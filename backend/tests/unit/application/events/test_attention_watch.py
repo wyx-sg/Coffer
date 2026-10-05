@@ -142,3 +142,12 @@ async def test_a_failing_report_is_logged_and_the_loop_carries_on() -> None:
         assert len(_attention_envelopes(broker)) == 1
     finally:
         task.cancel()
+
+
+def test_a_nudge_tells_whoever_keeps_the_report() -> None:
+    watcher = AttentionWatcher(EventBroker(buffer_size=8))
+    dropped: list[int] = []
+    watcher.on_nudge = lambda: dropped.append(1)
+    watcher.nudge()
+    watcher.on_changed(None)  # type: ignore[arg-type]
+    assert len(dropped) == 2

@@ -27,11 +27,21 @@ server that stays broken on purpose — can be ignored by its stable key
 and is listed in ``ignored`` instead, so the Overview, the sidebar's badges and
 the menu bar all count the same list. Any item can be ignored, whatever its
 severity.
+
+**One computation, many readers.** The menu bar, the Overview, the sidebar's
+badges and the attention watcher all read the same list. The last report is
+kept in memory and handed to every reader for up to ``reuse_seconds`` unless
+something :meth:`AttentionService.invalidate` d it in between — a resource
+write or reconcile pass (through the watcher's nudge), an ignore, any write
+request — so a read after an action is never answered from before it. The
+watcher's own recompute always asks the sources, so a signal nothing announces
+still reaches the list within its period.
 """
 
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -181,14 +191,52 @@ class AttentionService:
         feature_enabled: Callable[[str], bool],
         ignores: IgnoreStore | None = None,
         audit: AuditPort | None = None,
+        reuse_seconds: float = 0.0,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._sources = tuple(sources)
         self._feature_enabled = feature_enabled
         self._ignores = ignores
         self._audit = audit
+        self._reuse = reuse_seconds
+        self._clock = clock
+        # Bumped by every invalidation; a report is kept only if none happened
+        # while it was being computed.
+        self._generation = 0
+        self._latest: tuple[float, int, AttentionReport] | None = None
+        self._lock = asyncio.Lock()
 
-    async def report(self) -> AttentionReport:
-        """Ask every source that applies now. Writes nothing."""
+    def invalidate(self) -> None:
+        """Something may have changed the list: the next read asks the sources."""
+        self._generation += 1
+        self._latest = None
+
+    async def report(self, *, fresh: bool = False) -> AttentionReport:
+        """The list as it stands. Reuses the last report while it is younger than
+        ``reuse_seconds`` and nothing invalidated it; ``fresh`` always asks the
+        sources. Concurrent reads wait for one computation. Writes nothing."""
+        if not fresh and (kept := self._reusable()) is not None:
+            return kept
+        async with self._lock:
+            if not fresh and (kept := self._reusable()) is not None:
+                return kept
+            generation = self._generation
+            report = await self._compute()
+            if self._reuse > 0 and generation == self._generation:
+                self._latest = (self._clock(), generation, report)
+            return report
+
+    def _reusable(self) -> AttentionReport | None:
+        latest = self._latest
+        if latest is None:
+            return None
+        at, generation, report = latest
+        if generation != self._generation or self._clock() - at >= self._reuse:
+            return None
+        return report
+
+    async def _compute(self) -> AttentionReport:
+        """Ask every source that applies now."""
         asked = [
             source
             for source in self._sources
@@ -222,18 +270,20 @@ class AttentionService:
         """Ignore the listed item ``key``. Raises
         :class:`AttentionNotIgnorable` for a key that names no item now.
         Ignoring an ignored item again writes and audits nothing."""
-        report = await self.report()
+        report = await self.report(fresh=True)
         if any(attention_key(i) == key for i in report.ignored):
             return
         item = next((i for i in report.items if attention_key(i) == key), None)
         if item is None or self._ignores is None:
             raise AttentionNotIgnorable(key)
         if await self._ignores.add(key):
+            self.invalidate()
             await self._record(AuditEventType.ATTENTION_IGNORED, key, actor)
 
     async def unignore(self, key: str, *, actor: str) -> None:
         """Stop ignoring ``key``. A key that is not ignored is a no-op."""
         if self._ignores is not None and await self._ignores.remove(key):
+            self.invalidate()
             await self._record(AuditEventType.ATTENTION_UNIGNORED, key, actor)
 
     async def _record(self, event: AuditEventType, key: str, actor: str) -> None:

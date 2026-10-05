@@ -14,6 +14,7 @@ from cryptography.fernet import Fernet
 from coffer.domain.vault.layout import SECRET
 from coffer.infrastructure.secret.ref_paths import ref_to_relpath
 from coffer.infrastructure.vault.home import vault_root
+from coffer.surfaces.http import reconcile_dependencies
 from tests.support.boundary_daemon import BoundaryDaemon, prepare_home, running_daemon
 
 
@@ -37,6 +38,9 @@ def _plant_foreign_ciphertext(d: BoundaryDaemon, ref: str) -> None:
     path = vault_root(d.home) / SECRET / ref_to_relpath(ref)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(blob + b"\n")
+    # The sync round that brings such a file ends with a reconcile pass, whose
+    # nudge drops the kept attention list; planting it by hand skips that.
+    reconcile_dependencies.get_attention_service().invalidate()
 
 
 @pytest.mark.acceptance(

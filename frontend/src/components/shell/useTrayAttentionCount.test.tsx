@@ -9,6 +9,11 @@ import { useTrayAttentionCount } from "./useTrayAttentionCount";
 
 const read = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/api/attention", () => ({ attentionApi: { read } }));
+// The change feed: the test plays the daemon and hands the hook its events.
+const feed = vi.hoisted(() => ({
+  follow: vi.fn<(listener: (m: unknown) => void, signal: AbortSignal) => Promise<void>>(),
+}));
+vi.mock("@/lib/events/eventStream", () => ({ followDaemonEvents: feed.follow }));
 const shell = vi.hoisted(() => ({
   inShell: true,
   invoke: vi.fn<(command: string, args?: { count: number }) => Promise<void>>(() =>
@@ -59,5 +64,37 @@ describe("useTrayAttentionCount", () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(read).not.toHaveBeenCalled();
     expect(shell.invoke).not.toHaveBeenCalled();
+  });
+
+  it("follows the change feed instead of polling: an attention change re-reads the list", async () => {
+    shell.inShell = true;
+    shell.invoke.mockClear();
+    let emit: (m: unknown) => void = () => {};
+    feed.follow.mockImplementation((listener) => {
+      emit = listener;
+      return new Promise(() => {});
+    });
+    read.mockReset();
+    read.mockResolvedValueOnce(listOf(1)).mockResolvedValue(listOf(3));
+    const { wrapper } = harness();
+    renderHook(() => useTrayAttentionCount(), { wrapper });
+    await waitFor(() =>
+      expect(shell.invoke).toHaveBeenLastCalledWith("set_attention_count", { count: 1 }),
+    );
+    act(() =>
+      emit({ type: "change", change: { seq: 1, kind: "attention", id: null, op: "upsert" } }),
+    );
+    await waitFor(() =>
+      expect(shell.invoke).toHaveBeenLastCalledWith("set_attention_count", { count: 3 }),
+    );
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("opens no change feed in a browser", () => {
+    shell.inShell = false;
+    feed.follow.mockClear();
+    const { wrapper } = harness();
+    renderHook(() => useTrayAttentionCount(), { wrapper });
+    expect(feed.follow).not.toHaveBeenCalled();
   });
 });
