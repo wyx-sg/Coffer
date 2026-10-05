@@ -36,6 +36,10 @@ export interface paths {
          *     both written without approval (spec secret "Store a secret through the
          *     API"). A replacement is audited as such, never with a value, and whatever
          *     holds the old value, such as the model proxy, picks the new one up.
+         *
+         *     Without a `ref`, a `label` names it: the id `secret/<uuid4 hex>` is minted,
+         *     the label stored as its note, and the answer is 201 with the ref and uri
+         *     (spec secret "Mint every secret's id; a person names it").
          */
         post: operations["set_secret_api_v1_secrets_post"];
         delete?: never;
@@ -187,6 +191,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Notes
+         * @description Set a ref's label and description (spec secret "Label and describe a
+         *     secret without changing its reference"). A field left out stays, an empty
+         *     one is removed; the ref must be stored or cited (else 404). Audited by ref
+         *     and field names, never the text.
+         */
+        put: operations["put_notes_api_v1_secrets_notes_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/presence/challenge": {
         parameters: {
             query?: never;
@@ -308,6 +335,28 @@ export interface paths {
          * @description Plaintext secrets in the skill master store and in MCP servers' env / headers.
          */
         post: operations["scan_plaintext_api_v1_secrets_scan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/uses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Uses
+         * @description Who had this secret decrypted for use, newest first, read from the audit
+         *     log's ``secret_resolved`` rows (a resource's destination, or a `coffer run`
+         *     child). Never a value.
+         */
+        get: operations["list_uses_api_v1_secrets_uses_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -685,6 +734,8 @@ export interface components {
             kind: string;
             /** Name */
             name: string;
+            /** Slot */
+            slot: string | null;
             /** Uid */
             uid: string;
         };
@@ -713,6 +764,8 @@ export interface components {
         SecretImportMovedOut: {
             /** Id */
             id: string;
+            /** Label */
+            label: string | null;
             /** Name */
             name: string | null;
             /** Ref */
@@ -766,6 +819,44 @@ export interface components {
             refs: components["schemas"]["SecretRefOut"][];
         };
         /**
+         * SecretMintedOut
+         * @description A secret stored under an id the daemon minted.
+         */
+        SecretMintedOut: {
+            /**
+             * Ref
+             * @description The minted ref, secret/<32 hex characters>.
+             */
+            ref: string;
+            /**
+             * Uri
+             * @description How a file cites it: coffer://secret/<32 hex characters>.
+             */
+            uri: string;
+        };
+        /**
+         * SecretNotesIn
+         * @description Set a ref's label and description. A field left out is unchanged; an
+         *     empty string removes it.
+         */
+        SecretNotesIn: {
+            /** Description */
+            description?: string | null;
+            /** Label */
+            label?: string | null;
+            /** Ref */
+            ref: string;
+        };
+        /** SecretNotesOut */
+        SecretNotesOut: {
+            /** Description */
+            description: string | null;
+            /** Label */
+            label: string | null;
+            /** Ref */
+            ref: string;
+        };
+        /**
          * SecretRefOut
          * @description One stored or cited secret ref: presence and references, never a value.
          */
@@ -776,6 +867,12 @@ export interface components {
             cited_by: components["schemas"]["SecretCiterOut"][];
             /** Created At */
             created_at: string | null;
+            /** Created For */
+            created_for: string | null;
+            /** Description */
+            description: string | null;
+            /** Label */
+            label: string | null;
             /** Last Used At */
             last_used_at: string | null;
             /**
@@ -852,14 +949,27 @@ export interface components {
          * @description Request body for storing a secret in the secret store.
          *
          *     Secrets are Fernet-encrypted into the vault; only ciphertext is
-         *     persisted; audit rows carry the ref only.
+         *     persisted; audit rows carry the ref only. A new secret's id is minted by
+         *     the daemon: omit ``ref`` and the answer carries the minted ``secret/<hex>``.
+         *     A ``ref`` replaces the value of a secret that exists (a new ref must itself
+         *     be ``secret/<32 hex>``).
          */
         SecretSetIn: {
             /**
-             * Ref
-             * @description Reference key the secret is stored under. Slash-separated segments are allowed (e.g. channel/tg/bot-token).
+             * Created For
+             * @description The uid of the resource a new secret is minted for; deleting that resource releases the secret when nothing else cites it.
              */
-            ref: string;
+            created_for?: string | null;
+            /**
+             * Label
+             * @description The name the person gives the secret, stored as its label.
+             */
+            label?: string | null;
+            /**
+             * Ref
+             * @description An existing secret's ref, to replace its value. Omit it to create a new secret under a minted id.
+             */
+            ref?: string | null;
             /**
              * Value
              * @description The secret value.
@@ -888,6 +998,28 @@ export interface components {
              * @enum {string}
              */
             master_key_storage: "file" | "keychain" | "keychain_access_group";
+        };
+        /**
+         * SecretUseOut
+         * @description One time a secret was decrypted for use, and by whom (from the audit log).
+         */
+        SecretUseOut: {
+            /** Actor */
+            actor: string;
+            /** Argv0 */
+            argv0: string | null;
+            /** At */
+            at: string;
+            /** Cwd */
+            cwd: string | null;
+            /** Destination Kind */
+            destination_kind: string;
+            /** Destination Name */
+            destination_name: string;
+            /** Destination Uid */
+            destination_uid: string | null;
+            /** Slot */
+            slot: string | null;
         };
     };
     responses: never;
@@ -954,6 +1086,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Stored under a minted id. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretMintedOut"];
+                };
+            };
             /** @description Successful Response */
             204: {
                 headers: {
@@ -1289,6 +1430,51 @@ export interface operations {
             };
         };
     };
+    put_notes_api_v1_secrets_notes_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretNotesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretNotesOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     presence_challenge_api_v1_secrets_presence_challenge_post: {
         parameters: {
             query?: never;
@@ -1524,6 +1710,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretScanOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_uses_api_v1_secrets_uses_get: {
+        parameters: {
+            query: {
+                ref: string;
+                limit?: number;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretUseOut"][];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

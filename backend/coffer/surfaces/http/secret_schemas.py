@@ -179,7 +179,7 @@ class SecretScanFindingOut(BaseModel):
     #: A server's ``env`` or ``header``.
     field: Literal["env", "header"] | None = None
     key: str
-    #: A skill's standalone secret name; a server's ref is minted on import.
+    #: The label a skill's secret gets; its id and a server's ref are minted on import.
     proposed_name: str | None = None
 
 
@@ -200,10 +200,12 @@ class SecretImportMovedOut(BaseModel):
     id: str
     source: Literal["skill", "mcp_server"]
     resource: str
-    #: A skill's standalone secret name.
+    #: A skill's minted standalone name; absent in a dry run.
     name: str | None = None
-    #: The ref the value is (or, for a skill, would be) stored under; absent
-    #: in a server's dry run, where it is minted on import.
+    #: The label a skill's secret is given (the finding's proposed name).
+    label: str | None = None
+    #: The ref the value is stored under; absent in a dry run, where it is
+    #: minted on import.
     ref: str | None = None
     #: `coffer://secret/<name>`, for a skill's value.
     uri: str | None = None
@@ -225,3 +227,154 @@ class SecretImportOut(BaseModel):
     moved: list[SecretImportMovedOut]
     skipped: list[SecretImportSkippedOut]
     dry_run: bool
+
+
+# --- Storing, labelling and listing secrets ---
+
+
+#: A ref: slash-separated segments of ``[A-Za-z0-9_.-]``, none made only of dots
+#: (``.`` and ``..`` name no file, and would escape the store's directory).
+_REF_PATTERN = r"^\.*[A-Za-z0-9_-][A-Za-z0-9_.-]*(/\.*[A-Za-z0-9_-][A-Za-z0-9_.-]*)*$"
+
+
+class SecretSetIn(BaseModel):
+    """Request body for storing a secret in the secret store.
+
+    Secrets are Fernet-encrypted into the vault; only ciphertext is
+    persisted; audit rows carry the ref only. A new secret's id is minted by
+    the daemon: omit ``ref`` and the answer carries the minted ``secret/<hex>``.
+    A ``ref`` replaces the value of a secret that exists (a new ref must itself
+    be ``secret/<32 hex>``).
+    """
+
+    ref: str | None = Field(
+        default=None,
+        min_length=1,
+        pattern=_REF_PATTERN,
+        description=(
+            "An existing secret's ref, to replace its value. Omit it to create "
+            "a new secret under a minted id."
+        ),
+    )
+    label: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=64,
+        description="The name the person gives the secret, stored as its label.",
+    )
+    created_for: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=64,
+        description=(
+            "The uid of the resource a new secret is minted for; deleting that "
+            "resource releases the secret when nothing else cites it."
+        ),
+    )
+    value: str = Field(
+        min_length=1,
+        max_length=8192,
+        description="The secret value.",
+    )
+
+
+class SecretMintedOut(BaseModel):
+    """A secret stored under an id the daemon minted."""
+
+    ref: str = Field(description="The minted ref, secret/<32 hex characters>.")
+    uri: str = Field(description="How a file cites it: coffer://secret/<32 hex characters>.")
+
+
+class SecretNotesIn(BaseModel):
+    """Set a ref's label and description. A field left out is unchanged; an
+    empty string removes it."""
+
+    ref: str = Field(min_length=1, pattern=_REF_PATTERN)
+    label: str | None = Field(default=None, max_length=64)
+    description: str | None = Field(default=None, max_length=200)
+
+
+class SecretNotesOut(BaseModel):
+    ref: str
+    label: str | None = None
+    description: str | None = None
+
+
+class SecretExistsOut(BaseModel):
+    """Presence-only response — never carries the secret value."""
+
+    present: bool = Field(description="Whether a secret is stored under the ref.")
+
+
+class SecretCiterOut(BaseModel):
+    """A resource citing a secret ref — identity and label, never config."""
+
+    uid: str
+    kind: str
+    name: str
+    #: The key it cites the ref under: an MCP server's env var or header name, a
+    #: channel's secret field (bot-token, app-secret), a provider's `key`.
+    slot: str | None = None
+
+
+class SecretUseOut(BaseModel):
+    """One time a secret was decrypted for use, and by whom (from the audit log)."""
+
+    at: str
+    actor: str
+    #: The destination's kind (mcp_server, channel, provider, sync_remote, ...) or `run`.
+    destination_kind: str
+    destination_uid: str | None = None
+    destination_name: str
+    slot: str | None = None
+    #: A `coffer run` child's program and working directory.
+    argv0: str | None = None
+    cwd: str | None = None
+
+
+class SecretBindingOut(BaseModel):
+    """One destination a secret is sent to (or waits to be sent to)."""
+
+    destination_kind: str
+    destination_uid: str
+    slot: str
+    status: Literal["approved", "pending"]
+    approval_id: str | None = None
+
+
+class SecretRefOut(BaseModel):
+    """One stored or cited secret ref: presence and references, never a value."""
+
+    ref: str
+    #: The name the person gave it, if any (never changes the ref).
+    label: str | None = None
+    #: What it is for, in the person's words.
+    description: str | None = None
+    #: The uid of the resource it was minted for, if any.
+    created_for: str | None = None
+    present: bool = Field(description="Whether a secret is stored under the ref.")
+    #: Stored, but this Mac's master key cannot open it (it came with the vault
+    #: from a machine holding another key). With ``present`` false, the row is
+    #: "Missing on this Mac".
+    locked: bool = False
+    created_at: str | None = None
+    #: When a consumer last had the value decrypted on this Mac.
+    last_used_at: str | None = None
+    cited_by: list[SecretCiterOut]
+    #: The ``coffer://secret/<name>`` a file cites, for a standalone secret.
+    uri: str | None = None
+    #: Skills in the master store whose files mention the standalone secret.
+    mentioned_by_skills: list[str] = Field(default_factory=list)
+    #: Nothing cites it — no resource, no skill: the cleanup candidate.
+    unreferenced: bool = False
+    #: Where its value is approved to go, and where it waits for approval.
+    bindings: list[SecretBindingOut] = Field(default_factory=list)
+    #: Whether another process of this user can read the value where Coffer
+    #: puts it: a stdio MCP server's environment, or a ``coffer run`` child.
+    readable_by_local_processes: bool = False
+
+
+class SecretListOut(BaseModel):
+    """Every stored ref and every ref a registered resource cites, sorted by ref."""
+
+    refs: list[SecretRefOut]

@@ -101,7 +101,7 @@ delete it. See [Skills](/guides/skills).
 ### `coffer run`
 
 The command that hands [standalone secrets](#standalone-secret) to one child process:
-`coffer run --secret NAME -- cmd`. The values are set only in that child's environment and
+`coffer run --secret ENV=<id> -- cmd`. The values are set only in that child's environment and
 masked as `***` in its output, and each resolve is audited as `secret_resolved`. It keeps a
 secret out of files and transcripts by accident; it does not hide it from an agent that runs
 the command, which is the child's parent. See [Secrets](/guides/secrets#run-a-command-with-a-secret).
@@ -372,9 +372,11 @@ is a [resource](#resource) of kind `skill`. See [Skills](/guides/skills).
 
 ### Standalone secret
 
-A secret that belongs to no resource, stored as `secret/<name>` (`coffer secret set
-secret/<name>`) and cited from skills and env files as `coffer://secret/<name>`. Commands use
-it through [`coffer run`](#coffer-run). Its name is fixed once created. See
+A secret that belongs to no resource, stored as `secret/<id>` and cited from skills and env
+files as `coffer://secret/<id>`. Coffer mints the id when you run `coffer secret set --name
+"Orders DB"`; a person never picks an id, only a name (the label, up to 64 characters) and a
+description (up to 200), both changeable at any time. Commands use it through
+[`coffer run`](#coffer-run). See
 [Secrets](/guides/secrets).
 
 ### Storage class

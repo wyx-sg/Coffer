@@ -17,7 +17,7 @@ approves it").
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Protocol
 
 from coffer.domain.secret_errors import SecretMissing
@@ -38,6 +38,12 @@ class BoundaryPort(Protocol):
     def bind(self, dest: SecretDestination, refs: Mapping[str, str], *, actor: str) -> object: ...
 
 
+#: ``(ref, destination, slot)`` — called once a value was decrypted for a
+#: destination; the composition root audits it (spec secret "Audit every use of
+#: a secret by who used it"). Never given a value.
+UseListener = Callable[[str, SecretDestination, str], None]
+
+
 class SecretResolver:
     """Resolve secret refs against the secret store.
 
@@ -45,9 +51,15 @@ class SecretResolver:
     adapter is wired at composition root.
     """
 
-    def __init__(self, store: SecretStorePort, boundary: BoundaryPort | None = None) -> None:
+    def __init__(
+        self,
+        store: SecretStorePort,
+        boundary: BoundaryPort | None = None,
+        on_use: UseListener | None = None,
+    ) -> None:
         self._store = store
         self._boundary = boundary
+        self._on_use = on_use
 
     def materialize(
         self, refs: dict[str, str], destination: SecretDestination | None = None
@@ -69,6 +81,8 @@ class SecretResolver:
             value = self._store.get(ref)
             if value is None:
                 raise SecretMissing(ref)
+            if destination is not None and self._on_use is not None:
+                self._on_use(ref, destination, key)
             out[key] = value
         return out
 

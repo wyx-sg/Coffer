@@ -19,11 +19,12 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.secret import plaintext_move
 from coffer.application.secret.plaintext_move import Hit
 from coffer.domain.audit import AuditEventType
-from coffer.domain.secrets import secret_uri
+from coffer.domain.secrets import LABEL_MAX, ORIGIN_DIALOG, ORIGIN_PAGE, SecretNote, secret_uri
 from coffer.infrastructure.secret import plaintext_findings
 from coffer.infrastructure.skill.master_store import default_master_root as skills_root
 from coffer.surfaces.http.dependencies import get_actor, get_audit_service, get_resource_service
 from coffer.surfaces.http.secret_composition import get_secret_store
+from coffer.surfaces.http.secret_notes_wiring import get_secret_notes
 from coffer.surfaces.http.secret_schemas import (
     SecretImportIn,
     SecretImportMovedOut,
@@ -92,12 +93,28 @@ async def import_plaintext(
     async def update_config(uid: str, config: dict[str, Any]) -> object:
         return await resources.update_config(uid, config, actor)
 
+    notes = get_secret_notes()
+
+    def set_note(ref: str, note: SecretNote) -> None:
+        label = note.label[:LABEL_MAX] if note.label else None
+        notes.put(
+            ref,
+            SecretNote(
+                label=label,
+                created_for=note.created_for,
+                origin=ORIGIN_DIALOG if note.created_for else ORIGIN_PAGE,
+            ),
+            summary=f"describe secret {ref}",
+            actor=actor,
+        )
+
     result = await plaintext_move.move(
         hits,
         body.ids,
         store=store,
         rewrite=plaintext_findings.rewrite_file,
         update_config=update_config,
+        set_note=set_note,
         dry_run=body.dry_run,
     )
     for details in result.stored:
@@ -110,6 +127,7 @@ async def import_plaintext(
                 resource=m.resource,
                 name=m.name,
                 ref=m.ref,
+                label=m.label,
                 uri=secret_uri(m.name) if m.name else None,
             )
             for m in result.moved

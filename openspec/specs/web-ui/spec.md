@@ -2183,17 +2183,15 @@ is still entered where the thing that needs it is configured.
 
 The page MUST carry:
 
-- **List** — one table of every secret the store holds or a resource cites, by
-  its reference (a standalone secret by its name), sorted by name, with whether
-  this Mac holds it, so a reference cited but missing reads as missing on this
-  Mac (spec [secret](../secret/spec.md) "List every stored and cited secret with
-  what uses it"). Search by name, and a status filter of All, In use and Not
-  used, narrow it; its columns are Name, Used by, Last used and Created, the
-  times relative ("3 h ago") and, past a week, a date ("Aug 12"). The page has
-  no owner line, no owner-type filter, no by-owner view and no "Delete unused".
-- **Used by** — for each secret, what cites it, by kind and current name, each
-  opening that thing's page; a secret nothing cites reads Nothing and is found
-  with the Not used filter.
+- **List** — every secret the store holds or a resource cites, sorted by its
+  displayed name, with whether this Mac holds it, so a reference cited but
+  missing reads as missing on this Mac (spec [secret](../secret/spec.md) "List
+  every stored and cited secret with what uses it"). Search, and a status filter
+  of All, In use and Not used, narrow it. The page has no owner line, no
+  owner-type filter, no by-owner view and no "Delete unused".
+- **Used by** — for each secret, what cites it, by kind, current name and slot,
+  each opening that thing's page; a secret nothing cites reads Nothing and is
+  found with the Not used filter.
 - **Add and replace** — store a new secret at once, or replace the value of one
   that exists, at once and without the value ever being shown back (spec
   [secret](../secret/spec.md) "Store a secret through the API").
@@ -2210,6 +2208,23 @@ The page MUST carry:
 - **Missing values** — a banner counting the secrets this Mac has no value for,
   with **Add values** (spec [secret](../secret/spec.md) "Show a secret this Mac
   cannot open as missing on this Mac"); it offers no master-key import.
+- **List and detail** — the page is a split view like the other library pages:
+  `/secrets/<id>/<tab>` with the list on the left and the chosen secret on the
+  right. A list row shows the secret's label — or, without one, a standalone
+  secret's name, else the first citer's name and the slot, never a hex
+  segment — with its description as a muted second line, its status (missing on
+  this Mac, waiting for approval) and how many things use it; search matches
+  the label, description and id. The detail's header holds the label and
+  description, each edited in place (spec [secret](../secret/spec.md) "Label and
+  describe a secret without changing its reference"), with Replace value… and
+  Reveal value… beside them and Copy reference and Delete… in its ⋯ menu. Its
+  **Overview** tab shows the id and `coffer://secret/<id>`, each with Copy,
+  whether this Mac holds it and whether local processes can read it, created
+  and last used, and everything that uses it — by kind, current name and slot,
+  each opening its page — with the approvals it holds or waits for. Its
+  **Usage** tab lists the secret's recent uses from the audit log — who, which
+  slot, when; a `coffer run` by its command and folder — with a link to all of
+  them in Activity.
 - **Find plaintext keys** — the entry point that moves plaintext secrets out of
   what Coffer manages and into the store (spec [secret](../secret/spec.md)
   "Move plaintext secrets in managed resources into the store").
@@ -2233,8 +2248,8 @@ secret capability's, specified with it.
 #### Scenario: the secrets page lists each secret with what uses it
 - **GIVEN** a registered MCP server citing a stored reference, and a model provider citing a reference the store does not hold
 - **WHEN** the user opens `/secrets`
-- **THEN** both references are listed in one table, the first as present and the second as missing on this Mac
-- **AND** each row names its citer by kind and current name, and choosing it opens that resource's page
+- **THEN** both are listed, the first as present and the second as missing on this Mac
+- **AND** choosing a row shows its citer on the Overview tab by kind and current name, which opens that resource's page
 
 #### Scenario: a secret in use cannot be deleted from the secrets page
 - **GIVEN** a stored secret cited by a registered channel
@@ -2252,6 +2267,12 @@ secret capability's, specified with it.
 - **GIVEN** the Secrets page
 - **WHEN** it is opened, with secrets and with none
 - **THEN** its header offers Find plaintext keys beside Add secret, and the empty page offers both
+
+#### Scenario: a secret opens on its own detail page with overview and usage
+- **GIVEN** the Secrets page listing a secret an MCP server cites under a hex ref, which the server has used
+- **WHEN** its row is chosen
+- **THEN** the list row reads as the server's name and the slot, the address becomes `/secrets/<id>`, and the Overview tab shows the id, the times and the server under Used by, which opens the server's page
+- **AND** the Usage tab lists the server's use, and a label and description typed in the header show on the row while the id stays the same
 
 ### Requirement: Open Settings as a modal from the sidebar footer
 Settings MUST NOT be a navigation entry: it is not one of the sidebar's fourteen

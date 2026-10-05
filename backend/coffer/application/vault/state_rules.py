@@ -8,7 +8,8 @@ map of capability type to key lists and a ``tool_exposure`` map of tool to
 ``listed`` / ``search``), a channel's pairings
 (``channel-peers``: ``channel_uid`` and a ``peers`` list naming each chat),
 the command-line tools a person added by hand (``cli-tools``: a ``tools`` list,
-each entry naming its ``command``),
+each entry naming its ``command``), what a person said about a secret
+(``secret-notes``: a ``notes`` map keyed by ref),
 and Coffer's own settings (``settings``). Only one document per owner is
 admitted: a second path claiming an owner ``HEAD`` already files elsewhere is
 ``DUPLICATE_UID``. A key this build does not know is a warning; an area it
@@ -39,6 +40,7 @@ AREAS: dict[str, tuple[str | None, frozenset[str]]] = {
     "mcp-preferences": ("server_uid", frozenset({"server_uid", "disabled", "tool_exposure"})),
     "channel-peers": ("channel_uid", frozenset({"channel_uid", "peers"})),
     "cli-tools": (None, frozenset({"tools"})),
+    "secret-notes": (None, frozenset({"notes"})),
     # ``model``, ``curate_owner_machine_id`` and ``model_timeout_s`` are keys an
     # older build wrote; they are accepted and ignored, and the next write of
     # the document drops them.
@@ -81,6 +83,17 @@ def _shape_error(area: str, doc: dict[str, Any]) -> str | None:
         commands = [t["command"] for t in tools]
         if len(set(commands)) != len(commands):
             return "a command is listed twice"
+    if area == "secret-notes":
+        notes = doc.get("notes", {})
+        if not isinstance(notes, dict) or not all(
+            isinstance(entry, dict)
+            and isinstance(entry.get("label", ""), str)
+            and isinstance(entry.get("description", ""), str)
+            and isinstance(entry.get("created_for", ""), str)
+            and isinstance(entry.get("origin", ""), str)
+            for entry in notes.values()
+        ):
+            return "notes must map a ref to an object with a label and a description"
     if area == "settings" and "upkeep" in doc and not isinstance(doc["upkeep"], dict):
         return "upkeep must be an object"
     return None

@@ -68,6 +68,9 @@ function ref(over: Partial<SecretRef> & { ref: string }): SecretRef {
     readable_by_local_processes: false,
     unreferenced: false,
     uri: null,
+    label: null,
+    description: null,
+    created_for: null,
     ...over,
   };
 }
@@ -75,18 +78,18 @@ const LINEAR = ref({
   ref: "secret/linear-api-key",
   uri: "coffer://secret/linear-api-key",
   present: false,
-  cited_by: [{ kind: "mcp_server", name: "linear", uid: "l" }],
+  cited_by: [{ kind: "mcp_server", name: "linear", uid: "l", slot: null }],
 });
 const SENTRY = ref({
   ref: "secret/sentry-token",
   uri: "coffer://secret/sentry-token",
   locked: true,
-  cited_by: [{ kind: "mcp_server", name: "sentry", uid: "s" }],
+  cited_by: [{ kind: "mcp_server", name: "sentry", uid: "s", slot: null }],
 });
 const GITHUB = ref({
   ref: "secret/github-token",
   uri: "coffer://secret/github-token",
-  cited_by: [{ kind: "mcp_server", name: "github", uid: "g" }],
+  cited_by: [{ kind: "mcp_server", name: "github", uid: "g", slot: null }],
 });
 
 function approval(id: string, over: Partial<Approval> = {}): Approval {
@@ -192,7 +195,7 @@ describe("Secrets banners", () => {
       ignored: [item("secret_missing_here", "secret:fp:secret_missing_here")],
     };
     renderPage();
-    const row = (await screen.findByText("linear-api-key")).closest("tr")!;
+    const row = (await screen.findByText("linear-api-key")).closest("li")!;
     expect(within(row).getByText("No value on this Mac")).toBeInTheDocument();
     expect(screen.queryByTestId("secrets-missing-banner")).toBeNull();
   });

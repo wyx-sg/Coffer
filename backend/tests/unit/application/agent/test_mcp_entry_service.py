@@ -22,6 +22,7 @@ Covers:
 from __future__ import annotations
 
 import pathlib
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -478,14 +479,16 @@ async def test_adopt_happy_path_order(svc, store, rs, keyring, audit_svc):
     assert "mcp_servers.coffer" in new_text
 
     # Secret went to the keychain under the given ref with the original value...
-    assert keyring.set_calls == [("mcp/jira/JIRA_API_TOKEN", "tok-123")]
+    (minted, value) = keyring.set_calls[0]
+    assert re.fullmatch(r"secret/[0-9a-f]{32}", minted) and value == "tok-123"
+    assert len(keyring.set_calls) == 1
     # ...and into secret_refs, NOT the plain env of the registered config.
     (kind, name, config, actor) = rs.register_calls[0]
     assert (kind, name, actor) == ("mcp_server", "jira", "cli")
     transport = config["transport"]
     assert "JIRA_API_TOKEN" not in transport["env"]
     assert transport["env"] == {"JIRA_URL": "https://jira.example.com"}
-    assert transport["secret_refs"] == {"JIRA_API_TOKEN": "mcp/jira/JIRA_API_TOKEN"}
+    assert transport["secret_refs"] == {"JIRA_API_TOKEN": minted}
     assert resource.name == "jira"
 
     # Audit recorded with the resource name and NO secret values anywhere.
@@ -584,14 +587,13 @@ async def test_adopt_bogus_mapping_key_ignored(svc, store, rs, keyring):
 
     # Keyring must NOT have been called for the bogus key.
     keyring_refs = [ref for ref, _ in keyring.set_calls]
-    assert "mcp/jira/ghost" not in keyring_refs
-    assert keyring_refs == ["mcp/jira/JIRA_API_TOKEN"]
+    assert len(keyring_refs) == 1 and re.fullmatch(r"secret/[0-9a-f]{32}", keyring_refs[0])
 
     # secret_refs in the registered transport must NOT contain the bogus key.
     (_, _, config, _) = rs.register_calls[0]
     transport = config["transport"]
     assert "DOES_NOT_EXIST_TOKEN" not in transport["secret_refs"]
-    assert transport["secret_refs"] == {"JIRA_API_TOKEN": "mcp/jira/JIRA_API_TOKEN"}
+    assert transport["secret_refs"] == {"JIRA_API_TOKEN": keyring_refs[0]}
 
 
 # ---------------------------------------------------------------------------
@@ -628,7 +630,8 @@ async def test_adopt_gas_with_secret_mapping_happy_path(svc, store, rs, keyring)
     resource = await svc.adopt(_CX_UID, "gas", secrets={"Authorization": "mcp/gas/auth"})
 
     # Keychain received the raw value.
-    assert keyring.set_calls == [("mcp/gas/auth", "Bearer abc")]
+    (minted, value) = keyring.set_calls[0]
+    assert re.fullmatch(r"secret/[0-9a-f]{32}", minted) and value == "Bearer abc"
 
     # Registered transport: headers empty, secret_refs set.
     (_, name, config, _) = rs.register_calls[0]
@@ -637,7 +640,7 @@ async def test_adopt_gas_with_secret_mapping_happy_path(svc, store, rs, keyring)
     assert transport["type"] == "http"
     assert transport["url"] == "https://gas.example/mcp"
     assert transport["headers"] == {}
-    assert transport["secret_refs"] == {"Authorization": "mcp/gas/auth"}
+    assert transport["secret_refs"] == {"Authorization": minted}
 
     # Entry removed from file; coffer survives.
     new_text = store._files[_CODEX_CONFIG]
@@ -678,31 +681,22 @@ async def test_adopt_rollback_on_verify_failure(svc, store, rs):
     spec="secret",
     scenario="adopting an MCP entry never replaces or deletes a secret it did not create",
 )
-async def test_adopt_refuses_a_ref_that_already_holds_a_value(svc, store, rs, keyring):
-    """Re-adopting an entry whose refs exist must leave them exactly as they
-    are: no overwrite before the register, and no delete when it then fails."""
+async def test_adopt_refuses_a_ref_that_already_holds_a_value(svc, store, rs, keyring, monkeypatch):
+    """Adoption mints each id; should one ever collide with a stored value it
+    must leave it exactly as it is: no overwrite, no delete."""
     store._files[_CODEX_CONFIG] = _CODEX_TOML
-    keyring.values["mcp/jira/T"] = "in-use-by-an-existing-server"
+    taken = "secret/" + "f" * 32
+    monkeypatch.setattr(
+        "coffer.application.agent.mcp_entry_service.mint_secret_name", lambda: "f" * 32
+    )
+    keyring.values[taken] = "in-use-by-an-existing-server"
 
     with pytest.raises(AdoptSecretRefExists):
-        await svc.adopt(_CX_UID, "jira", secrets={"JIRA_API_TOKEN": "mcp/jira/T"})
+        await svc.adopt(_CX_UID, "jira", secrets={"JIRA_API_TOKEN": "ignored"})
 
-    assert keyring.values == {"mcp/jira/T": "in-use-by-an-existing-server"}
+    assert keyring.values == {taken: "in-use-by-an-existing-server"}
     assert keyring.set_calls == []
     assert rs.resources == []
-
-
-@pytest.mark.acceptance(
-    spec="secret",
-    scenario="adopting an MCP entry never replaces or deletes a secret it did not create",
-)
-async def test_adopt_refuses_a_standalone_name(svc, store, keyring):
-    store._files[_CODEX_CONFIG] = _CODEX_TOML
-
-    with pytest.raises(AdoptSecretRefExists):
-        await svc.adopt(_CX_UID, "jira", secrets={"JIRA_API_TOKEN": "secret/shared"})
-
-    assert keyring.values == {}
 
 
 @pytest.mark.acceptance(
@@ -712,10 +706,11 @@ async def test_adopt_refuses_a_standalone_name(svc, store, keyring):
 async def test_adopt_name_clash_is_answered_before_any_secret_is_written(svc, store, rs, keyring):
     store._files[_CODEX_CONFIG] = _CODEX_TOML
     await svc.adopt(_CX_UID, "jira", secrets={"JIRA_API_TOKEN": "mcp/jira/T"})
+    first = dict(keyring.values)
     store._files[_CODEX_CONFIG] = _CODEX_TOML  # the entry is still in the file
 
     with pytest.raises(ResourceAlreadyExists):
         await svc.adopt(_CX_UID, "jira", secrets={"JIRA_API_TOKEN": "mcp/jira/T"})
 
     # The first adoption's secret survives the second attempt untouched.
-    assert keyring.values["mcp/jira/T"]
+    assert keyring.values == first and first

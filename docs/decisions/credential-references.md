@@ -1,7 +1,7 @@
 # Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use
 
 **Status**: Accepted
-**Date**: 2026-09-18
+**Date**: 2026-10-04
 **Deciders**: Yuxing Wu
 **Related**: [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Kind Plugin Contract](kind-plugin-contract.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [principles](../../docs-site/architecture/principles.md) (Secrets), spec secret, spec vault-sync, research note [credentials and secrets](../research/credentials-secrets.md), PRs #293, #406
 
@@ -71,29 +71,39 @@ The lifecycle is kept whole around the ref:
 - **No orphans.** Deleting a resource releases the refs nothing else cites,
   on this machine and, through a converged deletion, on every other
   (spec secret "Release unshared references when a resource is deleted").
-  The standalone `secret/` namespace is exempt, because its citers are mostly
-  files Coffer does not parse.
+  Only a secret created for that resource is released, and only when nothing
+  else — no other resource, no skill file — cites it. Every other secret is
+  kept and shows as Not used, because its citers may be files Coffer does not
+  parse.
 - **A value is never read back by a route.** No route, command or tool returns
   a secret's value; it is seen only in the desktop app behind a presence check
   (`secret_revealed`), the presence probe decrypts nothing and audits nothing,
   and citing a ref from a new destination waits for an approval
   ([Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)).
 
-Refs are **minted opaque**: `provider/<uuid4 hex>/key` in the backend
-(`application/provider/service.py`), `<kind>/<uuid4 hex>/<logical key>` for
-`channel` and `mcp_server` in the frontend (`lib/secretRef.ts`), one per
-secret. A rotation re-encrypts under the same ref, so nothing that cites it
-changes. A ref is a file name in the vault (`secret/<ref>.enc`, or
-`local/secret/<ref>.enc` for a ref true of one machine), which is why it must
-be stable and free of the resource's name.
+Refs are **minted opaque and one shape**: `secret/<uuid4 hex>` for every
+secret — a standalone one, an MCP server's header or environment value, a
+channel's token, a provider's key. A resource's config cites `secret/<id>` in
+its secret slot; the slot, not the ref, says what the secret is for. What a
+person reads — a name (label) and a description — and the resource a secret was
+minted for (`created_for`, that resource's uid) live in a synced vault notes
+document keyed by ref, never in the ref, so changing them touches nothing that
+cites the secret. Ownership is `created_for`, not a namespace. A rotation
+re-encrypts under the same ref, so nothing that cites it changes. A ref is a
+file name in the vault (`secret/<ref>.enc`, or `local/secret/<ref>.enc` for a
+ref true of one machine), which is why it must be stable and free of the
+resource's name. A one-time start-up migration moved the older shapes
+(`secret/<name>`, `postman.AUTHORIZATION`, `mcp_server/<hex>/X`,
+`provider/<hex>/key` and the like) to `secret/<id>`, keeping each value and
+repointing every citer.
 
 Pros: the config is safe to show, export, diff and sync; one store and one
 resolver for every kind; rotation touches only the store; rename touches no
 secret.
 
 Cons: two things to keep consistent (the citation and the row), which is why
-delete is guarded from both sides; a ref is not self-describing beyond its
-trailing logical key; a resource can be registered citing a ref the store does
+delete is guarded from both sides; a ref is not self-describing at all, so the
+notes document carries the name a person recognises; a resource can be registered citing a ref the store does
 not yet hold, which `coffer secret list` reports as missing.
 
 It wins because it makes "no plaintext outside the store" one claim about one
@@ -163,7 +173,8 @@ Lost: one store is one thing to verify.
 ### Option F — Refs derived from the resource's name (the earlier convention)
 
 Mint `channel/<name>/<secret>` or `<name>.<ENV>` so a ref is readable at a
-glance.
+glance (a later variant minted `<kind>/<uuid4 hex>/<logical key>`: opaque, but
+a different shape per kind, with the slot name inside the ref).
 
 Pros: human-readable; no minting step.
 
@@ -183,10 +194,12 @@ and the move crossed the remote as one change on each side.
 Resource configuration carries opaque secret references and never secret
 values; each kind declares where its refs live; the encrypted store is the only
 holder of a secret; resolution happens only at spawn, header injection or
-adapter start, and only into a destination a person has approved. Refs are
-minted opaque, per secret, and never derived from a mutable name. A secret
-cannot be deleted while cited, and a deleted resource releases what nothing
-else cites.
+adapter start, and only into a destination a person has approved. Every
+secret has one shape of ref, `secret/<uuid4 hex>`, minted per secret and never
+derived from a mutable name; names, descriptions and the resource a secret was
+created for live in notes, not in the ref. A secret cannot be deleted while
+cited, and a deleted resource releases only the secret created for it that
+nothing else cites.
 
 ## Consequences
 
@@ -197,6 +210,7 @@ else cites.
 - The sync layer carries refs in resource documents and ciphertext only on a
   remote configured for it; a machine without the ciphertext holds a resource
   whose ref is reported missing or locked rather than a broken secret.
-- A secret a person or a skill owns, rather than a resource, takes a named
-  `secret/<name>` ref instead of a minted one
+- A secret a person or a skill owns, rather than a resource, has the same
+  `secret/<id>` shape; it is minted with a name and cited from files as
+  `coffer://secret/<id>`
   ([Standalone Secrets Are Named `coffer://secret/` References](standalone-secrets-are-named-references-injected-into-one-child.md)).

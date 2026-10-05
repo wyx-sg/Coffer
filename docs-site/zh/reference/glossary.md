@@ -67,7 +67,7 @@ Coffer 自带并自行维护的技能。它是 Coffer 给智能体的说明书�
 
 ### `coffer run` {#coffer-run}
 
-把[独立密钥](#standalone-secret)交给一个子进程的命令：`coffer run --secret NAME -- cmd`。这些值只设置在该子进程的环境中，在其输出里被遮盖为 `***`，每次解析都以 `secret_resolved` 记入审计。它能防止密钥不小心进入文件和对话记录；但它不会对运行该命令的智能体隐藏密钥，因为智能体是子进程的父进程。见[密钥](/zh/guides/secrets#run-a-command-with-a-secret)。
+把[独立密钥](#standalone-secret)交给一个子进程的命令：`coffer run --secret ENV=<id> -- cmd`。这些值只设置在该子进程的环境中，在其输出里被遮盖为 `***`，每次解析都以 `secret_resolved` 记入审计。它能防止密钥不小心进入文件和对话记录；但它不会对运行该命令的智能体隐藏密钥，因为智能体是子进程的父进程。见[密钥](/zh/guides/secrets#run-a-command-with-a-secret)。
 
 ### 连接（Connection） {#connection}
 
@@ -237,8 +237,7 @@ Coffer 为防范以你身份运行、遭到提示词注入的智能体而守住�
 
 ### 独立密钥（Standalone secret） {#standalone-secret}
 
-不属于任何资源的密钥，存为 `secret/<name>`（`coffer secret set
-secret/<name>`），在技能和 env 文件中以 `coffer://secret/<name>` 引用。命令通过 [`coffer run`](#coffer-run) 使用它。它的名称一经创建就固定。见[密钥](/zh/guides/secrets)。
+不属于任何资源的密钥，存为 `secret/<id>`，在技能和 env 文件中以 `coffer://secret/<id>` 引用。id 由 Coffer 在你运行 `coffer secret set --name "Orders DB"` 时生成；人从不自己选 id，只给它起名称（标签，最多 64 个字符）和写描述（最多 200 个字符），二者可随时修改。命令通过 [`coffer run`](#coffer-run) 使用它。见[密钥](/zh/guides/secrets)。
 
 ### 存储类别（Storage class） {#storage-class}
 

@@ -6,6 +6,7 @@
 // in `transport.secret_refs`, a custom-tool group keeps the bare name. Use
 // `secretRef` / `secretUri` / `secretNameOf` to convert at the edge.
 import { secretsApi } from "@/lib/api/secret";
+import { uuid4Hex } from "@/lib/secretRef";
 
 /** The store namespace standalone secrets live under. */
 export const SECRET_PREFIX = "secret/";
@@ -22,7 +23,14 @@ export function isValidSecretName(name: string): boolean {
 type SecretChoice =
   | { kind: "stored"; name: string }
   /** Pasted or typed: written to Secrets when the form is submitted. */
-  | { kind: "new"; name: string; value: string };
+  | {
+      kind: "new";
+      /** The minted id (32 hex characters) it will be stored under; never typed by a person. */
+      name: string;
+      /** What the person calls it; stored as the secret's label. */
+      label: string;
+      value: string;
+    };
 
 /** What a secret field holds; null = nothing chosen yet. */
 export type SecretFieldValue = SecretChoice | null;
@@ -53,22 +61,9 @@ export function secretReferenceOf(ref: string): string {
   return name === null ? ref : `coffer://secret/${name}`;
 }
 
-/** A secret name from the thing being configured ("OpenAI" → "openai-key"):
- *  lower-case, runs of anything else become one dash; a taken name gets `-2`, `-3`… */
-export function defaultSecretName(base: string, taken: ReadonlySet<string> = new Set()): string {
-  const slug = base
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 56);
-  const stem = slug || "secret";
-  if (!taken.has(stem)) return stem;
-  for (let n = 2; ; n += 1) {
-    const candidate = `${stem}-${n}`;
-    if (!taken.has(candidate)) return candidate;
-  }
-}
+/** A fresh id for a secret that is stored when the form is saved: the 32 hex characters of
+ *  `secret/<id>`, the same shape the daemon mints for the Add secret dialog. */
+export const mintSecretName = uuid4Hex;
 
 const SECRET_KEY = /token|key|secret|password|passwd|auth|credential/i;
 
@@ -102,7 +97,18 @@ export async function persistNewSecrets(
 ): Promise<{ names: string[] }> {
   const names: string[] = [];
   for (const v of newSecretsOf(values)) {
-    await secretsApi.set(secretRef(v.name), v.value);
+    const ref = secretRef(v.name);
+    await secretsApi.set(ref, v.value);
+    // The label is a nicety: the secret is stored and cited either way, so a failure to save it
+    // must not fail the form that already wrote the value.
+    const label = v.label?.trim();
+    if (label) {
+      try {
+        await secretsApi.setNotes(ref, { label });
+      } catch (e) {
+        console.warn(`[persistNewSecrets] could not label ${ref}:`, e);
+      }
+    }
     names.push(v.name);
   }
   return { names };

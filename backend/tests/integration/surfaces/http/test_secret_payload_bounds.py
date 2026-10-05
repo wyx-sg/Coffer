@@ -17,7 +17,7 @@ def test_a_secret_value_is_bounded_at_8192_bytes() -> None:
     wire model, so no route can accept a value the keyring cannot hold."""
     from pydantic import ValidationError
 
-    from coffer.surfaces.http.schemas import SecretSetIn
+    from coffer.surfaces.http.secret_schemas import SecretSetIn
 
     SecretSetIn(ref="ok", value="x" * 8192)  # boundary
     with pytest.raises(ValidationError):

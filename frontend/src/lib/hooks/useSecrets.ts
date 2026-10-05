@@ -59,6 +59,35 @@ export function useDeleteSecret() {
   });
 }
 
+/** Where this Mac last handed a secret's value out (the sheet's Recent uses); read while `enabled`. */
+export function useSecretUses(ref: string, enabled = true) {
+  return useQuery({
+    queryKey: [...secretsKey, "uses", ref],
+    queryFn: () => secretsApi.uses(ref),
+    enabled,
+  });
+}
+
+/** Add a standalone secret under a minted id. The dialog renders a failure inline. */
+export function useAddSecret() {
+  const refresh = useRefreshSecrets();
+  return useMutation({
+    mutationFn: ({ label, value }: { label: string; value: string }) =>
+      secretsApi.add(label, value),
+    onSuccess: refresh,
+  });
+}
+
+/** Set (or, empty, remove) a secret's label and/or description. Shown inline by the sheet, so no toast. */
+export function useSecretNotes() {
+  const refresh = useRefreshSecrets();
+  return useMutation({
+    mutationFn: ({ ref, ...notes }: { ref: string; label?: string; description?: string }) =>
+      secretsApi.setNotes(ref, notes),
+    onSuccess: refresh,
+  });
+}
+
 const BULK_DELETE_REFRESH = [secretsKey, pendingApprovalsKey];
 
 /** Delete several refs at once: each is refused or deleted on its own, and one summary toast says how many went. */

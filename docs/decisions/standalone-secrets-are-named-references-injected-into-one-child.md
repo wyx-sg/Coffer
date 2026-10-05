@@ -1,7 +1,7 @@
 # Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process
 
 **Status**: Accepted
-**Date**: 2026-09-30
+**Date**: 2026-10-04
 **Deciders**: Yuxing Wu
 **Related**: [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [principles](../../docs-site/architecture/principles.md) (Secrets), research note [credentials and secrets](../research/credentials-secrets.md), spec secret "Address a secret by an opaque reference", spec secret "Resolve standalone secrets into one child with coffer run", spec secret "List every stored and cited secret with what uses it", spec secret "Route every secret command through the daemon", spec secret "Release unshared references when a resource is deleted", spec secret "Hold plaintext only in memory at the moment of use"
 
@@ -70,40 +70,48 @@ and the initial environment of any same-user process is readable with `ps eww`
 
 ## Options Considered
 
-### Option A — Named secrets in the existing store, cited as `coffer://secret/<name>`, resolved by `coffer run` into one child (chosen)
+### Option A — A minted id in the existing store, cited as `coffer://secret/<id>`, resolved by `coffer run` into one child (chosen)
 
 - **Namespace, not a new store.** A standalone secret is one ciphertext file of the
-  existing encrypted store under the ref `secret/<name>`, where `<name>` is one
-  ref segment (`[A-Za-z0-9_.-]`, at most 64 characters). It is cited from
-  anywhere a person or a skill writes text as the URI `coffer://secret/<name>`:
+  existing encrypted store under the ref `secret/<id>`, where `<id>` is 32
+  lowercase hex characters minted by Coffer. It is cited from
+  anywhere a person or a skill writes text as the URI `coffer://secret/<id>`:
   a `.env` value, a skill's `connection.md`, a resource config field (a
-  resource may cite `secret/<name>` in its secret refs like any other ref).
-- **The name is fixed after creation.** The name is quoted in files Coffer
-  cannot see — skills, env files, scripts on other machines — which is exactly
-  the condition under which
+  resource may cite `secret/<id>` in its secret refs like any other ref).
+- **The id is minted and fixed; the name is a note.** The id is quoted in files
+  Coffer cannot see — skills, env files, scripts on other machines — which is
+  exactly the condition under which
   [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md)
-  fixes a name. Renaming is create-new plus delete-old; rotation re-encrypts
-  under the same name, so nothing that cites it changes. This is also what
-  answers the three reasons [Resources Cite Secrets by Opaque Reference](credential-references.md)
-  retired name-derived refs: a rename cannot move the secret
-  because there is no rename; a standalone secret is never mistaken for a
-  resource's minted ref because the two live in different namespaces; and a
-  sync never sees a move, only an add or a delete.
-- **Lifecycle independent of resources.** Deleting a resource releases only
-  the minted refs nothing else cites; the `secret/` namespace is never released
-  by `release_orphaned_secrets` (`application/resource_delete_ops.py`),
-  because a standalone secret's citers are mostly files Coffer does not parse.
-  Deleting a standalone secret is refused with `SECRET_IN_USE` while a resource
-  cites it, and likewise while a skill in the master store cites its URI, naming
-  the skill.
-- **`coffer run [--secret NAME|ENV=NAME]… [--env-file FILE] [--no-masking] -- cmd args…`.** The
+  fixes a name, so it never changes and a person never picks it. What a person
+  sees and edits is a **name** (label, at most 64 characters) and a
+  **description** (at most 200), kept in one vault notes document keyed by id
+  and synced with the vault, so editing them touches no ciphertext and nothing
+  that cites the secret. `coffer secret set --name "<name>"` mints a secret;
+  `coffer secret set <existing ref>` only replaces its value; a client cannot
+  store a value under an id it chose. Rotation re-encrypts under the same id.
+  This also answers the three reasons
+  [Resources Cite Secrets by Opaque Reference](credential-references.md)
+  retired name-derived refs: an id is never derived from a mutable name, so
+  nothing moves on rename; a sync never sees a move, only an add or a delete;
+  and one shape serves every secret, so there is no namespace to confuse.
+- **Lifecycle independent of resources.** Deleting a resource releases a
+  secret only if it was created for that resource (the notes record
+  `created_for`, the uid of the resource it was minted for) and nothing else —
+  no other resource, no skill file — cites it
+  (`release_orphaned_secrets`, `application/resource_delete_ops.py`). Every
+  other secret is kept and shows as Not used, because a standalone secret's
+  citers are mostly files Coffer does not parse. Deleting a secret is refused
+  with `SECRET_IN_USE` while a resource cites it, and likewise while a skill in
+  the master store cites its URI, naming the skill.
+- **`coffer run [--secret ID|ENV=ID]… [--env-file FILE] [--no-masking] -- cmd args…`.** The
   CLI asks the daemon to resolve every `--secret`, every `coffer://secret/`
   value in `--env-file`, and every `coffer://secret/` value already present in
   its own environment (the pattern `op run` uses). It then starts `cmd` with
   those values set **only in the child's environment**; the calling shell, the
-  agent that typed the command and its other children never hold them. `ENV`
-  defaults to the name upper-cased with `-` and `.` as `_`. Exit status and
-  signals pass through.
+  agent that typed the command and its other children never hold them. The bare
+  `--secret <id>` form derives the variable name from the id, which is a hex
+  string and rarely what a program reads, so `--secret ENV=<id>` is the useful
+  form. Exit status and signals pass through.
 - **Output masking — accidental-leak defence only.** The child's stdout and
   stderr pass through a filter that replaces every exact occurrence of a
   resolved value with `***`, holding back a tail the length of the longest
@@ -115,26 +123,26 @@ and the initial environment of any same-user process is readable with `ps eww`
   child writes to files, and does not see a transformed value (`base64`, a
   substring); that is the line between accident and intent, and the docs say
   so.
-- **A `coffer run` resolve is audited.** The resolve route
-  (`POST /api/v1/secrets/resolve`) answers `secret/<name>` refs only, so a
-  resource's minted ref is never answerable there, and records one
-  `secret_resolved` row per name with the name, the command's `argv[0]` and
+- **Every use is audited.** The resolve route
+  (`POST /api/v1/secrets/resolve`) answers `secret/<id>` refs only and records
+  one `secret_resolved` row per secret with the id, the command's `argv[0]` and
   working directory — never the value, never the rest of argv, which may itself
-  carry a secret. Volume is bounded by the audit log's per-table retention
-  ([Audit Every Change With Its Actor](audit-and-retention.md)). A resolve at a
-  resource's moment of use is not an audit row; it stamps the secret's
-  last-used time, shown in the listing.
+  carry a secret. A use at a resource's moment of use (an MCP spawn, a channel
+  start, a provider key fetch, a sync push) is audited the same way, naming
+  the destination and slot. Volume is bounded by a one-minute window per
+  destination and the audit log's per-table retention
+  ([Audit Every Change With Its Actor](audit-and-retention.md)).
 - **Every stored secret is listable, with what uses it.** `coffer secret list`
-  and the Secrets page list every stored ref — cited or not — with the
-  resources that cite it from the kinds' extractors and, for `secret/` names,
+  and the Secrets page list every stored ref — cited or not — with its name,
+  its description, the resources that cite it from the kinds' extractors and
   the skills in the master store whose files mention the URI (a literal search
-  of Coffer's own skill store). A row nothing references is the cleanup
-  candidate. The list carries no values: a value is seen only in the desktop
-  app, under a presence check.
+  of Coffer's own skill store, kept in a rebuildable index). A row nothing
+  references shows as Not used and is the cleanup candidate. The list carries
+  no values: a value is seen only in the desktop app, under a presence check.
 - **No migration of plaintext secret files.** Coffer does not scan
   `~/.coffer/secrets/` or the skill store for plaintext values and does not
   rewrite files. A person or their agent stores a value as a standalone secret
-  and cites `coffer://secret/<name>`. A new standalone secret, and the
+  and cites `coffer://secret/<id>`. A new standalone secret, and the
   replacement of a value already in use, are stored at once: writing stays open
   ([Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)).
 
@@ -240,16 +248,41 @@ proxy with a placeholder in the environment (the pattern of Claude Code's
   the agent's own child; handing it a value is handing the agent the value, and
   the design says so instead of pretending otherwise.
 
+### Option G — A person-chosen, fixed name: `secret/<name>` (the earlier design)
+
+A standalone secret's id was the name its author typed, fixed after creation,
+cited as `coffer://secret/<name>`. `coffer run --secret NAME` derived the
+variable name from it.
+
+- **Pros.** A citation reads at a glance in a skill file or a `.env`; no
+  minting step; `coffer run --secret github` was short.
+- **Cons.** The name was both the label and the identity, so it could not be
+  fixed and also be good. A person wrote it before they knew what the secret
+  would be used for, and could not correct it: renaming meant rewriting every
+  config, skill file and script that cites it, including files on other
+  machines Coffer cannot see, so a rename was create-new plus delete-old and a
+  typo or a vague name stayed for good. Names also leaked structure:
+  `postman.AUTHORIZATION` and `team.TOKEN` shapes grew inside the namespace,
+  and the Secrets page showed whatever the author typed, or a hex segment for a
+  resource's own secret.
+- **Why it lost.** Readable and unrenamable is the wrong trade for a value that
+  outlives the labels around it. Splitting the two keeps the one property the
+  fixed name bought (a citation that never goes stale) and gives the person a
+  name and description they can change at any time.
+
 ## Decision
 
 A secret that belongs to no resource is one ciphertext file of the existing
-encrypted store under `secret/<name>`, cited as `coffer://secret/<name>`, and
-its name cannot change after creation. `coffer run` resolves the secrets a
-command names or whose references it inherits, through the daemon, and sets
-them only in that one child's environment, masking exact matches of the values
-in the child's output. Every `coffer run` resolve is audited without the value.
-Every stored secret is listed with what uses it, cited or not. Plaintext secret
-files are migrated into the store and rewritten as references.
+encrypted store under `secret/<uuid4 hex>`, minted by Coffer and fixed for
+life, cited as `coffer://secret/<id>`. A person gives it only a name (a label of
+up to 64 characters) and a description (up to 200), kept in a synced vault
+notes document, so changing them touches nothing that cites the secret.
+`coffer run` resolves the secrets a command names or whose references it
+inherits, through the daemon, and sets them only in that one child's
+environment, masking exact matches of the values in the child's output. Every
+`coffer run` resolve is audited without the value. Every stored secret is listed
+with what uses it, cited or not. Plaintext secret files are migrated into the
+store and rewritten as references.
 
 The threat model is part of the decision: this protects against secrets
 landing in transcripts, git and plaintext files by accident, and — with no
@@ -266,16 +299,23 @@ Rules a future change must respect:
 - A `coffer run` resolve that is not audited is a defect.
 - The masking filter is described everywhere as an accident guard, never as
   protection.
-- The `secret/` namespace is never released by a resource deletion.
+- A secret's id never changes and a person never chooses one; what a person
+  can change, freely, is its name and description.
+- Deleting a resource never deletes a standalone secret: a secret is released
+  only when it was created for that resource and nothing else cites it.
 
 ## Consequences
 
-- Minted opaque refs remain the rule for resource-owned secrets
-  ([Resources Cite Secrets by Opaque Reference](credential-references.md));
-  this adds a second, named namespace for secrets owned by people and skills.
-- The skill-library guide cites secrets as `coffer://secret/<name>` and runs
+- One shape serves every secret: `secret/<uuid4 hex>`, for a standalone secret
+  and for the ones a resource owns alike
+  ([Resources Cite Secrets by Opaque Reference](credential-references.md)).
+  What differs is only who the secret was minted for, which the notes record.
+- The skill-library guide cites secrets as `coffer://secret/<id>` and runs
   commands under `coffer run`, the `coffer-guide` skill teaches `coffer run`,
   and `SECURITY.md` states the threat model above.
+- A one-time start-up migration moved every older standalone `secret/<name>`
+  to a minted id, keeping the old name as its label and rewriting
+  `coffer://secret/<name>` in the skill store's files.
 - The provider key Coffer once injected into the Codex process it drives is
   gone: the local model proxy hands an agent only its local proxy token
   ([API-Key Providers Are Reached Through a Separate Local Model Proxy](api-key-providers-are-reached-through-a-separate-local-model-proxy.md)).
@@ -286,9 +326,9 @@ Rules a future change must respect:
   still holds a value (spec vault-sync "Refuse to push a plaintext secret"). A
   secret typed into a skill file after the migration therefore reaches local
   history, and is stopped at the remote.
-- Not built yet: an audit row for a resolve at a resource's moment of use (an
-  MCP spawn, a channel start, a sync push, a provider key fetch); only
-  `coffer run`'s resolves are audited, and the others stamp last-used time.
+- A resolve at a resource's moment of use (an MCP spawn, a channel start, a
+  sync push, a provider key fetch) is audited too, as `secret_resolved` naming
+  the destination and slot, at most once a minute per destination.
 - Not built yet: a pseudo-terminal for the child; a tool that needs a real
   terminal runs with `--no-masking`.
 - Not built yet: a skill's `requires.secrets` frontmatter as a source of

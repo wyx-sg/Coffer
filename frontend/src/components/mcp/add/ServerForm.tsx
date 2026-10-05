@@ -18,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useSecretChoices } from "@/components/secret/useSecretChoices";
 import type { KeyValueSecretRow } from "@/components/secret/secretValue";
 import { translateApiError } from "@/lib/api/errors";
 import { useMcpConfigTest } from "@/lib/hooks/useMcpAddFlow";
@@ -65,16 +64,13 @@ export function ServerForm({
 }: Props) {
   const { t } = useTranslation();
   const type = initial.transportType;
-  const { names: secretNames } = useSecretChoices();
   const [name, setName] = useState(initial.name);
   const [description, setDescription] = useState("");
   const [cwd, setCwd] = useState("");
   const [command, setCommand] = useState(initial.command);
   const [argsText, setArgsText] = useState(initial.args.map(quoteArg).join(" "));
   const [url, setUrl] = useState(initial.url);
-  const [rows, setRows] = useState<KeyValueSecretRow[]>(() =>
-    rowsFromParsed(initial.env, new Set(secretNames), true),
-  );
+  const [rows, setRows] = useState<KeyValueSecretRow[]>(() => rowsFromParsed(initial.env, true));
   const [asked] = useState(() => askedKeysOf(initial.env));
   const [focusRow, setFocusRow] = useState<number | undefined>();
   const [reach, setReach] = useState<ReachIntent>({ mode: "everywhere" });
@@ -94,7 +90,7 @@ export function ServerForm({
     command: type === "stdio" ? command.trim() : "",
     args: type === "stdio" ? (args ?? []) : [],
     url: type === "http" ? url.trim() : "",
-    env: promoteAsked(keptRows(rows), asked, secretNames).map((r) => ({
+    env: promoteAsked(keptRows(rows), asked).map((r) => ({
       ...r,
       key: r.key.trim(),
     })),
@@ -111,7 +107,10 @@ export function ServerForm({
   const formKey = testKeyOf(testBody);
   const result = test.data && testedKey === formKey ? test.data : null;
   const canTest =
-    !test.isPending && targetOk && missingSecretValues(server).length === 0 && unfilled.length === 0;
+    !test.isPending &&
+    targetOk &&
+    missingSecretValues(server).length === 0 &&
+    unfilled.length === 0;
   const runTest = () => {
     setTestedKey(formKey);
     test.mutate(testBody);

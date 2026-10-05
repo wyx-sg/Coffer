@@ -14,7 +14,13 @@ import { KeyValueSecretRows } from "./KeyValueSecretRows";
 import { SecretField } from "./SecretField";
 
 vi.mock("@/lib/api/secret", () => ({
-  secretsApi: { list: vi.fn(), set: vi.fn(), pendingApprovals: vi.fn() },
+  secretsApi: {
+    list: vi.fn(),
+    set: vi.fn(),
+    add: vi.fn(),
+    setNotes: vi.fn(),
+    pendingApprovals: vi.fn(),
+  },
 }));
 const { secretsApi } = await import("@/lib/api/secret");
 const api = vi.mocked(secretsApi);
@@ -69,12 +75,17 @@ function RowsHarness({ initial }: { initial: KeyValueSecretRow[] }) {
   );
 }
 
+const MINTED = "0123456789abcdef0123456789abcdef";
+const HEX = expect.stringMatching(/^[0-9a-f]{32}$/);
+
 const current = (id: string) => JSON.parse(screen.getByTestId(id).textContent ?? "null");
 
 beforeEach(() => {
   api.list.mockResolvedValue({ refs: [stored("openai-key", 3), stored("deploy-token", 0)] });
   api.pendingApprovals.mockResolvedValue({ approvals: [] });
   api.set.mockResolvedValue(undefined);
+  api.setNotes.mockResolvedValue({ ref: "", label: null, description: null });
+  api.add.mockResolvedValue({ ref: `secret/${MINTED}`, uri: `coffer://secret/${MINTED}` });
 });
 afterEach(() => vi.clearAllMocks());
 
@@ -89,27 +100,60 @@ describe("SecretField", () => {
     expect(screen.getByText("deploy-token")).toBeInTheDocument();
   });
 
+  test("the menu lists secrets by name and description, and picking one stores its id", async () => {
+    api.list.mockResolvedValue({
+      refs: [
+        {
+          ...stored(MINTED),
+          label: "GitHub token",
+          description: "release bot",
+        } as SecretRef,
+        stored("deploy-token", 0),
+      ],
+    });
+    wrap(<FieldHarness />);
+    fireEvent.click(screen.getByRole("button", { name: /choose a secret for api key/i }));
+    const list = await screen.findByRole("listbox");
+    const option = await within(list).findByRole("option", { name: /GitHub token/ });
+    expect(option).toHaveTextContent("release bot");
+    expect(list).not.toHaveTextContent(MINTED);
+    // The filter finds it by its description too.
+    fireEvent.change(screen.getByLabelText("Filter secrets"), { target: { value: "release" } });
+    expect(within(list).getAllByRole("option")).toHaveLength(1);
+    fireEvent.click(within(list).getByRole("option", { name: /GitHub token/ }));
+    // The config gets the id; the field shows the name.
+    expect(current("value")).toEqual({ kind: "stored", name: MINTED });
+    expect(await screen.findByText("GitHub token")).toBeInTheDocument();
+  });
+
   acceptance(
     "web-ui",
     "a pasted value becomes a new secret written when the form is saved",
     async () => {
       wrap(<FieldHarness />);
       await screen.findByPlaceholderText("Choose a secret, or paste a new value");
-      // openai-key is taken, so the default name gets a suffix.
       await waitFor(() => expect(api.list).toHaveBeenCalled());
       await screen.findByRole("button", { name: /choose a secret/i });
       fireEvent.paste(screen.getByPlaceholderText("Choose a secret, or paste a new value"), {
         clipboardData: { getData: () => "sk-abc123" },
       });
+      // A minted id, labelled after the thing being configured; no name to type.
       await waitFor(() =>
-        expect(current("value")).toEqual({ kind: "new", name: "openai-key-2", value: "sk-abc123" }),
+        expect(current("value")).toEqual({
+          kind: "new",
+          name: HEX,
+          label: "openai-key",
+          value: "sk-abc123",
+        }),
       );
       expect(screen.getByText("New · saved on Add")).toBeInTheDocument();
       expect(screen.queryByDisplayValue("sk-abc123")).not.toBeInTheDocument();
       expect(api.set).not.toHaveBeenCalled();
 
-      await persistNewSecrets([current("value")]);
-      expect(api.set).toHaveBeenCalledWith("secret/openai-key-2", "sk-abc123");
+      const pending = current("value");
+      await persistNewSecrets([pending]);
+      expect(api.set).toHaveBeenCalledWith(`secret/${pending.name}`, "sk-abc123");
+      expect(api.setNotes).toHaveBeenCalledWith(`secret/${pending.name}`, { label: "openai-key" });
     },
   );
 
@@ -118,13 +162,11 @@ describe("SecretField", () => {
     fireEvent.click(screen.getByRole("button", { name: /choose a secret for api key/i }));
     fireEvent.click(await screen.findByRole("button", { name: "New secret…" }));
     const dialog = await screen.findByRole("dialog", { name: "New secret" });
-    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "grafana-token" } });
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "Grafana token" } });
     fireEvent.change(within(dialog).getByLabelText("Value"), { target: { value: "glsa_1" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add secret" }));
-    await waitFor(() => expect(api.set).toHaveBeenCalledWith("secret/grafana-token", "glsa_1"));
-    await waitFor(() =>
-      expect(current("value")).toEqual({ kind: "stored", name: "grafana-token" }),
-    );
+    await waitFor(() => expect(api.add).toHaveBeenCalledWith("Grafana token", "glsa_1"));
+    await waitFor(() => expect(current("value")).toEqual({ kind: "stored", name: MINTED }));
   });
 
   test("the menu stays open inside a dialog's focus trap", async () => {
@@ -187,7 +229,10 @@ describe("KeyValueSecretRows", () => {
     wrap(<RowsHarness initial={[plain("X-Api-Token", "abc")]} />);
     fireEvent.click(screen.getByRole("button", { name: "Store it in Coffer?" }));
     expect(current("rows")).toEqual([
-      { key: "X-Api-Token", value: { kind: "new", name: "x-api-token", value: "abc" } },
+      {
+        key: "X-Api-Token",
+        value: { kind: "new", name: HEX, label: "X-Api-Token", value: "abc" },
+      },
     ]);
   });
 

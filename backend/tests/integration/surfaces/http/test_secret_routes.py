@@ -99,6 +99,12 @@ class _FakeResourceService:
     async def find_secret_citations(self, secret_ref: str) -> list[Resource]:
         return list(self.citations.get(secret_ref, []))
 
+    def secret_slots(self, resource: Resource) -> dict[str, str]:
+        for ref, rows in self.citations.items():
+            if any(r.uid == resource.uid for r in rows):
+                return {"KEY": ref}
+        return {}
+
     async def cited_secret_refs(self) -> dict[str, list[Resource]]:
         return {ref: list(rows) for ref, rows in self.citations.items() if rows}
 
@@ -135,16 +141,19 @@ async def test_set_secret_stores_value() -> None:
     ) as c:
         r = await c.post(
             "/api/v1/secrets",
-            json={"ref": "github.GITHUB_TOKEN", "value": "ghp_secret"},
+            json={"ref": "secret/0123456789abcdef0123456789abcdef", "value": "ghp_secret"},
         )
         assert r.status_code == 204
-    assert fake.store["github.GITHUB_TOKEN"] == "ghp_secret"
+    assert fake.store["secret/0123456789abcdef0123456789abcdef"] == "ghp_secret"
     # spec resource-framework "Audit every lifecycle change": every secret lifecycle
     # change is audited; secret value MUST NOT appear in the audit row — only the ref.
     assert len(audit_repo.entries) == 1
     set_entry = audit_repo.entries[0]
     assert set_entry.event_type == "secret_set"
-    assert set_entry.details == {"ref": "github.GITHUB_TOKEN", "replaced": False}
+    assert set_entry.details == {
+        "ref": "secret/0123456789abcdef0123456789abcdef",
+        "replaced": False,
+    }
     assert "ghp_secret" not in str(set_entry.details)
 
 
@@ -307,12 +316,16 @@ async def test_list_reports_every_cited_ref_with_its_presence() -> None:
             {
                 "ref": "mcp/github/token",
                 "present": True,
-                "cited_by": [{"uid": f"{1:032x}", "kind": "mcp_server", "name": "github"}],
+                "cited_by": [
+                    {"uid": f"{1:032x}", "kind": "mcp_server", "name": "github", "slot": "KEY"}
+                ],
             },
             {
                 "ref": "provider/openai/key",
                 "present": False,
-                "cited_by": [{"uid": f"{2:032x}", "kind": "provider", "name": "openai"}],
+                "cited_by": [
+                    {"uid": f"{2:032x}", "kind": "provider", "name": "openai", "slot": "key"}
+                ],
             },
         ]
     }
@@ -369,7 +382,7 @@ async def test_slash_separated_refs_round_trip() -> None:
     set -> exists -> get -> delete without mangling the path."""
     fake = _FakeSecretStore()
     transport = ASGITransport(_build_app(fake, _FakeAuditRepo()))
-    ref = "channel/tg/bot-token"
+    ref = "secret/0123456789abcdef0123456789abcdef"
     async with AsyncClient(
         transport=transport,
         base_url="http://t",

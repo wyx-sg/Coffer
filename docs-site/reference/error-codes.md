@@ -81,8 +81,8 @@ give the status each code is actually sent with.
 | `APPROVAL_NOT_FOUND` | 404 | No approval has that id. | List them in **Settings › Security** (**Review**). |
 | `APPROVAL_NOT_PENDING` | 409 | The approval was already approved, rejected or superseded. | Nothing to do; a new change raises a new approval. |
 | `PRESENCE_GRANT_INVALID` | 403 | A reveal, key backup or approval came without a valid presence grant: missing, expired, already used, for another operation or target, or not signed by the desktop app. | Do it in the Coffer desktop app, which runs the presence check and signs the grant. |
-| `SECRET_NAME_INVALID` | 422 | A standalone secret name is not one segment of `[A-Za-z0-9_.-]` of at most 64 characters. | Pick a valid name, such as `orders-db`. |
-| `SECRET_NOT_FOUND` | 404 | `coffer run` named a standalone secret the store does not hold. Only `secret/<name>` values can be resolved this way; a resource's secret never can. | Store it: `coffer secret set secret/<name>`. |
+| `SECRET_NAME_INVALID` | 422 | A new standalone secret's ref is not `secret/<32 hex>`, or its label is over 64 characters or its description over 200. | Mint the secret with `coffer secret set --name "Orders DB"` and let Coffer choose the id; shorten the label or description. |
+| `SECRET_NOT_FOUND` | 404 | `coffer run` named a standalone secret the store does not hold. Only `secret/<id>` values can be resolved this way; a resource's secret never can. | Check the id with `coffer secret list`, or mint the secret with `coffer secret set --name "<name>"`. |
 
 ## MCP servers and the gateway
 
@@ -133,7 +133,7 @@ give the status each code is actually sent with.
 | `MCP_ENTRY_PROTECTED` | 422 | The entry is Coffer's own gateway entry. | Use the install and uninstall actions instead of editing it. |
 | `MCP_ENTRY_SOURCE_AMBIGUOUS` | 422 | The entry exists in more than one config file. | Name the source file. |
 | `ADOPT_SECRET_UNRESOLVED` | 422 | Adopting an MCP entry found secret-like environment keys with no secret mapping. | Map each listed key to a secret ref when adopting. |
-| `ADOPT_SECRET_REF_EXISTS` | 409 | Adopting an MCP entry mapped a secret key to a ref that already holds a value, or to a standalone `secret/<name>`. Adopting only creates refs. Nothing was written. | Map the key to a new ref, or delete the existing secret first if nothing uses it. |
+| `ADOPT_SECRET_REF_EXISTS` | 409 | Adopting an MCP entry mapped a secret key to a ref that already holds a value, or to a standalone `secret/<id>`. Adopting only creates refs. Nothing was written. | Map the key to a new ref, or delete the existing secret first if nothing uses it. |
 | `PLUGIN_NOT_FOUND` | 404 | No installed plugin has that identifier. | Refresh the plugin list. |
 | `PLUGIN_TOGGLE_UNSUPPORTED` | 422 | This agent type's plugins cannot be enabled or disabled through Coffer. | Use the agent's own tooling. |
 | `PLUGIN_UNINSTALL_UNSUPPORTED` | 422 | This agent type's plugins must be uninstalled with the agent's own tooling. | Use the agent's own tooling. |

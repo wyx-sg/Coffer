@@ -35,7 +35,8 @@ export type ListKind =
   | "customTools"
   | "providers"
   | "knowledge"
-  | "memory";
+  | "memory"
+  | "secrets";
 
 // Title and subtitle bar widths (px) of the seven rows, as drawn on the board.
 const ROWS: readonly (readonly [number, number])[] = [

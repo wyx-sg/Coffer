@@ -121,14 +121,17 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
               onChange={(e) => setBaseUrl(e.target.value)}
             />
           </FormField>
-          <FormField label={t("customTools.fields.headers")} help={t("customTools.fields.headersHelp")}>
+          <FormField
+            label={t("customTools.fields.headers")}
+            help={t("customTools.fields.headersHelp")}
+          >
             <KeyValueSecretRows
               rows={rows}
               onChange={setRows}
               label={t("customTools.fields.headers")}
               keyPlaceholder={t("customTools.editor.headerKey")}
               addLabel={t("customTools.editor.addHeader")}
-              secretNameFor={(key) => `${group.name}-${key}`}
+              secretLabelFor={(key) => `${group.name}-${key}`}
             />
           </FormField>
           <FormField

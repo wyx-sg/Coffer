@@ -19,6 +19,9 @@ vi.mock("@/lib/api/secret", () => ({
     list: vi.fn(),
     set: vi.fn(),
     remove: vi.fn(),
+    add: vi.fn(),
+    setNotes: vi.fn(),
+    uses: vi.fn(),
     scan: vi.fn(),
     importFindings: vi.fn(),
     pendingApprovals: vi.fn(),
@@ -66,23 +69,26 @@ function ref(over: Partial<SecretRef> & { ref: string }): SecretRef {
     readable_by_local_processes: false,
     unreferenced: false,
     uri: null,
+    label: null,
+    description: null,
+    created_for: null,
     ...over,
   };
 }
 
 const GITHUB = ref({
   ref: "mcp_server/u-gh/GITHUB_TOKEN",
-  cited_by: [{ kind: "mcp_server", name: "github", uid: "u-gh" }],
+  cited_by: [{ kind: "mcp_server", name: "github", uid: "u-gh", slot: null }],
 });
 const OPENAI = ref({
   ref: "provider/u-oa/api_key",
   present: false,
-  cited_by: [{ kind: "provider", name: "OpenAI", uid: "u-oa" }],
+  cited_by: [{ kind: "provider", name: "OpenAI", uid: "u-oa", slot: null }],
 });
 const SEATALK = ref({
   ref: "secret/seatalk-app-secret",
   uri: "coffer://secret/seatalk-app-secret",
-  cited_by: [{ kind: "channel", name: "SeaTalk", uid: "u-st" }],
+  cited_by: [{ kind: "channel", name: "SeaTalk", uid: "u-st", slot: null }],
 });
 const OLD = ref({
   ref: "secret/old-openai-key",
@@ -96,7 +102,7 @@ function Where() {
   return <p data-testid="where">{location.pathname}</p>;
 }
 
-function renderPage() {
+function renderPage(path = "/secrets") {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -104,11 +110,14 @@ function renderPage() {
     <QueryClientProvider client={qc}>
       <ToastProvider>
         <TooltipProvider>
-          <MemoryRouter initialEntries={["/secrets"]}>
+          <MemoryRouter initialEntries={[path]}>
             <Routes>
               <Route path="/secrets" element={<SecretsPage />} />
+              <Route path="/secrets/:id" element={<SecretsPage />} />
+              <Route path="/secrets/:id/:tab" element={<SecretsPage />} />
               <Route path="*" element={<Where />} />
             </Routes>
+            <Where />
           </MemoryRouter>
         </TooltipProvider>
       </ToastProvider>
@@ -116,13 +125,16 @@ function renderPage() {
   );
 }
 
+const at = (ref: string, tab = "") => `/secrets/${encodeURIComponent(ref)}${tab}`;
 const openMenu = (name: string) =>
   fireEvent.click(screen.getByRole("button", { name: `Actions for ${name}` }));
+const HEX = "0123456789abcdef0123456789abcdef";
 
 beforeEach(() => {
   inShell = false;
   api.list.mockResolvedValue({ refs: [GITHUB, OPENAI, SEATALK, OLD] });
   api.pendingApprovals.mockResolvedValue({ approvals: [] });
+  api.uses.mockResolvedValue([]);
   attention = { items: [], ignored: [] };
   api.remove.mockResolvedValue(undefined);
   api.set.mockResolvedValue(undefined);
@@ -133,53 +145,103 @@ afterEach(() => {
 });
 
 describe("SecretsPage", () => {
+  acceptance(
+    "web-ui",
+    "a secret opens on its own detail page with overview and usage",
+    async () => {
+      renderPage();
+      // The list reads names, not ids; nothing is open until a row is.
+      const row = await screen.findByRole("link", { name: /OpenAI · api_key/ });
+      expect(screen.getByText("Nothing selected")).toBeInTheDocument();
+      fireEvent.click(row);
+      expect(screen.getAllByTestId("where")[0]).toHaveTextContent(at("provider/u-oa/api_key"));
+      // Overview: the reference, whether this Mac holds it, and Used by with a link.
+      expect(await screen.findByText("provider/u-oa/api_key")).toBeInTheDocument();
+      expect(
+        screen.getByText("No value on this Mac", { selector: "dd *, dd" }),
+      ).toBeInTheDocument();
+      const usedBy = screen.getByRole("region", { name: "Used by" });
+      expect(within(usedBy).getByText("OpenAI")).toBeInTheDocument();
+      fireEvent.click(within(usedBy).getByRole("link", { name: /OpenAI/ }));
+      expect(screen.getAllByTestId("where")[0]).toHaveTextContent("/model-providers/u-oa");
+    },
+  );
+
   acceptance("web-ui", "the secrets page lists each secret with what uses it", async () => {
     renderPage();
-    await screen.findByText("GITHUB_TOKEN");
-    const githubRow = screen.getByText("GITHUB_TOKEN").closest("tr")!;
-    const openaiRow = screen.getByText("api_key").closest("tr")!;
-    expect(within(githubRow).queryByText("No value on this Mac")).not.toBeInTheDocument();
-    expect(within(openaiRow).getByText("No value on this Mac")).toBeInTheDocument();
-
-    fireEvent.click(within(openaiRow).getByRole("button", { name: /is used by 1 thing/ }));
-    expect(await screen.findByText("Model provider")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("link", { name: /OpenAI/ }));
-    expect(screen.getByTestId("where")).toHaveTextContent("/model-providers/u-oa");
+    // Both are listed: the server's as present, the provider's as missing here.
+    const github = await screen.findByRole("link", { name: /github · GITHUB_TOKEN/ });
+    const openai = screen.getByRole("link", { name: /OpenAI · api_key/ });
+    expect(github.closest("li")).not.toHaveTextContent("No value on this Mac");
+    expect(openai.closest("li")).toHaveTextContent("No value on this Mac");
+    // Choosing a row names its citer by kind and name, which opens its page.
+    fireEvent.click(github);
+    const usedBy = await screen.findByRole("region", { name: "Used by" });
+    expect(within(usedBy).getByText("github")).toBeInTheDocument();
+    expect(within(usedBy).getByText("MCP server")).toBeInTheDocument();
+    fireEvent.click(within(usedBy).getByRole("link", { name: /github/ }));
+    expect(screen.getAllByTestId("where")[0]).toHaveTextContent("/mcp-servers/github");
   });
 
   test("a citer whose feature is off is named without a link to its missing page", async () => {
     kindPageOpen = false;
-    renderPage();
-    await screen.findByText("GITHUB_TOKEN");
-    const openaiRow = screen.getByText("api_key").closest("tr")!;
-    fireEvent.click(within(openaiRow).getByRole("button", { name: /is used by 1 thing/ }));
-    expect(await screen.findByText("Model provider")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /OpenAI/ })).toBeNull();
+    renderPage(at("provider/u-oa/api_key"));
+    const usedBy = await screen.findByRole("region", { name: "Used by" });
+    expect(within(usedBy).getByText("OpenAI")).toBeInTheDocument();
+    expect(within(usedBy).queryByRole("link")).toBeNull();
   });
 
-  test("a secret nothing uses is found under Not used, never used", async () => {
+  test("the Usage tab lists where the value was handed out, with a link to Activity", async () => {
+    api.uses.mockResolvedValue([
+      {
+        at: new Date(Date.now() - 2 * 60_000).toISOString(),
+        actor: "daemon",
+        destination_kind: "mcp_server",
+        destination_uid: "u-gh",
+        destination_name: "github",
+        slot: "GITHUB_TOKEN",
+        argv0: null,
+        cwd: null,
+      },
+      {
+        at: new Date(Date.now() - 3600_000).toISOString(),
+        actor: "cli",
+        destination_kind: "run",
+        destination_uid: null,
+        destination_name: "run",
+        slot: null,
+        argv0: "npm",
+        cwd: "/work/app",
+      },
+    ]);
+    renderPage(at(GITHUB.ref));
+    fireEvent.mouseDown(await screen.findByRole("tab", { name: "Usage" }));
+    const usage = within(await screen.findByRole("tabpanel"));
+    expect(await usage.findByRole("link", { name: /github/ })).toHaveAttribute(
+      "href",
+      "/mcp-servers/github",
+    );
+    expect(usage.getByText("2 min ago")).toBeInTheDocument();
+    expect(usage.getByText("coffer run npm")).toBeInTheDocument();
+    expect(usage.getByText("/work/app")).toBeInTheDocument();
+    expect(api.uses).toHaveBeenCalledWith(GITHUB.ref);
+    expect(screen.getByRole("link", { name: "View all in Activity" })).toHaveAttribute(
+      "href",
+      `/activity?tab=changes&q=${encodeURIComponent(GITHUB.ref)}`,
+    );
+  });
+
+  test("a secret never handed out says so on the Usage tab", async () => {
+    renderPage(at(OLD.ref, "/usage"));
+    expect(await screen.findByText("Not used on this Mac yet")).toBeInTheDocument();
+  });
+
+  test("a secret nothing uses is found under Not used", async () => {
     renderPage();
     await screen.findByText("old-openai-key");
     fireEvent.click(screen.getByRole("button", { name: "Not used" }));
-    const row = screen.getByText("old-openai-key").closest("tr")!;
-    expect(within(row).getByText("Nothing")).toBeInTheDocument();
-    expect(within(row).getByText("Never")).toBeInTheDocument();
-    expect(screen.queryByText("GITHUB_TOKEN")).not.toBeInTheDocument();
-  });
-
-  test("each row says when it was last used and created, and copies its reference", async () => {
-    const used = new Date(Date.now() - 2 * 60_000).toISOString();
-    api.list.mockResolvedValue({ refs: [{ ...SEATALK, last_used_at: used }] });
-    renderPage();
-    const row = (await screen.findByText("seatalk-app-secret")).closest("tr")!;
-    expect(row).toHaveTextContent("2 min ago");
-    expect(row).toHaveTextContent("Aug 12");
-    openMenu("seatalk-app-secret");
-    expect(
-      screen.getByRole("menuitem", {
-        name: "Copy reference (coffer://secret/seatalk-app-secret)",
-      }),
-    ).toBeInTheDocument();
+    expect(screen.getByText("old-openai-key")).toBeInTheDocument();
+    expect(screen.queryByText(/GITHUB_TOKEN/)).not.toBeInTheDocument();
   });
 
   acceptance("secret", "a secret this Mac cannot open is missing on this Mac", async () => {
@@ -187,27 +249,21 @@ describe("SecretsPage", () => {
       ref: "secret/sentry-token",
       uri: "coffer://secret/sentry-token",
       locked: true,
-      cited_by: [{ kind: "mcp_server", name: "sentry", uid: "u-se" }],
+      cited_by: [{ kind: "mcp_server", name: "sentry", uid: "u-se", slot: null }],
     });
     api.list.mockResolvedValue({ refs: [GITHUB, OPENAI, locked] });
-    renderPage();
+    renderPage(at("secret/sentry-token"));
     const banner = await screen.findByTestId("secrets-missing-banner");
     expect(banner).toHaveTextContent("2 secrets have no value on this Mac");
     expect(banner).toHaveTextContent("OpenAI and sentry can’t start until they have a value.");
     // Importing the master key replaces this Mac's own; it is not offered here.
     expect(within(banner).queryByRole("link")).toBeNull();
     expect(within(banner).getByRole("button", { name: "Add values" })).toBeInTheDocument();
-    const row = screen.getByText("sentry-token").closest("tr")!;
-    expect(within(row).getByText("No value on this Mac")).toBeInTheDocument();
-    expect(within(row).getByText("Never")).toBeInTheDocument();
-    openMenu("sentry-token");
-    expect(screen.getByRole("menuitem", { name: "Reveal in the Coffer app" })).toBeDisabled();
-    // The row's Add value button is not repeated in the menu.
-    expect(
-      screen.queryByRole("menuitem", { name: /^(Add|Replace) value/ }),
-    ).not.toBeInTheDocument();
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
-    fireEvent.click(within(row).getByRole("button", { name: "Add a value for sentry-token" }));
+    // The row says so, and the pane's own action is Add value, with reveal off.
+    const list = screen.getByRole("list", { name: "Secrets" });
+    expect(within(list).getAllByText("No value on this Mac")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Reveal in the Coffer app" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Add value" }));
     const dialog = await screen.findByRole("dialog", { name: "Add a value for sentry-token" });
     fireEvent.change(within(dialog).getByLabelText("New value"), { target: { value: "sntr" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add value" }));
@@ -223,13 +279,73 @@ describe("SecretsPage", () => {
     });
     expect(screen.getByText("seatalk-app-secret")).toBeInTheDocument();
     expect(screen.queryByText("old-openai-key")).not.toBeInTheDocument();
-    expect(screen.queryByText("GITHUB_TOKEN")).not.toBeInTheDocument();
+  });
+
+  acceptance("secret", "a secret added on the page gets a minted id and its label", async () => {
+    api.add.mockResolvedValue({ ref: `secret/${HEX}`, uri: `coffer://secret/${HEX}` });
+    renderPage();
+    await screen.findByText("seatalk-app-secret");
+    fireEvent.click(screen.getByRole("button", { name: "Add secret" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add secret" });
+    // No name to type: a label and a value.
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "GitHub token" } });
+    fireEvent.change(within(dialog).getByLabelText("Value"), { target: { value: "ghp_x" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add secret" }));
+    // Then the dialog offers the minted URI to copy, and waits for Done.
+    expect(await within(dialog).findByText(`coffer://secret/${HEX}`)).toBeInTheDocument();
+    expect(api.add).toHaveBeenCalledWith("GitHub token", "ghp_x");
+    expect(api.set).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  test("the label and description save in place and leave the reference alone", async () => {
+    api.setNotes.mockResolvedValue({ ref: SEATALK.ref, label: "SeaTalk bot", description: null });
+    renderPage(at(SEATALK.ref));
+    const label = await screen.findByRole("textbox", { name: "Name" });
+    fireEvent.change(label, { target: { value: "SeaTalk bot" } });
+    fireEvent.blur(label);
+    await waitFor(() =>
+      expect(api.setNotes).toHaveBeenCalledWith(SEATALK.ref, { label: "SeaTalk bot" }),
+    );
+    const description = screen.getByRole("textbox", { name: "Description" });
+    description.focus();
+    fireEvent.change(description, { target: { value: "bot app secret" } });
+    fireEvent.keyDown(description, { key: "Enter" });
+    await waitFor(() =>
+      expect(api.setNotes).toHaveBeenCalledWith(SEATALK.ref, { description: "bot app secret" }),
+    );
+    // The list is read again, and the address did not move.
+    await waitFor(() => expect(api.list.mock.calls.length).toBeGreaterThan(1));
+    expect(screen.getAllByTestId("where")[0]).toHaveTextContent(at(SEATALK.ref));
+  });
+
+  test("a secret with a label is listed and searched by it, with its description", async () => {
+    api.list.mockResolvedValue({
+      refs: [
+        {
+          ...ref({ ref: `secret/${HEX}`, uri: `coffer://secret/${HEX}` }),
+          label: "Jira PAT",
+          description: "release bot's token",
+        } as SecretRef,
+        OLD,
+      ],
+    });
+    renderPage();
+    expect(await screen.findByText("Jira PAT")).toBeInTheDocument();
+    expect(screen.getByText("release bot's token")).toBeInTheDocument();
+    expect(screen.queryByText(HEX)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Find a secret" }), {
+      target: { value: "RELEASE" },
+    });
+    expect(screen.getByText("Jira PAT")).toBeInTheDocument();
+    expect(screen.queryByText("old-openai-key")).not.toBeInTheDocument();
   });
 
   acceptance("web-ui", "a secret in use cannot be deleted from the secrets page", async () => {
-    renderPage();
-    await screen.findByText("seatalk-app-secret");
-    openMenu("seatalk-app-secret");
+    renderPage(at(SEATALK.ref));
+    await screen.findByRole("region", { name: "Used by" });
+    openMenu(SEATALK.ref);
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete…" }));
     const dialog = await screen.findByRole("dialog", { name: "seatalk-app-secret is in use" });
     expect(within(dialog).getByText("SeaTalk")).toBeInTheDocument();
@@ -243,18 +359,18 @@ describe("SecretsPage", () => {
     expect(api.remove).not.toHaveBeenCalled();
     // The footer's Close, not the corner ×.
     fireEvent.click(within(dialog).getAllByRole("button", { name: "Close" }).at(-1)!);
-    expect(screen.getByText("seatalk-app-secret")).toBeInTheDocument();
+    expect(screen.getAllByText("seatalk-app-secret").length).toBeGreaterThan(0);
   });
 
   test("a refusal the daemon answers names what started using it since", async () => {
     api.remove.mockRejectedValueOnce(
       new ApiError("SECRET_IN_USE", "in use", {
-        resources: [{ kind: "skill", name: "release-notes", uid: "s-1" }],
+        resources: [{ kind: "skill", name: "release-notes", uid: "s-1", slot: null }],
       }),
     );
-    renderPage();
-    await screen.findByText("old-openai-key");
-    openMenu("old-openai-key");
+    renderPage(at(OLD.ref));
+    await screen.findByRole("region", { name: "Used by" });
+    openMenu(OLD.ref);
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete…" }));
     const confirm = await screen.findByRole("dialog", { name: "Delete old-openai-key?" });
     fireEvent.click(within(confirm).getByRole("button", { name: "Delete secret" }));
@@ -263,25 +379,38 @@ describe("SecretsPage", () => {
     expect(within(blocked).getByText("release-notes")).toBeInTheDocument();
   });
 
-  test("an unused secret is deleted after confirming", async () => {
-    renderPage();
-    await screen.findByText("old-openai-key");
-    openMenu("old-openai-key");
+  test("an unused secret is deleted after confirming, and the page returns to the list", async () => {
+    renderPage(at(OLD.ref));
+    await screen.findByRole("region", { name: "Used by" });
+    openMenu(OLD.ref);
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete…" }));
     const confirm = await screen.findByRole("dialog", { name: "Delete old-openai-key?" });
     fireEvent.click(within(confirm).getByRole("button", { name: "Delete secret" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(api.remove).toHaveBeenCalledWith("secret/old-openai-key");
+    await waitFor(() => expect(screen.getAllByTestId("where")[0]).toHaveTextContent(/^\/secrets$/));
+  });
+
+  test("the menu holds Copy reference and Delete, not the visible buttons", async () => {
+    renderPage(at(SEATALK.ref));
+    await screen.findByRole("region", { name: "Used by" });
+    expect(screen.getByRole("button", { name: "Replace value…" })).toBeInTheDocument();
+    openMenu(SEATALK.ref);
+    expect(
+      screen.getByRole("menuitem", {
+        name: "Copy reference (coffer://secret/seatalk-app-secret)",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /Replace|Reveal/ })).toBeNull();
   });
 
   acceptance("web-ui", "revealing a secret is an explicit, audited read", async () => {
     inShell = true;
     revealSecret.mockResolvedValue("ghp_example_value");
-    renderPage();
-    await screen.findByText("seatalk-app-secret");
+    renderPage(at(SEATALK.ref));
+    await screen.findByRole("region", { name: "Used by" });
     expect(screen.queryByText("ghp_example_value")).not.toBeInTheDocument();
-    openMenu("seatalk-app-secret");
-    fireEvent.click(screen.getByRole("menuitem", { name: "Reveal value…" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reveal value…" }));
     const dialog = await screen.findByRole("dialog", {
       name: "Show the value of seatalk-app-secret?",
     });
@@ -295,29 +424,25 @@ describe("SecretsPage", () => {
   });
 
   test("a browser offers no reveal and names the desktop app instead", async () => {
-    renderPage();
-    await screen.findByText("seatalk-app-secret");
-    openMenu("seatalk-app-secret");
-    expect(screen.getByRole("menuitem", { name: "Reveal in the Coffer app" })).toBeDisabled();
+    renderPage(at(SEATALK.ref));
+    expect(await screen.findByRole("button", { name: "Reveal in the Coffer app" })).toBeDisabled();
   });
 
-  test("adding stores a standalone secret under its name, and a taken name offers replace", async () => {
-    renderPage();
-    await screen.findByText("seatalk-app-secret");
-    fireEvent.click(screen.getByRole("button", { name: "Add secret" }));
-    const dialog = await screen.findByRole("dialog", { name: "Add secret" });
-    const name = within(dialog).getByLabelText("Name");
-    fireEvent.change(name, { target: { value: "seatalk-app-secret" } });
-    expect(within(dialog).getByRole("alert")).toHaveTextContent("already exists");
-    fireEvent.change(name, { target: { value: "npm-publish-token" } });
-    fireEvent.change(within(dialog).getByLabelText("Value"), { target: { value: "npm_x" } });
-    expect(dialog).toHaveTextContent("coffer://secret/npm-publish-token");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add secret" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(api.set).toHaveBeenCalledWith("secret/npm-publish-token", "npm_x");
+  test("replacing a value stores it at once and says so", async () => {
+    renderPage(at(SEATALK.ref));
+    fireEvent.click(await screen.findByRole("button", { name: "Replace value…" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Replace the value of seatalk-app-secret",
+    });
+    expect(dialog).toHaveTextContent("Channel SeaTalk");
+    fireEvent.change(within(dialog).getByLabelText("New value"), { target: { value: "new" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Replace value" }));
+    expect(await screen.findByText("Replaced the value of seatalk-app-secret")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(api.set).toHaveBeenCalledWith(SEATALK.ref, "new");
   });
 
-  test("a secret whose new destination waits is marked on its row", async () => {
+  test("a secret whose new destination waits is marked on its row and its Used by", async () => {
     api.list.mockResolvedValue({
       refs: [
         GITHUB,
@@ -335,26 +460,18 @@ describe("SecretsPage", () => {
         },
       ],
     });
-    renderPage();
-    const row = (await screen.findByText("seatalk-app-secret")).closest("tr")!;
-    expect(await within(row).findByText("Waiting for approval")).toBeInTheDocument();
+    renderPage(at(SEATALK.ref));
+    const usedBy = await screen.findByRole("region", { name: "Used by" });
+    expect(await within(usedBy).findByText("Waiting for approval")).toBeInTheDocument();
+    expect(within(usedBy).getByText("app_secret")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("list", { name: "Secrets" })).getByText("Waiting for approval"),
+    ).toBeInTheDocument();
   });
 
-  test("replacing a value stores it at once and says so", async () => {
-    api.set.mockResolvedValueOnce(undefined);
-    renderPage();
-    await screen.findByText("seatalk-app-secret");
-    openMenu("seatalk-app-secret");
-    fireEvent.click(screen.getByRole("menuitem", { name: "Replace value…" }));
-    const dialog = await screen.findByRole("dialog", {
-      name: "Replace the value of seatalk-app-secret",
-    });
-    expect(dialog).toHaveTextContent("Channel SeaTalk");
-    fireEvent.change(within(dialog).getByLabelText("New value"), { target: { value: "new" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Replace value" }));
-    expect(await screen.findByText("Replaced the value of seatalk-app-secret")).toBeInTheDocument();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(api.set).toHaveBeenCalledWith(SEATALK.ref, "new");
+  test("an address that names no secret says it no longer exists", async () => {
+    renderPage(at("secret/gone"));
+    expect(await screen.findByText("This secret no longer exists")).toBeInTheDocument();
   });
 
   acceptance("web-ui", "the secrets page offers to find plaintext keys", async () => {
@@ -378,7 +495,7 @@ describe("SecretsPage", () => {
   test("a failed list says so with a retry", async () => {
     api.list.mockRejectedValue(new ApiError("INTERNAL", "boom"));
     renderPage();
-    expect(await screen.findByText("Couldn't load secrets")).toBeInTheDocument();
+    expect(await screen.findByText("Couldn’t load secrets")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Retry/ })).toBeInTheDocument();
   });
 });

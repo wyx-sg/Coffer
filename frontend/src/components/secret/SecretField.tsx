@@ -2,9 +2,10 @@
 // (Foundations 0.2.05 · Secret field): provider API keys, channel / sync tokens,
 // a tool group's auth. One 30px picker, "🔑 name ▾"; the value never shows.
 //
-// Empty, it takes a paste: the pasted text becomes a NEW secret named after the
-// thing being configured (`defaultName`), kept in the form's state and written
-// to Secrets when the form submits — call `persistNewSecrets([value])` from
+// The picker lists secrets by name (their label), never by id. Empty, it takes a
+// paste: the pasted text becomes a NEW secret labelled after the thing being
+// configured (`defaultName`) and given a minted id, kept in the form's state and
+// written to Secrets when the form submits — call `persistNewSecrets([value])` from
 // `@/components/secret/secretValue` then. A chosen name Coffer does not hold on this
 // machine shows a "Missing" warning.
 import { useRef } from "react";
@@ -14,7 +15,7 @@ import { ChevronDown, KeyRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { fieldClass } from "@/components/ui/field-classes";
 import { useSecretChoices } from "./useSecretChoices";
-import { defaultSecretName, type SecretFieldValue } from "./secretValue";
+import { mintSecretName, type SecretFieldValue } from "./secretValue";
 import { cn } from "@/lib/utils";
 import { SecretMenu } from "./SecretMenu";
 
@@ -22,7 +23,7 @@ interface Props {
   id?: string;
   value: SecretFieldValue;
   onChange: (value: SecretFieldValue) => void;
-  /** Names the secret a paste creates ("openai" → "openai-key"): the thing being configured. */
+  /** Labels the secret a paste creates ("OpenAI key"): the thing being configured. */
   defaultName: string;
   disabled?: boolean;
   invalid?: boolean;
@@ -35,12 +36,12 @@ const SHELL = "flex h-control-md items-center gap-2 px-2.5 py-0 text-left";
 
 function Picker({ id, value, onChange, defaultName, disabled, invalid, ...aria }: Props) {
   const { t } = useTranslation();
-  const { names, loaded } = useSecretChoices();
+  const { names, loaded, displayOf } = useSecretChoices();
   const input = useRef<HTMLInputElement>(null);
   const label = aria["aria-label"] ?? t("secretField.placeholder");
-  const fresh = () => defaultSecretName(defaultName, names);
   const paste = (text: string) => {
-    if (text !== "") onChange({ kind: "new", name: fresh(), value: text });
+    if (text !== "")
+      onChange({ kind: "new", name: mintSecretName(), label: defaultName, value: text });
   };
 
   if (value === null) {
@@ -73,7 +74,7 @@ function Picker({ id, value, onChange, defaultName, disabled, invalid, ...aria }
         <SecretMenu
           selected={null}
           disabled={disabled}
-          defaultNewName={fresh()}
+          defaultNewLabel={defaultName}
           onSelectStored={(name) => onChange({ kind: "stored", name })}
         >
           <button
@@ -88,16 +89,17 @@ function Picker({ id, value, onChange, defaultName, disabled, invalid, ...aria }
     );
   }
 
+  const shown = value.kind === "new" ? value.label : displayOf(value.name);
   const missing = value.kind === "stored" && loaded && !names.has(value.name);
   return (
     <SecretMenu
       selected={value.name}
       disabled={disabled}
-      defaultNewName={fresh()}
+      defaultNewLabel={defaultName}
       onSelectStored={(name) => onChange({ kind: "stored", name })}
-      pendingName={
+      pendingLabel={
         value.kind === "new"
-          ? { value: value.name, onChange: (name) => onChange({ ...value, name }) }
+          ? { value: value.label, onChange: (label) => onChange({ ...value, label }) }
           : undefined
       }
     >
@@ -105,12 +107,12 @@ function Picker({ id, value, onChange, defaultName, disabled, invalid, ...aria }
         id={id}
         type="button"
         disabled={disabled}
-        aria-label={t("secretField.chosen", { label, name: value.name })}
+        aria-label={t("secretField.chosen", { label, name: shown })}
         aria-invalid={invalid}
         className={cn(fieldClass, SHELL)}
       >
         <KeyRound className="size-[13px] shrink-0 text-text-muted" aria-hidden />
-        <span className="min-w-0 flex-1 truncate font-mono text-xs">{value.name}</span>
+        <span className="min-w-0 flex-1 truncate text-xs">{shown}</span>
         {value.kind === "new" ? (
           <Badge variant="secondary" className="shrink-0 font-sans">
             {t("secretField.newBadge")}

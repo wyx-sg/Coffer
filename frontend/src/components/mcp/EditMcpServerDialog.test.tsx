@@ -28,7 +28,7 @@ const getApiClientMock = vi.mocked(getApiClient);
 type ResourceOut = components["schemas"]["ResourceOut"];
 
 /** The ref Coffer minted for this server's key, as an older server holds it. */
-const OWN = "mcp_server/0123456789abcdef0123456789abcdef/GITHUB_TOKEN";
+const OWN = "secret/0123456789abcdef0123456789abcdef";
 
 const stdioResource: ResourceOut = {
   uid: "u-github",
@@ -164,9 +164,7 @@ describe("EditMcpServerDialog", () => {
     // A chosen secret shows its name, never a value; a plain row shows its text.
     const keys = screen.getAllByLabelText("Environment name");
     expect(keys.map((k) => (k as HTMLInputElement).value)).toEqual(["GITHUB_TOKEN", "LOG_LEVEL"]);
-    expect(
-      screen.getByRole("button", { name: "GITHUB_TOKEN: secret GITHUB_TOKEN" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^GITHUB_TOKEN: secret / })).toBeInTheDocument();
     expect(screen.getByLabelText("Value of LOG_LEVEL")).toHaveValue("debug");
     expect(screen.getByLabelText("Start timeout")).toHaveValue(30);
     expect(screen.getByLabelText("Request timeout")).toHaveValue(120);
@@ -223,10 +221,13 @@ describe("EditMcpServerDialog", () => {
     save();
     await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
     expect(api.order).toEqual(["POST:/secrets", "PATCH:/resources/{uid}"]);
-    expect(api.POST.mock.calls[0][1].body).toEqual({ ref: "secret/api_token", value: "abc" });
+    expect(api.POST.mock.calls[0][1].body).toEqual({
+      ref: expect.stringMatching(/^secret\/[0-9a-f]{32}$/),
+      value: "abc",
+    });
     expect(patchBody(api.PATCH).config.transport.secret_refs).toEqual({
       GITHUB_TOKEN: OWN,
-      API_TOKEN: "secret/api_token",
+      API_TOKEN: expect.stringMatching(/^secret\/[0-9a-f]{32}$/),
     });
   });
 
