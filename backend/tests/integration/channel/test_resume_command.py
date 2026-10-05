@@ -119,3 +119,40 @@ async def test_resume_never_offers_another_chats_conversation(env: ChannelEnv) -
         assert "not one of this chat's" in adapter.texts()[-1]
     assert await env.active_conversation(resource) == ids[-1]
     assert await env.active_conversation(resource, "other-chat") == foreign
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="/resume pages through every earlier conversation"
+)
+async def test_resume_pages_through_every_earlier_conversation(env: ChannelEnv) -> None:
+    resource, adapter = await _card_channel(env)
+    ids = []
+    for n in range(1, 10):
+        await env.processor.on_message(inbound("tg", "owner", "/new"))
+        conversation_id = await env.active_conversation(resource)
+        assert conversation_id is not None
+        await env.chat.rename_conversation(conversation_id, new_title=f"task {n}")
+        ids.append(conversation_id)
+    newest_first = list(reversed(ids))
+
+    await env.processor.on_message(inbound("tg", "owner", "/resume"))
+
+    [(_chat, text, buttons)] = _resume_cards(adapter)
+    assert text.endswith("Page 1/3")
+    assert "1 · task 9" in text and "5 · task 5" not in text
+    assert [b.label for b in buttons][:4] == ["✓ 1", "2", "3", "4"]
+
+    await env.processor.on_callback(
+        tap_event("tg", "owner", "page:resume:2", platform_message_id="c-1")
+    )
+
+    _chat, _mid, text, buttons, _title = adapter.card_updates[-1]
+    assert "9 · task 1" in text and "1 · task 9" not in text
+    # Numbering stays global: the last page's only button is the 9th conversation.
+    assert [b.value for b in buttons if b.value.startswith("resume:")] == [
+        f"resume:{newest_first[8]}"
+    ]
+    assert buttons[0].label == "9"
+
+    await env.processor.on_message(inbound("tg", "owner", "/resume 9"))
+    assert await env.active_conversation(resource) == ids[0]

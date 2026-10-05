@@ -179,6 +179,8 @@ class FakeChannelAdapter:
         # scripted refusal a transport with no threads available raises.
         self.opened_threads: list[tuple[str, str, str, str]] = []
         self.open_thread_fails_with: Exception | None = None
+        # The ``anchor_message_id`` of each ``open_thread``, in step with the list above.
+        self.open_thread_anchors: list[str] = []
         self._next_id = 0
 
     @property
@@ -228,10 +230,13 @@ class FakeChannelAdapter:
             self.card_titles.append(title)
         return SentMessage(message_id=self._new_id())
 
-    async def open_thread(self, chat_id: str, mark: str, body: str) -> str:
+    async def open_thread(
+        self, chat_id: str, mark: str, body: str, *, anchor_message_id: str = ""
+    ) -> str:
         if self.open_thread_fails_with is not None:
             raise self.open_thread_fails_with
-        thread_id = f"t{len(self.opened_threads) + 1}"
+        self.open_thread_anchors.append(anchor_message_id)
+        thread_id = anchor_message_id or f"t{len(self.opened_threads) + 1}"
         self.opened_threads.append((chat_id, mark, body, thread_id))
         return thread_id
 

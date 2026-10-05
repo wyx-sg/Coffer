@@ -693,17 +693,27 @@ export interface components {
          * ModelSwitchIn
          * @description What the agent page's Change model dialog asks for.
          *
-         *     ``connection_uid`` ``null`` is the agent's own built-in login: no model
-         *     or tiers are written, and Coffer removes only the keys it wrote.
+         *     ``connection_uid`` ``null`` is the agent's own built-in login: no tiers are
+         *     written, Coffer removes only the keys it wrote, and ``native_model`` sets
+         *     the agent's own top-level ``model`` (``clear_native_model`` removes it: the
+         *     built-in default; neither leaves it as it is). Both are refused with a
+         *     connection, where ``model`` is the binding.
          *     ``seen`` is sent only to apply: each previewed file's path with the
          *     fingerprint the preview read, so a file edited since is refused.
          */
         ModelSwitchIn: {
             agent_type: components["schemas"]["AgentType"];
+            /**
+             * Clear Native Model
+             * @default false
+             */
+            clear_native_model?: boolean;
             /** Connection Uid */
             connection_uid?: string | null;
             /** Model */
             model?: string | null;
+            /** Native Model */
+            native_model?: string | null;
             /** Seen */
             seen?: {
                 [key: string]: string;

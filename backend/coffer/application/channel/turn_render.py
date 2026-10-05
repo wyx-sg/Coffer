@@ -179,7 +179,7 @@ class TurnRenderer:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await ticker
         end = TurnEnd(stop_reason, error, len(tool_ids), self.now() - started, tokens)
-        stop_noted = await self._rewrite_stop_notice(end)
+        stop_line, stop_noted = await self._rewrite_stop_notice(end)
         delivered = await deliver_reply(
             adapter=self.adapter,
             chat_id=self.chat_id,
@@ -192,6 +192,7 @@ class TurnRenderer:
             end=end,
             send_card=self.send_card,
             stop_noted=stop_noted,
+            stop_line=stop_line,
             tracker=self.tracker,
         )
         if self._ping_due(end, delivered):
@@ -226,24 +227,25 @@ class TurnRenderer:
             await self.send(self._with_mention(line))
         await self._questions().asked(block)
 
-    async def _rewrite_stop_notice(self, end: TurnEnd) -> bool:
-        """Edit the "⏹ Stopping…" a ``/stop`` sent into "⏹ Stopped after 12s."
-        where the platform can edit it; ``False`` leaves the result to be said
-        in the reply."""
+    async def _rewrite_stop_notice(self, end: TurnEnd) -> tuple[str | None, bool]:
+        """The stopped line a ``/stop`` asked for, and whether it already went
+        out by editing the "⏹ Stopping “title”…" message in place. ``(None,
+        False)`` when no ``/stop`` stopped this turn."""
         notice = take_stop_notice(self.conversation_id)
         if notice is None or end.outcome != "stopped":
-            return False
+            return None, False
+        line = stopped_line(
+            end.duration, title=notice.title, tool_count=end.tool_count, held=notice.held
+        )
+        if not notice.message_id:
+            return line, False
         try:
             await self.adapter.update_card(
-                notice.chat_id,
-                notice.message_id,
-                stopped_line(end.duration),
-                [],
-                chat_kind=notice.chat_kind,
+                notice.chat_id, notice.message_id, line, [], chat_kind=notice.chat_kind
             )
         except Exception:
-            return False
-        return True
+            return line, False
+        return line, True
 
     def _ping_due(self, end: TurnEnd, delivered: Delivered) -> bool:
         """A long turn whose answer finished a message that PERSISTS from the

@@ -18,9 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
+from coffer.application.provider import switch_ops
 from coffer.application.provider.kind import make_provider_kind
 from coffer.application.provider.projection_reconcile import TARGET, ProviderProjectionTarget
-from coffer.application.provider.projector import ProviderProjector
+from coffer.application.provider.projector import NativeModel, ProviderProjector
 from coffer.application.provider.service import ProviderService
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.resource_service import ResourceService
@@ -399,3 +400,30 @@ async def test_a_codex_auth_table_without_a_timeout_is_re_projected(codex: _Env)
     assert result.outcome is Outcome.APPLIED
     assert any(p.endswith("auth.timeout_ms") for p in result.change.difference.changed_params)
     assert config.read_text(encoding="utf-8") == current
+
+
+async def _built_in_model_survives(built: _Env, key: str) -> None:
+    await built.switch()
+    await switch_ops.deactivate(
+        built.providers, built.agent_type, actor="test", native_model=NativeModel("own-model")
+    )
+    path = built.agent.path(key)
+    before = path.read_text(encoding="utf-8")
+    assert "own-model" in before
+
+    assert (await built.reconciler.plan(trigger=Trigger.PERIOD)).results == ()
+    # Even a pass a person asked for (the one that removes unclaimed keys).
+    assert (await built.reconciler.run(trigger=Trigger.MANUAL)).results == ()
+    assert path.read_text(encoding="utf-8") == before
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a model set on the built-in login is not Coffer's to report or remove",
+)
+async def test_a_claude_code_model_set_on_the_built_in_login_survives_a_pass(env: _Env) -> None:
+    await _built_in_model_survives(env, "settings")
+
+
+async def test_a_codex_model_set_on_the_built_in_login_survives_a_pass(codex: _Env) -> None:
+    await _built_in_model_survives(codex, "config")

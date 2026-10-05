@@ -2089,3 +2089,23 @@ async def test_seatalk_declares_no_group_streaming_and_a_seven_day_card_window(
     assert caps.streams_in_groups is False
     assert caps.withdraw_window_hours == 168
     assert caps.withdraw_removes is False
+
+
+async def test_open_thread_anchored_replies_in_the_owners_message_thread(
+    fake_seatalk: FakeSeaTalk,
+) -> None:
+    """With the owner's own message as anchor the mark is a reply in its thread
+    and that message's id is the thread's; without one a root message is posted
+    and its id is the thread's."""
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        anchored = await adapter.open_thread("emp-1", "🧵#1 Task", "body", anchor_message_id="u-1")
+        rooted = await adapter.open_thread("emp-1", "🧵#2 Task", "body")
+    finally:
+        await adapter.stop()
+    [(first, _a), (second, _b)] = fake_seatalk.single_chat_calls
+    assert anchored == "u-1"
+    assert first["message"]["thread_id"] == "u-1"
+    assert first["message"]["text"]["content"].startswith("🧵#1 Task")
+    assert "thread_id" not in second["message"] or not second["message"]["thread_id"]
+    assert rooted != "u-1" and rooted

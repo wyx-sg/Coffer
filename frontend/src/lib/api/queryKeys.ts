@@ -79,6 +79,9 @@ export const agentProvidersKey = ["agentProviders"] as const;
  *  provider key (`claude_code`, …), not a registry name. */
 export const agentProviderModelsKey = (agentKey: string) =>
   ["agentProviders", agentKey, "models"] as const;
+/** The same catalogue for the agent's own login, whatever it runs on now. */
+export const agentBuiltinModelsKey = (agentKey: string) =>
+  ["agentProviders", agentKey, "models", "builtin"] as const;
 
 // --- skills, mcp, customTools — in queryKeys.capabilities.ts ---------------
 export * from "./queryKeys.capabilities";

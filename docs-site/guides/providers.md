@@ -68,7 +68,7 @@ The file Coffer writes is chosen by the **agent**, not by the protocol. Reaching
 5. Click **Review changes**. Coffer lists, file by file, the lines it will write — `settings.json` for Claude Code; `config.toml` and Coffer's model list file for Codex.
 6. Click **Apply**. Coffer writes the files and records the model and the provider on the agent in one step. If a file changed after the review was drawn, nothing is written and the review offers **Reload preview**. After a successful apply a notice says the change takes effect once you restart that agent; sessions already open keep the old setting.
 
-Picking the **Built-in login** puts the agent back on its own login; the form asks for nothing else. The details of the form are in [Change an agent's model](/guides/agents#change-an-agent-s-model).
+Picking the **Built-in login** puts the agent back on its own login; the form then asks only for its **Model** — the agent's own default, or one of its own models. The details of the form are in [Change an agent's model](/guides/agents#change-an-agent-s-model).
 
 The agent's **Overview › Model** section then reads the provider, the model and the **Route** — through Coffer's proxy, with a **Test** button. **Rotate proxy token**, which replaces the agent's own local token for Coffer's proxy, is in the agent page's **⋯** menu, offered only while the agent runs on a provider; the built-in login bypasses the proxy.
 
@@ -133,7 +133,7 @@ The file is edited with `tomlkit`, so your comments and key order survive. Codex
 
 When the provider curates models, Coffer writes its own catalogue next to `config.toml` so Codex's picker lists them. Each entry carries the model's context window, and an auto-compact limit at 90% of it, from what the provider records for the model. Coffer writes no `model_reasoning_effort`; one an earlier version wrote stays in your file as your own setting.
 
-Reverting to the built-in login removes exactly the keys Coffer wrote. A `model` you changed since with `/model` is yours and stays, and so is any effort key an earlier version wrote.
+Reverting to the built-in login removes exactly the keys Coffer wrote. The form there also sets the agent's own `model` (or clears it to the built-in default), and a `model` you changed since with `/model` is yours and stays, and so is any effort key an earlier version wrote.
 
 ## Local model runtimes
 

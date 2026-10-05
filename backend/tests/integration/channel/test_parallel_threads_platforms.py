@@ -1,6 +1,6 @@
 """How each platform opens a parallel thread, with the REAL adapter bound into
-the real channel core (spec channels/seatalk "Open a parallel thread by posting
-its root message", channels/telegram "Open a parallel thread as a private-chat
+the real channel core (spec channels/seatalk "Open a parallel thread under the
+owner's /thread message", channels/telegram "Open a parallel thread as a private-chat
 topic").
 
 Each platform's Open API is its in-process fake, so what is asserted is the wire
@@ -63,9 +63,9 @@ def _seatalk_dm(text: str, *, message_id: str, thread_id: str = "") -> dict[str,
 
 
 @pytest.mark.acceptance(
-    spec="channels/seatalk", scenario="/thread posts the root message the thread hangs from"
+    spec="channels/seatalk", scenario="/thread answers inside a thread of the owner's message"
 )
-async def test_seatalk_thread_posts_the_root_message_the_thread_hangs_from(
+async def test_seatalk_thread_answers_inside_a_thread_of_the_owner_message(
     env: ChannelEnv,
 ) -> None:
     env.keyring.set("channel/st/app-secret", "app-secret-value")
@@ -88,13 +88,13 @@ async def test_seatalk_thread_posts_the_root_message_the_thread_hangs_from(
     try:
         await adapter.handle_event(_seatalk_dm("/thread", message_id="u-1"))
         [root] = [body["message"] for body, _auth in fake.single_chat_calls]
-        # A new direct-chat message (no thread of its own) opening with the mark.
+        # The mark is a reply in the thread rooted at the owner's own message.
         assert root["tag"] == "text"
-        assert not root.get("thread_id")
+        assert root["thread_id"] == "u-1"
         assert root["text"]["content"].startswith("🧵#1 Task")
-        root_id = "m1"  # the fake's first single_chat message id
+        root_id = "u-1"
 
-        # A reply under that message drives the new parallel conversation.
+        # A reply under the owner's message drives the new parallel conversation.
         await adapter.handle_event(
             _seatalk_dm("what is left?", message_id="u-2", thread_id=root_id)
         )

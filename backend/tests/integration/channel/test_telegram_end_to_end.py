@@ -120,13 +120,13 @@ async def test_the_drafts_stop_button_interrupts_the_running_turn(env: ChannelEn
         # Telegram can edit a message, so "Stopping…" becomes the result in place.
         await wait_until(
             lambda: any(
-                "Stopped after" in str(p.get("text", ""))
+                str(p.get("text", "")).startswith("⏹ Stopped")
                 for m, p in fake.calls
                 if m == "editMessageText"
             )
         )
         assert any("Stopping" in t for t in _sent_texts(fake))
-        assert not any("Stopped after" in t for t in _sent_texts(fake))
+        assert not any(t.startswith("⏹ Stopped") for t in _sent_texts(fake))
         assert not any("echo:" in t for t in _sent_texts(fake))
     finally:
         gated.release.set()

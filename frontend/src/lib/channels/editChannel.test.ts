@@ -22,6 +22,7 @@ import {
   normaliseDirectory,
   planChannelEdit,
   storedDefaultDirectory,
+  storedDefaultModel,
 } from "@/lib/channels/editChannel";
 import {
   parseBurstWait,
@@ -387,6 +388,45 @@ describe("planChannelEdit", () => {
         values: { default_agent: AGENT_A, default_directory: null },
       });
       expect(cleared.config.default_agent_config).toBeNull();
+    });
+  });
+
+  describe("default model", () => {
+    const config = { channel_type: "telegram", bot_token_ref: "r", default_agent: AGENT_A };
+
+    test("is written into the default agent config beside the directory, and cleared from it", () => {
+      const set = planChannelEdit({
+        ...TG,
+        config: { ...config, default_agent_config: { cwd: "/srv/app" } },
+        values: { default_agent: AGENT_A, default_model: "opus" },
+      });
+      expect(set.config.default_agent_config).toEqual({ cwd: "/srv/app", model: "opus" });
+      expect(storedDefaultModel(set.config)).toBe("opus");
+
+      const cleared = planChannelEdit({
+        ...TG,
+        config: { ...config, default_agent_config: { model: "opus" } },
+        values: { default_agent: AGENT_A, default_model: null },
+      });
+      expect(cleared.config.default_agent_config).toBeNull();
+    });
+
+    test("changing the default agent drops the model but keeps the directory", () => {
+      const plan = planChannelEdit({
+        ...TG,
+        config: { ...config, default_agent_config: { cwd: "/srv/app", model: "opus" } },
+        values: { default_agent: AGENT_B },
+      });
+      expect(plan.config.default_agent_config).toEqual({ cwd: "/srv/app" });
+    });
+
+    test("an unrelated edit keeps the model", () => {
+      const plan = planChannelEdit({
+        ...TG,
+        config: { ...config, default_agent_config: { model: "opus" } },
+        values: { default_agent: AGENT_A, default_directory: "/srv/app" },
+      });
+      expect(plan.config.default_agent_config).toEqual({ model: "opus", cwd: "/srv/app" });
     });
   });
 });

@@ -78,6 +78,8 @@ const CONNECTED: CofferConnection = {
 
 interface World {
   connection: CofferConnection;
+  /** The model the agent's own config names (the models catalogue's default). */
+  nativeModel: string | null;
   hook: CofferHook | null;
   transcripts: { title: string; source_path: string }[];
 }
@@ -145,6 +147,8 @@ function route(path: string): unknown {
         },
       ],
     };
+  if (p.startsWith("/agent-providers/") && p.endsWith("/models"))
+    return { models: [], default_model: world.nativeModel };
   if (p === "/daemon/status") return { features: {} };
   if (p.startsWith("/resources")) return { resources: [{ uid: "m1", enabled: true, scope: null }] };
   if (p === "/providers") return { providers: [] };
@@ -155,6 +159,7 @@ function route(path: string): unknown {
 beforeEach(() => {
   world = {
     connection: CONNECTED,
+    nativeModel: "claude-opus-5-5",
     hook: HOOK,
     transcripts: [{ title: "Fix SeaTalk reconnect", source_path: "/s/1.jsonl" }],
   };
@@ -316,7 +321,15 @@ describe("AgentOverviewTab — tiles, model, details", () => {
     },
   );
 
+  test("on its built-in login the model is the agent's own, not a binding left from a connection", async () => {
+    world.nativeModel = "gpt-6-luna";
+    renderTab({ agent: { type: "codex", model: "deepseek-flash" }, typeRow: { type: "codex" } });
+    expect(await screen.findByText("gpt-6-luna")).toBeInTheDocument();
+    expect(screen.queryByText("deepseek-flash")).toBeNull();
+  });
+
   test("a null model reads Built-in default", async () => {
+    world.nativeModel = null;
     renderTab({ agent: { type: "codex", model: null }, typeRow: { type: "codex" } });
     expect(await screen.findByText("Default model")).toBeInTheDocument();
     expect(screen.getAllByText("Built-in default").length).toBeGreaterThan(0);

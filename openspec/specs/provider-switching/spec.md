@@ -406,11 +406,11 @@ surface that offers the edit — REST and the connection's form.
 - **AND** re-sending the wire the connection already has is not a change and succeeds, so a client that submits a whole form is never told its unchanged dropdown is a conflict; once the agents are back on their own login, the same patch succeeds (see "Refuse to move the wire of a live connection")
 
 ### Requirement: Review a model change before writing it
-An agent's model MUST be changed in two calls, so the person sees the lines before they are written. `POST /api/v1/providers/model-switch/preview` takes `{agent_type, connection_uid, model, tier_models}` — `connection_uid` null is the agent's built-in login, which carries no model or tiers — and answers, per file the change would write, the file's path, whether it would be added, modified or removed, the line counts and diff, and a **fingerprint** of what the file held when it was read, plus the agent and the connection it would run on; it writes nothing, not even a backup. It refuses, as "Switch one agent at a time" does, with 409 when the connection or the agent is switched off or the connection does not reach the agent. `POST /api/v1/providers/model-switch/apply` takes the same body with `seen`, each previewed file's path and fingerprint, and does what the switch of "Switch one agent at a time" and "Revert an agent type to its built-in login" does — records the model binding (`model` and `tier_models`) on the agent, then projects it and sets the connection, putting the binding back if the projection fails — so the preview and the write cannot disagree about the lines. When a file named in `seen` was edited on disk after the preview, nothing is written and the answer is 409 `CONFIG_FILE_STALE`.
+An agent's model MUST be changed in two calls, so the person sees the lines before they are written. `POST /api/v1/providers/model-switch/preview` takes `{agent_type, connection_uid, model, tier_models, native_model, clear_native_model}` — `connection_uid` null is the agent's built-in login, which carries no tiers and whose model is the agent's own: `native_model` sets the top-level `model` key of the agent's own config (Codex `config.toml`, Claude Code `settings.json`), `clear_native_model` removes it (the agent's built-in default), and neither leaves it as it is; the two are exclusive and are refused (422) together or beside a `connection_uid` — and answers, per file the change would write, the file's path, whether it would be added, modified or removed, the line counts and diff, and a **fingerprint** of what the file held when it was read, plus the agent and the connection it would run on; it writes nothing, not even a backup. It refuses, as "Switch one agent at a time" does, with 409 when the connection or the agent is switched off or the connection does not reach the agent. `POST /api/v1/providers/model-switch/apply` takes the same body with `seen`, each previewed file's path and fingerprint, and does what the switch of "Switch one agent at a time" and "Revert an agent type to its built-in login" does — for a connection, records the model binding (`model` and `tier_models`) on the agent, then projects it and sets the connection, putting the binding back if the projection fails; for the built-in login, takes Coffer's keys out, writes or removes the agent's own `model` key in the same file write, and only then clears the binding on the agent's record — so the preview and the write cannot disagree about the lines. When a file named in `seen` was edited on disk after the preview, nothing is written and the answer is 409 `CONFIG_FILE_STALE`.
 
 The files are the agent's own: for Claude Code, `settings.json` — the top-level `model` and the `env.ANTHROPIC_DEFAULT_<TIER>_MODEL` pins; for Codex, `config.toml` — `model` and `[model_providers.coffer]` — together with Coffer's own model-list file `coffer-model-catalog.json` beside it, so a Codex change reads as two changes. A model the user has since changed with `/model` no longer equals the agent's binding and is theirs. No reasoning effort is written, so none is previewed.
 
-The web UI's **Change model** dialog (Overview › Model › Change…, or `?change-model=1`) is the one form for both agents: Provider, Model and, for Claude Code, Model per tier — Codex has one model per session and no tiers. **Review changes** opens the 1060-wide review of the files from the preview, with a note that only the lines shown change, a backup copy is kept in Coffer's own folder, and, for Codex, that the model list file is Coffer's own; **Apply** writes them and closes both dialogs. With a provider and a model chosen, Coffer tests that provider with that model by itself once the draft has rested for a moment (`POST /api/v1/models/test-connection` with the connection's protocol, base URL and stored secret ref — the call of Overview › Model › Test; the page never handles a key), cancels a run the draft has moved past, and shows the result as a line under Model: **Testing connection…**, **Connection OK** with how long it took, or **Connection failed** with the reason and **Retry**. **Review changes** is enabled only when the draft differs from what is applied, names a model, AND the test for exactly this provider and model passed; while it is testing or after a failure it stays off and a line beside it says why. A local runtime connection is tested the same way. The review runs no second test. When Apply is refused as stale, the review says which file changed and offers **Reload preview**, and writes nothing. With the built-in login chosen the dialog offers Provider only, with a line saying the agent picks its model itself (`/model`) and that Coffer sets it only for a provider the user adds.
+The web UI's **Change model** dialog (Overview › Model › Change…, or `?change-model=1`) is the one form for both agents: Provider, Model and, for Claude Code, Model per tier — Codex has one model per session and no tiers. **Review changes** opens the 1060-wide review of the files from the preview, with a note that only the lines shown change, a backup copy is kept in Coffer's own folder, and, for Codex, that the model list file is Coffer's own; **Apply** writes them and closes both dialogs. With a provider and a model chosen, Coffer tests that provider with that model by itself once the draft has rested for a moment (`POST /api/v1/models/test-connection` with the connection's protocol, base URL and stored secret ref — the call of Overview › Model › Test; the page never handles a key), cancels a run the draft has moved past, and shows the result as a line under Model: **Testing connection…**, **Connection OK** with how long it took, or **Connection failed** with the reason and **Retry**. **Review changes** is enabled only when the draft differs from what is applied, names a model, AND the test for exactly this provider and model passed; while it is testing or after a failure it stays off and a line beside it says why. A local runtime connection is tested the same way. The review runs no second test. When Apply is refused as stale, the review says which file changed and offers **Reload preview**, and writes nothing. With the built-in login chosen the dialog offers **Model** with no tier section: **Built-in default** (the agent's config names no model), then the agent's own built-in models — the label shown, the id stored — preselected with what the agent's config names now (a configured id the list lacks still reads as its id); when the agent runs on a connection the field starts at Built-in default, and the list is the agent's own, asked of `GET /api/v1/agent-providers/{agent_key}/models?source=builtin` (see "Serve one model list to every surface"), so it never shows the connection's curated set. Choosing one sends `native_model`, Built-in default sends `clear_native_model`, and no connection test runs.
 
 A change written into an agent's config files is read when that agent starts: Codex (App and CLI) reads `config.toml` at startup, and nothing in Coffer establishes that a running Claude Code re-reads `settings.json`, so both are treated as needing a restart. After a successful **Apply** the web UI MUST show a notice naming the agent by its display name — "Restart <agent> to use this change — sessions already open keep the old setting." — at the moment of the change; sessions already open are not touched.
 
@@ -431,10 +431,28 @@ A change written into an agent's config files is read when that agent starts: Co
 - **THEN** the apply is refused with 409 `CONFIG_FILE_STALE`, the user's edit survives and the agent's record is unchanged
 - **AND** the review says which file changed and offers Reload preview
 
-#### Scenario: the built-in login asks for a provider only
+#### Scenario: the built-in login offers the agent's own models and no tiers
 - **GIVEN** the Change model dialog for a Claude Code agent on a connection
 - **WHEN** the user picks the built-in login
-- **THEN** no Model or tier field is shown, Review changes lists only the removal of the keys Coffer wrote, and applying leaves the agent's `connection_uid` empty
+- **THEN** the Model field offers Built-in default and the agent's own models, no tier field is shown, and the models are asked of the agent's own catalogue rather than the connection's curated set
+- **AND** with Built-in default kept, Review changes lists only the removal of the keys Coffer wrote, and applying leaves the agent's `connection_uid` empty
+
+#### Scenario: choosing a model on the built-in login sets the agent's own model
+- **GIVEN** the Change model dialog for an agent on its built-in login whose config names a model
+- **WHEN** the dialog opens
+- **THEN** Model is preselected with that model and Review changes is off
+- **AND** choosing another model enables it and previews `{connection_uid: null, native_model}`; choosing Built-in default previews `clear_native_model`
+
+#### Scenario: a model chosen on the built-in login is written to the agent's own config
+- **GIVEN** a Claude Code agent and a Codex agent on their built-in login
+- **WHEN** a model is applied to each with `native_model`
+- **THEN** Claude Code's `settings.json` carries the top-level `model` and Codex's `config.toml` carries `model`, every other key and comment kept, and applying again with the same model previews no file
+- **AND** `clear_native_model` removes the key again, and a file edited since the preview refuses the apply with 409 `CONFIG_FILE_STALE`
+
+#### Scenario: leaving a connection for the built-in login clears the binding
+- **GIVEN** a Claude Code agent on a connection with a bound model and tiers
+- **WHEN** the user applies the built-in login with a model
+- **THEN** Coffer's keys leave `settings.json`, the chosen `model` is the file's top-level model, and the agent's record has no `model` and no `tier_models`
 
 #### Scenario: a model change is tested before it can be reviewed
 - **GIVEN** the Change model dialog for an agent with an enabled connection that reaches it
@@ -452,6 +470,11 @@ A change written into an agent's config files is read when that agent starts: Co
 - **GIVEN** the Change model review for a Codex agent with a passed connection test
 - **WHEN** the user applies the change and it succeeds
 - **THEN** a notice reads "Restart Codex to use this change" and says sessions already open keep the old setting
+
+#### Scenario: a model set on the built-in login is not Coffer's to report or remove
+- **GIVEN** an agent on its built-in login whose config names a model Coffer did not project
+- **WHEN** a reconcile pass runs, including one a person asks for
+- **THEN** it reports and removes nothing and the file is unchanged
 
 #### Scenario: the built-in login needs no connection test
 - **GIVEN** the Change model dialog for an agent on a connection
@@ -632,6 +655,8 @@ connection curates models but none of modality `text`: Coffer's surfaces then of
 while the projection writes no model catalogue ("Project into Codex config without overwriting it"
 writes one only for curated `text` models), so Codex keeps listing its built-in models.
 
+`GET /api/v1/agent-providers/{agent_key}/models?source=builtin` MUST answer for the agent's own login whatever it runs on now — the models its own catalogue lists, which is what the Change model dialog offers when the agent is moving back to its built-in login. Claude Code's own list does not depend on the connection. Codex's is read from Codex with its `config.toml`, and while a connection that curates models is projected the catalogue pointer there replaces Codex's list with Coffer's, so the answer is then empty rather than the connection's ids under the agent's name; the dialog still offers Built-in default.
+
 That read MUST NOT touch the network: it happens on every card render and every turn, so
 introspection would put a network round trip on the daemon's event loop. Every surface that offers a model MUST get this answer from the same place:
 `GET /api/v1/agent-providers/{agent_key}/models` serves it, and a channel's `/model` card resolves it
@@ -660,14 +685,18 @@ does not curate with the agent's projected default — [Reach API-key and local 
 account cannot run fails where every other unusable choice fails. A model name is still raw
 passthrough everywhere the CLI accepts one. Coffer offers no reasoning-effort control on any surface: the agent runs at the effort its own configuration names.
 
-On the built-in login the Change model dialog offers no model control — those slots bind a connection's
-model — and says where the model is chosen instead (the agent's own `/model`, or `/model` in a channel); the agent's Overview › Model still shows the model its own configuration names, read-only. The model is stored per conversation in the provider-owned `AgentConfig` blob, set with `/model` in a channel; `/model default` clears it so the agent runs at its own
+On the built-in login the Change model dialog offers a Model control over the agent's own models ("Review a model change before writing it"), which writes the top-level `model` of the agent's own configuration; `/model` in the agent, or in a channel, still works. The agent's Overview › Model shows the model its own configuration names, never the record's binding, which belongs to a connection. The model is stored per conversation in the provider-owned `AgentConfig` blob, set with `/model` in a channel; `/model default` clears it so the agent runs at its own
 default.
 
 #### Scenario: the agent's model picker offers a fixed list without free-form entry
 - **GIVEN** an agent whose model is being chosen — on its detail page or on a channel's `/model` card,
 - **WHEN** the model picker is opened,
 - **THEN** it offers a fixed dropdown with no free-text "Custom…" entry and no text input: the agent's own catalogue (`GET /api/v1/agent-providers/{agent_key}/models`) when it is on its built-in login, and, when a connection overrides it, that connection's curated `text` ids served by the same route — never a model field stored on the connection, which carries none (TypeScript acceptance test).
+
+#### Scenario: the built-in login's models are listed while a connection is active
+- **GIVEN** a Claude Code agent on a connection that curates models
+- **WHEN** a client reads `/api/v1/agent-providers/claude_code/models` and again with `source=builtin`
+- **THEN** the first lists the connection's curated ids and the second lists the agent's own models
 
 ### Requirement: Keep an independent speech-to-text default
 At most one connection globally MUST carry the config field `transcribe_default`, and
@@ -756,7 +785,7 @@ clobbering them"); on the built-in login no pin is written.
 
 In the Change model dialog the tiers are a **Model per tier** section — Fable only when the connection
 lists a Fable model — prefilled with the suggestion and each editable from the connection's models; applying the change stores them as the agent's
-`tier_models` and writes the pins ("Review a model change before writing it"). Codex has no tiers. On the built-in login the section is hidden.
+`tier_models` and writes the pins ("Review a model change before writing it"). Codex has no tiers. On the built-in login the section is hidden and no pin is written.
 
 #### Scenario: a non-Claude connection pins every tier to the model
 - **GIVEN** a Claude Code agent bound to `kimi-k3` and a connection whose curated models are `kimi-k3` and `kimi-k3-mini`
@@ -776,7 +805,7 @@ lists a Fable model — prefilled with the suggestion and each editable from the
 #### Scenario: the built-in login shows no tiers
 - **GIVEN** a Claude Code agent on its built-in login
 - **WHEN** its Change model dialog is open
-- **THEN** it shows Provider only and no Model per tier section, and no tier pin is in `settings.json`
+- **THEN** it shows Provider and Model and no Model per tier section, and no tier pin is in `settings.json`
 
 ### Requirement: Reach API-key and local connections through the local model proxy
 An agent on a connection MUST send its model requests to the local model proxy, never to the
@@ -1344,7 +1373,7 @@ The web surfaces:
   other model setting — no output-limit, subagent, thinking or fast-mode
   control — because what else a model needs Coffer derives and writes itself. Picking a non-built-in
   connection introspects its endpoint and stages a default model — the first model returned — and
-  the tier suggestions for it. Picking things in the form is a DRAFT: it writes nothing, and **Review changes** is enabled only once the draft differs from what is applied, names a model and has passed its connection test ("Review a model change before writing it"). The built-in login needs no model and no test. The agent's Overview reads the connection the agent is on from the agent record's `connection_uid`, not from any flag on a connection.
+  the tier suggestions for it. Picking things in the form is a DRAFT: it writes nothing, and **Review changes** is enabled only once the draft differs from what is applied, names a model and has passed its connection test ("Review a model change before writing it"). On the built-in login Model is the agent's own model and optional, and no test runs. The agent's Overview reads the connection the agent is on from the agent record's `connection_uid`, not from any flag on a connection.
 
 #### Scenario: update a provider profile
 - **GIVEN** a connection exists,

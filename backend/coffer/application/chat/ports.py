@@ -141,6 +141,10 @@ class ModelCatalogPort(Protocol):
 
     async def offered(self, agent_key: str) -> Sequence[CatalogueModel]: ...
 
+    async def builtin_offered(self, agent_key: str) -> Sequence[CatalogueModel]:
+        """The agent's own login's models, even while a connection is active."""
+        ...
+
     async def native_default_model(self, agent_key: str) -> str | None: ...
 
 

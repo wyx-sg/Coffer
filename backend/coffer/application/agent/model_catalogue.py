@@ -42,7 +42,9 @@ from dataclasses import replace
 from typing import Protocol
 
 from coffer.application.agent.answering import AgentLister, answering_agent_config
+from coffer.domain.agent.descriptor import descriptor_for
 from coffer.domain.agent.model_catalogue import AgentModel
+from coffer.domain.agent.types import AgentType
 
 _log = logging.getLogger(__name__)
 
@@ -203,6 +205,26 @@ class AgentModelCatalogueService:
                 else AgentModel(id=model_id)
                 for model_id in endpoint_models
             )
+        return await self.catalogue(agent_key)
+
+    async def builtin_offered(self, agent_key: str) -> list[AgentModel]:
+        """The models the agent's OWN login offers, whatever it runs on now —
+        what the Change model dialog lists when the user is moving the agent to
+        its built-in login, where ``offered()`` would still answer with the
+        connection's curated set.
+
+        Claude Code's list is read from its binary and does not depend on the
+        connection. Codex's ``model/list`` reads ``config.toml``, and while a
+        connection that curates models is projected the catalogue pointer there
+        REPLACES Codex's own list with Coffer's; asking would only return the
+        connection's ids as if they were Codex's, so nothing is offered then
+        (the dialog still offers the built-in default).
+        """
+        if (
+            descriptor_for(AgentType(agent_key)).curated_list_replaces_builtin
+            and await self._connection_models(agent_key) is not None
+        ):
+            return []
         return await self.catalogue(agent_key)
 
     async def suggest(self, agent_key: str) -> list[str]:

@@ -55,9 +55,13 @@ async def test_thread_opens_a_marked_parallel_conversation(env: ChannelEnv) -> N
     dm_conversation = await env.active_conversation(resource)
     assert dm_conversation is not None
 
-    await env.processor.on_message(inbound("tg", "owner", "/thread deploy check"))
+    await env.processor.on_message(
+        inbound("tg", "owner", "/thread deploy check", platform_message_id="t1")
+    )
 
+    # The owner's own message is the thread's root; the mark answers inside it.
     assert adapter.opened_threads == [("owner", "🧵#1 deploy check", THREAD_BODY, "t1")]
+    assert adapter.open_thread_anchors == ["t1"]
     parallel = await env.active_conversation(resource, "owner", "t1")
     assert parallel is not None and parallel != dm_conversation
     assert (await env.chat.get_conversation(parallel)).title == "🧵#1 deploy check"
@@ -93,7 +97,7 @@ async def test_thread_without_a_title_is_a_numbered_task(env: ChannelEnv) -> Non
 
 async def test_a_number_is_never_reused_after_new_in_a_parallel_thread(env: ChannelEnv) -> None:
     resource, adapter = await _seatalk_shaped(env)
-    await env.processor.on_message(inbound("tg", "owner", "/thread one"))
+    await env.processor.on_message(inbound("tg", "owner", "/thread one", platform_message_id="t1"))
     first = await env.active_conversation(resource, "owner", "t1")
 
     # /new inside the thread replaces its conversation; the new one keeps the mark.
@@ -102,13 +106,15 @@ async def test_a_number_is_never_reused_after_new_in_a_parallel_thread(env: Chan
     assert fresh is not None and fresh != first
     assert (await env.chat.get_conversation(fresh)).title == "🧵#1 one"
 
-    await env.processor.on_message(inbound("tg", "owner", "/thread two"))
+    await env.processor.on_message(inbound("tg", "owner", "/thread two", platform_message_id="t2"))
     assert adapter.opened_threads[-1][1] == "🧵#2 two"
 
 
 async def test_status_inside_a_parallel_thread_names_its_mark(env: ChannelEnv) -> None:
     resource, adapter = await _seatalk_shaped(env)
-    await env.processor.on_message(inbound("tg", "owner", "/thread deploy check"))
+    await env.processor.on_message(
+        inbound("tg", "owner", "/thread deploy check", platform_message_id="t1")
+    )
     await env.processor.on_message(inbound("tg", "owner", "/status", thread_id="t1"))
     status = _answers_in(adapter, "t1")[-1]
     assert status.splitlines()[:2] == ["Status", "🧵#1 deploy check"]
@@ -118,6 +124,23 @@ async def test_status_inside_a_parallel_thread_names_its_mark(env: ChannelEnv) -
     # The direct chat's own /status carries no mark.
     await env.processor.on_message(inbound("tg", "owner", "/status"))
     assert adapter.texts()[-1].startswith("Status\nNo conversation yet\n")
+
+
+@pytest.mark.acceptance(
+    spec="channels/seatalk",
+    scenario="/thread from a button or inside a thread posts a root message",
+)
+async def test_thread_without_a_typed_root_message_opens_one_of_its_own(env: ChannelEnv) -> None:
+    _resource, adapter = await _seatalk_shaped(env)
+
+    # A tap on a `/thread` button types no message to hang the thread from.
+    await env.processor.on_callback(tap_event("tg", "owner", "cmd:thread"))
+    # A `/thread` sent inside a thread is itself a reply, which cannot root one.
+    await env.processor.on_message(
+        inbound("tg", "owner", "/thread", thread_id="x-1", platform_message_id="x-2")
+    )
+
+    assert adapter.open_thread_anchors == ["", ""]
 
 
 async def test_thread_in_a_group_is_declined_and_opens_nothing(env: ChannelEnv) -> None:
@@ -154,8 +177,12 @@ async def test_status_in_a_direct_chat_lists_its_parallel_threads(env: ChannelEn
     await env.processor.on_message(inbound("tg", "owner", "/status"))
     assert "parallel" not in adapter.texts()[-1]
 
-    await env.processor.on_message(inbound("tg", "owner", "/thread deploy check"))
-    await env.processor.on_message(inbound("tg", "owner", "/thread write docs"))
+    await env.processor.on_message(
+        inbound("tg", "owner", "/thread deploy check", platform_message_id="t1")
+    )
+    await env.processor.on_message(
+        inbound("tg", "owner", "/thread write docs", platform_message_id="t2")
+    )
     # The second thread runs another agent; the first one runs a turn.
     await env.processor.on_message(inbound("tg", "owner", "/new codex", thread_id="t2"))
     gated = GatedAdapter()
@@ -235,7 +262,7 @@ async def test_stop_from_a_casual_thread_stops_the_direct_chats_turn(env: Channe
     await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
 
     await env.processor.on_message(inbound("tg", "owner", "/stop", thread_id="m-root"))
-    assert _answers_in(adapter, "m-root") == ["⏹ Stopping…"]
+    assert _answers_in(adapter, "m-root") == ["⏹ Stopping “long job”…"]
     gated.release.set()
 
 

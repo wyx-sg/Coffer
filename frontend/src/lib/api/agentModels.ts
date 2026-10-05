@@ -34,11 +34,13 @@ export type AgentModelsOut = AgentRegistryWire["schemas"]["AgentModelsOut"];
 // ---------------------------------------------------------------------------
 
 export const agentModelsApi = {
-  /** The catalogue for one agent type. 404s on an unknown agent key. */
-  list: (agentKey: string) =>
+  /** The catalogue for one agent type. 404s on an unknown agent key.
+   *  `builtin` asks for the agent's OWN login's models even while a connection
+   *  is active (the Change model dialog moving the agent back to it). */
+  list: (agentKey: string, source: "active" | "builtin" = "active") =>
     unwrap(
       getApiClient().GET("/agent-providers/{agent_key}/models", {
-        params: { path: { agent_key: agentKey } },
+        params: { path: { agent_key: agentKey }, query: source === "builtin" ? { source } : {} },
       }),
     ),
 };

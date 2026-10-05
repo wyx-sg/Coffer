@@ -9,11 +9,20 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { AgentSelect } from "@/components/agents/AgentSelect";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ScopeControl } from "@/components/ScopeControl";
 import { SettingsSection } from "@/components/settings/SettingsLayout";
 import { channelConversationsHref } from "@/lib/channels/tabs";
 import type { ChannelPerson, ChannelStatus } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
+import { storedDefaultModel } from "@/lib/channels/editChannel";
+import { useAgentModelList } from "@/lib/hooks/useAgentModelList";
 import { CHANNEL_KIND } from "@/lib/hooks/useChannels";
 import { ChannelPeopleList } from "./ChannelPeopleList";
 
@@ -35,7 +44,12 @@ interface Props {
   onAdd: () => void;
   onRemove: (person: ChannelPerson) => void;
   onDefaultAgentChange: (agentUid: string) => void;
+  /** The default agent's model for new conversations; `null` is the provider's default. */
+  onDefaultModelChange: (model: string | null) => void;
 }
+
+// Radix Select forbids an empty item value, so "no model" is this sentinel.
+const NO_MODEL = "__provider_default__";
 
 export function ChannelOverviewTab({
   channel,
@@ -43,11 +57,19 @@ export function ChannelOverviewTab({
   onAdd,
   onRemove,
   onDefaultAgentChange,
+  onDefaultModelChange,
 }: Props) {
   const { t } = useTranslation();
   const people = status?.people ?? [];
   const defaultAgent =
     typeof channel.config.default_agent === "string" ? channel.config.default_agent : "";
+  const models = useAgentModelList(defaultAgent);
+  const model = storedDefaultModel(channel.config);
+  // A stored id the catalogue does not list still shows as itself.
+  const options =
+    model !== null && !models.some((m) => m.id === model)
+      ? [...models, { id: model, label: model, description: "" }]
+      : models;
 
   return (
     <div className="flex max-w-form flex-col gap-8" data-testid="channel-overview">
@@ -75,6 +97,24 @@ export function ChannelOverviewTab({
             value={defaultAgent}
             onChange={onDefaultAgentChange}
           />
+        </Row>
+        <Row label={t("channels.overview.agents.model")}>
+          <Select
+            value={model ?? NO_MODEL}
+            onValueChange={(v) => onDefaultModelChange(v === NO_MODEL ? null : v)}
+          >
+            <SelectTrigger aria-label={t("channels.overview.agents.model")}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_MODEL}>{t("channels.overview.agents.modelDefault")}</SelectItem>
+              {options.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.label || m.id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Row>
         <Row
           label={t("channels.overview.agents.reach")}

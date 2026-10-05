@@ -210,3 +210,18 @@ __all__ = [
     "codex_model_catalog_path",
     "remove_codex_provider",
 ]
+
+
+def set_codex_model(text: str, model: str | None) -> str:
+    """``config.toml`` text with the top-level ``model`` set to ``model``, or the
+    key removed for ``None`` — the agent's own default on its built-in login.
+    Comments and the rest of the file are kept; text that already says so comes
+    back unchanged, byte for byte."""
+    doc = tomlkit.parse(text) if text.strip() else tomlkit.document()
+    if (doc.get("model") == model) if model is not None else ("model" not in doc):
+        return text
+    if model is None:
+        doc.pop("model", None)
+    else:
+        doc["model"] = model
+    return tomlkit.dumps(doc)

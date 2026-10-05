@@ -122,7 +122,7 @@ A conversation you delete on the Conversations page (or whose session you delete
 
 A direct chat is one conversation. To run a second task beside it without mixing contexts, send `/thread [title]`. The bot opens a thread marked `🧵#N title`, and whatever you send inside that thread runs in a conversation of its own. The mark is the thread's name in the chat, the conversation's title on the Conversations page, and the title of `/status` inside it. `/status` in the direct chat lists the parallel threads on one line, each with whether it is running, has messages waiting, or is idle.
 
-How the thread appears depends on the platform. On SeaTalk it is a message from the bot that you reply under. On Telegram it is a private-chat topic, which needs the bot's Threaded Mode turned on in BotFather. In a group, every thread is already its own conversation, so `/thread` is not needed there.
+How the thread appears depends on the platform. On SeaTalk it is the thread of your own `/thread` message: the bot answers inside it, and you reply there. On Telegram it is a private-chat topic, which needs the bot's Threaded Mode turned on in BotFather. In a group, every thread is already its own conversation, so `/thread` is not needed there.
 
 Each turn tells the agent it is on a chat channel: keep replies concise but quote the key log lines, errors and IDs behind a finding verbatim, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. The turn's system prompt also carries the [memory](/guides/memory#in-channel-turns) index, and the notes your message names are added after it: Coffer delivers both itself, and on a connected agent Coffer's hook stands aside for them inside the turn, while its triggers still guard the turn's commands.
 
@@ -140,7 +140,7 @@ Nine words are Coffer's commands. Everything else you type — including other t
 | `/resume [n]` | Reopen an earlier conversation from this chat. |
 | `/thread [title]` | In a direct chat, open a parallel conversation in its own thread. |
 | `/del` | Owner only. Withdraw the bot's reply: quote it and send `/del`, or send it bare for the most recent one. |
-| `/help` | List the commands, with New, Stop, Model, Status and Resume buttons. |
+| `/help` | List the commands, with a button for each, paged. |
 
 In a group only `/new`, `/stop`, `/help` and `/del` work, because they control the group's own conversation and replies. `/model`, `/dir`, `/status`, `/resume` and `/thread` work only in a direct chat with the bot; sent in a group they get one private line, "This command works in a private chat with me.", and nothing else happens. To save something into [knowledge](/guides/knowledge#from-a-chat-ask-your-agent) from a chat, ask the agent.
 
@@ -151,6 +151,8 @@ The full reference, with where each command works, is at [Channel commands](/ref
 Two settings decide which agent answers.
 
 **The default agent** is the agent a new conversation starts on. Set it when you register the channel; change it under **Agents** → **Default agent** on the channel's **Overview**.
+
+**The default model** is the model that agent runs on in new conversations. Pick it under **Agents** → **Default model** on the **Overview**, from the default agent's own model list; **Provider default** leaves the choice to the agent's provider. It belongs to the default agent only: a chat that switched to another agent with `/new <agent>` does not get it (the default directory still applies), a model chosen in the chat with `/model` wins over it, `/model default` returns to it, and changing the default agent clears it.
 
 **The scope** is the channel's reach — the list of agents it **may drive**. For every other resource kind, scope names the agents a resource is delivered *to*; a channel is used by no agent, so its scope is read the other way round. Set it with **Agents it may drive** on the channel's **Overview**: every agent, only the ones you pick, or none.
 
@@ -258,7 +260,7 @@ The header names the channel, its status and where it runs (`SeaTalk app 8231 ·
 **Overview** is one column, with these sections stacked:
 
 - **Who can use it** — a bordered list of the paired owners, each with when they paired and **Remove**, and **Add owner** below it; an unpaired channel says nobody is paired yet, and the bot ignores every message until you pair.
-- **Agents** — **Default agent** (saved as soon as you pick it) and **Agents it may drive**, the channel's scope (see [Default agent and scope](#default-agent-and-scope)).
+- **Agents** — **Default agent** and **Default model** (each saved as soon as you pick it) and **Agents it may drive**, the channel's scope (see [Default agent and scope](#default-agent-and-scope)).
 - **Conversations from this channel →** — one link to the Conversations page filtered to this channel. The commands the bot answers are not listed here; see [Channel commands](/reference/channel-commands).
 
 **Settings** is one column of sections — **Connection**, **Receiving messages**, **Replies and conversations** and **Working directories** — each setting with its own one-line explanation beneath it, and a **Delete channel** row at the bottom. It saves each change as you make it — a number or a path once you stop typing and it is valid, a switch at once — with no saved line; a save that fails says so in a toast. It holds the channel's title, **In group chats**, **Message batching**, **Replies**, **Conversations**, **Directories** (the folders `/dir` may switch to — each row has **Set as default** and a remove ✕; the default's row reads *default* and has **Unset default**; with no default, new conversations start in Coffer's workspace, shown at the top of the list as *default · Coffer workspace*; a long list scrolls in its box), **Secrets** (the SeaTalk App ID, and the secret or token by its name, linking to its page on the Secrets page, with **Replace key…**), **Runs on** and **Delete…**. Every field starts from the settings the daemon reports for the channel, defaults included. A replaced secret is written under the reference the channel already uses and the daemon notices the new value and restarts the adapter on it by itself — also when you replace it with `coffer secret set` — so rotating a secret changes neither pairing nor binding. Deleting a channel stops the bot and removes its pairing; its conversations stay on the Conversations page.

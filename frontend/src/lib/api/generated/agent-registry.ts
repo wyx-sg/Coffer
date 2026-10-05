@@ -32,6 +32,11 @@ export interface paths {
          *     catalogue and the web picker merged the endpoint's models into it in the
          *     browser, so the page and the chat disagreed about one question.
          *
+         *     ``source=builtin`` answers for the agent's own login whatever it runs on now
+         *     (the Change model dialog, moving an agent back to it): the models its own
+         *     catalogue lists, or none for a Codex whose projected connection catalogue
+         *     hides them.
+         *
          *     An unregistered ``agent_key`` is a 404.
          */
         get: operations["list_agent_models_api_v1_agent_providers__agent_key__models_get"];
@@ -1688,7 +1693,9 @@ export type $defs = Record<string, never>;
 export interface operations {
     list_agent_models_api_v1_agent_providers__agent_key__models_get: {
         parameters: {
-            query?: never;
+            query?: {
+                source?: "active" | "builtin";
+            };
             header?: {
                 "x-coffer-token"?: string | null;
             };

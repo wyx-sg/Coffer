@@ -252,6 +252,30 @@ async def test_an_activated_gateway_that_restricts_nothing_leaves_discovery_alon
     assert await env.catalogue.suggest("claude_code") == _CLI_MODELS
 
 
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="the built-in login's models are listed while a connection is active",
+)
+async def test_the_built_in_models_are_listed_while_a_gateway_is_active(env: _Env) -> None:
+    """The Change model dialog moving an agent back to its own login lists the
+    agent's own models, not the connection's curated set."""
+    await _gateway(env, models=_text(*_GATEWAY_MODELS), agents=[AgentType.CLAUDE_CODE])
+
+    assert [m.id for m in await env.catalogue.builtin_offered("claude_code")] == _CLI_MODELS
+    assert await env.catalogue.suggest("claude_code") == _GATEWAY_MODELS
+
+
+async def test_codex_built_in_models_are_not_guessed_behind_a_projected_catalogue(
+    env: _Env,
+) -> None:
+    """Codex's own model list is replaced by Coffer's catalogue file while a
+    curating connection is projected, so nothing is offered rather than the
+    connection's ids under the agent's name."""
+    await _gateway(env, models=_text("gpt-6-codex"), agents=[AgentType.CODEX])
+
+    assert await env.catalogue.builtin_offered("codex") == []
+
+
 async def test_a_gateway_activated_for_another_agent_does_not_leak(env: _Env) -> None:
     """Activation is per agent type. A connection routed at Codex says nothing
     about what Claude Code — still on its own login — can run."""

@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 
 from coffer.application.channel import model_switch, new_conversation
 from coffer.application.channel.agent_routing import routable_choices
-from coffer.application.channel.command_cards import PICK_AGENT
+from coffer.application.channel.command_cards import PICK_AGENT, current_help_card
 from coffer.application.channel.command_context import deliver_card
 from coffer.application.channel.details_card import DETAILS_KINDS, apply_details_tap
 from coffer.application.channel.dir_switch import apply_dir, current_dir_card
@@ -231,6 +231,8 @@ async def _current_card(
         return await new_conversation.current_agent_card(ctx, page=page)
     if kind == "resume":
         return await current_resume_card(ctx, page=page)
+    if kind == "help":
+        return current_help_card(group=ctx.chat_kind == "group", page=page)
     return None
 
 

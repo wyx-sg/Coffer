@@ -46,10 +46,11 @@ export function OverviewModelSection({ agent }: { agent: AgentOut }) {
   const provider = useProviderLabel(agent);
   const providers = useProviders(models);
   const active = providers.data ? activeProviderFor(agent, providers.data) : null;
-  // On its own login the model is whatever the agent's config names.
+  // On its own login the model is whatever the agent's config names; the
+  // record's binding is the connection's and may be left over from one.
   const onConnection = !!agent.connection_uid && active !== null;
   const nativeModel = useAgentDefaultModel(onConnection ? "" : agent.type).data ?? null;
-  const model = agent.model ?? nativeModel;
+  const model = onConnection ? agent.model : nativeModel;
   const test = useModelPairTest(active, model ?? "");
 
   return (

@@ -13,9 +13,9 @@ from __future__ import annotations
 import os
 
 from coffer.application.channel.command_cards import (
-    HELP_ACTIONS,
     STATUS_ACTIONS,
     command_card,
+    help_card,
 )
 from coffer.application.channel.selection_cards import (
     CALLBACK_MAX_BYTES,
@@ -220,13 +220,26 @@ def test_a_model_set_by_name_that_is_not_in_the_catalogue_gets_no_false_locator(
     assert "is on page" not in card.text
 
 
-class TestTheCommandCard:
-    def test_the_help_card_carries_its_five_actions(self):
-        card = command_card(title="Commands", text="/new")
+def _commands(card: SelectionCard) -> list[str]:
+    return [b.value for b in card.buttons if b.value.startswith("cmd:")]
 
-        assert _values(card) == [f"cmd:{name}" for _label, name in HELP_ACTIONS]
-        assert [b.label for b in card.buttons] == ["New", "Stop", "Model", "Status", "Resume"]
-        assert card.title == "Commands"
+
+class TestTheCommandCard:
+    def test_the_help_card_is_paged_over_every_direct_command(self):
+        first = help_card(text="/new", group=False)
+
+        assert first.title == "Commands"
+        assert first.pages == 3
+        assert _commands(first) == ["cmd:new", "cmd:stop", "cmd:model", "cmd:dir"]
+        last = help_card(text="/new", group=False, page=2)
+        assert _commands(last) == ["cmd:help"]
+        assert "Page 3/3" in last.text
+
+    def test_a_group_help_card_fits_one_page(self):
+        card = help_card(text="/new", group=True)
+
+        assert card.pages == 1
+        assert [b.label for b in card.buttons] == ["New", "Stop", "Del", "Help"]
 
     def test_the_status_card_carries_its_actions(self):
         card = command_card(title="Status", text="Idle", actions=STATUS_ACTIONS)
@@ -252,3 +265,18 @@ def test_the_dir_card_names_paths_under_home_with_a_tilde_and_folds_in_the_defau
     assert card.text.startswith("Current: ~/src/app\n")
     assert path_label(None) == "Default directory"
     assert path_label(home) == "~"
+
+
+def test_a_resume_card_numbers_globally_and_shows_the_lines_of_its_page() -> None:
+    entries = [(f"c{i}", f"{i} · title {i}") for i in range(1, 11)]
+    card = resume_card(header="h", entries=entries, active="c6", page=1)
+
+    assert card.pages == 3
+    assert [b.label for b in card.buttons if not is_page_turn(b.value)] == [
+        "5",
+        "✓ 6",
+        "7",
+        "8",
+    ]
+    assert "5 · title 5" in card.text and "8 · title 8" in card.text
+    assert "title 1" not in card.text.replace("title 10", "")

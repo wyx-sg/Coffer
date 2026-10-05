@@ -138,6 +138,7 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
               setDialog("remove");
             }}
             onDefaultAgentChange={(agent) => void save({ default_agent: agent })}
+            onDefaultModelChange={(model) => void save({ default_model: model })}
           />
         </TabsContent>
         <TabsContent value="settings">

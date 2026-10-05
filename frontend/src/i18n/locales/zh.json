@@ -2495,8 +2495,8 @@
         }
       },
       "builtinNote": {
-        "claude_code": "使用自己的登录时，{{agent}} 自行选择模型（<code>/model</code>）。只有你添加的提供商，Coffer 才会设置它。",
-        "codex": "使用自己的登录时，{{agent}} 自行选择模型（<code>/model</code>）。只有你添加的提供商，Coffer 才会设置它。"
+        "claude_code": "使用自己的登录时，{{agent}} 运行它自己的配置里写的模型；选一个会写进那份配置，选“内置默认”则移除该项。<code>/model</code> 仍然可用。",
+        "codex": "使用自己的登录时，{{agent}} 运行它自己的配置里写的模型；选一个会写进那份配置，选“内置默认”则移除该项。<code>/model</code> 仍然可用。"
       },
       "test": {
         "testing": "正在测试连接…",
@@ -3505,6 +3505,8 @@
       "agents": {
         "title": "智能体",
         "default": "默认智能体",
+        "model": "默认模型",
+        "modelDefault": "提供商默认",
         "reach": "可驱动的智能体",
         "help": "每条消息都会成为「对话」里的一个对话，默认由默认智能体处理，除非 /new 指定了别的。",
         "reachHint": "在聊天里用 /new 指定智能体时，只能从这些里选。"

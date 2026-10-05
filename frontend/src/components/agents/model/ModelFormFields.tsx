@@ -1,8 +1,9 @@
 // src/components/agents/model/ModelFormFields.tsx — the fields of the Change model dialog (boards 2.1.16, 2.1.17, 2.1.19, 2.1.65).
 //
-// Which fields show follows the agent and the provider: the built-in login is a
-// provider and one line (it sets no model or tiers); a provider adds
-// Model and, for Claude Code, Model per tier. Codex has one model per session, so no tiers.
+// Which fields show follows the agent and the provider: the built-in login has
+// Model (the agent's own default, or one of its own models) and no tiers; a
+// provider has Model and, for Claude Code, Model per tier. Codex has one model per
+// session, so no tiers.
 import { Trans, useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
@@ -23,6 +24,8 @@ import type { useModelSwitchTest } from "@/lib/hooks/useModelSwitchTest";
 
 const K = "agents.changeModel";
 const HINT = "text-xs text-text-subtle";
+/** Radix selects refuse an empty value: this stands for "the config names no model". */
+const NATIVE_DEFAULT = "__builtin_default__";
 
 function Field({
   label,
@@ -97,13 +100,33 @@ export function ModelFormFields({
       </Field>
 
       {c.draftIsBuiltin ? (
-        <p className={HINT}>
-          <Trans
-            i18nKey={`${K}.builtinNote.${agentType}`}
-            values={{ agent }}
-            components={{ code: <code className="font-mono text-text-muted" /> }}
-          />
-        </p>
+        <Field label={t(`${K}.model.label`)} htmlFor="change-model-model">
+          <Select
+            value={c.draftNative || NATIVE_DEFAULT}
+            onValueChange={(v) => c.pickNative(v === NATIVE_DEFAULT ? "" : v)}
+          >
+            <SelectTrigger id="change-model-model" className="text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NATIVE_DEFAULT} className="text-xs">
+                {t("agents.overviewTab.model.auto")}
+              </SelectItem>
+              {c.nativeModels.map((m) => (
+                <SelectItem key={m.id} value={m.id} className="text-xs">
+                  {m.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className={HINT}>
+            <Trans
+              i18nKey={`${K}.builtinNote.${agentType}`}
+              values={{ agent }}
+              components={{ code: <code className="font-mono text-text-muted" /> }}
+            />
+          </span>
+        </Field>
       ) : (
         <>
           <Field label={t(`${K}.model.label`)} htmlFor="change-model-model">
