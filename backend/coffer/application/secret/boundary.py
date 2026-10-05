@@ -30,7 +30,6 @@ in a worker thread. Async callers use ``asyncio.to_thread``.
 from __future__ import annotations
 
 import builtins
-import dataclasses
 import secrets as _secrets
 from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, datetime, timedelta
@@ -354,13 +353,6 @@ class SecretBoundary:
 
     def bindings(self, ref: str | None = None) -> builtins.list[SecretBinding]:
         return self._store.bindings(ref)
-
-    def rebind(self, old: str, new: str) -> None:
-        """Carry every binding of ``old`` to ``new``: the same value at a new
-        name stays approved where it was approved (spec secret "Move every
-        secret to a fixed id once")."""
-        for binding in self._store.bindings(old):
-            self._store.put_binding(dataclasses.replace(binding, ref=new))
 
     def forget(self, ref: str) -> None:
         """A deleted secret takes its bindings with it; a new value is a new secret."""

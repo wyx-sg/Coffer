@@ -4,7 +4,7 @@ import { useMemo } from "react";
 
 import { useTranslation } from "react-i18next";
 
-import { citersOf, displayName, isMintedId, isMissingHere, SECRET_PREFIX } from "./secretRows";
+import { citersOf, displayName, isMissingHere, SECRET_PREFIX } from "./secretRows";
 import type { SecretRef } from "@/lib/api/secret";
 import { useSecrets } from "@/lib/hooks/useSecrets";
 
@@ -40,10 +40,10 @@ export function useSecretChoices() {
   const names = useMemo(() => new Set(options.map((o) => o.name)), [options]);
   /** The row behind a name, including one cited but not stored here. */
   const rowOf = (name: string) => query.data?.refs.find((r) => r.ref === `${SECRET_PREFIX}${name}`);
-  /** What a chosen secret is called: its display name, else its id unless that is a minted one. */
+  /** What a chosen secret is called: its display name, else the placeholder. */
   const displayOf = (name: string) => {
     const row = rowOf(name);
-    return row ? displayName(row, unnamed) : isMintedId(name) ? unnamed : name;
+    return row ? displayName(row, unnamed) : unnamed;
   };
   return {
     options,

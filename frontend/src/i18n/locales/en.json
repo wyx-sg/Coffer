@@ -822,7 +822,6 @@
       "secret_approval_approved": "Approved a secret change",
       "secret_approval_rejected": "Rejected a secret change",
       "secret_imported": "Imported secrets",
-      "secret_migrated": "Gave a secret a fixed id",
       "secret_notes_updated": "Changed a secret's name or description",
       "secret_protection_enabled": "Turned secret approval back on",
       "storage_cache_cleared": "Cleared the rebuildable cache",

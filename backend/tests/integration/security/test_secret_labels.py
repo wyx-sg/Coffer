@@ -1,12 +1,10 @@
-"""Labels, minted ids, the move to minted ids, who used a secret and the citation
+"""Labels, minted ids, who used a secret and the citation
 index, against a real in-process daemon over a throwaway HOME (spec secret)."""
 
 from __future__ import annotations
 
-import json
 import pathlib
 import re
-import subprocess
 import time
 import uuid
 from collections.abc import Callable, Iterator
@@ -21,16 +19,13 @@ from coffer.surfaces.http.secret_index_wiring import get_citation_index
 from coffer.surfaces.http.secret_notes_wiring import get_secret_notes
 from tests.support.boundary_daemon import (
     BoundaryDaemon,
-    get_secret_store,
     point_cli_at,
     prepare_home,
     running_daemon,
 )
 
 VALUE = "-".join(["fake", "token", "value"])
-OLD_VALUE = "-".join(["old", "fake", "value"])
 MINTED = re.compile(r"^secret/[0-9a-f]{32}$")
-ORPHAN = "channel/telegram/bot-token"
 
 
 @pytest.fixture
@@ -143,86 +138,6 @@ def test_a_person_cannot_choose_an_id(d: BoundaryDaemon, monkeypatch: pytest.Mon
     assert _row(d, "secret/" + uri.group(1))["label"] == "Orders DB"
     again = CliRunner().invoke(cli_app, ["secret", "set", "secret/orders-db"], input=VALUE + "\n")
     assert again.exit_code != 0 and d.value("secret/orders-db") is None
-
-
-@pytest.mark.acceptance(
-    spec="secret", scenario="start-up moves old names to fixed ids and keeps them readable"
-)
-def test_start_up_moves_old_names_to_fixed_ids(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    db = prepare_home(tmp_path, monkeypatch)
-    hexref = "mcp_server/" + "ab" * 16 + "/JIRA_TOKEN"
-    skill = tmp_path / ".coffer" / "vault" / "skills" / "deploy"
-    with running_daemon(tmp_path, db) as old:
-        for ref in ("secret/github", "postman.AUTHORIZATION", "team.TOKEN", hexref, ORPHAN):
-            get_secret_store().set(ref, OLD_VALUE + ref)
-        skill.mkdir(parents=True)
-        (skill / "run.sh").write_text("curl -H coffer://secret/github\n")
-        postman = old.register_stdio("postman", "p", {"AUTHORIZATION": "postman.AUTHORIZATION"})
-        one = old.register_stdio("one", "p", {"TOKEN": "team.TOKEN"})
-        two = old.register_stdio("two", "p", {"TOKEN": "team.TOKEN"})
-        jira = old.register_stdio("jira", "p", {"JIRA_TOKEN": hexref})
-        for waiting in old.pending():
-            old.approve(waiting["id"])
-    # An older build's file: a key the mcp_server kind dropped long ago, at HEAD.
-    vault = tmp_path / ".coffer" / "vault"
-    jira_file = vault / "resources" / "mcp_server" / "jira.json"
-    doc = json.loads(jira_file.read_text())
-    doc["config"]["auto_enable_new_capabilities"] = True
-    jira_file.write_text(json.dumps(doc, indent=2))
-    subprocess.run(
-        [
-            "git",
-            "-C",
-            str(vault),
-            "-c",
-            "user.name=t",
-            "-c",
-            "user.email=t@t",
-            "commit",
-            "-qam",
-            "x",
-        ],
-        check=True,
-    )
-
-    def refs(d: BoundaryDaemon, resource: dict[str, Any]) -> dict[str, str]:
-        got = d.client.get(f"/api/v1/resources/{resource['uid']}").json()
-        return dict(got["config"]["transport"]["secret_refs"])
-
-    with running_daemon(tmp_path, db) as d:
-        listed = d.client.get("/api/v1/secrets").json()["refs"]
-        assert all(MINTED.match(r["ref"]) for r in listed), [r["ref"] for r in listed]
-        by_label = {r["label"]: r for r in listed if r["label"]}
-        github = by_label["github"]
-        # Nothing cites it any more; it still moves, named after its old ref.
-        assert d.value(by_label[ORPHAN]["ref"]) == OLD_VALUE + ORPHAN
-        assert "auto_enable_new_capabilities" not in jira_file.read_text()
-        assert d.value(github["ref"]) == OLD_VALUE + "secret/github"
-        assert github["ref"].removeprefix("secret/") in (skill / "run.sh").read_text()
-        assert "secret/github" not in (skill / "run.sh").read_text()
-        for resource, key, old in (
-            (postman, "AUTHORIZATION", "postman.AUTHORIZATION"),
-            (jira, "JIRA_TOKEN", hexref),
-        ):
-            new = refs(d, resource)[key]
-            assert MINTED.match(new) and d.value(new) == OLD_VALUE + old
-        shared = {refs(d, one)["TOKEN"], refs(d, two)["TOKEN"]}
-        assert len(shared) == 1 and MINTED.match(next(iter(shared)))
-        # Several resources share it, so it was minted for none of them; one
-        # resource's own is minted for that resource.
-        row = {r["ref"]: r for r in listed}
-        assert row[next(iter(shared))]["created_for"] is None
-        assert row[refs(d, postman)["AUTHORIZATION"]]["created_for"] == postman["uid"]
-        assert d.pending() == [] and len(d.audit("secret_migrated")) == 5
-        assert d.value("postman.AUTHORIZATION") is None and d.value("secret/github") is None
-        assert d.resolve_for(d.client.get(f"/api/v1/resources/{postman['uid']}").json())
-        first = sorted(r["ref"] for r in listed)
-
-    with running_daemon(tmp_path, db) as again:
-        assert sorted(r["ref"] for r in again.client.get("/api/v1/secrets").json()["refs"]) == first
-        assert len(again.audit("secret_migrated")) == 5
 
 
 @pytest.mark.acceptance(

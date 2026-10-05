@@ -76,18 +76,21 @@ function ref(over: Partial<SecretRef> & { ref: string }): SecretRef {
 }
 const LINEAR = ref({
   ref: "secret/linear-api-key",
+  label: "linear-api-key",
   uri: "coffer://secret/linear-api-key",
   present: false,
   cited_by: [{ kind: "mcp_server", name: "linear", uid: "l", slot: null }],
 });
 const SENTRY = ref({
   ref: "secret/sentry-token",
+  label: "sentry-token",
   uri: "coffer://secret/sentry-token",
   locked: true,
   cited_by: [{ kind: "mcp_server", name: "sentry", uid: "s", slot: null }],
 });
 const GITHUB = ref({
   ref: "secret/github-token",
+  label: "github-token",
   uri: "coffer://secret/github-token",
   cited_by: [{ kind: "mcp_server", name: "github", uid: "g", slot: null }],
 });

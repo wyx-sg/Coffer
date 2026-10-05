@@ -822,7 +822,6 @@
       "secret_approval_approved": "批准了一项密钥改动",
       "secret_approval_rejected": "拒绝了一项密钥改动",
       "secret_imported": "导入了密钥",
-      "secret_migrated": "为密钥换成固定 ID",
       "secret_notes_updated": "修改了密钥的名称或描述",
       "secret_protection_enabled": "重新开启了密钥审批",
       "storage_cache_cleared": "清除了可重建的缓存",
