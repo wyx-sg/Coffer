@@ -208,16 +208,6 @@ export function followLanguageInShell(
   i18n.on("languageChanged", tell);
 }
 
-/**
- * Tell the shell how many things the attention list holds, so the count
- * beside the tray icon follows a resolve or an ignore at once rather than at
- * the tray's own next read. A no-op outside Tauri: a browser has no tray.
- */
-export async function setShellAttentionCount(count: number): Promise<void> {
-  if (!isTauri()) return;
-  await shellInvoke("set_attention_count", { count });
-}
-
 // ---------------------------------------------------------------------------
 // Presence-gated actions (spec desktop-app "Release plaintext and approvals
 // only after a presence check in the shell")

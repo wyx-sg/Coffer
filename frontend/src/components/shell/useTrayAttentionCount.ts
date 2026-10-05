@@ -9,10 +9,15 @@
 import { useEffect } from "react";
 
 import { useAttention } from "@/lib/hooks/useAttention";
-import { inDesktopShell, setShellAttentionCount } from "@/lib/tauri";
+import { inDesktopShell, shellInvoke } from "@/lib/tauri";
 
 /** How often the open window re-reads the list with nothing prompting it. */
 const REFRESH_MS = 10_000;
+
+/** Tell the shell the list's length (`tray::set_attention_count`). */
+function reportCount(count: number): Promise<void> {
+  return shellInvoke("set_attention_count", { count });
+}
 
 export function useTrayAttentionCount(): void {
   const inShell = inDesktopShell();
@@ -20,7 +25,7 @@ export function useTrayAttentionCount(): void {
   const count = attention.data?.items.length;
   useEffect(() => {
     if (!inShell || count === undefined) return;
-    setShellAttentionCount(count).catch((e: unknown) => {
+    reportCount(count).catch((e: unknown) => {
       console.error("Coffer: could not tell the desktop shell the attention count", e);
     });
   }, [inShell, count]);

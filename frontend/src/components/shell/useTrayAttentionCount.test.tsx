@@ -9,10 +9,15 @@ import { useTrayAttentionCount } from "./useTrayAttentionCount";
 
 const read = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/api/attention", () => ({ attentionApi: { read } }));
-const shell = vi.hoisted(() => ({ inShell: true, report: vi.fn(() => Promise.resolve()) }));
+const shell = vi.hoisted(() => ({
+  inShell: true,
+  invoke: vi.fn<(command: string, args?: { count: number }) => Promise<void>>(() =>
+    Promise.resolve(),
+  ),
+}));
 vi.mock("@/lib/tauri", () => ({
   inDesktopShell: () => shell.inShell,
-  setShellAttentionCount: shell.report,
+  shellInvoke: shell.invoke,
 }));
 
 function harness() {
@@ -31,24 +36,28 @@ const listOf = (n: number) => ({
 describe("useTrayAttentionCount", () => {
   it("reports the list's length, and again when a resolve shrinks it to nothing", async () => {
     shell.inShell = true;
-    shell.report.mockClear();
+    shell.invoke.mockClear();
     read.mockResolvedValueOnce(listOf(2)).mockResolvedValue(listOf(0));
     const { qc, wrapper } = harness();
     renderHook(() => useTrayAttentionCount(), { wrapper });
-    await waitFor(() => expect(shell.report).toHaveBeenLastCalledWith(2));
+    await waitFor(() =>
+      expect(shell.invoke).toHaveBeenLastCalledWith("set_attention_count", { count: 2 }),
+    );
     // A resolve anywhere invalidates the shared key.
     await act(() => qc.invalidateQueries({ queryKey: attentionKey }));
-    await waitFor(() => expect(shell.report).toHaveBeenLastCalledWith(0));
+    await waitFor(() =>
+      expect(shell.invoke).toHaveBeenLastCalledWith("set_attention_count", { count: 0 }),
+    );
   });
 
   it("reads nothing in a browser", async () => {
     shell.inShell = false;
-    shell.report.mockClear();
+    shell.invoke.mockClear();
     read.mockClear();
     const { wrapper } = harness();
     renderHook(() => useTrayAttentionCount(), { wrapper });
     await new Promise((r) => setTimeout(r, 20));
     expect(read).not.toHaveBeenCalled();
-    expect(shell.report).not.toHaveBeenCalled();
+    expect(shell.invoke).not.toHaveBeenCalled();
   });
 });
