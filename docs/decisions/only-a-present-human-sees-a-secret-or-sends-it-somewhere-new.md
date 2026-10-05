@@ -122,7 +122,15 @@ before**.
    desktop app, under the same presence check. The approval is proven, not
    asserted: after the presence check passes, the desktop app signs the pending
    change with a key derived from the master key, and the daemon applies a
-   binding only with a valid signature. Only Coffer's signed binaries can read
+   binding only with a valid signature. The signed grant names the approval
+   *and* the target fingerprint the person was shown, and the daemon checks it
+   against the target it holds when the grant is redeemed, so a target changed
+   during the prompt approves nothing. A person may start the approval from
+   the command line (`coffer approval approve <id>`): the command queues a
+   request the desktop app claims, the app runs the same presence check and
+   signs, and the command reads the approval's state afterwards — it never sees
+   the grant, the signature or the key, and no flag skips the check; see
+   [Every Web UI and Desktop Operation Has a `coffer` Command Over the Same Route](command-line-parity-with-the-web-ui.md). Only Coffer's signed binaries can read
    the master key, and only the desktop app's approval path signs, so a process
    an agent controls cannot produce one. A binding whose secret value was supplied for it needs
    no approval: the destination was just registered or changed, and the ref has

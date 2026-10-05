@@ -32,6 +32,16 @@ _STATUS: dict[str, int] = {
     "CUSTOM_TOOL_NOT_FOUND": 404,
     "NOT_A_CUSTOM_TOOL_GROUP": 404,
     "CUSTOM_TOOL_EXISTS": 409,
+    # environments and arguments (spec mcp-gateway "Choose a custom tool's
+    # environment on every call", "Validate a custom tool's arguments before
+    # any request")
+    "CUSTOM_TOOL_ARGUMENTS_INVALID": 422,
+    "CUSTOM_TOOL_ENVIRONMENT_REQUIRED": 422,
+    "CUSTOM_TOOL_ENVIRONMENT_UNKNOWN": 422,
+    "CUSTOM_TOOL_ENVIRONMENT_DISABLED": 422,
+    "CUSTOM_TOOL_ENVIRONMENT_NOT_FOUND": 404,
+    "CUSTOM_TOOL_ENVIRONMENT_EXISTS": 409,
+    "CUSTOM_TOOL_LAST_ENVIRONMENT": 409,
     "OPENAPI_UNREADABLE": 422,
     "OPENAPI_UNREACHABLE": 502,
     "NOT_IMPORTED_FROM_OPENAPI": 409,
@@ -69,6 +79,10 @@ _STATUS: dict[str, int] = {
     "PRESENCE_GRANT_INVALID": 403,
     "APPROVAL_NOT_FOUND": 404,
     "APPROVAL_NOT_PENDING": 409,
+    # The command line's requests to the desktop shell (spec secret "Approve
+    # from the command line with the person's own presence check").
+    "DESKTOP_REQUEST_NOT_FOUND": 404,
+    "APPROVAL_TARGET_CHANGED": 409,
     "SECRET_NAME_INVALID": 422,
     "SECRET_NOT_FOUND": 404,
     "UPSTREAM_UNAVAILABLE": 503,

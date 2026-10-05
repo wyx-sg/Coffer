@@ -1,5 +1,5 @@
 """HTTP surface for the one ``memory`` kind (spec memory "Manage memory in the
-web UI").
+web UI and on the command line").
 
 List partitions, notes and retirements, show one note with the entries behind
 it, walk a partition's own directory and read a file out of it, run a sync (an

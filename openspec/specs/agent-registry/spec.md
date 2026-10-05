@@ -881,7 +881,7 @@ path that writes back into it.
 - **THEN** its row carries the `conversation_id`, `running` true, `needs_you` and the channel binding, while a session no conversation points at carries none of them
 
 ### Requirement: Offer every agent operation over REST and on the Agents page
-Every management operation — register/list/view/update/remove, the config-file listing and preview, Coffer connect/disconnect/connection status, MCP entry list/view/remove/adopt, plugin list/detail/toggle/uninstall, the hooks listing, native session listing, rename and delete, and the model catalogue — MUST be available through (a) the REST API and (b) the Agents page in the web UI. The command line carries none of them: it has no `agent` command group.
+Every management operation — register/list/view/update/remove, the config-file listing and preview, Coffer connect/disconnect/connection status, MCP entry list/view/remove/adopt, plugin list/detail/toggle/uninstall, the hooks listing, native session listing, rename and delete, and the model catalogue — MUST be available through (a) the REST API, (b) the Agents page in the web UI and (c) the `coffer agent` commands, which call the same routes ([resource-framework](../resource-framework/spec.md) "Offer every management operation on the command line"). An agent's config files and native-memory files are its own plain files: their listings are commands, their content is read with the reader's own tools.
 
 - the lifecycle of "Manage the agent lifecycle" under `/api/v1/agents`;
 - the config-file listing at `GET /api/v1/agents/{uid}/config-files` and one file's preview at `GET /api/v1/agents/{uid}/config-files/{key}/content`;

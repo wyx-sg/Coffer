@@ -21,6 +21,9 @@ export type CustomToolPatch = Schemas["CustomToolPatch"];
 export type CustomToolHeaderIn = Schemas["CustomToolHeaderIn"];
 export type CustomToolHeaderOut = Schemas["CustomToolHeaderOut"];
 export type CustomToolTestOut = Schemas["CustomToolTestOut"];
+export type CustomToolEnvironment = Schemas["CustomToolEnvironmentOut"];
+export type CustomToolEnvironmentIn = Schemas["CustomToolEnvironmentIn"];
+export type CustomToolEnvironmentPatch = Schemas["CustomToolEnvironmentPatch"];
 export type CustomToolUnsavedTestIn = Schemas["CustomToolUnsavedTestIn"];
 export type OpenApiReadIn = Schemas["OpenApiReadIn"];
 export type OpenApiReading = Schemas["OpenApiReadOut"];
@@ -39,6 +42,9 @@ function must<T>(data: T | undefined, what: string): T {
 const group = (name: string) => ({ params: { path: { name } } });
 const tool = (name: string, toolName: string) => ({
   params: { path: { name, tool: toolName } },
+});
+const env = (name: string, environment: string) => ({
+  params: { path: { name, environment } },
 });
 
 export const customToolsApi = {
@@ -98,15 +104,45 @@ export const customToolsApi = {
     if (error) throwApiError(error, "INTERNAL_ERROR", "delete tool failed");
     return must(data, "delete tool");
   },
-  /** Run a draft tool once against the group's base URL and secret; saves nothing. */
+  /** Add an environment: where the group's same tools are sent. */
+  addEnvironment: async (name: string, body: CustomToolEnvironmentIn): Promise<CustomToolGroup> => {
+    const { data, error } = await getApiClient().POST("/custom-tools/{name}/environments", {
+      ...group(name),
+      body,
+    });
+    if (error) throwApiError(error, "INTERNAL_ERROR", "add environment failed");
+    return must(data, "add environment");
+  },
+  updateEnvironment: async (
+    name: string,
+    environment: string,
+    body: CustomToolEnvironmentPatch,
+  ): Promise<CustomToolGroup> => {
+    const { data, error } = await getApiClient().PATCH(
+      "/custom-tools/{name}/environments/{environment}",
+      { ...env(name, environment), body },
+    );
+    if (error) throwApiError(error, "INTERNAL_ERROR", "update environment failed");
+    return must(data, "update environment");
+  },
+  removeEnvironment: async (name: string, environment: string): Promise<CustomToolGroup> => {
+    const { data, error } = await getApiClient().DELETE(
+      "/custom-tools/{name}/environments/{environment}",
+      env(name, environment),
+    );
+    if (error) throwApiError(error, "INTERNAL_ERROR", "delete environment failed");
+    return must(data, "delete environment");
+  },
+  /** Run a draft tool once in one of the group's environments, with its secret; saves nothing. */
   test: async (
     name: string,
     draft: CustomToolIn,
     args: Record<string, unknown>,
+    environment?: string | null,
   ): Promise<CustomToolTestOut> => {
     const { data, error } = await getApiClient().POST("/custom-tools/{name}/test", {
       ...group(name),
-      body: { tool: draft, arguments: args },
+      body: { tool: draft, arguments: args, environment: environment ?? null },
     });
     if (error) throwApiError(error, "INTERNAL_ERROR", "test failed");
     return must(data, "test");

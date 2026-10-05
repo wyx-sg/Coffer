@@ -83,10 +83,12 @@ class SecretBindingPending(CofferError):  # noqa: N818
 
     def __init__(self, approval_ids: list[str], descriptions: list[str]) -> None:
         joined = "; ".join(descriptions)
+        ids = " ".join(approval_ids)
         super().__init__(
             f"waiting for approval in the Coffer app: {joined}. Nothing was sent; "
-            "open the Coffer desktop app to approve or reject (a rejected one stays "
-            "refused until the destination changes)"
+            f"approve with Touch ID by running: coffer approval approve {ids} — or "
+            "in the Coffer desktop app (a rejected one stays refused until the "
+            "destination changes)"
         )
         self.approval_ids = approval_ids
 
@@ -110,6 +112,20 @@ class SecretBindingRejected(SecretBindingPending):
             "it stays refused until the destination changes",
         )
         self.approval_ids = approval_ids
+
+
+class ApprovalTargetChanged(CofferError):  # noqa: N818
+    """The approval's target moved after the person was shown it: nothing is
+    applied, and the approval for the new target asks again."""
+
+    code = "APPROVAL_TARGET_CHANGED"
+
+    def __init__(self, approval_id: str) -> None:
+        super().__init__(
+            f"approval {approval_id} now names another target than the one you were shown; "
+            "nothing was approved — review it again"
+        )
+        self.approval_ids = [approval_id]
 
 
 class PresenceGrantInvalid(CofferError):  # noqa: N818

@@ -117,6 +117,17 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "B", "UP", "N", "C4", "SIM", "RUF"]
 ignore = []
 
+[tool.ruff.lint.flake8-bugbear]
+# A Typer option's default is a declaration Typer reads, never a shared mutable
+# value, whatever the parameter's annotation (a repeatable option is a list).
+extend-immutable-calls = [
+    "typer.Option",
+    "typer.Argument",
+    "coffer.surfaces.cli._io.data_option",
+    "coffer.surfaces.cli._io.set_option",
+    "coffer.surfaces.cli._io.json_option",
+]
+
 [tool.ruff.format]
 quote-style = "double"
 

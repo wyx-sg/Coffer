@@ -7,7 +7,7 @@ description: How Coffer encrypts every secret it holds, how to store, cite, rota
 
 Coffer keeps every secret it needs — an MCP server's token, a provider's API key, a channel bot's token, a sync remote's push token — in one encrypted store, and everything else refers to a secret by its id. This page covers storing and citing secrets, rotating and deleting them, where the master key lives, and how to back it up or move it to another machine.
 
-No command, route or MCP tool prints a stored value. You see a value only in the desktop app, after Touch ID or your login password, and a secret goes somewhere it has not gone before only after you approve it there. [Secrets](/guides/secrets) explains that boundary, how approvals work, and how to allow a standalone secret to be handed to a command you run with `coffer run`.
+No command, route or MCP tool prints a stored value. You see a value only in the desktop app, after Touch ID or your login password, and a secret goes somewhere it has not gone before only after you approve it there (an agent can ask with `coffer approval approve`, which brings the prompt to the app). [Secrets](/guides/secrets) explains that boundary, how approvals work, and how to allow a standalone secret to be handed to a command you run with `coffer run`.
 
 ## How secrets are stored
 
@@ -86,7 +86,7 @@ The list shows every ref the store holds and every ref a registered resource cit
 
 It decrypts nothing and is not audited. `--json` gives the same data, with each secret's `label`, `description` and `created_for` (the uid of the resource it was made for), the slot each citer uses (`cited_by`), and the approved and pending destinations of each ref. The [Secrets page](/guides/secrets#the-secrets-page) in the web UI shows the same list.
 
-No command prints a value. A row of the [Secrets page](/guides/secrets#the-secrets-page) says whether a value is stored. To see or copy one, choose **Reveal value…** on the [Secrets page](/guides/secrets#the-secrets-page) in the desktop app, which asks for Touch ID or your login password each time.
+No command prints a value. A row of the [Secrets page](/guides/secrets#the-secrets-page) says whether a value is stored. To see or copy one, choose **Reveal value…** on the [Secrets page](/guides/secrets#the-secrets-page) in the desktop app, which asks for Touch ID or your login password each time. `coffer secret reveal <ref>` starts the same reveal from a terminal; the value still shows only in the app.
 
 ## Rotate a secret
 
@@ -153,7 +153,7 @@ Settings › Security holds what belongs to this Mac only: **Encryption** (where
 
 Open the **desktop app** and back up the master key: choose a passphrase of at least eight characters (typed twice), confirm with Touch ID or your login password, pick a folder, and the app writes `coffer-master-key.cfk` into that folder with mode `0600`. The file holds the key encrypted under a key derived from the passphrase (scrypt), plus the key's fingerprint; without the passphrase it opens nothing, and Coffer cannot recover a forgotten one. It never overwrites an existing file (a second backup is `coffer-master-key-2.cfk`), neither the key nor the passphrase passes through the page's answer, the log or the audit, and the backup is audited as `master_key_exported`. Keep the file and the passphrase somewhere safe, such as your password manager.
 
-No command, REST route or browser page writes a key backup. An agent can run any command you can, so a command that exported the key would hand every secret to it.
+No command, REST route or browser page writes a key backup. An agent can run any command you can, so a command that exported the key would hand every secret to it. `coffer secret backup-key` only opens the backup in the desktop app, where you confirm presence, type the passphrase and pick the folder.
 
 In a development build the key is also simply the file `~/.coffer/master.key` (or the keychain entry, service `coffer`, entry `master-key`), and copying all of `~/.coffer/` with the daemon stopped captures it.
 
@@ -185,7 +185,7 @@ To let a second machine decrypt them, move the key yourself, over a channel you 
 | `SECRET_LOCKED` at startup | The keychain could not be read — it is locked or the prompt was dismissed | Unlock the keychain and start the daemon again. |
 | `SECRET_UNREADABLE` naming a ref | The ciphertext does not decrypt with the current key — usually a key from another machine | Import the matching key, or set the ref again with its value. |
 | `SECRET_IN_USE` | A resource still cites the ref | Detach or delete the resources the message names. |
-| `waiting for approval in the Coffer app`, exit `9` | A secret in the change goes somewhere it has not gone before | Approve it in the desktop app; the approvals dialog lists what waits. See [Secrets → Approvals](/guides/secrets#approvals). |
+| `waiting for approval: <id>`, exit `9` | A secret in the change goes somewhere it has not gone before | Run the `next:` command it printed, `coffer approval approve <id>`, and confirm in the desktop app, or approve it in the app's approvals dialog, which lists what waits. See [Secrets → Approvals](/guides/secrets#approvals). |
 | `PRESENCE_GRANT_INVALID` | A reveal, key backup or approval was attempted outside the desktop app | Do it in the desktop app. |
 | An MCP server fails to start naming a missing secret | The cited ref is not in the store | `coffer secret set <ref>` to give an existing secret a value, or add the secret on the Secrets page. |
 

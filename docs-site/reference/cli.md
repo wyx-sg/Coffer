@@ -38,11 +38,26 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | Group | Description |
 | --- | --- |
 | [`coffer run`](/reference/cli/run) | Run a command with secrets set only in its environment. |
-| [`coffer daemon`](/reference/cli/daemon) | Daemon lifecycle |
-| [`coffer config`](/reference/cli/config) | Read and change Coffer's settings (the keys read before the daemon starts) |
-| [`coffer log`](/reference/cli/log) | Read Coffer's records: the audit log, MCP calls and the daemon log |
-| [`coffer path`](/reference/cli/path) | Where Coffer's log files and skill working files live |
-| [`coffer mcp`](/reference/cli/mcp) | Check an MCP server |
-| [`coffer secret`](/reference/cli/secret) | Manage encrypted secrets. |
-| [`coffer cli`](/reference/cli/cli) | Read the command-line tools Coffer manages. |
-| [`coffer vault`](/reference/cli/vault) | Hand edits the vault refused |
+| [`coffer daemon`](/reference/cli/daemon) | The Coffer daemon: start, stop, status, and its settings. |
+| [`coffer config`](/reference/cli/config) | Daemon settings read before it binds (work while it is down). |
+| [`coffer log`](/reference/cli/log) | Read Coffer's audit, MCP and daemon logs. |
+| [`coffer path`](/reference/cli/path) | Where Coffer keeps files you read directly. |
+| [`coffer mcp`](/reference/cli/mcp) | MCP servers: register, change, test, their tools and logs. |
+| [`coffer secret`](/reference/cli/secret) | Secrets: list, store, delete, reveal in the app, import, approvals. |
+| [`coffer cli`](/reference/cli/cli) | Command-line tools Coffer manages for skills. |
+| [`coffer vault`](/reference/cli/vault) | The vault's history and the hand edits it refused. |
+| [`coffer custom-tool`](/reference/cli/custom-tool) | Custom tools: groups of HTTP API requests served as MCP tools. |
+| [`coffer approval`](/reference/cli/approval) | Secret approvals: list, show, approve with Touch ID, reject. |
+| [`coffer app`](/reference/cli/app) | The Coffer desktop app. |
+| [`coffer resource`](/reference/cli/resource) | Any resource by uid: show, rename, switch on or off, reach, delete. |
+| [`coffer channel`](/reference/cli/channel) | Messaging channels: status, pairing, people, notify, restart. |
+| [`coffer knowledge`](/reference/cli/knowledge) | Knowledge collections (documents are plain files you edit directly). |
+| [`coffer skill`](/reference/cli/skill) | Skills: import, update, delivery to agents, sources. |
+| [`coffer agent`](/reference/cli/agent) | Manage coding agents: add, connect, their MCP entries, plugins and sessions. |
+| [`coffer provider`](/reference/cli/provider) | Model providers: connections, prices, switching agents' models. |
+| [`coffer model`](/reference/cli/model) | Ask a model endpoint which models it serves, or test it. |
+| [`coffer conversation`](/reference/cli/conversation) | Conversations: rename, stop a turn, delete (list: agent session all). |
+| [`coffer settings`](/reference/cli/settings) | Settings: approvals, secret storage, features, data, upkeep. |
+| [`coffer attention`](/reference/cli/attention) | What needs you (the Overview list): list, ignore, un-ignore. |
+| [`coffer usage`](/reference/cli/usage) | Model usage and cost. |
+| [`coffer sync`](/reference/cli/sync) | Vault sync: remote, rounds, machines, conflicts. |

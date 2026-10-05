@@ -20,6 +20,7 @@ from typing import Any
 from coffer.application.mcp.custom_tool_ports import ToolTestOutcome
 from coffer.domain.errors import UpstreamTimeout
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
+from coffer.domain.mcp.http_api_environment import HttpApiEnvironment
 from coffer.domain.mcp.http_api_render import RenderError
 from coffer.infrastructure.mcp.http_api_client import build_request, mask_secrets, send_request
 from coffer.infrastructure.net.ssrf_guard import check_url
@@ -29,6 +30,7 @@ class HttpApiToolRunner:
     async def run(
         self,
         transport: HttpApiTransport,
+        env: HttpApiEnvironment,
         tool: HttpApiTool,
         arguments: dict[str, Any],
         overlay: dict[str, str],
@@ -36,14 +38,14 @@ class HttpApiToolRunner:
         secrets = list(overlay.values())
         started = time.monotonic()
         try:
-            request = build_request(transport, tool, arguments, overlay)
+            request = build_request(transport, env, tool, arguments, overlay)
         except RenderError as e:
             return ToolTestOutcome(
                 ok=False, duration_ms=0, error=mask_secrets(str(e), secrets), failure="request"
             )
         try:
             outcome = await send_request(
-                request, timeout_seconds=transport.timeout_seconds, secrets=secrets
+                request, timeout_seconds=transport.timeout_for(env), secrets=secrets
             )
         except UpstreamTimeout as e:
             return ToolTestOutcome(
@@ -73,19 +75,23 @@ class HttpApiToolRunner:
         )
 
     async def run_unsaved(
-        self, transport: HttpApiTransport, tool: HttpApiTool, arguments: dict[str, Any]
+        self,
+        transport: HttpApiTransport,
+        env: HttpApiEnvironment,
+        tool: HttpApiTool,
+        arguments: dict[str, Any],
     ) -> ToolTestOutcome:
         try:
-            await asyncio.to_thread(check_url, str(transport.base_url))
+            await asyncio.to_thread(check_url, str(env.base_url))
         except ValueError as e:
             return ToolTestOutcome(
                 ok=False,
                 duration_ms=0,
-                url=str(transport.base_url),
+                url=str(env.base_url),
                 error=str(e),
                 failure="blocked",
             )
-        return await self.run(transport, tool, arguments, {})
+        return await self.run(transport, env, tool, arguments, {})
 
 
 __all__ = ["HttpApiToolRunner"]

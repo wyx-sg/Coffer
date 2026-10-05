@@ -13,18 +13,17 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Response
 
-from coffer.application.mcp.custom_tool_handoff import request_test_handoff
 from coffer.application.mcp.custom_tool_import import CustomToolImporter
-from coffer.application.mcp.custom_tool_ports import ToolTestOutcome
 from coffer.application.mcp.custom_tools import UNSET, CustomToolService
 from coffer.domain.errors import ConfigValidationError
+from coffer.domain.mcp.http_api_environment import LIFTED_ENVIRONMENT
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor
-from coffer.surfaces.http.handoff_schemas import HandoffOut
 from coffer.surfaces.http.mcp.custom_tool_dependencies import (
     get_custom_tool_importer,
     get_custom_tool_service,
 )
+from coffer.surfaces.http.mcp.custom_tool_env_routes import router as env_router
 from coffer.surfaces.http.mcp.custom_tool_schemas import (
     CustomToolGroupIn,
     CustomToolGroupListOut,
@@ -42,14 +41,15 @@ from coffer.surfaces.http.mcp.custom_tool_schemas import (
     OpenApiReadIn,
     OpenApiReadOut,
 )
+from coffer.surfaces.http.mcp.custom_tool_test_out import test_out
 from coffer.surfaces.http.mcp.custom_tool_views_out import group_out, operation_out
-from coffer.surfaces.http.mcp.handoff_views import host_machine
 
 router = APIRouter(
     prefix="/api/v1/custom-tools",
     tags=["custom-tools"],
     dependencies=[Depends(require_token)],
 )
+router.include_router(env_router)
 
 _service = Depends(get_custom_tool_service)
 _importer = Depends(get_custom_tool_importer)
@@ -78,11 +78,21 @@ async def create_group(
         if body.source
         else None
     )
+    environments = (
+        [e.model_dump(mode="json") for e in body.environments]
+        if body.environments is not None
+        else [
+            {
+                "name": LIFTED_ENVIRONMENT,
+                "base_url": body.base_url,
+                "headers": _header_rows(body.headers),
+            }
+        ]
+    )
     view = await svc.create_group(
         name=body.name,
         description=body.description,
-        base_url=body.base_url,
-        headers=_header_rows(body.headers),
+        environments=environments,
         timeout_seconds=body.timeout_seconds,
         agents=body.agents,
         tools=[_tool_dict(t) for t in body.tools],
@@ -123,8 +133,9 @@ async def test_unsaved(
         timeout_seconds=body.timeout_seconds,
         raw_tool=_tool_dict(body.tool),
         arguments=body.arguments,
+        variables=body.variables,
     )
-    return _test_out(o, group=None, method=body.tool.method, seconds=body.timeout_seconds)
+    return test_out(o, group=None, method=body.tool.method, seconds=body.timeout_seconds)
 
 
 @router.get("/{name}", response_model=CustomToolGroupOut)
@@ -197,41 +208,8 @@ async def test_tool(
     name: str, body: CustomToolTestIn, svc: CustomToolService = _service
 ) -> CustomToolTestOut:
     """Run a draft tool once; saves nothing and records no invocation."""
-    outcome = await svc.test_tool(name, _tool_dict(body.tool), body.arguments)
-    return _test_out(outcome, group=name, method=body.tool.method)
-
-
-def _test_out(
-    o: ToolTestOutcome, *, group: str | None, method: str, seconds: int | None = None
-) -> CustomToolTestOut:
-    handoff = (
-        HandoffOut(
-            prompt=request_test_handoff(
-                group=group,
-                method=method,
-                url=o.url,
-                failure=o.failure,
-                error=o.error,
-                seconds=seconds,
-                machine=host_machine(),
-            )
-        )
-        if o.failure in ("connect", "timeout")
-        else None
-    )
-    return CustomToolTestOut(
-        ok=o.ok,
-        duration_ms=o.duration_ms,
-        url=o.url,
-        status=o.status,
-        status_line=o.status_line,
-        body=o.body,
-        truncated=o.truncated,
-        content_type=o.content_type,
-        error=o.error,
-        failure=o.failure,  # type: ignore[arg-type]
-        handoff=handoff,
-    )
+    outcome = await svc.test_tool(name, _tool_dict(body.tool), body.arguments, body.environment)
+    return test_out(outcome, group=name, method=body.tool.method)
 
 
 @router.post("/{name}/reimport/preview", response_model=CustomToolReimportPreviewOut)

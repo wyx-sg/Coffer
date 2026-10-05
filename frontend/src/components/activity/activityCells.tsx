@@ -87,6 +87,7 @@ export function CallTarget({
         `${callServerLabel(call)}.`
       )}
       {call.capability_key}
+      {call.environment ? <span className="text-text-muted"> @{call.environment}</span> : null}
     </span>
   );
 }

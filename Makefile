@@ -173,6 +173,7 @@ lint:
 	$(PY) scripts/check_docs_locales.py
 	$(PY) scripts/check_error_codes_reference.py
 	$(PY) scripts/check_removed_commands.py
+	$(PY) scripts/cli_coverage.py --check
 	$(PY) scripts/check_platform_calls.py
 	$(PY) scripts/check_bare_tasks.py
 	$(PY) scripts/check_coffer_paths.py

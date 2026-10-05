@@ -145,9 +145,9 @@ hiding at the bottom of a severity filter.
 
 | Event | Emitted by |
 | --- | --- |
-| `token_rotated` | A rotation through either surface (spec daemon "Rotate the token over REST"). |
+| `token_rotated` | A rotation through either surface (spec daemon "Rotate the token over REST and on the command line"). |
 | `daemon_restarted` | `POST /api/v1/daemon/restart` (spec daemon "Restart itself on request"), once the successor is spawned and before this daemon exits. Details `{port, successor_pid}`: the port the successor will bind and its process id. A refused restart — no successor could be started — records nothing, because nothing changed. `coffer daemon restart` stops and starts the daemon from outside and records nothing, for the reason the port records nothing. |
-| `daemon_residency_updated` | `PUT /api/v1/daemon/residency` (spec daemon "Change residency from the settings page"). Details `{login_service_installed}`, read back after the change, so they record what became true rather than what was asked for. |
+| `daemon_residency_updated` | `PUT /api/v1/daemon/residency` (spec daemon "Change residency from the settings page or the command line"). Details `{login_service_installed}`, read back after the change, so they record what became true rather than what was asked for. |
 
 The fixed-port setting deliberately emits nothing — see spec daemon "Bind a fixed, settable port" for
 why recording it only when a daemon happens to be running would be less honest

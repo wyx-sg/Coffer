@@ -164,7 +164,7 @@ class DaemonResidencyOut(BaseModel):
 
     Residency is the login service alone: the daemon never stands down on its
     own, so there is no idle window to report (spec daemon "Change residency
-    from the settings page").
+    from the settings page or the command line").
     """
 
     #: False where there is no launchd to install into — the toggle renders

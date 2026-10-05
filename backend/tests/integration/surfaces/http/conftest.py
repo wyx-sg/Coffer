@@ -47,9 +47,9 @@ def _submit_material(
     """Submit material the way an entrance does, through the running service.
 
     There is no REST route for it (spec knowledge "Manage knowledge in the web
-    UI"): an upload goes through ``/upload``. The service is what every entrance ends
-    up in, driven here on the app's own event loop so a test needs no document
-    converter or file drop.
+    UI and on the command line"): an upload goes through ``/upload``. The
+    service is what every entrance ends up in, driven here on the app's own
+    event loop so a test needs no document converter or file drop.
     """
     from coffer.surfaces.http.knowledge.dependencies import get_knowledge_service
 

@@ -210,6 +210,7 @@ async def _project(
                 session_id=r.session_id,
                 trace_id=r.trace_id,
                 agent_uid=r.agent_uid,
+                environment=r.environment,
                 handoff=handoff_out(handoff_for(r)),
             )
             for r in rows

@@ -266,7 +266,7 @@ The agent process Coffer spawns for a channel turn still loads the agent's own s
 ### Requirement: Install delivery hooks explicitly and removably
 For an agent the developer drives themselves, delivery MUST go through that agent's own hook mechanism, invoking Coffer's existing CLI **by absolute path**. An agent runs its hooks under a shell that need not have `~/.coffer/bin` on its `PATH`: Codex runs them under `/bin/zsh` without the user's rc files, and Claude Code started from the Dock does not inherit the login shell's `PATH`. The bare name is used only when the build cannot locate its own CLI.
 
-Coffer's hook is **two entries**, one on each moment memory reaches a session, for both supported agents: `SessionStart` (matched on `startup|resume|clear|compact`), which adds the bounded index, and `UserPromptSubmit`, which adds the notes the prompt names. Both entries run the same command, `coffer memory hook --agent-uid <uid> --cwd "$PWD"`, which reads the event the agent hands its hook on stdin and prints that event's JSON `hookSpecificOutput` with `additionalContext`, which both agents read on every event. Nothing once-per-session MAY be keyed on a process id: every session of one Codex app-server shares a parent pid, so it is keyed on the hook's `session_id`. The command is an internal entry point, hidden from help and from the CLI reference (see "Manage memory in the web UI").
+Coffer's hook is **two entries**, one on each moment memory reaches a session, for both supported agents: `SessionStart` (matched on `startup|resume|clear|compact`), which adds the bounded index, and `UserPromptSubmit`, which adds the notes the prompt names. Both entries run the same command, `coffer memory hook --agent-uid <uid> --cwd "$PWD"`, which reads the event the agent hands its hook on stdin and prints that event's JSON `hookSpecificOutput` with `additionalContext`, which both agents read on every event. Nothing once-per-session MAY be keyed on a process id: every session of one Codex app-server shares a parent pid, so it is keyed on the hook's `session_id`. The command is an internal entry point, hidden from help and from the CLI reference (see "Manage memory in the web UI and on the command line").
 
 Installation MUST be an **explicit act** on Coffer's surface: connecting the agent to Coffer, of which the hook is one part (spec agent-registry "Connect an agent to Coffer in one action"), or a person applying the missing hook's reconcile item. It MUST be marker-scoped, idempotent, and removable without disturbing entries Coffer did not write. An install or a remove MUST take out Coffer's marked entries on **every** event first, so a marked entry on any other event — a `PreToolUse` or `PostToolUse` entry an earlier version wrote, for one — is never left behind beside the new ones. Coffer MUST NOT install the hook silently, and MUST NOT write into any file that is an agent's *memory*: a hook lives in the agent's settings, which is a different thing.
 
@@ -552,27 +552,6 @@ read "Distilling…"; the Memory page's header carries no status line beside the
   distils the three partitions in turn, leaving the fourth alone
 - **AND** it is no longer listed once it has answered
 
-### Requirement: Manage memory in the web UI
-People MUST manage memory in the web UI: browse partitions and the memories in them, open a memory in their editor (see "Edit a memory in the person's own editor"), delete a memory (see "Delete a memory by hand"), run **Update memory** (see "Update memory in one action"), hand a partition's tidying to the agent (see "Hand a partition's tidying to the agent"), read a partition's Delivered view (see "Show what each agent is given at session start"), and read what was retired. The REST family under `/api/v1/memory` is the web UI's own interface: it carries what that page needs and no route that no page calls — no route writes a note's text, and no requirement promises it to anything else. The one route another program calls is `POST /api/v1/memory/hook`, which answers one fire of the memory hook, whose session-start answer is the composed session context. Installing, inspecting and removing an agent's delivery hook are part of that agent's Coffer connection (spec agent-registry "Connect an agent to Coffer in one action") and are not in this family.
-
-There MUST be no command group for memory beyond one hidden entry, and no `coffer path` target for it. The single exception is `coffer memory hook`, the command every installed memory hook entry runs: it MUST be hidden from `coffer --help` and from the CLI reference, because a person never types it. A partition's notes, its index and its retirement record are plain files (see "Keep notes readable as plain files"), so the way to them is the memory root that session-start delivery names (see "Expose no memory tool and name the memory root at session start"), not a command.
-
-#### Scenario: memory is managed from the web UI and has no command group
-- **GIVEN** a running daemon with a distilled partition
-- **WHEN** the command tree of `coffer` is listed, including its hidden commands
-- **THEN** the only command under `memory` is `hook`, it is absent from the help output and the CLI reference, and there is no `path memory` target
-- **AND** the memory page lists the partition and its memories, runs Update memory and shows the Delivered view without any command
-
-#### Scenario: a path segment that escapes the memory root is refused
-- **GIVEN** a request on the memory family naming a partition or a note slug that is `..`, holds a path separator or is hidden
-- **WHEN** the route runs
-- **THEN** it is refused with `MEMORY_UNSAFE_PATH` (400) and nothing outside the partition is read or written
-
-#### Scenario: the delivery state of an agent is read on the agent's page
-- **GIVEN** two registered agents, one connected to Coffer and one not
-- **WHEN** the agent's detail data is read for each
-- **THEN** the first's `coffer_connection` is `connected` with its `memory_hook` part installed, the second's is `disconnected`, and neither carries a last-fired time
-
 ### Requirement: Delete a memory by hand
 A person MUST be able to delete a memory from its partition's page. `DELETE /api/v1/memory/partitions/{uid}/notes/{slug}` MUST **retire** the note, not merely remove it: the sources it was distilled from still live in the agents' own memory, so a bare file removal would be undone by the next distil pass. It MUST append a record to the partition's `RETIRED.md` with the reason `Deleted by hand` carrying the note's origin entry ids (see "Record retirements so they stick"), remove the note's file from `notes/`, re-render `MEMORY.md` without it, and record a `memory_note_deleted` audit event naming the partition, the note and the user. An unknown note is refused with 404. The web UI's **Delete…** MUST ask first, in a confirmation naming the memory, and MUST close that dialog only on success: a delete that fails leaves it open and shows the reason.
 
@@ -745,3 +724,24 @@ An edited note is the note, not a suggestion: a distil pass never rewrites an ex
 - **WHEN** a person changes its body in their own editor
 - **THEN** the next read of the note, the index line rendered from it and the next session's delivery carry the changed text
 - **AND** deleting the derived tree and rebuilding it gives back a note without that edit
+
+### Requirement: Manage memory in the web UI and on the command line
+People MUST manage memory in the web UI: browse partitions and the memories in them, open a memory in their editor (see "Edit a memory in the person's own editor"), delete a memory (see "Delete a memory by hand"), run **Update memory** (see "Update memory in one action"), hand a partition's tidying to the agent (see "Hand a partition's tidying to the agent"), read a partition's Delivered view (see "Show what each agent is given at session start"), and read what was retired. The REST family under `/api/v1/memory` serves the web UI and the `coffer memory` commands, which call the same routes: it carries what that page needs and no route that no page calls — no route writes a note's text, and no requirement promises it to anything else. The one route another program calls is `POST /api/v1/memory/hook`, which answers one fire of the memory hook, whose session-start answer is the composed session context. Installing, inspecting and removing an agent's delivery hook are part of that agent's Coffer connection (spec agent-registry "Connect an agent to Coffer in one action") and are not in this family.
+
+The `coffer memory` commands MUST list partitions and, per partition, its notes, files, Delivered view and retired notes, read which agents' memory Coffer reads, run Update memory and print the tidy hand-off; no command reads, writes or deletes a note's text, and there is no `coffer path` target for memory. `coffer memory hook`, the command every installed memory hook entry runs, MUST be hidden from `coffer --help`, the group's help and the CLI reference, because a person never types it. A partition's notes, its index and its retirement record are plain files (see "Keep notes readable as plain files"), so the way to them is the memory root that session-start delivery names (see "Expose no memory tool and name the memory root at session start"), not a command.
+
+#### Scenario: memory is managed on the command line, its notes as files
+- **GIVEN** a running daemon with a distilled partition
+- **WHEN** the command tree of `coffer` is listed, including its hidden commands
+- **THEN** the `memory` group offers partitions, notes, files, delivered, retired, reading and sync, no command reads, writes or deletes a note, and `hook` is hidden from the help output and the CLI reference
+- **AND** there is no `path memory` target
+
+#### Scenario: a path segment that escapes the memory root is refused
+- **GIVEN** a request on the memory family naming a partition or a note slug that is `..`, holds a path separator or is hidden
+- **WHEN** the route runs
+- **THEN** it is refused with `MEMORY_UNSAFE_PATH` (400) and nothing outside the partition is read or written
+
+#### Scenario: the delivery state of an agent is read on the agent's page
+- **GIVEN** two registered agents, one connected to Coffer and one not
+- **WHEN** the agent's detail data is read for each
+- **THEN** the first's `coffer_connection` is `connected` with its `memory_hook` part installed, the second's is `disconnected`, and neither carries a last-fired time

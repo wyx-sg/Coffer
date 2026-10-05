@@ -3,7 +3,7 @@
 Create a collection, list them, walk one level of a collection, read a
 document, upload a document, delete a document and fetch the prompt that hands
 a tidy to the person's agent (spec knowledge
-"Manage knowledge in the web UI"). These routes
+"Manage knowledge in the web UI and on the command line"). These routes
 are the web UI's own: one the page does not call does not exist. Deleting a
 collection goes through the kind-agnostic Resource route, since collection
 lifecycle is a Resource concern.

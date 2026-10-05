@@ -92,3 +92,6 @@ class MCPInvocation:
     #: The ``/mcp`` request's trace id: the key that joins this
     #: call to the audit rows and daemon log lines it caused.
     trace_id: str | None = None
+    #: The environment a custom-tool call was made in; ``None`` for every other
+    #: call (spec mcp-gateway "Record invocations without content").
+    environment: str | None = None

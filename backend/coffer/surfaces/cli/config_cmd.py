@@ -2,9 +2,9 @@
 
 One key registry (``_config_keys``) holds them: today the daemon's port, which
 must be changeable when the daemon cannot start. Every other setting is a
-control on the Settings page (spec resource-framework "Keep the command line to
-what needs it"). A value is checked against its key's type before anything is
-written; ``unset`` returns a key to its default.
+control on the Settings page (spec resource-framework "Offer every
+management operation on the command line"). A value is checked against its
+key's type before anything is written; ``unset`` returns a key to its default.
 """
 
 from __future__ import annotations

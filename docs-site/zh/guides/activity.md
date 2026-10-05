@@ -113,7 +113,7 @@ coffer log mcp --server filesystem          # one server
 coffer log mcp --status error --since 1d --json
 ```
 
-不带 `--server` 时，输出包括 Coffer 自己的内置工具调用（服务器为 `coffer`）以及已删除服务器的行（以其 uid 显示）。`--limit` 接受 1–500。
+不带 `--server` 时，输出包括 Coffer 自己的内置工具调用（服务器为 `coffer`）以及已删除服务器的行（以其 uid 显示）。`--limit` 接受 1–500。[自定义工具](/zh/guides/custom-tools#environments)的调用还会写明它在哪个环境里发出：活动页面在工具旁边（`@live`）和抽屉里显示它，`--json` 以 `environment` 字段带出。不记录任何请求头、变量或凭据。
 
 每次调用处于四种状态之一：
 

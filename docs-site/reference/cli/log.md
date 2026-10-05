@@ -1,12 +1,12 @@
 ---
 title: coffer log
-description: "Read Coffer's records: the audit log, MCP calls and the daemon log"
+description: "Read Coffer's audit, MCP and daemon logs."
 pageClass: cli-ref
 ---
 
 # coffer log
 
-Read Coffer's records: the audit log, MCP calls and the daemon log
+Read Coffer's audit, MCP and daemon logs.
 
 ```sh
 coffer log [OPTIONS] COMMAND [ARGS]...

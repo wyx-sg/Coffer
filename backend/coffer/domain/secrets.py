@@ -239,6 +239,13 @@ def batch_target(items: Iterable[tuple[str, str]]) -> str:
     return "batch:" + hashlib.sha256("\n".join(lines).encode()).hexdigest()
 
 
+def pinned_target(approval_id: str, fingerprint: str) -> str:
+    """The target a single approval's grant is signed over when it is pinned to
+    the approval's target: ``<id>@<fingerprint>`` (design
+    align-cli-with-ui-and-add-tool-environments D9)."""
+    return f"{approval_id}@{fingerprint}"
+
+
 def grant_message(op: str, target: str, nonce: str) -> bytes:
     """The exact bytes a presence grant signs (the desktop shell signs the same)."""
     return f"coffer-presence-grant/v1\n{op}\n{target}\n{nonce}".encode()

@@ -26,7 +26,7 @@ class AuditEventType(StrEnum):
     # the listing, left to search, or handed back to the usage ranking.
     TOOL_EXPOSURE_CHANGED = "tool_exposure_changed"
     TOKEN_ROTATED = "token_rotated"
-    # spec daemon "Change residency from the settings page":
+    # spec daemon "Change residency from the settings page or the command line":
     # autostart installed or removed
     DAEMON_RESIDENCY_UPDATED = "daemon_residency_updated"
     # spec daemon "Restart itself on request": the web UI asked the daemon to

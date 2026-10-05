@@ -327,14 +327,15 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 
 ## 自定义工具：HTTP API 传输 {#custom-tools-the-http-api-transport}
 
-一个 **自定义工具组** 是传输方式为 `http_api` 的 `mcp_server`。它的配置包括一个基础 URL、静态 header、一个认证 header 及其认证方案、这个 header 携带的那一个密钥引用（只存凭据，方案在发请求时加上）、一个超时和一张工具列表；每个工具是一个方法、一个路径模板、header、一个请求体模板、一份描述参数的 JSON Schema、一个开关和一个「会修改数据」标志。面向用户的部分见 [自定义工具指南](/zh/guides/custom-tools)。
+一个 **自定义工具组** 是传输方式为 `http_api` 的 `mcp_server`。它的配置包括一张工具列表、一个默认超时和一个或多个**环境**；每个环境有一个用户起的、在组内唯一的名字、一个绑定键、一个基础 URL、若干 header 行（明文，或带认证方案的密钥引用：只存凭据，方案在发请求时加上）、非敏感变量、一个开关和一个可选超时。每个工具是一个方法、一个路径模板、header、一个请求体模板、一份描述参数的 JSON Schema、一个开关和一个「会修改数据」标志。工具从不按环境复制。面向用户的部分见 [自定义工具指南](/zh/guides/custom-tools)。
 
 ### 原则 {#principles}
 
 - **同一条流水线，最后一跳不同。** 智能体和上游之间的一切都是网关的常规路径。只有「连接」不一样：它是一个进程内适配器，实现与任何上游相同的连接契约（启动并 initialize、发送请求、关闭）。它根据配置回答 `tools/list`，在 `tools/call` 时发出 HTTP 请求；`resources/list` 和 `prompts/list` 回答 *method not found*，而发现模块本来就把这读作「没有」。
 - **值只能填充请求，不能改变请求的形状。** 请求渲染对每个路径占位符做不保留任何安全字符的百分号编码，参数缺失时丢掉对应的查询参数对，并用 JSON 值填充请求体模板（字符串里的文本做 JSON 转义）。不是路径的路径，或者 schema 没有声明的占位符，会在保存工具时被拒绝。
-- **密钥只有一条出路。** 它通过适配器的 header 覆盖到达，由 supervisor 通过受保护的解析器、针对「这个组在这个基础 URL」这个目标具体化；它最后添加，在所有工具 header 之后；从不跟随重定向，所以它永远不会到达没人配置过的主机；上游返回的任何内容里，它的值都会被遮盖成 `***`。
-- **天然有界。** 每次调用一个 HTTP 客户端，使用组的超时（1–300 s），以流式方式最多读 1 MiB 响应。
+- **密钥只有一条出路。** 它通过请求的 header 覆盖到达，在调用时通过受保护的解析器、针对「这个组的这个环境在它的基础 URL」这个目的地解析（启动时什么都不解析）；它最后添加，在所有工具 header 之后；从不跟随重定向，所以它永远不会到达没人配置过的主机；上游返回的任何内容里，它的值都会被遮盖成 `***`。
+- **天然有界。** 每次调用一个 HTTP 客户端，使用环境的超时，没有则用组的（1–300 s），以流式方式最多读 1 MiB 响应。
+- **发送之前就拒绝。** 未知、缺失或已关闭的环境、违反 schema 的参数，以及缺失、等待批准或被拒绝的密钥，都在任何上游请求之前被拒绝。
 
 ### 各部分在哪里 {#what-is-where}
 
@@ -343,18 +344,28 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 | 定义和工具 | 服务器配置里的传输方式部分 | 它像每个服务器的定义一样随同步传输，工具开关也像能力开关一样传输。 |
 | 按工具的闸门 | 网关，按会话 | 按会话计算被关掉的和超出生效范围的工具；`tools/list` 和 `coffer__search_tools` 丢掉它们，`tools/call` 以 `denied` 拒绝它们，与停用的能力形态相同。 |
 | 注解 | 每个发现的工具的注解，复制到它的列表条目 | 会修改数据的工具列为 `readOnlyHint: false, destructiveHint: true`，其他的列为 `readOnlyHint: true`；每个上游自己的注解也会透传。 |
-| 管理 | MCP 应用层包和自定义工具 REST 路由 | 每次写入都经过资源服务，所以校验、缺失密钥探测、审计和逐出活动连接都随之而来。 |
+| 管理 | MCP 应用层包和自定义工具 REST 路由（`/api/v1/custom-tools/…`，环境在 `/{name}/environments` 下），自定义工具页面和 `coffer custom-tool` 命令都通过它们操作 | 每次写入都经过资源服务，所以校验、缺失密钥探测、审计和逐出活动连接都随之而来。 |
 | OpenAPI | MCP 领域包里的一个纯读取器，以及 MCP 基础设施包里的一个获取器 | 文档被读成草稿工具；URL 通过 SSRF 防护获取（5 MiB、20 s、重定向会重新检查）。 |
+
+### 环境与保留参数 {#environments-and-the-reserved-argument}
+
+环境出现之前存下的组（顶层的基础 URL、header 和密钥引用）在读取时被提升为一个名为 `default`、绑定键为空的环境；提升后的形式只在组被保存时才写回。环境的绑定键在创建时固定（它的第一个名字），重命名时保留。组的顶层 `secret_refs` 由各环境派生，键为 `<key>:<header>`（提升出的环境用裸 header 名），所以每个与类型无关的遍历者——缺失密钥探测、引用索引、待处理事项、删除时的释放——不需要知道环境也照常工作。
+
+网关给每个自定义工具声明一个保留参数 `coffer_environment`：组里已开启环境的 `enum`，开启的超过一个时为 `required`。工具自己的 schema 不能声明它。调用时网关先解析环境（否则为 `CUSTOM_TOOL_ENVIRONMENT_UNKNOWN`、`_DISABLED` 或 `_REQUIRED`），去掉这个参数，然后才校验和渲染，所以它永远到不了路径、查询、header 或请求体。连接不保存当前环境：每次调用解析自己的环境、变量和密钥，所以发往不同环境的并发调用不会混在一起。只开启一个环境的组在没传参数时使用它。变量填充工具路径、查询、header 和请求体里的 `{env:NAME}`，从不进入基础 URL，所以密钥发往的主机只由环境的基础 URL 决定；看起来像凭据的变量值会被拒绝，引用了某个已开启环境缺少的变量的工具也会被拒绝。调用记录会写下每次调用的环境（`mcp_invocations.environment`），从不记录 header、变量或凭据。
+
+### 参数校验 {#argument-validation}
+
+MCP 领域包里有一个纯 JSON Schema 校验器（只用标准库），有两个入口：保存工具时检查 schema（关键字类型、合法的正则表达式、可解析的本地 `$ref`），以及校验每次调用的参数，把每个失败以 `{path, keyword, message}` 返回。它覆盖 `type`（包括 OpenAPI 3.0 的 `nullable`）、`enum`、`const`、数值边界和 `multipleOf`、字符串长度和 `pattern`、`items`、`prefixItems`、数组边界、`uniqueItems`、`contains`、`properties`、`required`、`additionalProperties`、`patternProperties`、属性个数、`propertyNames`、`allOf`、`anyOf`、`oneOf`、`not`、`if`/`then`/`else`、`dependentRequired` 以及本地 `$ref`。MCP 调用、CLI 测试以及页面上的草稿和已保存工具测试都用同一个校验器；失败为 `CUSTOM_TOOL_ARGUMENTS_INVALID`（REST 上是 422，MCP 上是带内工具错误），永远到不了渲染这一步。
 
 ### 密钥边界 {#the-secret-boundary}
 
-目标就是这个组；它的 **target** 是 `http_api <base_url>`，槽位是认证 header 的名字，所以绑定已存储的密钥、改动基础 URL、给 header 改名，都要等人在桌面应用里批准。组会报告它的密钥状态为 `present`、`missing` 或 `pending_approval`（带审批 id），被扣住的密钥会让智能体的调用以 `SECRET_BINDING_PENDING` 失败，而且什么都没发出去。组绑定的独立密钥在组被删除时从不会被释放：它属于密钥页面。
+每个已开启的环境都是一个独立的目的地：同样的类型和 uid（就是这个组，所以每个按资源查看审批的视图仍然能找到它们）、标签 `<group> · <environment>`、**target** `http_api <base_url>`，以及槽位 `<key>:<header>`（提升出的环境用 `<header>`，保留它原来的槽位和目标，所以它的审批在升级后仍然有效）。绑定已存储的密钥、改动某个环境的基础 URL、给密钥 header 改名，都只为那个环境等人批准；批准 `live` 对 `test` 什么都不批准。组按环境报告密钥状态为 `present`、`missing` 或 `pending_approval`（带审批 id）。被扣住的密钥会让智能体的调用以带内的 `SECRET_BINDING_PENDING` 失败，写明审批 id 和 `coffer approval approve <id>`，什么都没发出去，而且只影响那个环境。组绑定的独立密钥在组被删除时从不会被释放：它属于密钥页面。
 
 ### 测试一个请求 {#testing-a-request}
 
 请求测试用与真实调用相同的请求构建和发送逻辑运行一个草稿工具，什么都不记录。有两个入口：
 
-- **已保存的组**（`POST /api/v1/custom-tools/{name}/test`）通过组已批准的绑定具体化密钥，和一次真实调用完全一样。
+- **已保存的组**（`POST /api/v1/custom-tools/{name}/test`）在请求指定的环境里运行，通过该环境已批准的绑定具体化它的密钥，和一次真实调用完全一样；结果写明它在哪个环境运行以及实际目标。
 - **尚未保存的组**（`POST /api/v1/custom-tools/test`，内联带上组的基础 URL、header 和超时）。它没有绑定，所以不发送任何已存储的密钥，也不加认证 header。它的基础 URL 是在表单里输入的，所以在发送任何东西之前要先经过 SSRF 防护（见 [安全 → 出站请求](/zh/architecture/security#outbound-requests)）；被拒绝或解析不了的地址报告为未测试。
 
 没有收到应答时，结果会说明是怎么失败的：`request`（请求无法构建）、`timeout`、`connect` 或 `blocked`。重新导入的预览还会指出保留下来、但请求被规格改变了的工具（新增了必填参数，或者方法、路径、请求体模板变了），而读取结果会带上每个操作的第一个 tag，方便导入表单对它们分组。
@@ -388,7 +399,7 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 | `surfaces/http/` | 会话工厂、按会话和进程级的 supervisor、回收器的环境变量开关、内置服务器的智能体列表 |
 | `application/mcp/` | 网关会话（握手、分发、订阅、销毁）、共享的调用流水线及其闸门、并行扇出、降级服务器重试、分层、内置工具分发和身份注入、`coffer__search_tools`、`initialize` 说明文字、通知和采样转发、进程监管、发现、自定义工具组和按工具的闸门 |
 | `application/` 根目录和 `application/secret/` | 内置工具注册表；密钥引用具体化 |
-| `domain/mcp/` | 命名空间、服务器配置、HTTP API 传输及其请求渲染、OpenAPI 读取、简化版 BM25 排序器、分层策略 |
+| `domain/mcp/` | 命名空间、服务器配置、HTTP API 传输、它的环境和请求渲染、JSON Schema 校验器、OpenAPI 读取、简化版 BM25 排序器、分层策略 |
 | `infrastructure/mcp/` | stdio、HTTP 和 HTTP API 上游连接、测试探针、分发表、OpenAPI 获取、持久化、带缓冲的调用写入器 |
 
 ## 相关 {#related}

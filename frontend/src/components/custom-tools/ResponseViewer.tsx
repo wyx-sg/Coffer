@@ -64,8 +64,12 @@ export function ResponseViewer({ body, contentType, cutAt }: Props) {
         <div className="flex min-h-8 items-start gap-2 border-b border-border-subtle bg-surface-sunken px-3 py-1.5 text-xs">
           <TriangleAlert className="mt-px size-3.5 shrink-0 text-warning" aria-hidden />
           <span>
-            <span className="font-label text-text">{t("customTools.test.cutShort", { size: cutAt })}</span>{" "}
-            <span className="text-text-muted">{t("customTools.test.cutShortBody", { size: cutAt })}</span>
+            <span className="font-label text-text">
+              {t("customTools.test.cutShort", { size: cutAt })}
+            </span>{" "}
+            <span className="text-text-muted">
+              {t("customTools.test.cutShortBody", { size: cutAt })}
+            </span>
           </span>
         </div>
       ) : null}

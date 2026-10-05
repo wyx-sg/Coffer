@@ -66,7 +66,9 @@ def test_a_custom_tool_request_carries_the_scheme() -> None:
         auth_schemes={"Authorization": "Bearer"},
         tools=[HttpApiTool(name="me", method="GET", path="/me")],
     )
-    request = build_request(transport, transport.tools[0], {}, {"Authorization": KEY})
+    request = build_request(
+        transport, transport.environments[0], transport.tools[0], {}, {"Authorization": KEY}
+    )
     assert request.headers["Authorization"] == f"Bearer {KEY}"
 
 

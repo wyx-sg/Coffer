@@ -37,7 +37,9 @@ async def test_a_custom_tool_does_not_follow_a_redirect_with_its_header() -> Non
     with redirect_origins() as origins:
         transport = HttpApiTransport(base_url=origins.first.url, headers={})
         tool = HttpApiTool(name="get", method="GET", path="/thing")
-        request = build_request(transport, tool, {}, {"X-API-Key": SECRET})
+        request = build_request(
+            transport, transport.environments[0], tool, {}, {"X-API-Key": SECRET}
+        )
         outcome = await send_request(request, timeout_seconds=5, secrets=[SECRET])
         assert outcome.status == 307
         assert origins.first.received(SECRET)

@@ -1,10 +1,10 @@
-"""The command line holds only what needs it: the scenarios that are about the
-shape of the command tree rather than one command's behaviour.
+"""The shape of the command tree: what each kind's group holds, and what stays a file.
 
-Specs: resource-framework "Keep the command line to what needs it" and "Locate
-the log files with coffer path", knowledge "Manage knowledge in the web UI",
-memory "Manage memory in the web UI", daemon "Change residency from the settings
-page". Everything here runs in process against the Typer app; no daemon is
+Specs: resource-framework "Offer every management operation on the command
+line" and "Locate the log files with coffer path", knowledge "Manage knowledge
+in the web UI and on the command line", memory "Manage memory in the web UI and
+on the command line", daemon "Change residency from the settings page or the
+command line". Everything here runs in process against the Typer app; no daemon is
 started and nothing is written outside ``tmp_path``.
 """
 
@@ -25,32 +25,6 @@ from coffer.surfaces.cli.main import app
 _runner = CliRunner()
 _REPO = Path(__file__).resolve().parents[5]
 
-#: Every command the web UI does not replace (spec resource-framework "Keep the
-#: command line to what needs it").
-_EXPECTED = {
-    "memory hook",
-    "proxy token",
-    "daemon start",
-    "daemon stop",
-    "daemon restart",
-    "daemon status",
-    "path logs",
-    "path skill-data",
-    "config list",
-    "config get",
-    "config set",
-    "config unset",
-    "run",
-    "secret list",
-    "secret set",
-    "cli list",
-    "log audit",
-    "log mcp",
-    "log daemon",
-    "mcp test",
-    "vault problems",
-}
-
 
 def _walk(cmd: Any, path: tuple[str, ...] = ()) -> Iterator[tuple[tuple[str, ...], Any]]:
     yield path, cmd
@@ -64,19 +38,6 @@ def _tree() -> list[tuple[tuple[str, ...], Any]]:
 
 def _leaves() -> dict[str, Any]:
     return {" ".join(p): c for p, c in _tree() if not getattr(c, "commands", None)}
-
-
-@pytest.mark.acceptance(
-    spec="resource-framework",
-    scenario="the command tree holds only commands the web UI does not replace",
-)
-def test_the_command_tree_holds_only_commands_the_web_ui_does_not_replace() -> None:
-    assert set(_leaves()) == _EXPECTED
-    groups = {p[0] for p, _ in _tree() if len(p) > 1}
-    # No group exists for a kind the web UI manages.
-    for managed in ("knowledge", "skill", "agent", "channel", "provider", "sync", "tool"):
-        assert managed not in groups
-        assert managed not in {p[0] for p, _ in _tree()}
 
 
 @pytest.mark.acceptance(
@@ -117,52 +78,53 @@ def test_path_logs_names_the_log_files_and_refuses_other_targets(
     assert not logs.exists(), "naming the files creates and changes nothing"
 
 
+#: Words a command that read, wrote or deleted a plain file's content would use.
+_FILE_VERBS = {"read", "write", "edit", "cat", "save", "rm"}
+
+
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="no knowledge command group or path target exists"
+    spec="knowledge", scenario="knowledge is managed on the command line, its documents as files"
 )
-def test_no_knowledge_command_group_or_path_target_exists() -> None:
-    assert "knowledge" not in {p[0] for p, _ in _tree()}
-    assert _runner.invoke(app, ["knowledge"]).exit_code == 2
+def test_knowledge_is_managed_on_the_command_line_its_documents_as_files() -> None:
+    knowledge = {" ".join(p[1:]) for p, _ in _tree() if p[0] == "knowledge" and len(p) > 1}
+    assert {
+        "collections",
+        "create",
+        "describe",
+        "tree",
+        "changes",
+        "restore",
+        "upload",
+    } <= knowledge
+    assert not knowledge & _FILE_VERBS
+    assert "delete" in knowledge  # a collection's, through the resource framework
     assert _runner.invoke(app, ["path", "knowledge"]).exit_code == 2
 
 
 @pytest.mark.acceptance(
-    spec="memory", scenario="memory is managed from the web UI and has no command group"
+    spec="memory", scenario="memory is managed on the command line, its notes as files"
 )
-def test_memory_has_only_the_hidden_hook_and_no_path_target() -> None:
-    assert {" ".join(p) for p, _ in _tree() if p[0] == "memory"} == {"memory", "memory hook"}
-    leaves = _leaves()
-    assert leaves["memory hook"].hidden
-
-    # Absent from the help a person reads, and from the reference page.
-    root_help = _runner.invoke(app, ["--help"]).output
-    assert "memory" not in root_help
-    assert "hook" not in root_help
-    reference = "\n".join(
-        p.read_text(encoding="utf-8")
-        for p in [
-            _REPO / "docs-site/reference/cli.md",
-            *(_REPO / "docs-site/reference/cli").glob("*.md"),
-        ]
-    )
-    assert "memory hook" not in reference
+def test_memory_is_managed_on_the_command_line_its_notes_as_files() -> None:
+    memory = {" ".join(p[1:]) for p, _ in _tree() if p[0] == "memory" and len(p) > 1}
+    assert {"partitions", "notes", "delivered", "retired", "reading", "sync"} <= memory
+    assert not memory & _FILE_VERBS
+    assert _leaves()["memory hook"].hidden
+    assert "hook" not in _runner.invoke(app, ["memory", "--help"]).output
     assert _runner.invoke(app, ["path", "memory"]).exit_code == 2
 
 
-@pytest.mark.acceptance(spec="daemon", scenario="residency has no command")
-def test_residency_has_no_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.acceptance(
+    spec="daemon", scenario="residency is set in Settings or on the command line"
+)
+def test_residency_is_set_in_settings_or_on_the_command_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    daemon_subcommands = {p[1] for p, _ in _tree() if p[0] == "daemon" and len(p) > 1}
-    assert daemon_subcommands == {"start", "stop", "restart", "status"}
-
-    for argv in (
-        ["daemon", "service", "install"],
-        ["daemon", "service", "status"],
-        ["daemon", "idle"],
-    ):
-        result = _runner.invoke(app, argv)
-        assert result.exit_code == 2, argv
-    # Nothing was opened or written: the throwaway HOME is still empty.
+    residency = {" ".join(p) for p, _ in _tree() if p[:2] == ("daemon", "residency")}
+    assert residency == {"daemon residency", "daemon residency show", "daemon residency set"}
+    # The old service verbs stay gone, and refusing them opens and writes nothing.
+    for argv in (["daemon", "service", "install"], ["daemon", "idle"]):
+        assert _runner.invoke(app, argv).exit_code == 2, argv
     assert list(tmp_path.iterdir()) == []
 
 

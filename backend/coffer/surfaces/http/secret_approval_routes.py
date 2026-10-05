@@ -20,8 +20,17 @@ from fastapi import APIRouter, Depends, Query
 from coffer.application.audit_service import AuditService
 from coffer.application.secret.boundary import SecretBoundary
 from coffer.domain.audit import AuditEventType
-from coffer.domain.secret_errors import ApprovalNotFound, ApprovalNotPending
-from coffer.domain.secrets import LOCAL_PROCESS_KIND, SecretApproval, batch_target
+from coffer.domain.secret_errors import (
+    ApprovalNotFound,
+    ApprovalNotPending,
+    ApprovalTargetChanged,
+)
+from coffer.domain.secrets import (
+    LOCAL_PROCESS_KIND,
+    SecretApproval,
+    batch_target,
+    pinned_target,
+)
 from coffer.surfaces.http.dependencies import get_actor, get_audit_service
 from coffer.surfaces.http.secret_boundary_wiring import (
     approval_applied,
@@ -77,9 +86,29 @@ async def approve(
     grant: PresenceGrantIn,
     audit: AuditService = Depends(get_audit_service),  # noqa: B008
 ) -> ApprovalOut:
-    """Apply a pending approval, against a presence grant for exactly this id."""
+    """Apply a pending approval, against a presence grant for exactly this id —
+    and, when the grant is pinned (``fingerprint``), for exactly the target the
+    person was shown: a target that moved since is refused, nothing applied."""
     boundary, grants = get_secret_boundary(), get_presence_grants()
-    grants.redeem("approve", approval_id, grant.nonce, grant.signature)
+    if grant.fingerprint is None:
+        grants.redeem("approve", approval_id, grant.nonce, grant.signature)
+    else:
+        grants.redeem(
+            "approve", pinned_target(approval_id, grant.fingerprint), grant.nonce, grant.signature
+        )
+        # Bring the list up to the configuration, so a target that moved since
+        # the prompt has superseded this approval before it is checked.
+        for created in await refresh_approvals():
+            await audit.record(
+                AuditEventType.SECRET_APPROVAL_REQUESTED.value,
+                actor=created.requested_by,
+                details={"approval_id": created.id, "op": created.op, "ref": created.ref},
+            )
+        current = await asyncio.to_thread(boundary.get, approval_id)
+        if current.status == "pending" and (current.target_fingerprint or "") != grant.fingerprint:
+            raise ApprovalTargetChanged(approval_id)
+        if current.status == "superseded":
+            raise ApprovalTargetChanged(approval_id)
     approved = await asyncio.to_thread(boundary.approve, approval_id, actor="desktop")
     approval_applied()
     await audit.record(

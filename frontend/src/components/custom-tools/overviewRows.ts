@@ -49,11 +49,19 @@ const STATUS: Partial<Record<CustomToolHeaderOut["secret_state"], Requirement["s
 };
 
 /** What the group needs from this Mac: each secret its headers cite. Nothing runs here, so no launcher. */
+/** The secrets a group's headers cite, one row per environment's secret header. With
+ *  several environments a row is named `<environment> · <header>`. */
 export function groupRequires(group: CustomToolGroup): Requirement[] {
-  return group.headers.flatMap((h) => {
-    const status = h.secret ? STATUS[h.secret_state] : undefined;
-    return h.secret && status
-      ? [{ kind: "secret" as const, name: h.name, secret: h.secret, status, version: null }]
-      : [];
-  });
+  const envs = group.environments ?? [];
+  const several = envs.length > 1;
+  const sources = envs.length ? envs : [{ name: "", headers: group.headers }];
+  return sources.flatMap((env) =>
+    env.headers.flatMap((h) => {
+      const status = h.secret ? STATUS[h.secret_state] : undefined;
+      const name = several ? `${env.name} · ${h.name}` : h.name;
+      return h.secret && status
+        ? [{ kind: "secret" as const, name, secret: h.secret, status, version: null }]
+        : [];
+    }),
+  );
 }

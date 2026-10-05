@@ -164,11 +164,11 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
   by switching off **Store master key in OS keychain** in **Settings → Security**.
 - Find secrets that are cited but missing with `coffer secret list`, then store each one on the **Secrets** page or with `coffer secret set <ref>`.
 
-### A command exits 9: "waiting for approval in the Coffer app"
+### A command exits 9: "waiting for approval"
 
-**Cause.** The change sends a secret somewhere it has not gone before — a second MCP server citing the same token, a changed command line or URL, a push token pointed at a new remote — replaces a value something already uses, switches `secrets.require_approval` off, or asks `coffer run` to use a standalone secret you have not allowed it to (the secret's page shows **Allow `coffer run`…**; see [Secrets](/guides/secrets#allow-coffer-run-to-use-it)). The change is saved; the secret is held until you approve it. An MCP server in that state is not started, and its tools fail with `SECRET_BINDING_PENDING`.
+**Cause.** The change sends a secret somewhere it has not gone before — a second MCP server citing the same token, a changed command line or URL, a push token pointed at a new remote — replaces a value something already uses, switches `secrets.require_approval` off, or asks `coffer run` to use a standalone secret you have not allowed it to (the secret's page shows **Allow `coffer run`…**; see [Secrets](/guides/secrets#allow-coffer-run-to-use-it)). The change is saved; the secret is held until you approve it. The command printed the approval ids and the command that approves them (`next: coffer approval approve <id>`). An MCP server in that state is not started, and its tools fail with `SECRET_BINDING_PENDING`; a custom tool's call answers the same tool error, naming the approval ids and the same command, for the environment that waits only.
 
-**Fix.** Open the desktop app and answer the approval it shows (on the **Secrets** page, **Review** opens the approvals dialog). Approve only a target you recognise; refuse the rest there. Rerun the command once you have answered. See [Secrets → Approvals](/guides/secrets#approvals).
+**Fix.** Run the printed `coffer approval approve <id>` (or let your agent run it) and confirm the Touch ID or password prompt the desktop app shows, or open the desktop app and answer the approval there (on the **Secrets** page, **Review** opens the approvals dialog). Approve only a target you recognise; refuse the rest with **Reject** or `coffer approval reject <id>`. The change is already saved, so nothing needs to be rerun. If `coffer approval approve` exits `11`, the check was cancelled or timed out and the approval still waits; if it exits `12`, the desktop app is not running and could not be started — open it and run the command again. See [Secrets → Approvals](/guides/secrets#approvals).
 
 ### The app says "This is not Coffer's daemon — nothing was sent"
 
@@ -198,7 +198,7 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 **Cause.** By design: no command, route or MCP tool returns a stored value, because an agent can run any command you can. `coffer secret list` only shows which values are stored.
 
-**Fix.** Reveal or copy it in the desktop app, which asks for Touch ID or your password. To give a value to a command, store it as a standalone secret, allow `coffer run` to use it on the secret's page (Touch ID or your password in the desktop app), then run the command with `coffer run --secret ENV=coffer://secret/<id> -- <command>`. See [Secrets](/guides/secrets#allow-coffer-run-to-use-it).
+**Fix.** Reveal or copy it in the desktop app, which asks for Touch ID or your password; `coffer secret reveal <ref>` opens that reveal from the terminal, and the value still shows only in the app. To give a value to a command, store it as a standalone secret, allow `coffer run` to use it on the secret's page (Touch ID or your password in the desktop app), then run the command with `coffer run --secret ENV=coffer://secret/<id> -- <command>`. See [Secrets](/guides/secrets#allow-coffer-run-to-use-it).
 
 See [Secret store](/guides/secret-store).
 
