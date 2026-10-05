@@ -30,6 +30,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import Any, Protocol
 
+from coffer.application.runtime.supervisor import spawn
 from coffer.infrastructure.channel.seatalk_bridge.protocol import (
     BridgeConfig,
     encode_config,
@@ -138,7 +139,7 @@ class SubprocessBridge:
         self._process = process
         self._secret = secret
         self._stderr: collections.deque[str] = collections.deque(maxlen=_STDERR_TAIL_LINES)
-        self._stderr_task = asyncio.ensure_future(self._drain_stderr())
+        self._stderr_task = spawn(self._drain_stderr(), name="seatalk-bridge-stderr")
         self._closing: asyncio.Future[None] | None = None
 
     @classmethod
@@ -181,7 +182,7 @@ class SubprocessBridge:
 
     async def close(self) -> None:
         if self._closing is None:
-            self._closing = asyncio.ensure_future(self._shutdown())
+            self._closing = spawn(self._shutdown(), name="seatalk-bridge-shutdown")
         await asyncio.shield(self._closing)
 
     async def _shutdown(self) -> None:
