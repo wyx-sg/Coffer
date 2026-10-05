@@ -211,6 +211,7 @@
     "secret_approval_requested",
     "secret_deleted",
     "secret_imported",
+    "secret_local_access_revoked",
     "secret_notes_updated",
     "secret_protection_enabled",
     "secret_resolved",

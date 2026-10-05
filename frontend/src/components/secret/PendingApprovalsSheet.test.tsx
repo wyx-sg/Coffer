@@ -77,6 +77,7 @@ const GITHUB: SecretRef = {
   unreferenced: false,
   bindings: [],
   readable_by_local_processes: true,
+  local_access: null,
 };
 
 function renderSheet() {

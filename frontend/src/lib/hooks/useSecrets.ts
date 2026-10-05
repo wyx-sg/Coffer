@@ -79,6 +79,33 @@ export function useSecretNotes() {
   });
 }
 
+/** Ask to let `coffer run` hand a standalone secret to local programs (waits for an approval). */
+export function useRequestLocalAccess() {
+  const refresh = useRefreshSecrets();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: (name: string) => secretsApi.requestLocalAccess(name),
+    onSuccess: refresh,
+    onError: (e) => toast.error(translateApiError(t, e)),
+  });
+}
+
+/** Withdraw that grant at once. */
+export function useRevokeLocalAccess() {
+  const refresh = useRefreshSecrets();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: (name: string) => secretsApi.revokeLocalAccess(name),
+    onSuccess: () => {
+      refresh();
+      toast.success(t("secrets.localAccess.revoked"));
+    },
+    onError: (e) => toast.error(translateApiError(t, e)),
+  });
+}
+
 const BULK_DELETE_REFRESH = [secretsKey, pendingApprovalsKey];
 
 /** Delete several refs at once: each is refused or deleted on its own, and one summary toast says how many went. */

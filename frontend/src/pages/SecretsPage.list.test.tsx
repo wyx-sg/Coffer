@@ -47,6 +47,7 @@ function ref(over: Partial<SecretRef> & { ref: string }): SecretRef {
     created_at: "2026-08-12T09:00:00Z",
     last_used_at: null,
     readable_by_local_processes: false,
+    local_access: null,
     unreferenced: false,
     uri: null,
     label: null,
@@ -71,6 +72,7 @@ const GROQ = ref({
   label: "groq · key",
   cited_by: [{ kind: "provider", name: "groq", uid: "u-groq", slot: null }],
   readable_by_local_processes: true,
+  local_access: null,
 });
 const OLD_A = ref({
   ref: "secret/old-a",

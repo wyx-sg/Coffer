@@ -149,6 +149,7 @@ def test_a_server_start_and_a_coffer_run_each_show_as_a_use(d: BoundaryDaemon) -
     server = d.register_stdio("svc", "svc-mcp", {"SVC_TOKEN": server_ref})
 
     d.resolve_for(server)
+    d.grant_local(run_ref.removeprefix("secret/"))
     r = d.client.post(
         "/api/v1/secrets/resolve",
         json={"names": [run_ref.removeprefix("secret/")], "argv0": "psql", "cwd": "/tmp/work"},

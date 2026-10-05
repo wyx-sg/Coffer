@@ -289,7 +289,7 @@ requires:
 
 每个条目是 Coffer 密钥存储中一个密钥的名称，绝不是它的值。只有映射形式能带 `secrets:`；列表形式（`requires: [jq, gh]`）只声明命令。密钥存储不接受的名称，或重复写出的名称，会被跳过并给出警告；`commands`、`secrets` 和 `tools` 之外的键会被拒绝：Coffer 把它报告为警告，不读取它下面的任何内容。
 
-值由你自己在[密钥页面](/zh/guides/secrets)设置；技能的命令在 `coffer run --secret` 下运行时拿到它，这个值只设置在该命令的环境中：
+值由你自己在[密钥页面](/zh/guides/secrets)设置，并在那里允许 `coffer run` 使用该密钥一次（[密钥 → 允许 `coffer run` 使用它](/zh/guides/secrets#allow-coffer-run-to-use-it)）。之后技能的命令在 `coffer run --secret` 下运行时拿到它，这个值只设置在该命令的环境中：
 
 ```sh
 coffer run --secret GITHUB_TOKEN -- gh issue list

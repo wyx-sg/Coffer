@@ -244,7 +244,7 @@ def test_a_record_does_not_follow_a_reassigned_sys_stderr(daemon_log: Path) -> N
     real_stderr = sys.stderr
     sys.stderr = hijacked
     try:
-        logging.getLogger("httpx").info('HTTP Request: GET /api/v1/resources "200 OK"')
+        logging.getLogger("coffer.test").warning('HTTP Request: GET /api/v1/resources "200 OK"')
     finally:
         sys.stderr = real_stderr
 
@@ -275,3 +275,18 @@ def test_a_line_written_inside_a_turn_carries_its_ids(daemon_log: Path) -> None:
     assert first["session_id"] == "sess-1"
     assert second["trace_id"] == "-"
     assert "turn_id" not in second and "session_id" not in second
+
+
+def test_a_request_url_never_reaches_the_log(daemon_log: Path) -> None:
+    """httpx logs each request's URL at INFO, and a Telegram bot token sits in
+    the URL's path; the daemon keeps those lines out of daemon.log."""
+    configure_logging()
+    fake = "123456:fake-bot-token-for-tests"
+    logging.getLogger("httpx").info(
+        f'HTTP Request: POST https://api.telegram.org/bot{fake}/getUpdates "200 OK"'
+    )
+    logging.getLogger("httpcore.http11").info(f"send_request_headers url=/bot{fake}/getMe")
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    assert fake not in daemon_log.read_text()

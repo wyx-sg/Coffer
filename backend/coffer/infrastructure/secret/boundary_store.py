@@ -107,6 +107,20 @@ class FileBoundaryStore:
 
         self._bindings.update(drop)
 
+    def delete_binding(self, ref: str, kind: str, uid: str, slot: str) -> bool:
+        """Forget one binding (a revoked grant); answers whether it was there."""
+        wanted = (ref, kind, uid, slot)
+        dropped: list[bool] = []
+
+        def drop(doc: dict[str, Any]) -> None:
+            rows = doc.get(_BINDINGS, [])
+            kept = [r for r in rows if _binding_key(r) != wanted]
+            dropped.append(len(kept) != len(rows))
+            doc[_BINDINGS] = kept
+
+        self._bindings.update(drop)
+        return bool(dropped and dropped[0])
+
     # --- approvals ----------------------------------------------------------
 
     def create_approval(self, approval: SecretApproval) -> None:

@@ -7,7 +7,7 @@ description: Coffer 如何加密它保管的每个密钥；如何存入、引用
 
 Coffer 需要的每个密钥——MCP 服务器的令牌、提供商的 API 密钥、消息渠道机器人的令牌、同步远端的推送令牌——都放在同一个加密存储里，其他地方一律按 id 引用密钥。本页介绍如何存入和引用密钥、如何轮换和删除、主密钥放在哪里，以及如何备份主密钥或把它迁到另一台机器。
 
-没有任何命令、路由或 MCP 工具会打印已存储的值。只有在桌面应用里、通过 Touch ID 或登录密码验证之后，你才能看到一个值；密钥要发往一个从未去过的地方，也必须先由你在桌面应用里批准。这条边界、审批的工作方式，以及如何用 `coffer run` 把密钥交给你运行的命令，见[密钥](/zh/guides/secrets)。
+没有任何命令、路由或 MCP 工具会打印已存储的值。只有在桌面应用里、通过 Touch ID 或登录密码验证之后，你才能看到一个值；密钥要发往一个从未去过的地方，也必须先由你在桌面应用里批准。这条边界、审批的工作方式，以及如何允许把独立密钥交给你用 `coffer run` 运行的命令，见[密钥](/zh/guides/secrets)。
 
 ## 密钥如何存储 {#how-secrets-are-stored}
 
@@ -53,7 +53,7 @@ coffer secret set --name "GitHub token"
 | 模型提供商 | **添加提供商**里的 **API key** 字段 |
 | 消息渠道 | 消息渠道的令牌字段（见[消息渠道](/zh/guides/channels)） |
 | 同步远端 | **同步**页面上的推送密钥 |
-| 你运行的命令、技能、env 文件 | `coffer://secret/<id>`，指向以 `secret/<id>` 存储的独立密钥——见[密钥](/zh/guides/secrets) |
+| 你运行的命令、技能、env 文件 | `coffer://secret/<id>`，指向以 `secret/<id>` 存储的独立密钥——只有你允许后 `coffer run` 才会解析它，见[密钥](/zh/guides/secrets#allow-coffer-run-to-use-it) |
 
 注册一个引用了存储中不存在的 ref 的资源会失败，报错里会写出缺少哪个密钥，而且什么都不会保存。
 
@@ -82,7 +82,7 @@ coffer secret list
 - **Name**——密钥的名称，没有则为空。
 - **Present in store**——存储里是否有值。恢复一个不含密钥的保险库之后，`no` 的那些行就是需要重新设置的。
 - **Used by**——引用该 ref 的资源、文件中引用了独立密钥 `coffer://secret/<id>` 的技能，以及有多少个去处在等待审批。`(unreferenced)` 表示没有任何东西在用这个密钥，可以考虑删除。
-- **Readable by local processes**——以你的身份运行的其他程序，能否在 Coffer 放置该值的地方读到它：stdio MCP 服务器的环境变量，或交给某个命令的独立密钥。见[仍然暴露的部分](/zh/architecture/security#what-stays-exposed)。
+- **Readable by local processes**——以你的身份运行的其他程序，能否在 Coffer 放置该值的地方读到它：stdio MCP 服务器的环境变量，或你已允许 `coffer run` 使用的独立密钥。见[仍然暴露的部分](/zh/architecture/security#what-stays-exposed)。
 
 它不解密任何东西，也不记入审计。`--json` 给出同样的数据，外加每个密钥的 `label`、`description` 和 `created_for`（为之创建它的资源的 uid）、各引用方所用的槽位（`cited_by`），以及每个 ref 已批准和待批准的去处。Web 界面里的[密钥页面](/zh/guides/secrets#the-secrets-page)显示同一份列表。
 

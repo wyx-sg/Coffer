@@ -45,7 +45,7 @@ The presence grant that proves "a person approved this" is signed with a key der
 | An agent asking Coffer for a secret's value — through REST, the CLI, MCP, or a master key export. | No route, command or tool returns a value or the key. Reveals and key backups exist only in the desktop app, behind a presence check. |
 | An agent making Coffer deliver an existing secret to a program or URL of its choosing. | Every destination is checked at the moment of use. A secret goes to a target no person approved only after an approval in the desktop app, signed with a presence grant. |
 | An agent switching the protection off. | It waits for an approval in the desktop app. |
-| A secret pasted into a skill file, `.env` or script that syncs to git, or echoed into a transcript. | Standalone secrets are cited as `coffer://secret/<id>` and resolved by `coffer run` into one child's environment only, with exact values masked in its output. This guards against accidents, not against the agent (see below). |
+| A secret pasted into a skill file, `.env` or script that syncs to git, or echoed into a transcript. | Standalone secrets are cited as `coffer://secret/<id>` and resolved by `coffer run` into one child's environment only, with exact values masked in its output, and only for a secret a person granted to local programs. Masking guards against accidents; the grant is what stands between a secret and an agent that runs `coffer run` (see below). |
 | A web page in your browser reaching the daemon — including through DNS rebinding. | Every request whose `Host` is not the daemon's own loopback address and port is refused, and so is every request whose `Origin` is not one of Coffer's own. Every management call must also carry the API token. The browser UI offers no reveal, backup or approval. |
 | A host on the network reaching the daemon. | The daemon binds `127.0.0.1` only. The OS refuses remote connections before they reach Coffer. |
 | Another user account on the same machine. | `daemon.json`, `daemon-config.json` and, in a development build, `master.key` are mode `0600`. |
@@ -59,10 +59,11 @@ The presence grant that proves "a person approved this" is signed with a key der
 Stated plainly, so nobody over-trusts the boundary. Each is a consequence of running as the same user, and the UI labels the secrets they cover as readable by local processes rather than describing Coffer as protecting them.
 
 - **A stdio MCP server's environment.** A third-party server that takes its token from an environment variable holds it in its initial environment, which any process running as you can read with `ps eww` — measured from inside Claude Code's sandbox too, and against a hardened-runtime binary. Coffer cannot fix a server it did not write. It marks such servers "readable by other processes on this Mac"; prefer an HTTP server with gateway-injected headers wherever the upstream offers one.
-- **`coffer run` children.** A standalone secret resolved into a command's environment is readable by the agent that started the command: the agent is the parent, and `ps eww` works regardless. It can also simply run `coffer run --secret X -- env`. `coffer run` is an accident guard, and every standalone secret is listed as readable by local processes.
+- **`coffer run` children.** A standalone secret resolved into a command's environment is readable by whoever started the command: the parent owns the child, and `ps eww` works regardless. It can also simply run `coffer run --secret X -- env`. So masking is an accident guard only, and `coffer run` resolves a secret only after a person [granted it to local programs](#local-process-grant). A secret an agent should merely use stays without that grant and reaches its service through Coffer instead: an MCP server whose environment or header the daemon fills, or a custom HTTP tool, where the daemon makes the request. A standalone secret with the grant on, like a secret in a stdio server's environment, is listed as readable by local processes.
 - **Computer-use agents.** An agent granted Accessibility or screen control can click an approval or type your password. The presence check holds against an agent with a shell, not one with the mouse.
 - **The signed CLI shares the key's access group.** In a signed release the `coffer` CLI could read the master key. That is acceptable because no CLI code path returns plaintext, the key or a grant, and the hardened runtime keeps other processes from attaching to or injecting into Coffer's signed binaries.
 - **Bypass modes.** An agent in `bypassPermissions`, `--yolo` or `danger-full-access` has no sandbox of its own. Nothing above depends on one; nothing above protects what such an agent reaches outside Coffer either. Coffer's own chat turns run agents this way (below).
+- **The grant is not a boundary without the Keychain access group.** In a build without it — every build from source and every unsigned build — the master key is the file `~/.coffer/master.key`, readable by any process of the same user, so an agent with a shell can decrypt the store directly; the grant then removes the one-command path but does not keep the secret confidential. Even in a signed release, a stdio MCP server's environment is readable by same-user processes (`ps eww`). A real boundary against a same-user agent needs the agent sandboxed (no read of `~/.coffer`, no `ps` of other processes), or Coffer's daemon running as a separate operating-system user.
 - **Development builds.** Everything in [Development builds](#development-builds).
 
 And, as before:
@@ -144,6 +145,7 @@ A **destination** is a place Coffer sends a secret's plaintext. Each one has a *
 | A Telegram channel's bot token | the Telegram bot |
 | A SeaTalk channel's app secret | the SeaTalk app id |
 | The sync remote's push token | the git URL |
+| A standalone secret handed to `coffer run` (the `local_process` destination) | the label "coffer run" — any program a person runs through it |
 
 A provider connection's key goes through the same check against its base URL and the protocol that presents it: the local model proxy and Coffer's own engine receive it only for an approved URL. A custom-tool group's authentication is checked against its base URL like an HTTP MCP server's header; a new destination type joins this list in the change that introduces it.
 
@@ -154,11 +156,20 @@ Two things approve a binding without a person:
 - **A value supplied for it.** When a destination is registered or changed, a ref that has never been sent anywhere, is not a standalone secret and was written on this machine within the last five minutes is approved with that registration. Every "add" flow stores the pasted secret and then registers what cites it, and the binding is recorded in that call, so a second destination citing the same ref waits, however soon it comes. A secret already sent elsewhere, kept for `coffer run`, or met only at the moment of use is never counted as supplied.
 - **The protection switched off**, which itself waits for an approval.
 
-One more change widens where a secret goes and waits for the same approval:
+Two more changes widen where a secret goes and wait for the same approval:
 
 - **Switching the protection off** (`secrets.require_approval`). Switching it on applies at once.
+- **Granting a standalone secret to local programs**, described next.
 
 Approving takes a presence grant. Rejecting does not — refusing only narrows what Coffer does — and works from every surface. The desktop app raises a notification for each new pending approval and opens a sheet to answer it; a command whose change leaves a secret waiting prints `waiting for approval in the Coffer app` and exits `9`. Several approvals can be answered under one presence check: the grant is signed over a digest of exactly the approvals and targets you were shown, so it approves that list and nothing else, and any item whose target changed since is skipped (see [Secrets → Answering several at once](/guides/secrets#answering-several-at-once)). A change the person saves in the desktop app runs that check as part of the save: the page asks the shell to approve exactly the bindings the save left waiting on its own destination, so the approval is one Touch ID at Save rather than a separate sheet — the daemon still cannot tell that request from an agent's, and the grant is what proves a person was there (see [Secrets → A change you make in the desktop app](/guides/secrets#approve-on-save)). See [Secrets → Approvals](/guides/secrets#approvals).
+
+### Granting a secret to local programs {#local-process-grant}
+
+`coffer run` is the one path that puts a standalone secret into a process that a person or an agent chose, so it has its own destination, `local_process`, with the target "coffer run". The daemon resolves a standalone secret for `coffer run` only while that binding is approved. The approval is a per-secret grant, answered like the others: in the desktop app, behind a presence check. It is never given by the build's default, never by switching approval protection off, and never because the value was just supplied; none of the automatic approvals above apply to it.
+
+Without the grant, `coffer run` starts nothing, prints no value and exits non-zero. The request is recorded as a pending approval (`SECRET_BINDING_PENDING`) and waits in the desktop app; a refused one answers `SECRET_BINDING_REJECTED` until it is asked for again. The Secrets page asks for it with **Allow `coffer run`…** (`POST /api/v1/secrets/local-access/request`) and the listing reports `local_access` as `on`, `pending` or `off`. **Revoke** (`POST /api/v1/secrets/local-access/revoke`) takes effect at once with no presence check, since it only narrows access, and is audited as `secret_local_access_revoked`.
+
+The reason is that whoever runs `coffer run` — an agent too — owns the child process and can read its environment, so masking only guards against accidents. See [What stays exposed](#what-stays-exposed) for how far the grant reaches.
 
 ### Placement is part of the approval {#placement}
 
@@ -176,7 +187,7 @@ The boundary rests on one fact: in a signed release, only Coffer's signed binari
 
 - the master key is the file `~/.coffer/master.key` (or, opt-in, a login-keychain item), readable by any process running as you;
 - that process can derive the grant key and forge a reveal, a key backup or an approval;
-- so **the secret boundary does not hold**. The rules still run — no plaintext route, approvals, `coffer run` masking — and still catch accidents, but they do not stop a determined same-user agent.
+- so **the secret boundary does not hold**. The rules still run — no plaintext route, approvals, the `coffer run` grant and masking — and still catch accidents, but they do not stop a determined same-user agent, which can read the master key file and decrypt the store directly.
 - so **approvals are off by default**. `secrets.require_approval` defaults by the build, by the same fact that decides where the master key lives: on in a signed release, off in a development build, where an approval a same-user process can forge would only add friction. A setting a person stores wins in both; turning it on needs nobody, and turning it off once it is on waits for the desktop app. Settings and the Secrets page say so in one line, and the Overview's "Secret approval is off" item is raised only where a signed build's default was turned off, so a development build is not nagged about its default.
 
 A development build says so. The daemon reports itself as one, and the desktop app titles every presence prompt "Development build". Where a development machine has no LocalAuthentication, the app falls back to a confirmation dialog in its own window — never to no check.

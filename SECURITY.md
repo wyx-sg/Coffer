@@ -18,7 +18,8 @@ What stays exposed, by design:
 - **Group chats are not content-filtered.** In a group turn the agent can still read your memory, knowledge and files, and a SeaTalk group reply cannot be recalled by the platform. Coffer does not scan replies for secrets or personal data. Your safeguard is deleting a reply (`/del`, the 🗑 button); an agent tricked by a group member can still say something private. Do not pair the bot with a group that contains people you do not trust.
 
 - A stdio MCP server's environment, including its secrets, is readable by any same-user process (`ps eww`), even from inside an agent's sandbox.
-- A secret `coffer run` hands to a command is readable by the agent that ran the command; `coffer run` guards against accidents, not against that agent.
+- A secret `coffer run` hands to a command is readable by whoever ran the command, so `coffer run` resolves only a standalone secret a person granted to local programs in the desktop app, once per secret. Masking guards against accidents. A secret an agent should only use stays ungranted and reaches its service through an MCP server or a custom HTTP tool.
+- Without the Keychain access group (every build from source and every unsigned build) the master key is the file `~/.coffer/master.key`, readable by any process of the same user, so an agent with a shell can decrypt the store directly and the grant is not a confidentiality boundary. A real boundary against a same-user agent needs the agent sandboxed or Coffer's daemon running as a separate OS user.
 - An agent with Accessibility or screen control can click an approval.
 - The signed `coffer` CLI shares the master key's Keychain access group; no CLI path returns the key or plaintext.
 - Agents in bypass modes (`bypassPermissions`, `--yolo`, `danger-full-access`) have no sandbox of their own.
