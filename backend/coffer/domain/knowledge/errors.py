@@ -41,32 +41,6 @@ class KnowledgeFileNotFound(KnowledgeError):  # noqa: N818
         self.path = path
 
 
-class KnowledgeFileConflict(KnowledgeError):  # noqa: N818
-    """A document changed on disk after the editor read it.
-
-    Spec knowledge "Save a document edited in the web UI". The save is refused
-    and the file left as it is: a person's editor or an agent wrote it
-    in between, and overwriting that silently would lose their change.
-    """
-
-    code = "KNOWLEDGE_FILE_CONFLICT"
-
-    def __init__(
-        self, path: str, *, current_body: str | None = None, current_fingerprint: str = ""
-    ) -> None:
-        super().__init__(f"{path!r} changed on disk since it was opened; your text was not saved")
-        self.path = path
-        #: What the editor needs to recover without saving over the file (spec
-        #: knowledge "Save a document edited in the web UI"): the document as it
-        #: is on disk now, so the page can Reload, Compare or Copy my text.
-        self.error_details: dict[str, object] = {
-            "path": path,
-            "saved": False,
-            "current_body": current_body,
-            "current_fingerprint": current_fingerprint,
-        }
-
-
 class UnsafeKnowledgePath(KnowledgeError):  # noqa: N818
     """A path that escapes the knowledge root, names a hidden entry, or cannot
     name a document.
@@ -107,9 +81,9 @@ class KnowledgeHistoryUnavailable(KnowledgeError):  # noqa: N818
     """No history can be read: git is not installed, or the knowledge root has
     no repository it could create.
 
-    Spec knowledge "Keep every document's history".
-    Writes never fail for this — they are simply not recorded — so only the
-    history reads raise it.
+    Spec knowledge "Commit every knowledge write naming its writer".
+    Writes never fail for this — they are simply not recorded — so only a
+    read of the changes feed raises it.
     """
 
     code = "KNOWLEDGE_HISTORY_UNAVAILABLE"
@@ -123,31 +97,16 @@ class KnowledgeHistoryUnavailable(KnowledgeError):  # noqa: N818
             self.error_details: dict[str, object] = details
 
 
-class KnowledgeVersionNotFound(KnowledgeError):  # noqa: N818
-    """A version the history does not hold, or one in which the document named
-    does not exist."""
-
-    code = "KNOWLEDGE_VERSION_NOT_FOUND"
-
-    def __init__(self, version: str, path: str | None = None) -> None:
-        where = f" of {path!r}" if path else ""
-        super().__init__(f"no version {version!r}{where} in the knowledge history")
-        self.version = version
-        self.path = path
-
-
 class KnowledgeNotADelete(KnowledgeError):  # noqa: N818
-    """A restore-a-delete aimed at a change that deleted nothing — only the
-    deletion of a document or of a collection is put back this way (spec
-    knowledge "Restore a deleted collection or document from Recent changes")."""
+    """A restore-a-delete aimed at a change that deleted nothing, or at a
+    version that is not a knowledge change at all — only the deletion of a
+    document or of a collection is put back this way (spec knowledge "Undo a
+    knowledge delete from its toast")."""
 
     code = "KNOWLEDGE_NOT_A_DELETE"
 
     def __init__(self, version: str) -> None:
-        super().__init__(
-            f"{version!r} did not delete a document or a collection; "
-            "restore a document's version instead"
-        )
+        super().__init__(f"{version!r} did not delete a document or a collection")
         self.version = version
 
 

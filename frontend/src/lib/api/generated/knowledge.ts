@@ -95,91 +95,10 @@ export interface paths {
         };
         /** Read File */
         get: operations["read_file_api_v1_knowledge_file_get"];
-        /** Save File */
-        put: operations["save_file_api_v1_knowledge_file_put"];
+        put?: never;
         post?: never;
         /** Delete File */
         delete: operations["delete_file_api_v1_knowledge_file_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/knowledge/history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Document History
-         * @description A document's versions, newest first, each with its writer and time.
-         */
-        get: operations["document_history_api_v1_knowledge_history_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/knowledge/history/diff": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Version Diff
-         * @description What one version did to the document.
-         */
-        get: operations["version_diff_api_v1_knowledge_history_diff_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/knowledge/history/restore": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Restore Version
-         * @description Put one version of a document back, as a new change naming the user.
-         */
-        post: operations["restore_version_api_v1_knowledge_history_restore_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/knowledge/history/version": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Version Body
-         * @description The document's body as one version left it.
-         */
-        get: operations["version_body_api_v1_knowledge_history_version_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -300,7 +219,7 @@ export interface components {
             undoes: string | null;
             /**
              * Version
-             * @description The change's id (its commit), what diff and restore take.
+             * @description The change's id (its commit), what a restore of a delete takes.
              */
             version: string;
             /**
@@ -400,28 +319,6 @@ export interface components {
              */
             status: "added" | "modified" | "removed";
         };
-        /**
-         * DocumentHistoryOut
-         * @description A document's versions, newest first.
-         */
-        DocumentHistoryOut: {
-            /** Path */
-            path: string;
-            /** Versions */
-            versions: components["schemas"]["DocumentVersionOut"][];
-        };
-        /**
-         * DocumentVersionOut
-         * @description One version of a document: the change that made it.
-         */
-        DocumentVersionOut: {
-            change: components["schemas"]["ChangeOut"];
-            /**
-             * Removed
-             * @description True when this change removed the document.
-             */
-            removed: boolean;
-        };
         /** ErrorDetail */
         ErrorDetail: {
             /**
@@ -455,8 +352,6 @@ export interface components {
             description: string;
             /** File Path */
             file_path: string;
-            /** Fingerprint */
-            fingerprint: string;
             /** Folder Path */
             folder_path: string;
             /** Path */
@@ -465,19 +360,6 @@ export interface components {
             title: string;
             /** Updated At */
             updated_at: string;
-        };
-        /**
-         * FileSave
-         * @description A document's new body, from the web UI's editor ("Save a document edited
-         *     in the web UI"). The frontmatter is kept as it is on disk.
-         */
-        FileSave: {
-            /** Body */
-            body: string;
-            /** Expected Fingerprint */
-            expected_fingerprint: string;
-            /** Path */
-            path: string;
         };
         /** FileSummaryOut */
         FileSummaryOut: {
@@ -520,58 +402,6 @@ export interface components {
             files: components["schemas"]["FileSummaryOut"][];
             /** Path */
             path: string;
-        };
-        /**
-         * VersionBodyOut
-         * @description A document's body as one version left it, for Compare with current.
-         */
-        VersionBodyOut: {
-            /** Body */
-            body: string;
-            /** Path */
-            path: string;
-            /** Version */
-            version: string;
-        };
-        /**
-         * VersionDiffOut
-         * @description One version's diff of one document.
-         */
-        VersionDiffOut: {
-            /** Added */
-            added: number;
-            /**
-             * Diff
-             * @description A unified diff; empty when the change made no textual change.
-             */
-            diff: string;
-            /** Path */
-            path: string;
-            /** Removed */
-            removed: number;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "added" | "modified" | "removed";
-            /** Version */
-            version: string;
-        };
-        /**
-         * VersionRestoreIn
-         * @description Put one version of a document back, as a new change.
-         */
-        VersionRestoreIn: {
-            /**
-             * Path
-             * @description Knowledge-root-relative document path.
-             */
-            path: string;
-            /**
-             * Version
-             * @description The version to restore.
-             */
-            version: string;
         };
     };
     responses: never;
@@ -843,51 +673,6 @@ export interface operations {
             };
         };
     };
-    save_file_api_v1_knowledge_file_put: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FileSave"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FileOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     delete_file_api_v1_knowledge_file_delete: {
         parameters: {
             query: {
@@ -908,179 +693,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    document_history_api_v1_knowledge_history_get: {
-        parameters: {
-            query: {
-                path: string;
-            };
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentHistoryOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    version_diff_api_v1_knowledge_history_diff_get: {
-        parameters: {
-            query: {
-                path: string;
-                version: string;
-            };
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VersionDiffOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    restore_version_api_v1_knowledge_history_restore_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["VersionRestoreIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FileOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    version_body_api_v1_knowledge_history_version_get: {
-        parameters: {
-            query: {
-                path: string;
-                version: string;
-            };
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VersionBodyOut"];
-                };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {

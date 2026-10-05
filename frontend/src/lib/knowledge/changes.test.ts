@@ -1,23 +1,12 @@
-// frontend/src/lib/knowledge/changes.test.ts — how the Knowledge page words, filters and groups changes.
+// frontend/src/lib/knowledge/changes.test.ts — how a knowledge writer and a time are worded, and the page's addresses.
 import { describe, expect, test } from "vitest";
 import type { TFunction } from "i18next";
 
 import i18n from "@/i18n";
 import type { ChangeOut } from "@/lib/api/knowledge";
 
-import {
-  agentLabel,
-  changeSentence,
-  dayKey,
-  groupByDay,
-  authorKey,
-  authorOptions,
-  matchesAuthor,
-  withinDays,
-  writerLabel,
-} from "./changes";
-import { collectionOfPath, collectionPath, pathInCollection } from "./routes";
-import { describeItem } from "./text";
+import { agentLabel, dayKey, whenLabel, writerLabel } from "./changes";
+import { collectionPath, pathInCollection } from "./routes";
 
 const t = i18n.getFixedT("en") as TFunction;
 
@@ -50,71 +39,19 @@ describe("wording", () => {
     expect(agentLabel(t, "agent")).toBe("An agent");
   });
 
-  test("words a change from its fields, the document without its collection", () => {
-    expect(changeSentence(t, change({}))).toBe("edited dir/doc.md");
-    // A change an earlier curation pass made has no words of its own: its summary stands.
-    expect(
-      changeSentence(
-        t,
-        change({ writer: "curation", operation: "pass", summary: "Curate login-retry.md" }),
-      ),
-    ).toBe("Curate login-retry.md");
-    expect(changeSentence(t, change({ operation: "mystery", summary: "Raw subject" }))).toBe(
-      "Raw subject",
-    );
-  });
-});
-
-describe("filters and grouping", () => {
-  test("the Author filter names each person, agent and Curation once", () => {
-    const mine = change({});
-    const pass = change({ writer: "curation", operation: "pass", agent: "codex" });
-    const codex = change({ writer: "agent", agent: "codex" });
-    const claude = change({ writer: "agent", agent: "claude-code" });
-    const all = [pass, claude, mine, codex, pass];
-    expect(authorKey(pass)).toBe("curation");
-    expect(authorKey(codex)).toBe("agent:codex");
-    expect(all.filter((c) => matchesAuthor(c, "agent:codex"))).toEqual([codex]);
-    expect(all.filter((c) => matchesAuthor(c, "user"))).toEqual([mine]);
-    expect(all.filter((c) => matchesAuthor(c, "any"))).toHaveLength(5);
-    expect(authorOptions(t, all)).toEqual([
-      { value: "user", label: "You" },
-      { value: "agent:claude-code", label: "Claude Code" },
-      { value: "agent:codex", label: "Codex" },
-      { value: "curation", label: "Curation" },
-    ]);
-  });
-
-  test("groups by day under today, yesterday and a date", () => {
+  test("words a time as today, yesterday or a date", () => {
     const now = new Date(2026, 8, 30, 12);
-    const at = (d: Date) => change({ time: d.toISOString() });
-    const groups = groupByDay(
-      [at(new Date(2026, 8, 30, 9)), at(new Date(2026, 8, 29, 9)), at(new Date(2026, 8, 20, 9))],
-      now,
-    );
-    expect(groups.map(([day]) => day)).toEqual(["today", "yesterday", "2026-09-20"]);
     expect(dayKey(new Date(2026, 8, 30, 1).toISOString(), now)).toBe("today");
-  });
-
-  test("the last seven days", () => {
-    const now = Date.parse("2026-09-30T10:00:00Z");
-    expect(withinDays("2026-09-24T10:00:00Z", 7, now)).toBe(true);
-    expect(withinDays("2026-09-22T10:00:00Z", 7, now)).toBe(false);
+    expect(dayKey(new Date(2026, 8, 29, 9).toISOString(), now)).toBe("yesterday");
+    expect(dayKey(new Date(2026, 8, 20, 9).toISOString(), now)).toBe("2026-09-20");
+    expect(whenLabel(t, new Date(2026, 8, 30, 9, 5).toISOString(), "en", now)).toBe("Today 09:05");
   });
 });
 
-describe("addresses and derived text", () => {
+describe("addresses", () => {
   test("builds the page's addresses", () => {
     expect(collectionPath("kn-1")).toBe("/knowledge/kn-1");
-    expect(collectionPath("kn-1", "history", "c/a b.md")).toBe(
-      "/knowledge/kn-1/history?file=c%2Fa%20b.md",
-    );
-    expect(collectionOfPath("c/dir/doc.md")).toBe("c");
+    expect(collectionPath("kn-1", "c/a b.md")).toBe("/knowledge/kn-1?file=c%2Fa%20b.md");
     expect(pathInCollection("c/dir/doc.md")).toBe("dir/doc.md");
-  });
-
-  test("describes an added item by its first sentence, else its title", () => {
-    expect(describeItem("T", "# Heading\n\nFirst one. Second one.")).toBe("First one.");
-    expect(describeItem("Only a title", "")).toBe("Only a title");
   });
 });

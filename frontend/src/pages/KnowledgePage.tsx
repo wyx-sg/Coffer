@@ -1,24 +1,23 @@
 // frontend/src/pages/KnowledgePage.tsx — the one Knowledge surface.
 //
-// A document app (spec knowledge "Show a collection as one tree of documents in
-// the web UI"): the tree of every collection on the left — Recent changes on
-// top, then each collection with its documents — and whatever the address names
-// on the right (lib/knowledge/routes.ts): Recent changes, a collection, or an
-// open document with its Document and History tabs. Every collection is served
-// to every agent, so there is no per-collection switch and no reach control;
-// and the layer has no retrieval, so there is no search box — ⌘K jumps to a
-// collection by name.
+// A document app (spec knowledge "Show a collection as one tree of read-only
+// documents in the web UI"): the tree of every collection on the left, each
+// with its documents, and whatever the address names on the right
+// (lib/knowledge/routes.ts): a line to pick a collection, a collection, or an
+// open document, read-only. Every collection is served to every agent, so
+// there is no per-collection switch and no reach control; and the layer has no
+// retrieval, so there is no search box — ⌘K jumps to a collection by name.
 //
-// New knowledge goes in as a document — an upload, an agent's file — and people
-// write through Edit. Tidying is the agent's: Tidy all hands every collection
-// to the default managed agent and sends the prompt at once (spec knowledge
-// "Hand a tidy to the agent").
+// New knowledge goes in as a document — an upload, an agent's file — and a
+// person changes one in their own editor (Open in editor). Tidying is the
+// agent's: Tidy all hands every collection to the default managed agent and
+// sends the prompt at once (spec knowledge "Hand a tidy to the agent").
 //
 // Nothing auto-provisions a collection, so an empty list is the first-run
 // empty state. The page is a workspace (boards 5.1.01–5.1.29): a header — the
 // title with its Experimental tag, one subtitle line, and on the right Tidy all
-// and Upload, the page's one primary button (secondary while a document has
-// unsaved edits) — then the tree and the pane, each scrolling on its own.
+// and Upload, the page's one primary button — then the tree and the pane, each
+// scrolling on its own.
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams } from "react-router-dom";
@@ -40,7 +39,6 @@ import { knowledgeKey } from "@/lib/api/queryKeys";
 import { useDetailTab } from "@/lib/detailTabs";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
 import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
-import { useEditingDocument } from "@/lib/knowledge/dirtyDocument";
 import {
   collectionBasePath,
   DEFAULT_KNOWLEDGE_TAB,
@@ -71,11 +69,10 @@ export function KnowledgePage() {
   const file = params.get("file");
   const collections = useKnowledgeCollections();
   const [dialog, setDialog] = useState<KnowledgeDialog>(null);
-  // While a document has unsaved edits, Upload steps back to secondary.
-  // (The editor publishes only its dirty state, so this is the signal we have.)
-  const editing = useEditingDocument() !== null;
 
-  const [tab] = useDetailTab(
+  // A document has no tabs: an address that names one (an old `/<uid>/history`)
+  // is sent to the bare address, which opens the document.
+  useDetailTab(
     KNOWLEDGE_TABS,
     DEFAULT_KNOWLEDGE_TAB,
     uid ? collectionBasePath(uid) : KNOWLEDGE_ROOT,
@@ -99,7 +96,7 @@ export function KnowledgePage() {
           list.length > 0 ? (
             <>
               <AgentHandoff prompt={tidyAllPrompt} label={t("knowledge.tidy.all")} help={false} />
-              <Button variant={editing ? "outline" : "default"} onClick={() => setDialog("upload")}>
+              <Button onClick={() => setDialog("upload")}>
                 <Upload aria-hidden /> {t("knowledge.upload.button")}
               </Button>
             </>
@@ -158,7 +155,6 @@ export function KnowledgePage() {
               isLoading={collections.isPending}
               currentUid={uid ?? null}
               file={file}
-              atRecent={!uid}
               onCreate={() => setDialog("create")}
             />
           )
@@ -168,9 +164,7 @@ export function KnowledgePage() {
             <KnowledgePane
               uid={uid ?? null}
               collection={current}
-              collections={list}
               collectionsLoading={collections.isPending}
-              tab={tab}
               file={file}
             />
           )

@@ -16,15 +16,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import * as knowledgeApi from "@/lib/api/knowledge";
 import { KnowledgePage } from "@/pages/KnowledgePage";
 
-import {
-  COLLECTION,
-  DIFF,
-  EDIT,
-  FILES,
-  OTHER,
-  PASS,
-  TREES,
-} from "@/components/knowledge/knowledgeTestData";
+import { COLLECTION, FILES, OTHER, TREES } from "@/components/knowledge/knowledgeTestData";
 
 /** Where the router is now — rendered so a test can assert the address. A
  *  test-only file, so fast refresh is not a concern here. */
@@ -72,17 +64,6 @@ export function answerFromFixtures() {
     if (!found) throw new Error(`no fixture for ${path}`);
     return found;
   });
-  api.listChanges.mockResolvedValue({
-    changes: [PASS, EDIT],
-    next_cursor: null,
-  });
-  api.getHistory.mockResolvedValue({ path: "", versions: [] });
-  api.getVersionDiff.mockImplementation(async (path: string, version: string) => ({
-    path,
-    version,
-    status: "modified",
-    added: 1,
-    removed: 1,
-    diff: DIFF,
-  }));
+  // The changes feed is read only to find the delete an Undo restores.
+  api.listChanges.mockResolvedValue({ changes: [], next_cursor: null });
 }

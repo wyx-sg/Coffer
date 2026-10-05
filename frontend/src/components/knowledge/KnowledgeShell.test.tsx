@@ -2,14 +2,13 @@
 //
 // The Knowledge page's shell (boards 5.1.01, 5.1.03, 5.1.09, 5.1.11, 5.1.12,
 // 5.1.13, 5.1.26–28; Foundations 0.6.04): the header (title, Experimental tag,
-// one subtitle, Tidy all and the one primary Upload), the first-run empty
-// state, the tree (a Collections strip with New collection, the unsaved dot)
-// and the Upload dialog's Cancel. Mocked only at the network boundary, like the page tests.
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+// one subtitle, Tidy all and the one primary Upload), the landing with no
+// collection open, the first-run empty state, the tree (a Collections strip
+// with New collection) and the Upload dialog's Cancel. Mocked only at the network boundary, like the page tests.
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { COLLECTION, GATEWAY, OTHER, UID } from "@/components/knowledge/knowledgeTestData";
-import { setDirtyDocument, setEditingDocument } from "@/lib/knowledge/dirtyDocument";
 import { answerFromFixtures, renderKnowledge } from "@/test/knowledgeHarness";
 
 import { acceptance } from "@/test/acceptance";
@@ -19,14 +18,9 @@ vi.mock("@/lib/api/knowledge", () => ({
   createCollection: vi.fn(),
   getTree: vi.fn(),
   getFile: vi.fn(),
-  saveFile: vi.fn(),
   deleteFile: vi.fn(),
   uploadFile: vi.fn(),
   listChanges: vi.fn(),
-  getHistory: vi.fn(),
-  getVersionDiff: vi.fn(),
-  getVersionBody: vi.fn(),
-  restoreVersion: vi.fn(),
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
 }));
@@ -51,10 +45,6 @@ beforeEach(() => {
   answerFromFixtures();
 });
 afterEach(() => {
-  act(() => {
-    setDirtyDocument(null);
-    setEditingDocument(null);
-  });
   vi.clearAllMocks();
 });
 
@@ -64,7 +54,7 @@ function tree() {
 
 describe("the header", () => {
   acceptance("knowledge", "the page's one primary action is Upload", async () => {
-    renderKnowledge(`/knowledge/${UID}`);
+    renderKnowledge(`/knowledge/${UID}?file=${encodeURIComponent(GATEWAY.path)}`);
     const tidyAll = await within(screen.getByRole("banner")).findByRole("button", {
       name: "Tidy all",
     });
@@ -84,15 +74,36 @@ describe("the header", () => {
     const header = screen.getByRole("banner");
     expect(header.parentElement?.className).toMatch(/px-8/);
     expect(header.parentElement?.className).not.toMatch(/border-b/);
+    // The pane offers no Edit: a document is changed in the person's own editor.
+    expect(await screen.findByRole("button", { name: "Open in editor" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+});
+
+describe("with no collection open", () => {
+  test("the tree lists the collections, the pane says to pick one, and Tidy all stays", async () => {
+    renderKnowledge("/knowledge");
+    expect(await screen.findByText("Pick a collection")).toBeInTheDocument();
+    expect(
+      await within(tree()).findByRole("button", { name: new RegExp(`^${COLLECTION.name}$`) }),
+    ).toBeInTheDocument();
+    expect(
+      await within(screen.getByRole("banner")).findByRole("button", { name: "Tidy all" }),
+    ).toBeInTheDocument();
+    // There is no Recent changes view: history is git's.
+    expect(screen.queryByText("Recent changes")).toBeNull();
+    expect(screen.queryByRole("link", { name: /Recent changes/ })).toBeNull();
   });
 
-  test("Upload drops to secondary while a document is being edited", async () => {
-    renderKnowledge(`/knowledge/${UID}`);
-    await screen.findByRole("button", { name: "Tidy all" });
-    act(() => setEditingDocument(GATEWAY.path));
+  test("an old History address opens the document", async () => {
+    renderKnowledge(`/knowledge/${UID}/history?file=${encodeURIComponent("shopee/gateway.md")}`);
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Upload" }).className).not.toMatch(/bg-accent/),
+      expect(screen.getByTestId("where")).toHaveTextContent(
+        `/knowledge/${UID}?file=shopee%2Fgateway.md`,
+      ),
     );
+    expect(await screen.findByRole("heading", { level: 1, name: "Account Gateway" })).toBeVisible();
   });
 });
 
@@ -122,10 +133,9 @@ describe("the tree", () => {
     const nav = tree();
     await within(nav).findByRole("button", { name: "gateway.md" });
     expect(within(nav).queryByRole("button", { name: /^Inbox/ })).toBeNull();
-    // The collection rows and Recent changes carry no number.
+    // The collection rows carry no number.
     const row = within(nav).getByRole("button", { name: new RegExp(`^${COLLECTION.name}$`) });
     expect(row).not.toHaveTextContent(/\d/);
-    expect(within(nav).getByRole("link", { name: "Recent changes" })).not.toHaveTextContent(/\d/);
     // A collection with no documents shows no "0".
     fireEvent.click(within(nav).getByRole("button", { name: `Expand ${OTHER.name}` }));
     expect(nav.textContent).not.toMatch(/(^|\s)0(\s|$)/);
@@ -133,16 +143,6 @@ describe("the tree", () => {
     expect(within(nav).getAllByRole("button", { name: "New collection" })).toHaveLength(1);
     fireEvent.click(within(nav).getByRole("button", { name: "New collection" }));
     expect(await screen.findByRole("dialog")).toHaveTextContent("New collection");
-  });
-
-  test("the file with unsaved edits shows an accent dot", async () => {
-    renderKnowledge(`/knowledge/${UID}`);
-    const nav = tree();
-    await within(nav).findByRole("button", { name: "gateway.md" });
-    expect(within(nav).queryByRole("img", { name: "Unsaved changes" })).toBeNull();
-    act(() => setDirtyDocument(GATEWAY.path));
-    const dot = await within(nav).findByRole("img", { name: "Unsaved changes" });
-    expect(within(nav).getByRole("button", { name: /^gateway\.md/ })).toContainElement(dot);
   });
 });
 

@@ -1,6 +1,6 @@
-"""Wire models for a collection's history (spec knowledge "Keep every
-document's history", "Follow edits across
-collections in one feed").
+"""Wire models for the knowledge changes feed and a collection's description
+(spec knowledge "Follow edits across collections in one feed", "Undo a
+knowledge delete from its toast").
 
 Each mirrors a value object in ``domain.knowledge.history``. A change is one
 vault commit that touched ``knowledge/``, named by its commit id (``version``)
@@ -14,13 +14,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from coffer.domain.knowledge.history import (
-    WRITER_DISK,
-    WRITERS,
-    Change,
-    DocumentDiff,
-    DocumentVersion,
-)
+from coffer.domain.knowledge.history import WRITER_DISK, WRITERS, Change
 
 Writer = Literal["user", "agent", "curation", "sync", "disk"]
 DocumentStatus = Literal["added", "modified", "removed"]
@@ -38,7 +32,9 @@ class DocumentChangeOut(BaseModel):
 class ChangeOut(BaseModel):
     """One change to knowledge: one commit naming its writer."""
 
-    version: str = Field(description="The change's id (its commit), what diff and restore take.")
+    version: str = Field(
+        description="The change's id (its commit), what a restore of a delete takes."
+    )
     time: datetime
     writer: Writer = Field(
         description="`user` a person; `agent` an agent whose material became a document on "
@@ -92,76 +88,12 @@ def change_out(change: Change) -> ChangeOut:
     )
 
 
-class DocumentVersionOut(BaseModel):
-    """One version of a document: the change that made it."""
-
-    change: ChangeOut
-    removed: bool = Field(description="True when this change removed the document.")
-
-
-class DocumentHistoryOut(BaseModel):
-    """A document's versions, newest first."""
-
-    path: str
-    versions: list[DocumentVersionOut]
-
-
-def history_out(path: str, versions: list[DocumentVersion]) -> DocumentHistoryOut:
-    return DocumentHistoryOut(
-        path=path,
-        versions=[
-            DocumentVersionOut(change=change_out(v.change), removed=v.removed) for v in versions
-        ],
-    )
-
-
-class DocumentDiffOut(BaseModel):
-    """What one change did to one document, as a unified diff."""
-
-    path: str
-    status: DocumentStatus
-    diff: str = Field(description="A unified diff; empty when the change made no textual change.")
-    added: int
-    removed: int
-
-
-def diff_out(diff: DocumentDiff) -> DocumentDiffOut:
-    return DocumentDiffOut(
-        path=diff.path,
-        status=diff.status,  # type: ignore[arg-type]
-        diff=diff.diff,
-        added=diff.added,
-        removed=diff.removed,
-    )
-
-
-class VersionDiffOut(DocumentDiffOut):
-    """One version's diff of one document."""
-
-    version: str
-
-
-class VersionBodyOut(BaseModel):
-    """A document's body as one version left it, for Compare with current."""
-
-    path: str
-    version: str
-    body: str
-
-
 class CollectionDescribeIn(BaseModel):
     """A collection's new description: its README's opening paragraph."""
 
     # Stripped before the length check: a whitespace-only description is empty.
     description: str = Field(min_length=1, max_length=2000)
     model_config = ConfigDict(str_strip_whitespace=True)
-
-
-class VersionRestoreIn(BaseModel):
-    """Put one version of a document back, as a new change."""
-
-    path: str = Field(min_length=1, description="Knowledge-root-relative document path.")
-    version: str = Field(min_length=4, description="The version to restore.")
 
 
 class ChangesOut(BaseModel):

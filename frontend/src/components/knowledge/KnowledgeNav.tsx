@@ -1,10 +1,10 @@
 // frontend/src/components/knowledge/KnowledgeNav.tsx
 //
 // The Knowledge page's left pane (boards 5.1.01, 5.1.09, Foundations 0.6.04):
-// Recent changes on top, then a 36px "Collections" header strip with a New
-// collection icon button, then every collection as a node of one tree — its
-// documents under it (spec knowledge "Show a collection as one tree of
-// documents in the web UI"). The open collection is expanded unless closed on
+// a 36px "Collections" header strip with a New collection icon button, then
+// every collection as a node of one tree — its documents under it (spec
+// knowledge "Show a collection as one tree of read-only documents in the web
+// UI"). The open collection is expanded unless closed on
 // its chevron; others open and close on theirs, and that choice is ephemeral
 // UI state (it does not survive a reload).
 //
@@ -12,33 +12,19 @@
 // to a collection by name.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
-import { FolderPlus, History } from "lucide-react";
+import { FolderPlus } from "lucide-react";
 
 import { KnowledgeCollectionNode } from "@/components/knowledge/KnowledgeCollectionNode";
-import {
-  NAV_CHEVRON,
-  NAV_ICON,
-  NAV_LABEL,
-  NAV_ROW,
-  NAV_ROW_ACTIVE,
-  NAV_ROW_IDLE,
-  navIndent,
-} from "@/components/knowledge/navRow";
 import { ListLoadingRows } from "@/components/ListPaneStates";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { CollectionOut } from "@/lib/api/knowledge";
-import { KNOWLEDGE_ROOT } from "@/lib/knowledge/routes";
-import { cn } from "@/lib/utils";
 
 interface Props {
   collections: CollectionOut[];
   isLoading: boolean;
   currentUid: string | null;
   file: string | null;
-  /** The pane is on Recent changes (the page's bare address). */
-  atRecent: boolean;
   onCreate: () => void;
 }
 
@@ -49,7 +35,7 @@ export function KnowledgeNav(props: Props) {
   // it keeps it open rather than flipping it shut.
   const [opened, setOpened] = useState<Set<string>>(new Set());
   const [closed, setClosed] = useState<Set<string>>(new Set());
-  // Arriving in a collection — a document, a link from Recent changes — opens it again even if it was closed earlier, so what is on
+  // Arriving in a collection — a document, a link — opens it again even if it was closed earlier, so what is on
   // screen is visible in the tree. Adjusted during render, not in an effect,
   // so the tree never paints closed first.
   const [arrivedAt, setArrivedAt] = useState(props.currentUid);
@@ -80,20 +66,7 @@ export function KnowledgeNav(props: Props) {
   return (
     <nav aria-label={t("knowledge.nav.label")} className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 flex-col gap-px overflow-auto px-2 py-2.5">
-        <Link
-          to={KNOWLEDGE_ROOT}
-          aria-current={props.atRecent ? "page" : undefined}
-          style={navIndent(0)}
-          className={cn(NAV_ROW, props.atRecent ? NAV_ROW_ACTIVE : NAV_ROW_IDLE)}
-        >
-          <span className={NAV_CHEVRON} />
-          <History className={NAV_ICON} aria-hidden />
-          <span className={cn(NAV_LABEL, props.atRecent && "font-label")}>
-            {t("knowledge.recent.title")}
-          </span>
-        </Link>
-
-        <div className="-mx-2 mb-1 mt-2 flex h-9 shrink-0 items-center border-y border-border-subtle pl-[18px] pr-2.5 text-sm font-semibold text-text">
+        <div className="-mx-2 mb-1 flex h-9 shrink-0 items-center border-y border-border-subtle pl-[18px] pr-2.5 text-sm font-semibold text-text">
           {t("knowledge.nav.collections")}
           <Tooltip>
             <TooltipTrigger asChild>

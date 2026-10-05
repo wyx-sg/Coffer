@@ -88,10 +88,6 @@ class KnowledgeFile:
     file_path: str
     #: Absolute path of its containing folder.
     folder_path: str
-    #: sha256 hex of the file's bytes as read — what an edit hands back so a
-    #: file changed on disk since is refused rather than overwritten (spec
-    #: knowledge "Save a document edited in the web UI").
-    fingerprint: str = ""
 
 
 @dataclass(frozen=True)

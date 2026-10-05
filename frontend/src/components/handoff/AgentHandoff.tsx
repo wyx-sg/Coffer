@@ -31,8 +31,9 @@ interface Props {
   /** The "?" beside it; off in a row that already says what the problem is
    *  (Knowledge and Memory failures, after their own Retry / Check again). */
   help?: boolean;
-  /** Name the main part ("Tidy") instead of "Hand off to <Agent>". */
-  label?: string;
+  /** Name the main part ("Tidy") instead of "Hand off to <Agent>"; a function
+   *  is given the agent's name ("Hand off to <Agent> to restore"). */
+  label?: string | ((agent: string) => string);
 }
 
 /** The agent's mark in a button-sized box (a Blossom is bigger than its box; it overflows evenly). */
@@ -71,7 +72,11 @@ export function AgentHandoff({ prompt, size = "default", help = true, label }: P
         <SplitButton
           size={size}
           icon={<Mark target={agent} />}
-          label={label ?? t("handoff.handoffTo", { agent: agent.name })}
+          label={
+            typeof label === "function"
+              ? label(agent.name)
+              : (label ?? t("handoff.handoffTo", { agent: agent.name }))
+          }
           tooltip={t("handoff.tooltip", { agent: agent.name, terminal: terminalLabel })}
           onClick={() => handoff(agent)}
           menuLabel={t("handoff.moreOptions")}

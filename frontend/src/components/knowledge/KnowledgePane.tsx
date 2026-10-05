@@ -1,32 +1,29 @@
 // frontend/src/components/knowledge/KnowledgePane.tsx
 //
 // The right side of the Knowledge page: which view the address names
-// (lib/knowledge/routes.ts). An open document with its Document and History
-// tabs; a collection with no document open → its overview; nothing chosen →
-// Recent changes.
+// (lib/knowledge/routes.ts). An open document, read-only; a collection with no
+// document open → its overview; nothing chosen → a line saying to pick one.
 import { Book } from "lucide-react";
 
 import { DetailNotFound } from "@/components/DetailNotFound";
 import { KnowledgeCollectionView } from "@/components/knowledge/KnowledgeCollectionView";
 import { KnowledgeDocumentPane } from "@/components/knowledge/KnowledgeDocumentPane";
-import { KnowledgeRecentChanges } from "@/components/knowledge/KnowledgeRecentChanges";
+import { KnowledgeLandingPanel } from "@/components/knowledge/KnowledgeLandingPanel";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { CollectionOut } from "@/lib/api/knowledge";
-import { KNOWLEDGE_ROOT, type KnowledgeTab } from "@/lib/knowledge/routes";
+import { KNOWLEDGE_ROOT } from "@/lib/knowledge/routes";
 
 interface Props {
   uid: string | null;
   /** The collection `uid` names, once the list has it. */
   collection: CollectionOut | null;
-  collections: CollectionOut[];
   collectionsLoading: boolean;
-  tab: KnowledgeTab;
   file: string | null;
 }
 
 export function KnowledgePane(props: Props) {
   if (!props.uid) {
-    return <KnowledgeRecentChanges collections={props.collections} />;
+    return <KnowledgeLandingPanel />;
   }
   if (!props.collection) {
     if (props.collectionsLoading) {
@@ -44,13 +41,7 @@ export function KnowledgePane(props: Props) {
     );
   }
   if (props.file) {
-    return (
-      <KnowledgeDocumentPane
-        collection={props.collection}
-        path={props.file}
-        tab={props.tab === "history" ? "history" : "document"}
-      />
-    );
+    return <KnowledgeDocumentPane collection={props.collection} path={props.file} />;
   }
   return <KnowledgeCollectionView collection={props.collection} />;
 }

@@ -5,7 +5,7 @@
 // edited in place (blur / ⌘Enter saves, Esc cancels, the toast offers Undo),
 // the properties rows, the empty collection's one muted line, Rename… from the
 // ⋯ menu (a dialog that closes only on success), and Delete collection… from
-// the same menu — at once, with an Undo toast.
+// the same menu — which asks first, then offers Undo in a toast.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
@@ -19,14 +19,9 @@ vi.mock("@/lib/api/knowledge", () => ({
   createCollection: vi.fn(),
   getTree: vi.fn(),
   getFile: vi.fn(),
-  saveFile: vi.fn(),
   deleteFile: vi.fn(),
   uploadFile: vi.fn(),
   listChanges: vi.fn(),
-  getHistory: vi.fn(),
-  getVersionDiff: vi.fn(),
-  getVersionBody: vi.fn(),
-  restoreVersion: vi.fn(),
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
 }));
@@ -91,7 +86,7 @@ describe("a just created, empty collection", () => {
       screen.getByText(/No documents yet\. Upload one, or drop Markdown files into the folder\./),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reveal in Finder" })).toBeInTheDocument();
-    // No Add a document: people write through Edit, agents write files.
+    // No Add a document: people write in their own editor, agents write files.
     expect(screen.queryByRole("button", { name: /Add a document/ })).toBeNull();
   });
 });
@@ -161,9 +156,7 @@ describe("Delete collection…", () => {
     documents: [],
   };
 
-  acceptance("knowledge", "delete a collection at once and find it in Recent changes", async () => {
-    vi.mocked(resourcesApi.remove).mockResolvedValue(undefined);
-    renderKnowledge(`/knowledge/${UID}`);
+  const askToDelete = async () => {
     fireEvent.click(await screen.findByRole("button", { name: `More actions for ${NAME}` }));
     expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
       "Reveal in Finder",
@@ -172,25 +165,62 @@ describe("Delete collection…", () => {
       "Delete collection…",
     ]);
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete collection…" }));
+    return screen.findByRole("dialog");
+  };
 
-    await waitFor(() => expect(resourcesApi.remove).toHaveBeenCalledWith(UID));
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(await screen.findByText(`Deleted ${NAME}`)).toBeInTheDocument();
-    // The page goes to Recent changes.
-    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent(/^\/knowledge$/));
+  acceptance(
+    "knowledge",
+    "delete a collection after asking and undo it from the toast",
+    async () => {
+      vi.mocked(resourcesApi.remove).mockResolvedValue(undefined);
+      renderKnowledge(`/knowledge/${UID}`);
+      const dialog = await askToDelete();
 
-    // Undo restores it from the vault's history.
-    api.listChanges.mockResolvedValue({ changes: [REMOVAL], next_cursor: null });
-    api.restoreDeleted.mockResolvedValue(REMOVAL);
-    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
-    await waitFor(() => expect(api.restoreDeleted).toHaveBeenCalledWith("r3m0ve"));
+      // The confirmation names the collection and its documents, and nothing is deleted yet.
+      expect(within(dialog).getByText(`Delete ${NAME}?`)).toBeInTheDocument();
+      expect(within(dialog).getByText(/2 documents go with it/)).toBeInTheDocument();
+      expect(within(dialog).queryByRole("textbox")).toBeNull();
+      expect(resourcesApi.remove).not.toHaveBeenCalled();
+
+      fireEvent.click(within(dialog).getByRole("button", { name: "Delete collection" }));
+      await waitFor(() => expect(resourcesApi.remove).toHaveBeenCalledWith(UID));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(await screen.findByText(`Deleted ${NAME}`)).toBeInTheDocument();
+      // The page goes to Knowledge.
+      await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent(/^\/knowledge$/));
+
+      // Undo restores it from the vault's history.
+      api.listChanges.mockResolvedValue({ changes: [REMOVAL], next_cursor: null });
+      api.restoreDeleted.mockResolvedValue(REMOVAL);
+      fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+      await waitFor(() => expect(api.restoreDeleted).toHaveBeenCalledWith("r3m0ve"));
+    },
+  );
+
+  test("Cancel deletes nothing", async () => {
+    renderKnowledge(`/knowledge/${UID}`);
+    const dialog = await askToDelete();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(resourcesApi.remove).not.toHaveBeenCalled();
+    expect(screen.getByTestId("where")).toHaveTextContent(`/knowledge/${UID}`);
+  });
+
+  test("a refused delete stays in the dialog, which stays open", async () => {
+    vi.mocked(resourcesApi.remove).mockRejectedValue(new ApiError("INTERNAL_ERROR", "boom"));
+    renderKnowledge(`/knowledge/${UID}`);
+    const dialog = await askToDelete();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete collection" }));
+    expect(await within(dialog).findByText(`Couldn’t delete ${NAME}`)).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.queryByText(`Deleted ${NAME}`)).toBeNull();
   });
 
   test("an Undo the vault refuses is an error toast", async () => {
     vi.mocked(resourcesApi.remove).mockResolvedValue(undefined);
     renderKnowledge(`/knowledge/${UID}`);
-    fireEvent.click(await screen.findByRole("button", { name: `More actions for ${NAME}` }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Delete collection…" }));
+    const dialog = await askToDelete();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete collection" }));
     await screen.findByText(`Deleted ${NAME}`);
     api.listChanges.mockResolvedValue({ changes: [REMOVAL], next_cursor: null });
     api.restoreDeleted.mockRejectedValue(new Error("name taken"));

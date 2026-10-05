@@ -81,9 +81,11 @@ so make it the right one.
    alone.
 
 The collection must already exist: only the developer creates one. Coffer
-commits every change it finds on disk to the vault's history, so a bad edit can
-be restored; never run git inside the vault yourself, because a commit of your
-own would be attributed to nobody.
+commits every change it finds on disk to the vault's git history, so a bad edit
+can be brought back from it; never run git inside the vault on your own
+initiative, because a commit of your own would be attributed to nobody. When
+the developer hands you a restore from History…, follow that prompt: it says
+how to commit so the vault names you.
 
 ### Tidying a collection
 
@@ -101,7 +103,7 @@ work through one collection at a time:
 5. Move a document into a subfolder only if that makes the tree easier for a
    person to browse; folders carry no meaning to Coffer.
 6. Report what you merged, split, corrected and deleted, so the developer can
-   check it against the history in Coffer's Knowledge page.
+   check it against the vault's git history.
 
 Change nothing that does not need changing.
 
