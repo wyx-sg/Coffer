@@ -1,16 +1,14 @@
 // src/lib/sessions/rows.ts — the one row shape the Conversations list and an
-// agent's Sessions tab share (components/sessions/SessionRow). A conversation
-// and an agent's native session say the same things about themselves, under
-// different field names; these two functions are the whole of that difference.
-import type { Conversation } from "@/lib/api/chat";
-import type { AgentSession } from "@/lib/api/agentSessions";
+// agent's Sessions tab share (components/sessions/SessionRow). Both lists are
+// agent sessions; the cross-agent rows additionally say whose they are.
+import type { AgentSession, AgentSessionRow } from "@/lib/api/agentSessions";
 
-/** @ui-only The chat a row came from: both wire shapes carry it, identical. */
-export type SessionChannel = NonNullable<Conversation["channel_binding"]>;
+/** @ui-only The chat a row came from. */
+export type SessionChannel = NonNullable<AgentSession["channel_binding"]>;
 
 /** @ui-only A list row, whichever list it is in. */
 export interface SessionRowData {
-  /** The conversation id, or the native session id. */
+  /** The native session id; the conversation id for a channel conversation no turn has run on. */
   id: string;
   /** The agent's native session id: what opens in a terminal. Null until a turn has run. */
   sessionId: string | null;
@@ -28,24 +26,9 @@ export interface SessionRowData {
   agentKey: string | null;
 }
 
-export function conversationRow(c: Conversation): SessionRowData {
+export function sessionRow(s: AgentSession | AgentSessionRow): SessionRowData {
   return {
-    id: c.id,
-    sessionId: c.session_id,
-    conversationId: c.id,
-    title: c.title,
-    cwd: c.cwd,
-    activityAt: c.updated_at,
-    running: c.running,
-    needsYou: c.needs_you,
-    channel: c.channel_binding,
-    agentKey: c.agent_key,
-  };
-}
-
-export function sessionRow(s: AgentSession): SessionRowData {
-  return {
-    id: s.session_id,
+    id: s.session_id ?? s.conversation_id ?? "",
     sessionId: s.session_id,
     conversationId: s.conversation_id,
     title: s.title,
@@ -54,6 +37,6 @@ export function sessionRow(s: AgentSession): SessionRowData {
     running: s.running,
     needsYou: s.needs_you,
     channel: s.channel_binding,
-    agentKey: null,
+    agentKey: "agent_key" in s ? s.agent_key : null,
   };
 }

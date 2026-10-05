@@ -1,8 +1,8 @@
 // src/components/chat/ConversationsFilterBar.tsx — the Conversations list's
 // filter row, all in the URL (lib/conversations/filters): the search over titles
-// and working directories ("/" focuses it), a Channel pill (each channel,
-// several at once), an Agent pill, and Clear filters once anything narrows the
-// list. It shows no result count.
+// and working directories ("/" focuses it), a Source pill (This Mac, then each
+// channel, several at once), an Agent pill, and Clear filters once anything
+// narrows the list. It shows no result count.
 import { useTranslation } from "react-i18next";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
@@ -10,9 +10,14 @@ import { SearchInput } from "@/components/SearchInput";
 import { Button } from "@/components/ui/button";
 import { FilterPill, type FilterOption } from "@/components/filters";
 import type { AgentProviderInfo } from "@/lib/api/agentProviders";
-import { clearFilters, isFiltered, type ConversationFilters } from "@/lib/conversations/filters";
+import {
+  clearFilters,
+  isFiltered,
+  LOCAL_SOURCE,
+  type ConversationFilters,
+} from "@/lib/conversations/filters";
 
-/** @ui-only A channel as the Channel pill lists it. */
+/** @ui-only A channel as the Source pill lists it. */
 export interface SourceChannel {
   uid: string;
   /** "SeaTalk · Team bot". */
@@ -39,11 +44,11 @@ export function ConversationsFilterBar({
   const { t } = useTranslation();
   const set = (patch: Partial<ConversationFilters>) => onChange({ ...filters, ...patch });
 
-  const sourceOptions: FilterOption[] = channels.map((ch) => ({
-    value: ch.uid,
-    label: ch.heading,
-  }));
-  // A channel named in the link that no channel matches any more is still listed, so it can be unticked.
+  const sourceOptions: FilterOption[] = [
+    { value: LOCAL_SOURCE, label: t("conversations.filters.thisMac") },
+    ...channels.map((ch) => ({ value: ch.uid, label: ch.heading })),
+  ];
+  // A source named in the link that no channel matches any more is still listed, so it can be unticked.
   const known = new Set(sourceOptions.map((o) => o.value));
   for (const uid of filters.source) {
     if (!known.has(uid)) sourceOptions.push({ value: uid, label: uid });
@@ -65,8 +70,9 @@ export function ConversationsFilterBar({
         className="w-60"
       />
       <FilterPill
-        label={t("conversations.filters.channel")}
+        label={t("conversations.filters.source")}
         options={sourceOptions}
+        fixedOrder
         value={filters.source}
         onChange={(source) => set({ source })}
       />

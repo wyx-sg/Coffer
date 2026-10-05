@@ -16,11 +16,45 @@ export type AgentSession = Schemas["AgentSessionOut"];
 /** One page of sessions; `total` is null when the agent cannot count them (Codex). */
 export type AgentSessionList = Schemas["AgentSessionListResponse"];
 
+/** One row of the cross-agent list: the session plus whose it is; `session_id` is null for a channel conversation no turn has run on. */
+export type AgentSessionRow = Schemas["AgentSessionRowOut"];
+
+/** One page of every agent's sessions, with the agents that could not be read. */
+export type AllAgentSessionsPage = Schemas["AllAgentSessionsResponse"];
+
 const one = (uid: string, sessionId: string) => ({
   params: { path: { uid, session_id: sessionId } },
 });
 
 export const agentSessionsApi = {
+  // Every managed agent's sessions in one list (spec agent-registry "List every
+  // agent's sessions in one list"): `source` is `local` and channel uids, `agent`
+  // agent keys; a cursor belongs to the filters it was issued for.
+  listAll: (
+    opts: {
+      limit: number;
+      cursor?: string | null;
+      q?: string;
+      source?: readonly string[];
+      agent?: readonly string[];
+    },
+    signal?: AbortSignal,
+  ): Promise<AllAgentSessionsPage> =>
+    unwrap(
+      getApiClient().GET("/agent-sessions", {
+        signal,
+        params: {
+          query: {
+            limit: opts.limit,
+            ...(opts.cursor ? { cursor: opts.cursor } : {}),
+            ...(opts.q ? { q: opts.q } : {}),
+            ...(opts.source?.length ? { source: opts.source.join(",") } : {}),
+            ...(opts.agent?.length ? { agent: opts.agent.join(",") } : {}),
+          },
+        },
+      }),
+    ),
+
   list: (
     uid: string,
     opts: { limit: number; cursor?: string | null; q?: string },

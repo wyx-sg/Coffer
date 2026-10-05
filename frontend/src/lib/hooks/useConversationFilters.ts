@@ -1,16 +1,11 @@
 // src/lib/hooks/useConversationFilters.ts — the Conversations page's filters,
-// kept in the URL's search params (source / agent / archived / q) so a
+// kept in the URL's search params (source / agent / q) so a
 // filtered list survives a reload, is a link, and follows the user from the
 // list into a conversation and back. See lib/conversations/filters.
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import {
-  filtersSearch,
-  hasLegacyChannel,
-  parseFilters,
-  type ConversationFilters,
-} from "@/lib/conversations/filters";
+import { filtersSearch, parseFilters, type ConversationFilters } from "@/lib/conversations/filters";
 
 export function useConversationFilters() {
   const [params, setParams] = useSearchParams();
@@ -24,10 +19,5 @@ export function useConversationFilters() {
       setParams(new URLSearchParams(filtersSearch(next)), { replace: true }),
     [setParams],
   );
-  // `?channel=<uid>` is read once, as a source, and the address rewritten.
-  const legacy = hasLegacyChannel(params);
-  useEffect(() => {
-    if (legacy) setFilters(filters);
-  }, [legacy, filters, setFilters]);
   return { filters, setFilters, search };
 }

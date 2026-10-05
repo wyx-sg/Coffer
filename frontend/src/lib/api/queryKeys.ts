@@ -51,9 +51,6 @@ export const agentPluginsKey = (uid: string) => ["agents", uid, "plugins"] as co
 /** One plugin's detail — under the listing's key, so a toggle or uninstall that
  *  invalidates the listing refreshes the detail page too. */
 export const agentPluginKey = (uid: string, id: string) => ["agents", uid, "plugins", id] as const;
-/** The latest conversations one channel started (its Overview). */
-export const channelRecentConversationsKey = (uid: string) =>
-  ["channels", uid, "recent-conversations"] as const;
 export const agentUnmanagedSkillsKey = (uid: string) =>
   ["agents", uid, "unmanaged-skills"] as const;
 /** One unmanaged folder's preview — nested under the list key, so adopting or
@@ -192,19 +189,16 @@ export const memoryReadingKey = ["memory", "reading"] as const;
  *  pass ending must not drag a kind's whole subtree into the same invalidation. */
 export const upkeepRunsKey = ["upkeep", "runs"] as const;
 
-// --- chat — the channel conversations list ---
+// --- agent sessions — every agent's sessions in one list (the Conversations page) ---
 
-export const conversationsKey = ["conversations"] as const;
-/** The list's channel and agent pills: part of its key, in a stable order. */
-type ListNarrowing = { source?: readonly string[]; agent?: readonly string[] };
-const narrowKey = ({ source = [], agent = [] }: ListNarrowing) => ({
-  source: [...source].sort(),
-  agent: [...agent].sort(),
-});
+export const allAgentSessionsKey = ["agent-sessions"] as const;
 
-/** The pages a conversation list has read so far, for one view (search text, channels, agents). */
-export const conversationPagesKey = (q: string, narrow: ListNarrowing = {}) =>
-  ["conversations", "lists", "pages", { q, ...narrowKey(narrow) }] as const;
+/** The pages the cross-agent list has read so far, for one view (search text, sources, agents). */
+export const allAgentSessionPagesKey = (
+  q: string,
+  { source = [], agent = [] }: { source?: readonly string[]; agent?: readonly string[] } = {},
+) =>
+  ["agent-sessions", "pages", { q, source: [...source].sort(), agent: [...agent].sort() }] as const;
 
 // --- secrets — the secret boundary's approvals -------------------------
 export const secretsKey = ["secrets"] as const;

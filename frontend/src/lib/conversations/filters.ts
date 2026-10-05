@@ -1,14 +1,14 @@
 // src/lib/conversations/filters.ts
-// The Conversations page's filters (spec chat "Show channel conversations on
-// the Conversations page"): the title-and-directory search, the channels and
-// the agents, read from and written to the URL so a filtered list is a link
-// (a channel's "Conversations from this channel" opens
+// The Conversations page's filters (spec chat "Show every agent's sessions on
+// the Conversations page"): the title-and-directory search, the sources (`local`
+// and channel uids) and the agents, read from and written to the URL so a
+// filtered list is a link (a channel's "Conversations from this channel" opens
 // `/conversations?source=<uid>`). The server applies every one of them (the
 // list asks for `source`, `agent` and `q` with each page); this module only
 // reads and writes the URL.
 
 export interface ConversationFilters {
-  /** Channel uids; empty means every channel. */
+  /** `local` (this Mac) and channel uids; empty means every source. */
   source: string[];
   /** Agent keys (`claude_code`, `codex`); empty means every agent. */
   agent: string[];
@@ -20,17 +20,15 @@ const list = (raw: string | null): string[] =>
   Array.from(new Set((raw ?? "").split(",").filter(Boolean)));
 
 export function parseFilters(params: URLSearchParams): ConversationFilters {
-  const source = list(params.get("source"));
-  // A link from before channels were a pill: `?channel=<uid>` is one source.
-  const legacy = params.get("channel");
-  if (legacy && !source.includes(legacy)) source.push(legacy);
-  return { source, agent: list(params.get("agent")), q: params.get("q") ?? "" };
+  return {
+    source: list(params.get("source")),
+    agent: list(params.get("agent")),
+    q: params.get("q") ?? "",
+  };
 }
 
-/** Whether the URL still spells a filter the old way (and should be rewritten once). */
-export function hasLegacyChannel(params: URLSearchParams): boolean {
-  return params.has("channel");
-}
+/** The source value for sessions that were not started by a channel. */
+export const LOCAL_SOURCE = "local";
 
 /** The query string for `filters` — a default is never spelled out. */
 export function filtersSearch(filters: ConversationFilters): string {
@@ -43,7 +41,7 @@ export function filtersSearch(filters: ConversationFilters): string {
   return s ? `?${s}` : "";
 }
 
-/** Whether anything narrows the list: a channel, an agent or a search. */
+/** Whether anything narrows the list: a source, an agent or a search. */
 export function isFiltered(filters: ConversationFilters): boolean {
   return filters.source.length > 0 || filters.agent.length > 0 || filters.q.trim() !== "";
 }

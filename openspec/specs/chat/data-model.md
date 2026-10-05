@@ -22,16 +22,19 @@ the migration that removed the web chat deleted the rows that had none.
 | `title` | TEXT, NOT NULL | Opens as a placeholder; replaced by the first user message's own words, unless the owner renamed it first. The owner's rename also renames the agent's native session (see "Rename and delete a conversation through its agent"). |
 | `agent_config` | TEXT, NULL | JSON of the provider-owned `AgentConfig`. NULL = none stored yet. |
 | `created_at` | TIMESTAMP | |
-| `updated_at` | TIMESTAMP | Bumped at turn **start** and again at turn **finalise** (see "List conversations by latest activity"). |
+| `updated_at` | TIMESTAMP | Bumped at turn **start** and again at turn **finalise**, so a channel conversation sorts by its latest activity in the Conversations list (agent-registry "List every agent's sessions in one list"). |
 | `channel_uid` | TEXT | The **uid** of the channel that owns this thread. A uid and not a name, because a binding has to keep naming the same channel after the user renames it (ADR resource-identity-is-an-immutable-uid); the label a person or an agent reads is resolved from it at read time. Nothing delivers a reply to it from the web any more. |
 | `peer_chat_id` | TEXT | The chat id inside that channel. |
 
-Index: `idx_conversations_updated (updated_at)` — the recency ordering of
-"List conversations by latest activity".
+Index: `idx_conversations_updated (updated_at)` — the recency ordering of a
+channel's conversations when the Conversations list is narrowed to channels
+(agent-registry "List every agent's sessions in one list"); otherwise the list
+is each agent's own session listing, merged.
 
-### What a listed conversation carries beyond its row
+### What a conversation carries beyond its row
 
-`ConversationOut` (the chat contract) adds fields read at request time, never
+`ConversationOut` (the chat contract, the single-conversation read) and a
+channel-narrowed row of the session listing add fields read at request time, never
 stored on the row. Each is read once for a whole page — the agents' names, the
 channels and the places of the channel-bound conversations are one query each —
 so a longer page costs no more queries.

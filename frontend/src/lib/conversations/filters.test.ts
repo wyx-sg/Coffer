@@ -1,10 +1,10 @@
 // src/lib/conversations/filters.test.ts
 import { describe, expect, it } from "vitest";
 
-import { clearFilters, filtersSearch, hasLegacyChannel, isFiltered, parseFilters } from "./filters";
+import { clearFilters, filtersSearch, isFiltered, parseFilters } from "./filters";
 
 describe("conversation filters", () => {
-  it("reads channels, agents and the search from the URL", () => {
+  it("reads sources, agents and the search from the URL", () => {
     expect(parseFilters(new URLSearchParams("source=ch1,ch2&agent=codex&q=sentry"))).toEqual({
       source: ["ch1", "ch2"],
       agent: ["codex"],
@@ -20,15 +20,10 @@ describe("conversation filters", () => {
     expect(parseFilters(new URLSearchParams(filtersSearch(f)))).toEqual(f);
   });
 
-  it("reads a legacy ?channel=<uid> as one source", () => {
-    const params = new URLSearchParams("channel=ch1&agent=codex");
-    expect(hasLegacyChannel(params)).toBe(true);
-    const f = parseFilters(params);
-    expect(f.source).toEqual(["ch1"]);
-    // Written back, the legacy key is gone.
-    expect(filtersSearch(f)).toBe("?source=ch1&agent=codex");
-    expect(hasLegacyChannel(new URLSearchParams(filtersSearch(f)))).toBe(false);
-    expect(parseFilters(new URLSearchParams("source=ch1&channel=ch1")).source).toEqual(["ch1"]);
+  it("reads `local` as a source beside channel uids", () => {
+    const f = parseFilters(new URLSearchParams("source=local,ch1"));
+    expect(f.source).toEqual(["local", "ch1"]);
+    expect(filtersSearch(f)).toBe("?source=local,ch1");
   });
 
   it("counts a channel, an agent or a search as narrowing, and clears them all", () => {

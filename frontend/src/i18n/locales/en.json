@@ -3172,7 +3172,7 @@
     }
   },
   "conversations": {
-    "subtitle": "The conversations your channels started.",
+    "subtitle": "Every session of every agent, wherever it was started.",
     "title": "Conversations",
     "group": {
       "today": "Today",
@@ -3183,12 +3183,15 @@
       "ariaLabel": "Conversations",
       "loadFailed": "Couldn’t load conversations",
       "emptyTitle": "No conversations yet",
-      "emptyBody": "Conversations appear here when you message one of your channels from SeaTalk or Telegram.",
+      "emptyBody": "Sessions appear here once an agent has one: started in a terminal, by a channel, or with New conversation.",
       "noMatches": "No conversations match",
-      "clearFilters": "Clear filters"
+      "clearFilters": "Clear filters",
+      "unavailable_one": "Couldn’t read {{agents}}’s sessions",
+      "unavailable_other": "Couldn’t read the sessions of {{agents}}"
     },
     "filters": {
-      "channel": "Channel",
+      "source": "Source",
+      "thisMac": "This Mac",
       "agent": "Agent",
       "search": "Search titles and directories"
     },
@@ -3234,6 +3237,13 @@
       "stop": "Stop the turn and continue in the terminal",
       "stopping": "Stopping…",
       "failed": "Couldn’t stop the turn"
+    },
+    "columns": {
+      "title": "Title",
+      "source": "Source",
+      "agent": "Agent",
+      "directory": "Directory",
+      "lastActive": "Last active"
     }
   },
   "channels": {
@@ -3428,9 +3438,7 @@
         "help": "Each message becomes a conversation in Conversations, on the default agent unless /new names another.",
         "reachHint": "/new <agent> in a chat picks only from these."
       },
-      "conversations": "Conversations from {{name}}",
-      "allConversations": "Open Conversations",
-      "noConversations": "No conversations yet."
+      "conversationsLink": "Conversations from this channel →"
     },
     "settings": {
       "connection": {
@@ -5996,5 +6004,17 @@
     "opened": "Opened in {{terminal}}",
     "copyCommand": "Copy command",
     "commandCopied": "Command copied"
+  },
+  "newConversation": {
+    "button": "New conversation",
+    "noAgent": "No managed agent yet. Add one in Agents first.",
+    "title": "New conversation",
+    "description": "Starts a blank session in a terminal window on this machine.",
+    "agent": "Agent",
+    "directory": "Working directory",
+    "directoryHint": "Defaults to Coffer's workspace.",
+    "workspacePlaceholder": "~/.coffer/content/workspace",
+    "openIn": "Open in {{terminal}}",
+    "moreTerminals": "Open in another terminal"
   }
 }
