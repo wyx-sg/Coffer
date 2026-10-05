@@ -81,7 +81,7 @@ The ways a turn can end early are told apart by marks on the in-flight turn, set
 | Cause | How it is signalled | Outcome |
 | --- | --- | --- |
 | Owner interrupt (`POST .../interrupt`, `/stop` in a channel, **Stop** in the list) | The turn is marked interrupted; the queue is paused | `turn_done` with `stop_reason: "interrupted"`; the output so far is delivered to the channel as events. |
-| Conversation deleted | The turn is marked discarded | The turn is cancelled; the bus closes every subscriber. |
+| Conversation deleted | The turn is marked discarded | The turn is cancelled; the bus closes every subscriber. The delete waits for the turn's agent process to exit before asking the agent to delete the session, because Codex refuses to delete a thread a live process still holds. |
 | Daemon shutdown | Neither mark | `turn_error` `daemon_stopped`. |
 
 Stopping every turn is a step of the daemon's teardown and runs before the database closes. It closes the door first (no turn may start afterwards and every queue is paused, so a cancelled turn's end does not start the next one), cancels every running turn, and waits up to five seconds for them. A daemon that dies outright leaves nothing behind to clean up: the next channel message resumes the agent's session.
