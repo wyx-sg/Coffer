@@ -15,12 +15,11 @@
 // that has no primary action leaves the row inert.
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, Pencil, Square, SquareTerminal, Trash2 } from "lucide-react";
+import { Pencil, Square, Trash2 } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { StatusWord } from "@/components/status/StatusWord";
 import { Button } from "@/components/ui/button";
-import { SplitButton } from "@/components/ui/split-button";
 import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { abbreviateHomePath } from "@/lib/agents/display";
@@ -29,6 +28,7 @@ import type { SessionRowData } from "@/lib/sessions/rows";
 import type { TerminalChoice } from "@/lib/hooks/useTerminals";
 import { cn } from "@/lib/utils";
 import { GRID, type SessionColumns } from "./columns";
+import { SessionOpenButton } from "./SessionOpenButton";
 import { SourceBadge } from "./SourceBadge";
 
 interface Props {
@@ -139,22 +139,6 @@ export function SessionRow({
     },
   ];
 
-  const openActions: MenuAction[] = otherTerminals.map((other) => ({
-    key: `terminal:${other.value}`,
-    label: t("sessions.row.openIn", { terminal: other.label }),
-    icon: SquareTerminal,
-    onSelect: () => onPrimaryAction?.(row, other.value),
-  }));
-  if (onCopyCommand) {
-    openActions.push({
-      key: "copy-command",
-      label: t("sessions.row.copyCommand"),
-      icon: Copy,
-      separated: openActions.length > 0,
-      onSelect: () => onCopyCommand(row),
-    });
-  }
-
   return (
     <li
       tabIndex={openable ? 0 : -1}
@@ -233,19 +217,13 @@ export function SessionRow({
           </Button>
         ) : null}
         {onPrimaryAction ? (
-          <SplitButton
-            size="sm"
-            icon={<SquareTerminal aria-hidden />}
-            label={
-              terminalLabel
-                ? t("sessions.row.openIn", { terminal: terminalLabel })
-                : t("sessions.row.open")
-            }
-            disabled={!openable}
-            tooltip={openable ? undefined : t("sessions.row.noSession")}
-            onClick={() => onPrimaryAction(row)}
-            menuLabel={t("sessions.row.openOptions", { title: row.title })}
-            actions={openable ? openActions : []}
+          <SessionOpenButton
+            row={row}
+            openable={openable}
+            terminalLabel={terminalLabel}
+            otherTerminals={otherTerminals}
+            onOpen={onPrimaryAction}
+            onCopyCommand={onCopyCommand}
           />
         ) : null}
         <ActionMenu label={t("sessions.row.moreActions", { title: row.title })} actions={actions} />
