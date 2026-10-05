@@ -103,42 +103,16 @@ describe("MemoryPage", () => {
     expect(screen.getByRole("button", { name: /update memory/i }).className).toMatch(/bg-accent/);
   });
 
-  test("the header says how and when memory was last read, with the schedule behind Update memory's arrow", async () => {
+  test("idle, the header shows no status line, with the schedule behind Update memory's arrow", async () => {
     stub([COFFER]);
     renderPage();
-    expect(await screen.findByTestId("memory-status")).toHaveTextContent(
-      /^Reads automatically every hour · 14m ago$/,
-    );
     const arrow = await screen.findByTestId("memory-automatic");
     expect(arrow).toHaveAccessibleName("Read memory automatically");
-    expect(screen.queryByText(/^Automatic · /)).toBeNull();
+    expect(screen.queryByTestId("memory-status")).toBeNull();
+    expect(screen.queryByText(/Reads automatically/)).toBeNull();
   });
 
-  test("with automatic reading off the status is just when memory was last read", async () => {
-    stub([COFFER]);
-    vi.mocked(internalEngineApi.get).mockResolvedValue({
-      upkeep: {
-        aggregate: {
-          enabled: false,
-          interval_s: null,
-          default_interval_s: 3600,
-          last_pass_at: ago(14),
-          next_pass_at: null,
-        },
-        distil: {
-          enabled: false,
-          interval_s: null,
-          default_interval_s: 21600,
-          last_pass_at: null,
-          next_pass_at: null,
-        },
-      },
-    } as unknown as Awaited<ReturnType<typeof internalEngineApi.get>>);
-    renderPage();
-    expect(await screen.findByTestId("memory-status")).toHaveTextContent(/^Read 14m ago$/);
-  });
-
-  test("a read that left an agent unread says so in the header and in a banner", async () => {
+  test("a read that left an agent unread says so in a banner", async () => {
     stub([COFFER]);
     vi.mocked(api.getReading).mockResolvedValue({
       read_at: ago(2),
@@ -152,7 +126,6 @@ describe("MemoryPage", () => {
       ],
     });
     renderPage();
-    expect(await screen.findByTestId("memory-status")).toHaveTextContent(/· 1 agent failed$/);
     const banner = await screen.findByTestId("memory-read-failures");
     expect(banner).toHaveTextContent(/Couldn't read Codex's memory:/);
     expect(banner).toHaveTextContent("~/.codex/memories");

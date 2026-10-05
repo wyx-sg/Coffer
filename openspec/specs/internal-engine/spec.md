@@ -302,9 +302,8 @@ per pass rather than per target.
 
 ### Requirement: Show and change the memory passes on the Memory page
 The web UI MUST show and change each unattended pass on the page whose content it upkeeps,
-not in Settings: the ▾ half of the page header's **Update memory** split button opens a popover,
-and the header's status line names the schedule ("Reads automatically every hour · 14 min ago";
-just "Read 14 min ago" while switched off). Edits MUST save
+not in Settings: the ▾ half of the page header's **Update memory** split button opens a popover;
+the header itself carries no schedule line. Edits MUST save
 on their own — a switch on toggle, an interval on selection — through
 `PUT /api/v1/internal-engine-config/upkeep`, one pass per request, and the interval's default
 option MUST name the real number.

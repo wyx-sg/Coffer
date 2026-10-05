@@ -133,6 +133,8 @@ export function ConversationsIndex() {
               agentNames={agentNames}
               stoppingId={stop.isPending ? (stop.variables ?? null) : null}
               onPrimaryAction={opener.open}
+              terminalLabel={opener.terminalLabel}
+              otherTerminals={opener.otherTerminals}
               onCopyCommand={opener.copyCommand}
               canOpen={opener.canOpen}
               onRename={onRename}

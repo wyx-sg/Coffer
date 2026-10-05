@@ -2,7 +2,9 @@
 // shared by the Conversations page and an agent's Sessions tab (spec chat "Open
 // a conversation in the terminal" and "Ask before opening a session that is
 // running"). The row's main action asks the daemon to resume its native session
-// in the preferred terminal; Copy command copies the same command line. A row
+// in the preferred terminal; its ▾ menu opens it in another terminal on this
+// machine instead (once — the preference stays), and Copy command copies the
+// same command line. A row
 // whose turn is running or waits on a question first opens a dialog: answer in
 // the chat, or stop the turn (the row's own Stop) and then open the terminal.
 // The caller renders `dialog` once beside its list.
@@ -14,7 +16,11 @@ import { useToast } from "@/components/ui/toast";
 import type { AgentType } from "@/lib/api/agents";
 import { platformName } from "@/lib/channels/platformName";
 import { useInterruptConversation } from "@/lib/hooks/useConversations";
-import { useOpenInTerminal } from "@/lib/hooks/useTerminals";
+import {
+  useOpenInTerminal,
+  useTerminalChoices,
+  type TerminalChoice,
+} from "@/lib/hooks/useTerminals";
 import type { SessionRowData } from "@/lib/sessions/rows";
 import { resumeCommand } from "@/lib/terminal/command";
 
@@ -25,8 +31,13 @@ function agentTypeOf(key: string | null | undefined): AgentType | null {
 
 /** The pieces of a list that opens its rows in a terminal. */
 export interface SessionOpener {
-  /** The row's main action; leaves a row without a session alone. */
-  open: (row: SessionRowData) => void;
+  /** The row's main action — or, given `terminal`, the ▾ pick of another
+   *  terminal; leaves a row without a session alone. */
+  open: (row: SessionRowData, terminal?: string) => void;
+  /** The preferred terminal's name ("Open in <terminal>"). */
+  terminalLabel: string;
+  /** The other terminals a row's ▾ menu offers. */
+  otherTerminals: TerminalChoice[];
   /** Copy the row's resume command; leaves a row without a session alone. */
   copyCommand: (row: SessionRowData) => void;
   /** Whether the row has a session to open (the split button is disabled otherwise). */
@@ -43,8 +54,11 @@ export function useOpenSession(agentType?: AgentType): SessionOpener {
   const { t } = useTranslation();
   const { toast } = useToast();
   const openTerminal = useOpenInTerminal();
+  const choices = useTerminalChoices();
   const stop = useInterruptConversation({ silent: true });
-  const [busy, setBusy] = useState<SessionRowData | null>(null);
+  // The busy row, and the terminal it was asked to open in (undefined: the preferred one).
+  const [pending, setPending] = useState<{ row: SessionRowData; terminal?: string } | null>(null);
+  const busy = pending?.row ?? null;
 
   const typeOf = useCallback(
     (row: SessionRowData) => agentType ?? agentTypeOf(row.agentKey),
@@ -68,22 +82,23 @@ export function useOpenSession(agentType?: AgentType): SessionOpener {
   );
 
   const start = useCallback(
-    async (row: SessionRowData) => {
+    async (row: SessionRowData, terminal?: string) => {
       const agent = typeOf(row);
       if (!row.sessionId || !agent) return;
       await openTerminal(
         { agent, cwd: row.cwd, resume: row.sessionId },
         { label: t("terminal.copyCommand"), onClick: () => copyCommand(row) },
+        terminal,
       );
     },
     [copyCommand, openTerminal, t, typeOf],
   );
 
   const open = useCallback(
-    (row: SessionRowData) => {
+    (row: SessionRowData, terminal?: string) => {
       if (!canOpen(row)) return;
-      if (row.running || row.needsYou) setBusy(row);
-      else void start(row);
+      if (row.running || row.needsYou) setPending({ row, terminal });
+      else void start(row, terminal);
     },
     [canOpen, start],
   );
@@ -94,7 +109,7 @@ export function useOpenSession(agentType?: AgentType): SessionOpener {
   const dialog = (
     <ConfirmDialog
       open={busy !== null}
-      onOpenChange={(next) => !next && setBusy(null)}
+      onOpenChange={(next) => !next && setPending(null)}
       title={t("sessions.busy.title")}
       description={t(busy?.needsYou ? "sessions.busy.waiting" : "sessions.busy.running", {
         platform,
@@ -106,13 +121,20 @@ export function useOpenSession(agentType?: AgentType): SessionOpener {
       variant="default"
       pending={stop.isPending}
       onConfirm={async () => {
-        const row = busy;
-        if (!row) return;
+        if (!pending) return;
+        const { row, terminal } = pending;
         if (row.conversationId) await stop.mutateAsync(row.conversationId);
-        void start(row);
+        void start(row, terminal);
       }}
     />
   );
 
-  return { open, copyCommand, canOpen, dialog };
+  return {
+    open,
+    copyCommand,
+    canOpen,
+    terminalLabel: choices.label,
+    otherTerminals: choices.others,
+    dialog,
+  };
 }

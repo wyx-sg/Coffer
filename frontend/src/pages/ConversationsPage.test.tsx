@@ -476,7 +476,7 @@ describe("Opening a conversation in the terminal", () => {
     session_id: "abc-123",
   });
   const openButton = (title: string) =>
-    within(row(title)).getByRole("button", { name: "Open in terminal" });
+    within(row(title)).getByRole("button", { name: /^Open in / });
 
   acceptance("chat", "a row opens its session in the preferred terminal", async () => {
     localStorage.setItem("coffer.preferredTerminal", "iterm");
@@ -516,6 +516,31 @@ describe("Opening a conversation in the terminal", () => {
       }),
     );
     expect(openTerminal).toHaveBeenCalledTimes(2);
+  });
+
+  acceptance("chat", "the ▾ menu opens the session in another terminal once", async () => {
+    localStorage.setItem("coffer.preferredTerminal", "iterm");
+    listed(alpha);
+    renderPage();
+    await screen.findByText("Alpha rollout");
+    expect(
+      await within(row("Alpha rollout")).findByRole("button", { name: "Open in iTerm" }),
+    ).toBeVisible();
+    fireEvent.click(
+      within(row("Alpha rollout")).getByRole("button", { name: "Open options for Alpha rollout" }),
+    );
+    // The other terminals on this machine, then Copy command; the preferred one is not repeated.
+    expect(screen.queryByRole("menuitem", { name: "Open in iTerm" })).toBeNull();
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Open in System terminal" }));
+    await waitFor(() =>
+      expect(openTerminal).toHaveBeenCalledWith({
+        agent: "claude_code",
+        cwd: "/work/api",
+        resume: "abc-123",
+        terminal: null,
+      }),
+    );
+    expect(localStorage.getItem("coffer.preferredTerminal")).toBe("iterm");
   });
 
   acceptance("web-ui", "the preferred terminal is sent only when a session opens", async () => {

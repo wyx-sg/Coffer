@@ -3155,10 +3155,6 @@
       "running": "正在提炼…"
     },
     "status": {
-      "read": "{{when}}读取",
-      "readAuto": "{{cadence}}自动读取 · {{when}}",
-      "failed_one": "{{count}} 个智能体读取失败",
-      "failed_other": "{{count}} 个智能体读取失败",
       "reading": "正在读取智能体的记忆…",
       "distilling": "正在提炼第 {{current}} / {{total}} 个分区"
     },
@@ -3217,6 +3213,7 @@
       "stopAria": "停止 {{title}}",
       "moreActions": "{{title}} 的更多操作",
       "open": "在终端中打开",
+      "openIn": "在 {{terminal}} 中打开",
       "noSession": "还没有会话：这个对话还没有运行过任何一轮。",
       "openOptions": "{{title}} 的打开选项",
       "copyCommand": "复制命令"
@@ -5964,11 +5961,6 @@
       "days_one": "{{count}} 天",
       "days_other": "{{count}} 天",
       "default": "默认（{{interval}}）"
-    },
-    "cadence": {
-      "hourly": "每小时",
-      "daily": "每天",
-      "every": "每 {{interval}}"
     }
   },
   "drawer": {

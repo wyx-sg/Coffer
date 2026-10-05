@@ -3155,10 +3155,6 @@
       "running": "Distilling…"
     },
     "status": {
-      "read": "Read {{when}}",
-      "readAuto": "Reads automatically {{cadence}} · {{when}}",
-      "failed_one": "{{count}} agent failed",
-      "failed_other": "{{count}} agents failed",
       "reading": "Reading agents’ memory…",
       "distilling": "Distilling {{current}} of {{total}} partitions"
     },
@@ -3217,6 +3213,7 @@
       "stopAria": "Stop {{title}}",
       "moreActions": "More actions for {{title}}",
       "open": "Open in terminal",
+      "openIn": "Open in {{terminal}}",
       "noSession": "No session yet: no turn has run on this conversation.",
       "openOptions": "Open options for {{title}}",
       "copyCommand": "Copy command"
@@ -5964,11 +5961,6 @@
       "days_one": "{{count}} day",
       "days_other": "{{count}} days",
       "default": "Default ({{interval}})"
-    },
-    "cadence": {
-      "hourly": "every hour",
-      "daily": "every day",
-      "every": "every {{interval}}"
     }
   },
   "drawer": {

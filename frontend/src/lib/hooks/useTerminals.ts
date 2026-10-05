@@ -45,9 +45,11 @@ export interface OpenFallback {
 export type OpenRequest = Omit<OpenTerminalBody, "terminal">;
 
 /**
- * Open an agent in the preferred terminal. Resolves true once the daemon has
- * started it (a toast says "Opened in <terminal>"), false when it refused: the
- * toast then carries the translated reason and `fallback` as the way out.
+ * Open an agent in the preferred terminal, or in `terminal` when one is named
+ * (a one-off pick from a ▾ menu; the preference stays). Resolves true once the
+ * daemon has started it (a toast says "Opened in <terminal>"), false when it
+ * refused: the toast then carries the translated reason and `fallback` as the
+ * way out.
  */
 export function useOpenInTerminal() {
   const { t } = useTranslation();
@@ -55,8 +57,8 @@ export function useOpenInTerminal() {
   const { data: detected = [] } = useDetectedTerminals();
 
   return useCallback(
-    async (request: OpenRequest, fallback: OpenFallback): Promise<boolean> => {
-      const terminal = getPreferredTerminal();
+    async (request: OpenRequest, fallback: OpenFallback, chosen?: string): Promise<boolean> => {
+      const terminal = chosen ?? getPreferredTerminal();
       const label = labelOf(t, detected, terminal);
       try {
         await fsApi.openTerminal({ ...request, terminal: terminal || null });
@@ -78,4 +80,28 @@ export function useTerminalLabel(): string {
   const { t } = useTranslation();
   const { data: detected = [] } = useDetectedTerminals();
   return labelOf(t, detected, usePreferredTerminal());
+}
+
+/** @ui-only A terminal a ▾ menu offers: its preference value ("" = the system terminal) and name. */
+export interface TerminalChoice {
+  value: string;
+  label: string;
+}
+
+/**
+ * The preferred terminal's name, and the other terminals on this machine — the
+ * system terminal and every detected one — for an "Open in <other>" menu.
+ */
+export function useTerminalChoices(): { label: string; others: TerminalChoice[] } {
+  const { t } = useTranslation();
+  const { data: detected = [] } = useDetectedTerminals();
+  const preferred = usePreferredTerminal();
+  const all: TerminalChoice[] = [
+    { value: "", label: t("terminal.system") },
+    ...detected.map((d) => ({ value: d.value, label: d.label })),
+  ];
+  return {
+    label: labelOf(t, detected, preferred),
+    others: all.filter((c) => c.value !== preferred),
+  };
 }

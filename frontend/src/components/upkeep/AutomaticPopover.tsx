@@ -36,14 +36,6 @@ function intervalName(t: Translate, seconds: number): string {
   return t("upkeep.interval.minutes", { count: Math.round(seconds / 60) });
 }
 
-/** "every hour", "every 6 hours" — how often a pass runs, for a status line. */
-export function cadenceName(t: Translate, setting: UpkeepSetting): string {
-  const seconds = setting.interval_s ?? setting.default_interval_s;
-  if (seconds === 3600) return t("upkeep.cadence.hourly");
-  if (seconds === 86400) return t("upkeep.cadence.daily");
-  return t("upkeep.cadence.every", { interval: intervalName(t, seconds) });
-}
-
 /** "Last pass 2 h ago · next in 58 min" — each half left out when unknown. */
 export function clockLine(
   t: Translate,

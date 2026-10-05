@@ -86,7 +86,7 @@ Coffer sends no memory content to any model. Aggregation, distil and delivery st
 
 ### Change the schedule
 
-In the Memory header, the **▾** on **Update memory** (the read button's own arrow) opens a popover with one switch, **Read memory automatically**, and an interval. The switch turns aggregation and distil on or off together; the interval is how often the agents' memory is read, and distil keeps its own slower interval. The popover also says when the memory was last read and when the next read is due. The header shows how and when the agents' memory was last read (*Reads automatically every hour · 14 min ago*, or *Read 14 min ago* with automatic reading off), and says so when an agent's memory could not be read: a warning banner then names the agent and the path, with **Retry** and **Hand off to &lt;Agent&gt; ▾**, whose prompt asks an agent to fix the read permission; while **Update memory** runs it reads *Distilling 2 of 5 partitions*.
+In the Memory header, the **▾** on **Update memory** (the read button's own arrow) opens a popover with one switch, **Read memory automatically**, and an interval. The switch turns aggregation and distil on or off together; the interval is how often the agents' memory is read, and distil keeps its own slower interval. The popover also says when the memory was last read and when the next read is due. When an agent's memory could not be read, a warning banner names the agent and the path, with **Retry** and **Hand off to &lt;Agent&gt; ▾**, whose prompt asks an agent to fix the read permission; while **Update memory** runs the header reads *Distilling 2 of 5 partitions*.
 
 A change applies without a restart. The popover offers 15 minutes to 1 day; the settings API accepts down to 60 seconds.
 
