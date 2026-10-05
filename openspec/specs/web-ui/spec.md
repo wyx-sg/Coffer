@@ -2001,8 +2001,8 @@ The page MUST carry:
 - **List and detail** — the page is a split view like the other library pages:
   `/secrets/<id>` with the list on the left and the chosen secret on the
   right. A list row shows the secret's label — or, without one, the first
-  citer's name and the slot, never a hex id — with its description as a muted
-  second line, its status (missing on this Mac, waiting for approval) and how
+  citer's name and the slot, never a hex id — on one line with no description
+  (that is in the detail's header), its status (missing on this Mac, waiting for approval) and how
   many things use it; search matches the label, description and id. The
   detail's header holds the label and description, each edited in place (spec
   [secret](../secret/spec.md) "Label and describe a secret without changing its
@@ -2177,7 +2177,10 @@ MUST offer the daemon's hand-off prompt (spec skill-manager "Hand a required
 command to an agent with a prompt") through the hand-off split button of "Hand a machine-dependent problem to an agent with one split button"
 — **Hand off to <Agent>** starts the hand-off agent in the preferred terminal with the prompt sent, and **Copy prompt** copies it;
 with no managed agent available only Copy prompt is offered. The page's **Check again** probes every command afresh, and the banner that
-states a problem re-checks that one tool. A CLI a person added keeps **Edit** and a
+states a problem re-checks that one tool. Under the header's meta line every CLI —
+added by hand or required — carries its description, edited in place (leaving the
+field or Enter saves, an empty field clears it; spec skill-manager "Declare a
+command-line tool without a skill"). A CLI a person added keeps **Edit** and a
 **⋯** menu with **Remove** (a 420-wide confirmation saying the tool stays
 installed on this machine); a CLI a skill or MCP server requires has neither, so
 its header's right side is empty. **Add CLI** opens a 480-wide form for a command
@@ -2240,6 +2243,11 @@ is probed are specified by skill-manager; this page shows what they report.
 - **WHEN** the user opens Overview
 - **THEN** an attention item names the CLI and the problem, and its name and its Check action open the CLI's page
 - **AND** once the daemon's list no longer reports it — every required CLI present, current and logged in — the item is gone
+
+#### Scenario: a required CLI's description is edited in place
+- **GIVEN** `uv`, required by a skill and not added by hand
+- **WHEN** the user opens `/clis/uv`, types a description under the header and leaves the field
+- **THEN** the page saves that description for `uv`, trimmed, with no Edit dialog
 
 ### Requirement: Resize every split view by its divider
 Every split view — a list beside its detail, a file tree beside its file, and the sidebar beside the workspace — MUST
@@ -2875,8 +2883,8 @@ A knowledge document's ⋯ menu and a managed skill's ⋯ menu (not the builtin 
 The Skills page MUST follow canvas 4.3: a compact header (title, help) over the
 library beside a reading pane. The library MUST group skills under **Needs
 attention**, **In use**, **Off** and **Built-in**, without counts in the group
-titles; a row MUST show, in place of its description, the one thing that needs the
-reader, and an Off row carries no reach word. The library offers a search, which
+titles; a row MUST show no description (it is on the skill's page) and, as a second
+line, only the one thing that needs the reader, and an Off row carries no reach word. The library offers a search, which
 applies to the built-in skills too, and a reach filter — all skills, or the skills
 that reach one chosen agent — but no filter by kind. Rows ticked
 for bulk actions MUST show the selection as a bar above the list ("N of M
@@ -2929,7 +2937,7 @@ validates its source inline and MUST carry the Available to reach control.
 #### Scenario: a library row says what needs attention in place of its description
 - **GIVEN** a skill whose declared command is missing and a Git skill with an update waiting
 - **WHEN** the user opens the Skills page
-- **THEN** the first row reads "Needs <command> · not installed" and the second "Update available" where their descriptions would be
+- **THEN** the first row reads "Needs <command> · not installed" and the second "Update available" under their names, and a row with nothing to say shows its name alone
 
 #### Scenario: selected skills are set or deleted together from the bar above the list
 - **GIVEN** the built-in skill and two of the user's skills

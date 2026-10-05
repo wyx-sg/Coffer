@@ -273,7 +273,7 @@ describe("SecretsPage", () => {
     expect(screen.getAllByTestId("where")[0]).toHaveTextContent(at(SEATALK.ref));
   });
 
-  test("a secret with a label is listed and searched by it, with its description", async () => {
+  test("a secret with a label is listed by it alone and searched by its description too", async () => {
     api.list.mockResolvedValue({
       refs: [
         {
@@ -286,7 +286,7 @@ describe("SecretsPage", () => {
     });
     renderPage();
     expect(await screen.findByText("Jira PAT")).toBeInTheDocument();
-    expect(screen.getByText("release bot's token")).toBeInTheDocument();
+    expect(screen.queryByText("release bot's token")).not.toBeInTheDocument();
     expect(screen.queryByText(HEX)).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Find a secret" }), {
       target: { value: "RELEASE" },

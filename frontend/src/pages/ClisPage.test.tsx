@@ -302,6 +302,19 @@ describe("ClisPage", () => {
     },
   );
 
+  acceptance("web-ui", "a required CLI's description is edited in place", async () => {
+    api.list.mockResolvedValue(listOf([UV_READY]));
+    api.edit.mockResolvedValue({ ...UV_READY, description: "Runs Python tools." });
+    renderPage("/clis/uv");
+    const field = await screen.findByRole("textbox", { name: "Description" });
+    expect(field).toHaveAttribute("placeholder", "What this tool is for");
+    fireEvent.change(field, { target: { value: "  Runs Python tools.  " } });
+    fireEvent.blur(field);
+    await waitFor(() =>
+      expect(api.edit).toHaveBeenCalledWith("uv", { description: "Runs Python tools." }),
+    );
+  });
+
   test("a command nothing knows says so", async () => {
     const { ApiError } = await import("@/lib/api/errors");
     api.get.mockRejectedValue(new ApiError("CLI_NOT_KNOWN", "nope"));

@@ -53,7 +53,8 @@ class CliLoginOut(BaseModel):
 class CliOut(BaseModel):
     command: str
     title: str | None
-    #: What the person wrote about it when they added the tool by hand.
+    #: What the person wrote about it — when they added it by hand, or on its
+    #: page for a tool a skill or MCP server requires.
     description: str | None
     #: The person added this tool by hand (alone or besides a skill that
     #: requires it); ``needed_by`` and ``needed_by_servers`` may both be empty.
@@ -107,7 +108,8 @@ class CliAddIn(BaseModel):
 
 
 class CliEditIn(BaseModel):
-    """Change a hand-added tool; a field left out stays, ``null`` clears it."""
+    """Change a hand-added tool; a field left out stays, ``null`` clears it.
+    A tool a skill or MCP server requires takes only ``description``."""
 
     title: str | None = None
     description: str | None = None

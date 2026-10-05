@@ -109,7 +109,9 @@ async def edit_cli(
     actor: str = Depends(get_actor),
 ) -> CliOut:
     """Change a tool added by hand; a field left out stays, ``null`` clears it.
-    404 ``CLI_TOOL_NOT_DECLARED`` for a tool no one added by hand."""
+    A tool a skill or MCP server requires takes only ``description``: any
+    other field is 404 ``CLI_TOOL_NOT_DECLARED``, and a command nobody lists
+    is 404 ``CLI_NOT_KNOWN``."""
     changes = {k: getattr(body, k) for k in body.model_fields_set}
     return cli_out(await tools.edit(command, changes, actor=actor))
 

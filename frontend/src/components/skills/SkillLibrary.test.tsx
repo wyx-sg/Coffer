@@ -77,9 +77,9 @@ describe("SkillLibrary", () => {
     expect(within(group("Built-in")!).getByTestId("skill-builtin-badge")).toBeInTheDocument();
   });
 
-  test("a row shows its description unless something needs saying, and Off rows carry no reach word", () => {
+  test("a row shows no description, and Off rows carry no reach word", () => {
     renderLibrary();
-    expect(within(group("In use")!).getByText("Say hello nicely.")).toBeInTheDocument();
+    expect(within(group("In use")!).queryByText("Say hello nicely.")).toBeNull();
     expect(names(group("Off")!).every((n) => !n?.includes("Off"))).toBe(true);
   });
 

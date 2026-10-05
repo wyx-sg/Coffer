@@ -1,7 +1,9 @@
 """Where the command-line tools a person added by hand are kept.
 
 The declarations are a vault state document, ``state/cli-tools/tools.json`` —
-machine-independent, so they travel with the vault. Where a tool was found on
+machine-independent, so they travel with the vault. The same document keeps,
+under ``notes``, the description a person wrote for a tool they did not add (one
+a skill or MCP server requires). Where a tool was found on
 this machine (when it was added by an absolute path) is machine-local state
 under ``local/`` and never synced.
 """
@@ -31,11 +33,41 @@ class VaultCliToolRepo:
         tools = (from_document(entry) for entry in doc.get("tools", []))
         return sorted((t for t in tools if t is not None), key=lambda t: t.command)
 
+    def notes(self) -> dict[str, str]:
+        """The descriptions written for tools nobody added by hand, by command."""
+        raw = (self._doc.get() or {}).get("notes")
+        if not isinstance(raw, dict):
+            return {}
+        return {k: v for k, v in raw.items() if isinstance(k, str) and isinstance(v, str) and v}
+
     def save(self, tools: list[DeclaredTool], *, summary: str, actor: str | None = None) -> None:
-        if not tools:
+        self._write(tools, self.notes(), summary=summary, actor=actor)
+
+    def set_note(
+        self, command: str, text: str | None, *, summary: str, actor: str | None = None
+    ) -> None:
+        """Keep ``text`` as ``command``'s description; ``None`` drops it."""
+        notes = self.notes()
+        if text is None:
+            notes.pop(command, None)
+        else:
+            notes[command] = text
+        self._write(self.all(), notes, summary=summary, actor=actor)
+
+    def _write(
+        self,
+        tools: list[DeclaredTool],
+        notes: dict[str, str],
+        *,
+        summary: str,
+        actor: str | None,
+    ) -> None:
+        if not tools and not notes:
             self._doc.remove(summary=summary, actor=actor)
             return
         body: dict[str, Any] = {"tools": [to_document(t) for t in sorted_tools(tools)]}
+        if notes:
+            body["notes"] = dict(sorted(notes.items()))
         self._doc.put(body, summary=summary, actor=actor)
 
 

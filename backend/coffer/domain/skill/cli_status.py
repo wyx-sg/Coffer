@@ -16,7 +16,7 @@ version that cannot be read is reported as unknown, never as outdated.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -145,8 +145,12 @@ def aggregate(
     servers: Iterable[ServerLauncher] = (),
     declared: Iterable[DeclaredTool] = (),
     coffer: Iterable[CofferNeed] = (),
+    notes: Mapping[str, str] | None = None,
 ) -> list[RequiredCommand]:
-    """One :class:`RequiredCommand` per command, sorted by command name."""
+    """One :class:`RequiredCommand` per command, sorted by command name.
+    ``notes`` are descriptions written for tools nobody added by hand; a
+    hand-added tool's own description wins."""
+    notes = notes or {}
     by_declared = {d.command: d for d in declared}
     by_coffer = {c.command: c for c in coffer}
     by_command: dict[str, list[tuple[str, str, CommandRequirement]]] = {}
@@ -165,6 +169,7 @@ def aggregate(
             by_server.get(command, ()),
             by_declared.get(command),
             by_coffer.get(command),
+            notes.get(command),
         )
         for command in sorted(
             by_command.keys() | by_server.keys() | by_declared.keys() | by_coffer.keys()
@@ -178,6 +183,7 @@ def _row(
     servers: Sequence[ServerLauncher] = (),
     declared: DeclaredTool | None = None,
     coffer: CofferNeed | None = None,
+    note: str | None = None,
 ) -> RequiredCommand:
     reqs = [req for _uid, _name, req in entries]
     own = declared or DeclaredTool(command)
@@ -195,7 +201,7 @@ def _row(
         ),
         needed_by_servers=tuple(servers),
         added=declared is not None,
-        description=own.description,
+        description=own.description or note,
         needed_by_coffer=coffer.uses if coffer else (),
     )
 
