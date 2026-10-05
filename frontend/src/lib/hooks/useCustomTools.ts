@@ -95,6 +95,7 @@ export function useCreateCustomToolGroup() {
   const notice = useApprovalNotice();
   return useMutation({
     mutationFn: (body: CustomToolGroupIn) => customToolsApi.create(body),
+    meta: { secretDestination: (group: unknown) => (group as CustomToolGroup).uid },
     onSuccess: (group) => {
       settle(qc, group);
       notice(group);
@@ -108,6 +109,7 @@ export function useUpdateCustomToolGroup(name: string) {
   const notice = useApprovalNotice();
   return useMutation({
     mutationFn: (body: CustomToolGroupPatch) => customToolsApi.update(name, body),
+    meta: { secretDestination: (group: unknown) => (group as CustomToolGroup).uid },
     onSuccess: (group) => {
       settle(qc, group);
       notice(group);
@@ -242,6 +244,7 @@ export function useApplyReimport(group: string) {
   return useMutation({
     mutationFn: ({ add, document }: { add: string[]; document?: string }) =>
       customToolsApi.applyReimport(group, add, document),
+    meta: { secretDestination: (next: unknown) => (next as CustomToolGroup).uid },
     onSuccess: (next) => settle(qc, next),
   });
 }

@@ -158,7 +158,7 @@ flowchart LR
 
 - **关闭保护**（`secrets.require_approval`）。开启则立即生效。
 
-批准需要存在性授权。拒绝不需要——拒绝只会缩小 Coffer 做的事——并且在每个界面都能操作。桌面应用会为每一项新的待批准弹出通知，并打开一个面板供你处理；改动让某个密钥进入等待的命令会打印 `waiting for approval in the Coffer app` 并以 `9` 退出。多条批准可以在一次存在性验证下一并处理：授权是针对你看到的那份批准及其目标的摘要签名的，因此它只批准那份清单，其间目标发生变化的项会被跳过（见[密钥 → 一次处理多条](/zh/guides/secrets#answering-several-at-once)）。见[密钥 → 批准](/zh/guides/secrets#approvals)。
+批准需要存在性授权。拒绝不需要——拒绝只会缩小 Coffer 做的事——并且在每个界面都能操作。桌面应用会为每一项新的待批准弹出通知，并打开一个面板供你处理；改动让某个密钥进入等待的命令会打印 `waiting for approval in the Coffer app` 并以 `9` 退出。多条批准可以在一次存在性验证下一并处理：授权是针对你看到的那份批准及其目标的摘要签名的，因此它只批准那份清单，其间目标发生变化的项会被跳过（见[密钥 → 一次处理多条](/zh/guides/secrets#answering-several-at-once)）。用户在桌面应用里保存的改动，会把这次校验当作保存的一部分：页面请求桌面壳只批准这次保存在它自己的目标上留下的那些绑定，于是批准就是保存时的一次 Touch ID，而不是另开一个面板——daemon 仍然分不清这个请求和智能体的请求，证明有人在场的是那份授权（见[密钥 → 你在桌面应用里做的改动](/zh/guides/secrets#approve-on-save)）。见[密钥 → 批准](/zh/guides/secrets#approvals)。
 
 ### 放置位置也是审批的一部分 {#placement}
 

@@ -225,6 +225,37 @@ its approval sheet opens.
 - **WHEN** the shell polls twice
 - **THEN** it raises one notification for it, and none for an approval it already announced
 
+### Requirement: Approve a save's own binding on the spot
+When the person saves a change in the desktop app that leaves a secret's
+binding waiting for approval ([secret](../secret/spec.md) "Hold a secret for a
+new destination until a person approves it") — a resource pointed at another
+stored secret, a new MCP server, channel, provider or custom tool group, a
+moved target, the sync remote — the page MUST approve it as part of that save:
+right after the save returns it asks the shell to approve, under one presence
+check, exactly the bind approvals created on that save's destination since the
+save started, and only then reports the save done. It MUST NOT sweep in an
+approval for another destination or one created before the save. While such a
+save runs, the approval sheet MUST NOT open on its own; a presence check the
+person cancels leaves the approval waiting, shown on its resource, and the sheet
+does not open over it. In a browser, which has no presence check, the save
+leaves the approval waiting as before.
+
+#### Scenario: a save in the app approves its own binding with one presence check
+- **GIVEN** the desktop app and a save that leaves two bind approvals on its destination
+- **WHEN** the save returns
+- **THEN** the shell approves both under one presence check before the save reports done
+- **AND** an approval on another destination, or one older than the save, is left waiting
+
+#### Scenario: a cancelled check leaves the approval waiting without the sheet
+- **GIVEN** the desktop app and a save that leaves an approval waiting
+- **WHEN** the person cancels the presence check
+- **THEN** the approval stays waiting and the approval sheet does not open over it
+
+#### Scenario: a save in a browser leaves its approval waiting
+- **GIVEN** the page open in a browser
+- **WHEN** a save leaves an approval waiting
+- **THEN** no presence check is asked for and the approval waits for the app
+
 ### Requirement: Show the daemon and what needs the user in the menu bar
 The shell MUST keep an item in the macOS menu bar whose icon is the Stroke C mark as a monochrome template image, so macOS tints it for a light or a dark menu bar, dimmed and struck through while no daemon is serving. While anything needs the user, the icon MUST carry that count beside it as a number, "9+" past nine; the count is the length of the Overview's attention list, which leaves out what the user has ignored. Its menu MUST offer, in this order, and nothing more: a status line naming the daemon's port and version while it runs, or that it is offline, which cannot be chosen; an entry "N things need you" ("1 thing needs you" for one) — shown only when something does, directly under the status line, and opening Overview; a separator; Open Coffer; Restart daemon, which reads Start daemon while none is serving and runs the one restart (see "Restart by stopping the running daemon first"); a separator; and Quit Coffer (⌘Q). The icon's tooltip MUST read "Coffer · N things need you" ("Coffer · 1 thing needs you" for one) while something needs the user, and plain "Coffer" otherwise, offline included. While no daemon is serving the attention entry and the count MUST be absent. What the menu bar says MUST follow the daemon without the user opening the window: a daemon that stops answering MUST read as offline within one poll, and a launching app MUST allow a cold daemon a few polls before calling it offline.
 

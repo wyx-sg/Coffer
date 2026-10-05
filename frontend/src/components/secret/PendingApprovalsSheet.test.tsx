@@ -14,6 +14,7 @@ import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Approval, SecretRef } from "@/lib/api/secret";
 import { openApprovalsSheet } from "@/lib/hooks/useApprovals";
+import { withInlineApproval } from "@/lib/inlineApproval";
 import { acceptance } from "@/test/acceptance";
 import { PendingApprovalsSheet } from "./PendingApprovalsSheet";
 
@@ -104,6 +105,32 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe("PendingApprovalsSheet", () => {
+  acceptance(
+    "desktop-app",
+    "a cancelled check leaves the approval waiting without the sheet",
+    async () => {
+      inShell = true;
+      listMock.mockResolvedValue({
+        approvals: [approval({ created_at: new Date().toISOString() })],
+      });
+      approvePending.mockRejectedValueOnce(new Error("cancelled"));
+      renderSheet();
+      let finishSave: () => void = () => {};
+      const saving = withInlineApproval(
+        () => new Promise<string>((resolve) => (finishSave = () => resolve("u-gh"))),
+        (uid) => uid,
+      );
+      await waitFor(() => expect(listMock).toHaveBeenCalled());
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      await act(async () => {
+        finishSave();
+        await saving;
+      });
+      expect(approvePending).toHaveBeenCalledWith("apr-1");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    },
+  );
+
   test("stays closed while nothing waits", async () => {
     listMock.mockResolvedValue({ approvals: [] });
     renderSheet();

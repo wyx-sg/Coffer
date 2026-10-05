@@ -10,6 +10,7 @@ import type { TFunction } from "i18next";
 
 import { persistNewSecrets, secretRef, type KeyValueSecretRow } from "@/lib/secretValue";
 import { ApiError, translateApiError } from "@/lib/api/errors";
+import { withInlineApproval } from "@/lib/inlineApproval";
 import { resourcesApi } from "@/lib/api/resources";
 import { secretsApi } from "@/lib/api/secret";
 import { scopeApi } from "@/lib/api/scope";
@@ -155,7 +156,25 @@ function isNameTaken(err: unknown): boolean {
  * server never cites a secret that was not stored) → reach.
  * Never rejects: every server lands in `created` or `failed`.
  */
-export async function importMcpServers({
+export async function importMcpServers(args: ImportMcpServersArgs): Promise<ImportReport> {
+  // In the desktop app, what the batch left waiting is approved under one
+  // presence check at the end (`lib/inlineApproval`); what is still waiting
+  // after that — a cancelled check, or a browser — is reported as before.
+  const report = await withInlineApproval(
+    () => registerAll(args),
+    (r) => (r.awaitingApproval.length > 0 ? r.created.map((c) => c.uid) : null),
+  );
+  if (report.awaitingApproval.length === 0) return report;
+  const uidOf = new Map(report.created.map((c) => [c.name, c.uid]));
+  const still: ImportReport["awaitingApproval"] = [];
+  for (const entry of report.awaitingApproval) {
+    const uid = uidOf.get(entry.name);
+    if (uid === undefined || (await pendingRefsFor(uid)) !== null) still.push(entry);
+  }
+  return { ...report, awaitingApproval: still };
+}
+
+async function registerAll({
   servers,
   created,
   reach = { mode: "everywhere" },

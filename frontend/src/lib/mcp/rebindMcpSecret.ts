@@ -1,6 +1,7 @@
 // src/lib/mcp/rebindMcpSecret.ts — point one env var / header of an MCP server at another stored secret.
 //
 // The saved config is the stored one with `transport.secret_refs[field]` replaced; every other key is kept.
+import { withInlineApproval } from "@/lib/inlineApproval";
 import { resourcesApi, type ResourceOut } from "@/lib/api/resources";
 
 export async function rebindMcpSecret(
@@ -14,5 +15,8 @@ export async function rebindMcpSecret(
     ...((transport.secret_refs as Record<string, string> | undefined) ?? {}),
     [field]: ref,
   };
-  await resourcesApi.update(resource.uid, { config: { ...config, transport } });
+  await withInlineApproval(
+    () => resourcesApi.update(resource.uid, { config: { ...config, transport } }),
+    () => resource.uid,
+  );
 }

@@ -12,7 +12,7 @@
 // a presence check in the shell"). Approving several runs one presence check that signs over
 // exactly the ticked list, and the same dialog turns into a per-change result (spec secret
 // "Approve several bindings in one confirmation").
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,11 @@ import {
   useRejectApprovals,
 } from "@/lib/hooks/useApprovals";
 import { useSecrets } from "@/lib/hooks/useSecrets";
+import {
+  approvalsHeld,
+  DECLINED_APPROVALS_EVENT,
+  subscribeApprovalsHeld,
+} from "@/lib/inlineApproval";
 import { presenceAvailable } from "@/lib/tauri";
 import { ApprovalsList, ApprovalsResult } from "./ApprovalsTable";
 import { approvalSecretName } from "./secretRows";
@@ -57,7 +62,10 @@ export function PendingApprovalsSheet() {
   const approveOne = useApproveApproval();
   const approveMany = useApproveApprovals();
   const rejectMany = useRejectApprovals();
-  const open = outcome !== null || approvals.some((a) => !dismissed.has(a.id));
+  // A save in the desktop app approves its own bindings inline (`lib/inlineApproval`):
+  // the sheet stays shut meanwhile so it never races that presence prompt.
+  const held = useSyncExternalStore(subscribeApprovalsHeld, approvalsHeld);
+  const open = outcome !== null || (!held && approvals.some((a) => !dismissed.has(a.id)));
   // What each secret is used by — read only while something waits.
   const secrets = useSecrets(approvals.length > 0);
   const rows = secrets.data?.refs ?? [];
@@ -69,6 +77,16 @@ export function PendingApprovalsSheet() {
     const reopen = () => setDismissed(new Set());
     window.addEventListener(OPEN_APPROVALS_EVENT, reopen);
     return () => window.removeEventListener(OPEN_APPROVALS_EVENT, reopen);
+  }, []);
+  // A presence prompt the person cancelled after a save: it stays waiting on its
+  // resource, and the sheet does not pop up over it.
+  useEffect(() => {
+    const decline = (e: Event) => {
+      const ids = (e as CustomEvent<string[]>).detail ?? [];
+      setDismissed((prev) => new Set([...prev, ...ids]));
+    };
+    window.addEventListener(DECLINED_APPROVALS_EVENT, decline);
+    return () => window.removeEventListener(DECLINED_APPROVALS_EVENT, decline);
   }, []);
 
   // Only changes still waiting count as ticked.

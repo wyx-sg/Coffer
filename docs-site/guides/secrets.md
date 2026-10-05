@@ -148,6 +148,7 @@ A secret added on the Secrets page or with `coffer secret set --name` belongs to
 | --- | --- |
 | Register a resource that cites a secret already sent somewhere else, such as a second MCP server using the same token. | The new server gets no secret until you approve. The first keeps working. |
 | Change where a resource sends a secret: a stdio server's command, arguments, working directory or other environment; an HTTP server's URL; a SeaTalk channel's app. | The resource gets no secret until you approve the new target. |
+| Point a resource at another stored secret (**Replace key… › Use another secret**). | The resource keeps nothing it can use until you approve the secret for it. |
 | Point the sync remote's push token at a different URL. | The remote is not saved until you approve. |
 | Turn off secret approval in **Settings › Security**. | The protection stays on until you approve. |
 
@@ -158,6 +159,10 @@ send secret 'github/token' to mcp_server 'gh-work' (GITHUB_TOKEN) at stdio npx -
 ```
 
 Approve only a target you recognise. A command line you did not write, pointing at a script in a temporary directory, is exactly what an injected agent would register.
+
+### A change you make in the desktop app {#approve-on-save}
+
+Coffer cannot tell your click from an agent calling the same API, so a change you make yourself still needs the presence check — but in the desktop app it runs as part of the save. When **Save** (or **Use this secret**, **Add**, **Create group**…) leaves an approval waiting on what you just saved, the app asks for Touch ID or your password right away, with the approval's own description in the prompt, and approves exactly that change. There is no approvals sheet to open. Cancel the prompt and the change stays waiting, shown on its page, until you approve it there or from the sheet. In a browser there is no presence check, so the change waits for the app.
 
 ### What needs no approval
 

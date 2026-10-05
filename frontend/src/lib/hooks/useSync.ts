@@ -126,6 +126,7 @@ export function useSaveSyncRemote() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: (remote: SyncRemoteInput) => syncApi.putRemote(remote),
+    meta: { secretDestination: () => "remote" },
     onSuccess: () => invalidateSync(qc),
     onError: (error) => toast.error(translateApiError(t, error)),
   });
@@ -159,6 +160,7 @@ export function useRestoreSyncRemote() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: () => syncApi.restoreRemote(),
+    meta: { secretDestination: () => "remote" },
     onSuccess: () => invalidateSync(qc),
     onError: (error) => toast.error(translateApiError(t, error)),
   });

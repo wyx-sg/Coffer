@@ -65,6 +65,8 @@ export function useCreateProvider() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: ProviderCreate) => providersApi.create(body),
+    // The key goes to the new connection's URL: approved on the spot in the desktop app.
+    meta: { secretDestination: (data: unknown) => (data as Provider).uid },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: providersKey });
       // The key goes only to an approved URL: a binding the registration could
@@ -80,6 +82,8 @@ export function useUpdateProvider() {
   return useMutation({
     mutationFn: (vars: { uid: string; patch: ProviderPatch }) =>
       providersApi.update(vars.uid, vars.patch),
+    // A moved base URL / protocol sends the key somewhere new.
+    meta: { secretDestination: (_data: unknown, vars: unknown) => (vars as { uid: string }).uid },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: providersKey });
       // A moved base URL asks again from the save.
@@ -116,6 +120,8 @@ export function useRebindProviderKey() {
   return useMutation({
     mutationFn: (vars: { uid: string; secretRef: string }) =>
       providersApi.update(vars.uid, { secret_ref: vars.secretRef }),
+    // Another stored secret now goes to this connection.
+    meta: { secretDestination: (_data: unknown, vars: unknown) => (vars as { uid: string }).uid },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: providersKey });
       void qc.invalidateQueries({ queryKey: secretsListKey });
