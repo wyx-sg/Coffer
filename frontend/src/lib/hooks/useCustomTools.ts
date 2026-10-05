@@ -25,6 +25,7 @@ import { resourcesApi } from "@/lib/api/resources";
 import {
   customToolGroupKey,
   customToolsKey,
+  mcpTieringsKey,
   pendingApprovalsKey,
   resourcesKey,
 } from "@/lib/api/queryKeys";
@@ -41,12 +42,14 @@ export function useCustomToolGroup(name: string) {
   });
 }
 
-/** A write answered with the group: store it, refresh the list and the
- *  resource lists a group also appears in. */
+/** A write answered with the group: store it, refresh the list, the
+ *  resource lists a group also appears in, and the tiering split (a tool added,
+ *  removed or switched changes the catalogue every server's split is cut from). */
 function settle(qc: QueryClient, group: CustomToolGroup): void {
   qc.setQueryData(customToolGroupKey(group.name), group);
   void qc.invalidateQueries({ queryKey: customToolsKey });
   void qc.invalidateQueries({ queryKey: resourcesKey });
+  void qc.invalidateQueries({ queryKey: mcpTieringsKey });
 }
 
 /** Saved, but the bound secret waits for a person in the Coffer app: say so,

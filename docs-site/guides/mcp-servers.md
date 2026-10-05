@@ -227,7 +227,7 @@ Tiering is controlled by three environment variables of the daemon process (rest
 | `COFFER_TOOL_TIERING_BUDGET` | `50` | How many upstream tools to list. |
 | `COFFER_TOOL_TIERING_WINDOW_DAYS` | `90` | The usage window that ranks tools. |
 
-A malformed value falls back to the default, and any failure of the usage query lists everything. A server's page shows the split: **Tools reach agents** reads **Listed directly** or **Most behind search**, the Tools tab marks each tool **Listed** or **Behind search**, and a note says how many of its tools are listed and why. To keep a specific tool listed without changing the budget, use it: usage is what ranks it. To remove a tool from agents entirely, disable it instead.
+A malformed value falls back to the default, and any failure of the usage query lists everything. A server's page shows the split: **Tools reach agents** reads **Listed directly** or **Most behind search**, the Tools tab marks each tool **Listed** or **Behind search**, and a note says how many of its tools are listed and why. To decide for one tool rather than let usage rank it, set its **Exposure** on the Tools tab: **Auto** (the budget decides; the row reads **Auto · Listed** or **Auto · Behind search**), **Always listed** (listed, taking a slot of the budget) or **Search only** (left to `coffer__search_tools`). The choice is saved with the server and recorded in Activity, and a custom tool group's Tools tab offers the same choice for its tools ([Custom tools](/guides/custom-tools#how-each-tool-reaches-agents)). Exposure only decides how a tool is listed; to remove a tool from agents entirely, disable it instead.
 
 ## The invocation log
 

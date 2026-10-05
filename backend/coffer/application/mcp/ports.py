@@ -13,7 +13,7 @@ subclass anything; they just need to satisfy the method signatures.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from datetime import datetime
 from typing import Any, Protocol
 
@@ -92,8 +92,15 @@ class MCPCapabilityPreferenceRepoPort(Protocol):
         """Tool name -> ``listed`` | ``search`` for the tools the person set."""
         ...
 
-    async def set_exposure(self, resource_uid: str, changes: dict[str, str]) -> bool:
-        """Set tools' exposure (``auto`` clears) in one write; False when a tool is unknown."""
+    async def set_exposure(
+        self,
+        resource_uid: str,
+        changes: dict[str, str],
+        *,
+        known: Collection[str] | None = None,
+    ) -> bool:
+        """Set tools' exposure (``auto`` clears) in one write; False when a tool
+        is not in ``known`` (default: the tools discovery has seen)."""
         ...
 
 

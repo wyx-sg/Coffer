@@ -83,7 +83,7 @@ Settings is not an entry: it is a modal opened from the sidebar footer (see
 "Open Settings as a modal from the sidebar footer"). Usage is not an entry:
 it is a tab of Model providers (see provider-switching "Show metered usage on a
 Usage tab of Model providers"). Custom
-tools and CLIs are specified by "Manage custom tool groups on one page" and "Show
+tools and CLIs are specified by "Manage custom tool groups on their own page" and "Show
 every CLI a skill requires on the CLIs page". An
 entry whose experimental feature is switched off (spec
 [experimental-features](../experimental-features/spec.md) "Close every surface of a switched-off feature")
@@ -264,13 +264,13 @@ default tab at the bare `/<kind>/<id>`, never in a `?tab=` query. A list page
 with no detail to nest under (Sync, Activity) carries its tab in the query
 instead, as `?tab=`, with the default tab at the bare address. The `<id>` is
 the resource's name where the kind's name is fixed and unique within the kind —
-skills (`/skills/<name>`) and MCP servers (`/mcp-servers/<name>`) — the agent's
+skills (`/skills/<name>`), MCP servers (`/mcp-servers/<name>`) and custom tool
+groups (`/custom-tools/<group>`), which are `mcp_server` resources — the agent's
 type for agents (`/agents/<type>`), and the command for CLIs (`/clis/<command>`).
 A kind whose name can be renamed — model providers, channels, knowledge
 collections, memory partitions — MUST keep its immutable `uid` as the `<id>`
 (`/model-providers/<uid>`), because a renamed name would break every
-address to it. A custom tool group's page (`/custom-tools/<group>`), which is an `mcp_server`
-resource, has too little to split and carries no tab. A page opened from a tab (a plugin, a direct MCP entry, an
+address to it. A page opened from a tab (a plugin, a direct MCP entry, an
 unmanaged skill) nests under that tab's path.
 
 #### Scenario: detail pages share one tab layout
@@ -706,8 +706,8 @@ which lists the direct MCP entries in the agents' own config files to adopt
 ([agent-registry](../agent-registry/spec.md) "Adopt a direct MCP entry into Coffer"); it is not a
 second button on the page. The dialog adds MCP servers only: it offers no
 custom tool (an HTTP API imported from an OpenAPI document or defined by hand),
-which is added on the Custom tools page (see "Manage custom tool groups on one
-page").
+which is added on the Custom tools page (see "Manage custom tool groups on their
+own page").
 
 The review step covers every server's environment values and, for an HTTP
 server, the values of its `headers` too, read with the same secret detection as
@@ -2921,7 +2921,7 @@ why.
 - **WHEN** a hand-off button renders
 - **THEN** it reads Hand off to Claude Code
 
-### Requirement: Manage custom tool groups on one page
+### Requirement: Manage custom tool groups on their own page
 The Custom tools page (`/custom-tools`, under Capabilities) MUST manage custom
 tools, which have one type in 1.0 — **HTTP API**: a tool is one HTTP request
 Coffer makes on an agent's behalf — and MUST manage them in **groups**. A group
@@ -2990,14 +2990,28 @@ off (Turn on), a secret missing (Add secret, Choose another, no hand-off) and a
 secret waiting for approval (Open approvals, the only button). Re-import is a
 button in the definition of an imported group.
 
-A group's detail page (`/custom-tools/<group>`) MUST be one page with no tabs and no
-tab in its address. Under its header — its **reach** and a one-line summary of the
-last 24 hours (calls and failures) — it shows the group's **definition** (base
-URL, and the auth header with the name of the secret it is bound to), and below it
-a **Tools** section holding the **tools table** — each tool's method and path, its
-switch and its changes-data flag. The group's calls are read on the Activity page,
-not on the group's page; the failing banner's View calls opens Activity's Tool
-calls tab searching the group's name. Above the table one row
+A group's detail page (`/custom-tools/<group>/<tab>`) MUST carry, under its
+header — its **reach** and a one-line summary of the last 24 hours (calls and
+failures) — two tabs laid out like every other detail page's. **Overview** (the
+default, at the bare `/custom-tools/<group>`) stacks the group's **definition**
+(base URL, and the auth header with the name of the secret it is bound to), then
+what an MCP server's Overview shows ("Open an MCP server on its Overview"):
+**Last 24 hours** — the group's calls and errors with a table of the agents that
+made them, and for a group that is on a View in Activity link to Activity's Tool
+calls tab searching the group's name (for a group that is off, only its last
+call and who made it); **Requires** — each secret its headers cite, named by the
+secret's own name, as Set, Missing or Waiting for approval with a View in
+Secrets link to `/secrets?q=<name>` (a group runs no command, so it has no
+launcher row); and **Most-called tools** — the busiest four, read-only with no
+switches, each marked when it sits behind search, with the rest one link away
+("Show all N in Tools"). **Tools** (`/custom-tools/<group>/tools`) holds the
+**tools table** — each tool's method and path, its switch, its changes-data flag
+and its **exposure**, the same choice as an MCP server's Tools tab ("Auto ·
+Listed", "Always listed", "Search only"; [mcp-gateway](../mcp-gateway/spec.md)
+"Choose how each tool is exposed"), shown for a tool that is on while tool
+tiering is on. The group's calls are read on the Activity page, not on the
+group's page; the failing banner's View calls opens Activity's Tool calls tab
+searching the group's name. Above the table one row
 carries a search, which narrows the rows by tool name, and **Add request**, so
 adding stays in view however many tools the group has; the count of tools that
 are on and **All on** / **All off** keep acting on the whole group. Choosing
@@ -3056,11 +3070,23 @@ the gateway").
 - **WHEN** the user opens `/custom-tools`
 - **THEN** the failing group is listed first with its tools, and the page header carries one Add custom tool action whose flow asks for an existing or new group and offers Import an OpenAPI spec and Add one request by hand, and no Script type
 
-#### Scenario: a group's page is one page with the definition then the tools
+#### Scenario: a group's page has Overview and Tools tabs
 - **GIVEN** the `billing` group with three tools and a call in the last 24 hours
-- **WHEN** the user opens `/custom-tools/billing` and chooses one tool
-- **THEN** the page shows, under a header with the reach and a one-line 24-hour summary, the definition with the bound secret's name and below it the Tools section with the tools table, and no tabs
-- **AND** the tool opens in a drawer with its request and Test without changing the address `/custom-tools/billing`
+- **WHEN** the user opens `/custom-tools/billing`, switches to Tools and chooses one tool
+- **THEN** the page opens on Overview with the definition and the bound secret's name, under a header with the reach and a one-line 24-hour summary, and its tabs are Overview and Tools and no other
+- **AND** Tools, at `/custom-tools/billing/tools`, shows the tools table, and the tool opens in a drawer with its request and Test without changing the address
+
+#### Scenario: a group's Overview shows what it requires, its busiest tools and the last 24 hours
+- **GIVEN** the `billing` group, on, whose `Authorization` header is bound to the stored secret `billing-token`, with 31 calls from Claude Code in 24 hours, most of them to `get_invoice`
+- **WHEN** its Overview opens
+- **THEN** it shows Last 24 hours with the totals, the table of the agents that called it and View in Activity opening `/activity?tab=mcp&q=billing`
+- **AND** Requires lists `billing-token` as Set, linked to `/secrets?q=billing-token`, with no launcher row
+- **AND** Most-called tools lists `get_invoice` first, without switches
+
+#### Scenario: a custom tool's exposure is set on the group's Tools tab
+- **GIVEN** the `billing` group, with tool tiering on, whose `get_invoice` is left to Auto and listed and whose `create_invoice` is pinned
+- **WHEN** the user opens its Tools tab and sets `get_invoice` to Search only
+- **THEN** the rows read "Auto · Listed" and "Always listed" before the change, and the change is saved as `get_invoice`'s exposure on the group without opening the tool's drawer
 
 #### Scenario: a tool's drawer has no switch, and Delete tool is outlined
 - **GIVEN** the `billing` group with a tool

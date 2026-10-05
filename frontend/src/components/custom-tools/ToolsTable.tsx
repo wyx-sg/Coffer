@@ -1,17 +1,21 @@
 // src/components/custom-tools/ToolsTable.tsx — a group's tools (4.2.01): each one's switch, request, changes-data
-// flag and last 24 hours; "N of M on · All on · All off" on the title row, then a toolbar of a name filter and
-// Add request above the table; the pencil (or the row) opens the drawer. A tool has no reach of its own: its
-// group's reach decides who sees it.
+// flag, exposure (the MCP server Tools tab's control: Auto · Listed, Always listed, Search only; spec mcp-gateway
+// "Choose how each tool is exposed") and last 24 hours; "N of M on · All on · All off" on the title row, then a
+// toolbar of a name filter and Add request above the table; the pencil (or the row) opens the drawer. A tool has
+// no reach of its own: its group's reach decides who sees it.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pencil, Plus } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
+import { HelpTip } from "@/components/HelpTip";
 import { SearchInput } from "@/components/SearchInput";
 import { Section } from "@/components/Section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { McpToolExposure } from "@/components/mcp/server/McpToolExposure";
+import type { ToolRow } from "@/components/mcp/server/toolRows";
 import type { CustomToolGroup } from "@/lib/api/customTools";
 import { agentPrefix, toolsOn } from "@/lib/customTools/groups";
 import { useSetAllCustomTools, useToggleCustomTool } from "@/lib/hooks/useCustomTools";
@@ -19,11 +23,17 @@ import { cn } from "@/lib/utils";
 
 interface Props {
   group: CustomToolGroup;
+  /** The group's tools as tool rows, each with its exposure once tiering was read. */
+  rows: readonly ToolRow[];
+  /** Show the Exposure column (tiering is on and its split was read). */
+  showExposure: boolean;
   onOpenTool: (tool: string) => void;
   onAddRequest: () => void;
 }
 
-const GRID = "grid grid-cols-[40px_minmax(0,1fr)_72px_56px_32px] items-center gap-3 px-2";
+const GRID = "grid items-center gap-3 px-2";
+const COLS = "grid-cols-[40px_minmax(0,1fr)_72px_56px_32px]";
+const COLS_EXPOSURE = "grid-cols-[40px_minmax(0,1fr)_176px_72px_56px_32px]";
 
 /** A 24-hour count; a tool with no call in 24 hours reads "—" in both columns. */
 function Count({
@@ -42,8 +52,24 @@ function Count({
   );
 }
 
-export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
+/** A tool's exposure control; a tool that is off, or one tiering has not reported, reads "—". */
+function ExposureCell({
+  serverUid,
+  tool,
+  exposure,
+}: {
+  serverUid: string;
+  tool: string;
+  exposure: ToolRow["exposure"] | undefined;
+}) {
+  if (!exposure) return <span className="text-xs text-text-subtle">—</span>;
+  return <McpToolExposure serverUid={serverUid} tool={tool} exposure={exposure} />;
+}
+
+export function ToolsTable({ group, rows, showExposure, onOpenTool, onAddRequest }: Props) {
   const { t } = useTranslation();
+  const grid = cn(GRID, showExposure ? COLS_EXPOSURE : COLS);
+  const exposureOf = new Map(rows.map((r) => [r.key, r.exposure]));
   const toggle = useToggleCustomTool(group.name);
   const setAll = useSetAllCustomTools(group.name);
   const [filter, setFilter] = useState("");
@@ -108,7 +134,7 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
         <div
           role="row"
           className={cn(
-            GRID,
+            grid,
             "h-8 border-b border-border-subtle text-2xs font-semibold text-text-muted",
           )}
         >
@@ -116,6 +142,12 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
             <span className="sr-only">{t("customTools.tools.switch")}</span>
           </span>
           <span role="columnheader">{t("customTools.tools.colTool")}</span>
+          {showExposure ? (
+            <span role="columnheader" className="flex items-center gap-1">
+              {t("mcp.exposure.col")}
+              <HelpTip label={t("mcp.exposure.col")}>{t("mcp.exposure.help")}</HelpTip>
+            </span>
+          ) : null}
           <span role="columnheader" className="text-right">
             {t("customTools.tools.colCalls")}
           </span>
@@ -142,7 +174,7 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
             key={tool.name}
             role="row"
             className={cn(
-              GRID,
+              grid,
               "min-h-[49px] cursor-pointer border-b border-border-subtle py-1.5 hover:bg-surface-hover",
             )}
             onClick={() => onOpenTool(tool.name)}
@@ -174,6 +206,16 @@ export function ToolsTable({ group, onOpenTool, onAddRequest }: Props) {
                 ) : null}
               </span>
             </span>
+            {showExposure ? (
+              // A portal's events bubble through the React tree: keep the row from opening.
+              <span role="cell" onClick={(e) => e.stopPropagation()}>
+                <ExposureCell
+                  serverUid={group.uid}
+                  tool={tool.name}
+                  exposure={tool.enabled ? exposureOf.get(tool.name) : null}
+                />
+              </span>
+            ) : null}
             <span role="cell" className="text-right">
               <Count value={tool.calls_24h} none={tool.calls_24h === 0} />
             </span>

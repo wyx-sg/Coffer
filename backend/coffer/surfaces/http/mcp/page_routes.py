@@ -1,6 +1,7 @@
 """The MCP server page's reads beside status.
 
-The last 24 hours, the server's own log, the tiering split and how each tool is exposed.
+The last 24 hours, the server's own log, the tiering split and how each tool is
+exposed — for a custom-tool group too, which is an ``mcp_server`` like any other.
 
 Each addresses its server by uid (``require_mcp_server``) and reads persisted
 state only — the invocation log, the upstream's log file, the tool lists
@@ -15,6 +16,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 
 from coffer.application.audit_service import AuditService
+from coffer.application.mcp.gateway_tool_gate import http_api_transport
 from coffer.application.mcp.saved_tools import current_tools
 from coffer.application.mcp.tiering_config import load_tiering_config
 from coffer.application.mcp.tiering_split import tiering_split
@@ -141,7 +143,10 @@ async def _set_exposure(
     actor: str,
 ) -> Response:
     resource = await require_mcp_server(uid, resource_service)
-    if not await prefs.set_exposure(resource.uid, changes):
+    # A custom-tool group's tools are its config; any other server's are what discovery saw.
+    group = http_api_transport(resource)
+    known = [tool.name for tool in group.tools] if group is not None else None
+    if not await prefs.set_exposure(resource.uid, changes, known=known):
         raise HTTPException(status_code=404, detail="tool not found on this server")
     modes = set(changes.values())
     await audit.record(

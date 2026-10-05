@@ -27,7 +27,7 @@ from any other kind module.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -133,10 +133,21 @@ class MCPCapabilityPreferenceStore:
         """The tools whose exposure the person set: tool name -> ``listed`` | ``search``."""
         return _exposure(self.documents.get(server_uid))
 
-    async def set_exposure(self, server_uid: str, changes: dict[str, str]) -> bool:
+    async def set_exposure(
+        self,
+        server_uid: str,
+        changes: dict[str, str],
+        *,
+        known: Collection[str] | None = None,
+    ) -> bool:
         """Set several tools' exposure (``auto`` clears) in one write; False,
-        and nothing written, when any named tool is not one this server offers."""
-        known = {p.capability_key for p in await self.list_for(server_uid, "tool")}
+        and nothing written, when any named tool is not one this server offers.
+
+        ``known`` is the server's tool names when the caller has them from the
+        server's own config (a custom-tool group); otherwise they are the tools
+        discovery has seen."""
+        if known is None:
+            known = {p.capability_key for p in await self.list_for(server_uid, "tool")}
         if any(tool not in known for tool in changes):
             return False
         pinned = self.exposure_for(server_uid)

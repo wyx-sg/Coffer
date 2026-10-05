@@ -98,3 +98,40 @@ async def test_the_change_is_audited(ctx):  # noqa: F811
     rows = await ctx.audit.query(event_type="tool_exposure_changed")
     assert len(rows) == 1
     assert rows[0].details["key"] == "2 tools" and rows[0].details["mode"] == "listed"
+
+
+def _group(*tools: str, off: tuple[str, ...] = ()) -> dict:
+    return {
+        "transport": {
+            "type": "http_api",
+            "base_url": "https://billing.example/v1",
+            "tools": [
+                {"name": t, "method": "GET", "path": f"/{t}", "enabled": t not in off}
+                for t in tools
+            ],
+        }
+    }
+
+
+async def test_a_custom_tool_groups_tools_take_an_exposure_before_any_agent_listed_them(ctx):  # noqa: F811
+    """A group's tools are its config: no discovery has to have seen them first."""
+    group = await ctx.server("billing", _group("list_invoices", "refund", off=("refund",)))
+
+    r = await ctx.client.patch(_url(group.uid, "list_invoices"), json={"mode": "search"})
+    assert r.status_code == 204
+    assert ctx.prefs.exposure_for(group.uid) == {"list_invoices": "search"}
+    assert await exposure_overrides(ctx.prefs, [group]) == {"billing__list_invoices": "search"}
+
+    split = await _tiering(ctx, group.uid)
+    assert split["tool_count"] == 2
+    by_tool = {t["tool"]: t for t in split["tools"]}
+    assert by_tool["list_invoices"]["mode"] == "search"
+    assert by_tool["list_invoices"]["effective"] == "search"
+    assert by_tool["list_invoices"]["reason"] == "search_only"
+    # A switched-off tool is offered to no agent, so it has no exposure to report.
+    assert "refund" not in by_tool
+
+    ghost = await ctx.client.patch(_url(group.uid, "ghost"), json={"mode": "listed"})
+    assert ghost.status_code == 404
+    rows = await ctx.audit.query(event_type="tool_exposure_changed")
+    assert [r.details["key"] for r in rows] == ["list_invoices"]

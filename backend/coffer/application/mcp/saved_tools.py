@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 
 from coffer.application.mcp.gateway_scope import visible_mcp_servers
 from coffer.application.mcp.gateway_tiering import apply_tiering
-from coffer.application.mcp.gateway_tool_gate import hidden_tool_names
+from coffer.application.mcp.gateway_tool_gate import hidden_tool_names, http_api_transport
 from coffer.application.mcp.ports import MCPCapabilityPreferenceRepoPort, MCPInvocationRepoPort
 from coffer.application.mcp.tiering_config import TieringConfig
 from coffer.application.mcp.tool_exposure import exposure_overrides
@@ -33,7 +33,14 @@ async def current_tools(
     rows for tools the server no longer offers keep an older stamp, so the
     current set is the rows carrying the newest one. A tool switched off on
     another machine and never seen here has no stamp, and is not current.
+
+    A custom-tool group's tools are its own config, served in-process, so they
+    are read from there: a group nobody has listed yet still has its tools
+    (spec mcp-gateway "Choose how each tool is exposed").
     """
+    transport = http_api_transport(resource)
+    if transport is not None:
+        return [(tool.name, tool.enabled) for tool in transport.tools]
     rows = [r for r in await prefs.list_for(resource.uid, "tool") if r.last_seen_at > _NEVER_SEEN]
     if not rows:
         return []
