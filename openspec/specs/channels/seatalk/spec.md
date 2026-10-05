@@ -205,7 +205,13 @@ withdrawable cards").
   renders the latest snapshot it received.
 - Updates must be **less than 30 s apart** or the platform terminates the
   stream, so the last snapshot is re-sent on a keep-alive well inside that
-  window.
+  window — only when nothing else has written for a whole keep-alive interval.
+- A stream has **one writer**. The turn's events, the status tick and the
+  keep-alive only offer snapshots; the platform writes run one at a time and
+  each sends the newest snapshot offered. Because the client shows the latest
+  snapshot it received, a write carrying an older snapshot than the one on
+  screen would make the message jump back and then forward. A snapshot offered
+  inside the buffer interval is written when the interval ends, never dropped.
 - One stream carries at most **4096 characters**; a reply that outgrows the
   budget finishes the stream at the limit and the remainder is sent as ordinary
   chunked messages. A reply's length is unknown until it ends, so refusing to
@@ -226,6 +232,14 @@ withdrawable cards").
 - **THEN** the stream is opened once, every update carries the FULL accumulated
   text (never a delta) under a monotonically increasing sequence number, and
   only the last update finishes the stream
+
+#### Scenario: a seatalk stream never shows an older snapshot after a newer one
+- **GIVEN** a SeaTalk stream whose platform answers slower than the buffer
+  interval, with the status tick and keep-alive running beside the reply text
+- **WHEN** the turn streams its reply
+- **THEN** at most one stream request is in flight at a time, sequence numbers
+  arrive in order, and every interim snapshot's answer extends the previous
+  one and its clock never goes back
 
 #### Scenario: a terminated seatalk stream is never reused
 - **GIVEN** a SeaTalk stream the platform has terminated (an error, or a gap
