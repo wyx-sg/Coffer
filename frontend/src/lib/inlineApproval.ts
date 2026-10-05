@@ -1,7 +1,7 @@
 // src/lib/inlineApproval.ts — a change saved in the desktop app approves the secret binding it waits on, on the spot.
 //
 // A save that sends a stored secret somewhere new leaves an approval waiting
-// (spec secret "Send a secret somewhere new only with approval"). The daemon
+// (spec secret "Hold a secret for a new destination until a person approves it"). The daemon
 // cannot tell the person's click from an agent's call with the same token, so
 // the approval still needs the shell's presence check — but when the person
 // saved it in the desktop app, that check runs as part of the save: one
