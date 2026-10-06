@@ -32,17 +32,10 @@ from coffer.domain.mcp.secret_target import mcp_destination
 from coffer.domain.mcp.server_config import AnyTransport, MCPServerConfig
 from coffer.domain.resource import Resource
 
-# A factory the composition root injects to build connections without
-# pulling the infrastructure adapters into the application layer.
-# Signature: (transport, secrets_overlay, spawn_timeout, request_timeout,
-#             resource) -> UpstreamConnectionPort.
-#
-# The whole ``Resource`` rather than its name because the connection needs both
-# halves of a resource and for different reasons: the NAME is what a timeout
-# message and the upstream's own stderr file are titled with — a uid there would
-# make every diagnostic unreadable — while the UID is what the spawned process's
-# PID file is recorded under, since that file has to name the same server after a
-# rename (ADR identity-is-the-uid-inside-the-file).
+# (transport, secrets_overlay, spawn_timeout, request_timeout, resource) ->
+# connection, injected by the composition root. The whole ``Resource``: the NAME
+# titles diagnostics and the stderr file, the UID names the child's PID file
+# (ADR identity-is-the-uid-inside-the-file).
 UpstreamFactory = Callable[
     [
         AnyTransport,
@@ -55,6 +48,26 @@ UpstreamFactory = Callable[
 ]
 
 _logger = logging.getLogger(__name__)
+
+#: uids of servers being deleted, consulted by EVERY supervisor in the process.
+#: The delete hook runs before the row is removed, so a spawn starting after its
+#: own supervisor was evicted — or in a session the hook never walked — still
+#: finds the row; this is what refuses it. A uid is never reissued.
+_retired_uids: set[str] = set()
+
+
+def retire_server(uid: str) -> None:
+    """Refuse and close every connection to ``uid`` from now on, in every session."""
+    _retired_uids.add(uid)
+
+
+def restore_server(uid: str) -> None:
+    """Lift :func:`retire_server` for a server that turned out to still exist."""
+    _retired_uids.discard(uid)
+
+
+class _Evicted(UpstreamUnavailable):
+    """The connection being started was evicted; retrying cannot help."""
 
 
 class UpstreamHealth(StrEnum):
@@ -78,12 +91,7 @@ _MAX_CONCURRENT_SPAWNS_ENV = "COFFER_MCP_MAX_CONCURRENT_SPAWNS"
 
 
 def _max_concurrent_spawns_from_env() -> int:
-    """Read ``COFFER_MCP_MAX_CONCURRENT_SPAWNS``; invalid or non-positive → default.
-
-    Same knob style as ``reaper_kwargs_from_env``: env so a
-    deployment can tune it without a code change, silently ignored when it
-    does not parse.
-    """
+    """Read ``COFFER_MCP_MAX_CONCURRENT_SPAWNS``; invalid or non-positive → default."""
     value = _DEFAULT_MAX_CONCURRENT_SPAWNS
     if raw := os.environ.get(_MAX_CONCURRENT_SPAWNS_ENV):
         with suppress(ValueError):
@@ -122,15 +130,12 @@ class SubprocessSupervisor:
     ) -> None:
         self._resources = resource_service
         self._secrets = secret_resolver
-        # The caller injects the upstream factory so application
-        # code never imports infrastructure adapters. The composition root and
-        # tests both inject ``coffer.infrastructure.mcp.factory.build_upstream``
-        # (the importlib-hidden fallback that used to live here was deleted,
-        # so the dependency is visible to importlinter again).
+        # ``coffer.infrastructure.mcp.factory.build_upstream`` in production.
         self._upstream_factory = upstream_factory
         self._retry_delays = retry_delays
         self._entries: dict[str, _UpstreamEntry] = {}
         self._clock = clock or (lambda: datetime.now(tz=UTC))
+        self._disposed = False
         # The composition root passes ONE ledger to every session's supervisor
         # so a dead server is backed off once for the daemon, not once per
         # session. Alone (tests, scripts) a supervisor keeps its own.
@@ -144,10 +149,12 @@ class SubprocessSupervisor:
         # server). Held only around build + spawn_and_initialize, never across
         # a retry sleep or a cooldown, so a waiting-out server holds no slot.
         self._spawn_slots = asyncio.Semaphore(max_concurrent_spawns)
+        #: Run on every connection this supervisor builds, BEFORE it starts: the
+        #: SDK fixes a session's sampling/roots callbacks when it is constructed.
+        self.prepare_connection: Callable[[str, UpstreamConnectionPort], None] | None = None
 
     @property
     def max_concurrent_spawns(self) -> int:
-        """How many upstream cold starts this supervisor runs at once."""
         return self._max_concurrent_spawns
 
     def _now(self) -> datetime:
@@ -192,10 +199,10 @@ class SubprocessSupervisor:
         Raises UpstreamUnavailable if the server is currently in cooldown
         or if all retry attempts fail.
         """
+        if self._disposed:
+            raise UpstreamUnavailable(f"{server_name!r}: this session has ended")
         entry = self._entries.setdefault(server_name, _UpstreamEntry())
-
-        # Cooldown gate — checked BEFORE acquiring spawn_lock to avoid
-        # blocking many waiters during cooldown.
+        # Checked BEFORE spawn_lock too, so waiters during a cooldown never queue.
         self._enforce_cooldown(entry, server_name)
 
         async with entry.spawn_lock:
@@ -228,25 +235,21 @@ class SubprocessSupervisor:
         if not resource.enabled:
             entry.state = UpstreamHealth.UNHEALTHY
             raise UpstreamUnavailable(f"{server_name!r} is disabled")
-        # Per-agent scope is NOT enforced here: the supervisor has no
-        # session context, and a server's per-agent scope is enforced at
-        # the gateway (the seam that knows which agent is asking).
-
+        if resource.uid in _retired_uids:
+            entry.state = UpstreamHealth.UNHEALTHY
+            raise UpstreamUnavailable(f"{server_name!r} is being deleted")
+        # Per-agent scope is enforced at the gateway, which knows the agent.
         config = MCPServerConfig.model_validate(resource.config)
 
-        # Attempt with retry. Catch only the transient failure modes a
-        # subprocess/HTTP-MCP spawn legitimately produces; let unexpected
-        # exceptions (e.g. programming errors, ValueError from bad config,
-        # asyncio.CancelledError from shutdown) propagate so they surface
-        # to the caller instead of silently burning the retry budget.
-        # asyncio.CancelledError is BaseException-derived, so
-        # the `except Exception`-based clause below excludes it naturally
-        # — the ladder stops on the spot, no retry sleep, no cooldown.
+        # Retry only the transient failures a spawn legitimately produces;
+        # anything else (bad config, a bug, CancelledError) propagates at once.
         last_error: Exception | None = None
         for attempt_idx in range(len(self._retry_delays) + 1):
             try:
                 async with self._spawn_slots:
                     conn = await self._build_connection(resource, config)
+                    if self.prepare_connection is not None:
+                        self.prepare_connection(server_name, conn)
                     try:
                         await conn.spawn_and_initialize()
                     except BaseException:
@@ -256,14 +259,12 @@ class SubprocessSupervisor:
                         with suppress(Exception):
                             await conn.close()
                         raise
-                if entry.generation != generation:
-                    # Evicted while we were starting. Caching this would
-                    # hand out a live subprocess for a server that has
-                    # since been deleted or renamed — the exact leak the
-                    # eviction was asked to prevent.
+                if entry.generation != generation or resource.uid in _retired_uids:
+                    # Evicted, deleted or its session ended while starting:
+                    # caching it would leave a child nothing will ever close.
                     with suppress(Exception):
                         await conn.close()
-                    raise UpstreamUnavailable(f"{server_name!r} was evicted while it was starting")
+                    raise _Evicted(f"{server_name!r} was evicted while it was starting")
                 entry.connection = conn
                 entry.state = UpstreamHealth.HEALTHY
                 self._failures.record_success(server_name)
@@ -275,6 +276,8 @@ class SubprocessSupervisor:
                 ConnectionError,
                 TimeoutError,
             ) as e:
+                if isinstance(e, _Evicted):
+                    raise  # not a failure of the server: no retry, no backoff
                 last_error = e
                 if isinstance(e, UpstreamAuthRejected):
                     # Asking again with the same key cannot succeed.
@@ -353,19 +356,11 @@ class SubprocessSupervisor:
     async def evict(self, server_name: str) -> None:
         """Drop this server's connection — after a crash, a delete or an edit.
 
-        Deliberately takes **no lock**. ``get_or_spawn`` holds ``spawn_lock``
-        across its whole retry ladder, which for a command that cannot speak
-        MCP is every attempt and every backoff between them; queueing here
-        behind it made deleting such a server wait for a subprocess nobody
-        wanted the answer to any more. The browser saw a request that never
-        came back.
-
-        Waiting was never what eviction needed. The caller is saying this
-        registration is finished, and a spawn still in flight for it is not a
-        thing to be patient with — it is a thing to invalidate. So the
-        generation counter goes up, which the spawner rechecks the moment it
-        has a connection; whichever of the two finishes second cleans up after
-        itself, and neither waits for the other.
+        Deliberately takes **no lock**: ``get_or_spawn`` holds ``spawn_lock``
+        across its whole retry ladder, and deleting a server that cannot speak
+        MCP used to wait out that ladder. A spawn in flight is invalidated
+        instead — the generation goes up, the spawner rechecks it the moment it
+        has a connection, and whichever finishes second cleans up.
         """
         # An edit or a delete is the person answering whatever was failing.
         self._failures.forget(server_name)
@@ -389,8 +384,13 @@ class SubprocessSupervisor:
         anyio's "cancel scope in a different task" error. Each close() is
         already bounded by its own ~5s teardown timeout, so a hung upstream
         cannot stall shutdown unboundedly even serially.
+
+        A spawn still in flight sees its entry's generation move and closes
+        what it built, and nothing spawns here afterwards.
         """
+        self._disposed = True
         for _name, entry in list(self._entries.items()):
+            entry.generation += 1
             if entry.connection is not None:
                 with suppress(Exception):
                     await entry.connection.close()

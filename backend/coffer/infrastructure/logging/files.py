@@ -22,7 +22,7 @@ import os
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TextIO
+from typing import Protocol, TextIO
 
 from coffer.infrastructure.vault.home import logs_dir
 
@@ -66,7 +66,17 @@ def upstream_log_path(server_name: str) -> Path:
     return log_dir() / "upstream" / f"{safe}.log"
 
 
-def write_coffer_line(sink: TextIO, text: str) -> None:
+class LineSink(Protocol):
+    """Where an upstream's log lines go: its log file, or a sink in front of it
+    that masks the values Coffer injected into the child
+    (``infrastructure.mcp.stderr_mask.MaskedSink``)."""
+
+    def write(self, text: str, /) -> int: ...
+
+    def flush(self) -> None: ...
+
+
+def write_coffer_line(sink: LineSink, text: str) -> None:
     """Append one Coffer-authored line to an upstream's log file.
 
     ``<ISO-8601 UTC timestamp> coffer <text>`` — the prefix is what the log read

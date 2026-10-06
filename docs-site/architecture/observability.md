@@ -76,7 +76,7 @@ The desktop shell writes its own few records (which daemon binary it chose, a fa
 | File | Written by | Rotation and cleanup |
 | --- | --- | --- |
 | `~/.coffer/logs/daemon.log` (+ `.1`–`.3`) | daemon, detached daemon's stdio, desktop shell | rotated at 10 MB; never deleted by the pruner |
-| `~/.coffer/logs/upstream/<server>.log` | stderr of each stdio MCP server, one file per registered server | rolled to `<server>.log.1` at 2 MB when opened; `.log.1` files older than 7 days are pruned |
+| `~/.coffer/logs/upstream/<server>.log` | stderr of each stdio MCP server, one file per registered server; secret values Coffer injected are masked as `••••••` before writing | rolled to `<server>.log.1` at 2 MB when opened; `.log.1` files older than 7 days are pruned |
 | `~/.coffer/logs/shim-<pid>-<epoch>.log` | one per `coffer-mcp-shim` process, created only when the shim logs something | pruned after 7 days |
 | `~/.coffer/eval-capture.jsonl` | eval capture, only when opted in | never pruned |
 

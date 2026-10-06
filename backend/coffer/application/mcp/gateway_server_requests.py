@@ -169,12 +169,18 @@ def build_list_roots_callback(
     registry: ServerRequestRegistry,
     get_sink: Callable[[], DownstreamSink | None],
     session_id: str,
+    get_capabilities: Callable[[], dict[str, Any]] | None = None,
 ) -> Any:  # returns ListRootsFnT-compatible coroutine function
     """Build an async callable that the mcp SDK will invoke for roots/list."""
 
     async def _list_roots_callback(
         context: ClientRequestContext,
     ) -> mcp_types.ListRootsResult | mcp_types.ErrorData:
+        if get_capabilities is not None and "roots" not in get_capabilities():
+            return mcp_types.ErrorData(
+                code=mcp_types.METHOD_NOT_FOUND,
+                message="downstream client does not support roots",
+            )
         _logger.debug("mcp.gateway.roots.forward", extra={"session": session_id})
         try:
             result = await registry.send_request("roots/list", {}, get_sink())
@@ -210,5 +216,27 @@ def build_session_callbacks(
     one call instead of repeating the registry/sink/session_id args twice."""
     return SessionCallbacks(
         sampling=build_sampling_callback(registry, get_sink, get_capabilities, session_id),
-        list_roots=build_list_roots_callback(registry, get_sink, session_id),
+        list_roots=build_list_roots_callback(registry, get_sink, session_id, get_capabilities),
     )
+
+
+def wire_connection(
+    conn: Any,
+    on_notification: Callable[[Any], Any],
+    client_capabilities: dict[str, Any],
+    callbacks: SessionCallbacks,
+) -> None:
+    """Hand a connection a session's handlers BEFORE it initializes.
+
+    The SDK reads the sampling and roots callbacks when its client session is
+    constructed, and declares upstream only the capabilities it was given one
+    for, so a callback set after the handshake is never called (spec
+    mcp-gateway "Relay an upstream's sampling and roots requests to the
+    client"). Each is offered only when the session's own client declared it
+    at ``initialize``, which always precedes the session's first spawn.
+    """
+    conn.on_notification(on_notification)
+    if "sampling" in client_capabilities:
+        conn.on_sampling_request(callbacks.sampling)
+    if "roots" in client_capabilities:
+        conn.on_roots_request(callbacks.list_roots)

@@ -22,6 +22,7 @@ from coffer.infrastructure.memory import paths as memory_paths
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 from tests.integration.memory.conftest import claude_code_config, init_repository
+from tests.support.mcp_wire import INIT_PARAMS
 
 _TOKEN = "test-token-memory-scenarios"
 _HEADERS = {"X-Coffer-Token": _TOKEN, "X-Coffer-Actor": "user"}
@@ -194,7 +195,7 @@ def test_no_memory_tool_is_listed_and_the_context_names_the_memory_root(
     assert {"coffer", "global"} <= set(partitions)
 
     init = client.post(
-        "/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+        "/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS}
     )
     assert init.status_code == 200, init.text
     r = client.post(
