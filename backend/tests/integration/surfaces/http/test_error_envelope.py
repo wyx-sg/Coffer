@@ -13,6 +13,7 @@ from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.secret.keyring_adapter import KeyringAdapter
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from tests.support.mcp_wire import INIT_PARAMS
 from tests.support.vault_stores import derived_sm, make_resource_repo
 
 
@@ -231,7 +232,7 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
             # Initialize
             init = await client.post(
                 "/mcp",
-                json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+                json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
             )
             session_id = init.headers["mcp-session-id"]
 

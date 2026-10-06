@@ -17,6 +17,7 @@ import {
   sendEnvelope,
   spawnShim,
   uniqueName,
+  INIT_PARAMS,
 } from "./_helpers";
 
 acceptance(
@@ -44,7 +45,7 @@ acceptance(
         jsonrpc: "2.0",
         id: 1,
         method: "initialize",
-        params: {},
+        params: INIT_PARAMS,
       });
       await readReply(shim);
 

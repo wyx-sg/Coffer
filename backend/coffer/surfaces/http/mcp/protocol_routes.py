@@ -12,14 +12,30 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
+from mcp import MCPError
 from sse_starlette.sse import EventSourceResponse
 
 from coffer.application.mcp.gateway import MCPGatewaySession
+from coffer.application.mcp.gateway_inflight import RequestCancelled
 from coffer.application.runtime import correlation
 from coffer.application.turn_ask import TURN_HEADER
 from coffer.domain.errors import CofferError
+from coffer.domain.mcp.jsonrpc_errors import (
+    INTERNAL_ERROR,
+    INVALID_REQUEST,
+    PARSE_ERROR,
+    JsonRpcError,
+)
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.mcp.dependencies import get_mcp_session_factory
+from coffer.surfaces.http.mcp.jsonrpc import (
+    METHOD_NOT_FOUND,
+    REQUEST_METHODS,
+    check_envelope,
+    check_params,
+    error_body,
+    error_for,
+)
 from coffer.surfaces.http.mcp.session_registry import (
     _ACTIVE_SESSIONS as _ACTIVE_SESSIONS,
 )
@@ -85,10 +101,10 @@ _logger = logging.getLogger(__name__)
 #: (``app_mcp_composition._PROCESS_SUPERVISOR_KEY``), not to a client's session.
 RESERVED_SESSION_PREFIX = "__"
 
-# JSON-RPC error codes
-_JSON_RPC_INVALID_REQUEST = -32600
-_JSON_RPC_INTERNAL_ERROR = -32603
-_JSON_RPC_COFFER_TOOL_DISABLED = -32000
+_JSON_RPC_INVALID_REQUEST = INVALID_REQUEST
+_JSON_RPC_INTERNAL_ERROR = INTERNAL_ERROR
+#: The header naming the MCP version agreed at ``initialize``.
+PROTOCOL_HEADER = "MCP-Protocol-Version"
 
 
 async def _get_or_create_session(
@@ -125,20 +141,28 @@ async def _get_or_create_session(
     return session
 
 
-def _error_response(req_id: Any, code: int, message: str) -> dict[str, Any]:
-    return {
-        "jsonrpc": "2.0",
-        "id": req_id,
-        "error": {"code": code, "message": message},
-    }
-
-
 def _session_not_found(req_id: Any) -> JSONResponse:
     """MCP streamable-http: an unknown session is 404, and the client must
     initialize a new one."""
     return JSONResponse(
         status_code=404,
-        content=_error_response(req_id, _JSON_RPC_INVALID_REQUEST, "unknown session"),
+        content=error_body(req_id, _JSON_RPC_INVALID_REQUEST, "unknown session"),
+    )
+
+
+def _protocol_header_refusal(request: Request, session: MCPGatewaySession) -> JSONResponse | None:
+    """MCP Streamable HTTP: after ``initialize`` the client names the agreed
+    version in ``MCP-Protocol-Version``; an unsupported or different one is 400.
+    A request without the header is taken as the agreed version (the shim, and
+    clients of the 2025-03-26 transport, send none)."""
+    sent = request.headers.get(PROTOCOL_HEADER)
+    if sent is None or sent == session.protocol_version:
+        return None
+    return JSONResponse(
+        status_code=400,
+        content=error_body(
+            None, _JSON_RPC_INVALID_REQUEST, f"unsupported {PROTOCOL_HEADER}: {sent!r}"
+        ),
     )
 
 
@@ -148,120 +172,112 @@ async def handle_post(
     mcp_session_id: str | None = Header(default=None, alias="Mcp-Session-Id"),
     factory: Callable[[str], MCPGatewaySession] = Depends(get_mcp_session_factory),  # noqa: B008
 ) -> Any:
-    """Process one JSON-RPC request from a downstream MCP client."""
+    """Process one JSON-RPC message from a downstream MCP client (spec
+    mcp-gateway "Answer every MCP message by the JSON-RPC rules")."""
     try:
         envelope = await request.json()
     except Exception:
-        raise HTTPException(status_code=400, detail="invalid JSON") from None
-
-    # The body parsed as valid JSON but must be a JSON-RPC request object. A
-    # top-level array (batch) or scalar has no "id"/"method" to read — reject
-    # it as an invalid request rather than crashing on ``.get`` (→ opaque 500).
-    if not isinstance(envelope, dict):
-        return JSONResponse(
-            content=_error_response(None, _JSON_RPC_INVALID_REQUEST, "invalid request"),
-        )
-
-    req_id = envelope.get("id")
+        return JSONResponse(status_code=400, content=error_body(None, PARSE_ERROR, "invalid JSON"))
+    req_id, malformed = check_envelope(envelope)
+    if malformed is not None:
+        return JSONResponse(content=error_body(req_id, malformed.code, malformed.message))
     method = envelope.get("method")
-    params = envelope.get("params") or {}
+    params = envelope.get("params", {})
+    is_request = "id" in envelope
 
-    # Allocate a session id on the first request if the client sent none. A
-    # session id this daemon does not know (the idle reaper dropped it, or the
-    # daemon restarted) is answered 404 for anything but ``initialize``, so the
-    # client handshakes again: rebuilding the session silently would lose the
-    # agent identity and per-agent scope that ``initialize`` carried (spec
-    # mcp-gateway "Take the agent identity from the handshake").
     if mcp_session_id is not None and mcp_session_id.startswith(RESERVED_SESSION_PREFIX):
         # A client names its own session id, so one that starts the way the
         # composition root's registry keys do (``__process__``) is never taken
         # as an id: it would replace that entry and blind the lifecycle hooks.
         mcp_session_id = None
-    if (
-        mcp_session_id is not None
-        and mcp_session_id not in _ACTIVE_SESSIONS
-        and (method != "initialize")
-    ):
+    if method == "initialize":
+        try:
+            check_params(method, params)
+        except JsonRpcError as e:
+            return JSONResponse(content=error_body(req_id, e.code, e.message))
+    elif mcp_session_id is None:
+        # Only ``initialize`` opens a session; anything else without one is 400.
+        return JSONResponse(
+            status_code=400,
+            content=error_body(req_id, _JSON_RPC_INVALID_REQUEST, "Mcp-Session-Id header required"),
+        )
+    elif mcp_session_id not in _ACTIVE_SESSIONS:
+        # A session id this daemon does not know (the idle reaper dropped it,
+        # or the daemon restarted) is 404, so the client handshakes again:
+        # rebuilding it silently would lose the agent identity and scope that
+        # ``initialize`` carried (spec mcp-gateway "Take the agent identity from
+        # the handshake").
         return _session_not_found(req_id)
     session_id = mcp_session_id or str(uuid.uuid4())
     correlation.bind(session_id=session_id)
     session = await _get_or_create_session(session_id, factory)
     # The Coffer-run turn this agent process belongs to, when the shim reports one.
     session.turn_token = request.headers.get(TURN_HEADER) or None
+    headers = {"Mcp-Session-Id": session_id}
+    if method != "initialize" and session.protocol_version is not None:
+        refusal = _protocol_header_refusal(request, session)
+        if refusal is not None:
+            return refusal
 
     # Hold a refcount across the request so a concurrent SSE-close-triggered
     # _drop_session waits for us to finish before disposing the session.
     _acquire_session_ref(session_id)
     try:
-        # Sampling and roots: if the envelope has no "method" but has an "id", it is a
-        # JSON-RPC response to a server-initiated request that coffer sent downstream.
-        # Route it to the session's pending-request registry and return 200 immediately.
-        if method is None and req_id is not None:
-            matched = session.handle_response_from_downstream(envelope)
-            if matched:
-                # Ack with a genuinely EMPTY body. JSONResponse("")
-                # serialises to the 2-byte body `""` (a JSON empty-string),
-                # which the shim parses as valid JSON and forwards as a stray
-                # line on the MCP wire, corrupting the downstream client. A
-                # bare 202 with no body is the contract the shim expects for a
-                # matched-response ack.
-                return Response(status_code=202, headers={"Mcp-Session-Id": session_id})
-            # Non-matching id with no method — fall through to the "missing method" error.
-
-        if not isinstance(method, str):
-            return _error_response(req_id, _JSON_RPC_INVALID_REQUEST, "missing method")
-
-        # Notifications are one-way messages: they have no "id" and must never
-        # receive a JSON-RPC response body.  Return 202 Accepted immediately for
-        # any no-id message — whether it starts with "notifications/" or not
-        # (e.g. a bare "ping" sent as a notification).
-        if req_id is None:
-            return Response(status_code=202, headers={"Mcp-Session-Id": session_id})
-
+        if method is None:
+            # A response to a request Coffer sent downstream (sampling, roots).
+            # Matched or not, a response gets no response: an empty 202 (a body
+            # of ``""`` would reach the shim's MCP wire as a stray line).
+            if not session.handle_response_from_downstream(envelope):
+                _logger.info("mcp.post.unmatched_response", extra={"id": req_id})
+            return Response(status_code=202, headers=headers)
+        if not is_request:
+            # A notification never gets a response body.
+            _on_notification(session, method, params)
+            return Response(status_code=202, headers=headers)
         try:
+            if method != "initialize" and session.protocol_version is None:
+                raise JsonRpcError(_JSON_RPC_INVALID_REQUEST, "the session is not initialized")
+            if method not in REQUEST_METHODS:
+                raise JsonRpcError(METHOD_NOT_FOUND, f"method not found: {method!r}")
+            check_params(method, params)
             if method == "initialize":
                 result = await session.handle_initialize(params)
             elif method == "ping":
                 result = {}
             else:
-                result = await session.handle_request(method, params)
-        except CofferError as e:
-            code = (
-                _JSON_RPC_COFFER_TOOL_DISABLED
-                if e.code == "TOOL_DISABLED"
-                else _JSON_RPC_INTERNAL_ERROR
-            )
-            response: dict[str, Any] = _error_response(req_id, code, str(e))
+                result = await session.inflight.run(req_id, session.handle_request(method, params))
+        except RequestCancelled:
+            # The client cancelled it: MCP sends no response for that request.
+            return Response(status_code=202, headers=headers)
         except Exception as e:
-            # Never echo an arbitrary exception message onto the wire —
-            # upstream/library errors can embed secrets (e.g. an auth
-            # failure that reflects the API key). This branch only ever catches
-            # non-CofferError exceptions (CofferError is handled above), so the
-            # class name alone is the safe summary; the full detail is logged
-            # server-side via ``_logger.exception``. Mirrors the invocation-log
-            # rule in ``gateway_handlers._safe_error_summary`` (spec secret
-            # "Hold plaintext only in memory at the moment of use").
-            _logger.exception("mcp.post.unexpected", extra={"method": method})
-            response = _error_response(
-                req_id, _JSON_RPC_INTERNAL_ERROR, f"internal error: {type(e).__name__}"
-            )
+            if not isinstance(e, (CofferError, JsonRpcError, MCPError)):
+                # Never echo an arbitrary exception message onto the wire —
+                # upstream/library errors can embed secrets; the class name is
+                # the safe summary and the detail goes to the daemon log.
+                _logger.exception("mcp.post.unexpected", extra={"method": method})
+            code, message = error_for(e)
+            response: dict[str, Any] = error_body(req_id, code, message)
         else:
             response = {"jsonrpc": "2.0", "id": req_id, "result": result}
-
-        # Per the MCP streamable-http spec, return the session id so the client
-        # uses it on subsequent calls.
-        return JSONResponse(
-            content=response,
-            headers={"Mcp-Session-Id": session_id},
-        )
+        return JSONResponse(content=response, headers=headers)
     finally:
         _release_session_ref(session_id)
+
+
+def _on_notification(session: MCPGatewaySession, method: str, params: dict[str, Any]) -> None:
+    """``notifications/cancelled`` cancels that request of THIS session; every
+    other notification needs nothing from the gateway."""
+    if method == "notifications/cancelled":
+        request_id = params.get("requestId")
+        if isinstance(request_id, (str, int)) and not isinstance(request_id, bool):
+            session.inflight.cancel(request_id)
 
 
 @router.get("", response_class=Response)
 async def handle_get(
     mcp_session_id: str | None = Header(default=None, alias="Mcp-Session-Id"),
     factory: Callable[[str], MCPGatewaySession] = Depends(get_mcp_session_factory),  # noqa: B008
+    sent: str | None = Header(default=None, alias=PROTOCOL_HEADER),
 ) -> EventSourceResponse:
     """Open the SSE stream for downstream-bound server notifications."""
     if mcp_session_id is None:
@@ -273,6 +289,9 @@ async def handle_get(
     # is 404 so the client handshakes again (see ``handle_post``).
     if mcp_session_id not in _ACTIVE_SESSIONS:
         raise HTTPException(status_code=404, detail="unknown session")
+    # ``isinstance``: a direct call (tests) leaves the parameter at its Header default.
+    if isinstance(sent, str) and sent != _ACTIVE_SESSIONS[mcp_session_id].protocol_version:
+        raise HTTPException(status_code=400, detail=f"unsupported {PROTOCOL_HEADER}: {sent!r}")
     _touch(mcp_session_id)
     queue = _NOTIFICATION_QUEUES.setdefault(mcp_session_id, asyncio.Queue(maxsize=_QUEUE_MAXSIZE))
 

@@ -26,6 +26,7 @@ from coffer.domain.mcp.custom_tool_env_errors import (
     CustomToolLastEnvironment,
 )
 from coffer.domain.mcp.http_api import HttpApiTransport
+from coffer.domain.mcp.http_api_environment import HttpApiEnvironment
 
 #: Fields of an environment a change may set; ``headers`` replaces every row.
 _CHANGEABLE = (
@@ -62,17 +63,19 @@ class CustomToolEnvironments:
         self, group: str, name: str, changes: dict[str, Any], *, actor: str
     ) -> GroupView:
         resource, transport = await self._service.group(group)
-        if _find(transport, name) is None:
+        target = _find(transport, name)
+        if target is None:
             raise CustomToolEnvironmentNotFound(group, name)
         unknown = sorted(set(changes) - set(_CHANGEABLE))
         if unknown:
             raise ConfigValidationError("unknown environment field(s): " + ", ".join(unknown))
         new_name = changes.get("name")
-        if new_name and new_name != name and _find(transport, new_name) is not None:
-            raise CustomToolEnvironmentExists(group, new_name)
+        clash = _find(transport, new_name) if new_name else None
+        if clash is not None and clash.key != target.key:
+            raise CustomToolEnvironmentExists(group, str(new_name))
         fields = transport.model_dump(mode="json")
         for env in fields["environments"]:
-            if env["name"] != name:
+            if env["key"] != target.key:
                 continue
             for key, value in changes.items():
                 if key == "headers":
@@ -86,27 +89,39 @@ class CustomToolEnvironments:
 
     async def delete(self, group: str, name: str, *, actor: str) -> GroupView:
         resource, transport = await self._service.group(group)
-        if _find(transport, name) is None:
+        target = _find(transport, name)
+        if target is None:
             raise CustomToolEnvironmentNotFound(group, name)
         if len(transport.environments) == 1:
             raise CustomToolLastEnvironment(group)
         fields = transport.model_dump(mode="json")
-        fields["environments"] = [e for e in fields["environments"] if e["name"] != name]
+        fields["environments"] = [e for e in fields["environments"] if e["key"] != target.key]
         await self._service.write_transport(resource, self._service.validated(fields), actor)
         return await self._service.view(group)
 
 
-def _find(transport: HttpApiTransport, name: str) -> object | None:
+def _find(transport: HttpApiTransport, name: str) -> HttpApiEnvironment | None:
+    """The environment ``name`` names. Names are unique in a group regardless of
+    case, so every lookup — add, change, rename, delete — matches the same way,
+    and a change acts on the environment found (by its key), never on a
+    different spelling of its name."""
     return next((e for e in transport.environments if e.name.lower() == name.lower()), None)
 
 
-def _fresh_key(name: str, taken: set[str]) -> str:
+def _fresh_key(name: str, taken: set[str], limit: int = 40) -> str:
+    """``name``, or ``name`` with the first free ``-<n>`` suffix, within the
+    40-character limit: the suffix gets its room by shortening the name, so
+    every candidate differs from the last, and at most ``len(taken) + 1``
+    candidates are tried — one of them is free. ``limit`` is ``ENV_NAME_RE``'s
+    40; the function needs nothing from its module, so it can be checked alone."""
     if name not in taken:
         return name
-    n = 2
-    while f"{name}-{n}"[:40] in taken:
-        n += 1
-    return f"{name}-{n}"[:40]
+    for n in range(2, len(taken) + 3):
+        suffix = f"-{n}"
+        candidate = name[: limit - len(suffix)] + suffix
+        if candidate not in taken:
+            return candidate
+    raise AssertionError("unreachable: more distinct candidates than taken keys")
 
 
 __all__ = ["CustomToolEnvironments", "environment_fields"]

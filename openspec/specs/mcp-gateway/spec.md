@@ -101,6 +101,9 @@ list-changed notifications) between clients and upstream MCP servers.
   characters) and omits the tiering sentence when nothing is actually hidden. At `initialize` the count of
   hidden tools comes from the tool lists discovery last saved for the servers the session can see, because the
   handshake precedes the first `tools/list`; each `tools/list` then replaces that estimate with the real count.
+- **Output schemas.** A tool's `outputSchema`, when its upstream declares one, MUST reach the agent as
+  declared, in the aggregated `tools/list` and in `coffer__search_tools` results alike; a tool that declares
+  none carries no `outputSchema` key. A call result's `structuredContent` is returned as the upstream sent it.
 - **Degraded upstream discovery.** When a server misses the per-server discovery budget its tools are left
   out of that listing, but the server MUST be **named**, retried in the background, and on recovery the
   gateway MUST emit `notifications/tools/list_changed` so the client re-lists.
@@ -136,6 +139,11 @@ list-changed notifications) between clients and upstream MCP servers.
 - **WHEN** `GET /api/v1/resources/mcp_server/{uid}/tiering` is read for the server with four tools
 - **THEN** it answers a catalogue of five with three listed, that server's `t2` and `t3` listed and `t1` and `t4` behind search, and a tool count of four
 - **AND** nothing is spawned, and a tool the server no longer offers is not counted
+
+#### Scenario: pass an upstream tool's output schema through
+- **GIVEN** an upstream that declares an `outputSchema` on tool `typed` and none on tool `plain`
+- **WHEN** the agent lists tools or searches with `coffer__search_tools`
+- **THEN** `typed` carries exactly the declared `outputSchema` in both results, `plain` carries no `outputSchema` key, and a call to `typed` returns its `structuredContent` unchanged
 
 ### Requirement: Namespace every upstream capability
 The system MUST namespace every upstream capability with its server's name (`<server>__<tool>` for tools and
@@ -246,6 +254,22 @@ the existing name pattern and the ban on `__`, wherever the framework validates 
 - **WHEN** the user registers a server named `fs` with a stdio command and the description "Local files" through the Add dialog (`POST /api/v1/resources/mcp_server`) and then lists servers
 - **THEN** the list shows it as `fs` with that description, and reading it back carries a `null` title
 - **AND** a title submitted for it through the kind-agnostic update route is refused as a validation error
+
+Deleting a server MUST leave no upstream process or connection for it in any session, the process-wide one
+included: a spawn already under way when the delete begins, one a listing or call starts while the delete
+runs, and one in a session opened during the delete are each refused or closed rather than kept, and an
+evicted start is neither retried nor counted as a failure of that name. Ending a session MUST close any spawn
+of that session still under way.
+
+#### Scenario: a listing during a delete does not revive the deleted server
+- **GIVEN** a stdio server `fs` with a live child in a session, and a delete whose eviction of another session's child is still under way
+- **WHEN** that session, or a session opened at that moment, lists or calls `fs` before the delete removes the registration
+- **THEN** that spawn is refused or its child is closed, and once the delete returns no child of `fs` is running, checked by pid
+
+#### Scenario: ending a session closes a spawn still in flight
+- **GIVEN** a session whose spawn of `fs` has started its child but has not finished starting
+- **WHEN** the session ends and the spawn then finishes
+- **THEN** the child is closed, the call fails as unavailable, and the ended session starts nothing more
 
 ### Requirement: Support stdio and HTTP upstreams
 The system MUST support both stdio and HTTP MCP transports for upstream servers. An HTTP upstream MAY cite a
@@ -459,6 +483,9 @@ used for every subsequent list and call.
   a session that lost the handshake's identity and scope; the shim MUST then replay its cached `initialize` and
   resend the call. A session id that starts with `__` MUST NOT be taken as a client's session id. An open
   notification stream MUST keep its session from being reaped as idle.
+- The handshake happens once per session: a second `initialize` on a session that already completed one MUST
+  be refused with JSON-RPC `-32600` and change nothing — not the identity, the client's capabilities or the
+  cwd. A new session may report any identity, as before.
 - A `_meta` carrying only a name-based `coffer/agent` key MUST be treated as reporting no identity rather than
   resolved by name.
 - A session with no reported identity (a hand-configured shim invocation, or any client that omits
@@ -490,6 +517,11 @@ used for every subsequent list and call.
 - **WHEN** each calls a Coffer built-in tool with an `agent` argument naming a different agent,
 - **THEN** the identified session's call reaches the tool with its own agent in `agent`, and the unidentified session's call reaches it with no `agent` argument at all,
 - **AND** no built-in tool Coffer advertises in `tools/list` declares `agent` in its input schema.
+
+#### Scenario: a second initialize on a session changes nothing
+- **GIVEN** a server scoped to agent `A`, and a session whose handshake reported agent `B` and whose call to that server was refused
+- **WHEN** the same session sends `initialize` again reporting `A`
+- **THEN** that `initialize` is answered `-32600`, the next call is still refused as out of scope with no upstream request, and a new session reporting `A` may call the server
 
 ### Requirement: Re-enable a server when its preference document is deleted
 A server's preference document, `state/mcp-preferences/<server name>.json` in the vault, is this spec's, so
@@ -1075,7 +1107,9 @@ a start that timed out) and when it stops it — through `GET /api/v1/resources/
 newest first, each line saying whether Coffer or the server wrote it and, for Coffer's lines, when. Only
 the tail is read, from the current file and then the one rolled aside. A server Coffer does not start
 (Streamable HTTP) has no log and answers none. Coffer's lines name the command and never a secret, which
-reaches the server only through its environment.
+reaches the server only through its environment; a value Coffer injected into that environment is masked in
+the file before it is written, whoever wrote the line (secret "Hold plaintext only in memory at the moment
+of use").
 
 #### Scenario: a server's log tells Coffer's lines from the server's
 - **GIVEN** a stdio server whose log file holds a start line, a line the server printed and a launcher-not-found line, and an older rolled-aside file
@@ -1169,7 +1203,14 @@ group saved before environments existed MUST read as one environment named
 `default` holding its base URL and header rows, with its secret bindings kept.
 Environments MUST be managed through `/api/v1/custom-tools/{name}/environments`
 (add, change, rename, switch on or off, delete; the last environment cannot be
-deleted) and in the group's Environments section on the Custom tools page.
+deleted) and in the group's Environments section on the Custom tools page. Because
+names are unique regardless of case, every management route finds an environment
+the same way: a change, rename or delete naming it in another case acts on that
+environment (a rename that changes only its case included), and a name no
+environment has is `CUSTOM_TOOL_ENVIRONMENT_NOT_FOUND` with nothing changed —
+never a success that changed nothing. An environment's binding key is its first
+name; a name renamed away and added again gets that name with the first free
+`-<n>` suffix, shortened to stay within 40 characters, found in bounded time.
 
 #### Scenario: one group serves the same tools in several environments
 - **GIVEN** a group `billing` with the tool `list_invoices` and the environments `sandbox` (`https://sandbox.billing.example`) and `prod` (`https://billing.example`)
@@ -1191,6 +1232,16 @@ deleted) and in the group's Environments section on the Custom tools page.
 - **GIVEN** a group with the environment `default`
 - **WHEN** an environment `staging` is added, renamed `uat`, switched off, and deleted, and then deleting `default` is attempted
 - **THEN** each change is saved and audited, and deleting the last environment is refused with nothing changed
+
+#### Scenario: an environment named in another case is changed or deleted
+- **GIVEN** a group with the environments `Test` and `live`
+- **WHEN** `test` is given a description, `TEST` is renamed `test`, and `TeSt` is deleted
+- **THEN** each change lands on that environment and is read back, the advertised `coffer_environment` choices follow, and a name no environment has is answered 404 with nothing changed
+
+#### Scenario: a 40-character environment name renamed and added again
+- **GIVEN** an environment whose name is 40 characters long
+- **WHEN** it is renamed and an environment with the original name is added, three times over
+- **THEN** every add succeeds at once and every environment has its own binding key of at most 40 characters
 
 ### Requirement: Choose a custom tool's environment on every call
 Every request of a custom tool — an MCP call, a CLI test and a test on the
@@ -1360,3 +1411,80 @@ unchanged.
 - **WHEN** a draft tool is tested in that environment
 - **THEN** the result carries `x-request-id`, `x-trace-id` with the value masked, `server` and `date`
 - **AND** it carries no `set-cookie`, `www-authenticate` or unknown header, and neither the secret's value nor the cookie appears anywhere in it
+
+### Requirement: Answer every MCP message by the JSON-RPC rules
+The `/mcp` endpoint MUST check every message before it reaches a session or an upstream, and answer by the
+JSON-RPC 2.0 and MCP 2025-06-18 rules — never with an HTTP 500 or a result for a malformed message.
+
+- **Envelope.** A body that is not JSON is HTTP 400 with JSON-RPC `-32700`. A message that is not an object,
+  whose `jsonrpc` is not `"2.0"`, whose `id` is not a string or an integer, whose `method` is not a string, or
+  that has neither a `method` nor a `result`/`error` is answered `-32600`; params that are not an object are
+  `-32602`. The answer echoes the request's `id` only when that id is itself valid, else `null`.
+- **Params.** `initialize` MUST carry `protocolVersion` (a string), `capabilities` (an object) and
+  `clientInfo` with a `name` and a `version`; `tools/call` and `prompts/get` a non-empty `name` and, when
+  given, object `arguments`; `resources/read` a string `uri`; a list's `cursor`, when given, is a string.
+  Anything else is `-32602`.
+- **Codes.** A method the gateway does not answer is `-32601`. A tool, resource or prompt that no server
+  offers under that name — no `<server>__` prefix, or no such server — is `-32602`. A switched-off or
+  out-of-scope capability stays `-32000` (`TOOL_DISABLED`). An upstream's own JSON-RPC error keeps its code,
+  with a message of Coffer's own (an upstream's text can echo a credential), except `-32000`, which the SDK
+  uses for a dropped connection; that, a timeout and anything unexpected are `-32603`.
+- **Lifecycle.** Only `initialize` opens a session: any other message without `Mcp-Session-Id` is HTTP 400.
+  A request on a session that has not completed `initialize` is `-32600`. The gateway speaks MCP
+  `2025-06-18` and answers every `initialize` with it, whatever version was asked for. After the handshake,
+  an `MCP-Protocol-Version` header naming another version is HTTP 400, on `POST` and `GET` alike; a request
+  without the header is taken as the agreed version.
+- **Responses and notifications.** A response the client sends (to a sampling or roots request) and every
+  notification are answered with an empty 202, matched or not.
+
+#### Scenario: a malformed message gets its JSON-RPC error
+- **GIVEN** the gateway
+- **WHEN** a client posts a message with no method, with `jsonrpc` `1.0`, with an array or `null` id, or an `initialize` whose params are an array or lack `protocolVersion`
+- **THEN** each is answered HTTP 200 with JSON-RPC `-32600` or `-32602` carrying the request's id when it was valid and `null` otherwise, and no session is opened
+
+#### Scenario: only initialize opens a session
+- **GIVEN** a client that has not initialized
+- **WHEN** it posts `tools/list` or a notification without `Mcp-Session-Id`
+- **THEN** each is answered HTTP 400 and no session is opened
+
+#### Scenario: each failure keeps its own JSON-RPC code
+- **GIVEN** an initialized session and a stdio server `up`
+- **WHEN** the client calls an unknown method, a tool of no server, `up`'s tool with arguments of the wrong type, and a tool switched off
+- **THEN** the answers are `-32601`, `-32602`, `-32602` without the upstream's own text, and `-32000` with no upstream request
+
+#### Scenario: an unsupported MCP-Protocol-Version header is refused
+- **GIVEN** a session that agreed on `2025-06-18`
+- **WHEN** it sends `ping` with that header, with none, and with `qa-invalid` or `2024-11-05`, and opens its stream with `qa-invalid`
+- **THEN** the first two are answered and the others are HTTP 400
+
+### Requirement: Cancel a request only when the client says so
+A `notifications/cancelled` naming a request still being answered in the same session MUST stop it: the
+upstream receives one cancellation of its own, the call is never sent again, and the cancelled request gets
+no response (an empty 202 on its HTTP request). The id is looked up in the sending session only, so two
+sessions using the same id never cancel each other. A cancellation for a request already answered or never
+seen is accepted and changes nothing. A dropped HTTP connection is not a cancellation: the request runs to
+its end and its answer is not delivered. A request id still in flight in a session MUST NOT be used again in
+it; such a request is answered `-32600` and not run.
+
+#### Scenario: a cancelled request stops upstream once and is not answered
+- **GIVEN** two sessions each running a slow call of the same server under the same request id
+- **WHEN** one session sends `notifications/cancelled` for that id
+- **THEN** its call is answered with an empty 202 well before the slow call would end, the upstream records one start and one cancellation for it, and the other session's call completes normally
+
+### Requirement: Relay an upstream's sampling and roots requests to the client
+When an upstream asks its client for `sampling/createMessage` or `roots/list` during a request, the gateway
+MUST pass the question to the downstream client of the session the upstream connection belongs to, over that
+session's notification stream, and return the client's answer to the upstream. This holds for stdio
+upstreams and for HTTP upstreams that keep a channel back to the client. The gateway offers each capability
+to an upstream only when the session's client declared it at `initialize`; a session whose client did not is
+never asked, and the upstream is told the capability is not supported.
+
+#### Scenario: two clients each answer their own upstream's sampling and roots
+- **GIVEN** a stdio server, and separately an HTTP server, whose tools ask the client to sample and to list roots, and two sessions whose clients declared both and answer differently
+- **WHEN** both sessions call both tools at the same time
+- **THEN** each call returns its own client's answer and each client is asked exactly once per tool
+
+#### Scenario: a client that declared no sampling is never asked to sample
+- **GIVEN** a session whose client declared neither capability
+- **WHEN** it calls a tool that asks for sampling and one that asks for roots
+- **THEN** both tools report that the client refused, and the client is asked nothing

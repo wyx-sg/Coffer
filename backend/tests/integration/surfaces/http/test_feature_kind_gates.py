@@ -25,6 +25,7 @@ from coffer.infrastructure.knowledge.paths import knowledge_root
 from coffer.infrastructure.memory.paths import memory_root
 from tests.integration.surfaces.http import test_feature_gates as gates
 from tests.support.features import FAKE_FEATURE
+from tests.support.mcp_wire import INIT_PARAMS
 
 home = gates.home
 fake_tool = gates.fake_tool
@@ -105,7 +106,7 @@ def test_an_unknown_uid_is_still_not_found(home: pathlib.Path) -> None:
 def _instructions(c: TestClient) -> str:
     r = c.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
         headers=gates._HEADERS,
     )
     assert r.status_code == 200, r.text
@@ -118,7 +119,7 @@ def _named_tools(text: str) -> set[str]:
 
 
 def _listed_tools(c: TestClient) -> set[str]:
-    session = gates._mcp(c, None, "initialize", {}).headers["mcp-session-id"]
+    session = gates._mcp(c, None, "initialize", INIT_PARAMS).headers["mcp-session-id"]
     return gates._tool_names(c, session)
 
 

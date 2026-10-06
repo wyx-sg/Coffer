@@ -8,6 +8,7 @@ deep nesting while keeping gateway.py readable.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -36,11 +37,13 @@ from coffer.application.runtime import correlation
 from coffer.domain.errors import (
     CofferError,
     InvalidPrefix,
+    ResourceNotFound,
     ToolDisabled,
     UpstreamAuthRejected,
     UpstreamTimeout,
 )
 from coffer.domain.mcp.capability import CapabilityType, MCPInvocation
+from coffer.domain.mcp.jsonrpc_errors import unknown_capability
 from coffer.domain.mcp.namespace import (
     parse_prefixed_prompt,
     parse_prefixed_tool,
@@ -53,11 +56,6 @@ if TYPE_CHECKING:
     from coffer.application.resource_service import ResourceService
 
 
-# --------------------------------------------------------------------------- #
-# Preference + invocation helpers                                              #
-# --------------------------------------------------------------------------- #
-
-
 def _safe_error_summary(e: BaseException) -> str:
     """Build an invocation-log-safe error summary.
 
@@ -68,9 +66,8 @@ def _safe_error_summary(e: BaseException) -> str:
     appears in any invocation record (spec secret "Hold plaintext only in
     memory at the moment of use").
 
-    Rule: for Coffer-internal exceptions (CofferError subclasses) the message
-    is authored by Coffer and safe to keep. For everything else, store only
-    the class name.
+    Coffer-authored messages (CofferError) are kept; anything else is reduced
+    to its class name.
     """
     if isinstance(e, CofferError):
         return f"{type(e).__name__}: {e}"
@@ -189,7 +186,7 @@ async def _invoke(
     try:
         server_name, original = spec.parse(prefixed)
     except InvalidPrefix as e:
-        raise ToolDisabled(f"unrecognised {spec.label}: {prefixed!r}") from e
+        raise unknown_capability(spec.label, prefixed) from e
 
     # A LABEL is resolved here because a label is genuinely all the caller gave
     # us: what arrived is a namespaced wire key the downstream client composed
@@ -201,7 +198,10 @@ async def _invoke(
     # live connection (``supervisor``/``ensure_subscribed``), which is
     # in-process, rebuilt per session, and deliberately the same key the client
     # addressed.
-    resource = await resources.get_by_name("mcp_server", server_name)
+    try:
+        resource = await resources.get_by_name("mcp_server", server_name)
+    except ResourceNotFound as e:
+        raise unknown_capability(spec.label, prefixed) from e
 
     async def _record(
         status: Literal["ok", "error", "timeout", "denied"],
@@ -309,6 +309,11 @@ async def _invoke(
     except UpstreamTimeout as e:
         status = "timeout"
         error_msg = _safe_error_summary(e)
+        raise
+    except asyncio.CancelledError:
+        # The client cancelled the request (or the session ended): not a
+        # transport failure, so nothing is evicted, and not a success.
+        status, error_msg = "error", "CancelledError"
         raise
     except Exception as e:
         status = "error"

@@ -76,7 +76,7 @@ Coffer 自己的模块通过 Python 标准库的 logging 记日志。根 logger 
 | 文件 | 写入者 | 滚动与清理 |
 | --- | --- | --- |
 | `~/.coffer/logs/daemon.log`（+ `.1`–`.3`） | 守护进程、脱离终端的守护进程的 stdio、桌面壳 | 10 MB 滚动；清理器从不删除 |
-| `~/.coffer/logs/upstream/<server>.log` | 每个 stdio MCP 服务器的 stderr，每个已注册服务器一个文件 | 打开时超过 2 MB 就滚动为 `<server>.log.1`；超过 7 天的 `.log.1` 文件会被清理 |
+| `~/.coffer/logs/upstream/<server>.log` | 每个 stdio MCP 服务器的 stderr，每个已注册服务器一个文件；Coffer 注入的密钥值在写盘前遮盖为 `••••••` | 打开时超过 2 MB 就滚动为 `<server>.log.1`；超过 7 天的 `.log.1` 文件会被清理 |
 | `~/.coffer/logs/shim-<pid>-<epoch>.log` | 每个 `coffer-mcp-shim` 进程一个，只在 shim 有日志要写时才创建 | 7 天后清理 |
 | `~/.coffer/eval-capture.jsonl` | 评测采集，仅在开启时 | 从不清理 |
 

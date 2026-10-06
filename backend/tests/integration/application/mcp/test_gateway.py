@@ -17,7 +17,8 @@ from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
 from coffer.application.secret.resolver import SecretResolver
-from coffer.domain.errors import ResourceNotFound, ToolDisabled
+from coffer.domain.errors import ToolDisabled
+from coffer.domain.mcp.jsonrpc_errors import INVALID_PARAMS, JsonRpcError
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind
 from coffer.domain.scope import Scope
@@ -510,11 +511,13 @@ async def test_tools_call_unknown_server_raises(
     _with_in_memory(monkeypatch)
     session, _rsvc, _prefs, _inv, engine = await _setup(tmp_path, {})
     try:
-        with pytest.raises((ResourceNotFound, ToolDisabled)):
+        # An unknown tool is invalid params (MCP), not a disabled one.
+        with pytest.raises(JsonRpcError) as caught:
             await session.handle_request(
                 "tools/call",
                 {"name": "ghost__some_tool", "arguments": {}},
             )
+        assert caught.value.code == INVALID_PARAMS
     finally:
         await session.dispose()
         await _safe_dispose(engine)
@@ -525,11 +528,12 @@ async def test_tools_call_malformed_prefix(tmp_path: Path, monkeypatch: pytest.M
     _with_in_memory(monkeypatch)
     session, _rsvc, _prefs, _inv, engine = await _setup(tmp_path, {})
     try:
-        with pytest.raises(ToolDisabled):
+        with pytest.raises(JsonRpcError) as caught:
             await session.handle_request(
                 "tools/call",
                 {"name": "no_prefix_here", "arguments": {}},
             )
+        assert caught.value.code == INVALID_PARAMS
     finally:
         await session.dispose()
         await _safe_dispose(engine)

@@ -325,11 +325,21 @@ Plaintext MUST exist only in memory, between the decrypt that produces it and th
 header injection that consumes it. It MUST NOT be held longer, and it MUST NOT be written anywhere:
 no secret value may appear in any file under `~/.coffer`, database table, log file, audit entry
 or invocation record.
+A value injected into a stdio MCP server's environment MUST be replaced by `••••••` in everything written
+to that server's log file — its stderr and Coffer's own start, stop and error lines alike — before the bytes
+reach disk, including a value split across two writes and output written just before the process exits.
+Only the exact injected values of at least four characters are replaced, and no other output is rewritten;
+a value the server re-encodes before printing is beyond what an exact match can catch.
 
 #### Scenario: secrets never leak to logs or audit
 - **GIVEN** an MCP server registered with a secret reference,
 - **WHEN** the server is spawned, exercised, and torn down through one representative session,
 - **THEN** an automated scan of every file under `~/.coffer` — the vault, `local/`, the history database, and every log file under `~/.coffer/logs/` — and of every database row, audit entry and invocation record reveals zero occurrences of the secret's literal value.
+
+#### Scenario: an injected secret a stdio server prints on stderr is masked before it is written
+- **GIVEN** a stdio MCP server whose `secret_refs` inject a stored secret into its environment
+- **WHEN** the server prints that value on stderr — in one write, split across two writes, or immediately before exiting with a non-zero status — and Coffer then stops it
+- **THEN** the raw bytes of `~/.coffer/logs/upstream/<name>.log` hold `••••••` where the value was and no occurrence of it, the server page's log and its diagnosis hand-off show none either, and a stderr line holding no injected value is kept verbatim
 
 ### Requirement: Keep secret values out of secret audit events
 The events `secret_set`, `secret_revealed`, `secret_deleted`, `secret_notes_updated`,

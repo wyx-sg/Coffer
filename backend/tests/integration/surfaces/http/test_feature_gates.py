@@ -31,6 +31,7 @@ from coffer.surfaces.http import feature_dependencies
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 from tests.support.features import FAKE_FEATURE, enable_all_in_config, register_fake_feature
+from tests.support.mcp_wire import INIT_PARAMS
 
 _TOKEN = "test-token-feature-gates"
 _HEADERS = {"X-Coffer-Token": _TOKEN, "X-Coffer-Actor": "user"}
@@ -274,7 +275,7 @@ def test_a_switched_off_features_tool_leaves_the_tool_list(
 ) -> None:
     with _client() as c:
         _switch(c, FAKE_FEATURE, True)
-        session = _mcp(c, None, "initialize", {}).headers["mcp-session-id"]
+        session = _mcp(c, None, "initialize", INIT_PARAMS).headers["mcp-session-id"]
         assert fake_tool in _tool_names(c, session)
         unknown = _mcp(
             c, session, "tools/call", {"name": "coffer__nosuchtool", "arguments": {}}
@@ -304,7 +305,7 @@ def test_the_gateway_advertises_only_search_tools_as_a_built_in(home: pathlib.Pa
         return {n for n in _tool_names(c, session) if n.startswith("coffer__")}
 
     with _client() as c:
-        session = _mcp(c, None, "initialize", {}).headers["mcp-session-id"]
+        session = _mcp(c, None, "initialize", INIT_PARAMS).headers["mcp-session-id"]
         unknown = _mcp(
             c, session, "tools/call", {"name": "coffer__nosuchtool", "arguments": {}}
         ).json()

@@ -31,6 +31,8 @@ The suite is the safety net: **a green `make verify` (+ `verify-e2e`) must mean 
 - **Vacuous loop / conditional** — `for x in results: assert ...` with no guard that `results` is non-empty; `if captured: assert ...` that passes when the branch never ran. Add the `len(...) >= 1` / unconditional guard so emptiness fails.
 - **Over-mocking** — mocking the unit under test, or mocking so much the test only verifies the mock. Real fakes at a *boundary* (in-memory SQLite, the `keyring` test backend, a fake upstream session) are fine; mocking the thing you claim to test is not.
 - **Too loose** — an assertion (or a perf budget) so wide it can't fail (`assert len(x) >= 0`, a latency ceiling 100× the real value).
+- **Pinning a bug** — asserting what the code happens to do instead of what the contract says (an unknown method "returns -32603", an unknown tool "is a disabled tool"), or a test helper that only works because the implementation is lax (an `initialize` with half its required fields). When the helper and the code agree on something the external protocol forbids, both are wrong.
+- **Ordinary inputs only** — every name typical (`test`, `live`). A rule with a limit or a normalisation (a 40-character name, case-insensitive uniqueness, a field that may be absent, null, empty or the wrong type) is tested at the limit and across the normalisation, or as a property (see "Property-Based Tests").
 
 **Measuring it.** `pytest --cov=coffer --cov-report=term-missing` reports line/branch coverage; use it to find untested functions and branches. Coverage is a *floor-finding tool, not the goal* — a line counted as covered by a tautological test is still untested in spirit. Genuinely-unreachable defensive lines may be excluded with `# pragma: no cover` and a one-line reason rather than padded with a fake test. New code should not lower coverage of the file it touches.
 
@@ -95,6 +97,8 @@ rather than a warning.
 ## Acceptance Scenarios — Cross-Tier Markers
 
 Every scenario in a capability spec must be covered by at least one test in any tier (typically integration or e2e). Tag tests with markers so coverage can be audited.
+
+The audit sees only what a spec states. When a capability speaks an external protocol (MCP and JSON-RPC for `mcp-gateway`), the protocol's own rules that Coffer relies on — error codes, the session lifecycle, version negotiation, cancellation, server-initiated requests, optional fields it relays — are written as requirements and scenarios in Coffer's spec too, so a rule nobody wrote down cannot pass unnoticed with no test at all.
 
 **Spec convention** — each scenario is an OpenSpec `#### Scenario: <name>` inside the `### Requirement:` it verifies, under `## Requirements` (see [openspec.md](./openspec.md) "Writing `spec.md`"):
 
@@ -182,6 +186,8 @@ Prefer **real over mock** when speed allows:
 - Real subprocess for subprocess lifecycle tests (use short-running child processes).
 - Real filesystem (under `tmp_path`).
 - `keyring` test backend (in-memory) — NOT a mock; it's an alternate real implementation.
+
+**A fake never replaces the seam under test.** A test of a callback that a library wires in (the MCP SDK's sampling and roots handlers, which it fixes when its client session is built) goes through the real library and a real peer, not a direct call of the callback. A test of what reaches a log, a process or a socket uses a peer that actually produces it (an upstream that really prints its injected secret on stderr), and asserts on the raw bytes, the exact process ids, or how many times the peer was really called — never only on a status or a mock's call list. The 2026-10-06 full MCP test found eleven defects behind a green suite; two of them lived exactly in a seam the tests had faked.
 
 Only mock when:
 
