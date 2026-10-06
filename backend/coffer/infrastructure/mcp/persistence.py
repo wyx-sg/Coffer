@@ -121,11 +121,10 @@ class MCPCapabilityPreferenceStore:
         if not listed and not pinned:
             self.documents.remove(server_uid, summary=summary)
             return
-        doc: dict[str, Any] = {}
-        if listed:
-            doc["disabled"] = listed
-        if pinned:
-            doc["tool_exposure"] = pinned
+        # An emptied list is written as ``None``, not left out: the vault writer
+        # keeps every key of the stored document a new one does not name, so a
+        # list left out would survive (``merge_ordered`` drops a ``None`` key).
+        doc: dict[str, Any] = {"disabled": listed or None, "tool_exposure": pinned or None}
         name = self._name_of(server_uid) or server_uid
         self.documents.put(server_uid, name, doc, summary=summary)
 
