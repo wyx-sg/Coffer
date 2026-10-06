@@ -67,7 +67,7 @@ pub fn same(a: f64, b: f64) -> bool {
 }
 
 #[cfg(target_os = "macos")]
-pub use macos::{pin, watch};
+pub use macos::{on_full_screen_exit, pin, watch};
 
 #[cfg(target_os = "macos")]
 mod macos {
@@ -248,6 +248,23 @@ mod macos {
         ];
         // The center holds the observer for the app's lifetime.
         std::mem::forget(token);
+    }
+
+    /// Run `then` each time the window has finished leaving full screen. Call
+    /// from setup, on the main thread.
+    pub fn on_full_screen_exit<R: Runtime>(window: &WebviewWindow<R>, then: impl Fn() + 'static) {
+        let Ok(ptr) = window.ns_window() else {
+            return;
+        };
+        // SAFETY: setup runs on the main thread, and the window lives as long
+        // as the app (close hides it to the tray).
+        unsafe {
+            observe(
+                NSWindowDidExitFullScreenNotification,
+                &*(ptr as *const AnyObject),
+                then,
+            );
+        }
     }
 
     /// Put the lights back on the main thread, after whatever layout pass is

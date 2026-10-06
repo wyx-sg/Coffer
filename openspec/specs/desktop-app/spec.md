@@ -33,6 +33,7 @@ The menu bar item's labels, its tooltip and the sync notification MUST be in the
 - **WHEN** the user closes the window,
 - **THEN** the process stays alive with its tray entry intact instead of exiting,
 - **AND** re-activating from the Dock restores the window.
+- **AND** a window closed in full screen first leaves full screen and is hidden once it has, so no empty black screen is left in its place.
 
 #### Scenario: the tray speaks the interface language
 - **GIVEN** the user has chosen Chinese as the interface language,
