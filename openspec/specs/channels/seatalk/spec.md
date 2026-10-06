@@ -224,6 +224,13 @@ withdrawable cards").
   snapshot it received, a write carrying an older snapshot than the one on
   screen would make the message jump back and then forward. A snapshot offered
   inside the buffer interval is written when the interval ends, never dropped.
+- The client has no append: every update **replaces the whole message**, so an
+  update that rewrites text already on screen (a step line shifting, the clock,
+  the step count) redraws the bubble. Only a snapshot that appends to the one on
+  screen goes at the fast buffer interval; any other is held to **at most one
+  write per redraw interval (2 s)**, folding everything offered meanwhile into
+  the newest snapshot. The status clock moves only with a redraw (a step, the
+  status tick), so answer text streaming under it stays a pure append.
 - One stream carries at most **4096 characters**; a reply that outgrows the
   budget finishes the stream at the limit and the remainder is sent as ordinary
   chunked messages. A reply's length is unknown until it ends, so refusing to
@@ -252,6 +259,14 @@ withdrawable cards").
 - **THEN** at most one stream request is in flight at a time, sequence numbers
   arrive in order, and every interim snapshot's answer extends the previous
   one and its clock never goes back
+
+#### Scenario: a long seatalk run redraws the message at a bounded cadence
+- **GIVEN** a SeaTalk stream for a turn that runs many quick tool steps, with
+  answer text written between them
+- **WHEN** the turn streams
+- **THEN** every interim write that is not a pure append of the previous one
+  comes at least a redraw interval after the previous write, and the steps
+  offered meanwhile are folded into that one write
 
 #### Scenario: a terminated seatalk stream is never reused
 - **GIVEN** a SeaTalk stream the platform has terminated (an error, or a gap

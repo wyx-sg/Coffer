@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import itertools
 import random
+import time
 from dataclasses import replace
 from typing import Any
 
@@ -20,7 +21,7 @@ import pytest
 
 from coffer.application.channel.turn_render import TurnRenderer
 from coffer.application.channel.turn_status import LIVE_SEPARATOR
-from coffer.domain.chat.events import TextDelta, TurnDone
+from coffer.domain.chat.events import TextDelta, ToolCall, ToolResult, TurnDone
 from coffer.infrastructure.channel.seatalk_caps import SEATALK_CAPABILITIES
 from coffer.infrastructure.channel.seatalk_live import SeaTalkLiveText
 
@@ -41,6 +42,7 @@ class SlowSeaTalk:
         self.gate: asyncio.Event | None = None  # holds the next update open
 
     async def post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+        sent = time.monotonic()
         self.in_flight += 1
         self.max_in_flight = max(self.max_in_flight, self.in_flight)
         try:
@@ -52,10 +54,10 @@ class SlowSeaTalk:
         finally:
             self.in_flight -= 1
         if path.endswith("init_stream"):
-            self.calls.append({"seq": 0, "content": body["message"]["text"]["content"]})
+            self.calls.append({"seq": 0, "at": sent, "content": body["message"]["text"]["content"]})
             return {"stream_id": "s1"}
         self.calls.append(
-            {"seq": body["seq"], "content": body["message"]["text"]["content"], **body}
+            {"seq": body["seq"], "at": sent, "content": body["message"]["text"]["content"], **body}
         )
         return {}
 
@@ -152,3 +154,80 @@ async def test_a_streamed_turn_is_written_in_order_and_never_goes_back() -> None
     headers = [s.split("\n", 1)[0] for s in platform.interim]
     seconds = [int(h.split("· ")[1].rstrip("s")) for h in headers]
     assert seconds == sorted(seconds)
+
+
+async def test_appends_stream_fast_and_redraws_are_folded() -> None:
+    """The client replaces the whole message on every update, so one that
+    rewrites what is already shown redraws the bubble: those are folded into
+    one write per redraw interval, while text that only grows keeps the fast
+    cadence (the typewriter effect)."""
+    platform = SlowSeaTalk()
+    live = SeaTalkLiveText(platform.post, "emp-1", keepalive_seconds=60.0)
+    live._min_interval, live._redraw_interval = 0.01, 0.2
+    for i in range(30):  # the first line changes every time: a redraw each
+        await live.update(f"⏳ Working · step {i}\n✅ shell")
+        await asyncio.sleep(0.02)
+    await wait_until(lambda: platform.interim[-1].startswith("⏳ Working · step 29"), timeout=2.0)
+    redraws = len(platform.interim)
+    assert redraws <= 6, platform.interim  # ~0.6 s of offers, one per 0.2 s
+
+    words = "⏳ Working · step 29\n✅ shell\n─\n"
+    for i in range(30):  # only appends: each is written at the fast cadence
+        words += f"w{i} "
+        await live.update(words)
+        await asyncio.sleep(0.02)
+    await live.close(words)
+    assert len(platform.interim) - redraws >= 20
+
+
+@pytest.mark.acceptance(
+    spec="channels/seatalk",
+    scenario="a long seatalk run redraws the message at a bounded cadence",
+)
+async def test_a_long_run_redraws_at_most_once_per_redraw_interval() -> None:
+    """A run of many quick tool steps with answer text between them: every
+    interim write that is not a pure append of the one before it comes at least
+    a redraw interval after the previous write, so the bubble is not redrawn
+    several times a second."""
+    platform = SlowSeaTalk(latency=0.002)
+    redraw = 0.15
+
+    class Adapter:
+        capabilities = replace(SEATALK_CAPABILITIES, supports_typing=False, supports_media=False)
+
+        async def open_live_text(self, chat_id: str, **_kw: Any) -> SeaTalkLiveText:
+            live = SeaTalkLiveText(platform.post, chat_id, keepalive_seconds=60.0)
+            live._min_interval, live._redraw_interval = 0.01, redraw
+            return live
+
+    async def send(_text: str) -> None:
+        return None
+
+    renderer = TurnRenderer(
+        channel="st",
+        adapter=Adapter(),  # type: ignore[arg-type]
+        chat_id="emp-1",
+        conversation_id="c-redraw",
+        send=send,
+        tick_seconds=0.1,
+    )
+    queue: asyncio.Queue[Any] = asyncio.Queue()
+    task = asyncio.create_task(renderer.consume(queue))
+    for step in range(25):
+        for w in range(4):
+            await queue.put(TextDelta(text=f"s{step}w{w} "))
+            await asyncio.sleep(0.004)
+        call = f"t{step}"
+        await queue.put(ToolCall(tool_use_id=call, tool_name="shell", tool_input={}))
+        await queue.put(ToolResult(tool_use_id=call, tool_name="shell", output=None, error=None))
+        await asyncio.sleep(0.01)
+    await queue.put(_DONE)
+    await queue.put(None)
+    await task
+
+    interim = [c for c in platform.calls if not c.get("finish")]
+    for older, newer in itertools.pairwise(interim):
+        if not newer["content"].startswith(older["content"]):
+            assert newer["at"] - older["at"] >= redraw * 0.9, (older, newer)
+    # 25 steps offered ~50 redraws; far fewer were written.
+    assert len(interim) < 40
