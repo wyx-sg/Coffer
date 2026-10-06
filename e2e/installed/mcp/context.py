@@ -29,6 +29,8 @@ class Ctx:
     servers: dict[str, dict[str, Any]] = field(default_factory=dict)
     #: Ports of the runner's own HTTP fixtures, by tag.
     http: dict[str, dict[str, int]] = field(default_factory=dict)
+    #: What one area learns and a later one checks (versions, the shim's stderr).
+    facts: dict[str, Any] = field(default_factory=dict)
 
     @property
     def rec(self) -> CaseRecorder:
@@ -46,7 +48,6 @@ class Ctx:
     def stdio(
         self,
         tag: str,
-        mode: str = "basic",
         env: dict[str, str] | None = None,
         cwd: Path | None = None,
     ) -> dict[str, Any]:
@@ -58,8 +59,6 @@ class Ctx:
                 str(UPSTREAM),
                 "--tag",
                 tag,
-                "--mode",
-                mode,
                 "--ledger",
                 str(self.ledger(tag)),
             ],
@@ -69,17 +68,14 @@ class Ctx:
             transport["cwd"] = str(cwd)
         return transport
 
-    async def start_http(self, tag: str, *, stateful: bool = False) -> dict[str, int]:
-        """Start one of the runner's own HTTP fixtures; returns its two ports."""
+    async def start_http(self, tag: str) -> dict[str, int]:
+        """Start one of the runner's own HTTP fixtures; returns its port."""
         ready = self.run.fixture_dir / f"{tag}.ready"
         command = [PYTHON, str(UPSTREAM), "--transport", "http", "--tag", tag]
         command += ["--ledger", str(self.ledger(tag)), "--ready", str(ready)]
-        if stateful:
-            command.append("--stateful")
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": os.environ.get("HOME", "/"),
-            "QA_CANARY_EXPECTED": self.canary,
         }
         proc = self.run.processes.spawn(
             command, tag, self.run.out / f"{tag}.log", env=env, cwd=self.run.out
@@ -128,17 +124,6 @@ class Ctx:
             await asyncio.sleep(0.25)
         return reply.status
 
-    async def toggle(self, name: str, tool: str, enabled: bool) -> int:
-        verb = "enable" if enabled else "disable"
-        path = f"/api/v1/resources/mcp_server/{self.uid(name)}/capabilities/tool/{verb}"
-        reply = await self.run.client.request("POST", path, {"capability_key": tool})
-        return reply.status
-
-    async def invocations(self, name: str, status: str | None = None) -> dict[str, Any]:
-        query = "?limit=50" + (f"&status={status}" if status else "")
-        path = f"/api/v1/resources/mcp_server/{self.uid(name)}/invocations{query}"
-        return (await self.run.client.request("GET", path)).json
-
     # --- ledgers ----------------------------------------------------------------
 
     def events(self, tag: str, event: str | None = None, name: str | None = None) -> list[dict]:
@@ -161,21 +146,6 @@ class Ctx:
         pids = {int(r["pid"]) for r in self.events(tag, "process-start")}
         self.run.fixture_pids.update(pids)
         return pids
-
-    async def wait_count(
-        self,
-        tag: str,
-        target: int,
-        event: str = "start",
-        name: str | None = None,
-        timeout: float = 10,
-    ) -> int:
-        deadline = asyncio.get_running_loop().time() + timeout
-        while (
-            self.count(tag, event, name) < target and asyncio.get_running_loop().time() < deadline
-        ):
-            await asyncio.sleep(0.05)
-        return self.count(tag, event, name)
 
 
 async def phase(ctx: Ctx, area: str, body: Callable[[Ctx], Awaitable[None]]) -> None:

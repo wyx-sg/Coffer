@@ -20,6 +20,7 @@ from typing import Any
 
 import pytest
 
+from tests.fixtures.ledger_mcp_server import RPC_ERROR_TEXT
 from tests.support.boundary_daemon import BoundaryDaemon, prepare_home, running_daemon
 
 pytestmark = pytest.mark.timeout(120)
@@ -160,6 +161,7 @@ def test_only_initialize_opens_a_session(daemon: BoundaryDaemon) -> None:
     assert "Mcp-Session-Id" not in r.headers
     r = _post(daemon, {"jsonrpc": "2.0", "method": "notifications/initialized"})
     assert r.status_code == 400
+    assert "Mcp-Session-Id" not in r.headers
 
 
 def test_params_of_the_wrong_shape_are_invalid_params(daemon: BoundaryDaemon) -> None:
@@ -171,6 +173,69 @@ def test_params_of_the_wrong_shape_are_invalid_params(daemon: BoundaryDaemon) ->
     assert _code(_rpc(daemon, s, "prompts/get", {})) == -32602
     assert _code(_rpc(daemon, s, "tools/list", {"cursor": 1})) == -32602
     assert _code(_rpc(daemon, s, "tools/call", {"name": "x", "_meta": "no"})) == -32602
+
+
+def test_a_ping_with_a_string_id_is_answered_with_that_id(daemon: BoundaryDaemon) -> None:
+    s = _open(daemon)
+    r = _rpc(daemon, s, "ping", rid="qa-string-id")
+    assert r.status_code == 200
+    assert r.json() == {"jsonrpc": "2.0", "id": "qa-string-id", "result": {}}
+
+
+def test_delete_is_refused_and_the_session_survives(daemon: BoundaryDaemon) -> None:
+    s = _open(daemon)
+    r = daemon.client.delete("/mcp", headers={"Mcp-Session-Id": s})
+    assert r.status_code == 405
+    assert _rpc(daemon, s, "ping").json()["result"] == {}
+
+
+def test_an_unknown_tool_of_a_known_server_is_invalid_params(
+    daemon: BoundaryDaemon, ledger: pathlib.Path
+) -> None:
+    s = _open(daemon)
+    r = _rpc(daemon, s, "tools/call", {"name": "up__qa-unknown", "arguments": {}})
+    assert _code(r) == -32602
+    assert _events(ledger) == []
+
+
+@pytest.mark.parametrize(
+    ("headers", "statuses"),
+    [
+        ({"X-Coffer-Token": ""}, (401,)),
+        ({"X-Coffer-Token": "qa-wrong-token"}, (401,)),
+        ({"Origin": "https://qa-attacker.invalid"}, (403,)),
+        ({"Host": "qa-attacker.invalid"}, (403,)),
+    ],
+)
+def test_an_established_session_refuses_a_bad_credential_or_origin(
+    daemon: BoundaryDaemon,
+    ledger: pathlib.Path,
+    headers: dict[str, str],
+    statuses: tuple[int, ...],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The suite-wide ``COFFER_ALLOWED_HOSTS=*`` switches the Host check off; allow
+    # only the in-process client's own authority so a foreign Host is really judged.
+    monkeypatch.setenv("COFFER_ALLOWED_HOSTS", "testserver")
+    s = _open(daemon)
+    ping = _rpc_with(daemon, s, {"jsonrpc": "2.0", "id": 90, "method": "ping"}, headers)
+    assert ping.status_code in statuses, (ping.status_code, ping.text)
+    assert "result" not in ping.text
+    call = {
+        "jsonrpc": "2.0",
+        "id": 91,
+        "method": "tools/call",
+        "params": {"name": "up__echo", "arguments": {"text": "x"}},
+    }
+    refused = _rpc_with(daemon, s, call, headers)
+    assert refused.status_code in statuses, (refused.status_code, refused.text)
+    assert _events(ledger) == []
+    # The session itself is untouched by the refused requests.
+    assert _rpc(daemon, s, "ping").json()["result"] == {}
+
+
+def _rpc_with(d: BoundaryDaemon, session: str, body: Any, headers: dict[str, str]) -> Any:
+    return _post(d, body, session, headers)
 
 
 # --- error codes --------------------------------------------------------------
@@ -188,9 +253,8 @@ def test_each_failure_keeps_its_own_code(daemon: BoundaryDaemon, ledger: pathlib
     # The upstream's own JSON-RPC errors keep their code; their text is not relayed.
     wrong = _rpc(daemon, s, "tools/call", {"name": "up__echo", "arguments": {"text": 7}})
     assert _code(wrong) == -32602 and "must be a string" not in wrong.text
-    assert (
-        _code(_rpc(daemon, s, "tools/call", {"name": "up__rpc_error", "arguments": {}})) == -32602
-    )
+    rpc_error = _rpc(daemon, s, "tools/call", {"name": "up__rpc_error", "arguments": {}})
+    assert _code(rpc_error) == -32602 and RPC_ERROR_TEXT not in rpc_error.text
     ok = _rpc(daemon, s, "tools/call", {"name": "up__echo", "arguments": {"text": "hi"}})
     assert ok.status_code == 200 and ok.json()["result"]["isError"] is False
     # A switched-off tool keeps Coffer's own code, and no upstream request is made.

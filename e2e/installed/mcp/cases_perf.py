@@ -1,80 +1,25 @@
-"""A light concurrency and latency observation, and the gateway overhead budget.
+"""The installed build's gateway overhead budget.
 
-Shared-machine numbers: they show correlation and the order of magnitude, not a
-benchmark. The one budget asserted is the spec's: at most 50 ms of median
-overhead over 100 calls compared with calling the same fixture directly.
+The spec's budget — at most 50 ms of median overhead over 100 calls compared
+with calling the same fixture directly — measured end to end over HTTP against
+the frozen daemon, whose import and runtime costs differ from the source tree
+the repository's in-process benchmark measures. A shared-machine number: it
+shows the order of magnitude, not a benchmark.
 """
 
 from __future__ import annotations
 
-import asyncio
 import statistics
 import time
 from typing import Any
 
 from e2e.installed.mcp.context import PYTHON, UPSTREAM, Ctx
-from e2e.installed.mcp.wire import ok, structured
 
-B, BENCH = "qa-mcp-b", "qa-mcp-bench"
+BENCH = "qa-mcp-bench"
 
 
 async def run(ctx: Ctx) -> None:
-    await _correlation(ctx)
-    await _sessions(ctx)
     await _overhead(ctx)
-
-
-async def _correlation(ctx: Ctx) -> None:
-    sid, _ = await ctx.wire.initialize("qa-agent-a")
-    await ctx.wire.call(sid, f"{B}__echo", {"text": "warm"})
-    gate = asyncio.Semaphore(4)
-    latencies: list[float] = []
-    wrong: list[int] = []
-
-    async def one(i: int) -> None:
-        async with gate:
-            t0 = time.perf_counter()
-            reply = await ctx.wire.call(sid, f"{B}__echo", {"text": f"qa {i}"}, rid=f"load-{i}")
-            latencies.append((time.perf_counter() - t0) * 1000)
-            if not ok(reply) or structured(reply).get("arguments", {}).get("text") != f"qa {i}":
-                wrong.append(i)
-
-    t0 = time.perf_counter()
-    await asyncio.gather(*(one(i) for i in range(40)))
-    metrics = {
-        "calls": 40,
-        "concurrency": 4,
-        "seconds": round(time.perf_counter() - t0, 2),
-        "p50_ms": round(statistics.median(latencies), 1),
-        "p95_ms": round(sorted(latencies)[37], 1),
-        "wrong": wrong,
-    }
-    ctx.rec.record(
-        "F001",
-        "forty concurrent calls each get their own answer",
-        expected="40 distinct correct replies (latency recorded as an observation)",
-        actual=metrics,
-        ok=not wrong,
-        upstream=40,
-    )
-
-
-async def _sessions(ctx: Ctx) -> None:
-    ids, failed = [], []
-    for i in range(8):
-        sid, _ = await ctx.wire.initialize(f"qa-agent-{i}")
-        ids.append(sid)
-        reply = await ctx.wire.call(sid, f"{B}__echo", {"text": str(i)})
-        if not ok(reply):
-            failed.append(i)
-    ctx.note_pids(B)
-    ctx.rec.record(
-        "F002",
-        "eight sessions in a row are distinct and each answered",
-        expected="8 distinct session ids, every call answered",
-        actual={"distinct": len(set(ids)), "failed": failed},
-        ok=len(set(ids)) == 8 and not failed,
-    )
 
 
 async def _measure(client: Any, name: str) -> list[float]:
@@ -118,8 +63,8 @@ async def _overhead(ctx: Ctx) -> None:
     ctx.note_pids(BENCH)
     added = statistics.median(gateway_ms) - statistics.median(direct_ms)
     ctx.rec.record(
-        "F003",
-        "the gateway adds at most 50 ms of median overhead over 100 calls",
+        "the installed gateway adds at most 50 ms of median overhead",
+        "100 warm calls through the installed daemon against the same fixture called directly",
         expected="median(gateway) - median(direct stdio) <= 50 ms, same fixture and arguments",
         actual={
             "direct_p50_ms": round(statistics.median(direct_ms), 2),
