@@ -16,7 +16,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
@@ -65,6 +65,8 @@ class BuiltinToolOut(BaseModel):
     #: What agents call it (``coffer__search_tools``).
     qualified_name: str
     description: str
+    #: Its JSON Schema input, for the row's details.
+    input_schema: dict[str, Any] = Field(default_factory=dict)
 
 
 class McpBuiltinServerOut(BaseModel):
@@ -93,14 +95,17 @@ class McpBuiltinServerOut(BaseModel):
 
 def _tools(registry: BuiltinToolRegistry) -> list[BuiltinToolOut]:
     search = tool_search_descriptor()
-    qualified = [(search["name"], search["description"])] + [
-        (f"{COFFER_TOOL_PREFIX}{t.name}", t.description) for t in registry.list()
+    qualified = [(search["name"], search["description"], search["inputSchema"])] + [
+        (f"{COFFER_TOOL_PREFIX}{t.name}", t.description, t.input_schema) for t in registry.list()
     ]
     return [
         BuiltinToolOut(
-            name=q.removeprefix(COFFER_TOOL_PREFIX), qualified_name=q, description=d or ""
+            name=q.removeprefix(COFFER_TOOL_PREFIX),
+            qualified_name=q,
+            description=d or "",
+            input_schema=schema or {},
         )
-        for q, d in qualified
+        for q, d, schema in qualified
     ]
 
 

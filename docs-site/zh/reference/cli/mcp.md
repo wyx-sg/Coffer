@@ -39,6 +39,10 @@ coffer mcp [OPTIONS] COMMAND [ARGS]...
 | [`mcp tool`](#mcp-tool) | Switch a server's tools, prompts and resources on or off. |
 | [`mcp tool enable`](#mcp-tool-enable) | Switch capabilities on. |
 | [`mcp tool disable`](#mcp-tool-disable) | Switch capabilities off. |
+| [`mcp resource`](#mcp-resource) | Read one of a server's resources now. |
+| [`mcp resource read`](#mcp-resource-read) | Read one resource now, as its row's details do. |
+| [`mcp prompt`](#mcp-prompt) | Fill one of a server's prompts and show the messages it makes. |
+| [`mcp prompt get`](#mcp-prompt-get) | Fill one prompt now, as its row's details do. |
 
 ## mcp test
 
@@ -408,6 +412,68 @@ coffer mcp tool disable [OPTIONS] UID CAPABILITY_TYPE
 | --- | --- | --- | --- |
 | `UID` <span class="cli-chip">参数</span> | text | 必填 | The mcp_server's name or uid |
 | `CAPABILITY_TYPE` <span class="cli-chip">参数</span> | text | 必填 | tool, prompt or resource |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## mcp resource
+
+Read one of a server's resources now.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer mcp resource [OPTIONS] COMMAND [ARGS]...
+```
+
+子命令：`read`。
+
+## mcp resource read
+
+Read one resource now, as its row's details do. Body: uri.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer mcp resource read [OPTIONS] UID
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `UID` <span class="cli-chip">参数</span> | text | 必填 | The mcp_server's name or uid |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## mcp prompt
+
+Fill one of a server's prompts and show the messages it makes.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer mcp prompt [OPTIONS] COMMAND [ARGS]...
+```
+
+子命令：`get`。
+
+## mcp prompt get
+
+Fill one prompt now, as its row's details do. Body: name, arguments.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer mcp prompt get [OPTIONS] UID
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `UID` <span class="cli-chip">参数</span> | text | 必填 | The mcp_server's name or uid |
 | `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
 | `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

@@ -1537,6 +1537,53 @@ paths:
       summary: Server Log
       tags:
       - mcp
+  /api/v1/resources/mcp_server/{uid}/prompts/get:
+    post:
+      description: Fill one of the server's prompts with the given arguments, for its row's details.
+      operationId: get_prompt_preview_api_v1_resources_mcp_server__uid__prompts_get_post
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromptGetBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityPreviewOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Prompt Preview
+      tags:
+      - mcp
   /api/v1/resources/mcp_server/{uid}/refresh:
     post:
       description: |-
@@ -1579,6 +1626,53 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Refresh Capabilities
+      tags:
+      - mcp
+  /api/v1/resources/mcp_server/{uid}/resources/read:
+    post:
+      description: Read one of the server's resources now, for its row's details.
+      operationId: read_resource_preview_api_v1_resources_mcp_server__uid__resources_read_post
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceReadBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilityPreviewOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Read Resource Preview
       tags:
       - mcp
   /api/v1/resources/mcp_server/{uid}/status:
@@ -1851,6 +1945,10 @@ components:
         description:
           title: Description
           type: string
+        input_schema:
+          additionalProperties: true
+          title: Input Schema
+          type: object
         name:
           title: Name
           type: string
@@ -1861,6 +1959,7 @@ components:
       - name
       - qualified_name
       - description
+      - input_schema
       title: BuiltinToolOut
       type: object
     CapabilityKeyBody:
@@ -1916,6 +2015,30 @@ components:
       - fetched_at
       - from_cache
       title: CapabilityListOut
+      type: object
+    CapabilityPreviewOut:
+      properties:
+        contents:
+          items:
+            $ref: '#/components/schemas/PreviewContentOut'
+          title: Contents
+          type: array
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: The error the server answered with.
+          title: Error
+      required:
+      - contents
+      - description
+      - error
+      title: CapabilityPreviewOut
       type: object
     CustomToolEnvironmentIn:
       description: |-
@@ -3896,6 +4019,82 @@ components:
       - end_line
       - text
       title: OpenApiSourceTextOut
+      type: object
+    PreviewContentOut:
+      description: One body of a resource, or one message of a prompt.
+      properties:
+        kind:
+          description: text, blob, or a prompt content type such as image.
+          title: Kind
+          type: string
+        mime_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Mime Type
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: 'A prompt message''s role: user or assistant.'
+          title: Role
+        size_bytes:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: A binary body's size; its bytes are not sent.
+          title: Size Bytes
+        text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Text
+        truncated:
+          default: false
+          description: The text was cut at 64 KiB.
+          title: Truncated
+          type: boolean
+        uri:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Uri
+      required:
+      - kind
+      - text
+      - truncated
+      - size_bytes
+      - uri
+      - mime_type
+      - role
+      title: PreviewContentOut
+      type: object
+    PromptGetBody:
+      properties:
+        arguments:
+          additionalProperties:
+            type: string
+          title: Arguments
+          type: object
+        name:
+          description: The prompt's name as the server lists it.
+          minLength: 1
+          title: Name
+          type: string
+      required:
+      - name
+      title: PromptGetBody
+      type: object
+    ResourceReadBody:
+      properties:
+        uri:
+          description: The resource's URI as the server lists it.
+          minLength: 1
+          title: Uri
+          type: string
+      required:
+      - uri
+      title: ResourceReadBody
       type: object
     ToolCallCountOut:
       properties:

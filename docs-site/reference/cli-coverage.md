@@ -210,7 +210,9 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | MCP servers · Tools tab · how a tool is exposed | `PATCH /resources/mcp_server/{uid}/tools/{tool}/exposure` | `coffer mcp exposure` | `test_cli_parity.py` |
 | MCP servers · Tools tab · expose several | `PATCH /resources/mcp_server/{uid}/tools/exposure` | `coffer mcp exposure-all` | `test_cli_parity.py` |
 | MCP servers · list | `GET /resources` | `coffer mcp list` | `test_cli_parity.py` |
+| MCP servers · Prompts tab · Get prompt | `POST /resources/mcp_server/{uid}/prompts/get` | `coffer mcp prompt get` | `test_cli_parity.py` |
 | MCP servers · Reach | `PUT /resources/{uid}/scope` | `coffer mcp reach` | `test_cli_parity.py` |
+| MCP servers · Resources tab · Read content | `POST /resources/mcp_server/{uid}/resources/read` | `coffer mcp resource read` | `test_cli_parity.py` |
 | MCP servers · Log tab | `GET /resources/mcp_server/{uid}/log` | `coffer mcp server-log` | `test_cli_parity.py` |
 | MCP servers · open a server | `GET /resources/{uid}` | `coffer mcp show` | `test_cli_parity.py` |
 | MCP servers · a server's state | `GET /resources/mcp_server/{uid}/status` | `coffer mcp status` | `test_cli_parity.py` |

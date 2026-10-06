@@ -729,7 +729,30 @@
       "viewInActivity": "View in Activity",
       "bulkTools": "Selected tools",
       "bulkResources": "Selected resources",
-      "bulkPrompts": "Selected prompts"
+      "bulkPrompts": "Selected prompts",
+      "preview": {
+        "name": "Name",
+        "mimeType": "Type",
+        "content": "Content",
+        "read": "Read content",
+        "reading": "Reading…",
+        "readAgain": "Read again",
+        "arguments": "Arguments",
+        "noArguments": "Takes no arguments.",
+        "required": "Required",
+        "messages": "Messages",
+        "get": "Get prompt",
+        "getting": "Getting…",
+        "fillRequired": "Fill in the required arguments first.",
+        "truncated": "Showing the first 64 KB.",
+        "binary": "Binary content ({{type}}, {{size}} bytes), not shown.",
+        "serverError": "The server answered with an error: {{error}}",
+        "empty": "The server returned nothing.",
+        "role": {
+          "user": "User",
+          "assistant": "Assistant"
+        }
+      }
     },
     "builtin": {
       "group": "Built-in",

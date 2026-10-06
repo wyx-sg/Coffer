@@ -55,6 +55,8 @@ GROUP_HELP: dict[str, str] = {
     "channel person": "The people paired with a channel.",
     "daemon port": "The port the daemon's next start uses.",
     "daemon residency": "Whether the daemon starts at login.",
+    "mcp prompt": "Fill one of a server's prompts and show the messages it makes.",
+    "mcp resource": "Read one of a server's resources now.",
     "mcp tool": "Switch a server's tools, prompts and resources on or off.",
     "provider price-list": "The bundled model price list.",
     "provider switch": "Switch an agent type's model to a connection: preview, then apply.",

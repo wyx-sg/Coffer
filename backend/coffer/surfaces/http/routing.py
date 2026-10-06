@@ -56,6 +56,7 @@ from coffer.surfaces.http.internal_engine_routes import router as internal_engin
 from coffer.surfaces.http.knowledge import change_router as knowledge_change_router
 from coffer.surfaces.http.knowledge import router as knowledge_router
 from coffer.surfaces.http.mcp.builtin_routes import router as mcp_builtin_router
+from coffer.surfaces.http.mcp.capability_preview_routes import router as mcp_preview_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
 from coffer.surfaces.http.mcp.config_test_routes import router as mcp_config_test_router
 from coffer.surfaces.http.mcp.custom_tool_routes import router as custom_tool_router
@@ -148,6 +149,7 @@ def include_all_routers(app: FastAPI) -> None:
         # MCP
         mcp_protocol_router,
         mcp_capability_router,
+        mcp_preview_router,
         mcp_server_test_router,
         mcp_config_test_router,  # testing a config before it is added (nothing saved)
         mcp_builtin_router,  # Coffer's own `coffer` server, read-only

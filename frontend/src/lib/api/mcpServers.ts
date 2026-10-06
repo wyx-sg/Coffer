@@ -10,6 +10,7 @@ export type McpServerLog = components["schemas"]["McpServerLogOut"];
 export type ToolTiering = components["schemas"]["ToolTieringOut"];
 export type McpTestResult = components["schemas"]["McpTestResultOut"];
 export type InvocationList = components["schemas"]["InvocationListOut"];
+export type CapabilityPreview = components["schemas"]["CapabilityPreviewOut"];
 
 export type ToolExposure = components["schemas"]["ToolExposureOut"];
 export type ToolExposureMode = ToolExposure["mode"];
@@ -112,6 +113,26 @@ export const mcpServersApi = {
       }),
     ),
   /** One test of a registered server: spawn/connect once and report latency. */
+  /** Read one resource now, for its row's details. */
+  readResource: (uid: string, uri: string): Promise<CapabilityPreview> =>
+    unwrap(
+      getApiClient().POST("/resources/mcp_server/{uid}/resources/read", {
+        params: { path: { uid } },
+        body: { uri },
+      }),
+    ),
+  /** Fill one prompt with the given arguments, for its row's details. */
+  getPrompt: (
+    uid: string,
+    name: string,
+    args: Record<string, string>,
+  ): Promise<CapabilityPreview> =>
+    unwrap(
+      getApiClient().POST("/resources/mcp_server/{uid}/prompts/get", {
+        params: { path: { uid } },
+        body: { name, arguments: args },
+      }),
+    ),
   test: (uid: string): Promise<McpTestResult> =>
     unwrap(getApiClient().POST("/resources/mcp_server/{uid}/test", { params: { path: { uid } } })),
 };
