@@ -705,7 +705,7 @@ The Tools, Resources and Prompts tabs MUST be uniform — each carrying a filter
 - **WHEN** the user types a partial name in the capability search box on the Tools tab
 - **THEN** only matching tools remain visible and non-matching tools are hidden
 
-### Requirement: Add MCP servers from one paste box
+### Requirement: Add MCP servers by pasting them into one box
 The MCP servers page MUST carry one **Add server** action, and no separate
 paste-JSON action. It opens a modal whose first step is one paste box that
 recognises what was pasted, so the user can paste whatever an MCP server's
@@ -721,10 +721,11 @@ README gives them:
   host.
 
 One recognised server MUST open the manual form prefilled with it; several MUST
-open the review step. The same dialog carries **Import from agents** as a link,
-which lists the direct MCP entries in the agents' own config files to adopt
-([agent-registry](../agent-registry/spec.md) "Adopt a direct MCP entry into Coffer"); it is not a
-second button on the page. The dialog adds MCP servers only: it offers no
+open the review step. The dialog MUST NOT offer importing the direct MCP
+entries in the agents' own config files: that is done on each agent's MCP
+servers tab ([agent-registry](../agent-registry/spec.md) "Adopt a direct MCP entry into Coffer"). While no
+server is registered, the page's welcome MAY list those entries per agent, each
+row opening that agent's MCP servers tab. The dialog adds MCP servers only: it offers no
 custom tool (an HTTP API imported from an OpenAPI document or defined by hand),
 which is added on the Custom tools page (see "Manage custom tool groups on their
 own page").
@@ -791,10 +792,10 @@ the dialog MUST NOT send that server's registration until the name is shortened.
 - **WHEN** the user pastes a `[mcp_servers.docs]` table with a command, arguments and an `env` table
 - **THEN** the manual form opens prefilled as a stdio server named `docs` with that command, arguments and environment, the secret-looking values offered as secrets
 
-#### Scenario: the add dialog links to importing from agents
-- **GIVEN** the MCP servers page
+#### Scenario: the add dialog offers no import from agents
+- **GIVEN** the MCP servers page, and an agent whose own config file holds a direct MCP entry
 - **WHEN** it renders and the user opens Add server
-- **THEN** the page carries one Add server action and no separate paste-JSON action, and the dialog carries an Import from agents link
+- **THEN** the page carries one Add server action and no separate paste-JSON action, and the dialog carries no Import from agents link
 - **AND** the dialog offers no custom tool, neither an OpenAPI import nor a hand-made HTTP request
 
 ### Requirement: Explain unreadable pasted input in the dialog
@@ -1387,24 +1388,6 @@ released to the test, which says the server is tested once it is added.
 - **WHEN** the user presses Test
 - **THEN** the app posts the form's config to `/api/v1/resources/mcp_server/test-config` with the typed value in `secret_values`, and shows "Test passed in 1.4 s" with the tools it listed
 - **AND** no resource is registered and no secret is written
-
-### Requirement: Review an import from the agents before it is applied
-Import from your agents MUST open the shared change preview of the daemon's
-import plan ([agent-registry](../agent-registry/spec.md) "Plan an import of
-agents' direct MCP entries") before anything is written: the servers found,
-each ticked, with the agents that hold it and a note when two agents' entries
-merge into one server or an entry duplicates a server Coffer already has;
-what will happen to Coffer and to each agent; and each agent config file the
-import edits, with its diff. A name the daemon cannot register is listed
-unticked. Unticking a server re-plans without it. Import MUST apply the ticked
-entries through the apply route, and the outcome MUST say which entries were
-not imported and why.
-
-#### Scenario: the import review shows each file's diff before it imports
-- **GIVEN** an agent whose config file holds one direct MCP entry
-- **WHEN** the user opens Import from your agents and presses Import 1 server
-- **THEN** the dialog first shows the plan with that agent's file and its diff, and only then posts the ticked entries to `/api/v1/agents/mcp-import/apply`
-- **AND** the entry is not adopted one by one through the agent's adopt route
 
 ### Requirement: Show the built-in coffer server read-only
 The MCP servers list MUST end with a Built-in group holding Coffer's own

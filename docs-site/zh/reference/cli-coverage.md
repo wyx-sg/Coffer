@@ -22,8 +22,8 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | Agents · MCP tab | `GET /agents/{uid}/mcp-entries` | `coffer agent mcp-entry list` | `test_cli_parity.py` |
 | Agents · MCP tab · remove | `DELETE /agents/{uid}/mcp-entries/{entry}` | `coffer agent mcp-entry remove` | `test_cli_parity.py` |
 | Agents · MCP tab · open an entry | `GET /agents/{uid}/mcp-entries/{entry}` | `coffer agent mcp-entry show` | `test_cli_parity.py` |
-| MCP servers · Import from agents · Import | `POST /agents/mcp-import/apply` | `coffer agent mcp-import apply` | `test_cli_parity.py` |
-| MCP servers · Import from agents · review | `POST /agents/mcp-import/plan` | `coffer agent mcp-import plan` | `test_cli_parity.py` |
+| Command line only · import several agents' entries at once | `POST /agents/mcp-import/apply` | `coffer agent mcp-import apply` | `test_cli_parity.py` |
+| MCP servers · first-run · the agents' own servers | `POST /agents/mcp-import/plan` | `coffer agent mcp-import plan` | `test_cli_parity.py` |
 | Agents · model picker | `GET /agent-providers/{agent_key}/models` | `coffer agent models` | `test_cli_parity.py` |
 | Agents · Memory tab · files | `GET /agents/{uid}/native-memory/files` | `coffer agent native-memory files` | `test_cli_parity.py` |
 | Agents · Memory tab | `GET /agents/{uid}/native-memory` | `coffer agent native-memory list` | `test_cli_parity.py` |

@@ -9,7 +9,7 @@ import type { AddedServer } from "./ApprovalStep";
 export type HeadingStep =
   | { kind: "approval"; added: AddedServer[] }
   | { kind: "review" }
-  | { kind: "paste" | "form" | "importAgents" };
+  | { kind: "paste" | "form" };
 
 export function headingOf(
   t: TFunction,

@@ -1,7 +1,7 @@
 // frontend/src/lib/mcp/pasteParse.ts
 //
 // The Add server paste box's one entry point (spec web-ui "Add MCP servers
-// from one paste box" / "Explain unreadable pasted input in the dialog").
+// by pasting them into one box" / "Explain unreadable pasted input in the dialog").
 // Recognises, first fit wins: JSON, Codex TOML, a URL, a command line.
 // Pure — no React, no network; the dialog renders what this returns.
 

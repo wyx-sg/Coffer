@@ -1,11 +1,10 @@
 // frontend/src/lib/hooks/useAgentDirectMcpEntries.ts — every registered agent's
-// direct MCP entries at once, for the Add server dialog's "Import from your
-// agents" and the first-run card (spec agent-registry "Plan an import of
-// agents' direct MCP entries").
+// direct MCP entries at once, for the MCP servers page's first-run card (spec
+// agent-registry "Plan an import of agents' direct MCP entries").
 //
 // One query per agent under the same key the agent's MCP servers tab reads
-// (`agentMcpEntriesKey`), so the dialog and the tab share one cache entry and
-// an import or adoption from either refreshes both.
+// (`agentMcpEntriesKey`), so the card and the tab share one cache entry and
+// an adoption on the tab refreshes the card.
 import { useQueries } from "@tanstack/react-query";
 
 import { agentsApi, type AgentOut } from "@/lib/api/agents";

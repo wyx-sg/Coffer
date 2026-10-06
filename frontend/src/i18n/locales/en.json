@@ -296,9 +296,6 @@
         "httpSub": "A server already running somewhere, reached over HTTP.",
         "httpRuns": "Coffer connects to it for each agent session"
       },
-      "elsewhere": "Already have them elsewhere?",
-      "importAgents": "Import from your agents",
-      "importFound": "Import from your agents · {{count}} found",
       "reviewN_one": "Review {{count}} server",
       "reviewN_other": "Review {{count}} servers",
       "continue": "Continue",
@@ -392,29 +389,6 @@
       "failedTail_other": "{{names}} could not be added; the reasons are on their cards.",
       "toastTestedOff_one": "Test passed · {{count}} tool",
       "toastTestedOff_other": "Test passed · {{count}} tools"
-    },
-    "import": {
-      "title": "Review import",
-      "sub": "Bring your agents' MCP servers into Coffer",
-      "none": "No direct MCP entries in your agents' config files.",
-      "nameUnusable": "Its name can't be added as is; adopt it from the agent's page to rename it.",
-      "importN_one": "Import {{count}} server",
-      "importN_other": "Import {{count}} servers",
-      "done_one": "Imported {{count}} server",
-      "done_other": "Imported {{count}} servers",
-      "partial": "Imported {{done}} of {{total}}. Not imported: {{names}} — {{reason}}",
-      "coffer": "Coffer",
-      "serversItem_one": "{{count}} server",
-      "serversItem_other": "{{count}} servers",
-      "happensCoffer_one": "Adds {{names}}, available to the agents that had it.",
-      "happensCoffer_other": "Adds {{names}}, each available to the agents that had it.",
-      "happensAgent_one": "Loses its {{names}} entry and gets it through Coffer. Its other settings stay as they are.",
-      "happensAgent_other": "Loses its own {{names}} entries and gets them through Coffer.",
-      "serversFound": "Servers found · {{count}}",
-      "mergedNote": "Same command in both — becomes one server.",
-      "duplicateNote": "Already in Coffer — only the duplicate entry is removed.",
-      "diffNote": "Secrets in these entries move to the keychain first; the removed lines are kept in Activity's record of this import.",
-      "footNote": "Only the entries shown are removed. Everything else in each file is left as it is."
     },
     "edit": {
       "title": "Edit {{name}}",
@@ -687,8 +661,7 @@
         "body": "Add a server once and every agent you choose gets its tools through Coffer's one endpoint.",
         "foundTitle_one": "Your agents already use {{count}} MCP server",
         "foundTitle_other": "Your agents already use {{count}} MCP servers",
-        "foundBody": "Import them and Coffer runs them for every agent you choose. Each one is removed from the agent's own config, so it isn't started twice.",
-        "reviewImport": "Review and import"
+        "foundBody": "Open an agent to import them; Coffer then runs each one for every agent you choose, and removes it from the agent's own config so it isn't started twice."
       },
       "clearSelection": "Clear selection",
       "selectedTitle_one": "{{count}} server selected",
