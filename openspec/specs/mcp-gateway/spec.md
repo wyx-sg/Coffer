@@ -330,6 +330,11 @@ changed. `coffer mcp tool enable` and `coffer mcp tool disable` call the same ro
 - **THEN** both capabilities are disabled, with the disabled ones marked disabled
 - **AND** an enable request naming a tool the server does not offer is refused and changes nothing
 
+#### Scenario: switching the last disabled tool back on holds beside a pin
+- **GIVEN** a server with tool `a` pinned to `listed` and tool `b` switched off
+- **WHEN** `b` is switched back on, and in a second server the pin on `a` is set back to `auto` while `b` stays off
+- **THEN** each change reads back after a restart — `b` enabled with `a` still pinned, and no pin left with `b` still off
+
 ### Requirement: Preserve capability decisions
 The system MUST preserve the user's enable/disable decisions across daemon restarts, upstream upgrades, and
 upstream temporary disappearances. A capability is discovered live from the upstream; only the user's
