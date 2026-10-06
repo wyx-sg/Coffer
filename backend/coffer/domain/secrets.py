@@ -225,6 +225,15 @@ class SecretApproval:
             )
         return "turn off approval for new secret destinations"
 
+    def destination(self) -> SecretDestination:
+        """Where a ``bind`` approval sends its secret, as the boundary checks it."""
+        return SecretDestination(
+            self.destination_kind or "",
+            self.destination_uid or "",
+            self.target or "",
+            self.destination_label or "",
+        )
+
 
 def batch_target(items: Iterable[tuple[str, str]]) -> str:
     """The target a batch grant is signed over: a digest of exactly the

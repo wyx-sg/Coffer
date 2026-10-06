@@ -51,12 +51,15 @@ export function firstSecret(group: Pick<CustomToolGroup, "headers" | "environmen
 }
 
 /** The secret a banner or a row names for `state`: the first header in that state (a
- *  pending approval is named by the group's `pending_secrets`), else the first secret. */
+ *  pending or refused approval is named by the group's `pending_secrets` or
+ *  `rejected_secrets`), else the first secret. */
 export function secretInState(
-  group: Pick<CustomToolGroup, "headers" | "environments" | "pending_secrets">,
-  state: "missing" | "pending_approval",
+  group: Pick<CustomToolGroup, "headers" | "environments" | "pending_secrets"> &
+    Partial<Pick<CustomToolGroup, "rejected_secrets">>,
+  state: "missing" | "pending_approval" | "rejected",
 ): string {
   if (state === "pending_approval" && group.pending_secrets[0]) return group.pending_secrets[0];
+  if (state === "rejected" && group.rejected_secrets?.[0]) return group.rejected_secrets[0];
   return allHeaders(group).find((h) => h.secret_state === state)?.secret ?? firstSecret(group);
 }
 

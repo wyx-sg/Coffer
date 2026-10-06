@@ -22,6 +22,7 @@ import {
 } from "@/lib/api/customTools";
 import { translateApiError } from "@/lib/api/errors";
 import { resourcesApi } from "@/lib/api/resources";
+import { secretsApi } from "@/lib/api/secret";
 import {
   customToolGroupKey,
   customToolsKey,
@@ -63,6 +64,25 @@ export function useApprovalNotice() {
     void qc.invalidateQueries({ queryKey: pendingApprovalsKey });
     toast.info(t("customTools.pendingApprovalSaved"));
   };
+}
+
+/** The refused banner's Ask again: puts each refused request back. In the desktop app the
+ *  request is approved on the spot with Touch ID (the mutation opts in to inline approval);
+ *  in a browser it waits on the approvals list. */
+export function useAskAgainForGroup(group: CustomToolGroup) {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: () => Promise.all((group.rejected_approvals ?? []).map((id) => secretsApi.askAgain(id))),
+    meta: { secretDestination: () => group.uid },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: customToolGroupKey(group.name) });
+      void qc.invalidateQueries({ queryKey: customToolsKey });
+      void qc.invalidateQueries({ queryKey: pendingApprovalsKey });
+    },
+    onError: (e) => toast.error(translateApiError(t, e)),
+  });
 }
 
 /** Re-read a group and the lists it shows in — after a secret it names was added elsewhere. */

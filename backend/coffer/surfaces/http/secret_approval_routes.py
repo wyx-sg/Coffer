@@ -1,5 +1,5 @@
-"""The secret boundary's approval routes: list, read, approve, reject,
-and approve or reject several at once.
+"""The secret boundary's approval routes: list, read, approve, reject, ask
+again after a refusal, and approve or reject several at once.
 
 Spec secret "Hold a secret for a new destination until a person approves it".
 Mounted on the secret boundary's router (``secret_boundary_routes``), whose
@@ -134,6 +134,28 @@ async def reject(
         details={"approval_id": rejected.id, "op": rejected.op, "ref": rejected.ref},
     )
     return approval_out(rejected)
+
+
+@router.post("/approvals/{approval_id}/ask-again", response_model=ApprovalListOut)
+async def ask_again(
+    approval_id: str,
+    audit: AuditService = Depends(get_audit_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> ApprovalListOut:
+    """Ask again for a refused binding: the refusal is retired and a new
+    request for the same target waits (answered: the approvals now waiting,
+    none when the binding needs no approval). Needs no presence: asking grants
+    nothing, the person still approves in the desktop app."""
+    boundary = get_secret_boundary()
+    asked = await asyncio.to_thread(boundary.ask_again, approval_id, actor=actor)
+    waiting = [a for a in asked if a.status == "pending"]
+    for created in waiting:
+        await audit.record(
+            AuditEventType.SECRET_APPROVAL_REQUESTED.value,
+            actor=actor,
+            details={"approval_id": created.id, "op": created.op, "ref": created.ref},
+        )
+    return ApprovalListOut(approvals=[approval_out(a) for a in waiting])
 
 
 @router.post("/approvals/approve", response_model=BatchOut)

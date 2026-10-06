@@ -777,15 +777,23 @@ environment's secrets are resolved for a call. A switched-off environment asks
 for no approval. A group's request MUST NOT follow a redirect, and no argument
 hole in a tool's path, query, headers or body MAY be filled from a stored
 secret. The group MUST report each secret header's state as `present`,
-`missing` or `pending_approval`, per environment and, as a whole, the worst of
-them (`none` with no secret header), with the ids of the approvals it waits on
-and the names of the secrets concerned.
+`missing`, `rejected` (a person refused its binding) or `pending_approval`, per
+environment and, as a whole, the worst of them in that order (`none` with no
+secret header), with the ids of the approvals it waits on and of the refused
+ones, and the names of the secrets concerned. A refused binding is not reported
+as waiting: nothing asks the person until someone asks again.
 
 #### Scenario: binding a stored secret to a group waits for approval
 - **GIVEN** a stored secret `billing-token`
 - **WHEN** a group is created with its `Authorization` header bound to `billing-token`, and an agent calls one of its tools
 - **THEN** the group reports `pending_approval` naming one approval for its base URL and the secret `billing-token`, and the call fails with `SECRET_BINDING_PENDING` having sent nothing
 - **AND** once the approval is applied the next call carries the secret
+
+#### Scenario: a refused binding shows as refused, not waiting
+- **GIVEN** a group whose secret binding waits for approval
+- **WHEN** a person rejects the approval, and later asks again for it
+- **THEN** the group reports `rejected` with the refused approval's id and the secret's name and no pending approval, and its health is `attention` for `approval_rejected`
+- **AND** after asking again it reports `pending_approval` naming the new approval
 
 #### Scenario: moving a group's base URL asks again
 - **GIVEN** a group whose secret is approved for its base URL
@@ -815,7 +823,7 @@ approval MUST report it as a pending approval on the Secrets page
 ([secret](../secret/spec.md) "Hold a secret for a new destination until a
 person approves it"). A group's health MUST be `off` while disabled, `failing`
 when its last call in 24 hours failed, `attention` while a secret of an enabled
-environment is missing or waits for approval, `healthy` after a successful last
+environment is missing, waits for approval or was refused, `healthy` after a successful last
 call, and `idle` with no call in 24 hours.
 
 #### Scenario: create a custom-tool group and add a tool
@@ -1004,7 +1012,7 @@ value is never read for this; a server that cites none never asks the secret sto
 - **THEN** it names `Authorization` as the key and the secret's reference, and once the value is stored it names none
 
 ### Requirement: Show what an MCP server requires
-A server's status read MUST also list what its command and settings need from this machine, worked out from the config alone and without starting the server: for a stdio server its **launcher** (the command's executable — `npx`, `uvx`, `docker`, `bunx`, `node`, `python` and the like) as a CLI that is `found`, with its version when it prints one, or `not_found`; and every **secret** its environment or headers cite — through a stored secret bound to the variable or header, or a `coffer://secret/<name>` written in a plain value — as `set`, `missing` on this machine or `waiting_approval`, naming the variable or header and the secret. A launcher's version is read once and kept until the daemon restarts; one that is not found is looked up again on every read. An HTTP server has no launcher, and no secret's value is read.
+A server's status read MUST also list what its command and settings need from this machine, worked out from the config alone and without starting the server: for a stdio server its **launcher** (the command's executable — `npx`, `uvx`, `docker`, `bunx`, `node`, `python` and the like) as a CLI that is `found`, with its version when it prints one, or `not_found`; and every **secret** its environment or headers cite — through a stored secret bound to the variable or header, or a `coffer://secret/<name>` written in a plain value — as `set`, `missing` on this machine, `waiting_approval`, or `refused` once a person refused its binding (a refusal is not a wait), naming the variable or header and the secret. A launcher's version is read once and kept until the daemon restarts; one that is not found is looked up again on every read. An HTTP server has no launcher, and no secret's value is read.
 
 #### Scenario: a server's page lists what it requires
 - **GIVEN** a stdio server started with `npx` whose environment binds one stored secret that is set, one that is missing, and one that waits for approval

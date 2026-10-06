@@ -62,6 +62,7 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Secrets · approvals · Approve (desktop app, after Touch ID or the login password) | `GET /desktop/requests/{request_id}` | `coffer approval approve` | `test_approval_cli.py` |
 | Secrets · approvals · Approve (desktop app, after Touch ID or the login password) | `POST /secrets/approvals/approve` | `coffer approval approve` | `test_approval_cli.py` |
 | Secrets · approvals · Approve (desktop app, after Touch ID or the login password) | `POST /secrets/approvals/{approval_id}/approve` | `coffer approval approve` | `test_approval_cli.py` |
+| Secrets · approvals · Ask again | `POST /secrets/approvals/{approval_id}/ask-again` | `coffer approval ask-again` | `test_approval_cli.py` |
 | Secrets · approvals · list (Secrets page, Overview) | `GET /secrets/approvals` | `coffer approval list` | `test_approval_cli.py` |
 | Secrets · approvals · Reject | `POST /secrets/approvals/reject` | `coffer approval reject` | `test_approval_cli.py` |
 | Secrets · approvals · Reject | `POST /secrets/approvals/{approval_id}/reject` | `coffer approval reject` | `test_approval_cli.py` |
