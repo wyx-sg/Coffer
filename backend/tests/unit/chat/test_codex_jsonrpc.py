@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient
+from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient, NdjsonLineReader
 
 
 class FakeReader:
@@ -313,4 +313,37 @@ async def test_stream_end_during_failing_write_leaves_no_unretrieved_future() ->
     finally:
         loop.set_exception_handler(None)
     assert unretrieved == []
+    await client.close()
+
+
+async def test_line_reader_returns_a_frame_longer_than_the_stream_limit() -> None:
+    # A thread/resume result carries the whole thread: one line far past
+    # StreamReader's limit, which its own readline would refuse and drop.
+    stream = asyncio.StreamReader(limit=64)
+    big = {"id": 1, "result": {"thread": {"id": "t", "turns": ["x" * 1000]}}}
+    stream.feed_data((json.dumps(big) + "\n").encode() + b'{"id": 2}\nlast')
+    stream.feed_eof()
+    reader = NdjsonLineReader(stream)
+
+    assert json.loads(await reader.readline()) == big
+    assert await reader.readline() == b'{"id": 2}\n'
+    assert await reader.readline() == b"last"
+    assert await reader.readline() == b""
+
+
+async def test_oversized_response_resolves_the_request() -> None:
+    stream = asyncio.StreamReader(limit=64)
+    writer = FakeWriter()
+    client = CodexRpcClient(NdjsonLineReader(stream), writer)
+    client.start()
+
+    request = asyncio.create_task(client.request("thread/resume", {"threadId": "t"}))
+    for _ in range(100):
+        if writer.frames:
+            break
+        await asyncio.sleep(0)
+    result = {"thread": {"id": "t", "turns": ["x" * 1000]}}
+    stream.feed_data((json.dumps({"id": writer.frames[0]["id"], "result": result}) + "\n").encode())
+
+    assert await asyncio.wait_for(request, 1) == result
     await client.close()
