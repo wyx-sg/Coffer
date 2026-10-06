@@ -103,6 +103,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `CUSTOM_TOOL_ENVIRONMENT_REQUIRED` | 422 | 该工具组开启了不止一个环境，而调用没有指定。`details.environments` 列出已开启的环境。什么都没发送。 | 传入 `coffer_environment`（命令行上是 `--env`）。见[自定义工具 → 选择一次调用的环境](/zh/guides/custom-tools#choosing-the-environment-of-a-call)。 |
 | `CUSTOM_TOOL_ENVIRONMENT_UNKNOWN` | 422 | 调用指定了该工具组没有的环境。`details.environments` 列出已开启的环境。什么都没发送。 | 使用列出的名字之一，与 `coffer custom-tool env list` 打印的完全一致。 |
 | `CUSTOM_TOOL_ENVIRONMENT_DISABLED` | 422 | 调用指定的环境已关闭。什么都没发送。 | 打开它（`coffer custom-tool env enable`，或**环境**下它的开关），或调用另一个环境。 |
+| `CUSTOM_TOOL_REQUEST_INVALID` | 422 | 预览（`--dry-run`）在所选环境中无法构建工具的请求：工具用了该环境没有定义的 `{env:NAME}`，或请求体模板产出的不是 JSON。`details` 写明分组和环境。什么都没发送。 | 在该环境中定义这个变量（`coffer custom-tool env set-var`），或修正工具的模板。 |
 | `CUSTOM_TOOL_ENVIRONMENT_NOT_FOUND` | 404 | 管理请求指定了该工具组没有的环境。 | 用 `coffer custom-tool env list` 或在工具组页面列出它们。 |
 | `CUSTOM_TOOL_ENVIRONMENT_EXISTS` | 409 | 该工具组已有同名环境。 | 换个名字，或修改已有的环境。 |
 | `CUSTOM_TOOL_LAST_ENVIRONMENT` | 409 | 删除这个环境会让工具组一个环境都不剩。 | 先添加另一个环境，或删除整个工具组。 |

@@ -72,6 +72,7 @@ class HttpApiToolRunner:
             body=outcome.body,
             truncated=outcome.truncated,
             content_type=outcome.content_type,
+            response_headers=outcome.headers,
         )
 
     async def run_unsaved(

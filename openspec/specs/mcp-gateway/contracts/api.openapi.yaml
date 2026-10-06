@@ -474,6 +474,53 @@ paths:
       summary: Update Environment
       tags:
       - custom-tools
+  /api/v1/custom-tools/{name}/preview:
+    post:
+      description: The request a draft tool would send; sends nothing and reads no secret value.
+      operationId: preview_draft_tool_api_v1_custom_tools__name__preview_post
+      parameters:
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomToolTestIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomToolRequestPreviewOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Preview Draft Tool
+      tags:
+      - custom-tools
   /api/v1/custom-tools/{name}/reimport:
     post:
       operationId: apply_reimport_api_v1_custom_tools__name__reimport_post
@@ -786,6 +833,59 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Update Tool
+      tags:
+      - custom-tools
+  /api/v1/custom-tools/{name}/tools/{tool}/preview:
+    post:
+      description: The request a saved tool would send; sends nothing and reads no secret value.
+      operationId: preview_saved_tool_api_v1_custom_tools__name__tools__tool__preview_post
+      parameters:
+      - in: path
+        name: name
+        required: true
+        schema:
+          title: Name
+          type: string
+      - in: path
+        name: tool
+        required: true
+        schema:
+          title: Tool
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomToolSavedTestIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomToolRequestPreviewOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Preview Saved Tool
       tags:
       - custom-tools
   /api/v1/custom-tools/{name}/tools/{tool}/test:
@@ -2484,6 +2584,53 @@ components:
           title: Path
       title: CustomToolPatch
       type: object
+    CustomToolPreviewHeaderOut:
+      properties:
+        name:
+          title: Name
+          type: string
+        secret:
+          anyOf:
+          - $ref: '#/components/schemas/CustomToolPreviewSecretOut'
+          - type: 'null'
+        value:
+          title: Value
+          type: string
+      required:
+      - name
+      - value
+      - secret
+      title: CustomToolPreviewHeaderOut
+      type: object
+    CustomToolPreviewSecretOut:
+      description: The stored secret a header reads — its reference, never its value.
+      properties:
+        id:
+          title: Id
+          type: string
+        name:
+          title: Name
+          type: string
+        scheme:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Scheme
+        state:
+          enum:
+          - none
+          - present
+          - missing
+          - pending_approval
+          title: State
+          type: string
+      required:
+      - id
+      - name
+      - scheme
+      - state
+      title: CustomToolPreviewSecretOut
+      type: object
     CustomToolReimportChangeOut:
       description: A kept tool whose request the spec changed.
       properties:
@@ -2608,6 +2755,53 @@ components:
       - warnings
       title: CustomToolReimportPreviewOut
       type: object
+    CustomToolRequestPreviewOut:
+      description: What one call would send; nothing was sent and no secret was read.
+      properties:
+        body:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Body
+        environment:
+          title: Environment
+          type: string
+        headers:
+          items:
+            $ref: '#/components/schemas/CustomToolPreviewHeaderOut'
+          title: Headers
+          type: array
+        method:
+          title: Method
+          type: string
+        timeout_seconds:
+          title: Timeout Seconds
+          type: integer
+        timeout_source:
+          enum:
+          - environment
+          - group
+          title: Timeout Source
+          type: string
+        url:
+          title: Url
+          type: string
+        variables:
+          additionalProperties:
+            type: string
+          title: Variables
+          type: object
+      required:
+      - environment
+      - method
+      - url
+      - headers
+      - body
+      - timeout_seconds
+      - timeout_source
+      - variables
+      title: CustomToolRequestPreviewOut
+      type: object
     CustomToolSavedTestIn:
       description: A saved tool run once in one environment.
       properties:
@@ -2679,6 +2873,11 @@ components:
         ok:
           title: Ok
           type: boolean
+        response_headers:
+          additionalProperties:
+            type: string
+          title: Response Headers
+          type: object
         status:
           anyOf:
           - type: integer
@@ -2710,6 +2909,7 @@ components:
       - failure
       - handoff
       - environment
+      - response_headers
       title: CustomToolTestOut
       type: object
     CustomToolUnsavedTestIn:

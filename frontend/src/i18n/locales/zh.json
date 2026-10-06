@@ -1819,6 +1819,7 @@
     "APPROVAL_TARGET_CHANGED": "批准过程中目标发生了变化。请检查新的目标后重新批准。",
     "CUSTOM_TOOL_ARGUMENTS_INVALID": "部分参数不符合工具的 schema，没有发出任何请求。",
     "CUSTOM_TOOL_ENVIRONMENT_DISABLED": "该环境已关闭。请打开它，或选择其他环境。",
+    "CUSTOM_TOOL_REQUEST_INVALID": "在该环境中无法构建请求：用到了该环境没有定义的变量，或请求体模板不是 JSON。",
     "CUSTOM_TOOL_ENVIRONMENT_EXISTS": "这个分组已有同名环境。",
     "CUSTOM_TOOL_ENVIRONMENT_NOT_FOUND": "这个分组没有这个名字的环境。",
     "CUSTOM_TOOL_ENVIRONMENT_REQUIRED": "请选择一个环境：这个分组开启了不止一个环境。",
@@ -4729,7 +4730,7 @@
     }
   },
   "customTools": {
-    "subtitle": "Coffer 替你的智能体发出的 HTTP API 请求，按共用的基础 URL 和密钥分组。",
+    "subtitle": "Coffer 替你的智能体发出的 HTTP API 请求，按分组管理。一个分组可以有多个环境，每个环境有自己的基础 URL、请求头和密钥。",
     "title": "自定义工具",
     "tabs": {
       "overview": "概览",
@@ -4756,7 +4757,9 @@
       "toolCount_one": "{{count}} 个工具",
       "hostTools_one": "{{host}} · {{count}} 个工具",
       "allAgents": "全部智能体",
-      "approvalRejected": "密钥审批已被拒绝"
+      "approvalRejected": "密钥审批已被拒绝",
+      "envsTools_one": "{{envs}} 个环境 · {{count}} 个工具",
+      "envsTools_other": "{{envs}} 个环境 · {{count}} 个工具"
     },
     "add": {
       "action": "添加自定义工具",
@@ -4772,9 +4775,9 @@
       "newGroupSub": "独立的名称、base URL 和密钥",
       "noGroupMatches": "没有匹配的分组",
       "startNew": "开始新分组",
-      "existingNote": "添加到 {{group}} 的请求使用它的 base URL 和密钥。只有新建分组时才能导入 OpenAPI 规范。",
+      "existingNote": "添加到 {{group}} 的请求在它的各个环境中运行，使用各环境自己的基础 URL 和密钥。只有新建分组时才能导入 OpenAPI 规范。",
       "change": "更改",
-      "handSummary": "base URL 和认证来自分组",
+      "handSummary": "基础 URL 和认证来自分组的环境",
       "importSummary": "你选中的每个操作都会成为新分组中的一个工具",
       "addTo": "添加到 {{group}}",
       "into": "放入 {{group}}",
@@ -4861,7 +4864,7 @@
     },
     "newGroup": {
       "title": "新分组",
-      "subtitle": "一个分组共用一个基础 URL、一个认证请求头和可使用它工具的范围。",
+      "subtitle": "一个分组包含它的环境（每个环境有基础 URL 和请求头，其中可以有密钥）以及可使用它工具的范围。新建时先有一个环境。",
       "create": "创建分组"
     },
     "group": {
@@ -4908,7 +4911,8 @@
       "missingBody_one": "在它恢复之前，已开启的 {{count}} 个工具都会失败。请在密钥页面添加它，或让分组改用另一个密钥。",
       "rejectedTitle": "{{secret}} 在这个分组的使用已被拒绝",
       "rejectedBody": "在重新申请并获批准之前，对这个分组工具的调用都会失败，也不会带上这个值。",
-      "askAgain": "重新申请"
+      "askAgain": "重新申请",
+      "failingTitleGroup": "对 {{group}} 的调用正在失败"
     },
     "definition": {
       "title": "定义",
@@ -4972,7 +4976,10 @@
       "requestHelpArgs": "接在 {{url}} 后面。{{holes}} 来自参数。",
       "changesDataHelpShort": "POST、PUT、PATCH 和 DELETE 默认开启。智能体会把它作为工具的只读或破坏性提示。",
       "fromGroup": "来自分组",
-      "addHeaderThis": "为此请求添加请求头"
+      "addHeaderThis": "为此请求添加请求头",
+      "requestHelpEnv": "拼接在环境 {{environment}} 的基础 URL {{url}} 后面。",
+      "requestHelpNoEnv": "拼接在请求所在环境的基础 URL 后面。",
+      "fromEnvironment": "来自环境 {{environment}}"
     },
     "test": {
       "title": "测试",
@@ -5003,7 +5010,9 @@
         "connect": "Coffer 无法从这台 Mac 建立连接{{detail}}。如果你通过 VPN 或 proxy 上网，请确认它能访问 {{host}}，然后重试。没有保存任何内容。",
         "blocked": "分组保存前，Coffer 只测试能解析到公网地址的 base URL。请先添加工具，再在分组中测试。",
         "rejected": "API 拒绝了 {{secret}}。如果它已过期，请修改它的值；{{group}} 中的每个工具都使用同一个密钥。",
-        "httpError": "API 返回了错误，响应见下方。请检查路径和参数的值，然后重试。没有保存任何内容。"
+        "httpError": "API 返回了错误，响应见下方。请检查路径和参数的值，然后重试。没有保存任何内容。",
+        "rejectedEnv": "API 拒绝了 {{secret}}。如果它已过期，请修改它的值；这个分组的每个工具在 {{environment}} 中都使用它。",
+        "timeoutEnv": "Coffer 在环境 {{environment}} 自己的 {{seconds}} 秒超时后停止了等待。如果只是 API 慢，请在“环境”中调大超时；如果它本该很快响应，请交给智能体查原因。没有保存任何内容。"
       },
       "cutShort": "已在 {{size}} 处截断。",
       "cutShortBody": "智能体也只会拿到前 {{size}}。请用参数缩小请求范围，或让 API 返回更少内容。",
@@ -5016,7 +5025,14 @@
         "add": "使用 {{secret}} 运行一次；添加工具前不会保存任何内容。"
       },
       "environment": "环境",
-      "ranIn": "在 {{environment}} 中运行"
+      "ranIn": "在 {{environment}} 中运行",
+      "pickEnvironment": "选择环境",
+      "envNone": "这个分组没有已开启的环境，测试不会运行。请在“环境”中开启一个。",
+      "env": {
+        "disabled": "环境 {{environment}} 已关闭，测试不会运行。请选择一个已开启的环境，或在“环境”中重新开启它。",
+        "deleted": "环境 {{environment}} 已被删除，测试不会运行。请选择其他环境。"
+      },
+      "responseHeaders": "响应头"
     },
     "editGroup": {
       "title": "编辑 {{name}}",
@@ -5057,7 +5073,7 @@
     },
     "firstRun": {
       "title": "还没有自定义工具",
-      "body": "自定义工具是 Coffer 替智能体发出的一次 HTTP 请求——无需运行 MCP 服务器。工具放在分组里，同一分组共用一个基础 URL、一个密钥和可使用的范围。",
+      "body": "自定义工具是 Coffer 替智能体发出的一次 HTTP 请求——无需运行 MCP 服务器。工具放在分组里；一个分组包含它的环境（每个环境有自己的基础 URL、请求头和密钥）和可使用它工具的范围。",
       "importBody": "从 URL 或文件里挑选操作；这次导入成为一个分组。",
       "importPoint": "之后可重新导入以获取改动。",
       "handBody": "方法、URL 模板、请求头、请求体和参数。",
@@ -5110,6 +5126,21 @@
         "pending_approval": "等待批准",
         "none": "无密钥",
         "rejected": "已拒绝"
+      }
+    },
+    "preview": {
+      "title": "{{environment}} 中的请求",
+      "secretState": {
+        "present": "已设置",
+        "missing": "缺失",
+        "pending_approval": "等待批准",
+        "none": "无密钥"
+      },
+      "variables": "变量：",
+      "missingVariables": "环境 {{environment}} 没有定义 {{names}}，在这里无法构建请求。",
+      "timeout": {
+        "environment": "超时 {{seconds}} 秒（环境 {{environment}} 自己的）",
+        "group": "超时 {{seconds}} 秒（分组的）"
       }
     }
   },

@@ -374,7 +374,7 @@ describe("CustomToolsPage", () => {
     fireEvent.click(within(dialog).getByRole("combobox", { name: "Put it in" }));
     fireEvent.click(within(dialog).getByRole("option", { name: /^billing/ }));
     expect(within(dialog).queryByRole("radio", { name: /Import an OpenAPI spec/ })).toBeNull();
-    expect(within(dialog).getByText(/uses its base URL and secret/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/runs in its environments, each with its own base URL and secret/)).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
 
     dialog = await screen.findByRole("dialog", { name: "Add a request" });

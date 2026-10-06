@@ -293,6 +293,10 @@ class CustomToolTestOut(BaseModel):
     handoff: HandoffOut | None = None
     #: The environment the request was made in (``null`` for an unsaved group).
     environment: str | None = None
+    #: The response headers that help find the request on the API's side —
+    #: request and trace ids, ``server``, ``date`` — names lower-cased, values
+    #: masked; every other header is left out. Empty when nothing answered.
+    response_headers: dict[str, str] = Field(default_factory=dict)
 
 
 class OpenApiReadIn(BaseModel):

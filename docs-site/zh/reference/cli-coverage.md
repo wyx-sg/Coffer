@@ -149,7 +149,9 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | Custom tools · switch a tool on | `PATCH /custom-tools/{name}/tools/{tool}` | `coffer custom-tool tool enable` | `test_custom_tool_cli.py` |
 | Custom tools · a group's Tools tab | `GET /custom-tools/{name}` | `coffer custom-tool tool list` | `test_custom_tool_cli.py` |
 | Custom tools · open a tool | `GET /custom-tools/{name}` | `coffer custom-tool tool show` | `test_custom_tool_cli.py` |
+| Custom tools · test a saved tool | `POST /custom-tools/{name}/tools/{tool}/preview` | `coffer custom-tool tool test` | `test_custom_tool_cli.py` |
 | Custom tools · test a saved tool | `POST /custom-tools/{name}/tools/{tool}/test` | `coffer custom-tool tool test` | `test_custom_tool_cli.py` |
+| Custom tools · test a tool being edited | `POST /custom-tools/{name}/preview` | `coffer custom-tool tool test-draft` | `test_custom_tool_cli.py` |
 | Custom tools · test a tool being edited | `POST /custom-tools/{name}/test` | `coffer custom-tool tool test-draft` | `test_custom_tool_cli.py` |
 | Custom tools · test a request before its group is saved | `POST /custom-tools/test` | `coffer custom-tool tool test-unsaved` | `test_custom_tool_cli.py` |
 | Custom tools · edit a tool | `PATCH /custom-tools/{name}/tools/{tool}` | `coffer custom-tool tool update` | `test_custom_tool_cli.py` |

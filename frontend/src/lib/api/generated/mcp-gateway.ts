@@ -116,6 +116,26 @@ export interface paths {
         patch: operations["update_environment_api_v1_custom_tools__name__environments__environment__patch"];
         trace?: never;
     };
+    "/api/v1/custom-tools/{name}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Draft Tool
+         * @description The request a draft tool would send; sends nothing and reads no secret value.
+         */
+        post: operations["preview_draft_tool_api_v1_custom_tools__name__preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/custom-tools/{name}/reimport": {
         parameters: {
             query?: never;
@@ -203,6 +223,26 @@ export interface paths {
         head?: never;
         /** Update Tool */
         patch: operations["update_tool_api_v1_custom_tools__name__tools__tool__patch"];
+        trace?: never;
+    };
+    "/api/v1/custom-tools/{name}/tools/{tool}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Saved Tool
+         * @description The request a saved tool would send; sends nothing and reads no secret value.
+         */
+        post: operations["preview_saved_tool_api_v1_custom_tools__name__tools__tool__preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/custom-tools/{name}/tools/{tool}/test": {
@@ -943,6 +983,31 @@ export interface components {
             /** Path */
             path?: string | null;
         };
+        /** CustomToolPreviewHeaderOut */
+        CustomToolPreviewHeaderOut: {
+            /** Name */
+            name: string;
+            secret: components["schemas"]["CustomToolPreviewSecretOut"] | null;
+            /** Value */
+            value: string;
+        };
+        /**
+         * CustomToolPreviewSecretOut
+         * @description The stored secret a header reads — its reference, never its value.
+         */
+        CustomToolPreviewSecretOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Scheme */
+            scheme: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "none" | "present" | "missing" | "pending_approval";
+        };
         /**
          * CustomToolReimportChangeOut
          * @description A kept tool whose request the spec changed.
@@ -997,6 +1062,33 @@ export interface components {
             warnings: string[];
         };
         /**
+         * CustomToolRequestPreviewOut
+         * @description What one call would send; nothing was sent and no secret was read.
+         */
+        CustomToolRequestPreviewOut: {
+            /** Body */
+            body: string | null;
+            /** Environment */
+            environment: string;
+            /** Headers */
+            headers: components["schemas"]["CustomToolPreviewHeaderOut"][];
+            /** Method */
+            method: string;
+            /** Timeout Seconds */
+            timeout_seconds: number;
+            /**
+             * Timeout Source
+             * @enum {string}
+             */
+            timeout_source: "environment" | "group";
+            /** Url */
+            url: string;
+            /** Variables */
+            variables: {
+                [key: string]: string;
+            };
+        };
+        /**
          * CustomToolSavedTestIn
          * @description A saved tool run once in one environment.
          */
@@ -1035,6 +1127,10 @@ export interface components {
             handoff: components["schemas"]["HandoffOut"] | null;
             /** Ok */
             ok: boolean;
+            /** Response Headers */
+            response_headers: {
+                [key: string]: string;
+            };
             /** Status */
             status: number | null;
             /** Status Line */
@@ -2170,6 +2266,52 @@ export interface operations {
             };
         };
     };
+    preview_draft_tool_api_v1_custom_tools__name__preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomToolTestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolRequestPreviewOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     apply_reimport_api_v1_custom_tools__name__reimport_post: {
         parameters: {
             query?: never;
@@ -2426,6 +2568,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomToolGroupOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_saved_tool_api_v1_custom_tools__name__tools__tool__preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                name: string;
+                tool: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomToolSavedTestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolRequestPreviewOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
