@@ -5134,7 +5134,8 @@
         "present": "已设置",
         "missing": "缺失",
         "pending_approval": "等待批准",
-        "none": "无密钥"
+        "none": "无密钥",
+        "rejected": "已拒绝"
       },
       "variables": "变量：",
       "missingVariables": "环境 {{environment}} 没有定义 {{names}}，在这里无法构建请求。",

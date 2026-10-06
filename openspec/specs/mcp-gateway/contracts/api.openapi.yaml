@@ -2621,6 +2621,7 @@ components:
           - none
           - present
           - missing
+          - rejected
           - pending_approval
           title: State
           type: string

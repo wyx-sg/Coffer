@@ -5134,7 +5134,8 @@
         "present": "Set",
         "missing": "Missing",
         "pending_approval": "Waiting for approval",
-        "none": "No secret"
+        "none": "No secret",
+        "rejected": "Refused"
       },
       "variables": "Variables:",
       "missingVariables": "{{environment}} defines no {{names}}, so the request cannot be built there.",

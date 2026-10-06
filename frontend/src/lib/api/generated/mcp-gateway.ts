@@ -1006,7 +1006,7 @@ export interface components {
              * State
              * @enum {string}
              */
-            state: "none" | "present" | "missing" | "pending_approval";
+            state: "none" | "present" | "missing" | "rejected" | "pending_approval";
         };
         /**
          * CustomToolReimportChangeOut
