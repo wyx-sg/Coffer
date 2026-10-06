@@ -66,6 +66,8 @@ mod update_relaunch;
 mod update_state;
 mod updater;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use tauri::{Manager, RunEvent, WindowEvent};
 
 use tray::should_close_app;
@@ -170,6 +172,12 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             if let Some(window) = app.get_webview_window("main") {
                 traffic_lights::watch(&window);
+                let target = window.clone();
+                traffic_lights::on_full_screen_exit(&window, move || {
+                    if HIDE_AFTER_FULL_SCREEN.swap(false, Ordering::SeqCst) {
+                        let _ = target.hide();
+                    }
+                });
             }
             Ok(())
         })
@@ -177,7 +185,7 @@ pub fn run() {
             WindowEvent::CloseRequested { api, .. } => {
                 // Intercept close — hide to tray instead of exiting.
                 api.prevent_close();
-                let _ = window.hide();
+                hide_to_tray(window);
             }
             // AppKit lays the title bar out again after each of these, and
             // that drops the lights back to the system's spot.
@@ -220,6 +228,21 @@ pub fn run() {
             }
             _ => {}
         });
+}
+
+/// Set when close is pressed in full screen: the window leaves full screen
+/// first and is hidden once AppKit says it has, because a window hidden while
+/// in full screen leaves its Space behind as a black screen.
+static HIDE_AFTER_FULL_SCREEN: AtomicBool = AtomicBool::new(false);
+
+/// Hide the window to the tray.
+fn hide_to_tray<R: tauri::Runtime>(window: &tauri::Window<R>) {
+    if cfg!(target_os = "macos") && window.is_fullscreen().unwrap_or(false) {
+        HIDE_AFTER_FULL_SCREEN.store(true, Ordering::SeqCst);
+        let _ = window.set_fullscreen(false);
+        return;
+    }
+    let _ = window.hide();
 }
 
 #[cfg(test)]
