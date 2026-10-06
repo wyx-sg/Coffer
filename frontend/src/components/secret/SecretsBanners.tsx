@@ -110,9 +110,16 @@ export function SecretsBanners({ rows, approvals, onAddValues }: Props) {
     items.find((i) => i.kind === "secret" && i.reason_code === reason)?.key;
   const isIgnored = (reason: string) =>
     ignored.some((i) => i.kind === "secret" && i.reason_code === reason);
+  // The set can change after the list was read (a new approval, a value added), and the daemon
+  // refuses a key that no longer names an item: so × reads the list afresh and ignores what is
+  // waiting now, which is what the banner — built from the page's own rows — shows.
   const ignorer = (reason: string) => {
-    const key = keyOf(reason);
-    return key ? () => ignore.mutate(key) : undefined;
+    if (!keyOf(reason)) return undefined;
+    return () =>
+      void attention.refetch().then(({ data }) => {
+        const key = data?.items.find((i) => i.kind === "secret" && i.reason_code === reason)?.key;
+        if (key) ignore.mutate(key);
+      });
   };
 
   const missing = rows.filter(isMissingHere);
