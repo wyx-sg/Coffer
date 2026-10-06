@@ -2258,6 +2258,12 @@ A transport that must shorten a snapshot to its own limit clips the answer's
 oldest words and keeps the status block whole; only a limit too small for the
 block drops the step lines, then the header.
 
+A transport whose live surface must only ever grow (`live_text_append_only`:
+SeaTalk, whose client re-types the whole message when anything already shown
+changes) shows an append-only log instead of this block — `⏳ Working` and the
+agent's text, no clock and no step lines; see channels/seatalk "Stream the
+reply under SeaTalk's streaming contract".
+
 #### Scenario: a long turn shows elapsed time and step count in one status line
 - **GIVEN** a turn that has run for 2 minutes 14 seconds and called eight tools,
   one of which failed

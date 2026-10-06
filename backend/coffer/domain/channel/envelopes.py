@@ -144,6 +144,11 @@ class ChannelCapabilities:
     # is a status message the renderer deletes before sending the real reply, so
     # opening it early would post something only to remove it again.
     live_text_persists: bool = False
+    # Whether that surface must only ever GROW. SeaTalk's client types an update
+    # out when it appends to what is shown, but clears the message and re-types it
+    # from the top when anything earlier changed — so its live snapshots are an
+    # append-only log (``turn_log``), not the status block redrawn in place.
+    live_text_append_only: bool = False
     supports_media: bool = False  # outbound file/photo upload (send_media)
     supports_history_fetch: bool = False  # can fetch recent/thread messages for context
     supports_reactions: bool = False  # emoji reaction on a message (set_reaction),

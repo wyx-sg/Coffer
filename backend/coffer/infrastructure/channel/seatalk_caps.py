@@ -31,6 +31,7 @@ SEATALK_CAPABILITIES = ChannelCapabilities(
     # place — init_stream/update_stream.
     supports_live_text=True,
     live_text_persists=True,  # the streamed message IS the reply
+    live_text_append_only=True,  # a changed head re-types the whole message
     # Both chat kinds: single_chat_typing and group_chat_typing. The group one
     # silently no-ops above 200 members (code 7003), so this promises an
     # attempt, never a delivered receipt.

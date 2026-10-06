@@ -41,6 +41,7 @@ from coffer.application.channel.turn_finish import (
     ping_line,
     stopped_line,
 )
+from coffer.application.channel.turn_log import TurnLog
 from coffer.application.channel.turn_status import (
     LIVE_SEPARATOR,
     ReplyText,
@@ -71,6 +72,10 @@ _UPDATE_INTERVAL_SECONDS = 1.5
 #: stream timeout and Telegram's 30 s draft preview), so the tick that keeps a
 #: surface alive is the tick that moves its clock — no extra traffic.
 _STATUS_TICK_SECONDS = 10.0
+
+#: How much of an append-only log a live snapshot carries, in UTF-8 bytes:
+#: inside SeaTalk's interim stream budget with room for the asker's @mention.
+_LOG_BUDGET_BYTES = 3000
 
 #: Cadence (spec channels/seatalk "Keep a typing heartbeat alive in DMs and group
 #: threads") for re-sending the typing indicator. SeaTalk shows it for four
@@ -117,6 +122,9 @@ class TurnRenderer:
     _status: TurnStatus = field(init=False)
     _reply: ReplyText = field(init=False)
     _surface: TurnSurface = field(init=False)
+    #: The append-only log a ``live_text_append_only`` transport shows instead of
+    #: the status block; ``None`` everywhere else.
+    _log: TurnLog | None = field(init=False, default=None)
     #: The moment the status header's clock shows. It moves only with a redraw
     #: (a step, the status tick), never with answer text: text then only APPENDS
     #: to the snapshot on screen, which the surface may write at its fast cadence.
@@ -141,6 +149,8 @@ class TurnRenderer:
             started=started, show_steps=self.show_steps, chat_kind=self.chat_kind
         )
         self._reply = ReplyText()
+        if self.adapter.capabilities.live_text_append_only:
+            self._log = TurnLog(budget=_LOG_BUDGET_BYTES)
         self._surface = TurnSurface(
             self.adapter, self.chat_id, self.thread_id, self.chat_kind, self._with_mention
         )
@@ -157,6 +167,8 @@ class TurnRenderer:
                     break
                 if isinstance(event, TextDelta):
                     self._reply.add(event.text)
+                    if self._log is not None:
+                        self._log.text(event.text)
                     await self._text_update()
                 elif isinstance(event, ToolCall):
                     tool_ids.add(event.tool_use_id)
@@ -268,6 +280,8 @@ class TurnRenderer:
         """A tool event: the text before it was narration — it moves up into
         the status block, and the next text starts a new paragraph."""
         closed = self._reply.boundary()
+        if self._log is not None:
+            self._log.boundary()
         if closed.strip():
             self._status.narrate(closed)
 
@@ -276,6 +290,8 @@ class TurnRenderer:
         platform's per-message cap: the answer's TAIL is kept (the newest words
         are the ones being watched), the step lines go before the header does,
         and only a cap too small for even that clips the whole snapshot."""
+        if self._log is not None:
+            return self._log.render()
         limit = self.adapter.capabilities.max_message_chars
         now = self._clock
         tail = self._reply.tail
@@ -325,7 +341,7 @@ class TurnRenderer:
         would be noise, and the 👀 receipt reaction already says "heard"."""
         caps = self.adapter.capabilities
         if self._surface.available and caps.live_text_persists:
-            await self._surface.open(self._status.block(self.now()))
+            await self._surface.open(self._snapshot())
 
     def _start_typing_heartbeat(self) -> asyncio.Task[None] | None:
         # A transport whose receipt cue is typing (SeaTalk — it cannot react)

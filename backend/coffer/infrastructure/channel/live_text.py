@@ -35,10 +35,11 @@ _logger = logging.getLogger(__name__)
 #: the core used to add a 1.5 s one of its own, which hid this entirely and made
 #: a stream arrive a paragraph at a time.
 #:
-#: It is what decides how the reply READS, because the client "renders progress
-#: by displaying the latest snapshot received" — it replaces the text, it does
-#: not animate towards it. So the typewriter effect is made of update frequency
-#: and nothing else.
+#: It is what decides how the reply READS. The docs say the client "renders
+#: progress by displaying the latest snapshot received"; in practice SeaTalk's
+#: client types out what an update APPENDS, and clears and re-types the whole
+#: message when anything earlier changed (see ``turn_log``), so the cadence sets
+#: how big each typed-out jump is.
 #:
 #: Measured against the real SDK: text deltas arrive about every 25 ms carrying
 #: ~4 characters each. Buffering at SeaTalk's suggested 200 ms therefore folds
@@ -52,10 +53,10 @@ _logger = logging.getLogger(__name__)
 #: backs off, and the refusal is logged; it cannot fail silently.
 MIN_UPDATE_INTERVAL = float(os.environ.get("COFFER_SEATALK_STREAM_INTERVAL", "0.1"))
 
-#: How often a snapshot that is NOT a pure append may be written. The client has
-#: no "append": every update replaces the whole message, and a snapshot that
-#: changes anything already on screen — the step lines shifting up, the clock,
-#: "+N earlier" — redraws the whole bubble. A long tool run offered one of those
+#: How often a snapshot that is NOT a pure append may be written. Every update
+#: replaces the whole message, and a snapshot that changes anything already on
+#: screen — the step lines shifting up, the clock, "+N earlier" — redraws it
+#: (on SeaTalk: re-types it from the top). A long tool run offered one of those
 #: per step, so the message redrew several times a second (measured: 50 updates
 #: in 12 s on a status-only stream) and visibly flickered. Text that only grows
 #: at the end keeps the fast cadence above; everything else is folded into one

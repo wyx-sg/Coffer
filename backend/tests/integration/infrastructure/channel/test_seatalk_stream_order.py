@@ -27,6 +27,17 @@ from coffer.infrastructure.channel.seatalk_live import SeaTalkLiveText
 
 from .conftest import wait_until
 
+#: SeaTalk's capabilities with the status block redrawn in place — the layout a
+#: transport without ``live_text_append_only`` (Telegram) gets. The one-writer
+#: ordering and the redraw cadence are shared by every surface, and are tested on
+#: this layout because it is the one that rewrites what is already shown.
+_STATUS_BLOCK_CAPS = replace(
+    SEATALK_CAPABILITIES,
+    supports_typing=False,
+    supports_media=False,
+    live_text_append_only=False,
+)
+
 _DONE = TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn")
 
 
@@ -115,7 +126,7 @@ async def test_a_streamed_turn_is_written_in_order_and_never_goes_back() -> None
     platform = SlowSeaTalk(latency=lambda: rng.uniform(0.005, 0.03))
 
     class Adapter:
-        capabilities = replace(SEATALK_CAPABILITIES, supports_typing=False, supports_media=False)
+        capabilities = _STATUS_BLOCK_CAPS
 
         async def open_live_text(self, chat_id: str, **_kw: Any) -> SeaTalkLiveText:
             live = SeaTalkLiveText(platform.post, chat_id, keepalive_seconds=0.05)
@@ -193,7 +204,7 @@ async def test_a_long_run_redraws_at_most_once_per_redraw_interval() -> None:
     redraw = 0.15
 
     class Adapter:
-        capabilities = replace(SEATALK_CAPABILITIES, supports_typing=False, supports_media=False)
+        capabilities = _STATUS_BLOCK_CAPS
 
         async def open_live_text(self, chat_id: str, **_kw: Any) -> SeaTalkLiveText:
             live = SeaTalkLiveText(platform.post, chat_id, keepalive_seconds=60.0)
@@ -231,3 +242,58 @@ async def test_a_long_run_redraws_at_most_once_per_redraw_interval() -> None:
             assert newer["at"] - older["at"] >= redraw * 0.9, (older, newer)
     # 25 steps offered ~50 redraws; far fewer were written.
     assert len(interim) < 40
+
+
+@pytest.mark.acceptance(
+    spec="channels/seatalk",
+    scenario="a long seatalk run only ever appends to the streamed message",
+)
+async def test_a_long_seatalk_run_only_ever_appends() -> None:
+    """SeaTalk's client re-types the whole message when anything already shown
+    changes, so a turn of many steps, with text between them and the status
+    tick and keep-alive running, sends snapshots that each start with the one
+    before: no ticking clock, no step lines, no text moving away."""
+    platform = SlowSeaTalk(latency=lambda: 0.002)
+
+    class Adapter:
+        capabilities = replace(SEATALK_CAPABILITIES, supports_typing=False, supports_media=False)
+
+        async def open_live_text(self, chat_id: str, **_kw: Any) -> SeaTalkLiveText:
+            live = SeaTalkLiveText(platform.post, chat_id, keepalive_seconds=0.05)
+            live._min_interval = 0.01
+            return live
+
+    async def send(_text: str) -> None:
+        return None
+
+    renderer = TurnRenderer(
+        channel="st",
+        adapter=Adapter(),  # type: ignore[arg-type]
+        chat_id="emp-1",
+        conversation_id="c-append",
+        send=send,
+        tick_seconds=0.03,
+    )
+    queue: asyncio.Queue[Any] = asyncio.Queue()
+    task = asyncio.create_task(renderer.consume(queue))
+    for step in range(25):
+        for w in range(4):
+            await queue.put(TextDelta(text=f"s{step}w{w} "))
+            await asyncio.sleep(0.004)
+        call = f"t{step}"
+        await queue.put(ToolCall(tool_use_id=call, tool_name="shell", tool_input={}))
+        await asyncio.sleep(0.01)
+        error = "boom" if step % 7 == 0 else None
+        await queue.put(ToolResult(tool_use_id=call, tool_name="shell", output=None, error=error))
+    await asyncio.sleep(0.12)  # ticks and keep-alives with nothing new to show
+    await queue.put(_DONE)
+    await queue.put(None)
+    await task
+
+    interim = platform.interim
+    assert interim[0] == "⏳ Working"
+    for older, newer in itertools.pairwise(interim):
+        assert newer.startswith(older), (older, newer)
+    assert "s0w0" in interim[-1] and "s24w3" in interim[-1]
+    assert "shell" not in interim[-1]
+    assert platform.calls[-1]["finish"] is True

@@ -224,13 +224,21 @@ withdrawable cards").
   snapshot it received, a write carrying an older snapshot than the one on
   screen would make the message jump back and then forward. A snapshot offered
   inside the buffer interval is written when the interval ends, never dropped.
-- The client has no append: every update **replaces the whole message**, so an
-  update that rewrites text already on screen (a step line shifting, the clock,
-  the step count) redraws the bubble. Only a snapshot that appends to the one on
-  screen goes at the fast buffer interval; any other is held to **at most one
-  write per redraw interval (2 s)**, folding everything offered meanwhile into
-  the newest snapshot. The status clock moves only with a redraw (a step, the
-  status tick), so answer text streaming under it stays a pure append.
+- The client **types out** an update that appends to what it shows, but
+  **clears the message and re-types it from the top** when anything already
+  shown changed. So the streamed message is an **append-only log**
+  (`live_text_append_only`), not the status block of "Show a turn's working
+  state as one status line": it opens as `⏳ Working`, carries no clock and no
+  step lines (the `show_steps` setting does not apply), and grows only by the
+  agent's text, left where it was written, with a paragraph break wherever a
+  tool call came between. Every interim snapshot starts with the previous one.
+  The one exception is length: past the log budget the oldest part is cut in
+  one large step, down to half the budget behind a leading `…`, so the message
+  is re-typed rarely rather than on every update.
+- Should a snapshot rewrite what is shown anyway (the log being cut), it is
+  held to **at most one write per redraw interval (2 s)**, folding everything
+  offered meanwhile into the newest snapshot; an append goes at the fast buffer
+  interval.
 - One stream carries at most **4096 characters**; a reply that outgrows the
   budget finishes the stream at the limit and the remainder is sent as ordinary
   chunked messages. A reply's length is unknown until it ends, so refusing to
@@ -260,9 +268,19 @@ withdrawable cards").
   arrive in order, and every interim snapshot's answer extends the previous
   one and its clock never goes back
 
+#### Scenario: a long seatalk run only ever appends to the streamed message
+- **GIVEN** a SeaTalk stream for a turn that runs many quick tool steps, some
+  failing, with the agent's text written between them and the status tick and
+  keep-alive running
+- **WHEN** the turn streams
+- **THEN** the message opens as `⏳ Working`, every interim snapshot starts with
+  the one before it, the agent's text from the first step is still shown at the
+  last, and no step line appears
+
 #### Scenario: a long seatalk run redraws the message at a bounded cadence
-- **GIVEN** a SeaTalk stream for a turn that runs many quick tool steps, with
-  answer text written between them
+- **GIVEN** a live surface whose snapshots rewrite what is already shown (the
+  status block redrawn in place), for a turn that runs many quick tool steps
+  with answer text written between them
 - **WHEN** the turn streams
 - **THEN** every interim write that is not a pure append of the previous one
   comes at least a redraw interval after the previous write, and the steps
