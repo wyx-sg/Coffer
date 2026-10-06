@@ -2,7 +2,8 @@
 //
 // Search; each row its select box, its switch, URI or name,
 // one-line description (a prompt's arguments after it) and its last-24-hours
-// reads or uses; every item is loaded and rendered whole (100 at a time as
+// reads or uses; a row opens, like a tool's, to its details (McpCapabilityRow);
+// every item is loaded and rendered whole (100 at a time as
 // the end scrolls into view, past 100). The header box ticks every item the
 // search matches; ticked items swap the toolbar for the selection bar (Turn
 // on, Turn off). The gateway lists every resource and prompt as the server
@@ -16,7 +17,6 @@ import { ListSelectionBar } from "@/components/ListSelectionBar";
 import { useTableSelection } from "@/components/DataTableSelection";
 import { BulkOnOffActions } from "@/components/BulkOnOffActions";
 import { LoadMoreSentinel } from "@/components/ui/load-more";
-import { TruncatedText } from "@/components/ui/truncated-text";
 import { Skeleton } from "@/components/ui/skeleton";
 import { mcpCapabilitiesKey } from "@/lib/api/queryKeys";
 import type { components } from "@/lib/api/types";
@@ -24,18 +24,22 @@ import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import { useGrowingList } from "@/lib/hooks/useGrowingList";
 import { capabilitiesApi } from "@/lib/hooks/useMcpCapabilityMutations";
 import type { InvocationSummary } from "@/lib/hooks/useMcpServerPage";
-import { ToggleSwitch } from "../CapabilityRowCells";
-import { CapabilityToolbar, RowSelectBox, SelectAllBox } from "./CapabilityToolbar";
+import { CapabilityToolbar, SelectAllBox } from "./CapabilityToolbar";
+import { McpCapabilityRow } from "./McpCapabilityRow";
 import { usageByTool } from "@/lib/mcp/serverState";
 
 type CapabilityListOut = components["schemas"]["CapabilityListOut"];
 
-interface Row {
+export interface CapabilityRow {
   key: string;
   prefixed: string;
   description: string | null;
   enabled: boolean;
+  resource?: components["schemas"]["MCPResourceView"];
+  prompt?: components["schemas"]["MCPPromptView"];
 }
+
+type Row = CapabilityRow;
 
 interface Props {
   serverUid: string;
@@ -53,8 +57,9 @@ function rowsOf(t: TFunction, kind: Props["kind"], caps: CapabilityListOut | und
     return (caps?.resources ?? []).map((r) => ({
       key: r.original_uri,
       prefixed: r.prefixed_uri,
-      description: r.description ?? r.name,
+      description: r.description ?? r.name ?? null,
       enabled: r.enabled,
+      resource: r,
     }));
   return (caps?.prompts ?? []).map((p) => {
     const args = p.arguments.map((a) => a.name).join(", ");
@@ -67,6 +72,7 @@ function rowsOf(t: TFunction, kind: Props["kind"], caps: CapabilityListOut | und
       prefixed: p.prefixed_name,
       description: parts.length > 0 ? parts.join(" · ") : null,
       enabled: p.enabled,
+      prompt: p,
     };
   });
 }
@@ -81,6 +87,7 @@ export function McpCapabilityTab({
 }: Props) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
+  const [open, setOpen] = useState<string | null>(null);
   const bulk = useBulkMutate({ invalidate: [mcpCapabilitiesKey(serverUid)] });
   const rows = rowsOf(t, kind, capabilities);
   const usage = usageByTool(summary);
@@ -140,25 +147,16 @@ export function McpCapabilityTab({
         </thead>
         <tbody>
           {page.shown.map((row) => (
-            <tr key={row.key} className="h-12 border-b border-border-subtle">
-              <td className="py-2 pl-2">
-                <RowSelectBox selection={selection} rowKey={row.key} name={row.key} />
-              </td>
-              <td className="py-2 text-center">
-                <ToggleSwitch serverUid={serverUid} kind={kind} row={row} />
-              </td>
-              <td className="py-2 pr-3">
-                <TruncatedText text={row.key} mono className="text-xs font-semibold" />
-              </td>
-              <td className="py-2 pr-3">
-                {row.description ? (
-                  <TruncatedText text={row.description} className="text-xs text-text-muted" />
-                ) : null}
-              </td>
-              <td className="py-2 pr-2 text-right tabular-nums">
-                {usage.get(row.key)?.calls ?? 0}
-              </td>
-            </tr>
+            <McpCapabilityRow
+              key={row.key}
+              serverUid={serverUid}
+              kind={kind}
+              row={row}
+              uses={usage.get(row.key)?.calls ?? 0}
+              selection={selection}
+              expanded={open === row.key}
+              onToggle={() => setOpen(open === row.key ? null : row.key)}
+            />
           ))}
         </tbody>
       </table>

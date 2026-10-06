@@ -303,8 +303,15 @@ class CapabilityDiscovery:
             if include_disabled or prefs.get(p.name, True)
         ]
 
+    async def request(self, server_name: str, method: str, params: dict[str, Any]) -> Any:
+        """One upstream request for the server page's previews (``resources/read``,
+        ``prompts/get``), on the same healed connection as the listings. An error
+        the upstream answers with (a missing argument, an unknown URI) is its
+        answer, raised as is, and never costs the connection."""
+        return await self._request_self_heal(server_name, method, params, answered_ok=True)
+
     async def _request_self_heal(
-        self, server_name: str, method: str, params: dict[str, Any]
+        self, server_name: str, method: str, params: dict[str, Any], *, answered_ok: bool = False
     ) -> Any:
         """Issue an upstream ``*/list`` request, healing a stale reused
         connection in place.
@@ -331,7 +338,7 @@ class CapabilityDiscovery:
         except UpstreamTimeout:
             raise
         except Exception as first_exc:
-            if _is_method_not_found(first_exc):
+            if _is_method_not_found(first_exc) or (answered_ok and isinstance(first_exc, MCPError)):
                 raise
             await self._supervisor.evict(server_name)
             conn = await self._supervisor.get_or_spawn(server_name)

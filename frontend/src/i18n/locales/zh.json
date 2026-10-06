@@ -703,7 +703,30 @@
       "viewInActivity": "在活动中查看",
       "bulkTools": "已选工具",
       "bulkResources": "已选资源",
-      "bulkPrompts": "已选提示词"
+      "bulkPrompts": "已选提示词",
+      "preview": {
+        "name": "名称",
+        "mimeType": "类型",
+        "content": "内容",
+        "read": "读取内容",
+        "reading": "读取中…",
+        "readAgain": "重新读取",
+        "arguments": "参数",
+        "noArguments": "不需要参数。",
+        "required": "必填",
+        "messages": "消息",
+        "get": "获取提示词",
+        "getting": "获取中…",
+        "fillRequired": "先填好必填参数。",
+        "truncated": "只显示前 64 KB。",
+        "binary": "二进制内容（{{type}}，{{size}} 字节），不显示。",
+        "serverError": "服务器返回了错误：{{error}}",
+        "empty": "服务器没有返回内容。",
+        "role": {
+          "user": "用户",
+          "assistant": "助手"
+        }
+      }
     },
     "builtin": {
       "group": "内置",
