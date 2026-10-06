@@ -1,6 +1,6 @@
 // frontend/src/components/mcp/add/ReviewStep.tsx — the review of several pasted
-// servers (board Mcp-Import-Review; spec web-ui "Add MCP servers from one paste
-// box"). Nothing is saved until Add: every card's name is the one it will keep
+// servers (board Mcp-Import-Review; spec web-ui "Add MCP servers by pasting them
+// into one box"). Nothing is saved until Add: every card's name is the one it will keep
 // and can be corrected here, a name over 24 characters (or taken, or repeated
 // in the batch) holds the Add button, and one reach choice covers the batch.
 // A batch that only partly went in stays open (board Mcp-Add-ReviewPartial): the
