@@ -1,42 +1,62 @@
-"""An upstream's sampling and roots requests, relayed to the right client.
+"""An upstream's sampling and roots requests, relayed through the installed
+daemon to the right official-SDK client over Streamable HTTP and SSE.
 
 First a control: the fixture's sampling and roots tools work with the official
-SDK directly, outside Coffer, so a failure through the gateway is the gateway's.
+SDK directly, outside Coffer, so a failure through the gateway is the
+gateway's. Which client is asked, and that an undeclared capability is never
+asked, is pinned by the repository's suites; here the point is that the
+server-initiated request rides the frozen daemon's notification stream and the
+client's answer comes back over its HTTP POST.
 """
 
 from __future__ import annotations
 
 import asyncio
+from collections import Counter
 from typing import Any
 
+from e2e.installed.mcp.cases_sdk import http_session
 from e2e.installed.mcp.context import PYTHON, UPSTREAM, Ctx
-from e2e.installed.mcp.wire import EventStream, answering, in_band_error, text_of
 
 A, RELAY = "qa-mcp-a", "qa-mcp-relay"
-CAPS = {"sampling": {}, "roots": {"listChanged": True}}
+
+
+def answering_client(sample_text: str, root_uri: str) -> tuple[dict[str, Any], Counter[str]]:
+    """SDK callbacks answering sampling with ``sample_text`` and roots with
+    ``root_uri``, and a counter of how often each was asked."""
+    import mcp.types as types
+
+    asked: Counter[str] = Counter()
+
+    async def sampling(_ctx: Any, _params: Any) -> types.CreateMessageResult:
+        asked["sampling"] += 1
+        return types.CreateMessageResult(
+            model="qa-synthetic-no-provider",
+            role="assistant",
+            content=types.TextContent(type="text", text=sample_text),
+        )
+
+    async def roots(_ctx: Any) -> types.ListRootsResult:
+        asked["roots"] += 1
+        return types.ListRootsResult(roots=[types.Root(uri=root_uri, name="qa root")])
+
+    return {"sampling_callback": sampling, "list_roots_callback": roots}, asked
+
+
+def texts(result: Any) -> list[str]:
+    return [c.text for c in result.content if hasattr(c, "text")]
 
 
 async def run(ctx: Ctx) -> None:
     await _direct_control(ctx)
     await _two_clients(ctx)
-    await _undeclared(ctx)
 
 
 async def _direct_control(ctx: Ctx) -> None:
-    import mcp.types as types
     from mcp.client.session import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
 
-    async def sampling(_ctx: Any, _params: Any) -> types.CreateMessageResult:
-        return types.CreateMessageResult(
-            model="qa-direct",
-            role="assistant",
-            content=types.TextContent(type="text", text="direct"),
-        )
-
-    async def roots(_ctx: Any) -> types.ListRootsResult:
-        return types.ListRootsResult(roots=[types.Root(uri="file:///qa-direct", name="qa")])
-
+    callbacks, _ = answering_client("direct", "file:///qa-direct")
     tag = "qa-mcp-direct"
     params = StdioServerParameters(
         command=PYTHON,
@@ -45,87 +65,52 @@ async def _direct_control(ctx: Ctx) -> None:
     )
     with (ctx.run.out / "direct-control-stderr.log").open("w") as errlog:
         async with stdio_client(params, errlog=errlog) as (r, w):
-            async with ClientSession(
-                r, w, sampling_callback=sampling, list_roots_callback=roots, read_timeout_seconds=15
-            ) as session:
+            async with ClientSession(r, w, read_timeout_seconds=15, **callbacks) as session:
                 await session.initialize()
-                sample = await session.call_tool("sampling", {})
-                listed = await session.call_tool("roots", {})
-    texts = [c.text for c in sample.content if hasattr(c, "text")]
-    texts += [c.text for c in listed.content if hasattr(c, "text")]
+                got = texts(await session.call_tool("sampling", {}))
+                got += texts(await session.call_tool("roots", {}))
     ctx.rec.record(
-        "CTRL001",
-        "control: the fixture's sampling and roots work with the official SDK directly",
-        expected="sampling:direct and roots:file:///qa-direct, outside Coffer",
-        actual=texts,
-        ok=texts == ["sampling:direct", "roots:file:///qa-direct"],
+        "fixture control: sampling and roots answered by the SDK directly",
+        "control: the fixture's sampling and roots work with the official SDK, outside Coffer",
+        expected="sampling:direct and roots:file:///qa-direct",
+        actual=got,
+        ok=got == ["sampling:direct", "roots:file:///qa-direct"],
     )
+
+
+async def _client(ctx: Ctx, sample: str, root: str) -> dict[str, Any]:
+    callbacks, asked = answering_client(sample, root)
+    async with http_session(ctx, **callbacks) as client:
+        await client.initialize()
+        calls = [(server, tool) for server in (A, RELAY) for tool in ("sampling", "roots")]
+        replies = await asyncio.gather(*(client.call_tool(f"{s}__{t}", {}) for s, t in calls))
+    return {
+        "results": {f"{s} {t}": texts(r) for (s, t), r in zip(calls, replies, strict=True)},
+        "asked": dict(asked),
+    }
 
 
 async def _two_clients(ctx: Ctx) -> None:
-    w = ctx.wire
-    one, _ = await w.initialize("qa-agent-a", caps=CAPS)
-    two, _ = await w.initialize("qa-agent-a", caps=CAPS)
-    answers = {one: ("qa-answer-one", "file:///qa-one"), two: ("qa-answer-two", "file:///qa-two")}
-    async with (
-        EventStream(w, one, answering(*answers[one]), seconds=40) as s1,
-        EventStream(w, two, answering(*answers[two]), seconds=40) as s2,
-    ):
-        calls = [
-            (sid, server, tool)
-            for sid in (one, two)
-            for server in (A, RELAY)
-            for tool in ("sampling", "roots")
-        ]
-        replies = await asyncio.gather(
-            *(
-                w.call(sid, f"{server}__{tool}", rid=f"qa-{server}-{tool}", timeout=30)
-                for sid, server, tool in calls
-            )
-        )
-        await s1.settle(0.3)
-    results = {}
-    passed = True
-    for (sid, server, tool), reply in zip(calls, replies, strict=True):
-        sample, root = answers[sid]
-        want = f"sampling:{sample}" if tool == "sampling" else f"roots:{root}"
-        got = text_of(reply)
-        passed &= got == want
-        results[f"{'one' if sid == one else 'two'} {server} {tool}"] = got
-    asked = {
-        name: {m: len(stream.requests(m)) for m in ("sampling/createMessage", "roots/list")}
-        for name, stream in (("one", s1), ("two", s2))
-    }
-    ctx.rec.record(
-        "two clients each answer their own upstream's sampling and roots",
-        "stdio and stateful HTTP upstreams ask two clients at once; each gets its own answer",
-        expected="every call returns its own client's answer; each client asked exactly once per "
-        "tool per server (2 sampling, 2 roots)",
-        actual={"results": results, "asked": asked},
-        ok=passed
-        and all(v == {"sampling/createMessage": 2, "roots/list": 2} for v in asked.values()),
+    one, two = await asyncio.gather(
+        _client(ctx, "qa-answer-one", "file:///qa-one"),
+        _client(ctx, "qa-answer-two", "file:///qa-two"),
     )
 
-
-async def _undeclared(ctx: Ctx) -> None:
-    w = ctx.wire
-    sid, _ = await w.initialize("qa-agent-a")
-    async with EventStream(
-        w, sid, answering("qa-should-not-be-asked", "file:///qa-no"), seconds=30
-    ) as s:
-        replies = {
-            f"{server} {tool}": await w.call(sid, f"{server}__{tool}", timeout=30)
-            for server in (A, RELAY)
-            for tool in ("sampling", "roots")
+    def answered(seen: dict[str, Any], sample: str, root: str) -> bool:
+        want = {
+            f"{s} {t}": [f"sampling:{sample}" if t == "sampling" else f"roots:{root}"]
+            for s in (A, RELAY)
+            for t in ("sampling", "roots")
         }
-        await s.settle(0.3)
-    asked = [m for m in s.messages if "id" in m and "method" in m]
+        return seen["results"] == want and seen["asked"] == {"sampling": 2, "roots": 2}
+
     ctx.rec.record(
-        "a client that declared no sampling is never asked to sample",
-        "a session that declared neither capability is never asked",
-        expected="all four tools report the client refused (in-band error); the client's stream "
-        "carries no request",
-        actual={"replies": {k: text_of(v) for k, v in replies.items()}, "asked": asked},
-        ok=all(in_band_error(v) and text_of(v).startswith("refused") for v in replies.values())
-        and not asked,
+        "two clients each answer their own upstream's sampling and roots",
+        "stdio and stateful HTTP upstreams ask two SDK clients at once through the installed "
+        "daemon; each gets its own answer",
+        expected="every call returns its own client's answer; each client asked exactly once per "
+        "tool per server (2 sampling, 2 roots)",
+        actual={"one": one, "two": two},
+        ok=answered(one, "qa-answer-one", "file:///qa-one")
+        and answered(two, "qa-answer-two", "file:///qa-two"),
     )

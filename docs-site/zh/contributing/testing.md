@@ -203,7 +203,9 @@ make verify-installed-mcp OUT=/tmp/coffer-acceptance/mcp-1     # the installed a
 make verify-installed-mcp OUT=<dir> DAEMON_JSON=<home>/.coffer/daemon.json SHIM=<path>
 ```
 
-它需要手动运行，`make verify` 和 CI 都不会跑它。因为默认目标就是你自己正在用的应用，它只创建名字以 `qa-` 开头的对象，这些名字里有任何一个已经存在就拒绝开始，结束时删掉自己创建的一切。你的 vault 同步到远端时它也拒绝写入；它从不重启守护进程，也从不批准任何密钥。`OUT` 必须是仓库之外一个新建或为空的目录。结果写到 `OUT/summary.md` 和 `OUT/cases.json`，守护进程 token 和测试用密钥都已遮盖。每个用例是 PASS、FAIL、BLOCKED（附上在那里跑不了的原因，比如需要重启或 Touch ID 批准）或 N/A。只有出现 FAIL 才算失败。完整规则见 [`.agents/testing.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/testing.md) 的 "Installed-build Acceptance" 一节。
+它只检查装好的版本才能看出来的东西，协议、权限、密钥和工具目录的规则都交给上面的层级去测。具体是：已安装的 shim 能连上冻结打包的守护进程，并把一次调用送到上游；官方 SDK 的会话在 HTTP、通知流和 shim 上都能工作，包括上游发来的 sampling 和 roots 请求送到正确的客户端；守护进程、它的握手和 shim 是同一个构建，冻结版本里延迟导入的路径（stderr 遮盖、自定义工具的 HTTP 客户端）能加载；以及只读地看一眼：它测的那个 shim 是不是你的 agent 配置里指向的那个。源码层级能测的行为应该放在那里，不放在这里。
+
+它需要手动运行，`make verify` 和 CI 都不会跑它。因为默认目标就是你自己正在用的应用，它只创建名字以 `qa-` 开头的对象，这些名字里有任何一个已经存在就拒绝开始，结束时删掉自己创建的一切。你的 vault 同步到远端时它也拒绝写入；它从不重启守护进程，也从不批准任何密钥。`OUT` 必须是仓库之外一个新建或为空的目录。结果写到 `OUT/summary.md` 和 `OUT/cases.json`，守护进程 token 和测试用密钥都已遮盖。每个用例是 PASS、FAIL、BLOCKED（附上在那里跑不了的原因，比如找不到已安装的 shim 或需要 Touch ID 批准）或 N/A（这次运行不适用的检查）。只有出现 FAIL 才算失败。完整规则见 [`.agents/testing.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/testing.md) 的 "Installed-build Acceptance" 一节。
 
 `make verify-installed-cli` 用同样的思路检查已安装的 `coffer` 命令，但它不需要守护进程，也不碰你的任何东西。它运行二进制的一份拷贝，`HOME` 指向一个空目录，只跑那些在连守护进程之前就会结束的命令。它只检查冻结打包才会出错的地方：每个命令组的帮助都能显示（打包漏掉的模块会在这里失败），zsh 和 bash 的命令补全可用，读不了的输入和源码一样以退出码 6 报错，而不是崩溃：
 

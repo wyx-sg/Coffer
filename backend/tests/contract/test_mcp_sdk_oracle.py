@@ -34,6 +34,9 @@ from tests.fixtures.net import free_port
 
 _FAKE = Path(__file__).resolve().parents[1] / "fixtures" / "fake_mcp_server.py"
 
+_LEDGER = Path(__file__).resolve().parents[1] / "fixtures" / "ledger_mcp_server.py"
+_LEDGER_TAG = "oracle-ledger"
+
 _TOKEN = "test-oracle-token"
 _HEADERS = {"X-Coffer-Token": _TOKEN}
 
@@ -184,6 +187,30 @@ async def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         )
         assert r.status_code == 201, f"resource registration failed: {r.status_code} {r.text}"
 
+        # A second upstream that serves a resource and a prompt, with exact texts.
+        r = await c.post(
+            "/api/v1/resources",
+            json={
+                "kind": "mcp_server",
+                "name": "ledger",
+                "config": {
+                    "transport": {
+                        "type": "stdio",
+                        "command": sys.executable,
+                        "args": [
+                            str(_LEDGER),
+                            "--ledger",
+                            str(tmp_path / "ledger.jsonl"),
+                            "--tag",
+                            _LEDGER_TAG,
+                        ],
+                    },
+                },
+            },
+            headers=_HEADERS,
+        )
+        assert r.status_code == 201, f"ledger registration failed: {r.status_code} {r.text}"
+
     yield port, _TOKEN, knowledge_root
 
     server.should_exit = True
@@ -226,6 +253,7 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
         assert init.server_info.name == "coffer", (
             f"expected server_info.name='coffer', got {init.server_info.name!r}"
         )
+        assert init.protocol_version == "2025-06-18"
 
         # 2. tools/list — SDK validates ListToolsResult.
         # Upstream tools must appear; Coffer's own built-in tools (coffer__*)
@@ -309,6 +337,10 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
         )
         # Reaching here means the SDK parsed the response without errors.
         assert call_result.content is not None, "expected non-empty content"
+        # The answer is the upstream's own: the fake server echoes the tool and arguments.
+        assert not call_result.is_error
+        text = "".join(getattr(c, "text", "") for c in call_result.content)
+        assert text == "echo:read_file:{'path': '/tmp/oracle-test'}", text
 
         # 4. The removed write tool is answered as an unknown tool end to end
         # (spec knowledge "Expose no knowledge tool"), not served and not
@@ -319,3 +351,25 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
                 arguments={"title": "t", "description": "d", "collection": "oracle"},
             )
         assert not (knowledge_root / "oracle").exists()
+
+
+async def test_sdk_reads_namespaced_resource_and_gets_namespaced_prompt(
+    running_daemon: tuple[int, str, Path],
+) -> None:
+    """The official SDK reads ``coffer://<server>/<uri>`` and gets ``<server>__<prompt>``,
+    each answering with the upstream's exact text."""
+    port, token, _ = running_daemon
+    url = f"http://127.0.0.1:{port}/mcp"
+    async with (
+        streamable_http_client(
+            url, http_client=create_mcp_http_client(headers={"X-Coffer-Token": token})
+        ) as (read, write),
+        ClientSession(read, write) as session,
+    ):
+        await session.initialize()
+        resource = await session.read_resource("coffer://ledger/ledger://same")
+        prompt = await session.get_prompt("ledger__same", {"text": "sdk"})
+
+    assert [getattr(c, "text", None) for c in resource.contents] == [_LEDGER_TAG]
+    assert len(prompt.messages) == 1
+    assert getattr(prompt.messages[0].content, "text", None) == f"{_LEDGER_TAG}:sdk"

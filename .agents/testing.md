@@ -382,6 +382,29 @@ installed shim and daemon reached from the outside, and the official SDK
 against them. A case that would pass or fail identically from source belongs in
 the integration, contract or e2e tier; move it there rather than add it here.
 
+For MCP, protocol, permission, secret, catalogue and custom-tool behaviour is
+pinned by the integration suites under `backend/tests/integration/`, the
+contract test `test_mcp_sdk_oracle.py` and `e2e/mcp/specs/`. The MCP suite keeps:
+
+1. **The frozen daemon and the installed shim connect**: the official SDK over
+   the shim's stdio — initialize, `tools/list`, and a call to a synthetic
+   stdio upstream that runs in its own cwd and env.
+2. **Official-SDK sessions as shipped**: over Streamable HTTP (handshake and a
+   call), the notification stream (an upstream's list-changed notifications
+   arriving over SSE), and server-initiated requests — an upstream's sampling
+   and roots reaching the right client, over HTTP+SSE for two clients at once
+   and through the shim.
+3. **Packaging integrity**: the binary `daemon.json` names answers the port,
+   the handshake reports the version the status does, the shim attaches
+   without a version-skew warning, and two lazily imported paths load — a stdio
+   upstream's stderr with an injected fake secret goes through the stderr
+   masker, and a custom HTTP tool call goes through the HTTP API client. The
+   gateway overhead budget is measured against the frozen daemon too.
+4. **Installed configuration, read-only**: whether the shim under test sits in
+   the daemon's install directory, and whether every registered agent's Coffer
+   entry points at it (N/A when `SHIM` was given or no agent carries the entry).
+5. **Cleanup and the target left untouched** (from `_common`).
+
 ```bash
 make verify-installed-mcp OUT=/tmp/coffer-acceptance/mcp-$(date +%H%M%S)
 # another target or shim:
@@ -404,9 +427,10 @@ make verify-installed-mcp OUT=<dir> DAEMON_JSON=<home>/.coffer/daemon.json SHIM=
   fixtures' ledgers. The daemon token and every canary are redacted from all of
   it.
 - **Status.** A case is PASS, FAIL, BLOCKED or N/A. BLOCKED is a case that
-  cannot run here, with the reason: a daemon restart, the idle reaper's window,
-  or a secret binding that waits for a person's approval (a signed build,
-  whose approvals need Touch ID). N/A is an observation outside the contract.
+  cannot run here, with the reason: no installed shim found, or a secret
+  binding that waits for a person's approval (a signed build, whose approvals
+  need Touch ID). N/A is a check that does not apply to this run, with the
+  facts it read.
   Neither counts as a pass. The run exits 1 when any case FAILs and 2 when a
   guard refuses it. Case ids are the OpenSpec scenario title when the case
   verifies that scenario, otherwise a short stable local id.
@@ -426,9 +450,10 @@ running app:
 - No restart, stop or upgrade of the daemon; the run records a case that the
   daemon is still the same process at the end. No approval is granted, and no
   shared setting (protection, features) is changed.
-- Upstreams are synthetic only: `e2e/installed/mcp/upstream.py` (stdio,
-  stateless and stateful Streamable HTTP, with a call ledger of
-  start/done/cancelled) and its own echo receiver. No business tool is called.
+- Upstreams are synthetic only: `e2e/installed/mcp/upstream.py` (stdio, and
+  session-keeping Streamable HTTP for the sampling/roots back-channel, with a
+  call ledger) and its own echo receiver for the custom tool. No business tool
+  is called.
   A `tools/list` through the gateway still makes Coffer list every server the
   session can see; that is the gateway's fan-out, not a tool call.
 - Secrets are a random fake canary minted per run. A fixture child the target

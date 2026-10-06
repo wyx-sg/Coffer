@@ -209,6 +209,9 @@ def test_a_switched_off_tool_is_hidden_and_refused(daemon: BoundaryDaemon, api: 
     )
     agent = Agent(daemon, CLAUDE)
     assert {"billing__on"} == {n for n in agent.tools() if n.startswith("billing__")}
+    found = json.loads(text_of(agent.call("coffer__search_tools", {"query": "billing off on"})))
+    names = [t["name"] for t in found["tools"]]
+    assert "billing__on" in names and "billing__off" not in names
     refused = agent.call("billing__off")
     assert refused["error"]["code"] == -32000
     assert api.seen == []
@@ -315,3 +318,32 @@ def test_a_custom_tools_exposure_is_honoured_by_the_gateway(
         "get_invoice": ("auto", "search"),
         "void_invoice": ("listed", "listed"),
     }
+
+
+def test_a_secret_bearing_call_leaves_the_secret_in_no_listing_or_record(
+    daemon: BoundaryDaemon, api: FakeHttpApi
+) -> None:
+    group = create_group(daemon, "billing", api.base_url, [tool("ping", "GET", "/ping")])
+    agent = Agent(daemon, CLAUDE)
+    assert text_of(agent.call("billing__ping")).startswith("HTTP 200")
+    assert api.seen[-1].headers["authorization"] == SECRET_VALUE
+    invocations(daemon, group["uid"], expect=1)
+    secret_token = SECRET_VALUE.split()[-1]
+    where = {
+        "tools/list": agent.rpc("tools/list"),
+        "prompts/list": agent.rpc("prompts/list"),
+        "secrets": daemon.client.get("/api/v1/secrets").json(),
+        "group": daemon.client.get("/api/v1/custom-tools/billing").json(),
+        "audit": daemon.client.get("/api/v1/audit", params={"limit": 200}).json(),
+        "invocations": daemon.client.get(
+            f"/api/v1/resources/mcp_server/{group['uid']}/invocations"
+        ).json(),
+    }
+    for name, body in where.items():
+        assert body, name
+    holding = [
+        n
+        for n, b in where.items()
+        if SECRET_VALUE in json.dumps(b) or secret_token in json.dumps(b)
+    ]
+    assert holding == []
