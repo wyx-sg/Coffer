@@ -723,7 +723,8 @@
           "not_found": "Not found",
           "set": "Set",
           "missing": "Missing",
-          "waiting_approval": "Waiting for approval"
+          "waiting_approval": "Waiting for approval",
+          "refused": "Refused"
         }
       },
       "viewInActivity": "View in Activity",
@@ -4756,6 +4757,7 @@
       "hostTools_one": "{{host}} · {{count}} tool",
       "hostTools_other": "{{host}} · {{count}} tools",
       "allAgents": "All agents",
+      "approvalRejected": "Secret approval refused",
       "envsTools_one": "{{envs}} environments · {{count}} tool",
       "envsTools_other": "{{envs}} environments · {{count}} tools"
     },
@@ -4888,7 +4890,8 @@
       "failing": "Failing",
       "off": "Off",
       "secretMissing": "Secret missing",
-      "waiting": "Waiting for approval"
+      "waiting": "Waiting for approval",
+      "refused": "Approval refused"
     },
     "alert": {
       "missingTitle": "Secret {{secret}} isn't in Secrets",
@@ -4906,6 +4909,9 @@
       "offBody_one": "Turning it on gives its {{count}} tool that is on back to the agents it reaches.",
       "offBody_other": "Turning it on gives its {{count}} tools that are on back to the agents it reaches.",
       "turnOn": "Turn on",
+      "rejectedTitle": "{{secret}} was refused for this group",
+      "rejectedBody": "Calls to this group's tools fail and carry no secret until it is asked for again and approved.",
+      "askAgain": "Ask again",
       "failingTitleGroup": "Calls to {{group}} are failing"
     },
     "definition": {
@@ -5118,7 +5124,8 @@
         "present": "Secrets set",
         "missing": "Secret missing",
         "pending_approval": "Waiting for approval",
-        "none": "No secret"
+        "none": "No secret",
+        "rejected": "Refused"
       }
     },
     "preview": {
@@ -5127,7 +5134,8 @@
         "present": "Set",
         "missing": "Missing",
         "pending_approval": "Waiting for approval",
-        "none": "No secret"
+        "none": "No secret",
+        "rejected": "Refused"
       },
       "variables": "Variables:",
       "missingVariables": "{{environment}} defines no {{names}}, so the request cannot be built there.",

@@ -696,11 +696,15 @@ export interface components {
             pending_approvals: string[];
             /** Pending Secrets */
             pending_secrets: string[];
+            /** Rejected Approvals */
+            rejected_approvals: string[];
+            /** Rejected Secrets */
+            rejected_secrets: string[];
             /**
              * Secret State
              * @enum {string}
              */
-            secret_state: "none" | "present" | "missing" | "pending_approval";
+            secret_state: "none" | "present" | "missing" | "rejected" | "pending_approval";
             /** Timeout Seconds */
             timeout_seconds: number | null;
             /** Variables */
@@ -800,13 +804,17 @@ export interface components {
             pending_approvals: string[];
             /** Pending Secrets */
             pending_secrets: string[];
+            /** Rejected Approvals */
+            rejected_approvals: string[];
+            /** Rejected Secrets */
+            rejected_secrets: string[];
             /** Scope */
             scope: string[] | null;
             /**
              * Secret State
              * @enum {string}
              */
-            secret_state: "none" | "present" | "missing" | "pending_approval";
+            secret_state: "none" | "present" | "missing" | "rejected" | "pending_approval";
             source: components["schemas"]["OpenApiSourceOut"] | null;
             /** Timeout Seconds */
             timeout_seconds: number;
@@ -863,7 +871,7 @@ export interface components {
              * Secret State
              * @enum {string}
              */
-            secret_state: "none" | "present" | "missing" | "pending_approval";
+            secret_state: "none" | "present" | "missing" | "rejected" | "pending_approval";
             /** Value */
             value: string | null;
         };
@@ -998,7 +1006,7 @@ export interface components {
              * State
              * @enum {string}
              */
-            state: "none" | "present" | "missing" | "pending_approval";
+            state: "none" | "present" | "missing" | "rejected" | "pending_approval";
         };
         /**
          * CustomToolReimportChangeOut
@@ -1419,7 +1427,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "found" | "not_found" | "set" | "missing" | "waiting_approval";
+            status: "found" | "not_found" | "set" | "missing" | "waiting_approval" | "refused";
             /** Version */
             version: string | null;
         };

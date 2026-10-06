@@ -456,7 +456,8 @@ HTTP URL, a git URL, a channel's platform and app) before it resolves a secret,
 and MUST inject nothing into a target no person approved: the attempt answers
 `SECRET_BINDING_PENDING` (409) naming the pending approvals, or
 `SECRET_BINDING_REJECTED` (409) naming a refused one (nothing waits, and it
-stays refused for that target until the destination changes). Citing an existing
+stays refused for that target until the destination changes or a person asks
+again). Citing an existing
 secret from a destination that did not cite it, and changing the target of one
 that did, each record a pending approval, once per target; a later target
 supersedes the approval for the earlier one. A binding already approved for
@@ -468,7 +469,12 @@ destination is registered") — or while the protection is switched off.
 Approving MUST
 take a presence grant (`POST /api/v1/secrets/approvals/{id}/approve`, or several at once
 under "Approve several bindings in one confirmation");
-refusing (`POST .../reject`) MUST NOT, and records its audit event. `GET /api/v1/secrets/approvals`
+refusing (`POST .../reject`) MUST NOT, and records its audit event. Asking again
+for a refused binding (`POST /api/v1/secrets/approvals/{id}/ask-again`, `coffer
+approval ask-again <id>`) MUST NOT take one either, since it grants nothing: it
+retires the refusal and records a new pending approval for the same target,
+which a person still approves; asking again for an approval that is not
+refused is refused with `APPROVAL_NOT_PENDING`. `GET /api/v1/secrets/approvals`
 lists approvals, having first evaluated every current destination, and marks
 superseded those nothing asks for any more.
 
@@ -483,6 +489,12 @@ superseded those nothing asks for any more.
 - **WHEN** the server is next started or listed, and then its target changes
 - **THEN** the first answers `SECRET_BINDING_REJECTED` (409, a refusal, not a wait) and the web UI says it was refused instead of showing a pending approval
 - **AND** until then checking again raises no fresh approval for the same target; the changed target drops the old refusal and a fresh pending approval for it waits for a person
+
+#### Scenario: asking again after a refusal puts the request back
+- **GIVEN** a server's binding that a person refused
+- **WHEN** the refusal is asked again with `POST /api/v1/secrets/approvals/{id}/ask-again`, and then the same is asked of an approval that is still pending
+- **THEN** the refusal is superseded and a new pending approval for the same target waits for a person, with no presence grant taken and nothing sent
+- **AND** the second is refused with `APPROVAL_NOT_PENDING`
 
 #### Scenario: changing where a secret goes asks again
 - **GIVEN** an MCP server whose secret is approved for its command line

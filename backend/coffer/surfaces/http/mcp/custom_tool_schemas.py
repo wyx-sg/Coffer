@@ -19,7 +19,7 @@ from coffer.surfaces.http.handoff_schemas import HandoffOut
 
 HttpMethodName = Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
 GroupHealthName = Literal["failing", "attention", "healthy", "idle", "off"]
-SecretStateName = Literal["none", "present", "missing", "pending_approval"]
+SecretStateName = Literal["none", "present", "missing", "rejected", "pending_approval"]
 #: How a test run failed before the API answered: the request could not be
 #: built, it timed out, it could not connect, or the address was refused.
 TestFailureName = Literal["request", "timeout", "connect", "blocked"]
@@ -146,6 +146,9 @@ class CustomToolEnvironmentOut(BaseModel):
     secret_state: SecretStateName
     pending_approvals: list[str]
     pending_secrets: list[str]
+    #: The refused approvals that block it until asked again, and their secrets.
+    rejected_approvals: list[str] = Field(default_factory=list)
+    rejected_secrets: list[str] = Field(default_factory=list)
 
 
 class OpenApiSourceIn(BaseModel):
@@ -214,7 +217,8 @@ class CustomToolGroupOut(BaseModel):
     scope: list[str] | None
     source: OpenApiSourceOut | None
     health: GroupHealthName
-    #: ``last_call_failed``, ``secret_missing`` or ``approval_pending``.
+    #: ``last_call_failed``, ``secret_missing``, ``approval_rejected`` or
+    #: ``approval_pending``.
     health_reason: str | None
     secret_state: SecretStateName
     #: The secret approvals this group waits on.
@@ -222,6 +226,11 @@ class CustomToolGroupOut(BaseModel):
     #: The names of the secrets whose approval is pending, for "<secret> waits
     #: for approval".
     pending_secrets: list[str]
+    #: The secret approvals a person refused: the group does not send those
+    #: secrets until one is asked again.
+    rejected_approvals: list[str] = Field(default_factory=list)
+    #: The names of the secrets whose approval was refused.
+    rejected_secrets: list[str] = Field(default_factory=list)
     calls_24h: int
     failures_24h: int
     last_call_at: datetime | None

@@ -10,7 +10,7 @@ server's page lists, from the command and settings alone:
 - every **secret** the config cites — from ``secret_refs`` (an environment
   variable or header whose value is a stored secret) or a ``coffer://secret/<name>``
   written in a plain value — and whether it is set on this machine, missing
-  from it, or waiting for an approval.
+  from it, waiting for an approval, or refused one.
 
 An HTTP server has no launcher. Reading is cheap and never starts the server.
 """
@@ -38,7 +38,7 @@ class CommandProbePort(Protocol):
 
 
 RequirementKind = Literal["cli", "secret"]
-RequirementStatus = Literal["found", "not_found", "set", "missing", "waiting_approval"]
+RequirementStatus = Literal["found", "not_found", "set", "missing", "waiting_approval", "refused"]
 
 
 @dataclass(frozen=True)
@@ -112,16 +112,24 @@ class ServerRequirements:
             slot: await asyncio.to_thread(self._secrets.exists, ref) for slot, ref in cited.items()
         }
         waiting: set[str] = set()
+        refused: set[str] = set()
         boundary = self._boundary()
         present = {s: r for s, r in cited.items() if exists[s] and s in transport.secret_refs}
         if boundary is not None and present:
             dest = mcp_destination(resource.uid, resource.name, config)
             pending = await asyncio.to_thread(boundary.check, dest, present)
-            waiting = {a.slot for a in pending if a.slot}
+            waiting = {a.slot for a in pending if a.slot and a.status != "rejected"}
+            refused = {a.slot for a in pending if a.slot and a.status == "rejected"}
         rows: list[ServerRequirement] = []
         for slot, ref in cited.items():
             status: RequirementStatus = (
-                "missing" if not exists[slot] else "waiting_approval" if slot in waiting else "set"
+                "missing"
+                if not exists[slot]
+                else "refused"
+                if slot in refused
+                else "waiting_approval"
+                if slot in waiting
+                else "set"
             )
             rows.append(
                 ServerRequirement(

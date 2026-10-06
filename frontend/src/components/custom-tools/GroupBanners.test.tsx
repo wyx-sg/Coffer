@@ -1,12 +1,13 @@
 // src/components/custom-tools/GroupBanners.test.tsx — what a group says about itself: the header's state pill, the
 // banner under it (failing calls with a hand-off, Off with Turn on, a missing secret, a secret waiting for
-// approval with one button) and the list row's subtitle.
+// approval with one button, a refused one with Ask again) and the list row's subtitle.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { acceptance } from "@/test/acceptance";
 import type { CustomToolGroup } from "@/lib/api/customTools";
 import { openApprovalsSheet } from "@/lib/hooks/useApprovals";
 import { GroupBanners } from "./GroupBanners";
@@ -28,6 +29,7 @@ vi.mock("@/lib/api/secret", () => ({
         },
       ],
     })),
+    askAgain: vi.fn(async () => ({ approvals: [] })),
   },
 }));
 vi.mock("@/lib/api/resources", () => ({
@@ -39,6 +41,7 @@ vi.mock("@/lib/hooks/useAgents", () => ({
 }));
 vi.mock("@/lib/hooks/useApprovals", () => ({ openApprovalsSheet: vi.fn() }));
 const { resourcesApi } = await import("@/lib/api/resources");
+const { secretsApi } = await import("@/lib/api/secret");
 
 function mount(ui: React.ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -135,6 +138,34 @@ describe("group banners", () => {
     expect(openApprovalsSheet).toHaveBeenCalled();
   });
 
+  acceptance("web-ui", "a refused secret on a group's page offers Ask again", async () => {
+    banners(
+      makeGroup({
+        name: "grafana",
+        health: "attention",
+        health_reason: "approval_rejected",
+        secret_state: "rejected",
+        rejected_approvals: ["ap-1"],
+        rejected_secrets: ["a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"],
+        headers: [
+          {
+            name: "Authorization",
+            value: null,
+            scheme: null,
+            secret: "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+            secret_state: "rejected",
+          },
+        ],
+      }),
+    );
+    expect(await screen.findByText("Grafana token was refused for this group")).toBeInTheDocument();
+    expect(screen.queryByText(/waits for approval/)).toBeNull();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Ask again" }));
+    await waitFor(() => expect(secretsApi.askAgain).toHaveBeenCalledWith("ap-1"));
+    expect(openApprovalsSheet).not.toHaveBeenCalled();
+  });
+
   test("a healthy group has no banner", () => {
     const { container } = banners(makeGroup());
     expect(container).toBeEmptyDOMElement();
@@ -169,6 +200,25 @@ describe("group header and row", () => {
       </ul>,
     );
     expect(screen.getByText("Waiting for approval")).toHaveClass("text-warning");
+  });
+
+  test("a refused group says so in its header and in the list, not that it waits", () => {
+    const refused = makeGroup({ health: "attention", secret_state: "rejected" });
+    mount(<GroupHeader group={refused} onEdit={() => {}} onDelete={() => {}} />);
+    expect(screen.getByText("Approval refused")).toBeInTheDocument();
+    mount(
+      <ul>
+        <GroupRow
+          group={refused}
+          selected={false}
+          onOpen={() => {}}
+          checked={false}
+          onCheckedChange={() => {}}
+        />
+      </ul>,
+    );
+    expect(screen.getByText("Secret approval refused")).toHaveClass("text-warning");
+    expect(screen.queryByText("Waiting for approval")).toBeNull();
   });
 
   test("an Off row leaves the reach column empty", () => {

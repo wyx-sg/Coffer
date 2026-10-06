@@ -723,7 +723,8 @@
           "not_found": "未找到",
           "set": "已设置",
           "missing": "缺失",
-          "waiting_approval": "等待批准"
+          "waiting_approval": "等待批准",
+          "refused": "已拒绝"
         }
       },
       "viewInActivity": "在活动中查看",
@@ -4756,6 +4757,7 @@
       "toolCount_one": "{{count}} 个工具",
       "hostTools_one": "{{host}} · {{count}} 个工具",
       "allAgents": "全部智能体",
+      "approvalRejected": "密钥审批已被拒绝",
       "envsTools_one": "{{envs}} 个环境 · {{count}} 个工具",
       "envsTools_other": "{{envs}} 个环境 · {{count}} 个工具"
     },
@@ -4888,7 +4890,8 @@
       "failing": "失败",
       "off": "已关闭",
       "secretMissing": "密钥缺失",
-      "waiting": "等待批准"
+      "waiting": "等待批准",
+      "refused": "审批已拒绝"
     },
     "alert": {
       "missingTitle": "密钥 {{secret}} 不在密钥页面中",
@@ -4906,6 +4909,9 @@
       "offBody_other": "开启后，它已开启的 {{count}} 个工具会重新提供给可用范围内的智能体。",
       "turnOn": "开启",
       "missingBody_one": "在它恢复之前，已开启的 {{count}} 个工具都会失败。请在密钥页面添加它，或让分组改用另一个密钥。",
+      "rejectedTitle": "{{secret}} 在这个分组的使用已被拒绝",
+      "rejectedBody": "在重新申请并获批准之前，对这个分组工具的调用都会失败，也不会带上这个值。",
+      "askAgain": "重新申请",
       "failingTitleGroup": "对 {{group}} 的调用正在失败"
     },
     "definition": {
@@ -5118,7 +5124,8 @@
         "present": "密钥已设置",
         "missing": "缺少密钥",
         "pending_approval": "等待批准",
-        "none": "无密钥"
+        "none": "无密钥",
+        "rejected": "已拒绝"
       }
     },
     "preview": {
@@ -5127,7 +5134,8 @@
         "present": "已设置",
         "missing": "缺失",
         "pending_approval": "等待批准",
-        "none": "无密钥"
+        "none": "无密钥",
+        "rejected": "已拒绝"
       },
       "variables": "变量：",
       "missingVariables": "环境 {{environment}} 没有定义 {{names}}，在这里无法构建请求。",

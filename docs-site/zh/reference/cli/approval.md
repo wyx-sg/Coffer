@@ -1,12 +1,12 @@
 ---
 title: coffer approval
-description: "Secret approvals: list, show, approve with Touch ID, reject."
+description: "Secret approvals: list, show, approve with Touch ID, reject, ask again."
 pageClass: cli-ref
 ---
 
 # coffer approval
 
-Secret approvals: list, show, approve with Touch ID, reject.
+Secret approvals: list, show, approve with Touch ID, reject, ask again.
 
 ```sh
 coffer approval [OPTIONS] COMMAND [ARGS]...
@@ -22,6 +22,7 @@ coffer approval [OPTIONS] COMMAND [ARGS]...
 | [`approval show`](#approval-show) | One approval: what it sends, to which destination and target, and its state. |
 | [`approval approve`](#approval-approve) | Approve with the person's own presence check, in the desktop app. |
 | [`approval reject`](#approval-reject) | Refuse approvals. |
+| [`approval ask-again`](#approval-ask-again) | Ask again for a refused binding: a new request waits for a person in the desktop app. |
 
 ## approval list
 
@@ -94,4 +95,21 @@ coffer approval reject [OPTIONS] APPROVAL_IDS...
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `APPROVAL_IDS` <span class="cli-chip">参数</span> | text（可变个数） | 必填 | The approvals to refuse |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## approval ask-again
+
+Ask again for a refused binding: a new request waits for a person in the desktop app. Needs no presence check: asking grants nothing.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer approval ask-again [OPTIONS] APPROVAL_ID
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `APPROVAL_ID` <span class="cli-chip">参数</span> | text | 必填 | The refused approval to ask for again |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

@@ -570,7 +570,7 @@ server's command and settings need from this machine (see mcp-gateway "Show what
 an MCP server requires"): the launcher as a row reading "Found · <version>" or
 "Not found" with a View in CLIs link to `/clis/<launcher>`, and each secret as
 named by the secret's own name (the setting that carries it is its tooltip) as
-Set, Missing or Waiting for approval with a View in Secrets link to
+Set, Missing, Refused or Waiting for approval with a View in Secrets link to
 `/secrets?q=<name>`, the Secrets list searched for it —
 and **Most-called tools**: the busiest four, read-only with no switches, each
 marked when it sits behind search, with the rest one link away ("Show all N in
@@ -2831,7 +2831,10 @@ Off turns the group off), **Edit group** and a **⋯** menu that holds only Dele
 group… — and each problem is answered in a banner under it, never in the header:
 failing calls (with **View calls**, which opens Activity on its calls, and the daemon's hand-off), a group that is
 off (Turn on), a secret missing (Add secret, Choose another, no hand-off) and a
-secret waiting for approval (Open approvals, the only button). Re-import is a
+secret waiting for approval (Open approvals, the only button) and a secret
+whose approval a person refused (Ask again, the only button: in the desktop app
+it asks for Touch ID at once and approves, elsewhere the request goes back on
+the approvals list). Re-import is a
 button in the definition of an imported group.
 
 A group's detail page (`/custom-tools/<group>/<tab>`) MUST carry, under its
@@ -2845,7 +2848,7 @@ what an MCP server's Overview shows ("Open an MCP server on its Overview"):
 made them, and for a group that is on a View in Activity link to Activity's Tool
 calls tab searching the group's name (for a group that is off, only its last
 call and who made it); **Requires** — each secret its headers cite, named by the
-secret's own name, as Set, Missing or Waiting for approval with a View in
+secret's own name, as Set, Missing, Refused or Waiting for approval with a View in
 Secrets link to `/secrets?q=<name>` (a group runs no command, so it has no
 launcher row); and **Most-called tools** — the busiest four, read-only with no
 switches, each marked when it sits behind search, with the rest one link away
@@ -2917,6 +2920,12 @@ the gateway").
 - **GIVEN** one group whose last call failed and two healthy groups
 - **WHEN** the user opens `/custom-tools`
 - **THEN** the failing group is listed first with its tools, and the page header carries one Add custom tool action whose flow asks for the group in a select that starts on New group and narrows the groups as the user types, and offers Import an OpenAPI spec and Add one request by hand, and no Script type
+
+#### Scenario: a refused secret on a group's page offers Ask again
+- **GIVEN** a group whose secret's approval a person refused
+- **WHEN** its page is opened
+- **THEN** a banner says the secret was refused, with Ask again as its only button, and no banner says it waits for approval
+- **AND** pressing Ask again asks again for that approval
 
 #### Scenario: a group's page has Overview and Tools tabs
 - **GIVEN** the `billing` group with three tools and a call in the last 24 hours

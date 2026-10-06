@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from coffer.application.mcp.custom_tool_preview import RequestPreview
 
-SecretStateName = Literal["none", "present", "missing", "pending_approval"]
+SecretStateName = Literal["none", "present", "missing", "rejected", "pending_approval"]
 
 
 class CustomToolPreviewSecretOut(BaseModel):
