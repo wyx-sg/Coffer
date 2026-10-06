@@ -82,7 +82,7 @@ give the status each code is actually sent with.
 | `APPROVAL_NOT_PENDING` | 409 | The approval was already approved, rejected or superseded. | Nothing to do; a new change raises a new approval. |
 | `PRESENCE_GRANT_INVALID` | 403 | A reveal, key backup, key import or approval came without a valid presence grant: missing, expired, already used, for another operation or target, or not signed by the desktop app. | Do it in the Coffer desktop app, which runs the presence check and signs the grant. |
 | `APPROVAL_TARGET_CHANGED` | 409 | The approval now names another target than the one the person was shown: its destination moved between the presence prompt and the approve request. Nothing was approved; the grant was pinned to the old target. | Review the approval again (`coffer approval show <id>`) and approve it afresh if you recognise the new target. |
-| `DESKTOP_REQUEST_NOT_FOUND` | 404 | No desktop request has that id: a command line request to the desktop app (approve, reveal, key backup, update) that never existed or has expired (requests last two minutes). | Run the command again; keep the desktop app open while it waits. |
+| `DESKTOP_REQUEST_NOT_FOUND` | 404 | No desktop request has that id: a command line request to the desktop app (approve, reveal, key backup, update) that never existed or has expired (requests last two minutes; a key backup's, ten). | Run the command again; keep the desktop app open while it waits. |
 | `SECRET_NAME_INVALID` | 422 | A new standalone secret's ref is not `secret/<32 hex>`, or its label is over 64 characters or its description over 200. | Mint the secret with `coffer secret set --name "Orders DB"` and let Coffer choose the id; shorten the label or description. |
 | `SECRET_NOT_FOUND` | 404 | `coffer run` named a standalone secret the store does not hold. Only `secret/<id>` values can be resolved this way; a resource's secret never can. | Check the id with `coffer secret list`, or mint the secret with `coffer secret set --name "<name>"`. |
 
@@ -341,7 +341,7 @@ is printed on standard error as `{"error": {"code", "message", "details"}, "exit
 | `10` | Waiting for git | The daemon is running but waits for git: none was found, or it is older than 2.40. The command printed why and a prompt for your agent before sending anything. See [Coffer needs git](/guides/troubleshooting#coffer-needs-git). |
 | `11` | Presence not confirmed | A step handed to the desktop app's presence check (`coffer approval approve`, `coffer secret reveal`, `coffer secret backup-key`) was cancelled, failed or timed out, or the daemon refused the grant (`PRESENCE_GRANT_INVALID`). Every approval stays pending. |
 | `12` | Desktop app unavailable | The step needs the desktop app, which is not running and could not be started here (no app, not a Mac, or `--no-launch`): `CLI_APP_UNAVAILABLE`. Nothing was approved. Open the app and run the command again. |
-| `13` | Wait timed out | An operation started with `--wait` had not finished by `--timeout` (`CLI_WAIT_TIMEOUT`). It may still be running; check its status command. |
+| `13` | Wait timed out | A wait ended before the operation finished: `coffer sync wait` ran past its `--timeout` (`CLI_WAIT_TIMEOUT`). The round may still be running; check `coffer sync status`. |
 
 ### Codes the command line sets
 
@@ -351,10 +351,10 @@ Besides the daemon's codes, which pass through unchanged, a command names these 
 | --- | --- | --- |
 | `CLI_INVALID_INPUT` | `6` | The command's own input is not valid: `--data` or `--args` is not JSON, `@file` cannot be read, `--set` is not `key=value`, or a flag's value is malformed. Nothing was sent. |
 | `CLI_APP_UNAVAILABLE` | `12` | The desktop app is not running and could not be started. |
-| `CLI_WAIT_TIMEOUT` | `13` | `--wait` ran out before the operation finished. |
+| `CLI_WAIT_TIMEOUT` | `13` | `coffer sync wait` ran past its `--timeout` before the operation finished. |
 | `CLI_DESKTOP_REQUEST_FAILED` | `1` | The desktop app could not carry out an update request (`coffer app update …`). |
 
-Pass `--verbose` (`coffer -v …`) to print the full traceback and HTTP context on error.
+Pass `--verbose` (`coffer -v …`) to add the request behind a refusal — method, path and status, never a header — as a line on standard error, or as a `request` object beside `error` with `--json`; an unexpected error also prints its traceback.
 
 ## MCP shim exit codes
 

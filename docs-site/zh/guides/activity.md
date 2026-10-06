@@ -100,6 +100,9 @@ coffer log audit --json
 | `--event-type` | 某一种事件类型。 |
 | `--since` | ISO 8601 下界，或者 `30m`、`1h`、`2d` 这样的时长。 |
 | `--trace` | 只看一个请求或轮次的行：它的 trace id，也就是抽屉、`X-Coffer-Trace` 响应头或一行守护进程日志上显示的那个。`coffer log mcp` 和 `coffer log daemon` 也接受它。 |
+| `--q` | 自由文本，不区分大小写，匹配事件代码、资源名、执行者和详情——也就是页面上的搜索框。 |
+| `--q-type` | 配合 `--q`：同样算作匹配的事件类型（可重复），就像页面把译文里含有该文本的事件也加进来。 |
+| `--cursor` | 读下一页：上一次读取打印出的 `next_cursor`。后面还有内容的页面会在末尾给出要用的 `--cursor` 值。 |
 | `--limit` | 1–500，默认 50。 |
 | `--json` | 机器可读的输出。 |
 
@@ -110,10 +113,12 @@ coffer log audit --json
 ```sh
 coffer log mcp                              # every server, newest 20
 coffer log mcp --server filesystem          # one server
-coffer log mcp --status error --since 1d --json
+coffer log mcp --status failed --since 1d --json   # every outcome but ok
+coffer log mcp --agent-uid <agent-uid> --q timeout
+coffer log mcp --uid coffer                 # Coffer's own tools, or a deleted server's uid
 ```
 
-不带 `--server` 时，输出包括 Coffer 自己的内置工具调用（服务器为 `coffer`）以及已删除服务器的行（以其 uid 显示）。`--limit` 接受 1–500。[自定义工具](/zh/guides/custom-tools#environments)的调用还会写明它在哪个环境里发出：活动页面在工具旁边（`@live`）和抽屉里显示它，`--json` 以 `environment` 字段带出。不记录任何请求头、变量或凭据。
+不带 `--server` 时，输出包括 Coffer 自己的内置工具调用（服务器为 `coffer`）以及已删除服务器的行（以其 uid 显示）。`--status` 接受 `ok`、`error`、`timeout`、`denied`，或用 `failed` 表示除 `ok` 以外的所有结果；`--agent-uid` 只保留某个智能体的调用；`--q` 搜索工具、错误、会话、结果和服务器名；`--uid` 按写入这些行时的服务器 uid 过滤，能选中 `--server` 叫不出名字的 `coffer` 和已删除的服务器（`--uid` 和 `--q` 读的是所有服务器，所以不能和 `--server` 同用）。`--limit` 接受 1–500，`--cursor` 读下一页。[自定义工具](/zh/guides/custom-tools#environments)的调用还会写明它在哪个环境里发出：活动页面在工具旁边（`@live`）和抽屉里显示它，`--json` 以 `environment` 字段带出。不记录任何请求头、变量或凭据。
 
 每次调用处于四种状态之一：
 
@@ -133,11 +138,12 @@ coffer log mcp --status error --since 1d --json
 ```sh
 coffer log daemon                           # newest 100 records
 coffer log daemon --errors --since 1h
+coffer log daemon --level warning --q sync --with-total
 coffer log daemon --json
 coffer path logs                            # the log directory and its daemon.log
 ```
 
-`coffer log daemon` 读取 `daemon.log` 的尾部，并按 **守护进程日志** 标签页的方式规整格式。`--limit` 接受 1–500。`coffer path logs` 打印文件位置（`COFFER_LOG_DIR` 可以改变它），方便你直接 `grep`。
+`coffer log daemon` 读取 `daemon.log` 的尾部，并按 **守护进程日志** 标签页的方式规整格式。`--level` 只保留某个严重级别及以上的记录（`debug`、`info`、`warning`、`error`、`critical`），`--q` 搜索消息、记录器、级别和折叠的行，`--with-total` 还会统计最近尾部里的匹配数，`--cursor` 读下一页。`--limit` 接受 1–500。这个命令经由守护进程读取，守护进程没在运行时会先启动它；`coffer path logs` 打印文件位置（`COFFER_LOG_DIR` 可以改变它），不需要守护进程，方便你直接 `grep`。
 
 ## 让智能体查看 Coffer {#let-an-agent-look-into-coffer}
 

@@ -92,10 +92,14 @@ pub async fn export_master_key_backup(
                 .map(str::to_owned)
                 .ok_or_else(|| format!("the daemon's answer carried no {name}"))
         };
-        Ok(MasterKeyBackup {
+        let backup = MasterKeyBackup {
             path: field("path")?,
             fingerprint: field("fingerprint")?,
-        })
+        };
+        // A `coffer secret backup-key` waiting on this dialog learns the file
+        // was written — from the daemon's answer above, not from the page.
+        crate::desktop_requests::report_backup_written(&backup.path, &backup.fingerprint);
+        Ok(backup)
     })
     .await
 }

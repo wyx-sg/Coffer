@@ -9,6 +9,12 @@ line"; design align-cli-with-ui-and-add-tool-environments D3.
   with repeatable ``--set a.b=value`` merged over it (the value parsed as JSON
   when it parses, else taken as text).
 * Exit codes: :class:`ExitCode`; the daemon's ``error.code`` is passed through.
+  A switched-off feature exits 1 and names Settings > Features, as the daemon
+  does (spec experimental-features "Close every surface of a switched-off
+  feature").
+* ``coffer --verbose``: a failure the daemon answered also names the request
+  behind it — ``METHOD /api/v1/path -> status`` on stderr, or a ``request``
+  object beside ``error`` with ``--json``. Never a header, so never the token.
 * Nothing prompts: a command reads stdin only when told to with ``-``.
 
 A change the daemon saved but that waits for a person's approval is reported
@@ -20,7 +26,7 @@ from __future__ import annotations
 import contextlib
 import json
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -29,6 +35,19 @@ import typer
 
 from coffer.surfaces.cli import _client
 from coffer.surfaces.cli._options import ExitCode
+
+#: ``coffer --verbose``, set once by the root callback for the whole command.
+_verbose = False
+
+
+def set_verbose(value: bool) -> None:
+    global _verbose
+    _verbose = value
+
+
+def verbose() -> bool:
+    return _verbose
+
 
 JSON_HELP = "Print the daemon's answer as JSON on stdout (errors as JSON on stderr)."
 DATA_HELP = "Request body: JSON text, @path to read a file, or - to read stdin."
@@ -54,8 +73,9 @@ def fail(
     *,
     as_json: bool,
     details: Mapping[str, Any] | None = None,
+    request: Mapping[str, Any] | None = None,
 ) -> NoReturn:
-    render_failure(code, message, int(exit_code), as_json=as_json, details=details)
+    render_failure(code, message, int(exit_code), as_json=as_json, details=details, request=request)
     raise typer.Exit(int(exit_code))
 
 
@@ -66,15 +86,23 @@ def render_failure(
     *,
     as_json: bool,
     details: Mapping[str, Any] | None = None,
+    request: Mapping[str, Any] | None = None,
 ) -> None:
+    """Say why a command failed. ``request`` (method, path, status) is shown
+    only under ``--verbose``."""
+    shown = dict(request) if request is not None and _verbose else None
     if as_json:
-        envelope = {
+        envelope: dict[str, Any] = {
             "error": {"code": code, "message": message, "details": dict(details or {})},
             "exit_code": exit_code,
         }
+        if shown is not None:
+            envelope["request"] = shown
         typer.echo(json.dumps(envelope, ensure_ascii=False), err=True)
         return
     typer.echo(message, err=True)
+    if shown is not None:
+        typer.echo(f"{shown['method']} {shown['path']} -> {shown['status']}", err=True)
     handoff = (details or {}).get("handoff")
     if isinstance(handoff, dict) and handoff.get("prompt"):
         typer.echo("\nTo hand this to your agent, give it this prompt:\n", err=True)
@@ -92,6 +120,8 @@ def exit_code_for(status: int, code: str | None) -> ExitCode:
         return ExitCode.SECRET_ISSUE
     if code == "PRESENCE_GRANT_INVALID":
         return ExitCode.PRESENCE_NOT_CONFIRMED
+    if code == "FEATURE_DISABLED":
+        return ExitCode.GENERIC
     if status in (502, 504) and code not in (None, "UPSTREAM_UNAVAILABLE"):
         return ExitCode.UPSTREAM_TEST_FAILED
     return {
@@ -102,7 +132,7 @@ def exit_code_for(status: int, code: str | None) -> ExitCode:
     }.get(status, ExitCode.GENERIC)
 
 
-def _envelope(r: httpx.Response) -> tuple[str, str, dict[str, Any]]:
+def envelope_of(r: httpx.Response) -> tuple[str, str, dict[str, Any]]:
     data: Any = None
     with contextlib.suppress(Exception):
         data = r.json()
@@ -117,6 +147,15 @@ def _envelope(r: httpx.Response) -> tuple[str, str, dict[str, Any]]:
     return f"HTTP_{r.status_code}", str(detail or r.reason_phrase or r.text[:200]), {}
 
 
+def _request_of(r: httpx.Response) -> dict[str, Any]:
+    """What ``--verbose`` adds to a failure: the method, the path and the status."""
+    try:
+        method, path = r.request.method, r.request.url.path
+    except RuntimeError:  # a response built without its request
+        method, path = "?", "?"
+    return {"method": method, "path": path, "status": r.status_code}
+
+
 def check(r: httpx.Response, *, as_json: bool) -> Any:
     """The response's JSON body (``None`` for no content), or render its error and exit."""
     if r.is_success:
@@ -126,11 +165,24 @@ def check(r: httpx.Response, *, as_json: bool) -> Any:
             return r.json()
         except ValueError:
             return r.text
-    code, message, details = _envelope(r)
-    if code == "FEATURE_DISABLED":
-        key = details.get("feature", "?")
-        message = f"{key} is switched off on this machine — run: coffer config set feature.{key} on"
-    fail(code, message, exit_code_for(r.status_code, code), as_json=as_json, details=details)
+    code, message, details = envelope_of(r)
+    fail(
+        code,
+        message,
+        exit_code_for(r.status_code, code),
+        as_json=as_json,
+        details=details,
+        request=_request_of(r),
+    )
+
+
+def client(*, as_json: bool) -> httpx.Client:
+    """A client for the daemon (started on demand), or the reason there is none."""
+    try:
+        c, _info = _client.client_or_exit(as_json=as_json)
+    except _client.ClientUnavailable as e:
+        fail(e.code, e.message, e.exit_code, as_json=as_json, details=e.details)
+    return c
 
 
 def call(
@@ -147,8 +199,7 @@ def call(
     """One request to the daemon (started on demand), its JSON answer or an exit.
 
     ``files`` and ``form`` send a multipart upload, as the page's file picker does."""
-    client, _info = _client.client_or_exit()
-    with client as c:
+    with client(as_json=as_json) as c:
         kwargs: dict[str, Any] = {}
         if params:
             kwargs["params"] = {k: v for k, v in params.items() if v is not None}
@@ -175,21 +226,38 @@ def call(
 
 
 def read_text(value: str, *, as_json: bool) -> str:
-    """``-`` reads stdin, ``@path`` reads a file, anything else is the text itself."""
+    """``-`` reads stdin, ``@path`` reads a file, anything else is the text itself.
+
+    A file or stdin that cannot be read, or is not UTF-8 text, exits 6 before
+    anything is sent."""
     if value == "-":
-        return sys.stdin.read()
+        raw = sys.stdin.buffer.read() if hasattr(sys.stdin, "buffer") else sys.stdin.read()
+        return raw if isinstance(raw, str) else _decode(raw, "stdin", as_json=as_json)
     if value.startswith("@"):
         path = Path(value[1:]).expanduser()
         try:
-            return path.read_text(encoding="utf-8")
+            data = path.read_bytes()
         except OSError as e:
             fail(
                 "CLI_INVALID_INPUT",
-                f"cannot read {path}: {e}",
+                f"cannot read {path}: {e.strerror or e}",
                 ExitCode.INVALID_INPUT,
                 as_json=as_json,
             )
+        return _decode(data, str(path), as_json=as_json)
     return value
+
+
+def _decode(data: bytes, where: str, *, as_json: bool) -> str:
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError as e:
+        fail(
+            "CLI_INVALID_INPUT",
+            f"{where} is not UTF-8 text (byte {e.start})",
+            ExitCode.INVALID_INPUT,
+            as_json=as_json,
+        )
 
 
 def parse_json(text: str, what: str, *, as_json: bool) -> Any:
@@ -255,85 +323,21 @@ def body_from(
     return apply_sets(body, sets, as_json=as_json)
 
 
-# --- output -------------------------------------------------------------------
+# --- output: in ``_output``, re-exported here as every command imports ``_io`` ---
 
-
-def emit(value: Any, *, as_json: bool, human: Callable[[Any], None] | None = None) -> None:
-    if as_json:
-        typer.echo(json.dumps(value, ensure_ascii=False, indent=2, default=str))
-        return
-    if human is not None:
-        human(value)
-        return
-    if value is None:
-        typer.echo("done")
-    elif isinstance(value, (dict, list)):
-        typer.echo(json.dumps(value, ensure_ascii=False, indent=2, default=str))
-    else:
-        typer.echo(str(value))
-
-
-def table(rows: list[Mapping[str, Any]], columns: list[str]) -> None:
-    """A plain aligned table of ``columns`` (no colours: agents read it)."""
-    if not rows:
-        typer.echo("(none)")
-        return
-    cells = [[_cell(r.get(c)) for c in columns] for r in rows]
-    widths = [max(len(c), *(len(row[i]) for row in cells)) for i, c in enumerate(columns)]
-    typer.echo("  ".join(c.upper().ljust(widths[i]) for i, c in enumerate(columns)).rstrip())
-    for row in cells:
-        typer.echo("  ".join(v.ljust(widths[i]) for i, v in enumerate(row)).rstrip())
-
-
-def _cell(value: Any) -> str:
-    if value is None:
-        return "-"
-    if isinstance(value, bool):
-        return "yes" if value else "no"
-    if isinstance(value, (list, dict)):
-        text = json.dumps(value, ensure_ascii=False, default=str)
-    else:
-        text = str(value)
-    return text if len(text) <= 60 else text[:57] + "..."
-
-
-def pending_approvals(value: Any) -> list[str]:
-    """The approval ids an answer says a change waits on, wherever it puts them."""
-    if not isinstance(value, dict):
-        return []
-    ids: list[str] = []
-    for key in ("pending_approvals", "approval_ids"):
-        found = value.get(key)
-        if isinstance(found, list):
-            ids += [str(i) for i in found]
-    return list(dict.fromkeys(ids))
-
-
-def report_pending(value: Any, *, as_json: bool) -> None:
-    """Exit 9 with the approve command when ``value`` waits on approvals."""
-    ids = pending_approvals(value)
-    if not ids:
-        return
-    command = "coffer approval approve " + " ".join(ids)
-    if as_json:
-        typer.echo(
-            json.dumps(
-                {"status": "pending_approval", "approval_ids": ids, "next": command},
-                ensure_ascii=False,
-            ),
-            err=True,
-        )
-    else:
-        typer.echo(f"waiting for approval: {', '.join(ids)}", err=True)
-        typer.echo(f"next: {command}", err=True)
-    raise typer.Exit(int(ExitCode.APPROVAL_PENDING))
-
+from coffer.surfaces.cli._output import (  # noqa: E402
+    emit,
+    pending_approvals,
+    report_pending,
+    table,
+)
 
 __all__ = [
     "apply_sets",
     "body_from",
     "call",
     "check",
+    "client",
     "data_option",
     "emit",
     "exit_code_for",
@@ -345,5 +349,7 @@ __all__ = [
     "render_failure",
     "report_pending",
     "set_option",
+    "set_verbose",
     "table",
+    "verbose",
 ]

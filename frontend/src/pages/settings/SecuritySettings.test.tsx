@@ -21,11 +21,15 @@ vi.mock("./SecretBoundaryCard", () => ({
 }));
 let inApp = false;
 const exportBackup = vi.fn();
+const backupClosed = vi.fn();
 vi.mock("@/lib/tauri", () => ({
   presenceAvailable: () => inApp,
   exportMasterKeyBackup: (passphrase: string) => exportBackup(passphrase),
   importMasterKey: (material: string, passphrase: string | null) =>
     importKeyInShell(material, passphrase),
+}));
+vi.mock("@/lib/masterKeyBackup", () => ({
+  masterKeyBackupClosed: () => backupClosed(),
 }));
 const importKeyInShell = vi.fn();
 
@@ -70,8 +74,8 @@ async function fakeDaemon(input: RequestInfo | URL, init?: RequestInit): Promise
     storage = ((await req.json()) as { master_key_storage: Storage }).master_key_storage;
     return json(200, { master_key_storage: storage });
   }
-  if (route === "GET /sync/key/fingerprint") return json(200, { fingerprint: currentFp });
-  if (route === "POST /sync/key/import/preview") {
+  if (route === "GET /secrets/key/fingerprint") return json(200, { fingerprint: currentFp });
+  if (route === "POST /secrets/key/import/preview") {
     const body = (await req.json()) as { material: string };
     const fp = body.material === BACKUP ? OTHER_FP : OWN_FP;
     return json(200, {
@@ -247,6 +251,8 @@ describe("SecuritySettings — master key", () => {
     );
     fireEvent.click(within(dialog).getByRole("button", { name: /done/i }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    // Closing tells the shell, so a command waiting on this dialog stops waiting.
+    expect(backupClosed).toHaveBeenCalled();
   });
 
   test("a cancelled presence check leaves the export dialog open without an error", async () => {
@@ -287,83 +293,77 @@ describe("SecuritySettings — master key", () => {
     expect(within(dialog).queryByRole("alert")).toBeNull();
   });
 
-  acceptance(
-    "vault-sync",
-    "the security tab replaces a key and names what stays locked",
-    async () => {
-      inApp = true;
-      // The shell does the presence check and the daemon call; the page only
-      // hands it the file's text and the passphrase.
-      importKeyInShell.mockImplementation(async (material: string, passphrase: string | null) => {
-        bodies.push({ material, passphrase });
-        if (passphrase !== "correct horse") throw "the passphrase does not open this key file";
-        currentFp = OTHER_FP;
-        return {
-          fingerprint: OTHER_FP,
-          replaced: true,
-          readable: 6,
-          locked_refs: ["secret/linear-api-key", "secret/jira-pat-2024"],
-        };
-      });
-      renderPage();
-      fireEvent.click(await screen.findByRole("button", { name: "Import…" }));
-      const dialog = await screen.findByRole("dialog");
-      expect(dialog).toHaveTextContent("Replace this Mac’s master key?");
-      const replace = within(dialog).getByRole("button", { name: "Replace key" });
-      expect(replace).toBeDisabled();
+  acceptance("secret", "the security tab replaces a key and names what stays locked", async () => {
+    inApp = true;
+    // The shell does the presence check and the daemon call; the page only
+    // hands it the file's text and the passphrase.
+    importKeyInShell.mockImplementation(async (material: string, passphrase: string | null) => {
+      bodies.push({ material, passphrase });
+      if (passphrase !== "correct horse") throw "the passphrase does not open this key file";
+      currentFp = OTHER_FP;
+      return {
+        fingerprint: OTHER_FP,
+        replaced: true,
+        readable: 6,
+        locked_refs: ["secret/linear-api-key", "secret/jira-pat-2024"],
+      };
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Import…" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Replace this Mac’s master key?");
+    const replace = within(dialog).getByRole("button", { name: "Replace key" });
+    expect(replace).toBeDisabled();
 
-      // jsdom's File has no text(); the page reads the picked file with it.
-      const file = Object.assign(
-        new File([BACKUP], "coffer-master-key.cfk", { type: "application/json" }),
-        { text: async () => BACKUP },
-      );
-      fireEvent.change(within(dialog).getByLabelText("Key file"), { target: { files: [file] } });
+    // jsdom's File has no text(); the page reads the picked file with it.
+    const file = Object.assign(
+      new File([BACKUP], "coffer-master-key.cfk", { type: "application/json" }),
+      { text: async () => BACKUP },
+    );
+    fireEvent.change(within(dialog).getByLabelText("Key file"), { target: { files: [file] } });
 
-      await waitFor(() =>
-        expect(within(dialog).getByTestId("key-in-file")).toHaveTextContent(
-          "C04B 7719 AE62 · different",
-        ),
-      );
-      expect(within(dialog).getByTestId("key-file-name")).toHaveTextContent(
-        "coffer-master-key.cfk",
-      );
-      expect(dialog).toHaveTextContent("7F3A 91C2 5D0E");
-      expect(dialog).toHaveTextContent("Recorded in Activity");
-      // Nothing is replaced by choosing the file.
-      expect(bodies).toHaveLength(0);
-      expect(replace).toBeDisabled();
+    await waitFor(() =>
+      expect(within(dialog).getByTestId("key-in-file")).toHaveTextContent(
+        "C04B 7719 AE62 · different",
+      ),
+    );
+    expect(within(dialog).getByTestId("key-file-name")).toHaveTextContent("coffer-master-key.cfk");
+    expect(dialog).toHaveTextContent("7F3A 91C2 5D0E");
+    expect(dialog).toHaveTextContent("Recorded in Activity");
+    // Nothing is replaced by choosing the file.
+    expect(bodies).toHaveLength(0);
+    expect(replace).toBeDisabled();
 
-      fireEvent.change(within(dialog).getByLabelText("Passphrase"), {
-        target: { value: "wrong one" },
-      });
-      fireEvent.click(replace);
-      expect(await within(dialog).findByRole("alert")).toHaveTextContent(
-        "the passphrase does not open this key file",
-      );
+    fireEvent.change(within(dialog).getByLabelText("Passphrase"), {
+      target: { value: "wrong one" },
+    });
+    fireEvent.click(replace);
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "the passphrase does not open this key file",
+    );
 
-      fireEvent.change(within(dialog).getByLabelText("Passphrase"), {
-        target: { value: "correct horse" },
-      });
-      fireEvent.click(within(dialog).getByRole("button", { name: "Replace key" }));
+    fireEvent.change(within(dialog).getByLabelText("Passphrase"), {
+      target: { value: "correct horse" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Replace key" }));
 
-      await waitFor(() => expect(screen.getByRole("dialog")).toHaveTextContent("Key imported"));
-      const done = screen.getByRole("dialog");
-      expect(done).toHaveTextContent(
-        "This Mac now uses key C04B 7719 AE62, but 2 secrets still can’t be decrypted with it.",
-      );
-      expect(within(done).getByTestId("readable-now")).toHaveTextContent("6 secrets");
-      expect(within(done).getByTestId("still-locked")).toHaveTextContent(
-        "linear-api-key, jira-pat-2024",
-      );
-      expect(within(done).getByRole("button", { name: "Open Secrets" })).toBeInTheDocument();
-      expect(bodies.at(-1)).toEqual({ material: BACKUP, passphrase: "correct horse" });
-      // The fingerprint row follows the key this Mac now uses.
-      fireEvent.click(within(done).getByRole("button", { name: /done/i }));
-      await waitFor(() =>
-        expect(screen.getByTestId("key-fingerprint")).toHaveTextContent("C04B 7719 AE62"),
-      );
-    },
-  );
+    await waitFor(() => expect(screen.getByRole("dialog")).toHaveTextContent("Key imported"));
+    const done = screen.getByRole("dialog");
+    expect(done).toHaveTextContent(
+      "This Mac now uses key C04B 7719 AE62, but 2 secrets still can’t be decrypted with it.",
+    );
+    expect(within(done).getByTestId("readable-now")).toHaveTextContent("6 secrets");
+    expect(within(done).getByTestId("still-locked")).toHaveTextContent(
+      "linear-api-key, jira-pat-2024",
+    );
+    expect(within(done).getByRole("button", { name: "Open Secrets" })).toBeInTheDocument();
+    expect(bodies.at(-1)).toEqual({ material: BACKUP, passphrase: "correct horse" });
+    // The fingerprint row follows the key this Mac now uses.
+    fireEvent.click(within(done).getByRole("button", { name: /done/i }));
+    await waitFor(() =>
+      expect(screen.getByTestId("key-fingerprint")).toHaveTextContent("C04B 7719 AE62"),
+    );
+  });
 });
 
 describe("SecuritySettings — daemon access token", () => {
@@ -445,6 +445,8 @@ describe("SecuritySettings — daemon access token", () => {
     expect(screen.queryByRole("button", { name: /add|reveal|delete/i })).toBeNull();
     // The way to them is a link to the Secrets page.
     expect(screen.getByRole("button", { name: /manage in secrets/i })).toBeInTheDocument();
-    expect(seen.some((r) => r.path.startsWith("/secrets"))).toBe(false);
+    // It reads no stored secret: only this machine's key, under /secrets/key.
+    const secretReads = seen.filter((r) => r.path.startsWith("/secrets"));
+    expect(secretReads.every((r) => r.path.startsWith("/secrets/key/"))).toBe(true);
   });
 });

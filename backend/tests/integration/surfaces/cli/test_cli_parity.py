@@ -62,7 +62,8 @@ def test_every_ui_route_and_desktop_command_has_a_command() -> None:
     ui = coverage.frontend_routes()
     assert len(ui) > 200
     covered = {(o.method, o.route) for o in OPERATIONS}
-    assert ui <= covered | set(EXEMPT)
+    # The event stream is plumbing the page subscribes to, not an operation.
+    assert ui <= covered | set(EXEMPT) | set(coverage.STREAM_EXEMPT)
     assert {cat for cat, _ in EXEMPT.values()} <= {"file-content", "window", "internal"}
 
 

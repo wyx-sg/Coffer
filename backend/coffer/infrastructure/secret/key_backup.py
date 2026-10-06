@@ -1,7 +1,7 @@
 """The master key backup file: ``coffer-master-key.cfk``, passphrase-protected.
 
 Spec secret "Release plaintext only to a present human in the desktop app"
-and vault-sync "Import a master key after showing whose key it is".
+and "Import a master key after showing whose key it is".
 
 The backup is the one way the master key leaves a machine (principle I), so
 the file does not hold the key in the clear: it holds the key encrypted under

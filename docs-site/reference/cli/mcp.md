@@ -37,8 +37,8 @@ This page matches what `coffer mcp --help` prints. Add `--help` to any command b
 | [`mcp server-log`](#mcp-server-log) | The newest lines of the server's own log. |
 | [`mcp builtin`](#mcp-builtin) | Coffer's own built-in tools. |
 | [`mcp tool`](#mcp-tool) | Switch a server's tools, prompts and resources on or off. |
-| [`mcp tool enable`](#mcp-tool-enable) | Switch capabilities on. |
-| [`mcp tool disable`](#mcp-tool-disable) | Switch capabilities off. |
+| [`mcp tool enable`](#mcp-tool-enable) | Switch one capability on. |
+| [`mcp tool disable`](#mcp-tool-disable) | Switch one capability off. |
 | [`mcp resource`](#mcp-resource) | Read one of a server's resources now. |
 | [`mcp resource read`](#mcp-resource-read) | Read one resource now, as its row's details do. |
 | [`mcp prompt`](#mcp-prompt) | Fill one of a server's prompts and show the messages it makes. |
@@ -48,7 +48,7 @@ This page matches what `coffer mcp --help` prints. Add `--help` to any command b
 
 Re-query a server's capabilities, then report whether it answers.
 
-Exits 7 when the server does not answer. With ``--prompt``, a failure also prints the hand-off prompt the server's page offers for it: installing a launcher that is not found here, or finding why the server fails.
+Exits 7 when the server does not answer. With ``--prompt``, a failure also prints the hand-off prompt the server's page offers for it: installing a launcher that is not found here, or finding why the server fails. ``--json`` prints the test's answer (``ok``, ``latency_ms``, ``error_message``, ``handoff``) with the refresh's counts under ``capabilities``; a failed test still exits 7.
 
 <p class="cli-label">Synopsis</p>
 
@@ -62,6 +62,7 @@ coffer mcp test [OPTIONS] NAME
 | --- | --- | --- | --- |
 | `NAME` <span class="cli-chip">argument</span> | text | required | Server name |
 | `--prompt` <span class="cli-chip">option</span> | flag |  | On a failure, also print the prompt to give your agent |
+| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## mcp list
 
@@ -205,7 +206,7 @@ coffer mcp add [OPTIONS]
 
 ## mcp test-config
 
-Test a config before adding it; nothing is saved. Body: transport, secret_values, spawn_timeout_seconds, request_timeout_seconds.
+Test a config before adding it; nothing is saved. Body: transport, secret_values, spawn_timeout_seconds, request_timeout_seconds. Exits 7 when the answer says ok: false.
 
 <p class="cli-label">Synopsis</p>
 
@@ -275,7 +276,7 @@ coffer mcp tiering [OPTIONS] UID
 
 ## mcp exposure
 
-Choose how one tool is exposed. Body: mode (auto | always | search).
+Choose how one tool is exposed. Body: {"mode": "listed"}; mode is auto, listed (in the tool list) or search (found with coffer__search_tools).
 
 <p class="cli-label">Synopsis</p>
 
@@ -295,7 +296,7 @@ coffer mcp exposure [OPTIONS] UID TOOL
 
 ## mcp exposure-all
 
-Choose how several tools are exposed. Body: tools, mode.
+Choose how several tools are exposed. Body: {"tools": ["read_file"], "mode": "search"}; mode is auto, listed or search.
 
 <p class="cli-label">Synopsis</p>
 
@@ -378,7 +379,7 @@ Subcommands: `enable`, `disable`.
 
 ## mcp tool enable
 
-Switch capabilities on. Body: capability_key (a list of keys).
+Switch one capability on. Body: {"capability_key": "read_file"} (one key per call).
 
 <p class="cli-label">Synopsis</p>
 
@@ -398,7 +399,7 @@ coffer mcp tool enable [OPTIONS] UID CAPABILITY_TYPE
 
 ## mcp tool disable
 
-Switch capabilities off. Body: capability_key (a list of keys).
+Switch one capability off. Body: {"capability_key": "read_file"} (one key per call).
 
 <p class="cli-label">Synopsis</p>
 

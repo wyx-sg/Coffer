@@ -297,7 +297,9 @@ index or retrieval.
 While `sync` is off, `/api/v1/sync` MUST answer 404 `FEATURE_DISABLED`, the
 convergence worker MUST skip its rounds, and the sync attention source MUST be
 tagged `sync` and not asked. The configured remote and the
-history stay untouched.
+history stay untouched. The master key's routes are the secret store's, under
+`/api/v1/secrets/key`, and stay open ([secret](../secret/spec.md)
+"Import a master key after showing whose key it is").
 
 #### Scenario: sync off closes the sync routes
 - **GIVEN** `sync` off

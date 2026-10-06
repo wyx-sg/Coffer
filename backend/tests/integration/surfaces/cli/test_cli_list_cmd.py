@@ -57,7 +57,7 @@ def _daemon(monkeypatch: pytest.MonkeyPatch, seen: list[tuple[str, str]]) -> Non
         seen.append((request.method, request.url.path))
         return httpx.Response(200, json={"items": _ITEMS, "warnings": []})
 
-    def fresh() -> tuple[httpx.Client, object]:
+    def fresh(**_kw: object) -> tuple[httpx.Client, object]:
         client = httpx.Client(
             base_url="http://daemon.invalid/api/v1", transport=httpx.MockTransport(handler)
         )

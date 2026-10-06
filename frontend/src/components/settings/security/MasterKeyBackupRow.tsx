@@ -5,7 +5,9 @@
 // then the shell asks for Touch ID, asks for a folder natively, and the daemon
 // writes `coffer-master-key.cfk` — the key encrypted under that passphrase —
 // so the key never reaches this page. The page learns only where the file
-// went. In a browser the row names the app on a disabled button instead of
+// went. Closing the dialog tells the shell, so a `coffer secret backup-key`
+// waiting on it ends with nothing written; a written file the shell reports
+// itself, from the daemon's answer. In a browser the row names the app on a disabled button instead of
 // offering a control that could only fail.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -24,6 +26,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { useExportMasterKey, useRevealPath } from "@/lib/hooks/useSecurity";
+import { masterKeyBackupClosed } from "@/lib/masterKeyBackup";
 import { presenceAvailable, type MasterKeyBackup } from "@/lib/tauri";
 
 import { SettingRow } from "@/components/settings/SettingsLayout";
@@ -88,6 +91,7 @@ function ExportDialog({ open, onClose }: { open: boolean; onClose: () => void })
     setRepeat("");
     setExported(null);
     exportKey.reset();
+    void masterKeyBackupClosed();
     onClose();
   };
 

@@ -13,7 +13,10 @@ import typer
 
 from coffer.surfaces.cli import _client as _cli_client
 
-app = typer.Typer(help="The local model proxy's per-agent tokens", hidden=True)
+#: Visible: ``status``, ``hint`` and ``rotate`` are the proxy's management
+#: commands (``commands/providers.py``); only ``token``, which agents' configs
+#: run, is hidden.
+app = typer.Typer(no_args_is_help=True)
 
 
 @app.command("token", hidden=True)

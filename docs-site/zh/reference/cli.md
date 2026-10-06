@@ -25,7 +25,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `--verbose, -v` <span class="cli-chip">选项</span> | 开关 |  | Show full tracebacks and HTTP request/response context on error. |
+| `--verbose, -v` <span class="cli-chip">选项</span> | 开关 |  | On an error, also show the request behind it (method, path, status) and, for an unexpected one, the traceback. |
 | `--version` <span class="cli-chip">选项</span> | 开关 |  | Print Coffer's version and exit. |
 | `--install-completion` <span class="cli-chip">选项</span> | 开关 |  | Install completion for the current shell. |
 | `--show-completion` <span class="cli-chip">选项</span> | 开关 |  | Show completion for the current shell, to copy it or customize the installation. |
@@ -42,6 +42,8 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer mcp`](/zh/reference/cli/mcp) | MCP servers: register, change, test, their tools and logs. |
 | [`coffer secret`](/zh/reference/cli/secret) | Secrets: list, store, delete, reveal in the app, import, approvals. |
 | [`coffer cli`](/zh/reference/cli/cli) | Command-line tools Coffer manages for skills. |
+| [`coffer memory`](/zh/reference/cli/memory) | Memory partitions (notes are plain files you edit directly). |
+| [`coffer proxy`](/zh/reference/cli/proxy) | The local model proxy. |
 | [`coffer vault`](/zh/reference/cli/vault) | The vault's history and the hand edits it refused. |
 | [`coffer custom-tool`](/zh/reference/cli/custom-tool) | Custom tools: groups of HTTP API requests served as MCP tools. |
 | [`coffer approval`](/zh/reference/cli/approval) | Secret approvals: list, show, approve with Touch ID, reject, ask again. |

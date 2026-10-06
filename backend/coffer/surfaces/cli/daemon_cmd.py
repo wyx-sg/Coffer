@@ -21,6 +21,7 @@ from coffer.infrastructure.daemon.pid_lock import pid_is_coffer_daemon
 from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
 from coffer.infrastructure.vault.home import daemon_json_path
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli import _io
 from coffer.surfaces.cli._options import ExitCode
 
 app = typer.Typer(help="Daemon lifecycle")
@@ -231,17 +232,20 @@ def status(
         else:
             typer.echo("status:  not running")
         raise typer.Exit(int(ExitCode.DAEMON_UNREACHABLE))
-    c, info = _cli_client.client_or_exit(allow_setup=True)
+    try:
+        c, info = _cli_client.client_or_exit(allow_setup=True, as_json=output_json)
+    except _cli_client.ClientUnavailable as e:
+        _io.fail(e.code, e.message, e.exit_code, as_json=output_json, details=e.details)
     with c:
         r = c.get("/daemon/status")
-        _cli_client.check(r, verbose=verbose)
+        _cli_client.check(r, verbose=verbose, as_json=output_json)
         data = r.json()
         setup = _cli_client.waiting_for_git(data)
         runs: list[dict[str, Any]] = []
         # A daemon waiting for git runs no passes and refuses the route.
         if setup is None:
             r = c.get("/upkeep/runs")
-            _cli_client.check(r, verbose=verbose)
+            _cli_client.check(r, verbose=verbose, as_json=output_json)
             runs = r.json()["runs"]
     if output_json:
         typer.echo(

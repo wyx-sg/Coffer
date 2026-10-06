@@ -45,7 +45,7 @@ class _Client:
 
 
 def _serve(monkeypatch: pytest.MonkeyPatch, routes: dict[str, dict[str, Any]]) -> None:
-    monkeypatch.setattr(cli_client, "client_or_exit", lambda: (_Client(routes), None))
+    monkeypatch.setattr(cli_client, "client_or_exit", lambda **_kw: (_Client(routes), None))
     monkeypatch.setattr(cli_client, "check", lambda *_a, **_k: None)
     monkeypatch.setattr(mcp_cli, "resolve_uid", lambda _c, _kind, name, **_k: f"u-{name}")
 

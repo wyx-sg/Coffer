@@ -81,7 +81,9 @@ def boot(
         raise_server_exceptions=False,
     )
     client.__enter__()
-    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (_PersistentClient(client), info))
+    monkeypatch.setattr(
+        _cli_client, "client_or_exit", lambda **_kw: (_PersistentClient(client), info)
+    )
     try:
         yield client
     finally:

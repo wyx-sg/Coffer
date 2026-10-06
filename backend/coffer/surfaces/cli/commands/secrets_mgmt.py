@@ -1,8 +1,10 @@
 """``coffer secret`` beyond ``list`` and ``set`` — the Secrets page.
 
-Spec secret "List every stored and cited secret with what uses it". No command
-prints a value: revealing one is ``coffer secret reveal``, which shows it in
-the desktop app after the person's presence check.
+Spec secret "List every stored and cited secret with what uses it" and
+"Import a master key after showing whose key it is". No command prints a value
+or the master key: revealing one is ``coffer secret reveal``, which shows it in
+the desktop app after the person's presence check, and importing a key is
+``coffer secret import-key``, which opens the app's own import.
 """
 
 from __future__ import annotations
@@ -10,6 +12,7 @@ from __future__ import annotations
 from coffer.surfaces.cli._route_command import RouteCommand, mount
 
 _UI = "Secrets · "
+_KEY = "Settings · Security · master key · "
 
 SPECS = [
     RouteCommand(
@@ -73,6 +76,34 @@ SPECS = [
         "/secrets/local-access/revoke",
         _UI + "Stop allowing local programs",
         "Withdraw the grant. Body: name.",
+        body=True,
+    ),
+    RouteCommand(
+        "secret key-fingerprint",
+        "GET",
+        "/secrets/key/fingerprint",
+        _KEY + "fingerprint",
+        "This machine's master key fingerprint (never the key).",
+    ),
+    RouteCommand(
+        "secret key-preview",
+        "POST",
+        "/secrets/key/import/preview",
+        _KEY + "import (review)",
+        "Whose key a key backup holds, beside this machine's; changes nothing. Body: "
+        "material (read from a file with --data @backup.json).",
+        body=True,
+    ),
+    RouteCommand(
+        "secret key-install",
+        "POST",
+        "/secrets/key/import",
+        _KEY + "import (the app's request)",
+        "The request the Coffer app sends to install a key backup. Body: material, "
+        "passphrase, nonce, signature, where nonce and signature are the presence grant "
+        "the app signs after its own Touch ID check; the command line cannot get one, "
+        "and without it nothing is installed. To import a key, run "
+        "`coffer secret import-key`, which opens the import in the app.",
         body=True,
     ),
 ]
