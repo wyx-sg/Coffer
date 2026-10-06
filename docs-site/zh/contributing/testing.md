@@ -205,6 +205,15 @@ make verify-installed-mcp OUT=<dir> DAEMON_JSON=<home>/.coffer/daemon.json SHIM=
 
 它需要手动运行，`make verify` 和 CI 都不会跑它。因为默认目标就是你自己正在用的应用，它只创建名字以 `qa-` 开头的对象，这些名字里有任何一个已经存在就拒绝开始，结束时删掉自己创建的一切。你的 vault 同步到远端时它也拒绝写入；它从不重启守护进程，也从不批准任何密钥。`OUT` 必须是仓库之外一个新建或为空的目录。结果写到 `OUT/summary.md` 和 `OUT/cases.json`，守护进程 token 和测试用密钥都已遮盖。每个用例是 PASS、FAIL、BLOCKED（附上在那里跑不了的原因，比如需要重启或 Touch ID 批准）或 N/A。只有出现 FAIL 才算失败。完整规则见 [`.agents/testing.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/testing.md) 的 "Installed-build Acceptance" 一节。
 
+`make verify-installed-cli` 用同样的思路检查已安装的 `coffer` 命令，但它不需要守护进程，也不碰你的任何东西。它运行二进制的一份拷贝，`HOME` 指向一个空目录，只跑那些在连守护进程之前就会结束的命令。它只检查冻结打包才会出错的地方：每个命令组的帮助都能显示（打包漏掉的模块会在这里失败），zsh 和 bash 的命令补全可用，读不了的输入和源码一样以退出码 6 报错，而不是崩溃：
+
+```sh
+make verify-installed-cli OUT=/tmp/coffer-acceptance/cli-1      # ~/.coffer/bin/coffer
+make verify-installed-cli OUT=<dir> COFFER=<path>/coffer
+```
+
+这两套测试只测已安装版本才会出错的地方，源码测试能覆盖的行为就放在源码测试里。请在和已安装版本对应的检出目录里运行：比它新的检出会把新增的命令报成失败。
+
 ## 前端测试 {#frontend-tests}
 
 前端测试在 jsdom 环境中使用 Vitest 和 Testing Library。每个测试都放在它所覆盖的模块旁边（`*.test.ts`、`*.test.tsx`），`make verify-unit` 用 `npx vitest run src` 把它们全部运行。`src/test/setup.ts` 加载真实的 i18n 文案目录，所以组件渲染的是真实文案。用真实的 `QueryClientProvider` 渲染，只 mock 网络边界：`src/lib/api/*` 模块，或者聊天用的 `streamClient`。约定见[前端](/zh/contributing/frontend#testing)。

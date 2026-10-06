@@ -25,6 +25,7 @@ PYTEST_XDIST := -n $(PYTEST_WORKERS) --dist loadgroup
 	verify verify-all \
 	verify-unit verify-integration verify-contract verify-e2e verify-visual visual-update verify-acceptance openspec-validate verify-benchmark verify-secrets \
 	verify-installed-mcp \
+	verify-installed-cli \
 	test-durations \
 	coverage lock \
 	eval eval-routing eval-curate \
@@ -55,6 +56,8 @@ help:
 	@echo "  make verify-installed-mcp OUT=<dir> [DAEMON_JSON=<path>] [SHIM=<path>]"
 	@echo "                            opt-in: MCP acceptance against an INSTALLED Coffer (not in verify / verify-all);"
 	@echo "                            OUT must be outside the repo, see .agents/testing.md \"Installed-build Acceptance\""
+	@echo "  make verify-installed-cli OUT=<dir> [COFFER=<path>]"
+	@echo "                            opt-in: smoke the INSTALLED frozen coffer binary (no daemon, nothing of yours touched)"
 	@echo "  make test-durations        re-measure backend/.test_durations (CI's integration shard balance)"
 	@echo "  PYTEST_WORKERS=0 make ...  run a backend tier serially (default: auto = one xdist worker per core)"
 	@echo "  make lint                  every static gate: repo checks (scripts/check_*.py, contract freshness),"
@@ -280,6 +283,15 @@ verify-e2e:
 # upstreams. It writes only qa- objects (refused if one exists, deleted at the
 # end), refuses a target that syncs to a remote unless ALLOW_SYNC_REMOTE=1, and
 # never restarts the daemon. See .agents/testing.md "Installed-build Acceptance".
+# The installed frozen `coffer` binary, run with an empty HOME and no daemon:
+# what only the PyInstaller build can get wrong (see .agents/testing.md
+# "Installed-build Acceptance"). COFFER defaults to ~/.coffer/bin/coffer.
+verify-installed-cli:
+	@if [ -z "$(OUT)" ]; then \
+		echo "verify-installed-cli: OUT=<an empty or new directory outside the repo> is required"; exit 2; \
+	fi
+	$(PY) -m e2e.installed.cli --out "$(OUT)" $(if $(COFFER),--coffer "$(COFFER)")
+
 verify-installed-mcp:
 	@if [ -z "$(OUT)" ]; then \
 		echo "verify-installed-mcp: OUT=<an empty or new directory outside the repo> is required"; exit 2; \

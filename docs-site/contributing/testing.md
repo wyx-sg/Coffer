@@ -205,6 +205,15 @@ make verify-installed-mcp OUT=<dir> DAEMON_JSON=<home>/.coffer/daemon.json SHIM=
 
 It is opt-in. Neither `make verify` nor CI runs it. Because its default target is your own running app, it only creates objects whose names start with `qa-`, and it refuses to start if one of those names already exists. It deletes everything it created when it finishes. It also refuses to write when your vault syncs to a remote, never restarts the daemon, and never approves a secret. `OUT` must be a new or empty directory outside the repository. Results go to `OUT/summary.md` and `OUT/cases.json`, with the daemon token and test secrets redacted. Each case is PASS, FAIL, BLOCKED (with the reason it cannot run there, such as a restart or a Touch ID approval) or N/A. The run fails only on a FAIL. The full rules are in [`.agents/testing.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/testing.md) under "Installed-build Acceptance".
 
+`make verify-installed-cli` checks the installed `coffer` command the same way, but needs no daemon and touches nothing of yours. It runs a copy of the binary with an empty `HOME` and only commands that finish before they would reach a daemon. It checks what only the frozen build can get wrong: every command group's help renders (a module the build left out fails here), shell completion works for zsh and bash, and unreadable input fails with the same exit-6 error as the source rather than a crash:
+
+```sh
+make verify-installed-cli OUT=/tmp/coffer-acceptance/cli-1      # ~/.coffer/bin/coffer
+make verify-installed-cli OUT=<dir> COFFER=<path>/coffer
+```
+
+Both suites test only what an installed build can get wrong. A behaviour the source tests can check is tested there instead. Run them from a checkout that matches the installed build, because a newer checkout reports its new commands as failures.
+
 ## Frontend tests
 
 Frontend tests use Vitest and Testing Library in a jsdom environment. Each test sits next to the module it covers (`*.test.ts`, `*.test.tsx`), and `make verify-unit` runs them all with `npx vitest run src`. `src/test/setup.ts` loads the real i18n catalogues, so components render real copy. Render with a real `QueryClientProvider` and mock only the network boundary: the `src/lib/api/*` module, or `streamClient` for chat. See [Frontend](/contributing/frontend#testing) for conventions.
