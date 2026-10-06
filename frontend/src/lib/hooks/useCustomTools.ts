@@ -74,7 +74,8 @@ export function useAskAgainForGroup(group: CustomToolGroup) {
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: () => Promise.all((group.rejected_approvals ?? []).map((id) => secretsApi.askAgain(id))),
+    mutationFn: () =>
+      Promise.all((group.rejected_approvals ?? []).map((id) => secretsApi.askAgain(id))),
     meta: { secretDestination: () => group.uid },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: customToolGroupKey(group.name) });
