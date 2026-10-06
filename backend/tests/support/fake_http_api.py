@@ -6,6 +6,8 @@ Routes answer by path:
 
 * ``/big``       — 2 MiB of text that embeds :attr:`FakeHttpApi.echo_secret`
 * ``/missing``   — 404
+* ``/forbidden`` — 403 HTML with diagnostic headers, a cookie, an auth
+  challenge, an unknown header and :attr:`FakeHttpApi.echo_secret` in a trace id
 * ``/redirect``  — 302 to :attr:`FakeHttpApi.redirect_to`
 * ``/openapi.json`` — :attr:`FakeHttpApi.openapi` as JSON
 * anything else  — 200 JSON ``{"ok": true, "path": …}``
@@ -61,6 +63,18 @@ def _handler(api: FakeHttpApi) -> type[BaseHTTPRequestHandler]:
                 self._send(200, payload, "text/plain")
             elif path.endswith("/missing"):
                 self._send(404, b'{"error": "not found"}', "application/json")
+            elif path.endswith("/forbidden"):
+                payload = b"<html><body><h1>403 Forbidden</h1></body></html>"
+                self.send_response(403)
+                self.send_header("Content-Type", "text/html")
+                self.send_header("X-Request-Id", "req-123")
+                self.send_header("X-Trace-Id", "trace-" + api.echo_secret)
+                self.send_header("Set-Cookie", "session=s3cr3t-cookie; HttpOnly")
+                self.send_header("WWW-Authenticate", 'Bearer realm="api"')
+                self.send_header("X-Internal-Node", "node-7")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
             elif path.endswith("/redirect"):
                 self.send_response(302)
                 self.send_header("Location", api.redirect_to)

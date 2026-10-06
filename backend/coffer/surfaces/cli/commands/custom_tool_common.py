@@ -116,8 +116,30 @@ def show_test(result: dict[str, Any]) -> None:
     if result.get("body"):
         typer.echo("")
         typer.echo(result["body"])
+    for header, value in (result.get("response_headers") or {}).items():
+        typer.echo(f"< {header}: {value}")
     if result.get("truncated"):
         typer.echo("[response cut]")
+
+
+def show_preview(result: dict[str, Any]) -> None:
+    """A dry run: the request a call would send, a secret header by its secret's name."""
+    typer.echo(f"{result['method']} {result['url']}  [{result['environment']}]")
+    for h in result.get("headers") or []:
+        secret = h.get("secret")
+        if secret:
+            typer.echo(
+                f"{h['name']}: {h['value']}  (secret {secret['name']}, id {secret['id']}, "
+                f"{secret['state']})"
+            )
+        else:
+            typer.echo(f"{h['name']}: {h['value']}")
+    timeout = result.get("timeout_seconds")
+    typer.echo(f"timeout: {timeout} s (from the {result.get('timeout_source')})")
+    if result.get("body") is not None:
+        typer.echo("")
+        typer.echo(result["body"])
+    typer.echo("\n(dry run: nothing was sent)")
 
 
 def test_exit(result: dict[str, Any]) -> None:
@@ -142,6 +164,7 @@ __all__ = [
     "read_group",
     "rows_of",
     "show_group",
+    "show_preview",
     "show_test",
     "test_exit",
 ]

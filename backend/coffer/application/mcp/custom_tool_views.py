@@ -90,7 +90,8 @@ class GroupViewer:
         self._boundary = boundary
         self._clock = clock
 
-    async def _environment(self, resource: Resource, env: HttpApiEnvironment) -> EnvironmentView:
+    async def environment(self, resource: Resource, env: HttpApiEnvironment) -> EnvironmentView:
+        """One environment's secret states: presence and pending approvals, never a value."""
         states: dict[str, SecretState] = {}
         present: dict[str, str] = {}
         for header, ref in env.secret_refs.items():
@@ -122,7 +123,7 @@ class GroupViewer:
         )
         out: list[GroupView] = []
         for resource, transport in groups:
-            envs = [await self._environment(resource, e) for e in transport.environments]
+            envs = [await self.environment(resource, e) for e in transport.environments]
             enabled = [e for e in envs if e.environment.enabled]
             secret_state = _worst({str(i): e.secret_state for i, e in enumerate(enabled)})
             pending = [a for e in enabled for a in e.pending_approvals]

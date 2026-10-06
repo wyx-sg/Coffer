@@ -46,7 +46,7 @@ export function groupSecrets(group: Pick<CustomToolGroup, "headers" | "environme
 }
 
 /** The first of them — what a banner or a row names. */
-export function firstSecret(group: Pick<CustomToolGroup, "headers" | "environments">): string {
+function firstSecret(group: Pick<CustomToolGroup, "headers" | "environments">): string {
   return groupSecrets(group)[0] ?? "";
 }
 

@@ -1,6 +1,8 @@
 // src/components/custom-tools/ToolTestSection.tsx — Test, at the bottom of every request form: a sample
 // value per argument, one run of the request as the form holds it (nothing is saved), and the result.
-// A saved group's request runs with its secret; a group not saved yet runs without one.
+// A saved group's request runs in the environment the form has chosen — the same one its preview, secret
+// and timeout come from; the picker only changes that choice, never the group. A group not saved yet runs
+// without a secret.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RotateCw } from "lucide-react";
@@ -14,64 +16,79 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { translateApiError } from "@/lib/api/errors";
-import type {
-  CustomToolEnvironment,
-  CustomToolHeaderIn,
-  CustomToolIn,
-} from "@/lib/api/customTools";
+import type { CustomToolGroup, CustomToolHeaderIn, CustomToolIn } from "@/lib/api/customTools";
+import {
+  effectiveTimeout,
+  enabledEnvironments,
+  environmentSecret,
+} from "@/lib/customTools/environmentContext";
 import { testArguments, type ArgRow } from "@/lib/customTools/schemaArgs";
 import { useTestCustomTool, useTestUnsavedCustomTool } from "@/lib/hooks/useCustomTools";
 import { useSecretChoices } from "@/components/secret/useSecretChoices";
+import { RequestPreview } from "./RequestPreview";
 import { ToolTestResult } from "./ToolTestResult";
+import type { ToolEnvironment } from "./useToolEnvironment";
 
-/** Where the request runs: a saved group by name, or an unsaved group's settings. */
+/** Where the request runs: a saved group in the form's chosen environment, or an unsaved group's settings. */
 export type TestTarget =
-  | { group: string }
+  | { saved: CustomToolGroup; environment: ToolEnvironment }
   | { unsaved: { name: string; base_url: string; headers: CustomToolHeaderIn[] } };
 
 interface Props {
   target: TestTarget;
-  secret: string | null;
-  timeoutSeconds: number;
+  /** An unsaved group's timeout; a saved group's comes from the chosen environment. */
+  timeoutSeconds?: number;
   args: ArgRow[];
   /** The draft as the form holds it now. */
   draft: () => CustomToolIn;
   ready: boolean;
   /** What the form's save button says: "save" (Save) or "add" (Add to …). */
   saveWord: "save" | "add";
-  /** A timed-out run offers Change timeout, which opens Edit group (a saved group only). */
+  /** A run that timed out on the group's timeout offers Change timeout, which opens Edit group. */
   onChangeTimeout?: () => void;
-  /** A saved group's environments: the run names one (spec mcp-gateway "Choose a custom
-   *  tool's environment on every call"); a picker shows once more than one is on. */
-  environments?: readonly CustomToolEnvironment[];
 }
 
 export function ToolTestSection(props: Props) {
-  const { target, secret, args, draft, ready } = props;
+  const { target, args, draft, ready } = props;
   const { displayOf } = useSecretChoices();
   const { t } = useTranslation();
-  const saved = useTestCustomTool("group" in target ? target.group : "");
+  const group = "saved" in target ? target.saved : null;
+  const choice = "saved" in target ? target.environment : null;
+  const saved = useTestCustomTool(group?.name ?? "");
   const unsaved = useTestUnsavedCustomTool();
-  const test = "group" in target ? saved : unsaved;
+  const test = group ? saved : unsaved;
   const [values, setValues] = useState<Record<string, string>>({});
-  const enabled = (props.environments ?? []).filter((e) => e.enabled);
-  const [environment, setEnvironment] = useState<string>(enabled[0]?.name ?? "");
-  const chosen = enabled.find((e) => e.name === environment) ?? enabled[0];
+  const enabled = group ? enabledEnvironments(group) : [];
+  const env = choice?.env ?? null;
   const named = args.filter((row) => row.name);
-  const groupName = "group" in target ? target.group : target.unsaved.name;
+  const groupName = group ? group.name : "unsaved" in target ? target.unsaved.name : "";
+  const secret = env ? environmentSecret(env) : null;
+  const timeout =
+    group && env
+      ? effectiveTimeout(group, env)
+      : { seconds: group?.timeout_seconds ?? props.timeoutSeconds ?? 30, source: "group" as const };
+  const blocked = choice !== null && choice.choice.state !== "ok";
+  const showPicker = group !== null && (enabled.length > 1 || (blocked && enabled.length > 0));
 
+  const pick = (name: string) => {
+    choice?.setName(name);
+    saved.reset();
+  };
   const run = () => {
     const tool = draft();
     const argValues = testArguments(args, values);
-    if ("group" in target)
-      return saved.mutate({ tool, args: argValues, environment: chosen?.name ?? null });
-    unsaved.mutate({
-      base_url: target.unsaved.base_url,
-      headers: target.unsaved.headers,
-      timeout_seconds: props.timeoutSeconds,
-      tool,
-      arguments: argValues,
-    });
+    if (group) {
+      if (env) saved.mutate({ tool, args: argValues, environment: env.name });
+      return;
+    }
+    if ("unsaved" in target)
+      unsaved.mutate({
+        base_url: target.unsaved.base_url,
+        headers: target.unsaved.headers,
+        timeout_seconds: timeout.seconds,
+        tool,
+        arguments: argValues,
+      });
   };
   const note =
     "unsaved" in target
@@ -79,18 +96,25 @@ export function ToolTestSection(props: Props) {
       : secret
         ? t(`customTools.test.noteSecret.${props.saveWord}`, { secret: displayOf(secret) })
         : t(`customTools.test.note.${props.saveWord}`);
+  const state = choice?.choice;
+  const unavailable =
+    state?.state === "none"
+      ? t("customTools.test.envNone")
+      : state?.state === "disabled" || state?.state === "deleted"
+        ? t(`customTools.test.env.${state.state}`, { environment: state.name })
+        : null;
 
   return (
     <section aria-label={t("customTools.test.title")} className="flex flex-col gap-2">
       <div className="flex min-h-control-sm flex-wrap items-center gap-2">
         <span className="text-xs font-label">{t("customTools.test.title")}</span>
-        {"group" in target && enabled.length > 1 ? (
-          <Select value={chosen?.name ?? ""} onValueChange={setEnvironment}>
+        {showPicker ? (
+          <Select value={env?.name ?? ""} onValueChange={pick}>
             <SelectTrigger
               className="h-control-sm w-auto min-w-[96px] font-mono text-xs"
               aria-label={t("customTools.test.environment")}
             >
-              <SelectValue />
+              <SelectValue placeholder={t("customTools.test.pickEnvironment")} />
             </SelectTrigger>
             <SelectContent>
               {enabled.map((e) => (
@@ -120,7 +144,7 @@ export function ToolTestSection(props: Props) {
           variant="outline"
           size="sm"
           className="ml-auto"
-          disabled={!ready || test.isPending}
+          disabled={!ready || blocked || test.isPending}
           onClick={run}
         >
           <RotateCw aria-hidden />
@@ -131,6 +155,19 @@ export function ToolTestSection(props: Props) {
               : t("customTools.test.run")}
         </Button>
       </div>
+      {unavailable ? (
+        <p role="alert" className="text-xs text-warning">
+          {unavailable}
+        </p>
+      ) : null}
+      {group && env ? (
+        <RequestPreview
+          group={group}
+          environment={env}
+          method={draft().method ?? "GET"}
+          tool={draft()}
+        />
+      ) : null}
       {test.error ? (
         <p role="alert" className="text-xs text-danger">
           {translateApiError(t, test.error)}
@@ -140,9 +177,10 @@ export function ToolTestSection(props: Props) {
           result={test.data}
           method={draft().method ?? "GET"}
           group={groupName}
-          secret={"group" in target ? secret : null}
-          timeoutSeconds={props.timeoutSeconds}
-          onChangeTimeout={"group" in target ? props.onChangeTimeout : undefined}
+          secret={group ? secret : null}
+          timeoutSeconds={timeout.seconds}
+          timeoutEnvironment={timeout.source === "environment" ? (env?.name ?? null) : null}
+          onChangeTimeout={group && timeout.source === "group" ? props.onChangeTimeout : undefined}
         />
       ) : (
         <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-text-muted">

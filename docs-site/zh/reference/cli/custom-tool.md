@@ -460,7 +460,7 @@ coffer custom-tool tool delete [OPTIONS] NAME TOOL
 
 Run a saved tool once in one environment; saves and logs nothing.
 
-Invalid arguments are refused before any request (exit 6, one error per field); a request the API answers with an error status exits 7.
+Invalid arguments are refused before any request (exit 6, one error per field); a request the API answers with an error status exits 7. ``--dry-run`` prints the request instead of sending it.
 
 <p class="cli-label">概要</p>
 
@@ -476,11 +476,14 @@ coffer custom-tool tool test [OPTIONS] NAME TOOL
 | `TOOL` <span class="cli-chip">参数</span> | text | 必填 |  |
 | `--env` <span class="cli-chip">选项</span> | text |  | The environment to run it in (needed when several are on) |
 | `--args` <span class="cli-chip">选项</span> | text |  | The arguments as a JSON object: text, @file or - |
+| `--dry-run` <span class="cli-chip">选项</span> | 开关 |  | Print the request a call would send — URL, headers, body, timeout — and send nothing; secret headers show their secret's name, not its value |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## custom-tool tool test-draft
 
 Run a tool that is not saved, in one of the group's environments.
+
+``--dry-run`` prints the request instead of sending it.
 
 <p class="cli-label">概要</p>
 
@@ -495,6 +498,7 @@ coffer custom-tool tool test-draft [OPTIONS] NAME
 | `NAME` <span class="cli-chip">参数</span> | text | 必填 | The group |
 | `--env` <span class="cli-chip">选项</span> | text |  | The environment to run it in (needed when several are on) |
 | `--args` <span class="cli-chip">选项</span> | text |  | The arguments as a JSON object: text, @file or - |
+| `--dry-run` <span class="cli-chip">选项</span> | 开关 |  | Print the request a call would send — URL, headers, body, timeout — and send nothing; secret headers show their secret's name, not its value |
 | `--data, -d` <span class="cli-chip">选项</span> | text |  | The draft tool as JSON (text, @file or -) |
 | `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

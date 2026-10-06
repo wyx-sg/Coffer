@@ -35,7 +35,6 @@ import httpx
 import mcp.types as mcp_types
 from mcp import MCPError
 
-from coffer.domain.auth_scheme import with_schemes
 from coffer.domain.error_base import CofferError
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
@@ -44,17 +43,38 @@ from coffer.domain.mcp.http_api_environment import (
     advertised_schema,
     select_environment,
 )
-from coffer.domain.mcp.http_api_render import (
-    ArgumentsInvalid,
-    RenderedRequest,
-    RenderError,
-    render_request,
-)
+from coffer.domain.mcp.http_api_render import ArgumentsInvalid, RenderedRequest, RenderError
+from coffer.domain.mcp.http_api_request import build_request
 from coffer.domain.secret_errors import SecretBindingPending
 
 #: The most of a response body a tool returns (spec: "read at most 1 MiB").
 MAX_RESPONSE_BYTES = 1024 * 1024
 MASK = "***"
+#: The response headers a test reports (spec mcp-gateway "Report what a custom
+#: tool's test reached"): ids that name the request on the API's side, and who
+#: answered when. Every other header — cookies, auth challenges, anything
+#: unknown — is left out.
+DIAGNOSTIC_HEADERS = frozenset(
+    {
+        "date",
+        "server",
+        "via",
+        "retry-after",
+        "x-request-id",
+        "request-id",
+        "x-correlation-id",
+        "x-trace-id",
+        "traceparent",
+        "x-b3-traceid",
+        "x-amzn-requestid",
+        "x-amzn-trace-id",
+        "x-amz-request-id",
+        "x-amz-cf-id",
+        "cf-ray",
+    }
+)
+#: The longest diagnostic header value kept.
+DIAGNOSTIC_VALUE_MAX = 256
 
 NotificationCallback = Callable[[Any], Awaitable[None]]
 #: Resolve one environment's secret headers: ``{header: value}``. Raises
@@ -92,7 +112,16 @@ def _text_result(text: str, *, is_error: bool) -> mcp_types.CallToolResult:
 class HttpCallOutcome:
     """What one request returned, before it is shaped into a tool result."""
 
-    __slots__ = ("body", "content_type", "duration_ms", "location", "status", "truncated", "url")
+    __slots__ = (
+        "body",
+        "content_type",
+        "duration_ms",
+        "headers",
+        "location",
+        "status",
+        "truncated",
+        "url",
+    )
 
     def __init__(
         self,
@@ -104,8 +133,11 @@ class HttpCallOutcome:
         duration_ms: int,
         content_type: str | None,
         location: str | None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         self.url = url
+        #: The allow-listed response headers (:func:`diagnostic_headers`).
+        self.headers = headers or {}
         self.status = status
         self.body = body
         self.truncated = truncated
@@ -143,40 +175,21 @@ def mask_secrets(text: str, secrets: list[str]) -> str:
     return text
 
 
+def diagnostic_headers(headers: httpx.Headers, secrets: list[str]) -> dict[str, str]:
+    """The allow-listed response headers, names lower-cased, each value
+    masked and cut to :data:`DIAGNOSTIC_VALUE_MAX` characters."""
+    out: dict[str, str] = {}
+    for name, value in headers.items():
+        key = name.lower()
+        if key in DIAGNOSTIC_HEADERS:
+            out[key] = mask_secrets(value, secrets)[:DIAGNOSTIC_VALUE_MAX]
+    return out
+
+
 def overlay_for(env: HttpApiEnvironment, overlay: dict[str, str]) -> dict[str, str]:
     """``{header: value}`` of ``env`` out of an overlay keyed by slot."""
     slots = env.slot_refs()
     return {env.header_of(slot): value for slot, value in overlay.items() if slot in slots}
-
-
-def build_request(
-    transport: HttpApiTransport,
-    env: HttpApiEnvironment,
-    tool: HttpApiTool,
-    arguments: dict[str, Any] | None,
-    header_overlay: dict[str, str],
-) -> RenderedRequest:
-    """The request for ``tool`` in ``env``: the arguments validated against the
-    tool's schema, the environment's base URL, headers and variables, and its
-    secret headers (``{header: value}``) added last, so no tool header can
-    replace them. ``arguments`` no longer holds the environment choice."""
-    rendered = render_request(
-        base_url=str(env.base_url),
-        method=tool.method,
-        path=tool.path,
-        group_headers=env.headers,
-        tool_headers=tool.headers,
-        body_template=tool.body_template,
-        input_schema=tool.input_schema,
-        arguments=arguments,
-        variables=env.variables,
-    )
-    for header, value in with_schemes(header_overlay, env.auth_schemes).items():
-        # Header names compare case-insensitively: drop any spelling a tool gave.
-        for name in [n for n in rendered.headers if n.lower() == header.lower()]:
-            del rendered.headers[name]
-        rendered.headers[header] = value
-    return rendered
 
 
 def refusal_text(error: CofferError | RenderError) -> str:
@@ -238,6 +251,7 @@ async def send_request(
                 duration_ms=int((time.monotonic() - started) * 1000),
                 content_type=response.headers.get("content-type"),
                 location=mask_secrets(location, secrets) if location else None,
+                headers=diagnostic_headers(response.headers, secrets),
             )
     except httpx.TimeoutException as e:
         raise UpstreamTimeout(f"request timed out after {timeout_seconds:g}s") from e
@@ -345,11 +359,13 @@ class HttpApiUpstreamConnection:
 
 
 __all__ = [
+    "DIAGNOSTIC_HEADERS",
     "MAX_RESPONSE_BYTES",
     "EnvSecrets",
     "HttpApiUpstreamConnection",
     "HttpCallOutcome",
     "build_request",
+    "diagnostic_headers",
     "list_tools_result",
     "mask_secrets",
     "overlay_for",

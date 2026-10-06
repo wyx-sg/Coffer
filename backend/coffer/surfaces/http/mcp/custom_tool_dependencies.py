@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from coffer.application.mcp.custom_tool_environments import CustomToolEnvironments
 from coffer.application.mcp.custom_tool_import import CustomToolImporter
+from coffer.application.mcp.custom_tool_preview import CustomToolPreviews
 from coffer.application.mcp.custom_tools import CustomToolService
 
 _service: CustomToolService | None = None
@@ -33,3 +34,8 @@ def get_custom_tool_importer() -> CustomToolImporter:
 def get_custom_tool_environments() -> CustomToolEnvironments:
     """The environment operations, over the one service's write path."""
     return CustomToolEnvironments(get_custom_tool_service())
+
+
+def get_custom_tool_previews() -> CustomToolPreviews:
+    """Dry runs of a tool's request, over the one service's checks."""
+    return CustomToolPreviews(get_custom_tool_service())
