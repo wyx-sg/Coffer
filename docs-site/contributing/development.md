@@ -148,7 +148,7 @@ Run `make help` for the same list.
 | `make verify-benchmark` | Every perf-budget test marked `benchmark`, including the ones too slow for `verify` |
 | `make verify-secrets` | gitleaks over the full git history, as CI's `secrets-scan` job runs it. Skips when gitleaks is not installed |
 | `make lint` | Every static gate: see [Testing](/contributing/testing#what-make-verify-runs) |
-| `make format` | `ruff format` and `ruff check --fix` over `backend` and `evals`. The frontend is formatted by its own prettier setup, not by this target |
+| `make format` | `ruff format` and `ruff check --fix` over `backend`, `evals` and `e2e/installed`. The frontend is formatted by its own prettier setup, not by this target |
 | `make verify-visual` | Screenshot baseline: every route, light and dark. Not part of `verify` or `verify-all` |
 | `make visual-update` | Re-record this platform's screenshot baseline |
 | `make test-durations` | Re-measure test durations for the integration shard balance (serial, about 15 minutes) |

@@ -276,10 +276,11 @@ make verify-e2e          # e2e tier only (Playwright: web + mcp projects)
 make verify-acceptance   # audit spec.md scenarios vs test markers
 make verify-visual       # screenshot baseline: every route, light + dark (not in verify / verify-e2e)
 make verify-secrets      # gitleaks over the full history (skips without a gitleaks binary)
+make verify-installed-mcp OUT=<dir>  # opt-in: MCP acceptance against an INSTALLED Coffer (see "Installed-build Acceptance")
 make visual-update       # re-record this platform's screenshot baseline
 
 make lint                # every static gate (see below) — NOT just ruff + mypy
-make format              # ruff format + ruff --fix (backend, evals); prettier is run per file
+make format              # ruff format + ruff --fix (backend, evals, e2e/installed); prettier is run per file
 ```
 
 **`make lint` is the whole static gate, not a formatter pass.** In order
@@ -293,7 +294,7 @@ make format              # ruff format + ruff --fix (backend, evals); prettier i
 `scripts/check_coffer_paths.py`, `scripts/check_agent_type_branches.py`, `scripts/check_frontend_colors.py`,
 `scripts/check_ignored_sources.py`, `scripts/check_error_codes_reference.py`,
 `scripts/check_bare_tasks.py`,
-`ruff check` and `ruff format --check` (over `backend/` and `evals/`), `mypy`
+`ruff check` and `ruff format --check` (over `backend/`, `evals/` and `e2e/installed/`), `mypy`
 (configured in `backend/pyproject.toml` with `strict = true`), `lint-imports`
 (the layering + cross-kind fence), and `scripts/dump_i18n_backend_keys.py --check`
 plus `npm run lint`, `npm run typecheck` and `npm run knip` in `frontend/`.
@@ -363,6 +364,82 @@ up here as an image diff.
   of the same tree needs a mask or a better wait — never a looser threshold
   (`maxDiffPixelRatio` 0.001: reruns are pixel-identical, the budget only
   absorbs glyph anti-aliasing jitter).
+
+## Installed-build Acceptance
+
+The four tiers test **this checkout's source**, in-process or against a daemon
+started from it. The installed-build suites under `e2e/installed/` test an
+**installed Coffer** from the outside instead: the frozen daemon binary over
+real HTTP `/mcp` and its notification stream, the installed `coffer-mcp-shim`,
+and the official MCP SDK as the client. Run them before a release, and after
+installing a fix, to see that what ships behaves as the source does. They are
+opt-in: neither `make verify` nor `make verify-all` runs them, and CI does not.
+
+```bash
+make verify-installed-mcp OUT=/tmp/coffer-acceptance/mcp-$(date +%H%M%S)
+# another target or shim:
+make verify-installed-mcp OUT=<dir> DAEMON_JSON=<home>/.coffer/daemon.json SHIM=<path>/coffer-mcp-shim
+```
+
+- **Target.** `DAEMON_JSON` (default `~/.coffer/daemon.json`) names the daemon;
+  it must already be running and answer `ready`. `SHIM` defaults to the
+  `coffer-mcp-shim` next to the daemon binary, then
+  `/Applications/Coffer.app/Contents/MacOS/`. The shim reads
+  `$HOME/.coffer/daemon.json`, so the suite runs it with `HOME` set to the home
+  that `DAEMON_JSON` lives in. A shim that finds no daemon starts one, so the
+  suite checks the target answers right before it starts the shim.
+- **Results.** `OUT` is required, must be outside the repository, and must be
+  new or empty, so no run overwrites another's evidence. It receives
+  `cases.json` and `summary.md` (one row per case: id, title, status, expected,
+  actual, upstream request counts, evidence), `target.json` (port, pid, version,
+  and the sha256 and mtime of the daemon binary and the shim), `guard.json`,
+  `journal.json`, `transcript.jsonl` (every request and stream event) and the
+  fixtures' ledgers. The daemon token and every canary are redacted from all of
+  it.
+- **Status.** A case is PASS, FAIL, BLOCKED or N/A. BLOCKED is a case that
+  cannot run here, with the reason: a daemon restart, the idle reaper's window,
+  or a secret binding that waits for a person's approval (a signed build,
+  whose approvals need Touch ID). N/A is an observation outside the contract.
+  Neither counts as a pass. The run exits 1 when any case FAILs and 2 when a
+  guard refuses it. Case ids are the OpenSpec scenario title when the case
+  verifies that scenario, otherwise a short stable local id.
+
+**Safety rules**, which hold because the default target is the person's own
+running app:
+
+- Only `qa-` names are created. Every name a suite will use is reserved before
+  it writes anything; if one already exists the run refuses to start, so it
+  never changes or deletes what it did not create. Everything it created is
+  deleted in `finally`, and the run records a case for "no `qa-` object left".
+- **Sync guard.** Before any write the suite reads the target's sync state
+  (`GET /api/v1/daemon/status` for the feature, `GET /api/v1/sync/remote` for
+  the remote) and refuses when a remote is configured and enabled: every `qa-`
+  object would be committed and pushed to the person's remote. `ALLOW_SYNC_REMOTE=1`
+  overrides it. Anything the guard cannot read is a refusal.
+- No restart, stop or upgrade of the daemon; the run records a case that the
+  daemon is still the same process at the end. No approval is granted, and no
+  shared setting (protection, features) is changed.
+- Upstreams are synthetic only: `e2e/installed/mcp/upstream.py` (stdio,
+  stateless and stateful Streamable HTTP, with a call ledger of
+  start/done/cancelled) and its own echo receiver. No business tool is called.
+  A `tools/list` through the gateway still makes Coffer list every server the
+  session can see; that is the gateway's fan-out, not a tool call.
+- Secrets are a random fake canary minted per run. A fixture child the target
+  spawned must be gone once its server is deleted: the run checks by pid and by
+  a marker path only its own fixtures carry, and records "no fixture process
+  left".
+- Sessions cannot be ended explicitly (`DELETE /mcp` is 405); the ones a run
+  opened hold no child once its servers are deleted, and the idle reaper drops
+  them.
+
+`e2e/installed/_common/` is the shared part (arguments and target, journal,
+sync guard, case recorder, process check, the run lifecycle) and stays
+surface-neutral; `e2e/installed/mcp/` is the MCP suite. A `cli/` suite for the
+installed `coffer` command (`--coffer`, default `~/.coffer/bin/coffer`) joins under the same `_common`.
+
+To validate the suite itself against this checkout, start a daemon from source
+under a throwaway `HOME` (with `COFFER_PORT_RANGE_START`/`_END` on free ports)
+and point `DAEMON_JSON` at its `daemon.json`.
 
 ## CI Jobs
 

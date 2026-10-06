@@ -194,6 +194,17 @@ Playwright 会启动两个 Web 服务器：
 
 CI 失败时，`e2e` job 会把 Playwright 报告和 trace，以及隔离守护进程的日志目录和 `daemon.json`，作为 workflow 产物上传。
 
+## 测试已安装的版本 {#testing-an-installed-build}
+
+上面每个层级测的都是本检出目录里的源码。发布前，或者装好一个修复之后，`make verify-installed-mcp` 检查的是你真正装上的那个版本：它通过真实 HTTP 驱动正在运行的守护进程的 `/mcp`、已安装的 `coffer-mcp-shim` 和官方 MCP SDK，上游是会记下每次调用的合成服务器：
+
+```sh
+make verify-installed-mcp OUT=/tmp/coffer-acceptance/mcp-1     # the installed app (~/.coffer/daemon.json)
+make verify-installed-mcp OUT=<dir> DAEMON_JSON=<home>/.coffer/daemon.json SHIM=<path>
+```
+
+它需要手动运行，`make verify` 和 CI 都不会跑它。因为默认目标就是你自己正在用的应用，它只创建名字以 `qa-` 开头的对象，这些名字里有任何一个已经存在就拒绝开始，结束时删掉自己创建的一切。你的 vault 同步到远端时它也拒绝写入；它从不重启守护进程，也从不批准任何密钥。`OUT` 必须是仓库之外一个新建或为空的目录。结果写到 `OUT/summary.md` 和 `OUT/cases.json`，守护进程 token 和测试用密钥都已遮盖。每个用例是 PASS、FAIL、BLOCKED（附上在那里跑不了的原因，比如需要重启或 Touch ID 批准）或 N/A。只有出现 FAIL 才算失败。完整规则见 [`.agents/testing.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/testing.md) 的 "Installed-build Acceptance" 一节。
+
 ## 前端测试 {#frontend-tests}
 
 前端测试在 jsdom 环境中使用 Vitest 和 Testing Library。每个测试都放在它所覆盖的模块旁边（`*.test.ts`、`*.test.tsx`），`make verify-unit` 用 `npx vitest run src` 把它们全部运行。`src/test/setup.ts` 加载真实的 i18n 文案目录，所以组件渲染的是真实文案。用真实的 `QueryClientProvider` 渲染，只 mock 网络边界：`src/lib/api/*` 模块，或者聊天用的 `streamClient`。约定见[前端](/zh/contributing/frontend#testing)。
@@ -227,7 +238,7 @@ CI 失败时，`e2e` job 会把 Playwright 报告和 trace，以及隔离守护�
 | `scripts/check_frontend_colors.py` | 前端在 `src/index.css` 之外没有颜色字面量；每种颜色都是主题 token |
 | `scripts/check_ignored_sources.py` | 没有 `.gitignore` 规则隐藏源码树中的文件，也没有未锚定的模式命中 `lib/` 或 `env/` 这类常见源码文件夹名（那样会在任意深度隐藏该文件夹） |
 | `scripts/check_bare_tasks.py` | `backend/coffer/` 下的模块启动的裸 `asyncio.create_task` / `ensure_future` 不得超出脚本中列出的额度。后台工作一律走 supervisor（它给任务命名、记录崩溃并在关停时取消）；在原地被 await 的任务连同理由登记在脚本里 |
-| `ruff check`、`ruff format --check` | 按 `backend/pyproject.toml` 中的规则，对 `backend/` 和 `evals/` 做 lint 和格式检查 |
+| `ruff check`、`ruff format --check` | 按 `backend/pyproject.toml` 中的规则，对 `backend/`、`evals/` 和 `e2e/installed/` 做 lint 和格式检查 |
 | `mypy` | 在设置了 `strict = true` 的 `backend/pyproject.toml` 下，对整个 `coffer` 包做类型检查 |
 | `lint-imports` | import-linter 契约：分层方向（`surfaces` → `application` → `domain`）、纯净的 `domain`、`keyring` 只限于密钥代码、类型之间不跨类型导入，以及特定库只限于各自的适配器 |
 | `scripts/dump_i18n_backend_keys.py --check` | 每个后端错误码和审计事件类型在前端 locale 覆盖测试读取的 fixture 中都有条目，所以不会有未翻译的上线 |
