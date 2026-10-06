@@ -375,6 +375,13 @@ and the official MCP SDK as the client. Run them before a release, and after
 installing a fix, to see that what ships behaves as the source does. They are
 opt-in: neither `make verify` nor `make verify-all` runs them, and CI does not.
 
+**Only what an installed build can get wrong.** A behaviour another tier can
+test is tested there, not here: these suites cover the frozen binaries
+(modules PyInstaller leaves out, a build that is not the version it says), the
+installed shim and daemon reached from the outside, and the official SDK
+against them. A case that would pass or fail identically from source belongs in
+the integration, contract or e2e tier; move it there rather than add it here.
+
 ```bash
 make verify-installed-mcp OUT=/tmp/coffer-acceptance/mcp-$(date +%H%M%S)
 # another target or shim:
@@ -434,8 +441,31 @@ running app:
 
 `e2e/installed/_common/` is the shared part (arguments and target, journal,
 sync guard, case recorder, process check, the run lifecycle) and stays
-surface-neutral; `e2e/installed/mcp/` is the MCP suite. A `cli/` suite for the
-installed `coffer` command (`--coffer`, default `~/.coffer/bin/coffer`) joins under the same `_common`.
+surface-neutral; `commands.py` there runs an installed binary with its streams
+kept apart (`run`) or under a pseudo-terminal (`run_pty`). `e2e/installed/mcp/`
+is the MCP suite.
+
+`e2e/installed/cli/` smokes the installed frozen `coffer` command:
+
+```bash
+make verify-installed-cli OUT=/tmp/coffer-acceptance/cli-$(date +%H%M%S)
+make verify-installed-cli OUT=<dir> COFFER=<path>/coffer   # another build
+```
+
+It needs no daemon and touches nothing of the person's: it runs a copy of the
+binary (no sibling `coffer-daemon` in reach) with `HOME` set to an empty
+directory under `OUT` and `PATH=/usr/bin:/bin`, only commands that end before
+they would reach a daemon, and checks after every case that no daemon was
+started under that home. It checks that the root help lists every group
+`backend/coffer/surfaces/cli/groups.py` declares and each group's help renders
+(a module the build left out fails here, and so does a build older than this
+checkout), that `--show-completion` works in a terminal for zsh and bash and
+refuses `sh` without a traceback (macOS `ps` hides parents that have no
+terminal, so completion is only testable under `run_pty`), and that unreadable
+input comes out as the source's exit-6 errors rather than a frozen traceback.
+`OUT` gets `cases.json`, `summary.md` and `target.json` (the binary's sha256,
+mtime and version, and this checkout's commit). Run it from a checkout that
+matches the installed build: a newer checkout reports its new groups as FAIL.
 
 To validate the suite itself against this checkout, start a daemon from source
 under a throwaway `HOME` (with `COFFER_PORT_RANGE_START`/`_END` on free ports)
