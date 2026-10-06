@@ -22,7 +22,7 @@ GROUP_HELP: dict[str, str] = {
     "agent native-memory": "What an agent keeps in its own memory files (read-only).",
     "app": "The Coffer desktop app.",
     "app update": "Check for, and install, a new version of the desktop app.",
-    "approval": "Secret approvals: list, show, approve with Touch ID, reject.",
+    "approval": "Secret approvals: list, show, approve with Touch ID, reject, ask again.",
     "attention": "What needs you (the Overview list): list, ignore, un-ignore.",
     "channel": "Messaging channels: status, pairing, people, notify, restart.",
     "cli": "Command-line tools Coffer manages for skills.",

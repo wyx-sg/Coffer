@@ -70,6 +70,13 @@ class DiscoveredTool:
     input_schema: dict[str, Any]
     enabled: bool
     annotations: dict[str, Any] | None = None
+    output_schema: dict[str, Any] | None = None
+
+
+def _output_schema_of(tool: Any) -> dict[str, Any] | None:
+    """An upstream tool's declared ``outputSchema`` as declared, or None."""
+    raw = getattr(tool, "output_schema", None)
+    return dict(raw) if isinstance(raw, dict) and raw else None
 
 
 def _annotations_of(tool: Any) -> dict[str, Any] | None:
@@ -170,6 +177,7 @@ class CapabilityDiscovery:
                         description=getattr(t, "description", None),
                         input_schema=getattr(t, "input_schema", None) or {},
                         annotations=_annotations_of(t),
+                        output_schema=_output_schema_of(t),
                     )
                     for t in getattr(result, "tools", [])
                 ]
@@ -186,6 +194,7 @@ class CapabilityDiscovery:
                 input_schema=t.input_schema,
                 enabled=prefs.get(t.name, True),
                 annotations=t.annotations,
+                output_schema=t.output_schema,
             )
             for t in cache.tools
             if include_disabled or prefs.get(t.name, True)

@@ -23,7 +23,7 @@ from coffer.application.runtime.supervisor import spawn
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.server_config import StdioTransport
 from coffer.infrastructure.daemon.orphan_sweep import reap_pidfile
-from coffer.infrastructure.logging.files import write_coffer_line
+from coffer.infrastructure.logging.files import LineSink, write_coffer_line
 from coffer.infrastructure.mcp.dispatch import dispatch_method
 from coffer.infrastructure.mcp.process_group import kill_process_group
 from coffer.infrastructure.mcp.stdio_spawn import leaf_exception, open_child
@@ -78,7 +78,7 @@ class StdioUpstreamConnection:
         self._runner: asyncio.Task[None] | None = None
         self._close_event: asyncio.Event | None = None
         self._ready: asyncio.Future[Any] | None = None
-        self._errlog: TextIO | None = None
+        self._errlog: LineSink | None = None
         self._session: ClientSession | None = None
         self._notification_callback: NotificationCallback | None = None
         # Server-initiated request callbacks (sampling and roots)
@@ -166,8 +166,9 @@ class StdioUpstreamConnection:
             raise UpstreamUnavailable("upstream init cancelled: CancelledError")
         exc = ready.exception()
         if exc is not None:
+            # The lifetime task has already written why it failed to the log
+            # (before unwinding closed it) — see ``_run_lifetime``.
             leaf = leaf_exception(exc)
-            self._note_error(self._launch_error_line(leaf, env))
             await self._cleanup()
             # Don't interpolate the raw exception into the message — an
             # upstream/transport error can embed secret-bearing argv or env
@@ -217,8 +218,12 @@ class StdioUpstreamConnection:
                     stderr_sink=self._stderr_sink,
                     command_line=self._command_line(),
                     on_stop=self._note_stop,
+                    # Only the secret overlay is masked out of stderr, not the
+                    # server's static env (spec secret "Hold plaintext only in
+                    # memory at the moment of use").
+                    mask_values=self._env_overlay.values(),
+                    on_sink=self._set_errlog,
                 )
-                self._errlog = started.errlog
                 self._pid_files = started.pid_files
                 self._child_pids = started.child_pids
                 session = await exit_stack.enter_async_context(
@@ -241,6 +246,10 @@ class StdioUpstreamConnection:
                 with suppress(asyncio.CancelledError):
                     await close_event.wait()
         finally:
+            if init_error is not None and not isinstance(init_error, asyncio.CancelledError):
+                # Written here, while the log is still open: unwinding the
+                # stack below closes it.
+                self._note_error(self._launch_error_line(leaf_exception(init_error), env))
             close_error: BaseException | None = None
             try:
                 # aclose() drives stdio_client's teardown, whose FINAL step
@@ -268,7 +277,10 @@ class StdioUpstreamConnection:
         reach the child only through ``secret_refs`` in its environment."""
         return " ".join([self._transport.command, *self._transport.args])
 
-    def _note_stop(self, errlog: TextIO) -> None:
+    def _set_errlog(self, errlog: LineSink) -> None:
+        self._errlog = errlog
+
+    def _note_stop(self, errlog: LineSink) -> None:
         # Only a session that came up is "stopped"; a failed start has its line.
         if self._session is not None:
             write_coffer_line(errlog, "stop after the session ended")

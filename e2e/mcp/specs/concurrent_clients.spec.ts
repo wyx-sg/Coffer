@@ -16,6 +16,7 @@ import {
   spawnShim,
   uniqueName,
   waitForCapabilities,
+  INIT_PARAMS,
 } from "./_helpers";
 
 acceptance("mcp-gateway", "concurrent clients", async () => {
@@ -40,13 +41,13 @@ acceptance("mcp-gateway", "concurrent clients", async () => {
       jsonrpc: "2.0",
       id: 1,
       method: "initialize",
-      params: {},
+      params: INIT_PARAMS,
     });
     sendEnvelope(shimB, {
       jsonrpc: "2.0",
       id: 1,
       method: "initialize",
-      params: {},
+      params: INIT_PARAMS,
     });
     const [initA, initB] = await Promise.all([
       readReply(shimA),

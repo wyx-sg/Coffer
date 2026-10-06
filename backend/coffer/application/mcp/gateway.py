@@ -1,21 +1,11 @@
 """MCPGatewaySession — per-downstream-client routing brain.
 
-One instance per downstream MCP client connection. Owns:
-- A SubprocessSupervisor (manages per-upstream connections)
-- A CapabilityDiscovery (caches lists, reconciles preferences)
-- A queue of upstream notifications to forward downstream
-
-Invocation handlers (tools/call, resources/read, prompts/get) live in
-`gateway_handlers`; the tools/list composition (aggregate, plus built-ins,
-minus what tiering hides) lives in `gateway_tools_list`.
-
-Sampling and roots live in `gateway_server_requests`, envelope parsing in
-`gateway_parsing`, and the per-agent server filter in `gateway_scope`.
-
-For the spec's "upstream tool list changes mid-session" scenario, the session
-subscribes to each upstream's notification stream
-(`UpstreamConnectionPort.on_notification`), forwards list-changed messages
-downstream and invalidates the discovery cache.
+One instance per downstream MCP client connection; owns its SubprocessSupervisor
+(per-upstream connections), shares a CapabilityDiscovery, and forwards upstream
+notifications downstream. Invocation handlers live in `gateway_handlers`, the
+tools/list composition in `gateway_tools_list`, sampling and roots in
+`gateway_server_requests`, cancellable in-flight requests in `gateway_inflight`,
+envelope parsing in `gateway_parsing` and the per-agent filter in `gateway_scope`.
 """
 
 from __future__ import annotations
@@ -48,6 +38,7 @@ from coffer.application.mcp.gateway_handlers import (
     handle_resources_read,
     handle_tools_call,
 )
+from coffer.application.mcp.gateway_inflight import InflightRequests
 from coffer.application.mcp.gateway_instructions import build_initialize_result
 from coffer.application.mcp.gateway_notifications import forward_upstream_notification
 from coffer.application.mcp.gateway_parsing import (
@@ -59,6 +50,7 @@ from coffer.application.mcp.gateway_scope import enabled_mcp_servers, visible_mc
 from coffer.application.mcp.gateway_server_requests import (
     ServerRequestRegistry,
     build_session_callbacks,
+    wire_connection,
 )
 from coffer.application.mcp.gateway_tool_gate import group_descriptions, hidden_tool_names
 from coffer.application.mcp.gateway_tool_search import TOOL_SEARCH_NAME
@@ -76,6 +68,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.runtime.supervisor import spawn
 from coffer.application.turn_ask import ASK_TOOL_NAME, TurnAskPort
 from coffer.domain.errors import UpstreamUnavailable
+from coffer.domain.mcp.jsonrpc_errors import INVALID_REQUEST, METHOD_NOT_FOUND, JsonRpcError
 
 _logger = logging.getLogger(__name__)
 
@@ -141,17 +134,25 @@ class MCPGatewaySession:
         self._degraded = DegradedTracker(discovery, self._send_downstream)
         # Downstream client capabilities declared during initialize.
         self._client_capabilities: dict[str, Any] = {}
+        # The MCP version agreed at ``initialize``; None until it succeeded. The
+        # handshake happens once per session: identity, capabilities and cwd are
+        # fixed for the session's life (spec mcp-gateway "Take the agent identity
+        # from the handshake").
+        self.protocol_version: str | None = None
+        # Requests still being answered, by id, so the client can cancel one.
+        self.inflight = InflightRequests()
         # Server-initiated request bookkeeping (sampling and roots).
         self._server_request_registry = ServerRequestRegistry()
-        # Pre-build SDK callbacks so we can register them on connection objects.
-        callbacks = build_session_callbacks(
+        # SDK callbacks for sampling and roots, wired into every connection this
+        # session's supervisor builds BEFORE it starts (``wire_connection``).
+        self._callbacks = build_session_callbacks(
             self._server_request_registry,
             lambda: self._downstream_sink,
             lambda: self._client_capabilities,
             self.id,
         )
-        self._sampling_callback = callbacks.sampling
-        self._list_roots_callback = callbacks.list_roots
+        if supervisor is not None:  # some unit tests build a session without one
+            supervisor.prepare_connection = self._prepare_connection
 
     def set_downstream_sink(self, sink: NotificationSink) -> None:
         """Called by the session runner once the downstream wire is open."""
@@ -164,6 +165,8 @@ class MCPGatewaySession:
         params: dict[str, Any],
     ) -> dict[str, Any]:
         """Respond to the client's initialize request with coffer's server capabilities."""
+        if self.protocol_version is not None:
+            raise JsonRpcError(INVALID_REQUEST, "this session is already initialized")
         # The client's capabilities gate server-initiated requests (sampling).
         self._client_capabilities = params.get("capabilities", {}) or {}
         self._session_cwd = _extract_cwd(params)
@@ -180,12 +183,14 @@ class MCPGatewaySession:
             config=self._tiering,
             clock=self._clock,
         )
-        return build_initialize_result(
+        result = build_initialize_result(
             hidden_count=self.last_hidden_count,
             tools=[tool.name for tool in self._builtin.list()],
             memory_root=self._builtin.directory("memory"),
             knowledge=self._builtin.directory("knowledge") is not None,
         )
+        self.protocol_version = result["protocolVersion"]
+        return result
 
     # --- Request dispatch ---
 
@@ -208,23 +213,16 @@ class MCPGatewaySession:
             )
         if method == "prompts/get":
             return await self._dispatch_handler(handle_prompts_get, params)
-        raise UpstreamUnavailable(f"method not supported by gateway: {method!r}")
+        raise JsonRpcError(METHOD_NOT_FOUND, f"method not found: {method!r}")
 
     def handle_response_from_downstream(self, envelope: dict[str, Any]) -> bool:
-        """Route an incoming JSON-RPC response to a pending server-initiated request.
-
-        Returns True if matched and consumed; False if the envelope should be
-        treated as a normal client request.
-        """
+        """Route a JSON-RPC response to a pending server-initiated request; True if matched."""
         return self._server_request_registry.handle_response(envelope)
 
     @property
     def _log_ctx(self) -> dict[str, Any]:
-        """What every path that records an invocation needs to write its row.
-
-        ``session_agent_uid`` is read at call time, so a row carries the uid the
-        session reported on ``initialize`` (or ``None`` when it reported none).
-        """
+        """What every path that records an invocation needs to write its row
+        (the uid the session reported on ``initialize``, or ``None``)."""
         return {
             "invocations": self._invocations,
             "session_id": self.id,
@@ -246,26 +244,27 @@ class MCPGatewaySession:
         return [r.name for r in rows], hidden, exposure, group_descriptions(rows)
 
     async def _ensure_subscribed(self, server_name: str) -> None:
-        """Attach notification + server-request handlers to the upstream connection lazily."""
+        """Make sure this session holds a connection to ``server_name``, whose
+        handlers ``_prepare_connection`` wired in before it started."""
         if server_name in self._notification_subscriptions:
             return
         try:
-            conn = await self._supervisor.get_or_spawn(server_name)
+            await self._supervisor.get_or_spawn(server_name)
         except UpstreamUnavailable:
             return
+        self._notification_subscriptions.add(server_name)
 
-        def _spawn_notification_task(notif: Any) -> asyncio.Task[None]:
+    def _prepare_connection(self, server_name: str, conn: Any) -> None:
+        """Wire this session's handlers into a connection before it starts."""
+
+        def _notify(notif: Any) -> asyncio.Task[None]:
             coro = self._on_upstream_notification(server_name, notif)
             task = spawn(coro, name=f"mcp-upstream-notification:{server_name}")
             self._notification_tasks.add(task)
             task.add_done_callback(self._notification_tasks.discard)
             return task
 
-        conn.on_notification(_spawn_notification_task)
-        # Let the SDK handle this upstream's sampling and roots requests.
-        conn.on_sampling_request(self._sampling_callback)
-        conn.on_roots_request(self._list_roots_callback)
-        self._notification_subscriptions.add(server_name)
+        wire_connection(conn, _notify, self._client_capabilities, self._callbacks)
 
     @property
     def degraded_servers(self) -> set[str]:
@@ -387,8 +386,9 @@ class MCPGatewaySession:
 
     async def dispose(self) -> None:
         """Close every owned upstream + drop all state."""
-        # Cancel any in-flight server-initiated requests
+        # Cancel any in-flight server-initiated requests and client requests
         self._server_request_registry.cancel_all()
+        self.inflight.cancel_all()
 
         await self._degraded.dispose()
         await self._supervisor.dispose()

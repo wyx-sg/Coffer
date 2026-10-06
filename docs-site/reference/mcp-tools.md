@@ -190,8 +190,11 @@ A call is refused, with JSON-RPC error code `-32000` and a message naming the re
 - the server's [reach](/architecture/resource-framework#reach) does not include the agent
   that opened the session.
 
-Other failures inside Coffer are JSON-RPC error `-32603`. A failing upstream tool returns
-its own `isError: true` result unchanged.
+A method Coffer does not answer is `-32601`. Params a method cannot use, or a tool name
+no server offers (no `<server>__` prefix, or no such server), are `-32602`. A JSON-RPC
+error the upstream answered keeps its code, with Coffer's own message. Other failures
+inside Coffer are JSON-RPC error `-32603`. A failing upstream tool returns its own
+`isError: true` result unchanged.
 
 ### Tiering
 

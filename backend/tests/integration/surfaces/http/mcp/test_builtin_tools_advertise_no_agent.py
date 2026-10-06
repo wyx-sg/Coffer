@@ -13,6 +13,7 @@ from starlette.testclient import TestClient
 
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from tests.support.mcp_wire import INIT_PARAMS
 
 
 @pytest.mark.acceptance(
@@ -30,7 +31,7 @@ def test_no_built_in_tool_declares_an_agent_property(tmp_path, monkeypatch) -> N
         headers = {"X-Coffer-Token": "test-token"}
         init = c.post(
             "/mcp",
-            json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+            json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
             headers=headers,
         )
         assert init.status_code == 200

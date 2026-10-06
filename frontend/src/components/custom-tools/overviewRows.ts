@@ -46,6 +46,7 @@ const STATUS: Partial<Record<CustomToolHeaderOut["secret_state"], Requirement["s
   present: "set",
   missing: "missing",
   pending_approval: "waiting_approval",
+  rejected: "refused",
 };
 
 /** What the group needs from this Mac: each secret its headers cite. Nothing runs here, so no launcher. */

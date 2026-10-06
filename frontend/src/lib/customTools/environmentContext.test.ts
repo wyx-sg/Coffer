@@ -23,6 +23,8 @@ function env(overrides: Partial<CustomToolEnvironment>): CustomToolEnvironment {
     secret_state: "none",
     pending_approvals: [],
     pending_secrets: [],
+    rejected_approvals: [],
+    rejected_secrets: [],
     ...overrides,
   };
 }

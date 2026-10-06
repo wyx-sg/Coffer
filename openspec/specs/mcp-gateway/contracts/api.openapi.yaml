@@ -2110,11 +2110,22 @@ components:
             type: string
           title: Pending Secrets
           type: array
+        rejected_approvals:
+          items:
+            type: string
+          title: Rejected Approvals
+          type: array
+        rejected_secrets:
+          items:
+            type: string
+          title: Rejected Secrets
+          type: array
         secret_state:
           enum:
           - none
           - present
           - missing
+          - rejected
           - pending_approval
           title: Secret State
           type: string
@@ -2139,6 +2150,8 @@ components:
       - secret_state
       - pending_approvals
       - pending_secrets
+      - rejected_approvals
+      - rejected_secrets
       title: CustomToolEnvironmentOut
       type: object
     CustomToolEnvironmentPatch:
@@ -2326,6 +2339,16 @@ components:
             type: string
           title: Pending Secrets
           type: array
+        rejected_approvals:
+          items:
+            type: string
+          title: Rejected Approvals
+          type: array
+        rejected_secrets:
+          items:
+            type: string
+          title: Rejected Secrets
+          type: array
         scope:
           anyOf:
           - items:
@@ -2338,6 +2361,7 @@ components:
           - none
           - present
           - missing
+          - rejected
           - pending_approval
           title: Secret State
           type: string
@@ -2376,6 +2400,8 @@ components:
       - secret_state
       - pending_approvals
       - pending_secrets
+      - rejected_approvals
+      - rejected_secrets
       - calls_24h
       - failures_24h
       - last_call_at
@@ -2470,6 +2496,7 @@ components:
           - none
           - present
           - missing
+          - rejected
           - pending_approval
           title: Secret State
           type: string
@@ -2717,6 +2744,7 @@ components:
           - none
           - present
           - missing
+          - rejected
           - pending_approval
           title: State
           type: string
@@ -3469,6 +3497,7 @@ components:
           - set
           - missing
           - waiting_approval
+          - refused
           title: Status
           type: string
         version:

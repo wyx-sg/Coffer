@@ -24,10 +24,10 @@ from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
 from coffer.domain.mcp.http_api_environment import HttpApiEnvironment
 from coffer.domain.mcp.secret_target import environment_destination
 from coffer.domain.resource import Resource
-from coffer.domain.secrets import standalone_name
+from coffer.domain.secrets import SecretApproval, standalone_name
 
 GroupHealth = Literal["failing", "attention", "healthy", "idle", "off"]
-SecretState = Literal["none", "present", "missing", "pending_approval"]
+SecretState = Literal["none", "present", "missing", "rejected", "pending_approval"]
 #: The list's order: failing groups first (spec web-ui "Manage custom tool groups on
 #: their own page"), switched-off ones last.
 HEALTH_ORDER: dict[str, int] = {"failing": 0, "attention": 1, "healthy": 2, "idle": 3, "off": 4}
@@ -52,6 +52,9 @@ class EnvironmentView:
     header_states: dict[str, SecretState]
     pending_approvals: list[str]
     pending_secrets: list[str]
+    #: The refused approvals that block it until asked again, and their secrets.
+    rejected_approvals: list[str]
+    rejected_secrets: list[str]
 
 
 @dataclass(frozen=True)
@@ -61,12 +64,16 @@ class GroupView:
     health: GroupHealth
     health_reason: str | None
     #: The worst state across the enabled environments' secret headers
-    #: (missing, then waiting for approval, then present); ``none`` with none.
+    #: (missing, then refused, then waiting for approval, then present);
+    #: ``none`` with none.
     secret_state: SecretState
     environments: list[EnvironmentView]
     pending_approvals: list[str]
     #: The names of the secrets whose approval is pending.
     pending_secrets: list[str]
+    rejected_approvals: list[str]
+    #: The names of the secrets whose approval a person refused.
+    rejected_secrets: list[str]
     calls: int
     failures: int
     last_call_at: datetime | None
@@ -102,14 +109,25 @@ class GroupViewer:
                 present[env.slot(header)] = ref
         boundary = self._boundary()
         if boundary is None or not present or not env.enabled:
-            return EnvironmentView(env, _worst(states), states, [], [])
+            return EnvironmentView(env, _worst(states), states, [], [], [], [])
         dest = environment_destination(resource.uid, resource.name, env)
-        pending = await asyncio.to_thread(boundary.check, dest, present)
-        for approval in pending:
+        # A refused approval is not waiting: it blocks until it is asked again.
+        waiting = await asyncio.to_thread(boundary.check, dest, present)
+        for approval in waiting:
             if approval.slot in present:
-                states[env.header_of(approval.slot)] = "pending_approval"
-        names = [standalone_name(a.ref or "") or (a.ref or "") for a in pending]
-        return EnvironmentView(env, _worst(states), states, [a.id for a in pending], names)
+                refused = approval.status == "rejected"
+                states[env.header_of(approval.slot)] = "rejected" if refused else "pending_approval"
+        pending = [a for a in waiting if a.status != "rejected"]
+        rejected = [a for a in waiting if a.status == "rejected"]
+        return EnvironmentView(
+            env,
+            _worst(states),
+            states,
+            [a.id for a in pending],
+            _names(pending),
+            [a.id for a in rejected],
+            _names(rejected),
+        )
 
     async def views(self, groups: list[tuple[Resource, HttpApiTransport]]) -> list[GroupView]:
         if not groups:
@@ -128,6 +146,8 @@ class GroupViewer:
             secret_state = _worst({str(i): e.secret_state for i, e in enumerate(enabled)})
             pending = [a for e in enabled for a in e.pending_approvals]
             pending_secrets = [n for e in enabled for n in e.pending_secrets]
+            rejected = [a for e in enabled for a in e.rejected_approvals]
+            rejected_secrets = [n for e in enabled for n in e.rejected_secrets]
             last = (
                 await self._outcomes.last_tool_call(resource.uid, since=since)
                 if self._outcomes is not None
@@ -153,6 +173,8 @@ class GroupViewer:
                     environments=envs,
                     pending_approvals=pending,
                     pending_secrets=pending_secrets,
+                    rejected_approvals=rejected,
+                    rejected_secrets=rejected_secrets,
                     calls=sum(c for c, _ in per_tool.values()),
                     failures=sum(f for _, f in per_tool.values()),
                     last_call_at=last.timestamp if last else None,
@@ -165,9 +187,13 @@ class GroupViewer:
         return out
 
 
+def _names(approvals: list[SecretApproval]) -> list[str]:
+    return [standalone_name(a.ref or "") or (a.ref or "") for a in approvals]
+
+
 def _worst(states: dict[str, SecretState]) -> SecretState:
     """The worst state of several (``none`` when there are none)."""
-    for state in ("missing", "pending_approval", "present"):
+    for state in ("missing", "rejected", "pending_approval", "present"):
         if state in states.values():
             return state
     return "none"
@@ -182,6 +208,8 @@ def _health(
         return "failing", "last_call_failed"
     if secret_state == "missing":
         return "attention", "secret_missing"
+    if secret_state == "rejected":
+        return "attention", "approval_rejected"
     if secret_state == "pending_approval":
         return "attention", "approval_pending"
     if last_status == "ok":

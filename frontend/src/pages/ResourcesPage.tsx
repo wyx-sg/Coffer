@@ -52,7 +52,7 @@ export function ResourcesPage() {
   const { name: nameParam = "", tab: pathTab } = useParams<{ name?: string; tab?: string }>();
   const navigate = useNavigate();
   const list = useResources("mcp_server");
-  const [add, setAdd] = useState<"paste" | "importAgents" | null>(null);
+  const [adding, setAdding] = useState(false);
   // The servers ticked in the list; while any is, the right pane summarises them (board 4.1.28).
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   useDaemonEvents();
@@ -104,7 +104,7 @@ export function ResourcesPage() {
   } else if (nameParam) {
     pane = <DetailNotFound kind="mcp" id={nameParam} backTo="/mcp-servers" icon={Server} />;
   } else if (servers.length === 0) {
-    pane = <McpFirstRun onImport={() => setAdd("importAgents")} />;
+    pane = <McpFirstRun />;
   } else {
     pane = <NothingSelected icon={Server} />;
   }
@@ -117,7 +117,7 @@ export function ResourcesPage() {
           title={t("resources.title")}
           subtitle={t("resources.subtitle")}
           actions={
-            <Button onClick={() => setAdd("paste")}>
+            <Button onClick={() => setAdding(true)}>
               <Plus aria-hidden /> {t("resources.addServer")}
             </Button>
           }
@@ -149,9 +149,8 @@ export function ResourcesPage() {
         />
       )}
       <AddMcpServerDialog
-        open={add !== null}
-        initialMode={add ?? "paste"}
-        onOpenChange={(open) => (open ? undefined : setAdd(null))}
+        open={adding}
+        onOpenChange={(open) => (open ? undefined : setAdding(false))}
       />
     </div>
   );

@@ -51,6 +51,19 @@ class Preview:
     error: str | None = None
 
 
+# What a JSON-RPC code means, for the codes a read or a fill is refused with.
+_CODE_NAMES = {-32602: "invalid params", -32601: "method not found", -32002: "resource not found"}
+
+
+def _answered(error: MCPError) -> str:
+    """The error a server answered with, by its code alone: its own text is not
+    relayed, since it can echo a credential (spec secret "Hold plaintext only in
+    memory at the moment of use"), as on the gateway."""
+    code = error.code
+    name = _CODE_NAMES.get(code) if isinstance(code, int) else None
+    return f"JSON-RPC error {code} ({name})" if name else f"JSON-RPC error {code}"
+
+
 def _cut(text: str) -> tuple[str, bool]:
     if len(text) <= PREVIEW_TEXT_LIMIT:
         return text, False
@@ -107,7 +120,7 @@ async def read_resource(discovery: CapabilityDiscovery, server_name: str, uri: s
             await _ask(discovery, server_name, "resources/read", {"uri": uri})
         )
     except MCPError as e:
-        return Preview(contents=[], error=str(e))
+        return Preview(contents=[], error=_answered(e))
     return Preview(contents=[_body(c) for c in result.get("contents") or []])
 
 
@@ -122,7 +135,7 @@ async def get_prompt(
     try:
         result = coerce_prompt_result(await _ask(discovery, server_name, "prompts/get", params))
     except MCPError as e:
-        return Preview(contents=[], error=str(e))
+        return Preview(contents=[], error=_answered(e))
     return Preview(
         contents=[_message(m) for m in result.get("messages") or []],
         description=result.get("description"),

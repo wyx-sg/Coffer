@@ -1,4 +1,4 @@
-// src/components/mcp/server/McpCapabilityRow.test.tsx — a resource or prompt row opens to its details and previews on demand (spec web-ui "Uniform capability tabs").
+// src/components/mcp/server/McpCapabilityRow.test.tsx — a resource or prompt row opens to its details and previews on demand (spec web-ui "Keep the capability tabs uniform").
 import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

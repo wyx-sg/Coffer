@@ -270,6 +270,19 @@ def test_reject_needs_no_presence(daemon: BoundaryDaemon, shell: FakeShell) -> N
     assert shell.prompts == []
 
 
+def test_ask_again_puts_a_refused_request_back_without_presence(
+    daemon: BoundaryDaemon, shell: FakeShell
+) -> None:
+    (refused,) = _pending(daemon, "second")
+    coffer("approval", "reject", refused)
+    out = coffer("approval", "ask-again", refused, "--json")
+    [asked] = json.loads(out.output)["approvals"]
+    assert _status(daemon, refused) == "superseded"
+    assert _status(daemon, asked["id"]) == "pending"
+    assert shell.prompts == []
+    coffer("approval", "ask-again", asked["id"], code=5)
+
+
 def test_key_backup_and_import_open_in_the_app(daemon: BoundaryDaemon, shell: FakeShell) -> None:
     backup = coffer("secret", "backup-key")
     imported = coffer("secret", "import-key", "--json")

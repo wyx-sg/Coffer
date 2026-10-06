@@ -44,7 +44,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer cli`](/zh/reference/cli/cli) | Command-line tools Coffer manages for skills. |
 | [`coffer vault`](/zh/reference/cli/vault) | The vault's history and the hand edits it refused. |
 | [`coffer custom-tool`](/zh/reference/cli/custom-tool) | Custom tools: groups of HTTP API requests served as MCP tools. |
-| [`coffer approval`](/zh/reference/cli/approval) | Secret approvals: list, show, approve with Touch ID, reject. |
+| [`coffer approval`](/zh/reference/cli/approval) | Secret approvals: list, show, approve with Touch ID, reject, ask again. |
 | [`coffer app`](/zh/reference/cli/app) | The Coffer desktop app. |
 | [`coffer resource`](/zh/reference/cli/resource) | Any resource by uid: show, rename, switch on or off, reach, delete. |
 | [`coffer channel`](/zh/reference/cli/channel) | Messaging channels: status, pairing, people, notify, restart. |

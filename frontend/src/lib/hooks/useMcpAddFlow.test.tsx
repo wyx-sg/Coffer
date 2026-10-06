@@ -4,14 +4,8 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
 
-import { agentMcpEntriesKey, resourcesKey } from "@/lib/api/queryKeys";
 import { mockApiClient } from "@/test/mockApiClient";
-import {
-  useApplyMcpImport,
-  useBuiltinMcpServer,
-  useMcpConfigTest,
-  useMcpImportPlan,
-} from "./useMcpAddFlow";
+import { useBuiltinMcpServer, useMcpConfigTest, useMcpImportPlan } from "./useMcpAddFlow";
 
 vi.mock("@/lib/api/client", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/client")>()),
@@ -22,11 +16,10 @@ const getApiClientMock = vi.mocked(getApiClient);
 
 function setup() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const invalidate = vi.spyOn(qc, "invalidateQueries");
   const wrapper = ({ children }: PropsWithChildren) => (
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );
-  return { wrapper, invalidate };
+  return { wrapper };
 }
 
 function useClient(methods: Record<string, ReturnType<typeof vi.fn>>) {
@@ -100,28 +93,6 @@ describe("useMcpAddFlow", () => {
     POST.mockClear();
     renderHook(() => useMcpImportPlan([]), { wrapper });
     expect(POST).not.toHaveBeenCalled();
-  });
-
-  test("applying an import refreshes each agent's entries and the resource lists", async () => {
-    const report = { entries: [], servers_added: [], coffer_entry_results: [] };
-    const POST = vi.fn().mockResolvedValue({ data: report, error: undefined });
-    useClient({ POST });
-    const { wrapper, invalidate } = setup();
-    const { result } = renderHook(() => useApplyMcpImport(), { wrapper });
-    const entries = [
-      { agent_uid: "u1", name: "a" },
-      { agent_uid: "u2", name: "b" },
-      { agent_uid: "u1", name: "c" },
-    ];
-    await act(async () => {
-      await result.current.mutateAsync(entries);
-    });
-    expect(POST).toHaveBeenCalledWith("/agents/mcp-import/apply", { body: { entries } });
-    const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
-    expect(keys).toContain(JSON.stringify(agentMcpEntriesKey("u1")));
-    expect(keys).toContain(JSON.stringify(agentMcpEntriesKey("u2")));
-    expect(keys).toContain(JSON.stringify(resourcesKey));
-    expect(keys.filter((k) => k === JSON.stringify(agentMcpEntriesKey("u1")))).toHaveLength(1);
   });
 
   test("the built-in server is read from /mcp/builtin", async () => {

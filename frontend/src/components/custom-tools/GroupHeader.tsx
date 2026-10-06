@@ -22,7 +22,7 @@ interface Props {
 /** The tile's glyph and tint per state (4.2.01–4.2.23). */
 function tileOf(state: GroupState): { icon: LucideIcon; className: string } {
   if (state === "failing") return { icon: CircleAlert, className: "bg-danger-soft text-danger" };
-  if (state === "secretMissing" || state === "waiting")
+  if (state === "secretMissing" || state === "waiting" || state === "refused")
     return { icon: KeyRound, className: "bg-warning-soft text-warning" };
   return {
     icon: Wrench,

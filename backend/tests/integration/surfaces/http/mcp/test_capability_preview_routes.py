@@ -88,3 +88,11 @@ def test_long_text_is_cut_and_a_blob_is_sized() -> None:
         {"role": "user", "content": {"type": "image", "data": "aGVsbG8=", "mimeType": "image/png"}}
     )
     assert (image.kind, image.size_bytes, image.role) == ("image", 5, "user")
+
+
+def test_an_upstream_error_is_named_by_its_code_not_its_text() -> None:
+    from mcp import MCPError
+
+    error = MCPError(code=-32602, message="bad token sk-secret-value")
+    assert capability_preview._answered(error) == "JSON-RPC error -32602 (invalid params)"
+    assert capability_preview._answered(MCPError(code=-1, message="x")) == "JSON-RPC error -1"

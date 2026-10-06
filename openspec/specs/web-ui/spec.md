@@ -570,7 +570,7 @@ server's command and settings need from this machine (see mcp-gateway "Show what
 an MCP server requires"): the launcher as a row reading "Found · <version>" or
 "Not found" with a View in CLIs link to `/clis/<launcher>`, and each secret as
 named by the secret's own name (the setting that carries it is its tooltip) as
-Set, Missing or Waiting for approval with a View in Secrets link to
+Set, Missing, Refused or Waiting for approval with a View in Secrets link to
 `/secrets?q=<name>`, the Secrets list searched for it —
 and **Most-called tools**: the busiest four, read-only with no switches, each
 marked when it sits behind search, with the rest one link away ("Show all N in
@@ -717,7 +717,7 @@ The Tools, Resources and Prompts tabs MUST be uniform — each carrying a filter
 - **THEN** the argument shows as a field marked required, and Get prompt waits until it is filled
 - **AND** once filled, Get prompt shows the messages the server returns, each with its role
 
-### Requirement: Add MCP servers from one paste box
+### Requirement: Add MCP servers by pasting them into one box
 The MCP servers page MUST carry one **Add server** action, and no separate
 paste-JSON action. It opens a modal whose first step is one paste box that
 recognises what was pasted, so the user can paste whatever an MCP server's
@@ -733,10 +733,11 @@ README gives them:
   host.
 
 One recognised server MUST open the manual form prefilled with it; several MUST
-open the review step. The same dialog carries **Import from agents** as a link,
-which lists the direct MCP entries in the agents' own config files to adopt
-([agent-registry](../agent-registry/spec.md) "Adopt a direct MCP entry into Coffer"); it is not a
-second button on the page. The dialog adds MCP servers only: it offers no
+open the review step. The dialog MUST NOT offer importing the direct MCP
+entries in the agents' own config files: that is done on each agent's MCP
+servers tab ([agent-registry](../agent-registry/spec.md) "Adopt a direct MCP entry into Coffer"). While no
+server is registered, the page's welcome MAY list those entries per agent, each
+row opening that agent's MCP servers tab. The dialog adds MCP servers only: it offers no
 custom tool (an HTTP API imported from an OpenAPI document or defined by hand),
 which is added on the Custom tools page (see "Manage custom tool groups on their
 own page").
@@ -803,10 +804,10 @@ the dialog MUST NOT send that server's registration until the name is shortened.
 - **WHEN** the user pastes a `[mcp_servers.docs]` table with a command, arguments and an `env` table
 - **THEN** the manual form opens prefilled as a stdio server named `docs` with that command, arguments and environment, the secret-looking values offered as secrets
 
-#### Scenario: the add dialog links to importing from agents
-- **GIVEN** the MCP servers page
+#### Scenario: the add dialog offers no import from agents
+- **GIVEN** the MCP servers page, and an agent whose own config file holds a direct MCP entry
 - **WHEN** it renders and the user opens Add server
-- **THEN** the page carries one Add server action and no separate paste-JSON action, and the dialog carries an Import from agents link
+- **THEN** the page carries one Add server action and no separate paste-JSON action, and the dialog carries no Import from agents link
 - **AND** the dialog offers no custom tool, neither an OpenAPI import nor a hand-made HTTP request
 
 ### Requirement: Explain unreadable pasted input in the dialog
@@ -1399,24 +1400,6 @@ released to the test, which says the server is tested once it is added.
 - **WHEN** the user presses Test
 - **THEN** the app posts the form's config to `/api/v1/resources/mcp_server/test-config` with the typed value in `secret_values`, and shows "Test passed in 1.4 s" with the tools it listed
 - **AND** no resource is registered and no secret is written
-
-### Requirement: Review an import from the agents before it is applied
-Import from your agents MUST open the shared change preview of the daemon's
-import plan ([agent-registry](../agent-registry/spec.md) "Plan an import of
-agents' direct MCP entries") before anything is written: the servers found,
-each ticked, with the agents that hold it and a note when two agents' entries
-merge into one server or an entry duplicates a server Coffer already has;
-what will happen to Coffer and to each agent; and each agent config file the
-import edits, with its diff. A name the daemon cannot register is listed
-unticked. Unticking a server re-plans without it. Import MUST apply the ticked
-entries through the apply route, and the outcome MUST say which entries were
-not imported and why.
-
-#### Scenario: the import review shows each file's diff before it imports
-- **GIVEN** an agent whose config file holds one direct MCP entry
-- **WHEN** the user opens Import from your agents and presses Import 1 server
-- **THEN** the dialog first shows the plan with that agent's file and its diff, and only then posts the ticked entries to `/api/v1/agents/mcp-import/apply`
-- **AND** the entry is not adopted one by one through the agent's adopt route
 
 ### Requirement: Show the built-in coffer server read-only
 The MCP servers list MUST end with a Built-in group holding Coffer's own
@@ -2849,7 +2832,10 @@ Off turns the group off), **Edit group** and a **⋯** menu that holds only Dele
 group… — and each problem is answered in a banner under it, never in the header:
 failing calls (with **View calls**, which opens Activity on its calls, and the daemon's hand-off), a group that is
 off (Turn on), a secret missing (Add secret, Choose another, no hand-off) and a
-secret waiting for approval (Open approvals, the only button). Re-import is a
+secret waiting for approval (Open approvals, the only button) and a secret
+whose approval a person refused (Ask again, the only button: in the desktop app
+it asks for Touch ID at once and approves, elsewhere the request goes back on
+the approvals list). Re-import is a
 button in the definition of an imported group.
 
 A group's detail page (`/custom-tools/<group>/<tab>`) MUST carry, under its
@@ -2863,7 +2849,7 @@ what an MCP server's Overview shows ("Open an MCP server on its Overview"):
 made them, and for a group that is on a View in Activity link to Activity's Tool
 calls tab searching the group's name (for a group that is off, only its last
 call and who made it); **Requires** — each secret its headers cite, named by the
-secret's own name, as Set, Missing or Waiting for approval with a View in
+secret's own name, as Set, Missing, Refused or Waiting for approval with a View in
 Secrets link to `/secrets?q=<name>` (a group runs no command, so it has no
 launcher row); and **Most-called tools** — the busiest four, read-only with no
 switches, each marked when it sits behind search, with the rest one link away
@@ -2935,6 +2921,12 @@ the gateway").
 - **GIVEN** one group whose last call failed and two healthy groups
 - **WHEN** the user opens `/custom-tools`
 - **THEN** the failing group is listed first with its tools, and the page header carries one Add custom tool action whose flow asks for the group in a select that starts on New group and narrows the groups as the user types, and offers Import an OpenAPI spec and Add one request by hand, and no Script type
+
+#### Scenario: a refused secret on a group's page offers Ask again
+- **GIVEN** a group whose secret's approval a person refused
+- **WHEN** its page is opened
+- **THEN** a banner says the secret was refused, with Ask again as its only button, and no banner says it waits for approval
+- **AND** pressing Ask again asks again for that approval
 
 #### Scenario: a group's page has Overview and Tools tabs
 - **GIVEN** the `billing` group with three tools and a call in the last 24 hours
