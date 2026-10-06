@@ -968,8 +968,22 @@ unchanged; and the exit codes are 0 ok, 2 usage, 3 daemon unreachable, 4 not
 found, 5 conflict, 6 invalid input, 7 upstream test failed, 8 secret, 9 approval
 pending (with the approval ids and the command that approves them), 10 git
 needed, 11 presence not confirmed, 12 desktop app unavailable and 13 a wait
-ran out. An operation that runs on after its request returns offers a status
-command and a way to wait for its result. The rule is policy over every spec
+ran out, with 1 for any other failure (a switched-off feature among them). An
+operation that runs on after its request returns offers a status command and a
+way to wait for its result.
+
+The contract MUST hold on every path, not only the daemon's answer: a name the
+command resolves to nothing, a refusal read by an older hand-written reader, and
+a daemon that cannot be started each print the same `--json` error envelope. A
+file or standard input that cannot be read or is not UTF-8 text exits 6 with
+`CLI_INVALID_INPUT` before anything is sent or started. An answer that waits on
+approvals exits 9 whether it names them as a list (`pending_approvals`,
+`approval_ids`), as `pending_approval_id`, or as an `approval_id` beside a
+`pending` state. A test command whose answer reports `ok: false` prints the
+whole answer and exits 7. `coffer --verbose` adds the request behind a daemon's
+refusal (method, path, status; never a header) to the text or the envelope.
+Every management command MUST be reachable from the visible help; only a
+command a program runs (`memory hook`, `proxy token`) is hidden. The rule is policy over every spec
 and is stated as such in [`.agents/openspec.md`](../../../.agents/openspec.md);
 this requirement is where it becomes testable, because the assertion runs over
 the entire command tree across every spec and so has no narrower home.
@@ -1001,6 +1015,21 @@ the entire command tree across every spec and so has no narrower home.
 - **WHEN** it is run with `--data -` on standard input, with `--data @file`, with JSON that does not parse, and against a daemon answering 404 with `--json`
 - **THEN** the first two send the body read, the third exits 6 with the code `CLI_INVALID_INPUT`, and the last exits 4 printing the daemon's error envelope and the exit code as JSON on standard error
 
+#### Scenario: every failure path keeps the JSON error contract
+- **GIVEN** a command run with `--json`
+- **WHEN** a name it resolves matches nothing, an older reader's route refuses, a `--data @file` is not UTF-8, or a test's answer says `ok: false`
+- **THEN** the first three print one `{"error", "exit_code"}` object on standard error and exit 4, 6 and 6 with nothing sent for the file, and the last prints the answer and exits 7
+
+#### Scenario: a single pending approval exits 9
+- **GIVEN** a change whose answer names one approval as `pending_approval_id`, or as `approval_id` beside a `pending` state
+- **WHEN** the command that made it ends
+- **THEN** it exits 9 printing `next: coffer approval approve <id>`
+
+#### Scenario: management commands are visible in help
+- **GIVEN** the CLI's live command tree
+- **WHEN** each registry command is looked up from the root help
+- **THEN** no management command sits under a hidden group or is hidden itself, and the only hidden leaves are the program-run `memory hook` and `proxy token`
+
 #### Scenario: a plain file is read with the reader's own tools
 - **GIVEN** a plain file that its owning spec declares directly readable or editable
 - **WHEN** a person or an agent needs it
@@ -1010,4 +1039,4 @@ the entire command tree across every spec and so has no narrower home.
 #### Scenario: a kept command surfaces the daemon's errors
 - **GIVEN** any failure surfaced by the management API,
 - **WHEN** it reaches a command that calls the daemon,
-- **THEN** the user sees an actionable message and a non-zero exit code; `--verbose` shows a full trace.
+- **THEN** the user sees an actionable message and a non-zero exit code; `--verbose` adds the request behind it (method, path and status)

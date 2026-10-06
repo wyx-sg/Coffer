@@ -347,7 +347,7 @@ coffer skill stage-archive [OPTIONS] ARCHIVE
 
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `ARCHIVE` <span class="cli-chip">参数</span> | path | 必填 | A .zip or .tar.gz of one or more skills |
+| `ARCHIVE` <span class="cli-chip">参数</span> | path | 必填 | A .zip or .skill archive of one or more skills |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## skill copy

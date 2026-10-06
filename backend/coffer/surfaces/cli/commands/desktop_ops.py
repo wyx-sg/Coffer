@@ -4,9 +4,11 @@ Spec secret "Approve from the command line with the person's own presence
 check" and desktop-app "Serve the command line's desktop requests". Revealing a
 secret and writing a master key backup take the person's presence check, and
 what they produce stays in the app: the value is shown in the Coffer window and
-the backup's passphrase is typed there. The command only learns whether the
-person went through with it. The updater lives in the app as well, so the
-update commands are requests to it too.
+the backup's passphrase is typed there. A reveal's and a backup's command
+learn whether the person went through with it — a backup's with the path the
+file was written to; the import command learns only that the app opened it.
+The updater lives in the app as well, so the update commands are requests to
+it too.
 """
 
 from __future__ import annotations
@@ -73,11 +75,24 @@ def backup_key(
     as_json: bool = _io.json_option(),
 ) -> None:
     """Open the master key backup in the Coffer app; the person checks presence,
-    types the passphrase and picks the folder there."""
+    types the passphrase and picks the folder there.
+
+    Waits until the person has written the backup, then prints where (exit 0);
+    closing the dialog, or no backup by --timeout, exits 11 with nothing
+    written. The path is the one the daemon wrote, reported by the app."""
     request = _desktop.run(
         {"op": "export_master_key"}, as_json=as_json, timeout=timeout, launch=not no_launch
     )
-    _ended(request, "the backup was written where the person chose", as_json=as_json)
+    written = (request.get("result") or {}).get("path")
+    if request["status"] == "done" and not written:
+        # Only a written file counts: an app that reports done with no path
+        # (one that predates this report) has opened the dialog, nothing more.
+        request = {
+            **request,
+            "status": "failed",
+            "message": "the app did not report a written backup; check it in the Coffer app",
+        }
+    _ended(request, f"the backup was written to {written}", as_json=as_json)
 
 
 @secrets.command("import-key")

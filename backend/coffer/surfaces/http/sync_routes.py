@@ -1,4 +1,4 @@
-"""/api/v1/sync — status, rounds, the remote, machines and the master key
+"""/api/v1/sync — status, rounds, the remote and machines
 (spec vault-sync; ADR sync-applies-clean-merges-and-stops-on-any-conflict).
 
 Sync is a cross-cutting service, not a resource kind, so it has its own
@@ -6,12 +6,10 @@ routes. What a round waiting for a person needs — the stopped files, a hold,
 a join and its choices, a rollback — is in ``sync_stop_routes``, on the same
 router.
 
-No route returns the master key: a backup is written only by the desktop
-app's presence-gated export (spec secret "Release plaintext only to a
-present human in the desktop app"). ``/key/import`` takes key material in, but
-installing a key is presence-gated too: it needs a grant for the fingerprint
-being installed. ``/key/import/preview`` says whose key a file holds before
-anything is replaced, and changes nothing.
+No route returns the master key. The key's own routes — its fingerprint, a
+key file's preview and the presence-gated import — are the secret store's,
+under ``/api/v1/secrets/key`` (``secret_key_routes``), so they answer whether
+or not the ``sync`` feature is on.
 """
 
 from __future__ import annotations
@@ -23,15 +21,9 @@ from fastapi import Query
 from coffer.application.sync.views import RoundFileDiff
 from coffer.domain.sync.remote import SyncRemote
 from coffer.surfaces.http import sync_stop_routes as _stop_routes  # noqa: F401  (registers)
-from coffer.surfaces.http.secret_boundary_wiring import get_presence_grants
 from coffer.surfaces.http.sync_dependencies import get_sync_service, router
 from coffer.surfaces.http.sync_projections import machine_out, remote_out, round_out, status_out
 from coffer.surfaces.http.sync_schemas import (
-    KeyFingerprintOut,
-    KeyImportIn,
-    KeyImportOut,
-    KeyMaterialIn,
-    KeyPreviewOut,
     MachineListOut,
     MachineOut,
     MachineRemovedOut,
@@ -229,47 +221,6 @@ async def restore_machine(machine_id: str) -> MachineOut:
     """Undo a retire: register the machine again with the descriptor it had.
     404 ``SYNC_MACHINE_NOT_FOUND`` when it was never registered here."""
     return machine_out(await get_sync_service().restore_machine(machine_id, actor=_ACTOR))
-
-
-# --- the master key -------------------------------------------------------------------
-
-
-@router.get("/key/fingerprint", response_model=KeyFingerprintOut)
-async def key_fingerprint() -> KeyFingerprintOut:
-    return KeyFingerprintOut(fingerprint=get_sync_service().key_fingerprint())
-
-
-@router.post("/key/import/preview", response_model=KeyPreviewOut)
-async def preview_key_import(body: KeyMaterialIn) -> KeyPreviewOut:
-    """Whose key a file holds and whether it is this machine's, changing nothing.
-
-    A passphrase-protected backup is not opened here: its fingerprint is read
-    from the file and checked against the key when it is imported.
-    """
-    preview = get_sync_service().preview_key(body.material)
-    return KeyPreviewOut(
-        fingerprint=preview.fingerprint,
-        current_fingerprint=preview.current,
-        same=preview.fingerprint == preview.current,
-        protected=preview.protected,
-    )
-
-
-@router.post("/key/import", response_model=KeyImportOut)
-async def import_key(body: KeyImportIn) -> KeyImportOut:
-    """Install a master key — only with a grant the desktop app signed for this
-    exact key, so a process that can reach the API cannot swap the key and then
-    forge grants with it. Redeemed before anything changes."""
-    service = get_sync_service()
-    fingerprint = service.preview_key(body.material).fingerprint
-    get_presence_grants().redeem("import_master_key", fingerprint, body.nonce, body.signature)
-    result = await service.import_key(body.material, body.passphrase, actor="desktop")
-    return KeyImportOut(
-        fingerprint=result.fingerprint,
-        replaced=result.replaced,
-        readable=result.readable,
-        locked_refs=result.locked_refs,
-    )
 
 
 __all__ = ["router"]

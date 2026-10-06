@@ -30,7 +30,7 @@ pub async fn import_master_key(
         let daemon = Daemon::find()?;
         let development = daemon.development()?;
         let preview = daemon.post(
-            "/api/v1/sync/key/import/preview",
+            "/api/v1/secrets/key/import/preview",
             &json!({"material": material}),
             DEFAULT_READ_TIMEOUT,
         )?;
@@ -49,7 +49,7 @@ pub async fn import_master_key(
         )?;
         let (nonce, signature) = daemon.grant(GrantOp::ImportMasterKey, &fingerprint)?;
         daemon.post(
-            "/api/v1/sync/key/import",
+            "/api/v1/secrets/key/import",
             &import_body(&material, passphrase.as_deref(), &nonce, &signature),
             IMPORT_TIMEOUT,
         )

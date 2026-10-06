@@ -531,7 +531,7 @@ coffer agent session all [OPTIONS]
 | --- | --- | --- | --- |
 | `--q` <span class="cli-chip">option</span> | text |  |  |
 | `--source` <span class="cli-chip">option</span> | text |  |  |
-| `--agent` <span class="cli-chip">option</span> | text |  | An agent uid |
+| `--agent` <span class="cli-chip">option</span> | text |  | Agent keys, comma-separated (e.g. claude_code,codex) |
 | `--limit` <span class="cli-chip">option</span> | integer |  |  |
 | `--cursor` <span class="cli-chip">option</span> | text |  |  |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

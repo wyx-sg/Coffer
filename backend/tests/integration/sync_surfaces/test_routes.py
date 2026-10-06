@@ -139,8 +139,8 @@ def test_remote_machines_join_and_key_routes(pair: tuple[Box, Box], tmp_path: Pa
         preview = c.get("/sync/join/preview").json()
         assert preview["kind"] in ("returning", "new")
         assert c.get("/sync/join-choices").json() == {"files": []}
-        assert c.get("/sync/key/fingerprint").json() == {"fingerprint": "abc123abc123"}
-        preview = c.post("/sync/key/import/preview", json={"material": "ok-key"}).json()
+        assert c.get("/secrets/key/fingerprint").json() == {"fingerprint": "abc123abc123"}
+        preview = c.post("/secrets/key/import/preview", json={"material": "ok-key"}).json()
         assert preview == {
             "fingerprint": "f11e" * 3,
             "current_fingerprint": "abc123abc123",
@@ -157,8 +157,8 @@ def test_remote_machines_join_and_key_routes(pair: tuple[Box, Box], tmp_path: Pa
                 "nonce": nonce,
                 "signature": sign_grant(gk, "import_master_key", "f11e" * 3, nonce),
             }
-            assert c.post("/sync/key/import", json={"material": "ok-key"}).status_code == 422
-            key = c.post("/sync/key/import", json={"material": "ok-key", **grant}).json()
+            assert c.post("/secrets/key/import", json={"material": "ok-key"}).status_code == 422
+            key = c.post("/secrets/key/import", json={"material": "ok-key", **grant}).json()
         finally:
             set_secret_boundary(None, None)
         assert key == {

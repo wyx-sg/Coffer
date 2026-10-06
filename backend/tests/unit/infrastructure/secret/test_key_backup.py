@@ -1,7 +1,7 @@
 """The passphrase-protected master key backup (``.cfk``).
 
 Spec secret "Release plaintext only to a present human in the desktop app" and
-vault-sync "Import a master key after showing whose key it is".
+"Import a master key after showing whose key it is".
 """
 
 from __future__ import annotations

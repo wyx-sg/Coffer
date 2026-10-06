@@ -100,6 +100,9 @@ coffer log audit --json
 | `--event-type` | One event type. |
 | `--since` | ISO 8601 lower bound, or an age such as `30m`, `1h`, `2d`. |
 | `--trace` | Only the rows of one request or turn: its trace id, the one the drawer, an `X-Coffer-Trace` header or a daemon log line shows. `coffer log mcp` and `coffer log daemon` take it too. |
+| `--q` | Free text, matched in any case against the event code, resource name, actor and details — the page's search box. |
+| `--q-type` | With `--q`: an event type that also matches (repeatable), as the page adds the events whose translated wording holds the text. |
+| `--cursor` | Read the next page: the `next_cursor` a previous read printed. A page with more after it ends with the `--cursor` value to use. |
 | `--limit` | 1–500, default 50. |
 | `--json` | Machine-readable output. |
 
@@ -110,10 +113,12 @@ Over REST the same query is `GET /api/v1/audit`, which also accepts `event_prefi
 ```sh
 coffer log mcp                              # every server, newest 20
 coffer log mcp --server filesystem          # one server
-coffer log mcp --status error --since 1d --json
+coffer log mcp --status failed --since 1d --json   # every outcome but ok
+coffer log mcp --agent-uid <agent-uid> --q timeout
+coffer log mcp --uid coffer                 # Coffer's own tools, or a deleted server's uid
 ```
 
-Without `--server` the output includes Coffer's own built-in tool calls (server `coffer`) and rows of servers since deleted (shown by their uid). `--limit` accepts 1–500. A [custom tool](/guides/custom-tools#environments)'s call also names the environment it was made in: the Activity page shows it beside the tool (`@live`) and in the drawer, and `--json` carries it as `environment`. No header, variable or credential is recorded.
+Without `--server` the output includes Coffer's own built-in tool calls (server `coffer`) and rows of servers since deleted (shown by their uid). `--status` takes `ok`, `error`, `timeout`, `denied`, or `failed` for every outcome but `ok`; `--agent-uid` keeps one agent's calls; `--q` searches the tool, error, session, outcome and server name; and `--uid` filters on the server uid the rows were written under, which reaches `coffer` and deleted servers that `--server` cannot name (`--uid` and `--q` read every server, so they do not combine with `--server`). `--limit` accepts 1–500 and `--cursor` reads the next page. A [custom tool](/guides/custom-tools#environments)'s call also names the environment it was made in: the Activity page shows it beside the tool (`@live`) and in the drawer, and `--json` carries it as `environment`. No header, variable or credential is recorded.
 
 An invocation has one of four statuses:
 
@@ -133,11 +138,12 @@ The invocation log records who called what, when, for how long and with what out
 ```sh
 coffer log daemon                           # newest 100 records
 coffer log daemon --errors --since 1h
+coffer log daemon --level warning --q sync --with-total
 coffer log daemon --json
 coffer path logs                            # the log directory and its daemon.log
 ```
 
-`coffer log daemon` reads the tail of `daemon.log` normalised the way the **Daemon log** tab shows it. `--limit` accepts 1–500. `coffer path logs` prints where the file is (`COFFER_LOG_DIR` moves it), so you can `grep` it directly.
+`coffer log daemon` reads the tail of `daemon.log` normalised the way the **Daemon log** tab shows it. `--level` keeps records at or above a severity (`debug`, `info`, `warning`, `error`, `critical`), `--q` searches the message, logger, level and folded lines, `--with-total` also counts the matches in the recent tail, and `--cursor` reads the next page. `--limit` accepts 1–500. The command reads through the daemon and starts it if it is down; `coffer path logs` prints where the file is (`COFFER_LOG_DIR` moves it) and needs no daemon, so you can `grep` it directly.
 
 ## Let an agent look into Coffer
 

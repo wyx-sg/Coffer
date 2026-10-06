@@ -66,7 +66,7 @@ def daemon(monkeypatch: pytest.MonkeyPatch) -> Any:
         started_at=datetime.now(tz=UTC),
         binary_path="/test",
     )
-    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (_Persistent(client), info))
+    monkeypatch.setattr(_cli_client, "client_or_exit", lambda **_kw: (_Persistent(client), info))
     with client:
         yield
 

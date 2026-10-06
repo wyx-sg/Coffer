@@ -132,7 +132,7 @@ def _daemon_answering(status: int, body: dict[str, Any], monkeypatch: pytest.Mon
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(status, json=body)
 
-    def fresh() -> tuple[httpx.Client, object]:
+    def fresh(**_kw: object) -> tuple[httpx.Client, object]:
         client = httpx.Client(
             base_url="http://daemon.invalid/api/v1", transport=httpx.MockTransport(handler)
         )
@@ -159,4 +159,5 @@ def test_a_kept_command_surfaces_the_daemons_error(monkeypatch: pytest.MonkeyPat
     verbose = _runner.invoke(app, ["--verbose", "secret", "list"])
     assert verbose.exit_code == plain.exit_code
     assert "the store is busy, retry shortly" in verbose.output
-    assert "Traceback" in verbose.output or "HTTPStatusError" in verbose.output
+    assert "GET /api/v1/secrets -> 409" in verbose.output
+    assert "GET /api/v1/secrets -> 409" not in plain.output

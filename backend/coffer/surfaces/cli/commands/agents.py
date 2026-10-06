@@ -211,7 +211,13 @@ SPECS = [
         "/agent-sessions",
         "Conversations · every agent's sessions",
         "Every agent's sessions in one list.",
-        query=(Q("q"), Q("source"), Q("agent", "An agent uid"), Q("limit", kind=int), Q("cursor")),
+        query=(
+            Q("q"),
+            Q("source"),
+            Q("agent", "Agent keys, comma-separated (e.g. claude_code,codex)"),
+            Q("limit", kind=int),
+            Q("cursor"),
+        ),
     ),
     RouteCommand(
         "agent session rename",

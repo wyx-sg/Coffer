@@ -300,6 +300,9 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Secrets · Not a secret | `POST /secrets/scan/ignore` | `coffer secret ignore` | `test_cli_parity.py` |
 | Secrets · Move into the store | `POST /secrets/import` | `coffer secret import` | `test_cli_parity.py` |
 | Settings · Security · Import a master key (desktop app, Touch ID) | `POST /desktop/requests` | `coffer secret import-key` | `test_cli_parity.py` |
+| Settings · Security · master key · fingerprint | `GET /secrets/key/fingerprint` | `coffer secret key-fingerprint` | `test_cli_parity.py` |
+| Settings · Security · master key · import (the app's request) | `POST /secrets/key/import` | `coffer secret key-install` | `test_cli_parity.py` |
+| Settings · Security · master key · import (review) | `POST /secrets/key/import/preview` | `coffer secret key-preview` | `test_cli_parity.py` |
 | Secrets · list | `GET /secrets` | `coffer secret list` | `test_secret_cmd.py` |
 | Secrets · Allow local programs (coffer run) | `POST /secrets/local-access/request` | `coffer secret local-access request` | `test_cli_parity.py` |
 | Secrets · Stop allowing local programs | `POST /secrets/local-access/revoke` | `coffer secret local-access revoke` | `test_cli_parity.py` |
@@ -381,9 +384,6 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Sync · Join · discard this machine's file | `POST /sync/join-choices/discard` | `coffer sync join-discard` | `test_cli_parity.py` |
 | Sync · Join · Ask an agent | `POST /sync/join-choices/handoff` | `coffer sync join-handoff` | `test_cli_parity.py` |
 | Sync · Join · review | `GET /sync/join/preview` | `coffer sync join-preview` | `test_cli_parity.py` |
-| Sync · Key · fingerprint | `GET /sync/key/fingerprint` | `coffer sync key fingerprint` | `test_cli_parity.py` |
-| Sync · Key · import | `POST /sync/key/import` | `coffer sync key import` | `test_cli_parity.py` |
-| Sync · Key · import (review) | `POST /sync/key/import/preview` | `coffer sync key import-preview` | `test_cli_parity.py` |
 | Sync · Machines · rename | `PATCH /sync/machines/self` | `coffer sync machine rename` | `test_cli_parity.py` |
 | Sync · Machines · Restore | `POST /sync/machines/{machine_id}/restore` | `coffer sync machine restore` | `test_cli_parity.py` |
 | Sync · Machines · Retire | `DELETE /sync/machines/{machine_id}` | `coffer sync machine retire` | `test_cli_parity.py` |
@@ -459,10 +459,11 @@ Plain files are read and edited with your own tools, and a few acts only make se
 | `get_daemon_info` | the page's plumbing: the page's handshake with the shell |
 | `import_master_key` | `coffer secret import-key` |
 | `install_update` | `coffer app update install` |
+| `master_key_backup_closed` | the page's plumbing: the backup dialog closing ends the command's waiting request |
 | `restart_daemon` | `coffer daemon restart` |
 | `reveal_secret` | `coffer secret reveal` |
 | `set_attention_count` | the page's plumbing: the menu bar's count, set by the page |
 | `set_ui_language` | the window: the window's interface language |
 | `set_update_auto_check` | `coffer app update auto-check` |
-| `show_daemon_log` | `coffer log daemon` |
+| `show_daemon_log` | `coffer path logs` |
 | `update_status` | `coffer app update status` |

@@ -75,7 +75,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `APPROVAL_NOT_PENDING` | 409 | 该审批已被批准、拒绝或取代。 | 无需操作；新的改动会产生新的审批。 |
 | `PRESENCE_GRANT_INVALID` | 403 | 一次查看、主密钥备份、主密钥导入或审批没有带有效的在场授权：缺失、过期、已用过、属于别的操作或目标，或者不是桌面应用签发的。 | 在 Coffer 桌面应用中操作，它会执行在场检查并签发授权。 |
 | `APPROVAL_TARGET_CHANGED` | 409 | 这条审批现在所指的目标已不是展示给本人的那个：在在场提示和批准请求之间，它的去处变了。什么都没批准；授权绑定的是旧目标。 | 重新查看这条审批（`coffer approval show <id>`），认得新目标的话再重新批准。 |
-| `DESKTOP_REQUEST_NOT_FOUND` | 404 | 没有这个 id 的桌面请求：命令行发给桌面应用的请求（批准、显示、主密钥备份、更新）从未存在或已过期（请求的有效期为两分钟）。 | 再运行一次命令；等待期间保持桌面应用打开。 |
+| `DESKTOP_REQUEST_NOT_FOUND` | 404 | 没有这个 id 的桌面请求：命令行发给桌面应用的请求（批准、显示、主密钥备份、更新）从未存在或已过期（请求的有效期为两分钟，主密钥备份的为十分钟）。 | 再运行一次命令；等待期间保持桌面应用打开。 |
 | `SECRET_NAME_INVALID` | 422 | 新建独立密钥的 ref 不是 `secret/<32 位十六进制>`，或它的标签超过 64 个字符、描述超过 200 个字符。 | 用 `coffer secret set --name "Orders DB"` 创建密钥，让 Coffer 来生成 id；缩短标签或描述。 |
 | `SECRET_NOT_FOUND` | 404 | `coffer run` 指定的独立密钥不在存储中。只有 `secret/<id>` 的值能这样解析；资源的密钥永远不能。 | 用 `coffer secret list` 核对 id，或用 `coffer secret set --name "<名称>"` 创建该密钥。 |
 
@@ -325,7 +325,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `10` | Waiting for git | 守护进程在运行，但在等 git：没有找到，或版本低于 2.40。命令在发送任何请求之前打印了原因和一段给智能体的提示词。见 [Coffer 需要 git](/zh/guides/troubleshooting#coffer-needs-git)。 |
 | `11` | Presence not confirmed | 交给桌面应用在场验证的步骤（`coffer approval approve`、`coffer secret reveal`、`coffer secret backup-key`）被取消、失败或超时，或者守护进程拒绝了授权（`PRESENCE_GRANT_INVALID`）。每条审批都继续等待。 |
 | `12` | Desktop app unavailable | 这一步需要桌面应用，而它没在运行且在这里无法启动（没有应用、不是 Mac，或用了 `--no-launch`）：`CLI_APP_UNAVAILABLE`。什么都没批准。打开应用后再运行一次命令。 |
-| `13` | Wait timed out | 用 `--wait` 发起的操作在 `--timeout` 之前没有完成（`CLI_WAIT_TIMEOUT`）。它可能仍在运行；用它的状态命令查看。 |
+| `13` | Wait timed out | 等待在操作完成之前就结束了：`coffer sync wait` 超过了它的 `--timeout`（`CLI_WAIT_TIMEOUT`）。这一轮可能仍在运行；用 `coffer sync status` 查看。 |
 
 ### 命令行自己设定的错误码 {#codes-the-command-line-sets}
 
@@ -335,10 +335,10 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | --- | --- | --- |
 | `CLI_INVALID_INPUT` | `6` | 命令自己的输入无效：`--data` 或 `--args` 不是 JSON、`@file` 读不了、`--set` 不是 `key=value`，或某个参数的值格式不对。什么都没发送。 |
 | `CLI_APP_UNAVAILABLE` | `12` | 桌面应用没在运行，也无法启动。 |
-| `CLI_WAIT_TIMEOUT` | `13` | 操作完成之前 `--wait` 就用完了。 |
+| `CLI_WAIT_TIMEOUT` | `13` | 操作完成之前 `coffer sync wait` 就超过了 `--timeout`。 |
 | `CLI_DESKTOP_REQUEST_FAILED` | `1` | 桌面应用无法执行一次更新请求（`coffer app update …`）。 |
 
-出错时传 `--verbose`（`coffer -v …`）可以打印完整的 traceback 和 HTTP 上下文。
+传 `--verbose`（`coffer -v …`）会在被拒绝时补上背后的请求——方法、路径和状态码，从不包含请求头——文本模式下是标准错误上的一行，`--json` 时是 `error` 旁边的一个 `request` 对象；意外错误还会打印 traceback。
 
 ## MCP shim 退出码 {#mcp-shim-exit-codes}
 

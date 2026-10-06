@@ -961,9 +961,18 @@ audit log (`GET /api/v1/audit`), `coffer log mcp` reads the invocation log, and
 `--server`, `coffer log mcp` reads the same cross-server log the Tool calls tab
 renders (`GET /api/v1/mcp/invocations`), Coffer's own built-in calls (`coffer`)
 and deleted servers' rows (`deleted:<name>`) included; with `--server <name>`, it
-reads that server's log. Each reader takes `--since`, `--limit` and `--json`,
-plus the filter its record affords: `--status` for invocations, and `--errors`
-for the daemon log.
+reads that server's log. Each reader takes `--since`, `--limit`, `--cursor`
+and `--json`, and MUST offer every filter the page sends for its record: `--q`
+on all three (with repeatable `--q-type` on the audit log), `--status`,
+`--agent-uid` and `--uid` on invocations, and `--errors`, `--level` and
+`--with-total` on the daemon log. A page with more after it ends with the
+`--cursor` value that reads the next one. `coffer log daemon` reads through the
+daemon; the file itself, with no daemon, is the one `coffer path logs` names.
+
+#### Scenario: every filter the Activity page sends has a reader option
+- **GIVEN** the Activity page's search, event-type, agent, server-uid, severity, paging and count filters
+- **WHEN** `coffer log audit`, `coffer log mcp` and `coffer log daemon` are run with the matching options
+- **THEN** each request carries the same query parameters the page sends, and a combination the route cannot serve (`--q-type` without `--q`, `--server` with `--uid` or `--q`) exits 2 before any request
 
 #### Scenario: the command-line readers still read the records
 - **GIVEN** a running daemon that has recorded an audit entry, MCP invocations on

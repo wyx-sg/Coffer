@@ -72,7 +72,6 @@ GROUP_HELP: dict[str, str] = {
     "skill orphan": "Folders in the skills store that no skill owns.",
     "skill source": "Where a skill came from: check, change, merge updates.",
     "skill update-check": "How often skills' sources are checked for updates.",
-    "sync key": "The master key, as sync moves it between machines (never shown).",
     "sync machine": "One machine of the vault: rename, retire, restore.",
     "sync remote": "The git remote the vault syncs with.",
 }

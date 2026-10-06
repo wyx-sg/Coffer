@@ -208,7 +208,8 @@ async def test_a_start_that_times_out_is_masked_and_leaks_nothing(
     raw = _assert_masked_log(name, canary)
     assert f"hanging with {MASK}".encode() in raw
     assert b" coffer error did not start within 1s" in raw
-    assert me.num_fds() == fds
+    # Growth is the leak; other xdist work may close descriptors meanwhile.
+    assert me.num_fds() <= fds
 
 
 @pytest.mark.asyncio
@@ -228,7 +229,8 @@ async def test_a_cancelled_start_flushes_the_masked_tail_and_leaks_nothing(
     raw = upstream_log_path(name).read_bytes()
     assert canary.encode() not in raw
     assert f"hanging with {MASK}".encode() in raw
-    assert me.num_fds() == fds
+    # Growth is the leak; other xdist work may close descriptors meanwhile.
+    assert me.num_fds() <= fds
 
 
 @pytest.mark.asyncio
@@ -251,7 +253,8 @@ async def test_a_grandchild_holding_stderr_open_does_not_hold_up_close(
             with contextlib.suppress(psutil.NoSuchProcess):
                 proc.kill()
     _assert_masked_log(name, canary)
-    assert me.num_fds() == fds
+    # Growth is the leak; other xdist work may close descriptors meanwhile.
+    assert me.num_fds() <= fds
 
 
 @pytest.mark.asyncio

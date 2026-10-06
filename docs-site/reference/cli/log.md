@@ -43,6 +43,8 @@ coffer log audit [OPTIONS]
 | `--limit` <span class="cli-chip">option</span> | integer (1-500) | `50` | Most entries to print |
 | `--cursor` <span class="cli-chip">option</span> | text |  | Read the page after this one: the next_cursor a previous read printed |
 | `--trace` <span class="cli-chip">option</span> | text |  | Only records of one request or turn: the trace id an audit row, an MCP call, a log line or an X-Coffer-Trace header carries |
+| `--q` <span class="cli-chip">option</span> | text |  | Only the records holding this text, in any case (the page's search box): event code, resource name, actor and details |
+| `--q-type` <span class="cli-chip">option</span> | text (repeatable) |  | With --q: an event type that also matches, as the page adds the events whose translated wording holds the text (repeatable) |
 | `--json` <span class="cli-chip">option</span> | flag |  | JSON output for scripts |
 
 ## log mcp
@@ -62,18 +64,21 @@ coffer log mcp [OPTIONS]
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `--server` <span class="cli-chip">option</span> | text |  | One server; omit for every server |
-| `--status` <span class="cli-chip">option</span> | text |  | ok \| error |
+| `--status` <span class="cli-chip">option</span> | text |  | ok \| error \| timeout \| denied, or failed for every outcome but ok |
 | `--since` <span class="cli-chip">option</span> | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
 | `--limit` <span class="cli-chip">option</span> | integer (1-500) | `20` | Most calls to print |
 | `--cursor` <span class="cli-chip">option</span> | text |  | Read the page after this one: the next_cursor a previous read printed |
 | `--trace` <span class="cli-chip">option</span> | text |  | Only records of one request or turn: the trace id an audit row, an MCP call, a log line or an X-Coffer-Trace header carries |
+| `--q` <span class="cli-chip">option</span> | text |  | Only the records holding this text, in any case (the page's search box): tool, error, session, outcome and server name |
+| `--agent-uid` <span class="cli-chip">option</span> | text |  | Only the calls made by this agent's sessions (its uid) |
+| `--uid` <span class="cli-chip">option</span> | text |  | Only the calls written under this server uid — the reserved coffer, or a server since deleted, which --server cannot name |
 | `--json` <span class="cli-chip">option</span> | flag |  | JSON output for scripts |
 
 ## log daemon
 
 Read the tail of the daemon log, newest first, normalised as the Activity page shows it.
 
-``--trace`` keeps the lines of one request or turn, the same id ``coffer log audit --trace`` and ``coffer log mcp --trace`` filter on.
+``--trace`` keeps the lines of one request or turn, the same id ``coffer log audit --trace`` and ``coffer log mcp --trace`` filter on. This reads through the daemon, starting it if it is not running; to read the file with no daemon, open the one ``coffer path logs`` names.
 
 <p class="cli-label">Synopsis</p>
 
@@ -89,4 +94,8 @@ coffer log daemon [OPTIONS]
 | `--errors` <span class="cli-chip">option</span> | flag |  | Only errors |
 | `--limit` <span class="cli-chip">option</span> | integer (1-500) | `100` | Most records to print |
 | `--trace` <span class="cli-chip">option</span> | text |  | Only records of one request or turn: the trace id an audit row, an MCP call, a log line or an X-Coffer-Trace header carries |
+| `--level` <span class="cli-chip">option</span> | text |  | Only records at or above this severity: debug, info, warning, error, critical |
+| `--q` <span class="cli-chip">option</span> | text |  | Only the records holding this text, in any case (the page's search box): message, logger, level and folded lines |
+| `--cursor` <span class="cli-chip">option</span> | text |  | Read the page after this one: the next_cursor a previous read printed |
+| `--with-total` <span class="cli-chip">option</span> | flag |  | Also count the matching records in the log's recent tail |
 | `--json` <span class="cli-chip">option</span> | flag |  | JSON output for scripts |

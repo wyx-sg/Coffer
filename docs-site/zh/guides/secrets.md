@@ -262,7 +262,7 @@ Coffer 每次为了使用而解密一个密钥——服务器启动、消息渠�
 
 在场验证守护的是“让明文出去”的操作，而不是主密钥本身：这就是守护进程从不等你的原因。
 
-**在桌面应用中备份主密钥**（设置 › 安全）：选一个口令，用 Touch ID 或登录密码确认，选一个文件夹，应用就会把受口令保护的 `coffer-master-key.cfk` 以权限 `0600` 写进去，并以 `master_key_exported` 记入审计。`coffer secret backup-key` 会在应用里打开同样的备份流程，口令在那里输入、文件夹在那里选择；没有任何命令或浏览器页面自己写出备份。在另一台机器上用**设置 › 安全**里的**导入主密钥**（或用 `coffer secret import-key` 在应用里打开它；在应用里同样要 Touch ID）安装备份——见[密钥存储 → 把主密钥带到另一台机器](/zh/guides/secret-store#carry-the-key-to-another-machine)。在签名发行版中，钥匙串是唯一的副本，所以一定要做备份。
+**在桌面应用中备份主密钥**（设置 › 安全）：选一个口令，用 Touch ID 或登录密码确认，选一个文件夹，应用就会把受口令保护的 `coffer-master-key.cfk` 以权限 `0600` 写进去，并以 `master_key_exported` 记入审计。`coffer secret backup-key` 会在应用里打开同样的备份流程，口令在那里输入、文件夹在那里选择，然后等待：文件写出后它打印写到了哪里（退出 0），如果你关闭对话框，它以 `11` 退出，什么都没写。没有任何命令或浏览器页面自己写出备份。在另一台机器上用**设置 › 安全**里的**导入主密钥**（或用 `coffer secret import-key` 在应用里打开它；在应用里同样要 Touch ID）安装备份——见[密钥存储 → 把主密钥带到另一台机器](/zh/guides/secret-store#carry-the-key-to-another-machine)。在签名发行版中，钥匙串是唯一的副本，所以一定要做备份。
 
 ## 相关 {#related}
 

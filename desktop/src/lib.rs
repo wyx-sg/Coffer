@@ -122,6 +122,7 @@ pub fn run() {
             tray::set_attention_count,
             secrets::reveal_secret,
             secrets::export_master_key_backup,
+            desktop_requests::master_key_backup_closed,
             secrets::approve_pending,
             secrets::approve_pending_batch,
             secrets_import::import_master_key,

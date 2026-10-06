@@ -1,25 +1,45 @@
-"""The master-key half of ``SyncService`` (spec vault-sync "Import a master
-key after showing whose key it is").
+"""This machine's master key: its fingerprint, a key file previewed beside it,
+and installing one (spec secret "Import a master key after showing whose key
+it is").
 
-Split out along a real seam: a round never touches the key, and this half
-never touches a round. It reports this machine's key fingerprint, previews a
-key file beside it, and installs one. The key crosses nothing here but the
-port: no route or return value carries it, and the passphrase that opens a
-protected backup is used once and neither stored nor recorded.
+The key belongs to the secret store, so this works whether or not the
+experimental ``sync`` feature is on; sync only reads the fingerprint for each
+machine's descriptor, through the same resolved key. The key crosses nothing
+here but the port: no route or return value carries it, and the passphrase that
+opens a protected backup is used once and neither stored nor recorded.
+Installing a key is presence-gated at the route, which redeems the desktop
+app's grant before :meth:`MasterKeyService.import_key` runs.
 """
 
 from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from coffer.domain.audit import AuditEventType
 from coffer.domain.sync.errors import MasterKeyFileInvalid
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from coffer.application.audit_service import AuditService
-    from coffer.application.sync.service_ports import MasterKeyPort, SecretFilesPort
+
+
+class MasterKeyPort(Protocol):
+    """The master key as it is resolved once per daemon start."""
+
+    def export_key(self) -> bytes | None: ...
+    def install_key(self, key: bytes) -> None: ...
+    def fingerprint(self) -> str | None: ...
+    # A key file's (fingerprint, needs a passphrase), unopened; and its key, opened.
+    def peek_backup(self, material: str) -> tuple[str, bool]: ...
+    def open_backup(self, material: str, passphrase: str | None) -> bytes: ...
+
+
+class KeyedSecretFilesPort(Protocol):
+    """The stored ciphertext files, and which of them the key cannot open."""
+
+    def count(self) -> int: ...
+    def locked_refs(self) -> list[str]: ...
 
 
 @dataclass(frozen=True)
@@ -46,18 +66,19 @@ class KeyImport:
     locked_refs: list[str]
 
 
-class KeyMixin:
-    """Declares what it borrows from ``SyncService``, which assigns each."""
-
-    _master_key: MasterKeyPort
-    _secrets: SecretFilesPort
-    _audit: AuditService
+class MasterKeyService:
+    def __init__(
+        self, *, master_key: MasterKeyPort, secrets: KeyedSecretFilesPort, audit: AuditService
+    ) -> None:
+        self._master_key = master_key
+        self._secrets = secrets
+        self._audit = audit
 
     def key_fingerprint(self) -> str | None:
         """A short SHA-256 fingerprint of the master key, never the key.
 
         Two machines showing the same fingerprint hold the same key; it rides
-        in each machine's descriptor, so the machines list can say that
+        in each machine's sync descriptor, so the machines list can say that
         another machine's secrets will not decrypt here.
         """
         return self._master_key.fingerprint()
@@ -104,4 +125,10 @@ class KeyMixin:
         )
 
 
-__all__ = ["KeyImport", "KeyMixin", "KeyPreview"]
+__all__ = [
+    "KeyImport",
+    "KeyPreview",
+    "KeyedSecretFilesPort",
+    "MasterKeyPort",
+    "MasterKeyService",
+]

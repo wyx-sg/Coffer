@@ -1,5 +1,5 @@
-"""Importing another machine's master key (spec vault-sync "Import a master
-key after showing whose key it is"): previewed first, a protected backup opens
+"""Importing another machine's master key (spec secret "Import a master key
+after showing whose key it is"): previewed first, a protected backup opens
 only with its passphrase, and the replaced key is never overwritten."""
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from cryptography.fernet import Fernet
 
-from coffer.application.sync.service_key import KeyMixin
+from coffer.application.secret.master_key_import import MasterKeyService
 from coffer.domain.errors import CofferError
 from coffer.infrastructure.secret import key_backup
 from coffer.infrastructure.sync.master_key import ResolvedMasterKey, SecretFiles
@@ -26,11 +26,14 @@ class _Audit:
         self.rows.append({"event": event, **kw})
 
 
-class _Keys(KeyMixin):
+class _Keys(MasterKeyService):
     def __init__(self, home: Path) -> None:
-        self._master_key = ResolvedMasterKey(make_master_key_manager(home))
-        self._secrets = SecretFiles(self._master_key, home=home)
-        self._audit = _Audit()  # type: ignore[assignment]
+        key = ResolvedMasterKey(make_master_key_manager(home))
+        super().__init__(
+            master_key=key,
+            secrets=SecretFiles(key, home=home),
+            audit=_Audit(),  # type: ignore[arg-type]
+        )
 
 
 def _home_with_key(home: Path) -> bytes:
@@ -43,7 +46,7 @@ def _home_with_key(home: Path) -> bytes:
 
 
 @pytest.mark.acceptance(
-    spec="vault-sync", scenario="an import shows whose key the file holds before replacing"
+    spec="secret", scenario="an import shows whose key the file holds before replacing"
 )
 def test_a_preview_names_both_keys_and_changes_nothing(tmp_path: Path) -> None:
     own = _home_with_key(tmp_path)
@@ -57,7 +60,7 @@ def test_a_preview_names_both_keys_and_changes_nothing(tmp_path: Path) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="vault-sync", scenario="a protected key file opens only with its passphrase"
+    spec="secret", scenario="a protected key file opens only with its passphrase"
 )
 async def test_a_protected_backup_imports_only_with_its_passphrase(tmp_path: Path) -> None:
     own = _home_with_key(tmp_path)

@@ -5,7 +5,7 @@ CLI surface: 0 success, 1 generic, 2 invalid usage (Typer's default),
 3 daemon unreachable, 4 not found, 5 conflict, 6 invalid input,
 7 upstream test failed, 8 secret issue, 9 approval pending, 10 the daemon
 waits for git, 11 a presence check was not confirmed, 12 the desktop app is
-not available, 13 a ``--wait`` ran out (spec resource-framework "Offer every
+not available, 13 a wait (``sync wait --timeout``) ran out (spec resource-framework "Offer every
 management operation on the command line").
 """
 
@@ -37,5 +37,5 @@ class ExitCode(IntEnum):
     PRESENCE_NOT_CONFIRMED = 11
     #: The desktop app is not running and could not be started here.
     APP_UNAVAILABLE = 12
-    #: An operation started with ``--wait`` had not finished by ``--timeout``.
+    #: A wait (``coffer sync wait --timeout``) ended before the operation finished.
     WAIT_TIMEOUT = 13

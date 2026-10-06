@@ -10,6 +10,7 @@ import typer
 from coffer import __version__
 from coffer.surfaces.cli import (
     _client,
+    _io,
     cli_cmd,
     commands,
     config_cmd,
@@ -43,7 +44,8 @@ def root(
         False,
         "--verbose",
         "-v",
-        help="Show full tracebacks and HTTP request/response context on error.",
+        help="On an error, also show the request behind it (method, path, status) "
+        "and, for an unexpected one, the traceback.",
     ),
     _version: bool = typer.Option(
         False,
@@ -56,6 +58,7 @@ def root(
     """Coffer — local-first AI agent vault."""
     ctx.ensure_object(dict)
     ctx.obj["verbose"] = verbose
+    _io.set_verbose(verbose)
 
 
 groups.set_root(app)
@@ -92,7 +95,7 @@ def run() -> None:
     try:
         app()
     except httpx.TransportError as err:
-        sys.exit(int(_client.render_http_error(err, verbose=False)))
+        sys.exit(int(_client.render_http_error(err, verbose=_io.verbose())))
 
 
 if __name__ == "__main__":
