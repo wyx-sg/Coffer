@@ -49,6 +49,18 @@ pub fn layout(
     (container, [x, x + spacing, x + 2.0 * spacing])
 }
 
+/// The title strip's centre line, px from the window's top edge: half the
+/// 38px `--titlebar-inset` (index.css).
+pub const STRIP_CENTRE: f64 = 19.0;
+
+/// The bottom edge, in window coordinates (origin bottom-left), that centres a
+/// button `height` tall on the strip's centre line. Resizing the container is
+/// not enough on its own: on current macOS the buttons keep their own y in it
+/// and stay at the system's height, so the shell places them on y itself.
+pub fn button_bottom(window_height: f64, height: f64) -> f64 {
+    window_height - STRIP_CENTRE - height / 2.0
+}
+
 /// Whether two coordinates are the same point on screen.
 pub fn same(a: f64, b: f64) -> bool {
     (a - b).abs() < 0.5
@@ -69,7 +81,7 @@ mod macos {
     use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
     use tauri::{Manager, Runtime, WebviewWindow};
 
-    use super::{layout, same, Frame};
+    use super::{button_bottom, layout, same, Frame};
 
     #[link(name = "AppKit", kind = "framework")]
     extern "C" {
@@ -155,8 +167,22 @@ mod macos {
         }
         for (button, x) in [close, mini, zoom].iter().zip(xs) {
             let frame: NSRect = msg_send![&**button, frame];
-            if !same(frame.origin.x, x) {
-                let origin = NSPoint::new(x, frame.origin.y);
+            // The button's spot in window coordinates, converted into its
+            // superview's, which handles a flipped superview too.
+            let in_window = NSRect::new(
+                NSPoint::new(
+                    0.0,
+                    button_bottom(window_frame.size.height, frame.size.height),
+                ),
+                frame.size,
+            );
+            let Some(parent): Option<Retained<AnyObject>> = msg_send![&**button, superview] else {
+                continue;
+            };
+            let local: NSRect =
+                msg_send![&*parent, convertRect: in_window, fromView: None::<&AnyObject>];
+            if !same(frame.origin.x, x) || !same(frame.origin.y, local.origin.y) {
+                let origin = NSPoint::new(x, local.origin.y);
                 let _: () = msg_send![&**button, setFrameOrigin: origin];
             }
         }
@@ -302,6 +328,13 @@ mod tests {
     fn the_layout_follows_the_window_height() {
         let (container, _) = layout((20.0, 17.0), 600.0, CONTAINER, CLOSE, 20.0);
         assert_eq!(container.y, 567.0);
+    }
+
+    /// A 16px close frame centred on y 19 spans 11..27 from the top.
+    #[test]
+    fn a_button_is_centred_on_the_strip() {
+        assert_eq!(button_bottom(900.0, 16.0), 900.0 - 27.0);
+        assert_eq!(button_bottom(600.0, 14.0), 600.0 - 26.0);
     }
 
     #[test]
