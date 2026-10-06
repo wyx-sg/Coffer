@@ -27,7 +27,7 @@ from coffer.application.mcp.custom_tool_ports import (
     ToolTestOutcome,
 )
 from coffer.application.mcp.custom_tool_secrets import env_secret_resolver
-from coffer.application.mcp.custom_tool_views import GroupView, GroupViewer
+from coffer.application.mcp.custom_tool_views import EnvironmentView, GroupView, GroupViewer
 from coffer.application.mcp.gateway_tool_gate import http_api_transport
 from coffer.application.resource_service import ResourceService
 from coffer.application.secret.resolver import SecretResolver
@@ -41,6 +41,7 @@ from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
 from coffer.domain.mcp.http_api_environment import (
     ENVIRONMENT_ARG,
     LIFTED_ENVIRONMENT,
+    HttpApiEnvironment,
     select_environment,
 )
 from coffer.domain.mcp.http_api_render import ArgumentsInvalid
@@ -284,6 +285,21 @@ class CustomToolService:
         """The checks a call makes, in its order, then one request: the
         environment, the arguments against the schema, then the environment's
         secrets — each refused before anything is sent."""
+        env, args = self.choose(resource, transport, tool, arguments, environment)
+        overlay = await env_secret_resolver(self._resolver(), resource)(env)
+        outcome = await self._runner.run(transport, env, tool, args, overlay)
+        return replace(outcome, environment=env.name)
+
+    def choose(
+        self,
+        resource: Resource,
+        transport: HttpApiTransport,
+        tool: HttpApiTool,
+        arguments: dict[str, Any],
+        environment: str | None,
+    ) -> tuple[HttpApiEnvironment, dict[str, Any]]:
+        """The environment a test names and its arguments checked against the
+        tool's schema — the gateway's rules, before any secret is read."""
         chosen = dict(arguments)
         if environment is not None:
             chosen[ENVIRONMENT_ARG] = environment
@@ -291,9 +307,11 @@ class CustomToolService:
         errors = validate(tool.input_schema, args)
         if errors:
             raise ArgumentsInvalid(errors)
-        overlay = await env_secret_resolver(self._resolver(), resource)(env)
-        outcome = await self._runner.run(transport, env, tool, args, overlay)
-        return replace(outcome, environment=env.name)
+        return env, args
+
+    async def secret_states(self, resource: Resource, env: HttpApiEnvironment) -> EnvironmentView:
+        """``env``'s secret headers' states (presence and approvals, no value)."""
+        return await self._viewer.environment(resource, env)
 
     async def test_unsaved(
         self,

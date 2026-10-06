@@ -1818,6 +1818,7 @@
     "APPROVAL_TARGET_CHANGED": "The destination changed while you were approving. Check the new target and approve again.",
     "CUSTOM_TOOL_ARGUMENTS_INVALID": "Some arguments don't match the tool's schema; nothing was sent.",
     "CUSTOM_TOOL_ENVIRONMENT_DISABLED": "That environment is off. Turn it on, or choose another.",
+    "CUSTOM_TOOL_REQUEST_INVALID": "The request cannot be built in that environment: it uses a variable the environment does not define, or a body template that is not JSON.",
     "CUSTOM_TOOL_ENVIRONMENT_EXISTS": "This group already has an environment with that name.",
     "CUSTOM_TOOL_ENVIRONMENT_NOT_FOUND": "This group has no environment with that name.",
     "CUSTOM_TOOL_ENVIRONMENT_REQUIRED": "Choose an environment: this group has more than one turned on.",
@@ -4728,7 +4729,7 @@
     }
   },
   "customTools": {
-    "subtitle": "HTTP API requests Coffer makes for your agents, in groups that share a base URL and a secret.",
+    "subtitle": "HTTP API requests Coffer makes for your agents, in groups. A group can have several environments, each with its own base URL, headers and secret.",
     "title": "Custom tools",
     "tabs": {
       "overview": "Overview",
@@ -4754,7 +4755,9 @@
       "lastCallFailed": "Last call failed",
       "hostTools_one": "{{host}} · {{count}} tool",
       "hostTools_other": "{{host}} · {{count}} tools",
-      "allAgents": "All agents"
+      "allAgents": "All agents",
+      "envsTools_one": "{{envs}} environments · {{count}} tool",
+      "envsTools_other": "{{envs}} environments · {{count}} tools"
     },
     "add": {
       "action": "Add custom tool",
@@ -4770,9 +4773,9 @@
       "newGroupSub": "Its own name, base URL and secret",
       "noGroupMatches": "No group matches",
       "startNew": "Start the new group",
-      "existingNote": "A request added to {{group}} uses its base URL and secret. Import an OpenAPI spec only when you create a new group.",
+      "existingNote": "A request added to {{group}} runs in its environments, each with its own base URL and secret. Import an OpenAPI spec only when you create a new group.",
       "change": "Change",
-      "handSummary": "Base URL and auth come from the group",
+      "handSummary": "Base URL and auth come from the group's environments",
       "importSummary": "Each operation you pick becomes one tool in the new group",
       "addTo": "Add to {{group}}",
       "into": "into {{group}}",
@@ -4859,7 +4862,7 @@
     },
     "newGroup": {
       "title": "New group",
-      "subtitle": "A group shares one base URL, one auth header and who can use its tools.",
+      "subtitle": "A group holds its environments — each with a base URL and headers, a secret among them — and who can use its tools. It starts with one environment.",
       "create": "Create group"
     },
     "group": {
@@ -4902,7 +4905,8 @@
       "offTitle": "Off — no agent can use it",
       "offBody_one": "Turning it on gives its {{count}} tool that is on back to the agents it reaches.",
       "offBody_other": "Turning it on gives its {{count}} tools that are on back to the agents it reaches.",
-      "turnOn": "Turn on"
+      "turnOn": "Turn on",
+      "failingTitleGroup": "Calls to {{group}} are failing"
     },
     "definition": {
       "title": "Definition",
@@ -4966,7 +4970,10 @@
       "requestHelpArgs": "Added to {{url}}. {{holes}} come from the arguments.",
       "changesDataHelpShort": "On for POST, PUT, PATCH and DELETE. Agents get it as the tool's read-only or destructive hint.",
       "fromGroup": "from the group",
-      "addHeaderThis": "Add header for this request"
+      "addHeaderThis": "Add header for this request",
+      "requestHelpEnv": "Added to {{environment}}'s base URL {{url}}.",
+      "requestHelpNoEnv": "Added to the base URL of the environment the request runs in.",
+      "fromEnvironment": "from {{environment}}"
     },
     "test": {
       "title": "Test",
@@ -4997,7 +5004,9 @@
         "connect": "Coffer couldn't open a connection from this Mac{{detail}}. If you use a VPN or proxy, check it reaches {{host}}, then run again. Nothing was saved.",
         "blocked": "Before a group is saved, Coffer tests a base URL only when it resolves to a public address. Add the tool, then test it from the group.",
         "rejected": "The API rejected {{secret}}. If it has expired, change its value; every tool in {{group}} uses the same secret.",
-        "httpError": "The API answered with an error; its response is below. Check the path and the argument values, then run again. Nothing was saved."
+        "httpError": "The API answered with an error; its response is below. Check the path and the argument values, then run again. Nothing was saved.",
+        "rejectedEnv": "The API rejected {{secret}}. If it has expired, change its value; every tool of this group uses it in {{environment}}.",
+        "timeoutEnv": "Coffer stopped waiting after {{environment}}'s own {{seconds}} s timeout. If the API is only slow, raise it under Environments; if it should answer quickly, hand it to an agent to find out why. Nothing was saved."
       },
       "cutShort": "Cut short at {{size}}.",
       "cutShortBody": "Agents get the same first {{size}}. Narrow the request with arguments, or return less from the API.",
@@ -5010,7 +5019,14 @@
         "add": "Runs once with {{secret}}; nothing is saved until you add the tool."
       },
       "environment": "Environment",
-      "ranIn": "Ran in {{environment}}"
+      "ranIn": "Ran in {{environment}}",
+      "pickEnvironment": "Pick an environment",
+      "envNone": "No environment of this group is on, so nothing runs. Turn one on under Environments.",
+      "env": {
+        "disabled": "Environment {{environment}} is off, so nothing runs. Pick one that is on, or turn it back on under Environments.",
+        "deleted": "Environment {{environment}} was deleted, so nothing runs. Pick another environment."
+      },
+      "responseHeaders": "Response headers"
     },
     "editGroup": {
       "title": "Edit {{name}}",
@@ -5051,7 +5067,7 @@
     },
     "firstRun": {
       "title": "No custom tools yet",
-      "body": "A custom tool is one HTTP request Coffer makes for your agents — no MCP server to run. Tools live in groups that share a base URL, one secret and who can use them.",
+      "body": "A custom tool is one HTTP request Coffer makes for your agents — no MCP server to run. Tools live in groups; a group holds its environments (each with its own base URL, headers and secret) and who can use its tools.",
       "importBody": "Pick operations from a URL or a file; the import becomes a group.",
       "importPoint": "Re-import later to pick up changes.",
       "handBody": "Method, URL template, headers, body and arguments.",
@@ -5103,6 +5119,21 @@
         "missing": "Secret missing",
         "pending_approval": "Waiting for approval",
         "none": "No secret"
+      }
+    },
+    "preview": {
+      "title": "Request in {{environment}}",
+      "secretState": {
+        "present": "Set",
+        "missing": "Missing",
+        "pending_approval": "Waiting for approval",
+        "none": "No secret"
+      },
+      "variables": "Variables:",
+      "missingVariables": "{{environment}} defines no {{names}}, so the request cannot be built there.",
+      "timeout": {
+        "environment": "Timeout {{seconds}} s ({{environment}}'s own)",
+        "group": "Timeout {{seconds}} s (the group's)"
       }
     }
   },

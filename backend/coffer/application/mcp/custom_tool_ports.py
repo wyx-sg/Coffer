@@ -7,7 +7,7 @@ it is the group's reach (spec mcp-gateway "Switch off one custom tool").
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol
 
@@ -74,6 +74,8 @@ class ToolTestOutcome:
     failure: str | None = None
     #: The environment the request was made in.
     environment: str | None = None
+    #: The allow-listed response headers (request ids, server, date), masked.
+    response_headers: dict[str, str] = field(default_factory=dict)
 
 
 class CustomToolRunnerPort(Protocol):

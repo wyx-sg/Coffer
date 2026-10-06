@@ -1,4 +1,6 @@
-"""``/api/v1/custom-tools/{name}/environments`` and a saved tool's test.
+"""``/api/v1/custom-tools/{name}/environments``, a saved tool's test and the
+request previews (spec mcp-gateway "Preview a custom tool's request without
+sending it").
 
 Spec mcp-gateway "Keep a custom-tool group's environments in the group" and
 "Manage custom tools through REST and the Custom tools page"; design
@@ -13,27 +15,44 @@ from typing import Any
 from fastapi import APIRouter, Depends
 
 from coffer.application.mcp.custom_tool_environments import CustomToolEnvironments
+from coffer.application.mcp.custom_tool_preview import CustomToolPreviews
 from coffer.application.mcp.custom_tools import CustomToolService
 from coffer.domain.errors import ConfigValidationError
 from coffer.surfaces.http.dependencies import get_actor
 from coffer.surfaces.http.mcp.custom_tool_dependencies import (
     get_custom_tool_environments,
+    get_custom_tool_previews,
     get_custom_tool_service,
+)
+from coffer.surfaces.http.mcp.custom_tool_preview_schemas import (
+    CustomToolRequestPreviewOut,
+    preview_out,
 )
 from coffer.surfaces.http.mcp.custom_tool_schemas import (
     CustomToolEnvironmentIn,
     CustomToolEnvironmentPatch,
     CustomToolGroupOut,
     CustomToolSavedTestIn,
+    CustomToolTestIn,
     CustomToolTestOut,
 )
 from coffer.surfaces.http.mcp.custom_tool_test_out import test_out
 from coffer.surfaces.http.mcp.custom_tool_views_out import group_out
+from coffer.surfaces.http.secret_notes_wiring import optional_secret_notes
 
 router = APIRouter()
 
+
+def _label_of(ref: str) -> str | None:
+    """A secret's label from its notes (never its value)."""
+    notes = optional_secret_notes()
+    note = notes.get(ref) if notes is not None else None
+    return note.label if note is not None else None
+
+
 _envs = Depends(get_custom_tool_environments)
 _service = Depends(get_custom_tool_service)
+_previews = Depends(get_custom_tool_previews)
 _actor = Depends(get_actor)
 
 
@@ -78,3 +97,24 @@ async def test_saved_tool(
     saved = transport.tool(tool)
     outcome = await svc.test_saved(name, tool, body.arguments, body.environment)
     return test_out(outcome, group=group.name, method=saved.method if saved else "GET")
+
+
+@router.post("/{name}/tools/{tool}/preview", response_model=CustomToolRequestPreviewOut)
+async def preview_saved_tool(
+    name: str, tool: str, body: CustomToolSavedTestIn, previews: CustomToolPreviews = _previews
+) -> CustomToolRequestPreviewOut:
+    """The request a saved tool would send; sends nothing and reads no secret value."""
+    return preview_out(
+        await previews.saved(name, tool, body.arguments, body.environment), _label_of
+    )
+
+
+@router.post("/{name}/preview", response_model=CustomToolRequestPreviewOut)
+async def preview_draft_tool(
+    name: str, body: CustomToolTestIn, previews: CustomToolPreviews = _previews
+) -> CustomToolRequestPreviewOut:
+    """The request a draft tool would send; sends nothing and reads no secret value."""
+    tool = body.tool.model_dump(mode="json")
+    return preview_out(
+        await previews.draft(name, tool, body.arguments, body.environment), _label_of
+    )

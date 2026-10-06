@@ -2763,13 +2763,16 @@ gateway as every other MCP server, and carries:
 - a **description** of what its API is for, which agents read when they search
   for a tool ([mcp-gateway](../mcp-gateway/spec.md) "Describe a custom-tool group"),
   shown first in the group's definition;
-- a shared **base URL** its tools' paths are relative to;
-- **header rows** — each a name and a value that is plain text or one stored
+- its **environments** — at least one, each with the **base URL** its tools'
+  paths are relative to, its own header rows, variables and, when it differs
+  from the group's, its own timeout; the tools are the same in each
+  ([mcp-gateway](../mcp-gateway/spec.md) "Keep a custom-tool group's environments in the group");
+- per environment, **header rows** — each a name and a value that is plain text or one stored
   secret holding the credential alone, behind the row's auth scheme (a bearer
   token is stored as `<token>` with the scheme **Bearer**), chosen by its name on the Secrets page
   or pasted to be saved there with the group (see "Choose secrets in one field
   and one set of rows"): Coffer's gateway adds each header when it calls the API,
-  once a person has approved a secret for the group's host
+  once a person has approved a secret for that environment's host
   ([mcp-gateway](../mcp-gateway/spec.md) "Wait for approval before a custom tool
   sends its secret"), and neither a secret header's value nor the secret's
   reference is ever part of what an agent sees or sends;
@@ -2782,12 +2785,14 @@ GET, and editable — which the gateway passes to agents as the tool's MCP
 annotations (`readOnlyHint` false and `destructiveHint` true when it changes
 data, `readOnlyHint` true otherwise), so each agent's own approval prompts apply
 to it. The page MUST list the groups under Needs attention, Healthy and Off, the failing
-ones first, each showing what is wrong in place of its tools, and an Off group
-leaves its reach column empty. Its header MUST carry one action, **Add custom tool**,
+ones first, each showing what is wrong in place of its tools — when nothing is,
+its one environment's host or, with several, how many environments it has and
+its tool count — and an Off group leaves its reach column empty. Its header MUST carry one action, **Add custom tool**,
 whose flow asks first for the group, in a select you can type into that starts
 on **New group** and lists every existing group with its source, tool count and
 description. An existing group MUST only take a request
-added by hand, which uses that group's base URL and secret; only a **new** group
+added by hand, which runs in that group's environments, each with its own base
+URL and secret; only a **new** group
 offers the two ways in:
 
 - **Import an OpenAPI spec** — from a URL or a file, into the new group; the user
@@ -2812,7 +2817,11 @@ Every request form MUST end with a **Test** section, whose Run runs the request 
 holds it once and shows the answer — the status and time in a block, the response
 in a viewer under it — the API's error body, a timeout, a failed
 connection (each of these two with the daemon's hand-off and, for a timeout,
-**Change timeout**) or a response cut short; nothing — neither a new group nor a tool — is
+**Change timeout**) or a response cut short, with the response headers that
+name the request on the API's side ([mcp-gateway](../mcp-gateway/spec.md)
+"Report what a custom tool's test reached"); a saved group's form previews and
+tests in one environment ("Preview and test a custom tool in one chosen
+environment"); nothing — neither a new group nor a tool — is
 saved until the form's **Add** or **Save**. A request of a group that is not saved
 yet is tested without its secret (see [mcp-gateway](../mcp-gateway/spec.md) "Test
 a custom tool request before its group is saved"). With no group yet the page
@@ -2829,7 +2838,8 @@ A group's detail page (`/custom-tools/<group>/<tab>`) MUST carry, under its
 header — its **reach** and a one-line summary of the last 24 hours (calls and
 failures) — two tabs laid out like every other detail page's. **Overview** (the
 default, at the bare `/custom-tools/<group>`) stacks the group's **definition**
-(base URL, and the auth header with the name of the secret it is bound to), then
+(with one environment, its base URL and the auth header with the name of the
+secret it is bound to; with several, each environment under Environments), then
 what an MCP server's Overview shows ("Open an MCP server on its Overview"):
 **Last 24 hours** — the group's calls and errors with a table of the agents that
 made them, and for a group that is on a View in Activity link to Activity's Tool
@@ -2853,7 +2863,8 @@ per-row checkbox (select-all in the header); while any is ticked a selection bar
 replaces that row with **Turn on**, **Turn off** and, while the exposure column
 shows, **Exposure**, acting on the ticked tools. Choosing
 a tool opens its editor in a 640-wide **drawer** below the title bar, where the
-request is edited — the headers the group already adds shown as "from the group",
+request is edited — the headers the chosen environment already adds shown as
+"from the group" ("from <environment>" when the group has several),
 no switch, which lives in the table — with **Delete tool** and Cancel
 beside it, and its **Test** section under the fields runs the tool with sample
 arguments and shows the response. Script tools are not offered: they are deferred past 1.0.
@@ -2877,7 +2888,7 @@ the gateway").
 #### Scenario: a hand-made request joins an existing group
 - **GIVEN** the `billing` group
 - **WHEN** the user chooses Add custom tool, defines one request by hand and picks `billing` as its group
-- **THEN** the tool is added to `billing`, using its base URL and auth header
+- **THEN** the tool is added to `billing`, using its environments' base URLs and auth headers
 - **AND** the flow offers no Import an OpenAPI spec for `billing`, only for a new group
 
 #### Scenario: a new group made by hand is saved with its first request
@@ -3123,3 +3134,36 @@ A knowledge document and a managed skill MUST each carry a **History** tab (spec
 - **GIVEN** the history read failing
 - **WHEN** the user opens the History tab and chooses Retry once the read works again
 - **THEN** the tab shows one Load error row with Retry, and after Retry it lists the versions
+
+### Requirement: Preview and test a custom tool in one chosen environment
+A saved group's request form — the tool drawer and Add request into an existing
+group — MUST hold ONE chosen environment, starting at the first one that is on,
+and everything the form shows about where the request goes MUST come from it:
+the help under Request names its base URL (and, with several environments, the
+environment), the headers already added are its headers, and the Test section
+shows a **preview** of the request — method and URL with the environment's
+`{env:NAME}` filled and `{argument}` holes left, the merged headers (the
+environment's plain ones, a tool header replacing one of the same name, the
+environment's secret headers last, each by its secret's name and state, never a
+value), its variables and the timeout that applies (its own, else the group's) —
+by the gateway's rules ([mcp-gateway](../mcp-gateway/spec.md) "Make a custom
+tool's request in the gateway"). The note under Test names that environment's
+secret, and none when it has no secret header. Run MUST send the chosen
+environment by name. The Test section's picker lists the environments that are
+on and only changes the choice: it saves nothing and changes no group setting.
+An environment switched off or deleted while the form is open MUST stay chosen
+and be reported — off, deleted, or no environment on — with Run off and no
+preview, until another is picked; the form never runs in another environment in
+its place.
+
+#### Scenario: the tool form previews and tests in the environment it names
+- **GIVEN** a group with environments `test` (a secret header, a plain header, `region=eu-1`, the group's 30 s timeout) and `live` (a different base URL and plain header, no secret header, `region=us-1`, its own 7 s timeout) and a tool `GET /v1/{env:region}/items/{id}`
+- **WHEN** the person opens the tool, reads the preview, picks `live` in Test and runs it
+- **THEN** the help, headers and preview first show `test`'s base URL, headers, secret and 30 s, then `live`'s base URL with `us-1`, its header and 7 s, and no secret of `test` anywhere
+- **AND** the run names `live`, its result shows the allow-listed response headers, and nothing about the group is saved
+
+#### Scenario: a tool form never runs in an environment that is off or gone
+- **GIVEN** a tool drawer open on environment `test`
+- **WHEN** `test` is switched off, then deleted, while the drawer stays open
+- **THEN** Test says `test` is off, then that it was deleted, with Run off and no preview each time
+- **AND** Run comes back only once the person picks another environment

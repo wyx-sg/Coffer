@@ -40,6 +40,7 @@ def test_out(
         failure=o.failure,  # type: ignore[arg-type]
         handoff=handoff,
         environment=o.environment,
+        response_headers=o.response_headers,
     )
 
 
