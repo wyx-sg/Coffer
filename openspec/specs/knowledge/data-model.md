@@ -38,9 +38,8 @@ every agent"): the kind is non-toggleable, and it is always enabled.
 ~/.coffer/vault/knowledge/
 ├── shopee/                         # a collection = a top-level folder = one Resource
 │   ├── README.md                   # the schema; first paragraph = the description; not a page
-│   ├── sources/                    # what arrived, kept as it came; never edited
-│   │   ├── q3-review.md            # a source: converted Markdown + frontmatter
-│   │   └── q3-review.pdf           # its original, named in `original:`
+│   ├── sources/                    # what arrived, kept as Markdown; never edited
+│   │   └── q3-review.md            # a source: converted Markdown + frontmatter
 │   ├── pages/                      # the wiki: read by agents, edited by people and agents
 │   │   ├── account/                # nesting chosen by whoever files a page
 │   │   │   └── login-sessions.md
@@ -131,7 +130,6 @@ description: The quarter's incidents and the follow-ups agreed.
 actor: user
 created_at: '2026-09-12T04:18:33Z'
 updated_at: '2026-09-12T04:18:33Z'
-original: q3-review.pdf
 ---
 ```
 
@@ -145,7 +143,6 @@ original: q3-review.pdf
 | `type` | `str` | A page's type: `concept`, `entity`, `how-to`, `decision` or `overview` by default, or one the README defines. Missing → `incomplete_page`. |
 | `sources` | list of `str` | A page's sources, by slug. Empty → `unsourced_page`; a slug no source has → `missing_source`. |
 | `aliases` | list of `str` | More names a page answers to in a `[[link]]`. |
-| `original` | `str` | A source's original file, a bare name beside it. Absent when the upload already was the text. |
 | `ingest` | `skipped` | Set by an agent on a source with nothing worth keeping, so it stops waiting. |
 
 A page's **slug** is its file stem; so is a source's. A `[[slug]]` or
@@ -189,8 +186,8 @@ through the vault's ordinary writer, and it keeps no machine-local record.
 
 `KnowledgeService.submit` promotes at once as well (see "Promote submitted
 material at once"): an upload becomes a source under `sources/`, with
-frontmatter filled from its opening prose and its original kept beside it
-unless the converter was passthrough. It then waits until a page cites it.
+frontmatter filled from its opening prose. Only the Markdown is kept; the
+uploaded file itself is not stored. It then waits until a page cites it.
 
 ### Naming
 
@@ -236,7 +233,7 @@ of them is persisted and none of them can be stale.
 | `CatalogueLevel` | `path`, `directories`, `files` | **One level of one collection**, never the whole tree. |
 | `Finding` | `kind`, `path`, `target`, `others` | One mechanical finding (see "Check a collection mechanically on every read"). |
 | `SourceRef`, `LinkRef`, `PageRef` | `slug`/`target`, `path`, `title`/`ambiguous` | A page's `sources` entry or `[[link]]` with what it resolves to; a page that cites a source. |
-| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `kind`, `page_type`, `aliases`, `sources`, `links`, `cited_by`, `waiting`, `original_path` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); Coffer serves a document's bytes only to be shown: no route saves them (see "Treat a direct file edit as a complete change"). |
+| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `kind`, `page_type`, `aliases`, `sources`, `links`, `cited_by`, `waiting` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); Coffer serves a document's bytes only to be shown: no route saves them (see "Treat a direct file edit as a complete change"). |
 
 Constants: `ACTOR_AGENT = "agent"`, `ACTOR_USER = "user"`.
 
@@ -253,8 +250,8 @@ no `SearchHit`, `SearchOutcome`, `SearchService` or grep value object.
 an uploaded document: the `markdown`, a `title` (the document's first H1,
 falling back to its file name; see "Fill frontmatter on converted material"),
 and which `converter` ran — reported on the upload response and written nowhere
-on disk. `ingest.PASSTHROUGH` is the one converter whose input is kept as the
-source itself, with no original beside it.
+on disk. Only the Markdown becomes the source; the uploaded file itself is not
+kept, whichever converter ran.
 
 The HTTP wire models in `surfaces/http/knowledge/schemas.py` mirror the domain
 types and add the shapes that describe an answer no domain type does:

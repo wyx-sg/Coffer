@@ -41,8 +41,7 @@ wiki per collection, which the developer and agents like you write together:
 - `README.md` is the collection's **schema**: what belongs in it, the page
   types it uses and any conventions. Where it disagrees with this file, it wins.
 - `sources/` holds the **sources**: material as it arrived (an upload, a file
-  dropped into the inbox), converted to Markdown, with the original file kept
-  beside it when there was one. Sources are never edited.
+  dropped into the inbox), converted to Markdown. Sources are never edited.
 - `pages/` holds the **pages**: the wiki itself, compiled from the sources and
   kept up to date. This is what you read first and what you write.
 

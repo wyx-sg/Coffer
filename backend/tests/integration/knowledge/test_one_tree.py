@@ -130,8 +130,8 @@ def test_material_waits_in_a_hidden_inbox(knowledge_root) -> None:  # type: igno
 
 def test_promoting_material_makes_it_a_source(knowledge_root) -> None:  # type: ignore[no-untyped-def]
     name = inbox.submit_material("shopee", title="Gateway", description="what it does", body="b")
-    promoted, kept = inbox.promote("shopee", name)
-    assert (promoted.path, kept) == ("shopee/sources/gateway.md", None)
+    promoted = inbox.promote("shopee", name)
+    assert promoted.path == "shopee/sources/gateway.md"
     assert (promoted.title, promoted.description, promoted.body.strip()) == (
         "Gateway",
         "what it does",

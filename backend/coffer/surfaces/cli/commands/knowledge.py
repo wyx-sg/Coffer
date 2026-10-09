@@ -99,7 +99,7 @@ def upload(
     files: list[Path] = typer.Argument(..., help="Files to keep as sources"),
     as_json: bool = _io.json_option(),
 ) -> None:
-    """Upload files into a collection; each becomes a source, its original kept."""
+    """Upload files into a collection; each is kept as a Markdown source."""
     results = []
     for path in files:
         try:

@@ -5,6 +5,8 @@
 **Deciders**: Yuxing Wu
 **Related**: [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md) (amended by this decision); [Tidying Knowledge and Memory Is the Agent's Job](tidying-knowledge-and-memory-is-the-agents-job.md); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md); research notes [knowledge curation](../research/knowledge-curation.md) and [knowledge structures](../research/knowledge-structures.md); spec knowledge; OpenSpec change `restructure-knowledge-as-a-wiki`
 
+**Amended** (2026-10-09): the owner decided that an upload keeps only its converted Markdown source, `sources/<slug>.md`; the uploaded file itself is no longer stored and a source has no `original` key. The collection stays one tree of Markdown every agent can read, and the sync repository carries no binaries. The text below describes that.
+
 ## Context
 
 [Knowledge Is a Directory of Markdown Files](knowledge-is-plain-files.md)
@@ -13,8 +15,8 @@ settled how knowledge is **stored and found**: plain Markdown under
 agent's own `Read` and `Grep` at paths a generated catalogue in the
 `coffer-guide` skill hands it. It left open how a collection is **structured**:
 every document was free-form, an upload became one more document beside the
-others, the original was thrown away, and a document was forbidden to name
-another file, because hand-written file references had rotted (343 of 398 dead).
+others and was rewritten in place by every tidy, and a document was forbidden
+to name another file, because hand-written file references had rotted (343 of 398 dead).
 
 Living with that showed three gaps:
 
@@ -22,9 +24,9 @@ Living with that showed three gaps:
   until someone pressed Tidy, and nothing recorded which uploads had already
   been folded into the rest. A collection grew as a pile of carriers rather than
   as subjects.
-- **Nothing could be checked against its origin.** The original bytes were
-  discarded on conversion, so a bad conversion or a wrong summary could not be
-  traced back to what was actually uploaded.
+- **Nothing could be checked against its origin.** An upload was rewritten in
+  place as it was tidied into the rest, and no document said what it drew on,
+  so a wrong summary could not be traced back to the material it came from.
 - **Documents could not point at each other.** The ban on naming files removed
   the dead links, and with them every relation between subjects. An agent found
   related material only by grepping for words.
@@ -83,13 +85,15 @@ Each collection holds three things:
 ```text
 <collection>/
 ├── README.md     the schema: what the collection is for, its page types, its conventions
-├── sources/      kept material: each upload's converted Markdown and its original file
+├── sources/      kept material: each upload's converted Markdown
 └── pages/        the wiki: pages people and agents both edit, linked by [[slug]]
 ```
 
 - **Sources are kept and do not change.** An upload, or a file dropped into
-  `.inbox/`, becomes a source: its converted Markdown with frontmatter, and the
-  original file beside it. Agents read sources and never edit them.
+  `.inbox/`, becomes a source: its converted Markdown with frontmatter. Only the Markdown
+  is kept, not the uploaded file, so the collection stays one tree of Markdown
+  and the sync repository carries no binaries. Agents read sources and never
+  edit them.
 - **Pages are compiled from sources by the agent**, when the person presses
   **Tidy** (an ingest plus a tidy), or as the agent learns something durable.
   A page names the sources it draws on in its `sources:` frontmatter, so which
@@ -120,7 +124,8 @@ Each collection holds three things:
   traces back to kept sources, and pages relate through links that are checked.
   Keeps every constraint of the earlier decision: no derived store, no
   retrieval tool, no model run by Coffer, one undivided store, pull not push.
-- **Cons.** Uploads now take disk space twice (original and Markdown). An
+- **Cons.** A bad conversion cannot be checked against the uploaded file,
+  because Coffer does not keep it; the person keeps that file themselves. An
   ingest costs agent tokens, and a compiled wiki is expensive to build compared
   with retrieving from raw sources (one preregistered study measured about 100×
   the build cost, with better cross-document answers and worse single-fact
@@ -140,8 +145,8 @@ generated, the git history stays the log, and judgement stays the agent's.**
 
 Rules a future change must respect:
 
-- **Sources are kept and immutable.** An upload keeps its original file next to
-  its converted Markdown. No agent instruction may tell an agent to edit a
+- **Sources are kept and immutable.** An upload is kept as its converted
+  Markdown only; the uploaded file is not stored. No agent instruction may tell an agent to edit a
   source, except to mark one `ingest: skipped` when it holds nothing worth a
   page.
 - **A page's identity is its slug.** File names are slugs; a page's `aliases`
@@ -162,8 +167,9 @@ Rules a future change must respect:
 ## Consequences
 
 - The earlier decision's rule "no document may name another knowledge file"
-  becomes "a page links by slug, never by path"; its "no kept originals" and "no
-  directory carries meaning" are reversed for `sources/` and `pages/`.
+  becomes "a page links by slug, never by path"; its "no directory carries
+  meaning" is reversed for `sources/` and `pages/`. Its "no kept originals"
+  stands: a source is the converted Markdown alone.
 - Tidy now means: compile the waiting sources into pages, then tidy the pages.
   A second hand-off, Check, asks the agent for a report only.
 - The web UI shows a collection as pages and sources, flags a waiting source and
@@ -172,6 +178,6 @@ Rules a future change must respect:
 - A page's author can still be a person in their editor: frontmatter is
   advisory, and a page with no sources is a finding, not an error.
 - Enforcement: spec knowledge "Keep sources and pages apart in each collection",
-  "Keep every upload as a source with its original", "Link pages by slug and
+  "Keep every upload as a Markdown source", "Link pages by slug and
   check every link", "Check a collection mechanically on every read", "Hand a
   check to the agent".

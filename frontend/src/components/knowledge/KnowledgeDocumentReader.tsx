@@ -4,7 +4,7 @@
 // 720 wide and centred — its title (the body's own leading `# Heading` when it
 // has one, so the page never shows two), then ONE quiet line of what it is
 // (KnowledgeFileLine: a page's type and sources, a source's citing pages or
-// Waiting mark and its original, who created it and when), then the body.
+// Waiting mark, who created it and when), then the body.
 // Preview renders the Markdown, a page's `[[links]]` opening the file each
 // resolves to (KnowledgeWikiLink); Source shows the raw text in the code
 // viewer. Every file is the same here, whoever wrote it last (spec knowledge

@@ -3142,7 +3142,7 @@
     "upload": {
       "button": "上传",
       "title": "上传来源",
-      "body": "Coffer 会把它转换成 Markdown，作为来源保存在知识集中，原始文件保留在旁边。",
+      "body": "Coffer 会把它转换成 Markdown，作为来源保存在知识集中。上传的文件本身不保存。",
       "choose": "把文件拖到这里，或选择一个",
       "types": "PDF、Word、PowerPoint、Excel、HTML、CSV、Markdown 或纯文本 · 最大 20 MB",
       "remove": "移除这个文件",
@@ -3173,8 +3173,7 @@
       "sources": "来源：",
       "missingSource": "没有名为 {{slug}} 的来源",
       "citedBy_one": "被 {{count}} 个页面引用：",
-      "citedBy_other": "被 {{count}} 个页面引用：",
-      "original": "原始文件：{{name}}"
+      "citedBy_other": "被 {{count}} 个页面引用："
     },
     "deleteDocument": {
       "menu": "删除",

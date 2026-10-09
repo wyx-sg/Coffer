@@ -164,9 +164,8 @@ export function describeCollection(uid: string, description: string): Promise<Co
 
 /**
  * Convert an uploaded file into a source of a collection, at once (see
- * "Promote submitted material at once"); `path` names it. The original is kept
- * beside the converted source (see "Keep every upload as a source with its
- * original").
+ * "Promote submitted material at once"); `path` names it. Only the Markdown
+ * is kept (see "Keep every upload as a Markdown source").
  */
 export function uploadFile(params: {
   /** The collection's NAME: this lands material in its directory. */

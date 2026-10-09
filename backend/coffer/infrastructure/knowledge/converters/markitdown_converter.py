@@ -1,6 +1,6 @@
 """Default file→Markdown engine via MarkItDown.
 
-Spec knowledge "Keep every upload as a source with its original" names
+Spec knowledge "Keep every upload as a Markdown source" names
 what it must handle; "Carry no vector or embedding dependency" fences who may
 import it.
 

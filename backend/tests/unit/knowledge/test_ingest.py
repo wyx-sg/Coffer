@@ -117,10 +117,6 @@ def _on_disk(collection: str = "shopee") -> list[str]:
 
 
 @pytest.mark.acceptance(
-    spec="knowledge",
-    scenario="a Markdown upload is its own source",
-)
-@pytest.mark.acceptance(
     spec="knowledge", scenario="an upload becomes a document at the collection root"
 )
 async def test_an_upload_becomes_a_document_and_nothing_else(knowledge) -> None:  # type: ignore[no-untyped-def]
@@ -137,21 +133,18 @@ async def test_an_upload_becomes_a_document_and_nothing_else(knowledge) -> None:
     assert result.converter == "passthrough"
     assert result.description == "Discussed the launch plan and open risks."
 
-    # One source, carrying the text: the upload was already that text, so no
-    # original is kept beside it, and no inbox item is left.
+    # One source, carrying the text, and no inbox item left beside it.
     assert _on_disk() == ["sources/meeting-notes.md"]
     document = fs.read_file(result.path)
-    assert "original" not in document.body
-    assert "original:" not in paths.resolve(result.path).read_text(encoding="utf-8")
     assert document.actor == ACTOR_USER
     assert document.description == result.description
     assert document.body.strip() == data.decode().strip()
 
 
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="an upload is kept as a source with its original"
+    spec="knowledge", scenario="an upload is kept as a Markdown source"
 )
-async def test_a_non_markdown_upload_is_converted_and_its_original_kept(knowledge) -> None:  # type: ignore[no-untyped-def]
+async def test_a_non_markdown_upload_is_converted_and_only_its_markdown_kept(knowledge) -> None:  # type: ignore[no-untyped-def]
     service = _service(knowledge)
     data = b"name,role\nAda,engineer\nGrace,engineer\n"
 
@@ -166,11 +159,9 @@ async def test_a_non_markdown_upload_is_converted_and_its_original_kept(knowledg
     assert "| name | role |" in document.body
     assert "| Ada | engineer |" in document.body
     assert document.actor == ACTOR_USER
-    # The `.csv` is kept beside its source, named in its frontmatter, so a
-    # page's claim can be traced back to what was uploaded.
-    assert _on_disk() == ["sources/team.csv", "sources/team.md"]
-    assert (paths.sources_dir("shopee") / "team.csv").read_bytes() == data
-    assert "original: team.csv" in paths.resolve(result.path).read_text(encoding="utf-8")
+    # The `.csv` itself is nowhere: the collection keeps the Markdown, not the
+    # file it arrived in.
+    assert _on_disk() == ["sources/team.md"]
 
 
 @pytest.mark.acceptance(

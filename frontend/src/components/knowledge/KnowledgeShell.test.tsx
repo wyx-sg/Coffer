@@ -164,7 +164,7 @@ describe("the Upload dialog", () => {
     const dialog = await screen.findByRole("dialog");
     expect(
       within(dialog).getByText(
-        "Coffer converts it to Markdown and keeps it as a source of the collection, with the original file beside it.",
+        "Coffer converts it to Markdown and keeps it as a source of the collection. The uploaded file itself is not stored.",
       ),
     ).toBeInTheDocument();
     const input = within(dialog).getByLabelText("Drop a file here, or choose one");

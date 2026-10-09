@@ -2,7 +2,7 @@
 //
 // One open knowledge file (boards 5.1.01, 5.1.29): the read-only reader with
 // its single line under the title (a page's type and sources, a source's
-// citing pages or Waiting mark and original) and no side rail, a page's
+// citing pages or Waiting mark) and no side rail, a page's
 // resolved `[[links]]`, the pane bar (full path, no tabs, History, Preview /
 // Source, Open in editor, ⋯), the history drawer beside the file reading its
 // path in the vault, and delete at once with an Undo toast. Mocked only at the
@@ -268,11 +268,10 @@ describe("a page's line and links", () => {
     expect(screen.getByTestId("where")).toHaveTextContent(encodeURIComponent(CACHE.path));
   });
 
-  test("a waiting source shows the Waiting mark and its original's name", async () => {
+  test("a waiting source shows the Waiting mark", async () => {
     renderKnowledge(`/knowledge/${UID}?file=${encodeURIComponent(RELEASE.path)}`);
     const line = await screen.findByTestId("file-line");
     expect(within(line).getByText("Waiting")).toBeInTheDocument();
-    expect(within(line).getByText("Original: release-notes.pdf")).toBeInTheDocument();
     expect(within(line).queryByText(/Cited by/)).toBeNull();
   });
 
@@ -280,7 +279,6 @@ describe("a page's line and links", () => {
     api.getFile.mockResolvedValue({
       ...RELEASE,
       waiting: false,
-      original_path: null,
       cited_by: [{ path: GATEWAY.path, title: GATEWAY.title }],
     });
     renderKnowledge(`/knowledge/${UID}?file=${encodeURIComponent(RELEASE.path)}`);

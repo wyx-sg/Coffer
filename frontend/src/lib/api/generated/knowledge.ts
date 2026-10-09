@@ -414,8 +414,6 @@ export interface components {
             kind: "page" | "source" | "file";
             /** Links */
             links: components["schemas"]["LinkRefOut"][];
-            /** Original Path */
-            original_path: string | null;
             /**
              * Page Type
              * @default

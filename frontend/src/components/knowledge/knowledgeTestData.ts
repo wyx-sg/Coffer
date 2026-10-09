@@ -56,7 +56,6 @@ export function file(path: string, over: Partial<FileOut> = {}): FileOut {
     sources: [],
     links: [],
     cited_by: [],
-    original_path: null,
     waiting: false,
     actor: "user",
     created_at: "2026-09-12T00:00:00Z",
@@ -85,7 +84,6 @@ export const RELEASE = file(`${NAME}/sources/release-notes.md`, {
   title: "Release notes",
   page_type: "",
   waiting: true,
-  original_path: `/Users/dev/.coffer/knowledge/${NAME}/sources/release-notes.pdf`,
   body: "Release notes, converted.",
 });
 

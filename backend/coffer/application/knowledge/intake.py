@@ -113,7 +113,7 @@ async def promote_waiting_files(service: KnowledgeService) -> list[str]:
             try:
                 async with recording(service.history, meta) as tx:
                     tx.touch(inbox.inbox_path(collection, name))
-                    document, _ = await asyncio.to_thread(inbox.promote, collection, name)
+                    document = await asyncio.to_thread(inbox.promote, collection, name)
                     tx.touch(document.path)
             except (OSError, KnowledgeFileNotFound):
                 logger.warning(

@@ -42,9 +42,9 @@ def _files_on_disk(tmp_path, collection: str = "shopee") -> list[str]:  # type: 
 
 @pytest.mark.acceptance(
     spec="knowledge",
-    scenario="an upload is kept as a source with its original",
+    scenario="an upload is kept as a Markdown source",
 )
-def test_an_upload_becomes_a_source_and_keeps_its_original(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
+def test_an_upload_becomes_a_markdown_source_and_nothing_else(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
     _create_collection(client, "shopee")
 
     resp = client.post(
@@ -64,11 +64,9 @@ def test_an_upload_becomes_a_source_and_keeps_its_original(client, tmp_path) -> 
     assert doc["title"] and doc["description"]
     assert "original_path" not in doc
 
-    # The source and, beside it, the original bytes it was converted from
-    # ("Keep every upload as a source with its original").
-    assert _files_on_disk(tmp_path) == ["sources/team.csv", "sources/team.md"]
-    sources = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / "sources"
-    assert (sources / "team.csv").read_bytes() == b"name,owner\nsession,account\n"
+    # Only the Markdown source: the uploaded bytes are not kept ("Keep every
+    # upload as a Markdown source").
+    assert _files_on_disk(tmp_path) == ["sources/team.md"]
 
     read = client.get("/api/v1/knowledge/file", params={"path": doc["path"]})
     assert read.status_code == 200, read.text
@@ -80,8 +78,7 @@ def test_an_upload_becomes_a_source_and_keeps_its_original(client, tmp_path) -> 
     assert file_out["description"] == doc["description"]
     assert "| session | account |" in file_out["body"]
     assert (file_out["kind"], file_out["waiting"]) == ("source", True)
-    assert file_out["original_path"] == str(sources / "team.csv")
-    assert "original: team.csv" in (sources / "team.md").read_text(encoding="utf-8")
+    assert "original_path" not in file_out
 
 
 def test_an_upload_takes_no_folder(client, tmp_path) -> None:  # type: ignore[no-untyped-def]

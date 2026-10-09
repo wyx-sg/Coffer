@@ -14,7 +14,7 @@ Knowledge is what a developer has learned about their working environment: which
 - **Copies diverge.** If each agent keeps its own notes, what one learns in the morning is invisible to another in the afternoon.
 - **Retrieval tools go unused.** A tool an agent has to remember to call is not retrieval. An audit of 448 Claude Code sessions, taken after a corpus had been built behind a set of knowledge tools and a delivered skill, found that the skill had never been loaded and no knowledge tool had ever been called. Every agent Coffer supports already has `Read` and `Grep`, and uses them constantly.
 - **Hand-maintained links rot.** In the same corpus, 343 of 398 internal file references were dead, each one a file name written into prose and broken by a later rename.
-- **Free-form documents do not compound.** When every upload stood alone as one more document, the original was discarded on conversion and documents were forbidden to name each other, a collection grew as a pile of carriers rather than as subjects: nothing recorded which uploads had been folded in, nothing traced a statement to its origin, and an agent found related material only by grepping for words.
+- **Free-form documents do not compound.** When every upload stood alone as one more document, was rewritten in place as it was tidied into the rest, and documents were forbidden to name each other, a collection grew as a pile of carriers rather than as subjects: nothing recorded which uploads had been folded in, nothing traced a statement to its origin, and an agent found related material only by grepping for words.
 
 Knowledge is also distinct from [memory](/architecture/memory). Knowledge is about the world and arrives because someone put it there. It is organised by collection and pulled through a skill. Memory is about the user and their projects. It accrues on its own and is aggregated from the agents' native memory.
 
@@ -27,7 +27,7 @@ Knowledge is also distinct from [memory](/architecture/memory). Knowledge is abo
 | No index of any kind: no table, no FTS, no vectors, no cache. The link graph and the check are rebuilt from the files on every read. | Nothing derived can disagree with the files. There is nothing to rebuild or reconcile. |
 | A file's path is where it is; a page's or a source's slug, its file name, is what links use. | A readable slug is what a person sees in a file manager and what an agent sees in a grep result, and it survives the folder moves a tidy makes. |
 | Metadata lives in YAML frontmatter. | Only the file is visible to every writer: people, agents and Coffer. |
-| An upload keeps its original file beside the converted Markdown. Sources are never edited. | A statement in a page can be traced back to what was actually uploaded, and a bad conversion shows against the original. |
+| An upload is kept as its converted Markdown only; the uploaded file is not stored. Sources are never edited. | The collection stays one tree of Markdown every agent can read, the sync repository carries no binaries, and a statement in a page can be traced back to the source it cites. |
 | Material becomes a source at once. An upload is kept as it arrives, and a file dropped into a hidden `.inbox/` is kept by the next sweep. | Nothing waits for a model connection or a pass. What was submitted is readable by every agent within the minute. |
 | Which sources wait is derived from the pages' `sources:` lists. | A manifest of what was ingested would be a second record that can disagree with the pages. |
 | Pages link by `[[slug]]`, never by path, and Coffer resolves every link on read. | Paths move as the corpus is reorganised; a slug moves only with a rename, and a link a rename breaks is reported at once instead of rotting silently. |
@@ -49,8 +49,7 @@ Knowledge is also distinct from [memory](/architecture/memory). Knowledge is abo
 │   ├── README.md                    # the schema; first paragraph is the description
 │   ├── sources/
 │   │   ├── q3-review.md             # a source: converted Markdown + frontmatter
-│   │   ├── q3-review.pdf            # its original, named in `original:`
-│   │   └── oncall-notes.md          # a Markdown upload is its own source
+│   │   └── oncall-notes.md          # a source from a Markdown upload
 │   ├── pages/
 │   │   ├── session-ownership.md     # a page
 │   │   └── infra/
@@ -65,7 +64,7 @@ Knowledge is also distinct from [memory](/architecture/memory). Knowledge is abo
 - **The README** sits at the collection root and is the collection's schema. Its first paragraph is the collection's description. It is read from disk on every listing and never copied into the resource file, because a copy would be wrong the first time a person edited the README. What it says about page types and conventions takes precedence over the guide's defaults, as the guide tells agents. The README is never listed as a page or a source, or counted. A collection has no title of its own: every surface shows it by its folder name, and the resource update refuses a title. Editing the description in the web UI rewrites exactly that first paragraph and leaves the rest of the README alone, as one commit naming the user; the guide skill is re-rendered afterwards, because the description is how an agent recognises the collection.
 - **What a file is** follows from where it is. The path module's `kind_of` says `page` for a Markdown file under `pages/`, `source` for one under `sources/`, and `file` for anything else, which is listed but neither catalogued nor checked.
 - **Nesting** inside `pages/` and `sources/` is chosen by whoever files a page, a person or an agent. Coffer assigns those folders no meaning; `pages/` and `sources/` are the only directories that mean anything.
-- **Hidden entries** (dot-prefixed) are excluded from every count, from the catalogue and from the check, and no surface lists or reads one. Inside a collection the one Coffer reads is `.inbox/`, a drop zone: a Markdown file left there is adopted as a source by the next sweep. The vault repository's `.git/info/exclude` ignores every other hidden entry inside a collection, so it is neither committed nor synced. `.history/` and `.raw/` do not exist: replaced text is in the git history, and an upload's original is a visible file in `sources/`.
+- **Hidden entries** (dot-prefixed) are excluded from every count, from the catalogue and from the check, and no surface lists or reads one. Inside a collection the one Coffer reads is `.inbox/`, a drop zone: a Markdown file left there is adopted as a source by the next sweep. The vault repository's `.git/info/exclude` ignores every other hidden entry inside a collection, so it is neither committed nor synced. `.history/` and `.raw/` do not exist: replaced text is in the git history, and an upload is kept only as its Markdown source in `sources/`.
 
 ### Path and slug
 
@@ -105,11 +104,10 @@ description: The quarterly review of the payments gateway.
 actor: user
 created_at: '2026-10-01T09:00:00.000+00:00'
 updated_at: '2026-10-01T09:00:00.000+00:00'
-original: q3-review.pdf
 ---
 ```
 
-Coffer writes a source's keys, in a fixed order: `title`, `description`, `actor` (`agent` or `user`), `created_at`, `updated_at`, and `original`, a bare file name beside it, when the original is kept. The one key an agent may add to a source is `ingest: skipped`. Coffer writes no page: a page's `title`, `type`, `description`, `sources` (source slugs), `aliases`, `actor` and timestamps are written by whoever writes the page, as the guide teaches. The default page types are `concept`, `entity`, `how-to`, `decision` and `overview`; Coffer accepts any non-empty string, so a README that defines its own types wins. Any other key a person added is kept, with its parsed value unchanged, whenever Coffer rewrites a file. This matters because dropping an unknown key would quietly delete a person's `tags:`.
+Coffer writes a source's keys, in a fixed order: `title`, `description`, `actor` (`agent` or `user`), `created_at` and `updated_at`. The one key an agent may add to a source is `ingest: skipped`. Coffer writes no page: a page's `title`, `type`, `description`, `sources` (source slugs), `aliases`, `actor` and timestamps are written by whoever writes the page, as the guide teaches. The default page types are `concept`, `entity`, `how-to`, `decision` and `overview`; Coffer accepts any non-empty string, so a README that defines its own types wins. Any other key a person added is kept, with its parsed value unchanged, whenever Coffer rewrites a file. This matters because dropping an unknown key would quietly delete a person's `tags:`.
 
 Frontmatter parsing degrades rather than raising: a file with no fence, or with malformed YAML inside one, yields empty frontmatter and its body, so one hand-edited file with a stray colon cannot break a whole collection walk.
 
@@ -123,7 +121,7 @@ Every entrance Coffer serves ends in a source. None of them waits. Pages are wri
 
 | Entrance | Surface | Ends in |
 | --- | --- | --- |
-| Upload, converted to Markdown first | The Knowledge page, `coffer knowledge upload` | A source, with its original |
+| Upload, converted to Markdown first | The Knowledge page, `coffer knowledge upload` | A source (its Markdown only) |
 | A Markdown file dropped into `<collection>/.inbox/` | An agent outside Coffer, another machine, or an older guide; the sweep adopts it | A source |
 | A page written straight into `pages/` | An agent's own file tools, or a person's editor | A page, committed as an edit on disk |
 
@@ -131,7 +129,7 @@ There is no entrance that creates a page at a path, and the web UI has no form f
 
 ```mermaid
 flowchart TD
-  U["Upload"] --> C["Convert to Markdown, keep the original"]
+  U["Upload"] --> C["Convert to Markdown"]
   C --> D["Describe from the opening prose"]
   D --> S["Promote at once"]
   W["File dropped into .inbox/"] --> N["Sweep normalises frontmatter, audits"]
@@ -170,11 +168,11 @@ One `knowledge_written` audit event is recorded per file, marked when the actor 
 An upload goes through four steps, in order:
 
 1. **Bounds the upload.** It takes one file per call, up to 20 MiB, and no folder. It refuses unknown collections before paying for conversion.
-2. **Converts it.** A converter registry dispatches by extension. Passthrough (Markdown, text and source files) runs first, then CSV, then MarkItDown for everything else. An unsupported type is refused with `INGEST_REJECTED` and `reason: unsupported_type`. A conversion that yields no text, such as an image-only PDF, is refused too. Nothing is written in either case: no source, no original and no inbox file.
+2. **Converts it.** A converter registry dispatches by extension. Passthrough (Markdown, text and source files) runs first, then CSV, then MarkItDown for everything else. An unsupported type is refused with `INGEST_REJECTED` and `reason: unsupported_type`. A conversion that yields no text, such as an image-only PDF, is refused too. Nothing is written in either case: no source and no inbox file.
 3. **Describes it.** The description is the source's first prose paragraph, and failing that its title. It is never empty. No model writes it.
-4. **Promotes the Markdown** with `actor: user` as `sources/<slug>.md`, and, unless the converter was passthrough, keeps the uploaded bytes beside it as `sources/<slug>.<ext>`, named in `original:`. A collision suffixes the Markdown and the original alike.
+4. **Promotes the Markdown** with `actor: user` as `sources/<slug>.md`. A collision suffixes the source's name (`-2`).
 
-For a passthrough upload the Markdown *is* the original, so nothing is kept twice. Converted formats take their space on disk twice; the 20 MiB ceiling stays.
+Only the Markdown is kept: the uploaded file itself is not stored, whichever converter ran. The collection stays one tree of Markdown every agent can read, and the sync repository carries no binaries. The 20 MiB ceiling stays.
 
 `markitdown` is imported lazily. An import-linter contract confines it to the knowledge converters and the channel's document extraction.
 
@@ -186,13 +184,13 @@ The web UI does not edit files: a file's pane is read-only (Preview and Source) 
 
 ## Links and the check
 
-`infrastructure/knowledge/wiki.py` walks one collection's `pages/` and `sources/` once and builds an in-memory `WikiGraph`: every page with its parsed frontmatter and outbound links, every source with whether it is skipped and its original, and the maps that resolve a name to a file. Nothing is stored; every read builds it again. A collection is hundreds of files at most, and a walk takes milliseconds.
+`infrastructure/knowledge/wiki.py` walks one collection's `pages/` and `sources/` once and builds an in-memory `WikiGraph`: every page with its parsed frontmatter and outbound links, every source with whether it is skipped, and the maps that resolve a name to a file. Nothing is stored; every read builds it again. A collection is hundreds of files at most, and a walk takes milliseconds.
 
 ### Links
 
 A link is `[[target]]` or `[[target|text]]` anywhere in a page's body outside code spans and fenced blocks, so a link written as an example is not a link. `target` resolves against every page's slug, every page's `aliases` and every source's slug. Matching ignores case and Unicode width, the same NFKC normalisation file names get, and tolerates a trailing `.md` or a leading folder, so a link written as a path still resolves. A target that names nothing is **dead**; one that names more than one distinct file is **ambiguous**. A page's `sources:` entries resolve against source slugs only; an entry that names none is a **missing source**.
 
-A page's read carries each link with the path it resolves to, or none, and each source entry with its path and title; a source's read carries the pages that cite it, whether it waits and its original's path. A tree listing carries each file's kind and whether a source waits, so the web UI marks a waiting source without a second call.
+A page's read carries each link with the path it resolves to, or none, and each source entry with its path and title; a source's read carries the pages that cite it and whether it waits. A tree listing carries each file's kind and whether a source waits, so the web UI marks a waiting source without a second call.
 
 ### Waiting sources
 
@@ -361,7 +359,7 @@ Coffer embeds nothing. It has no vector store, no embedding model and no FTS ind
 - **Agents rewrite pages, and Coffer reviews nothing before they do.** The safeguards are the ones any file edit has, plus the check: every change is a version naming its writer, any file can be brought back to any version from its history drawer or through git, the mechanical check reports a broken link or a page missing its sources at once, and a tidy ends with the agent's own report of what it integrated, merged, split, corrected and deleted. A tidy that went wrong is repaired by restoring a version from before it.
 - **Sources wait until someone tidies.** An upload or a dropped file stands as a source until the agent integrates it. The person sees the waiting count and the **Tidy** button, and nothing compiles pages behind their back.
 - **Compiling costs agent tokens.** An ingest is expensive compared with retrieving from raw sources, so the guide keeps grep over `sources/` as the fallback for an exact fact.
-- **Uploads take disk space twice** for converted formats: the original and the Markdown.
+- **A bad conversion cannot be checked against the uploaded file.** Coffer keeps only the Markdown; the person keeps the file they uploaded.
 - **The sweep moves files.** Filing a loose document changes its path. Links use slugs, not paths, and the catalogue is regenerated, so nothing refers to the old path but a person's memory; the move is one commit and can be restored.
 - **The history grows with every write.** Nothing prunes it. It sits beside the files and holds text that was later folded away or deleted.
 - **User content can leave the machine only through the agent the person chose.** Coffer sends no knowledge to any model. Tidy and Check send it to the agent's own provider, as every conversation does.

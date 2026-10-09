@@ -269,7 +269,7 @@ def test_reading_carries_the_absolute_paths_the_ui_opens_with(client, tmp_path) 
     sources = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / "sources"
     assert out["file_path"] == str(sources / "session.md")
     assert out["folder_path"] == str(sources)
-    assert (out["kind"], out["waiting"], out["original_path"]) == ("source", True, None)
+    assert (out["kind"], out["waiting"]) == ("source", True)
     assert out["body"].strip() == "account.session"
     assert out["actor"] == "user"
 

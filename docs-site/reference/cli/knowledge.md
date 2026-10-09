@@ -30,7 +30,7 @@ This page matches what `coffer knowledge --help` prints. Add `--help` to any com
 | [`knowledge changes`](#knowledge-changes) | Recent changes across collections, newest first. |
 | [`knowledge restore`](#knowledge-restore) | Restore what a delete removed (from the changes feed). |
 | [`knowledge tidy-handoff`](#knowledge-tidy-handoff) | The prompt that hands tidying knowledge to an agent. |
-| [`knowledge upload`](#knowledge-upload) | Upload files into a collection; each becomes a source, its original kept. |
+| [`knowledge upload`](#knowledge-upload) | Upload files into a collection; each is kept as a Markdown source. |
 
 ## knowledge list
 
@@ -242,7 +242,7 @@ coffer knowledge tidy-handoff [OPTIONS]
 
 ## knowledge upload
 
-Upload files into a collection; each becomes a source, its original kept.
+Upload files into a collection; each is kept as a Markdown source.
 
 <p class="cli-label">Synopsis</p>
 

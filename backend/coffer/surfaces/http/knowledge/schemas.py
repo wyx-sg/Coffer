@@ -203,11 +203,10 @@ class FileOut(BaseModel):
     aliases: list[str] = Field(default_factory=list)
     sources: list[SourceRefOut] = Field(default_factory=list)
     links: list[LinkRefOut] = Field(default_factory=list)
-    #: A source's citing pages, whether it waits, and its kept original's
-    #: absolute path ("Keep every upload as a source with its original").
+    #: A source's citing pages and whether it waits ("Derive which sources
+    #: wait from the pages that cite them").
     cited_by: list[PageRefOut] = Field(default_factory=list)
     waiting: bool = False
-    original_path: str | None = None
 
 
 class IngestedDocumentOut(BaseModel):

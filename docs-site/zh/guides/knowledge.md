@@ -13,7 +13,7 @@ description: 把你和智能体对工作环境的了解，存成一个由保留�
 
 - **所有智能体共用一份。** Claude Code 和 Codex 读的是同一批文件，一个智能体上午记下的东西，另一个下午就能读到。
 - **普通文件。** 每个页面、每个来源都是一个 Markdown 文件，你可以打开、编辑、grep、备份。Coffer 不建索引、不做 embedding，也不在数据库里另存一份内容。
-- **来源保留，页面编译。** 你上传的东西按到达时的样子连同原始文件一起保留，所以任何一句话都能追溯到它。知识在页面里生长：每个页面讲一个主题，写明它依据哪些来源，并链接到相关的页面。
+- **来源保留，页面编译。** 你上传的东西作为 Markdown 来源保留，页面会写明它依据哪些来源，所以任何一句话都能追溯到它出自的来源。知识在页面里生长：每个页面讲一个主题，写明它依据哪些来源，并链接到相关的页面。
 - **共同编写。** 你在自己的编辑器里编辑页面，知识页面只以只读方式显示它们并把它们交给编辑器打开；智能体用自己的文件工具写页面，遵循 `coffer-guide` 技能里的规则：一条事实放进已经拥有这个主题的页面。你按**整理**时，你的智能体会先把仍在等待的来源并进页面，再合并、拆分、修正页面。Coffer 自己不在你的知识上运行任何模型。
 
 知识不是[记忆](/zh/guides/memory)。记忆是智能体在工作中学到的东西，从它们各自的记忆库里读出来；知识是有人刻意写下来的东西。
@@ -28,8 +28,7 @@ description: 把你和智能体对工作环境的了解，存成一个由保留�
     ├── README.md                    ← the schema: what belongs here, page types, conventions
     ├── sources/
     │   ├── gateway-design.md        ← a source: the upload converted to Markdown
-    │   ├── gateway-design.pdf       ← its original file, kept beside it
-    │   └── oncall-notes.md          ← a Markdown upload is its own source
+    │   └── oncall-notes.md          ← a source from a Markdown upload
     ├── pages/
     │   ├── session-ownership.md     ← a page
     │   └── gateway/
@@ -38,7 +37,7 @@ description: 把你和智能体对工作环境的了解，存成一个由保留�
 ```
 
 - 知识集根目录的 **`README.md`** 是这个知识集的**纲要**。它的第一段就是 Coffer 所有显示知识集描述的地方用的描述，也是 `coffer-guide` 技能告诉智能体这个知识集讲什么的依据。它关于本知识集所用页面类型和约定的其余内容，优先于指南的默认规则。它从不作为页面或来源列出，也不计数。
-- **`sources/`** 保留到达的素材：每次上传和每个放进收件箱的文件，转换成 Markdown，有原始文件时原始文件就放在旁边。智能体读来源，从不编辑来源。
+- **`sources/`** 保留到达的素材：每次上传和每个放进收件箱的文件，转换成 Markdown。只保留 Markdown，不保留你上传的文件，所以知识集始终是一棵每个智能体都能读的 Markdown 树。智能体读来源，从不编辑来源。
 - **`pages/`** 放 wiki 本身：你和你的智能体编写并保持更新的页面。智能体首先读的就是这里。
 - `pages/` 和 `sources/` 里的**文件夹**是可选的，不代表任何含义。你或你的智能体都可以创建、移动、删除它们。只有 `pages/` 和 `sources/` 这两个文件夹本身有含义。
 - 知识集里的**其他文件**会在树里列出，但既不进目录，也不参与检查。留在 `pages/` 和 `sources/` 之外的 Markdown 文件会被扫描移进 `pages/`（见[自己在运行的是什么](#what-runs-on-its-own)）。
@@ -79,7 +78,7 @@ The `account-session` service owns ... see [[rate-limits|the gateway's limits]].
 
 Coffer 自己不写页面：谁写页面，谁就给它这些键，`coffer-guide` 技能就是这样教智能体的。缺少 `title`、`type` 或 `description`，或者没有列出任何 `sources` 的页面照样能用；[检查](#check-a-collection)知识集时它会作为一条发现出现。
 
-来源带着 Coffer 保留它时写入的键：`title`、`description`、`actor`、`created_at`、`updated_at`，保留了原始文件时还有 `original`，即旁边那个原始文件的名字。智能体唯一可以加到来源上的键是 `ingest: skipped`，用于没有任何值得写成页面的内容的来源。
+来源带着 Coffer 保留它时写入的键：`title`、`description`、`actor`、`created_at`、`updated_at`。智能体唯一可以加到来源上的键是 `ingest: skipped`，用于没有任何值得写成页面的内容的来源。
 
 你给文件加的其他键，Coffer 每次重写文件时都会连同值一起保留。
 
@@ -127,7 +126,7 @@ Coffer 自己不写页面：谁写页面，谁就给它这些键，`coffer-guide
 
 ### 上传来源 {#upload-a-source}
 
-上传会把文件转换成 Markdown，并立刻作为来源保留在知识集里，原始文件就放在旁边。
+上传会把文件转换成 Markdown，并立刻作为来源保留在知识集里。只保留 Markdown：你上传的文件不会被存储，需要的话请自己留一份。
 
 ```text
 知识 → 上传 → 选择文件和知识集 → 上传
@@ -139,7 +138,7 @@ Coffer 自己不写页面：谁写页面，谁就给它这些键，`coffer-guide
 | 表格 | `csv`、`tsv` |
 | 按文本读取 | `md`、`markdown`、`mdx`、`txt`、`text`、`rst`、`json`、`yaml`、`yml`、`toml`、`ini`、`cfg`、`log`、`sql`，以及常见源码文件（`py`、`js`、`ts`、`go`、`rs`、`java`、`sh` ……） |
 
-比如上传一个 PDF，会得到 `sources/gateway-design.md`（提取出的 Markdown 加上 frontmatter）和 `sources/gateway-design.pdf`（你上传的文件），后者的名字写在来源的 `original` 键里。按文本读取的文件（Markdown、纯文本、源码）本身就是来源，没有单独的原始文件。名字和已有来源重复时，Markdown 和原始文件会加上同样的后缀（`-2`）。
+比如上传一个 PDF，会得到 `sources/gateway-design.md`（提取出的 Markdown 加上 frontmatter），除此之外什么都没有。按文本读取的文件（Markdown、纯文本、源码）也以同样的方式成为来源。名字和已有来源重复时，会加上后缀（`-2`）。
 
 每次上传一个文件，最大 20 MB；上传只选知识集，不选文件夹。不支持的类型会被拒绝，并指出是哪种类型；转换后没有文本的（比如纯图片 PDF）也会被拒绝。被拒绝的上传不会留下任何东西。
 
@@ -301,7 +300,7 @@ Coffer **没有读取、列出或搜索知识的工具**。智能体用它已有
 **页面或来源。** 选中一个文件会只读地显示它。它的窗格栏先写明文件在哪里，然后是**历史**（见[历史与恢复](#history-and-restore)）、Markdown 的**预览 / 源码**切换、作为按钮的**在编辑器中打开**（见[自己编辑文件](#edit-a-file-yourself)），以及 **⋯** 菜单（**在访达中显示**和**删除**）。标题下面一行描述这个文件，读自它的 frontmatter：
 
 - **页面**：它的类型、谁写的、什么时候创建的，以及它的来源，点开每个都会打开对应来源；页面写了但并不存在的来源会被划掉。正文里，每个 `[[链接]]` 都是指向它所指页面或来源的链接；失效的链接标成红色，悬停提示说没有叫这个名字的东西。
-- **来源**：**被 N 个页面引用**，点开每个都会打开对应页面；还没有页面引用时显示**待整理**；保留了原始文件时还会写出原始文件的名字。
+- **来源**：**被 N 个页面引用**，点开每个都会打开对应页面；还没有页面引用时显示**待整理**。
 
 页面没有搜索框，也没有按知识集的开关：⌘K 按名字跳到知识集，每个知识集都到达每个智能体。知识页面上没有手工输入页面的表单：你在自己的编辑器里写，智能体则通过写文件来写。
 

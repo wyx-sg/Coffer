@@ -13,7 +13,7 @@ Knowledge holds facts about the world you work in: which team owns a service, ho
 
 - **One copy for every agent.** Claude Code and Codex read the same files, so what one agent records in the morning another reads in the afternoon.
 - **Plain files.** Every page and every source is a Markdown file you can open, edit, grep and back up. Coffer keeps no index, no embeddings and no database copy of the content.
-- **Sources kept, pages compiled.** What you upload is kept as it arrived, with its original file, so a statement can always be traced back to it. The pages are where the knowledge grows: each page is about one subject, says which sources it draws on, and links to the pages it relates to.
+- **Sources kept, pages compiled.** What you upload is kept as a Markdown source, and a page names the sources it draws on, so a statement can always be traced back to the source it came from. The pages are where the knowledge grows: each page is about one subject, says which sources it draws on, and links to the pages it relates to.
 - **Written together.** You edit pages in your own editor; the Knowledge page shows them read-only and opens them there. Agents write pages with their own file tools, following the rules in the `coffer-guide` skill: a fact goes into the page that already owns its subject. When you press **Tidy**, your agent folds the sources that are still waiting into the pages, then merges, splits and corrects the pages. Coffer itself runs no model over your knowledge.
 
 Knowledge is not [memory](/guides/memory). Memory is what agents learn while working, read out of their own memory stores. Knowledge is what somebody deliberately wrote down.
@@ -28,8 +28,7 @@ A **collection** is a top-level folder under the knowledge root:
     ├── README.md                    ← the schema: what belongs here, page types, conventions
     ├── sources/
     │   ├── gateway-design.md        ← a source: the upload converted to Markdown
-    │   ├── gateway-design.pdf       ← its original file, kept beside it
-    │   └── oncall-notes.md          ← a Markdown upload is its own source
+    │   └── oncall-notes.md          ← a source from a Markdown upload
     ├── pages/
     │   ├── session-ownership.md     ← a page
     │   └── gateway/
@@ -38,7 +37,7 @@ A **collection** is a top-level folder under the knowledge root:
 ```
 
 - **`README.md`** at the collection root is the collection's **schema**. Its first paragraph is the collection's description everywhere Coffer shows one, and it is what the `coffer-guide` skill tells agents the collection is about. Whatever else it says about the page types and conventions the collection uses takes precedence over the guide's defaults. It is never listed as a page or a source, or counted.
-- **`sources/`** keeps the material that arrived: every upload and every file dropped into the inbox, converted to Markdown, with the original file beside it when there was one. Agents read sources and never edit them.
+- **`sources/`** keeps the material that arrived: every upload and every file dropped into the inbox, converted to Markdown. Only the Markdown is kept, not the file you uploaded, so the collection stays one tree of Markdown every agent can read. Agents read sources and never edit them.
 - **`pages/`** holds the wiki itself: the pages you and your agents write and keep up to date. This is what agents read first.
 - **Folders** inside `pages/` and `sources/` are optional and carry no meaning. You or your agent can create, move and remove them. `pages/` and `sources/` are the only folders that mean anything.
 - **Any other file** in a collection is listed in the tree but neither catalogued nor checked. A Markdown file left outside `pages/` and `sources/` is moved into `pages/` by the sweep (see [What runs on its own](#what-runs-on-its-own)).
@@ -79,7 +78,7 @@ The `account-session` service owns ... see [[rate-limits|the gateway's limits]].
 
 Coffer writes no page itself: whoever writes a page gives it these keys, as the `coffer-guide` skill teaches agents. A page that lacks `title`, `type` or `description`, or names no `sources`, still works; it shows up as a finding when the collection is [checked](#check-a-collection).
 
-A source carries the keys Coffer writes when it keeps one — `title`, `description`, `actor`, `created_at`, `updated_at` — and `original`, the name of the original file beside it, when one is kept. The one key an agent may add to a source is `ingest: skipped`, for a source with nothing worth a page.
+A source carries the keys Coffer writes when it keeps one — `title`, `description`, `actor`, `created_at`, `updated_at`. The one key an agent may add to a source is `ingest: skipped`, for a source with nothing worth a page.
 
 Any other key you add to a file is kept, with its value, whenever Coffer rewrites the file.
 
@@ -127,7 +126,7 @@ You can also ask directly: "write down what we just found out about the session 
 
 ### Upload a source {#upload-a-source}
 
-Upload converts a file to Markdown and keeps it in the collection as a source straight away, with the original file beside it.
+Upload converts a file to Markdown and keeps it in the collection as a source straight away. Only the Markdown is kept: the file you uploaded is not stored, so keep your own copy if you need it.
 
 ```text
 Knowledge → Upload → choose a file and the collection → Upload
@@ -139,7 +138,7 @@ Knowledge → Upload → choose a file and the collection → Upload
 | Tables | `csv`, `tsv` |
 | Taken as text | `md`, `markdown`, `mdx`, `txt`, `text`, `rst`, `json`, `yaml`, `yml`, `toml`, `ini`, `cfg`, `log`, `sql`, and common source files (`py`, `js`, `ts`, `go`, `rs`, `java`, `sh`, …) |
 
-An uploaded PDF, for example, becomes `sources/gateway-design.md`, the extracted Markdown with frontmatter, and `sources/gateway-design.pdf`, the file you uploaded, named in the source's `original` key. A file taken as text — Markdown, plain text, source code — is its own source, with no separate original. A name another source already has suffixes the Markdown and the original alike (`-2`).
+An uploaded PDF, for example, becomes `sources/gateway-design.md`, the extracted Markdown with frontmatter, and nothing else. A file taken as text — Markdown, plain text, source code — becomes a source the same way. A name another source already has gets a suffix (`-2`).
 
 One file per upload, at most 20 MB; the upload takes the collection, not a folder. An unsupported type is refused with the type named, and a conversion that produces no text — an image-only PDF, for example — is refused too. A refused upload leaves nothing behind.
 
@@ -301,7 +300,7 @@ The collection's **⋯** menu holds **Reveal in Finder**, **Copy path**, **Renam
 **A page or a source.** Choosing a file shows it read-only. Its pane bar names where the file is, then carries **History** (see [History and restore](#history-and-restore)), a **Preview / Source** switch for Markdown, **Open in editor** as a button (see [Edit a file yourself](#edit-a-file-yourself)), and a **⋯** menu with **Reveal in Finder** and **Delete**. Under the title one line describes the file, read from its frontmatter:
 
 - For a **page**: its type, who wrote it and when it was created, and its sources, each opening that source; a source the page names that does not exist is struck through. In the text, every `[[link]]` is a link to the page or source it names; a dead one is marked in red, with a tooltip saying nothing has that name.
-- For a **source**: **Cited by N pages**, each opening that page, or **Waiting** when no page cites it yet, and the name of its original file when one is kept.
+- For a **source**: **Cited by N pages**, each opening that page, or **Waiting** when no page cites it yet.
 
 The page has no search box and no per-collection switch: ⌘K jumps to a collection by name, and every collection reaches every agent. There is no form for typing a page into the Knowledge page: you write in your own editor, and agents by writing files.
 

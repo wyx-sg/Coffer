@@ -1142,7 +1142,7 @@ ignore_imports = [
 # extracted text"), and
 # ``infrastructure.knowledge.converters.markitdown_converter``, which turns an
 # uploaded document into a Markdown source (spec knowledge "Keep every upload as a
-# source with its original"). The source is the whole ``coffer`` package,
+# Markdown source"). The source is the whole ``coffer`` package,
 # so a package added later is covered without anyone remembering to list it;
 # the two consumers' own edges are the only ones ignored, which also removes
 # every indirect chain through them. The vector-index and embedding SDKs it

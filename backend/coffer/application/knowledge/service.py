@@ -248,14 +248,12 @@ class KnowledgeService:
         body: str,
         actor_kind: str = ACTOR_AGENT,
         actor: str,
-        original: tuple[str, bytes] | None = None,
     ) -> Submission:
         """Add new material to a collection (see "Promote submitted
         material at once").
 
         The material becomes a source under the collection's ``sources/`` on the
-        spot, with ``original`` — an upload's own file name and bytes — kept
-        beside it ("Keep every upload as a source with its original"). It waits
+        spot, as Markdown only ("Keep every upload as a Markdown source"). It waits
         there until the person's agent compiles it into pages.
         """
         row = await self.require_collection(collection)
@@ -272,10 +270,8 @@ class KnowledgeService:
                 row.name, title=title, description=description, body=body, actor=actor_kind
             )
             tx.touch(f"{row.name}/{paths.INBOX_DIR_NAME}/{name}")
-            document, kept = inbox.promote(row.name, name, original=original)
+            document = inbox.promote(row.name, name)
             tx.touch(document.path)
-            if kept is not None:
-                tx.touch(kept)
         await self._audit.record(
             AuditEventType.KNOWLEDGE_WRITTEN.value,
             resource=row,

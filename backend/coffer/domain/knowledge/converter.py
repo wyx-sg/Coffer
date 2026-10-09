@@ -34,7 +34,7 @@ class Conversion:
 class UnsupportedDocument(Exception):  # noqa: N818 - carries the rejected type, not an "...Error"
     """No converter handles this file type; nothing was written.
 
-    Spec knowledge "Keep every upload as a source with its original".
+    Spec knowledge "Keep every upload as a Markdown source".
     """
 
     def __init__(self, doc_type: str) -> None:

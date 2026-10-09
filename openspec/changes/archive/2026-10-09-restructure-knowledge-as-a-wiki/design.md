@@ -10,8 +10,7 @@ This file records the mechanics.
 <collection>/
 ├── README.md                 schema; first paragraph is the description
 ├── sources/
-│   ├── release-notes.md      converted Markdown + frontmatter (the source)
-│   └── release-notes.pdf     the original, when it is not the same text
+│   └── release-notes.md      converted Markdown + frontmatter (the source)
 ├── pages/
 │   └── session-ownership.md  a page
 └── .inbox/                   drop zone; adopted into sources/
@@ -22,10 +21,10 @@ This file records the mechanics.
   collection is a plain file: listed, never catalogued or checked.
 - `paths.py` gains `PAGES_DIR_NAME`, `SOURCES_DIR_NAME` and `kind_of(relpath)`
   returning `page`, `source` or `file`.
-- An upload's original is kept as `sources/<slug>.<ext>` beside
-  `sources/<slug>.md` unless the converter was passthrough (the Markdown *is*
-  the original). The source's frontmatter names it in `original:`. A collision
-  suffixes both names alike (`-2`).
+- An upload is kept only as `sources/<slug>.md`, its converted Markdown; the
+  uploaded file itself is not stored, so the collection stays one tree of
+  Markdown every agent can read and the sync repository carries no binaries.
+  A collision suffixes the source's name (`-2`).
 
 ## Frontmatter
 
@@ -33,7 +32,7 @@ This file records the mechanics.
   `aliases` (list), `actor`, `created_at`, `updated_at`. Coffer writes no page
   itself; the guide tells agents to write these.
 - **Source:** `title`, `description`, `actor`, `created_at`, `updated_at`,
-  `original` (when kept), and optionally `ingest: skipped`, the one key the
+  and optionally `ingest: skipped`, the one key the
   guide lets an agent add to a source.
 - Default page types in the guide: `concept`, `entity`, `how-to`, `decision`,
   `overview`. A README that defines its own types wins; Coffer accepts any
@@ -79,7 +78,7 @@ the list route computes them per collection, one walk each.
 
 - `FileOut` adds `kind`, and for a page `page_type`, `aliases`, `sources`
   (each `{slug, path, title}`, `path` null when missing) and `links` (each
-  `{target, path}`, `path` null when dead); for a source `original_path`,
+  `{target, path}`, `path` null when dead); for a source
   `cited_by` (`{path, title}`) and `waiting`.
 - `FileSummaryOut` adds `kind` and `waiting`, so the tree can mark a waiting
   source without a second call.
@@ -132,8 +131,7 @@ within a minute. Content is never rewritten.
 - **Reader**: a page shows a line under the title naming its type and its
   sources (each a link to the source, a missing one struck through); `[[links]]`
   render as links to the page they resolve to, a dead one in the danger tone
-  with a tooltip. A source shows "Cited by N pages" or the Waiting chip, and
-  its original's name when one is kept.
+  with a tooltip. A source shows "Cited by N pages" or the Waiting chip.
 - **Collection page**: properties Pages, Sources (n waiting), Folder; a
   **Check** section listing the findings grouped by kind, each path opening
   the file, with **Check with agent** beside **Tidy**; a **Change log** section

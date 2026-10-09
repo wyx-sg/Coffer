@@ -153,10 +153,9 @@ class KnowledgeFile:
     sources: tuple[SourceRef, ...] = ()
     #: A page's ``[[links]]``, each resolved to the file it names.
     links: tuple[LinkRef, ...] = ()
-    #: A source's pages that cite it, whether it waits, and its kept original.
+    #: A source's pages that cite it, and whether it waits.
     cited_by: tuple[PageRef, ...] = ()
     waiting: bool = False
-    original_path: str | None = None
 
 
 @dataclass(frozen=True)

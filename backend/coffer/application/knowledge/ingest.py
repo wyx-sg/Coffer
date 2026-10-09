@@ -1,11 +1,11 @@
 """Turning an uploaded document into a source for a collection.
 
 An upload is one of the entrances new knowledge arrives by — the Knowledge page's upload
-button and a channel attachment (see "Keep every upload as a source with its original"
+button and a channel attachment (see "Keep every upload as a Markdown source"
 and "Ingest documents sent to a channel"). The document is converted to Markdown and
 **submitted as material**: it goes through :meth:`KnowledgeService.submit`, which keeps
 it as a source under ``sources/`` on the spot (see "Promote submitted material at
-once"), with the original file beside it unless the Markdown already was the file.
+once"). Only the Markdown is kept; the uploaded file itself is not.
 
 What this module owns that ``submit`` does not need to think about: **the
 description is optional input, never optional output.** The catalogue the
@@ -51,9 +51,6 @@ class ConverterRegistry(Protocol):
 #: attachment) under one honest ceiling rather than the page silently accepting what a
 #: phone never could.
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
-
-#: The converter that reads a file as it stands: its Markdown is the original.
-PASSTHROUGH = "passthrough"
 
 
 @dataclass(frozen=True)
@@ -117,10 +114,6 @@ class IngestService:
             raise EmptyConversion(pathlib.Path(filename).suffix.lstrip(".").lower())
         description = _fallback_description(conversion.markdown, title=conversion.title)
 
-        # The Markdown is the original when it was read as it stands; anything
-        # converted keeps its own file beside the source ("Keep every upload
-        # as a source with its original").
-        original = None if conversion.converter == PASSTHROUGH else (filename, data)
         submitted = await self._knowledge.submit(
             collection=collection,
             title=conversion.title,
@@ -128,7 +121,6 @@ class IngestService:
             body=conversion.markdown,
             actor_kind=ACTOR_USER,
             actor=actor,
-            original=original,
         )
         return IngestedDocument(
             path=submitted.document.path,

@@ -2,8 +2,9 @@
 
 A collection was a pile of free-form documents. Each upload stood alone until
 someone pressed Tidy, nothing recorded which uploads had already been folded
-into the rest, the original file was thrown away on conversion, and documents
-were forbidden to name each other, so subjects had no relations an agent could
+into the rest, the material as uploaded was not kept apart from what was
+written from it, so a statement could not be traced back to where it came
+from, and documents were forbidden to name each other, so subjects had no relations an agent could
 follow. Knowledge did not compound. The user asked for a structure for the
 knowledge base, compared against Karpathy's LLM Wiki, RAG and the alternatives,
 and for a less awkward Document / History switch on a document's page. The
@@ -15,8 +16,8 @@ the research behind it is [knowledge structures](../../../docs/research/knowledg
 
 - **Each collection is a wiki**: its `README.md` is the schema, `sources/` holds
   kept material, `pages/` holds the pages people and agents edit.
-- **An upload becomes a source**: its converted Markdown in `sources/` with its
-  original file kept beside it. A Markdown file dropped into `.inbox/` becomes a
+- **An upload becomes a source**: its converted Markdown in `sources/`. Only the
+  Markdown is kept, not the uploaded file. A Markdown file dropped into `.inbox/` becomes a
   source too.
 - **Pages carry** `title`, `type`, `description`, `sources`, `aliases`, `actor`
   and timestamps. A page's identity is its slug; `aliases` give it more names.

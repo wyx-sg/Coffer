@@ -133,7 +133,6 @@ class Source:
     slug: str
     title: str
     skipped: bool
-    original: str | None
 
 
 @dataclass
@@ -243,7 +242,6 @@ def build(collection: str) -> WikiGraph:
             slug=path.stem,
             title=str(fm.get("title") or path.stem),
             skipped=str(fm.get(INGEST_KEY) or "").strip().lower() == INGEST_SKIPPED,
-            original=str(fm["original"]) if fm.get("original") else None,
         )
         graph.sources.append(source)
         graph.source_names.setdefault(normalise(path.stem), set()).add(source.path)
@@ -268,8 +266,8 @@ def build(collection: str) -> WikiGraph:
 
 def describe(file: KnowledgeFile) -> KnowledgeFile:
     """``file`` with what the wiki says about it: a page's type, aliases,
-    resolved sources and links; a source's citing pages, whether it waits and
-    its kept original (spec knowledge "Link pages by slug and check every
+    resolved sources and links; a source's citing pages and whether it waits
+    (spec knowledge "Link pages by slug and check every
     link", "Derive which sources wait from the pages that cite them")."""
     kind = paths.kind_of(file.path)
     if kind == paths.KIND_FILE:
@@ -306,17 +304,11 @@ def describe(file: KnowledgeFile) -> KnowledgeFile:
     source = graph.source(file.path)
     if source is None:
         return dataclasses.replace(file, kind=kind)
-    original = None
-    # A bare file name beside the source, never a path a writer could aim elsewhere.
-    if source.original and pathlib.PurePath(source.original).name == source.original:
-        candidate = pathlib.Path(file.folder_path) / source.original
-        original = str(candidate) if candidate.is_file() else None
     return dataclasses.replace(
         file,
         kind=kind,
         cited_by=tuple(PageRef(p.path, p.title) for p in graph.citing(source.path)),
         waiting=any(s.path == source.path for s in graph.waiting()),
-        original_path=original,
     )
 
 

@@ -867,11 +867,6 @@ components:
             $ref: '#/components/schemas/LinkRefOut'
           title: Links
           type: array
-        original_path:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Original Path
         page_type:
           default: ''
           title: Page Type
@@ -911,7 +906,6 @@ components:
       - links
       - cited_by
       - waiting
-      - original_path
       title: FileOut
       type: object
     FileSummaryOut:

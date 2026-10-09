@@ -6,7 +6,7 @@
 // left out. A page: its type, when it was created and by whom, and its sources
 // — each opening that source, one that names no source struck through. A
 // source: when it was created and by whom, the pages that cite it (each
-// opening the page) or the Waiting mark, and the name of its kept original.
+// opening the page) or the Waiting mark.
 // Any other file: when it was created and by whom.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -121,14 +121,6 @@ export function KnowledgeFileLine({ file, collectionUid }: Props) {
             </Link>
           ))}
         </Joined>
-      </span>,
-    );
-  }
-
-  if (file.kind === "source" && file.original_path) {
-    parts.push(
-      <span key="original">
-        {t("knowledge.document.original", { name: file.original_path.split("/").pop() })}
       </span>,
     );
   }

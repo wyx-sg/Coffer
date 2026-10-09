@@ -3142,7 +3142,7 @@
     "upload": {
       "button": "Upload",
       "title": "Upload a source",
-      "body": "Coffer converts it to Markdown and keeps it as a source of the collection, with the original file beside it.",
+      "body": "Coffer converts it to Markdown and keeps it as a source of the collection. The uploaded file itself is not stored.",
       "choose": "Drop a file here, or choose one",
       "types": "PDF, Word, PowerPoint, Excel, HTML, CSV, Markdown or text · up to 20 MB",
       "remove": "Remove this file",
@@ -3173,8 +3173,7 @@
       "sources": "Sources:",
       "missingSource": "No source is named {{slug}}",
       "citedBy_one": "Cited by {{count}} page:",
-      "citedBy_other": "Cited by {{count}} pages:",
-      "original": "Original: {{name}}"
+      "citedBy_other": "Cited by {{count}} pages:"
     },
     "deleteDocument": {
       "menu": "Delete",

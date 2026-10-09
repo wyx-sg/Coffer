@@ -113,15 +113,6 @@ def test_a_source_waits_until_cited_or_skipped(shopee: pathlib.Path) -> None:
     assert waiting == ["shopee/sources/b.md"]
 
 
-def test_a_source_names_its_kept_original_only_beside_it(shopee: pathlib.Path) -> None:
-    _source(shopee, "team", original="team.csv")
-    (shopee / "sources" / "team.csv").write_text("a,b\n", encoding="utf-8")
-    _source(shopee, "escape", original="../../secret.txt")
-
-    assert _read("shopee/sources/team.md").original_path == str(shopee / "sources" / "team.csv")
-    assert _read("shopee/sources/escape.md").original_path is None
-
-
 def test_the_findings_name_every_mechanical_problem(shopee: pathlib.Path) -> None:
     _source(shopee, "s")
     _source(shopee, "waiting")

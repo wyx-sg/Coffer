@@ -114,11 +114,11 @@ def test_no_wire_model_carries_a_retrieval_payload() -> None:
 
 
 def test_an_ingested_document_names_the_source_it_became() -> None:
-    """The upload's answer names the source; its kept original is read from the
-    source itself (see "Keep every upload as a source with its original")."""
+    """Only the Markdown is kept, so no wire model names an original (see
+    "Keep every upload as a Markdown source")."""
     fields = set(schemas.IngestedDocumentOut.model_fields)
     assert {"path", "title", "description", "converter"} == fields
-    assert "original_path" in schemas.FileOut.model_fields
+    assert "original_path" not in schemas.FileOut.model_fields
 
 
 def test_a_collection_reports_its_pages_sources_and_both_handoffs() -> None:
