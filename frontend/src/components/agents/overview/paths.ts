@@ -41,16 +41,6 @@ export function mcpConfigPath(
   return abbreviateHomePath(join(dir, ".claude.json"));
 }
 
-/** The file that holds Coffer's memory hook — where the daemon says it is, when it says. */
-export function hookConfigPath(
-  agent: Pick<AgentOut, "type" | "config_dir">,
-  hookPath?: string | null,
-): string {
-  if (hookPath) return abbreviateHomePath(hookPath);
-  const file = agent.type === "codex" ? "hooks.json" : "settings.json";
-  return abbreviateHomePath(join(agent.config_dir, file));
-}
-
 /** The file whose absence means the agent is gone from its directory. */
 export function mainConfigPath(agent: Pick<AgentOut, "type" | "config_dir">): string {
   const file = agent.type === "codex" ? "config.toml" : "settings.json";

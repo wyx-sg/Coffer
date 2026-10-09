@@ -2,38 +2,33 @@
 
 ## Purpose
 
-Every agent the developer runs keeps its own memory, and none of them can see any of the others'. Claude Code accrues per-fact notes per project; Codex distils its rollouts into task groups and a profile. Both work well and neither leaves its own directory, so the developer re-teaches each agent what the other already knows. Coffer **reads those native memories, without ever writing to them**, turns them into **notes of its own** — one file per raw entry, in Coffer's own format, filed by repository and by `global` — and hands each agent the **index** of that set at session start, with the absolute path to read the rest the same way it reads its own memory: as files. After the start it hands over the few notes a prompt names. What Claude Code learns in the morning, Codex opening the same repository in the afternoon already knows — not because Coffer wrote into Codex's memory, but because Coffer handed it that note's index line.
+Every agent the developer runs keeps its own memory, and none of them can see any of the others'. Claude Code accrues per-fact notes per project; Codex consolidates its rollouts into a summary and topic files. Both work well and neither leaves its own directory, so the developer re-teaches each agent what the other already knows, and re-teaches it again on the next machine. Coffer **syncs those memories into each other**: it reads what every registered agent wrote for itself, keeps one copy of each memory in a **hub** in the vault, and writes the hub back into **each agent's own native memory**, where that agent already looks for it.
 
-**Coffer aggregates memory; it does not own it.** Coffer never writes an agent's native memory files, so no agent's own loop is disturbed and nothing has to be reconciled. Everything under `~/.coffer/derived/memory/` is **derived** and may be deleted and rebuilt at any time, which is what makes it safe to rewrite aggressively. Reproducing it after a delete gives back an **equivalent** set of notes, not a byte-identical one.
+```
+~/.coffer/vault/memory/
+├── global/                  ← memories about the person, for every project
+└── projects/<project key>/  ← one folder per repository, the same key on every machine
+```
 
-**Coffer runs no model over memory.** The distil pass is mechanical: each new raw entry becomes one note as it stands, and the index is rendered. The judgement — which notes are the same subject, which are stale — belongs to the person's own coding agent. A **Tidy** button on a partition, and **Tidy all** on the Memory page, hand that job to the default managed agent, which follows the `coffer-guide` memory section: it merges notes by listing the merged entries in the survivor's `origins`, and retires a note by giving it a `retired:` frontmatter key, which the next distil pass records in `RETIRED.md` and removes. Nothing tidies unattended; until someone presses Tidy, notes from different agents may duplicate each other.
+**The hub is vault content.** Vault sync carries it to the person's other machines, so a memory one agent learned on one machine reaches every agent on every machine. A project is named by its repository's normalised `origin`, and the paths in a memory are stored portably, so a memory written in one checkout reads true in another.
 
-**Memory is not knowledge.** [Knowledge](../knowledge/spec.md) holds what the user or an agent **wrote down about the world**; this layer holds what agents **learned while working** — the user's preferences, a project's decisions, a trap already hit.
+**Each agent reads the copies the way it reads its own memory.** For Claude Code that is a `coffer_` topic file per memory, a short marked block in the project's `MEMORY.md`, and a rules file for global memories; for Codex it is a memory extension folder. Coffer delivers nothing into a session itself: no hook, no index at session start, no retrieval at prompt time.
+
+**Coffer does the mechanical work and nothing else.** It publishes, writes and removes copies; it never merges, rewords or judges a memory, and it never touches a memory an agent wrote. Judgement stays with each agent's own curation (Codex consolidation, Claude Code's Auto Dream), which now sees the other agents' memories beside its own; a copy the agent edited or removed is the agent's, and is not written again. **Curate now** asks an agent to run its curation at once.
+
+**Memory is not knowledge.** [Knowledge](../knowledge/spec.md) holds what the user or an agent **wrote down about the world**; this layer holds what agents **learned while working**: the user's preferences, a project's decisions, a trap already hit.
 
 | | Memory | Knowledge |
 | --- | --- | --- |
-| Where it comes from | agents' native memories, read-only | the human uploads it, or writes it with an agent |
+| Where it comes from | agents' native memories | the human uploads it, or writes it with an agent |
 | Partitioned by | project (and `global`) | collection |
-| Who authors the stored text | **Coffer**, one note per raw entry as it stands; a person or an agent may edit or tidy a note | the human or an agent, directly |
-| Delivered by | **push** — the index at session start and the notes a prompt names | **pull** — the agent reaches for it |
-| Can an entry be retired | yes, and must be | no; it is updated |
-| If the store is lost | rebuilt, equivalently, from the agents' own copies | gone |
+| Who authors the stored text | the agent that learned it; Coffer copies it as it stands | the human or an agent, directly |
+| Reaches an agent by | **push**: a copy in the agent's own memory | **pull**: the agent reaches for it |
+| Tidied by | each agent's own curation | an agent on request (Tidy) |
 
-Both supported agents solved retrieval the same way, and neither built a search engine for it: Claude Code loads **the whole index** into every session (94 entries, ~9k tokens on the maintainer's machine) and reaches a body with a file read; Codex writes **the search terms into the index entry itself**. This layer copies that shape:
+The first sync on a machine, and any sync that would change more than 50 copies, waits as a **preview** the person writes or cancels, and **Undo sync** removes every copy Coffer wrote that the agent has not edited. The page and the `coffer memory` commands manage the sync; neither reads or writes a memory's text.
 
-```
-~/.coffer/derived/memory/<partition>/
-├── MEMORY.md     ← the index. What a session is given; what a human opens first.
-├── notes/        ← Coffer's own notes. One topic per file.
-├── RETIRED.md    ← what was retired, and why. Also the next pass's exclusion list.
-└── .raw/         ← what was read out of the agents, verbatim. Derived, hidden.
-```
-
-Four jobs, kept apart: **`.raw/` is faithful, `notes/` is a readable copy that agents tidy, `MEMORY.md` is findable, `RETIRED.md` is what makes a retirement stick.** Three earlier designs are not repeated: transcript distillation (removed 2026-09-09), session-context injection that had never once been installed on the maintainer's machine (removed 2026-09-10; delivery returns as an explicit install with every fire audited), and a budgeted digest that on a live vault delivered 8 of 189 entries, none about the current project, pointing at a tool called five times in its lifetime — an agent will not go looking for what it has not been shown.
-
-Assumptions: each agent's native memory is read at the shape it has today, and a format change is expected to break the reader visibly and locally; both agents distil their own memory well enough to be a good source; a partition's index fits a session's opening comfortably, and the delivery ceiling exists for when it does not; and every consumer of delivery is a process on this machine with filesystem access, including a channel-driven turn, which drives a local Claude Code or Codex.
-
-While the `memory` feature is switched off (spec [experimental-features](../experimental-features/spec.md) "Close the memory feature's surfaces"), the memory routes are closed, the memory delivery hook is withdrawn from agents, and the distil and aggregate passes skip their rounds, and a note's `retired:` marker is not acted on meanwhile; stored memory stays untouched and the hook returns when the feature is switched on. Requirements below describe the feature while it is on.
+While the `memory` feature is switched off (spec [experimental-features](../experimental-features/spec.md)), the memory routes are closed and the memory sync skips its rounds; the copies already written stay in the agents' own memory.
 
 ## Requirements
 

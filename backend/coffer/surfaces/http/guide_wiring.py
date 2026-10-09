@@ -20,7 +20,7 @@ from collections.abc import Awaitable, Callable
 
 from coffer.application.features import FeatureService
 from coffer.application.skill.builtin_seed import BuiltinSkillSeed
-from coffer.domain.features import KNOWLEDGE, MEMORY
+from coffer.domain.features import KNOWLEDGE
 
 _log = logging.getLogger(__name__)
 
@@ -64,12 +64,12 @@ class BuiltinGuide:
 
 
 #: The features whose switch changes what the guide documents: ``knowledge``
-#: carries the catalogue, ``memory`` the memory root.
-GUIDE_FEATURES = frozenset({KNOWLEDGE, MEMORY})
+#: carries the catalogue.
+GUIDE_FEATURES = frozenset({KNOWLEDGE})
 
 
 def follow_guide_features(guide: BuiltinGuide, features: FeatureService) -> None:
-    """Re-render the guide whenever ``knowledge`` or ``memory`` is switched, so
+    """Re-render the guide whenever ``knowledge`` is switched, so
     what it documents leaves and comes back with the feature (spec
     experimental-features "Withdraw what a switched-off feature put in front of
     agents"). The renderer reads the switches itself; this only says when to

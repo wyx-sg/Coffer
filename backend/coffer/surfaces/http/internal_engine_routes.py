@@ -2,10 +2,9 @@
 """/api/v1/internal-engine-config — Coffer's own operating settings.
 
 Two things live on one singleton: the unattended work Coffer runs on a
-timer, and which model transcribes speech. The timed work is aggregation (spec
-memory "Aggregate on an interval and on demand") and distil (spec memory
-"Distil each raw entry into a note mechanically"),
-each with a switch and an interval the operator can see and change. A timer
+timer, and which model transcribes speech. The timed work is the memory sync
+(spec memory "Sync on an interval and on demand"), with a switch and an
+interval the operator can see and change. A timer
 that rewrites your files is not something to discover.
 
 The speech-to-text model (spec internal-engine "Transcribe speech on its own
@@ -26,8 +25,6 @@ from coffer.application.internal_engine_config_service import InternalEngineConf
 from coffer.application.upkeep_clock import PASS_CLOCK, last_pass_at
 from coffer.application.upkeep_schedule import DEFAULT_INTERVALS
 from coffer.domain.internal_engine_config import (
-    AGGREGATE,
-    DISTIL,
     MEMORY_SYNC,
     GlobalInternalEngineConfig,
     UpkeepSetting,
@@ -40,7 +37,7 @@ from coffer.surfaces.http.dependencies import (
 )
 
 #: The passes a client may name, in the order they run.
-_PASSES = (AGGREGATE, DISTIL, MEMORY_SYNC)
+_PASSES = (MEMORY_SYNC,)
 
 
 # The request/response models live here rather than in ``schemas.py``, which is
@@ -74,7 +71,7 @@ class InternalEngineConfigOut(BaseModel):
     """Coffer's own operating settings: its unattended work and its speech-to-text."""
 
     updated_at: datetime | None = None
-    #: Keyed by pass name (``aggregate`` / ``distil`` / ``memory_sync``).
+    #: Keyed by pass name (``memory_sync``).
     upkeep: dict[str, UpkeepSettingOut] = Field(default_factory=dict)
     #: The speech-to-text model. ``null`` means Coffer transcribes nothing and
     #: hands the agent the audio file untouched — a real answer, not an unset
@@ -105,7 +102,7 @@ class UpkeepUpdate(BaseModel):
     timer can be changed independently.
     """
 
-    pass_name: Literal["aggregate", "distil", "memory_sync"] = Field(alias="pass")
+    pass_name: Literal["memory_sync"] = Field(alias="pass")
     enabled: bool | None = None
     interval_s: int | None = Field(default=None, ge=60)
     #: Explicitly return this pass to its own default interval. Needed because

@@ -26,7 +26,6 @@ from coffer.infrastructure.daemon import bootstrap
 from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.knowledge.paths import knowledge_root
 from coffer.infrastructure.logging.files import log_dir
-from coffer.infrastructure.memory.paths import memory_root
 from coffer.infrastructure.model_proxy.info import info_path
 from coffer.infrastructure.model_proxy.spool import spool_dir
 from coffer.infrastructure.skill.master_store import MasterStore, default_master_root
@@ -63,7 +62,6 @@ def test_content_trees_are_under_content(home: pathlib.Path) -> None:
 
 
 def test_derived_trees_are_under_derived(home: pathlib.Path) -> None:
-    assert memory_root() == home / "derived" / "memory"
     store = MasterStore()
     assert store.paths_for("coffer-guide").folder == (home / "derived" / "skills" / "coffer-guide")
     assert store.paths_for("my-skill").folder == (home / "vault" / "skills" / "my-skill")
@@ -71,9 +69,9 @@ def test_derived_trees_are_under_derived(home: pathlib.Path) -> None:
 
 def test_every_root_follows_home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path / "one"))
-    first = (knowledge_root(), memory_root(), default_media_dir())
+    first = (knowledge_root(), default_media_dir())
     monkeypatch.setenv("HOME", str(tmp_path / "two"))
-    second = (knowledge_root(), memory_root(), default_media_dir())
+    second = (knowledge_root(), default_media_dir())
     for a, b in zip(first, second, strict=True):
         assert a.relative_to(tmp_path / "one") == b.relative_to(tmp_path / "two")
 
@@ -86,7 +84,6 @@ def test_a_retired_override_moves_nothing(
     roots = (
         knowledge_root(),
         default_master_root(),
-        memory_root(),
     )
     assert all(str(root).startswith(str(home)) for root in roots), roots
     assert os.environ[name] == "/elsewhere"

@@ -141,13 +141,6 @@ SPECS = [
         _UI + "Data · storage",
         "What Coffer stores and how much.",
     ),
-    RouteCommand(
-        "settings storage clear-cache",
-        "POST",
-        "/storage/cache/clear",
-        _UI + "Data · Clear cache",
-        "Delete caches Coffer can rebuild.",
-    ),
 ]
 
 mount(SPECS)

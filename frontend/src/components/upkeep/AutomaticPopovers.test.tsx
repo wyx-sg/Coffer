@@ -1,28 +1,32 @@
 // frontend/src/components/upkeep/AutomaticPopovers.test.tsx
 //
-// The automatic-read schedule behind the ▾ of Memory's Update memory button (spec internal-engine
-// "Show and change the memory passes on the Memory page"): it opens a popover
-// whose edits write the aggregate and distil passes.
-import { beforeEach, expect, vi } from "vitest";
+// The automatic-sync schedule behind the ▾ of Memory's Sync now button (spec
+// memory "Sync on an interval and on demand"): it opens a popover whose edits
+// write the internal engine's one `memory_sync` pass.
+import { beforeEach, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
-import { MemoryAutomaticPopover } from "@/components/memory/MemoryAutomaticPopover";
+import { MemorySyncButton } from "@/components/memory/MemorySyncButton";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { InternalEngineConfig, UpkeepSetting } from "@/lib/api/internalEngine";
-import { acceptance } from "@/test/acceptance";
 
 const MINUTE = 60_000;
 const at = (minutes: number) => new Date(Date.now() + minutes * MINUTE).toISOString();
 
 let config: Partial<InternalEngineConfig> = {};
 const setUpkeep = vi.fn();
+const syncNow = vi.fn();
 
 vi.mock("@/lib/hooks/useInternalEngine", () => ({
   useInternalEngineConfig: () => ({ data: config }),
   useSetUpkeep: () => ({ isPending: false, mutate: setUpkeep }),
 }));
+vi.mock("@/lib/hooks/useMemory", () => ({
+  useSyncNow: () => ({ isPending: false, mutate: syncNow }),
+}));
+
 function pass(over: Partial<UpkeepSetting> = {}): UpkeepSetting {
   return {
     enabled: true,
@@ -59,25 +63,36 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-acceptance("internal-engine", "the memory popover switches reading and distilling together", () => {
-  config = {
-    upkeep: {
-      aggregate: pass({ last_pass_at: at(-14), next_pass_at: at(46) }),
-      distil: pass({ default_interval_s: 21600 }),
-    },
-  };
-  renderIt(<MemoryAutomaticPopover trigger={<button data-testid="memory-automatic">v</button>} />);
+test("the memory popover switches and times the one memory_sync pass", () => {
+  config = { upkeep: { memory_sync: pass({ last_pass_at: at(-14), next_pass_at: at(46) }) } };
+  renderIt(<MemorySyncButton running={false} />);
   const dialog = open("memory-automatic");
-  expect(dialog).toHaveTextContent("Read memory automatically");
-  expect(dialog).toHaveTextContent(/Last read 14m ago · next in 46m/);
+  expect(dialog).toHaveTextContent("Sync memory automatically");
+  expect(dialog).toHaveTextContent(/Last synced 14m ago · next in 46m/);
 
-  fireEvent.click(within(dialog).getByRole("switch", { name: "Read memory automatically" }));
-  expect(setUpkeep).toHaveBeenCalledTimes(2);
-  expect(setUpkeep).toHaveBeenCalledWith({ pass: "aggregate", enabled: false });
-  expect(setUpkeep).toHaveBeenCalledWith({ pass: "distil", enabled: false });
+  fireEvent.click(within(dialog).getByRole("switch", { name: "Sync memory automatically" }));
+  expect(setUpkeep).toHaveBeenCalledTimes(1);
+  expect(setUpkeep).toHaveBeenCalledWith({ pass: "memory_sync", enabled: false });
 
   setUpkeep.mockClear();
   pickInterval(dialog, "30 minutes");
   expect(setUpkeep).toHaveBeenCalledTimes(1);
-  expect(setUpkeep).toHaveBeenCalledWith({ pass: "aggregate", interval_s: 1800 });
+  expect(setUpkeep).toHaveBeenCalledWith({ pass: "memory_sync", interval_s: 1800 });
+});
+
+test("Sync now syncs, and reads Syncing… while the daemon reports a sync running", () => {
+  config = { upkeep: { memory_sync: pass() } };
+  const { rerender } = renderIt(<MemorySyncButton running={false} />);
+  fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
+  expect(syncNow).toHaveBeenCalledTimes(1);
+  rerender(
+    <QueryClientProvider client={new QueryClient()}>
+      <TooltipProvider>
+        <MemoryRouter>
+          <MemorySyncButton running />
+        </MemoryRouter>
+      </TooltipProvider>
+    </QueryClientProvider>,
+  );
+  expect(screen.getByRole("button", { name: "Syncing…" })).toBeDisabled();
 });

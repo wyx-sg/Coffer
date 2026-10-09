@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
-from coffer.application.memory.aggregate import AgentSource
+from coffer.application.memory.sources import AgentSource
 from coffer.application.memory.sync_publish import FindSecret, PublishContext, publish
 from coffer.application.memory.sync_report import SyncReport, preview_summary
 from coffer.application.memory.sync_write import (

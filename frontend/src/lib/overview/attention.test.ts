@@ -100,28 +100,17 @@ describe("pages", () => {
   });
 });
 
-test("a memory-hook problem opens the agent's Hooks tab and repairs as a hook", () => {
-  const hook = item({
+test("an agent's repair opens the agent's page and reads by its verb", () => {
+  const repair = item({
     kind: "agent",
     uid: "a1",
-    reason_code: "stale_command",
+    reason_code: "agent_partial",
     action: { verb: "repair", method: "POST", path: "/api/v1/reconcile/apply", body: null },
   });
-  expect(actionPage(hook, "claude_code")).toBe("/agents/claude_code/hooks");
-  expect(itemPage(hook, "claude_code")).toBe("/agents/claude_code");
-  expect(itemActionLabelKey(hook)).toBe("overview.actions.repairHook");
-  const untrusted = item({ ...hook, reason_code: "hook_untrusted" });
-  expect(actionPage(untrusted, "codex")).toBe("/agents/codex/hooks");
-  // Only a hook reason on an agent: a skill's drift keeps its own page and label.
-  const drift = item({
-    ...hook,
-    kind: "skill",
-    uid: "s1",
-    title: "code-review",
-    reason_code: "link_missing",
-  });
+  expect(actionPage(repair, "claude_code")).toBe("/agents/claude_code");
+  expect(itemActionLabelKey(repair)).toBe("overview.actions.repair");
+  const drift = item({ ...repair, kind: "skill", uid: "s1", title: "code-review" });
   expect(actionPage(drift)).toBe("/skills/code-review");
-  expect(itemActionLabelKey(drift)).toBe("overview.actions.repair");
 });
 
 test("an action label comes from its verb, falling back to Open", () => {

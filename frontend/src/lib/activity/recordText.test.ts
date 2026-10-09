@@ -32,9 +32,13 @@ describe("changeLink", () => {
     expect(changeLink(entry("provider", "agnes"), "p-1")?.to).toBe("/model-providers/p-1");
     expect(changeLink(entry("channel", "seatalk"), "c-1")?.to).toBe("/channels/c-1");
     expect(changeLink(entry("knowledge", "shopee"), "k-1")?.to).toBe("/knowledge/k-1");
-    expect(changeLink(entry("memory", "coffer"), "m-1")?.to).toBe("/memory/m-1");
     // Not found (deleted since): the kind's list.
-    expect(changeLink(entry("memory", "gone"))?.to).toBe("/memory");
+    expect(changeLink(entry("knowledge", "gone"))?.to).toBe("/knowledge");
+  });
+
+  test("an old memory partition's record keeps its label but opens nothing", () => {
+    // Memory partitions are gone; their past records stay readable, unlinked.
+    expect(changeLink(entry("memory", "coffer"), "m-1")).toBeNull();
   });
 
   test("a name-addressed kind opens by name", () => {

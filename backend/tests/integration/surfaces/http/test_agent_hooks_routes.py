@@ -43,16 +43,14 @@ def test_the_hooks_route_lists_hooks_and_writes_nothing(
 
         assert r.status_code == 200, r.text
         body = r.json()
-        assert [(h["event"], h["command"], h["source"], h["coffer"]) for h in body["items"]] == [
-            ("Stop", "x.sh", "user", False),
-            ("Stop", "notify.sh", "user", False),
+        assert [(h["event"], h["command"], h["source"]) for h in body["items"]] == [
+            ("Stop", "x.sh", "user"),
+            ("Stop", "notify.sh", "user"),
         ]
         # Timeout and the position `hooks.Stop[0].hooks[1]` come with each hook.
         second = body["items"][1]
         assert (second["timeout"], second["group_index"], second["hook_index"]) == (7, 0, 1)
-        assert body["coffer_hook"]["health"] == "missing"
-        # Missing: the events it would be installed on, both.
-        assert body["coffer_hook"]["event"] == "SessionStart,UserPromptSubmit"
+        assert "coffer_hook" not in body and "coffer" not in body["items"][0]
         assert body["parse_errors"] == []
         assert _audit_count(c) == before
         assert c.get("/api/v1/agents/nope/hooks").status_code == 404

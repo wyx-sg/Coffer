@@ -1,9 +1,7 @@
-"""``/api/v1/storage`` — what Coffer keeps on this machine, and clearing the rebuildable cache.
+"""``/api/v1/storage`` — what Coffer keeps on this machine.
 
-Spec daemon "Report what Coffer stores and clear the rebuildable cache", read
-by Settings > Data. Measuring and clearing are in
-``infrastructure/storage_usage.py``; this module only refuses a clear while a
-memory pass is rewriting the tree, and records the clear.
+Spec daemon "Report what Coffer stores", read by Settings > Data. Measuring is
+in ``infrastructure/storage_usage.py``.
 """
 
 from __future__ import annotations
@@ -12,21 +10,14 @@ import asyncio
 
 from fastapi import APIRouter, Depends
 
-from coffer.application.audit_service import AuditService
-from coffer.application.upkeep_runs import UPKEEP_RUNS
-from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import UpkeepAlreadyRunning
 from coffer.infrastructure import storage_usage
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.daemon_schemas import (
-    CacheClearOut,
-    CacheUsageOut,
     HistoryUsageOut,
     LocalContentUsageOut,
     StorageSummaryOut,
     VaultUsageOut,
 )
-from coffer.surfaces.http.dependencies import get_actor, get_audit_service
 
 router = APIRouter(prefix="/api/v1/storage", tags=["daemon"], dependencies=[Depends(require_token)])
 
@@ -46,28 +37,4 @@ async def storage_summary() -> StorageSummaryOut:
             bytes=usage.local_content.bytes,
         ),
         history=HistoryUsageOut(path=usage.history.path, bytes=usage.history.bytes),
-        cache=CacheUsageOut(bytes=usage.cache_bytes),
     )
-
-
-@router.post("/cache/clear", response_model=CacheClearOut)
-async def clear_cache(
-    audit: AuditService = Depends(get_audit_service),  # noqa: B008
-    actor: str = Depends(get_actor),
-) -> CacheClearOut:
-    """Delete the memory tree's files and the transcript summary cache.
-
-    Partitions keep their rows; the next memory update rebuilds their folders
-    from the agents' own memory. Refused (409) while a memory pass is running,
-    because that pass is writing into the tree being cleared.
-    """
-    busy = next((run for run in UPKEEP_RUNS.list_running() if run.kind == "memory"), None)
-    if busy is not None:
-        raise UpkeepAlreadyRunning(busy.kind, busy.name)
-    freed = await asyncio.to_thread(storage_usage.clear_cache)
-    await audit.record(
-        AuditEventType.STORAGE_CACHE_CLEARED.value,
-        actor=actor,
-        details={"cleared_bytes": freed},
-    )
-    return CacheClearOut(cleared_bytes=freed)

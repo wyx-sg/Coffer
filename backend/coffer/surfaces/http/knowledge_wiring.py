@@ -19,7 +19,6 @@ one place allowed to bridge kinds (Contract 5).
 
 from __future__ import annotations
 
-import pathlib
 from dataclasses import dataclass
 from functools import cache
 from typing import TYPE_CHECKING
@@ -106,20 +105,12 @@ def wire_knowledge_kind(
         # One rendering for the whole machine: the catalogue carries no
         # per-agent slice, so there is one text and every agent gets it.
         # While the ``knowledge`` feature is off the skill carries no catalogue,
-        # documents no knowledge tool and does not name the memory root (spec
-        # experimental-features); nothing the feature holds moves. The memory
-        # root is read off the registry the memory kind put it in, which
-        # answers None while that feature is off.
+        # and documents no knowledge tool (spec experimental-features);
+        # nothing the feature holds moves.
         on = features.is_enabled(KNOWLEDGE)
-        memory_root = builtin_tools.directory("memory")
         return guide_render.render(
             guide_render.display_root(paths.knowledge_root()),
             await service.catalogue() if on else None,
-            memory_root=(
-                guide_render.display_memory_root(pathlib.Path(memory_root))
-                if memory_root is not None
-                else None
-            ),
         )
 
     # No tool: knowledge is plain files an agent reads and writes with its own

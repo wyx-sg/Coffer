@@ -50,6 +50,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 ├── state/settings/internal-engine.json
 ├── knowledge/<collection>/             # documents, README.md, hidden .inbox/
 ├── skills/<name>/                      # skill master folders
+├── memory/                             # the memory hub: global/ and projects/<project>/
 ├── secret/<ref>.enc
 ├── machines/<machine id>.json
 └── .git/
@@ -62,10 +63,11 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `resources/<kind>/<name>.json` | 每个资源一个 JSON 文件：`uid`、`kind`、`format_version`、`name`、可选的 `title`、`description`、`config`。身份以文件里的 `uid` 为准，而不是路径。 | 你、守护进程 | 是 | 不能：所有同步的机器上这个资源都会消失。 |
 | `state/mcp-preferences/<server>.json` | 你在某个 MCP 服务器上关掉的工具、提示词和资源，附带该服务器的 uid。 | 你、守护进程 | 是 | 可以：该服务器上的一切都会重新打开。 |
 | `state/channel-peers/<channel>.json` | 与某个消息渠道配对的身份，包括所有者。 | 守护进程 | 是 | 配对关系会丢失。 |
-| `state/settings/internal-engine.json` | 单次模型调用的超时、语音转文字模型，以及 aggregate 和 distil 的开关和间隔。不存在时用默认值。 | 你、守护进程 | 是 | 可以：设置恢复默认。 |
+| `state/settings/internal-engine.json` | 语音转文字模型，以及记忆同步的开关和间隔。不存在时用默认值。 | 你、守护进程 | 是 | 可以：设置恢复默认。 |
 | `knowledge/<collection>/` | 一个知识集：任意层级嵌套的 Markdown 文档，加一个描述它的 `README.md`。你和你的智能体编辑这些文件；整理则由智能体来合并和纠正。 | 你、守护进程 | 是 | **不能。** 这是写下来的知识。 |
 | `knowledge/<collection>/.inbox/` | 投放区：智能体或另一台机器放在这里的 Markdown 文件，会被下一次扫描（一分钟内）收编并升格为文档，之后这个文件就不在了。 | 你、你的智能体、守护进程 | 是 | 不能：尚未升格的文件会丢失。 |
 | `skills/<name>/` | 托管技能的主副本：`SKILL.md`、其他文件，以及 `.coffer.meta.json`（Coffer 的元数据）。智能体拿到的是指向这个目录的符号链接。 | 你、守护进程 | 是 | **不能。** 删掉目录会让投递给智能体的链接失效。 |
+| `memory/` | [记忆](/zh/guides/memory)中心库：你任意一台机器上的智能体为自己写下的每条记忆一个 Markdown 文件，放在 `global/` 或 `projects/<project>/` 下（项目是仓库的远端，`[A-Za-z0-9._-]` 之外的字符都换成 `-`）。Frontmatter 写明来源机器、智能体和来源文件；文本里的路径存为 `<repo>` 和 `~`。只有条目来源的那台机器会修改它。 | 记忆同步 | 是 | 每台机器会在下次同步时重新发布自己智能体的记忆；另一台机器的记忆只能由那台机器重新发布。 |
 | `secret/<ref>.enc` | 一个密钥的 Fernet 密文，权限 `0600`。从不包含主密钥本身。除非同步远端允许携带密钥，否则不进仓库。 | 守护进程 | 仅在 `--with-secret` 时 | **不能。** 密钥就没了。 |
 | `machines/<machine id>.json` | 每台参与同步的机器一个描述文件：名称、操作系统、主机名、Coffer 版本、上一轮同步、上次收敛的提交、密钥指纹、智能体及其插件。 | 同步（每台机器只写自己的） | 是 | 在**同步**页面的机器列表里用**退役**移除另一台机器。 |
 | `.git/` | 上面所有文件的历史。每轮同步前的快照是 `refs/tags/coffer/pre-apply/` 下的标签。`.git/info/exclude` 列出仓库忽略的内容。 | 守护进程 | 同步的就是这些提交 | **不能。** 所有版本和回滚能力都会丢失。 |
@@ -81,6 +83,8 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `local/skill-source-status.json` | 本机上次在每个从 Git 导入的技能来源处看到的情况。 | 守护进程 | 从不 | 可以：下次检查会补上。 |
 | `local/secret/` | 仅限本机的密文，比如模型代理的令牌。 | 守护进程 | 从不 | 代理令牌会重新生成；使用提供商的智能体会重新读取自己的令牌。 |
 | `local/secret-boundary/` | `bindings.json`、`approvals.json`、`settings.json`、`times.json`：每个密钥被批准发往哪个目的地、待处理的审批、密钥边界的开关、每个密钥首次存到本机的时间。 | 守护进程 | 从不 | 每个密钥都要重新等待审批。 |
+| `local/memory-sync.json` | 记忆同步的账本：每个来源的摘要、Coffer 写进本机智能体的每份副本及其状态（已写入、被智能体修改或移除）、交付内容的指纹、Codex 导入开关、本机是否确认过预览、上次同步及其报告。 | 守护进程 | 从不 | 可以：下次同步会根据 `coffer_` 文件重新推出它，并先给出预览。 |
+| `local/memory-sync-preview.json` | 一次首次或大量的记忆同步，正在记忆页上等待**写入**或**取消**。 | 守护进程 | 从不 | 可以：下次同步会重新规划。 |
 | `local/sync/remote.json` | 唯一的同步远端：URL、分支、推送用密钥引用、是否携带密钥、间隔、是否暂停。 | 守护进程 | 从不 | 本机忘掉这个远端。 |
 | `local/sync/round.json` | 一轮停下的同步、一次保留，或一次加入尚待选择的项目，以及你目前的回答。 | 守护进程 | 从不 | 下一轮会重新提问。 |
 
@@ -108,13 +112,12 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 
 ### 派生数据 {#derived}
 
-`derived/` 下的一切都能从其余数据重建，所以（在守护进程停止时）删除它总是安全的。**设置 → 数据** 可以帮你清掉这些缓存。
+`derived/` 下的一切都能从其余数据重建，所以（在守护进程停止时）删除它总是安全的。
 
 | 路径 | 用途 | 由谁重建 |
 | --- | --- | --- |
 | `derived/derived.db` | MCP 服务器健康状态、哪些技能副本投递到了哪些智能体、每项上游能力首次和最近一次被看到的时间。表结构版本不一致时会重建。 | 健康检查、技能投递、网关 |
-| `derived/memory/<partition>/` | `global` 或某个仓库的派生记忆：`MEMORY.md`（索引）、`notes/`、`RETIRED.md`（退役了什么、为什么），以及隐藏的 `.raw/`（聚合读到的原文）。根目录的 `.source_state.json` 记录上一次聚合读了什么。 | 聚合与提炼（`RETIRED.md` 中的退役决定和你对笔记的编辑会丢失） |
-| `derived/resources/` | 派生的资源文件：记忆分区，以及 `skill/coffer-guide.json`。 | 守护进程启动时 |
+| `derived/resources/` | 派生的资源文件：`skill/coffer-guide.json`。 | 守护进程启动时 |
 | `derived/secret-citations.json` | 每个密钥被谁引用：引用它的资源和技能文件。不会同步。 | 守护进程启动时重建，之后每次资源或技能变化时更新 |
 | `derived/skills/coffer-guide/` | Coffer 自带的指南技能，由当前构建渲染。 | 守护进程启动时 |
 | `derived/sync-conflicts/` | 停下的同步轮次中冲突文件的标注副本，供手工合并。 | 在编辑器里重新打开该文件 |
@@ -183,7 +186,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 
 ## 智能体配置目录里的内容 {#inside-an-agent-s-config-directory}
 
-Coffer 只会为你要求的事写入已注册智能体自己的配置目录：把它连接到 Coffer、投递技能、切换模型提供商、安装或移除 MCP 条目，或切换插件。每次写入都是原子的，如果文件在 Coffer 读取之后变了就会被拒绝，文件的上一版会先复制到 `~/.coffer/config-backups`，从不放在文件旁边（见[配置备份](#config-backups)）。
+Coffer 只会为你要求的事写入已注册智能体自己的配置目录：把它连接到 Coffer、投递技能、切换模型提供商、安装或移除 MCP 条目、切换插件，或同步记忆。每次写入都是原子的，如果文件在 Coffer 读取之后变了就会被拒绝，文件的上一版会先复制到 `~/.coffer/config-backups`，从不放在文件旁边（见[配置备份](#config-backups)）。
 
 配置目录默认是 Claude Code 的 `~/.claude` 和 Codex 的 `~/.codex`。如果智能体注册在别的目录，Coffer 为它启动的每个进程都会设置 `CLAUDE_CONFIG_DIR` 或 `CODEX_HOME`。
 
@@ -193,7 +196,9 @@ Coffer 只会为你要求的事写入已注册智能体自己的配置目录：�
 | --- | --- | --- |
 | `~/.claude.json`（非默认目录时在配置目录内） | `mcpServers.coffer`：`{"command": "~/.coffer/bin/coffer-mcp-shim", "args": ["--agent-uid", "<uid>"]}`，shim 路径为绝对路径。 | 把智能体连接到 Coffer 时。见[智能体](/zh/guides/agents#connect-an-agent-to-coffer)。 |
 | `settings.json` | `apiKeyHelper` 设为 `<absolute path to coffer> proxy token --agent-uid <agent uid>`（例如 `/Users/you/.coffer/bin/coffer …`；只有找不到 CLI 时才用裸的 `coffer`），它会打印该智能体的本地代理令牌；`env.ANTHROPIC_BASE_URL` 设为模型代理的 `http://127.0.0.1:<proxy port>/anthropic`；把 `127.0.0.1,localhost` 追加到 `env.NO_PROXY`；以及模型相关的键（`model`、`env.ANTHROPIC_DEFAULT_<TIER>_MODEL`、`modelPicker`）。从不写入提供商的 API 密钥。 | 把智能体切换到某个模型提供商时。见[模型提供商](/zh/guides/providers)。 |
-| `settings.json` | 两个 Hook 条目，命令以 `: coffer-memory;` 开头，并以完整路径运行 `coffer` CLI：`coffer memory hook --agent-uid <uid> --cwd "$PWD"`。分别是 `hooks.SessionStart`（matcher `startup\|resume\|clear\|compact`，超时 10 秒）和 `hooks.UserPromptSubmit`（超时 5 秒）。 | 把智能体连接到 Coffer。见[记忆](/zh/guides/memory#install-the-hook)。 |
+| `projects/<project>/memory/coffer_<slug>.md` | 另一个智能体或另一台机器学到的每条记忆一份副本，使用 Claude Code 的记忆格式，外加一个写明来源的 `coffer:` 区块。一旦 Claude Code 修改或移除它，Coffer 就不再动它。 | 记忆同步，针对本机已检出的项目。见[记忆](/zh/guides/memory#what-coffer-writes-into-each-agent)。 |
+| `projects/<project>/memory/MEMORY.md` | 在 `<!-- coffer:memory-sync:begin -->` 和 `<!-- coffer:memory-sync:end -->` 之间每份副本一行，最多 30 行；文件的其余部分从不改动。不存在时创建。 | 记忆同步。 |
+| `rules/coffer-memory.md` | 来自你其他智能体和机器的每条 `global` 记忆，放在一个归 Coffer 所有的文件里。 | 记忆同步。 |
 | `skills/<name>` | 指向 `~/.coffer/vault/skills/<name>` 的符号链接（不支持符号链接时为副本）。 | 向智能体投递技能时。见[技能](/zh/guides/skills)。 |
 
 ### Codex {#codex}
@@ -203,10 +208,10 @@ Coffer 只会为你要求的事写入已注册智能体自己的配置目录：�
 | `config.toml` | `[mcp_servers.coffer]`，`command` 设为 shim，`args = ["--agent-uid", "<uid>"]`。 | 把智能体连接到 Coffer 时。 |
 | `config.toml` | `model_provider = "coffer"`；一个 `[model_providers.coffer]` 表，其中 `base_url` 设为模型代理的 `http://127.0.0.1:<proxy port>/openai/v1`，`supports_websockets = false`，`requires_openai_auth = false`，以及一条 `auth` 命令（以绝对路径调用 `coffer`，`args = ["proxy", "token", "--agent-uid", "<agent uid>"]`）；还有指向下面模型目录的 `model_catalog_json`。从不写入提供商的 API 密钥。 | 把智能体切换到某个模型提供商时。 |
 | `coffer-model-catalog.json` | 提供商精选的模型列表，让 Codex 自己的模型选择器能显示它。关闭提供商时删除。 | 把智能体切换到某个模型提供商时。 |
-| `hooks.json` | 与 Claude Code 相同的两个 Hook 条目，事件、matcher 和超时都一样，都运行 `coffer memory hook`。Codex 在 `config.toml` 的 `[hooks.state]` 中记录对每个条目的批准，Coffer 只读不写。 | 把智能体连接到 Coffer。 |
+| `memories/extensions/coffer/` | `instructions.md`（告诉 Codex 的整合这些文件是什么）和 `resources/<id>-<slug>.md`（另一个智能体或另一台机器学到的每条记忆一个）。Codex 的记忆关闭时什么都不写。 | 记忆同步。见[记忆](/zh/guides/memory#what-coffer-writes-into-each-agent)。 |
 | `skills/<name>` | 指向 `~/.coffer/vault/skills/<name>` 的符号链接。 | 向智能体投递技能时。 |
 
-Coffer 通过 `coffer` 服务器键、`: coffer-memory` 标记，以及运行 `coffer` CLI（裸名或任意路径）加 `proxy token` 的 `apiKeyHelper` 来识别自己的条目，并且只删除这些。其他条目——你自己的 MCP 服务器、其他工具的 Hook、你的 `env`——保持原样。Coffer 会读取智能体的原生记忆文件，但从不写入。
+Coffer 通过 `coffer` 服务器键，以及运行 `coffer` CLI（裸名或任意路径）加 `proxy token` 的 `apiKeyHelper` 来识别自己的条目，并且只删除这些。其他条目——你自己的 MCP 服务器、你的 Hook、你的 `env`——保持原样。在智能体的记忆里，Coffer 只写上面列出的文件和标记区块，从不写智能体自己写的记忆；记忆页上的**撤销同步…**会移除它们。升级后首次启动时，守护进程会移除早期版本装在 `settings.json` 和 `hooks.json` 里的 `: coffer-memory` Hook 条目。
 
 ::: tip 清理智能体
 卸载 Coffer 之前，先断开每个智能体与 Coffer 的连接，并在每个智能体的页面上移除提供商投影，然后再删除 `~/.coffer`。先删 `~/.coffer` 的话，智能体会指向一个已经不存在的 shim。

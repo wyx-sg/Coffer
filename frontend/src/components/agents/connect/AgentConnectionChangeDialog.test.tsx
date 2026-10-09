@@ -25,10 +25,7 @@ function use(d: FakeDaemon) {
 }
 
 const claude = typeRow({ type: "claude_code", uid: "agt_a" });
-const both = [
-  { key: "mcp", installed: true, detail: "/Users/me/.coffer/bin/coffer" },
-  { key: "memory_hook", installed: true, detail: "coffer memory hook --agent-uid agt_a" },
-];
+const both = [{ key: "mcp", installed: true, detail: "/Users/me/.coffer/bin/coffer" }];
 
 afterEach(() => vi.clearAllMocks());
 
@@ -45,9 +42,7 @@ describe("AgentConnectionChangeDialog", () => {
       expect(within(dialog).getByText("Disconnect Claude Code from Coffer?")).toBeInTheDocument(),
     );
     expect(within(dialog).getByText("Review changes")).toBeInTheDocument();
-    expect(
-      within(dialog).getByText(/Loses Coffer’s MCP servers, skills and memory/),
-    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/Loses Coffer’s MCP servers and skills/)).toBeInTheDocument();
     expect(within(dialog).getByText(/Only Coffer’s own lines are removed/)).toBeInTheDocument();
     expect(within(dialog).getAllByText("−4").length).toBeGreaterThan(0);
     expect(dialog.querySelectorAll('[data-line="remove"]').length).toBeGreaterThan(0);
@@ -72,7 +67,7 @@ describe("AgentConnectionChangeDialog", () => {
     expect(await screen.findByText("Nothing to change")).toBeInTheDocument();
   });
 
-  test("adding an agent writes the MCP entry and the memory hook", async () => {
+  test("adding an agent writes the MCP entry and nothing else", async () => {
     const codex = typeRow({ type: "codex" });
     use(fakeDaemon({ types: [codex] }));
     renderWithDaemon(
@@ -80,14 +75,13 @@ describe("AgentConnectionChangeDialog", () => {
     );
     const dialog = await screen.findByRole("dialog");
     await waitFor(() =>
-      expect(within(dialog).getByTestId("changes-heading")).toHaveTextContent("Changes · 2"),
+      expect(within(dialog).getByTestId("changes-heading")).toHaveTextContent("Changes · 1"),
     );
     expect(within(dialog).getAllByText("~/.codex/config.toml").length).toBeGreaterThan(0);
-    expect(within(dialog).getAllByText("~/.codex/hooks.json").length).toBeGreaterThan(0);
-    // Before registration the uid is not known, and the previews say so: the
-    // MCP entry once, and the memory hook's two entries (SessionStart,
-    // UserPromptSubmit).
-    expect(within(dialog).getAllByText(/<assigned on add>/)).toHaveLength(3);
+    // Coffer installs no hook: hooks.json is not touched.
+    expect(within(dialog).queryByText("~/.codex/hooks.json")).toBeNull();
+    // Before registration the uid is not known, and the MCP entry's preview says so.
+    expect(within(dialog).getAllByText(/<assigned on add>/)).toHaveLength(1);
   });
 
   acceptance(
@@ -101,10 +95,7 @@ describe("AgentConnectionChangeDialog", () => {
           connections: {
             agt_a: {
               state: "disconnected",
-              parts: [
-                { key: "mcp", installed: false, detail: null },
-                { key: "memory_hook", installed: false, detail: null },
-              ],
+              parts: [{ key: "mcp", installed: false, detail: null }],
             },
           },
           fail: (c) =>

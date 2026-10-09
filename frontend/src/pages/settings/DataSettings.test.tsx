@@ -97,7 +97,6 @@ const STORAGE: StorageSummary = {
     bytes: 224_395_264,
   },
   history: { path: "/Users/u/.coffer/runs.db", bytes: 50_541_363 },
-  cache: { bytes: 100_663_296 },
 };
 
 function wrap(ui: React.ReactNode) {
@@ -115,13 +114,7 @@ function mockApi({
   storage = STORAGE,
   policies = POLICIES,
   patch = vi.fn().mockResolvedValue({ data: {}, error: undefined }),
-  post = vi
-    .fn()
-    .mockImplementation(async (path: string) =>
-      path === "/storage/cache/clear"
-        ? { data: { cleared_bytes: 100_663_296 }, error: undefined }
-        : { data: { tables: { mcp_invocations: 12 } }, error: undefined },
-    ),
+  post = vi.fn().mockResolvedValue({ data: { tables: { mcp_invocations: 12 } }, error: undefined }),
 }: {
   storage?: typeof STORAGE;
   policies?: typeof POLICIES;
@@ -171,9 +164,9 @@ describe("DataSettings", () => {
     expect(within(history).queryByText("Sync rounds")).toBeNull();
     expect(within(history).queryByText("Attachments")).toBeNull();
     expect(within(history).getByRole("button", { name: /clear expired data now/i })).toBeVisible();
-    const cache = screen.getByTestId("settings-data-cache");
-    expect(within(cache).getByText("96 MB")).toBeInTheDocument();
-    expect(within(cache).getByRole("button", { name: /^clear$/i })).toBeInTheDocument();
+    // Coffer keeps no rebuildable cache: no cache block and no Clear cache.
+    expect(screen.queryByTestId("settings-data-cache")).toBeNull();
+    expect(screen.queryByText("Rebuildable cache")).toBeNull();
     expect(screen.queryByText(/this mac only/i)).toBeNull();
     expect(screen.queryByRole("button", { name: /^save$/i })).toBeNull();
   });
@@ -306,50 +299,6 @@ describe("DataSettings", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /clear expired data now/i }));
     await waitFor(() => expect(post).toHaveBeenCalledWith("/retention/prune", { body: {} }));
     expect(await screen.findByText("Removed 12 rows from Tool calls")).toBeInTheDocument();
-  });
-
-  // The page half; the backend half is test_daemon_port_and_storage_routes.py.
-  acceptance("web-ui", "clearing the cache is confirmed and rebuilt", async () => {
-    const { post } = mockApi();
-    render(wrap(<DataSettings />));
-    const cache = await screen.findByTestId("settings-data-cache");
-    await within(cache).findByText("96 MB");
-    fireEvent.click(within(cache).getByRole("button", { name: /^clear$/i }));
-    const dialog = await screen.findByRole("dialog");
-    expect(
-      within(dialog).getByText(/rebuilt from the agents' own memory on the next update/i),
-    ).toBeInTheDocument();
-    expect(
-      within(dialog).getByText(/each entry becoming a note as it stands/i),
-    ).toBeInTheDocument();
-    expect(within(dialog).getByText(/sources are gone won't come back/i)).toBeInTheDocument();
-    expect(post).not.toHaveBeenCalled();
-    fireEvent.click(within(dialog).getByRole("button", { name: /clear cache/i }));
-    await waitFor(() => expect(post).toHaveBeenCalledWith("/storage/cache/clear"));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-  });
-
-  test("a failed cache clear keeps the dialog open with its error", async () => {
-    const post = vi.fn().mockResolvedValue({
-      data: undefined,
-      error: {
-        error: {
-          code: "UPKEEP_ALREADY_RUNNING",
-          message: "an upkeep pass is already running",
-          details: {},
-        },
-      },
-    });
-    mockApi({ post });
-    render(wrap(<DataSettings />));
-    const cache = await screen.findByTestId("settings-data-cache");
-    await within(cache).findByText("96 MB");
-    fireEvent.click(within(cache).getByRole("button", { name: /^clear$/i }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /clear cache/i }));
-    await waitFor(() => expect(post).toHaveBeenCalled());
-    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   test("a retention save that fails says so, marks the row and offers Retry", async () => {

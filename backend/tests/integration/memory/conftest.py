@@ -6,7 +6,7 @@ exact spelling ``git remote add`` writes into a config are all things this
 layer parses by hand, and a fixture that wrote them by hand would be testing
 the test's idea of git rather than git's.
 
-``ResourceService``/``AuditService`` stay fake — nothing here needs a real
+``AuditService`` stays fake — nothing here needs a real
 database, and the agent config directories all live under ``tmp_path``.
 The memory root resolves from the fresh ``HOME`` every test gets
 (``_real_home_guard`` in ``backend/tests/conftest.py``).
@@ -18,16 +18,10 @@ import json
 import pathlib
 import subprocess
 
-from tests.unit.memory.conftest import (  # re-exported for the integration tests
-    FakeAudit,
-    FakeResources,
-    agent_source_resolver,
-)
+from tests.unit.memory.conftest import FakeAudit  # re-exported for the integration tests
 
 __all__ = [
     "FakeAudit",
-    "FakeResources",
-    "agent_source_resolver",
     "claude_code_config",
     "codex_config",
     "git",

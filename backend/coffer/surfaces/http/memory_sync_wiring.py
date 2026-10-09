@@ -4,8 +4,8 @@ demand").
 Builds the sync service and its page view, sets the route dependencies, and
 starts the worker: one sync at start, then on the operator's interval, while
 both the ``memory`` feature and the ``memory_sync`` pass are on. The pass is
-off by default (``domain.internal_engine_config``): the sync writes into the
-agents' own memory, so the person turns it on.
+on by default (``domain.internal_engine_config``); the first sync on a machine
+waits for the person to confirm its preview before it writes into an agent.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from dataclasses import replace
 from coffer.application.audit_service import AuditService
 from coffer.application.features import FeatureService
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
-from coffer.application.memory.aggregate import AgentSource
+from coffer.application.memory.sources import AgentSource
 from coffer.application.memory.sync_service import MemorySyncService
 from coffer.application.memory.sync_view import MemorySyncView
 from coffer.application.memory.sync_worker import MemorySyncWorker

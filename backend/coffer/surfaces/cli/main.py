@@ -18,7 +18,6 @@ from coffer.surfaces.cli import (
     groups,
     lifecycle_cmd,
     log_cmd,
-    memory_cmd,
     path_cmd,
     proxy_cmd,
     run_cmd,
@@ -78,7 +77,6 @@ app.command(
 # `coffer update` / `coffer uninstall`: this machine's Coffer as a whole.
 app.command("update")(lifecycle_cmd.update)
 app.command("uninstall")(lifecycle_cmd.uninstall)
-groups.adopt("memory", memory_cmd.app)
 groups.adopt("proxy", proxy_cmd.app)
 groups.adopt("vault", vault_cmd.app)
 # Every management command (spec resource-framework "Offer every management

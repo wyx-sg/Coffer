@@ -94,15 +94,12 @@ Connecting writes everything Coffer needs into the agent's own config, in one ac
 | Part | What it does | When |
 | --- | --- | --- |
 | Gateway MCP entry | A `coffer` stdio MCP server entry pointing at `coffer-mcp-shim`. The agent reaches every enabled upstream server, Coffer's own tools, and its delivered knowledge through it. | Always |
-| Memory delivery hook | Two hook entries — session start and each prompt — through which Coffer hands the agent its memory. See [Memory](/guides/memory#install-the-hook). | Always |
 
 Disconnecting removes both, and only Coffer's own entries; everything else in those files stays as it was.
 
 **Web UI:** the Overview tab's **Connection** section shows each part — the MCP entry and the memory hook, with the file each lives in and whether it is current — and carries the one fix the agent's state calls for at the section's title: **Connect** when it is not connected, **Repair** when it needs repair, and **Check again** while Codex has not approved Coffer's hook. A connected agent has no button there; **Disconnect…** is in the ⋯ menu. The page header never changes into a fix button: it holds the agent's mark, its name, one status pill (**Connected**, **Not connected**, **Needs repair**, **Hook not approved** or **Config left behind**), **New conversation** and the ⋯ menu. On the **Agents** list the row carries the same state and the same action. Every connect, repair and disconnect opens the same **Review changes** preview first: a repair lists only the missing parts, a disconnect only the lines it removes. If a write fails partway, the preview says which change failed, keeps the ones that applied, and offers to retry only the failed one.
 
 Restart the agent (or reload its MCP servers) after connecting so it starts the shim.
-
-An agent that carries the gateway entry but not the hook reads **Needs repair** until you connect it again.
 
 ### What gets written where
 
@@ -132,8 +129,6 @@ For Codex:
 command = "/Users/you/.coffer/bin/coffer-mcp-shim"
 args = ["--agent-uid", "9a006a32d0bf5787955c43d54e4b44e9"]
 ```
-
-The memory hook's two entries are described in [Filesystem](/reference/filesystem).
 
 Connecting is idempotent: connecting again rewrites each entry in place and never adds a second one. Disconnecting when nothing is installed succeeds and changes nothing. Every write is backed up and audited by part (`agent_mcp_installed` / `agent_mcp_uninstalled`, `memory_delivery_installed` / `memory_delivery_removed`). The connection status is read from the files each time; Coffer does not store it.
 
@@ -251,17 +246,6 @@ The **Hooks** tab shows every hook the agent will run, read straight from the ag
 | --- | --- | --- |
 | Agent's own files | `settings.json`, `settings.local.json` | `hooks.json` |
 | Plugins | each enabled plugin's `hooks/hooks.json` | each enabled plugin's `hooks/hooks.json`, where it has one |
-| Coffer's own hook | `SessionStart` and `UserPromptSubmit` in `settings.json` | the same two events in `hooks.json` |
-
-**Coffer's memory hook** — the [memory delivery hook](/guides/memory#install-the-hook) — is marked on each of its two entries and reported as one hook, as a block of properties at the top: its state and when it last fired, its command, the events it sits on and the file that declares it. Its fix is at the block's title (**Repair**, or **Check again**), and the reason a state is a problem is written in the block. The state says how it is doing:
-
-- **Current** — installed on exactly the two events, each with exactly the command this version of Coffer writes.
-- **Out of date** — Coffer's hook is there but carries another command than the one Coffer writes now, or sits on another set of events. The daemon rewrites it on its next reconcile pass; **Repair** does it now.
-- **Missing** — no Coffer hook. **Repair** connects the agent to Coffer again, which installs it.
-
-For Codex it also says whether Codex will run the hook. Codex skips an entry you have not approved, and Coffer's hook counts as approved only when both entries are, so **Not approved** (or **Changed since trusted**, after a Coffer update changed the command) means at least one entry is installed but not running. The agent's page reads **Hook not approved**, and Overview lists it under **Needs you**. Open Codex, run `/hooks` and trust both of Coffer's entries. Coffer does not approve them for you, and **Check again** re-reads Codex's approval afterwards.
-
-It also shows when the hook last fired, from the [audit log](/guides/activity). **Never fired** on an agent you use every day is the sign that the agent is not running the hook; the block says the likely cause and links to **Activity**, and Overview lists it under **Needs you**.
 
 **The agent's own hooks** are one table of **Event**, **Command**, **Matcher** and **File**, without Coffer's hook, with a search over the command and an **Event** filter that shows how many hooks each event has; once either narrows the table it says how many of how many are shown. Click a row for its details: the command in full, the event and when it runs, the matcher, the type, the timeout, the file and the entry's position in it (`hooks.<event>[group].hooks[hook]`), with **Copy command** and **Open in editor**. Everything on the tab is read only: Coffer never edits another tool's hooks, so a hook is changed in its own file, and a file name opens that file in your editor.
 

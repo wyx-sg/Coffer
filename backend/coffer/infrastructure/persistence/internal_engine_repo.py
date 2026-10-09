@@ -6,12 +6,15 @@ settings are one vault document,
 ``state/settings/internal-engine.json``::
 
     {"format_version": 1, "transcribe_model": null,
-     "upkeep": {"aggregate": {"enabled": true, "interval_s": null}, ...}}
+     "upkeep": {"memory_sync": {"enabled": true, "interval_s": null}}}
 
 A document written by an older version may carry ``model``,
-``curate_owner_machine_id``, ``model_timeout_s`` or ``upkeep.curate``. They are ignored on read,
-and the next write rebuilds the document from the fields above, which drops
-them (spec internal-engine "Ignore retired keys in the settings document").
+``curate_owner_machine_id``, ``model_timeout_s``, ``upkeep.curate`` or
+``upkeep.distil``. They are ignored on read, and the next write rebuilds the
+document from the fields above, which drops them (spec internal-engine "Ignore
+retired keys in the settings document"). ``upkeep.aggregate`` is the one that
+carries over: with no ``upkeep.memory_sync`` beside it, its switch and
+interval are read as the memory sync's (the memory sync replaced it).
 
 A vault that never chose anything has no document, and reads as the defaults
 (``get`` answers ``None``); a change back to every default removes the
@@ -32,9 +35,8 @@ from pathlib import Path
 from typing import Any
 
 from coffer.domain.internal_engine_config import (
-    AGGREGATE,
-    DISTIL,
     MEMORY_SYNC,
+    RETIRED_AGGREGATE,
     GlobalInternalEngineConfig,
     UpkeepSetting,
 )
@@ -44,9 +46,7 @@ from coffer.infrastructure.vault.state_documents import StateDocument
 
 AREA = "settings"
 DOC = "internal-engine"
-_PASSES = (AGGREGATE, DISTIL, MEMORY_SYNC)
-#: A pass that is off until the person turns it on.
-_OFF_BY_DEFAULT = frozenset({MEMORY_SYNC})
+_PASSES = (MEMORY_SYNC,)
 #: Top-level keys an older build wrote. A write names each as ``None``, which
 #: the document encoder reads as "remove it from the file".
 _RETIRED_KEYS = ("model", "curate_owner_machine_id", "model_timeout_s")
@@ -67,22 +67,19 @@ def _str(raw: Any) -> str | None:
 def _upkeep(doc: Mapping[str, Any], name: str) -> UpkeepSetting:
     block = doc.get("upkeep")
     entry = block.get(name) if isinstance(block, dict) else None
-    default = name not in _OFF_BY_DEFAULT
+    if not isinstance(entry, dict) and name == MEMORY_SYNC and isinstance(block, dict):
+        entry = block.get(RETIRED_AGGREGATE)
     if not isinstance(entry, dict):
-        return UpkeepSetting(enabled=default)
-    raw = entry.get("enabled", default)
-    enabled = raw is not False if default else raw is True
-    return UpkeepSetting(enabled=enabled, interval_s=_int(entry.get("interval_s")))
+        return UpkeepSetting(enabled=True)
+    return UpkeepSetting(
+        enabled=entry.get("enabled", True) is not False, interval_s=_int(entry.get("interval_s"))
+    )
 
 
 def _to_domain(doc: Mapping[str, Any], updated_at: datetime) -> GlobalInternalEngineConfig:
-    aggregate, distil, memory_sync = (_upkeep(doc, name) for name in _PASSES)
+    memory_sync = _upkeep(doc, MEMORY_SYNC)
     return GlobalInternalEngineConfig(
         updated_at=updated_at,
-        auto_aggregate_enabled=aggregate.enabled,
-        aggregate_interval_s=aggregate.interval_s,
-        auto_distil_enabled=distil.enabled,
-        distil_interval_s=distil.interval_s,
         memory_sync_enabled=memory_sync.enabled,
         memory_sync_interval_s=memory_sync.interval_s,
         transcribe_model=_str(doc.get("transcribe_model")),

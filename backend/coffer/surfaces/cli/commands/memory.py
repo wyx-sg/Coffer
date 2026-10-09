@@ -1,78 +1,77 @@
-"""``coffer memory`` — the Memory page (``memory hook`` predates this module).
+"""``coffer memory`` — the Memory page.
 
-Spec memory "Manage memory in the web UI and on the command line". Memory notes
-are plain Markdown files under the memory root, read and edited with the
-reader's own tools; the partitions, what each delivers, a sync pass and the
-tidy hand-off are commands.
+Spec memory "Manage memory sync in the web UI". The hub and each agent's own
+memory are plain files, read and edited with the reader's own tools; the sync,
+its preview, undo, the Codex import switch and curation are commands.
 """
 
 from __future__ import annotations
 
-from coffer.surfaces.cli._route_command import RouteCommand, mount
+from coffer.surfaces.cli._route_command import Q, RouteCommand, mount
 
-P = {"uid": "memory"}
 _UI = "Memory · "
 
 SPECS = [
     RouteCommand(
-        "memory partitions",
+        "memory state",
         "GET",
-        "/memory/partitions",
-        _UI + "partitions",
-        "Every memory partition.",
-    ),
-    RouteCommand(
-        "memory notes",
-        "GET",
-        "/memory/partitions/{uid}/notes",
-        _UI + "a partition's notes",
-        "A partition's notes and their paths (read them with your own tools).",
-        names=P,
-    ),
-    RouteCommand(
-        "memory files",
-        "GET",
-        "/memory/partitions/{uid}/files",
-        _UI + "a partition's files",
-        "A partition's files.",
-        names=P,
-    ),
-    RouteCommand(
-        "memory delivered",
-        "GET",
-        "/memory/partitions/{uid}/delivered",
-        _UI + "what agents are given",
-        "What the partition delivers to agents.",
-        names=P,
-    ),
-    RouteCommand(
-        "memory retired",
-        "GET",
-        "/memory/partitions/{uid}/retired",
-        _UI + "retired notes",
-        "Notes retired from delivery.",
-        names=P,
-    ),
-    RouteCommand(
-        "memory reading",
-        "GET",
-        "/memory/reading",
-        _UI + "what Coffer reads",
-        "Which agents' memory Coffer reads, and where.",
+        "/memory/sync/state",
+        _UI + "the page",
+        "The sync, its pending preview, the hub's projects and each agent's state.",
     ),
     RouteCommand(
         "memory sync",
         "POST",
-        "/memory/sync",
+        "/memory/sync/run",
         _UI + "Sync now",
-        "Read the agents' memory again now.",
+        "Sync memory now.",
     ),
     RouteCommand(
-        "memory tidy-handoff",
+        "memory preview-write",
+        "POST",
+        "/memory/sync/preview/write",
+        _UI + "preview · Write",
+        "Write exactly what the pending preview lists.",
+    ),
+    RouteCommand(
+        "memory preview-cancel",
+        "POST",
+        "/memory/sync/preview/cancel",
+        _UI + "preview · Cancel",
+        "Drop the pending preview.",
+    ),
+    RouteCommand(
+        "memory undo",
+        "POST",
+        "/memory/sync/undo",
+        _UI + "Undo sync…",
+        "Remove every unedited copy Coffer wrote on this machine and turn automatic sync off.",
+    ),
+    RouteCommand(
+        "memory codex-import",
+        "PUT",
+        "/memory/sync/codex-import",
+        _UI + "Codex imports Claude Code's memories itself",
+        "Say whether Codex imports Claude Code's memories itself. Body: value (true, false, null).",
+        body=True,
+    ),
+    RouteCommand(
+        "memory entries",
         "GET",
-        "/memory/tidy-handoff",
-        _UI + "Tidy with an agent",
-        "The prompt that hands tidying memory to an agent.",
+        "/memory/sync/entries",
+        _UI + "a project's memories",
+        "A project's memories with their origin and where each was written.",
+        query=(Q("project", "The project key, or global"),),
+        rows="entries",
+        columns=("title", "origin_agent", "origin_machine", "type"),
+    ),
+    RouteCommand(
+        "memory curate",
+        "POST",
+        "/memory/sync/curate",
+        _UI + "Curate now",
+        "Ask an agent to consolidate its own memory now. Body: agent_type.",
+        body=True,
     ),
 ]
 

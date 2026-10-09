@@ -26,8 +26,7 @@ export type AgentType = Schemas["AgentType"];
 export type ConfigFileInfo = Schemas["ConfigFileInfoOut"];
 
 /** An agent's Coffer connection: every part Coffer writes into the agent
- *  that applies now (`mcp` always, `memory_hook` while memory is on), and a
- *  state derived from them — `partial` is "needs repair". */
+ *  (the `mcp` gateway entry), and a state derived from them — `partial` is "needs repair". */
 export type CofferConnection = Schemas["CofferConnectionOut"];
 
 export type AgentOut = Schemas["AgentOut"];
@@ -44,10 +43,9 @@ export type AgentTypeOut = Schemas["AgentTypeOut"];
 /** One config file read for its read-only preview, secret values hidden. */
 export type ConfigFileContent = Schemas["ConfigFileContentOut"];
 
-/** Every hook in the agent's native config, plus Coffer's own hook's health. */
+/** Every hook in the agent's native config. */
 export type AgentHooksOut = Schemas["AgentHooksOut"];
 export type NativeHook = Schemas["NativeHookOut"];
-export type CofferHook = Schemas["CofferHookOut"];
 
 export const agentsApi = {
   list: () => unwrap(getApiClient().GET("/agents")),

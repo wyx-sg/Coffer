@@ -22,7 +22,6 @@ export const OBJECT_KINDS = [
   "skill",
   "cli",
   "knowledge",
-  "memory",
   "secret",
 ] as const;
 export type ObjectKind = (typeof OBJECT_KINDS)[number];
@@ -77,7 +76,6 @@ export const KIND_PAGE: Record<ObjectKind, string> = {
   skill: "/skills",
   cli: "/clis",
   knowledge: "/knowledge",
-  memory: "/memory",
   secret: "/secrets",
 };
 

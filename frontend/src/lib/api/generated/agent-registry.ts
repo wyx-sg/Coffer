@@ -263,8 +263,8 @@ export interface paths {
         };
         /**
          * List Agent Hooks
-         * @description Every hook the agent's own files and enabled plugins declare, with
-         *     Coffer's own marked and its health. Writes nothing.
+         * @description Every hook the agent's own files and enabled plugins declare. Writes
+         *     nothing.
          */
         get: operations["list_agent_hooks_api_v1_agents__uid__hooks_get"];
         put?: never;
@@ -610,7 +610,6 @@ export interface components {
         };
         /** AgentHooksOut */
         AgentHooksOut: {
-            coffer_hook: components["schemas"]["CofferHookOut"] | null;
             /** Items */
             items: components["schemas"]["NativeHookOut"][];
             /** Parse Errors */
@@ -842,21 +841,6 @@ export interface components {
             /** Key */
             key: string;
         };
-        /** CofferHookOut */
-        CofferHookOut: {
-            /** Event */
-            event: string;
-            /** Expected Command */
-            expected_command: string;
-            health: components["schemas"]["HookHealth"];
-            /** Installed Command */
-            installed_command: string | null;
-            /** Last Fired At */
-            last_fired_at: string | null;
-            /** Path */
-            path: string;
-            trust: components["schemas"]["HookTrust"];
-        };
         /**
          * ConfigFileContentOut
          * @description One config file's read-only preview. No fingerprint: there is no write.
@@ -998,14 +982,6 @@ export interface components {
             prompt: string;
         };
         /**
-         * HookHealth
-         * @description Coffer's own delivery hook: ``current`` is exactly the command Coffer
-         *     would write now; ``stale`` carries Coffer's marker with another command;
-         *     ``missing`` is not there at all.
-         * @enum {string}
-         */
-        HookHealth: "current" | "stale" | "missing";
-        /**
          * HookSource
          * @description Where a hook was found. ``user`` is a file in the agent's config
          *     directory; ``plugin`` is an installed, enabled plugin's hook file. A
@@ -1014,18 +990,6 @@ export interface components {
          * @enum {string}
          */
         HookSource: "user" | "plugin";
-        /**
-         * HookTrust
-         * @description Whether the agent will actually run Coffer's installed hook.
-         *
-         *     Codex runs a hook only after the user has reviewed it: it records trust
-         *     against a hash of the hook's definition, so a new or changed hook is
-         *     skipped — silently — until the user trusts it with ``/hooks``. Coffer never
-         *     writes that trust itself (spec agent-registry/codex "Leave Codex's
-         *     internal-state tables untouched"); it reads it and says so.
-         * @enum {string}
-         */
-        HookTrust: "not_required" | "trusted" | "untrusted" | "modified" | "disabled" | "unknown";
         /** MarketplaceOut */
         MarketplaceOut: {
             /** Name */
@@ -1367,8 +1331,6 @@ export interface components {
         };
         /** NativeHookOut */
         NativeHookOut: {
-            /** Coffer */
-            coffer: boolean;
             /** Command */
             command: string;
             /** Event */

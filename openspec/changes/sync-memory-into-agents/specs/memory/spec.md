@@ -221,13 +221,18 @@ On the first start of a build carrying this requirement, Coffer MUST remove its 
 - **WHEN** the upgraded daemon starts
 - **THEN** both Coffer entries are gone, the person's hook is unchanged, and `~/.coffer/derived/memory/` no longer exists
 
-### Requirement: Manage memory sync in the web UI
-The Memory page MUST show the sync switch and interval, **Sync now**, when memory last synced and the next sync, a pending preview when there is one, the hub's projects with how many memories each holds and from which agents, per agent the copies written on this machine and its curation state, and **Undo sync…**. Choosing a project MUST list its memories with their origin and, per local agent, whether a copy was written, held back, edited by the agent or removed by it. The page MUST NOT offer to edit a memory's text: the person edits memory in the agent's own memory directory.
+### Requirement: Manage memory sync in the web UI and on the command line
+The Memory page MUST show the sync switch and interval, **Sync now**, when memory last synced and the next sync, a pending preview when there is one, the hub's projects with how many memories each holds and from which agents, per agent the copies written on this machine and its curation state, and **Undo sync…**. Choosing a project MUST list its memories with their origin and, per local agent, whether a copy was written, held back, edited by the agent or removed by it. The page MUST NOT offer to edit a memory's text: the person edits memory in the agent's own memory directory. Every operation of the page MUST also be a `coffer memory` command.
 
 #### Scenario: a project's memories show where each was written
 - **GIVEN** a project with two hub entries, one written into Claude Code and one whose copy Claude Code's curation removed
 - **WHEN** the person opens the project on the Memory page
 - **THEN** each memory shows its origin agent and machine, and for Claude Code one reads written and the other removed by the agent
+
+#### Scenario: memory sync is managed on the command line
+- **GIVEN** the `coffer memory` command group
+- **WHEN** its commands are listed
+- **THEN** they are `state`, `sync`, `preview-write`, `preview-cancel`, `undo`, `codex-import`, `entries` and `curate`, one per operation of the page, and none reads or writes a memory's text
 
 ### Requirement: Audit every sync, undo and curation request
 Every sync that changed something, every undo, every curation request and every hook removal on upgrade MUST record an audit event with its actor. An agent's own change to its memory is not a Coffer act and is not audited.

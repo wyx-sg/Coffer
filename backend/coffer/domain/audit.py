@@ -38,8 +38,8 @@ class AuditEventType(StrEnum):
     # "needs you" item ignored on this machine, or no longer.
     ATTENTION_IGNORED = "attention_ignored"
     ATTENTION_UNIGNORED = "attention_unignored"
-    # Settings > Data "Rebuildable cache": the memory tree and the transcript
-    # summary cache were cleared, to be rebuilt by the next memory update.
+    # Settings > Data "Rebuildable cache" was cleared. No longer emitted: the
+    # cache was the retired memory tree, which the upgrade step removes.
     STORAGE_CACHE_CLEARED = "storage_cache_cleared"
     INTERNAL_ENGINE_MODEL_SET = "internal_engine_model_set"
     SECRET_SET = "secret_set"
@@ -95,17 +95,18 @@ class AuditEventType(StrEnum):
     KNOWLEDGE_EDITED = "knowledge_edited"
     # No longer emitted: kept so a row written by an earlier build keeps its name.
     KNOWLEDGE_CURATED = "knowledge_curated"
-    # spec memory
+    # spec memory: the sync into each agent's own memory
+    MEMORY_SYNCED = "memory_synced"
+    MEMORY_SYNC_UNDONE = "memory_sync_undone"
+    MEMORY_CURATION_REQUESTED = "memory_curation_requested"
+    MEMORY_HOOK_REMOVED = "memory_hook_removed"
+    # The retired memory layer's: no longer emitted, kept so a row written by
+    # an earlier build keeps its name.
     MEMORY_AGGREGATED = "memory_aggregated"
     MEMORY_DELIVERY_FIRED = "memory_delivery_fired"
     MEMORY_DELIVERY_INSTALLED = "memory_delivery_installed"
     MEMORY_DELIVERY_REMOVED = "memory_delivery_removed"
     MEMORY_DISTILLED = "memory_distilled"
-    # spec memory: the sync into each agent's own memory
-    MEMORY_SYNCED = "memory_synced"
-    MEMORY_SYNC_UNDONE = "memory_sync_undone"
-    MEMORY_CURATION_REQUESTED = "memory_curation_requested"
-    # no longer emitted; kept so recorded events still read
     MEMORY_NOTE_EDITED = "memory_note_edited"
     MEMORY_NOTE_DELETED = "memory_note_deleted"
     # spec channels

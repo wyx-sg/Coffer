@@ -189,8 +189,8 @@ converge:
 - **Per-capability toggles** on an MCP server (the disabled tool set) converge
   as a state document in the vault: they describe the server, not this machine.
 
-Rows a kind *derives* on each machine — the whole `memory` kind, and Coffer's
-own generated `coffer-guide` skill — are withheld from sync for a different
+Rows a kind *derives* on each machine — Coffer's own generated `coffer-guide`
+skill — are withheld from sync for a different
 reason, covered in [Sync Withholds Derived Output](sync-withholds-derived-output.md).
 
 ## Consequences

@@ -4,8 +4,8 @@ interval and on demand").
 One sync at daemon start, then one per interval. Both the switch and the
 interval are read per pass, so a change in Settings — or one arriving from
 another machine through vault sync — applies without a restart. The switch is
-off by default: the sync writes into the agents' own memory, so the person
-turns it on.
+on by default; the first sync on a machine, and any large one, waits as a
+preview for the person to confirm.
 """
 
 from __future__ import annotations

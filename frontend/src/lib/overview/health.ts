@@ -44,7 +44,7 @@ export const AREAS: readonly Area[] = [
   { id: "mcpServers", to: "/mcp-servers", kinds: ["mcp_server"] },
   { id: "skills", to: "/skills", kinds: ["skill"] },
   { id: "knowledge", to: "/knowledge", kinds: ["knowledge"], feature: "knowledge" },
-  { id: "memory", to: "/memory", kinds: ["memory"], feature: "memory" },
+  { id: "memory", to: "/memory", kinds: [], feature: "memory" },
   { id: "providers", to: "/model-providers", kinds: ["provider"] },
   { id: "channels", to: "/channels", kinds: ["channel"] },
   { id: "sync", to: "/sync", kinds: ["sync"] },

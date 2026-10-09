@@ -182,25 +182,13 @@ export const knowledgeCollectionsKey = ["knowledge", "collections"] as const;
 export const knowledgeTreeKey = (path: string) => ["knowledge", "tree", path] as const;
 export const knowledgeFileKey = (path: string) => ["knowledge", "file", path] as const;
 
-// --- memory — partitions, their memories, what is delivered ---------------
+// --- memory — the sync between the agents' own memories (spec memory) -------
 
 export const memoryKey = ["memory"] as const;
-export const memoryPartitionsKey = ["memory", "partitions"] as const;
-export const memoryPartitionFilesKey = (uid: string) =>
-  ["memory", "partitions", uid, "files"] as const;
-export const memoryNotesKey = (uid: string) => ["memory", "partitions", uid, "notes"] as const;
-export const memoryNoteKey = (uid: string, slug: string) =>
-  ["memory", "partitions", uid, "notes", slug] as const;
-export const memoryRetiredKey = (uid: string) => ["memory", "partitions", uid, "retired"] as const;
-export const memoryDeliveredKey = (uid: string) =>
-  ["memory", "partitions", uid, "delivered"] as const;
-export const memoryReadingKey = ["memory", "reading"] as const;
-
-// --- upkeep — the long rewrites (memory update) in flight ---
-
-/** Deliberately NOT under `memoryKey`: one read answers for every kind, and a
- *  pass ending must not drag a kind's whole subtree into the same invalidation. */
-export const upkeepRunsKey = ["upkeep", "runs"] as const;
+/** The sync's state: switch-independent facts, the pending preview, projects, agents. */
+export const memorySyncStateKey = ["memory", "sync"] as const;
+/** One project's hub entries with their copy state here (`""` for global memories). */
+export const memoryEntriesKey = (project: string) => ["memory", "entries", project] as const;
 
 // --- agent sessions — every agent's sessions in one list (the Conversations page) ---
 
@@ -251,8 +239,6 @@ export function ownListKeysForKind(kind: string): readonly QueryKey[] {
       return [agentsKey];
     case "knowledge":
       return [knowledgeCollectionsKey];
-    case "memory":
-      return [memoryPartitionsKey];
     case "channel":
       return [channelsKey];
     case "mcp_server":

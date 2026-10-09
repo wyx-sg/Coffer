@@ -22,7 +22,7 @@ from starlette.testclient import TestClient
 from coffer.domain.chat.errors import AgentConfigRejected, UnknownAgent
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.chat.dependencies import get_agent_registry, get_chat_service
+from coffer.surfaces.http.chat.dependencies import get_chat_service
 
 _TOKEN = "test-token"
 _HEADERS = {"X-Coffer-Token": _TOKEN}
@@ -142,22 +142,3 @@ async def test_create_conversation_rejects_unknown_agent_and_bad_config(app) -> 
             )
 
         assert (await svc.page_conversations()).items == []
-
-
-@pytest.mark.acceptance(spec="memory", scenario="a channel turn carries the index without a hook")
-@pytest.mark.asyncio
-async def test_every_provider_is_wired_with_the_memory_composer(app) -> None:  # type: ignore[no-untyped-def]
-    """The composition root hands every agent provider the memory kind's
-    composer, so a channel turn's system prompt can carry the index (spec memory
-    "Deliver to channel turns through the system prompt"). The provider seam
-    itself is proven in ``test_sdk_provider.py``; this proves the real wiring
-    reaches it rather than leaving the default ``None``."""
-    with TestClient(app):
-        set_active_token(_TOKEN)
-        entries = get_agent_registry().entries()
-        assert {e.provider.agent_key for e in entries} >= {"claude_code", "codex"}
-        for entry in entries:
-            composer = entry.provider._compose_memory_context  # type: ignore[attr-defined]
-            assert composer is not None, entry.provider.agent_key
-            # An isolated, empty tree delivers nothing: no header, not an empty one.
-            assert await composer(entry.provider.agent_key, "/nowhere", "c1") is None

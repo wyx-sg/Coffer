@@ -2,8 +2,8 @@
 
 Specs: resource-framework "Offer every management operation on the command
 line" and "Locate the log files with coffer path", knowledge "Manage knowledge
-in the web UI and on the command line", memory "Manage memory in the web UI and
-on the command line", daemon "Change residency from the settings page or the
+in the web UI and on the command line", memory "Manage memory sync in the web UI
+and on the command line", daemon "Change residency from the settings page or the
 command line". Everything here runs in process against the Typer app; no daemon is
 started and nothing is written outside ``tmp_path``.
 """
@@ -101,15 +101,21 @@ def test_knowledge_is_managed_on_the_command_line_its_documents_as_files() -> No
     assert _runner.invoke(app, ["path", "knowledge"]).exit_code == 2
 
 
-@pytest.mark.acceptance(
-    spec="memory", scenario="memory is managed on the command line, its notes as files"
-)
-def test_memory_is_managed_on_the_command_line_its_notes_as_files() -> None:
+@pytest.mark.acceptance(spec="memory", scenario="memory sync is managed on the command line")
+def test_memory_sync_is_managed_on_the_command_line() -> None:
     memory = {" ".join(p[1:]) for p, _ in _tree() if p[0] == "memory" and len(p) > 1}
-    assert {"partitions", "notes", "delivered", "retired", "reading", "sync"} <= memory
+    assert memory == {
+        "state",
+        "sync",
+        "preview-write",
+        "preview-cancel",
+        "undo",
+        "codex-import",
+        "entries",
+        "curate",
+    }
+    # A memory's text is edited in the agent's own memory directory, never here.
     assert not memory & _FILE_VERBS
-    assert _leaves()["memory hook"].hidden
-    assert "hook" not in _runner.invoke(app, ["memory", "--help"]).output
     assert _runner.invoke(app, ["path", "memory"]).exit_code == 2
 
 

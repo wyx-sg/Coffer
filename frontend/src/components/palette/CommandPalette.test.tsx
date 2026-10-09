@@ -1,7 +1,7 @@
 // src/components/palette/CommandPalette.test.tsx — the palette's scenarios (spec web-ui "Jump to any page or object from a command palette").
 //
 // Only the network boundary is mocked: `getApiClient()` (resources, daemon
-// status, and the list routes of agents, skills, providers, knowledge, memory). The
+// status, and the list routes of agents, skills, providers, knowledge). The
 // list hooks, the query cache, the router and the Settings opener are real.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -50,7 +50,6 @@ beforeEach(() => {
     "/skills": async () => ({ items: SKILLS }),
     "/providers": async () => ({ providers: [] }),
     "/knowledge/collections": async () => ({ collections: COLLECTIONS }),
-    "/memory/partitions": async () => ({ partitions: [] }),
   };
   call.mockImplementation(async (path: string) => {
     const answer = callAnswers[path];

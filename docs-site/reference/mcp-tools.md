@@ -20,9 +20,9 @@ integrations against Coffer. For how the gateway works internally, see
 | [`coffer__ask`](#coffer-ask) | Ask the owner a question and wait for the answer. | Only inside a turn Coffer runs. |
 | [`coffer__channel_read_thread`](#coffer-channel-read-thread) | Read a chat thread's earlier messages, page by page. | Only inside a turn Coffer runs. |
 
-Those three are the whole list. Coffer's knowledge, its memory notes and its own records have no
-tool: agents change and read knowledge and memory with their own file tools, and read the
-records with the `coffer` command line. See
+Those three are the whole list. Coffer's knowledge, memory and its own records have no
+tool: agents change and read knowledge with their own file tools, reach memory through their
+own native memory, and read the records with the `coffer` command line. See
 [Knowledge, memory and logs without a tool](#memory-and-logs-without-a-tool).
 
 ::: tip Names inside your agent
@@ -270,22 +270,20 @@ environment variables on the daemon; see [Configuration](/reference/configuratio
 Coffer's `initialize` result declares protocol version `2025-06-18`, server name `coffer`,
 and the capabilities `tools`, `resources` and `prompts`, each with `listChanged: true`
 (resources without `subscribe`). Its `instructions` field, which clients place in the
-agent's system prompt, is at most 800 characters. It reads (the memory root is
-`~/.coffer/derived/memory`, outside the vault, here `/Users/you/.coffer/derived/memory`):
+agent's system prompt, is at most 800 characters. It reads:
 
 ```text
 Coffer is this machine's local vault: it aggregates the user's MCP servers behind one
 endpoint, holds what this developer wrote down, and adds its own tool:
 coffer__search_tools (describe an upstream tool you need; results are callable by name).
-Its knowledge is markdown you read with your own file tools. Its
-memory notes are Markdown under /Users/you/.coffer/derived/memory/*/notes/; grep them with your
-own tools. Its own logs: coffer log audit|mcp|daemon (files: coffer path logs). The
-coffer-guide skill is the manual: load it for the catalogue, with paths, before asking
-the developer something they may have written down.
+Its knowledge is markdown you read with your own file tools. Its own logs: coffer log
+audit|mcp|daemon (files: coffer path logs). The coffer-guide skill is the manual: load it
+for the catalogue, with paths, before asking the developer something they may have
+written down.
 ```
 
-(Line breaks added here; the text is one paragraph.) When a memory root is too long for
-the 800-character cap, the sentence is shortened to fit. When tiering hid tools in this session's last `tools/list`, one sentence is
+(Line breaks added here; the text is one paragraph.) While the knowledge feature is off,
+the knowledge sentences are left out. When tiering hid tools in this session's last `tools/list`, one sentence is
 appended:
 
 ```text
@@ -294,16 +292,17 @@ Your tool list is a budgeted slice: 88 more upstream tools are unlisted, all cal
 
 ## Knowledge, memory and logs without a tool {#memory-and-logs-without-a-tool}
 
-Coffer has no tool for knowledge, memory notes or its own records, because an agent can
+Coffer has no tool for knowledge, memory or its own records, because an agent can
 already do all of them with what it has. To add knowledge, write a Markdown document straight
 into a collection, as the `coffer-guide` skill describes; a file left in a collection's `.inbox/`
 folder is adopted by Coffer's sweep, which fills in any missing frontmatter and promotes it to a
-document. To change a document or a memory note, edit the file in place.
+document. To change a document, edit the file in place. Memory needs no tool at all: an agent
+keeps writing its own memory, and [memory sync](/guides/memory) writes what your other agents
+learned into that same memory, which the agent loads itself.
 
 | To find | Do this |
 | --- | --- |
 | A knowledge document | Read the file under the collection folders the `coffer-guide` skill lists. |
-| A memory note | Grep the memory root the handshake, the session-start delivery and the `coffer-guide` skill name (every partition's notes are `<root>/<partition>/notes/*.md`), then read the file. |
 | What changed in Coffer (registrations, deletions, secret reads, config writes) | `coffer log audit --since 1h` |
 | Which MCP calls failed | `coffer log mcp --status error --since 1h`, or `--server <name>` for one server |
 | What the daemon logged, including tracebacks | `coffer log daemon --errors --since 1h`, or grep the file `coffer path logs` names |

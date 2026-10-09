@@ -1,313 +1,180 @@
 ---
 title: Memory
-description: Let Coffer read what each of your agents has learned, turn it into one set of notes per repository, hand the right notes back at session start and at each prompt, and ask your agent to tidy them. You can read the notes in the web UI and edit them in your own editor.
+description: Let Coffer share what each of your agents has learned with your other agents, on this machine and on your other machines, by writing it into each agent's own memory. Each agent keeps curating and loading its memory itself.
 ---
 
 # Memory
 
-Coffer reads the memory your agents already keep — Claude Code's per-project notes, Codex's task groups and profile — turns it into one set of notes per repository plus one global set, and makes those notes available to every agent. It never writes back into an agent's own memory. This page covers what Coffer reads, where the notes live, how your agent tidies them, how agents receive them, how to see delivery working, and how to browse, edit, switch off and rebuild the notes.
+Coffer keeps every memory your agents wrote for themselves — Claude Code's per-project memory files, Codex's task groups and profile — in one place in your vault, and writes each one into your other agents' own memory, in that agent's own format. Each agent then loads and curates those memories the way it loads and curates its own. This page covers what Coffer reads, where the shared memories live, what it writes into each agent, how a sync runs, and how to check, pause and undo it.
 
-## What memory aggregation is for
+Memory is an [experimental feature](/guides/experimental-features): switch it on in **Settings → Features** first.
 
-Every agent keeps its own memory, and none can see another's. What Claude Code learned about a repository this morning, Codex has to be taught again this afternoon.
+## What memory sync is for
 
-Coffer closes that gap without taking over either agent's memory:
+Every agent keeps its own memory, and none can see another's. What Claude Code learned about a repository this morning, Codex has to be taught again this afternoon, and what either learned on your laptop is missing on your desktop.
 
-1. **Read.** Coffer reads each registered agent's native memory files. It never creates, changes, moves or deletes anything there, and never changes an agent's memory settings.
-2. **Distil.** Coffer turns each memory it read into a note of its own, as the agent wrote it — one note per entry, with no model involved. Merging lessons that two agents learned separately into one note is **tidying**, which your agent does when you press **Tidy**.
-3. **Deliver.** An installed hook hands the notes back at two moments: the index for the repository and `global` at session start, and the few notes a prompt names when you send it.
+Coffer closes that gap without running a memory system of its own:
+
+1. **Publish.** Coffer reads each registered agent's native memory and publishes every memory the agent wrote on this machine into the **hub**, a folder in your vault. [Vault sync](/guides/vault-sync) carries the hub to your other machines.
+2. **Write.** Coffer writes every hub memory into each agent on this machine except the one it came from: as memory files the agent loads itself.
+3. **Leave the rest to the agent.** Merging duplicates, correcting what is wrong and forgetting what is stale is each agent's own curation (Claude Code's Auto Dream, Codex's consolidation). Coffer does not put memory into a session, and does not change a memory an agent wrote.
+
+Coffer's work is mechanical: it copies, files and renames, and never calls a model over your memory.
 
 Memory is not [knowledge](/guides/knowledge). Knowledge is what you or an agent deliberately wrote down about the world; memory is what agents learned while working, collected automatically.
 
 | | Memory | Knowledge |
 | --- | --- | --- |
-| Comes from | agents' own memory files, read-only | you, or an agent writing it down |
-| Organised by | repository, plus `global` | collection |
-| Who writes the stored text | Coffer copies each entry into a note; an agent tidies on request | you and agents, directly |
-| Reaches an agent | through a hook: the index at session start, matching notes at each prompt | the agent reads it when the `coffer-guide` skill points there |
-| If the store is lost | rebuilt from the agents' own memory | gone |
+| Comes from | agents' own memory, written by the agents | you, or an agent writing it down |
+| Organised by | project, plus `global` | collection |
+| Who edits the text | the agent that holds it, through its own curation | you and agents, directly |
+| Reaches an agent | through the agent's own memory, which it loads every session | the agent reads it when the `coffer-guide` skill points there |
+| Stored | the hub in `vault/memory/`, synced like other vault content | the vault, synced like other vault content |
 
 ## What Coffer reads
 
 | Agent | Files read |
 | --- | --- |
-| Claude Code | Each fact file in `<config_dir>/projects/<project>/memory/*.md` — its frontmatter `name`, `description` and `type`, and its body. Claude Code's own `MEMORY.md` index is skipped. |
+| Claude Code | Each memory file in `<config_dir>/projects/<project>/memory/*.md` — its frontmatter `name`, `description` and `type`, and its body. Claude Code's own `MEMORY.md` index is skipped. |
 | Codex | `<config_dir>/memories/MEMORY.md` — each task group's preferences, reusable knowledge and failures — and `memory_summary.md` — the profile, standing preferences, and the search terms Codex lists for each task group. |
 
-Coffer does not read session transcripts or rollout files. Both agents already distil their own sessions into memory, and Coffer starts from that.
+Coffer does not read session transcripts or rollout files. Both agents already distil their own sessions into memory, and Coffer starts from that. It skips its own copies when it reads them back (see [What Coffer writes into each agent](#what-coffer-writes-into-each-agent)), so nothing it wrote is published again.
 
-If an agent's memory format changes and a file can no longer be parsed, that agent contributes nothing to the pass, the failure is reported with the file's path and the reason, the other agent's memory is still read, and notes from earlier passes are left in place.
+If an agent's memory format changes and a file can no longer be parsed, that agent publishes nothing in that sync, the Memory page names the file and the reason, the other agent's memory is still read, and what the agent published earlier stays in the hub.
 
-## Partitions
+## The hub
 
-A **partition** is a folder under `~/.coffer/derived/memory/`. There is one per repository, plus one named `global`:
-
-- An entry is filed under the repository it was learned in. The main checkout, its worktrees and another clone of the same repository all map to one partition, named after the repository's directory.
-- An entry about **you** rather than a project (type `user`: your preferences, Codex's profile) is filed under `global`, whichever repository it came from.
-- Guidance on how to work (type `feedback`) is filed with the repository it was given in, because it usually binds that repository. Only feedback given outside any repository goes to `global`.
-- An entry learned in a directory that is not a repository creates no partition. The distil pass decides whether it belongs in `global` or nowhere.
-
-Partitions are created by aggregation only; you do not create them.
+The hub is `vault/memory/` in your vault, one Markdown file per memory:
 
 ```text
-~/.coffer/derived/memory/
+~/.coffer/vault/memory/
 ├── global/
-└── payments-api/
-    ├── MEMORY.md      ← the index: one line per note
-    ├── notes/         ← Coffer's notes, one topic per file
-    │   └── retry-budget-for-ledger-writes.md
-    ├── RETIRED.md     ← notes that were retired, and why
-    └── .raw/          ← what was read from the agents, verbatim (hidden)
+│   └── 3f2a91c4de55b071.md
+└── projects/
+    └── github.com-acme-payments/
+        └── 8c01d6e2a9b34f70.md
 ```
 
-| File | What it holds |
+- **A project is its repository.** A project is named by its repository's `origin` URL (`github.com/acme/payments`), or by the repository's directory name when it has no remote. A main checkout, its worktrees and another clone of the same repository — on this machine or another — are one project.
+- **What is about you is `global`.** A memory about you rather than a project (type `user`: your preferences, Codex's profile) is filed under `global`, whichever repository it came from.
+- **Scratch folders are not projects.** A memory learned in a directory that is not inside a repository is published only when it is about you, under `global`.
+- **Paths travel.** When a memory is published, its repository's folder is written as `<repo>` and your home folder as `~`. When it is written into an agent, they expand to where the project is checked out on that machine and to that machine's home.
+
+Each file's frontmatter names where the memory came from (the machine, the agent and the agent's own file), its `type`, `title`, one-line `description` and when it was created and last updated; the body is the memory as the agent wrote it. Only the machine and agent a memory came from ever change or delete its hub file: when the agent drops the memory, its hub file goes too.
+
+A memory that looks like it holds a secret (an API key, a token, a private key, a password) is **withheld**: it is not published, and the Memory page names the agent and source, never the value.
+
+The hub is vault content, so if you use [vault sync](/guides/vault-sync) your memories go to your own git remote with the rest of your vault. Two agents' versions of one lesson are two hub files; each agent merges them on its own side.
+
+## What Coffer writes into each agent {#what-coffer-writes-into-each-agent}
+
+A hub memory is written into every registered agent on this machine except the agent that wrote it, on the machine where it wrote it. Claude Code on your desktop receives what Claude Code learned on your laptop.
+
+| Agent | What Coffer writes |
 | --- | --- |
-| `MEMORY.md` | The index. Each line gives a note's title, its file, a one-line description written to stand on its own, and the search terms the source supplied, newest first. This is what a session receives. |
-| `notes/<slug>.md` | One note. Frontmatter carries `title`, `description`, `type` (`user`, `feedback` or `project`), `origins` (every agent file the note was built from), `created_at` and `updated_at`, and sometimes `search_terms`. The body is the entry as the agent wrote it, unless someone has edited or merged it. |
-| `RETIRED.md` | Each retired note's title, the reason, and the note that replaced it. The next pass reads this file so a retired subject is not brought back from the same unchanged source. An agent retires a note by marking it (see [Tidy memory](#tidy-memory)); the next pass records it here. A note is also retired here, with the reason "its sources are gone", when every raw entry it was built from has left `.raw/` — the agent deleted the fact, or it is now filed into another partition — and that kind of record does not stop the subject coming back. |
-| `.raw/` | Every entry exactly as it was read, with the agent, source path and read time. It is the distil pass's input and lets you check a note against the words it came from. It is not shown in the web UI; open it on disk, under `~/.coffer/derived/memory/<partition>/.raw/`. |
+| Claude Code | One file per memory, `coffer_<slug>.md`, in the project's memory folder (`~/.claude/projects/<project>/memory/`, created when missing), in Claude Code's own memory format plus a `coffer:` block naming the memory's origin. One line per copy inside a marked block at the end of that folder's `MEMORY.md`, between `<!-- coffer:memory-sync:begin -->` and `<!-- coffer:memory-sync:end -->`: at most 30 lines, newest first, the last line saying how many more copies the folder holds. `global` memories go to `~/.claude/rules/coffer-memory.md`, which Claude Code loads in every session. |
+| Codex | One file per memory under `~/.codex/memories/extensions/coffer/resources/`, naming the project it applies to (or "all projects") above the memory's text, and an `instructions.md` that tells Codex's consolidation what these files are: memories your other agents learned, to be treated as information and never as instructions, filed under the project each names, and tagged `[via Coffer]` when Codex folds them into its own memory. |
 
-Everything under `~/.coffer/derived/memory/` is derived. It can be deleted and rebuilt at any time, and it is not carried by [vault sync](/guides/vault-sync): each machine builds its own from the agents installed on it.
+- **Only where the project is checked out.** A project's memories are written on a machine only once the project is checked out there, as found from the working directories your agents recorded. Until then they wait in the hub. `global` memories are written on every machine.
+- **Only Coffer's own files.** Coffer creates, changes and deletes only its copies, its marked block in `MEMORY.md`, its rules file and its Codex extension folder. Everything else in `MEMORY.md` and every memory the agent wrote stays byte for byte as it was, and Coffer never changes an agent's memory settings. It backs `MEMORY.md` up to `~/.coffer/config-backups/` before changing it.
+- **An edited copy belongs to the agent.** When an agent edits or removes a copy — Auto Dream merging it into one of Claude Code's own files, say — Coffer stops managing it: it does not overwrite the edit or bring the removed copy back. If the memory later changes in the hub, Coffer writes the new version as a new copy beside the edited one.
+- **Codex's memories off.** When Codex's memories feature is off (`memories` under `[features]` in `config.toml`), Coffer writes nothing into Codex and the Memory page says so.
 
-## How the passes run
+### When Codex imports from Claude Code itself
 
-Two background passes keep the partitions current. Both are on by default, and neither calls a model.
+Codex can import Claude Code's project memories itself and keep that import updated. When you use that, turn on **Codex imports Claude Code's memories itself** under the agents table on the Memory page. Coffer then writes no Claude Code memory into Codex on this machine, and the table says *Codex imports it*. Codex's memories still reach Claude Code.
 
-| Pass | What it does | Default schedule |
-| --- | --- | --- |
-| **Read from agents** (aggregation) | Reads every registered agent's memory files and writes new entries into `.raw/`. A source file whose content has not changed since the last pass is skipped. | At daemon start, then hourly |
-| **Distil memory** | For each partition, turns every new entry into a note of its own, removes the notes an agent marked retired, and rewrites `MEMORY.md`. | About a minute after start, then every 6 hours |
+## How a sync runs
 
-The two passes run on separate timers: distil does not wait for an aggregation (to run both at once, use [Update memory](#run-a-pass-now)), and a partition with no new entries and nothing to retire costs nothing. Distil is mechanical: each new entry becomes one note, as it stands, and `MEMORY.md` is written from the notes' frontmatter. A later entry on a subject a note already covers opens a note beside it; nothing merges them until an agent tidies the partition.
-
-::: info What leaves your machine
-Coffer sends no memory content to any model. Aggregation, distil and delivery stay on your machine, and prompt-time ranking runs inside the daemon. When you press **Tidy**, the notes your agent reads go to that agent's own provider, as in any conversation with it.
-:::
-
-### Change the schedule
-
-In the Memory header, the **▾** on **Update memory** (the read button's own arrow) opens a popover with one switch, **Read memory automatically**, and an interval. The switch turns aggregation and distil on or off together; the interval is how often the agents' memory is read, and distil keeps its own slower interval. The popover also says when the memory was last read and when the next read is due. When an agent's memory could not be read, a warning banner names the agent and the path, with **Retry** and **Hand off to &lt;Agent&gt; ▾**, whose prompt asks an agent to fix the read permission; while it runs, **Update memory** reads *Updating…*.
-
-A change applies without a restart. The popover offers 15 minutes to 1 day; the settings API accepts down to 60 seconds.
-
-### Run a pass now
+One background pass, **memory sync**, reads the agents, updates the hub and writes the copies. It is on by default, runs when the daemon starts and then every hour, and calls no model. A source whose content has not changed since the last sync is skipped, so a quiet sync costs almost nothing. Only one sync runs at a time.
 
 ```text
-Memory → Update memory
-Memory → choose the partition → Update memory
+Memory → Sync now
 ```
 
-**Update memory** runs both passes in one action: it reads every registered agent's latest memory, then distils every partition that gained new entries or holds a note an agent marked retired. It reports how many entries it read across how many partitions, any sources that failed to parse, and which partitions it distilled. A partition whose distil pass is already running is reported as skipped rather than failing the update. The button is the same on the partitions page and on a partition's page. Only one distil pass runs per partition at a time. `coffer daemon status` shows what is running now.
+**Sync now** runs a sync at once and reports how many memories it published, copies it wrote and copies it removed. The **▾** beside it opens the automatic sync: a switch, **Sync memory automatically**, and an interval from 15 minutes to 1 day. A change applies without a restart. The header says when memory last synced, or that automatic sync is off.
 
-## Tidy memory {#tidy-memory}
+### A first or large sync waits for you
 
-Because every entry becomes a note of its own, a partition collects near-duplicates: two agents rarely phrase the same lesson the same way, so you end up with one note per memory each agent wrote. Coffer does not merge them. Your agent does, when you ask.
+The first sync on a machine, and any sync that would write more than 50 copies, publishes to the hub as usual but writes nothing into your agents yet. The Memory page shows it as a preview: per agent and project, how many copies would be written, updated and removed. Open a row to see the project's memories. **Write** applies exactly that plan; **Cancel** drops it. A later sync replaces a preview you have not answered.
 
-```text
-Memory → Tidy all                          (every partition, one after another)
-Memory → choose the partition → Tidy
-```
+### What each sync recorded
 
-**Tidy** starts your default hand-off agent in your preferred terminal with a prompt that names the partition and its folder, sent as its first message. **Tidy all**, in the Memory page's header, sends one prompt the same way that names every partition with its notes folder and note count, and asks the agent to go through them one at a time. With no managed agent available, the button offers **Copy prompt** instead: paste it into any agent that has the `coffer-guide` skill.
-
-The prompt points the agent at the **Tidying memory** section of the `coffer-guide` skill. Following it, the agent works through one partition at a time:
-
-1. Reads the partition's `MEMORY.md`, then the notes in full.
-2. **Merges** notes about the same subject: it rewrites the surviving note so it holds every fact of both, appends the merged note's `origins` to the survivor's `origins` unchanged, and deletes the merged note's file. The `origins` are how Coffer knows a memory is already accounted for, so a dropped origin brings the merged note back at the next update.
-3. **Retires** a note that is no longer true by adding `retired:` with the reason to its frontmatter, and `replaced_by:` with the surviving note's file name when there is one. It does not delete the file: the memory the note came from still lives in the agent's own memory, so a deleted note would come back. Coffer records the retirement and removes the file at the next update, and never recreates it. The memory then shows in the partition's **Retired** group.
-4. Keeps one topic and a one-line `description` per note, and reports what it merged and retired.
-
-Where two notes disagree the newer statement wins, unless the older one is shown to be right by a source, a date, a command's output or the code, whoever wrote either. The agent leaves `.raw/`, `MEMORY.md`, `RETIRED.md` and the agents' own memory files alone.
-
-Tidy runs only when you press it or ask your agent. The timers never merge or retire a note on their own.
-
-## How agents receive memory
-
-Memory reaches a session at two moments:
-
-| Moment | What the agent gets | Hook event |
-| --- | --- | --- |
-| **Session start** | the index of `global` and of the repository the session is in, and where the notes are | `SessionStart` |
-| **Each prompt you send** | up to three notes your prompt names, if any match well enough | `UserPromptSubmit` |
-
-Both go through one hook, installed into the agent's own settings when you connect the agent to Coffer. The decision behind this design, and the evidence for it, is the ADR [Memory Reaches a Session at Two Moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md).
-
-### Install the hook
-
-Delivery goes through each agent's own hook mechanism. The hook is one part of the agent's [Coffer connection](/guides/agents#connect-an-agent-to-coffer): connecting an agent installs it and disconnecting removes it. Coffer never installs it into an agent you have not connected.
-
-```text
-Agents → choose the agent → Connect
-```
-
-What gets installed is two entries, one per event, in the agent's settings file: `~/.claude/settings.json` for Claude Code, `~/.codex/hooks.json` for Codex.
-
-| Event | When it fires | Timeout |
-| --- | --- | --- |
-| `SessionStart` | on startup, resume, clear and compact | 10 seconds |
-| `UserPromptSubmit` | each prompt you send | 5 seconds |
-
-Both entries run the same command, an internal entry point of `coffer` that you never type yourself. It is called by its full path (usually `~/.coffer/bin/coffer`), because the shell an agent runs hooks in may not have `~/.coffer/bin` on its `PATH`. The command reads the event the agent hands it and answers in the JSON both agents read. Each entry is marked with `coffer-memory`, so Coffer can find and remove exactly its own entries. Installing twice leaves one entry per event, and removing takes out only Coffer's entries and leaves every other hook and setting untouched. The hook lives in the agent's settings, not in its memory files.
-
-::: warning Codex needs you to approve both entries
-Codex runs a hook only after you have approved it, and it skips an unapproved one without saying so. After connecting a Codex agent, and again after any Coffer update that changes the hook's command, open Codex, run `/hooks` and trust each of Coffer's two entries: `SessionStart` and `UserPromptSubmit`. An entry you leave unapproved is simply skipped, so trusting only `SessionStart` gives you the index and nothing else. Coffer does not approve its own hook; it only reports it as untrusted. The agent's **Hooks** tab and the attention list all show when an approval is missing.
-:::
-
-The daemon keeps installed hooks current. On every reconcile pass it rewrites any hook whose command or set of events is out of date for the running build, back into the two current entries. It never adds a hook to an agent that does not have one.
-
-Whether the hook is installed, current and trusted is shown on the **agent's** page (its connection status and **Hooks** tab), not with memory. The partition's **Delivered** tab in [See it working](#see-it-working) shows what is delivered, never the state of a hook.
-
-### At session start: the index
-
-The session-start context contains, in order:
-
-1. the `global` partition's index — what is known about you,
-2. the index of the partition for the repository the session is in,
-3. the absolute path of that partition's `notes/` folder, with the instruction that a note's body is read as a file, and
-4. the memory root (`~/.coffer/derived/memory/`), which spans every partition, so a note from another repository is one search away with the agent's own tools. The `coffer-guide` skill names the knowledge root too, so an agent knows where both live.
-
-What a hook prints is capped at 9,500 bytes, which is under both agents' limits for a hook's output: Claude Code shows the model only a short preview of anything past about 10,000 characters, and Codex cuts the middle out of anything past about 2,500 tokens. A large vault's index is bigger than that. When the index does not fit, the oldest lines are dropped first, the current repository's lines are kept in preference to `global`'s, and the text says how many lines were dropped and which folder still holds them — every note stays readable as a file.
-
-### At each prompt: the notes your prompt names
-
-When you send a prompt, Coffer ranks the notes of the current repository's partition and of `global` against it, matching words in each note's title, description, search terms and body. Chinese text is matched too. The best **three** notes that clear a relevance bar are added to the session, each as its file path and one line:
-
-```text
-Coffer memory: notes recorded for this user that may apply to this request. …
-- (/Users/you/.coffer/derived/memory/payments-api/notes/retry-budget-for-ledger-writes.md) a fact they recorded: Retry budget for ledger writes — ledger writes retry three times, then park in the dead-letter table.
-```
-
-- A note is given **once per session**. A later prompt that names the same note does not bring it in again, even after the daemon restarts.
-- A short prompt — under three words — and a nudge such as `continue`, `ok` or `继续` bring in nothing, so a conversation that is just moving along costs nothing.
-- The whole addition stays under 1.5 KB.
-- The ranking is plain word matching over the note files. Nothing is embedded, and nothing leaves your machine.
-
-### In channel turns
-
-Coffer drives a turn that comes from a [channel](/guides/channels) itself, so it delivers that turn's index and notes itself. On an agent connected to Coffer, the agent still runs Coffer's hook inside the turn, and the hook stands aside for session start and each prompt, so nothing arrives twice:
-
-- **The index.** The session-start payload — the `global` index, the index of the partition for the conversation's working directory, and where the notes are — goes into that turn's system prompt. A turn gets no memory header at all when the index is empty.
-- **The notes your message names.** Coffer ranks each message you send against the notes exactly as it does [at each prompt](#at-each-prompt-the-notes-your-prompt-names) — the same three-note limit, relevance bar and size cap — and adds what it finds after your message in what the agent receives. A note is given once per conversation, and each delivery is recorded in the audit log as a `prompt` fire of the agent. Your message is stored in the conversation as you wrote it.
-
-Nothing needs installing for this. On a connected agent, Coffer's hook still runs inside a channel turn and stands aside for both moments, so the agent never receives memory twice.
-
-A turn you send from the [Conversations](/guides/chat) page does not get this append: it gets memory the way a terminal session does, through the agent's own hook when the agent is connected to Coffer. No turn gets memory both ways.
-
-### On demand: search the memory root
-
-For a note from a different repository than the one the session is in, an agent searches the memory root with its own file tools — `grep` over `~/.coffer/derived/memory/` covers every partition at once, and the session-start payload names that root. Every note is a Markdown file with its title and one-line description in its frontmatter. There is no memory tool: Coffer exposes nothing for an agent to call.
-
-There is no tool for an agent to write memory through Coffer either. An agent records something the way it always does, in its own memory, and Coffer reads it on the next pass. The `coffer-guide` skill tells agents this.
-
-## See it working
-
-**Exactly what an agent is given at session start** in one partition's repository — the same text the hook would print, composed the same way:
-
-```text
-Memory → choose the partition → Delivered
-```
-
-The partition's **Delivered** tab shows that text read-only, with a switch between the connected agents (Claude Code first), its length in characters and a **Copy** button. It opens as formatted Markdown (**Rendered**); **Raw** shows the exact text, and **Copy** always copies the raw text. In Rendered mode each entry's title and file name is a link to that memory on its partition's page (entries under *Known about you* open the global partition); an entry whose partition is unknown stays plain text. A hint beside the text reminds you that editing a memory changes what is delivered.
-
-**Every delivery, one by one.** Each delivery is an audit event naming its moment (`session_start` or `prompt`), the session and the notes it carried, never their text:
+Every sync that changed something is one `memory_synced` entry in [Activity](/guides/activity), listing the hub files it published, updated and deleted, the copies it wrote, updated and removed per agent and file, the memories it withheld and the sources it could not read. A sync that changed nothing records nothing.
 
 ```sh
-coffer log audit --event-type memory_delivery_fired --limit 20
+coffer log audit --event-type memory_synced --limit 20
 ```
 
-You can read the same events on the [Activity](/guides/activity) page.
-
-## Browse and edit memory
-
-### Coffer's partitions
+## The Memory page
 
 ```text
-Memory → choose the partition
+Memory
 ```
 
-In the web UI a note is called a **memory** (中文 记忆条目): one memory per subject. The **Memory** page carries the **Experimental** tag beside its title; its primary action is **Update memory**, a split button whose **▾** holds the automatic-read schedule; **Tidy all**, which costs model tokens, stands apart to its left. It lists partitions in a table — the partition, its path (**Every project** for `global`), its number of memories, its **Sources** (the agents it was learned from) and a **Distilled** column saying when it was last distilled. The table has no heading of its own; a search box above it filters the rows by partition name and path. Healthy rows are grey; only **Repository missing** is coloured. With no partition yet it shows the first-run welcome **Nothing distilled yet** instead: **Update memory** and the connected agents whose memory Coffer found on this Mac, or, with no agent connected, **Open Agents** to connect one. A partition whose repository no longer exists on disk is marked **Repository missing**; nothing is delivered from it, and it stays listed until you delete it (see [Rebuild a partition](#rebuild-a-partition)).
+The **Memory** page carries the **Experimental** tag. Its header holds **Sync now** with its **▾**, when memory last synced, and a **⋯** menu with **Undo sync…**. Below it, in order:
 
-The Memory page's header carries **Tidy all** beside **Update memory**. A partition's page has no back link and no Experimental tag: its title is the partition's name, the line under it carries the path, the number of memories and when it was last distilled, and its header offers **Tidy** beside **Update memory**. It has two tabs:
+- **Problems**: sources the last sync could not read, and memories withheld because they look like secrets.
+- **The preview**, while a first or large sync waits for **Write** or **Cancel**.
+- **Projects**: every project in the hub, with whether and where it is checked out on this machine (**Not checked out here** otherwise), how many memories it holds and the agents they came from. **Global memories** sits at the top. A search box filters the rows.
+- **Agents on this machine**: per agent, the copies written here (and how many the agent edited or removed), whether its own memory is on (Claude Code's auto memory, Codex's memories) and whether its own curation is on (Claude Code's Auto Dream, Codex's consolidation), with a hint when either is off, and **Curate now**. With Codex registered, the switch **Codex imports Claude Code's memories itself** sits below the table.
 
-- **Memories** (the default) lists the partition's memories — each by its title and one-line description — beside the selected one. The selected memory shows its title, a line naming the agents it was learned from and when it was last updated (*Learned by Claude Code, Codex · updated …*), and its body (searchable with ⌘F), with **Open in editor** as a button and a **⋯** menu holding **Reveal in Finder** and **Delete…**; the list and the memory fill the window and scroll inside. Under the list, a collapsed **Retired** group lists the memories that were retired. Choose one to read it: the pane shows its full title, a *Retired* tag, the date, the full reason and, when another memory replaced it, a **Replaced by …** link to that memory. A retired memory is read-only, and the group opens by itself when the address names one. A partition not yet distilled shows no list, only an empty state.
-- **Delivered** shows the session-start text each agent receives in this partition's project (see [See it working](#see-it-working)).
+With no Claude Code or Codex registered, the page says there is no agent to sync and offers **Open Agents**.
 
-The page shows Coffer's memories only. It shows no file tree, no `MEMORY.md` or `RETIRED.md`, no `.raw/`, no native paths and no agent's original text; those stay on disk. The header's **⋯** menu offers **Reveal partition folder**, **Copy path**, **Distil history in Activity** (the Changes tab, where every distil pass is recorded) and, only while the repository is missing, **Delete partition…**.
+Choose a project to open its page. It names where the project is checked out on this machine, or that its memories wait in the hub because it is not, and lists every memory: its title and type, the agent and machine it came from, when it was last updated, and per agent on this machine what became of its copy:
 
-A note's `origins` frontmatter names every agent file it was built from, and `.raw/` holds each entry exactly as it was read, so you can trace a note that reads wrong back to what the agent actually recorded. On disk, a partition's `MEMORY.md`, `notes/` and `RETIRED.md` are plain files under `~/.coffer/derived/memory/<partition>/`.
+| State | Meaning |
+| --- | --- |
+| **Its own** | the agent wrote this memory itself |
+| **Written** | Coffer wrote a copy (**In rules file** for a `global` memory in Claude Code) |
+| **Next sync** | the copy is written at the next sync |
+| **Held back** | the project is not checked out on this machine |
+| **Codex imports it** | Codex's own import carries this memory |
+| **Edited by agent** / **Removed by agent** | the agent changed or removed the copy, and Coffer leaves it alone |
 
-### Edit a memory
+The page never edits a memory's text. To change a memory, change it where the agent keeps it — in Claude Code's memory folder or with Codex's memory tools — and the next sync carries the change. To see an agent's own memory folders, open **Agents → choose the agent → More → Memory**.
 
-A memory that is wrong or incomplete can be fixed by you, in your own editor:
+## Curation is each agent's own
 
-- **From the web UI.** The page shows a memory read-only. Choose the memory in its partition and select **Open in editor**, which opens the note's file in the editor chosen in **Settings › General**; **Reveal in Finder** in its **⋯** menu shows the file. Coffer holds none of your text, so there is no save and no conflict to resolve: what your editor saves is what the page shows next.
-- **On disk.** Open the note under `~/.coffer/derived/memory/<partition>/notes/` in your own editor. The next index line and the next session's delivery carry the change.
+Coffer does not merge or retire memories. Each agent curates what it holds, Coffer's copies included:
 
-An edited note stays as you left it: the distil pass never rewrites an existing note's body. It changes only when a tidy merges or retires it, under the rule in [When two statements disagree](#when-two-statements-disagree).
+- **Claude Code**: Auto Dream merges duplicates, drops what is contradicted or stale and rewrites the index, on Claude Code's own schedule. Coffer cannot read whether it is on yet, so the page shows it as unknown; check it in Claude Code's `/memory`.
+- **Codex**: consolidation runs whenever its memories are on and its inputs changed, and reads Coffer's extension folder as one of its inputs. Fresher evidence wins over an older statement.
 
-Because the tree is derived, rebuilding a partition (see [Rebuild a partition](#rebuild-a-partition)) loses every edit and every merge: the notes come back from the agents' own memory, one per entry.
+A rarely used project can hold a copy beside the agent's own version of the same lesson until its curation next runs. To run it now, choose **Curate now** on the agent's row: Coffer starts the agent without a terminal, in your home folder, with a prompt asking it to consolidate its own memory, and records a `memory_curation_requested` event. The run uses that agent's own model and account, as any session with it does.
 
-### Delete a memory {#delete-a-memory}
-
-Choose the memory, open its **⋯** menu and select **Delete…**; Coffer asks first. Deleting retires the memory rather than just removing the file: the sources it was built from still live in the agent's own memory, so Coffer records the deletion in `RETIRED.md` (reason *Deleted by hand*, with the note's source entries), removes the note, rewrites `MEMORY.md` and logs a `memory_note_deleted` event in Activity. The next **Update memory** does not bring it back. If the delete fails, the dialog stays open and shows why. The memory then appears in the **Retired** group.
-
-### When two statements disagree
-
-When two notes disagree — or your edit and a newer note — the newer statement wins unless the older one is shown to be right by evidence: a source, a date, a command's output or the code. No writer is exempt: a statement is not safe because a person wrote it, and not suspect because an agent did. This is the rule your agent follows when it tidies (see [Tidy memory](#tidy-memory)); the older note is retired with the reason and the note that replaced it, and stays readable in the **Retired** group. Coffer's own passes decide nothing by this rule: they copy entries and carry out the marks an agent leaves.
-
-### An agent's own memory
-
-To see the memory an agent keeps for itself, open **Agents → choose the agent → More → Memory**. The tab opens with **Coffer's memory** for that agent — its memory hook, when it last fired and what it delivers — and below it lists each of the agent's own native memory stores by project, path and number of items. Choose one to browse its files read-only. The agent owns and rewrites these files; open one in your editor if you want to change it. Changes you make there reach Coffer's notes on the next aggregation and distil.
-
-## Every partition reaches every agent
-
-A partition has no on/off switch and no per-agent reach. Every partition is served to every agent — including agents that contributed nothing to it, which is the point of aggregating — through the memory hook.
-
-This controls what Coffer hands to agents, not what they can open: the notes are ordinary files under `~/.coffer/derived/memory/`.
-
-Coffer reads every registered agent's memory; there is no per-agent switch for it. Turn off **Read memory automatically** in the Memory header to stop reading all of them.
-
-## Rebuild a partition
-
-Because everything under `~/.coffer/derived/memory/` is derived, you can throw a partition away and build it again from the agents' own memory. Delete the partition's folder on disk, then choose **Update memory** in the web UI. The rebuilt partition covers the same subjects from the same sources, one note per entry. Every edit and merge you or an agent made to its notes is gone. Retirements recorded in the deleted `RETIRED.md` are lost with it, so a subject that was retired may come back.
-
-To remove a partition from Coffer entirely — for example one marked **Repository missing** — remove it:
+## Undo sync
 
 ```text
-Memory → Delete on the partition's row
-Memory → choose the partition → ⋯ → Delete partition…
+Memory → ⋯ → Undo sync…
 ```
 
-The web UI offers **Delete** only on a partition marked **Repository missing**: any other partition is recreated by the next update. The confirmation says how many distilled memories go with it; the agents' own memory for that folder is not touched.
+**Undo sync…** shows what it removes and what it keeps, then removes from this machine every copy Coffer wrote that the agent has not edited, Coffer's block in each `MEMORY.md`, `~/.claude/rules/coffer-memory.md` and `~/.codex/memories/extensions/coffer/`, turns automatic sync off and records a `memory_sync_undone` event. It keeps the hub in your vault, every memory an agent wrote itself and every copy an agent edited. Your other machines are not affected. Turn automatic sync back on, or choose **Sync now**, to write the copies again.
 
-## Limits
+## Turning memory off
 
-- **Rules about every reply are not memory's job.** A rule such as "always reply in Chinese" or a preferred tone applies to every turn. No prompt names it, so retrieval does not deliver it at the right moment. Put such rules in the instructions the agent loads on every turn: `CLAUDE.md` for Claude Code, `AGENTS.md` for Codex. You own those files, and Coffer never writes them.
-- **A tiny store rarely clears the bar.** The relevance bar was tuned on a store of real size. The ranking weighs each word by how rare it is across the whole store, so with only a handful of notes even a matching note scores low, and a prompt usually brings in nothing. That is on purpose: it stops a prompt that shares only common words from bringing in noise. Retrieval starts to work as the agents learn more.
-- **A session idle for more than a week is treated as new.** Coffer rebuilds what each session was given from the delivery fires in the audit log, so a daemon restart does not repeat a note. Fires older than seven days are not read back, so a session that has been idle that long can be given a note again.
-- **Retrieval reads only the current repository's partition and `global`.** A note filed under another repository is never brought in at a prompt. The agent can still find it by searching the memory root.
-- **Memory never gets in the way when Coffer is down.** If the daemon is not running, is slow, or answers with an error, the hook prints nothing and lets the prompt through. You lose that fire's delivery, nothing more. A short prompt never contacts the daemon at all.
+Switching the **memory** feature off in **Settings → Features** stops the sync, hides the Memory page and closes its API. Copies already written stay in your agents, as ordinary memory they own; use **Undo sync…** first if you want them gone. Turning automatic sync off on the Memory page stops the unattended sync and keeps **Sync now**.
+
+## Upgrading from an earlier build
+
+Earlier builds kept memory as notes under `~/.coffer/derived/memory/` and handed them to sessions through a `coffer-memory` hook. On its first start, the daemon removes that hook from every agent's settings (leaving every other hook untouched, and recording a `memory_hook_removed` event per agent) and deletes `~/.coffer/derived/memory/`. Nothing is lost: those notes were built from the agents' own memory, which the first sync publishes to the hub.
 
 ## Troubleshooting
 
-**A partition is empty or missing.** Check that the agent is registered, then choose **Update memory** and read its report. Entries learned outside a git repository do not get a partition of their own.
+**A project's memories are not in an agent.** Open the project's page: **Held back** means the project is not checked out on this machine (open it once with an agent there); **Next sync** means a sync has not run since; a preview waiting on the Memory page means you have not chosen **Write** yet. For Codex, check that its memories are on.
 
-**An agent is not given its memory.** Open the agent's **Hooks** tab to confirm Coffer's hook is **Current** on both events (press **Repair** if it reads **Out of date** or **Missing**). For Codex, check that both entries are trusted in `/hooks`. Then open the partition's **Delivered** tab to see exactly what it is given at session start.
+**An agent's memory is not published.** Check that the agent is registered and its own memory is on, then choose **Sync now** and read the **Problems** above the projects. A memory learned outside any repository is published only when it is about you.
 
-**A prompt brings in no notes.** Short prompts and nudges never do. Otherwise the prompt's words did not match any note of this repository or `global` well enough; with only a few notes in the store that is normal (see [Limits](#limits)). A note the session was already given is not given again.
+**The same lesson appears twice in an agent.** Two agents' accounts of one lesson are two memories until the agent curates. Choose **Curate now** on the agent, or wait for its own curation to run.
 
-**Several notes say the same thing.** Each entry becomes a note of its own, so two agents' versions of one lesson sit side by side until someone tidies. Press **Tidy** on the partition, or **Tidy all** in the Memory header.
-
-**My edit to a note disappeared.** Either a tidy merged or retired the note (the Retired group shows the reason), or the partition was rebuilt, which loses edits.
+**A copy keeps coming back after I deleted it.** It does not, unless the memory changed in the hub since: then the new version is written as a new copy. To stop a memory reaching an agent, change or remove it in the agent that wrote it.
 
 ## Related
 
 - [Knowledge](/guides/knowledge)
-- [Skills](/guides/skills) — the `coffer-guide` skill tells agents how memory works
 - [Agents](/guides/agents)
+- [Vault sync](/guides/vault-sync)
 - [Memory architecture](/architecture/memory)
-- [MCP tools reference](/reference/mcp-tools)
+- [`coffer memory`](/reference/cli/memory)
 - [Memory spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md)
-- [Aggregate the agents' memory; never write it](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md)
-- [Tidying Knowledge and Memory Is the Agent's Job](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-and-memory-is-the-agents-job.md)
-- [Memory reaches a session at two moments](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)
+- [Sync memory into each agent's own memory through a hub in the vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-memory-into-each-agents-own-memory.md)

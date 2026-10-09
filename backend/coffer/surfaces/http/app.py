@@ -36,14 +36,17 @@ from coffer.application.audit_service import AuditService
 from coffer.application.binary_deploy import deploy_frozen_sidecars
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
+from coffer.application.memory.legacy_removal import remove_memory_hooks
 from coffer.application.reconcile.hints import HintingResourceRepo
 from coffer.application.resource_service import ResourceService
 from coffer.application.runtime import loop_lag
 from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.resource import Kind
+from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.agent.legacy_cleanup import remove_transcript_sidecar
 from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
 from coffer.infrastructure.logging.setup import configure_logging
+from coffer.infrastructure.memory.retired_tree import remove_retired_trees
 from coffer.infrastructure.persistence.attention_ignore_repo import SqlAlchemyAttentionIgnoreRepo
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -75,14 +78,9 @@ from coffer.surfaces.http.dependencies import (
 from coffer.surfaces.http.engine_config_composition import build_config_services
 from coffer.surfaces.http.event_wiring import build_event_stream, start_attention_watch
 from coffer.surfaces.http.feature_dependencies import build_feature_service, set_feature_service
-from coffer.surfaces.http.guide_wiring import run_builtin_guide_refresh
+from coffer.surfaces.http.guide_wiring import follow_guide_features, run_builtin_guide_refresh
 from coffer.surfaces.http.kind_wiring import wire_resource_kinds
 from coffer.surfaces.http.mcp.protocol_routes import start_session_reaper
-from coffer.surfaces.http.memory_turn_wiring import memory_context_composer, memory_turn_retriever
-from coffer.surfaces.http.memory_wiring import (
-    follow_memory_switch,
-    register_delivery_hook_target,
-)
 from coffer.surfaces.http.openapi_route import include_openapi_route
 from coffer.surfaces.http.provider_health_wiring import wire_provider_health
 from coffer.surfaces.http.reconcile_wiring import (
@@ -144,6 +142,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     sm = session_maker(engine)
     # The vault repository, the resource files, derived.db and the one
     # validator every vault write passes (ADR storage-is-five-classes-by-nature).
+    # ONE-TIME (sync-memory-into-agents): the retired memory layer's derived
+    # tree and partition rows go before the resource store indexes ``derived/``.
+    await asyncio.to_thread(remove_retired_trees)
     vault = await build_vault_stores(app.state.kinds)
 
     secrets = await init_secret_store()
@@ -211,19 +212,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
 
     # Wire the chat feature (spec chat) after the kinds: the agent service is
-    # the agent kind's result, and a channel turn's memory append closes over
-    # the memory kind's service (spec memory "Deliver to channel turns through
-    # the system prompt").
+    # the agent kind's result.
     chat = wire_chat(
         sm,
         secret_store,
         kinds.agent_skill.agent_service,
         resource_svc,
         agent_catalog,
-        compose_memory_context=memory_context_composer(
-            kinds.memory.turn_retrieval, features.is_enabled
-        ),
-        retrieve_memory=memory_turn_retriever(kinds.memory.turn_retrieval, features.is_enabled),
     )
     # Each connection's health, kept without anyone opening it (provider_health_wiring).
     wire_provider_health(vault.derived_sm, kinds, chat.introspection_service, events)
@@ -250,21 +245,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # What cites each secret, and the one-time move of old refs to minted ids.
     await wire_secret_index(resource_svc, events)
 
-    # An agent's Coffer connection spans two kinds (the gateway entry is the
-    # agent kind's, the memory hook the memory kind's), so it is composed here.
+    # An agent's Coffer connection: the gateway entry.
     connection = wire_agent_connection(
-        kinds.agent_skill.agent_service,
-        kinds.agent_skill.mcp_service,
-        kinds.memory.delivery_service,
-        features,
-    )
-    register_delivery_hook_target(
-        reconciler, kinds.memory.delivery_service, features, connection.connected_agents
+        kinds.agent_skill.agent_service, kinds.agent_skill.mcp_service
     )
     # The boot pass converges every target at once — MCP entries, skill links,
-    # provider projections, delivery hooks — before the daemon reports ready.
+    # provider projections — before the daemon reports ready.
     await run_boot_pass(reconciler)
-    follow_memory_switch(reconciler, kinds.guide, features)
+    follow_guide_features(kinds.guide, features)
     # Coffer's own skill, re-rendered from this build and the corpus every boot
     # (cheap when nothing moved; heals an edited master; upgrades old renders).
     await run_builtin_guide_refresh(kinds.guide)
@@ -281,13 +269,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     await asyncio.to_thread(remove_transcript_sidecar)
     # ONE-TIME (require-an-agent-while-on): an empty agent list becomes off.
     await asyncio.to_thread(switch_off_empty_scopes)
+    # ONE-TIME (sync-memory-into-agents): take the retired memory hook out of
+    # every agent; a no-op once it has run.
+    await remove_memory_hooks(await resource_svc.list(kind="agent"), ConfigFileStore(), audit)
 
     workers = start_background_workers(
         retention_svc=retention_svc,
         knowledge_service=kinds.knowledge.service,
         guide=kinds.guide,
-        distil=kinds.memory.distil,
-        memory_service=kinds.memory.service,
         resource_svc=resource_svc,
         audit=audit,
         engine_config=internal_engine_config_svc,

@@ -12,7 +12,7 @@ the kind-agnostic core from importing any kind
 ([Code Layout — Layer-First](code-layout-layer-first.md)). Yet the running
 daemon is thick with cross-kind dependencies: deleting an agent has to clean up
 skill bindings; the provider kind projects into each agent's native config;
-the MCP gateway advertises built-in tools the skill, knowledge and memory kinds
+the MCP gateway advertises built-in tools the skill and knowledge kinds
 register; channels drive turns through the chat platform and save through the
 knowledge kind; sync needs every area's state providers, import gates and
 post-import hooks. Something has to see all of them at once, construct them in
@@ -46,13 +46,13 @@ modules for the 400-line cap (`kind_wiring.py`, `*_wiring.py`,
 `*_composition.py`). Every step is a plain function that takes what it needs as
 parameters and **returns what it built** as a small frozen record
 (`AgentSkillWiring`, `ProviderWiring`, `UsageWiring`, `KnowledgeWiring`,
-`MemoryWiring`, `McpWiring`, …). `wire_resource_kinds` calls the kind steps in
+`McpWiring`, …). `wire_resource_kinds` calls the kind steps in
 dependency order — agent and skill, then provider (it projects into agents),
-then usage metering, then knowledge, then memory (so the gateway's handshake
-names the memory root), then MCP last of the kinds (so it picks up every
+then usage metering, then knowledge, then MCP last of the kinds (so it picks up every
 built-in tool), then Coffer's own guide skill — and returns them bundled in
 `KindWirings`. Chat, the knowledge sweep, channels and the agent connection are wired
-after that from those results, and the background workers last. Sync takes
+after that from those results, and the background workers last (the memory
+sync among them). Sync takes
 part the same way and needs no contribution list: it is a round over the vault
 that the kind-agnostic vault writer already admits every kind's files through,
 so `start_sync` is one more step that takes the resource service, the audit

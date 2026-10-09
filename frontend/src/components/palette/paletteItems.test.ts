@@ -67,7 +67,6 @@ describe("objectItem", () => {
     expect(objectPath("skill", o("s1"))).toBe("/skills/s1-name");
     expect(objectPath("provider", o("p"))).toBe("/model-providers/p");
     expect(objectPath("knowledge", o("k"))).toBe("/knowledge/k");
-    expect(objectPath("memory", o("m"))).toBe("/memory/m");
     expect(objectPath("channel", o("c"))).toBe("/channels/c");
     expect(objectPath("agent", o("a"))).toBe("/agents/a");
     expect(objectPath("agent", { ...o("a"), type: "claude_code" })).toBe("/agents/claude_code");

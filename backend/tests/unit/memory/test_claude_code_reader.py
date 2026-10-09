@@ -16,7 +16,7 @@ import pathlib
 import pytest
 
 from coffer.domain.memory.errors import UnreadableMemory
-from coffer.domain.memory.note import TYPE_FEEDBACK
+from coffer.domain.memory.hub import TYPE_FEEDBACK
 from coffer.infrastructure.memory.readers.claude_code import ClaudeCodeMemoryReader
 
 

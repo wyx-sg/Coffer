@@ -13,7 +13,7 @@ Each AI coding agent keeps its own copy of everything:
 
 - **MCP servers.** Claude Code reads them from `~/.claude.json`, and Codex from `~/.codex/config.toml`. You add a server to one agent, forget the other, and the two lists drift apart.
 - **Skills.** Each agent has its own `skills/` directory. A skill you improve in one directory stays out of date in the other.
-- **Memory.** Claude Code writes notes about your projects to its own memory, and so does Codex. Neither can read the other's, so you teach each agent the same thing again.
+- **Memory.** Claude Code writes notes about your projects to its own memory, and so does Codex. Neither can read the other's, and neither carries it to your other machines, so you teach each agent the same thing again.
 - **Keys and providers.** Moving to a different model gateway means editing each agent's config by hand, with the API key pasted into several files.
 
 All of this lives in files the agents own and nothing connects. The more agents you use, the more copies there are.
@@ -23,14 +23,14 @@ All of this lives in files the agents own and nothing connects. The more agents 
 Coffer is a **daemon plus a vault**:
 
 - **`coffer-daemon`** is a long-running process that listens on `127.0.0.1` (port 38470 by default). It holds all of Coffer's state and serves the MCP endpoint, the REST API and the web UI.
-- **The vault** is `~/.coffer/vault`, a git repository of plain files: one JSON file per resource, the skill folders, the knowledge collections and the encrypted secrets. Beside it in `~/.coffer` are machine-local settings, a history database and state Coffer can rebuild, such as the memory tree.
+- **The vault** is `~/.coffer/vault`, a git repository of plain files: one JSON file per resource, the skill folders, the knowledge collections and the encrypted secrets. Beside it in `~/.coffer` are machine-local settings, a history database and state Coffer can rebuild, such as MCP server health.
 - **`coffer-mcp-shim`** is a small stdio program that each agent starts as an ordinary MCP server. It finds the running daemon, starting one if none is running, and forwards the session to it.
 
 When you connect Claude Code on the **Agents** page, Coffer writes one `coffer` entry into Claude Code's MCP config. From then on, Claude Code reaches every MCP server you register in Coffer through that one entry.
 
 ## What it manages
 
-Everything Coffer manages is a **resource** of one of seven **kinds**. Every resource has an immutable id, a name, an on/off switch (knowledge collections and memory partitions are always on) and an audit trail.
+Everything Coffer manages is a **resource** of one of six **kinds**. Every resource has an immutable id, a name, an on/off switch (knowledge collections and agents are always on) and an audit trail.
 
 | Kind | What it is | Guide |
 | --- | --- | --- |
@@ -38,11 +38,10 @@ Everything Coffer manages is a **resource** of one of seven **kinds**. Every res
 | `agent` | A registered local coding agent: Claude Code or Codex | [Agents](/guides/agents) |
 | `skill` | An [AgentSkills](https://agentskills.io) folder, delivered into agents' `skills/` directories | [Skills](/guides/skills) |
 | `knowledge` | A collection: a folder of Markdown documents under `~/.coffer/vault/knowledge/` | [Knowledge](/guides/knowledge) |
-| `memory` | A partition of notes that Coffer builds from the agents' own memory, one per repository plus `global` | [Memory](/guides/memory) |
 | `channel` | A Telegram or SeaTalk bot you use to chat with your agents from your phone | [Channels](/guides/channels) |
 | `provider` | A model-provider profile (protocol, base URL, key) that Coffer writes into each agent's config | [Model providers](/guides/providers) |
 
-Coffer also provides some capabilities that are not resource kinds: an encrypted [secret store](/guides/secret-store), a web [Conversations](/guides/chat) page, an [activity and audit](/guides/activity) record, and [vault sync](/guides/vault-sync) with a git remote you own.
+Coffer also provides some capabilities that are not resource kinds: an encrypted [secret store](/guides/secret-store), a web [Conversations](/guides/chat) page, an [activity and audit](/guides/activity) record, [memory sync](/guides/memory) between your agents, and [vault sync](/guides/vault-sync) with a git remote you own.
 
 ## Where you use it
 

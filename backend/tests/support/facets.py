@@ -46,15 +46,14 @@ TEST_COFFER_CLI = "/opt/coffer/bin/coffer"
 
 
 def agent_catalog(programs: Mapping[AgentType, ProgramInfo] | None = None) -> AgentCatalog:
-    """The production catalogue, each probe answering from ``programs``, and
-    the delivery hooks running :data:`TEST_COFFER_CLI`."""
+    """The production catalogue, each probe answering from ``programs``."""
     found = dict(programs or {})
     return AgentCatalog(
         {
             d.type: dataclasses.replace(
                 d, dependency_probe=FixedProbe(d.program, found.get(d.type, ProgramInfo()))
             )
-            for d in build_agent_catalog(coffer_cli=TEST_COFFER_CLI)
+            for d in build_agent_catalog()
         }
     )
 

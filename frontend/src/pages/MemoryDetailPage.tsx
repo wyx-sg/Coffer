@@ -1,114 +1,95 @@
-// frontend/src/pages/MemoryDetailPage.tsx — one partition, at /memory/<uid>[/delivered]
-// (spec memory "Show a partition's memories read-only").
+// frontend/src/pages/MemoryDetailPage.tsx — one project's memories, at /memory/projects/<folder>,
+// and the global ones at /memory/global (spec memory "Manage memory sync in the web UI").
 //
-// The header is the partition's name alone (no back link, no Experimental tag,
-// no Automatic control) over one description line: the repository it is keyed
-// on in mono — a worktree and a second clone are one partition ("Identify a
-// partition by its repository") — how many memories it holds and when it was
-// distilled; a partition whose repository is gone says so ("Report
-// unresolvable partitions"). Its actions: Tidy (hands the partition to the
-// default managed agent and sends the prompt at once; spec memory "Hand a
-// partition's tidying to the agent"), Update memory, secondary (spinning while
-// the daemon reports a distil pass over THIS partition, by uid, so leaving
-// mid-pass and coming back still reads busy) and the ⋯ menu. Boards
-// 5.2.06–5.2.09.
-//
-// Two tabs in the path: Memories (default) and Delivered. There is no status
-// or reach control — every partition is served to every agent — and no
-// per-memory action but Edit: memories are derived by distillation, and
-// a person's edit is the memory until newer evidence revises it.
+// The header is the project's key (or "Global memories") over one line: where
+// it is checked out on this machine — or that it is not, so its memories wait
+// in the hub, held back — and how many memories it holds. The body lists them
+// with their origin agent and machine and, per agent here, what became of the
+// copy. There is no action: Coffer never edits a memory's text, and syncing is
+// the Memory page's.
 import { Brain } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
+import { sortAgents } from "@/components/agent/agentOrder";
 import { DetailNotFound } from "@/components/DetailNotFound";
-import { AgentHandoff } from "@/components/handoff/AgentHandoff";
-import { PartitionDeliveredTab } from "@/components/memory/PartitionDeliveredTab";
-import { PartitionMemoriesTab } from "@/components/memory/PartitionMemoriesTab";
-import { PartitionMenu } from "@/components/memory/PartitionMenu";
-import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
-import { distilState } from "@/components/memory/partitionFacts";
-import { UnresolvableBadge } from "@/components/memory/UnresolvableBadge";
+import { EmptyState } from "@/components/EmptyState";
+import { MemoryEntriesTable } from "@/components/memory/MemoryEntriesTable";
 import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { abbreviateHomePath } from "@/lib/agents/display";
-import { useDetailTab } from "@/lib/detailTabs";
-import { useMemoryPartitions, useMemoryUpdateRunning } from "@/lib/hooks/useMemory";
-import { useUpkeepRunning } from "@/lib/hooks/useUpkeep";
-
-const MEMORY_TABS = ["memories", "delivered"] as const;
+import { translateApiError } from "@/lib/api/errors";
+import { useMemoryEntries, useMemorySyncState } from "@/lib/hooks/useMemory";
 
 export function MemoryDetailPage() {
-  const { t, i18n } = useTranslation();
-  const uid = useParams<{ uid: string }>().uid ?? "";
-  const partitions = useMemoryPartitions();
-  const row = partitions.data?.find((p) => p.uid === uid);
-  const distilling = useUpkeepRunning("memory", uid);
-  const updating = useMemoryUpdateRunning();
-  const running = distilling || updating;
-  const [tab, setTab] = useDetailTab(MEMORY_TABS, "memories", `/memory/${encodeURIComponent(uid)}`);
+  const { t } = useTranslation();
+  const folder = useParams<{ folder: string }>().folder;
+  const isGlobal = folder === undefined;
+  const state = useMemorySyncState();
+  const project = isGlobal ? null : state.data?.projects.find((p) => p.folder === folder);
+  // Global memories are asked for as project "" — the hub files them under `global/`.
+  const key = isGlobal ? "" : (project?.key ?? null);
+  const entries = useMemoryEntries(key);
 
-  if (partitions.isPending) {
+  if (state.isPending) {
     return (
-      <div className="space-y-6" aria-busy="true">
+      <div className="flex flex-col gap-6" aria-busy="true">
         <Skeleton className="h-8 w-64" />
       </div>
     );
   }
-  if (!row) {
+  if (!isGlobal && !project) {
     return (
-      <div className="space-y-6">
+      <div className="flex flex-col gap-6">
         <PageHeader title={t("memory.title")} />
-        <DetailNotFound kind="memory" id={uid} backTo="/memory" icon={Brain} />
+        <DetailNotFound kind="memory" id={folder ?? ""} backTo="/memory" icon={Brain} />
       </div>
     );
   }
 
-  const where = row.repository_path ? (
-    <span className="font-mono text-xs">{abbreviateHomePath(row.repository_path)}</span>
+  const count = isGlobal ? (state.data?.global_memories ?? 0) : (project?.memories ?? 0);
+  const where = isGlobal ? (
+    t("memory.detail.global")
+  ) : project?.checked_out ? (
+    <span className="font-mono text-xs">{abbreviateHomePath(project.checked_out)}</span>
   ) : (
-    t("memory.cols.global")
+    t("memory.detail.notHere")
   );
-  const subtitle = (
-    <span className="text-text-muted">
-      {where} · {t("memory.partitions.memories", { count: row.note_count })} ·{" "}
-      {distilState(t, i18n.language, row, distilling).toLowerCase()}
-    </span>
-  );
+  const agentTypes = sortAgents(
+    [...new Set((state.data?.agents ?? []).map((a) => a.agent_type))].map((type) => ({ type })),
+  ).map((a) => a.type);
 
   return (
-    <div className="flex min-h-0 flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <PageHeader
-        title={row.name}
-        badges={row.unresolvable ? <UnresolvableBadge /> : null}
-        subtitle={subtitle}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <AgentHandoff
-              prompt={row.tidy_handoff.prompt}
-              label={t("memory.tidy.one")}
-              help={false}
-            />
-            <MemoryUpdateButton variant="outline" running={running} />
-            <PartitionMenu partition={row} />
-          </div>
+        title={
+          isGlobal ? (
+            t("memory.projects.global")
+          ) : (
+            <span className="truncate font-mono">{project?.key}</span>
+          )
+        }
+        subtitle={
+          <span className="text-text-muted">
+            {where} · {t("memory.detail.memories", { count })}
+          </span>
         }
       />
-
-      <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-col">
-        <TabsList>
-          <TabsTrigger value="memories">{t("memory.detail.tabs.memories")}</TabsTrigger>
-          <TabsTrigger value="delivered">{t("memory.detail.tabs.delivered")}</TabsTrigger>
-        </TabsList>
-        <TabsContent value={tab} className="mt-[18px] min-h-0">
-          {tab === "memories" ? (
-            <PartitionMemoriesTab uid={uid} name={row.name} partition={row} />
-          ) : (
-            <PartitionDeliveredTab uid={uid} repositoryPath={row.repository_path} />
-          )}
-        </TabsContent>
-      </Tabs>
+      {entries.error ? (
+        <EmptyState
+          icon={Brain}
+          tone="error"
+          title={t("memory.entries.loadFailed")}
+          description={translateApiError(t, entries.error)}
+        />
+      ) : (
+        <MemoryEntriesTable
+          entries={entries.data ?? []}
+          agentTypes={agentTypes}
+          machine={state.data?.machine ?? ""}
+          isLoading={entries.isPending}
+        />
+      )}
     </div>
   );
 }

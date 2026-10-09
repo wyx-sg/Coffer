@@ -233,18 +233,14 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 
 | 界面操作 | 接口 | 命令 | 验收 |
 | --- | --- | --- | --- |
-| Memory · Delete | `DELETE /resources/{uid}` | `coffer memory delete` | `test_cli_parity.py` |
-| Memory · what agents are given | `GET /memory/partitions/{uid}/delivered` | `coffer memory delivered` | `test_cli_parity.py` |
-| Memory · a partition's files | `GET /memory/partitions/{uid}/files` | `coffer memory files` | `test_cli_parity.py` |
-| Memory · list | `GET /resources` | `coffer memory list` | `test_cli_parity.py` |
-| Memory · a partition's notes | `GET /memory/partitions/{uid}/notes` | `coffer memory notes` | `test_cli_parity.py` |
-| Memory · partitions | `GET /memory/partitions` | `coffer memory partitions` | `test_cli_parity.py` |
-| Memory · what Coffer reads | `GET /memory/reading` | `coffer memory reading` | `test_cli_parity.py` |
-| Memory · retired notes | `GET /memory/partitions/{uid}/retired` | `coffer memory retired` | `test_cli_parity.py` |
-| Memory · open a partition | `GET /resources/{uid}` | `coffer memory show` | `test_cli_parity.py` |
-| Memory · Sync now | `POST /memory/sync` | `coffer memory sync` | `test_cli_parity.py` |
-| Memory · Tidy with an agent | `GET /memory/tidy-handoff` | `coffer memory tidy-handoff` | `test_cli_parity.py` |
-| Memory · edit a partition | `PATCH /resources/{uid}` | `coffer memory update` | `test_cli_parity.py` |
+| Memory · Codex imports Claude Code's memories itself | `PUT /memory/sync/codex-import` | `coffer memory codex-import` | `test_cli_parity.py` |
+| Memory · Curate now | `POST /memory/sync/curate` | `coffer memory curate` | `test_cli_parity.py` |
+| Memory · a project's memories | `GET /memory/sync/entries` | `coffer memory entries` | `test_cli_parity.py` |
+| Memory · preview · Cancel | `POST /memory/sync/preview/cancel` | `coffer memory preview-cancel` | `test_cli_parity.py` |
+| Memory · preview · Write | `POST /memory/sync/preview/write` | `coffer memory preview-write` | `test_cli_parity.py` |
+| Memory · the page | `GET /memory/sync/state` | `coffer memory state` | `test_cli_parity.py` |
+| Memory · Sync now | `POST /memory/sync/run` | `coffer memory sync` | `test_cli_parity.py` |
+| Memory · Undo sync… | `POST /memory/sync/undo` | `coffer memory undo` | `test_cli_parity.py` |
 
 ## `coffer model` {#model}
 
@@ -336,7 +332,6 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | Settings · Data · retention | `PATCH /retention/policies/{table_name}` | `coffer settings retention set` | `test_cli_parity.py` |
 | Settings · Secrets · storage | `PUT /settings/secrets` | `coffer settings secrets set` | `test_cli_parity.py` |
 | Settings · Secrets · storage | `GET /settings/secrets` | `coffer settings secrets show` | `test_cli_parity.py` |
-| Settings · Data · Clear cache | `POST /storage/cache/clear` | `coffer settings storage clear-cache` | `test_cli_parity.py` |
 | Settings · Data · storage | `GET /storage` | `coffer settings storage show` | `test_cli_parity.py` |
 
 ## `coffer skill` {#skill}
@@ -459,8 +454,6 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | `GET /fs/terminals` | 窗口操作: which terminals the Open in… menu offers |
 | `DELETE /knowledge/file` | 普通文件: a knowledge document is a plain file |
 | `GET /knowledge/file` | 普通文件: a knowledge document is a plain file |
-| `DELETE /memory/partitions/{uid}/notes/{slug}` | 普通文件: a memory note is a plain Markdown file |
-| `GET /memory/partitions/{uid}/notes/{slug}` | 普通文件: a memory note is a plain Markdown file |
 | `GET /skills/orphans/{name}/files/content` | 普通文件: a skill's files are plain files |
 | `GET /skills/{uid}/files/content` | 普通文件: a skill's files are plain files |
 | `POST /sync/join-choices/editor` | 窗口操作: opens a conflicting file in the editor |

@@ -1,108 +1,78 @@
-// frontend/src/pages/MemoryDetailPage.test.tsx
+// frontend/src/pages/MemoryDetailPage.test.tsx — one project's memories and where each was written.
 //
-// One partition's page (spec memory "Show a partition's memories read-only"):
-// it opens on Memories — its memories beside the selected one, a collapsed
-// read-only Retired group with reasons, a meta line naming the agents and
-// the update time — and shows none of the agents' own memory: no file tree,
-// no MEMORY.md / RETIRED.md / .raw/, no native path. Delivered, at
-// /memory/<uid>/delivered, shows each agent's session-start text with an
-// agent switch and no hook state. Tidy and Tidy all hand the partition or every
-// partition to the hand-off agent, started in the preferred terminal with the
-// prompt sent at once. Only the
-// api modules are mocked.
+// Spec memory "Manage memory sync in the web UI": choosing a project lists its
+// memories with their origin agent and machine and, per agent on this machine,
+// what became of the copy — the origin itself, written, in the rules file,
+// waiting for the next sync, held back, left to Codex's own import, or edited
+// or removed by the agent. Global memories have their own address. The request
+// helpers (`@/lib/api/memory`) are mocked; the query hooks are real.
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
-import {
-  COFFER,
-  DELIVERED,
-  FILES,
-  GLOBAL,
-  GONE,
-  NATIVE_PATH,
-  NODE_NOTE,
-  NOTES,
-  PORT_NOTE,
-  RETIRED,
-} from "@/components/memory/memoryTestData";
-import type { PartitionOut } from "@/lib/api/memoryTypes";
-import { ApiError } from "@/lib/api/errors";
-import { MemoryDetailPage } from "@/pages/MemoryDetailPage";
-import { MemoryPage } from "@/pages/MemoryPage";
+import type { HubEntry, MemorySyncState } from "@/lib/api/memoryTypes";
 import { acceptance } from "@/test/acceptance";
 
-const fs = vi.hoisted(() => ({
-  open: vi.fn(() => Promise.resolve()),
-  reveal: vi.fn(() => Promise.resolve()),
-}));
-vi.mock("@/lib/fsActions", () => ({ useFsActions: () => fs }));
+import { MemoryDetailPage } from "./MemoryDetailPage";
+
 vi.mock("@/lib/api/memory", () => ({
-  deleteNote: vi.fn(),
-  listPartitions: vi.fn(),
-  listNotes: vi.fn(),
-  getNote: vi.fn(),
-  listRetired: vi.fn(),
-  listPartitionFiles: vi.fn(),
-  getDelivered: vi.fn(),
-  getReading: vi.fn(async () => ({ read_at: null, failures: [] })),
-  sync: vi.fn(),
-  getTidyHandoff: vi.fn(),
+  getSyncState: vi.fn(),
+  listEntries: vi.fn(),
 }));
-vi.mock("@/lib/api/upkeep", () => ({ listUpkeepRuns: vi.fn() }));
-vi.mock("@/lib/api/agentProviders", () => ({ agentProvidersApi: { list: vi.fn() } }));
-vi.mock("@/lib/api/resources", () => ({ resourcesApi: { remove: vi.fn() } }));
-vi.mock("@/lib/api/fs", () => ({ fsApi: { listTerminals: vi.fn(), openTerminal: vi.fn() } }));
-// The first-run welcome lists the connected agents; none here.
-vi.mock("@/lib/api/agents", () => ({ agentsApi: { list: vi.fn(async () => ({ items: [] })) } }));
-
 const api = await import("@/lib/api/memory");
-const { listUpkeepRuns } = await import("@/lib/api/upkeep");
-const { agentProvidersApi } = await import("@/lib/api/agentProviders");
-const { resourcesApi } = await import("@/lib/api/resources");
-const { fsApi } = await import("@/lib/api/fs");
 
-function stub({
-  partitions = [COFFER],
-  running = false,
-  managedAgent = false,
-}: { partitions?: PartitionOut[]; running?: boolean; managedAgent?: boolean } = {}) {
-  vi.mocked(api.listPartitions).mockResolvedValue({ partitions });
-  vi.mocked(api.listNotes).mockResolvedValue(NOTES);
-  vi.mocked(api.getNote).mockImplementation(async (_uid, slug) =>
-    slug === PORT_NOTE.slug ? PORT_NOTE : NODE_NOTE,
-  );
-  vi.mocked(api.listRetired).mockResolvedValue(RETIRED);
-  vi.mocked(api.listPartitionFiles).mockResolvedValue(FILES);
-  vi.mocked(api.getDelivered).mockResolvedValue(DELIVERED);
-  vi.mocked(listUpkeepRuns).mockResolvedValue({
-    runs: running
-      ? [
-          {
-            kind: "memory",
-            name: COFFER.uid,
-            started_at: "2026-09-30T08:00:00Z",
-            done: null,
-            total: null,
-          },
-        ]
-      : [],
-  });
-  vi.mocked(agentProvidersApi.list).mockResolvedValue({
-    agents: managedAgent
-      ? [{ agent_key: "claude_code", display_name: "Claude Code", available: true }]
-      : [],
-  } as Awaited<ReturnType<typeof agentProvidersApi.list>>);
-  vi.mocked(api.getTidyHandoff).mockResolvedValue({ prompt: "Tidy every partition." });
-  vi.mocked(fsApi.listTerminals).mockResolvedValue([]);
-  vi.mocked(fsApi.openTerminal).mockResolvedValue(undefined);
-}
+const AGENT = {
+  copies: { written: 0 },
+  curation: { memory: "on", curation: "on" },
+  writer: { state: "ok", reason: "", path: "" },
+};
 
-function LocationProbe() {
-  const location = useLocation();
-  return <div data-testid="location">{`${location.pathname}${location.search}`}</div>;
+const STATE: MemorySyncState = {
+  agents: [
+    { ...AGENT, agent: "codex", agent_type: "codex" },
+    { ...AGENT, agent: "claude-code", agent_type: "claude_code" },
+  ],
+  codex_imports_claude: null,
+  global_memories: 3,
+  last_report: {},
+  last_synced_at: "",
+  machine: "mac-mini",
+  preview: null,
+  projects: [
+    {
+      key: "github.com/me/app",
+      folder: "github.com--me--app",
+      checked_out: "/Users/me/src/app",
+      memories: 8,
+      agents: { claude_code: 5, codex: 3 },
+    },
+    {
+      key: "github.com/me/elsewhere",
+      folder: "github.com--me--elsewhere",
+      checked_out: null,
+      memories: 1,
+      agents: { codex: 1 },
+    },
+  ],
+  running: false,
+};
+
+function entry(id: string, over: Partial<HubEntry> = {}): HubEntry {
+  return {
+    id,
+    title: id,
+    description: "",
+    type: "feedback",
+    origin_agent: "codex",
+    origin_machine: "laptop",
+    project: "github.com/me/app",
+    copies: {},
+    created_at: "2026-10-01T00:00:00Z",
+    updated_at: "2026-10-01T00:00:00Z",
+    ...over,
+  };
 }
 
 function renderAt(path: string) {
@@ -112,457 +82,114 @@ function renderAt(path: string) {
       <TooltipProvider>
         <MemoryRouter initialEntries={[path]}>
           <Routes>
-            <Route path="/memory" element={<MemoryPage />} />
-            <Route path="/memory/:uid" element={<MemoryDetailPage />} />
-            <Route path="/memory/:uid/:tab" element={<MemoryDetailPage />} />
-            <Route path="*" element={null} />
+            <Route path="/memory/global" element={<MemoryDetailPage />} />
+            <Route path="/memory/projects/:folder" element={<MemoryDetailPage />} />
           </Routes>
-          <LocationProbe />
         </MemoryRouter>
       </TooltipProvider>
     </QueryClientProvider>,
   );
 }
 
-/** Radix tabs activate on mousedown, not click. */
-function openTab(name: RegExp) {
-  fireEvent.mouseDown(screen.getByRole("tab", { name }), { button: 0 });
+const rowOf = async (title: string) =>
+  (await screen.findByText(title)).closest("tr") as HTMLElement;
+
+/** The cell under the "In <agent>" column of a row. */
+function copyCell(row: HTMLElement, agent: string): HTMLElement {
+  const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
+  const index = headers.indexOf(`In ${agent}`);
+  expect(index).toBeGreaterThan(-1);
+  return within(row).getAllByRole("cell")[index];
 }
 
-function assertNoAgentOwnMemory() {
-  const text = document.body.textContent ?? "";
-  expect(text).not.toContain("MEMORY.md");
-  expect(text).not.toContain("RETIRED.md");
-  expect(text).not.toContain(".raw");
-  expect(text).not.toContain(NATIVE_PATH);
-  expect(text).not.toContain("/.codex/memories");
-  expect(screen.queryByRole("tree")).toBeNull();
-}
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(api.getSyncState).mockResolvedValue(STATE);
+});
 
 describe("MemoryDetailPage", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    stub();
+  acceptance("memory", "a project's memories show where each was written", async () => {
+    vi.mocked(api.listEntries).mockResolvedValue({
+      project: "github.com/me/app",
+      entries: [
+        entry("Prefers pnpm", { copies: { codex: "origin", claude_code: "written" } }),
+        entry("Old build notes", { copies: { codex: "origin", claude_code: "removed" } }),
+      ],
+    });
+    renderAt("/memory/projects/github.com--me--app");
+    const written = await rowOf("Prefers pnpm");
+    expect(api.listEntries).toHaveBeenCalledWith("github.com/me/app");
+    // The origin agent and machine.
+    expect(within(written).getByRole("img", { name: /Codex/ })).toBeInTheDocument();
+    expect(written).toHaveTextContent("laptop");
+    expect(copyCell(written, "Claude Code")).toHaveTextContent("Written");
+    expect(copyCell(written, "Codex")).toHaveTextContent("Its own");
+    const removed = await rowOf("Old build notes");
+    expect(copyCell(removed, "Claude Code")).toHaveTextContent("Removed by agent");
+
+    // The header: the project's key, where it lives here, how many memories.
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("github.com/me/app");
+    expect(screen.getByText("~/src/app")).toBeInTheDocument();
+    expect(screen.getByText(/8 memories/)).toBeInTheDocument();
   });
 
-  // Opens on Memories with the first memory selected and its meta line: the
-  // page half of the scenario (the REST note route keeps the native paths —
-  // test_memory_routes.py).
-  acceptance("memory", "provenance paths stay in the data, not on the page", async () => {
-    renderAt(`/memory/${COFFER.uid}`);
-    expect(
-      await screen.findByRole("tab", { name: "Memories", selected: true }),
-    ).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: NODE_NOTE.title })).toBeInTheDocument();
-    const meta = await screen.findByTestId("memory-meta");
-    expect(meta).toHaveTextContent(/^Learned by Claude Code, Codex · updated 2026-09-26/);
-    // The body is rendered Markdown, with no frontmatter in it.
-    const pane = screen.getByTestId("memory-pane");
-    expect(within(pane).getByText("Node 20")).toBeInTheDocument();
-    expect(pane).not.toHaveTextContent(/origins:|native_path|---/);
-    // The header: the name alone, then repository path, memory count, age.
-    const title = screen.getByRole("heading", { level: 1, name: "coffer" });
-    const header = title.closest("header") as HTMLElement;
-    expect(header).toHaveTextContent(/~\/work\/coffer · 2 memories · distilled /);
-    // No back link, no Experimental tag, no Automatic control, no file action on a memory.
-    expect(screen.queryByText(/‹ Memory/)).toBeNull();
-    expect(screen.queryByText("Experimental")).toBeNull();
-    expect(screen.queryByRole("button", { name: /automatic/i })).toBeNull();
-    assertNoAgentOwnMemory();
-  });
-
-  test("choosing a memory puts it in the URL and shows it", async () => {
-    renderAt(`/memory/${COFFER.uid}`);
-    fireEvent.click(await screen.findByRole("button", { name: /Daemon port is fixed at 38470/ }));
-    expect(await screen.findByRole("heading", { name: PORT_NOTE.title })).toBeInTheDocument();
-    expect(screen.getByTestId("location")).toHaveTextContent(`?memory=${PORT_NOTE.slug}`);
-    expect(await screen.findByTestId("memory-meta")).toHaveTextContent(/^Learned by Claude Code ·/);
-  });
-
-  test("retired memories are a collapsed, read-only group with their reasons", async () => {
-    renderAt(`/memory/${COFFER.uid}`);
-    const group = await screen.findByTestId("memory-retired");
-    const toggle = within(group).getByRole("button", { name: /retired/i });
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(toggle).toHaveTextContent(/Retired\s*1/);
-    expect(within(group).queryByText(RETIRED.retired[0].title)).toBeNull();
-    fireEvent.click(toggle);
-    expect(within(group).getByText(RETIRED.retired[0].title)).toBeInTheDocument();
-    expect(within(group).getByText(RETIRED.retired[0].reason)).toBeInTheDocument();
-    expect(within(group).queryByRole("button", { name: /restore/i })).toBeNull();
-  });
-
-  test("a retired memory opens read-only beside the list, and links to its replacement", async () => {
-    renderAt(`/memory/${COFFER.uid}`);
-    const group = await screen.findByTestId("memory-retired");
-    fireEvent.click(within(group).getByRole("button", { name: /retired/i }));
-    fireEvent.click(within(group).getByRole("button", { name: /Use Node 18 for vitest/ }));
-    expect(screen.getByTestId("location")).toHaveTextContent("?retired=0");
-    const pane = await screen.findByTestId("retired-pane");
-    expect(
-      within(pane).getByRole("heading", { name: RETIRED.retired[0].title }),
-    ).toBeInTheDocument();
-    expect(pane).toHaveTextContent(/Retired 2026-09-26/);
-    expect(pane).toHaveTextContent(RETIRED.retired[0].reason);
-    expect(within(pane).queryByRole("button", { name: /^edit/i })).toBeNull();
-    expect(screen.queryByTestId("memory-pane")).toBeNull();
-    fireEvent.click(
-      within(pane).getByRole("button", { name: /Replaced by Use Node 20 for frontend vitest/ }),
-    );
-    expect(await screen.findByTestId("memory-pane")).toBeInTheDocument();
-    expect(screen.queryByTestId("retired-pane")).toBeNull();
-    expect(screen.getByTestId("location")).toHaveTextContent(`?memory=use-node-20`);
-  });
-
-  test("a retired memory named in the URL opens its group and its view", async () => {
-    renderAt(`/memory/${COFFER.uid}?retired=0`);
-    expect(await screen.findByTestId("retired-pane")).toBeInTheDocument();
-    expect(
-      within(screen.getByTestId("memory-retired")).getByRole("button", { name: /retired/i }),
-    ).toHaveAttribute("aria-expanded", "true");
-  });
-
-  test("a memory has Open in editor, a ⋯ menu, and no Edit, status or reach control", async () => {
-    renderAt(`/memory/${COFFER.uid}`);
-    const pane = await screen.findByTestId("memory-pane");
-    const list = screen.getByRole("list", { name: "Memories" });
-    expect(
-      within(pane)
-        .getAllByRole("button")
-        .map((b) => b.textContent?.trim()),
-    ).toEqual(["Open in editor", ""]);
-    for (const region of [list, screen.getByTestId("memory-retired")]) {
-      expect(
-        within(region).queryByRole("button", { name: /^(delete|restore|hide|pin)\b/i }),
-      ).toBeNull();
+  test("every copy state reads as its own word", async () => {
+    const states = [
+      ["origin", "Its own"],
+      ["written", "Written"],
+      ["held_back", "Held back"],
+      ["deferred", "Codex imports it"],
+      ["rules", "In rules file"],
+      ["pending", "Next sync"],
+      ["edited", "Edited by agent"],
+      ["removed", "Removed by agent"],
+    ] as const;
+    vi.mocked(api.listEntries).mockResolvedValue({
+      project: "github.com/me/app",
+      entries: states.map(([state]) =>
+        entry(`m-${state}`, { origin_machine: "mac-mini", copies: { claude_code: state } }),
+      ),
+    });
+    renderAt("/memory/projects/github.com--me--app");
+    for (const [state, word] of states) {
+      const row = await rowOf(`m-${state}`);
+      expect(copyCell(row, "Claude Code")).toHaveTextContent(word);
+      // This machine's own memories read "This machine", not its id.
+      expect(row).toHaveTextContent("This machine");
     }
-    fireEvent.click(within(pane).getByRole("button", { name: /more actions for/i }));
-    expect(await screen.findByRole("menuitem", { name: /reveal/i })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: /delete/i })).toBeInTheDocument();
-    // No action sits both on the bar and in the menu.
-    expect(screen.queryByRole("menuitem", { name: /open in editor|edit$/i })).toBeNull();
-    expect(within(pane).queryByRole("button", { name: /^edit/i })).toBeNull();
-    expect(screen.queryByRole("menuitem", { name: /^edit/i })).toBeNull();
-    expect(screen.queryByTestId("scope-control")).toBeNull();
-    expect(screen.queryByRole("searchbox")).toBeNull();
+    // Read only: nothing on the page edits a memory.
+    expect(screen.queryByRole("button", { name: /^Edit/ })).toBeNull();
   });
 
-  test("a partition with no memories says so and offers Update memory", async () => {
-    vi.mocked(api.listNotes).mockResolvedValue({ notes: [] });
-    renderAt(`/memory/${COFFER.uid}`);
-    expect(await screen.findByText("No memories for coffer yet")).toBeInTheDocument();
-    // Only the header carries Update memory: the empty state has none, and no
-    // list column is drawn beside it (board 5.2.08).
-    expect(screen.getAllByRole("button", { name: /update memory/i })).toHaveLength(1);
-    expect(screen.queryByRole("list", { name: "Memories" })).toBeNull();
-  });
-
-  acceptance(
-    "memory",
-    "a partition's page names the partition and offers no way back",
-    async () => {
-      renderAt(`/memory/${COFFER.uid}`);
-      expect(await screen.findByRole("heading", { name: "coffer" })).toBeInTheDocument();
-      expect(screen.queryByText("Experimental")).toBeNull();
-      expect(screen.queryByRole("link", { name: /back/i })).toBeNull();
-      expect(screen.queryByRole("button", { name: /^back/i })).toBeNull();
-      expect(screen.queryByTestId("memory-automatic")).toBeNull();
-      expect(screen.getByText(/memories/)).toBeInTheDocument();
-      // Tidy sits beside Update memory, and no notice about Coffer's engine is drawn.
-      expect(screen.getByRole("button", { name: /update memory/i })).toBeInTheDocument();
-      expect(screen.queryByTestId("memory-no-model")).toBeNull();
-    },
-  );
-
-  acceptance("memory", "Tidy sends the prompt to the default managed agent", async () => {
-    stub({ managedAgent: true });
-    renderAt(`/memory/${COFFER.uid}`);
-    fireEvent.click(await screen.findByRole("button", { name: "Tidy" }));
-    await waitFor(() =>
-      expect(fsApi.openTerminal).toHaveBeenCalledWith({
-        agent: "claude_code",
-        prompt: COFFER.tidy_handoff.prompt,
-        terminal: null,
-      }),
-    );
-    expect(fsApi.openTerminal).toHaveBeenCalledTimes(1);
-    // The page stays where it is.
-    expect(screen.getByTestId("location")).toHaveTextContent(`/memory/${COFFER.uid}`);
-  });
-
-  acceptance("memory", "with no managed agent the page offers Copy prompt only", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
-    renderAt(`/memory/${COFFER.uid}`);
-    fireEvent.click(await screen.findByRole("button", { name: "Copy prompt" }));
-    expect(writeText).toHaveBeenCalledWith(COFFER.tidy_handoff.prompt);
-    expect(screen.queryByRole("button", { name: "Tidy" })).toBeNull();
-    expect(fsApi.openTerminal).not.toHaveBeenCalled();
-  });
-
-  acceptance(
-    "memory",
-    "Tidy all hands every partition to the agent in one conversation",
-    async () => {
-      stub({ managedAgent: true, partitions: [GLOBAL, COFFER] });
-      renderAt("/memory");
-      fireEvent.click(await screen.findByRole("button", { name: "Tidy all" }));
-      await waitFor(() =>
-        expect(fsApi.openTerminal).toHaveBeenCalledWith({
-          agent: "claude_code",
-          prompt: "Tidy every partition.",
-          terminal: null,
-        }),
-      );
-      // One session for every partition: the all-partitions prompt is fetched and sent once.
-      expect(api.getTidyHandoff).toHaveBeenCalledTimes(1);
-      expect(fsApi.openTerminal).toHaveBeenCalledTimes(1);
-    },
-  );
-
-  // Delivered lives at /memory/<uid>/delivered with an agent switch.
-  acceptance("memory", "a partition has a memories tab and a delivered tab", async () => {
-    renderAt(`/memory/${COFFER.uid}`);
+  test("a project not checked out here says its memories wait in the hub", async () => {
+    vi.mocked(api.listEntries).mockResolvedValue({
+      project: "github.com/me/elsewhere",
+      entries: [entry("Deploy on Fridays", { copies: { claude_code: "held_back" } })],
+    });
+    renderAt("/memory/projects/github.com--me--elsewhere");
     expect(
-      await screen.findByRole("tab", { name: "Memories", selected: true }),
+      await screen.findByText(/Not checked out on this machine: its memories wait in the hub/),
     ).toBeInTheDocument();
-    await screen.findByTestId("memory-pane");
-    openTab(/delivered/i);
-    await waitFor(() =>
-      expect(screen.getByTestId("location")).toHaveTextContent(`/memory/${COFFER.uid}/delivered`),
+    expect(copyCell(await rowOf("Deploy on Fridays"), "Claude Code")).toHaveTextContent(
+      "Held back",
     );
-    await screen.findByTestId("memory-delivered-rendered");
-    fireEvent.click(screen.getByRole("button", { name: "Raw" }));
-    const text = await screen.findByTestId("memory-delivered-text");
-    // Claude Code first, as on the Agents page.
-    const radios = screen.getAllByRole("radio");
-    expect(radios.map((r) => r.textContent)).toEqual(["Claude Code", "Codex"]);
-    expect(radios[0]).toHaveAttribute("aria-checked", "true");
-    expect(text.textContent).toBe(DELIVERED.agents[1].text);
+  });
+
+  test('global memories are asked for as project ""', async () => {
+    vi.mocked(api.listEntries).mockResolvedValue({ project: "", entries: [] });
+    renderAt("/memory/global");
     expect(
-      screen.getByText("What a session in ~/work/coffer starts with · read-only"),
+      await screen.findByRole("heading", { level: 1, name: "Global memories" }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/ characters · nothing trimmed$/)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("radio", { name: /codex/i }));
-    expect(screen.getByTestId("memory-delivered-text").textContent).toBe(DELIVERED.agents[0].text);
-    expect(document.body.textContent).not.toMatch(/hook|repair|stale/i);
-  });
-
-  acceptance(
-    "web-ui",
-    "a partition's delivered tab shows each agent's session-start text",
-    async () => {
-      renderAt(`/memory/${COFFER.uid}/delivered`);
-      await screen.findByTestId("memory-delivered-rendered");
-      fireEvent.click(screen.getByRole("button", { name: "Raw" }));
-      const text = await screen.findByTestId("memory-delivered-text");
-      expect(text.textContent).toBe(DELIVERED.agents[1].text);
-      expect(
-        screen.getByText("What a session in ~/work/coffer starts with · read-only"),
-      ).toBeInTheDocument();
-      // Read-only: no field to edit and no action on the text.
-      expect(screen.queryByRole("textbox")).toBeNull();
-      fireEvent.click(screen.getByRole("radio", { name: /codex/i }));
-      expect(screen.getByTestId("memory-delivered-text").textContent).toBe(
-        DELIVERED.agents[0].text,
-      );
-    },
-  );
-
-  test("Delivered renders the text as Markdown by default, Raw shows it verbatim", async () => {
-    renderAt(`/memory/${COFFER.uid}/delivered`);
-    const rendered = await screen.findByTestId("memory-delivered-rendered");
-    expect(within(rendered).getByRole("heading", { name: "coffer (claude)" })).toBeInTheDocument();
-    expect(within(rendered).getByText("Use Node 20 for frontend vitest").tagName).toBe("LI");
-    expect(screen.queryByTestId("memory-delivered-text")).toBeNull();
-    expect(screen.getByRole("button", { name: "Rendered" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Raw" }));
-    expect(screen.getByTestId("memory-delivered-text").textContent).toBe(DELIVERED.agents[1].text);
-    expect(screen.queryByTestId("memory-delivered-rendered")).toBeNull();
-  });
-
-  acceptance(
-    "web-ui",
-    "a delivered entry links to the memory it came from on its partition's page",
-    async () => {
-      stub({ partitions: [GLOBAL, COFFER] });
-      vi.mocked(api.getDelivered).mockResolvedValue({
-        partition: "coffer",
-        agents: [
-          {
-            ...DELIVERED.agents[1],
-            text: [
-              "## Coffer memory",
-              "Known about you:",
-              "- **Prefers Node 20** (`node-20.md`) — vitest",
-              "Memory for this repository — partition `coffer` (/Users/dev/work/coffer):",
-              "- **Port is 8000** (`port-8000.md`) — daemon",
-              "Memory for this repository — partition `nowhere` (/x):",
-              "- **Orphan** (`orphan.md`) — unknown partition",
-            ].join("\n"),
-          },
-        ],
-      });
-      renderAt(`/memory/${COFFER.uid}/delivered`);
-      const rendered = await screen.findByTestId("memory-delivered-rendered");
-      expect(screen.getByText(/Edit a memory to change what is delivered/)).toBeInTheDocument();
-      const globalLink = await within(rendered).findByRole("link", { name: "node-20.md" });
-      expect(globalLink).toHaveAttribute("href", `/memory/${GLOBAL.uid}?memory=node-20`);
-      // A line whose partition is unknown stays plain code.
-      expect(within(rendered).queryByRole("link", { name: "orphan.md" })).toBeNull();
-      expect(within(rendered).getByText("orphan.md").tagName).toBe("CODE");
-
-      fireEvent.click(within(rendered).getByRole("link", { name: "Port is 8000" }));
-      await waitFor(() =>
-        expect(screen.getByTestId("location")).toHaveTextContent(
-          `/memory/${COFFER.uid}?memory=port-8000`,
-        ),
-      );
-    },
-  );
-
-  test("Delivered with no agent connected says so", async () => {
-    vi.mocked(api.getDelivered).mockResolvedValue({ partition: "coffer", agents: [] });
-    renderAt(`/memory/${COFFER.uid}/delivered`);
-    expect(await screen.findByText(/No agent is connected to Coffer/)).toBeInTheDocument();
-  });
-
-  test("the running state is the daemon's, matched by the partition's uid", async () => {
-    stub({ running: true });
-    renderAt(`/memory/${COFFER.uid}`);
-    const button = await screen.findByRole("button", { name: /updating/i });
-    expect(button).toBeDisabled();
-  });
-
-  test("the ⋯ menu offers Delete only while the repository is gone", async () => {
-    renderAt(`/memory/${COFFER.uid}`);
-    fireEvent.click(await screen.findByRole("button", { name: /more actions for coffer/i }));
     expect(
-      await screen.findByRole("menuitem", { name: /reveal partition folder/i }),
+      screen.getByText(/Written into every agent on every machine · 3 memories/),
     ).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: /copy path/i })).toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: /delete partition/i })).toBeNull();
+    await waitFor(() => expect(api.listEntries).toHaveBeenCalledWith(""));
   });
 
-  test("deleting an unresolvable partition confirms, then returns to Memory", async () => {
-    stub({ partitions: [GONE] });
-    vi.mocked(resourcesApi.remove).mockResolvedValue(undefined);
-    renderAt(`/memory/${GONE.uid}`);
-    expect(await screen.findByTestId("partition-unresolvable-badge")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /more actions for old-prototype/i }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: /delete partition/i }));
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("Delete old-prototype?")).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete partition" }));
-    await waitFor(() => expect(resourcesApi.remove).toHaveBeenCalledWith(GONE.uid));
-    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(/^\/memory$/));
+  test("an unknown project is not found and lists nothing", async () => {
+    renderAt("/memory/projects/nope");
+    expect(await screen.findByRole("link", { name: /back/i })).toHaveAttribute("href", "/memory");
+    expect(api.listEntries).not.toHaveBeenCalled();
   });
-
-  acceptance("web-ui", "a kind that cannot be disabled shows no status control", async () => {
-    // The partition's page half: no reach or status button in the header.
-    renderAt(`/memory/${COFFER.uid}`);
-    await screen.findByRole("heading", { name: "coffer" });
-    expect(screen.queryByTestId("scope-control")).toBeNull();
-    expect(screen.queryByRole("button", { name: /^(enabled|disabled|every agent)$/i })).toBeNull();
-  });
-});
-
-describe("a memory's file actions and deletion", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    stub();
-  });
-
-  acceptance("memory", "the selected memory opens in the person's editor", async () => {
-    renderAt(`/memory/${COFFER.uid}`);
-    const pane = await screen.findByTestId("memory-pane");
-    // The page offers no Edit: the memory is changed in the person's own editor.
-    expect(within(pane).queryByRole("button", { name: /^edit/i })).toBeNull();
-    fireEvent.click(within(pane).getByRole("button", { name: "Open in editor" }));
-    expect(fs.open).toHaveBeenCalledWith(NODE_NOTE.file_path, expect.anything());
-    fireEvent.click(within(pane).getByRole("button", { name: /more actions for/i }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: /reveal/i }));
-    expect(fs.reveal).toHaveBeenCalledWith(NODE_NOTE.file_path);
-  });
-
-  test("a retired memory offers neither Open in editor nor Reveal", async () => {
-    renderAt(`/memory/${COFFER.uid}?retired=0`);
-    const pane = await screen.findByTestId("retired-pane");
-    expect(within(pane).queryByRole("button", { name: /open in editor|edit|delete/i })).toBeNull();
-    expect(within(pane).queryByRole("button", { name: /more actions/i })).toBeNull();
-    expect(screen.queryByTestId("memory-pane")).toBeNull();
-  });
-
-  acceptance("memory", "a memory deleted by hand is retired and not recreated", async () => {
-    vi.mocked(api.deleteNote).mockResolvedValue(undefined);
-    renderAt(`/memory/${COFFER.uid}`);
-    const pane = await screen.findByTestId("memory-pane");
-    fireEvent.click(within(pane).getByRole("button", { name: /more actions for/i }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: /delete/i }));
-    const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText(`Delete “${NODE_NOTE.title}”?`)).toBeInTheDocument();
-    // Nothing is deleted until it is confirmed.
-    expect(api.deleteNote).not.toHaveBeenCalled();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete memory" }));
-    await waitFor(() => expect(api.deleteNote).toHaveBeenCalledWith(COFFER.uid, NODE_NOTE.slug));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-  });
-
-  test("a refused delete keeps the dialog open and says why", async () => {
-    vi.mocked(api.deleteNote).mockRejectedValue(new ApiError("INTERNAL_ERROR", "disk is full"));
-    renderAt(`/memory/${COFFER.uid}`);
-    const pane = await screen.findByTestId("memory-pane");
-    fireEvent.click(within(pane).getByRole("button", { name: /more actions for/i }));
-    fireEvent.click(await screen.findByRole("menuitem", { name: /delete/i }));
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete memory" }));
-    expect(await within(dialog).findByText(/disk is full|went wrong|error/i)).toBeInTheDocument();
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-  });
-});
-
-acceptance("memory", "browse a partition's memories with a read-only preview", async () => {
-  vi.clearAllMocks();
-  // With no partitions: the first-run welcome, no table.
-  stub({ partitions: [] });
-  const first = renderAt("/memory");
-  expect(await screen.findByText("No agent memory to read")).toBeInTheDocument();
-  expect(screen.queryByRole("table")).toBeNull();
-  first.unmount();
-
-  // With one distilled partition: the table.
-  stub();
-  const second = renderAt("/memory");
-  expect(await screen.findByRole("table")).toBeInTheDocument();
-  second.unmount();
-
-  // Its page lists its memories beside the chosen one.
-  renderAt(`/memory/${COFFER.uid}`);
-  const list = await screen.findByRole("list", { name: "Memories" });
-  expect(within(list).getByText(NOTES.notes[0].title)).toBeInTheDocument();
-  expect(within(list).getByText(NOTES.notes[1].title)).toBeInTheDocument();
-  const meta = await screen.findByTestId("memory-meta");
-  expect(meta).toHaveTextContent("Claude Code");
-  expect(meta).toHaveTextContent("Codex");
-  expect(meta).toHaveTextContent(/updated 2026-09-26/);
-  expect(screen.getByTestId("memory-pane")).not.toHaveTextContent(/origins:|---/);
-
-  // The retired memory is in a collapsed Retired group with its reason.
-  const group = screen.getByTestId("memory-retired");
-  const toggle = within(group).getByRole("button", { name: /retired/i });
-  expect(toggle).toHaveAttribute("aria-expanded", "false");
-  fireEvent.click(toggle);
-  expect(within(group).getByText(RETIRED.retired[0].reason)).toBeInTheDocument();
-
-  // None of the agents' own memory; a memory's file actions are its own.
-  assertNoAgentOwnMemory();
-  const pane = screen.getByTestId("memory-pane");
-  expect(within(pane).getByRole("button", { name: "Open in editor" })).toBeInTheDocument();
-  expect(within(pane).getByRole("button", { name: /more actions for/i })).toBeInTheDocument();
-  expect(within(pane).queryByRole("button", { name: /^(edit|delete)\b/i })).toBeNull();
-  expect(within(list).queryByRole("button", { name: /^(edit|delete)\b/i })).toBeNull();
 });

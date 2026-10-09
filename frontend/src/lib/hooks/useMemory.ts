@@ -1,179 +1,169 @@
 // frontend/src/lib/hooks/useMemory.ts
 //
-// ALL queries + mutations for the `memory` kind (agents/frontend.md §3). Keys
-// are hierarchical under one `["memory"]` root so a write with cross-cutting
-// effects — Update memory, a distil pass — can invalidate the whole subtree
-// with a prefix, mirroring `lib/hooks/useKnowledge.ts`.
-//
-// A partition's memories, retired memories, files and delivered text hang off
-// that partition's own key, so the broad invalidation Update memory does
-// reaches the open partition page too, and deleting a partition can drop its
-// whole subtree in one `removeQueries`.
+// ALL queries + mutations for the memory sync (agents/frontend.md §3; spec
+// memory "Manage memory sync in the web UI"). Keys are hierarchical under one
+// `["memory"]` root, so a sync, a write or an undo — each of which can change
+// every count on the page and every project's copy states — invalidates the
+// whole subtree with one prefix. The sync's switch and interval are the
+// internal engine's `memory_sync` pass (`useSetUpkeep`), whose last and next
+// run are refreshed with it.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
-import { useUpkeepRunning } from "@/lib/hooks/useUpkeep";
 import {
-  deleteNote,
-  getDelivered,
-  getNote,
-  getReading,
-  listNotes,
-  listPartitions,
-  listRetired,
-  sync,
+  cancelPreview,
+  curate,
+  getSyncState,
+  listEntries,
+  runSync,
+  setCodexImport,
+  undoSync,
+  writePreview,
+  type MemorySyncReport,
 } from "@/lib/api/memory";
 import {
-  memoryDeliveredKey,
+  internalEngineKey,
+  memoryEntriesKey,
   memoryKey,
-  memoryNoteKey,
-  memoryNotesKey,
-  memoryPartitionFilesKey,
-  memoryPartitionsKey,
-  memoryReadingKey,
-  memoryRetiredKey,
-  resourcesKey,
-  upkeepRunsKey,
+  memorySyncStateKey,
 } from "@/lib/api/queryKeys";
-import { resourcesApi } from "@/lib/api/resources";
+import { parseSummary } from "@/lib/memory/syncFacts";
 
-export function useMemoryPartitions() {
+/** How often the state is re-read while a sync runs (the worker's or another tab's). */
+const POLL_WHILE_RUNNING_MS = 1500;
+
+export function useMemorySyncState() {
   return useQuery({
-    queryKey: memoryPartitionsKey,
-    queryFn: async () => (await listPartitions()).partitions,
+    queryKey: memorySyncStateKey,
+    queryFn: getSyncState,
+    refetchInterval: (query) => (query.state.data?.running ? POLL_WHILE_RUNNING_MS : false),
   });
 }
 
-/** A partition's memories, newest wording as the last distil pass left them. */
-export function useMemoryNotes(uid: string) {
+/** One project's memories (`""`: global ones), each with where it was written here. */
+export function useMemoryEntries(project: string | null) {
   return useQuery({
-    queryKey: memoryNotesKey(uid),
-    queryFn: async () => (await listNotes(uid)).notes,
-    enabled: uid.length > 0,
+    queryKey: memoryEntriesKey(project ?? ""),
+    queryFn: async () => (await listEntries(project ?? "")).entries,
+    enabled: project !== null,
   });
 }
 
-/** One memory in full: body (frontmatter stripped by the daemon) + provenance. */
-export function useMemoryNote(uid: string, slug: string | null) {
-  return useQuery({
-    queryKey: memoryNoteKey(uid, slug ?? ""),
-    queryFn: () => getNote(uid, slug as string),
-    enabled: Boolean(uid && slug),
-  });
-}
-
-/** Delete one memory by hand (spec memory "Delete a memory by hand"). The
- *  memory's own read is dropped before the lists refetch, so the pane that
- *  showed it cannot refetch a 404; the list falls to the next memory and the
- *  deleted one shows in the Retired group.
- *
- *  No `onError` toast: it runs from a ConfirmDialog, which stays open and shows
- *  the failure itself. */
-export function useDeleteMemoryNote(uid: string) {
+/** Refresh everything a sync can change: the page, every project, the pass's clock. */
+function useInvalidateSync() {
   const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: memoryKey });
+    void qc.invalidateQueries({ queryKey: internalEngineKey });
+  };
+}
+
+/** The toast after a sync or a Write: what changed, or that copies wait for review. */
+function useReportToast() {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return (report: MemorySyncReport) => {
+    const s = parseSummary(report.summary);
+    if (s.preview) {
+      toast.info(t("memory.toast.previewWaiting"));
+      return;
+    }
+    const changed = s.published + s.updated + s.deleted + s.written + s.removed;
+    if (changed === 0) {
+      toast.success(t("memory.toast.nothingChanged"));
+      return;
+    }
+    toast.success(t("memory.toast.synced"), {
+      description: t("memory.toast.syncedDetail", {
+        published: s.published + s.updated,
+        written: s.written,
+        removed: s.removed,
+      }),
+    });
+  };
+}
+
+/** Sync now. A sync already running is refused (`MEMORY_SYNC_RUNNING`), said in a toast. */
+export function useSyncNow() {
+  const invalidate = useInvalidateSync();
+  const report = useReportToast();
+  const { t } = useTranslation();
+  const { toast } = useToast();
   return useMutation({
-    mutationFn: (slug: string) => deleteNote(uid, slug),
-    onSuccess: (_data, slug) => {
-      qc.removeQueries({ queryKey: memoryNoteKey(uid, slug) });
-      void qc.invalidateQueries({ queryKey: memoryNotesKey(uid) });
-      void qc.invalidateQueries({ queryKey: memoryRetiredKey(uid) });
-      void qc.invalidateQueries({ queryKey: memoryPartitionsKey });
-      void qc.invalidateQueries({ queryKey: memoryPartitionFilesKey(uid) });
-      void qc.invalidateQueries({ queryKey: memoryDeliveredKey(uid) });
+    mutationFn: runSync,
+    onSuccess: report,
+    onError: (error) => toast.error(translateApiError(t, error)),
+    onSettled: invalidate,
+  });
+}
+
+/** Write the pending preview: exactly the copies it listed. */
+export function useWritePreview() {
+  const invalidate = useInvalidateSync();
+  const report = useReportToast();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: writePreview,
+    onSuccess: report,
+    onError: (error) => toast.error(translateApiError(t, error)),
+    onSettled: invalidate,
+  });
+}
+
+/** Cancel the pending preview: nothing is written; the next sync plans again. */
+export function useCancelPreview() {
+  const invalidate = useInvalidateSync();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: cancelPreview,
+    onError: (error) => toast.error(translateApiError(t, error)),
+    onSettled: invalidate,
+  });
+}
+
+/** Undo sync…: remove Coffer's copies from this machine's agents and turn automatic sync off.
+ *
+ *  No `onError` toast: it runs from a ConfirmDialog, which stays open and shows the failure itself. */
+export function useUndoSync() {
+  const invalidate = useInvalidateSync();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: undoSync,
+    onSuccess: (report) => {
+      const s = parseSummary(report.summary);
+      toast.success(t("memory.undo.done", { count: s.removed }));
+      invalidate();
     },
   });
 }
 
-/** The memories the partition retired, each with its reason. */
-export function useMemoryRetired(uid: string) {
-  return useQuery({
-    queryKey: memoryRetiredKey(uid),
-    queryFn: async () => (await listRetired(uid)).retired,
-    enabled: uid.length > 0,
-  });
-}
-
-/** The exact session-start text each connected agent receives in the
- *  partition's project. */
-export function useMemoryDelivered(uid: string) {
-  return useQuery({
-    queryKey: memoryDeliveredKey(uid),
-    queryFn: async () => (await getDelivered(uid)).agents,
-    enabled: uid.length > 0,
-  });
-}
-
-/** When the agents' memory was last read, and whose read failed — the
- *  Memory header's "Read 14 min ago" and its failure banner (spec memory
- *  "Report the last read of the agents' memory"). */
-export function useMemoryReading() {
-  return useQuery({ queryKey: memoryReadingKey, queryFn: getReading });
-}
-
-/** Update memory: read every agent's latest native memory, then distil every
- * partition that gained new entries (spec memory "Update memory in one
- * action"). Partitions, memories and every partition's files can all change,
- * so the invalidation is the full `["memory"]` prefix.
- *
- * A distil pass already running over a partition does not fail the request —
- * the daemon reports that partition as skipped — and the shared run list is
- * refreshed on settle, so a partition page's spinner follows the daemon's
- * answer rather than this mutation's. */
-export function useSyncMemory() {
+/** Whether Codex imports Claude Code's memories itself (`null` forgets the answer). */
+export function useSetCodexImport() {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: sync,
-    onSuccess: (result) => {
-      void qc.invalidateQueries({ queryKey: memoryKey });
-      toast.success(
-        t("memory.syncDone", {
-          count: result.entries_written,
-          partitions: result.distilled.length,
-        }),
-      );
-      if (result.failures.length > 0) {
-        toast.error(t("memory.syncFailures", { count: result.failures.length }));
-      }
+    mutationFn: (value: boolean | null) => setCodexImport(value),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: memoryKey }),
+    onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+/** Curate now: the agent starts without a terminal and consolidates its own memory. */
+export function useCurateNow() {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: (agent: { type: string; name: string }) => curate(agent.type),
+    onSuccess: (result, agent) => {
+      if (result.started) toast.success(t("memory.agents.curateStarted", { agent: agent.name }));
+      else toast.error(t("memory.agents.curateNotStarted", { agent: agent.name }));
     },
     onError: (error) => toast.error(translateApiError(t, error)),
-    onSettled: () => void qc.invalidateQueries({ queryKey: upkeepRunsKey }),
   });
-}
-
-/** Delete a partition whose repository is gone (spec memory "Report
- * unresolvable partitions") through the kind-agnostic resource route. The
- * partition's own sub-queries are removed before the list is invalidated, so an
- * open partition page cannot refetch a 404.
- *
- * No `onError` toast: the one place this runs is a ConfirmDialog, which stays
- * open and shows the failure itself. */
-export function useDeletePartition() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (uid: string) => resourcesApi.remove(uid),
-    onSuccess: (_data, uid) => {
-      for (const key of [
-        memoryNotesKey(uid),
-        memoryRetiredKey(uid),
-        memoryPartitionFilesKey(uid),
-        memoryDeliveredKey(uid),
-      ]) {
-        qc.removeQueries({ queryKey: key });
-      }
-      void qc.invalidateQueries({ queryKey: memoryPartitionsKey });
-      void qc.invalidateQueries({ queryKey: resourcesKey });
-    },
-  });
-}
-
-/** The run Update memory holds while it works (backend `UPDATE_RUN`). */
-const UPDATE_RUN = "update";
-
-/** Whether Update memory is running right now, by anyone's request: its button reads "Updating…". */
-export function useMemoryUpdateRunning(): boolean {
-  return useUpkeepRunning("memory", UPDATE_RUN);
 }

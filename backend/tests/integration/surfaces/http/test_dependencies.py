@@ -32,7 +32,6 @@ from coffer.surfaces.http import workspace_dependencies as workspace_deps
 from coffer.surfaces.http.chat import dependencies as chat_deps
 from coffer.surfaces.http.knowledge import dependencies as knowledge_deps
 from coffer.surfaces.http.mcp import dependencies as mcp_deps
-from coffer.surfaces.http.memory import dependencies as memory_deps
 
 _Provider = tuple[ModuleType, str, Callable[[], Any], Callable[[Any], None]]
 
@@ -87,13 +86,6 @@ _PROVIDERS: list[_Provider] = [
     # knowledge kind — two services, not three: there is no search service to
     # provide any more (spec knowledge "Expose no knowledge tool").
     *_pairs(knowledge_deps, "_knowledge_service", "_ingest_service", "_change_service"),
-    # memory kind
-    *_pairs(
-        memory_deps,
-        "_memory_service",
-        "_memory_hook_service",
-        "_memory_stats_service",
-    ),
     # turn platform (chat)
     *_pairs(
         chat_deps,

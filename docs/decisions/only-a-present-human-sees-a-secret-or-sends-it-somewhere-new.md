@@ -268,15 +268,15 @@ sandboxed agent cannot read `daemon.json`, the master key file or the vault.
 
 - **Pros.** Cheap. Both agents protect their own config directories from
   sandboxed writes, so a sandboxed agent cannot lift the rule.
-- **Cons.** Agents are *meant* to read `~/.coffer`: knowledge documents and
-  memory notes are files there, read with the agent's own file tools
+- **Cons.** Agents are *meant* to read `~/.coffer`: knowledge documents are
+  files there, read with the agent's own file tools
   ([Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md)).
   Once the master key is in the Keychain and the plaintext routes are gone,
   nothing under `~/.coffer` is plaintext and `daemon.json`'s token no longer
   yields a secret, so there is nothing left for the rule to protect. It does
   nothing in bypass mode.
-- **Why it loses.** It would break knowledge and memory to guard files that no
-  longer hold anything secret.
+- **Why it loses.** It would break knowledge to guard files that no longer
+  hold anything secret.
 
 ### Option D — Remove browser access; the desktop app is the only UI
 

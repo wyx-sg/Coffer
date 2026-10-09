@@ -71,7 +71,6 @@ STREAM_EXEMPT: dict[tuple[str, str], str] = {
 #: Commands that stay hidden on purpose, each with why; every other command must be
 #: reachable from visible help.
 HIDDEN_ALLOWLIST: dict[str, str] = {
-    "memory hook": "run by an agent's hook, never typed by a person (memory_cmd.py)",
     "proxy token": "run by the agent shim to mint a per-agent token (proxy_cmd.py)",
 }
 

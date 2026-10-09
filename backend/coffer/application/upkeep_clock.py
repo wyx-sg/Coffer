@@ -2,13 +2,13 @@
 "Report when each unattended pass last ran and runs next").
 
 A switch and an interval say what the operator asked for; they do not say
-whether it is happening. The Memory page's Automatic popover
-answer that with one line — "Last pass 2 h ago · next in 58 min" — and the two
+whether it is happening. The Memory page's header
+answers that with one line — "Last pass 2 h ago · next in 58 min" — and the two
 halves of that line come from two different places, on purpose.
 
 **Last** is read from the audit log. Every pass already records an event when
-it finishes (``memory_aggregated``, ``memory_distilled``), whoever asked for
-it — the timer, Update memory or the CLI. So the
+it changes something (``memory_synced``), whoever asked for it — the timer,
+Sync now or the CLI. So the
 newest one is the honest answer to "when did this last happen", and it survives
 a daemon restart, which an in-process record would not.
 
@@ -33,12 +33,10 @@ from datetime import UTC, datetime, timedelta
 
 from coffer.application.audit_service import AuditService
 from coffer.domain.audit import AuditEventType
-from coffer.domain.internal_engine_config import AGGREGATE, DISTIL, MEMORY_SYNC
+from coffer.domain.internal_engine_config import MEMORY_SYNC
 
 #: The audit event each pass records when it finishes — the source of "last".
 PASS_EVENTS: dict[str, str] = {
-    AGGREGATE: AuditEventType.MEMORY_AGGREGATED.value,
-    DISTIL: AuditEventType.MEMORY_DISTILLED.value,
     MEMORY_SYNC: AuditEventType.MEMORY_SYNCED.value,
 }
 

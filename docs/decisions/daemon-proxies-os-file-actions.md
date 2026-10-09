@@ -8,7 +8,7 @@
 ## Context
 
 Coffer's file viewers are read-only by design: agent config files, skill
-folders, knowledge files, memory files and native memory stores are shown, and
+folders, knowledge files and native memory stores are shown, and
 the user edits in their own editor. So every viewer needs a way to take a file
 to the operating system — **open it in the user's editor** and **reveal it in the
 file manager** — and several forms need the reverse, **picking a folder** and

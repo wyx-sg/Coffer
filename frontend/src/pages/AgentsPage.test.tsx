@@ -110,13 +110,13 @@ describe("AgentsPage", () => {
       fireEvent.click(addBoth);
       const dialog = await screen.findByRole("dialog");
       expect(within(dialog).getByText("Connect 2 agents to Coffer")).toBeInTheDocument();
-      expect(within(dialog).getByTestId("changes-heading")).toHaveTextContent("Changes · 4");
-      for (const path of ["~/.claude.json", "~/.claude/settings.json", "~/.codex/config.toml"]) {
+      expect(within(dialog).getByTestId("changes-heading")).toHaveTextContent("Changes · 2");
+      for (const path of ["~/.claude.json", "~/.codex/config.toml"]) {
         expect(within(dialog).getAllByText(path).length).toBeGreaterThan(0);
       }
       expect(writes()).toEqual([]);
 
-      fireEvent.click(within(dialog).getByRole("button", { name: "Apply 4 changes" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Apply 2 changes" }));
       await waitFor(() => expect(within(dialog).getByText("Changes applied")).toBeInTheDocument());
       expect(writes().map((c) => `${c.method} ${c.path}`)).toEqual([
         "POST /agents",
@@ -141,15 +141,15 @@ describe("AgentsPage", () => {
     daemon.fail = (c) => {
       if (c.method === "POST" && c.path === "/agents/agt_2/coffer-connection" && failOnce) {
         failOnce = false;
-        return new ApiError("CONFIG_WRITE_FAILED", "hooks.json is locked");
+        return new ApiError("CONFIG_WRITE_FAILED", "config.toml is locked");
       }
       return undefined;
     };
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Connect both" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Apply 4 changes" }));
-    const retry = await within(dialog).findByRole("button", { name: "Retry 2 changes" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply 2 changes" }));
+    const retry = await within(dialog).findByRole("button", { name: "Retry 1 change" });
     expect(within(dialog).getByText("Some changes failed")).toBeInTheDocument();
     fireEvent.click(retry);
     await waitFor(() => expect(within(dialog).getByText("Changes applied")).toBeInTheDocument());
@@ -247,10 +247,7 @@ describe("AgentsPage", () => {
           connections: {
             agt_a: {
               state: "partial",
-              parts: [
-                { key: "mcp", installed: true, detail: "/bin/coffer" },
-                { key: "memory_hook", installed: false, detail: null },
-              ],
+              parts: [{ key: "mcp", installed: false, detail: null }],
             },
           },
         }),
@@ -259,9 +256,7 @@ describe("AgentsPage", () => {
       const repair = await waitFor(() =>
         within(rowOf("Claude Code")).getByRole("button", { name: "Repair" }),
       );
-      await waitFor(() =>
-        expect(rowOf("Claude Code")).toHaveTextContent("Memory hook not written"),
-      );
+      await waitFor(() => expect(rowOf("Claude Code")).toHaveTextContent("MCP entry missing"));
       fireEvent.click(repair);
       const dialog = await screen.findByRole("dialog");
       expect(within(dialog).getByText("Repair Claude Code’s connection")).toBeInTheDocument();

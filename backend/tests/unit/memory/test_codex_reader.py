@@ -21,7 +21,7 @@ import pathlib
 
 import pytest
 
-from coffer.domain.memory.note import TYPE_PROJECT, TYPE_USER
+from coffer.domain.memory.hub import TYPE_PROJECT, TYPE_USER
 from coffer.infrastructure.memory.readers.codex import CodexMemoryReader
 
 _MEMORY_MD = """# Task Group: alpha service configuration and rollout

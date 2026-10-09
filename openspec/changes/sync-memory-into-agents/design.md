@@ -229,7 +229,7 @@ A sync computes its plan (hub changes and copy changes) before writing. The
 routes are under `/api/v1/memory/sync/` (`state`, `run`, `preview/write`,
 `preview/cancel`, `undo`, `codex-import`, `entries?project=`, `curate`); the
 switch and interval are the `memory_sync` pass of the internal-engine
-settings, off by default. Hub
+settings, on by default. Hub
 changes are applied at once. Copy changes are applied only when
 `ledger.previewed` is true and the number of copies to write or rewrite is at
 most 50; otherwise the plan is saved as the pending preview
@@ -249,18 +249,18 @@ drops `distil.*`.
 
 ## 9. Delivery, in order
 
-The change is large; it lands as three PRs on this change, archiving in the
-last:
+The change lands as two PRs, archiving in the second:
 
-1. **Hub and writers behind the feature, beside the old layer**: hub store,
-   path portability, both writers, ledger, echo and absorption, preview,
-   undo, `memory_synced`, the sync worker. The old aggregation keeps running;
-   the new worker is off until PR 3.
-2. **Remove the old layer**: delivery hook and upgrade removal, retrieval,
-   channel injection, partitions, distil, tidy, the `memory` kind, routes and
-   CLI.
-3. **Memory page, docs, canvas, spec archive**: the new page, en + zh docs,
-   Context and Agents canvases, the other capabilities' deltas, archive.
+1. **Hub and writers beside the old layer**: hub store, path portability,
+   both writers, ledger, echo and absorption, preview, undo, `memory_synced`,
+   the sync worker (off while the old aggregation still ran).
+2. **Remove the old layer and ship the page**: delivery hook and upgrade
+   removal, retrieval, channel injection, partitions, distil, tidy, the
+   `memory` kind, the rebuildable cache, routes and CLI; the new Memory page;
+   the worker on by default; the other capabilities' deltas, en + zh docs and
+   the archive. Removing the old layer and archiving go together because the
+   specs on `main` must describe the code on `main` (`.agents/openspec.md`).
+   The Context and Agents canvases are redrawn after it merges.
 
 ## Risks
 

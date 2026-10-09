@@ -1,8 +1,7 @@
 """Start the daemon's background workers, in one place.
 
-Five timers that outlive a request: retention pruning, the vault sync
-round, the knowledge sweep, the memory distil pass, the memory
-aggregate pass. They are gathered
+Four timers that outlive a request: retention pruning, the vault sync
+round, the knowledge sweep and the memory sync. They are gathered
 here rather than inlined in the lifespan because each needs a different slice
 of the graph, and reading which worker gets what is the only reason to look at
 this code at all.
@@ -20,7 +19,6 @@ from coffer.application.audit_service import AuditService
 from coffer.application.features import FeatureService
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.knowledge.service import KnowledgeService
-from coffer.application.memory.service import MemoryService
 from coffer.application.platform_port import PlatformPort
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
@@ -32,9 +30,7 @@ from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.surfaces.http.guide_wiring import BuiltinGuide
 from coffer.surfaces.http.knowledge_sweep_wiring import start_knowledge_sweep
-from coffer.surfaces.http.memory.distil_state import DistilRunner
 from coffer.surfaces.http.memory_sync_wiring import start_memory_sync_worker, wire_memory_sync
-from coffer.surfaces.http.memory_wiring import start_aggregate_worker, start_distil_worker
 from coffer.surfaces.http.sync_wiring import SyncWiring, start_sync, start_sync_worker
 
 
@@ -47,8 +43,6 @@ class BackgroundWorkers:
     sync: SyncWiring
     sync_worker: SyncWorker
     knowledge_sweep_task: asyncio.Task[None]
-    distil_task: asyncio.Task[None]
-    aggregate_task: asyncio.Task[None]
     memory_sync_task: asyncio.Task[None]
 
 
@@ -57,8 +51,6 @@ def start_background_workers(
     retention_svc: RetentionService,
     knowledge_service: KnowledgeService,
     guide: BuiltinGuide,
-    distil: DistilRunner,
-    memory_service: MemoryService,
     resource_svc: ResourceService,
     audit: AuditService,
     engine_config: InternalEngineConfigService,
@@ -88,14 +80,8 @@ def start_background_workers(
     # The knowledge sweep: refresh the guide, promote what landed in a
     # collection's inbox, and commit edits found on disk.
     knowledge_sweep_task = start_knowledge_sweep(knowledge_service, guide, resource_svc, features)
-    distil_task = start_distil_worker(distil, resource_svc, engine_config, features)
-    # Aggregation (spec memory "Aggregate on an interval and on demand"): a
-    # catch-up pass now, then hourly. It
-    # only reads the agents' own memory and only writes the derived tree, so
-    # nothing here has to wait on the vault rewriters above.
-    aggregate_task = start_aggregate_worker(memory_service, engine_config, features)
     # The memory sync into each agent's own memory (spec memory "Sync on an
-    # interval and on demand"): off until the person turns it on.
+    # interval and on demand"): a sync at start, then on its interval.
     memory_sync = wire_memory_sync(resource_svc, audit, engine_config)
     memory_sync_task = start_memory_sync_worker(memory_sync, engine_config, features)
 
@@ -105,7 +91,5 @@ def start_background_workers(
         sync=sync,
         sync_worker=sync_worker,
         knowledge_sweep_task=knowledge_sweep_task,
-        distil_task=distil_task,
-        aggregate_task=aggregate_task,
         memory_sync_task=memory_sync_task,
     )

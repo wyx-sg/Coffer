@@ -13,15 +13,14 @@ read-it-yourself shape of the knowledge layer, and the catalogue of every
 document with its path — and a skill body costs a session nothing until a
 model reaches for it. So the handshake's job is narrower now: say what Coffer
 is, name its tools so they are recognisable when they appear in a tool list,
-say in one line each where its memory notes and its own logs are read, and
+say in one line where its own logs are read, and
 point at the skill for everything else (spec knowledge "Keep the handshake
 instructions to what a skill cannot carry").
 
 "Name its tools" means every one the session's tool list carries — both
 while every experimental feature is on, never one a switched-off feature took
-out of the list. Coffer has no tool for its memory notes or its own logs, so
-the text names where those are instead: the memory root to search (while the
-memory feature is on) and the ``coffer log`` readers. The escape hatch
+out of the list. Coffer has no tool for its own logs, so the text names the
+``coffer log`` readers instead. The escape hatch
 ``coffer__search_tools`` used to be named only in the tiering paragraph, so a
 session with nothing hidden was never told the hatch existed — and a later
 session, whose tool list had in fact been trimmed, had no earlier mention to
@@ -78,11 +77,6 @@ _PLAIN_INTRO = (
 #: "Expose no knowledge tool").
 _KNOWLEDGE = " Its knowledge is markdown you read with your own file tools."
 
-#: Said only while the memory feature is on: there is no memory tool, so the
-#: directory is the whole of what an agent needs (spec memory "Expose no memory
-#: tool and name the memory root at session start").
-_MEMORY = " Its memory notes are Markdown under {root}/*/notes/; grep them with your own tools."
-
 #: Coffer's own records have no tool either; the command line reads them.
 _LOGS = " Its own logs: coffer log audit|mcp|daemon (files: coffer path logs)."
 
@@ -95,26 +89,16 @@ _PLAIN_OUTRO = " The coffer-guide skill is the manual: load it before relying on
 
 _TIERED = " Your tool list is a budgeted slice: {n} more upstream tools are unlisted, all callable."
 
-#: The memory line for a root too long to fit the cap: it names where the root
-#: is printed instead of the root itself, so the cap is met by a shorter
-#: sentence rather than by truncating the tail of the text.
-_MEMORY_BY_COMMAND = (
-    " Its memory notes are Markdown under the memory root the coffer-guide skill names; "
-    "grep them with your own tools."
-)
 
-
-def _base(tools: Collection[str], memory_line: str, *, knowledge: bool) -> str:
-    """The unconditional part, naming exactly ``tools`` (bare names), with
-    ``memory_line`` (empty while the memory feature is off) and the knowledge
-    line only while ``knowledge`` is on."""
+def _base(tools: Collection[str], *, knowledge: bool) -> str:
+    """The unconditional part, naming exactly ``tools`` (bare names), with the
+    knowledge line only while ``knowledge`` is on."""
     glosses = [(name, gloss) for name, gloss in _TOOL_GLOSSES if name in tools]
     named = ", ".join(f"coffer__{name} ({gloss})" for name, gloss in glosses)
     own = "its own tools" if len(glosses) > 1 else "its own tool"
     text = f"{_INTRO if knowledge else _PLAIN_INTRO}{own}: {named}."
     if knowledge:
         text += _KNOWLEDGE
-    text += memory_line
     text += _LOGS
     return text + (_KNOWLEDGE_OUTRO if knowledge else _PLAIN_OUTRO)
 
@@ -123,7 +107,6 @@ def build_instructions(
     *,
     hidden_count: int,
     tools: Collection[str] | None = None,
-    memory_root: str | None = None,
     knowledge: bool = True,
 ) -> str:
     """Build the per-session instructions text.
@@ -132,8 +115,6 @@ def build_instructions(
     carries right now (``coffer__search_tools`` is always among them, being
     the gateway's own); ``None`` means all of them. The text names only those,
     so a tool whose experimental feature is switched off is never advertised.
-    ``memory_root`` is the absolute memory root while the memory feature is
-    on, and ``None`` while it is off — when the text does not name it.
     ``knowledge`` is whether the knowledge feature is on; while it is off the
     text says nothing of knowledge.
 
@@ -147,14 +128,11 @@ def build_instructions(
     the cap is met: truncating here would drop the tail of a sentence into the
     client's system prompt and say nothing about it, so the text is written to
     fit and a contract test asserts that it does, at both a 0 and an
-    implausibly large ``hidden_count``, with a long memory root.
+    implausibly large ``hidden_count``.
     """
     named = NAMED_TOOLS if tools is None else {*tools, "search_tools"}
     tiered = _TIERED.format(n=hidden_count) if hidden_count > 0 else ""
-    memory_line = _MEMORY.format(root=memory_root) if memory_root else ""
-    text = _base(named, memory_line, knowledge=knowledge) + tiered
-    if memory_root and len(text) > MAX_INSTRUCTIONS_CHARS:
-        text = _base(named, _MEMORY_BY_COMMAND, knowledge=knowledge) + tiered
+    text = _base(named, knowledge=knowledge) + tiered
     return text[:MAX_INSTRUCTIONS_CHARS]
 
 
@@ -162,7 +140,6 @@ def build_initialize_result(
     *,
     hidden_count: int,
     tools: Collection[str] | None = None,
-    memory_root: str | None = None,
     knowledge: bool = True,
 ) -> dict[str, Any]:
     """The ``initialize`` response body. Arguments as for :func:`build_instructions`."""
@@ -173,7 +150,6 @@ def build_initialize_result(
         "instructions": build_instructions(
             hidden_count=hidden_count,
             tools=tools,
-            memory_root=memory_root,
             knowledge=knowledge,
         ),
     }

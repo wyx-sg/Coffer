@@ -11,7 +11,7 @@ export type InternalEngineConfig = components["schemas"]["InternalEngineConfigOu
 export type UpkeepSetting = components["schemas"]["UpkeepSettingOut"];
 export type UpkeepUpdate = components["schemas"]["UpkeepUpdate"];
 
-/** The passes Coffer runs on its own behalf (aggregate and distil), read off the
+/** The passes Coffer runs on its own behalf (the memory sync), read off the
  *  contract rather than spelled here, so the two cannot drift. */
 export type UpkeepPass = UpkeepUpdate["pass"];
 

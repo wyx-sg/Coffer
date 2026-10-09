@@ -7,9 +7,8 @@ setting not working. The wait is therefore sliced and the interval re-read.
 
 from __future__ import annotations
 
-from coffer.application.memory import aggregate_worker
 from coffer.application.upkeep_schedule import DEFAULT_INTERVALS, wait_for_next_pass
-from coffer.domain.internal_engine_config import AGGREGATE
+from coffer.domain.internal_engine_config import MEMORY_SYNC
 
 
 class FakeClock:
@@ -112,10 +111,9 @@ async def test_a_zero_interval_still_yields_once() -> None:
     assert clock.naps == [0]
 
 
-def test_aggregation_defaults_to_hourly() -> None:
+def test_the_memory_sync_defaults_to_hourly() -> None:
     # The worker waits on the same number the settings page labels "default".
-    assert DEFAULT_INTERVALS[AGGREGATE] == 60 * 60
-    assert DEFAULT_INTERVALS[AGGREGATE] == aggregate_worker.DEFAULT_INTERVAL_S
+    assert DEFAULT_INTERVALS[MEMORY_SYNC] == 60 * 60
 
 
 async def test_an_interval_stored_in_the_vault_keeps_its_value() -> None:
@@ -127,7 +125,7 @@ async def test_an_interval_stored_in_the_vault_keeps_its_value() -> None:
         return 60
 
     await wait_for_next_pass(
-        stored_minute, default_s=aggregate_worker.DEFAULT_INTERVAL_S, slice_s=30, sleep=clock.sleep
+        stored_minute, default_s=DEFAULT_INTERVALS[MEMORY_SYNC], slice_s=30, sleep=clock.sleep
     )
     assert clock.naps == [30, 30]
 
@@ -137,6 +135,6 @@ async def test_an_interval_stored_in_the_vault_keeps_its_value() -> None:
         return None
 
     await wait_for_next_pass(
-        unset, default_s=aggregate_worker.DEFAULT_INTERVAL_S, slice_s=30, sleep=unset_clock.sleep
+        unset, default_s=DEFAULT_INTERVALS[MEMORY_SYNC], slice_s=30, sleep=unset_clock.sleep
     )
     assert sum(unset_clock.naps) == 60 * 60

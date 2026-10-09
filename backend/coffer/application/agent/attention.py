@@ -10,13 +10,6 @@ At most one item per enabled agent, the most basic problem first:
   own files raised (a config file that does not parse);
 - ``agent_partial`` — some of the parts Coffer writes into it are in place
   and some are not;
-- ``agent_hook_attention`` — connected, and the agent will run Coffer's memory
-  hook (no review step, or it approved this definition), yet the hook has never
-  fired. Only while the memory feature is on: with it off Coffer installs no
-  hook, so its absence is not a problem. A hook the agent will not run —
-  unapproved, approved for an earlier command, switched off, an unreadable
-  trust record — is the reconciler's memory-hook target's to report
-  (``hook_untrusted`` and its siblings), so it is not listed twice;
 - ``agent_not_connected`` — none are. Informational: an agent the person
   chose not to connect is not broken.
 """
@@ -24,23 +17,18 @@ At most one item per enabled agent, the most basic problem first:
 from __future__ import annotations
 
 import pathlib
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from typing import Protocol
 
 from coffer.application.agent.auto_detect import AgentDetection
 from coffer.application.agent.connection_service import ConnectionState, ConnectionStatus
-from coffer.application.agent.hooks_service import CofferHook
 from coffer.application.attention import AttentionAction, AttentionItem, Severity
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.detection import DetectionState
 from coffer.domain.agent.types import AgentType, agent_display_name
-from coffer.domain.hook_trust import HookTrust
 from coffer.domain.resource import Resource
 
 KIND = "agent"
-
-#: The trust values under which the agent runs Coffer's hook.
-_RUNS = frozenset({HookTrust.NOT_REQUIRED, HookTrust.TRUSTED})
 
 
 class AgentListPort(Protocol):
@@ -63,10 +51,6 @@ class AgentConnectionPort(Protocol):
     async def status(self, agent_uid: str) -> ConnectionStatus: ...
 
 
-class AgentHooksPort(Protocol):
-    async def coffer_hook(self, uid: str) -> CofferHook | None: ...
-
-
 def _check(uid: str) -> AttentionAction:
     return AttentionAction(verb="check", method="GET", path=f"/api/v1/agents/{uid}")
 
@@ -87,15 +71,10 @@ class AgentAttentionSource:
         agents: AgentListPort,
         detect: AgentDetectPort,
         connection: AgentConnectionPort,
-        hooks: AgentHooksPort | None = None,
-        memory_on: Callable[[], bool] | None = None,
     ) -> None:
         self._agents = agents
         self._detect = detect
         self._connection = connection
-        self._hooks = hooks
-        # None: not told, so the hook is judged (a daemon wired without the feature switch).
-        self._memory_on = memory_on
 
     async def items(self) -> Sequence[AttentionItem]:
         out: list[AttentionItem] = []
@@ -156,34 +135,12 @@ class AgentAttentionSource:
                 severity=Severity.INFO,
                 action=_connect(agent.uid),
             )
-        return await self._hook_item(agent.uid, title)
-
-    async def _hook_item(self, uid: str, title: str) -> AttentionItem | None:
-        """A connected agent that runs Coffer's hook, but the hook never fired."""
-        if self._hooks is None or (self._memory_on is not None and not self._memory_on()):
-            return None
-        hook = await self._hooks.coffer_hook(uid)
-        if hook is None:
-            return None
-        # Any other trust is the reconciler's hook_untrusted family: reporting
-        # it here too put the same problem on Overview twice.
-        if hook.trust not in _RUNS or hook.last_fired_at is not None:
-            return None
-        return AttentionItem(
-            kind=KIND,
-            uid=uid,
-            title=title,
-            reason_code="agent_hook_attention",
-            reason="Coffer's memory hook has never fired.",
-            severity=Severity.WARNING,
-            action=_check(uid),
-        )
+        return None
 
 
 __all__ = [
     "AgentAttentionSource",
     "AgentConnectionPort",
     "AgentDetectPort",
-    "AgentHooksPort",
     "AgentListPort",
 ]

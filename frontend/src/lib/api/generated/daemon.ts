@@ -456,44 +456,10 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/storage/cache/clear": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Clear Cache
-         * @description Delete the memory tree's files and the transcript summary cache.
-         *
-         *     Partitions keep their rows; the next memory update rebuilds their folders
-         *     from the agents' own memory. Refused (409) while a memory pass is running,
-         *     because that pass is writing into the tree being cleared.
-         */
-        post: operations["clear_cache_api_v1_storage_cache_clear_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** CacheClearOut */
-        CacheClearOut: {
-            /** Cleared Bytes */
-            cleared_bytes: number;
-        };
-        /** CacheUsageOut */
-        CacheUsageOut: {
-            /** Bytes */
-            bytes: number;
-        };
         /** DaemonLogListOut */
         DaemonLogListOut: {
             /** Next Cursor */
@@ -869,7 +835,6 @@ export interface components {
          * @description What Coffer keeps on this machine, by kind (Settings > Data).
          */
         StorageSummaryOut: {
-            cache: components["schemas"]["CacheUsageOut"];
             history: components["schemas"]["HistoryUsageOut"];
             local_content: components["schemas"]["LocalContentUsageOut"];
             vault: components["schemas"]["VaultUsageOut"];
@@ -2001,47 +1966,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StorageSummaryOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    clear_cache_api_v1_storage_cache_clear_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CacheClearOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

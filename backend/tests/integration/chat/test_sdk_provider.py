@@ -26,7 +26,6 @@ from claude_agent_sdk import (
 )
 from claude_agent_sdk import TextBlock as SdkTextBlock
 
-from coffer.domain.channel_turn import CHANNEL_TURN_ENV
 from coffer.domain.chat.channel_note import ChannelNote
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
@@ -315,7 +314,7 @@ async def test_a_channel_whose_name_will_not_resolve_still_gets_the_channel_note
 
     A channel deleted out from under a live thread leaves the uid unresolvable.
     If that downgraded the turn, the agent would lose the "short replies, you
-    cannot click dialogs" contract — and the memory digest with it — for a
+    cannot click dialogs" contract for a
     reason that has nothing to do with where the user is sitting. So the note
     goes out either way, minus the name it cannot honestly give."""
     repo, engine = await _repo(tmp_path)
@@ -325,14 +324,10 @@ async def test_a_channel_whose_name_will_not_resolve_still_gets_the_channel_note
     async def _gone(uid: str, conversation_id: str) -> ChannelNote | None:
         return None
 
-    async def _memory(agent_key: str, cwd: str, conversation_id: str) -> str | None:
-        return "## Coffer memory\nKnown about you:\n- **Likes tabs** (`likes-tabs.md`) — x."
-
     provider = ClaudeSdkProvider(
         conversations=repo,
         session_factory=factory,
         resolve_channel=_gone,
-        compose_memory_context=_memory,
     )
 
     await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
@@ -342,105 +337,6 @@ async def test_a_channel_whose_name_will_not_resolve_still_gets_the_channel_note
     append = captured[0].system_prompt["append"]
     assert "You are replying in a chat channel" in append
     assert "MEDIA:/absolute/path" in append
-    assert "## Coffer memory" in append
-
-    await engine.dispose()
-
-
-@pytest.mark.acceptance(
-    spec="memory",
-    scenario="a channel turn carries the index without a hook",
-)
-@pytest.mark.asyncio
-async def test_channel_conversation_appends_memory_context(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """A channel-driven turn gets the memory index through this same
-    system-prompt append — no session-start hook, no install (spec memory
-    "Deliver to channel turns through the system prompt"). The provider never
-    builds the payload itself: it calls the injected composer, the same seam
-    ``list_models`` already uses, so the chat/provider layer never reaches into
-    the memory kind directly."""
-    repo, engine = await _repo(tmp_path)
-    conv = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
-    factory, captured = _make_factory(_simple_messages())
-
-    calls: list[tuple[str, str, str]] = []
-
-    async def _memory(agent_key: str, cwd: str, conversation_id: str) -> str | None:
-        calls.append((agent_key, cwd, conversation_id))
-        # The real composer's shape (application/memory/index.index_line): a
-        # line per note naming the file its body is in, not a budgeted digest.
-        # A stub that keeps the old shape teaches a reader the wrong payload.
-        return (
-            "## Coffer memory\nKnown about you:\n"
-            "- **Likes tabs** (`likes-tabs.md`) — Two spaces are not a tab."
-        )
-
-    provider = ClaudeSdkProvider(
-        conversations=repo, session_factory=factory, compose_memory_context=_memory
-    )
-
-    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
-    adapter = await provider.build_adapter(conv.id)
-    await _collect(adapter, _user_turn("hi", conv.id))
-
-    append = captured[0].system_prompt["append"]
-    assert "## Coffer memory" in append
-    assert "- **Likes tabs** (`likes-tabs.md`)" in append
-    # Resolved lazily per turn, keyed by this agent and the conversation's cwd —
-    # never guessed or hardcoded (mirrors how ``list_models`` is called).
-    assert calls == [("claude_code", str(tmp_path), conv.id)]
-
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_no_memory_to_deliver_appends_no_header(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """When the composer has nothing to deliver, the turn carries no memory
-    header at all — an empty ``## Coffer memory`` section would be worse than
-    saying nothing."""
-    repo, engine = await _repo(tmp_path)
-    conv = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
-    factory, captured = _make_factory(_simple_messages())
-
-    async def _memory(agent_key: str, cwd: str, conversation_id: str) -> str | None:
-        return None
-
-    provider = ClaudeSdkProvider(
-        conversations=repo, session_factory=factory, compose_memory_context=_memory
-    )
-
-    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
-    adapter = await provider.build_adapter(conv.id)
-    await _collect(adapter, _user_turn("hi", conv.id))
-
-    assert "Coffer memory" not in captured[0].system_prompt["append"]
-
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_web_conversation_never_gets_memory_context(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """A non-channel (web UI) turn is not the "channel-driven turn" spec memory
-    "Deliver to channel turns through the system prompt" names — even a wired
-    composer must not be consulted for it (the agent's own hook, "Deliver the
-    index and the notes path at session start", is the delivery path there
-    instead)."""
-    repo, engine = await _repo(tmp_path)
-    conv = await repo.create(_conv())  # no channel binding
-    factory, captured = _make_factory(_simple_messages())
-
-    async def _memory(agent_key: str, cwd: str, conversation_id: str) -> str | None:
-        raise AssertionError("memory composer must not be called for a non-channel turn")
-
-    provider = ClaudeSdkProvider(
-        conversations=repo, session_factory=factory, compose_memory_context=_memory
-    )
-
-    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
-    adapter = await provider.build_adapter(conv.id)
-    await _collect(adapter, _user_turn("hi", conv.id))
-
-    assert "Coffer memory" not in captured[0].system_prompt["append"]
 
     await engine.dispose()
 
@@ -474,18 +370,16 @@ async def test_web_conversation_gets_the_model_note_only(tmp_path) -> None:  # t
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="memory", scenario="a channel turn's own hook leaves the index and the notes to the turn"
-)
-async def test_a_channel_turn_marks_the_claude_code_it_spawns(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """The Agent SDK loads the user's settings, so Coffer's memory hook fires
-    inside a channel turn too, with the CLI's environment. The mark in that
-    environment is what tells the hook the turn already carries the index and
-    the notes, so they arrive once."""
+@pytest.mark.acceptance(spec="memory", scenario="a channel turn carries no memory from Coffer")
+async def test_a_channel_turn_carries_no_memory_from_coffer(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Coffer puts no memory into a turn: a channel turn's Claude Code starts
+    with the same environment as one the developer drives, and its system
+    prompt names no memory. Its memory is what Claude Code reads itself."""
     repo, engine = await _repo(tmp_path)
     channel = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
     web = await repo.create(_conv())
     envs: dict[str, dict[str, str]] = {}
+    prompts: dict[str, str] = {}
     for conv in (channel, web):
         factory, captured = _make_factory(_simple_messages())
         provider = ClaudeSdkProvider(conversations=repo, session_factory=factory)
@@ -493,10 +387,10 @@ async def test_a_channel_turn_marks_the_claude_code_it_spawns(tmp_path) -> None:
         adapter = await provider.build_adapter(conv.id)
         await _collect(adapter, _user_turn("hi", conv.id))
         envs[conv.id] = dict(captured[0].env)
+        prompts[conv.id] = str(captured[0].system_prompt)
 
-    assert envs[channel.id] == {CHANNEL_TURN_ENV: "1"}
-    # A turn the developer drives is not marked: its hook is its memory.
-    assert CHANNEL_TURN_ENV not in envs[web.id]
+    assert envs[channel.id] == envs[web.id] == {}
+    assert "memory" not in prompts[channel.id].lower()
 
     await engine.dispose()
 
@@ -561,45 +455,6 @@ async def test_on_conversation_deleted_is_noop(tmp_path) -> None:  # type: ignor
     provider = ClaudeSdkProvider(conversations=repo)
     # Should complete without error.
     await provider.on_conversation_deleted("any-id")
-    await engine.dispose()
-
-
-@pytest.mark.acceptance(
-    spec="memory", scenario="a channel turn's prompt brings in the notes it names"
-)
-@pytest.mark.asyncio
-async def test_a_channel_turn_sends_the_notes_its_prompt_names(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """A channel turn's prompt reaches the agent with the notes it names after
-    it — where a UserPromptSubmit hook's context would land — keyed on the
-    conversation; a turn the developer drives is never ranked here."""
-    repo, engine = await _repo(tmp_path)
-    channel = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
-    web = await repo.create(_conv())
-    sessions: list[_FakeSdkSession] = []
-
-    def factory(options: ClaudeAgentOptions) -> _FakeSdkSession:
-        sessions.append(_FakeSdkSession(options, _simple_messages()))
-        return sessions[-1]
-
-    calls: list[tuple[str, str, str, str]] = []
-    notes = "## Coffer memory — notes this prompt names\n- a fact they recorded: x"
-
-    async def _retrieve(agent_key: str, cwd: str, prompt: str, conversation_id: str) -> str | None:
-        calls.append((agent_key, cwd, prompt, conversation_id))
-        return notes
-
-    provider = ClaudeSdkProvider(
-        conversations=repo, session_factory=factory, retrieve_memory=_retrieve
-    )
-    for conv in (channel, web):
-        await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
-        adapter = await provider.build_adapter(conv.id)
-        await _collect(adapter, _user_turn("why does make verify fail", conv.id))
-
-    assert sessions[0].connected_prompt == f"why does make verify fail\n\n{notes}"
-    assert sessions[1].connected_prompt == "why does make verify fail"
-    assert calls == [("claude_code", str(tmp_path), "why does make verify fail", channel.id)]
-
     await engine.dispose()
 
 

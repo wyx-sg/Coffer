@@ -7,8 +7,7 @@
 // page wires to its dialogs.
 import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
 import { agentRowState } from "@/lib/agents/rowState";
-import { useAgentConnection, useAgentHooks } from "@/lib/hooks/useAgents";
-import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
+import { useAgentConnection } from "@/lib/hooks/useAgents";
 
 import { OverviewModelSection } from "./model/OverviewModelSection";
 import { AgentNotFoundCard } from "./overview/AgentNotFoundCard";
@@ -42,8 +41,6 @@ export function AgentOverviewTab({ agent, typeRow, actions }: Props) {
 
 function OverviewBody({ agent, typeRow, actions }: Props) {
   const connection = useAgentConnection(agent.uid);
-  const hooks = useAgentHooks(agent.uid);
-  const memoryOn = useFeatureEnabled("memory") === true;
   const state = agentRowState({ state: typeRow.state, uid: agent.uid }, connection.data?.state);
 
   return (
@@ -53,11 +50,8 @@ function OverviewBody({ agent, typeRow, actions }: Props) {
         typeRow={typeRow}
         state={state}
         connection={connection.data}
-        hook={memoryOn ? hooks.data?.coffer_hook : undefined}
         failed={connection.isError}
         actions={actions}
-        onCheckHook={() => void hooks.refetch()}
-        checking={hooks.isFetching}
       />
       <OverviewSummary agent={agent} typeRow={typeRow} notConnected={state === "not_connected"} />
       <OverviewModelSection agent={agent} />

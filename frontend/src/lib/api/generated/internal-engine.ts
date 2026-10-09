@@ -159,9 +159,9 @@ export interface components {
             interval_s?: number | null;
             /**
              * Pass
-             * @enum {string}
+             * @constant
              */
-            pass: "aggregate" | "distil" | "memory_sync";
+            pass: "memory_sync";
             /**
              * Use Default Interval
              * @default false

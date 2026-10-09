@@ -30,7 +30,7 @@ router = APIRouter(
 
 
 class CofferConnectionPartOut(BaseModel):
-    #: ``mcp`` (the gateway entry) or ``memory_hook`` (the memory delivery hook).
+    #: ``mcp`` (the gateway entry).
     key: str
     installed: bool
     #: What is installed, when it is — the shim or hook command.

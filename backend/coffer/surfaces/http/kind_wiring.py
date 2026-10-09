@@ -2,8 +2,7 @@
 
 Gathered out of ``app.py``'s lifespan because the order is the only thing here
 worth reading, and it was buried between the things that surround it: provider
-after agent, because it projects into each agent's native config; memory before
-MCP, so the gateway's handshake can name the memory root; MCP last of the kinds,
+after agent, because it projects into each agent's native config; MCP last of the kinds,
 so it picks up every built-in tool the others registered. Each step returns what it
 built and the next step takes it as a parameter, so the dependency is the
 argument list, not a getter that happens to be populated by then.
@@ -29,7 +28,6 @@ from coffer.surfaces.http.app_mcp_composition import McpWiring, wire_mcp_kind
 from coffer.surfaces.http.builtin_server_wiring import wire_builtin_server
 from coffer.surfaces.http.guide_wiring import BuiltinGuide
 from coffer.surfaces.http.knowledge_wiring import KnowledgeWiring, wire_knowledge_kind
-from coffer.surfaces.http.memory_wiring import MemoryWiring, wire_memory_kind
 from coffer.surfaces.http.provider_wiring import ProviderWiring, wire_provider_kind
 from coffer.surfaces.http.secret_boundary_wiring import register_destination_source
 from coffer.surfaces.http.sync_wiring import sync_remote_secret_source
@@ -44,7 +42,6 @@ class KindWirings:
     agent_skill: AgentSkillWiring
     provider: ProviderWiring
     knowledge: KnowledgeWiring
-    memory: MemoryWiring
     mcp: McpWiring
     #: Usage metering (spec provider-switching).
     usage: UsageWiring
@@ -124,16 +121,6 @@ async def wire_resource_kinds(
         _catalogue_changed,
     )
 
-    # Before wire_mcp_kind below, so the gateway's handshake names the memory root.
-    memory = wire_memory_kind(
-        app,
-        resource_svc,
-        audit,
-        builtin_tools,
-        agent_skill.agent_service,
-        agent_catalog,
-    )
-
     # Wire up MCP-specific plumbing (after other kinds so the gateway picks
     # their built-in tools).
     mcp = wire_mcp_kind(app, resource_svc, audit, sm, vault, secret_store, builtin_tools)
@@ -151,7 +138,6 @@ async def wire_resource_kinds(
         agent_skill=agent_skill,
         provider=provider,
         knowledge=knowledge,
-        memory=memory,
         mcp=mcp,
         usage=usage,
         guide=guide,
