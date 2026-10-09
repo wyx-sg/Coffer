@@ -142,7 +142,8 @@ args = ["--agent-uid", "9a006a32d0bf5787955c43d54e4b44e9"]
 1. `COFFER_MCP_SHIM_PATH`，如果设置了且文件存在；
 2. 守护进程 `PATH` 上的 `coffer-mcp-shim`；
 3. 运行守护进程的 Python 解释器的 scripts 目录（`pip` 和 `uv` 放置控制台脚本的地方）；
-4. 与正在运行的可执行文件打包在一起的二进制。
+4. 与正在运行的可执行文件打包在一起的二进制；
+5. 已部署的 `~/.coffer/bin/coffer-mcp-shim`。
 
 当结果是安装版时，Coffer 写入稳定的 `~/.coffer/bin/coffer-mcp-shim` 链接，而不是带版本号的目录，这样条目在升级后依然有效。如果找不到任何 shim，安装会以 `SHIM_NOT_FOUND` 失败，指出缺失的二进制，且不写入任何东西。这个拒绝会附带一段交接提示词：列出 Coffer 查找过的每个位置，并请一个智能体找到或重装 shim，使其能在 `~/.coffer/bin/coffer-mcp-shim` 解析到。接入的审阅界面会在**重试**旁提供**复制提示词**。
 

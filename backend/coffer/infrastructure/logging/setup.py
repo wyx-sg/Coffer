@@ -306,10 +306,12 @@ def configure_logging(level: str = "INFO") -> None:
     # nothing at all once the root logger has handlers, so on the second call
     # the level would be whatever the last library to touch it left behind.
     logging.getLogger().setLevel(level)
-    # httpx and httpcore log each request's full URL at INFO, and some URLs
-    # carry a credential in their path (a Telegram bot token is
-    # ``/bot<token>/<method>``). Their warnings and errors still reach the log.
-    for noisy in ("httpx", "httpcore"):
+    # httpx, httpx2 (the MCP SDK's client) and httpcore log each request's
+    # full URL at INFO, and some URLs carry a credential in their path (a
+    # Telegram bot token is ``/bot<token>/<method>``). The MCP SDK's
+    # streamable-HTTP client logs every reconnect of an upstream's push stream
+    # at INFO. Their warnings and errors still reach the log.
+    for noisy in ("httpx", "httpx2", "httpcore", "mcp.client.streamable_http"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
     _attach_file_handler(formatter)
     _attach_stderr_handler(formatter)

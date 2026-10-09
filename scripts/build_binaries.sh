@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build every Coffer binary (coffer, coffer-daemon, coffer-mcp-shim,
-# coffer-seatalk-bridge) with PyInstaller into dist/. The release workflow packages
+# coffer-seatalk-bridge) with PyInstaller into dist/. Three are single files;
+# the shim is an executable plus its coffer-mcp-shim-lib/ folder. The release workflow packages
 # all of dist/ into coffer-cli-<triple>.tar.gz; the daemon deploys the
 # helper binaries sitting next to it into ~/.coffer/bin/ at startup.
 #
@@ -76,6 +77,12 @@ echo ">>> Building coffer-daemon for $TRIPLE"
 echo ">>> Building coffer-mcp-shim for $TRIPLE"
 ( cd "$REPO_ROOT/backend" && "${PYINSTALLER[@]}" --clean --noconfirm \
     --distpath "$DIST_DIR" --workpath "$BUILD_DIR" coffer-mcp-shim.spec )
+# The shim is a one-folder build: move its executable and its library folder
+# up beside the other binaries, so dist/ is the flat layout the archive ships.
+rm -rf "$DIST_DIR/coffer-mcp-shim-lib"
+mv "$DIST_DIR/coffer-mcp-shim.onedir/coffer-mcp-shim-lib" "$DIST_DIR/"
+mv -f "$DIST_DIR/coffer-mcp-shim.onedir/"* "$DIST_DIR/"
+rmdir "$DIST_DIR/coffer-mcp-shim.onedir"
 echo ">>> Building coffer (management CLI) for $TRIPLE"
 ( cd "$REPO_ROOT/backend" && "${PYINSTALLER[@]}" --clean --noconfirm \
     --distpath "$DIST_DIR" --workpath "$BUILD_DIR" coffer.spec )

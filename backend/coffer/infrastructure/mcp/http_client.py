@@ -43,7 +43,6 @@ import httpx2
 from mcp import ClientSession, MCPError
 from mcp.client.session import ListRootsFnT, SamplingFnT
 from mcp.client.streamable_http import streamable_http_client
-from mcp.shared._httpx_utils import create_mcp_http_client
 from mcp.types import ServerNotification
 
 from coffer.application.runtime.supervisor import spawn
@@ -51,6 +50,7 @@ from coffer.domain.auth_scheme import with_schemes
 from coffer.domain.errors import UpstreamAuthRejected, UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.server_config import HttpTransport
 from coffer.infrastructure.mcp.dispatch import dispatch_method
+from coffer.infrastructure.mcp.push_stream_guard import GuardedAsyncClient, PushStreamGuard
 
 NotificationCallback = Callable[[Any], Awaitable[None]]
 
@@ -161,11 +161,12 @@ class HttpUpstreamConnection:
 
         # httpx2.Timeout: connect/write/pool use spawn_timeout_seconds; the
         # read window is the post-init SSE streaming budget (see module note).
-        http_client = create_mcp_http_client(
+        # The guard stops reopening a push stream the upstream closes at once.
+        http_client = GuardedAsyncClient(
+            guard=PushStreamGuard(self._server_name),
             headers=merged_headers or None,
             timeout=httpx2.Timeout(float(self._spawn_timeout), read=_STREAM_READ_SECONDS),
         )
-
         http_client.event_hooks["response"].append(self._note_status)
 
         loop = asyncio.get_running_loop()

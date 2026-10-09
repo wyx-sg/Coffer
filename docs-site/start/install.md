@@ -95,7 +95,7 @@ The script:
 
 1. Checks that you are on macOS arm64. Any other OS or architecture exits with an error that points to the from-source install.
 2. Downloads `coffer-cli-aarch64-apple-darwin.tar.gz` and the release's `SHA256SUMS` from GitHub Releases, then verifies the archive's checksum. If the checksum does not match, the script stops.
-3. Installs `coffer`, `coffer-daemon` and `coffer-mcp-shim` into the install directory. Each binary is copied to a temporary name beside it, marked executable and renamed over the public name, so when that name is a symlink into a versioned directory (as it is once a daemon started from elsewhere, such as the desktop app, has deployed its build there), the link is replaced and the previous version's binaries stay intact for a rollback.
+3. Installs `coffer`, `coffer-daemon`, `coffer-mcp-shim` and the shim's library folder `coffer-mcp-shim-lib/` into the install directory. The library folder goes in first, by a temporary sibling and a rename, and each binary is copied to a temporary name beside it, marked executable and renamed over the public name, so when that name is a symlink into a versioned directory (as it is once a daemon started from elsewhere, such as the desktop app, has deployed its build there), the link is replaced and the previous version's binaries stay intact for a rollback.
 4. If that directory is not already on your `PATH`, appends a line to your shell profile. The profile depends on your shell: `~/.zshrc` for zsh (or `$ZDOTDIR/.zshrc`), `~/.bash_profile` for bash on macOS, `~/.config/fish/config.fish` for fish (as `fish_add_path`), and `~/.profile` for anything else. Running the script again does not add the line twice.
 5. Warns, without failing, when `git` is missing or older than 2.40, and points to [Requirements](#requirements).
 
@@ -129,7 +129,7 @@ tar -xzf coffer-cli-aarch64-apple-darwin.tar.gz -C ~/.coffer/bin
 export PATH="$HOME/.coffer/bin:$PATH"          # add to your shell profile
 ```
 
-Keep the four binaries together in one directory. `coffer` and `coffer-mcp-shim` look for `coffer-daemon` beside them when they need to start the daemon. If you downloaded the archive in a browser, clear the quarantine flag with `xattr -dr com.apple.quarantine ~/.coffer/bin`.
+Keep the four binaries and the `coffer-mcp-shim-lib/` folder together in one directory. `coffer` and `coffer-mcp-shim` look for `coffer-daemon` beside them when they need to start the daemon. If you downloaded the archive in a browser, clear the quarantine flag with `xattr -dr com.apple.quarantine ~/.coffer/bin`.
 
 ## From source
 
@@ -158,7 +158,7 @@ cd frontend && npm install && npm run build && cd ..
 
 | Command | Produces |
 | --- | --- |
-| `make bundle-binaries` | `coffer`, `coffer-daemon` and `coffer-mcp-shim` frozen with PyInstaller into `dist/`, the same layout as the release archive |
+| `make bundle-binaries` | `coffer`, `coffer-daemon` and `coffer-mcp-shim` (with `coffer-mcp-shim-lib/`) frozen with PyInstaller into `dist/`, the same layout as the release archive |
 | `make desktop` | `Coffer.app` and an unsigned `.dmg`. Needs a Rust toolchain and Node.js, and takes roughly 50 minutes because it runs PyInstaller first. |
 
 ## What gets installed where

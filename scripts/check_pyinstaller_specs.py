@@ -24,10 +24,13 @@ fails on the first file whose text is not ASCII.
 
 Checks, for each `backend/*.spec`:
 
-  1. The `Analysis([...])` entry script exists.
+  1. The `Analysis([...])` entry script and every `runtime_hooks` script exist.
   2. Every source path in `datas=` exists (a literal list, or a variable
      assigned earlier in the spec).
   3. The `EXE(...)` run-time options carry `("X utf8", None, "OPTION")`.
+  4. A one-file spec (no `COLLECT(...)`) runs `packaging/rth_unpack_owner.py`,
+     which marks its unpack directory so the daemon can delete it once the
+     process is gone.
 
 Both are resolved from `backend/`, which is where the specs' own paths are
 relative to and where `scripts/build_binaries.sh` runs PyInstaller.
@@ -98,8 +101,8 @@ def _datas_pairs(tree: ast.Module, value: ast.expr) -> list[ast.expr]:
 def declared_paths(spec: Path) -> list[str]:
     """Every literal path `spec` asks PyInstaller to read.
 
-    The entry script (`Analysis`'s first positional argument, a list) and the
-    source half of each `datas` pair. `binaries` follows the same shape but is
+    The entry script (`Analysis`'s first positional argument, a list), each
+    `runtime_hooks` script, and the source half of each `datas` pair. `binaries` follows the same shape but is
     empty in every spec here; it is read too, so that stays true.
     """
     tree = ast.parse(spec.read_text(encoding="utf-8"))
@@ -111,6 +114,9 @@ def declared_paths(spec: Path) -> list[str]:
     if call.args and isinstance(call.args[0], ast.List):
         paths.extend(p for p in (_string(e) for e in call.args[0].elts) if p)
     for keyword in call.keywords:
+        if keyword.arg == "runtime_hooks" and isinstance(keyword.value, ast.List):
+            paths.extend(p for p in (_string(e) for e in keyword.value.elts) if p)
+            continue
         if keyword.arg not in {"datas", "binaries"}:
             continue
         for entry in _datas_pairs(tree, keyword.value):
@@ -157,6 +163,18 @@ def freezes_utf8_mode(spec: Path) -> bool:
     return False
 
 
+UNPACK_OWNER_HOOK = "packaging/rth_unpack_owner.py"
+
+
+def is_one_file(spec: Path) -> bool:
+    """Whether `spec` builds a single file: it has no `COLLECT(...)` step."""
+    tree = ast.parse(spec.read_text(encoding="utf-8"))
+    return not any(
+        isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "COLLECT"
+        for node in ast.walk(tree)
+    )
+
+
 def main() -> int:
     specs = sorted(BACKEND.glob("*.spec"))
     if not specs:
@@ -170,6 +188,12 @@ def main() -> int:
             checked += 1
             if not (BACKEND / path).exists():
                 stale.append(f"{spec.name}: names '{path}', which does not exist under backend/")
+        if is_one_file(spec) and UNPACK_OWNER_HOOK not in declared_paths(spec):
+            stale.append(
+                f"{spec.name}: a one-file build must list '{UNPACK_OWNER_HOOK}' in "
+                "runtime_hooks, or the daemon cannot tell its unpack directory is Coffer's "
+                "and the copies a killed process leaves in $TMPDIR are never removed"
+            )
         if not freezes_utf8_mode(spec):
             stale.append(
                 f"{spec.name}: its EXE(...) run-time options are missing "

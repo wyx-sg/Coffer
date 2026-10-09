@@ -73,8 +73,9 @@ def default_shim_resolver() -> str:
     lookup, the running interpreter's own scripts directory (where pip / uv
     place console scripts — found via ``sysconfig`` even when the venv's bin is
     off ``PATH`` and ``sys.executable`` is a symlink to the base interpreter),
-    then the bundled binary next to the running executable (PyInstaller dist).
-    Whichever branch answers, the deployed shim is named by its public
+    then the bundled binary next to the running executable (PyInstaller dist),
+    then the deployed ``~/.coffer/bin/coffer-mcp-shim``. Whichever branch
+    answers, the deployed shim is named by its public
     ``~/.coffer/bin/coffer-mcp-shim`` rather than the version directory behind
     it (see :func:`_stable_path`). Raises ``ShimNotFound`` if none resolve,
     carrying the prompt that hands finding it to an agent, with every place
@@ -100,7 +101,12 @@ def default_shim_resolver() -> str:
     if bundled.exists():
         return _stable_path(bundled)
     looked_in.append(str(bundled.parent))
-    public = str(user_bin_dir() / _SHIM_BINARY)
+    # The macOS app's daemon has no shim beside it -- the app keeps the
+    # one-folder shim in Contents/Resources -- and has deployed it here.
+    deployed = user_bin_dir() / _SHIM_BINARY
+    if deployed.exists():
+        return str(deployed)
+    public = str(deployed)
     raise ShimNotFound(
         _SHIM_BINARY, handoff=shim_handoff(_SHIM_BINARY, public=public, looked_in=looked_in)
     )

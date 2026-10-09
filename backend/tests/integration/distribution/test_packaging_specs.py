@@ -306,6 +306,21 @@ def test_shim_spec_includes_anyio_backend_hidden_import() -> None:
     )
 
 
+def test_shim_spec_builds_one_folder_and_collects_only_what_it_imports() -> None:
+    """Every MCP session starts a shim. A one-file shim unpacked its whole
+    archive into $TMPDIR on each start and left it behind when killed, and
+    collecting every ``coffer`` submodule dragged the daemon's dependencies
+    into it (ADR distribution-pyinstaller)."""
+    text = (_REPO / "backend" / "coffer-mcp-shim.spec").read_text()
+    tree = _parse_spec(_REPO / "backend" / "coffer-mcp-shim.spec")
+    assert _find_calls(tree, "COLLECT"), "the shim must be a one-folder build"
+    assert not _find_calls(tree, "collect_submodules")
+    assert 'LIB_DIR = "coffer-mcp-shim-lib"' in text and "contents_directory=LIB_DIR" in text
+    assert {"PIL", "numpy", "hypothesis", "cryptography", "keyring"} <= _spec_excludes(
+        "coffer-mcp-shim.spec"
+    )
+
+
 def _spec_excludes(spec_name: str) -> set[str]:
     analysis = _find_calls(_parse_spec(_REPO / "backend" / spec_name), "Analysis")[0]
     return set(_extract_str_list(_get_kw(analysis, "excludes")))
@@ -415,7 +430,8 @@ def test_release_workflow_packages_the_cli_archive() -> None:
 _SHIPPED_BINARIES = ["coffer", "coffer-daemon", "coffer-mcp-shim", "coffer-seatalk-bridge"]
 #: The three the app embeds as ``externalBin`` — which Tauri re-signs with the
 #: app's keychain entitlement. The SeaTalk bridge must never be one of them.
-_EXTERNAL_BINARIES = ["coffer", "coffer-daemon", "coffer-mcp-shim"]
+_EXTERNAL_BINARIES = ["coffer", "coffer-daemon"]
+_SHIM = "coffer-mcp-shim"
 _BRIDGE = "coffer-seatalk-bridge"
 
 
@@ -443,17 +459,22 @@ def test_the_cli_archive_holds_exactly_the_four_binaries() -> None:
 
 @pytest.mark.acceptance(spec="desktop-app", scenario="a release tag produces the desktop tier")
 def test_the_desktop_tier_embeds_the_bridge_outside_external_bin() -> None:
-    """The `.dmg` embeds the same four binaries: three as ``externalBin`` and
-    the SeaTalk bridge through ``bundle.macOS.files``, which Tauri copies
-    without re-signing — so the bridge keeps the signature that has no
-    keychain access group. The release's staging loop names the three, and
-    copies the bridge under its plain name beside them."""
+    """The `.dmg` embeds the same four binaries: two as ``externalBin``, and
+    the SeaTalk bridge and the one-folder shim through ``bundle.macOS.files``,
+    which Tauri copies without re-signing — so the bridge keeps the signature
+    that has no keychain access group, and the shim's library folder lands in
+    ``Contents/Resources``, where data files may live. The release's staging
+    loop names the two, and copies the others under their plain names."""
     import json
 
     conf = json.loads((_REPO / "desktop" / "tauri.conf.json").read_text())
     assert conf["bundle"]["externalBin"] == [f"binaries/{b}" for b in _EXTERNAL_BINARIES]
     macos = json.loads((_REPO / "desktop" / "tauri.macos.conf.json").read_text())
-    assert macos["bundle"]["macOS"]["files"] == {f"MacOS/{_BRIDGE}": f"binaries/{_BRIDGE}"}
+    assert macos["bundle"]["macOS"]["files"] == {
+        f"MacOS/{_BRIDGE}": f"binaries/{_BRIDGE}",
+        f"Resources/{_SHIM}": f"binaries/{_SHIM}",
+        f"Resources/{_SHIM}-lib": f"binaries/{_SHIM}-lib",
+    }
     text = _release_yml_text()
     loops = [
         ln.strip()
@@ -464,8 +485,11 @@ def test_the_desktop_tier_embeds_the_bridge_outside_external_bin() -> None:
     for loop in loops:
         assert loop == f"for b in {' '.join(_EXTERNAL_BINARIES)}; do"
     assert f"cp dist/{_BRIDGE} desktop/binaries/{_BRIDGE}" in text
+    assert f"cp dist/{_SHIM} desktop/binaries/{_SHIM}" in text
+    assert f"cp -R dist/{_SHIM}-lib desktop/binaries/{_SHIM}-lib" in text
     makefile = (_REPO / "Makefile").read_text()
     assert f'"desktop/binaries/{_BRIDGE}$$EXT"' in makefile
+    assert f"cp -R dist/{_SHIM}-lib desktop/binaries/{_SHIM}-lib" in makefile
 
 
 @pytest.mark.acceptance(

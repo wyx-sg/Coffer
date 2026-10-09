@@ -144,7 +144,8 @@ The daemon may run from the desktop app, a login service or a virtualenv, none o
 1. `COFFER_MCP_SHIM_PATH`, if set and the file exists;
 2. `coffer-mcp-shim` on the daemon's `PATH`;
 3. the scripts directory of the Python interpreter running the daemon (where `pip` and `uv` put console scripts);
-4. the binary bundled beside the running executable.
+4. the binary bundled beside the running executable;
+5. the deployed `~/.coffer/bin/coffer-mcp-shim`.
 
 When the answer is the installed build, Coffer writes the stable `~/.coffer/bin/coffer-mcp-shim` link rather than a versioned directory, so the entry survives upgrades. If no shim can be found, install fails with `SHIM_NOT_FOUND`, naming the missing binary, and writes nothing. The refusal carries a hand-off prompt that lists every place Coffer looked and asks an agent to find or reinstall the shim so it resolves at `~/.coffer/bin/coffer-mcp-shim`: the Connect review offers it as **Copy prompt** beside **Retry**.
 
