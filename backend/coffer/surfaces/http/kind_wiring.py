@@ -102,6 +102,8 @@ async def wire_resource_kinds(
         provider.service,
         prices=provider.prices,
     )
+    # Only a running proxy writes the spool: the ingest parks while none does.
+    provider.proxy.supervisor.watch_idle(lambda idle: usage.ingest.set_wanted(not idle))
 
     # Coffer's own skill carries the knowledge catalogue, so a collection
     # appearing, going or being switched has to reach the rendered file. The

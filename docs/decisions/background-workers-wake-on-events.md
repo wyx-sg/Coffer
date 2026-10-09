@@ -126,6 +126,21 @@ Option B, in three steps so each can be measured:
    channel and agent hints, and the reconciler's period lengthened once the
    agent config files it compares are watched.
 
+   Done in change `move-background-workers-onto-events`:
+   - The channel runtime is woken by every resource hint and every secret
+     stored or approved, retries a failed start by timer, and falls back every
+     5 minutes.
+   - The model proxy watchdog parks, with no timer, while no proxy runs and
+     none is needed, and the next state push wakes it.
+   - The usage ingest runs only while a proxy runs, drains once more when the
+     proxy stops, and then parks.
+   - The MCP session reaper parks with no session open.
+
+   Two parts are left for later changes. The reconciler keeps its 60-second
+   period until the agents' config files are watched. A running proxy is still
+   left running when the last agent leaves: stopping it needs a drain decision
+   for in-flight streams that this change does not make.
+
 Knowledge and memory workers (knowledge sweep, memory aggregate, distil, sync)
 are being redesigned separately and are not moved here.
 

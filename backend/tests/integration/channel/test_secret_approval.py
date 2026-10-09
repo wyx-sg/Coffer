@@ -27,7 +27,7 @@ def _runtime(env: ChannelEnv, outcome: list[Exception | None]) -> ChannelRuntime
         adapter_factory=factory,  # type: ignore[arg-type]
         processor=env.processor,
         pairing=env.pairing,
-        interval_seconds=0.05,
+        fallback_seconds=0.05,
     )
 
 

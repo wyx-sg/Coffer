@@ -57,7 +57,11 @@ from coffer.surfaces.http.channel_routes import (
 )
 from coffer.surfaces.http.chat.dependencies import set_channel_note_reader, set_channel_places
 from coffer.surfaces.http.chat_wiring import ChatWiring
-from coffer.surfaces.http.secret_boundary_wiring import register_resource_destination
+from coffer.surfaces.http.event_wiring import EventStream
+from coffer.surfaces.http.secret_boundary_wiring import (
+    on_approval_applied,
+    register_resource_destination,
+)
 from coffer.surfaces.http.secret_composition import boundary_resolver
 from coffer.surfaces.http.vault_composition import VaultStores
 
@@ -121,6 +125,7 @@ def wire_channel_kind(
     secret_store: EncryptedSecretStore,
     chat: ChatWiring,
     builtin_tools: BuiltinToolRegistry,
+    events: EventStream,
 ) -> ChannelRuntime:
     # Pairings are this machine's record beside the channel, keyed by its uid;
     # what each thread is doing is history in runs.db. A pairing change hints
@@ -206,6 +211,10 @@ def wire_channel_kind(
         materialize=materialize,
         secret_revision=secret_revision,
     )
+    # What a pass reads changes on a resource write (sync and hand edits
+    # included) or a secret stored or approved; those bring the next pass forward.
+    events.late_sinks.append(runtime.on_changed)
+    on_approval_applied(runtime.poke)
 
     # Each paired person's picture, asked of the running adapter when the
     # Channels page wants it (spec channels "Show each paired person's platform

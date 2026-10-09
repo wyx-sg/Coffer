@@ -194,3 +194,60 @@ async def test_a_port_held_by_another_process_is_named_not_reported_as_a_bare_ex
     assert error is not None
     assert "could not bind 127.0.0.1:1" in error
     assert "code 3" not in error
+
+
+@pytest.mark.acceptance(
+    spec="daemon", scenario="an idle model proxy watchdog parks until a push wakes it"
+)
+async def test_an_idle_supervisor_parks_with_no_timer_and_a_push_wakes_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR background-workers-wake-on-events: no agent routed, no wake-ups."""
+    import asyncio
+
+    from coffer.application.runtime.workers import workers
+
+    state = ProxyState()
+    supervisor = _supervisor(tmp_path, _Clock(), state)
+    asked = 0
+    real = supervisor._attach_or_spawn
+
+    async def counting() -> bool:
+        nonlocal asked
+        asked += 1
+        return await real()
+
+    async def spawn_fails() -> None:
+        raise RuntimeError("stop here")
+
+    monkeypatch.setattr(supervisor, "_attach_or_spawn", counting)
+    monkeypatch.setattr(supervisor, "_spawn", spawn_fails)
+    seen: list[bool] = []
+    supervisor.watch_idle(seen.append)
+    await supervisor.start()
+    try:
+
+        def row() -> object:
+            return next((w for w in workers().snapshot() if w.name == "model-proxy"), None)
+
+        for _ in range(100):
+            if getattr(row(), "state", None) == "parked":
+                break
+            await asyncio.sleep(0.01)
+        assert getattr(row(), "state", None) == "parked"
+        assert getattr(row(), "next_run_at", 0) is None
+        before = asked
+        await asyncio.sleep(0.1)
+        assert asked == before, "a parked watchdog asks nothing"
+        assert seen == [False, True]
+
+        state.routes = _routed().routes
+        await supervisor.refresh()
+        for _ in range(100):
+            if asked > before:
+                break
+            await asyncio.sleep(0.01)
+        assert asked > before
+        assert seen[-1] is False
+    finally:
+        await supervisor.stop()

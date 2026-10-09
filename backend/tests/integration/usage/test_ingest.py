@@ -167,3 +167,42 @@ async def test_each_files_records_reach_the_observer_after_their_commit(sm, tmp_
     svc.observe = broken
     write_spool(spool, "b.jsonl", [record(3)])
     assert (await svc.ingest_once()).inserted == 1  # an observer failing costs nothing
+
+
+@pytest.mark.acceptance(
+    spec="daemon", scenario="the usage ingest drains once when the proxy stops and then parks"
+)
+async def test_the_loop_drains_once_when_the_proxy_stops_then_parks(sm, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    """ADR background-workers-wake-on-events: no proxy, no spool reads."""
+    import asyncio
+
+    from coffer.application.runtime.workers import workers
+
+    spool = tmp_path / "spool"
+    svc = _service(sm, spool)
+    svc.set_wanted(False)
+    task = asyncio.create_task(svc.run(0.01))
+
+    def state() -> str | None:
+        row = next((w for w in workers().snapshot() if w.name == "usage-ingest"), None)
+        return row.state if row else None
+
+    async def until(predicate) -> None:  # type: ignore[no-untyped-def]
+        async with asyncio.timeout(3):
+            while not predicate():
+                await asyncio.sleep(0.01)
+
+    try:
+        await until(lambda: state() == "parked")
+        svc.set_wanted(True)
+        write_spool(spool, "a.jsonl", [record(request_id="r1")])
+        await until(lambda: not (spool / "a.jsonl").exists())
+
+        # The proxy stops with a file it just finished: one more pass takes it.
+        write_spool(spool, "b.jsonl", [record(request_id="r2")])
+        svc.set_wanted(False)
+        await until(lambda: state() == "parked")
+        assert not (spool / "b.jsonl").exists()
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
