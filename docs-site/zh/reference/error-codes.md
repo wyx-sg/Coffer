@@ -190,6 +190,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `MEMORY_RAW_ENTRY_NOT_FOUND` | 404 | 该分区中没有这个 id 的原始条目。 | 刷新；该条目可能已变成笔记并被移除。 |
 | `MEMORY_UNSAFE_PATH` | 400 | 某段路径是隐藏的、全是点，或因其他原因不安全。 | 使用分区内的路径。 |
 | `MEMORY_UNREADABLE` | 422 | 某个智能体的原生记忆文件无法解析。 | 修复消息中指出的文件。 |
+| `MEMORY_SYNC_RUNNING` | 409 | 已有一次记忆同步在运行。 | 等它结束后再同步。 |
+| `MEMORY_SYNC_NO_PREVIEW` | 409 | 没有等待写入或取消的记忆同步预览。 | 刷新记忆页面。 |
 | `MEMORY_DELIVERY_UNSUPPORTED` | 422 | 这个类型的智能体没有 Coffer 可以安装的记忆 Hook。 | 无；该智能体用自己的文件工具从 `coffer-guide` 技能指明的记忆根目录读取记忆笔记。 |
 | `MEMORY_DELIVERY_CONFIG_INVALID` | 422 | 智能体的设置或 Hook 文件不是 Coffer 能编辑的 JSON 对象。 | 修复该文件，然后重新安装投递。 |
 

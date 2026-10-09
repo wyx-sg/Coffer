@@ -288,6 +288,7 @@ components:
           enum:
           - aggregate
           - distil
+          - memory_sync
           title: Pass
           type: string
         use_default_interval:

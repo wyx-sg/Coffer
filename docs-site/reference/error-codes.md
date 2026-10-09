@@ -197,6 +197,8 @@ give the status each code is actually sent with.
 | `MEMORY_RAW_ENTRY_NOT_FOUND` | 404 | No raw entry with that id in the partition. | Refresh; the entry may have become a note and been removed. |
 | `MEMORY_UNSAFE_PATH` | 400 | A path segment is hidden, all dots, or otherwise unsafe. | Use a path inside the partition. |
 | `MEMORY_UNREADABLE` | 422 | An agent's native memory file cannot be parsed. | Repair the file the message names. |
+| `MEMORY_SYNC_RUNNING` | 409 | A memory sync is already running. | Wait for it to finish, then sync again. |
+| `MEMORY_SYNC_NO_PREVIEW` | 409 | No memory sync preview is waiting to be written or cancelled. | Refresh the Memory page. |
 | `MEMORY_DELIVERY_UNSUPPORTED` | 422 | This agent type has no memory hook Coffer can install. | None; that agent reads memory notes from the memory root the `coffer-guide` skill names, with its own file tools. |
 | `MEMORY_DELIVERY_CONFIG_INVALID` | 422 | The agent's settings or hooks file is not a JSON object Coffer can edit. | Repair the file, then install delivery again. |
 

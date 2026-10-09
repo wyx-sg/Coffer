@@ -26,7 +26,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 
-from coffer.domain.internal_engine_config import AGGREGATE, DISTIL
+from coffer.domain.internal_engine_config import AGGREGATE, DISTIL, MEMORY_SYNC
 
 #: How often the wait looks up again. Short enough that changing an interval in
 #: Settings visibly takes effect, long enough to be free.
@@ -44,6 +44,8 @@ DEFAULT_INTERVALS: dict[str, float] = {
     AGGREGATE: 60 * 60.0,
     # Distil rewrites more, so it sweeps four times a day rather than hourly.
     DISTIL: 6 * 60 * 60.0,
+    # The memory sync reads an unchanged source for the price of a hash.
+    MEMORY_SYNC: 60 * 60.0,
 }
 
 

@@ -44,6 +44,8 @@ KNOWLEDGE = "knowledge"
 SKILLS = "skills"
 SECRET = "secret"
 MACHINES = "machines"
+#: The memory hub (spec memory "Keep every agent's memories in a hub in the vault").
+MEMORY = "memory"
 MANIFEST = "manifest.json"
 
 #: The one bundle-wide number the vault still carries. Builds from before
@@ -54,7 +56,7 @@ MANIFEST_SCHEMA_VERSION = 3
 #: Every top-level directory of the vault repository. Anything else a person
 #: puts there is kept and committed like any other file, but belongs to no
 #: area Coffer reads.
-VAULT_DIRS = (RESOURCES, STATE, KNOWLEDGE, SKILLS, SECRET, MACHINES)
+VAULT_DIRS = (RESOURCES, STATE, KNOWLEDGE, SKILLS, SECRET, MACHINES, MEMORY)
 
 #: The suffix of every document Coffer parses (resources, state, machines).
 DOCUMENT_SUFFIX = ".json"
@@ -114,6 +116,7 @@ __all__ = [
     "MACHINES",
     "MANIFEST",
     "MANIFEST_SCHEMA_VERSION",
+    "MEMORY",
     "RESOURCES",
     "SECRET",
     "SKILLS",

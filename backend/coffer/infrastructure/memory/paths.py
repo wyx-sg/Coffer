@@ -37,7 +37,7 @@ import os
 import pathlib
 import re
 
-from coffer.domain.error_base import CofferError
+from coffer.domain.memory.errors import UnsafeMemoryPath
 from coffer.infrastructure.vault.home import derived_root
 
 #: The partition's index — the file delivery renders from and a human opens.
@@ -51,20 +51,6 @@ RAW_DIR_NAME = ".raw"
 
 _DOTS_ONLY = re.compile(r"^\.+$")
 _SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._\- 一-鿿]+$")
-
-
-class UnsafeMemoryPath(CofferError):  # noqa: N818
-    """A path segment that is hidden, all dots, or otherwise unsafe.
-
-    See "Confine reads to registered agents' memory paths".
-    """
-
-    code = "MEMORY_UNSAFE_PATH"
-
-    def __init__(self, segment: str, reason: str) -> None:
-        super().__init__(f"unsafe memory path segment {segment!r}: {reason}")
-        self.segment = segment
-        self.reason = reason
 
 
 def memory_root() -> pathlib.Path:

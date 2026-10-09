@@ -74,6 +74,11 @@ rewrite was built to stop making. The terms are different: they are metadata
 about where material is findable, not a second telling of it, and nothing else
 in either file records them.
 
+A bullet tagged `[via Coffer]` is what Codex derived from a memory Coffer
+synced into it from another agent (spec memory "Never republish Coffer's own
+copies"), and is skipped; so is everything under `extensions/`, which this
+reader never lists.
+
 `raw_memories.md` and `rollout_summaries/` are never read: they are the raw
 transcripts Codex already distilled into the two files above, and "Read no
 transcripts or rollouts" forbids this layer from reading transcripts a second
@@ -105,6 +110,7 @@ from coffer.domain.agent.codex_memory import (
 from coffer.domain.memory.errors import UnreadableMemory
 from coffer.domain.memory.note import TYPE_PROJECT, TYPE_USER
 from coffer.domain.memory.reader import RawEntry, SourceFile
+from coffer.infrastructure.memory.writers.codex import VIA_COFFER
 
 _MEMORY_NAME = "MEMORY.md"
 _SUMMARY_NAME = "memory_summary.md"
@@ -220,6 +226,8 @@ def _read_groups(text: str, summary_text: str) -> tuple[RawEntry, ...]:
         search_terms = terms_by_title.get(entry.title, ())
         for heading, entry_type in _GROUP_SECTIONS.items():
             for bullet in section_bullets(entry.body, heading):
+                if VIA_COFFER in bullet:
+                    continue
                 entries.append(
                     RawEntry(
                         title=_bullet_title(bullet),
@@ -249,6 +257,8 @@ def _read_summary(text: str) -> tuple[RawEntry, ...]:
             )
         )
     for bullet in section_bullets(text, _PROFILE_PREFS_HEADING):
+        if VIA_COFFER in bullet:
+            continue
         entries.append(
             RawEntry(
                 title=_bullet_title(bullet),

@@ -33,12 +33,13 @@ from datetime import UTC, datetime, timedelta
 
 from coffer.application.audit_service import AuditService
 from coffer.domain.audit import AuditEventType
-from coffer.domain.internal_engine_config import AGGREGATE, DISTIL
+from coffer.domain.internal_engine_config import AGGREGATE, DISTIL, MEMORY_SYNC
 
 #: The audit event each pass records when it finishes — the source of "last".
 PASS_EVENTS: dict[str, str] = {
     AGGREGATE: AuditEventType.MEMORY_AGGREGATED.value,
     DISTIL: AuditEventType.MEMORY_DISTILLED.value,
+    MEMORY_SYNC: AuditEventType.MEMORY_SYNCED.value,
 }
 
 

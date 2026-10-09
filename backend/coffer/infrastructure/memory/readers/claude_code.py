@@ -16,10 +16,14 @@ first:
 
 `name` and `description` are the source's own title and description — no
 derivation needed, unlike Codex's untitled bullets. `metadata.type` picks the
-entry's type; `metadata.type: reference` is skipped rather than mapped, because
-Claude Code's own `reference` memories are knowledge the user or the agent wrote
-down about the world, not something the agent learned while working — exactly
-the boundary spec memory's overview draws between memory and knowledge. `MEMORY.md`
+entry's type; `metadata.type: reference` is carried as `reference`, which the
+memory sync publishes like any other memory (spec memory "Keep every agent's
+memories in a hub in the vault") and the older aggregation leaves out.
+
+A copy Coffer wrote into this directory — a `coffer_` file whose frontmatter
+names a hub entry — is read as nothing: it is the hub's own memory coming
+back, and publishing it would loop (spec memory "Never republish Coffer's own
+copies"). `MEMORY.md`
 in the same directory is Claude Code's own regenerated index and is ignored for
 the same reason knowledge ignores `README.md`: Coffer regenerates that role
 itself (see "Read Claude Code and Codex memory with their search terms").
@@ -65,6 +69,7 @@ from coffer.domain.memory.errors import UnreadableMemory
 from coffer.domain.memory.note import TYPE_FEEDBACK, TYPE_PROJECT, TYPE_USER
 from coffer.domain.memory.reader import RawEntry, SourceFile
 from coffer.infrastructure.agent_files.claude_code_transcripts import cwd_from_transcripts
+from coffer.infrastructure.memory.writers.claude_code import is_coffer_copy
 
 _INDEX_NAME = "MEMORY.md"
 _FENCE = "---"
@@ -81,7 +86,7 @@ _TYPE_MAP = {
     "project": TYPE_PROJECT,
     "user": TYPE_USER,
 }
-_SKIP_TYPE = "reference"
+_REFERENCE = "reference"
 
 
 class ClaudeCodeMemoryReader:
@@ -132,7 +137,7 @@ class ClaudeCodeMemoryReader:
         if not isinstance(metadata, dict):
             raise UnreadableMemory(source.path, "frontmatter 'metadata' is not a mapping")
         raw_type = str(metadata.get("type", "") or "").strip().lower()
-        if raw_type == _SKIP_TYPE:
+        if is_coffer_copy(path.name, frontmatter):
             return ()
 
         name = frontmatter.get("name")
@@ -142,7 +147,7 @@ class ClaudeCodeMemoryReader:
         if not isinstance(description, str):
             description = str(description)
 
-        entry_type = _TYPE_MAP.get(raw_type, TYPE_PROJECT)
+        entry_type = _REFERENCE if raw_type == _REFERENCE else _TYPE_MAP.get(raw_type, TYPE_PROJECT)
         project_dir = path.parent.parent
         project_root = self._project_root(project_dir)
         return (

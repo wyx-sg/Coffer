@@ -29,6 +29,9 @@ WRITER_DAEMON = "daemon"
 WRITER_CURATION = "curation"
 #: A sync round's merge: another machine's changes, applied here.
 WRITER_SYNC = "sync"
+#: The memory sync publishing this machine's agents' memories to the hub
+#: (spec memory "Keep every agent's memories in a hub in the vault").
+WRITER_MEMORY_SYNC = "memory-sync"
 
 WRITERS = (
     WRITER_USER,
@@ -37,6 +40,7 @@ WRITERS = (
     WRITER_DAEMON,
     WRITER_CURATION,
     WRITER_SYNC,
+    WRITER_MEMORY_SYNC,
 )
 
 #: The operations the vault core itself names; kinds add their own words.
@@ -156,6 +160,7 @@ __all__ = [
     "WRITER_CURATION",
     "WRITER_DAEMON",
     "WRITER_DISK",
+    "WRITER_MEMORY_SYNC",
     "WRITER_SYNC",
     "WRITER_USER",
     "CommitMeta",

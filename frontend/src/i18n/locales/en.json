@@ -828,7 +828,10 @@
       "secret_set": "Stored a secret",
       "attention_ignored": "Ignored an item on Overview",
       "attention_unignored": "Stopped ignoring an item on Overview",
-      "secret_revealed": "Revealed a secret in the Coffer app"
+      "secret_revealed": "Revealed a secret in the Coffer app",
+      "memory_synced": "Synced memory between the agents",
+      "memory_sync_undone": "Removed the memories Coffer synced into the agents",
+      "memory_curation_requested": "Asked an agent to tidy its own memory"
     },
     "capType": {
       "tool": "tool",
@@ -1884,7 +1887,9 @@
     "CUSTOM_TOOL_ENVIRONMENT_UNKNOWN": "That environment isn't registered in this group.",
     "INVOCATION_NOT_FOUND": "That tool call isn't in the log. It may have been cleared by retention.",
     "CUSTOM_TOOL_LAST_ENVIRONMENT": "A group needs at least one environment, so its last one can't be deleted.",
-    "DESKTOP_REQUEST_NOT_FOUND": "That request to the Coffer app has expired or was already handled."
+    "DESKTOP_REQUEST_NOT_FOUND": "That request to the Coffer app has expired or was already handled.",
+    "MEMORY_SYNC_RUNNING": "A memory sync is already running",
+    "MEMORY_SYNC_NO_PREVIEW": "There is no memory sync preview waiting"
   },
   "pagination": {
     "showing": "Showing {{shown}} of {{total}}",
@@ -4041,7 +4046,8 @@
         "skills": "Skills",
         "resources": "MCP servers & tools",
         "secret": "Encrypted secrets",
-        "machines": "Machines"
+        "machines": "Machines",
+        "memory": "Memory"
       }
     },
     "resolve": {

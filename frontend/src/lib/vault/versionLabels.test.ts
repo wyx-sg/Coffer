@@ -35,6 +35,7 @@ describe("vaultWriterLabel", () => {
     expect(vaultWriterLabel(t, "agent")).toBe("An agent");
     expect(vaultWriterLabel(t, "daemon")).toBe("Coffer");
     expect(vaultWriterLabel(t, "curation")).toBe("Coffer");
+    expect(vaultWriterLabel(t, "memory-sync")).toBe("Coffer");
     expect(vaultWriterLabel(t, "sync")).toBe("Sync");
   });
 });
