@@ -141,6 +141,8 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 
 要手动撤销一次升级，把这些符号链接指回上一个版本目录即可。frozen 守护进程启动时会把同级二进制部署到这里；源码安装则使用 `pip` 放到 `PATH` 上的命令行脚本。见[分发与发布](/zh/architecture/distribution)。
 
+`coffer update` 会用新版本的二进制替换这里的二进制。`coffer uninstall` 会删除 `bin/`，`~/.coffer` 的其余部分保持不动，见[安装 → 卸载](/zh/start/install#uninstall)。
+
 ### Skill 临时数据 {#skill-working-files}
 
 | 路径 | 用途 | 所有者 | 是否同步 | 能否安全删除 |

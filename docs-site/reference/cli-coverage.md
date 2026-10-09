@@ -170,6 +170,8 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Settings · Daemon · status | `GET /daemon/status` | `coffer daemon status` | `test_daemon_status_cmd.py` |
 | Settings · Daemon · passes in flight | `GET /upkeep/runs` | `coffer daemon status` | `test_daemon_status_cmd.py` |
 | Settings · Daemon · upgrade | `GET /daemon/upgrade` | `coffer daemon upgrade` | `test_cli_parity.py` |
+| Settings · About · Check automatically (installer binaries) | `PUT /daemon/upgrade/auto-check` | `coffer daemon upgrade-auto-check` | `test_cli_parity.py` |
+| Settings · About · Check for updates (installer binaries) | `POST /daemon/upgrade/check` | `coffer daemon upgrade-check` | `test_cli_parity.py` |
 | Settings · Daemon · passes in flight | `GET /upkeep/runs` | `coffer daemon upkeep` | `test_cli_parity.py` |
 
 ## `coffer knowledge` {#knowledge}
@@ -411,6 +413,18 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Sync · Move the vault | `POST /sync/vault/move` | `coffer sync vault-move` | `test_cli_parity.py` |
 | Sync · a round in progress | `GET /sync/status` | `coffer sync wait` | `test_cli_parity.py` |
 
+## `coffer uninstall` {#uninstall}
+
+| UI operation | Route | Command | Acceptance |
+| --- | --- | --- | --- |
+| Settings · About · Uninstall Coffer (desktop app) | `POST /daemon/uninstall` | `coffer uninstall` | `test_cli_parity.py` |
+
+## `coffer update` {#update}
+
+| UI operation | Route | Command | Acceptance |
+| --- | --- | --- | --- |
+| Settings · About · Check for updates (installer binaries) | `GET /daemon/upgrade` | `coffer update` | `test_cli_parity.py` |
+
 ## `coffer usage` {#usage}
 
 | UI operation | Route | Command | Acceptance |
@@ -471,4 +485,5 @@ Plain files are read and edited with your own tools, and a few acts only make se
 | `set_ui_language` | the window: the window's interface language |
 | `set_update_auto_check` | `coffer app update auto-check` |
 | `show_daemon_log` | `coffer path logs` |
+| `uninstall_coffer` | `coffer uninstall` |
 | `update_status` | `coffer app update status` |

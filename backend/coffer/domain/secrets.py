@@ -47,6 +47,8 @@ GRANT_OPS: tuple[str, ...] = (
     "approve_batch",
     "export_master_key",
     "import_master_key",
+    # Deleting Coffer's data on uninstall (spec daemon "Uninstall Coffer from this machine").
+    "uninstall",
 )
 
 

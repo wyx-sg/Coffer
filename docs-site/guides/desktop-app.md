@@ -63,7 +63,15 @@ The app updates itself. It checks the newest GitHub release's update manifest 30
 - **Check automatically** on About turns the launch and six-hourly checks off; checking by hand still works.
 - A check that fails — no network, the manifest unreachable — says why on About, keeps the time of the last successful check, and changes nothing. Failures are also written to `~/.coffer/logs/daemon.log`.
 - A build without an update key (every build from source, and a release made before the project's update key existed) says it does not check for updates. Update it by installing the new `.dmg` over it and choosing **Restart daemon**.
-- In a browser, About only says that updates are installed by the desktop app.
+- In a browser, About says that updates are installed by the desktop app. A daemon running from the installer's binaries instead shows its own release check there, with `coffer update` to copy — see [Install → Upgrade](/start/install#upgrade).
+
+### Uninstall
+
+**Settings › About › Uninstall Coffer…** removes Coffer from this Mac. The dialog lists what goes — Coffer's MCP entry, memory hook and model routing in each agent, the skill links it delivered, start at login, the command-line tools and the installer's `PATH` lines, and the app — and what stays: `~/.coffer`, ready for a reinstall. Confirm, and the app shows each step as the daemon reports it, then moves itself to the Trash and quits.
+
+**Also delete my data** is unticked by default. Ticking it says what is lost for good, offers **Back up the master key first**, and renames the button **Uninstall and delete data**; confirming asks for Touch ID, and only then is anything removed. `~/.coffer` and the master key's Keychain item are deleted after the daemon has stopped.
+
+`coffer uninstall` (and `coffer uninstall --delete-data`, which ticks the box) opens this dialog when the daemon is the app's, so the decision is always made in the app.
 
 ## Presence checks and approvals
 

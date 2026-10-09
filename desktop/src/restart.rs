@@ -29,7 +29,9 @@ pub fn restart_rate_limit_refusal(
         .as_secs()
         .saturating_sub(elapsed.as_secs())
         .max(1);
-    Some(format!("restart_daemon: rate-limited; retry in {remaining}s"))
+    Some(format!(
+        "restart_daemon: rate-limited; retry in {remaining}s"
+    ))
 }
 
 /// Record a restart attempt's outcome against the rate-limit window.

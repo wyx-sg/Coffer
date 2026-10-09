@@ -95,11 +95,11 @@ Coffer 免费且开源，采用 GNU AGPL v3.0（或更高版本）许可证。�
 
 ## 怎么升级？ {#how-do-i-upgrade}
 
-用你安装旧版本的同样方式安装新版本，然后运行 `coffer daemon restart`，替换掉正在运行的守护进程。在此之前，命令会打印版本警告。上一个构建保留在 `~/.coffer/bin` 中以便回滚，历史数据库在任何迁移之前都会先复制一份。另见[升级与回滚](/zh/guides/daemon#upgrades-and-rollback)。
+桌面应用会在**设置 › 关于**里自我更新。用一行安装脚本安装的，运行 `coffer update`：它会安装最新发布，并让守护进程以新版本重启。源码安装则拉取代码、重新安装，再运行 `coffer daemon restart`。见[安装 → 升级](/zh/start/install#upgrade)。上一个构建保留在 `~/.coffer/bin` 中以便回滚，历史数据库在任何迁移之前都会先复制一份。另见[升级与回滚](/zh/guides/daemon#upgrades-and-rollback)。
 
 ## 怎么卸载 Coffer？ {#how-do-i-uninstall-coffer}
 
-从每个智能体中移除 Coffer 的 MCP 条目和记忆 Hook，注销智能体（这会移除 Coffer 投递的技能链接），停止守护进程及其开机自启服务，然后删除二进制，如果愿意，再删掉 `~/.coffer`。[安装 → 卸载](/zh/start/install#uninstall)给出了具体命令。如果你以后可能还要用，先备份 `~/.coffer`，并在桌面应用中备份主密钥。
+在桌面应用的**设置 › 关于**里选择**卸载 Coffer…**，或者运行 `coffer uninstall`。Coffer 会断开你的智能体，移除它投递的技能链接、开机自启动、它的二进制和 `PATH` 行以及应用本身，并保留 `~/.coffer` 以便重新安装。是否同时删除数据是单独的选择，需要 Touch ID。见[安装 → 卸载](/zh/start/install#uninstall)。
 
 如果你用过保险库同步，远端仓库不受影响，仍保存着你保险库里的文档。
 

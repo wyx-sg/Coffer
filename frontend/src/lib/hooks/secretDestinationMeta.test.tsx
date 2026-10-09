@@ -46,7 +46,10 @@ describe("secretDestination meta", () => {
 
   test("provider update and rebind name the provider in the variables", async () => {
     expect(
-      (await metaOf(useUpdateProvider))(undefined, { uid: "p-2", patch: { base_url: "https://a" } }),
+      (await metaOf(useUpdateProvider))(undefined, {
+        uid: "p-2",
+        patch: { base_url: "https://a" },
+      }),
     ).toBe("p-2");
     expect(
       (await metaOf(useRebindProviderKey))(undefined, { uid: "p-3", secretRef: "secret/x" }),

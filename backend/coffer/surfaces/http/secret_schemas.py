@@ -13,7 +13,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-_GRANT_OPS = Literal["reveal", "approve", "approve_batch", "export_master_key", "import_master_key"]
+_GRANT_OPS = Literal[
+    "reveal", "approve", "approve_batch", "export_master_key", "import_master_key", "uninstall"
+]
 
 
 class PresenceGrantIn(BaseModel):

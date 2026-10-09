@@ -29,7 +29,7 @@ import uvicorn
 
 from coffer.application.runtime.supervisor import spawn
 from coffer.domain.agent.descriptor import AGENT_DESCRIPTORS
-from coffer.infrastructure.daemon import bootstrap, login_service, self_restart
+from coffer.infrastructure.daemon import bootstrap, data_purge, login_service, self_restart
 from coffer.infrastructure.daemon.force_stop import stop_daemon_process
 from coffer.infrastructure.daemon.orphan_sweep import serves_our_vault
 from coffer.infrastructure.daemon.phase import set_daemon_phase
@@ -376,6 +376,9 @@ def main() -> None:
         release_lock()
         bootstrap.release()
         sock.close()
+        # Once nothing serves, because it deletes ~/.coffer: the data an
+        # uninstall asked to delete (spec daemon "Uninstall Coffer from this machine").
+        data_purge.purge_if_requested()
         # Last, because it ends this process: a login service uninstalled while
         # this daemon was the launchd job is booted out now that it is leaving.
         login_service.release_job_if_uninstalled()

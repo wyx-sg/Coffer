@@ -25,6 +25,8 @@ coffer daemon [OPTIONS] COMMAND [ARGS]...
 | [`daemon reload`](#daemon-reload) | Ask the running daemon to restart itself. |
 | [`daemon rotate-token`](#daemon-rotate-token) | Mint a new daemon token (clients re-read daemon.json). |
 | [`daemon upgrade`](#daemon-upgrade) | Whether this daemon is older than the installed Coffer, and the hand-off. |
+| [`daemon upgrade-check`](#daemon-upgrade-check) | Check for a newer release of the installer's binaries now. |
+| [`daemon upgrade-auto-check`](#daemon-upgrade-auto-check) | Switch the daemon's daily release check on or off. |
 | [`daemon setup-check`](#daemon-setup-check) | Look for git again while the daemon waits in its setup state. |
 | [`daemon upkeep`](#daemon-upkeep) | The rewriting passes running now. |
 | [`daemon port`](#daemon-port) | The port the daemon's next start uses. |
@@ -132,6 +134,40 @@ coffer daemon upgrade [OPTIONS]
 
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## daemon upgrade-check
+
+Check for a newer release of the installer's binaries now.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer daemon upgrade-check [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## daemon upgrade-auto-check
+
+Switch the daemon's daily release check on or off. Body: enabled.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer daemon upgrade-auto-check [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## daemon setup-check

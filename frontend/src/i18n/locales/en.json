@@ -1277,13 +1277,61 @@
         "auto": "Check automatically",
         "autoHelp": "Checks at launch and every 6 hours, and asks before installing.",
         "browser": "Updates are installed by the Coffer desktop app. Here in a browser, hand the upgrade to an agent: the prompt says how this copy of Coffer was installed.",
-        "unconfigured": "This build was made without an update key, so it does not check for updates. New versions are on the GitHub Releases page."
+        "unconfigured": "This build was made without an update key, so it does not check for updates. New versions are on the GitHub Releases page.",
+        "daemonNeverChecked": "The daemon checks a minute after it starts, then daily.",
+        "commandHelp": "Run this in a terminal: it downloads the release, verifies it and restarts the daemon on it.",
+        "daemonAutoHelp": "The daemon checks GitHub once a day and installs nothing by itself."
       },
       "diagnosticsCopied": "Diagnostics copied — paste them into your bug report.",
       "versionLine": "Version {{version}}",
       "versionLineLoading": "Reading the version…",
       "details": "Details",
-      "versionWithCommit": "{{version}} ({{commit}})"
+      "versionWithCommit": "{{version}} ({{commit}})",
+      "uninstall": {
+        "title": "Uninstall",
+        "label": "Uninstall Coffer",
+        "description": "Remove Coffer from this Mac. Your data in ~/.coffer stays unless you choose to delete it.",
+        "open": "Uninstall Coffer…",
+        "browser": "Uninstalling removes the app too, so it runs from the Coffer desktop app (Settings › About) or in a terminal:",
+        "dialog": {
+          "title": "Uninstall Coffer?",
+          "body": "Coffer takes back everything it wrote outside ~/.coffer, stops, and the app moves itself to the Trash.",
+          "removes": "Removes",
+          "removesValue": "Coffer's MCP entry, memory hook and model routing from each agent; the skill links it delivered; start at login; the command-line tools and the installer's PATH lines; Coffer.app",
+          "keeps": "Keeps",
+          "keepsValue": "~/.coffer: your vault, secrets, skills, knowledge and settings. Install Coffer again and they are there; connect your agents again.",
+          "keepsNothing": "Nothing. ~/.coffer and the master key are deleted.",
+          "deleteData": "Also delete my data (~/.coffer)",
+          "deleteDataHelp": "Asks for Touch ID first.",
+          "dangerTitle": "This cannot be undone",
+          "danger": "Every secret, skill, knowledge collection and memory note in ~/.coffer, and the master key that opens your secrets, are deleted for good — including skills Coffer adopted from your agents. A vault you moved elsewhere is left in place.",
+          "backup": "Back up the master key first",
+          "confirm": "Uninstall",
+          "confirmDelete": "Uninstall and delete data",
+          "pending": "Uninstalling…",
+          "failed": "Couldn’t uninstall Coffer"
+        },
+        "done": {
+          "title": "Coffer is uninstalled",
+          "body": "Your data in ~/.coffer is kept. Coffer is quitting and moving itself to the Trash.",
+          "bodyDeleted": "Your data is deleted once the daemon has stopped. Coffer is quitting and moving itself to the Trash."
+        },
+        "steps": {
+          "agents": "Read the agents",
+          "provider_routing": "Model routing taken out of the agents",
+          "agent_connections": "Agents disconnected",
+          "skill_links": "Skill links removed",
+          "login_job": "Start at login turned off",
+          "terminal_files": "Terminal launch files removed",
+          "path_lines": "Installer's PATH lines removed",
+          "binaries": "Command-line tools removed"
+        },
+        "outcome": {
+          "done": "done",
+          "nothing": "nothing to do",
+          "failed": "failed"
+        }
+      }
     },
     "security": {
       "masterKey": {

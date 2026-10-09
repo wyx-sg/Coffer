@@ -95,11 +95,11 @@ A fixed port keeps bookmarks working and keeps the browser's stored preferences 
 
 ## How do I upgrade?
 
-Install the new version the same way you installed the old one, then run `coffer daemon restart` so the running daemon is replaced. Until you do, commands print a version warning. The previous build stays in `~/.coffer/bin` for a rollback, and the history database is copied before any migration. See [Upgrades and rollback](/guides/daemon#upgrades-and-rollback).
+The desktop app updates itself from **Settings › About**. With the one-line installer, run `coffer update`: it installs the newest release and restarts the daemon on it. From source, pull, reinstall and run `coffer daemon restart`. See [Install → Upgrade](/start/install#upgrade). The previous build stays in `~/.coffer/bin` for a rollback, and the history database is copied before any migration. See [Upgrades and rollback](/guides/daemon#upgrades-and-rollback).
 
 ## How do I uninstall Coffer?
 
-Remove Coffer's MCP entry and memory hook from each agent, unregister the agents (which removes the skill links Coffer delivered), stop the daemon and its login service, then delete the binaries and, if you want, `~/.coffer`. [Install → Uninstall](/start/install#uninstall) gives the exact commands. Back up `~/.coffer`, and the master key from the desktop app, first if you might want them again.
+Choose **Uninstall Coffer…** on **Settings › About** in the desktop app, or run `coffer uninstall`. Coffer disconnects your agents, removes the skill links it delivered, start at login, its binaries and `PATH` lines and the app, and keeps `~/.coffer` for a reinstall. Deleting your data too is a separate choice that asks for Touch ID. See [Install → Uninstall](/start/install#uninstall).
 
 If you used vault sync, the remote repository is untouched and still holds your vault's documents.
 

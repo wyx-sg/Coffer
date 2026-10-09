@@ -322,7 +322,10 @@ mod tests {
     #[test]
     fn a_login_shell_that_does_not_exist_yields_nothing() {
         assert_eq!(
-            login_shell_path_of("/nonexistent/login-shell", std::time::Duration::from_secs(1)),
+            login_shell_path_of(
+                "/nonexistent/login-shell",
+                std::time::Duration::from_secs(1)
+            ),
             None
         );
     }
