@@ -126,7 +126,7 @@ flowchart TD
 - **一份侧边栏。** 两种语言的侧边栏都由 `docs-site/.vitepress/sidebar.json` 生成，每个条目都带有英文和中文标签。
 - **用应用里的词。** 使用 Web 界面使用的中文术语（`frontend/src/i18n/locales/zh.json`）：智能体、技能、知识、记忆、密钥、MCP 服务器、模型提供商、消息渠道、对话、整理。代码、命令、路径、配置键和错误码保持英文。
 - **生成的页面。** `make docs-reference` 会生成两种语言的 CLI 参考。命令帮助来自 CLI 本身，所以两个页面上都是英文。
-- **页面组件。** 文档站以设计画布「7 · Docs site」为准，每块画板是一种页面模板。任务的步骤用 `::: steps` … `:::` 包住其中的 `###` 标题即可编号（步骤里还要放容器时，外层用更长的围栏，如 `::::: steps`）。Markdown 写不出的图和列表是 `docs-site/.vitepress/theme/components/` 下的 Vue 组件，按文件名全局注册，页面直接写 `<ArchDiagram />`，不用 import。首页本身就是组件 `CofferHome`，截图在 `docs-site/public/overview.png`。
+- **页面组件。** 文档站以设计画布「7 · Docs site」为准，每块画板是一种页面模板。任务的步骤用 `::: steps` … `:::` 包住其中的 `###` 标题即可编号（步骤里还要放容器时，外层用更长的围栏，如 `::::: steps`）。Markdown 写不出的图和列表是 `docs-site/.vitepress/theme/components/` 下的 Vue 组件，按文件名全局注册，页面直接写 `<ArchDiagram />`，不用 import。首页本身就是组件 `CofferHome`，里面带 tab 的截图由 `HomeShots` 渲染。图片是 `docs-site/public/shots/<语言>/<主题>/` 下的文件，由 `make docs-shots` 用带演示数据的守护进程生成，不要手改。要加一张图，就在 `e2e/docs/specs/shots.docs.spec.ts` 里加一个场景，页面按名字引用（[为什么这样做](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/docs-screenshots-are-generated-from-a-seeded-daemon.md)）。
 
 `scripts/check_docs_locales.py` 是 `make lint` 的一部分。当某个页面、侧边栏条目、标题锚点或链接只存在于一种语言而缺少另一种时，它会报错并给出路径。
 

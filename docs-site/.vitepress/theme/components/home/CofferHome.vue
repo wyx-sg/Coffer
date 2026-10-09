@@ -6,7 +6,6 @@ import { STR, type Lang } from "./homeStrings";
 const props = defineProps<{ lang: Lang }>();
 const s = computed(() => STR[props.lang]);
 const href = (p: string) => withBase((props.lang === "zh" ? "/zh" : "") + p);
-const shot = computed(() => withBase("/overview.png"));
 </script>
 
 <template>
@@ -34,10 +33,7 @@ const shot = computed(() => withBase("/overview.png"));
           </div>
           <InstallTabs :lang="lang" />
         </div>
-        <div class="shot" role="img" :aria-label="s.shot">
-          <img :src="shot" width="2368" height="1480" :alt="s.shot" />
-          <div class="fade" />
-        </div>
+        <HomeShots :lang="lang" />
       </div>
     </section>
 
@@ -125,31 +121,6 @@ h1 {
 .btn.primary:hover {
   background: var(--vp-button-brand-hover-bg, var(--vp-c-brand-1));
 }
-.shot {
-  position: relative;
-  margin-top: 56px;
-  aspect-ratio: 1184 / 700;
-  overflow: hidden;
-  border-radius: 12px;
-  border: 1px solid var(--vp-c-border);
-  background: var(--vp-c-bg);
-}
-.shot img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top left;
-}
-.fade {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 17%;
-  background: linear-gradient(to bottom, transparent, var(--vp-c-bg));
-  pointer-events: none;
-}
 @media (max-width: 959px) {
   .hero {
     padding: 48px 0 56px;
@@ -157,9 +128,6 @@ h1 {
   .hero-grid {
     grid-template-columns: minmax(0, 1fr);
     row-gap: 32px;
-  }
-  .shot {
-    margin-top: 40px;
   }
 }
 @media (max-width: 639px) {

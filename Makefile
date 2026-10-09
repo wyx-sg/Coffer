@@ -23,7 +23,7 @@ PYTEST_XDIST := -n $(PYTEST_WORKERS) --dist loadgroup
 
 .PHONY: help install install-e2e-browsers hooks \
 	verify verify-all \
-	verify-unit verify-integration verify-contract verify-e2e verify-visual visual-update verify-acceptance openspec-validate verify-benchmark verify-secrets \
+	verify-unit verify-integration verify-contract verify-e2e verify-visual visual-update docs-shots verify-acceptance openspec-validate verify-benchmark verify-secrets \
 	verify-installed-mcp \
 	verify-installed-cli \
 	test-durations \
@@ -50,6 +50,7 @@ help:
 	@echo "  make verify-e2e            e2e tier only (Playwright: web + mcp projects)"
 	@echo "  make verify-visual         screenshot baseline: every route, light + dark (not in verify / verify-e2e)"
 	@echo "  make visual-update         re-record this platform's screenshot baseline after a deliberate visual change"
+	@echo "  make docs-shots            regenerate the docs site's app pictures (docs-site/public/shots/) from a seeded daemon"
 	@echo "  make verify-acceptance     openspec validate + audit scenarios vs test markers"
 	@echo "  make verify-benchmark      every perf-budget test, the slow ones too (COFFER_RUN_BENCHMARKS=1)"
 	@echo "  make verify-secrets        gitleaks over the full git history (skips when gitleaks is not installed)"
@@ -319,6 +320,16 @@ visual-update:
 		echo "visual-update: e2e/node_modules missing — run 'make install' first"; exit 1; \
 	else \
 		cd e2e && $(VISUAL_PW) --update-snapshots; \
+	fi
+
+# Docs images (e2e/playwright.docs.config.ts): its own seeded daemon (:18200) and
+# Vite (:5175); writes docs-site/public/shots/<lang>/<theme>/<name>.webp. Not part
+# of verify: a run changes files, and a person reviews the image diff.
+docs-shots:
+	@if [ ! -d e2e/node_modules ]; then \
+		echo "docs-shots: e2e/node_modules missing — run 'make install' first"; exit 1; \
+	else \
+		cd e2e && npx playwright test -c playwright.docs.config.ts; \
 	fi
 
 # The Python trees only (backend, evals, e2e/installed). The frontend tree is not prettier-clean as a whole,

@@ -25,6 +25,7 @@ the ADRs the research informs. What Coffer decided, and why, lives in
 | [Credentials & secrets](./credentials-secrets.md) | Holding secrets for agents and MCP servers without exposing plaintext | `secret` |
 | [Activity & audit](./activity-and-audit.md) | Audit logs, invocation logs, daemon logs, retention and the UI over them | `resource-framework`, `web-ui`, `daemon` |
 | [Desktop shell & daemon](./desktop-shell-and-daemon.md) | A resident localhost daemon plus a native shell and CLI from one download | `daemon`, `desktop-app` |
+| [Documentation screenshots](./docs-screenshots.md) | Keeping product pictures in docs and on home pages current | none — docs site |
 | [Agent evaluation](./agent-evaluation.md) | Capturing interactions into datasets and gating CI on regressions | none — engineering harness |
 
 Capabilities with no note: `resource-framework` (as a framework), `vault-storage`, `experimental-features`
