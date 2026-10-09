@@ -34,7 +34,7 @@ describe("ProviderMark", () => {
     expect(local("ollama")).toBe("ollama");
     expect(local("vllm")).toBe("vllm");
     expect(local("llama_server")).toBe("llama-cpp");
-    expect(local("lmstudio")).toBe("glyph");
+    expect(local("lmstudio")).toBe("lmstudio");
     expect(markOf({ base_url: "http://localhost:11434", protocol: "ollama" }).kind).toBe("ollama");
   });
 
@@ -63,8 +63,13 @@ describe("ProviderMark", () => {
     expect(row.container).not.toHaveTextContent("OpenAI");
   });
 
-  test("everyone else — gateways, Gemini, DeepSeek — gets the neutral glyph", () => {
-    expect(markOf({ base_url: "https://api.deepseek.com" }).kind).toBe("glyph");
+  test("every preset vendor has its mark, in either region; a gateway gets the neutral glyph", () => {
+    expect(markOf({ base_url: "https://api.deepseek.com" }).kind).toBe("deepseek");
+    expect(markOf({ base_url: "https://api.deepseek.com/anthropic" }).kind).toBe("deepseek");
+    expect(markOf({ base_url: "https://api.moonshot.cn/v1" }).kind).toBe("kimi");
+    expect(
+      markOf({ base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1" }).kind,
+    ).toBe("qwen");
     expect(markOf({}).kind).toBe("glyph");
   });
 

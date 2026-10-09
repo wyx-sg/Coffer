@@ -76,6 +76,7 @@ export type DetectLocalOut = Schemas["DetectLocalOut"];
  *  from: `user` (You set), `provider` (its own API), `bundled` (the price list
  *  shipped with the release), `local` (costs nothing) — or `null`: unknown. */
 export type ModelPrice = Schemas["ModelPriceOut"];
+export type ModelWindow = Schemas["ModelWindowOut"];
 /** The agent config changes deleting a provider makes (the review before Delete). */
 export type ProviderDeletePreview = Schemas["ProviderDeletePreviewOut"];
 /** A connection's kept health verdict (spec provider-switching "Know each
@@ -141,6 +142,15 @@ export const providersApi = {
   prices: (uid: string, models: string[]) =>
     unwrap(
       getApiClient().POST("/providers/{uid}/prices", {
+        params: { path: { uid } },
+        body: { models },
+      }),
+    ),
+
+  /** Each model's context window on this provider, with its source. Read-only. */
+  windows: (uid: string, models: string[]) =>
+    unwrap(
+      getApiClient().POST("/providers/{uid}/windows", {
         params: { path: { uid } },
         body: { models },
       }),

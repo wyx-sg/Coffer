@@ -45,7 +45,7 @@ The agent reads this page, chooses the path that fits your machine and checks th
 | Path | Best for | Gives you |
 | --- | --- | --- |
 | [Desktop app](#desktop-app) | Anyone who prefers a window and a menu-bar icon | `Coffer.app`, plus the same four binaries once you first open it |
-| [One-line installer](#one-line-installer) | Terminal users on a Mac | `coffer`, `coffer-daemon`, `coffer-mcp-shim` in `~/.coffer/bin` |
+| [One-line installer](#one-line-installer) | Terminal users on a Mac | `coffer`, `coffer-daemon`, `coffer-mcp-shim`, `coffer-seatalk-bridge` in `~/.coffer/bin` |
 | [Release archive](#release-archive) | Installing by hand, or on machines with no GUI | The same four binaries, extracted wherever you choose |
 | [From source](#from-source) | Contributors, Linux users, and anyone tracking `main` | A Python install with `coffer` and `coffer-mcp-shim` on your `PATH` |
 
@@ -95,7 +95,7 @@ The script:
 
 1. Checks that you are on macOS arm64. Any other OS or architecture exits with an error that points to the from-source install.
 2. Downloads `coffer-cli-aarch64-apple-darwin.tar.gz` and the release's `SHA256SUMS` from GitHub Releases, then verifies the archive's checksum. If the checksum does not match, the script stops.
-3. Installs `coffer`, `coffer-daemon`, `coffer-mcp-shim` and the shim's library folder `coffer-mcp-shim-lib/` into the install directory. The library folder goes in first, by a temporary sibling and a rename, and each binary is copied to a temporary name beside it, marked executable and renamed over the public name, so when that name is a symlink into a versioned directory (as it is once a daemon started from elsewhere, such as the desktop app, has deployed its build there), the link is replaced and the previous version's binaries stay intact for a rollback.
+3. Installs `coffer`, `coffer-daemon`, `coffer-mcp-shim`, `coffer-seatalk-bridge` and the shim's library folder `coffer-mcp-shim-lib/` into the install directory. The library folder goes in first, by a temporary sibling and a rename, and each binary is copied to a temporary name beside it, marked executable and renamed over the public name, so when that name is a symlink into a versioned directory (as it is once a daemon started from elsewhere, such as the desktop app, has deployed its build there), the link is replaced and the previous version's binaries stay intact for a rollback.
 4. If that directory is not already on your `PATH`, appends a line to your shell profile. The profile depends on your shell: `~/.zshrc` for zsh (or `$ZDOTDIR/.zshrc`), `~/.bash_profile` for bash on macOS, `~/.config/fish/config.fish` for fish (as `fish_add_path`), and `~/.profile` for anything else. Running the script again does not add the line twice.
 5. Warns, without failing, when `git` is missing or older than 2.40, and points to [Requirements](#requirements).
 
@@ -158,14 +158,14 @@ cd frontend && npm install && npm run build && cd ..
 
 | Command | Produces |
 | --- | --- |
-| `make bundle-binaries` | `coffer`, `coffer-daemon` and `coffer-mcp-shim` (with `coffer-mcp-shim-lib/`) frozen with PyInstaller into `dist/`, the same layout as the release archive |
+| `make bundle-binaries` | `coffer`, `coffer-daemon`, `coffer-mcp-shim` (with `coffer-mcp-shim-lib/`) and `coffer-seatalk-bridge` frozen with PyInstaller into `dist/`, the same layout as the release archive |
 | `make desktop` | `Coffer.app` and an unsigned `.dmg`. Needs a Rust toolchain and Node.js, and takes roughly 50 minutes because it runs PyInstaller first. |
 
 ## What gets installed where
 
 | Path | What it is |
 | --- | --- |
-| `~/.coffer/bin/coffer`, `coffer-daemon`, `coffer-mcp-shim` | The public names. For a release build these are symlinks into a versioned directory. |
+| `~/.coffer/bin/coffer`, `coffer-daemon`, `coffer-mcp-shim`, `coffer-seatalk-bridge` | The public names. For a release build these are symlinks into a versioned directory. |
 | `~/.coffer/bin/<version>/` | One directory per deployed build. The current and previous versions are kept, so you can roll back by pointing the links at the older directory. |
 | `~/.coffer/vault/` | The vault: a git repository of resource files, skills, knowledge and encrypted secrets. |
 | `~/.coffer/local/` | Settings true of this machine only: agents, reach, retention, the sync remote. |
@@ -249,7 +249,7 @@ Either way Coffer takes back everything it wrote outside `~/.coffer`, then stops
 
 `~/.coffer` stays: your vault, secrets, skills, knowledge and settings are there when you install Coffer again. Connect your agents again after a reinstall. A source checkout and its `.venv` are yours to remove. Shells that are already open keep the old `PATH` until they restart.
 
-To delete your data as well, tick **Also delete my data** in the dialog; Coffer asks for Touch ID before anything is removed. The app also deletes the master key's Keychain items once the daemon has stopped. From a terminal, `coffer uninstall --delete-data` asks you to type `delete my data`, does nothing without a terminal to type it in, and deletes `~/.coffer` but not the Keychain, which only Coffer's daemon touches: delete the `coffer` items in Keychain Access yourself. A vault you moved somewhere else is left in place.
+To delete your data as well, tick **Also delete my data** in the dialog; Coffer asks for Touch ID before anything is removed. The app also deletes the master key's Keychain items once the daemon has stopped. When the daemon belongs to the desktop app, `coffer uninstall` (with or without `--delete-data`) opens this dialog instead. After an installer or source install, `coffer uninstall --delete-data` asks you to type `delete my data`, does nothing without a terminal to type it in, and deletes `~/.coffer` but not the Keychain, which only Coffer's daemon touches: delete the `coffer` items in Keychain Access yourself. A vault you moved somewhere else is left in place.
 
 ::: danger Deleting ~/.coffer is permanent
 `~/.coffer` holds your database, knowledge collections, skill library and encrypted secrets. Deleting it destroys every stored secret and every document that exists only there, including skills Coffer adopted from your agents. [Back up the master key](/guides/secrets#the-master-key-and-its-backup) first if you might want them back.

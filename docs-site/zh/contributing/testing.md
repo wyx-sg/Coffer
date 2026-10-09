@@ -171,7 +171,7 @@ pytest 标记在 `backend/pyproject.toml` 中注册，并在 `--strict-markers` 
 
 | 项目 | 测试文件 | 驱动什么 |
 | --- | --- | --- |
-| `web` | `e2e/web/specs/*.spec.ts`：`agent_workspace`，以及覆盖活动、智能体、冷启动、知识、MCP 流程、设置和技能的各个 `shell_*` spec | Chromium 访问 Web 界面 |
+| `web` | `e2e/web/specs/*.spec.ts`：`agent_workspace`、`clis`、`custom-tools`，以及覆盖其他页面、冷启动、命令面板和 MCP 流程的各个 `shell_*` spec | Chromium 访问 Web 界面 |
 | `mcp` | `e2e/mcp/specs/*.spec.ts`：stdio 和 HTTP 上的往返、并发客户端、能力停用、会变化的上游、上游崩溃恢复 | 真实 MCP 客户端 → `coffer-mcp-shim`（stdio）→ 守护进程（`/mcp`）→ 上游 MCP 服务器。没有浏览器 |
 
 第一次运行之前：
@@ -238,11 +238,12 @@ make verify-installed-cli OUT=<dir> COFFER=<path>/coffer
 | `scripts/check_adr_index.py` | `docs/decisions/` 内的链接都能解析，并且决策记录索引恰好列出现存的所有决策记录 |
 | `scripts/check_spec_citations.py` | 任何被跟踪文件中的每一处 `spec <capability> "<Title>"` 引用都指向一条真实存在的需求。在 `openspec/` 内，相对于规格的链接（`[x](../skill-manager/spec.md) "<Title>"`）和指向文件所在能力的 `see "<Title>"` 也会检查。跨行折断的标题按合并成一行来读 |
 | `scripts/check_architecture_doc.py` | `docs-site/architecture/layering.md` 中的代码布局树列出了每个包、没有列出已经不存在的东西，并且架构页面列出了每一个内置 `coffer__*` 工具 |
-| `scripts/check_pyinstaller_specs.py` | 三个 PyInstaller spec 指向存在的文件，并保留 `-X utf8` 运行时选项。没有任何 pull request job 运行 PyInstaller，所以这是唯一的早期预警 |
+| `scripts/check_pyinstaller_specs.py` | 四个 PyInstaller spec 指向存在的文件，并保留 `-X utf8` 运行时选项。没有任何 pull request job 运行 PyInstaller，所以这是唯一的早期预警 |
 | `scripts/check_cli_reference.py` | 本站生成的 CLI 参考页面（英文和中文）与代码一致。用 `make docs-reference` 修复偏移 |
 | `scripts/check_docs_locales.py` | 本站的英文树和中文树一一对应：页面、侧边栏条目、标题锚点，以及中文页面链接到中文页面 |
 | `scripts/check_error_codes_reference.py` | 中英文的[错误码](/zh/reference/error-codes)页列出守护进程在 `surfaces/http/errors.py` 中映射的每一个错误码，每个都标明它实际使用的 HTTP 状态码，且不列出守护进程没有映射的错误码 |
 | `scripts/check_removed_commands.py` | `docs-site/` 下的页面、仓库指南（`README.md`、`README.zh-CN.md`、`AGENTS.md`、`CONTRIBUTING.md`、`.agents/`、除 ADR 以外的 `docs/`）、规格、桌面壳源文件、随包发布的技能正文、Web 界面源文件或 e2e spec 中，都没有引用已被移除的 `coffer` 命令、选项或 `coffer__` 工具。每次命中都会写明应改用的命令；有意提到它的行（比如断言它已被移除的场景）列在脚本的 `ALLOWED` 里 |
+| `scripts/cli_coverage.py --check` | Web 界面调用的每个路由都有对应的 `coffer` 命令或列明的不需要命令的理由，除白名单外每个命令都出现在 `--help` 里，并且[CLI 覆盖表](/zh/reference/cli-coverage)（英文和中文）是最新的。用 `.venv/bin/python scripts/cli_coverage.py --write` 修正这两页 |
 | `scripts/check_platform_calls.py` | 基础设施层平台部分以外的代码都不询问自己运行在哪个操作系统上。测试不受此限制。见[平台端口](/zh/architecture/platform) |
 | `scripts/check_coffer_paths.py` | 每个 `~/.coffer` 路径都在 `infrastructure/vault/home.py` 里构造，它是唯一知道目录布局并遵循 `HOME` 的模块；其他模块自己构造路径就会失败。迁移和真实 home 的测试守卫不受此限制 |
 | `scripts/check_agent_type_branches.py` | 智能体描述符及其切面以外的代码都不按智能体类型分支。见[智能体切面](/zh/architecture/agent-facets) |
@@ -257,7 +258,7 @@ make verify-installed-cli OUT=<dir> COFFER=<path>/coffer
 | `npm run typecheck` | 对前端运行 `tsc` |
 | `npm run knip` | 前端死代码：未使用的文件、导出和依赖 |
 
-当 `frontend/node_modules` 不存在时，四个前端步骤会被跳过。CI 总会安装它。`lint-imports` 以 `PYTHONPATH=backend` 运行，这样在 git worktree 里它分析的是本检出目录，而不是可编辑安装指向的那个。
+当 `frontend/node_modules` 不存在时，四个前端步骤会失败；先运行 `make install`。CI 总会安装它。`lint-imports` 以 `PYTHONPATH=backend` 运行，这样在 git worktree 里它分析的是本检出目录，而不是可编辑安装指向的那个。
 
 ::: tip 只改文档也可能让 `make lint` 失败
 引用、决策记录索引、架构文档、已移除命令和参考页这几道门禁都会读取 Markdown。改完文档后也要运行 `make lint`。

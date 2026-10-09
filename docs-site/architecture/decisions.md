@@ -30,6 +30,7 @@ Explained in: [Resource framework](/architecture/resource-framework), [Persisten
 | Decision | Record |
 | --- | --- |
 | The Resource Framework Is Core Domain, Designed Before the Second Kind | [`resource-framework-upfront`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-framework-upfront.md) |
+| Every Web UI and Desktop Operation Has a `coffer` Command Over the Same Route | [`command-line-parity-with-the-web-ui`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/command-line-parity-with-the-web-ui.md) |
 | A Kind Plugs In as One Frozen Record of Optional Hooks: Validators Before the Write, Reactions After | [`kind-plugin-contract`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/kind-plugin-contract.md) |
 | A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label | [`identity-is-the-uid-inside-the-file`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/identity-is-the-uid-inside-the-file.md) |
 | Names Visible to Agents Are Fixed | [`names-visible-to-agents-are-fixed`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/names-visible-to-agents-are-fixed.md) |
@@ -60,7 +61,8 @@ Explained in: [Daemon and processes](/architecture/daemon), [Distribution and re
 | Agents Reach the Gateway Through a stdio Shim, Not a Native HTTP Entry | [`stdio-shim-bridge`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/stdio-shim-bridge.md) |
 | The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do | [`desktop-shell-over-a-shared-frontend`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/desktop-shell-over-a-shared-frontend.md) |
 | The Loopback Daemon Performs OS File Actions for the UI | [`daemon-proxies-os-file-actions`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-proxies-os-file-actions.md) |
-| Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App | [`distribution-pyinstaller`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/distribution-pyinstaller.md) |
+| Distribution — Four PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App | [`distribution-pyinstaller`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/distribution-pyinstaller.md) |
+| Coffer Is Licensed Under AGPL-3.0-or-later | [`project-license-is-agpl-3-0`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/project-license-is-agpl-3-0.md) |
 | Experimental Features Instead of a Release Branch | [`experimental-features-instead-of-a-release-branch`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/experimental-features-instead-of-a-release-branch.md) |
 | The Sidebar Is Grouped by What the Person Comes to Do: Agents, Run, Capabilities, Context, System | [`sidebar-grouped-by-what-the-person-comes-to-do`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md) |
 
@@ -88,6 +90,9 @@ Explained in: [Agents](/guides/agents), [Model providers](/guides/providers), [A
 | Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale | [`agent-hook-installation`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-hook-installation.md) |
 | LLM Connections Are Projected Into Each Agent's Own Config File | [`provider-connections-projected-into-agent-config`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-connections-projected-into-agent-config.md) |
 | API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged | [`api-key-providers-are-reached-through-a-separate-local-model-proxy`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/api-key-providers-are-reached-through-a-separate-local-model-proxy.md) |
+| One Connection Serves Both Wires: an Optional Anthropic Address Beside the Base URL | [`one-connection-serves-both-wires`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/one-connection-serves-both-wires.md) |
+| A Connection Reaches the Agents Its Addresses Serve; No Scope, No Off Switch | [`provider-reach-is-what-its-addresses-serve`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-reach-is-what-its-addresses-serve.md) |
+| A Provider Model's Context Window Comes From You, Then the Endpoint, Then the Bundled List, Else Nothing | [`context-windows-for-provider-models`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/context-windows-for-provider-models.md) |
 | Usage Is Metered at the Proxy; Subscription Agents Are Not Metered | [`usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md) |
 | The Model Catalogue Is Read Back From the Installed Agent | [`model-catalogue-read-from-the-agent`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/model-catalogue-read-from-the-agent.md) |
 | The Speech-to-Text Model Is a Setting; Its Endpoint Is Borrowed From a Flagged Connection | [`internal-engine-settings`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/internal-engine-settings.md) |
@@ -121,6 +126,7 @@ Explained in: [Knowledge](/architecture/knowledge), [Memory](/architecture/memor
 | Coffer Ships Its Own Manual as a Skill Resource | [`coffer-ships-its-own-skill`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md) |
 | Knowledge Is a Directory of Markdown Files, Not an Index | [`knowledge-is-plain-files`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) |
 | Tidying Knowledge and Memory Is the Agent's Job | [`tidying-knowledge-and-memory-is-the-agents-job`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-and-memory-is-the-agents-job.md) |
+| Knowledge Is a Wiki of Pages Compiled From Kept Sources | [`knowledge-is-a-wiki-of-pages-compiled-from-kept-sources`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md) |
 | Aggregate the Agents' Memory; Never Write It | [`aggregate-agent-memory-never-write-it`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md) |
 | Memory Reaches a Session at Three Moments: an Index at Start, Retrieval per Prompt, and a Guard Before a Known Trap | [`memory-reaches-a-session-at-prompt-time-and-before-a-known-trap`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md) |
 
@@ -139,3 +145,11 @@ Explained in: [Vault sync](/architecture/vault-sync), [Security model](/architec
 | Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository | [`secrets-cross-machines-only-as-ciphertext`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/secrets-cross-machines-only-as-ciphertext.md) |
 | Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process | [`standalone-secrets-are-named-references-injected-into-one-child`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/standalone-secrets-are-named-references-injected-into-one-child.md) |
 | Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New | [`only-a-present-human-sees-a-secret-or-sends-it-somewhere-new`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md) |
+
+## Documentation
+
+Explained in: [Contributing](/contributing/#docs-site-in-two-languages).
+
+| Decision | Record |
+| --- | --- |
+| Docs Screenshots Are Generated From a Seeded Daemon, Not Captured by Hand | [`docs-screenshots-are-generated-from-a-seeded-daemon`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/docs-screenshots-are-generated-from-a-seeded-daemon.md) |

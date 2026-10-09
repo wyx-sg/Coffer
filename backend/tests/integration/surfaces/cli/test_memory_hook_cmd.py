@@ -67,7 +67,6 @@ def _info() -> DaemonInfo:
         port=59999,
         token="t",
         started_at=datetime.now(tz=UTC),
-        binary_path="/x",
     )
 
 

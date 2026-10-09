@@ -1,11 +1,11 @@
 ---
 title: 分发与发布
-description: Coffer 怎样被构建成冻结二进制，以命令行压缩包和桌面 .dmg 发布，在凭据齐备时签名并公证，由桌面应用原地更新，安装到 ~/.coffer/bin 下按版本分的目录，打上提交号标记并为正式发布加固，并由实验功能开关把关。
+description: Coffer 怎样被构建成冻结二进制，以命令行压缩包和桌面 .dmg 发布，在凭据齐备时签名并公证，由桌面应用原地更新，安装到 ~/.coffer/bin 下按版本分的目录，由守护进程卸载，打上提交号标记并为正式发布加固，并由实验功能开关把关。
 ---
 
 # 分发与发布 {#distribution-and-releases}
 
-本页讲 Coffer 的 Python 代码怎样到达一台没有 Python 的机器：四个冻结二进制、产出它们的发布流水线、发布怎样签名和公证、桌面应用怎样自我更新、两档下载方式、新构建怎样装在旧构建旁边，以及实验功能怎样在一台机器上逐个开启。它写给构建或发布 Coffer 的贡献者，也写给想知道自己磁盘上到底装了什么的人。
+本页讲 Coffer 的 Python 代码怎样到达一台没有 Python 的机器：四个冻结二进制、产出它们的发布流水线、发布怎样签名和公证、桌面应用怎样自我更新、两档下载方式、新构建怎样装在旧构建旁边、Coffer 怎样卸载，以及实验功能怎样在一台机器上逐个开启。它写给构建或发布 Coffer 的贡献者，也写给想知道自己磁盘上到底装了什么的人。
 
 ## 问题 {#the-problem}
 
@@ -33,13 +33,14 @@ Coffer 是一个 Python 程序，但它的用户是跑 AI 编程智能体的人�
 
 ## 二进制 {#the-binaries}
 
-每个二进制都由 `backend/` 下各自的 PyInstaller spec 冻结而成，一个入口点一个：守护进程的、shim 的和命令行的。
+每个二进制都由 `backend/` 下各自的 PyInstaller spec 冻结而成，一个入口点一个：守护进程的、shim 的、命令行的和 SeaTalk 桥的。
 
 | 二进制 | 包含什么 |
 | --- | --- |
 | `coffer-daemon` | 整个后端：FastAPI 和 uvicorn、SQLAlchemy 和 aiosqlite、alembic 及作为数据文件的迁移脚本、MCP SDK、文档转换器、模型 SDK，以及构建时若前端已构建（`frontend/dist`）则打包进来的 Web 界面。 |
 | `coffer-mcp-shim` | MCP 客户端启动的 stdio 到 HTTP 的桥：一个可执行文件，加上它旁边存放其库文件的文件夹 `coffer-mcp-shim-lib/`（约 30 MB）。spec 只冻结 shim 入口脚本导入的内容，并排除守护进程的那些依赖：FastAPI、uvicorn、SQLAlchemy、alembic、structlog、Pillow、numpy、cryptography、keyring 和测试库。 |
 | `coffer` | Typer 命令行、httpx 和 `keyring` 后端：守护进程的一个轻量 HTTP 客户端。不含 Web 服务端、SQLAlchemy、Alembic 和 MCP SDK。 |
+| `coffer-seatalk-bridge` | 守护进程在自己旁边启动的进程，用来在守护进程之外加载运营方提供的 SeaTalk WebSocket SDK。里面没有守护进程的任何部分；由于 SDK 的导入无法静态追踪，它带上了整个标准库、`websockets` 和 `certifi`。它签名时不带钥匙串 entitlement，所以第三方代码永远不会在能读到主密钥的地方运行。 |
 
 守护进程、命令行和 SeaTalk 桥的 spec 构建单文件的控制台可执行程序；shim 的 spec 构建单文件夹的控制台可执行程序。所有 spec 都不做 UPX 压缩，并且都把解释器选项 `-X utf8` 冻结进去。这个选项只对发布出去的二进制有意义：未冻结的解释器在 C locale 下会自己打开 UTF-8 模式，但从 Finder 或 launchd 启动、没有 `LANG` 的冻结二进制否则会退回 ASCII。
 
@@ -50,7 +51,7 @@ PyInstaller 靠静态分析找导入，所以任何在函数里延迟导入的�
 ### 本地构建 {#building-locally}
 
 ```sh
-make bundle-binaries        # runs scripts/build_binaries.sh → dist/coffer, dist/coffer-daemon, dist/coffer-mcp-shim and dist/coffer-mcp-shim-lib/
+make bundle-binaries        # runs scripts/build_binaries.sh → dist/coffer, dist/coffer-daemon, dist/coffer-mcp-shim, dist/coffer-mcp-shim-lib/ and dist/coffer-seatalk-bridge
 bash scripts/smoke_test_bundle.sh dist
 ```
 
@@ -68,7 +69,7 @@ flowchart TD
     I --> F["构建前端（codegen + vite build）"]
     F --> P["发布计划：哪些 secret 已设置"]
     P --> S["打上构建标记（签名时加上 access group）"]
-    S --> B["构建二进制（PyInstaller ×3，能签就签）"]
+    S --> B["构建二进制（PyInstaller ×4，能签就签）"]
     B --> K["冒烟测试（+ 校验签名、公证）"]
     K --> A["coffer-cli-aarch64-apple-darwin.tar.gz"]
     K --> D["放置二进制 → tauri build（签名、公证、更新包）"]
@@ -97,7 +98,7 @@ flowchart TD
 
 桌面应用是一个 Tauri 2 壳，包着守护进程提供的同一套 Web 界面。它的 Tauri 配置打包 `app` 和 `dmg` 两个目标，把构建好的前端作为本地资源加载，并把 `coffer` 和 `coffer-daemon` 列为外部二进制。Tauri 把每个名字解析为 `<name>-<target-triple>`，放到 `Coffer.app/Contents/MacOS/`，和应用自己的可执行文件放在一起。SeaTalk 桥由 `bundle.macOS.files` 复制进 `Contents/MacOS`。shim 及其 `coffer-mcp-shim-lib/` 文件夹由 `bundle.macOS.files` 复制到 `Contents/Resources/`：`Contents/MacOS` 只能放已签名的代码，而库文件夹里还有数据文件。
 
-应用启动时按固定顺序寻找守护进程：`~/.coffer/daemon.json` 指向的、已在运行的守护进程（直接附着，从不重新拉起）；应用包里的二进制；`~/.coffer/bin/coffer-daemon`；`PATH` 上的 `coffer-daemon`；都没有就提示你安装命令行。壳自己从不写 `~/.coffer/bin`——那是它启动的守护进程的事（见下一节）。所以装了应用也就装了命令行。
+应用启动时按固定顺序寻找守护进程：`~/.coffer/daemon.json` 指向的、已在运行的守护进程（直接附着，从不重新拉起）；应用包里的二进制；`~/.coffer/bin/coffer-daemon`；`PATH` 上的 `coffer-daemon`；都没有就提示这份 Coffer 已损坏或不完整，并给出安装页面和一段可以交给智能体的提示词。壳自己从不写 `~/.coffer/bin`——那是它启动的守护进程的事（见下一节）。所以装了应用也就装了命令行。
 
 | 目标 | 做什么 |
 | --- | --- |
@@ -131,6 +132,7 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 ├── coffer            -> 0.2.0/coffer
 ├── coffer-daemon     -> 0.2.0/coffer-daemon
 ├── coffer-mcp-shim   -> 0.2.0/coffer-mcp-shim
+├── coffer-seatalk-bridge -> 0.2.0/coffer-seatalk-bridge
 ├── 0.2.0/
 │   ├── coffer-daemon
 │   ├── .coffer-daemon.version
@@ -152,7 +154,7 @@ stateDiagram-v2
     Skip --> [*]
 ```
 
-对 `coffer`、`coffer-daemon` 和 `coffer-mcp-shim` 中的每一个：
+对 `coffer`、`coffer-daemon`、`coffer-mcp-shim` 和 `coffer-seatalk-bridge` 中的每一个：
 
 1. **判断。** 当 `~/.coffer/bin/<version>/<name>` 不存在、大小和正在运行的构建的兄弟文件不同、缺少 `.<name>.version` 哨兵文件（说明复制从未完成），公开名字没有指向它，或（对 shim）版本目录缺少 `coffer-mcp-shim-lib/` 时，就需要部署。不看修改时间：它记录的是构建何时被解压，而不是内容是什么。
 2. **复制。** 二进制先复制到一个临时名字，设为可执行，再改名进版本目录。对 shim，会先把 `coffer-mcp-shim-lib/` 复制进同一个版本目录。哨兵文件最后写，所以有哨兵就意味着复制完整。守护进程在自己旁边找 shim，在应用里则到 `../Resources` 找。
@@ -166,6 +168,18 @@ stateDiagram-v2
 ::: warning
 `install.sh` 往 `~/.coffer/bin` 里装的是普通文件，每个都改名覆盖公开名字，所以之前部署留下的符号链接会被替换而不是被写穿，版本目录保持完好。从 `~/.coffer/bin` 本身运行的守护进程会跳过部署，所以只用安装脚本的机器在别处的构建（比如桌面应用）启动守护进程之前，不会有版本目录。
 :::
+
+## 卸载 {#uninstalling}
+
+Coffer 会写入不属于它的文件，所以由守护进程来卸载它：每种类型把自己写进去的内容撤回。`coffer uninstall` 和桌面应用的**设置 › 关于 › 卸载 Coffer…** 最终都调用 `POST /api/v1/daemon/uninstall`，它会：
+
+1. 在持有调和器期间，撤回模型提供商路由、每个智能体的连接（它的 MCP 条目和钩子）以及每个已投递的技能链接；
+2. 冻结调和器，让守护进程退出之前没有任何一轮调和把链接放回去；
+3. 移除开机自启动任务、终端启动文件、安装脚本加的 `PATH` 行和 `~/.coffer/bin`。
+
+即使前面的步骤失败，每一步也都会执行，并报告自己的结果，然后守护进程停止。`~/.coffer` 的其余部分（保险库、密钥、设置和历史）会保留下来，供重新安装时使用。
+
+删除数据是另一个单独的选择。在桌面应用里，**同时删除我的数据**会先要求 Touch ID，并发送一个针对 `delete-data` 的 `uninstall` 在场授权；守护进程停止服务后，会删除主密钥的钥匙串条目，然后删除 `~/.coffer`，应用则把自己移到废纸篓。`coffer uninstall --delete-data` 要求在终端里输入一句确认短语，等守护进程停止后自己删除 `~/.coffer`；它从不触碰钥匙串。如果 Coffer 是由桌面应用安装的，`coffer uninstall` 会改为打开应用的卸载对话框。
 
 ## 构建标记 {#the-build-stamp}
 
@@ -277,12 +291,12 @@ sequenceDiagram
 
 | 目录 | 放着什么 |
 | --- | --- |
-| `backend/` | 三个 PyInstaller spec |
+| `backend/` | 四个 PyInstaller spec |
 | `scripts/` | 构建、冒烟测试、spec 检查、构建与构建身份打标记、发布计划与签名、更新清单、版本号改写 |
 | `.github/workflows/` | 发布流水线和 `desktop` 检查流水线 |
 | `desktop/` | Tauri 壳：打包配置、entitlements、守护进程查找顺序、更新器 |
 | `docs-site/public/` | 一行安装脚本 |
-| 后端的应用层 | 按版本部署与符号链接切换、实验功能状态；HTTP 界面层放着请求时门禁和迁移前的数据库副本 |
+| 后端的应用层 | 按版本部署与符号链接切换、卸载步骤、实验功能状态；HTTP 界面层放着请求时门禁和迁移前的数据库副本 |
 
 ## 相关页面 {#related}
 
@@ -290,5 +304,5 @@ sequenceDiagram
 - 参考：[文件与目录](/zh/reference/filesystem)、[配置](/zh/reference/configuration)
 - 架构：[守护进程与进程](/zh/architecture/daemon)、[安全模型](/zh/architecture/security)、[持久化](/zh/architecture/persistence)
 - 检查清单：[RELEASING.md](https://github.com/wyx-sg/Coffer/blob/main/RELEASING.md)
-- 决策记录：[The Master Key Lives in the macOS Keychain](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)、[Distribution — PyInstaller-Bundled Daemon, Shim, and CLI](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/distribution-pyinstaller.md)、[Daemon Detect-or-Spawn Pattern](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-detect-or-spawn.md)、[The Desktop Shell Returns, Owning Only What a Browser Cannot Do](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/desktop-shell-over-a-shared-frontend.md)、[Experimental Features Instead of a Release Branch](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/experimental-features-instead-of-a-release-branch.md)、[The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
+- 决策记录：[Distribution — Four PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/distribution-pyinstaller.md)、[Daemon Detect-or-Spawn Pattern](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-detect-or-spawn.md)、[The Desktop Shell Returns, Owning Only What a Browser Cannot Do](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/desktop-shell-over-a-shared-frontend.md)、[Experimental Features Instead of a Release Branch](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/experimental-features-instead-of-a-release-branch.md)、[The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
 - 规格：[daemon](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md)、[desktop-app](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md)、[experimental-features](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md)

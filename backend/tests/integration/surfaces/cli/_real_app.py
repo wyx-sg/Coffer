@@ -72,7 +72,6 @@ def boot(
         port=59940,
         token=_TOKEN,
         started_at=datetime.now(tz=UTC),
-        binary_path="/test",
     )
     client = TestClient(
         app,

@@ -34,7 +34,6 @@ def _info(port: int, token: str) -> DaemonInfo:
         port=port,
         token=token,
         started_at=_dt.datetime.now(tz=_dt.UTC),
-        binary_path="/usr/bin/python3",
     )
 
 

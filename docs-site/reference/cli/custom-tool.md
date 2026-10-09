@@ -684,7 +684,7 @@ coffer custom-tool env set-header [OPTIONS] NAME ENV HEADER
 | `HEADER` <span class="cli-chip">argument</span> | text | required | The header's name |
 | `--value` <span class="cli-chip">option</span> | text |  | A plain value |
 | `--secret` <span class="cli-chip">option</span> | text |  | A stored secret's name (its value stays in Coffer) |
-| `--scheme` <span class="cli-chip">option</span> | text |  | Sent before the secret: Bearer, Basic, Token… |
+| `--scheme` <span class="cli-chip">option</span> | text |  | Sent before the secret: Bearer or Token |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## custom-tool env unset-header

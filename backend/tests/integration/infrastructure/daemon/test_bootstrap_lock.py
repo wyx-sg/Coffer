@@ -87,7 +87,6 @@ def test_acquire_or_existing_returns_existing_without_binding(
         port=59250,
         token="live-tok",
         started_at=datetime.now(tz=UTC),
-        binary_path="/fake/coffer-daemon",
     )
     write(home / ".coffer" / "daemon.json", existing)
     monkeypatch.setattr(bootstrap, "live_daemon", lambda: existing)
@@ -177,7 +176,6 @@ def test_live_daemon_is_none_for_a_bound_but_not_serving_socket(
                 port=bound_port,
                 token="t",
                 started_at=datetime.now(tz=UTC),
-                binary_path="/fake/coffer-daemon",
             ),
         )
         assert bootstrap.live_daemon() is None

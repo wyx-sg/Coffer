@@ -206,6 +206,7 @@ def model_card(
     picks: Sequence[str],
     labels: Mapping[str, str] | None = None,
     page: int | None = None,
+    default_label: str = "Default model",
 ) -> SelectionCard:
     """Pick the model the agent's CLI runs from the next message.
 
@@ -221,7 +222,7 @@ def model_card(
     shows itself. The tap still carries the id.
     """
     names = labels or {}
-    shown = names.get(current or "") or current or "Default model"
+    shown = names.get(current or "") or current or default_label
     options = [
         ChoiceButton(
             label=tick(names.get(name) or name, name == current),
@@ -237,7 +238,7 @@ def model_card(
         header=f"Current: {shown}\nTap a model (or send /model <name>):",
         options=options,
         current_value=f"model:{current}" if current else None,
-        current_label=names.get(current or "") or current or "Default model",
+        current_label=names.get(current or "") or current or default_label,
         page=page,
     )
 

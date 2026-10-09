@@ -92,7 +92,10 @@ class _Service:
 
 def _connection() -> Resource:
     cfg = ProviderConfig(
-        protocol=Protocol.ANTHROPIC, base_url="https://gw.example", secret_ref="provider/x/key"
+        protocol=Protocol.OPENAI,
+        base_url="https://gw.example/v1",
+        anthropic_base_url="https://gw.example",
+        secret_ref="provider/x/key",
     )
     return Resource(
         uid="3c9a7b15d0e24f6688aa1b2c3d4e5f60",

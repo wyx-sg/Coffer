@@ -91,10 +91,13 @@ the daemon's `/mcp` over HTTP and SSE, finding or starting the daemon itself.
 
 **The path is absolute and resolved when the entry is written**
 (`default_shim_resolver` in `application/agent/mcp_service.py`), in this
-order: the `COFFER_MCP_SHIM_PATH` override, a `PATH` lookup, the running
-interpreter's scripts directory (where pip and uv put console scripts, found
-via `sysconfig` even when the venv's `bin` is not on `PATH`), then the binary
-next to the running executable. A daemon launched from the Dock, by launchd or
+order: the `COFFER_MCP_SHIM_PATH` override; in an installed build, the deployed
+`~/.coffer/bin/coffer-mcp-shim`, so every daemon on the machine writes the same
+entry ([An Installed Daemon Names the Deployed Shim](an-installed-daemon-names-the-deployed-shim.md));
+then a `PATH` lookup, the running interpreter's scripts directory (where pip
+and uv put console scripts, found via `sysconfig` even when the venv's `bin` is
+not on `PATH`), the binary next to the running executable, and the deployed
+shim. A daemon launched from the Dock, by launchd or
 by a venv does not inherit the user's shell `PATH`, so a bare
 `coffer-mcp-shim` would resolve in the user's terminal and nowhere else. When
 the resolved path is the deployed shim, the entry names the public

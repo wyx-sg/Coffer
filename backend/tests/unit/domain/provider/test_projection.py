@@ -110,7 +110,7 @@ def test_remove_anthropic_clears_managed_keys_preserves_others() -> None:
         picker_models=("m",),
         replace_builtin_picker=True,
         local=True,
-        local_context_window=131072,
+        context_window=131072,
         api_key_helper=_HELPER,
     )
     d = json.loads(remove_anthropic_settings(text, managed_model="m"))

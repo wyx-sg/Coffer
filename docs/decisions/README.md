@@ -149,6 +149,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`daemon-is-a-resident-login-service`](daemon-is-a-resident-login-service.md) | The Daemon Is Resident: It Never Idles Out, and a Login Service Restarts Only a Crash |
 | [`daemon-auth-and-origin-guard`](daemon-auth-and-origin-guard.md) | A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard |
 | [`stdio-shim-bridge`](stdio-shim-bridge.md) | Agents Reach the Gateway Through a stdio Shim, Not a Native HTTP Entry |
+| [`an-installed-daemon-names-the-deployed-shim`](an-installed-daemon-names-the-deployed-shim.md) | An Installed Daemon Names the Deployed Shim |
 | [`desktop-shell-over-a-shared-frontend`](desktop-shell-over-a-shared-frontend.md) | The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do |
 | [`daemon-proxies-os-file-actions`](daemon-proxies-os-file-actions.md) | The Loopback Daemon Performs OS File Actions for the UI |
 | [`distribution-pyinstaller`](distribution-pyinstaller.md) | Distribution — Four PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App |
@@ -178,6 +179,9 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`agent-hook-installation`](agent-hook-installation.md) | Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale |
 | [`provider-connections-projected-into-agent-config`](provider-connections-projected-into-agent-config.md) | LLM Connections Are Projected Into Each Agent's Own Config File |
 | [`api-key-providers-are-reached-through-a-separate-local-model-proxy`](api-key-providers-are-reached-through-a-separate-local-model-proxy.md) | API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged |
+| [`one-connection-serves-both-wires`](one-connection-serves-both-wires.md) | One Connection Serves Both Wires: an Optional Anthropic Address Beside the Base URL |
+| [`provider-reach-is-what-its-addresses-serve`](provider-reach-is-what-its-addresses-serve.md) | A Connection Reaches the Agents Its Addresses Serve; No Scope, No Off Switch |
+| [`context-windows-for-provider-models`](context-windows-for-provider-models.md) | A Provider Model's Context Window Comes From You, Then the Endpoint, Then the Bundled List, Else Nothing |
 | [`usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota`](usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md) | Usage Is Metered at the Proxy; Subscription Agents Are Not Metered |
 | [`model-catalogue-read-from-the-agent`](model-catalogue-read-from-the-agent.md) | The Model Catalogue Is Read Back From the Installed Agent |
 | [`internal-engine-settings`](internal-engine-settings.md) | The Speech-to-Text Model Is a Setting; Its Endpoint Is Borrowed From a Flagged Connection |

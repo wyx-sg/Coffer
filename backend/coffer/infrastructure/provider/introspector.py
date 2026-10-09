@@ -73,6 +73,27 @@ def reported_price(extra: dict[str, object] | None) -> ModelPrice | None:
     )
 
 
+#: Where a ``/models`` entry reports a model's context window, first match wins:
+#: Anthropic's ``max_input_tokens``; OpenRouter's ``context_length`` (and its
+#: ``top_provider``'s); the spellings LiteLLM-style gateways and vLLM use.
+_WINDOW_KEYS = ("max_input_tokens", "context_length", "context_window", "max_model_len")
+
+
+def reported_window(entry: dict[str, object] | None) -> int | None:
+    """The context window a ``/models`` entry reports, or ``None``. Never a
+    guess: a missing, non-integer or implausible value is no answer."""
+    if not entry:
+        return None
+    candidates: list[object] = [entry.get(k) for k in _WINDOW_KEYS]
+    top = entry.get("top_provider")
+    if isinstance(top, dict):
+        candidates.append(top.get("context_length"))
+    for value in candidates:
+        if isinstance(value, int) and not isinstance(value, bool) and 1024 <= value <= 100_000_000:
+            return value
+    return None
+
+
 class ProviderIntrospector:
     """Implements ``ProviderIntrospectionPort`` over OpenAI-compatible HTTP."""
 
@@ -111,9 +132,18 @@ class ProviderIntrospector:
             return list(await self._anthropic_models(url, api_key))
         client = self._openai_client(url, api_key)
         page = await client.models.list()
-        return [ListedModel(id=m.id, price=reported_price(m.model_extra)) for m in page.data]
+        return [
+            ListedModel(
+                id=m.id,
+                price=reported_price(m.model_extra),
+                context_window=reported_window(m.model_extra),
+            )
+            for m in page.data
+        ]
 
-    async def _anthropic_models(self, base_url: str | None, api_key: str | None) -> list[str]:
+    async def _anthropic_models(
+        self, base_url: str | None, api_key: str | None
+    ) -> list[ListedModel]:
         root = (base_url or "https://api.anthropic.com").rstrip("/")
         async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
             r = await c.get(
@@ -121,7 +151,10 @@ class ProviderIntrospector:
                 headers={"x-api-key": api_key or "", "anthropic-version": _ANTHROPIC_VERSION},
             )
             r.raise_for_status()
-            return [m["id"] for m in r.json().get("data", [])]
+            return [
+                ListedModel(id=m["id"], context_window=reported_window(m))
+                for m in r.json().get("data", [])
+            ]
 
     async def test_chat(
         self, *, provider: str, model: str, base_url: str | None, api_key: str | None

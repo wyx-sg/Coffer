@@ -119,7 +119,6 @@ def _make_bridge(port: int = 18765, agent_uid: str | None = None) -> _Bridge:
         port=port,
         token="t-internals",
         started_at=_dt.datetime.now(tz=_dt.UTC),
-        binary_path="/usr/bin/python3",
     )
     return _Bridge(info, agent_uid=agent_uid)
 
@@ -917,7 +916,6 @@ async def test_wait_for_daemon_returns_none_when_status_fails(
         port=18999,
         token="t",
         started_at=_dt.datetime.now(tz=_dt.UTC),
-        binary_path="/usr/bin/python3",
     )
     monkeypatch.setattr(shim_main, "discover", lambda: info)
 
@@ -952,7 +950,6 @@ async def test_wait_for_daemon_returns_info_on_200(
         port=18999,
         token="t",
         started_at=_dt.datetime.now(tz=_dt.UTC),
-        binary_path="/usr/bin/python3",
     )
     monkeypatch.setattr(shim_main, "discover", lambda: info)
 
@@ -1008,7 +1005,6 @@ async def test_ensure_daemon_waits_for_a_running_daemon_before_spawning(
         port=38470,
         token="t",
         started_at=_dt.datetime.now(tz=_dt.UTC),
-        binary_path="/x",
     )
     waits: list[float] = []
 
@@ -1226,7 +1222,6 @@ async def test_handle_envelope_recovers_when_daemon_moves_to_new_port(
             port=new_port,
             token="t-new",
             started_at=_dt.datetime.now(tz=_dt.UTC),
-            binary_path="/usr/bin/python3",
         )
 
     monkeypatch.setattr("coffer.surfaces.shim.main._wait_for_daemon", _fake_wait_for_daemon)
@@ -1352,7 +1347,6 @@ def _rotated_daemon(port: int, token: str) -> Any:
             port=port,
             token=token,
             started_at=_dt.datetime.now(tz=_dt.UTC),
-            binary_path="/usr/bin/python3",
         )
 
     return _fake_wait_for_daemon

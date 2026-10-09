@@ -24,6 +24,7 @@ from coffer.application.provider.projection_reconcile import ProviderProjectionT
 from coffer.application.provider.projector import ProviderProjector
 from coffer.application.provider.secret_gate import provider_destination
 from coffer.application.provider.service import ProviderService
+from coffer.application.provider.windows import ProviderWindowResolver
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.resource_service import ResourceService
 from coffer.application.runtime.supervisor import spawn_restarting
@@ -48,7 +49,11 @@ from coffer.surfaces.http.model_proxy_wiring import (
     wire_model_proxy,
 )
 from coffer.surfaces.http.price_list_routes import set_price_list_source
-from coffer.surfaces.http.provider_dependencies import set_price_resolver, set_provider_service
+from coffer.surfaces.http.provider_dependencies import (
+    set_price_resolver,
+    set_provider_service,
+    set_window_resolver,
+)
 from coffer.surfaces.http.secret_boundary_wiring import (
     get_secret_boundary,
     on_approval_applied,
@@ -95,6 +100,19 @@ def wire_provider_kind(
     # speech-to-text default (spec provider-switching "Keep an independent
     # speech-to-text default").
     app.state.kinds["provider"] = make_provider_kind(resource_svc)
+    # The bundled list prices usage and backs each model's context window.
+    # You set → local → from the provider's API → the bundled list (spec
+    # provider-switching "Resolve each model's price from the provider, its
+    # API, or the bundled list"). The list is read from the build, never
+    # fetched per request: a daily refresh keeps a fresher copy of the list
+    # (spec provider-switching "Refresh the bundled price list in the
+    # background"), and every lookup reads whichever is fresher.
+    price_list = PriceListSource(load_bundled_prices())
+    set_price_list_source(price_list)
+    # You set → endpoint → the bundled list (spec provider-switching "Resolve
+    # each provider model's context window"); the switch and the reconciler
+    # are handed the same resolver, so they agree about the file.
+    windows = ProviderWindowResolver(price_list.current)
     provider_svc = ProviderService(
         resources=resource_svc,
         secrets=secret_store,
@@ -113,7 +131,9 @@ def wire_provider_kind(
         # The agents are pointed at the local model proxy, on the port
         # daemon-config.json names at the moment of each projection.
         proxy_root=proxy_root_now,
+        window_of=windows.tokens,
     )
+    windows.attach(provider_svc)
     set_provider_service(provider_svc)
     # A key goes only to a base URL a person approved, and a key in use is
     # replaced only after approval (spec secret "Hold a secret for a new
@@ -130,22 +150,18 @@ def wire_provider_kind(
             providers=provider_svc,
             agents=agent_service,
             projector=ProviderProjector(
-                ConfigFileStore(), agents=agent_catalog, proxy_root=proxy_root_now
+                ConfigFileStore(),
+                agents=agent_catalog,
+                proxy_root=proxy_root_now,
+                window_of=windows.tokens,
             ),
             store=ConfigFileStore(),
             clear_choice=provider_svc.clear_agent_connection,
         )
     )
-    # You set → local → from the provider's API → the bundled list (spec
-    # provider-switching "Resolve each model's price from the provider, its
-    # API, or the bundled list"). The list is read from the build, never
-    # fetched per request: a daily refresh keeps a fresher copy of the list
-    # (spec provider-switching "Refresh the bundled price list in the
-    # background"), and every lookup reads whichever is fresher.
-    price_list = PriceListSource(load_bundled_prices())
-    set_price_list_source(price_list)
     prices = ProviderPriceResolver(provider_svc, price_list.current, reported_price_store())
     set_price_resolver(prices)
+    set_window_resolver(windows)
     refresh_task = (
         None if refresh_pinned_off() else spawn_restarting(price_list.run, name="price-refresh")
     )

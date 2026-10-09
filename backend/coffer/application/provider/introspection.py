@@ -69,13 +69,19 @@ class ModelIntrospectionService:
         except Exception as e:  # degrade to an empty list + reason — never 500 the picker
             return ModelList(models=[], message=str(e), reachable=False)
         entries = [m if isinstance(m, ListedModel) else ListedModel(id=m) for m in listed]
-        models = [m.id for m in entries]
         self._remember_prices(provider, base_url, entries)
-        if not models:
+        if not entries:
             # Say what happened, nothing more: no surface takes a typed model id
             # (spec provider-switching "Choose a model from a fixed list").
             return ModelList(models=[], message="the endpoint listed no models")
-        return ModelList(models=[DiscoveredModel(id=m, modality=infer_modality(m)) for m in models])
+        return ModelList(
+            models=[
+                DiscoveredModel(
+                    id=m.id, modality=infer_modality(m.id), context_window=m.context_window
+                )
+                for m in entries
+            ]
+        )
 
     def _remember_prices(
         self, provider: str, base_url: str | None, entries: list[ListedModel]

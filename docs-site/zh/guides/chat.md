@@ -151,7 +151,7 @@ Claude Code 会删除超过 `cleanupPeriodDays` 没有动过的会话，**默认
 
 在智能体自己的系统提示词之后，Coffer 按以下顺序追加：
 
-1. 一段说明，告诉智能体它在聊天渠道上，回复要简短，而且它不能点你电脑上的对话框。
+1. 一段说明，告诉智能体它在聊天渠道上，回复要简短，而且它不能点你电脑上的对话框；如果消息渠道为这类聊天设了自己的系统提示词，接着在 "Instructions from the channel's owner:" 标题下追加它（见[你自己的系统提示词](/zh/guides/channels#your-own-system-prompts)）。
 2. 对话工作目录和 `global` 的[记忆](/zh/guides/memory#in-channel-turns)索引，以及笔记所在的位置。
 3. 说明 Coffer 让智能体用的是哪个模型。
 
@@ -163,13 +163,13 @@ Claude Code 会删除超过 `cleanupPeriodDays` 没有动过的会话，**默认
 
 ## 工作原理 {#how-it-works}
 
-一条消息渠道的消息会在守护进程里启动或排队一个轮次。轮次的输出是一串带类型的事件（`turn_start`、`text_delta`、`tool_call`、`tool_result`、`turn_done`、`turn_error` 和 `queue_changed`），由消息渠道渲染到聊天里。这个流在轮次运行期间存在于内存中，不会存下任何东西；Web 界面不订阅它。设计见[对话与轮次](/zh/architecture/chat)。
+一条消息渠道的消息会在守护进程里启动或排队一个轮次。轮次的输出是一串带类型的事件（`turn_start`、`text_delta`、`tool_call`、`tool_result`、`turn_done`、`turn_error`、`question_asked` 和 `question_closed`），由消息渠道渲染到聊天里。这个流在轮次运行期间存在于内存中，不会存下任何东西；Web 界面不订阅它。设计见[对话与轮次](/zh/architecture/chat)。
 
 ## 故障排查 {#troubleshooting}
 
 **智能体显示为不可用。** 要么它的 CLI 不在你的 `PATH`（登录 shell 的 `PATH` 与守护进程自己的合并）上，要么没有注册该类型的智能体。安装 CLI，然后在「智能体」页面选**连接**。Coffer 只运行它管理的智能体。
 
-**每个轮次都以 `stream_ended` 失败。** 智能体进程在轮次中途退出了。先确认智能体在终端里能正常工作，再到**活动 → 守护进程**查看底层错误。
+**每个轮次都以 `stream_ended` 失败。** 智能体进程在轮次中途退出了。先确认智能体在终端里能正常工作，再到**活动 → 守护进程日志**查看底层错误。
 
 **没有流式输出，回复一下子全部出现。** Claude Code 轮次需要支持部分消息的 CLI。SDK 使用自己内置的 CLI；如果它缺失、而 `PATH` 上的 `claude` 又太旧，轮次会在连接时失败。请更新 Claude Code。
 

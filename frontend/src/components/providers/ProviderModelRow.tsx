@@ -1,4 +1,4 @@
-// src/components/providers/ProviderModelRow.tsx — one model in the Models section, a table row: select box, switch, id (never wrapped) with what uses it, its price, its type.
+// src/components/providers/ProviderModelRow.tsx — one model in the Models section, a table row: select box, switch, id (never wrapped) with what uses it, its price, its context window, its type.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -16,6 +16,8 @@ interface Props {
   tags: string[];
   /** The model's price and where it came from (ModelPriceCell). */
   price?: ReactNode;
+  /** The model's context window and where it came from (ModelWindowCell). */
+  window?: ReactNode;
   disabled: boolean;
   selected: boolean;
   onSelect: () => void;
@@ -29,6 +31,7 @@ export function ProviderModelRow({
   modality,
   tags,
   price,
+  window,
   disabled,
   selected,
   onSelect,
@@ -74,6 +77,7 @@ export function ProviderModelRow({
         </span>
       </td>
       <td className="px-2 py-2 align-middle">{price}</td>
+      <td className="px-2 py-2 align-middle">{window}</td>
       <td className="py-2 pl-2 pr-4 align-middle">
         <ModalitySelect value={modality} onChange={onModality} disabled={disabled} label={id} />
       </td>

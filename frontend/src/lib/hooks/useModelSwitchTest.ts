@@ -5,7 +5,11 @@
 // (`POST /api/v1/models/test-connection`, the call Overview › Model › Test
 // makes) once the draft has rested for a moment. Changing the pair cancels the
 // run in flight, and a result belongs only to the pair it was run on, so a
-// pass on the old pair never unlocks the new one.
+// pass on the old pair never unlocks the new one. The probe speaks the wire
+// the AGENT will use, not the connection's own protocol: Claude Code reaches
+// any connection over the Anthropic wire, so an OpenAI-protocol connection
+// that serves no Messages API fails here instead of after the switch (spec
+// provider-switching "Test a connection on the wire the agent speaks").
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -18,6 +22,20 @@ const modelSwitchTestKey = (pair: string | null, baseUrl?: string | null, ref?: 
   ["model-switch-test", pair, baseUrl, ref] as const;
 
 const DEBOUNCE_MS = 400;
+
+/** Where and how a probe for `agentType` on `connection` speaks: Claude Code
+ *  only speaks Anthropic, at the connection's Anthropic address when it has one
+ *  (ADR one-connection-serves-both-wires); any other agent, the connection's
+ *  own protocol at its base URL. */
+export function probeEndpoint(
+  connection: Provider,
+  agentType?: string,
+): { provider: string; base_url: string } {
+  if (agentType === "claude_code") {
+    return { provider: "anthropic", base_url: connection.anthropic_base_url ?? connection.base_url };
+  }
+  return { provider: connection.protocol, base_url: connection.base_url };
+}
 
 /** @ui-only derived view; never crosses the wire. */
 export type SwitchTestStatus =
@@ -32,7 +50,11 @@ interface Outcome {
   ms: number;
 }
 
-export function useModelSwitchTest(connection: Provider | null, model: string) {
+export function useModelSwitchTest(
+  connection: Provider | null,
+  model: string,
+  agentType?: string,
+) {
   const { t } = useTranslation();
   const pair = connection && model ? `${connection.uid}\u0000${model}` : null;
   const [settled, setSettled] = useState<string | null>(pair);
@@ -46,7 +68,10 @@ export function useModelSwitchTest(connection: Provider | null, model: string) {
 
   const query = useQuery<Outcome>({
     // The pair AND the endpoint it names: editing the connection retests.
-    queryKey: modelSwitchTestKey(settled, connection?.base_url, connection?.secret_ref),
+    queryKey: [
+      ...modelSwitchTestKey(settled, connection?.base_url, connection?.secret_ref),
+      agentType,
+    ],
     enabled: settled !== null && settled === pair && !!connection,
     retry: false,
     gcTime: 0,
@@ -58,9 +83,8 @@ export function useModelSwitchTest(connection: Provider | null, model: string) {
       try {
         const r = await modelProbeApi.test(
           {
-            provider: connection!.protocol,
+            ...probeEndpoint(connection!, agentType),
             model,
-            base_url: connection!.base_url,
             secret_ref: connection!.secret_ref,
           },
           signal,

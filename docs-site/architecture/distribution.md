@@ -1,11 +1,11 @@
 ---
 title: Distribution and releases
-description: How Coffer is built into frozen binaries, released as a CLI archive and a desktop .dmg, signed and notarised when the secrets exist, updated in place by the desktop app, installed into versioned directories under ~/.coffer/bin, stamped with a commit and hardened for tagged releases, and gated by experimental features.
+description: How Coffer is built into frozen binaries, released as a CLI archive and a desktop .dmg, signed and notarised when the secrets exist, updated in place by the desktop app, installed into versioned directories under ~/.coffer/bin, uninstalled by the daemon, stamped with a commit and hardened for tagged releases, and gated by experimental features.
 ---
 
 # Distribution and releases
 
-This page explains how Coffer's Python code reaches a machine with no Python on it: the four frozen binaries, the release workflow that produces them, how a release is signed and notarised, how the desktop app updates itself, the two download tiers, how a new build is installed beside the old one, and how experimental features are switched on, one machine at a time. It is for contributors who build or release Coffer and for anyone who wants to know what is actually on their disk.
+This page explains how Coffer's Python code reaches a machine with no Python on it: the four frozen binaries, the release workflow that produces them, how a release is signed and notarised, how the desktop app updates itself, the two download tiers, how a new build is installed beside the old one, how Coffer is uninstalled, and how experimental features are switched on, one machine at a time. It is for contributors who build or release Coffer and for anyone who wants to know what is actually on their disk.
 
 ## The problem
 
@@ -33,13 +33,14 @@ Coffer is a Python program, but its users are people running AI coding agents, n
 
 ## The binaries
 
-Each binary is frozen from its own PyInstaller spec in `backend/`, one per entry point: the daemon's, the shim's and the CLI's.
+Each binary is frozen from its own PyInstaller spec in `backend/`, one per entry point: the daemon's, the shim's, the CLI's and the SeaTalk bridge's.
 
 | Binary | What it contains |
 | --- | --- |
 | `coffer-daemon` | The whole backend: FastAPI and uvicorn, SQLAlchemy and aiosqlite, alembic with its migration scripts as data files, the MCP SDK, document converters, model SDKs, and the built web UI when the frontend has been built (`frontend/dist`) at build time. |
 | `coffer-mcp-shim` | The stdio-to-HTTP bridge an MCP client launches: an executable plus a folder, `coffer-mcp-shim-lib/`, beside it that holds its libraries (about 30 MB). The spec freezes only what the shim's entry script imports and excludes the daemon's stacks: FastAPI, uvicorn, SQLAlchemy, alembic, structlog, Pillow, numpy, cryptography, keyring and the test libraries. |
 | `coffer` | The Typer CLI, httpx, and the `keyring` backends: a thin HTTP client of the daemon. Excludes the web server, SQLAlchemy, Alembic and the MCP SDK. |
+| `coffer-seatalk-bridge` | The process the daemon starts beside itself to load SeaTalk's operator-supplied WebSocket SDK outside the daemon. Nothing of the daemon is in it; since the SDK's imports cannot be traced, it carries the whole standard library, `websockets` and `certifi`. It is signed without the keychain entitlement, so third-party code never runs where the master key can be read. |
 
 The daemon, CLI and SeaTalk bridge specs build a single-file console executable; the shim spec builds a one-folder console executable. No spec uses UPX compression, and each freezes the interpreter option `-X utf8` in. That option matters only for the shipped binary: an unfrozen interpreter in the C locale turns UTF-8 mode on by itself, but a frozen binary started from Finder or launchd with no `LANG` would otherwise fall back to ASCII.
 
@@ -50,7 +51,7 @@ PyInstaller finds imports by static analysis, so anything imported lazily inside
 ### Building locally
 
 ```sh
-make bundle-binaries        # runs scripts/build_binaries.sh → dist/coffer, dist/coffer-daemon, dist/coffer-mcp-shim and dist/coffer-mcp-shim-lib/
+make bundle-binaries        # runs scripts/build_binaries.sh → dist/coffer, dist/coffer-daemon, dist/coffer-mcp-shim, dist/coffer-mcp-shim-lib/ and dist/coffer-seatalk-bridge
 bash scripts/smoke_test_bundle.sh dist
 ```
 
@@ -68,7 +69,7 @@ flowchart TD
     I --> F["build frontend (codegen + vite build)"]
     F --> P["release plan: which secrets are present"]
     P --> S["stamp build (+ access group when signing)"]
-    S --> B["build binaries (PyInstaller x3, signed when possible)"]
+    S --> B["build binaries (PyInstaller x4, signed when possible)"]
     B --> K["smoke test (+ verify signatures, notarise)"]
     K --> A["coffer-cli-aarch64-apple-darwin.tar.gz"]
     K --> D["stage binaries → tauri build (sign, notarise, updater archive)"]
@@ -97,7 +98,7 @@ Versions are kept in several files that must agree exactly — the Python packag
 
 The desktop app is a Tauri 2 shell around the same web UI the daemon serves. Its Tauri configuration bundles `app` and `dmg` targets, loads the built frontend as local assets, and lists `coffer` and `coffer-daemon` as external binaries. Tauri resolves each name to `<name>-<target-triple>` and places it in `Coffer.app/Contents/MacOS/`, next to the app's own executable. The SeaTalk bridge is copied into `Contents/MacOS` by `bundle.macOS.files`. The shim and its `coffer-mcp-shim-lib/` folder are copied by `bundle.macOS.files` into `Contents/Resources/`: `Contents/MacOS` may hold only signed code, and the library folder carries data files too.
 
-When the app starts, it resolves a daemon in a fixed order: an already-running daemon named by `~/.coffer/daemon.json` (attached to, never re-spawned); the binary inside the app bundle; `~/.coffer/bin/coffer-daemon`; `coffer-daemon` on `PATH`; otherwise a message telling you to install the CLI. The shell never writes to `~/.coffer/bin` itself — the daemon it starts does that (next section). Installing the app therefore installs the CLI too.
+When the app starts, it resolves a daemon in a fixed order: an already-running daemon named by `~/.coffer/daemon.json` (attached to, never re-spawned); the binary inside the app bundle; `~/.coffer/bin/coffer-daemon`; `coffer-daemon` on `PATH`; otherwise a message saying this copy of Coffer is damaged or incomplete, with the install page and a prompt to hand to an agent. The shell never writes to `~/.coffer/bin` itself — the daemon it starts does that (next section). Installing the app therefore installs the CLI too.
 
 | Target | What it does |
 | --- | --- |
@@ -131,6 +132,7 @@ Every frozen daemon, whichever tier it came from, deploys its sibling binaries a
 ├── coffer            -> 0.2.0/coffer
 ├── coffer-daemon     -> 0.2.0/coffer-daemon
 ├── coffer-mcp-shim   -> 0.2.0/coffer-mcp-shim
+├── coffer-seatalk-bridge -> 0.2.0/coffer-seatalk-bridge
 ├── 0.2.0/
 │   ├── coffer-daemon
 │   ├── .coffer-daemon.version
@@ -152,7 +154,7 @@ stateDiagram-v2
     Skip --> [*]
 ```
 
-For each of `coffer`, `coffer-daemon` and `coffer-mcp-shim`:
+For each of `coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge`:
 
 1. **Decide.** A deploy is needed when `~/.coffer/bin/<version>/<name>` is missing, differs in size from the running build's sibling, lacks its `.<name>.version` sentinel (a copy that never completed), the public name does not point at it, or (for the shim) the version directory lacks `coffer-mcp-shim-lib/`. Modification time is not used: it records when a build was extracted, not what it contains.
 2. **Copy.** The binary is copied to a temporary name, made executable, and renamed into the version directory. For the shim, `coffer-mcp-shim-lib/` is copied into the same version directory first. The sentinel is written last, so a sentinel means a complete copy. The daemon finds the shim beside itself or, in the app, in `../Resources`.
@@ -166,6 +168,18 @@ Before running database migrations, the daemon also copies `runs.db` (and its `-
 ::: warning
 `install.sh` installs plain files into `~/.coffer/bin`, each renamed over its public name, so a symlink left by an earlier deploy is replaced rather than written through and the version directories stay intact. A daemon running from `~/.coffer/bin` itself skips the deploy, so an installer-only machine has no version directories until a build from another location (such as the desktop app) starts a daemon.
 :::
+
+## Uninstalling
+
+Coffer writes into files it does not own, so the daemon uninstalls it: each kind takes its own writes back out. `coffer uninstall` and the desktop app's **Settings › About › Uninstall Coffer…** both end in `POST /api/v1/daemon/uninstall`, which:
+
+1. inside the reconciler's hold, takes the model-provider routing, every agent's connection (its MCP entry and hook) and every delivered skill link out;
+2. freezes the reconciler, so no pass puts a link back before the daemon exits;
+3. removes the start-at-login job, the terminal launch files, the installer's `PATH` lines and `~/.coffer/bin`.
+
+Each step runs even when an earlier one failed and reports its own outcome, and then the daemon stops. The rest of `~/.coffer` (the vault, secrets, settings and history) stays for a reinstall.
+
+Deleting the data is a separate choice. In the desktop app, **Also delete my data** asks for Touch ID and sends a presence grant for `uninstall` over `delete-data`; once the daemon has stopped serving, it deletes the master key's Keychain items and then `~/.coffer`, and the app moves itself to the Trash. `coffer uninstall --delete-data` asks for a confirmation phrase typed at a terminal and deletes `~/.coffer` itself once the daemon has stopped; it never touches the Keychain. When the desktop app installed Coffer, `coffer uninstall` opens the app's dialog instead.
 
 ## The build stamp
 
@@ -277,12 +291,12 @@ Without a Developer ID, macOS quarantines a downloaded archive or `.dmg`. Clear 
 
 | Directory | What it holds |
 | --- | --- |
-| `backend/` | the three PyInstaller specs |
+| `backend/` | the four PyInstaller specs |
 | `scripts/` | building, smoke-testing, spec checking, build and build-identity stamping, release planning and signing, the update manifest, version bumping |
 | `.github/workflows/` | the release workflow and the `desktop` check workflow |
 | `desktop/` | the Tauri shell: bundle configuration, entitlements, daemon resolution order, the updater |
 | `docs-site/public/` | the one-line installer |
-| the backend's application layer | the versioned deploy and symlink flip, experimental-feature state; the HTTP surface holds the request-time gates and the pre-migration database copy |
+| the backend's application layer | the versioned deploy and symlink flip, the uninstall steps, experimental-feature state; the HTTP surface holds the request-time gates and the pre-migration database copy |
 
 ## Related
 
@@ -290,5 +304,5 @@ Without a Developer ID, macOS quarantines a downloaded archive or `.dmg`. Clear 
 - Reference: [Files and directories](/reference/filesystem), [Configuration](/reference/configuration)
 - Architecture: [Daemon and processes](/architecture/daemon), [Security model](/architecture/security), [Persistence](/architecture/persistence)
 - Checklist: [RELEASING.md](https://github.com/wyx-sg/Coffer/blob/main/RELEASING.md)
-- Decision records: [The Master Key Lives in the macOS Keychain](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md), [Distribution — PyInstaller-Bundled Daemon, Shim, and CLI](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/distribution-pyinstaller.md), [Daemon Detect-or-Spawn Pattern](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-detect-or-spawn.md), [The Desktop Shell Returns, Owning Only What a Browser Cannot Do](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/desktop-shell-over-a-shared-frontend.md), [Experimental Features Instead of a Release Branch](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/experimental-features-instead-of-a-release-branch.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
+- Decision records: [Distribution — Four PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/distribution-pyinstaller.md), [Daemon Detect-or-Spawn Pattern](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-detect-or-spawn.md), [The Desktop Shell Returns, Owning Only What a Browser Cannot Do](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/desktop-shell-over-a-shared-frontend.md), [Experimental Features Instead of a Release Branch](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/experimental-features-instead-of-a-release-branch.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
 - Specs: [daemon](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md), [desktop-app](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/desktop-app/spec.md), [experimental-features](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/experimental-features/spec.md)

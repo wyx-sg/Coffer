@@ -38,7 +38,7 @@ If sources disagree: **principles win.** Flag inconsistency to the user.
 2. open the right branch (see .agents/workflow.md)
 3. behaviour change? start an OpenSpec change first (/opsx:propose)
 4. work in small, committable chunks (one logical change per commit);
-   make verify before each commit — the commit hook asks when it is stale
+   make verify before each commit
 5. archive the change (/opsx:archive) in the same PR, before it merges
 6. squash to one commit before final push
 7. open PR — STOP at PR-opened, wait for explicit user merge instruction

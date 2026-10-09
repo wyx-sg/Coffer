@@ -31,7 +31,7 @@ Coffer 的大部分代码是用 AI 编程智能体写的，主要是 Claude Code
 
 - [`AGENTS.md`](https://github.com/wyx-sg/Coffer/blob/main/AGENTS.md) 是智能体在会话开始时读的操作手册。人也可以读，规则一样适用。
 - [`.agents/`](https://github.com/wyx-sg/Coffer/tree/main/.agents) 每个主题一个约定文件：`workflow.md`、`openspec.md`、`stack.md`、`frontend.md`、`visual-language.md`、`testing.md` 和 `harness.md`。这一部分的页面对它们做了概括，细则请点链接看原文。
-- `.claude/` 是一个签入仓库的控制层。里面有权限设置、自动格式化被编辑文件的 Hook、拦截破坏性 shell 命令的 Hook、在 `make verify` 结果过期时提交会发出警告的 Hook，以及 `/opsx:*` 这组 OpenSpec 命令。[`.agents/harness.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/harness.md) 逐一说明了它们。
+- `.claude/` 是一个签入仓库的控制层。里面有权限设置、自动格式化被编辑文件的 Hook、拦截破坏性 shell 命令的 Hook，以及 `/opsx:*` 这组 OpenSpec 命令和技能。[`.agents/harness.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/harness.md) 逐一说明了它们。
 
 当 AI 智能体对某个提交有实质性贡献时，该提交要带一个写明模型的 `Co-Authored-By` 尾注，例如 `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`。
 

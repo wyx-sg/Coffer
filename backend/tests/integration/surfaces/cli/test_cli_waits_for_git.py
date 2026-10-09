@@ -52,7 +52,6 @@ def waiting_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[
         port=9,  # nothing listens: a request the CLI sent would fail loudly
         token=_TOKEN,
         started_at=datetime.now(tz=UTC),
-        binary_path="/test",
     )
     monkeypatch.setattr(cli_client, "live_daemon", lambda: info)
     monkeypatch.setattr(cli_client, "daemon_is_running", lambda: True)
