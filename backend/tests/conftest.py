@@ -58,6 +58,10 @@ os.environ.setdefault("COFFER_MODEL_PROXY", "off")
 # (``infrastructure/usage/price_refresh.REFRESH_ENV``); tests price from the
 # snapshot in the tree.
 os.environ.setdefault("COFFER_PRICE_REFRESH", "off")
+# Each connection's health is swept at boot and re-checked after every edit,
+# over the network (``surfaces/http/provider_health_wiring.BACKGROUND_ENV``);
+# tests check only when they ask.
+os.environ.setdefault("COFFER_PROVIDER_HEALTH", "off")
 # Every experimental feature is off until switched on, and almost every test
 # drives routes, tools or passes of one of them, so the suite pins all four on
 # (``COFFER_FEATURES``). The tests of the feature mechanism itself, and the

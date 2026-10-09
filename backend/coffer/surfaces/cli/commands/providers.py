@@ -52,6 +52,22 @@ SPECS = [
         pending=True,
     ),
     RouteCommand(
+        "provider health",
+        "GET",
+        "/providers/health",
+        _UI + "the list's health marks",
+        "Each connection's last health verdict: reachable, key_rejected or unreachable.",
+        columns=("uid", "status", "source", "checked_at", "message"),
+    ),
+    RouteCommand(
+        "provider check",
+        "POST",
+        "/providers/{uid}/check",
+        "Overview · Needs you · Check",
+        "List a connection's models now and keep its health verdict.",
+        names=P,
+    ),
+    RouteCommand(
         "provider delete-preview",
         "GET",
         "/providers/{uid}/delete-preview",
@@ -130,7 +146,7 @@ SPECS = [
         "/models/list-models",
         _UI + "Add · list models",
         "Ask an endpoint which models it serves. Body: provider, base_url, secret_ref | "
-        "secret_value.",
+        "secret_value, connection_uid.",
         body=True,
     ),
     RouteCommand(

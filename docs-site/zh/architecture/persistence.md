@@ -157,7 +157,7 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 ```text
 ~/.coffer/derived/
 ├── channel-avatars/            已配对的人在平台上的头像，由各消息渠道的适配器拉取
-├── derived.db                   MCP server health, skill deliveries, capability first/last seen
+├── derived.db                   MCP server and model provider health, skill deliveries, capability first/last seen
 ├── memory/<partition>/          the memory tree (MEMORY.md, notes/, RETIRED.md, .raw/)
 ├── resources/                   derived resource files (memory partitions, coffer-guide)
 ├── skills/coffer-guide/         Coffer's own guide skill, rendered from the build

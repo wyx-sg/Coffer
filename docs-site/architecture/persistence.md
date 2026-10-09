@@ -157,7 +157,7 @@ Every connection runs this pragma suite:
 ```text
 ~/.coffer/derived/
 ├── channel-avatars/            paired people's pictures, as each channel's adapter fetched them
-├── derived.db                   MCP server health, skill deliveries, capability first/last seen
+├── derived.db                   MCP server and model provider health, skill deliveries, capability first/last seen
 ├── memory/<partition>/          the memory tree (MEMORY.md, notes/, RETIRED.md, .raw/)
 ├── resources/                   derived resource files (memory partitions, coffer-guide)
 ├── skills/coffer-guide/         Coffer's own guide skill, rendered from the build

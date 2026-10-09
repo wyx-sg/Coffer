@@ -13,13 +13,17 @@ from fastapi import APIRouter, Depends
 
 from coffer.application.provider.introspection import ModelIntrospectionService
 from coffer.application.provider.introspection_gate import authorize_stored_key
+from coffer.application.provider.ports import ModelList
 from coffer.application.provider.service import ProviderService
+from coffer.domain.errors import ResourceNotFound
+from coffer.domain.provider.config import ProviderConfig
 from coffer.infrastructure.provider.introspector import PROTOCOL_BASE_URLS
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.provider_dependencies import (
     get_introspection_service,
     get_provider_service,
 )
+from coffer.surfaces.http.provider_health_routes import get_provider_health_service_optional
 from coffer.surfaces.http.provider_schemas import (
     ListModelsIn,
     ProviderModel,
@@ -61,11 +65,38 @@ async def list_provider_models(
         secret_ref=body.secret_ref,
         secret_value=body.secret_value,
     )
+    await _keep_health(providers, body, result)
     return ProviderModelsOut(
         models=[ProviderModel(id=m.id, modality=m.modality) for m in result.models],
         message=result.message,
         reachable=result.reachable,
     )
+
+
+async def _keep_health(providers: ProviderService, body: ListModelsIn, result: ModelList) -> None:
+    """Keep the verdict of a listing that is a saved connection's own — its
+    stored key, its URL, its wire (spec provider-switching "Know each
+    connection's health without opening it"). A typed key, or a draft that
+    differs from what is saved, says nothing about the saved connection."""
+    health = get_provider_health_service_optional()
+    if health is None or body.connection_uid is None or body.secret_value:
+        return
+    try:
+        row = await providers.get(body.connection_uid)
+    except ResourceNotFound:
+        return
+    cfg = ProviderConfig.model_validate(row.config)
+    same = (
+        cfg.protocol.value == body.provider
+        and cfg.secret_ref == body.secret_ref
+        and _norm(cfg.base_url) == _norm(body.base_url)
+    )
+    if same:
+        await health.record_listing(row.uid, result)
+
+
+def _norm(url: str | None) -> str:
+    return (url or "").strip().rstrip("/").lower()
 
 
 @router.post("/test-connection", response_model=TestResultOut)
