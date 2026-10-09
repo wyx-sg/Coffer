@@ -51,7 +51,6 @@ function onKey(event: KeyboardEvent) {
     </div>
     <p class="caption">{{ current.text }}</p>
     <div id="shot-panel" class="window" role="tabpanel" :aria-labelledby="`shot-tab-${current.id}`">
-      <div class="bar" aria-hidden="true"><i /><i /><i /></div>
       <img :key="src" :src="src" width="2880" height="1800" :alt="current.alt" decoding="async" />
       <div class="fade" aria-hidden="true" />
     </div>
@@ -112,21 +111,6 @@ function onKey(event: KeyboardEvent) {
   border: 1px solid var(--vp-c-border);
   background: var(--vp-c-bg);
   box-shadow: 0 24px 48px -24px rgb(0 0 0 / 0.25);
-}
-.bar {
-  display: flex;
-  gap: 7px;
-  align-items: center;
-  height: 32px;
-  padding: 0 14px;
-  border-bottom: 1px solid var(--vp-c-border);
-  background: var(--vp-c-bg-soft);
-}
-.bar i {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: var(--vp-c-divider);
 }
 .window img {
   display: block;

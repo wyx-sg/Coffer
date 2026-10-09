@@ -108,3 +108,8 @@ is a changed scenario or a changed UI, regenerated with `make docs-shots`.
 - The set of scenarios is a deliberate list, so a new guide asks "does a reader
   need to find this on screen?" before adding one.
 - Option D stays open and reuses the seed.
+- Pictures show the desktop app, not a browser tab: the scenario stands in for
+  the Tauri host (a Mac platform, the daemon handshake, a screen larger than the
+  window) so the app draws its own title strip, and the three traffic lights the
+  system would draw are painted on top. Full-window shots keep that chrome;
+  page-level shots crop to the page below it.

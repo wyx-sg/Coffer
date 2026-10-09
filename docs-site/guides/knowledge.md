@@ -71,6 +71,8 @@ A document must not refer to another knowledge file by its file name or path, be
 
 Collections are created only on purpose, and only by a person. Reading, writing, an agent's working directory or a Markdown file an agent drops into some other folder never creates one.
 
+<Shot name="knowledge-page" alt="The Knowledge page, with a collection and its documents." />
+
 ```text
 Knowledge → New collection → Name, What belongs in here → Create collection
 ```

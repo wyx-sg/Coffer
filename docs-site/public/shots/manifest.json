@@ -1,0 +1,274 @@
+{
+  "en/dark/add-provider-dialog": [
+    1280,
+    1000
+  ],
+  "en/dark/add-server-dialog": [
+    1280,
+    956
+  ],
+  "en/dark/agent-page": [
+    1638,
+    1284
+  ],
+  "en/dark/agents": [
+    2880,
+    1800
+  ],
+  "en/dark/agents-list": [
+    1638,
+    660
+  ],
+  "en/dark/channels": [
+    1638,
+    1172
+  ],
+  "en/dark/connect-dialog": [
+    2120,
+    896
+  ],
+  "en/dark/conversations": [
+    1638,
+    1112
+  ],
+  "en/dark/knowledge": [
+    2880,
+    1800
+  ],
+  "en/dark/knowledge-page": [
+    1638,
+    1284
+  ],
+  "en/dark/mcp-server": [
+    1638,
+    1284
+  ],
+  "en/dark/mcp-servers": [
+    2880,
+    1800
+  ],
+  "en/dark/overview": [
+    2880,
+    1800
+  ],
+  "en/dark/providers": [
+    1638,
+    1284
+  ],
+  "en/dark/secrets": [
+    1638,
+    1284
+  ],
+  "en/dark/skill": [
+    1638,
+    1284
+  ],
+  "en/dark/skills": [
+    2880,
+    1800
+  ],
+  "en/light/add-provider-dialog": [
+    1280,
+    1000
+  ],
+  "en/light/add-server-dialog": [
+    1280,
+    956
+  ],
+  "en/light/agent-page": [
+    1638,
+    1284
+  ],
+  "en/light/agents": [
+    2880,
+    1800
+  ],
+  "en/light/agents-list": [
+    1638,
+    660
+  ],
+  "en/light/channels": [
+    1638,
+    1172
+  ],
+  "en/light/connect-dialog": [
+    2120,
+    896
+  ],
+  "en/light/conversations": [
+    1638,
+    1112
+  ],
+  "en/light/knowledge": [
+    2880,
+    1800
+  ],
+  "en/light/knowledge-page": [
+    1638,
+    1284
+  ],
+  "en/light/mcp-server": [
+    1638,
+    1284
+  ],
+  "en/light/mcp-servers": [
+    2880,
+    1800
+  ],
+  "en/light/overview": [
+    2880,
+    1800
+  ],
+  "en/light/providers": [
+    1638,
+    1284
+  ],
+  "en/light/secrets": [
+    1638,
+    1284
+  ],
+  "en/light/skill": [
+    1638,
+    1284
+  ],
+  "en/light/skills": [
+    2880,
+    1800
+  ],
+  "zh/dark/add-provider-dialog": [
+    1280,
+    1000
+  ],
+  "zh/dark/add-server-dialog": [
+    1280,
+    956
+  ],
+  "zh/dark/agent-page": [
+    1638,
+    1284
+  ],
+  "zh/dark/agents": [
+    2880,
+    1800
+  ],
+  "zh/dark/agents-list": [
+    1638,
+    660
+  ],
+  "zh/dark/channels": [
+    1638,
+    1172
+  ],
+  "zh/dark/connect-dialog": [
+    2120,
+    896
+  ],
+  "zh/dark/conversations": [
+    1638,
+    1112
+  ],
+  "zh/dark/knowledge": [
+    2880,
+    1800
+  ],
+  "zh/dark/knowledge-page": [
+    1638,
+    1284
+  ],
+  "zh/dark/mcp-server": [
+    1638,
+    1284
+  ],
+  "zh/dark/mcp-servers": [
+    2880,
+    1800
+  ],
+  "zh/dark/overview": [
+    2880,
+    1800
+  ],
+  "zh/dark/providers": [
+    1638,
+    1284
+  ],
+  "zh/dark/secrets": [
+    1638,
+    1284
+  ],
+  "zh/dark/skill": [
+    1638,
+    1284
+  ],
+  "zh/dark/skills": [
+    2880,
+    1800
+  ],
+  "zh/light/add-provider-dialog": [
+    1280,
+    1000
+  ],
+  "zh/light/add-server-dialog": [
+    1280,
+    956
+  ],
+  "zh/light/agent-page": [
+    1638,
+    1284
+  ],
+  "zh/light/agents": [
+    2880,
+    1800
+  ],
+  "zh/light/agents-list": [
+    1638,
+    660
+  ],
+  "zh/light/channels": [
+    1638,
+    1172
+  ],
+  "zh/light/connect-dialog": [
+    2120,
+    896
+  ],
+  "zh/light/conversations": [
+    1638,
+    1112
+  ],
+  "zh/light/knowledge": [
+    2880,
+    1800
+  ],
+  "zh/light/knowledge-page": [
+    1638,
+    1284
+  ],
+  "zh/light/mcp-server": [
+    1638,
+    1284
+  ],
+  "zh/light/mcp-servers": [
+    2880,
+    1800
+  ],
+  "zh/light/overview": [
+    2880,
+    1800
+  ],
+  "zh/light/providers": [
+    1638,
+    1284
+  ],
+  "zh/light/secrets": [
+    1638,
+    1284
+  ],
+  "zh/light/skill": [
+    1638,
+    1284
+  ],
+  "zh/light/skills": [
+    2880,
+    1800
+  ]
+}

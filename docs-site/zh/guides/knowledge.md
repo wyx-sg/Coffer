@@ -71,6 +71,8 @@ The `account-session` service owns ...
 
 知识集只能有意创建，而且只能由人创建。读、写、智能体的工作目录，或者智能体放进其他文件夹的 Markdown 文件，都不会创建知识集。
 
+<Shot name="knowledge-page" alt="“知识库”页面，含一个集合及其文档。" />
+
 ```text
 知识 → 新建知识集 → 名称、这里放什么 → 创建知识集
 ```

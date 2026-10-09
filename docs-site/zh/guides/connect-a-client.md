@@ -26,6 +26,8 @@ description: 通过 stdio shim 或 HTTP 端点，把 Claude Code、Codex 或任�
 
 打开 **智能体 →（该智能体）**，点击 **连接**。Coffer 会先显示确切的几行，由你确认。
 
+<Shot name="connect-dialog" alt="Coffer 改动智能体文件之前的确认对话框。" />
+
 Coffer 会写入 shim 的绝对路径和智能体的 uid：
 
 ::: code-group
