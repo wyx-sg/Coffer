@@ -27,14 +27,17 @@ _logger = logging.getLogger(__name__)
 _QUEUE_MAXSIZE = 1000
 
 # Default idle timeout for the session reaper. A session is considered idle
-# when neither a POST nor an upstream notification has touched it for this
-# many seconds. Conservative default lets long-lived clients stay connected
-# while still bounding leaked-session memory. The ``start_session_reaper``
+# when neither a downstream POST nor a forwarded upstream notification has
+# touched it for this many seconds; holding a GET stream open is not activity.
+# Each session owns its own upstream connections, so a short window bounds what
+# an abandoned client costs; a client that comes back after it is dropped gets
+# 404 and handshakes again. The ``start_session_reaper``
 # constructor knobs override these; env wiring is
 # ``COFFER_MCP_SESSION_IDLE_S`` / ``COFFER_MCP_SESSION_REAPER_INTERVAL_S``.
-_DEFAULT_IDLE_TIMEOUT_S = 30 * 60
+_DEFAULT_IDLE_TIMEOUT_S = 10 * 60
 
-# How often an open SSE stream refreshes its session's idle timer.
+# How often an idle SSE stream wakes to re-check for a stop signal; it does not
+# refresh the session's idle timer.
 _STREAM_KEEPALIVE_S = 15
 
 # How often the session reaper wakes up.
@@ -48,7 +51,8 @@ _NOTIFICATION_QUEUES: dict[str, asyncio.Queue[str]] = {}
 _ACTIVE_SESSIONS: dict[str, MCPGatewaySession] = {}
 
 # Per-session last-activity timestamp (time.monotonic()). Updated on every
-# downstream POST and every upstream-originated sink push. Used by the
+# downstream POST and every upstream-originated sink push (never by an open
+# stream or its keepalive wake-up). Used by the
 # session reaper to evict idle sessions.
 _LAST_ACTIVITY: dict[str, float] = {}
 

@@ -45,7 +45,7 @@ Coffer 把配置放在五个地方，每个地方都有其理由：
 | `COFFER_TOOL_TIERING_BUDGET` | `50` | 直接列出多少个上游工具，其余的只能通过 `coffer__search_tools` 找到。非正数或格式错误的值回退到默认值。 |
 | `COFFER_TOOL_TIERING_WINDOW_DAYS` | `90` | 为预算给工具排序时使用的调用历史的回溯窗口。 |
 | `COFFER_MCP_MAX_CONCURRENT_SPAWNS` | `4` | 一个会话同时冷启动多少个上游 MCP 服务器。 |
-| `COFFER_MCP_SESSION_IDLE_S` | `1800` | `/mcp` 会话可空闲多少秒，之后回收器会关闭它及其上游进程。 |
+| `COFFER_MCP_SESSION_IDLE_S` | `600` | `/mcp` 会话在没有请求、也没有上游通知的情况下可持续多少秒，之后回收器会关闭它及其上游进程。打开着的通知流不算活动。 |
 | `COFFER_MCP_SESSION_REAPER_INTERVAL_S` | `60` | 回收器两次扫描之间的秒数。 |
 | `COFFER_MCP_SHIM_PATH` | 未设置 | `coffer-mcp-shim` 二进制的绝对路径，会写进智能体的 MCP 条目，优先于 `PATH` 和打包附带的副本。文件不存在时忽略。 |
 
