@@ -19,6 +19,7 @@ from coffer.surfaces.cli.commands.custom_tool_common import (
     GROUPS,
     group_path,
     header_rows,
+    json_arg,
     pairs,
     read_group,
     show_group,
@@ -110,6 +111,12 @@ def create(
     operation: list[str] | None = typer.Option(
         None, "--operation", help="With --from-openapi: an operation key to import; repeat"
     ),
+    response: str | None = typer.Option(
+        None,
+        "--response",
+        help='Response settings as JSON {"diagnostic_headers": [...], "rules": [...]}: '
+        "text, @file or -",
+    ),
     data: str | None = _io.data_option("The whole group as JSON (text, @file or -)"),
     sets: list[str] | None = _io.set_option(),
     as_json: bool = _io.json_option(),
@@ -133,6 +140,8 @@ def create(
         body["description"] = description
     if timeout is not None:
         body["timeout_seconds"] = timeout
+    if response is not None:
+        body["response"] = json_arg(response, "--response", as_json=as_json)
     if agent:
         body["agents"] = [_agent_uid(a, as_json=as_json) for a in agent]
     if from_openapi:
@@ -189,6 +198,12 @@ def update(
     name: str = typer.Argument(..., help="The group's name"),
     description: str | None = typer.Option(None, "--description"),
     timeout: int | None = typer.Option(None, "--timeout", help="The group's seconds per request"),
+    response: str | None = typer.Option(
+        None,
+        "--response",
+        help='Response settings as JSON {"diagnostic_headers": [...], "rules": [...]}: '
+        "text, @file or -",
+    ),
     data: str | None = _io.data_option(),
     sets: list[str] | None = _io.set_option(),
     as_json: bool = _io.json_option(),
@@ -199,6 +214,8 @@ def update(
         body["description"] = description
     if timeout is not None:
         body["timeout_seconds"] = timeout
+    if response is not None:
+        body["response"] = json_arg(response, "--response", as_json=as_json)
     changed = _io.call("PATCH", group_path(name), as_json=as_json, body=body)
     _io.emit(changed, as_json=as_json, human=show_group)
     _io.report_pending(changed, as_json=as_json)

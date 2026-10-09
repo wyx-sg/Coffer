@@ -2402,6 +2402,8 @@ components:
         name:
           title: Name
           type: string
+        response:
+          $ref: '#/components/schemas/CustomToolResponse'
         source:
           anyOf:
           - $ref: '#/components/schemas/OpenApiSourceIn'
@@ -2512,6 +2514,8 @@ components:
             type: string
           title: Rejected Secrets
           type: array
+        response:
+          $ref: '#/components/schemas/CustomToolResponse'
         scope:
           anyOf:
           - items:
@@ -2556,6 +2560,7 @@ components:
       - headers
       - environments
       - timeout_seconds
+      - response
       - scope
       - source
       - health
@@ -2597,6 +2602,10 @@ components:
             type: array
           - type: 'null'
           title: Headers
+        response:
+          anyOf:
+          - $ref: '#/components/schemas/CustomToolResponse'
+          - type: 'null'
         timeout_seconds:
           anyOf:
           - maximum: 300.0
@@ -2727,6 +2736,13 @@ components:
         path:
           title: Path
           type: string
+        response_rules:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/CustomToolResponseRule'
+            type: array
+          - type: 'null'
+          title: Response Rules
         source_text:
           anyOf:
           - type: string
@@ -2794,6 +2810,13 @@ components:
         path:
           title: Path
           type: string
+        response_rules:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/CustomToolResponseRule'
+            type: array
+          - type: 'null'
+          title: Response Rules
       required:
       - name
       - agent_name
@@ -2807,6 +2830,7 @@ components:
       - changes_data
       - changes_data_set
       - operation
+      - response_rules
       - calls_24h
       - failures_24h
       title: CustomToolOut
@@ -2868,6 +2892,13 @@ components:
           - type: string
           - type: 'null'
           title: Path
+        response_rules:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/CustomToolResponseRule'
+            type: array
+          - type: 'null'
+          title: Response Rules
       title: CustomToolPatch
       type: object
     CustomToolPreviewHeaderOut:
@@ -3089,6 +3120,98 @@ components:
       - variables
       title: CustomToolRequestPreviewOut
       type: object
+    CustomToolResponse:
+      description: A group's response settings.
+      properties:
+        diagnostic_headers:
+          items:
+            type: string
+          title: Diagnostic Headers
+          type: array
+        rules:
+          items:
+            $ref: '#/components/schemas/CustomToolResponseRule'
+          title: Rules
+          type: array
+      title: CustomToolResponse
+      type: object
+    CustomToolResponseField:
+      description: Where a rule reads the API's own error message.
+      properties:
+        name:
+          title: Name
+          type: string
+        source:
+          enum:
+          - header
+          - json
+          title: Source
+          type: string
+      required:
+      - source
+      - name
+      title: CustomToolResponseField
+      type: object
+    CustomToolResponseRule:
+      description: One value of the answer and the values that mean success.
+      properties:
+        message:
+          anyOf:
+          - $ref: '#/components/schemas/CustomToolResponseField'
+          - type: 'null'
+        missing:
+          default: ok
+          enum:
+          - ok
+          - error
+          title: Missing
+          type: string
+        name:
+          default: ''
+          title: Name
+          type: string
+        ok_values:
+          items:
+            type: string
+          title: Ok Values
+          type: array
+        source:
+          enum:
+          - status
+          - header
+          - json
+          title: Source
+          type: string
+      required:
+      - source
+      - ok_values
+      title: CustomToolResponseRule
+      type: object
+    CustomToolRuleFailureOut:
+      description: The first rule a test's answer broke.
+      properties:
+        message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Message
+        rule:
+          $ref: '#/components/schemas/CustomToolResponseRule'
+        summary:
+          title: Summary
+          type: string
+        value:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Value
+      required:
+      - rule
+      - value
+      - message
+      - summary
+      title: CustomToolRuleFailureOut
+      type: object
     CustomToolSavedTestIn:
       description: A saved tool run once in one environment.
       properties:
@@ -3125,6 +3248,10 @@ components:
         body:
           title: Body
           type: string
+        body_bytes:
+          default: 0
+          title: Body Bytes
+          type: integer
         content_type:
           anyOf:
           - type: string
@@ -3165,6 +3292,10 @@ components:
             type: string
           title: Response Headers
           type: object
+        rule_failure:
+          anyOf:
+          - $ref: '#/components/schemas/CustomToolRuleFailureOut'
+          - type: 'null'
         status:
           anyOf:
           - type: integer
@@ -3197,6 +3328,8 @@ components:
       - handoff
       - environment
       - response_headers
+      - body_bytes
+      - rule_failure
       title: CustomToolTestOut
       type: object
     CustomToolUnsavedTestIn:
@@ -3218,6 +3351,8 @@ components:
             $ref: '#/components/schemas/CustomToolHeaderIn'
           title: Headers
           type: array
+        response:
+          $ref: '#/components/schemas/CustomToolResponse'
         timeout_seconds:
           default: 30
           maximum: 300.0

@@ -16,6 +16,11 @@ from pydantic import BaseModel, Field, model_validator
 
 from coffer.domain.auth_scheme import AuthScheme
 from coffer.surfaces.http.handoff_schemas import HandoffOut
+from coffer.surfaces.http.mcp.custom_tool_response_schemas import (
+    CustomToolResponse,
+    CustomToolResponseRule,
+    CustomToolRuleFailureOut,
+)
 
 HttpMethodName = Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
 GroupHealthName = Literal["failing", "attention", "healthy", "idle", "off"]
@@ -45,6 +50,8 @@ class CustomToolIn(BaseModel):
     operation: str | None = None
     #: The operation's spec text, kept from an import for the re-import diff.
     source_text: str | None = None
+    #: The tool's own response rules; ``null`` follows the group's.
+    response_rules: list[CustomToolResponseRule] | None = None
 
 
 class CustomToolPatch(BaseModel):
@@ -59,6 +66,8 @@ class CustomToolPatch(BaseModel):
     input_schema: dict[str, Any] | None = None
     enabled: bool | None = None
     changes_data: bool | None = None
+    #: ``null`` makes the tool follow its group's rules again.
+    response_rules: list[CustomToolResponseRule] | None = None
 
 
 class CustomToolOut(BaseModel):
@@ -77,6 +86,8 @@ class CustomToolOut(BaseModel):
     #: Whether the flag was set by hand rather than following the method.
     changes_data_set: bool
     operation: str | None
+    #: The tool's own response rules; ``null`` when it follows the group's.
+    response_rules: list[CustomToolResponseRule] | None = None
     calls_24h: int
     failures_24h: int
 
@@ -183,6 +194,7 @@ class CustomToolGroupIn(BaseModel):
     agents: list[str] | None = None
     tools: list[CustomToolIn] = Field(default_factory=list)
     source: OpenApiSourceIn | None = None
+    response: CustomToolResponse = Field(default_factory=CustomToolResponse)
 
     @model_validator(mode="after")
     def _one_way(self) -> CustomToolGroupIn:
@@ -200,6 +212,8 @@ class CustomToolGroupPatch(BaseModel):
     base_url: str | None = None
     headers: list[CustomToolHeaderIn] | None = None
     timeout_seconds: int | None = Field(default=None, ge=1, le=300)
+    #: Replaces the group's response settings as a whole.
+    response: CustomToolResponse | None = None
 
 
 class CustomToolGroupOut(BaseModel):
@@ -213,6 +227,7 @@ class CustomToolGroupOut(BaseModel):
     headers: list[CustomToolHeaderOut]
     environments: list[CustomToolEnvironmentOut]
     timeout_seconds: int
+    response: CustomToolResponse
     #: The group's reach as agent uids; ``null`` is every agent.
     scope: list[str] | None
     source: OpenApiSourceOut | None
@@ -272,6 +287,7 @@ class CustomToolUnsavedTestIn(BaseModel):
     timeout_seconds: int = Field(default=30, ge=1, le=300)
     #: The draft environment's variables, for ``{env:NAME}`` in the tool.
     variables: dict[str, str] = Field(default_factory=dict)
+    response: CustomToolResponse = Field(default_factory=CustomToolResponse)
     tool: CustomToolIn
     arguments: dict[str, Any] = Field(default_factory=dict)
 
@@ -293,10 +309,14 @@ class CustomToolTestOut(BaseModel):
     handoff: HandoffOut | None = None
     #: The environment the request was made in (``null`` for an unsaved group).
     environment: str | None = None
-    #: The response headers that help find the request on the API's side —
-    #: request and trace ids, ``server``, ``date`` — names lower-cased, values
-    #: masked; every other header is left out. Empty when nothing answered.
+    #: Request and trace ids, ``server``, ``date``, and the headers the group
+    #: names or its rules read — names lower-cased, values masked; every other
+    #: header is left out. Empty when nothing answered.
     response_headers: dict[str, str] = Field(default_factory=dict)
+    #: The bytes of body read (at most 1 MiB); 0 for an empty body.
+    body_bytes: int = 0
+    #: The first response rule the answer broke; ``null`` when all held.
+    rule_failure: CustomToolRuleFailureOut | None = None
 
 
 class OpenApiReadIn(BaseModel):

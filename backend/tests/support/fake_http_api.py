@@ -4,6 +4,8 @@ A real socket, so the gateway's own HTTP client makes a real request: the
 tests can see exactly which method, path, query, headers and body arrived.
 Routes answer by path:
 
+* any path in :attr:`FakeHttpApi.answers` — that ``Answer`` (status, headers, body)
+
 * ``/big``       — 2 MiB of text that embeds :attr:`FakeHttpApi.echo_secret`
 * ``/missing``   — 404
 * ``/forbidden`` — 403 HTML with diagnostic headers, a cookie, an auth
@@ -35,12 +37,23 @@ class Seen:
 
 
 @dataclass
+class Answer:
+    """A scripted answer: any status, any headers, any body (empty included)."""
+
+    status: int = 200
+    headers: dict[str, str] = field(default_factory=dict)
+    body: bytes = b""
+
+
+@dataclass
 class FakeHttpApi:
     port: int = 0
     seen: list[Seen] = field(default_factory=list)
     echo_secret: str = ""
     redirect_to: str = "http://127.0.0.1:9/elsewhere"
     openapi: dict[str, Any] = field(default_factory=dict)
+    #: ``{path: Answer}`` (the path without its query), checked first.
+    answers: dict[str, Answer] = field(default_factory=dict)
 
     @property
     def base_url(self) -> str:
@@ -59,7 +72,15 @@ def _handler(api: FakeHttpApi) -> type[BaseHTTPRequestHandler]:
                 Seen(self.command, self.path, {k.lower(): v for k, v in self.headers.items()}, body)
             )
             path = self.path.split("?", 1)[0]
-            if path.endswith("/big"):
+            if path in api.answers:
+                scripted = api.answers[path]
+                self.send_response(scripted.status)
+                for name, value in scripted.headers.items():
+                    self.send_header(name, value)
+                self.send_header("Content-Length", str(len(scripted.body)))
+                self.end_headers()
+                self.wfile.write(scripted.body)
+            elif path.endswith("/big"):
                 chunk = ("x" * 1000 + api.echo_secret + "\n").encode()
                 payload = chunk * (2 * 1024 * 1024 // len(chunk) + 1)
                 self._send(200, payload, "text/plain")

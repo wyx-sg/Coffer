@@ -879,6 +879,7 @@ export interface components {
             headers?: components["schemas"]["CustomToolHeaderIn"][];
             /** Name */
             name: string;
+            response?: components["schemas"]["CustomToolResponse"];
             source?: components["schemas"]["OpenApiSourceIn"] | null;
             /**
              * Timeout Seconds
@@ -934,6 +935,7 @@ export interface components {
             rejected_approvals: string[];
             /** Rejected Secrets */
             rejected_secrets: string[];
+            response: components["schemas"]["CustomToolResponse"];
             /** Scope */
             scope: string[] | null;
             /**
@@ -967,6 +969,7 @@ export interface components {
             description?: string | null;
             /** Headers */
             headers?: components["schemas"]["CustomToolHeaderIn"][] | null;
+            response?: components["schemas"]["CustomToolResponse"] | null;
             /** Timeout Seconds */
             timeout_seconds?: number | null;
         };
@@ -1040,6 +1043,8 @@ export interface components {
             operation?: string | null;
             /** Path */
             path: string;
+            /** Response Rules */
+            response_rules?: components["schemas"]["CustomToolResponseRule"][] | null;
             /** Source Text */
             source_text?: string | null;
         };
@@ -1080,6 +1085,8 @@ export interface components {
             operation: string | null;
             /** Path */
             path: string;
+            /** Response Rules */
+            response_rules: components["schemas"]["CustomToolResponseRule"][] | null;
         };
         /**
          * CustomToolPatch
@@ -1108,6 +1115,8 @@ export interface components {
             name?: string | null;
             /** Path */
             path?: string | null;
+            /** Response Rules */
+            response_rules?: components["schemas"]["CustomToolResponseRule"][] | null;
         };
         /** CustomToolPreviewHeaderOut */
         CustomToolPreviewHeaderOut: {
@@ -1215,6 +1224,67 @@ export interface components {
             };
         };
         /**
+         * CustomToolResponse
+         * @description A group's response settings.
+         */
+        CustomToolResponse: {
+            /** Diagnostic Headers */
+            diagnostic_headers?: string[];
+            /** Rules */
+            rules?: components["schemas"]["CustomToolResponseRule"][];
+        };
+        /**
+         * CustomToolResponseField
+         * @description Where a rule reads the API's own error message.
+         */
+        CustomToolResponseField: {
+            /** Name */
+            name: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "header" | "json";
+        };
+        /**
+         * CustomToolResponseRule
+         * @description One value of the answer and the values that mean success.
+         */
+        CustomToolResponseRule: {
+            message?: components["schemas"]["CustomToolResponseField"] | null;
+            /**
+             * Missing
+             * @default ok
+             * @enum {string}
+             */
+            missing?: "ok" | "error";
+            /**
+             * Name
+             * @default
+             */
+            name?: string;
+            /** Ok Values */
+            ok_values: string[];
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "status" | "header" | "json";
+        };
+        /**
+         * CustomToolRuleFailureOut
+         * @description The first rule a test's answer broke.
+         */
+        CustomToolRuleFailureOut: {
+            /** Message */
+            message: string | null;
+            rule: components["schemas"]["CustomToolResponseRule"];
+            /** Summary */
+            summary: string;
+            /** Value */
+            value: string | null;
+        };
+        /**
          * CustomToolSavedTestIn
          * @description A saved tool run once in one environment.
          */
@@ -1240,6 +1310,11 @@ export interface components {
         CustomToolTestOut: {
             /** Body */
             body: string;
+            /**
+             * Body Bytes
+             * @default 0
+             */
+            body_bytes: number;
             /** Content Type */
             content_type: string | null;
             /** Duration Ms */
@@ -1257,6 +1332,7 @@ export interface components {
             response_headers: {
                 [key: string]: string;
             };
+            rule_failure: components["schemas"]["CustomToolRuleFailureOut"] | null;
             /** Status */
             status: number | null;
             /** Status Line */
@@ -1282,6 +1358,7 @@ export interface components {
             base_url: string;
             /** Headers */
             headers?: components["schemas"]["CustomToolHeaderIn"][];
+            response?: components["schemas"]["CustomToolResponse"];
             /**
              * Timeout Seconds
              * @default 30

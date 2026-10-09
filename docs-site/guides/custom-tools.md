@@ -61,7 +61,7 @@ Nothing is saved until **Add to `<group>`**. A saved tool opens in a drawer on t
 
 ## Test before you save
 
-Beside every tool editor is **Try it**: fill in a sample value for each argument and press **Run**. In a saved group the form works in **one environment** at a time: it starts at the first one that is on, and with more than one on, an **Environment** picker in the **Try it** header changes it. Everything the form says about where the request goes follows that choice — the base URL under **Request**, the headers it already adds, and **Preview**, the tab beside **Result**: the method and URL with the environment's variables filled in (argument holes such as `{id}` stay until the run), the headers as they would be sent (a secret header by its secret's name and whether it is set, never its value), the variables and the timeout that applies. Picking an environment saves nothing. If the environment is switched off or deleted while the form is open, Try it says so and **Run** stays off until you pick another; it never runs somewhere else instead. The result says **Ran in &lt;environment&gt;**. It runs the request once as the form holds it and shows the status, time, size and body — or the API's error body, a timeout (the environment's own, else the group's), a connection that failed, or a response cut short at 1 MiB, which is what an agent would get too. Under the URL it lists the response headers that name the request on the API's side — request and trace ids, `server`, `date` — so you can quote them to the API's owners; cookies, auth challenges and other headers are never shown. A 401 or 403 says the API rejected the secret. Arguments that break the tool's schema are listed field by field and nothing is sent. Nothing is saved and nothing is recorded as an agent's call.
+Beside every tool editor is **Try it**: fill in a sample value for each argument and press **Run**. In a saved group the form works in **one environment** at a time: it starts at the first one that is on, and with more than one on, an **Environment** picker in the **Try it** header changes it. Everything the form says about where the request goes follows that choice — the base URL under **Request**, the headers it already adds, and **Preview**, the tab beside **Result**: the method and URL with the environment's variables filled in (argument holes such as `{id}` stay until the run), the headers as they would be sent (a secret header by its secret's name and whether it is set, never its value), the variables and the timeout that applies. Picking an environment saves nothing. If the environment is switched off or deleted while the form is open, Try it says so and **Run** stays off until you pick another; it never runs somewhere else instead. The result says **Ran in &lt;environment&gt;**. It runs the request once as the form holds it and shows the status, time, size and body — or the API's error body, a timeout (the environment's own, else the group's), a connection that failed, or a response cut short at 1 MiB, which is what an agent would get too. Under the URL it lists the response headers that name the request on the API's side — request and trace ids, `server`, `date` — so you can quote them to the API's owners; the headers the group names as diagnostic are listed too, and cookies, auth challenges and other headers are never shown. The result also says whether the answer passes the group's [response rules](#judging-the-answer). A 401 or 403 says the API rejected the secret. Arguments that break the tool's schema are listed field by field and nothing is sent. Nothing is saved and nothing is recorded as an agent's call.
 
 A request of a group that is **not saved yet** is tested without its secret: a stored secret goes only to a saved group, after you approve it (see below). Its base URL is typed into the form, so Coffer tests it only on a public address it can resolve; a loopback, private or unresolvable host is reported as not tested — add the tool, then test it from the group.
 
@@ -122,11 +122,46 @@ A custom tool is listed to agents the way an MCP server's tool is (see [Many too
 
 ## How a call is made
 
-When an agent calls a tool, the gateway picks the environment the call names, checks the arguments, renders the request, sends it to that environment's base URL with its timeout (the group's 30 seconds unless you change it, up to 300), **does not follow redirects** — a redirect is returned to the agent with its location, so the secret never travels to a host you did not configure — and reads at most 1 MiB of the response. The agent receives `HTTP <status> <reason>` followed by the body; a status of 400 or more is returned as a tool error. Every call is recorded in Activity with its tool, environment, time, duration and outcome, and with the request it sent and the response it got, the secret and every credential header masked and each part cut at 16 KB (see [What a call records](/guides/activity#what-a-call-records)).
+When an agent calls a tool, the gateway picks the environment the call names, checks the arguments, renders the request, sends it to that environment's base URL with its timeout (the group's 30 seconds unless you change it, up to 300), **does not follow redirects** — a redirect is returned to the agent with its location, so the secret never travels to a host you did not configure — and reads at most 1 MiB of the response. The agent receives `HTTP <status> <reason>` followed by the body; a status of 400 or more, or an answer that breaks one of the group's [response rules](#judging-the-answer), is returned as a tool error; the result also lists the response headers the group asks to see, and says `(empty body)` when there is none. Every call is recorded in Activity with its tool, environment, time, duration and outcome, and with the request it sent and the response it got, the secret and every credential header masked and each part cut at 16 KB (see [What a call records](/guides/activity#what-a-call-records)).
 
 ### Arguments are checked before any request
 
 A tool's arguments are a JSON Schema, and every call — an agent's, a test on this page, a test from the command line — is checked against all of it by the same validator before anything is sent: types (and OpenAPI's `nullable`), `enum` and `const`, numeric ranges and `multipleOf`, string length and `pattern`, array items, length and uniqueness, `required` and `additionalProperties`, `allOf`, `anyOf`, `oneOf`, `not`, `if`/`then`/`else` and local `$ref`. Arguments that do not match are refused as `CUSTOM_TOOL_ARGUMENTS_INVALID`, with one entry per field naming its path, the rule it broke and why, and the API receives no request. An agent gets the same list as a tool error, so it can correct the call. A schema that is not valid itself — `minimum` given as text, a `pattern` that is not a regular expression, a `$ref` to nothing — is refused when you save the tool. A missing secret, a secret waiting for approval, and an unknown or switched-off environment are likewise refused before any request.
+
+### Judging the answer {#judging-the-answer}
+
+By default an answer is a success when its HTTP status is below 400, and an empty `200` or a `204` counts. Some APIs answer `200` even when they fail and say so somewhere else: in a header, or in a field of the JSON body. Coffer has no built-in idea of any API's convention, so you tell it where to look with **response rules**, on the group's **Edit group** dialog or on a tool.
+
+A rule reads one value of the answer — the HTTP **status**, one response **header** (any capitalisation), or one **JSON field** named by a [JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901) such as `/code` or `/status/code` — and lists the values that mean success (up to 20, compared as text; a number `0` matches `"0"`). It also says what an answer *without* the value means (the default is success; choose failure for an API that always sends the value) and, optionally, where the API puts its own error message, so the agent sees it. A call succeeds only when its status is below 400 **and every rule holds**; a group may have up to 10 rules.
+
+For example, an RPC gateway that always answers `200` and reports a code in the `X-Sp-Error` header (`0` is success) with the text in `X-Sp-Errmsg`:
+
+```json
+{
+  "diagnostic_headers": ["x-sp-errmsg"],
+  "rules": [
+    {"source": "header", "name": "x-sp-error", "ok_values": ["0"],
+     "missing": "ok", "message": {"source": "header", "name": "x-sp-errmsg"}}
+  ]
+}
+```
+
+and an API that answers `{"status": {"code": 0}}` on success and puts its text in `/status/message`:
+
+```json
+[
+  {"source": "json", "name": "/status/code", "ok_values": ["0"],
+   "missing": "error", "message": {"source": "json", "name": "/status/message"}}
+]
+```
+
+The first is what you give a group, as `--response` (a JSON object, `@file` or `-`); the second is a tool's own **response rules** (`--response-rules`). A tool's rules replace the group's as a whole: an empty list judges that tool by HTTP status alone, and `group` (or leaving the field out) makes it follow the group again.
+
+When a rule fails, the agent gets a tool error that names the rule, the value it read (or that it was missing), the values that mean success and the API's message, and Activity records the call as `error`. The result always says `(empty body)` when the answer had none, so an agent can tell an empty success from a missing answer.
+
+A group can also name **diagnostic headers**: extra response headers (a vendor's request id, a rate-limit counter) to show beside the status in every result and test, on top of the built-in request and trace ids. When a call fails, the agent sees all the diagnostic headers there are. Headers that carry credentials or cookies (`Authorization`, `Set-Cookie`, `X-Api-Key` and the like) can never be named, either as a diagnostic header or in a rule.
+
+A test on the Custom tools page or from the command line judges the answer the same way, so you can try a rule before an agent does: it shows the failed rule, and the command exits `7`.
 
 ## From the command line
 
@@ -165,7 +200,7 @@ To see what a call would send without sending it, add `--dry-run` to `tool test`
 coffer custom-tool tool test billing search --env test --args '{"q": "x"}' --dry-run
 ```
 
-A real test also prints the response headers that identify the request (`x-request-id`, `server`, `date` and the like) after the status line, and lists them under `response_headers` with `--json`.
+A real test also prints the response headers that identify the request (`x-request-id`, `server`, `date` and the like) after the status line, and lists them under `response_headers` with `--json`. Add `--response '<json>'` (or `@file`, `-`) to `group create` or `group update` to set a group's diagnostic headers and rules, and `--response-rules '<json array>'` to `tool add` or `tool update` for a tool's own (`group` makes it follow the group again). A test whose answer breaks a rule prints the rule and exits `7`; with `--json` it reports `ok` false, `rule_failure` and `body_bytes`.
 
 A tool's definition, request template and argument schema come from flags, from a file (`--data @search.json`) or from standard input (`--data -`), and `--set key=value` changes one field on top. Every command takes `--json`. `--env` chooses the environment of a test and is needed once more than one is on; `--args` takes the arguments as JSON (text, `@file` or `-`). A test or a dry run whose arguments break the schema exits `6` with one error per field and sends nothing, and so does a dry run whose request cannot be built in that environment (`CUSTOM_TOOL_REQUEST_INVALID`); a test the API answers with an error status exits `7`.
 

@@ -22,10 +22,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from coffer.application.audit_service import AuditService
-from coffer.application.mcp.custom_tool_ports import (
-    CustomToolRunnerPort,
-    ToolTestOutcome,
-)
+from coffer.application.mcp.custom_tool_ports import CustomToolRunnerPort, ToolTestOutcome
 from coffer.application.mcp.custom_tool_secrets import env_secret_resolver
 from coffer.application.mcp.custom_tool_views import EnvironmentView, GroupView, GroupViewer
 from coffer.application.mcp.gateway_tool_gate import http_api_transport
@@ -157,6 +154,7 @@ class CustomToolService:
         tools: list[dict[str, Any]],
         source: dict[str, Any] | None,
         actor: str,
+        response: dict[str, Any] | None = None,
     ) -> GroupView:
         """Create a group. ``environments`` are request-shaped (header rows)."""
         scope = Scope(agents=agents) if agents is not None else None
@@ -170,6 +168,7 @@ class CustomToolService:
             "timeout_seconds": timeout_seconds,
             "tools": tools,
             "source": source,
+            "response": response or {},
         }
         transport = _validated(fields)
         config = MCPServerConfig(transport=transport).model_dump(mode="json")
@@ -187,6 +186,7 @@ class CustomToolService:
         base_url: Any = UNSET,
         headers: Any = UNSET,
         timeout_seconds: Any = UNSET,
+        response: Any = UNSET,
     ) -> GroupView:
         """Change a group. ``base_url`` and ``headers`` change its environment
         when it has exactly one; with several, they are changed per environment."""
@@ -194,6 +194,8 @@ class CustomToolService:
         fields = transport.model_dump(mode="json")
         if timeout_seconds is not UNSET:
             fields["timeout_seconds"] = timeout_seconds
+        if response is not UNSET:
+            fields["response"] = response
         if base_url is not UNSET or headers is not UNSET:
             if len(transport.environments) != 1:
                 raise ConfigValidationError(
@@ -322,6 +324,7 @@ class CustomToolService:
         raw_tool: dict[str, Any],
         arguments: dict[str, Any],
         variables: dict[str, str] | None = None,
+        response: dict[str, Any] | None = None,
     ) -> ToolTestOutcome:
         """Run a request of a group that is not saved yet (spec mcp-gateway
         "Test a custom tool request before its group is saved").
@@ -340,7 +343,12 @@ class CustomToolService:
             "variables": variables or {},
         }
         transport = _validated(
-            {"environments": [env], "timeout_seconds": timeout_seconds, "tools": [tool]}
+            {
+                "environments": [env],
+                "timeout_seconds": timeout_seconds,
+                "tools": [tool],
+                "response": response or {},
+            }
         )
         args = {k: v for k, v in arguments.items() if k != ENVIRONMENT_ARG}
         errors = validate(tool.input_schema, args)
