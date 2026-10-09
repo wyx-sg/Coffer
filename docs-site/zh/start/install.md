@@ -251,7 +251,7 @@ coffer daemon restart
 
 ## 实验功能 {#experimental-features}
 
-每个构建都带有同样的能力。其中四项属于实验功能——知识、记忆、同步和模型提供商——无论稳定版还是源码构建，一开始都是关闭的。在设置 → 功能中开启。见[实验功能](/zh/guides/experimental-features)。
+每个构建都带有同样的能力。其中两项属于实验功能——知识和记忆——无论稳定版还是源码构建，一开始都是关闭的。同步和模型提供商是常规功能，始终开启。在设置 → 功能中开启。见[实验功能](/zh/guides/experimental-features)。
 
 ## 下一步 {#next-steps}
 

@@ -143,7 +143,7 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 ### 因为功能已关闭，页面或工具不见了 {#a-page-or-tool-is-missing-because-a-feature-is-switched-off}
 
-**原因。** 这个页面或工具属于一个在这台机器上被关掉的[实验功能](/zh/guides/experimental-features)。实验功能默认关闭，关闭的功能看起来就像不存在：没有侧边栏入口，命令面板里搜不到，直接打开它的页面链接会显示「未找到」页面。四个功能是知识、记忆、同步和模型提供商。
+**原因。** 这个页面或工具属于一个在这台机器上被关掉的[实验功能](/zh/guides/experimental-features)。实验功能默认关闭，关闭的功能看起来就像不存在：没有侧边栏入口，命令面板里搜不到，直接打开它的页面链接会显示「未找到」页面。两个实验功能是知识和记忆；同步和模型提供商（含用量）始终开启，不会以这种方式被隐藏。
 
 **解决办法。** 在**设置 → 功能**里开启它。**决定方**会显示每个功能由什么决定；如果显示 `pin`，说明 `COFFER_FEATURES` 在守护进程的环境里把它固定了，到启动守护进程的地方去改。
 

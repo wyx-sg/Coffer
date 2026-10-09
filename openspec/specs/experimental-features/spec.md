@@ -3,7 +3,7 @@
 ## Purpose
 
 Ship one build that carries every capability, and let each person decide which
-of the not-yet-proven ones to try. A registry names the four experimental
+of the not-yet-proven ones to try. A registry names the two experimental
 features; each is off until the person switches it on, and the choice is made
 per machine. A switched-off feature looks absent on every surface and loses
 nothing it holds. The choice of feature gates over a separate release branch
@@ -42,7 +42,7 @@ key the registry does not name and no table lists MUST be ignored by every read
 — logged, never listed — and MUST NOT fail anything. A `features` object a
 person already holds is kept as it is.
 
-#### Scenario: the registry names the four experimental features
+#### Scenario: the registry names the two experimental features
 - **GIVEN** a running daemon
 - **WHEN** `GET /api/v1/daemon/features` is requested
 - **THEN** the route lists exactly `knowledge`, `memory`, `sync` and `models`, in that order, each with its state and what decided it
@@ -187,12 +187,6 @@ the Model section is read-only, with no Provider row and no Change…, and Speec
 - **GIVEN** a registered feature `f` that owns a sidebar entry, a palette page and an Overview tile, and `f` off
 - **WHEN** the sidebar, the command palette and the Overview render
 - **THEN** none of them shows anything of `f`, and a sidebar group left with no entry shows no heading
-
-#### Scenario: a page omits the section that belongs to a switched-off feature
-- **GIVEN** `models` off
-- **WHEN** the user opens an agent's Overview and Settings › General
-- **THEN** the Model section shows the agent's own model read-only, with no Provider row and no Change…, and Speech-to-text shows no connection choice
-- **AND** neither shows a notice about it, and `?change-model=1` opens no dialog
 
 ### Requirement: Keep what a switched-off feature holds
 Switching a feature off MUST NOT delete, move or rewrite anything it holds —
@@ -355,12 +349,6 @@ No feature MUST hard-depend on another. Every link from one feature to another
 MUST degrade when the other is off and MUST NOT fail: a surface that would
 embed data of a switched-off feature MUST leave that section out.
 
-#### Scenario: models off leaves knowledge and memory working
-- **GIVEN** `models` off
-- **WHEN** the knowledge sweep and the aggregate and distil passes run
-- **THEN** they run and do not fail, because none of them calls a model
-- **AND** agents fall back to their own login
-
 #### Scenario: memory off leaves knowledge and channels working
 - **GIVEN** `memory` off and `knowledge` on
 - **WHEN** knowledge is used and a channel turn runs
@@ -370,11 +358,6 @@ embed data of a switched-off feature MUST leave that section out.
 - **GIVEN** `knowledge` off and `memory` on
 - **WHEN** memory is used and a channel turn runs
 - **THEN** memory works as before and the channel turn answers
-
-#### Scenario: sync off leaves the vault single-machine
-- **GIVEN** `sync` off
-- **WHEN** the knowledge sweep runs and a channel is read
-- **THEN** the sweep commits as on a single-machine vault, and the channel stays bound to its machine
 
 ### Requirement: Show the Features tab in every build
 Settings MUST carry a **Features** tab (`/settings/features`) in every build,

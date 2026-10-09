@@ -18,12 +18,8 @@ from fastapi import FastAPI
 
 from coffer.application.agent.service import AgentService
 from coffer.application.audit_service import AuditService
-from coffer.application.features import FeatureService
 from coffer.application.provider.kind import make_provider_kind
 from coffer.application.provider.prices import ProviderPriceResolver
-from coffer.application.provider.projection_reconcile import (
-    TARGET as PROJECTION_TARGET,
-)
 from coffer.application.provider.projection_reconcile import ProviderProjectionTarget
 from coffer.application.provider.projector import ProviderProjector
 from coffer.application.provider.secret_gate import provider_destination
@@ -32,9 +28,7 @@ from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.resource_service import ResourceService
 from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.agent.facets import AgentCatalog
-from coffer.domain.features import MODELS
 from coffer.domain.provider.config import ProviderConfig
-from coffer.domain.reconcile import Outcome, Trigger
 from coffer.domain.resource import Resource
 from coffer.domain.secrets import SecretDestination
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
@@ -43,7 +37,6 @@ from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.usage.bundled_prices import load_bundled_prices
 from coffer.infrastructure.usage.price_refresh import (
     PriceListSource,
-    refresh_enabled,
     refresh_pinned_off,
 )
 from coffer.surfaces.http.engine_config_composition import (
@@ -97,17 +90,7 @@ def wire_provider_kind(
     agent_catalog: AgentCatalog,
     reconciler: Reconciler,
 ) -> ProviderWiring:
-    """Wire the ``provider`` kind (spec provider-switching) into the app.
-
-    Everything here that runs without a request follows the ``models`` feature
-    (spec experimental-features "Close every surface of a switched-off
-    feature"): the projection into the agents, the local model proxy's state
-    and the price list's daily refresh."""
-    features = app.state.feature_service
-
-    def models_on() -> bool:
-        return bool(features.is_enabled(MODELS))
-
+    """Wire the ``provider`` kind (spec provider-switching) into the app."""
     # Handed the resource service so a direct write cannot flag a second
     # speech-to-text default (spec provider-switching "Keep an independent
     # speech-to-text default").
@@ -151,7 +134,6 @@ def wire_provider_kind(
             ),
             store=ConfigFileStore(),
             clear_choice=provider_svc.clear_agent_connection,
-            is_enabled=models_on,
         )
     )
     # You set → local → from the provider's API → the bundled list (spec
@@ -160,17 +142,14 @@ def wire_provider_kind(
     # fetched per request: a daily refresh keeps a fresher copy of the list
     # (spec provider-switching "Refresh the bundled price list in the
     # background"), and every lookup reads whichever is fresher.
-    price_list = PriceListSource(
-        load_bundled_prices(), enabled=lambda: models_on() and refresh_enabled()
-    )
+    price_list = PriceListSource(load_bundled_prices())
     set_price_list_source(price_list)
     prices = ProviderPriceResolver(provider_svc, price_list.current, reported_price_store())
     set_price_resolver(prices)
     refresh_task = (
         None if refresh_pinned_off() else spawn_restarting(price_list.run, name="price-refresh")
     )
-    proxy = wire_model_proxy(provider_svc, secret_store, reconciler, enabled=models_on)
-    _follow_models_switch(reconciler, features, proxy)
+    proxy = wire_model_proxy(provider_svc, secret_store, reconciler)
     _revoke_token_on_agent_delete(app, proxy)
     # An approved key reaches the proxy on the next state push, not before.
     on_approval_applied(proxy.schedule_refresh)
@@ -181,36 +160,6 @@ def wire_provider_kind(
         price_list=price_list,
         price_refresh_task=refresh_task,
     )
-
-
-def _follow_models_switch(
-    reconciler: Reconciler, features: FeatureService, proxy: ModelProxyWiring
-) -> None:
-    """Withdraw or restore the agents' projections, and re-push the proxy's
-    state, whenever ``models`` is switched.
-
-    The projection pass reads the state ``models`` is in when it runs (off
-    withdraws Coffer's keys from every agent, on projects each agent's connection
-    again; ``Trigger.SWITCH`` is the warrant for both) and the proxy serves
-    nothing while it is off. Nothing here fails the switch.
-    """
-
-    async def _on_switch(key: str, _enabled: bool) -> None:
-        if key != MODELS:
-            return
-        try:
-            report = await reconciler.run(targets=[PROJECTION_TARGET], trigger=Trigger.SWITCH)
-        except Exception:
-            _log.exception("models_switch.failed")
-            return
-        for failure in report.failures:
-            _log.warning("models_switch %s: %s", failure.target, failure.error)
-        for result in report.results:
-            if result.outcome is Outcome.FAILED:
-                _log.warning("models_switch %s: %s", result.change.id, result.error)
-        proxy.schedule_refresh()
-
-    features.subscribe(_on_switch)
 
 
 def _revoke_token_on_agent_delete(app: FastAPI, proxy: ModelProxyWiring) -> None:

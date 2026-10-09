@@ -167,9 +167,8 @@ It calls no model. See [Memory](/architecture/memory#the-distil-pass).
 
 ### Experimental feature
 
-A capability that ships switched off and can be switched on per machine. Four are: `knowledge`
-(Knowledge), `memory` (Memory), `sync` (Vault sync) and `models` (Model providers, the proxy and
-Usage). While a feature is off its routes answer `404 FEATURE_DISABLED`, its tools leave the MCP
+A capability that ships switched off and can be switched on per machine. Two are: `knowledge`
+(Knowledge) and `memory` (Memory). Vault sync and model providers graduated and are always on. While a feature is off its routes answer `404 FEATURE_DISABLED`, its tools leave the MCP
 tool list, and its UI looks absent; its data is kept. See [Experimental features](/guides/experimental-features) and
 [Configuration](/reference/configuration#experimental-features).
 

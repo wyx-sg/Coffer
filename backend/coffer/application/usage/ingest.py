@@ -22,7 +22,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, tzinfo
 
@@ -66,11 +65,7 @@ class UsageIngestService:
         spool: SpoolReader,
         prices: ConnectionPriceLookup,
         tz: tzinfo | None = None,
-        is_enabled: Callable[[], bool] = lambda: True,
     ) -> None:
-        # Whether the ``models`` feature is on right now; the loop skips its
-        # pass while it is off (spec experimental-features).
-        self._is_enabled = is_enabled
         self._repo = repo
         self._spool = spool
         self._prices = prices
@@ -130,8 +125,7 @@ class UsageIngestService:
         self._stop.clear()
         while not self._stop.is_set():
             try:
-                if self._is_enabled():
-                    await self.ingest_once()
+                await self.ingest_once()
             except Exception:
                 _logger.exception("usage.ingest.pass_failed")
             with contextlib.suppress(TimeoutError):

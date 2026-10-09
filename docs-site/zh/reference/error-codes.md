@@ -265,7 +265,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
 | `FEATURE_DISABLED` | 404 | 该路由或资源属于一个在本机上已关闭的实验功能。`details.feature` 给出功能名。 | 在**设置 → 功能**里开启它。见[实验功能](/zh/guides/experimental-features)。 |
-| `FEATURE_UNKNOWN` | 404 | 该键不是实验功能。键只有 `knowledge`、`memory`、`sync` 和 `models`。 | 使用这四个键之一。 |
+| `FEATURE_UNKNOWN` | 404 | 该键不是实验功能。键只有 `knowledge` 和 `memory`；`sync` 和 `models` 已经转正，不再是功能。 | 使用这两个键之一。 |
 | `FEATURE_PINNED` | 409 | `COFFER_FEATURES` 在守护进程的生命周期内固定了该功能。 | 修改 `COFFER_FEATURES` 并重启守护进程。 |
 
 ## 启动错误 {#startup-errors}

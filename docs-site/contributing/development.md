@@ -98,7 +98,7 @@ The source daemon also serves the built UI at its own origin when `frontend/dist
 | `HOME` | Every Coffer tree — the vault, `local/`, `content/`, `derived/`, `runs.db` — resolves from it; there is no per-tree override. A sandbox `HOME` is a separate Coffer |
 | `COFFER_DB_URL` | SQLAlchemy URL of the history database (default `sqlite+aiosqlite:///~/.coffer/runs.db`) |
 | `COFFER_LOG_DIR` | Where the daemon writes its log files |
-| `COFFER_FEATURES` | Pin experimental features for this daemon, as `<key>=on,<other-key>=off`. For example `models=on,sync=off`; the keys are `knowledge`, `memory`, `sync` and `models`, and each is off unless pinned or switched on in Settings |
+| `COFFER_FEATURES` | Pin experimental features for this daemon, as `<key>=on,<other-key>=off`. For example `knowledge=on,memory=off`; the keys are `knowledge` and `memory`, and each is off unless pinned or switched on in Settings |
 | `COFFER_WEBUI_DIR` | Serve a built UI from another directory |
 
 The [configuration reference](/reference/configuration) lists every variable the daemon reads.

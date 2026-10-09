@@ -18,7 +18,7 @@ Coffer keeps configuration in five places, and each one exists for a reason:
 | Browser `localStorage` | Web UI preferences | Per browser, never sent to the daemon |
 
 ::: warning Environment variables and a detached daemon
-The daemon is usually spawned detached — by the CLI, by an agent's MCP shim, by the desktop app or by the login service — and inherits the environment of whichever process started it, not your shell profile. An environment variable only reaches the daemon if you set it in the environment of the process that starts it, for example `COFFER_FEATURES=run=off,models=off coffer daemon restart`. Settings you want to keep belong in `daemon-config.json` or in **Settings**.
+The daemon is usually spawned detached — by the CLI, by an agent's MCP shim, by the desktop app or by the login service — and inherits the environment of whichever process started it, not your shell profile. An environment variable only reaches the daemon if you set it in the environment of the process that starts it, for example `COFFER_FEATURES=knowledge=on,memory=off coffer daemon restart`. Settings you want to keep belong in `daemon-config.json` or in **Settings**.
 :::
 
 ## Environment variables
@@ -135,16 +135,16 @@ The daemon's runtime state — its pid, port and API token — lives in a differ
 
 An experimental feature is a capability that is off until you switch it on, per machine; while it is off it looks absent — its pages, commands and routes are closed — and nothing it holds is deleted. Each registry entry names its key, the routes it owns and the resource kinds it owns.
 
-The registry holds four features, in this order:
+The registry holds two features, in this order:
 
 | Key | Closes | REST prefixes |
 | --- | --- | --- |
 | `knowledge` | Knowledge | `/api/v1/knowledge` |
 | `memory` | Memory | `/api/v1/memory` |
-| `sync` | Vault sync | `/api/v1/sync` |
-| `models` | Model providers (with its Usage tab) and the local model proxy | `/api/v1/providers`, `/api/v1/models`, `/api/v1/proxy`, `/api/v1/usage` |
 
-Everything else is always on, including conversations and channels. Any other key is not a feature: `PUT /api/v1/daemon/features/<key>` answers `FEATURE_UNKNOWN`. A stored setting for a key the registry does not name is ignored.
+Everything else is always on, including vault sync, model providers (with the local model proxy and Usage), conversations and channels. Any other key is not a feature: `PUT /api/v1/daemon/features/<key>` answers `FEATURE_UNKNOWN`. A stored setting for a key the registry does not name is ignored.
+
+`sync` and `models` were experimental features and have graduated. A `COFFER_FEATURES` entry or a stored setting that names either is an unknown key: logged and ignored. At startup the daemon removes their switches from the `features` object of `daemon-config.json`, with one log line per switch removed.
 
 While a feature is off, its routes answer `404` with code `FEATURE_DISABLED`; switch it on in **Settings → Features**. The registry lives in [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py).
 
@@ -156,14 +156,14 @@ Highest precedence first:
 2. **Setting** — this machine's value in `daemon-config.json` under `features`.
 3. **Default** — off, for every feature in every build.
 
-**Settings → Features** lists the four features in every build and the source of each state is reported as `pin`, `setting` or `default`. A pinned feature's switch is disabled.
+**Settings → Features** lists the two features in every build and the source of each state is reported as `pin`, `setting` or `default`. A pinned feature's switch is disabled.
 
 ### COFFER_FEATURES syntax
 
 A comma-separated list of `key=value` entries. `on`, `true` and `1` switch a feature on; `off`, `false` and `0` switch it off. Whitespace around entries is ignored and values are case-insensitive. An unknown key or a malformed entry is logged and skipped; it never stops the daemon.
 
 ```sh
-COFFER_FEATURES="knowledge=on,models=off" coffer daemon restart
+COFFER_FEATURES="knowledge=on,memory=off" coffer daemon restart
 ```
 
 See [Experimental features](/guides/experimental-features) for the task-oriented guide.

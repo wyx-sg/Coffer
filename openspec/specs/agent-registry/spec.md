@@ -9,7 +9,7 @@ Beyond registering agents, the user lists and previews each agent's known config
 
 The user runs Coffer on their own machine; there is no multi-tenant or remote-access requirement. The registry relies on the Resource framework, audit log and immutable-`uid` identity of resource-framework, and renders inside the web-ui application shell. A `coffer-hook` binary with a session-context rules route and a `disable_native_memory` switch once lived here and was removed because it was never installed; session-start delivery is now memory's own, marker-scoped install, which this registry only supports by supplying the agent record, its config directory, its allowlisted settings file and the atomic-write machinery.
 
-An agent's connection status carries no `memory_hook` part while the `memory` feature is switched off, and the provider projection into the agent's config is withdrawn while `models` is off (spec [experimental-features](../experimental-features/spec.md) "Close the memory feature's surfaces", "Close the models feature's surfaces").
+An agent's connection status carries no `memory_hook` part while the `memory` feature is switched off (spec [experimental-features](../experimental-features/spec.md) "Close the memory feature's surfaces").
 
 ## Requirements
 

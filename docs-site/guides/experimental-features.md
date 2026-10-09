@@ -1,39 +1,39 @@
 ---
 title: Experimental features
-description: The four capabilities that ship switched off — Knowledge, Memory, Sync and Model providers — how to switch each one on per machine from Settings or COFFER_FEATURES, and what a switched-off feature looks like.
+description: The two capabilities that ship switched off — Knowledge and Memory — how to switch each one on per machine from Settings or COFFER_FEATURES, and what a switched-off feature looks like.
 ---
 
 # Experimental features
 
-Coffer ships one build with every capability in it. A few capabilities are not proven yet, so they start **switched off** and you decide, machine by machine, which ones to try. This page explains the four experimental features and what you see while one is off.
+Coffer ships one build with every capability in it. A few capabilities are not proven yet, so they start **switched off** and you decide, machine by machine, which ones to try. This page explains the two experimental features and what you see while one is off.
 
 A stable release and a build from source behave the same way here: every experimental feature is off until you switch it on.
 
-## The four features
+## The two features
 
 | Key | Name | What it covers |
 | --- | --- | --- |
 | `knowledge` | Knowledge | The Knowledge page and its files, and the knowledge sections of the `coffer-guide` skill. |
 | `memory` | Memory | The Memory page, the memory delivery hook in your agents, and memory in channel turns. |
-| `sync` | Sync | Vault sync to your own git remote. |
-| `models` | Model providers | Model providers, the local model proxy and Usage, and the projection of connections into your agents' own config files. |
 
-Everything else is always on: the app shell, Overview, Agents, the MCP gateway and custom tools, Skills, Secrets, Activity, Settings, Conversations and Channels. The agent list and its model catalogue, the speech-to-text settings, the vault and an agent's own transcripts and memory files are not gated either.
+Everything else is always on: the app shell, Overview, Agents, model providers, the local model proxy and Usage, the MCP gateway and custom tools, Skills, Secrets, Activity, Sync, Settings, Conversations and Channels. The agent list and its model catalogue, the speech-to-text settings, the vault and an agent's own transcripts and memory files are not gated either.
 
 ### How the features relate
 
-No feature needs another. When one is off, the others keep working:
+Neither feature needs the other. When one is off, the other keeps working:
 
 | When this is off | What happens |
 | --- | --- |
 | `knowledge` | The Knowledge page and its API are gone, the `coffer-guide` skill has no knowledge catalogue, the knowledge sweep skips. Memory is unaffected. |
 | `memory` | The Memory page and its API are gone, the handshake does not name the memory root, the memory hook is taken out of your agents (and put back when you switch it on), distil and aggregate skip, and channel turns carry no memory. Knowledge is unaffected. |
-| `sync` | Nothing else changes: the vault stays a single-machine vault. |
-| `models` | The local proxy and Usage are gone, and Coffer's keys are taken out of your agents' own configs, so agents use their own login. Knowledge and memory keep working, since neither calls a model. |
+
+### Graduated features
+
+Vault sync and model providers (with the local model proxy, Usage and the projection of connections into your agents' own config files) started here as the `sync` and `models` features. They have graduated: they are regular features, always on, with no switch, and Settings → Features no longer lists them. A `COFFER_FEATURES` pin or a saved switch that still names `sync` or `models` is an unknown key, logged as a warning and ignored. At startup the daemon also removes their saved switches from `~/.coffer/daemon-config.json`, writing one log line per switch it removes. Nothing they hold is moved or rewritten.
 
 ## Switch a feature on or off
 
-Every feature is off by default. You switch it on for this machine on the Settings page, or pin it with `COFFER_FEATURES` (below). **Settings → Features** lists the four features, each with an **Experimental** mark, a one-line description and an on/off switch. The tab is in every build. If the feature is pinned (below), the switch is disabled and says so. **Reset to default** returns a feature to off, and **Decided by** shows whether a pin, this machine's setting or the default decided it.
+Every feature is off by default. You switch it on for this machine on the Settings page, or pin it with `COFFER_FEATURES` (below). **Settings → Features** lists the two features, each with an **Experimental** mark, a one-line description and an on/off switch. The tab is in every build. If the feature is pinned (below), the switch is disabled and says so. **Reset to default** returns a feature to off, and **Decided by** shows whether a pin, this machine's setting or the default decided it.
 
 A switch takes effect at once, with no restart, and is kept in `~/.coffer/daemon-config.json` on this machine only. It never syncs, so switching a feature on in your laptop leaves your desktop as it was. The same switch is `PUT /api/v1/daemon/features/{key}`, and `DELETE` on that path returns it to off.
 
@@ -54,7 +54,7 @@ The listing shows which one decided each feature: `pin`, `setting` or `default`.
 `COFFER_FEATURES` fixes features for the lifetime of one daemon, which is useful for tests and scripted setups:
 
 ```sh
-COFFER_FEATURES=knowledge=on,models=off coffer daemon restart
+COFFER_FEATURES=knowledge=on,memory=off coffer daemon restart
 ```
 
 Entries are comma-separated `key=value` pairs; `on`, `true` and `1` switch a feature on, `off`, `false` and `0` switch it off. An unknown key or a malformed entry is logged as a warning and ignored.

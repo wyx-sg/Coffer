@@ -48,23 +48,19 @@ class ExperimentalFeature:
     kinds: tuple[str, ...] = ()
 
 
-#: The four experimental features (spec experimental-features "Declare the
+#: The two experimental features (spec experimental-features "Declare the
 #: experimental features in one registry"). Everything else — the shell, the
 #: overview, Agents, the MCP gateway and its custom tools, Skills, Secrets,
-#: Activity, Settings, Conversations and Channels — is always on and owns no
-#: entry.
+#: Activity, Settings, Conversations, Channels, vault sync and Model providers
+#: — is always on and owns no entry.
 #:
-#: ``knowledge`` — the knowledge collections. ``memory`` — agent memory.
-#: ``sync`` — vault sync. ``models`` — Model providers, the local model proxy
-#: and the Usage tab. Every one is off until the person switches it on, on this
-#: machine. A feature joins by adding one entry here and tagging its other
-#: surfaces with its key; it leaves by deleting that entry and every gate that
-#: names it, and by adding one entry to ``GRADUATED_FEATURES`` or
-#: ``RETIRED_FEATURES`` below.
+#: ``knowledge`` — the knowledge collections. ``memory`` — agent memory. Each
+#: is off until the person switches it on, on this machine. A feature joins by
+#: adding one entry here and tagging its other surfaces with its key; it leaves
+#: by deleting that entry and every gate that names it, and by adding one entry
+#: to ``GRADUATED_FEATURES`` or ``RETIRED_FEATURES`` below.
 KNOWLEDGE = "knowledge"
 MEMORY = "memory"
-SYNC = "sync"
-MODELS = "models"
 
 EXPERIMENTAL_FEATURES: tuple[ExperimentalFeature, ...] = (
     ExperimentalFeature(
@@ -76,20 +72,6 @@ EXPERIMENTAL_FEATURES: tuple[ExperimentalFeature, ...] = (
         key=MEMORY,
         route_prefixes=("/api/v1/memory",),
         kinds=("memory",),
-    ),
-    ExperimentalFeature(
-        key=SYNC,
-        route_prefixes=("/api/v1/sync",),
-    ),
-    ExperimentalFeature(
-        key=MODELS,
-        route_prefixes=(
-            "/api/v1/providers",
-            "/api/v1/models",
-            "/api/v1/proxy",
-            "/api/v1/usage",
-        ),
-        kinds=("provider",),
     ),
 )
 
@@ -117,12 +99,17 @@ class RetiredFeature:
     strip: tuple[str, ...] = ()
 
 
-#: Every feature that has graduated, and what of its configuration moves. Empty
-#: today: no feature has graduated. A feature leaves ``EXPERIMENTAL_FEATURES``
-#: into exactly one of these two tables, in the same change; the daemon applies
-#: them to ``daemon-config.json`` once, at startup, and an entry stays only
-#: while a config written before it could still be in the wild.
-GRADUATED_FEATURES: tuple[GraduatedFeature, ...] = ()
+#: Every feature that has graduated, and what of its configuration moves.
+#: ``sync`` (vault sync) and ``models`` (Model providers, the local model proxy
+#: and Usage) graduated together; neither moves a setting. A feature leaves
+#: ``EXPERIMENTAL_FEATURES`` into exactly one of these two tables, in the same
+#: change; the daemon applies them to ``daemon-config.json`` once, at startup,
+#: and an entry stays only while a config written before it could still be in
+#: the wild.
+GRADUATED_FEATURES: tuple[GraduatedFeature, ...] = (
+    GraduatedFeature(key="sync"),
+    GraduatedFeature(key="models"),
+)
 
 #: Every feature that was removed, and the settings beyond its switch that go
 #: with it. Empty today: no feature has been retired.

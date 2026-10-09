@@ -37,7 +37,7 @@ because the user routed it there, and the endpoint must really speak what that a
 proxy relays each wire to an upstream of the same wire); curating an agent's own models; and
 deriving account entitlement locally.
 
-While the `models` feature is switched off (spec [experimental-features](../experimental-features/spec.md) "Close the models feature's surfaces"), the provider, model, proxy and usage routes answer 404 `FEATURE_DISABLED`, the projection into agents' own config files is withdrawn so each agent runs on its own login, and the local model proxy serves no agent; each agent record keeps its connection choice and the projection returns when the feature is switched on. Requirements below describe the feature while it is on.
+Model providers, the local model proxy and Usage are a regular feature: always on, with no switch (they graduated from the experimental features, spec [experimental-features](../experimental-features/spec.md) "Move a graduated feature's configuration and clean up a retired one's").
 
 ## Requirements
 

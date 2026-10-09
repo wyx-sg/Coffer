@@ -250,7 +250,7 @@ Restarting matters because a daemon that is already running keeps running the ol
 
 ## Experimental features
 
-Every build carries the same capabilities. Four of them are experimental — Knowledge, Memory, Sync and Model providers — and start switched off, in a stable release and a source build alike. Switch one on from Settings → Features. See [Experimental features](/guides/experimental-features).
+Every build carries the same capabilities. Two of them are experimental — Knowledge and Memory — and start switched off, in a stable release and a source build alike. Sync and Model providers are regular features, always on. Switch one on from Settings → Features. See [Experimental features](/guides/experimental-features).
 
 ## Next steps
 
