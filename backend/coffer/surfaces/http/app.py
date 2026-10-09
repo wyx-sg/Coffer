@@ -333,9 +333,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # session + per-session supervisor + upstream subprocesses indefinitely.
     reaper_task = start_session_reaper(**reaper_kwargs_from_env())
 
-    # Set the lifecycle phase
     daemon_routes.set_daemon_phase("ready")
-
     try:
         yield
     finally:
