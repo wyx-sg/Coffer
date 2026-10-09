@@ -2,8 +2,7 @@
 // A channel's Settings, saved as they change — there is no Save button and no
 // Saved line; a failed save is a toast. The sections: Connection (its name —
 // any display name, kept as the resource's title — SeaTalk's App ID, the
-// secret shown masked and replaced through a dialog, and the machine that runs
-// it), Receiving messages (group rules and batching), Replies and
+// secret shown masked and replaced through a dialog), Receiving messages (group rules and batching), Replies and
 // conversations, System prompts (edited through a dialog), and Working
 // directories; the one destructive action, Delete,
 // is a row at the bottom, not a section.
@@ -20,7 +19,6 @@ import type { ResourceOut } from "@/lib/api/resources";
 import { useChannelAutoSave, CHANNEL_KIND } from "@/lib/hooks/useChannels";
 import { useSetResourceTitle } from "@/lib/hooks/useResourceMutations";
 import { TITLE_MAX_LENGTH, titlePatchValue } from "@/lib/resourceTitle";
-import { ChannelMachineSelect, MachineBindingHelp } from "./ChannelMachineSelect";
 import {
   ChannelDirectoryFields,
   ChannelReceivingFields,
@@ -71,7 +69,6 @@ export function ChannelSettingsTab({
     nonEmpty,
     (v) => save({ app_id: v }),
   );
-  const runsOn = typeof config.runs_on === "string" && config.runs_on ? config.runs_on : null;
 
   return (
     <div className={SETTINGS_STACK} data-testid="channel-settings">
@@ -137,22 +134,6 @@ export function ChannelSettingsTab({
               {t("channels.settings.secrets.replace")}
             </Button>
           )}
-        </SettingRow>
-        <SettingRow
-          label={
-            <span className="flex items-center gap-0.5">
-              {t("channels.settings.machine.runsOn")}
-              <MachineBindingHelp />
-            </span>
-          }
-          description={t("channels.settings.machine.hint")}
-        >
-          <ChannelMachineSelect
-            uid={channel.uid}
-            name={channel.name}
-            config={config}
-            runsOn={runsOn}
-          />
         </SettingRow>
       </SettingsSection>
 

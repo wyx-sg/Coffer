@@ -69,8 +69,7 @@ async def test_delete_stops_the_adapter_and_removes_the_peer_row(env: ChannelEnv
     assert env.runtime.is_running(uid_of("tg")) is False
     assert env.processor.binding(uid_of("tg")) is None
     assert env.pairing.pending(resource.uid) is False
-    # The resource row is gone and the peer row went with it (the pairings are a
-    # vault document that goes with the channel).
+    # The resource row is gone and its pairings went with it.
     with pytest.raises(ResourceNotFound):
         await env.resources.get(resource.uid)
     assert await env.peers.owner_peer(resource.uid) is None

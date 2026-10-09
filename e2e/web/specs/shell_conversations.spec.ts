@@ -10,8 +10,7 @@
 //
 // A channel conversation cannot be opened from a real chat here, so the spec
 // makes the index rows an inbound message would have left: a SeaTalk channel
-// bound to another machine (its adapter never starts on this one, so nothing
-// reaches SeaTalk) and, written straight into the isolated HOME's database, the
+// switched off (its adapter never starts, so nothing reaches SeaTalk) and, written straight into the isolated HOME's database, the
 // conversation rows and their thread bookkeeping. They carry no native session,
 // so rename and delete act on the index alone, as the scenario "a conversation
 // with no session is deleted from the index only" says. They are listed by
@@ -59,7 +58,7 @@ async function api(
   });
 }
 
-async function createElsewhereChannel(name: string): Promise<string> {
+async function createOffChannel(name: string): Promise<string> {
   // Coffer mints the secret's id; the channel cites the ref it answers.
   const secret = await api("POST", "/secrets", {
     label: name,
@@ -77,12 +76,18 @@ async function createElsewhereChannel(name: string): Promise<string> {
       channel_type: "seatalk",
       app_id: "e2e-app",
       app_secret_ref: ref,
-      runs_on: "e2e-another-machine",
     },
   });
   if (!res.ok)
     throw new Error(`channel create failed: ${res.status} ${await res.text()}`);
-  return ((await res.json()) as { uid: string }).uid;
+  const uid = ((await res.json()) as { uid: string }).uid;
+  // Off, so the adapter never dials SeaTalk with a placeholder secret.
+  const off = await api("POST", `/resources/${uid}/disable`);
+  if (!off.ok)
+    throw new Error(
+      `channel disable failed: ${off.status} ${await off.text()}`,
+    );
+  return uid;
 }
 
 /** Write the index row of a channel's direct-chat conversation, as an inbound message would. */
@@ -126,8 +131,8 @@ test.describe("Conversations page", () => {
   }) => {
     const nameA = generateUniqueName("e2e-conv-a");
     const nameB = generateUniqueName("e2e-conv-b");
-    const channelA = await createElsewhereChannel(nameA);
-    const channelB = await createElsewhereChannel(nameB);
+    const channelA = await createOffChannel(nameA);
+    const channelB = await createOffChannel(nameB);
     const idA = generateUniqueName("conv-a");
     const idB = generateUniqueName("conv-b");
     const titleA = generateUniqueName("from seatalk a");
@@ -193,9 +198,7 @@ test.describe("Conversations page", () => {
   });
 
   test("a row renames in place and deletes after asking", async ({ page }) => {
-    const channel = await createElsewhereChannel(
-      generateUniqueName("e2e-conv-menu"),
-    );
+    const channel = await createOffChannel(generateUniqueName("e2e-conv-menu"));
     const id = generateUniqueName("conv-menu");
     const title = generateUniqueName("to rename");
     seedChannelConversation(id, title, channel, "/work/menu");

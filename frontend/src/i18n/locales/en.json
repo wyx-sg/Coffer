@@ -3462,7 +3462,6 @@
       "groups": {
         "attention": "Needs attention",
         "connected": "Connected",
-        "elsewhere": "Elsewhere",
         "off": "Off"
       }
     },
@@ -3474,18 +3473,6 @@
       "unavailable": {
         "word": "Status unknown",
         "line": "Status unavailable"
-      },
-      "unbound": {
-        "word": "Runs nowhere",
-        "line": "Not bound to a machine"
-      },
-      "unknownMachine": {
-        "word": "Runs nowhere",
-        "line": "Bound to an unknown machine"
-      },
-      "elsewhere": {
-        "word": "Runs on {{machine}}",
-        "line": "Runs on {{machine}}"
       },
       "off": {
         "word": "Off",
@@ -3546,23 +3533,16 @@
         "unavailable": "Retry first — Coffer can’t read this channel",
         "reconnecting": "Wait for the connection to come back",
         "off": "Turn the channel on to send a test",
-        "elsewhere": "Runs on {{machine}} — send a test from there",
-        "unbound": "Run it here to send a test",
         "notPaired": "Pair an owner first — a test goes to the owners"
       }
     },
     "quiet": {
-      "off": "{{name}} is off — it ignores messages until you turn it on.",
-      "elsewhere": "Runs on {{machine}}. This Mac stays quiet so only one answers."
+      "off": "{{name}} is off — it ignores messages until you turn it on."
     },
     "banner": {
       "unavailable": {
         "title": "Couldn't read this channel's status",
         "body": "Coffer couldn't read {{platform}}'s status. Your other channels are fine."
-      },
-      "unknownMachine": {
-        "title": "Set to run on a Mac that isn't in your sync group",
-        "body": "No Mac you sync with has taken this channel on, so none starts the bot and it never answers. Run it here, or pick the Mac that should run it in Settings."
       },
       "unreachable": {
         "title": "Can't reach {{platform}} — retrying",
@@ -3609,10 +3589,7 @@
       "websocket": "WebSocket",
       "websocketConnected": "WebSocket connected",
       "longPolling": "long polling",
-      "runsHere": "runs on this Mac",
-      "runsOn": "runs on {{machine}}",
-      "off": "off — settings and pairing are kept",
-      "unknownMachine": "set to run on a Mac that isn't in your sync group"
+      "off": "off — settings and pairing are kept"
     },
     "tabs": {
       "overview": "Overview",
@@ -3628,8 +3605,6 @@
       "replaceSecret": "Replace secret",
       "replaceToken": "Replace token",
       "openSecrets": "Open Secrets",
-      "runHere": "Run it here",
-      "runHereConfirm": "Run it here…",
       "turnOn": "Turn on",
       "delete": "Delete channel",
       "menu": {
@@ -3686,10 +3661,6 @@
         "description": "/dir may switch to these and the folders under them; new conversations start in the default. With no default they start in Coffer's workspace; with no directories /dir is off."
       },
       "unavailable": "This channel's saved settings are not valid, so they can't be shown here. Correct the channel's file under `~/.coffer/vault/resources/channel/`, or delete the channel and add it again.",
-      "machine": {
-        "runsOn": "Runs on",
-        "hint": "Exactly one Mac holds the bot's connection."
-      },
       "danger": {
         "body": "Stops the bot and removes the pairing. Conversations stay in Conversations.",
         "button": "Delete…"
@@ -3776,10 +3747,6 @@
       "bodyLast": "{{owner}} is the only owner. Once removed, the bot answers nobody until someone is paired again. Their conversations stay in Conversations.",
       "confirm": "Remove"
     },
-    "runHere": {
-      "title": "Run {{name}} on this Mac?",
-      "body": "{{machine}} is still running this bot. Stop it there first if you can — otherwise both Macs may answer for up to 5 minutes, until {{machine}} syncs."
-    },
     "delete": {
       "title": "Delete {{name}}?",
       "body": "The bot stops answering and its pairings are removed; conversations stay in Conversations. The app on {{platform}}'s side is untouched.",
@@ -3832,7 +3799,6 @@
       },
       "telegramHint": "The token BotFather gave you. Stored in Coffer's secret store.",
       "created": "Channel {{name}} added",
-      "machineUnknown": "Coffer could not read this machine's id, so the channel has no machine to run on. Try again in a moment.",
       "agent": "Default agent",
       "agentHint": "New conversations on this channel start on this agent.",
       "seatalkDelivery": {
@@ -3883,17 +3849,6 @@
         "add": "Add directory…",
         "tooMany": "At most {{max}} directories."
       }
-    },
-    "machine": {
-      "pickerLabel": "Machine running {{name}}",
-      "thisMachine": "This Mac",
-      "self": "{{name}} · this Mac",
-      "unbound": "Not bound",
-      "unknown": "Unknown machine ({{id}})",
-      "handover": "Rebinding needs no restart. The machine losing the channel stops within a couple of seconds; the machine gaining it starts after the next sync round brings the change over. Rebinding away from the machine you are on hands over cleanly — binding a channel to this machine while another still holds it can leave both answering until that machine's next round.",
-      "notReach": "This is which machine runs the adapter. \"Agents it may drive\", on Overview, is which agents this channel may drive.",
-      "rebound": "{{name}} now runs on {{machine}}",
-      "helpLabel": "About the machine binding"
     },
     "credentials": {
       "checking": "Checking…",

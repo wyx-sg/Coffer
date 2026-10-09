@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-12
 **Deciders**: Yuxing Wu
-**Related**: spec channels/telegram ("Receive updates by long polling", "Subscribe to the bot's own membership changes"); spec channels ("Process each inbound event once");
+**Related**: spec channels/telegram ("Receive updates by long polling", "Subscribe to the bot's own membership changes"); spec channels ("Process each inbound event once"); [Channels Are Machine-Local Resources, Like Agents](channels-are-machine-local-resources.md);
 [Channels Are Thin Transport Adapters](channel-adapter-framework.md), [SeaTalk Inbound Over WebSocket](seatalk-websocket-inbound.md);
 PRs #59, #356
 
@@ -43,7 +43,9 @@ Cons: one open HTTPS request per channel at all times; a reply to an update
 arrives up to one poll round-trip later than a webhook would push it (in
 practice sub-second, since a long poll returns as soon as an update exists).
 Only one consumer may poll a bot, so a second machine running the same bot
-competes for its updates — the channel's machine binding prevents that.
+competes for its updates (Telegram answers the second poller with
+409 Conflict) — a channel is never synced, so a second machine polls the bot
+only if the person creates the channel there too.
 
 Wins because it satisfies loopback-only with nothing to operate.
 
@@ -84,7 +86,8 @@ adapter's seen-id set.
 
 - No Telegram code path listens on a socket.
 - A crash re-delivers at most the updates of the batch in flight.
-- A bot token must be polled by one daemon only; the channel's `runs_on`
-  binding enforces it.
+- A bot token must be polled by one daemon only; a channel is a machine-local
+  resource, so it is never started by a machine the person did not create it
+  on ([Channels Are Machine-Local Resources, Like Agents](channels-are-machine-local-resources.md)).
 - Enforced by: `infrastructure/channel/telegram_poll.py`,
   `domain/channel/dedup.py`.

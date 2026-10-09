@@ -5,23 +5,14 @@
 // puts a channel in (status word, banner, primary action), the tabs in the
 // path, and the commands — reconnect (a restart request), send test, re-pair,
 // delete. Only the network boundary is mocked: the api client, the channel
-// status/pairing/notify requests, and the machine and agent registries.
+// status/pairing/notify requests, and the agent registry.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
 import type { ChannelStatus } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import { acceptance } from "@/test/acceptance";
-import {
-  AGENT,
-  HERE,
-  REGISTRY,
-  THERE,
-  makeChannel,
-  makeStatus,
-  renderChannelsPage,
-  where,
-} from "@/test/channelKit";
+import { AGENT, makeChannel, makeStatus, renderChannelsPage, where } from "@/test/channelKit";
 
 const h = vi.hoisted(() => ({
   channels: [] as unknown[],
@@ -53,10 +44,6 @@ vi.mock("@/lib/api/channels", async (orig) => ({
   notifyChannel: vi.fn(async () => ({ sent: true })),
   restartChannel: vi.fn(async () => ({ running: true })),
 }));
-vi.mock("@/lib/hooks/useMachines", () => ({
-  useMachines: () => ({ data: { machines: REGISTRY } }),
-  useThisMachineId: () => ({ machineId: HERE, isPending: false }),
-}));
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgents: () => ({ data: [AGENT] }),
   useAgent: () => ({ data: undefined }),
@@ -72,7 +59,7 @@ const { cancelPairingCode, issuePairingCode, notifyChannel, removeChannelPerson,
 
 const TEAM = makeChannel();
 const KICKED = makeChannel({ uid: "u-kick0001", name: "kicked-bot" });
-const OPS = makeChannel({ uid: "u-ops00001", name: "ops-alerts", config: { runs_on: THERE } });
+const OPS = makeChannel({ uid: "u-ops00001", name: "ops-alerts", enabled: false });
 const REVIEW = makeChannel({ uid: "u-rev00001", name: "design-review" });
 
 function serve(entries: [ResourceOut, ChannelStatus | Error][]) {
@@ -95,7 +82,7 @@ beforeEach(() => {
   serve([
     [TEAM, makeStatus(TEAM)],
     [KICKED, makeStatus(KICKED, { inbound: { websocket_state: "kicked", websocket_error: null } })],
-    [OPS, makeStatus(OPS, { running: false, runs_here: false })],
+    [OPS, makeStatus(OPS, { running: false })],
     [REVIEW, makeStatus(REVIEW, { people: [] })],
   ]);
 });
@@ -113,7 +100,7 @@ describe("the list", () => {
     expect(attention).toHaveTextContent("Another process took the connection");
     expect(attention).toHaveTextContent("Not paired yet");
     expect(screen.getByTestId("channel-group-connected")).toHaveTextContent("SeaTalk · team-bot");
-    expect(screen.getByTestId("channel-group-elsewhere")).toHaveTextContent("Runs on Mac mini");
+    expect(screen.getByTestId("channel-group-off")).toHaveTextContent("SeaTalk · ops-alerts");
   });
 
   test("the list is folded by dragging its divider, not by a button", async () => {
@@ -142,7 +129,6 @@ describe("the list", () => {
 });
 
 describe("the header says what state the channel is in", () => {
-  const ghost = makeChannel({ uid: "u-ghost001", config: { runs_on: "machine-ghost" } });
   const tg = makeChannel({
     uid: "u-tg000001",
     name: "personal",
@@ -243,22 +229,7 @@ describe("the header says what state the channel is in", () => {
       "approvalRefused",
       "Open Secrets",
     ],
-    [
-      "elsewhere",
-      OPS,
-      makeStatus(OPS, { runs_here: false }),
-      "Runs on Mac mini",
-      "quiet:elsewhere",
-      "Run it here…",
-    ],
-    [
-      "unknown machine",
-      ghost,
-      makeStatus(ghost, { runs_here: false }),
-      "Runs nowhere",
-      "unknownMachine",
-      "Run it here",
-    ],
+    ["off", OPS, makeStatus(OPS, { running: false }), "Off", "quiet:off", "Turn on"],
     ["not paired", TEAM, makeStatus(TEAM, { people: [] }), "Not paired", "notPaired", null],
     [
       "status unavailable",
@@ -274,7 +245,7 @@ describe("the header says what state the channel is in", () => {
     serve([[channel, status]]);
     renderChannelsPage(`/channels/${channel.uid}`);
     await waitFor(() => expect(screen.getByTestId("channel-state-word")).toHaveTextContent(word));
-    // A problem is a banner holding its fix; off and "runs elsewhere" are a quiet box.
+    // A problem is a banner holding its fix; off is a quiet box.
     const quiet = banner?.startsWith("quiet:") ?? false;
     const testId = quiet ? "channel-quiet" : "channel-banner";
     const found = screen.queryAllByTestId(testId).map((b) => b.dataset.state);
@@ -348,9 +319,7 @@ acceptance(
     renderChannelsPage(`/channels/${TEAM.uid}`);
     expect(await screen.findByText("register rejected: bad app id")).toBeInTheDocument();
     expect(screen.getByTestId("channel-state-word")).toHaveTextContent("Token rejected");
-    expect(screen.getByTestId("channel-meta")).toHaveTextContent(
-      "SeaTalk app 8231 · WebSocket · runs on this Mac",
-    );
+    expect(screen.getByTestId("channel-meta")).toHaveTextContent("SeaTalk app 8231 · WebSocket");
     expect(screen.getByTestId("channel-owner")).toHaveTextContent("Alex Chen");
     expect(screen.getByTestId("channel-diagnostic")).toHaveTextContent("Privacy mode is on");
   },

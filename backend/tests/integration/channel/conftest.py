@@ -392,9 +392,7 @@ class ChannelEnv:
     service: ChannelService
     websockets: StubWebSocketController
     #: The same factory ``runtime`` was built with, kept so a test can stand up
-    #: a SECOND runtime over these identical parts — which is what the machine
-    #: binding needs: the point of the binding is that two daemons look at one
-    #: resource table and only one of them starts anything.
+    #: a second runtime over these identical parts.
     adapter_factory: Any
     created_adapters: list[FakeChannelAdapter] = field(default_factory=list)
 
@@ -418,28 +416,6 @@ class ChannelEnv:
         test that inspects the queue right after sending."""
         await self.processor.on_message(msg)
         await self.processor._burst.settled()
-
-    def runtime_for(self, machine_id: str) -> ChannelRuntime:
-        """A runtime that believes it is running on ``machine_id``.
-
-        The fixture's own ``runtime`` is deliberately ungated — it has no
-        machine, so it starts every enabled channel, which is what every test
-        that is not about the binding wants. A test that IS about the binding
-        asks for one of these instead, and can ask twice to have two machines
-        reconciling the same table.
-        """
-
-        async def local_machine_id() -> str:
-            return machine_id
-
-        return ChannelRuntime(
-            resources=self.resources,
-            adapter_factory=self.adapter_factory,
-            processor=self.processor,
-            pairing=self.pairing,
-            interval_seconds=0.05,
-            machine_id=local_machine_id,
-        )
 
     def service_for(self, runtime: ChannelRuntime) -> ChannelService:
         """A ``ChannelService`` reading a particular runtime's answers."""
@@ -617,10 +593,9 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
     kinds: dict[str, Any] = {}
     resource_repo = make_resource_repo()
     resources = ResourceService(kinds=kinds, repo=resource_repo, audit=audit, secrets=keyring)
-    # As channel_wiring builds them: the pairings document is named after its
-    # channel and goes with the channel's rename and delete.
-    peers = ChannelPeerRepo(name_of=resource_repo.name_of)
-    resource_repo.add_follower(peers.documents.follow)
+    # As channel_wiring builds them: the pairings are this machine's record,
+    # keyed by the channel's uid.
+    peers = ChannelPeerRepo()
     threads = ChannelThreadConversationRepo(sm)
     cursors = ChannelThreadCursorRepo(sm)
     pairing = PairingManager()
@@ -676,6 +651,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
 
     async def on_delete(resource: Resource) -> None:
         await runtime.evict(resource)
+        peers.forget(resource.uid)
 
     async def agent_names() -> dict[str, str]:
         """Every registered agent's uid mapped to its name, wired exactly as

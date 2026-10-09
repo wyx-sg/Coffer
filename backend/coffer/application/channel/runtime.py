@@ -5,13 +5,6 @@ enabled channel resources against the running adapters and converge.
 Enable, disable, config edits, and delete all take effect within a tick;
 REST/CLI/UI never start or stop adapters directly, so reported status is
 always what is actually running.
-
-A channel travels between machines now, so "the enabled channel resources" is
-no longer the same set on every machine: the reconciler answers to the
-channel's **machine binding** as well, and a channel bound elsewhere is simply
-not in this machine's wanted set. That is also why rebinding needs no restart —
-the binding is config, a config change is a tick, and both ends of a rebind are
-reached by the same loop that already handles enable and disable.
 """
 
 from __future__ import annotations
@@ -82,7 +75,6 @@ class ChannelRuntime:
         websockets: WebSocketControllerPort | None = None,
         materialize: MaterializeFn | None = None,
         interval_seconds: float = _DEFAULT_INTERVAL_SECONDS,
-        machine_id: Callable[[], Awaitable[str]] | None = None,
         secret_revision: SecretRevision | None = None,
     ) -> None:
         self._resources = resources
@@ -93,10 +85,10 @@ class ChannelRuntime:
         self._materialize = materialize
         self._secret_revision = secret_revision
         self._interval = interval_seconds
-        # Which channels are this machine's to run — enabled, bound here, and
-        # able to drive their own default agent. Three gates, one predicate,
-        # kept out of the lifecycle loop (see ``wanted.py``).
-        self._gate = Gate(machine_id_provider=machine_id)
+        # Which channels are this machine's to run — enabled, and able to drive
+        # their own default agent. Two gates, one predicate, kept out of the
+        # lifecycle loop (see ``wanted.py``).
+        self._gate = Gate()
         self._running: dict[str, _Running] = {}
         self._failed_at: dict[str, float] = {}
         # Why a channel's adapter did not start when the cause is its secret
@@ -265,16 +257,6 @@ class ChannelRuntime:
         if binding is not None:
             self._processor.bind(dataclasses.replace(binding, resource=resource))
         self._running[channel_uid] = dataclasses.replace(entry, name=resource.name)
-
-    async def local_machine_id(self) -> str | None:
-        """This machine's id, or ``None`` when no provider is wired.
-
-        Public because the management surface answers "is this channel bound
-        here?" with the same value the gate uses — two answers to that question,
-        derived two ways, is how a surface comes to report a channel as running
-        that nothing ever started.
-        """
-        return await self._gate.machine_id()
 
     async def _enabled_channels(self) -> Desired:
         """The channels this machine should run (see ``wanted``)."""

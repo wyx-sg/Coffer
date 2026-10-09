@@ -51,21 +51,20 @@ flowchart LR
 | 类别 | 位置 | 存放内容 | 同步 | 历史 | 删掉是否安全 |
 | --- | --- | --- | --- | --- | --- |
 | **vault** | `vault/` | 资源定义、状态文档、知识、技能、密钥密文、机器描述。 | 设置了远端时同步 | Git | 否：这是唯一副本 |
-| **local** | `local/` | 本机专属资源（智能体）、生效范围、同步远端、保留策略、密钥边界的批准记录、本机专属密文。 | 从不 | 无 | 你会丢掉一些需要重新设置的设置 |
+| **local** | `local/` | 本机专属资源（智能体、消息渠道）、生效范围、消息渠道配对、同步远端、保留策略、密钥边界的批准记录、本机专属密文。 | 从不 | 无 | 你会丢掉一些需要重新设置的设置 |
 | **content** | `content/` | 聊天和消息渠道的附件、聊天工作目录。 | 暂不 | 无 | 否：这是你唯一的副本 |
 | **runs** | `runs.db`（以及 `skill-data/`、`config-backups/`） | 审计日志、MCP 调用、对话、消息渠道线程和发件箱、同步轮次和用量；`skill-data/` 里是 skill 脚本写的日志、操作记录和临时文件；`config-backups/` 里是每次改写前留下的智能体配置文件副本。 | 从不 | 它*本身*就是历史 | 你会丢掉历史 |
 | **derived** | `derived/` | `derived.db`、记忆树、Coffer 自己的指南技能、同步冲突的编辑器副本、消息渠道主人的头像。 | 从不 | 无 | 是：会被重建 |
 
-一个资源属于哪个类别由它的类型声明，并可按行细化：大多数类型在保险库里，`agent` 在本地（智能体的配置目录是关于这台机器的事实），`memory` 分区是派生的，内置的 `coffer-guide` 技能也是派生的，因为每台机器都自己渲染它。
+一个资源属于哪个类别由它的类型声明，并可按行细化：大多数类型在保险库里，`agent` 和 `channel` 在本地（智能体的配置目录和机器人连接都是关于这台机器的事实），`memory` 分区是派生的，内置的 `coffer-guide` 技能也是派生的，因为每台机器都自己渲染它。
 
 ### 保险库 {#the-vault}
 
 ```text
 ~/.coffer/vault/
 ├── manifest.json                       {"schema_version": 3}
-├── resources/<kind>/<name>.json        mcp_server, skill, channel, provider, knowledge
+├── resources/<kind>/<name>.json        mcp_server, skill, provider, knowledge
 ├── state/mcp-preferences/<server>.json the capabilities you switched off
-├── state/channel-peers/<channel>.json  paired identities per channel
 ├── state/settings/internal-engine.json upkeep and speech-to-text model settings (absent = defaults)
 ├── knowledge/<collection>/…            Markdown documents, hidden .inbox/ for new material
 ├── skills/<name>/…                     skill master folders
@@ -106,6 +105,8 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 ```text
 ~/.coffer/local/
 ├── resources/agent/<name>.json   agents are machine-local resources
+├── resources/channel/<name>.json channels are machine-local resources
+├── channel-peers.json            {channel uid: paired identities}
 ├── reach.json                    {uid: {enabled, agents, projects}}
 ├── engine.json                   when this machine last changed engine settings
 ├── retention.json                retention policy per prunable table

@@ -5,7 +5,7 @@ description: Set up a Telegram channel for Coffer — create a bot with BotFathe
 
 # Telegram
 
-This guide sets up a Telegram channel from scratch: create a bot with BotFather, store its token in Coffer, register the channel, pair your account, and get your first agent reply. It then covers media, groups, limits and troubleshooting. For what every channel shares — commands, scope, machine binding, security — see [Channels](/guides/channels).
+This guide sets up a Telegram channel from scratch: create a bot with BotFather, store its token in Coffer, register the channel, pair your account, and get your first agent reply. It then covers media, groups, limits and troubleshooting. For what every channel shares — commands, scope, security — see [Channels](/guides/channels).
 
 Telegram is the channel you can set up entirely on your own. It needs no public URL, no tunnel, no vendor SDK and no organisation approval: Coffer long-polls the Telegram Bot API at `api.telegram.org` over an outbound connection.
 
@@ -37,7 +37,7 @@ Channels → Add channel
 → Create
 ```
 
-The default agent is a registered agent, as the **Agents** page lists it. The channel is bound to the machine you register it from and starts polling immediately. A token reference that does not resolve is rejected and nothing is saved.
+The default agent is a registered agent, as the **Agents** page lists it. The channel is held on this machine only and starts polling immediately. A token reference that does not resolve is rejected and nothing is saved.
 
 Check that it is running: the channel's header shows its status and where it runs.
 
@@ -134,7 +134,7 @@ Until you do, the channel's page shows a warning naming this fix.
 
 ## Rotate the token
 
-On the channel's page, choose **Replace token** (in the header when Telegram rejected the old one, or in the **⋯** menu and under **Settings** → **Secrets**), paste the new token in **Bot token** and choose **Replace and restart**. Coffer checks the token with Telegram as you paste it and says **Works — this is @your_bot**, and for the same bot that the pairing still holds; a token Telegram rejects is named under the field. The token is written under the reference the channel already uses, so pairing and machine binding are untouched.
+On the channel's page, choose **Replace token** (in the header when Telegram rejected the old one, or in the **⋯** menu and under **Settings** → **Secrets**), paste the new token in **Bot token** and choose **Replace and restart**. Coffer checks the token with Telegram as you paste it and says **Works — this is @your_bot**, and for the same bot that the pairing still holds; a token Telegram rejects is named under the field. The token is written under the reference the channel already uses, so the pairing is untouched.
 
 ## Limits
 
@@ -152,13 +152,11 @@ On the channel's page, choose **Replace token** (in the header when Telegram rej
 **The bot does not answer at all.**
 Open the channel's page under **Channels**.
 
-- The header says it is not running — the channel is switched off, has no usable default agent, or is bound to another machine. The status and the channel's page say which.
+- The header says it is not running — the channel is switched off, or has no usable default agent. The status and the channel's page say which.
 - **Who can use it** on the **Overview** lists nobody — pair first. An unpaired bot answers nobody.
-- The header says it runs on another machine — only that machine polls the bot. Choose **Run it here…**, or change **Runs on** on the **Settings** tab.
-- The channel names a machine no longer in this vault, so it runs nowhere. Choose **Run it here**, or change **Runs on** on the **Settings** tab.
 
 **The bot answers someone else, or stops answering after a second machine was set up.**
-Two consumers are polling the same bot. This happens when the same token is registered twice, under two channel names or on two vaults. Keep one registration.
+Two consumers are polling the same bot (Telegram answers the second with `409 Conflict`). This happens when the same token is registered twice, under two channel names or on two machines. Keep one registration; see [Using the bot on another machine](/guides/channels#using-the-bot-on-another-machine).
 
 **The bot ignores messages in a group.**
 Mention it or reply to it. If you turned `require_mention` off, check the privacy-mode warning above.
@@ -171,7 +169,7 @@ The Bot API server does not offer rich messages, so replies use the HTML fallbac
 
 ## Related
 
-- [Channels](/guides/channels) — commands, scope, machine binding and security for every channel.
+- [Channels](/guides/channels) — commands, scope and security for every channel.
 - [SeaTalk](/guides/channels-seatalk)
 - [Secret store](/guides/secret-store)
 - [Spec: channels/telegram](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/telegram/spec.md)

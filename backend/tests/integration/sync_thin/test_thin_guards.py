@@ -285,19 +285,19 @@ def test_remote_failures_are_classified_by_what_a_person_can_do(
 
 
 @pytest.mark.acceptance(
-    spec="vault-sync", scenario="a synced channel carries a secret reference, never a secret"
+    spec="vault-sync", scenario="a synced resource carries a secret reference, never a secret"
 )
-def test_a_channel_file_travels_with_its_reference_and_never_its_secret(
+def test_a_resource_file_travels_with_its_reference_and_never_its_secret(
     pair: tuple[Machine, Machine],
 ) -> None:
     from .machines import resource
 
     mac, mini = pair
-    config = {"platform": "telegram", "bot_token_ref": "channel/tg/bot"}
-    mac.put("resources/channel/tg.json", resource("channel", "tg", "c" * 32, config))
-    mac.put("secret/channel/tg/bot.enc", _fernet(1000))
+    config = {"transport": "http", "url": "https://x.test", "token_ref": "mcp/x/token"}
+    mac.put("resources/mcp_server/x.json", resource("mcp_server", "x", "c" * 32, config))
+    mac.put("secret/mcp/x/token.enc", _fernet(1000))
     mac.round()
     mini.round()
-    arrived = mini.disk("resources/channel/tg.json") or b""
-    assert b"channel/tg/bot" in arrived and b"gAAAA" not in arrived
-    assert mini.disk("secret/channel/tg/bot.enc") is None
+    arrived = mini.disk("resources/mcp_server/x.json") or b""
+    assert b"mcp/x/token" in arrived and b"gAAAA" not in arrived
+    assert mini.disk("secret/mcp/x/token.enc") is None

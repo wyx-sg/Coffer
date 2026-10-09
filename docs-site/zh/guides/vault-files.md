@@ -5,15 +5,14 @@ description: Coffer 的配置和内容都是 ~/.coffer/vault 这个 git 仓库�
 
 # 手动编辑保险库 {#editing-the-vault-by-hand}
 
-Coffer 保存的、你希望带到另一台机器上的一切——MCP 服务器、技能、知识、提供商、消息渠道以及它们的设置——都是 `~/.coffer/vault` 里的普通文件，而这个目录从 Coffer 第一次运行起就是一个 git 仓库。本页写给想直接修改这些文件的人：用编辑器、shell 或智能体自己的文件工具去改，并了解 Coffer 会怎么处理这些改动、怎样撤销。
+Coffer 保存的、你希望带到另一台机器上的一切——MCP 服务器、技能、知识、提供商以及它们的设置——都是 `~/.coffer/vault` 里的普通文件，而这个目录从 Coffer 第一次运行起就是一个 git 仓库。本页写给想直接修改这些文件的人：用编辑器、shell 或智能体自己的文件工具去改，并了解 Coffer 会怎么处理这些改动、怎样撤销。
 
 ## 保险库里有什么 {#what-is-in-the-vault}
 
 ```text
 ~/.coffer/vault/
-├── resources/<kind>/<name>.json        one file per MCP server, skill, channel, provider, knowledge collection
+├── resources/<kind>/<name>.json        one file per MCP server, skill, provider, knowledge collection
 ├── state/mcp-preferences/<server>.json the tools, prompts and resources you switched off on a server
-├── state/channel-peers/<channel>.json  who is paired with a channel
 ├── state/settings/internal-engine.json 语音转文字模型和定期维护设置
 ├── knowledge/<collection>/…            knowledge documents (Markdown)
 ├── skills/<name>/…                     skill folders (SKILL.md and the rest)
@@ -21,7 +20,7 @@ Coffer 保存的、你希望带到另一台机器上的一切——MCP 服务器
 └── machines/<id>.json                  one descriptor per machine that syncs
 ```
 
-智能体不在这里：智能体的配置只关乎某一台机器，所以放在 `~/.coffer/local/resources/agent/`。生效范围（本机哪些智能体可以使用某个资源）也不在这里，而是在 `~/.coffer/local/reach.json`。见[文件与目录](/zh/reference/filesystem)。
+智能体和消息渠道不在这里：智能体的配置和机器人连接只关乎某一台机器，所以放在 `~/.coffer/local/resources/agent/` 和 `~/.coffer/local/resources/channel/`。生效范围（本机哪些智能体可以使用某个资源）也不在这里，而是在 `~/.coffer/local/reach.json`。见[文件与目录](/zh/reference/filesystem)。
 
 ## 编辑文件 {#edit-a-file}
 

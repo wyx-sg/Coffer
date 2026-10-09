@@ -92,16 +92,6 @@ class ChannelStatus:
     # approval — the cause behind ``running: false`` that no websocket state
     # explains (spec channels "Report a channel whose secret waits for approval").
     secret_approval: SecretApproval | None = None
-    # The machine this channel is bound to, and whether that machine is this
-    # one (spec channels "Bind each channel to the one machine that runs it").
-    # Both, because ``running`` alone cannot tell "stopped" from "not mine to
-    # start", and those two need opposite reactions from the user: one is a
-    # fault to chase, the other is the system working. ``runs_on`` is the raw
-    # id — resolving it to a machine NAME needs the registry, which lives in the
-    # sync module's working tree, so the surface that has it does the resolving
-    # and the CLI prints the id.
-    runs_on: str | None = None
-    runs_here: bool = False
     #: Enabled here and not yet reached by the reconciler (``start_pending``).
     starting: bool = False
     #: The display title a person chose (spec resource-framework "Carry an optional
@@ -215,43 +205,6 @@ class ChannelService:
         username = getattr(self._runtime.adapter(channel_uid), "identity", None)
         return start_link(getattr(username, "username", None) or "", code)
 
-    def _diagnostics(
-        self, resource: Resource, *, runs_on: str | None, runs_here: bool
-    ) -> tuple[ChannelDiagnostic, ...]:
-        """Everything about this channel that reads as configured and is not.
-
-        Two findings, and what they have in common is the failure mode: the
-        channel looks right in Coffer and produces silence in the chat, which is
-        the one case where saying nothing is worse than any amount of noise.
-
-        An UNBOUND channel runs on no machine at all, because no machine can
-        read "nobody in particular" as "me". It is reported here rather than
-        left to each surface because it needs nothing but the row itself to
-        detect. The neighbouring case — a binding naming a machine that is no
-        longer in the registry — deliberately is NOT here: answering it needs
-        the registry, which this module cannot reach, and a guess would be
-        worse than the surface's own join.
-
-        ``runs_here`` is what keeps that finding honest rather than merely
-        literal. A runtime with no machine of its own answers ``True`` to every
-        channel, binding gate included, so on such a runtime "unbound" costs
-        nothing and reporting it would be describing a rule that is not in
-        force.
-        """
-        findings: list[ChannelDiagnostic] = []
-        if resource.enabled and runs_on is None and not runs_here:
-            findings.append(
-                ChannelDiagnostic(
-                    code="channel_not_bound",
-                    message=(
-                        "This channel is not bound to a machine, so no daemon starts its "
-                        "adapter. Bind it to the machine that should answer this bot — a "
-                        "channel names one machine precisely so two never answer at once."
-                    ),
-                )
-            )
-        return (*findings, *self._privacy_mode_diagnostics(resource))
-
     def _privacy_mode_diagnostics(self, resource: Resource) -> tuple[ChannelDiagnostic, ...]:
         """spec channels/telegram "Report privacy mode that defeats the group configuration":
         a Telegram bot runs with privacy mode ON by default, which
@@ -282,8 +235,8 @@ class ChannelService:
         name = resource.name
         # Each person's DM thread row (``thread_id=""``) is where the conversation
         # pointer actually lives. It is read beside the pairing rather than stored
-        # on it because the two are different lifetimes: the pairing converges
-        # between machines, the pointer names a row in THIS machine's store.
+        # on it because the two are different lifetimes: the pairing is the
+        # channel's own state, the pointer is a row in the history store.
         people: list[ChannelPerson] = []
         for person in people_of(await self._peers.list_by_resource(resource.uid)):
             dm = await self._threads.get(resource.uid, person.chat_id, "")
@@ -298,16 +251,9 @@ class ChannelService:
             settings = parse_channel_config(dict(resource.config))
         except ValueError:  # pydantic's ValidationError is one
             settings = None
-        raw_binding = resource.config.get("runs_on")
-        runs_on = raw_binding if isinstance(raw_binding, str) and raw_binding else None
-        # Asked of the runtime rather than resolved here: the runtime is what
-        # acts on the answer, so a surface that derived its own could contradict
-        # the thing it is reporting on.
-        local = await self._runtime.local_machine_id()
-        runs_here = local is None or runs_on == local
         return ChannelStatus(
             secret_approval=self._secret_approval(resource),
-            diagnostics=self._diagnostics(resource, runs_on=runs_on, runs_here=runs_here),
+            diagnostics=self._privacy_mode_diagnostics(resource),
             uid=resource.uid,
             name=name,
             title=resource.title,
@@ -318,12 +264,7 @@ class ChannelService:
             pending_pairing=self._pairing.pending(resource.uid),
             people=tuple(people),
             inbound=inbound,
-            runs_on=runs_on,
-            # A runtime with no machine of its own is not bound anywhere else
-            # either, so it treats every channel as local — the same reading its
-            # gate takes.
-            runs_here=runs_here,
-            starting=resource.enabled and runs_here and self._runtime.start_pending(resource.uid),
+            starting=resource.enabled and self._runtime.start_pending(resource.uid),
         )
 
     def _secret_approval(self, resource: Resource) -> SecretApproval | None:

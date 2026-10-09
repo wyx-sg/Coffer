@@ -5,7 +5,7 @@ description: 为 Coffer 配置 SeaTalk 消息渠道：创建 SeaTalk 开放平�
 
 # SeaTalk {#seatalk}
 
-本指南配置一个 SeaTalk 消息渠道：在 SeaTalk 开放平台上创建机器人应用，提供 SeaTalk 的 WebSocket SDK，在 Coffer 里登记消息渠道，把应用切换到 WebSocket 投递，并配对你的账号。然后介绍群组、线程、引用消息、卡片、上限和故障排查。所有消息渠道共有的部分（命令、生效范围、机器绑定、安全）见[消息渠道](/zh/guides/channels)。
+本指南配置一个 SeaTalk 消息渠道：在 SeaTalk 开放平台上创建机器人应用，提供 SeaTalk 的 WebSocket SDK，在 Coffer 里登记消息渠道，把应用切换到 WebSocket 投递，并配对你的账号。然后介绍群组、线程、引用消息、卡片、上限和故障排查。所有消息渠道共有的部分（命令、生效范围、安全）见[消息渠道](/zh/guides/channels)。
 
 没有哪个智能体有官方的 SeaTalk 集成，所以你在 SeaTalk 里和智能体做的一切都经过这个消息渠道。
 
@@ -16,7 +16,7 @@ Coffer 通过**每个消息渠道一条出站 WebSocket 连接**接收 SeaTalk �
 由此带来两点：
 
 - **WebSocket 客户端是 SeaTalk 自己的 SDK，需要你自己提供。** 它从 SeaTalk 的门户分发，不在公共 PyPI 上，也没有公开许可证，所以 Coffer 不能随包发布或依赖它。没有它，SeaTalk 消息渠道能发送，但收不到任何东西。
-- **每个 SeaTalk 应用只有一条连接。** 第二个进程登记同一个应用（另一台机器，或同事在测试）会把连接抢走。每个消息渠道只绑定一台机器。
+- **每个 SeaTalk 应用只有一条连接。** 第二个进程登记同一个应用（另一台机器，或同事在测试）会把连接抢走。只在一台机器上把 SeaTalk 应用登记为消息渠道。
 
 ## 前提条件 {#prerequisites}
 
@@ -59,7 +59,7 @@ Channels → Add channel
 → Create
 ```
 
-配置内容是 App ID 和指向 App Secret 的引用，外加每个消息渠道都有的字段。消息渠道绑定到这台机器，并立刻开始连接。
+配置内容是 App ID 和指向 App Secret 的引用，外加每个消息渠道都有的字段。消息渠道只保存在本机，并立刻开始连接。
 
 检查连接：消息渠道状态行上的 **SeaTalk connection** 标记连上后显示**已连接**（Connected）。等到它连上再做下一步。
 
@@ -157,7 +157,7 @@ SeaTalk 能附带的一切都会驱动一个轮次：图片、文件和文档、
 
 ## 轮换 App Secret {#rotate-the-app-secret}
 
-在消息渠道页面选择**更换密钥**（在 **⋯** 菜单里，或在**设置** → **密钥**下），粘贴到 **App Secret**，然后选**更换并重启**。粘贴时 Coffer 会向 SeaTalk 检查 App ID 和 secret，被拒绝的 secret 会在字段下说明。secret 会写到消息渠道现有的引用下，所以配对和机器绑定都不变。在**设置** → **密钥**下，App Secret 显示为密钥的名字（链接到它的页面），旁边是**更换密钥…**；其中的**改用其他密钥**会让消息渠道改用另一个已存的密钥，并让适配器用它重启。**App ID** 在**设置** → **密钥**下原地编辑。
+在消息渠道页面选择**更换密钥**（在 **⋯** 菜单里，或在**设置** → **密钥**下），粘贴到 **App Secret**，然后选**更换并重启**。粘贴时 Coffer 会向 SeaTalk 检查 App ID 和 secret，被拒绝的 secret 会在字段下说明。secret 会写到消息渠道现有的引用下，所以配对不变。在**设置** → **密钥**下，App Secret 显示为密钥的名字（链接到它的页面），旁边是**更换密钥…**；其中的**改用其他密钥**会让消息渠道改用另一个已存的密钥，并让适配器用它重启。**App ID** 在**设置** → **密钥**下原地编辑。
 
 ## 上限 {#limits}
 
@@ -177,7 +177,7 @@ SeaTalk 能附带的一切都会驱动一个轮次：图片、文件和文档、
 检查 `~/.coffer/vendor/seatalk_oapi_sdk/`（或 `$COFFER_SEATALK_SDK_DIR/seatalk_oapi_sdk/`）是否存在；如果你用了 `COFFER_SEATALK_SDK_DIR`，确认它设置在守护进程启动的环境里，而不只是你当前的 shell；桥接进程从守护进程的环境里读取它。在此期间回复和通知仍然可用。
 
 **状态是 `kicked`。**
-另一个进程占用了这个应用的连接。常见原因：同一个应用在第二台机器上也登记成了消息渠道，或者某个测试脚本用了同一个 App ID。停掉另一个；Coffer 大约一分钟内会重连。要在机器之间迁移消息渠道，在当前运行它的机器上，到它的**设置**标签页修改**运行在**。
+另一个进程占用了这个应用的连接。常见原因：同一个应用在第二台机器上也登记成了消息渠道，或者某个测试脚本用了同一个 App ID。停掉另一个；Coffer 大约一分钟内会重连。要在机器之间迁移消息渠道，见[在另一台机器上使用机器人](/zh/guides/channels#using-the-bot-on-another-machine)。
 
 **开发者后台里 Re-verify 失败。**
 消息渠道还没连上。等 **SeaTalk connection** 标记显示已连接（Connected）后再点一次 **Re-verify**。
@@ -190,7 +190,7 @@ SeaTalk 只返回线程最近 7 天的回复（见[群组和线程](#groups-and-
 
 ## 相关 {#related}
 
-- [消息渠道](/zh/guides/channels)：所有消息渠道的命令、生效范围、机器绑定和安全。
+- [消息渠道](/zh/guides/channels)：所有消息渠道的命令、生效范围和安全。
 - [Telegram](/zh/guides/channels-telegram)
 - [密钥存储](/zh/guides/secret-store)
 - [规格：channels/seatalk](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/seatalk/spec.md)

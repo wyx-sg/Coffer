@@ -68,9 +68,9 @@ persisted.
 
 A channel is addressed by its immutable `uid`
 ([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md));
-its config is the type, the secret refs, the default agent and its config,
-and `runs_on` — the `machine_id` of the one machine whose daemon runs this
-channel's adapter (see "Bind each channel to the one machine that runs it").
+its config is the type, the secret refs, the default agent and its config.
+A channel is this machine's (see "Keep each channel on the machine that holds
+it").
 
 #### Scenario: register a telegram channel
 - **GIVEN** a bot token stored under a secret ref
@@ -112,8 +112,7 @@ the daemon MUST offer an explicit restart: `POST /api/v1/channels/{uid}/restart`
 stops the channel's adapter and its inbound connection (a SeaTalk websocket),
 forgets any failure it was waiting out, and starts them afresh at once from the
 stored configuration and the secret as it is now. It answers whether the adapter
-is running afterwards; a disabled channel, or one bound to another machine, stays
-stopped. The Channels page's **Reconnect** action MUST call it.
+is running afterwards; a disabled channel stays stopped. The Channels page's **Reconnect** action MUST call it.
 
 Replacing a secret under its existing ref MUST restart the adapter that uses it
 without anyone asking: the daemon notices that the stored value changed and
@@ -462,32 +461,29 @@ reuses.
 ### Requirement: Manage channels from the Channels page
 The Channels page MUST be a list beside a detail pane. The **list** shows every
 channel as one row — its platform, its name and one line saying what state it is
-in — grouped by that state (needs attention, connected, running on another
-machine, off), filterable by name, with a way to register a new channel (storing
+in — grouped by that state (needs attention, connected, off), filterable by name, with a way to register a new channel (storing
 secrets through the secret store); a row opens the channel. The **detail pane**
 MUST show the open channel's status (adapter running, paired peer, and the
 inbound state the channel's type reports — for SeaTalk, its websocket
 connection) in a header that is the same in every state: the platform mark, the
-name, a status pill, a meta line saying where it runs, a secondary **Send test**
+name, a status pill, a meta line saying how it connects, a secondary **Send test**
 (a test notification to its paired owner, see "Notify the paired owner on
 demand") and a ⋯ menu holding only **Reconnect** (see "Restart a channel's
 adapter on demand"). A control that cannot run in the current state MUST be
 disabled rather than hidden, and a disabled **Send test** MUST say why in its
 tooltip. The fix for a problem MUST sit in a banner between the header and the
 tabs — one banner, one fix button (Reconnect now, Replace token or secret, Take
-it back, Retry, Open Secrets, Run it here, Generate pairing code), and for a
+it back, Retry, Open Secrets, Generate pairing code), and for a
 missing SeaTalk SDK also the hand-off "Ask an agent" with Copy prompt behind
-its chevron. A channel that is off, or run by another Mac, is not a problem: it
-MUST show a quiet grey box with one small button (Turn on, Run it here…, the
-latter confirming first) instead of a banner. Changing the machine, replacing
-the secret and deleting live in the Settings tab. The detail pane MUST split into two tabs, in this order: **Overview**, the
+its chevron. A channel that is off is not a problem: it
+MUST show a quiet grey box with one small button, Turn on, instead of a banner.
+Replacing the secret and deleting live in the Settings tab. The detail pane MUST split into two tabs, in this order: **Overview**, the
 default, at the bare `/channels/<uid>` — a single column of sections — who can use it (the paired owners as a bordered
 list, each with Remove, and Add owner below it), the default agent, the agents the
 channel may drive (its reach) and one link, **Conversations from this channel →**, to the
 Conversations page filtered by `?source=<uid>` — the conversations themselves are listed there
 only ([chat](../chat/spec.md) "Show every agent's sessions on the Conversations page"); it lists no commands — and **Settings**, at `/channels/<uid>/settings` — the
-settings below, the machine that runs it (see "Bind each channel to the one
-machine that runs it") and its secrets, and the channel's deletion. Choosing a tab
+settings below, its secrets, and the channel's deletion. Choosing a tab
 changes the address and nothing else.
 
 Settings are saved as they change, with no save button and no saved line; a save
@@ -503,14 +499,14 @@ setting. A secret is shown masked and replaced through its own dialog, **in
 place**: the new value MUST be written to the secret store under the ref the
 channel already cites before the configuration is saved, and that ref MUST stay in
 the saved configuration, so a rotation moves no secret and leaves the channel's
-machine binding and pairing untouched. A secret left blank rotates nothing.
+pairing untouched. A secret left blank rotates nothing.
 
 Registering, editing, enabling, disabling, scoping and deleting a channel are the framework's own
 lifecycle operations (see [resource-framework](../resource-framework/spec.md)), done on the
-Channels page and over `/api/v1/resources`; pairing, binding, restarting and notifying are the
+Channels page and over `/api/v1/resources`; pairing, restarting and notifying are the
 channel routes under `/api/v1/channels/{uid}`; the `coffer channel` commands call the same routes ([resource-framework](../resource-framework/spec.md) "Offer every management operation on the command line"). The page
 MUST report the channel's configuration together with its status — adapter run state, paired
-peer, machine binding and the inbound state its type reports — with the group gating and the
+peer and the inbound state its type reports — with the group gating and the
 idle period shown as the settings with their defaults filled in, as the daemon reads them. Saving
 a setting changes only that setting: every switch, setting and ref it does not touch keeps its
 stored value. `coffer secret set <ref>` rotates a secret under a ref the channel's
@@ -551,7 +547,7 @@ and `PATCH /api/v1/resources/{uid}`.
   and confirms
 - **THEN** the new token is written under the channel's existing ref first
 - **AND** the channel's configuration is then saved to the same channel with
-  every ref unchanged, so nothing its pairing and binding hang off moves
+  every ref unchanged, so nothing its pairing hangs off moves
 
 #### Scenario: the group-gating switches are edited in the Settings tab
 - **GIVEN** a registered channel with `require_mention` on and `ignore_other_mentions` off (the defaults)
@@ -887,8 +883,8 @@ than vault state, and the transcript lands locally like any other turn text.
 ### Requirement: Treat an addressed group chat as its own peer
 The system MUST treat a group chat as a first-class peer. When the paired owner
 @mentions the bot (or the message is delivered as an addressed group event) the
-bot answers there; the group becomes an additional peer in the channel's pairings, the vault document
-`state/channel-peers/<channel name>.json`, keyed by the group chat id and inheriting
+bot answers there; the group becomes an additional peer in the channel's pairings on this
+machine, keyed by the group chat id and inheriting
 the owner's `sender_id`.
 
 #### Scenario: the owner @mentions the bot in a group main chat
@@ -994,11 +990,8 @@ other kind's scope names the agents a resource is *delivered to*; a channel is
 consumed by no agent — it is an inbound surface — so the list is inverted rather
 than borrowed, and the spec says so explicitly because a reader who assumes the
 usual reading gets it backwards. That inverted reading is the whole of what a
-channel's scope says: there is nothing in it about WHICH MACHINE runs the
-channel. That question has its own field, `runs_on` (see "Bind each channel to
-the one machine that runs it"), for a reason scope cannot satisfy: scope is
-reach, reach is machine-local and never travels, and the machine that runs a
-channel is one answer the machines must share.
+channel's scope says. Scope is reach, and reach is machine-local like the
+channel itself.
 
 - An unrestricted scope MUST mean every registered agent. A scope is never an
   empty list: `agents: []` is refused on both write paths with `SCOPE_INVALID`,
@@ -1048,14 +1041,6 @@ channel is one answer the machines must share.
 - A thread's sticky agent choice MUST be dropped in favour of the channel
   default once the scope no longer admits it, so narrowing a scope takes effect
   on the next conversation rather than waiting on whoever set the preference.
-
-Reach and the machine binding answer different questions and MUST never be
-merged: reach (`enabled` + `scope`, in this machine's reach record) says **which agents**
-this channel may drive and whether it is live here, and is set per machine and
-stays on it; the binding (`runs_on`, in the channel's config) says **which
-machine** runs the adapter, and travels because it is one answer for the whole
-vault. Giving the binding a home in `scope` would make "where does this apply"
-carry two unrelated answers.
 
 #### Scenario: a channel may only route to the agents in its scope
 - **GIVEN** a paired channel whose scope names one of the two registered agents,
@@ -1108,99 +1093,6 @@ carry two unrelated answers.
   token ref,
 - **THEN** the edit is accepted and the channel stays off — off is not
   frozen.
-
-### Requirement: Bind each channel to the one machine that runs it
-A channel MUST name the one machine that runs it. A channel's platform
-identity — a polled bot, a held WebSocket — tolerates
-exactly ONE consumer, so "which machine answers this bot" must have exactly one
-answer, and that answer is written down. Its configuration carries `runs_on`,
-the `machine_id` of the machine whose daemon starts this channel's adapter
-(spec `vault-sync`, "Derive machine identity from the host"). It is configuration in the channel's
-file and not part of its reach, because it MUST travel with that file — every
-machine holding the file reads the same name, and every machine but one
-finds it is not being named; reach MUST NOT travel and MUST NOT be made to carry
-this.
-
-- The binding MUST be authoritative for adapter startup. A runtime MUST start an
-  adapter only for a channel whose `runs_on` is this machine's id, and MUST fail
-  **closed** otherwise: an unknown machine, a retired one, and no binding at all
-  all mean "not this machine", and none of them may be read as permission to
-  start. Starting on a guess cannot be walked back — the platform has already
-  been answered twice. The three cases are distinguished in what the surfaces
-  report rather than in what the runtime does: **bound to another machine** is
-  normal and says so, so a channel that is quiet here never looks like a channel
-  that crashed here.
-- **Unbound MUST run nowhere**, and MUST be reported rather than left to look
-  like a stopped adapter, since a document naming no machine means the same
-  thing on every machine that holds it. A channel registered through any Coffer
-  surface MUST be bound to the registering machine at creation, so unbound is
-  reached by import or by hand, not by using the product.
-- A binding naming a machine no longer in the registry MUST be reported as a
-  fault on the channel, distinctly from a channel that is merely bound
-  elsewhere. Both run nowhere here; only one of them is somebody's mistake.
-  Starting a channel on the grounds that nobody else claims it would be the
-  rival-consumer failure arriving by the back door: every machine that cannot
-  resolve the id would reason identically and they would all start.
-- A `runs_on` value is written only by the surfaces, and they refuse an id the
-  machine registry does not hold; whatever else ends up there (a hand edit, say)
-  fails closed and is reported as a binding to an unknown machine.
-- Rebinding MUST converge without a restart and without a command that reaches
-  another machine: changing `runs_on` is an ordinary configuration edit. The
-  losing machine MUST stop its adapter within one reconcile tick of seeing the
-  change; the gaining machine MUST start one within one tick of the converge
-  round that brings the change to it. So the clean way to hand a channel over is
-  to rebind it from the machine that currently holds it. Rebinding TO the
-  machine one is sitting at while another machine still holds the channel is
-  allowed and is sometimes the only option — the old machine may be the one that
-  is broken — but it opens a window, bounded by that machine's sync interval, in
-  which both adapters are live; the surface offering the rebind MUST say so.
-- A channel's configuration MUST carry secret **references** only, never
-  secret material, exactly as it did when it never travelled — the rule is
-  unchanged, and travelling is what makes it load-bearing rather than merely
-  tidy. Ciphertext for those refs travels only when the user opts the remote in
-  to secrets, and a machine holding ciphertext without the master key MUST
-  report those refs locked rather than failing decryption silently.
-- A channel bound to another machine MUST NOT be refused by this machine's own
-  preconditions. Its `default_agent` names an agent on the machine that runs it;
-  validating that here would hold a good document out of the registry for a
-  fault on nobody's machine.
-- A channel's peer pairings MUST travel with the channel as synced state (spec
-  `vault-sync`, "Carry channel pairings as platform identity"), because a channel that travels without them makes
-  the owner re-pair from their phone every time it moves, and a rebind is meant
-  to be one click. What travels is platform identity — chat id, sender id,
-  display name. The active conversation pointer and the thread's sticky agent
-  do not: both name machine-local things — a conversation the other machine
-  does not have, an agent installed on this machine.
-
-Two adapters can still be pointed at one bot identity only the way they always
-could — by someone registering the same bot twice, by hand, under two names —
-which no field inside Coffer could prevent.
-
-#### Scenario: only the machine a channel names starts its adapter
-- **GIVEN** an enabled channel bound to another machine's `machine_id`
-- **WHEN** the runtime reconciles
-- **THEN** no adapter is started here, and the management surface reports the
-  channel as bound elsewhere rather than as stopped
-
-#### Scenario: a channel bound to an unknown machine starts nowhere
-- **GIVEN** an enabled channel whose binding names a machine the registry does
-  not hold
-- **WHEN** the runtime reconciles on any machine
-- **THEN** no machine starts an adapter for it, and the channel is reported as
-  bound to a machine that no longer exists
-
-#### Scenario: an unbound channel runs nowhere and says so
-- **GIVEN** an enabled channel whose configuration carries no binding
-- **WHEN** the runtime reconciles
-- **THEN** no adapter is started, and the channel's status carries a diagnostic
-  naming the missing binding and the fix
-
-#### Scenario: rebinding hands the channel over without a restart
-- **GIVEN** an enabled channel running on this machine
-- **WHEN** the user binds it to another machine
-- **THEN** this machine stops its adapter on the next reconcile, without a
-  daemon restart, and the channel's binding is what the next sync round
-  pushes
 
 ### Requirement: Drive every managed agent from one bot
 One bot MUST control all agents. A single paired Coffer-hosted bot drives any
@@ -2845,3 +2737,25 @@ Switches, choices and list edits keep saving as they change.
 - **WHEN** the owner types "3", pauses, types "2" and presses Enter
 - **THEN** exactly one save is sent, carrying 32 seconds
 - **AND** leaving the field afterwards sends nothing more
+
+### Requirement: Keep each channel on the machine that holds it
+A channel MUST be a machine-local resource, like an agent: its file is under
+`local/resources/channel/` and its pairings under `local/channel-peers.json`,
+keyed by the channel's uid; neither is in the vault, committed or synced
+([Channels Are Machine-Local Resources](../../../docs/decisions/channels-are-machine-local-resources.md)).
+A bot identity tolerates one consumer, and everything a channel names — its
+default agent, its working directories, its paired chats — is this machine's.
+A channel that is switched on runs on the machine that holds it; there is no
+setting naming another machine. Using the same bot on another machine means
+registering the channel there (its secret can be picked from the stored ones)
+and pairing again.
+
+#### Scenario: a channel stays on the machine that registered it
+- **GIVEN** a vault that converges with a remote
+- **WHEN** the owner registers and pairs a channel
+- **THEN** the channel's file and its pairings are written under `local/` and nothing about the channel is committed to the vault
+
+#### Scenario: an enabled channel runs on the machine that holds it
+- **GIVEN** an enabled channel whose default agent is registered on this machine
+- **WHEN** the channel runtime reconciles
+- **THEN** its adapter is started here, with no machine to name first

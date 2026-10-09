@@ -37,15 +37,15 @@ Everything committed in the vault repository, and nothing else:
 
 | Travels (in `~/.coffer/vault`) | Stays on each machine |
 | --- | --- |
-| Resource files of `mcp_server`, `skill`, `channel`, `provider` and `knowledge` | Agents (`local/resources/agent/`): an agent's config directory is a fact about this machine |
-| Knowledge documents and `.inbox/` material, skill master folders | Reach (`local/reach.json`), custom tools' reach, retention, the sync remote itself |
-| MCP capability switches, channel pairings, Coffer's settings (`state/`: upkeep, the speech-to-text model) | The derived tree: memory, caches, `derived.db`, the rendered `coffer-guide` skill |
+| Resource files of `mcp_server`, `skill`, `provider` and `knowledge` | Agents (`local/resources/agent/`) and channels (`local/resources/channel/`): an agent's config directory and a bot connection are facts about this machine |
+| Knowledge documents and `.inbox/` material, skill master folders | Reach (`local/reach.json`), custom tools' reach, channel pairings (`local/channel-peers.json`), retention, the sync remote itself |
+| MCP capability switches, Coffer's settings (`state/`: upkeep, the speech-to-text model) | The derived tree: memory, caches, `derived.db`, the rendered `coffer-guide` skill |
 | Secret ciphertext (`secret/`), only with `include_secret` | Machine-local ciphertext (`local/secret/`), the secret boundary, the master key |
 | One descriptor per machine (`machines/<id>.json`) | `runs.db` (conversations, audit, invocations, rounds), `content/`, logs, `daemon-config.json` |
 
 **Reach** is a decision about this machine. Publishing it would let one machine silently re-answer a question another already answered. See [Resource framework](/architecture/resource-framework).
 
-**Channels** travel with a `runs_on` field naming the one machine whose daemon starts the adapter. The document, its secret references and its pairings travel, so moving a bot to another machine is a rebind. Arrival starts nothing on a machine the channel does not name. See [Channels](/guides/channels).
+**Channels** do not travel. A bot token tolerates only one consumer, so a channel is a machine-local resource like an agent: its file and its pairings stay on the machine that runs it. Its secrets are ordinary secrets, and their ciphertext travels only when the remote carries secrets. See [Channels](/guides/channels#using-the-bot-on-another-machine).
 
 **Secrets.** `secret/` is listed in the repository's `.git/info/exclude` until the remote's `include_secret` is on; then the ciphertext files are committed like any other. Ciphertext that has entered a pushed commit cannot be withdrawn: revocation is rotation.
 
@@ -228,6 +228,6 @@ All paths are under `backend/coffer/`.
 
 ## Related
 
-- Spec: [vault-sync](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md), and [channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md) for `runs_on`
+- Spec: [vault-sync](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md), and [channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md)
 - Decision records: [Sync Only Pulls and Pushes the Vault Repository](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Sync Round That Would Lose Too Much Is Held](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-deletion-breaker.md), [Storage Is Five Classes by Nature](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/storage-is-five-classes-by-nature.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/secrets-cross-machines-only-as-ciphertext.md)
 - [Vault sync guide](/guides/vault-sync) · [Persistence](/architecture/persistence) · [Knowledge architecture](/architecture/knowledge) · [Security model](/architecture/security)

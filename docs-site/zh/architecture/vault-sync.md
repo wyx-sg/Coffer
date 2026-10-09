@@ -37,15 +37,15 @@ description: Coffer 如何通过拉取和推送保险库自己的 git 仓库，�
 
 | 会传输（在 `~/.coffer/vault` 中） | 留在每台机器上 |
 | --- | --- |
-| `mcp_server`、`skill`、`channel`、`provider` 和 `knowledge` 的资源文件 | 智能体（`local/resources/agent/`）：智能体的配置目录是关于这台机器的事实 |
-| 知识文档和 `.inbox/` 材料、技能主文件夹 | 生效范围（`local/reach.json`）、自定义工具的生效范围、保留策略、同步远端本身 |
-| MCP 能力开关、消息渠道配对、Coffer 的设置（`state/`：维护、语音转文字模型） | 派生树：记忆、缓存、`derived.db`、渲染出来的 `coffer-guide` 技能 |
+| `mcp_server`、`skill`、`provider` 和 `knowledge` 的资源文件 | 智能体（`local/resources/agent/`）和消息渠道（`local/resources/channel/`）：智能体的配置目录和机器人连接都是关于这台机器的事实 |
+| 知识文档和 `.inbox/` 材料、技能主文件夹 | 生效范围（`local/reach.json`）、自定义工具的生效范围、消息渠道配对（`local/channel-peers.json`）、保留策略、同步远端本身 |
+| MCP 能力开关、Coffer 的设置（`state/`：维护、语音转文字模型） | 派生树：记忆、缓存、`derived.db`、渲染出来的 `coffer-guide` 技能 |
 | 密钥密文（`secret/`），仅在开启 `include_secret` 时 | 本机专属密文（`local/secret/`）、密钥边界、主密钥 |
 | 每台机器一个描述文件（`machines/<id>.json`） | `runs.db`（对话、审计、调用、同步轮次）、`content/`、日志、`daemon-config.json` |
 
 **生效范围**是关于这台机器的决定。把它发布出去，会让一台机器悄悄重新回答另一台机器已经回答过的问题。见[资源框架](/zh/architecture/resource-framework)。
 
-**消息渠道**传输时带有一个 `runs_on` 字段，指明由哪一台机器的守护进程启动适配器。文档、它的密钥引用和配对都会传输，所以把机器人挪到另一台机器只是一次重新绑定。在消息渠道没有指明的机器上，它的到达不会启动任何东西。见[消息渠道](/zh/guides/channels)。
+**消息渠道**不会传输。一个机器人令牌只容得下一个消费者，所以消息渠道和智能体一样是本机资源：它的文件和配对都留在运行它的那台机器上。它的密钥是普通密钥，只有远端携带密钥时，密文才会传输。见[消息渠道](/zh/guides/channels#using-the-bot-on-another-machine)。
 
 **密钥。** 在远端的 `include_secret` 开启之前，`secret/` 都列在仓库的 `.git/info/exclude` 中；开启后，密文文件会像其他文件一样被提交。已经进入被推送提交的密文无法撤回：吊销就是轮换。
 
@@ -228,6 +228,6 @@ Coffer 调用真正的 `git`，所以远端始终是一个你可以克隆和查�
 
 ## 相关内容 {#related}
 
-- 规格：[vault-sync](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md)，以及关于 `runs_on` 的 [channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md)
+- 规格：[vault-sync](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/vault-sync/spec.md)，以及 [channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md)
 - 决策记录：[Sync Only Pulls and Pushes the Vault Repository](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-applies-clean-merges-and-stops-on-any-conflict.md)、[A Sync Round That Would Lose Too Much Is Held](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-deletion-breaker.md)、[Storage Is Five Classes by Nature](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/storage-is-five-classes-by-nature.md)、[Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/secrets-cross-machines-only-as-ciphertext.md)
 - [保险库同步指南](/zh/guides/vault-sync) · [持久化](/zh/architecture/persistence) · [知识架构](/zh/architecture/knowledge) · [安全模型](/zh/architecture/security)

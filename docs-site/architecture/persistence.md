@@ -51,21 +51,20 @@ flowchart LR
 | Class | Where | What it holds | Syncs | History | Safe to delete |
 | --- | --- | --- | --- | --- | --- |
 | **vault** | `vault/` | Resource definitions, state documents, knowledge, skills, secret ciphertext, machine descriptors. | Yes, when a remote is set | Git | No: it is the only copy |
-| **local** | `local/` | Machine-local resources (agents), reach, the sync remote, retention, the secret boundary's approvals, machine-local ciphertext. | Never | No | You lose settings you would set again |
+| **local** | `local/` | Machine-local resources (agents, channels), reach, channel pairings, the sync remote, retention, the secret boundary's approvals, machine-local ciphertext. | Never | No | You lose settings you would set again |
 | **content** | `content/` | Chat and channel attachments, the chat workspace. | Not yet | No | No: it is your only copy |
 | **runs** | `runs.db` (and `skill-data/`, `config-backups/`) | Audit log, MCP invocations, conversations, channel threads and outbox, sync rounds and usage; in `skill-data/`, the logs, journals and temp files skill scripts write; in `config-backups/`, the copies of agent config files made before each rewrite. | Never | It *is* history | You lose history |
 | **derived** | `derived/` | `derived.db`, the memory tree, Coffer's own guide skill, editor copies of sync conflicts, channel owners' pictures. | Never | No | Yes: it is rebuilt |
 
-Which class a resource belongs to is declared by its kind, with a per-row refinement: most kinds live in the vault, `agent` is local (an agent's config directory is a fact about this machine), `memory` partitions are derived, and the builtin `coffer-guide` skill is derived because every machine renders its own.
+Which class a resource belongs to is declared by its kind, with a per-row refinement: most kinds live in the vault, `agent` and `channel` are local (an agent's config directory and a bot connection are facts about this machine), `memory` partitions are derived, and the builtin `coffer-guide` skill is derived because every machine renders its own.
 
 ### The vault
 
 ```text
 ~/.coffer/vault/
 ├── manifest.json                       {"schema_version": 3}
-├── resources/<kind>/<name>.json        mcp_server, skill, channel, provider, knowledge
+├── resources/<kind>/<name>.json        mcp_server, skill, provider, knowledge
 ├── state/mcp-preferences/<server>.json the capabilities you switched off
-├── state/channel-peers/<channel>.json  paired identities per channel
 ├── state/settings/internal-engine.json upkeep and speech-to-text model settings (absent = defaults)
 ├── knowledge/<collection>/…            Markdown documents, hidden .inbox/ for new material
 ├── skills/<name>/…                     skill master folders
@@ -106,6 +105,8 @@ What Coffer ignores in the repository is written into `.git/info/exclude`, never
 ```text
 ~/.coffer/local/
 ├── resources/agent/<name>.json   agents are machine-local resources
+├── resources/channel/<name>.json channels are machine-local resources
+├── channel-peers.json            {channel uid: paired identities}
 ├── reach.json                    {uid: {enabled, agents, projects}}
 ├── engine.json                   when this machine last changed engine settings
 ├── retention.json                retention policy per prunable table

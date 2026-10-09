@@ -215,8 +215,6 @@ Open the channel's page first: its status line says what is wrong.
 | What the page says | Cause | Fix |
 | --- | --- | --- |
 | No answer, or a daemon error | The daemon is not running. Channels run inside the daemon. | `coffer daemon start`. On macOS, **Settings → Daemon → Start at login** keeps it running without a Coffer window. |
-| Running on another machine | The channel is bound to another machine sharing this vault, which answers instead. | Nothing, or move it here with **Run it here…** on the channel's page. |
-| **Runs nowhere** | The channel names no machine. | Choose a machine under **Runs on** on the channel's **Settings** tab. |
 | **Not paired** | Nobody has paired with the bot, so every message is ignored. | **Generate pairing code** on the channel's **Overview**, and send the code to the bot from your own account. |
 | A `ws error:` line under the inbound status | A SeaTalk channel's connection failed. The error says why, for example another process holding the connection. | Fix the cause the error names. |
 | A warning | A platform-side setting defeats part of the configuration. | Follow the fix in the warning. |

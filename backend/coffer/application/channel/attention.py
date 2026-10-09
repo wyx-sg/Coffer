@@ -76,7 +76,7 @@ class ChannelAttentionSource:
         return out
 
     def _item(self, status: ChannelStatus) -> AttentionItem | None:
-        if not status.enabled or not status.runs_here:
+        if not status.enabled:
             return None
         ws_state = status.inbound.websocket_state if status.inbound is not None else None
         ws_error = status.inbound.websocket_error if status.inbound is not None else None

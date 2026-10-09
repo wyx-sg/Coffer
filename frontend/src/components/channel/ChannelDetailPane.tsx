@@ -4,7 +4,7 @@
 // holds its fix, and two tabs
 // — Overview and Settings. The page owns the address (`/channels/<uid>` and
 // `/channels/<uid>/settings`); this pane runs the commands and owns their
-// dialogs: send test, replace secret, run it here, re-pair, delete.
+// dialogs: send test, replace secret, re-pair, delete.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -18,14 +18,12 @@ import {
   CHANNEL_KIND,
   useChannelAutoSave,
   useChannelView,
-  useRebindChannel,
   useReconnectChannel,
 } from "@/lib/hooks/useChannels";
 import { useRemoveChannelPerson } from "@/lib/hooks/useChannelPairing";
 import { useDeleteResource, useEnableResource } from "@/lib/hooks/useResourceMutations";
-import { displayName } from "@/lib/resourceTitle";
 import { ChannelDetailHeader, type ChannelCommand } from "./ChannelDetailHeader";
-import { channelHeading, useMachineName } from "./channelLabels";
+import { channelHeading } from "./channelLabels";
 import { ChannelOverviewTab } from "./ChannelOverviewTab";
 import { ChannelPeopleDialogs } from "./ChannelPeopleDialogs";
 import { ChannelPairDialog } from "./ChannelPairDialog";
@@ -36,7 +34,7 @@ import { channelPlatform } from "@/lib/channels/channelState";
 import { ChannelStatusBanner } from "./ChannelStatusBanner";
 import { platformLabel } from "./PlatformMark";
 
-type Dialog = "test" | "secret" | "delete" | "runHere" | "remove" | null;
+type Dialog = "test" | "secret" | "delete" | "remove" | null;
 
 interface Props {
   channel: ResourceOut;
@@ -49,11 +47,9 @@ interface Props {
 export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { status, view, selfId } = useChannelView(channel);
-  const machineName = useMachineName();
+  const { status, view } = useChannelView(channel);
   const removePerson = useRemoveChannelPerson(channel.uid);
   const reconnect = useReconnectChannel(channel.uid);
-  const rebind = useRebindChannel(channel.uid, displayName(channel));
   const enable = useEnableResource();
   const del = useDeleteResource();
   const { save } = useChannelAutoSave(channel);
@@ -70,12 +66,6 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
   const firstOwner = people[0]?.display_name ?? "";
   const openPair = () => setPairOpen(true);
   const setDialogOpen = (which: Dialog) => (open: boolean) => setDialog(open ? which : null);
-  const runHere = () =>
-    rebind.mutateAsync({
-      config: channel.config,
-      runsOn: selfId ?? "",
-      machine: t("channels.machine.thisMachine"),
-    });
 
   const onCommand = (command: ChannelCommand) => {
     switch (command) {
@@ -94,12 +84,6 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
       case "refresh":
         void status.refetch();
         return;
-      case "runHere":
-        if (selfId) void runHere().catch(() => undefined);
-        return;
-      case "runHereConfirm":
-        setDialog("runHere");
-        return;
       case "turnOn":
         enable.mutate({ kind: CHANNEL_KIND, uid: channel.uid });
         return;
@@ -111,14 +95,14 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
       <ChannelDetailHeader
         channel={channel}
         view={view}
-        busy={reconnect.isPending || rebind.isPending || enable.isPending}
+        busy={reconnect.isPending || enable.isPending}
         onCommand={onCommand}
       />
       <ChannelStatusBanner
         channel={channel}
         view={view}
         status={status.data}
-        busy={reconnect.isPending || rebind.isPending || enable.isPending}
+        busy={reconnect.isPending || enable.isPending}
         onCommand={onCommand}
         onPair={openPair}
       />
@@ -169,16 +153,6 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
         channel={channel}
         open={dialog === "secret"}
         onOpenChange={setDialogOpen("secret")}
-      />
-      <ConfirmDialog
-        open={dialog === "runHere"}
-        onOpenChange={setDialogOpen("runHere")}
-        variant="default"
-        title={t("channels.runHere.title", { name: displayName(channel) })}
-        description={t("channels.runHere.body", { machine: machineName(view.runsOn) })}
-        confirmLabel={t("channels.actions.runHere")}
-        pending={rebind.isPending}
-        onConfirm={runHere}
       />
       <ChannelPairDialog
         uid={channel.uid}

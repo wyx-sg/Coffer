@@ -1,12 +1,12 @@
 // frontend/src/lib/channels/channelState.test.ts
-// The one answer to "what state is this channel in?" — where it runs first,
-// then whether it is on, then its connection, then pairing — and the list
+// The one answer to "what state is this channel in?" — whether it is on first,
+// then its connection, then pairing — and the list
 // group and fix action each state brings.
 import { describe, expect, test } from "vitest";
 
 import type { ChannelStatus } from "@/lib/api/channels";
 import { describeChannel, type ChannelStateInput } from "@/lib/channels/channelState";
-import { HERE, THERE, makeChannel, makeStatus } from "@/test/channelKit";
+import { makeChannel, makeStatus } from "@/test/channelKit";
 
 const seatalk = makeChannel();
 
@@ -16,11 +16,8 @@ function input(
 ): ChannelStateInput {
   return {
     enabled: true,
-    config: seatalk.config,
     status: status === undefined ? undefined : makeStatus(seatalk, status),
     statusFailed: false,
-    selfId: HERE,
-    knownMachines: [HERE, THERE],
     ...over,
   };
 }
@@ -95,21 +92,6 @@ describe("describeChannel", () => {
     });
   });
 
-  test("another machine's channel is quiet here by design, whatever its local adapter says", () => {
-    const view = describeChannel(
-      input({ running: false, runs_on: THERE, runs_here: false }, { config: { runs_on: THERE } }),
-    );
-    expect(view).toMatchObject({ state: "elsewhere", group: "elsewhere", tone: "off" });
-    expect(view.primary).toBe("runHereConfirm");
-  });
-
-  test("a machine nobody claims, or none at all, runs nowhere", () => {
-    expect(describeChannel(input({ runs_on: "ghost", runs_here: false })).state).toBe(
-      "unknownMachine",
-    );
-    expect(describeChannel(input({ runs_on: null, runs_here: false })).state).toBe("unbound");
-  });
-
   // spec channels "Report a channel that is starting apart from one that failed to start"
   test("a channel switched on but not yet started is connecting, never a rejected secret", () => {
     const view = describeChannel(input({ running: false, starting: true, inbound: null }));
@@ -151,7 +133,6 @@ describe("describeChannel", () => {
     const tg = makeChannel({ config: { channel_type: "telegram" } });
     const view = describeChannel({
       ...input(undefined),
-      config: tg.config,
       status: makeStatus(tg),
     });
     expect(view.state).toBe("connected");
