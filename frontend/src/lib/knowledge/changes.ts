@@ -1,11 +1,10 @@
 // frontend/src/lib/knowledge/changes.ts
 //
-// How a knowledge writer and a change's time are worded: an agent by its
-// product name, a writer in a word, a time as the boards write it. Pure
-// functions over the wire shape, unit-tested without a component. The Knowledge
-// page shows no timeline of changes (spec knowledge "Follow edits across
-// collections in one feed" — the feed is only read to undo a delete), so this
-// is what remains of that wording.
+// How a knowledge writer, a change and its time are worded: an agent by its
+// product name, a writer in a word, what a change did in a few words, a time as
+// the boards write it. Pure functions over the wire shape, unit-tested without
+// a component; a collection page's Change log reads them (spec knowledge "Show
+// a collection as one tree of read-only documents in the web UI").
 import type { TFunction } from "i18next";
 
 import { agentTypeLabel } from "@/lib/agents/display";
@@ -30,9 +29,36 @@ export function writerLabel(t: TFunction, change: ChangeOut): string {
       return t("knowledge.writer.curation");
     case "sync":
       return t("knowledge.writer.sync");
+    case "daemon":
+      return t("knowledge.writer.daemon");
     default:
       return t("knowledge.writer.disk");
   }
+}
+
+/** The operations a change can name, each worded under `knowledge.operation`. */
+const OPERATIONS = new Set([
+  "save",
+  "delete",
+  "promote",
+  "restore",
+  "edit",
+  "sync",
+  "create",
+  "rename",
+  "remove",
+  "layout",
+  "baseline",
+]);
+
+/** What a change did, in a few words; a retired curation pass's change
+ *  (`pass`, `submit`, `undo`) reads as curation, anything else as its summary. */
+export function operationLabel(t: TFunction, change: ChangeOut): string {
+  if (OPERATIONS.has(change.operation)) return t(`knowledge.operation.${change.operation}`);
+  if (["pass", "submit", "undo"].includes(change.operation)) {
+    return t("knowledge.operation.curation");
+  }
+  return change.summary || change.operation;
 }
 
 /** The day heading a change sits under: "today", "yesterday", or the local

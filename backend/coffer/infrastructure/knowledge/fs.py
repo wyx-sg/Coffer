@@ -11,11 +11,11 @@ editor and an agent's reach the same bytes with nothing in between.
 
 Two kinds of file live under a collection, and this module is where they meet:
 
-* **Documents** — the visible tree. A person edits them in their own editor,
-  an agent with its own file tools; Coffer writes them through
-  :func:`write_file`.
+* **Sources and pages** — the visible tree. Coffer writes a source through
+  :func:`write_file` when material arrives; a person edits pages in their own
+  editor, an agent with its own file tools, and Coffer writes no page.
 * **Material** — the hidden ``.inbox/``, written and read by ``inbox.py``. A
-  file waits there only until the next sweep promotes it into a document (see
+  file waits there only until the next sweep adopts it as a source (see
   "Promote submitted material at once").
 """
 
@@ -116,13 +116,15 @@ def write_file(
     body: str,
     actor: str = ACTOR_AGENT,
     relpath: str | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> KnowledgeFile:
     """Create a document under ``directory``, or replace the one at ``relpath``.
 
     Both are knowledge-root-relative. ``directory`` is a collection or a folder
     inside one; ``relpath`` must name a document (``paths.require_document``).
     Replacing preserves ``created_at`` so the file keeps its own history even
-    though nothing but the file records it.
+    though nothing but the file records it. ``extra`` keys are written after
+    the ones this layer owns, as a person's own keys are.
     """
     now = timestamp()
     created = now
@@ -144,6 +146,7 @@ def write_file(
         paths.require_document(paths.relative_of(target))
     frontmatter: dict[str, Any] = {
         **carried,
+        **{k: v for k, v in (extra or {}).items() if k not in _ORDERED_KEYS},
         "title": title,
         "description": description,
         "actor": actor,

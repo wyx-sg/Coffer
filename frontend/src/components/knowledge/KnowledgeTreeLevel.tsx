@@ -11,6 +11,11 @@
 // so each expanded directory mounts another level and fetches its own listing
 // — and directories start CLOSED, except the ones on the way to the open
 // document, so a deep link lands with its document visible in the tree.
+//
+// At a collection's root its two folders come first, labelled Pages and
+// Sources, then any other entry; a waiting source carries a dot and the word
+// Waiting (spec knowledge "Show a collection as one tree of read-only documents
+// in the web UI").
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
@@ -25,6 +30,7 @@ import {
   NAV_ROW_IDLE,
   navIndent,
 } from "@/components/knowledge/navRow";
+import { StatusDot } from "@/components/status/StatusDot";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import { useKnowledgeTree } from "@/lib/hooks/useKnowledge";
@@ -42,11 +48,28 @@ interface Props {
   onSelect: (path: string) => void;
   /** What an EMPTY collection root says; nested levels say "nothing here". */
   emptyLabel?: string;
+  /** This level is a collection's root, where Pages and Sources come first. */
+  root?: boolean;
 }
 
 const indentOf = navIndent;
 
-export function KnowledgeTreeLevel({ path, depth, selectedPath, onSelect, emptyLabel }: Props) {
+/** A collection root's own folders, in the order they come. */
+const WIKI_FOLDERS = ["pages", "sources"] as const;
+
+function rootRank(name: string): number {
+  const i = (WIKI_FOLDERS as readonly string[]).indexOf(name);
+  return i < 0 ? WIKI_FOLDERS.length : i;
+}
+
+export function KnowledgeTreeLevel({
+  path,
+  depth,
+  selectedPath,
+  onSelect,
+  emptyLabel,
+  root = false,
+}: Props) {
   const { t } = useTranslation();
   // What the person opened and closed; a folder on the way to the open
   // document is open unless they closed it.
@@ -70,7 +93,12 @@ export function KnowledgeTreeLevel({ path, depth, selectedPath, onSelect, emptyL
     );
   }
 
-  const { directories } = data;
+  // A stable sort: the root's Pages and Sources first, the rest as listed.
+  const directories = root
+    ? [...data.directories].sort((a, b) => rootRank(a.name) - rootRank(b.name))
+    : data.directories;
+  const folderLabel = (name: string) =>
+    root && rootRank(name) < WIKI_FOLDERS.length ? t(`knowledge.tree.${name}`) : name;
   if (directories.length === 0 && data.files.length === 0) {
     return (
       <p style={indentOf(depth)} className="py-1.5 text-xs text-text-subtle">
@@ -122,7 +150,7 @@ export function KnowledgeTreeLevel({ path, depth, selectedPath, onSelect, emptyL
               ) : (
                 <Folder className={NAV_ICON} aria-hidden />
               )}
-              <span className={NAV_FOLDER}>{dir.name}</span>
+              <span className={NAV_FOLDER}>{folderLabel(dir.name)}</span>
             </button>
             {open ? (
               <KnowledgeTreeLevel
@@ -154,6 +182,12 @@ export function KnowledgeTreeLevel({ path, depth, selectedPath, onSelect, emptyL
               <span className={cn(NAV_NAME, active && "font-label")}>
                 {file.path.split("/").pop()}
               </span>
+              {file.kind === "source" && file.waiting ? (
+                <span className="flex shrink-0 items-center gap-1 text-2xs text-text-muted">
+                  <StatusDot tone="warn" size={6} />
+                  {t("knowledge.waiting")}
+                </span>
+              ) : null}
             </button>
           </li>
         );

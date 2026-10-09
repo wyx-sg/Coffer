@@ -1,8 +1,8 @@
 """``/api/v1/knowledge/*`` — the human's side of the knowledge directory.
 
-Create a collection, list them, walk one level of a collection, read a
-document, upload a document, delete a document and fetch the prompt that hands
-a tidy to the person's agent (spec knowledge
+Create a collection, list them, check one, walk one level of a collection,
+read a file, upload a source, delete a file and fetch the prompt that hands a
+tidy to the person's agent (spec knowledge
 "Manage knowledge in the web UI and on the command line"). These routes
 are the web UI's own: one the page does not call does not exist. Deleting a
 collection goes through the kind-agnostic Resource route, since collection
@@ -18,7 +18,7 @@ A collection's hidden ``.inbox`` is not listed and not readable ("Hide
 dot-prefixed entries except the inbox").
 
 **New knowledge arrives as material; a person's edit is the editor's.**
-``/upload`` submits material, which becomes a document at the collection root
+``/upload`` submits material, which becomes a source under ``sources/``
 ("Promote submitted material at once"). There is no route that creates or saves
 a document at a path: a person edits in their own editor, from the page's
 open-in-editor action, live on the very next read ("Treat a direct file edit as
@@ -67,6 +67,7 @@ from coffer.surfaces.http.knowledge.dependencies import (
     get_knowledge_service,
 )
 from coffer.surfaces.http.knowledge.schemas import (
+    CheckOut,
     CollectionCreate,
     CollectionListOut,
     CollectionOut,
@@ -75,6 +76,7 @@ from coffer.surfaces.http.knowledge.schemas import (
     FileSummaryOut,
     IngestedDocumentOut,
     TreeOut,
+    check_out,
     collection_out,
 )
 
@@ -117,6 +119,16 @@ async def create_collection(
 ) -> CollectionOut:
     created = await svc.create_collection(body.name, actor=actor, description=body.description)
     return collection_out(created)
+
+
+@router.get("/collections/{uid}/check", response_model=CheckOut)
+async def check_collection(
+    uid: str,
+    svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
+) -> CheckOut:
+    """One collection's mechanical findings, computed now from its files and
+    fixed by nothing here ("Check a collection mechanically on every read")."""
+    return check_out(await svc.check(uid))
 
 
 @router.get("/tidy-handoff", response_model=HandoffOut)

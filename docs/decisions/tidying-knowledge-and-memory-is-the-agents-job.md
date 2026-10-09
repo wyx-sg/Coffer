@@ -1,6 +1,8 @@
 # Tidying Knowledge and Memory Is the Agent's Job
 
 > **Amended (2026-10-04).** The change `move-agent-sessions-to-terminal` removed the web conversation, so Tidy starts the agent in the person's preferred terminal instead of opening a conversation in Coffer. The decision (the agent tidies, the person presses the button) is unchanged.
+>
+> **Amended (2026-10-09).** Tidy now first integrates the sources no page cites yet, and a report-only **Check with agent** hand-off joins it; Coffer computes the mechanical findings (dead links, orphan pages, waiting sources) itself. See [Knowledge Is a Wiki of Pages Compiled From Kept Sources](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md).
 
 **Status**: Accepted
 **Date**: 2026-10-04

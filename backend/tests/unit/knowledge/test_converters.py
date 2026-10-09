@@ -2,8 +2,8 @@
 
 No file is written and no ``.raw/`` copy is kept here — those belong to the
 ingestion pipeline that calls this layer. This tests only what turns bytes into
-``Conversion`` (spec knowledge "Convert uploads into documents
-without keeping the original").
+``Conversion`` (spec knowledge "Keep every upload as a Markdown
+source").
 """
 
 from __future__ import annotations

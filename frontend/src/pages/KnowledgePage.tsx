@@ -1,15 +1,15 @@
 // frontend/src/pages/KnowledgePage.tsx — the one Knowledge surface.
 //
-// A document app (spec knowledge "Show a collection as one tree of read-only
+// A wiki app (spec knowledge "Show a collection as one tree of read-only
 // documents in the web UI"): the tree of every collection on the left, each
-// with its documents, and whatever the address names on the right
+// with its pages and sources, and whatever the address names on the right
 // (lib/knowledge/routes.ts): a line to pick a collection, a collection, or an
-// open document, read-only. Every collection is served to every agent, so
+// open file, read-only, with its history drawer when the address names it. Every collection is served to every agent, so
 // there is no per-collection switch and no reach control; and the layer has no
 // retrieval, so there is no search box — ⌘K jumps to a collection by name.
 //
-// New knowledge goes in as a document — an upload, an agent's file — and a
-// person changes one in their own editor (Open in editor). Tidying is the
+// New knowledge goes in as a source — an upload, an agent's file — and a
+// person changes a page in their own editor (Open in editor). Tidying is the
 // agent's: Tidy all hands every collection to the default managed agent and
 // sends the prompt at once (spec knowledge "Hand a tidy to the agent").
 //
@@ -20,7 +20,7 @@
 // scrolling on its own.
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Navigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Upload } from "lucide-react";
 
@@ -36,15 +36,9 @@ import { SplitView } from "@/components/SplitView";
 import { Button } from "@/components/ui/button";
 import { getTidyHandoff } from "@/lib/api/knowledge";
 import { knowledgeKey } from "@/lib/api/queryKeys";
-import { useDetailTab } from "@/lib/detailTabs";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
 import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
-import {
-  collectionBasePath,
-  DEFAULT_KNOWLEDGE_TAB,
-  KNOWLEDGE_ROOT,
-  KNOWLEDGE_TABS,
-} from "@/lib/knowledge/routes";
+import { legacyRedirect } from "@/lib/knowledge/routes";
 import { PAGE_BLEED, PAGE_BLEED_HEAD } from "@/components/shell/pageFrame";
 import { cn } from "@/lib/utils";
 
@@ -64,20 +58,19 @@ export function KnowledgePage() {
       }
     },
   });
-  const { uid } = useParams<{ uid?: string }>();
+  const { uid, tab } = useParams<{ uid?: string; tab?: string }>();
+  const { search } = useLocation();
   const [params] = useSearchParams();
   const file = params.get("file");
   const collections = useKnowledgeCollections();
   const [dialog, setDialog] = useState<KnowledgeDialog>(null);
 
-  // A document's tab is in the path (`/<uid>/history?file=`); an unknown one is
-  // sent to the bare address, which opens the document.
-  const [tab] = useDetailTab(
-    KNOWLEDGE_TABS,
-    DEFAULT_KNOWLEDGE_TAB,
-    uid ? collectionBasePath(uid) : KNOWLEDGE_ROOT,
-    { enabled: Boolean(uid) },
-  );
+  // A file's pane has no tabs: the History tab's old address
+  // (`/<uid>/history?file=`) opens its history drawer, any other segment the
+  // bare address.
+  if (uid && tab) {
+    return <Navigate to={legacyRedirect(uid, tab, search)} replace />;
+  }
 
   const list = collections.data ?? [];
   const current = uid ? (list.find((c) => c.uid === uid) ?? null) : null;
@@ -166,7 +159,6 @@ export function KnowledgePage() {
               collection={current}
               collectionsLoading={collections.isPending}
               file={file}
-              tab={tab}
             />
           )
         }

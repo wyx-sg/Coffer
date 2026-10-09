@@ -14,18 +14,27 @@ import {
   createCollection,
   deleteFile,
   describeCollection,
+  getCheck,
   getFile,
   getTree,
+  listChanges,
   listCollections,
   uploadFile,
+  type ChangeOut,
 } from "@/lib/api/knowledge";
 import {
+  knowledgeChangesKey,
+  knowledgeCheckKey,
   knowledgeCollectionsKey,
   knowledgeFileKey,
   knowledgeKey,
   knowledgeTreeKey,
 } from "@/lib/api/queryKeys";
 import { resourcesApi } from "@/lib/api/resources";
+import { useInfiniteList } from "@/lib/hooks/useInfiniteList";
+
+/** Changes a collection's Change log reads at a time. */
+const CHANGE_LOG_PAGE = 20;
 
 export function useKnowledgeCollections() {
   return useQuery({
@@ -77,6 +86,27 @@ export function useKnowledgeFile(path: string | null) {
   });
 }
 
+/** A collection's mechanical check: its findings, read with the collection
+ *  page and refreshed with everything else under `["knowledge"]`. */
+export function useKnowledgeCheck(uid: string) {
+  return useQuery({
+    queryKey: knowledgeCheckKey(uid),
+    queryFn: () => getCheck(uid),
+  });
+}
+
+/** A collection's Change log: the changes feed for it (`collection` is its
+ *  NAME), newest first, a page at a time. */
+export function useKnowledgeChangeLog(collection: string) {
+  return useInfiniteList<ChangeOut>({
+    queryKey: knowledgeChangesKey(collection),
+    fetchPage: async (cursor, signal) => {
+      const page = await listChanges({ collection, limit: CHANGE_LOG_PAGE, cursor, signal });
+      return { items: page.changes, next: page.next_cursor };
+    },
+  });
+}
+
 /**
  * Delete ONE document from a collection — any document, whoever wrote it
  * (see "Let only a person delete a document").
@@ -102,8 +132,8 @@ export function useDeleteKnowledgeFile() {
 }
 
 /**
- * Convert one uploaded document into a document of a collection (a tree level
- * and `document_count` change), so success invalidates the whole
+ * Convert one uploaded file into a source of a collection (a tree level, the
+ * source and waiting counts and the check change), so success invalidates the whole
  * `["knowledge"]` subtree. A refusal (an unsupported type, a file too large) is
  * rendered in the upload dialog, where the file still is — so no `onError`
  * toast here.

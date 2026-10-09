@@ -66,6 +66,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge/collections/{uid}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check Collection
+         * @description One collection's mechanical findings, computed now from its files and
+         *     fixed by nothing here ("Check a collection mechanically on every read").
+         */
+        get: operations["check_collection_api_v1_knowledge_collections__uid__check_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge/collections/{uid}/description": {
         parameters: {
             query?: never;
@@ -198,7 +219,7 @@ export interface components {
             item: string | null;
             /**
              * Operation
-             * @description `save`, `delete`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, `remove` or `baseline`; a change a retired curation pass made also reads `pass`, `submit` or `undo`.
+             * @description `save`, `delete`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, `remove`, `layout` or `baseline`; a change a retired curation pass made also reads `pass`, `submit` or `undo`.
              */
             operation: string;
             /** Restored From */
@@ -224,10 +245,10 @@ export interface components {
             version: string;
             /**
              * Writer
-             * @description `user` a person; `agent` an agent whose material became a document on arrival; `curation` a change Coffer's retired curation pass made, kept in the history; `sync` another machine's change; `disk` an edit made outside Coffer (a person's editor, an agent's file tools).
+             * @description `user` a person; `agent` an agent whose material became a document on arrival; `curation` a change Coffer's retired curation pass made, kept in the history; `sync` another machine's change; `disk` an edit made outside Coffer (a person's editor, an agent's file tools); `daemon` Coffer filing a loose document into `pages/`.
              * @enum {string}
              */
-            writer: "user" | "agent" | "curation" | "sync" | "disk";
+            writer: "user" | "agent" | "curation" | "sync" | "disk" | "daemon";
         };
         /**
          * ChangesOut
@@ -241,6 +262,17 @@ export interface components {
              * @description Pass back as `cursor` for the next page; null on the last.
              */
             next_cursor: string | null;
+        };
+        /**
+         * CheckOut
+         * @description One collection's mechanical check ("Check a collection mechanically on
+         *     every read"): what Coffer found, and the prompt that hands the rest to the
+         *     agent.
+         */
+        CheckOut: {
+            collection: components["schemas"]["CollectionOut"];
+            /** Findings */
+            findings: components["schemas"]["FindingOut"][];
         };
         /** CollectionCreate */
         CollectionCreate: {
@@ -264,13 +296,14 @@ export interface components {
         };
         /** CollectionOut */
         CollectionOut: {
+            check_handoff: components["schemas"]["HandoffOut"];
             /** Description */
             description: string;
             /**
-             * Document Count
+             * Finding Count
              * @default 0
              */
-            document_count: number;
+            finding_count: number;
             /**
              * Folder Path
              * @default
@@ -278,11 +311,26 @@ export interface components {
             folder_path: string;
             /** Name */
             name: string;
+            /**
+             * Page Count
+             * @default 0
+             */
+            page_count: number;
+            /**
+             * Source Count
+             * @default 0
+             */
+            source_count: number;
             tidy_handoff: components["schemas"]["HandoffOut"];
             /** Uid */
             uid: string;
             /** Updated At */
             updated_at: string | null;
+            /**
+             * Waiting Source Count
+             * @default 0
+             */
+            waiting_source_count: number;
         };
         /** DirectoryOut */
         DirectoryOut: {
@@ -344,8 +392,12 @@ export interface components {
         FileOut: {
             /** Actor */
             actor: string;
+            /** Aliases */
+            aliases: string[];
             /** Body */
             body: string;
+            /** Cited By */
+            cited_by: components["schemas"]["PageRefOut"][];
             /** Created At */
             created_at: string;
             /** Description */
@@ -354,12 +406,32 @@ export interface components {
             file_path: string;
             /** Folder Path */
             folder_path: string;
+            /**
+             * Kind
+             * @default file
+             * @enum {string}
+             */
+            kind: "page" | "source" | "file";
+            /** Links */
+            links: components["schemas"]["LinkRefOut"][];
+            /**
+             * Page Type
+             * @default
+             */
+            page_type: string;
             /** Path */
             path: string;
+            /** Sources */
+            sources: components["schemas"]["SourceRefOut"][];
             /** Title */
             title: string;
             /** Updated At */
             updated_at: string;
+            /**
+             * Waiting
+             * @default false
+             */
+            waiting: boolean;
         };
         /** FileSummaryOut */
         FileSummaryOut: {
@@ -367,12 +439,42 @@ export interface components {
             actor: string;
             /** Description */
             description: string;
+            /**
+             * Kind
+             * @default file
+             * @enum {string}
+             */
+            kind: "page" | "source" | "file";
+            /**
+             * Page Type
+             * @default
+             */
+            page_type: string;
             /** Path */
             path: string;
             /** Title */
             title: string;
             /** Updated At */
             updated_at: string;
+            /**
+             * Waiting
+             * @default false
+             */
+            waiting: boolean;
+        };
+        /** FindingOut */
+        FindingOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "dead_link" | "ambiguous_link" | "duplicate_slug" | "missing_source" | "incomplete_page" | "unsourced_page" | "orphan_page" | "waiting_source";
+            /** Others */
+            others: string[];
+            /** Path */
+            path: string;
+            /** Target */
+            target: string | null;
         };
         /**
          * HandoffOut
@@ -392,6 +494,37 @@ export interface components {
             /** Path */
             path: string;
             /** Title */
+            title: string;
+        };
+        /** LinkRefOut */
+        LinkRefOut: {
+            /**
+             * Ambiguous
+             * @default false
+             */
+            ambiguous: boolean;
+            /** Path */
+            path: string | null;
+            /** Target */
+            target: string;
+        };
+        /** PageRefOut */
+        PageRefOut: {
+            /** Path */
+            path: string;
+            /** Title */
+            title: string;
+        };
+        /** SourceRefOut */
+        SourceRefOut: {
+            /** Path */
+            path: string | null;
+            /** Slug */
+            slug: string;
+            /**
+             * Title
+             * @default
+             */
             title: string;
         };
         /** TreeOut */
@@ -562,6 +695,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CollectionOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    check_collection_api_v1_knowledge_collections__uid__check_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

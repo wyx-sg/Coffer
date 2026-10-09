@@ -33,79 +33,136 @@ Coffer's own `coffer__` tools are always listed and never consume that budget,
 so this only ever concerns upstream tools.
 
 <!-- when:knowledge -->
-## Knowledge is a directory of files, and you read it yourself
+## Knowledge is a wiki of files, and you read it yourself
 
-The developer's knowledge lives under `<KNOWLEDGE_ROOT>/<collection>/`: one
-tree of Markdown documents per collection, which the developer and agents like
-you write together.
+The developer's knowledge lives under `<KNOWLEDGE_ROOT>/<collection>/`, one
+wiki per collection, which the developer and agents like you write together:
+
+- `README.md` is the collection's **schema**: what belongs in it, the page
+  types it uses and any conventions. Where it disagrees with this file, it wins.
+- `sources/` holds the **sources**: material as it arrived (an upload, a file
+  dropped into the inbox), converted to Markdown. Sources are never edited.
+- `pages/` holds the **pages**: the wiki itself, compiled from the sources and
+  kept up to date. This is what you read first and what you write.
 
 **There is no Coffer tool for reading, listing, searching or grepping it.** Use
-your own file tools on those paths. The full catalogue of what exists is at the
-bottom of this file, so you never have to guess at a filename. When the titles
-do not cover what you are after, grep the directory for a literal string — an
-identifier, a service name, a phrase in any language. It matches bytes, so
-nothing is stemmed away.
+your own file tools on those paths. The catalogue at the bottom of this file
+lists every page by type and every source still waiting to be integrated, so
+you never have to guess at a filename. When the pages do not carry what you are
+after, grep `sources/` for a literal string — an identifier, a service name, a
+phrase in any language. It matches bytes, so nothing is stemmed away.
 
 Check it before asking the developer something they may already have written
 down.
 
-### Writing something down
+### Writing a page
 
 When you learn something durable — a fact about a service, a convention this
 developer follows, a decision and the reason behind it, a trap and how to avoid
-it — put it into the collection's documents yourself, with your own file tools.
+it — put it into the collection's pages yourself, with your own file tools.
 Coffer does not rewrite what you write: where a fact ends up is your decision,
 so make it the right one.
 
-1. **Find its home.** Read the catalogue at the bottom of this file and grep the
-   collection for the subject. If a document already answers the question this
-   fact belongs to, read that document in full and fold the fact into the
-   section it belongs in. Only when no document owns the subject, create a new
-   file at a slug of its title (`session-ownership.md`).
-2. **Lose nothing.** Integrate; never regenerate. Every fact already in a
-   document you rewrite must survive your edit.
-3. **Organise by subject, never by provenance.** A reader wants the document to
-   be about the thing. Never add sections like "Added today" or "From the
+1. **Find its home.** Read the catalogue at the bottom of this file and grep
+   `pages/` for the subject. If a page already answers the question this fact
+   belongs to, read it in full and fold the fact into the section it belongs
+   in. Only when no page owns the subject, create one under `pages/` at a slug
+   of its title (`pages/session-ownership.md`).
+2. **Lose nothing.** Integrate; never regenerate. Every fact already in a page
+   you rewrite must survive your edit.
+3. **Organise by subject, never by provenance.** A reader wants the page to be
+   about the thing. Never add sections like "Added today" or "From the
    ticket" — put the fact where a reader would look for it.
 4. **Where two statements disagree, the newer wins unless the older one is
    shown to be right** — by a source, a date, a command's output or the code.
    Whoever wrote either, the developer included. Keep the superseded statement
    legible where the corrected fact is: "(previously recorded as X; corrected
    YYYY-MM-DD)".
-5. **Never name another knowledge file.** Paths move as the collection is
-   reorganised; name the subject in prose. The catalogue is how a reader finds
-   the file.
-6. **Give every document frontmatter**: a `title`, a one-line `description`
-   saying what *question* the document answers (it is the only thing a future
-   reader chooses by), and `actor: agent`. Leave any other key a person added
-   alone.
+5. **Link pages by `[[slug]]`, never by path.** A page's slug is its file name
+   without `.md`; write `[[session-ownership]]` or
+   `[[session-ownership|the session service]]`. A link may also name a source's
+   slug. When you rename a page, update the links to it, or keep its old slug in
+   its `aliases`. Coffer reports every link that names nothing.
+6. **Never edit a source.** A source is the record of what arrived; the only
+   thing you may add to one is `ingest: skipped` (see "Integrating sources").
+7. **Give every page frontmatter**: a `title`; a `type` — `concept`, `entity`,
+   `how-to`, `decision` or `overview` unless the README defines its own; a
+   one-line `description` saying what *question* the page answers (it is the
+   only thing a future reader chooses by); `sources`, the slugs of the sources
+   it draws on; any `aliases`; and `actor: agent`. Leave any other key a person
+   added alone.
 
-The collection must already exist: only the developer creates one. Coffer
-commits every change it finds on disk to the vault's git history, so a bad edit
-can be brought back from it; never run git inside the vault on your own
-initiative, because a commit of your own would be attributed to nobody. The
-developer reads a document's versions and restores an earlier one from its
-History tab in Coffer.
+```markdown
+---
+title: Session ownership
+type: concept
+description: Which service owns a login session, and how long it lives
+sources: [auth-design-2024, oncall-notes]
+aliases: [sessions]
+actor: agent
+---
+```
+
+The collection must already exist: only the developer creates one. A Markdown
+file you leave outside `pages/` and `sources/` is moved into `pages/` by Coffer
+within a minute. Coffer commits every change it finds on disk to the vault's
+git history, so a bad edit can be brought back from it;
+never run git inside the vault on your own initiative, because a commit of your
+own would be attributed to nobody. The developer reads a file's versions and restores an
+earlier one from its history in Coffer.
+
+### Integrating sources
+
+A source **waits** while no page lists it in `sources` and it is not marked
+`ingest: skipped`; the catalogue names the waiting ones. To integrate one:
+
+1. Read the source in full, and the README.
+2. Fold what it says into the pages that own its subjects, by the rules of
+   "Writing a page". Create a page for a subject no page owns.
+3. Add the source's slug to the `sources` of every page you changed with it.
+4. When nothing in it is worth keeping (a duplicate, an empty export), add
+   `ingest: skipped` to the source's frontmatter instead.
+
+One source may touch many pages; that is the point. Integrate the waiting
+sources one at a time, oldest first.
 
 ### Tidying a collection
 
 When the developer asks you to tidy, organise or clean up knowledge (整理知识),
 work through one collection at a time:
 
-1. Read its README and every document's title and description, then read the
-   documents in full before changing them.
-2. **Merge** documents that answer the same question into one, keeping every
-   fact; delete the ones you merged away.
-3. **Split** a document that answers several unrelated questions, one subject
-   per file.
-4. **Fix** what is wrong or contradictory by rule 4 above, and rewrite a
-   description that does not say what question its document answers.
-5. Move a document into a subfolder only if that makes the tree easier for a
-   person to browse; folders carry no meaning to Coffer.
-6. Report what you merged, split, corrected and deleted, so the developer can
-   check it against the vault's git history.
+1. Integrate its waiting sources first (see "Integrating sources").
+2. Read its README and every page's title and description, then read the pages
+   in full before changing them.
+3. **Merge** pages that answer the same question into one, keeping every fact
+   and every source; keep the merged-away slug in the survivor's `aliases`, and
+   delete the pages you merged away.
+4. **Split** a page that answers several unrelated questions, one subject per
+   page, and link them to each other.
+5. **Fix** what is wrong or contradictory by rule 4 of "Writing a page", the
+   links Coffer reports as dead, and a description that does not say what
+   question its page answers.
+6. Report which sources you integrated or skipped, and what you merged, split,
+   corrected and deleted, so the developer can check it against the vault's git
+   history.
 
 Change nothing that does not need changing.
+
+### Checking a collection
+
+When the developer asks you to check a collection, **change nothing**: read its
+README, its pages and, where a page's claim needs it, the sources it cites, and
+report:
+
+- statements that contradict each other, naming both pages;
+- statements a newer source or page shows to be stale;
+- subjects covered twice, by pages that should be one;
+- subjects mentioned across pages that deserve a page of their own;
+- the mechanical findings Coffer handed you (dead and ambiguous links, orphan
+  and incomplete pages, pages without sources, missing and waiting sources),
+  each with what you would do about it.
+
+The developer decides what to fix, and may then ask you to tidy.
 
 <!-- end:knowledge -->
 <!-- when:memory -->
@@ -261,8 +318,8 @@ text does not explain, not as a debugger for the developer's own program.
 - **Not the repository in front of you.** If the answer is in code you can
   already read, read the code. Knowledge is for what the repository cannot say.
 - **Not a scratch pad.** What goes in should still be true in a month.
-- Address knowledge files by collection and relative path. A path that climbs
-  out of the knowledge root is refused.
+- Address knowledge files by collection and relative path, and link pages by
+  `[[slug]]`. A path that climbs out of the knowledge root is refused.
 
 <!-- end:knowledge -->
 ## This file

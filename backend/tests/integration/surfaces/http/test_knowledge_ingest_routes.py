@@ -42,9 +42,9 @@ def _files_on_disk(tmp_path, collection: str = "shopee") -> list[str]:  # type: 
 
 @pytest.mark.acceptance(
     spec="knowledge",
-    scenario="an upload is converted into a document, keeping no original",
+    scenario="an upload is kept as a Markdown source",
 )
-def test_an_upload_becomes_one_document_and_keeps_no_file_of_its_own(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
+def test_an_upload_becomes_a_markdown_source_and_nothing_else(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
     _create_collection(client, "shopee")
 
     resp = client.post(
@@ -55,19 +55,18 @@ def test_an_upload_becomes_one_document_and_keeps_no_file_of_its_own(client, tmp
     assert resp.status_code == 201, resp.text
     doc = resp.json()
 
-    # The converted text is promoted to a document on the spot ("Promote submitted
-    # material at once"). A CSV, because a `.txt` or `.md` converts by
-    # passthrough and would not show that conversion happened.
-    assert doc["path"] == "shopee/team.md"
+    # The converted text is a source on the spot ("Promote submitted material
+    # at once"). A CSV, because a `.txt` or `.md` converts by passthrough and
+    # would not show that conversion happened.
+    assert doc["path"] == "shopee/sources/team.md"
     assert "pending" not in doc
     assert doc["converter"] == "csv"
     assert doc["title"] and doc["description"]
     assert "original_path" not in doc
 
-    # Neither the original bytes nor a separate extracted file: the one file in the
-    # collection is the document the knowledge became ("Convert uploads into documents
-    # without keeping the original").
-    assert _files_on_disk(tmp_path) == ["team.md"]
+    # Only the Markdown source: the uploaded bytes are not kept ("Keep every
+    # upload as a Markdown source").
+    assert _files_on_disk(tmp_path) == ["sources/team.md"]
 
     read = client.get("/api/v1/knowledge/file", params={"path": doc["path"]})
     assert read.status_code == 200, read.text
@@ -78,6 +77,8 @@ def test_an_upload_becomes_one_document_and_keeps_no_file_of_its_own(client, tmp
     assert file_out["title"] == doc["title"]
     assert file_out["description"] == doc["description"]
     assert "| session | account |" in file_out["body"]
+    assert (file_out["kind"], file_out["waiting"]) == ("source", True)
+    assert "original_path" not in file_out
 
 
 def test_an_upload_takes_no_folder(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -91,7 +92,7 @@ def test_an_upload_takes_no_folder(client, tmp_path) -> None:  # type: ignore[no
         files={"file": ("notes.md", b"# Notes\n\nSome prose.\n")},
     )
     assert resp.status_code == 201, resp.text
-    assert resp.json()["path"] == "shopee/notes.md"
+    assert resp.json()["path"] == "shopee/sources/notes.md"
     assert not (tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / "runbooks").exists()
 
 
