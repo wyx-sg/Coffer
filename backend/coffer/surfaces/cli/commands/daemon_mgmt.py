@@ -63,6 +63,21 @@ SPECS = [
         "Whether this daemon is older than the installed Coffer, and the hand-off.",
     ),
     RouteCommand(
+        "daemon upgrade-check",
+        "POST",
+        "/daemon/upgrade/check",
+        "Settings · About · Check for updates (installer binaries)",
+        "Check for a newer release of the installer's binaries now.",
+    ),
+    RouteCommand(
+        "daemon upgrade-auto-check",
+        "PUT",
+        "/daemon/upgrade/auto-check",
+        "Settings · About · Check automatically (installer binaries)",
+        "Switch the daemon's daily release check on or off. Body: enabled.",
+        body=True,
+    ),
+    RouteCommand(
         "daemon setup-check",
         "POST",
         "/daemon/setup/check",

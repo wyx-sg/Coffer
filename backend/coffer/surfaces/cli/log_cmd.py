@@ -19,6 +19,7 @@ form it accepts.
 
 from __future__ import annotations
 
+import contextlib
 import json as _json
 import re
 from datetime import UTC, datetime, timedelta
@@ -209,7 +210,7 @@ def mcp(
     table.add_column("Time")
     if server is None:
         table.add_column("Server")
-    for col in ("Type", "Key", "Duration (ms)", "Status", "Trace"):
+    for col in ("Type", "Key", "Duration (ms)", "Status", "Trace", "ID"):
         table.add_column(col)
     for inv in rows:
         named = [inv.get("resource_name") or inv["resource_uid"]] if server is None else []
@@ -221,9 +222,49 @@ def mcp(
             str(inv["duration_ms"]),
             inv["status"],
             inv.get("trace_id") or "",
+            str(inv["id"]),
         )
     _console.print(table)
     _next_page_hint(body.get("next_cursor"))
+
+
+@app.command("call")
+def call(
+    ctx: typer.Context,
+    invocation_id: int = typer.Argument(..., help="The call's id, as `coffer log mcp` prints it"),
+    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
+) -> None:
+    """Read one tool call with its arguments and result, secrets masked."""
+    verbose = _verbose(ctx)
+    with _io.client(as_json=output_json) as c:
+        r = c.get(f"/mcp/invocations/{invocation_id}")
+        _cli_client.check(r, verbose=verbose, as_json=output_json)
+    body = r.json()
+    if output_json:
+        typer.echo(_json.dumps(body, indent=2))
+        return
+    server = body.get("resource_name") or body["resource_uid"]
+    typer.echo(f"{body['timestamp']}  {server}.{body['capability_key']}  {body['status']}")
+    typer.echo(f"took {body['duration_ms']} ms · id {body['id']}")
+    if body.get("error_message"):
+        typer.echo(f"error: {body['error_message']}")
+    content = body.get("content")
+    if content is None:
+        typer.echo("\nContent was not recorded for this call.")
+        return
+    for part in ("arguments", "result", "error", "request", "response"):
+        if content.get(part):
+            typer.echo(f"\n{part.capitalize()}:\n{_content_text(content[part])}")
+
+
+def _content_text(part: dict[str, Any]) -> str:
+    """A recorded part laid out as JSON when whole, as text when cut."""
+    text: str = part["text"]
+    if not part["truncated"]:
+        with contextlib.suppress(ValueError):
+            return _json.dumps(_json.loads(text), indent=2, ensure_ascii=False)
+        return text
+    return f"{text}\n[cut at 16 KB — the call carried {part['bytes'] // 1024} KB]"
 
 
 def _next_page_hint(next_cursor: str | None) -> None:

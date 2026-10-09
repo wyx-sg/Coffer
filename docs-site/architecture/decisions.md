@@ -41,7 +41,7 @@ Explained in: [Resource framework](/architecture/resource-framework), [Persisten
 | History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage | [`history-is-one-sqlite-file-written-only-by-the-daemon`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/history-is-one-sqlite-file-written-only-by-the-daemon.md) |
 | Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades | [`every-vault-file-carries-its-format-version`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-file-carries-its-format-version.md) |
 | Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer | [`every-vault-write-is-a-validated-commit-naming-its-writer`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-write-is-a-validated-commit-naming-its-writer.md) |
-| Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table | [`audit-and-retention`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/audit-and-retention.md) |
+| Audit Every Change With Its Actor, Log Every Invocation, Prune Per Table | [`audit-and-retention`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/audit-and-retention.md) |
 | One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters | [`one-level-triggered-reconciler-compares-parameters`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/one-level-triggered-reconciler-compares-parameters.md) |
 | The Wire Contract Is Generated From the Pydantic Models, and the Frontend Client From the Contract | [`wire-contract-generated-from-the-pydantic-models`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/wire-contract-generated-from-the-pydantic-models.md) |
 | Background Work Runs Supervised, and Every Record Carries One Correlation Id | [`background-work-runs-supervised-and-correlated`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/background-work-runs-supervised-and-correlated.md) |
@@ -74,6 +74,7 @@ Explained in: [MCP gateway](/architecture/mcp-gateway).
 | MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream | [`mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md) |
 | Tool Overload: List a Usage-Ranked Slice, Search the Rest | [`tool-overload-tier-the-list-search-the-rest`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md) |
 | Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate | [`eval-capture-and-regression-gate`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/eval-capture-and-regression-gate.md) |
+| Record Tool Call Content, Masked Where the Secrets Are Known and Cut at 16 KB | [`record-tool-call-content-redacted-and-bounded`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/record-tool-call-content-redacted-and-bounded.md) |
 
 ## Agents & providers
 

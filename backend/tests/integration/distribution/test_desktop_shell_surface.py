@@ -119,11 +119,12 @@ _FRONTEND_SRC = _REPO / "frontend" / "src"
 # The only frontend modules allowed to know which host they run in: the
 # secret supplier itself, its update-check half (split out of it to keep
 # it within its size cap, and reaching the shell only through its
-# `shellInvoke` / `onShellEvent`), and the offline banner whose Restart control
-# only the shell can offer.
+# `shellInvoke` / `onShellEvent`), its uninstall half (the same way), and the
+# offline banner whose Restart control only the shell can offer.
 _HOST_AWARE_MODULES = {
     Path("lib/tauri.ts"),
     Path("lib/shellUpdates.ts"),
+    Path("lib/shellUninstall.ts"),
     Path("components/DaemonOfflineBanner.tsx"),
 }
 

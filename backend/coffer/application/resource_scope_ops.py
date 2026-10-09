@@ -70,8 +70,13 @@ async def update_scope(
         actor=actor,
         # Scope carries only agent uids — no secrets — so it is audited
         # verbatim (no redactor needed, unlike config), in the same shape the
-        # column stores.
-        details={"scope": scope.to_json() if scope is not None else None},
+        # column stores; the scope it replaced beside it, and the agents' names
+        # as they stand, for a reader who does not know the uids.
+        details={
+            "scope": scope.to_json() if scope is not None else None,
+            "before": before.scope.to_json() if before.scope is not None else None,
+            "agents": await _agent_names(service, scope),
+        },
     )
     # Kind-level reconciliation: runs AFTER persistence +
     # audit, unlike ``on_update_config`` — by the time this fires the new
@@ -82,3 +87,15 @@ async def update_scope(
         if inspect.isawaitable(hook_result):
             await hook_result
     return updated
+
+
+async def _agent_names(service: ResourceService, scope: Scope | None) -> list[str] | None:
+    """The labels of the agents ``scope`` names (``None``: every agent). A uid
+    this machine has no agent for stays as the uid."""
+    if scope is None or scope.agents is None:
+        return None
+    names: list[str] = []
+    for uid in scope.agents:
+        row = await service._repo.find(uid)
+        names.append(row.name if row is not None else uid)
+    return names

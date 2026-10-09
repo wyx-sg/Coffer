@@ -41,6 +41,14 @@ pub fn read_daemon_info() -> Option<(u16, String)> {
     Some((parse_daemon_port(&raw)?, parse_daemon_token(&raw)?))
 }
 
+/// The daemon's pid from `~/.coffer/daemon.json`, for a restart that has to
+/// force a wedged daemon out ([`crate::force_stop`]).
+pub fn read_daemon_pid() -> Option<u32> {
+    let raw = fs::read_to_string(discovery_file()?).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    u32::try_from(v.get("pid")?.as_u64()?).ok()
+}
+
 /// Best-effort check: is *anything* listening on `127.0.0.1:<port>`?
 ///
 /// This is a bare TCP connect, so it cannot tell a Coffer daemon apart from a
@@ -169,7 +177,10 @@ mod tests {
 
     #[test]
     fn parse_daemon_port_reads_well_formed_value() {
-        assert_eq!(parse_daemon_port(r#"{"port": 38470, "pid": 1}"#), Some(38470));
+        assert_eq!(
+            parse_daemon_port(r#"{"port": 38470, "pid": 1}"#),
+            Some(38470)
+        );
     }
 
     #[test]

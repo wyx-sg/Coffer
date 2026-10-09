@@ -3,8 +3,7 @@
 // Provider · Default model · Route, with a Test beside a route through Coffer's
 // proxy. "Change…" opens the Change model dialog; `?change-model=1` opens it on
 // arrival (Model providers' "Used by" links there) and is dropped when it
-// closes. With the Models feature off the section is read-only: no Provider
-// row, no Change.
+// closes.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
@@ -15,7 +14,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { agentTypeLabel } from "@/lib/agents/display";
 import type { AgentOut } from "@/lib/api/agents";
 import { useAgentDefaultModel } from "@/lib/hooks/useAgentModels";
-import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { useProviders } from "@/lib/hooks/useProviders";
 import { useModelPairTest } from "@/lib/hooks/useModelTest";
 import { activeProviderFor } from "@/lib/providers/usedBy";
@@ -29,10 +27,9 @@ const PARAM = "change-model";
 
 export function OverviewModelSection({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
-  const models = useFeatureEnabled("models") === true;
   const [params, setParams] = useSearchParams();
   const [openLocal, setOpenLocal] = useState(false);
-  const open = models && (openLocal || params.get(PARAM) === "1");
+  const open = openLocal || params.get(PARAM) === "1";
   const close = (next: boolean) => {
     if (next) return setOpenLocal(true);
     setOpenLocal(false);
@@ -44,7 +41,7 @@ export function OverviewModelSection({ agent }: { agent: AgentOut }) {
   };
 
   const provider = useProviderLabel(agent);
-  const providers = useProviders(models);
+  const providers = useProviders();
   const active = providers.data ? activeProviderFor(agent, providers.data) : null;
   // On its own login the model is whatever the agent's config names; the
   // record's binding is the connection's and may be left over from one.
@@ -58,19 +55,15 @@ export function OverviewModelSection({ agent }: { agent: AgentOut }) {
       title={t(`${K}.heading`)}
       as="h2"
       actions={
-        models ? (
-          <Button variant="link" size="sm" onClick={() => close(true)}>
-            {t(`${K}.change`)}
-          </Button>
-        ) : undefined
+        <Button variant="link" size="sm" onClick={() => close(true)}>
+          {t(`${K}.change`)}
+        </Button>
       }
     >
       <dl className="flex flex-col">
-        {models ? (
-          <InfoRow label={t(`${K}.provider`)}>
-            {provider ?? <Skeleton className="h-4 w-40" />}
-          </InfoRow>
-        ) : null}
+        <InfoRow label={t(`${K}.provider`)}>
+          {provider ?? <Skeleton className="h-4 w-40" />}
+        </InfoRow>
         <InfoRow label={t(`${K}.model`)} mono={!!model}>
           {model ?? t(`${K}.auto`)}
         </InfoRow>
@@ -104,7 +97,7 @@ export function OverviewModelSection({ agent }: { agent: AgentOut }) {
           )}
         </InfoRow>
       </dl>
-      {models ? <ChangeModelDialog agent={agent} open={open} onOpenChange={close} /> : null}
+      <ChangeModelDialog agent={agent} open={open} onOpenChange={close} />
     </Section>
   );
 }

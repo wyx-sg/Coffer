@@ -1,7 +1,7 @@
 // src/components/overview/AllGoodCard.tsx — "Nothing needs you": the calm card, with a sentence on what is fine.
 //
 // The sentence is built from lists the Overview already reads (agents, MCP
-// servers, and sync status while the sync feature is on; lib/overview/allGood),
+// servers, sync status; lib/overview/allGood),
 // so it can only say what those lists say; while one is still loading its
 // clause is left out. On the right, when the attention list was last checked
 // (Overview board 1.2.03).
@@ -9,7 +9,6 @@ import { Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { useAgents } from "@/lib/hooks/useAgents";
-import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { useResources } from "@/lib/hooks/useResources";
 import { useSyncStatus } from "@/lib/hooks/useSync";
 import { allGoodSummary } from "@/lib/overview/allGood";
@@ -20,13 +19,11 @@ export function AllGoodCard({ checkedAt }: { checkedAt: number }) {
   const iso = checkedAt > 0 ? new Date(checkedAt).toISOString() : null;
   const agents = useAgents();
   const servers = useResources("mcp_server");
-  const syncOn = useFeatureEnabled("sync") === true;
-  const sync = useSyncStatus(syncOn);
+  const sync = useSyncStatus();
   const summary = allGoodSummary(t, {
     agents: agents.data?.length,
     servers: servers.data?.filter((s) => s.enabled).length,
     vaultInSync:
-      syncOn &&
       sync.data !== undefined &&
       sync.data.configured &&
       !sync.data.problem &&

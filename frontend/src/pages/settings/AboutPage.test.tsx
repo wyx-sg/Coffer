@@ -4,6 +4,7 @@ import { acceptance } from "@/test/acceptance";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { AboutPage } from "./AboutPage";
 
 vi.mock("@/lib/api/client", async (orig) => ({
@@ -17,7 +18,11 @@ function wrap({ children }: PropsWithChildren) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>{children}</MemoryRouter>
+    </QueryClientProvider>
+  );
 }
 
 const STATUS = {
@@ -29,7 +34,7 @@ const STATUS = {
   executable: "/Applications/Coffer.app/Contents/MacOS/coffer-daemon",
   machine_id: "m-1",
   machine_name: "work-mac",
-  features: { knowledge: true, memory: false, sync: true },
+  features: { knowledge: true, memory: true },
   upstream_summary: null,
   pid: 4242,
   commit: "3909da95",
@@ -39,7 +44,11 @@ const STATUS = {
 
 function mockStatus() {
   getApiClientMock.mockReturnValue({
-    GET: vi.fn().mockResolvedValue({ data: STATUS, error: undefined }),
+    GET: vi.fn((path: string) =>
+      path === "/daemon/status"
+        ? Promise.resolve({ data: STATUS, error: undefined })
+        : new Promise(() => {}),
+    ),
   } as unknown as ReturnType<typeof getApiClient>);
 }
 
@@ -122,7 +131,7 @@ describe("AboutPage", () => {
     expect(text).not.toMatch(/channel/i);
     expect(text).toMatch(/Host: browser/);
     expect(text).toContain("Daemon: running on port 38470");
-    expect(text).toContain("Features: knowledge, sync");
+    expect(text).toContain("Features: knowledge, memory");
     expect(text).not.toContain("tok-must-not-leak");
     expect(text).not.toMatch(/token|secret/i);
     delete injected.__COFFER_TOKEN__;

@@ -2,7 +2,7 @@
 //
 // The daemon's access token (spec daemon "Rotate the token over REST and on the command line") and the master key's import (through the desktop shell) and fingerprint (spec secret
 // "Import a master key after showing whose key it is"), under `/secrets/key`,
-// which answer whether or not the experimental sync feature is on. Where the master key
+// which always answer. Where the master key
 // lives is read through `useSecretSettings`; the export goes through the
 // desktop shell (`@/lib/tauri`), because no route returns the key. Wire types
 // alias the generated contracts; transport is the typed client

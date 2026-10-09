@@ -200,7 +200,28 @@ async def test_every_audited_event_is_also_logged(tmp_path, caplog) -> None:
     assert record.resource_kind == "mcp_server"
     assert record.resource_uid == "9f2c1a7b4e8d4c1fa0b3d5e6f7081920"
     assert record.actor == "cli"
-    # `details` stays out: the audit table applies each kind's redactor before
-    # storing it, and re-deriving that here would duplicate the one place that
-    # knows which fields carry secrets.
-    assert not hasattr(record, "details")
+    # The row's details ride along: they are stored already redacted (a ref,
+    # never a value), so the line holds nothing the table does not.
+    assert record.details == {"ref": "jira.TOKEN"}
+    assert not hasattr(record, "details_truncated")
+
+
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="the daemon log line carries the event's details"
+)
+async def test_large_details_are_cut_in_the_log_line(tmp_path, caplog) -> None:
+    svc, _engine = await _service(tmp_path)
+    with caplog.at_level(logging.INFO, logger="coffer.application.audit_service"):
+        await svc.record(
+            AuditEventType.RETENTION_UPDATED.value,
+            actor="ui",
+            details={"table": "audit_log", "previous_days": 30, "retention_days": 7},
+        )
+        await svc.record(
+            AuditEventType.KNOWLEDGE_EDITED.value, actor="ui", details={"diff": "x" * 5000}
+        )
+    small, big = [r for r in caplog.records if r.name == "coffer.application.audit_service"]
+    assert small.details == {"table": "audit_log", "previous_days": 30, "retention_days": 7}
+    assert small.actor == "ui"
+    assert big.details_truncated is True
+    assert isinstance(big.details, str) and len(big.details.encode()) <= 2048

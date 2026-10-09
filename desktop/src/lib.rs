@@ -41,6 +41,7 @@ mod daemon_http;
 mod desktop_requests;
 mod discovery;
 mod env_path;
+mod force_stop;
 mod logging;
 mod master_key;
 mod presence;
@@ -62,6 +63,7 @@ mod tray_locale;
 mod tray_nav;
 mod tray_state;
 mod tray_watch;
+mod uninstall;
 mod update_relaunch;
 mod update_state;
 mod updater;
@@ -132,6 +134,7 @@ pub fn run() {
             updater::check_for_updates,
             updater::install_update,
             updater::set_update_auto_check,
+            uninstall::uninstall_coffer,
         ])
         .setup(|app| {
             // The window is configured hidden and revealed by the handshake

@@ -123,10 +123,14 @@ def test_the_sync_remote_token_is_not_offered_to_a_redirect_target(tmp_path: Pat
 def test_no_outbound_client_is_built_to_follow_redirects() -> None:
     """The rule is written down once (``infrastructure/net/redirects``); this
     keeps a new client from breaking it: only the SeaTalk media download (a
-    bearer token httpx strips across origins) may follow, and an SDK-built
-    client names ``follow_redirects``."""
+    bearer token httpx strips across origins) and ``coffer update``'s release
+    download (no credential at all; GitHub answers it with a redirect to its
+    file host) may follow, and an SDK-built client names ``follow_redirects``."""
     root = Path(__file__).resolve().parents[3] / "coffer"
-    allowed = {"infrastructure/channel/seatalk_media.py"}
+    allowed = {
+        "infrastructure/channel/seatalk_media.py",
+        "infrastructure/daemon/binary_update.py",
+    }
     sdk_calls = ("AsyncOpenAI(", "ChatOpenAI(", "ChatAnthropic(")
     offenders: list[str] = []
     for path in sorted(root.rglob("*.py")):

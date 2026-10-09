@@ -26,6 +26,7 @@ _logger = logging.getLogger(__name__)
 _STATUS: dict[str, int] = {
     **VAULT_AND_SYNC_STATUS,
     "RESOURCE_NOT_FOUND": 404,
+    "INVOCATION_NOT_FOUND": 404,
     # Nothing informational is listed under that key to ignore.
     "ATTENTION_NOT_IGNORABLE": 409,
     # custom tools (spec mcp-gateway "Manage custom tools through REST and the Custom tools page")

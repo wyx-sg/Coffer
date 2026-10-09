@@ -13,7 +13,7 @@
 // skill-manager "Declare a command-line tool without a skill"). A failed save
 // stays in the dialog and the primary button becomes Retry.
 import { CircleAlert, Lock } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ import { translateApiError } from "@/lib/api/errors";
 import { useAddCli, useEditCli } from "@/lib/hooks/useClis";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { CliFound } from "./CliFound";
+import { loginCheckRefusal } from "./loginCheckRefusal";
 
 /** The daemon's limit (domain/skill/cli_declared.py DESCRIPTION_MAX). */
 const DESCRIPTION_MAX = 1000;
@@ -80,6 +81,12 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
   };
 
   const command_ = existing?.command ?? command.trim();
+  const loginRefusal = loginCheckRefusal(save.error);
+  const loginInput = useRef<HTMLInputElement>(null);
+  const refusedFor = loginRefusal?.command;
+  useEffect(() => {
+    if (refusedFor) loginInput.current?.focus();
+  }, [refusedFor]);
   return (
     <form
       className="space-y-4"
@@ -168,14 +175,28 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
         <Label htmlFor="cli-login">{t("clis.add.loginCheck")}</Label>
         <Input
           id="cli-login"
+          ref={loginInput}
           value={loginCheck}
           placeholder="gh auth status"
           className="font-mono"
-          onChange={(e) => setLoginCheck(e.target.value)}
+          aria-invalid={loginRefusal ? true : undefined}
+          aria-describedby={loginRefusal ? "cli-login-error" : "cli-login-hint"}
+          onChange={(e) => {
+            setLoginCheck(e.target.value);
+            if (loginRefusal) save.reset();
+          }}
         />
-        <p className="text-xs text-text-muted">{t("clis.add.loginCheckHint")}</p>
+        {loginRefusal ? (
+          <p id="cli-login-error" role="alert" className="text-xs text-danger">
+            {t("clis.add.loginCheckCommand", { command: loginRefusal.command })}
+          </p>
+        ) : (
+          <p id="cli-login-hint" className="text-xs text-text-muted">
+            {t("clis.add.loginCheckHint")}
+          </p>
+        )}
       </div>
-      {save.error ? (
+      {save.error && !loginRefusal ? (
         <Alert variant="error">
           <CircleAlert aria-hidden />
           <AlertTitle>

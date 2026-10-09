@@ -32,6 +32,8 @@ pub enum GrantOp {
     ExportMasterKey,
     /// Installing a master key, signed over the fingerprint of the key being installed.
     ImportMasterKey,
+    /// Uninstalling and deleting `~/.coffer`, signed over `delete-data`.
+    Uninstall,
 }
 
 impl GrantOp {
@@ -42,6 +44,7 @@ impl GrantOp {
             GrantOp::ApproveBatch => "approve_batch",
             GrantOp::ExportMasterKey => "export_master_key",
             GrantOp::ImportMasterKey => "import_master_key",
+            GrantOp::Uninstall => "uninstall",
         }
     }
 }

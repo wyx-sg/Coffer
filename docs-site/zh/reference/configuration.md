@@ -18,7 +18,7 @@ Coffer 把配置放在五个地方，每个地方都有其理由：
 | 浏览器 `localStorage` | Web 界面偏好 | 按浏览器保存，从不发给守护进程 |
 
 ::: warning 环境变量与脱离启动的守护进程
-守护进程通常是脱离调用方启动的——由命令行、智能体的 MCP shim、桌面应用或开机自启服务拉起——它继承的是启动它的那个进程的环境，而不是你的 shell 配置文件。只有在启动守护进程的进程的环境里设置环境变量，它才能到达守护进程，例如 `COFFER_FEATURES=run=off,models=off coffer daemon restart`。想长期保留的设置，应该放进 `daemon-config.json` 或 **设置**。
+守护进程通常是脱离调用方启动的——由命令行、智能体的 MCP shim、桌面应用或开机自启服务拉起——它继承的是启动它的那个进程的环境，而不是你的 shell 配置文件。只有在启动守护进程的进程的环境里设置环境变量，它才能到达守护进程，例如 `COFFER_FEATURES=knowledge=on,memory=off coffer daemon restart`。想长期保留的设置，应该放进 `daemon-config.json` 或 **设置**。
 :::
 
 ## 环境变量 {#environment-variables}
@@ -34,6 +34,7 @@ Coffer 把配置放在五个地方，每个地方都有其理由：
 | `COFFER_WEBUI_DIR` | 内置 | 存放已构建 Web 界面（`index.html`）的目录。不设置时，守护进程提供冻结二进制中打包的界面，在源码检出中则提供 `frontend/dist`。 |
 | `COFFER_PRICE_REFRESH` | 未设置 | `off` 强制关闭每日模型价格表刷新，无论 `price_refresh` 怎么设；价格取自构建中附带的列表。测试套件和 e2e 守护进程会设置它。 |
 | `COFFER_MODEL_PROXY` | 未设置 | `off` 让守护进程不启动也不监管[本地模型代理](/zh/architecture/model-proxy)；其他任何值或不设置则保持开启。测试套件会设置它。 |
+| `COFFER_UPDATE_CHECK` | 未设置 | `off` 会固定关闭守护进程每天的新版本检查，不管 `update_check` 怎么设。只有从安装脚本装的二进制启动的守护进程才会检查。 |
 
 ### MCP 网关 {#mcp-gateway}
 
@@ -60,7 +61,7 @@ Coffer 把配置放在五个地方，每个地方都有其理由：
 
 | 名称 | 默认值 | 作用 |
 | --- | --- | --- |
-| `COFFER_DB_URL` | `sqlite+aiosqlite:///~/.coffer/runs.db` | 历史数据库的 SQLAlchemy URL。无论它怎么设，主密钥文件（`master.key`）都留在 `~/.coffer`。 |
+| `COFFER_DB_URL` | `sqlite+aiosqlite:///~/.coffer/runs.db` | 历史数据库的 SQLAlchemy URL。无论它怎么设，主密钥都留在 macOS 钥匙串中。 |
 | `COFFER_PROXY_SPOOL_DIR` | `~/.coffer/proxy-usage` | 模型代理写入用量暂存文件、守护进程从中读取的目录。两个进程必须看到相同的值。 |
 | `COFFER_LOG_DIR` | `~/.coffer/logs` | 存放 `daemon.log`、`proxy.log`、上游服务器日志、MCP shim 日志以及开机自启服务输出的目录。 |
 | `HOME` | 用户的主目录 | 每个 `~/.coffer` 路径都在需要的那一刻相对 `$HOME` 解析，所以换一个 `HOME` 就得到完全独立的保险库。 |
@@ -115,7 +116,8 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
   "machine_name": "studio",
   "machine_id": "3f0c9a…",
   "features": {},
-  "price_refresh": true
+  "price_refresh": true,
+  "record_call_content": true
 }
 ```
 
@@ -127,6 +129,8 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 | `machine_id` | 字符串 | 由主机派生 | 由主机派生的机器 id 的缓存，在同步的保险库中用来指代本机。删除后会重新算出同一个值。 | 由守护进程写入 |
 | `features` | 布尔值组成的对象 | `{}` | 本机的实验功能开关。立即生效。注册表中没有声明的键会被忽略。 | **设置 → 功能** |
 | `price_refresh` | 布尔值 | `true` | 守护进程是否每天从 genai-prices 刷新一次模型价格表。关闭时使用构建中附带的价格表。每次刷新时读取。 | **设置 › 通用 → 刷新模型价格** |
+| `update_check` | 布尔值 | `true` | 从安装脚本装的二进制运行的守护进程是否每天去 GitHub 检查一次新版本。它只报告结果，由 `coffer update` 安装。每次检查时读取。 | **设置 › 关于 → 自动检查**，或 `coffer daemon upgrade-auto-check --set enabled=false` |
+| `record_call_content` | 布尔值 | `true` | 每次 MCP 工具调用是否在调用日志里保存它的参数和返回结果（以及自定义工具的请求和响应），先遮盖密钥并截断到 16 KB。关闭后新的行只保留元数据。立即生效。 | **设置 › 数据 → 历史记录 → 记录工具调用内容**，或 `coffer settings call-content set` |
 
 守护进程的运行时状态——它的 pid、端口和 API 令牌——在另一个文件 `~/.coffer/daemon.json` 中，启动时创建、退出时删除。见[文件与目录](/zh/reference/filesystem#daemon-files)。
 
@@ -134,16 +138,16 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 
 实验功能是在你开启之前一直关闭的能力，按机器开启；关闭期间它看起来就像不存在——它的页面、命令和路由都不可用——但不会删除它保存的任何东西。每个注册表条目写明它的键、它拥有的路由和资源类型。
 
-注册表里有四个功能，按这个顺序：
+注册表里有两个功能，按这个顺序：
 
 | 键 | 关闭的内容 | REST 前缀 |
 | --- | --- | --- |
 | `knowledge` | 知识 | `/api/v1/knowledge` |
 | `memory` | 记忆 | `/api/v1/memory` |
-| `sync` | 保险库同步 | `/api/v1/sync` |
-| `models` | 模型提供商（含它的用量 tab）和本地模型代理 | `/api/v1/providers`、`/api/v1/models`、`/api/v1/proxy`、`/api/v1/usage` |
 
-其余一切始终开启，包括对话和消息渠道。其他任何键都不是功能：`PUT /api/v1/daemon/features/<key>` 会返回 `FEATURE_UNKNOWN`。注册表没有声明的键，其已保存的设置会被忽略。
+其余一切始终开启，包括保险库同步、模型提供商（连同本地模型代理和用量）、对话和消息渠道。其他任何键都不是功能：`PUT /api/v1/daemon/features/<key>` 会返回 `FEATURE_UNKNOWN`。注册表没有声明的键，其已保存的设置会被忽略。
+
+`sync` 和 `models` 曾是实验功能，现已转正。指向它们的 `COFFER_FEATURES` 条目或已保存的设置是未知的键：记日志并忽略。守护进程启动时会把它们的开关从 `daemon-config.json` 的 `features` 对象中移除，每移除一个开关记一行日志。
 
 功能关闭期间，它的路由返回 `404`，错误码为 `FEATURE_DISABLED`；在**设置 → 功能**里开启它。注册表位于 [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py)。
 
@@ -155,14 +159,14 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 2. **设置** — `daemon-config.json` 中 `features` 下本机的值。
 3. **默认值** — 每个构建中的每个功能都是关。
 
-**设置 → 功能** 在每个构建中都会列出这四个功能，状态的来源报告为 `pin`、`setting` 或 `default`。被固定的功能，开关不可用。
+**设置 → 功能** 在每个构建中都会列出这两个功能，状态的来源报告为 `pin`、`setting` 或 `default`。被固定的功能，开关不可用。
 
 ### COFFER_FEATURES 语法 {#coffer-features-syntax}
 
 逗号分隔的 `key=value` 条目列表。`on`、`true` 和 `1` 表示开启；`off`、`false` 和 `0` 表示关闭。条目两侧的空白会被忽略，值不区分大小写。未知的键或格式错误的条目会被记录并跳过，绝不会让守护进程停下。
 
 ```sh
-COFFER_FEATURES="knowledge=on,models=off" coffer daemon restart
+COFFER_FEATURES="knowledge=on,memory=off" coffer daemon restart
 ```
 
 面向任务的指南见[实验功能](/zh/guides/experimental-features)。
@@ -225,14 +229,15 @@ Coffer 自身工作的设置是保险库中的一个文档 `state/settings/inter
 | **附件** | `attachments` | 30 天 | 删除 `~/.coffer/content/channel-media` 中最后修改时间早于窗口的文件。显示在**本地内容**下。 |
 | 仅 REST | `sync_runs` | 90 天 | 删除同步轮次的历史。 |
 
+**MCP 调用**下面的**记录工具调用内容**决定新的调用是否保存参数和返回结果，先遮盖密钥并截断到 16 KB（默认开启；即 [daemon-config.json](#daemon-config-json) 里的 `record_call_content`）。见[调用记录了什么](/zh/guides/activity#what-a-call-records)。
+
 对话没有保留策略：Coffer 不保存对话文本，智能体自己的会话由智能体自己的清理机制处理（见[对话](/zh/guides/chat#chat-and-the-agent-s-own-sessions)）。旧版本留在 `retention.json` 里的 `conversations` 或 `conversations_archive` 条目会在守护进程启动时被丢弃。策略可以设为 **永久保留**（值为 `forever`）。同一次运行还会删除超过 7 天的旧 shim 日志和上游日志。
 
 ### 设置 → 安全 {#settings-→-security}
 
 | 设置 | 默认值 | 作用 |
 | --- | --- | --- |
-| **将主密钥存入系统钥匙串** | 关（文件） | 在 `~/.coffer/master.key` 和系统钥匙串（服务 `coffer`，条目 `master-key`）之间移动密钥的主密钥。主密钥本身不变，所以已存的密钥仍然可读。这次移动会被审计。仅限开发构建：签名的发布版把主密钥保存在自己的钥匙串访问组中，拒绝移动。 |
-| 新密钥去处需审批（`secrets.require_approval`） | 签名发布版开，开发构建关 | 开启时，密钥发往新的去处或目标之前，要先在桌面应用中等待审批。关闭时，新去处无需询问直接批准。开启立即生效；关闭则要等桌面应用中的一次审批。见[密钥](/zh/guides/secrets#switching-the-protection-off)。 |
+| 新密钥去处需审批（`secrets.require_approval`） | 开 | 开启时，密钥发往新的去处或目标之前，要先在桌面应用中等待审批。关闭时，新去处无需询问直接批准。开启立即生效；关闭则要等桌面应用中的一次审批。见[密钥](/zh/guides/secrets#switching-the-protection-off)。 |
 
 ## 相关内容 {#related}
 

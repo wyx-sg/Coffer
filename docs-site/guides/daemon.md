@@ -24,11 +24,13 @@ Exactly one daemon runs per vault. If two surfaces race to start one, a lock on 
 ```sh
 coffer daemon start      # spawn it in the background, if none is running
 coffer daemon status     # ask the running daemon how it is; never starts one
-coffer daemon stop       # SIGTERM, then wait for it to exit
-coffer daemon restart    # stop (if running), then start
+coffer daemon stop       # SIGTERM, then wait up to 15 s for it to exit
+coffer daemon restart    # stop (if running, by force if it will not), then start
 ```
 
 In the web UI, **Settings → Daemon → Restart** restarts it from a browser too: the daemon starts its successor, which waits for it to exit before binding the port, then exits itself, and the page reloads from the new daemon (which has a new token). The desktop app's Restart stops and starts the daemon from outside instead. `coffer daemon restart` keeps doing it from outside, so it also works on a daemon that no longer answers.
+
+Every restart replaces a daemon that is stuck. A daemon that does not exit within its grace period, or does not answer at all, is killed before its replacement starts, so a wedged daemon cannot keep the port and leave the new one refusing beside it. Only a process that is provably this vault's Coffer daemon is ever killed, and only when you ask for a restart: a command or an agent that starts the daemon on its own never kills one.
 
 `coffer daemon status` prints what the daemon reports about itself:
 
@@ -39,7 +41,7 @@ port:    38470
 pid:     41822
 ```
 
-`status` is `ready` while the daemon serves and `draining` while it shuts down, or `setup` while it waits for git — then the command also prints why and a prompt for your agent (see [Coffer needs git](/guides/troubleshooting#coffer-needs-git)). There is no earlier phase to see: the daemon opens its port only once it has finished starting. Four [experimental features](/guides/experimental-features) are off until you switch them on. Add `--json` for scripts.
+`status` is `ready` while the daemon serves and `draining` while it shuts down, or `setup` while it waits for git — then the command also prints why and a prompt for your agent (see [Coffer needs git](/guides/troubleshooting#coffer-needs-git)). There is no earlier phase to see: the daemon opens its port only once it has finished starting. Two [experimental features](/guides/experimental-features), Knowledge and Memory, are off until you switch them on. Add `--json` for scripts.
 
 With no daemon running, `coffer daemon status` prints `status:  not running` (`{"status": "stopped"}` under `--json`) and exits 3. It does not start a daemon, so its answer never changes what it reports on; use `coffer daemon start` for that.
 
@@ -47,8 +49,20 @@ A few behaviours worth knowing:
 
 - `start` decides "already running" by asking the daemon, not by checking whether `daemon.json` exists. A discovery file left behind by a crash never blocks a start. `start` reports success only once the new daemon answers its status call; if the daemon refuses to start (a vault migration is required, git is too old) it says so and points at `daemon.log`.
 - `start` checks the port before spawning. If something else holds it, you get the diagnosis at once instead of a ten-second timeout (see [When the port is taken](#when-the-port-is-taken)).
-- `stop` checks that the recorded pid really is a Coffer daemon before signalling it. If the pid has been recycled onto another process, `stop` removes the stale `daemon.json` and says so instead of killing a stranger.
+- `stop` checks that the recorded pid really is a Coffer daemon before signalling it. If the pid has been recycled onto another process, `stop` removes the stale `daemon.json` and says so instead of killing a stranger. A daemon that has not exited after 15 seconds is reported, not killed; `restart` is the command that replaces it.
+- `status` also lists any other daemon process serving this vault (`other daemon processes for this vault: …`, `other_daemon_pids` under `--json`): a start still booting, or a stray. One daemon serves a vault, so this line is normally absent.
 - `restart` is how a setting read before the daemon binds (the port) takes effect.
+
+### Why several Coffer processes run
+
+One daemon per vault does not mean one process. In Activity Monitor or `ps` you will normally see:
+
+- two `coffer-daemon` processes for the daemon itself: the installed binary is a single file that unpacks itself, so a small launcher process stays as the parent of the real one;
+- another `coffer-daemon` pair running `proxy`, the [local model proxy](/architecture/model-proxy);
+- a `coffer-mcp-shim` pair for every agent session that is connected to Coffer, ending when that session ends;
+- a `coffer-seatalk-bridge` pair while a SeaTalk channel runs.
+
+`coffer daemon status` names any daemon beyond these. A start that cannot finish gives up after two minutes on its own, and a start that finds the daemon busy leaves without starting a second one.
 
 To open the UI the daemon serves, browse to `http://127.0.0.1:<port>`; the port is in `~/.coffer/daemon.json` (38470 by default). The [desktop app](/guides/desktop-app) opens it for you.
 
@@ -159,6 +173,8 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.1 (/Users/you/.coffe
 
 Run `coffer daemon restart` and the warning goes away. The desktop app shows the same situation as a **Daemon out of date** notice with a **Restart daemon** button.
 
+To install a new version: the desktop app updates itself, and `coffer update` upgrades the installer's binaries and restarts the daemon on them. See [Install → Upgrade](/start/install#upgrade). `coffer uninstall` removes Coffer and keeps `~/.coffer`; see [Install → Uninstall](/start/install#uninstall).
+
 To roll back to the previous build:
 
 1. Stop the daemon: `coffer daemon stop`.
@@ -206,7 +222,6 @@ Everything Coffer holds is under `~/.coffer`. The parts that cannot be rebuilt a
 | `local/` | This machine's agents, reach, retention, sync remote and secret approvals. |
 | `content/` | Attachments and the chat workspace. |
 | `runs.db` (+ `-wal`, `-shm`) | Conversations, the audit log, invocation logs, sync rounds, usage. |
-| `master.key` | The key that decrypts every stored secret. It is absent if you moved the key to the OS keychain (**Settings → Security**). |
 
 `derived/`, including the memory tree derived from your agents' own memory files, can be regenerated. To take a consistent copy, stop the daemon first:
 
@@ -217,7 +232,7 @@ coffer daemon start
 ```
 
 ::: warning
-A backup that includes `master.key` can decrypt every secret in it. Store it like a password. A backup without the key keeps the secrets as ciphertext nobody can read.
+The copy does not include the master key, which lives in the macOS Keychain: without it the secrets in the copy are ciphertext nobody can read. Back the key up in the desktop app (**Settings › Security › Back up the master key**) and store that backup like a password.
 :::
 
 If you run Coffer on several machines, [vault sync](/guides/vault-sync) pushes the vault repository, history included, to a git repository you own, which doubles as an off-machine backup of knowledge, skills and resource definitions.

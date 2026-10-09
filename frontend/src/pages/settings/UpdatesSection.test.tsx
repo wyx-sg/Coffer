@@ -3,7 +3,8 @@
 // Settings › About's update check, against a stand-in for the desktop shell.
 // The shell owns the check and the install; what is asserted here is that the
 // tab renders the shell's record faithfully and asks it to act. In a browser
-// the tab hands the upgrade to an agent with the daemon's prompt.
+// the tab shows the daemon's own release check when it runs from the
+// installer's binaries, and hands the upgrade to an agent with its prompt.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -98,7 +99,12 @@ describe("UpdatesSection", () => {
     shell.setAuto.mockReset();
     getMock.mockReset();
     getMock.mockResolvedValue({
-      data: { install_method: "binaries", handoff: { prompt: UPGRADE_PROMPT } },
+      data: {
+        install_method: "app",
+        checks: false,
+        auto_check: false,
+        handoff: { prompt: UPGRADE_PROMPT },
+      },
     });
   });
 
@@ -179,6 +185,39 @@ describe("UpdatesSection", () => {
     expect(screen.queryByRole("button", { name: /download/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
   });
+
+  acceptance(
+    "web-ui",
+    "about in a browser shows the daemon's check and coffer update",
+    async () => {
+      shell.inShell = false;
+      getMock.mockResolvedValue({
+        data: {
+          install_method: "binaries",
+          checks: true,
+          auto_check: true,
+          checked_at: new Date(CHECKED_AT).toISOString(),
+          last_error: null,
+          available: {
+            version: "1.0.1",
+            tag: "v1.0.1",
+            notes: "- Secrets have their own page.",
+            published_at: null,
+            url: "https://github.com/wyx-sg/Coffer/releases/tag/v1.0.1",
+          },
+          handoff: { prompt: UPGRADE_PROMPT },
+        },
+      });
+      renderSection();
+      expect(await screen.findByText(/Coffer 1\.0\.1 is available/)).toBeInTheDocument();
+      expect(screen.getByText("coffer update")).toBeInTheDocument();
+      expect(screen.getByText("Secrets have their own page.")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /check for updates/i })).toBeEnabled();
+      expect(screen.getByRole("switch", { name: /check automatically/i })).toBeChecked();
+      // Nothing in the page installs.
+      expect(screen.queryByRole("button", { name: /download/i })).not.toBeInTheDocument();
+    },
+  );
 
   test("the desktop shell never asks for the upgrade hand-off", async () => {
     renderSection();

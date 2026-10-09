@@ -77,6 +77,7 @@ OWNERS: tuple[tuple[str, str], ...] = (
     ("/api/v1/resources/mcp_server", "mcp-gateway"),
     ("/api/v1/retention", "resource-framework"),
     ("/api/v1/settings", "secret"),
+    ("/api/v1/settings/call-content", "mcp-gateway"),
     ("/api/v1/skills", "skill-manager"),
     ("/api/v1/sync", "vault-sync"),
     ("/api/v1/vault", "vault-storage"),

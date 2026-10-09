@@ -183,13 +183,13 @@ export function actionIcon(verb: string): LucideIcon | undefined {
 
 /** The actions that run where the row is. An action runs in place only when
  *  it is a non-GET call into Coffer's own state that needs no preview: testing
- *  an MCP server again (`test`, POST) and probing a command again (`check`,
- *  POST on a CLI). Every other verb opens its page — `connect` and `repair`
+ *  an MCP server again (`test`, POST), probing a command again (`check`, POST
+ *  on a CLI) and checking a model provider's endpoint again (`check`, POST). Every other verb opens its page — `connect` and `repair`
  *  write into an agent's own files, whose preview lives there; `set_secret`
  *  and `replace_key` need the value typed; `turn_on` changes a security setting the person
  *  should see; `review`, `run` and a GET `check` only read. Keyed by kind and
  *  verb, so the call itself goes through the typed client (useInPlaceAction). */
-const IN_PLACE = new Set(["mcp_server:test", "cli:check"]);
+const IN_PLACE = new Set(["mcp_server:test", "cli:check", "provider:check"]);
 
 /** The item's in-place verb (`test` or `check`), or null when its action opens a page. */
 export function inPlaceVerb(item: AttentionItem): "test" | "check" | null {

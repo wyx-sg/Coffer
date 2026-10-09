@@ -146,3 +146,24 @@ def test_spool_dir_honours_the_env_override(
     monkeypatch.setenv("COFFER_PROXY_SPOOL_DIR", str(tmp_path / "s"))
     assert default_spool_dir() == tmp_path / "s"
     assert FileSpoolReader(tmp_path / "missing").completed() == []
+
+
+async def test_each_files_records_reach_the_observer_after_their_commit(sm, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    spool = tmp_path / "spool"
+    write_spool(spool, "a.jsonl", [record(1), record(2)])
+    svc = _service(sm, spool)
+    seen: list[tuple[int, int]] = []
+
+    async def observe(records) -> None:  # type: ignore[no-untyped-def]
+        seen.append((len(records), await _count(sm, UsageRequestModel)))
+
+    svc.observe = observe
+    await svc.ingest_once()
+    assert seen == [(2, 2)]
+
+    async def broken(_records) -> None:  # type: ignore[no-untyped-def]
+        raise RuntimeError("observer down")
+
+    svc.observe = broken
+    write_spool(spool, "b.jsonl", [record(3)])
+    assert (await svc.ingest_once()).inserted == 1  # an observer failing costs nothing

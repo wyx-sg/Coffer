@@ -37,7 +37,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `CURSOR_INVALID` | 400 | 发给分页列表（审计日志、MCP 调用日志、智能体的原生会话、聊天对话）的 `cursor` 无法解码，或者是为另一个列表或另一组筛选条件签发的。 | 去掉 `cursor` 重新读第一页，或发送同一列表、同样筛选条件返回的 `next_cursor`。 |
 | `NOT_FOUND` | 404 | 没有这个路由或对象，由路由抛出而非领域错误。 | 检查路径；守护进程在 `/api/v1/openapi.json` 向带令牌的调用方提供实时的路由列表。 |
 | `FORBIDDEN` | 403 | 路由拒绝了该操作。 | 阅读 `message`。 |
-| `CONFIG_INVALID` | 422 | 请求体或查询参数未通过校验，或资源的配置无效。提交的值不会被回显。 | 对照 `/api/v1/openapi.json`（需带令牌）中该路由的 schema 检查请求体。 |
+| `CONFIG_INVALID` | 422 | 请求体或查询参数未通过校验，或资源的配置无效。提交的值不会被回显。已存密钥被用于没有保存连接持有它的接入地址时，`details.reason` 为 `stored_key_destination`，且不会发出任何请求。 | 对照 `/api/v1/openapi.json`（需带令牌）中该路由的 schema 检查请求体。 |
 | `INTERNAL_ERROR` | 500 | 意外的失败。完整的 traceback 在守护进程日志中，对应响应的 trace id。 | 运行 `grep <trace-id> ~/.coffer/logs/daemon.log`，或 `coffer log daemon --errors`。 |
 | `HTTP_<status>` | 同名状态 | 一个没有具名错误码的普通 HTTP 错误。 | 阅读 `message`。 |
 
@@ -46,6 +46,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
 | `RESOURCE_NOT_FOUND` | 404 | 你给的 uid 或名字没有对应的资源。 | 在该类型的页面上核对名字；名字只在同一类型内唯一。 |
+| `INVOCATION_NOT_FOUND` | 404 | 日志里没有这个 id 的工具调用：从未存在，或已被保留期清理。 | 从 `coffer log mcp` 或活动页取 id。 |
 | `RESOURCE_ALREADY_EXISTS` | 409 | 该类型已有同名资源。 | 换个名字，或编辑已有的资源。 |
 | `UNKNOWN_KIND` | 400 | 该类型不是本守护进程注册的类型。 | 使用已注册的类型，例如 `mcp_server`、`skill` 或 `agent`。 |
 | `GENERIC_CREATE_NOT_ALLOWED` | 409 | 这个类型不能通过通用的 `/resources` 端点创建或更新。 | 使用该类型自己的端点，或它在 Web 界面里的页面。 |
@@ -63,10 +64,10 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | --- | --- | --- | --- |
 | `SECRET_MISSING` | 400 | 所引用的密钥 ref 下没有存储任何密钥。 | 存入它：`coffer secret set <ref>`，或在资源表单中重新填写。 |
 | `SECRET_IN_USE` | 409 | 仍有资源引用该密钥，不能删除。消息会列出这些资源。 | 先解除关联或删除那些资源。 |
-| `SECRET_LOCKED` | 503 | 系统钥匙串已锁定或不可用，或者一次钥匙串写入无法验证。 | 解锁钥匙串（登录桌面会话）后重试。 |
+| `SECRET_LOCKED` | 503 | macOS 钥匙串已锁定或不可用、拒绝把主密钥交给守护进程，或者一次钥匙串写入无法验证。 | 解锁钥匙串（登录桌面会话）后重试。 |
 | `SECRET_UNREADABLE` | 500 | 某个已存的密钥无法用当前主密钥解密。 | 恢复与之匹配的主密钥，或重新填写该密钥。见[密钥存储](/zh/guides/secret-store)。 |
-| `MASTER_KEY_MISSING` | 503 | 存在加密的密钥，但主密钥既不在密钥文件中也不在钥匙串中。在守护进程启动时抛出。 | 恢复 `~/.coffer/master.key`，或者重新填写你的密钥。 |
-| `MASTER_KEY_FILE_INVALID` | 422 | 要导入的主密钥文件不存在或不是有效的主密钥，或者 `.cfk` 备份的指纹与其主密钥不符。 | 导入桌面应用写出的主密钥备份。 |
+| `MASTER_KEY_MISSING` | 503 | 存在加密的密钥，但钥匙串中没有主密钥。在守护进程启动时抛出。 | 在桌面应用中导入你的主密钥备份（**设置 › 安全 › 导入主密钥**），或者重新填写你的密钥。 |
+| `MASTER_KEY_FILE_INVALID` | 422 | 要导入的主密钥备份（`.cfk`）不存在或不是有效的备份，或者它的指纹与其主密钥不符。 | 导入桌面应用写出的主密钥备份。 |
 | `MASTER_KEY_PASSPHRASE_WRONG` | 422 | 导入受口令保护的主密钥备份（`.cfk`）时口令错误或没给口令。 | 输入在另一台 Mac 上导出主密钥时设置的口令。 |
 | `MASTER_KEY_PASSPHRASE_TOO_SHORT` | 422 | 请求主密钥备份时给的口令不足八个字符。什么都没写入。 | 选一个更长的口令。 |
 | `SECRET_BINDING_PENDING` | 409 | 某个密钥将发往一个没有人批准过的去处或目标。什么都没发送。`details.approval_ids` 列出等待中的审批。 | 运行 `coffer approval approve <id>` 并在 Coffer 桌面应用中确认（或直接在应用里批准），或用 `coffer approval reject <id>` 或在**设置 › 安全**（**审阅**）里拒绝。自定义工具的调用会以带内方式返回它，写明审批 id 和同一条命令，而且只影响在等待的那个环境。`coffer run` 遇到无人允许它使用的独立密钥时也会返回它，见[密钥 → 允许 `coffer run` 使用它](/zh/guides/secrets#allow-coffer-run-to-use-it)。 |
@@ -114,7 +115,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | --- | --- | --- | --- |
 | `CLI_NOT_KNOWN` | 404 | 没有托管技能需要该命令，也没有以该名字添加的命令行工具。 | 在**命令行工具**页面列出已知的命令。 |
 | `CLI_TOOL_EXISTS` | 409 | 已经添加过同名的命令行工具。 | 在**命令行工具**页面修改它，或先移除。 |
-| `CLI_TOOL_INVALID` | 400 | 命令名、最低版本或登录检查不合法。 | 使用普通的命令名或绝对路径；字段见 `message`。 |
+| `CLI_TOOL_INVALID` | 400 | 命令名、最低版本或登录检查不合法。登录检查不以命令名开头时，`details.reason` 为 `login_check_command`，`details.field` 为 `login_check`，`details.command` 是它必须开头的名字（路径命令取文件名）。 | 使用普通的命令名或绝对路径；登录检查以命令名开头；字段见 `message`。 |
 | `CLI_TOOL_NOT_DECLARED` | 404 | 该命令行工具不是手动添加的，因此不能在这里编辑或移除。 | 技能需要的命令要在技能里修改，不在这里。 |
 
 ## 智能体与智能体工作目录 {#agents-and-agent-workspaces}
@@ -265,7 +266,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
 | `FEATURE_DISABLED` | 404 | 该路由或资源属于一个在本机上已关闭的实验功能。`details.feature` 给出功能名。 | 在**设置 → 功能**里开启它。见[实验功能](/zh/guides/experimental-features)。 |
-| `FEATURE_UNKNOWN` | 404 | 该键不是实验功能。键只有 `knowledge`、`memory`、`sync` 和 `models`。 | 使用这四个键之一。 |
+| `FEATURE_UNKNOWN` | 404 | 该键不是实验功能。键只有 `knowledge` 和 `memory`；`sync` 和 `models` 已经转正，不再是功能。 | 使用这两个键之一。 |
 | `FEATURE_PINNED` | 409 | `COFFER_FEATURES` 在守护进程的生命周期内固定了该功能。 | 修改 `COFFER_FEATURES` 并重启守护进程。 |
 
 ## 启动错误 {#startup-errors}

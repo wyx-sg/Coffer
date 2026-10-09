@@ -24,7 +24,6 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 ├── config-backups/               # copies of agent config files made before Coffer rewrites them: never synced, pruned by retention (each file's newest is kept)
 ├── skill-data/                   # logs, journals and temp files skill scripts write, one folder per skill: never synced, pruned by retention
 ├── derived/                      # rebuilt from the rest: always safe to delete
-├── master.key                    # secret master key (when stored as a file)
 ├── machine-id                    # fallback machine id (only if the host gives none)
 ├── daemon.json                   # running daemon: pid, port, API token
 ├── daemon.lock                   # spawn lock
@@ -103,8 +102,9 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `runs.db` | 历史：审计日志、MCP 调用日志、对话索引（标题和会话 id，没有文字）、消息渠道的线程、同步轮次与用量。`COFFER_DB_URL` 可以指定另一个数据库。 | 守护进程 | 从不 | 丢的是历史，不是配置。先停守护进程。 |
 | `runs.db-wal`、`runs.db-shm` | SQLite 预写日志和共享内存索引。WAL 里可能有已提交但还没合并进 `runs.db` 的数据。 | 守护进程 | 否 | **不能**，而且守护进程运行时，绝不要只复制 `runs.db` 而不带上它们。 |
 | `runs.db.pre-<revision>`（及 `-wal`、`-shm`） | 迁移修改表结构之前做的副本。只保留最新三份。 | 守护进程 | 否 | 升级后的守护进程工作正常后可以。 |
-| `master.key` | 解密已存密钥的 Fernet 主密钥，权限 `0600`。主密钥存放在操作系统钥匙串中时（服务 `coffer`，条目 `master-key`）不存在这个文件。 | 守护进程 | **从不。** 在桌面应用中备份，再通过**设置 › 安全 › 导入主密钥**装到另一台机器上。 | **不能。** 没有它，所有已存密钥都无法读取。 |
 | `machine-id` | 随机 id，权限 `0600`，只在主机不提供硬件 id（macOS 的 `IOPlatformUUID`、Linux 的 machine-id）时使用。从不重写。 | 守护进程 | 否 | 不能：新 id 会让本机在已同步的保险库中分裂成两个身份。 |
+
+解密已存密钥的主密钥不在这棵目录树里。它是 macOS 钥匙串中的一个项目（服务 `coffer`，账户 `master-key`），只有 Coffer 的签名二进制能读取，所以 `~/.coffer` 的副本里只有密钥的密文，没有解密它们的主密钥。主密钥从不同步：在桌面应用中备份它，再通过**设置 › 安全 › 导入主密钥**装到另一台机器上。
 
 ### 派生数据 {#derived}
 
@@ -140,6 +140,8 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `bin/coffer`、`bin/coffer-daemon`、`bin/coffer-mcp-shim` | 指向当前版本目录的相对符号链接，升级时原子切换。智能体的 MCP 条目、登录服务和你的 `PATH` 都使用这些固定名称。 | 安装程序、守护进程 | 否 | 不能：智能体的 MCP 条目指向 `bin/coffer-mcp-shim`。 |
 
 要手动撤销一次升级，把这些符号链接指回上一个版本目录即可。frozen 守护进程启动时会把同级二进制部署到这里；源码安装则使用 `pip` 放到 `PATH` 上的命令行脚本。见[分发与发布](/zh/architecture/distribution)。
+
+`coffer update` 会用新版本的二进制替换这里的二进制。`coffer uninstall` 会删除 `bin/`，`~/.coffer` 的其余部分保持不动，见[安装 → 卸载](/zh/start/install#uninstall)。
 
 ### Skill 临时数据 {#skill-working-files}
 

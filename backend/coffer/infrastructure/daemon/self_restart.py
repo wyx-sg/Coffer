@@ -18,8 +18,9 @@ halves itself, in the order that keeps them a true restart:
 Nothing new decides where the daemon comes from, which port it binds or
 whether a second one may run: the successor goes through the same
 ``bootstrap.acquire_or_existing`` as every start. If the predecessor never
-exits, the successor gives up waiting and meets it as a live daemon, which is
-the ordinary "already running" exit — never two daemons.
+exits, the successor forces it out (``force_stop``, through ``on_timeout``):
+the user asked for this daemon to be replaced, and a wedged one would otherwise
+keep its port and make the restart fail beside it.
 
 The frozen build is one PyInstaller one-file executable. A one-file program
 that starts *itself* again must say so (``PYINSTALLER_RESET_ENVIRONMENT``), or
@@ -93,13 +94,15 @@ def await_predecessor(
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
     timeout: float = PREDECESSOR_TIMEOUT_SECONDS,
+    on_timeout: Callable[[int], object] | None = None,
 ) -> bool:
     """Wait for the daemon this one succeeds to exit; ``True`` once it has.
 
     A start that is not a restart carries no predecessor and returns at once.
-    A malformed value is ignored. On a timeout it returns ``False`` and the
-    caller starts anyway: the spawn lock and the liveness probe then decide,
-    and a predecessor still serving makes this one exit as "already running".
+    A malformed value is ignored. On a timeout ``on_timeout`` gets the pid —
+    the entry point forces the wedged predecessor out there — and this returns
+    ``False``; the caller starts anyway, and the spawn lock and the liveness
+    probe decide as for any start.
     """
     raw = environ.pop(PREDECESSOR_ENV, None)
     if raw is None:
@@ -113,6 +116,8 @@ def await_predecessor(
     while not gone(pid):
         if clock() >= deadline:
             _logger.warning("daemon.restart.predecessor_still_running", extra={"pid": pid})
+            if on_timeout is not None:
+                on_timeout(pid)
             return False
         sleep(_POLL_SECONDS)
     return True

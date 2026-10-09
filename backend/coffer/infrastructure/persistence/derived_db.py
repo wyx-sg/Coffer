@@ -1,9 +1,10 @@
 """``derived/derived.db`` — tables rebuilt from other state (ADR
 storage-is-five-classes-by-nature).
 
-Three tables are observations this machine can make again: an MCP server's
-last health check, which skill copies were delivered into which agent, and
-when each upstream capability was first and last seen. None of them is the
+Four tables are observations this machine can make again: an MCP server's
+last health check, a model provider connection's last health verdict, which
+skill copies were delivered into which agent, and when each upstream
+capability was first and last seen. None of them is the
 only copy of a fact, so they live under ``derived/`` in a database of their
 own: no Alembic lineage, the schema created with ``create_all`` at open, and
 ``PRAGMA user_version`` compared with :data:`SCHEMA_VERSION` — a file at any
@@ -29,7 +30,7 @@ from coffer.infrastructure.persistence.engine import (
 from coffer.infrastructure.vault.home import derived_root
 
 #: Bumped whenever a table below changes shape; an older file is recreated.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class DerivedBase(DeclarativeBase):
@@ -46,6 +47,22 @@ class MCPServerHealthModel(DerivedBase):
     checked_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     #: Why a failing check failed (``domain.mcp.probe.FailureReason``); null when healthy.
     failure_reason: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class ProviderHealthModel(DerivedBase):
+    """The last health verdict per provider connection, keyed by its uid
+    (``domain.provider.health``)."""
+
+    __tablename__ = "provider_health"
+
+    resource_uid: Mapped[str] = mapped_column(String, primary_key=True)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    checked_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    #: ``check`` (a model-list call) or ``request`` (an agent's real call).
+    source: Mapped[str] = mapped_column(String, nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    #: When this status was first seen without a break.
+    since: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
 
 class SkillAgentBindingModel(DerivedBase):
@@ -132,6 +149,7 @@ __all__ = [
     "DerivedBase",
     "MCPCapabilitySeenModel",
     "MCPServerHealthModel",
+    "ProviderHealthModel",
     "SkillAgentBindingModel",
     "derived_db_path",
     "open_derived_db",

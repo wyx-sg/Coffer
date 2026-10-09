@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import mcp.types as mcp_types
 from mcp import MCPError
 
+from coffer.application.mcp.call_content import call_content, exchange_scope
 from coffer.application.mcp.gateway_coerce import (
     coerce_call_result,
     coerce_prompt_result,
@@ -28,12 +29,12 @@ from coffer.application.mcp.invocation_outcome import (
     INBAND_TOOL_ERROR,
     answered_rpc_error,
 )
+from coffer.application.mcp.invocation_record import check_capability_enabled, record_invocation
 from coffer.application.mcp.ports import (
     MCPCapabilityPreferenceRepoPort,
     MCPInvocationRepoPort,
 )
 from coffer.application.mcp.upstream_auth import UpstreamAuthMonitor
-from coffer.application.runtime import correlation
 from coffer.domain.errors import (
     CofferError,
     InvalidPrefix,
@@ -42,7 +43,7 @@ from coffer.domain.errors import (
     UpstreamAuthRejected,
     UpstreamTimeout,
 )
-from coffer.domain.mcp.capability import CapabilityType, MCPInvocation
+from coffer.domain.mcp.capability import CapabilityType
 from coffer.domain.mcp.jsonrpc_errors import unknown_capability
 from coffer.domain.mcp.namespace import (
     parse_prefixed_prompt,
@@ -92,51 +93,6 @@ def _is_transport_failure(e: BaseException) -> bool:
     if isinstance(e, MCPError):
         return e.code == mcp_types.CONNECTION_CLOSED
     return True
-
-
-async def check_capability_enabled(
-    prefs: MCPCapabilityPreferenceRepoPort,
-    resource_uid: str,
-    capability_type: CapabilityType,
-    capability_key: str,
-) -> None:
-    """Raise ToolDisabled if the capability is switched off."""
-    pref = await prefs.find(resource_uid, capability_type, capability_key)
-    # Missing row → default to enabled (matches CapabilityDiscovery's behaviour).
-    if pref is not None and not pref.enabled:
-        raise ToolDisabled(f"{capability_type}:{capability_key!r} is disabled on this server")
-
-
-async def record_invocation(
-    invocations: MCPInvocationRepoPort,
-    *,
-    session_id: str,
-    clock: Callable[[], datetime],
-    agent_uid: str | None = None,
-    resource_uid: str,
-    capability_type: CapabilityType,
-    capability_key: str,
-    duration_ms: int,
-    status: Literal["ok", "error", "timeout", "denied"],
-    error_message: str | None,
-    environment: str | None = None,
-) -> None:
-    await invocations.insert(
-        MCPInvocation(
-            id=None,
-            timestamp=clock(),
-            resource_uid=resource_uid,
-            capability_type=capability_type,
-            capability_key=capability_key,
-            duration_ms=duration_ms,
-            status=status,
-            error_message=error_message,
-            session_id=session_id,
-            agent_uid=agent_uid,
-            trace_id=correlation.current().trace_id,
-            environment=environment,
-        )
-    )
 
 
 # --------------------------------------------------------------------------- #
@@ -203,10 +159,14 @@ async def _invoke(
     except ResourceNotFound as e:
         raise unknown_capability(spec.label, prefixed) from e
 
+    # What the agent asked for: a tool's or a prompt's arguments, a resource's uri.
+    arguments = {"uri": original} if spec.param_key == "uri" else params.get("arguments")
+
     async def _record(
         status: Literal["ok", "error", "timeout", "denied"],
         error_message: str | None = None,
         duration_ms: int = 0,
+        parts: dict[str, Any] | None = None,
     ) -> None:
         await record_invocation(
             invocations,
@@ -220,6 +180,12 @@ async def _invoke(
             status=status,
             error_message=error_message,
             environment=environment,
+            # Redacted with what Coffer injected into this upstream (spec
+            # mcp-gateway "Record invocations with redacted, bounded content").
+            content=call_content(
+                {"arguments": arguments, **(parts or {})},
+                supervisor.mask_values(server_name),
+            ),
         )
 
     # A custom-tool call names its environment in the log, never a credential.
@@ -276,19 +242,24 @@ async def _invoke(
     # The clock starts BEFORE the upstream is obtained, and obtaining it sits
     # inside the recorded block: a call that fails because the upstream would
     # not start (cooldown, an exhausted spawn ladder) is still a call, and spec
-    # mcp-gateway "Record invocations without content" wants an entry for every
+    # mcp-gateway "Record invocations with redacted, bounded content" wants an entry for every
     # one — and "Route calls to the originating upstream" wants that failure
     # visible in the log.
     started = clock()
     status: Literal["ok", "error", "timeout", "denied"] = "ok"
     error_msg: str | None = None
     requested = False
+    parts: dict[str, Any] = {}
     try:
         conn = await supervisor.get_or_spawn(server_name)
         await ensure_subscribed(server_name)
         requested = True
-        result = await conn.request(spec.method, spec.build_request(original, params))
-        coerced = spec.coerce(result)
+        with exchange_scope() as exchange:
+            try:
+                result = await conn.request(spec.method, spec.build_request(original, params))
+            finally:
+                parts.update(exchange)  # a custom tool's request and response
+        coerced = parts["result"] = spec.coerce(result)
         # The upstream answered, so whatever key rejection was recorded is over
         # (an ``isError`` result below is still an answer).
         if auth_monitor is not None:
@@ -296,11 +267,11 @@ async def _invoke(
                 await auth_monitor.answered(resource.uid)
         # An in-band tool error (CallToolResult.isError) does not raise — the
         # connection is healthy, but the tool failed. Record an honest `error`
-        # status so the invocation log distinguishes success from failure. The
-        # error text is upstream-controlled (may echo secrets), so persist only
-        # a fixed Coffer-authored marker, never the result content (spec
-        # mcp-gateway "Record invocations without content"). The marker is also
-        # how the status route tells "the tool failed" from "the server is down"
+        # status so the invocation log distinguishes success from failure.
+        # ``error_message`` gets a fixed Coffer-authored marker — the result
+        # itself is in the row's redacted content (spec mcp-gateway "Record
+        # invocations with redacted, bounded content") — and the marker is how
+        # the status route tells "the tool failed" from "the server is down"
         # (invocation_outcome).
         if spec.detects_inband_error and isinstance(coerced, dict) and coerced.get("isError"):
             status = "error"
@@ -309,6 +280,7 @@ async def _invoke(
     except UpstreamTimeout as e:
         status = "timeout"
         error_msg = _safe_error_summary(e)
+        parts["error"] = str(e)
         raise
     except asyncio.CancelledError:
         # The client cancelled the request (or the session ended): not a
@@ -317,6 +289,9 @@ async def _invoke(
         raise
     except Exception as e:
         status = "error"
+        # The full text, which the content keeps redacted; ``error_message``
+        # stays the Coffer-authored summary.
+        parts["error"] = f"{type(e).__name__}: {e}"
         if auth_monitor is not None and isinstance(e, UpstreamAuthRejected):
             # A 401/403 from the upstream endpoint, not a tool-level error:
             # the key is refused, which the Overview offers to replace.
@@ -342,7 +317,7 @@ async def _invoke(
         raise
     finally:
         duration_ms = int((clock() - started).total_seconds() * 1000)
-        await _record(status, error_msg, duration_ms)
+        await _record(status, error_msg, duration_ms, parts)
 
 
 async def handle_tools_call(params: dict[str, Any], **kw: Any) -> Any:

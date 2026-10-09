@@ -896,7 +896,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "approve" | "reveal" | "export_master_key" | "import_master_key" | "update_status" | "update_check" | "update_install" | "update_auto_check";
+            op: "approve" | "reveal" | "export_master_key" | "import_master_key" | "update_status" | "update_check" | "update_install" | "update_auto_check" | "uninstall";
             /** Ref */
             ref?: string | null;
         };
@@ -916,7 +916,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "approve" | "reveal" | "export_master_key" | "import_master_key" | "update_status" | "update_check" | "update_install" | "update_auto_check";
+            op: "approve" | "reveal" | "export_master_key" | "import_master_key" | "update_status" | "update_check" | "update_install" | "update_auto_check" | "uninstall";
             /** Ref */
             ref: string | null;
             /** Result */
@@ -1054,7 +1054,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "reveal" | "approve" | "approve_batch" | "export_master_key" | "import_master_key";
+            op: "reveal" | "approve" | "approve_batch" | "export_master_key" | "import_master_key" | "uninstall";
             /** Target */
             target: string;
         };
@@ -1068,7 +1068,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "reveal" | "approve" | "approve_batch" | "export_master_key" | "import_master_key";
+            op: "reveal" | "approve" | "approve_batch" | "export_master_key" | "import_master_key" | "uninstall";
             /** Target */
             target: string;
         };

@@ -84,7 +84,9 @@ def daemon_log_path() -> Path:
     return log_dir() / "daemon.log"
 
 
-def spawn_detached_daemon(env: Mapping[str, str] | None = None) -> subprocess.Popen[bytes]:
+def spawn_detached_daemon(
+    env: Mapping[str, str] | None = None, *, command: list[str] | None = None
+) -> subprocess.Popen[bytes]:
     """Spawn the daemon detached from the caller, stdio redirected to ``daemon.log``.
 
     The one spawn every auto-spawn surface shares — the CLI's detect-or-spawn,
@@ -97,6 +99,8 @@ def spawn_detached_daemon(env: Mapping[str, str] | None = None) -> subprocess.Po
 
     ``env`` replaces the inherited environment — the daemon's own restart
     passes one naming the predecessor to wait for (``self_restart``).
+    ``command`` replaces the resolved one — ``coffer update`` starts the daemon
+    it has just installed, not the sibling of the binary running the update.
 
     Raises ``OSError`` when the process cannot be started; the log handle is
     closed on that path and otherwise leaks into the child on purpose.
@@ -113,7 +117,7 @@ def spawn_detached_daemon(env: Mapping[str, str] | None = None) -> subprocess.Po
         **detached_popen_kwargs(),
     }
     try:
-        return subprocess.Popen(daemon_spawn_command(), **kwargs)  # type: ignore[call-overload,no-any-return]
+        return subprocess.Popen(command or daemon_spawn_command(), **kwargs)  # type: ignore[call-overload,no-any-return]
     except OSError:
         log.close()
         raise

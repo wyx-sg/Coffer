@@ -72,7 +72,6 @@ In `~/.coffer` on each machine:
 | `content/` | Attachments and the chat workspace |
 | `runs.db` | History: conversations, audit and invocation logs, sync rounds, usage |
 | `derived/` | What Coffer rebuilds, such as memory derived from your agents' own stores |
-| `master.key` | The key that decrypts secrets (unless moved to the OS keychain) |
 | `logs/` | Daemon, shim and MCP server logs |
 | `bin/` | Deployed binaries (release installs) |
 
@@ -80,7 +79,7 @@ The complete list is in [Files and directories](/reference/filesystem).
 
 ## How are my secrets stored?
 
-Secrets are encrypted with Fernet, one file per secret under `~/.coffer/vault/secret/`. The master key lives in `~/.coffer/master.key` (mode `0600`) by default, or in the macOS keychain if you opt in under **Settings → Security**. Resources name a secret by reference, never by value. See [Secret store](/guides/secret-store).
+Secrets are encrypted with Fernet, one file per secret under `~/.coffer/vault/secret/`. The master key lives in the macOS Keychain, where only Coffer's signed binaries can read it. Resources name a secret by reference, never by value. See [Secret store](/guides/secret-store).
 
 ## Can two machines share one vault?
 
@@ -96,11 +95,11 @@ A fixed port keeps bookmarks working and keeps the browser's stored preferences 
 
 ## How do I upgrade?
 
-Install the new version the same way you installed the old one, then run `coffer daemon restart` so the running daemon is replaced. Until you do, commands print a version warning. The previous build stays in `~/.coffer/bin` for a rollback, and the history database is copied before any migration. See [Upgrades and rollback](/guides/daemon#upgrades-and-rollback).
+The desktop app updates itself from **Settings › About**. With the one-line installer, run `coffer update`: it installs the newest release and restarts the daemon on it. From source, pull, reinstall and run `coffer daemon restart`. See [Install → Upgrade](/start/install#upgrade). The previous build stays in `~/.coffer/bin` for a rollback, and the history database is copied before any migration. See [Upgrades and rollback](/guides/daemon#upgrades-and-rollback).
 
 ## How do I uninstall Coffer?
 
-Remove Coffer's MCP entry and memory hook from each agent, unregister the agents (which removes the skill links Coffer delivered), stop the daemon and its login service, then delete the binaries and, if you want, `~/.coffer`. [Install → Uninstall](/start/install#uninstall) gives the exact commands. Back up `~/.coffer`, including `master.key`, first if you might want it again.
+Choose **Uninstall Coffer…** on **Settings › About** in the desktop app, or run `coffer uninstall`. Coffer disconnects your agents, removes the skill links it delivered, start at login, its binaries and `PATH` lines and the app, and keeps `~/.coffer` for a reinstall. Deleting your data too is a separate choice that asks for Touch ID. See [Install → Uninstall](/start/install#uninstall).
 
 If you used vault sync, the remote repository is untouched and still holds your vault's documents.
 

@@ -40,6 +40,7 @@ OpName = Literal[
     "update_check",
     "update_install",
     "update_auto_check",
+    "uninstall",
 ]
 StatusName = Literal["waiting", "claimed", "done", "cancelled", "failed", "expired"]
 
@@ -62,7 +63,8 @@ class DesktopRequestIn(BaseModel):
     approval_ids: list[str] = Field(default_factory=list, max_length=50)
     #: ``reveal``: the secret to show in the app.
     ref: str | None = None
-    #: ``update_auto_check``: switch the daily update check on or off.
+    #: ``update_auto_check``: switch the daily update check on or off;
+    #: ``uninstall``: open the dialog with Also delete my data ticked.
     enabled: bool | None = None
 
 

@@ -101,7 +101,7 @@ A daemon it starts MUST be given a readiness budget that is a ceiling rather tha
 - **AND** no second daemon process is started.
 
 ### Requirement: Restart by stopping the running daemon first
-Restart MUST be a true restart: when a daemon is responsive it MUST be asked to shut down over its token-gated shutdown route and the port MUST be observed free before a replacement is spawned. A restart that silently became a no-op would do nothing at exactly the moment a user reaches for it — a wedged-but-listening daemon, whose old process still holds the port — and a failure to free the port MUST be reported rather than followed by a spawn that cannot bind. The same restart MUST run whichever place it was chosen from: the tray, the offline banner or the web UI's Settings → Daemon tab.
+Restart MUST be a true restart: when a daemon is responsive it MUST be asked to shut down over its token-gated shutdown route and the port MUST be observed free before a replacement is spawned. A restart that silently became a no-op would do nothing at exactly the moment a user reaches for it — a wedged-but-listening daemon, whose old process still holds the port — and a failure to free the port MUST be reported rather than followed by a spawn that cannot bind. A daemon that does not answer, or answers the shutdown request but keeps its port, is wedged: the restart MUST force it out — signal the pid `~/.coffer/daemon.json` records once its command line shows a Coffer daemon, and kill it when it does not exit — before spawning (spec [daemon](../daemon/spec.md) "Force out a wedged daemon on an explicit restart"), rather than spawn a replacement beside it. The same restart MUST run whichever place it was chosen from: the tray, the offline banner or the web UI's Settings → Daemon tab.
 
 A restart MUST wait for its replacement to answer and return that daemon's connection with the result — read from the daemon's discovery file while waiting, never carried over from the daemon it stopped, so a restart that moves the daemon to a port saved in Settings → Daemon (spec [daemon](../daemon/spec.md) "Bind a fixed, settable port") reconnects the shell on that port — and the page MUST install what it is handed rather than run a handshake of its own — a page that asked again the instant the restart returned asked before the new daemon had bound anything, and the handshake's cold-start branch answered by spawning a rival for it.
 
@@ -122,6 +122,12 @@ A restart MUST wait for its replacement to answer and return that daemon's conne
 - **WHEN** the replacement starts answering,
 - **THEN** the shell returns its base URL and token alongside the new PID,
 - **AND** the page installs those rather than running a second handshake, so the restart starts exactly one daemon.
+
+#### Scenario: a restart forces out a daemon that will not stop
+- **GIVEN** a daemon that does not answer its status call, or that answers the shutdown request but keeps its port,
+- **WHEN** the user chooses restart from the tray, the offline banner or Settings → Daemon,
+- **THEN** the shell ends the daemon process `~/.coffer/daemon.json` records and waits for the port to free before spawning a replacement,
+- **AND** a discovery file that names no live Coffer daemon is not acted on, and the restart goes straight to spawning.
 
 ### Requirement: Rate-limit restarts from the last success
 Restarts MUST be serialised and rate-limited to at most one every five seconds, measured from the last **successful** restart. A failed spawn MUST NOT consume the window, so the user can retry immediately rather than waiting out a cooldown a failure earned.
@@ -347,8 +353,10 @@ MUST run the reveal flow and show the value in the window, sending it nowhere el
 it MUST open the page's own backup dialog, where the person types the passphrase, and keep the
 request open while that dialog is: it ends the request done only once its own export has written
 the file, with the path and key fingerprint the daemon answered (never a path the page reports),
-and cancelled when the dialog closes without one; and for the update commands it MUST run the
-updater and report its state. It then tells the daemon how the request ended — done, cancelled or
+and cancelled when the dialog closes without one; for the update commands it MUST run the
+updater and report its state; and for an uninstall it MUST open the page's own uninstall dialog
+(with Also delete my data ticked when the command asked for it) and report that it opened it — the
+person confirms there. It then tells the daemon how the request ended — done, cancelled or
 failed with its reason — which approves nothing by itself. The shell
 never acts on a request by clicking or scripting its own window.
 
@@ -357,3 +365,31 @@ never acts on a request by clicking or scripting its own window.
 - **WHEN** the shell claims it
 - **THEN** it reads both approvals from the daemon, shows one prompt naming them, signs over exactly those approvals and targets, and reports the request done
 - **AND** a request whose approval's target moved is reported failed, with nothing signed
+
+#### Scenario: the shell opens the uninstall dialog for the command line
+- **GIVEN** a desktop request `uninstall` asking to delete the data
+- **WHEN** the shell claims it
+- **THEN** it opens Settings › About's uninstall dialog with Also delete my data ticked and reports the request done, uninstalling nothing itself
+
+### Requirement: Uninstall Coffer from the app
+The shell MUST offer uninstalling Coffer to the page as one command that takes
+whether to delete the data. With the data, it MUST first run the presence check
+(Touch ID or the login password) with a prompt that says the data will be
+deleted, and send the daemon's uninstall a grant for `uninstall` over
+`delete-data`; a cancelled check sends nothing. Before it calls the daemon it
+MUST stop starting daemons — no handshake, menu bar restart or update relaunch
+starts one again in this run. It then calls the daemon's uninstall (spec
+[daemon](../daemon/spec.md) "Uninstall Coffer from this machine"), waits for the
+daemon to exit, returns the daemon's step list to the page, moves its own `.app`
+to the Trash and quits. A failed call MUST leave the app running, report the
+reason to the page, and start daemons again.
+
+#### Scenario: uninstalling from the app removes Coffer and the app
+- **GIVEN** the app running with its daemon
+- **WHEN** the page asks the shell to uninstall without deleting the data
+- **THEN** the shell calls the daemon's uninstall, waits for the daemon to exit, returns its steps, moves the `.app` to the Trash and quits
+
+#### Scenario: deleting the data waits for the person's presence
+- **GIVEN** the page asking the shell to uninstall and delete the data
+- **WHEN** the person cancels the Touch ID prompt
+- **THEN** nothing is sent to the daemon and the app keeps running

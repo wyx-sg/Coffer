@@ -220,7 +220,15 @@ def _spawn_shim(env: dict[str, str]) -> subprocess.Popen[str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        env={**os.environ, **env},
+        # A daemon the shim spawns (its probe can miss this in-process one on
+        # a slow runner) stays off the real port and follows pytest out.
+        env={
+            **os.environ,
+            "COFFER_PORT_RANGE_START": "59700",
+            "COFFER_PORT_RANGE_END": "59709",
+            "COFFER_DAEMON_EXIT_WITH_PID": str(os.getpid()),
+            **env,
+        },
     )
 
 

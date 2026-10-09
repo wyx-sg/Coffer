@@ -22,13 +22,14 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from coffer.application.runtime.supervisor import spawn
 from coffer.application.vault.attention import VaultAttentionSource
 from coffer.domain.audit import AuditEventType
+from coffer.domain.audit_diff import commit_change
 from coffer.domain.vault.writers import WRITER_DISK
 from coffer.domain.vault.writes import CommitResult
 from coffer.infrastructure.vault.git import GitMissing
@@ -63,6 +64,9 @@ class VaultScanning:
     attention: VaultAttentionSource
     _audit: _Audit
     _loop: asyncio.AbstractEventLoop
+    #: ``(ref, path) -> bytes``, to say what each edit changed; ``None`` records
+    #: only the path and version.
+    _read: Callable[[str, str], bytes | None] | None = None
     task: asyncio.Task[None] | None = None
     _pending: set[asyncio.Task[None]] = field(default_factory=set)
     _stopped: bool = False
@@ -85,10 +89,15 @@ class VaultScanning:
     async def _record(self, result: CommitResult) -> None:
         for path in result.paths:
             try:
+                details: dict[str, Any] = {"path": path, "version": result.version}
+                if self._read is not None:
+                    # Added, deleted or modified, and the diff of a knowledge
+                    # or skill text file (never of config, which may hold env).
+                    details.update(
+                        await asyncio.to_thread(commit_change, self._read, result.version, [path])
+                    )
                 await self._audit.record(
-                    AuditEventType.VAULT_FILE_EDITED.value,
-                    actor=HUMAN,
-                    details={"path": path, "version": result.version},
+                    AuditEventType.VAULT_FILE_EDITED.value, actor=HUMAN, details=details
                 )
             except Exception:
                 _log.warning(
@@ -137,6 +146,7 @@ async def start_vault_scanning(
         attention=VaultAttentionSource(writer),
         _audit=audit,
         _loop=asyncio.get_running_loop(),
+        _read=writer.repo.read,
     )
     writer.add_listener(scanning.on_commit)
     try:

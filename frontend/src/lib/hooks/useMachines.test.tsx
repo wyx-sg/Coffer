@@ -29,20 +29,11 @@ function wrapper({ children }: PropsWithChildren) {
 
 describe("useMachines", () => {
   test("reads the registry", async () => {
-    status = { machine_id: "here", features: { sync: true } };
+    status = { machine_id: "here", features: {} };
     machinesApi.mockResolvedValue({ machines: [{ machine_id: "here" }] });
     const { result } = renderHook(() => useMachines(), { wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.machines).toHaveLength(1);
-  });
-
-  test("is not read while Sync is switched off, so channels and knowledge see a single machine", async () => {
-    machinesApi.mockReset();
-    status = { machine_id: "here", features: { sync: false } };
-    const { result } = renderHook(() => useMachines(), { wrapper });
-    await new Promise((r) => setTimeout(r, 10));
-    expect(machinesApi).not.toHaveBeenCalled();
-    expect(result.current.data).toBeUndefined();
   });
 
   test("takes this machine's id from the daemon status", () => {

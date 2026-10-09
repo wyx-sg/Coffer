@@ -72,7 +72,6 @@ Coffer 免费且开源，采用 GNU AGPL v3.0（或更高版本）许可证。�
 | `content/` | 附件和聊天工作目录 |
 | `runs.db` | 历史：对话、审计和调用日志、同步轮次、用量 |
 | `derived/` | Coffer 可重建的内容，例如从智能体自己的存储派生出的记忆 |
-| `master.key` | 解密密钥用的主密钥（除非已移到系统钥匙串） |
 | `logs/` | 守护进程、shim 和 MCP 服务器日志 |
 | `bin/` | 已部署的二进制（发布版安装） |
 
@@ -80,7 +79,7 @@ Coffer 免费且开源，采用 GNU AGPL v3.0（或更高版本）许可证。�
 
 ## 我的密钥是怎么存储的？ {#how-are-my-secrets-stored}
 
-密钥用 Fernet 加密，每个密钥一个文件，位于 `~/.coffer/vault/secret/` 下。主密钥默认放在 `~/.coffer/master.key`（权限 `0600`），你也可以在 **设置 → 安全** 中选择放进 macOS 钥匙串。资源通过引用来指明密钥，从不直接写值。见[密钥存储](/zh/guides/secret-store)。
+密钥用 Fernet 加密，每个密钥一个文件，位于 `~/.coffer/vault/secret/` 下。主密钥放在 macOS 钥匙串中，只有 Coffer 的签名二进制能读取。资源通过引用来指明密钥，从不直接写值。见[密钥存储](/zh/guides/secret-store)。
 
 ## 两台机器能共用一个保险库吗？ {#can-two-machines-share-one-vault}
 
@@ -96,11 +95,11 @@ Coffer 免费且开源，采用 GNU AGPL v3.0（或更高版本）许可证。�
 
 ## 怎么升级？ {#how-do-i-upgrade}
 
-用你安装旧版本的同样方式安装新版本，然后运行 `coffer daemon restart`，替换掉正在运行的守护进程。在此之前，命令会打印版本警告。上一个构建保留在 `~/.coffer/bin` 中以便回滚，历史数据库在任何迁移之前都会先复制一份。另见[升级与回滚](/zh/guides/daemon#upgrades-and-rollback)。
+桌面应用会在**设置 › 关于**里自我更新。用一行安装脚本安装的，运行 `coffer update`：它会安装最新发布，并让守护进程以新版本重启。源码安装则拉取代码、重新安装，再运行 `coffer daemon restart`。见[安装 → 升级](/zh/start/install#upgrade)。上一个构建保留在 `~/.coffer/bin` 中以便回滚，历史数据库在任何迁移之前都会先复制一份。另见[升级与回滚](/zh/guides/daemon#upgrades-and-rollback)。
 
 ## 怎么卸载 Coffer？ {#how-do-i-uninstall-coffer}
 
-从每个智能体中移除 Coffer 的 MCP 条目和记忆 Hook，注销智能体（这会移除 Coffer 投递的技能链接），停止守护进程及其开机自启服务，然后删除二进制，如果愿意，再删掉 `~/.coffer`。[安装 → 卸载](/zh/start/install#uninstall)给出了具体命令。如果你以后可能还要用，先备份 `~/.coffer`，包括 `master.key`。
+在桌面应用的**设置 › 关于**里选择**卸载 Coffer…**，或者运行 `coffer uninstall`。Coffer 会断开你的智能体，移除它投递的技能链接、开机自启动、它的二进制和 `PATH` 行以及应用本身，并保留 `~/.coffer` 以便重新安装。是否同时删除数据是单独的选择，需要 Touch ID。见[安装 → 卸载](/zh/start/install#uninstall)。
 
 如果你用过保险库同步，远端仓库不受影响，仍保存着你保险库里的文档。
 

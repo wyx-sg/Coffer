@@ -73,7 +73,13 @@ async def settle_change(
             event.event_type,
             resource=event.resource,
             actor=actor or ACTORS[trigger],
-            details={**event.details, "reconcile": trigger.value},
+            # Why the reconciler wrote: the decision's reason code (unless the
+            # target named one itself) and the trigger of the pass.
+            details={
+                "reason": change.decision.reason_code,
+                **event.details,
+                "reconcile": trigger.value,
+            },
         )
     except Exception as exc:
         _log.error("reconcile.audit_failed %s: %r", change.id, exc)

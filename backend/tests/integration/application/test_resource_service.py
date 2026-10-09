@@ -415,6 +415,8 @@ async def test_update_config_audits_with_before_after(tmp_path):
     assert entries[0].actor == "api"
     assert entries[0].details["before"] == {"foo": 1, "bar": "default"}
     assert entries[0].details["after"] == {"foo": 2, "bar": "different"}
+    # The keys that moved, so a reader need not compare the two.
+    assert entries[0].details["changed"] == ["bar", "foo"]
     await engine.dispose()
 
 
@@ -432,6 +434,7 @@ async def test_set_enabled_is_idempotent_and_audits_only_on_change(tmp_path):
     disabled_events = await audit.query(event_type=AuditEventType.RESOURCE_DISABLED.value)
     assert len(disabled_events) == 1
     assert disabled_events[0].actor == "api"
+    assert disabled_events[0].details == {"from": True, "to": False}
     await engine.dispose()
 
 

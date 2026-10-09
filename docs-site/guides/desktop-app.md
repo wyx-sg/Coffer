@@ -63,7 +63,15 @@ The app updates itself. It checks the newest GitHub release's update manifest 30
 - **Check automatically** on About turns the launch and six-hourly checks off; checking by hand still works.
 - A check that fails — no network, the manifest unreachable — says why on About, keeps the time of the last successful check, and changes nothing. Failures are also written to `~/.coffer/logs/daemon.log`.
 - A build without an update key (every build from source, and a release made before the project's update key existed) says it does not check for updates. Update it by installing the new `.dmg` over it and choosing **Restart daemon**.
-- In a browser, About only says that updates are installed by the desktop app.
+- In a browser, About says that updates are installed by the desktop app. A daemon running from the installer's binaries instead shows its own release check there, with `coffer update` to copy — see [Install → Upgrade](/start/install#upgrade).
+
+### Uninstall
+
+**Settings › About › Uninstall Coffer…** removes Coffer from this Mac. The dialog lists what goes — Coffer's MCP entry, memory hook and model routing in each agent, the skill links it delivered, start at login, the command-line tools and the installer's `PATH` lines, and the app — and what stays: `~/.coffer`, ready for a reinstall. Confirm, and the app shows each step as the daemon reports it, then moves itself to the Trash and quits.
+
+**Also delete my data** is unticked by default. Ticking it says what is lost for good, offers **Back up the master key first**, and renames the button **Uninstall and delete data**; confirming asks for Touch ID, and only then is anything removed. `~/.coffer` and the master key's Keychain item are deleted after the daemon has stopped.
+
+`coffer uninstall` (and `coffer uninstall --delete-data`, which ticks the box) opens this dialog when the daemon is the app's, so the decision is always made in the app.
 
 ## Presence checks and approvals
 
@@ -84,7 +92,7 @@ Each action runs its own check, with nothing remembered in between:
 **Approvals come to you.** The app checks the daemon every 15 seconds, whether or not its window is open. For each new pending approval it posts one notification, **Coffer needs your approval**, whose text names the change, and the window opens its approval sheet. From there, approve (with the check above) or reject (no check needed). A command that waits prints `waiting for approval in the Coffer app`; see [Secrets → Approvals](/guides/secrets#approvals) for what triggers one.
 
 ::: warning Development builds
-A build that is not signed with Coffer's Developer ID — every build from source, and every release made before the project had one — is a development build: the master key is a file any program running as you can read, and a same-user program could forge what the app signs. The app says **Development build** on every prompt. On a Mac without Touch ID or LocalAuthentication, a development build asks you to confirm in a dialog in its own window instead. See [Security model → Development builds](/architecture/security#development-builds).
+A build that is not signed with Coffer's Developer ID — every build from source — is a development build. The app says **Development build** on every prompt. On a Mac without Touch ID or LocalAuthentication, a development build asks you to confirm in a dialog in its own window instead. See [Security model → Development builds](/architecture/security#development-builds).
 :::
 
 ## Launch

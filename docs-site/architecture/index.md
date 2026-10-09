@@ -121,7 +121,7 @@ Most of Coffer's shape follows from a handful of decisions. Each one below is ar
 - **Knowledge is plain Markdown with no index; its catalogue reaches agents as a skill.** Agents read files all day and rarely call a retrieval tool. Nothing derived can disagree with the files. [Knowledge](/architecture/knowledge)
 - **Memory is aggregated read-only from each agent's own files and never written back.** Each agent keeps its own memory loop untouched, and everything Coffer derives can be deleted and rebuilt. [Memory](/architecture/memory)
 - **The vault is a git repository; sync pulls and pushes it, applies a clean merge and stops on any conflict.** A shared base is the only way to tell "never had it" from "deleted it", and nothing Coffer does on its own ever needs undoing. Your remote stays an ordinary repository you can inspect. [Vault sync](/architecture/vault-sync)
-- **Secrets are Fernet ciphertext under one master key, kept in a `0600` file by default.** Coffer's builds are unsigned, and macOS re-prompts for every keychain item a new build touches. One key in a file removes the prompts; the keychain stays an opt-in. [Security model](/architecture/security#the-secret-store)
+- **Secrets are Fernet ciphertext under one master key, kept in the macOS Keychain.** The key is one item in an access group only Coffer's signed binaries can read, so no other program gets it, and a copy of `~/.coffer/` is ciphertext without its key. [Security model](/architecture/security#the-secret-store)
 - **Unfinished features ship in every build, off until you switch them on, instead of living on a branch.** One line of development, and the owner tests exactly what users run. Switching a feature off hides it and keeps its data. [Distribution and releases](/architecture/distribution#experimental-features)
 
 </DecisionList>
@@ -148,7 +148,7 @@ Versions are the ones pinned in [`backend/uv.lock`](https://github.com/wyx-sg/Co
 | HTTP | FastAPI 0.141, Uvicorn 0.52 | REST API, the `/mcp` endpoint, serving the web UI. |
 | Validation | Pydantic 2.13 | Every config schema and wire model; JSON columns are validated on the way in and out. |
 | Persistence | git; SQLAlchemy 2.0 (async) over aiosqlite, Alembic 1.18 | The vault repository; the history database and its migrations. |
-| Secrets | `cryptography` (Fernet), `keyring` 25 | Envelope encryption; `keyring` only for the opt-in keychain master key. |
+| Secrets | `cryptography` (Fernet), `keyring` 25 | Envelope encryption; the master key is a Keychain item, and only the secret module touches the Keychain. |
 | MCP | `mcp` SDK 2.2 | The gateway as an MCP server and as a client of upstream servers. |
 | Agent turns | Claude Agent SDK 0.2, Codex app-server | Running a chat turn in Claude Code or Codex. |
 | Documents | MarkItDown 0.1 | Uploaded documents and channel attachments to Markdown or text. |

@@ -41,7 +41,7 @@ Coffer 保留三类设计文本，各司其职：
 | 历史记录是一个 SQLite 文件，只由守护进程写入，开机时经唯一一条 Alembic 迁移链向前迁移 | [`history-is-one-sqlite-file-written-only-by-the-daemon`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/history-is-one-sqlite-file-written-only-by-the-daemon.md) |
 | 每个保险库文件都带着自己的格式版本；布局升级由一台所有者机器提交 | [`every-vault-file-carries-its-format-version`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-file-carries-its-format-version.md) |
 | 每次保险库写入都是一次经过校验、比较并交换、写明写入者的提交 | [`every-vault-write-is-a-validated-commit-naming-its-writer`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-write-is-a-validated-commit-naming-its-writer.md) |
-| 每次改动都连同执行者一起审计，调用日志不记载荷，按表清理 | [`audit-and-retention`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/audit-and-retention.md) |
+| 每次改动都连同执行者一起审计，每次调用都记日志，按表清理 | [`audit-and-retention`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/audit-and-retention.md) |
 | 一个电平触发的调和器收敛 Coffer 在数据库之外写下的一切，比较的是参数 | [`one-level-triggered-reconciler-compares-parameters`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/one-level-triggered-reconciler-compares-parameters.md) |
 | 线上契约由 Pydantic 模型生成，前端客户端再由契约生成 | [`wire-contract-generated-from-the-pydantic-models`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/wire-contract-generated-from-the-pydantic-models.md) |
 | 后台工作受监督运行，每条记录都带同一个关联 id | [`background-work-runs-supervised-and-correlated`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/background-work-runs-supervised-and-correlated.md) |
@@ -74,6 +74,7 @@ Coffer 保留三类设计文本，各司其职：
 | MCP 能力状态：偏好存在保险库中，列表向上游实时查询 | [`mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md) |
 | 工具过多：列出按用量排序的一部分，其余靠搜索 | [`tool-overload-tier-the-list-search-the-rest`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md) |
 | 评测：选择性捕获、人工整理，以及确定性的回归门禁 | [`eval-capture-and-regression-gate`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/eval-capture-and-regression-gate.md) |
+| 记录工具调用内容：在已知密钥处遮盖，截断到 16 KB | [`record-tool-call-content-redacted-and-bounded`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/record-tool-call-content-redacted-and-bounded.md) |
 
 ## 智能体与提供商 {#agents-providers}
 

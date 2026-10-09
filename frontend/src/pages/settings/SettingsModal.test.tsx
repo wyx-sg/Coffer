@@ -19,8 +19,8 @@ vi.mock("@/lib/api/client", async (orig) => ({
 }));
 const { getApiClient } = await import("@/lib/api/client");
 
-// The four experimental features, every one off by default.
-const REGISTERED = ["knowledge", "memory", "sync", "models"].map((key) => ({
+// The two experimental features, both off by default.
+const REGISTERED = ["knowledge", "memory"].map((key) => ({
   key,
   source: "default",
   enabled: false,
@@ -47,7 +47,7 @@ beforeEach(() => {
             version: "0.0.0",
             port: 38470,
             started_at: "2026-01-01T00:00:00Z",
-            features: { knowledge: false, memory: false, sync: false, models: false },
+            features: { knowledge: false, memory: false },
             totals: { input_tokens: 0, output_tokens: 0 },
             // GET /secrets — the Overview's secrets tile reads it.
             refs: [],
@@ -208,10 +208,10 @@ describe("the Settings modal", () => {
     fireEvent.click(within(nav).getByRole("link", { name: "Features" }));
     await waitFor(() => expect(where.pathname).toBe("/settings/features"));
     const pane = await screen.findByTestId("settings-pane-features", {}, { timeout: 5_000 });
-    for (const name of ["Knowledge", "Memory", "Sync", "Model providers"]) {
+    for (const name of ["Knowledge", "Memory"]) {
       expect(await within(pane).findByRole("switch", { name })).not.toBeChecked();
     }
-    expect(within(pane).getAllByText("Experimental")).toHaveLength(4);
+    expect(within(pane).getAllByText("Experimental")).toHaveLength(2);
   });
 
   test("the Features address opens directly", async () => {

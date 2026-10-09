@@ -45,9 +45,9 @@ export const AREAS: readonly Area[] = [
   { id: "skills", to: "/skills", kinds: ["skill"] },
   { id: "knowledge", to: "/knowledge", kinds: ["knowledge"], feature: "knowledge" },
   { id: "memory", to: "/memory", kinds: ["memory"], feature: "memory" },
-  { id: "providers", to: "/model-providers", kinds: ["provider"], feature: "models" },
+  { id: "providers", to: "/model-providers", kinds: ["provider"] },
   { id: "channels", to: "/channels", kinds: ["channel"] },
-  { id: "sync", to: "/sync", kinds: ["sync"], feature: "sync" },
+  { id: "sync", to: "/sync", kinds: ["sync"] },
   { id: "customTools", to: "/custom-tools", kinds: ["custom_tool"] },
   { id: "clis", to: "/clis", kinds: ["cli"] },
   { id: "secrets", to: "/secrets", kinds: [] },
@@ -56,7 +56,6 @@ export const AREAS: readonly Area[] = [
     to: "/model-providers?tab=usage",
     own: { labelKey: "overview.health.usage.label", icon: Gauge, key: "usage" },
     kinds: [],
-    feature: "models",
   },
 ];
 

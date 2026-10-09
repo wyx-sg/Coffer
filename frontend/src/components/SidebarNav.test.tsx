@@ -14,14 +14,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarNav } from "./SidebarNav";
 import { appRoutes } from "@/router";
 
-// The four experimental features (knowledge, memory, sync, models) own five of
-// the fourteen entries. All are on unless a test says otherwise, so every other
-// assertion here is about the full fourteen.
+// The two experimental features (knowledge, memory) own two of the fourteen
+// entries. Both are on unless a test says otherwise, so every other assertion
+// here is about the full fourteen.
 const ALL_ON: Record<string, boolean> = {
   knowledge: true,
   memory: true,
-  sync: true,
-  models: true,
 };
 const features = vi.fn((): Record<string, boolean> | null => ALL_ON);
 vi.mock("@/lib/hooks/useFeatures", async (importOriginal) => ({
@@ -235,10 +233,8 @@ const hrefs = () =>
 
 /** Which addresses each feature owns. */
 const OWNED: Record<string, string[]> = {
-  models: ["/model-providers"],
   knowledge: ["/knowledge"],
   memory: ["/memory"],
-  sync: ["/sync"],
 };
 
 describe("a switched-off experimental feature", () => {
@@ -263,12 +259,13 @@ describe("a switched-off experimental feature", () => {
   );
 
   acceptance("web-ui", "a switched-off feature leaves the sidebar", () => {
-    features.mockReturnValue({ knowledge: false, memory: false, models: false, sync: false });
+    features.mockReturnValue({ knowledge: false, memory: false });
     renderNav();
 
     expect(hrefs()).toEqual([
       "/",
       "/agents",
+      "/model-providers",
       "/conversations",
       "/channels",
       "/mcp-servers",
@@ -277,6 +274,7 @@ describe("a switched-off experimental feature", () => {
       "/clis",
       "/secrets",
       "/activity",
+      "/sync",
     ]);
   });
 
@@ -297,7 +295,7 @@ describe("a switched-off experimental feature", () => {
     features.mockReturnValue(null);
     renderNav();
 
-    expect(hrefs()).toHaveLength(10);
+    expect(hrefs()).toHaveLength(12);
     expect(hrefs()).not.toContain("/knowledge");
   });
 });
@@ -321,10 +319,14 @@ describe("an experimental feature's entry", () => {
       expect(await rail.findByRole("tooltip")).toHaveTextContent("Knowledge · Experimental");
       rail.unmount();
 
-      // An entry no feature owns names no marker in its tooltip.
-      const plain = renderNav("/", true);
-      act(() => plain.getByRole("link", { name: "Agents" }).focus());
-      expect(await plain.findByRole("tooltip")).not.toHaveTextContent("Experimental");
+      // An entry no feature owns names no marker in its tooltip — Sync and
+      // Model providers are regular features.
+      for (const name of ["Agents", "Sync", "Model providers"]) {
+        const plain = renderNav("/", true);
+        act(() => plain.getByRole("link", { name }).focus());
+        expect(await plain.findByRole("tooltip")).not.toHaveTextContent("Experimental");
+        plain.unmount();
+      }
     },
   );
 });
