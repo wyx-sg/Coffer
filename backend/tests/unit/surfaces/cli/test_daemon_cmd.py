@@ -146,7 +146,8 @@ def test_daemon_start_fails_when_the_daemon_never_answers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A daemon.json (even a fresh one) is not success: if nothing answers the
-    status call in time, start() kills the child and exits 1."""
+    status call in time, start() exits 1 — and leaves the child alone, since a
+    slow boot finishes and a stuck one gives up on the spawn lock by itself."""
     _setup_home(tmp_path, monkeypatch)
 
     class _FakeProc:
@@ -167,7 +168,7 @@ def test_daemon_start_fails_when_the_daemon_never_answers(
     with pytest.raises(typer.Exit) as excinfo:
         daemon_cmd.start()
     assert excinfo.value.exit_code == 1
-    assert _FakeProc.killed is True
+    assert _FakeProc.killed is False
     assert "did not answer" in capsys.readouterr().err
 
 

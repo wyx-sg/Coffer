@@ -24,11 +24,13 @@ Coffer 的其他部分都是守护进程的客户端：`coffer` 命令行、你�
 ```sh
 coffer daemon start      # spawn it in the background, if none is running
 coffer daemon status     # ask the running daemon how it is; never starts one
-coffer daemon stop       # SIGTERM, then wait for it to exit
-coffer daemon restart    # stop (if running), then start
+coffer daemon stop       # SIGTERM, then wait up to 15 s for it to exit
+coffer daemon restart    # stop (if running, by force if it will not), then start
 ```
 
 在 Web 界面里，**设置 → 守护进程 → 重启** 也能从浏览器重启它：守护进程先启动继任者，继任者等它退出后再绑定端口，然后它自己退出，页面从新守护进程（带着新令牌）重新加载。桌面应用的重启则是从外部先停再启。`coffer daemon restart` 始终从外部执行，所以对已经不响应的守护进程也有效。
+
+每一种重启都会替换卡住的守护进程。守护进程在宽限期内没有退出，或者根本不响应，就会在新进程启动前被强制结束，这样卡死的进程不会一直占着端口，让新进程只能在旁边拒绝启动。只有能确认是本保险库 Coffer 守护进程的进程才会被结束，而且只在你要求重启时才会：命令或智能体自动拉起守护进程时从不结束任何进程。
 
 `coffer daemon status` 打印守护进程对自身的报告：
 
@@ -47,8 +49,20 @@ pid:     41822
 
 - `start` 判断「已在运行」靠的是询问守护进程，而不是检查 `daemon.json` 是否存在。崩溃后残留的发现文件不会阻止启动。只有新的守护进程应答了状态调用，`start` 才报告成功；如果守护进程拒绝启动（需要先迁移保险库、git 太旧），它会说明原因并指向 `daemon.log`。
 - `start` 在拉起进程前先检查端口。如果端口被其他程序占用，你会立刻看到诊断，而不是等十秒超时（见[端口被占用时](#when-the-port-is-taken)）。
-- `stop` 在发信号前先确认记录的 pid 确实是 Coffer 守护进程。如果该 pid 已被其他进程复用，`stop` 会删除过期的 `daemon.json` 并说明情况，而不会误杀无关进程。
+- `stop` 在发信号前先确认记录的 pid 确实是 Coffer 守护进程。如果该 pid 已被其他进程复用，`stop` 会删除过期的 `daemon.json` 并说明情况，而不会误杀无关进程。15 秒后仍未退出的守护进程只会被报告，不会被结束；要替换它，用 `restart`。
+- `status` 还会列出服务同一保险库的其他守护进程（`other daemon processes for this vault: …`，`--json` 下是 `other_daemon_pids`），比如还在启动的进程或残留进程。一个保险库只有一个守护进程在服务，所以这一行平时不会出现。
 - 在守护进程绑定前读取的设置（端口），要靠 `restart` 才能生效。
+
+### 为什么会有好几个 Coffer 进程 {#why-several-coffer-processes-run}
+
+每个保险库一个守护进程，不等于只有一个进程。在活动监视器或 `ps` 里，正常会看到：
+
+- 守护进程本身对应两个 `coffer-daemon` 进程：安装的程序是会自解压的单文件，一个小的启动进程会留下来，作为真正进程的父进程；
+- 另一对运行 `proxy` 的 `coffer-daemon`，是[本地模型代理](/zh/architecture/model-proxy)；
+- 每个连着 Coffer 的智能体会话一对 `coffer-mcp-shim`，会话结束就退出；
+- SeaTalk 渠道运行时一对 `coffer-seatalk-bridge`。
+
+除此之外的守护进程，`coffer daemon status` 会列出来。启动不了的进程两分钟后会自己放弃；发现守护进程正忙的启动会直接退出，不会再起第二个。
 
 要打开守护进程提供的界面，在浏览器里访问 `http://127.0.0.1:<port>`；端口在 `~/.coffer/daemon.json` 里（默认 38470）。[桌面应用](/zh/guides/desktop-app)会替你打开。
 

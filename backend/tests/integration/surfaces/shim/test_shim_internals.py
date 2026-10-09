@@ -991,6 +991,63 @@ async def test_ensure_daemon_exits_when_spawn_does_not_come_up(
     assert excinfo.value.code == 3
 
 
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="daemon", scenario="an MCP session waits for a busy daemon instead of spawning another"
+)
+async def test_ensure_daemon_waits_for_a_running_daemon_before_spawning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """daemon.json names a running Coffer daemon that has not answered yet: the
+    shim waits as long as the CLI's liveness probe does, and spawns nothing."""
+    from coffer.surfaces.shim import bootstrap as shim_main
+
+    info = DaemonInfo(
+        version=1,
+        pid=4242,
+        port=38470,
+        token="t",
+        started_at=_dt.datetime.now(tz=_dt.UTC),
+        binary_path="/x",
+    )
+    waits: list[float] = []
+
+    async def _answers_late(timeout: float) -> DaemonInfo:
+        waits.append(timeout)
+        return info
+
+    monkeypatch.setattr(shim_main, "discover", lambda: info)
+    monkeypatch.setattr(shim_main, "pid_is_coffer_daemon", lambda pid: pid == 4242)
+    monkeypatch.setattr(shim_main, "_wait_for_daemon", _answers_late)
+    monkeypatch.setattr(shim_main, "_spawn_daemon", lambda: pytest.fail("must not spawn"))
+
+    assert await shim_main._ensure_daemon() is info
+    assert waits == [shim_main._BUSY_DAEMON_WAIT]
+    assert shim_main._BUSY_DAEMON_WAIT >= 15
+
+
+@pytest.mark.asyncio
+async def test_ensure_daemon_looks_only_briefly_when_no_daemon_is_running(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from coffer.surfaces.shim import bootstrap as shim_main
+
+    waits: list[float] = []
+    spawned: list[bool] = []
+
+    async def _nothing_then_up(timeout: float) -> DaemonInfo | None:
+        waits.append(timeout)
+        return None if len(waits) == 1 else object()  # type: ignore[return-value]
+
+    monkeypatch.setattr(shim_main, "discover", lambda: None)
+    monkeypatch.setattr(shim_main, "_wait_for_daemon", _nothing_then_up)
+    monkeypatch.setattr(shim_main, "_spawn_daemon", lambda: spawned.append(True))
+
+    await shim_main._ensure_daemon()
+    assert waits[0] == shim_main._ABSENT_DAEMON_WAIT
+    assert spawned == [True]
+
+
 def test_run_handles_keyboard_interrupt_with_code_zero(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

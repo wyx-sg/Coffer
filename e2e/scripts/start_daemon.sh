@@ -12,6 +12,10 @@ export COFFER_DB_URL="sqlite+aiosqlite:///${COFFER_E2E_HOME}/runs.db"
 COFFER_E2E_PORT="${COFFER_E2E_PORT:-18000}"
 export COFFER_PORT_RANGE_START="${COFFER_E2E_PORT}"
 export COFFER_PORT_RANGE_END="$((COFFER_E2E_PORT + 9))"
+# The daemon follows the test runner out: Playwright passes its own pid, and the
+# daemon shuts down once that pid is gone, so a runner killed before its
+# teardown cannot leave this daemon running for good (it never idles out).
+export COFFER_DAEMON_EXIT_WITH_PID="${COFFER_DAEMON_EXIT_WITH_PID:-$PPID}"
 # The browser-driven `web` suite loads the app from the Vite dev server on
 # localhost:5173 and calls the daemon cross-origin. The daemon serves the built
 # web UI itself, so its CORS allowlist is empty (same-origin) by default and
