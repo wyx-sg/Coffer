@@ -282,10 +282,10 @@ The periodic workers that belong to no single kind start in one place, the HTTP 
 | Memory distil | First pass after 60 s, then every 6 h by default | Turns each new raw entry in the aggregated memory into a note and renders the index. No model is involved. |
 | Channel runtime | Every 2 s | Reconciles running adapters (Telegram polling, SeaTalk connections) against the channel resources bound to this machine. |
 | MCP session reaper | Every 60 s | Closes `/mcp` sessions with no request or upstream notification for more than 10 min (an open notification stream does not count), with their per-session supervisors and upstream subprocesses. Tunable with `COFFER_MCP_SESSION_IDLE_S` and `COFFER_MCP_SESSION_REAPER_INTERVAL_S`. |
-| Invocation writer | Continuous | Batches MCP invocation-log rows into SQLite off the request path. |
+| Invocation writer | When a row is queued; asleep otherwise | Batches MCP invocation-log rows into SQLite off the request path. |
 | Unpack keep-alive | Immediately, then every 6 h | Frozen builds only. Refreshes the timestamps of the files the one-file binary unpacked into `$TMPDIR/_MEI*`, so the OS temp cleaner (macOS removes files unused for about 3 days) cannot delete the CA bundle and libraries from under a long-running daemon. It also deletes every `$TMPDIR/_MEI*` directory that carries a `.coffer-pid` marker (written by each single-file Coffer binary's runtime hook) whose pid no longer runs, which reclaims what a killed CLI or bridge left behind. Directories without the marker (another PyInstaller program's) and the daemon's own are never touched. |
 | Supersession check | Every 30 s, run by the entry point | Stands the daemon down when another live daemon now owns `daemon.json` (see below). |
-| Vault scanner | A boot scan, then on file events and every 60 s | Settles hand edits in the vault into commits. |
+| Vault scanner | A boot scan, then on file events and every 60 s | Settles hand edits in the vault into commits. The native file watch checks for a stop twice a second. |
 | Reconciler | Every 60 s, sooner on a hint | Converges agents' MCP entries, skill links, provider projections and delivery hooks, and records open drift. |
 | Attention watch | Every 30 s, sooner on a hint | Recomputes the Overview's "needs you" list and publishes changes on `GET /api/v1/events`. |
 | Model proxy supervisor | Every 5 s | Finds the [local model proxy](/architecture/model-proxy), or spawns it once an agent is routed through it, pushes it its state and restarts it with backoff if it dies. |

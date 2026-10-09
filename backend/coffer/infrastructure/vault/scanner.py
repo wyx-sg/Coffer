@@ -30,6 +30,14 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_QUIET_S = 1.0
 DEFAULT_INTERVAL_S = 60.0
+#: How often watchfiles' native loop wakes to check for a stop. Its default,
+#: 50 ms, took the GIL twenty times a second on an idle daemon; an edit is
+#: settled after DEFAULT_QUIET_S anyway, so half a second costs no latency
+#: anyone sees. It also bounds how long cancelling the watch waits.
+_WATCH_STEP_MS = 500
+#: How long one native wait lasts before it hands back to Python with nothing.
+#: The default, 5 s, re-entered a worker thread every 5 s for no event.
+_WATCH_TIMEOUT_MS = 60_000
 
 
 class VaultScanner:
@@ -121,7 +129,13 @@ class VaultScanner:
                 if not Path(root).is_dir():
                     await asyncio.sleep(self._interval)
                     continue
-                async for _changes in awatch(root, watch_filter=outside_git, debounce=200):
+                async for _changes in awatch(
+                    root,
+                    watch_filter=outside_git,
+                    debounce=200,
+                    step=_WATCH_STEP_MS,
+                    rust_timeout=_WATCH_TIMEOUT_MS,
+                ):
                     self.poke()
             except asyncio.CancelledError:
                 raise

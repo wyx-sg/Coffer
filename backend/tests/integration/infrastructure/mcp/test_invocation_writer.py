@@ -51,7 +51,7 @@ def _inv(key: str) -> MCPInvocation:
 @pytest.mark.asyncio
 async def test_buffered_insert_flushes_by_batch_size(tmp_path):
     """Once flush_batch_size rows accumulate, the writer commits them."""
-    repo, engine = await _make_repo(tmp_path, flush_batch_size=5, flush_interval_seconds=10.0)
+    repo, engine = await _make_repo(tmp_path, flush_batch_size=5)
     await repo.start()
     try:
         for i in range(5):
@@ -71,9 +71,9 @@ async def test_buffered_insert_flushes_by_batch_size(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_buffered_insert_flushes_by_interval(tmp_path):
-    """A partial batch (< flush_batch_size) still flushes on the interval tick."""
-    repo, engine = await _make_repo(tmp_path, flush_batch_size=100, flush_interval_seconds=0.05)
+async def test_a_single_row_flushes_without_waiting_for_a_batch(tmp_path):
+    """A partial batch (< flush_batch_size) is committed as soon as it arrives."""
+    repo, engine = await _make_repo(tmp_path, flush_batch_size=100)
     await repo.start()
     try:
         await repo.insert(_inv("solo"))
@@ -84,7 +84,7 @@ async def test_buffered_insert_flushes_by_interval(tmp_path):
             if rows:
                 break
             await asyncio.sleep(0.02)
-        assert len(rows) == 1, "a single row must flush on the interval tick"
+        assert len(rows) == 1, "a single row must flush without waiting for a full batch"
     finally:
         await repo.stop()
         await engine.dispose()
@@ -94,15 +94,14 @@ async def test_buffered_insert_flushes_by_interval(tmp_path):
 async def test_stop_drains_pending_rows_without_loss(tmp_path):
     """The shutdown-loss case: stop() must persist every queued row.
 
-    Use a long interval and large batch so nothing flushes before stop(), then
-    assert stop() drained the full burst.
+    Use a large batch so the burst is still queued when stop() runs, then
+    assert stop() drained all of it.
     """
-    repo, engine = await _make_repo(tmp_path, flush_batch_size=1000, flush_interval_seconds=10.0)
+    repo, engine = await _make_repo(tmp_path, flush_batch_size=1000)
     await repo.start()
     try:
         for i in range(37):
             await repo.insert(_inv(f"k{i}"))
-        # Nothing should have flushed yet (batch not reached, interval not hit).
         await repo.stop()
         rows = await repo.query(limit=1000)
         assert len(rows) == 37, f"stop() lost rows: persisted {len(rows)}/37"
@@ -154,4 +153,22 @@ async def test_a_read_does_not_hang_on_a_stuck_commit(tmp_path):
     finally:
         stuck.set()
         await repo.stop()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_an_idle_writer_sleeps_on_the_queue_and_stops_at_once(tmp_path):
+    """With nothing queued the writer waits on the queue with no timer, and
+    stop() wakes it straight away instead of waiting for a tick."""
+    repo, engine = await _make_repo(tmp_path)
+    await repo.start()
+    try:
+        await asyncio.sleep(0.05)
+        task = repo._writer_task
+        assert task is not None and not task.done()
+        started = asyncio.get_running_loop().time()
+        await repo.stop()
+        assert asyncio.get_running_loop().time() - started < 0.5
+        assert task.done() and not task.cancelled()
+    finally:
         await engine.dispose()

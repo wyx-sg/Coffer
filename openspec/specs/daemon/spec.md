@@ -812,7 +812,9 @@ proxy of the same version found through `~/.coffer/proxy.json` (`port`, `pid`, `
 it once it exits, and spawns one when none is running; it health-checks the proxy on a short period
 and restarts it after a crash. It pushes the proxy what it serves — the agents' token digests and
 each agent's route with the decrypted keys, held only in the proxy's memory — over the proxy's
-authenticated loopback control route after every reconcile pass and whenever a token changes. The
+authenticated loopback control route after every reconcile pass that could have changed it — every
+pass but a periodic one that wrote nothing, failed no new target and left the same differences
+open — and whenever a token changes. The
 daemon stopping or restarting MUST NOT stop the proxy, so agents' in-flight model streams outlive a
 daemon upgrade. `GET /api/v1/proxy/status` reports whether it runs, its
 port, pid, version, restart count and last error.
@@ -836,6 +838,12 @@ challenge, or a proxy that holds no key, MUST be sent nothing and is logged as
 - **GIVEN** a proxy started by an earlier supervisor that has since stopped
 - **WHEN** a new supervisor starts
 - **THEN** it attaches to the same proxy process rather than spawning another
+
+#### Scenario: a periodic pass that changes nothing tells no pass listener
+- **GIVEN** a reconciler with a pass listener, whose first periodic pass found a difference it only reports
+- **WHEN** a second periodic pass finds the same difference and writes nothing
+- **THEN** the listener is not called for it
+- **AND** a hinted pass, a periodic pass that repairs drift, and a periodic pass after which a difference closed are each heard
 
 ### Requirement: Restart itself on request
 A page in a browser is served by the daemon, so it cannot stop the daemon and
