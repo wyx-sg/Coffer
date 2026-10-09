@@ -174,6 +174,8 @@ class _Model:
     id: str
     match: Matcher
     prices: Any  # a mapping, or a list of {constraint?, prices}
+    #: The model's context window in tokens, where the list records one.
+    context_window: int | None = None
 
     def prices_at(self, at: datetime) -> Mapping[str, Any]:
         if isinstance(self.prices, Mapping):
@@ -240,7 +242,12 @@ class BundledPrices:
                 model_match=compile_match(p["model_match"]) if p.get("model_match") else None,
                 fallbacks=tuple(p.get("fallback_model_providers") or ()),
                 models=tuple(
-                    _Model(id=str(m["id"]), match=compile_match(m.get("match")), prices=m["prices"])
+                    _Model(
+                        id=str(m["id"]),
+                        match=compile_match(m.get("match")),
+                        prices=m["prices"],
+                        context_window=_window(m.get("context_window")),
+                    )
                     for m in p.get("models", [])
                     if m.get("prices") is not None
                 ),
@@ -326,6 +333,31 @@ class BundledPrices:
         if supplement is not None:
             return BundledMatch(price=supplement, provider_name="Anthropic")
         return None
+
+    def context_window(self, model: str | None, *, base_url: str | None = None) -> int | None:
+        """The context window the list records for ``model`` at the provider
+        ``base_url`` names — found the way :meth:`lookup` finds a price —
+        or ``None`` (spec provider-switching "Resolve each provider model's
+        context window")."""
+        if not model:
+            return None
+        for candidate in dict.fromkeys(
+            c.lower()
+            for raw in model_candidates(model)
+            for c in (raw, _normalize_compact_date(raw))
+        ):
+            provider = self._provider_for(base_url, candidate)
+            found = self._find(provider, candidate) if provider is not None else None
+            if found is not None and found[1].context_window is not None:
+                return found[1].context_window
+        return None
+
+
+def _window(value: Any) -> int | None:
+    """A recorded context window, or ``None`` for anything not a sane count."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value if 1024 <= value <= 100_000_000 else None
 
 
 def _day(value: Any) -> date | None:

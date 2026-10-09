@@ -83,7 +83,9 @@ a = Analysis(
     datas=datas,
     hiddenimports=hidden,
     hookspath=[],
-    runtime_hooks=[],
+    # Marks the unpack directory with this process's pid so the daemon can
+    # delete it once the process is gone (packaging/rth_unpack_owner.py).
+    runtime_hooks=["packaging/rth_unpack_owner.py"],
     excludes=[
         # Nothing of the daemon belongs here — in particular nothing that can
         # reach the keychain or the vault.

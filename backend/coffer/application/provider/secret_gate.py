@@ -39,6 +39,10 @@ def provider_destination(uid: str, name: str, cfg: ProviderConfig) -> SecretDest
     # ``x-api-key``), so it is part of what a person approves (spec secret "Fix a
     # secret's placement by its destination's definition").
     target = f"model api {cfg.base_url} as {cfg.protocol.value}"
+    # A second, Anthropic address receives the key too, so it is part of what
+    # is approved: adding or moving it waits for approval like a new base URL.
+    if cfg.anthropic_base_url and cfg.anthropic_base_url != cfg.base_url:
+        target += f"; {cfg.anthropic_base_url} as anthropic"
     return SecretDestination(kind=KIND, uid=uid, target=target, label=name)
 
 

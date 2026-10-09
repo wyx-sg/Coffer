@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import type { AgentType } from "@/lib/api/agents";
 import { BUILTIN, type ConnectionDraft } from "@/lib/hooks/useAgentConnectionDraft";
+import { useAgentBuiltinDefault } from "@/lib/hooks/useAgentModels";
 import { agentTypeLabel } from "@/lib/agents/display";
 import { displayName } from "@/lib/resourceTitle";
 import { ModelTestStatus } from "./ModelTestStatus";
@@ -62,6 +63,8 @@ export function ModelFormFields({
   const { t } = useTranslation();
   const agent = agentTypeLabel(agentType);
   const builtin = t(`agents.overviewTab.model.builtin.${agentType}`);
+  // Named only when the agent itself reports which model its built-in default is.
+  const builtinDefault = useAgentBuiltinDefault(agentType).data ?? null;
   const none = c.compatible.length === 0;
   return (
     <>
@@ -110,7 +113,9 @@ export function ModelFormFields({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NATIVE_DEFAULT} className="text-xs">
-                {t("agents.overviewTab.model.auto")}
+                {builtinDefault
+                  ? t("agents.overviewTab.model.autoNamed", { model: builtinDefault })
+                  : t("agents.overviewTab.model.auto")}
               </SelectItem>
               {c.nativeModels.map((m) => (
                 <SelectItem key={m.id} value={m.id} className="text-xs">

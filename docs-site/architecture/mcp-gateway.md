@@ -71,7 +71,7 @@ When the SSE stream closes, the session stays open, because the shim reconnects 
 
 Agents speak stdio MCP, so `coffer-mcp-shim` bridges stdio to `/mcp`:
 
-1. **Find a daemon, or start one.** The shim reads `~/.coffer/daemon.json` and probes `GET /api/v1/daemon/status`. If no daemon answers within 1 second, it spawns one detached and waits up to 10 seconds. If the daemon still does not come up, the shim exits with code `3` and points at `~/.coffer/logs/daemon.log`. If the daemon reports a different version from the shim, the shim prints a one-line warning on stderr and carries on. See [Daemon and processes](/architecture/daemon).
+1. **Find a daemon, or start one.** The shim reads `~/.coffer/daemon.json` and probes `GET /api/v1/daemon/status`. If no daemon answers, it spawns one detached and waits up to 10 seconds. It waits 15 seconds for an answer when `daemon.json` names a running daemon (busy or still booting), and 1 second when it names none. If the daemon still does not come up, the shim exits with code `3` and points at `~/.coffer/logs/daemon.log`. If the daemon reports a different version from the shim, the shim prints a one-line warning on stderr and carries on. See [Daemon and processes](/architecture/daemon).
 2. **Stamp the handshake.** In the `initialize` envelope, the shim writes `params._meta["coffer/cwd"]` (its launch directory). If it was launched with `--agent-uid <uid>`, it also writes `params._meta["coffer/agent-uid"]`. It caches the envelope for later replay. When `COFFER_TURN_TOKEN` is set in its environment (the agent process is running a turn Coffer started), it also sends it as the `X-Coffer-Turn` header on every request, including the replayed handshake. The gateway offers `coffer__ask` only to a session whose header names a live turn; see the [MCP tools reference](/reference/mcp-tools#coffer-ask).
 3. **Pump stdin.** Each stdin line is POSTed as its own task. A slow `tools/call` therefore cannot block a `ping` behind it. The line limit is 64 MiB.
 4. **Drain SSE.** The shim holds `GET /mcp` open and writes each `data:` payload to stdout. If the stream drops, it reconnects with a backoff that starts at 0.5 seconds and grows to at most 5 seconds.
@@ -191,8 +191,9 @@ The built-in tool registry is an in-process registry that the composition root f
 | --- | --- |
 | `coffer__search_tools` | The gateway itself (gateway-owned) |
 | `coffer__channel_read_thread` | The channels feature (turn-scoped) |
+| `coffer__ask` | The gateway, answered by the chat kind through a turn-ask port (turn-scoped) |
 
-`coffer__search_tools` is gateway-owned and always present. `coffer__channel_read_thread` is registered by the channels feature as turn-scoped, so only a session inside a live Coffer turn sees or calls it. A call to any other `coffer__` name falls through to upstream routing and fails as an unknown tool would. Knowledge and memory have no built-in tool: agents change them with their own file tools, so the registry holds no tool for either.
+`coffer__search_tools` is gateway-owned and always present. `coffer__channel_read_thread` is registered by the channels feature as turn-scoped, so only a session inside a live Coffer turn sees or calls it. `coffer__ask` is served by the gateway itself, and listed only to a session whose `X-Coffer-Turn` header names a live turn; the chat kind answers it through a port the composition root hands the gateway, so the gateway imports no chat code. A call to any other `coffer__` name falls through to upstream routing and fails as an unknown tool would. Knowledge and memory have no built-in tool: agents change them with their own file tools, so the registry holds no tool for either.
 
 Before a built-in handler runs, the gateway sets `agent` as described above. It also fills `cwd` when the tool's schema declares that property and the client left it empty. The handler's return value is wrapped as an MCP tool result: JSON text in `content`, the same object in `structuredContent`, and `isError: false`. An exception inside a handler becomes an in-band `isError: true` result, not a JSON-RPC error, so the model can read it and correct itself. The text shows the message of a Coffer-authored error or an invalid-value error, and only the exception's type name for any other exception. For tool behaviour, see [MCP tools](/reference/mcp-tools).
 
@@ -267,23 +268,23 @@ stateDiagram-v2
   [*] --> UNHEALTHY
   UNHEALTHY --> STARTING: a call needs a connection
   STARTING --> HEALTHY: spawn and initialize ok
-  STARTING --> STARTING: attempt fails, wait 1 s, 5 s, 30 s
-  STARTING --> COOLDOWN: 4th attempt fails
+  STARTING --> STARTING: attempt fails, wait 1 s, 5 s
+  STARTING --> COOLDOWN: 3rd attempt fails
   STARTING --> UNHEALTHY: server disabled
-  COOLDOWN --> UNHEALTHY: 60 s elapsed, next call
+  COOLDOWN --> UNHEALTHY: backoff elapsed, next call
   HEALTHY --> UNHEALTHY: evict (transport failure, edit, disable, delete)
   HEALTHY --> [*]: session disposed
 ```
 
-- **Retry ladder.** Up to four attempts, with waits of 1, 5 and 30 seconds between them. Only transient spawn failures are retried: the upstream being unavailable or timing out, and operating-system, connection and timeout errors. A config error, a secret error or a cancellation stops the ladder at once. Each attempt is bounded by the server's `spawn_timeout_seconds` (default 30, range 5–120).
-- **Cooldown.** After the fourth failure, the entry enters a cooldown for 60 seconds. Calls during the cooldown fail fast as upstream unavailable. The cooldown is checked both before and after taking the per-server spawn lock, so callers queued behind one failing ladder do not each re-run it.
+- **Retry ladder.** Up to three attempts, with waits of 1 and 5 seconds between them. The ladder is short because it runs under the server's spawn lock, so every second of it is a second a caller waits. Only transient spawn failures are retried: the upstream being unavailable or timing out, and operating-system, connection and timeout errors. A config error, a secret error or a cancellation stops the ladder at once. Each attempt is bounded by the server's `spawn_timeout_seconds` (default 30, range 5–120).
+- **Shared backoff.** An exhausted ladder is recorded in one failure ledger the whole daemon shares, so every session's supervisor waits out the same backoff instead of re-running the ladder. The server is not tried again for 60 seconds, then twice as long after each further exhausted ladder, up to 30 minutes. Calls while it backs off fail fast as upstream unavailable, naming the last error and the next attempt. After 3 exhausted ladders in a row the server is reported as failing. A success, an edit of the server or its deletion clears the record. The backoff is checked both before and after taking the per-server spawn lock, so callers queued behind one failing ladder do not each re-run it.
 - **Concurrency.** At most 4 cold starts run at once per supervisor (`COFFER_MCP_MAX_CONCURRENT_SPAWNS`). The slot is held only during build and initialize, never during a backoff sleep.
 - **Eviction.** Eviction takes no lock. It bumps a generation counter and closes the current connection. A spawn that finishes after an eviction sees the changed generation, closes its new connection and raises. Deleting, disabling or editing a server therefore never waits on a slow ladder. Because the delete hook runs while the registration still exists, it first retires the server's uid process-wide: a spawn any supervisor starts or finishes from then on — in a session already evicted, or one opened during the delete — is refused or closed, and such an evicted start is neither retried nor backed off. Disposing a session bumps every entry's generation too, so a spawn still in flight closes what it built. The kind's delete, disable and config-edit hooks evict the server from every live session's supervisor and from the process-wide supervisor that backs the management routes. After a config edit, the next call spawns the server with the new command, URL or secret refs; re-enabling needs nothing, because the next call spawns afresh.
 - **Crash recovery.** A `tools/call` that fails on the transport evicts the connection, and the next call respawns the server. A transport failure is any exception that is not an MCP protocol error, or an MCP error saying the connection closed. Any other well-formed MCP error means the upstream answered, so the connection is kept. A timeout does not evict either, and neither does a failure to obtain a connection in the first place.
 - **Teardown.** A stdio close waits up to 10 seconds for the SDK's own shutdown, which escalates SIGTERM to SIGKILL. The connection's own lifetime task closes the process and its pipes, then the connection kills every PID recorded for it, along with its descendants. Each spawn records a PID file, taken from the process the SDK created (never guessed from the daemon's other children), under `~/.coffer/upstream-pids/`, keyed by the server's uid. At startup, the daemon sweeps any files left by a crash.
 - **Logs.** Each stdio upstream's stderr goes to its own file, `~/.coffer/logs/upstream/<name>.log`, not to `daemon.log`. When secrets are injected into the server's environment, its stderr reaches the file through a pipe Coffer reads: every injected value of four characters or more is replaced by `••••••` before it is written, even when it is split across writes or printed just before the process exits, and Coffer's own start, stop and error lines are masked the same way. Only the exact injected values are masked; a secret the server re-encodes is not.
 
-The daemon also runs one process-wide supervisor and discovery for the management routes: `GET …/capabilities`, `POST …/refresh` and the capability toggles. Scope never gates these routes, so you can always test a server that no session is allowed to see.
+The daemon also runs one process-wide supervisor and discovery for the management routes: `GET …/capabilities`, `POST …/refresh`, the capability toggles, and the row-detail previews `POST …/{uid}/resources/read` and `POST …/{uid}/prompts/get`. Scope never gates these routes, so you can always test a server that no session is allowed to see.
 
 ### Testing a server
 
@@ -306,6 +307,10 @@ The session subscribes lazily to each upstream it touches:
 - `notifications/resources/updated` is forwarded with its URI rewritten to `coffer://<server>/…`.
 - `notifications/message` and `notifications/progress` are dropped. A tool call is bounded by the server's request timeout; Coffer asks upstreams for no progress, so nothing extends it.
 - `sampling/createMessage` and `roots/list` from an upstream are relayed over SSE to this session's own client and matched to the client's reply by id, with a 30-second timeout. The SDK fixes a client session's sampling and roots handlers when it is built, so the supervisor hands each new connection the session's handlers before it starts, and offers the upstream sampling or roots only when the client declared it at `initialize`; an undeclared one is answered "not supported" without asking the client. An HTTP upstream can ask only if it keeps a channel back to its client (a stateless Streamable HTTP server cannot).
+
+### The push stream of an HTTP upstream
+
+After `initialize`, Coffer's client to a Streamable HTTP upstream opens `GET <endpoint>` so the upstream can push notifications, and the MCP SDK reopens that stream one second after it ends. Some upstreams answer `200` and close at once, which would mean a reopen every second for the life of the connection. A guard on the HTTP client's send counts push streams that end within 5 seconds of opening. After 3 such streams in a row, Coffer stops opening that connection's push stream. A stream that stays open 5 seconds or longer resets the count. Requests and responses keep flowing over `POST`; only server-initiated notifications from that upstream stop arriving for that connection. The guard sits on the client's send, so it also applies through an environment proxy.
 
 ### Cancellation
 
@@ -376,10 +381,13 @@ Each enabled environment is its own destination: the same kind and uid (the grou
 
 ### Testing a request
 
-A request test runs one draft tool with the same request building and sending as a call, and records nothing. There are two entry points:
+A request test runs one draft tool with the same request building and sending as a call, and records nothing. There are three entry points:
 
 - **A saved group** (`POST /api/v1/custom-tools/{name}/test`) runs in the environment the request names and materialises that environment's secret through its approved binding, exactly as a call would; the result names the environment it ran in and its actual target.
+- **A saved tool** (`POST /api/v1/custom-tools/{name}/tools/{tool}/test`) runs one tool as saved, in the one environment the request chooses, the same way.
 - **A group not saved yet** (`POST /api/v1/custom-tools/test`, the group's base URL, headers and timeout inline). It has no binding, so no stored secret is sent and the auth header is left off. Its base URL was typed into a form, so it passes the SSRF guard before anything is sent (see [Security → Outbound requests](/architecture/security#outbound-requests)); an address that is refused, or does not resolve, is reported as not tested.
+
+Two previews show the request a tool would send, without sending it or reading any secret value: `POST /api/v1/custom-tools/{name}/tools/{tool}/preview` for a saved tool and `POST /api/v1/custom-tools/{name}/preview` for a draft tool in a saved group.
 
 When no answer came back, a result says how it failed: `request` (the request could not be built), `timeout`, `connect` or `blocked`. A re-import preview also names the kept tools whose request the spec changed — a newly required argument, or a moved method, path or body template — and a reading carries each operation's first tag so the import form can group them.
 

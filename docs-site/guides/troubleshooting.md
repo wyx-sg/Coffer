@@ -33,7 +33,7 @@ coffer daemon restart
 
 If the holder is described as **another Coffer daemon**, it is most often your own daemon still starting: wait a few seconds and run `coffer daemon status`. See [Choose the port](/guides/daemon#choose-the-port).
 
-### "daemon failed to start within 10s; check ~/.coffer/logs/daemon.log"
+### "daemon failed to start within 30s; check ~/.coffer/logs/daemon.log"
 
 **Cause.** The daemon was spawned but did not publish itself in time. The reason is in the log, because a spawned daemon writes everything, including its refusal to start, to `daemon.log`.
 
@@ -115,11 +115,11 @@ See [MCP servers](/guides/mcp-servers) and [Connect a client](/guides/connect-a-
 
 ## The web UI
 
-### "Daemon offline" or "Daemon not running"
+### "Reconnecting to the daemon…" or "Coffer's daemon isn't running"
 
-**Cause.** The page cannot reach the daemon (**Daemon offline**), or the daemon answered but the page's token is not accepted (**Daemon not running**), which happens briefly while a daemon starts or after it restarted with a new token.
+**Cause.** The page cannot reach the daemon. For the first seconds the page stays, dimmed, under a **Reconnecting to the daemon…** bar that tries again after 1, 2, 4 and 8 seconds (**Retry now** tries at once); if the daemon still does not answer, the page makes way for **Coffer's daemon isn't running**. A daemon that answers but has no token for the page yet is still starting, which happens briefly while it starts or after it restarted with a new token.
 
-**Fix.** In a browser, run `coffer daemon start` in a terminal; the page checks again every 30 seconds and the notice clears itself. If it stays, reload the page: the daemon hands the page its current token on every load. In the desktop app, use **Restart daemon**.
+**Fix.** In the desktop app, press **Start daemon**. In a browser, run `coffer daemon start` in a terminal (the screen shows the command to copy); the page checks again every 30 seconds, or at once with **Retry**, and clears itself when the daemon answers. **Open daemon log** in the desktop app, or `coffer log daemon` in a terminal, shows why it stopped. If the screen stays, reload the page: the daemon hands the page its current token on every load.
 
 ### Coffer needs git
 
@@ -149,15 +149,9 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 ## Secrets and macOS keychain prompts
 
-### macOS asks for keychain access every time the daemon starts
-
-**Cause.** A resource cites a secret that is not in Coffer's encrypted store. At each start Coffer looks for that ref once in the OS keychain and moves it into the store if it finds it. A locked or denied read is retried at the next start, with another prompt.
-
-**Fix.** Find secrets that are cited but missing with `coffer secret list`, then store each one on the **Secrets** page or with `coffer secret set <ref>`.
-
 ### A command exits 9: "waiting for approval"
 
-**Cause.** The change sends a secret somewhere it has not gone before — a second MCP server citing the same token, a changed command line or URL, a push token pointed at a new remote — replaces a value something already uses, switches `secrets.require_approval` off, or asks `coffer run` to use a standalone secret you have not allowed it to (the secret's page shows **Allow `coffer run`…**; see [Secrets](/guides/secrets#allow-coffer-run-to-use-it)). The change is saved; the secret is held until you approve it. The command printed the approval ids and the command that approves them (`next: coffer approval approve <id>`). An MCP server in that state is not started, and its tools fail with `SECRET_BINDING_PENDING`; a custom tool's call answers the same tool error, naming the approval ids and the same command, for the environment that waits only.
+**Cause.** The change sends a secret somewhere it has not gone before — a second MCP server citing the same token, a changed command line or URL, a push token pointed at a new remote — switches `secrets.require_approval` off, or asks `coffer run` to use a standalone secret you have not allowed it to (the secret's page shows **Allow `coffer run`…**; see [Secrets](/guides/secrets#allow-coffer-run-to-use-it)). The change is saved; the secret is held until you approve it. The command printed the approval ids and the command that approves them (`next: coffer approval approve <id>`). An MCP server in that state is not started, and its tools fail with `SECRET_BINDING_PENDING`; a custom tool's call answers the same tool error, naming the approval ids and the same command, for the environment that waits only.
 
 **Fix.** Run the printed `coffer approval approve <id>` (or let your agent run it) and confirm the Touch ID or password prompt the desktop app shows, or open the desktop app and answer the approval there (on the **Secrets** page, **Review** opens the approvals dialog). Approve only a target you recognise; refuse the rest with **Reject** or `coffer approval reject <id>`. The change is already saved, so nothing needs to be rerun. If `coffer approval approve` exits `11`, the check was cancelled or timed out and the approval still waits; if it exits `12`, the desktop app is not running and could not be started — open it and run the command again. See [Secrets → Approvals](/guides/secrets#approvals).
 
@@ -183,7 +177,7 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 **Cause.** The header's auth scheme and the stored key disagree. Coffer sends `<scheme> <key>`. If the secret already holds `Bearer …` from an older setup and the row's scheme is also **Bearer**, the server sees `Bearer Bearer …`. If the row's scheme is **None** but the API wants `Authorization: Bearer <key>`, the word `Bearer` is missing. A header like `X-Api-Key` wants **None**.
 
-**Fix.** Open the server's **Edit** dialog (or the custom-tool group's), find the header row and set its scheme to what the API documents. Store only the raw key as the secret: choose **Replace value** and paste the key without `Bearer`. Save, then press **Test**. See [MCP servers → Auth scheme](/guides/mcp-servers#register-an-http-server).
+**Fix.** Open the server's **Edit** dialog (or the custom-tool group's), find the header row and set its scheme to what the API documents. Store only the raw key as the secret: in the secret row's picker choose **Change &lt;name&gt;'s value…** (on the server's page, **Replace key…** › **Enter a new value**) and paste the key without `Bearer`. Save, then press **Test**. See [MCP servers → Auth scheme](/guides/mcp-servers#register-an-http-server).
 
 ### There is no way to print a secret from the terminal
 
@@ -227,7 +221,7 @@ Messages are accepted only from the paired owner. In a group, the bot acts only 
 
 | File | Written by |
 | --- | --- |
-| `~/.coffer/logs/daemon.log` (+ `.1`–`.3`) | The daemon and everything acting for it. Readable on **Activity → Daemon**. |
+| `~/.coffer/logs/daemon.log` (+ `.1`–`.3`) | The daemon and everything acting for it. Readable on **Activity → Daemon log**. |
 | `~/.coffer/logs/shim-<pid>-<time>.log` | Each `coffer-mcp-shim` process an agent launched. Kept seven days. |
 | `~/.coffer/logs/upstream/<server>.log` | Each stdio MCP server's stderr. |
 

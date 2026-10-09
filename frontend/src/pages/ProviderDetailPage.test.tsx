@@ -115,6 +115,8 @@ const makeProvider = (over: Partial<Provider> = {}): Provider => ({
   secret_ref: "secret/b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
   local_runtime: null,
   compatible_agents: ["codex"],
+  served_agents: ["codex"],
+  anthropic_base_url: null,
   transcribe_default: false,
   models: [],
   enabled: true,
@@ -227,7 +229,10 @@ describe("ProviderDetailPage", () => {
     await heading();
 
     expect(screen.getByText("Reachable")).toBeInTheDocument();
-    expect(screen.getByText("locked while Codex runs on it")).toBeInTheDocument();
+    // The addresses it has, each saying which agent uses it.
+    expect(screen.getByText("OpenAI-compatible address")).toBeInTheDocument();
+    expect(screen.getByText("Codex uses this address.")).toBeInTheDocument();
+    expect(screen.queryByText("Anthropic-compatible address")).not.toBeInTheDocument();
     // The key shows as its secret's name, linked to that secret; never the ref or its URI.
     expect(await screen.findByRole("link", { name: "Acme key" })).toHaveAttribute(
       "href",
@@ -253,9 +258,11 @@ describe("ProviderDetailPage", () => {
       const section = screen.getByRole("heading", { name }).closest("section")!;
       expect(section).not.toHaveClass("border");
     }
-    // The header holds the actions in the sibling order: reach, test, edit, menu.
+    // The header says which agents can use it — no reach to set — then the
+    // actions in the sibling order: test, edit, menu.
     const header = screen.getByTestId("provider-header");
-    expect(within(header).getByTestId("scope-control")).toBeInTheDocument();
+    expect(header).toHaveTextContent("For Codex");
+    expect(within(header).queryByTestId("scope-control")).toBeNull();
     expect(within(header).getByRole("button", { name: "Test" })).toBeInTheDocument();
     expect(within(header).getByRole("button", { name: "Edit" })).toBeInTheDocument();
     expect(
@@ -445,7 +452,7 @@ describe("ProviderDetailPage", () => {
     expect(screen.getAllByRole("button", { name: "Replace key…" })).toHaveLength(1);
   });
 
-  test("Edit renames first, then patches the endpoint; the protocol is locked while live", async () => {
+  test("Edit renames first, then patches the addresses; the OpenAI address is locked while live", async () => {
     agentsState.data = [agent("codex", "gpt-5-codex")];
     const provider = makeProvider();
     serve(provider);
@@ -456,11 +463,20 @@ describe("ProviderDetailPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     const dialog = within(await screen.findByRole("dialog"));
-    expect(dialog.getByText("Locked while Codex runs on it.")).toBeInTheDocument();
-    expect(dialog.getByRole("combobox", { name: "Protocol" })).toBeDisabled();
+    expect(
+      dialog.getByText(
+        "Codex runs on it, so the OpenAI address can't be added or removed until it moves to another provider.",
+      ),
+    ).toBeInTheDocument();
+    expect(dialog.queryByRole("combobox", { name: "Protocol" })).toBeNull();
     expect(await dialog.findByRole("link", { name: "Acme key" })).toBeInTheDocument();
     fireEvent.change(dialog.getByLabelText("Name"), { target: { value: "acme-eu" } });
-    fireEvent.change(dialog.getByLabelText("Base URL"), { target: { value: "https://gw/v2" } });
+    fireEvent.change(dialog.getByLabelText("OpenAI-compatible address"), {
+      target: { value: "https://gw/v2" },
+    });
+    fireEvent.change(dialog.getByLabelText("Anthropic-compatible address"), {
+      target: { value: "https://gw" },
+    });
     fireEvent.click(dialog.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(api.update).toHaveBeenCalledTimes(1));
@@ -468,7 +484,10 @@ describe("ProviderDetailPage", () => {
     expect(resources.rename.mock.invocationCallOrder[0]).toBeLessThan(
       api.update.mock.invocationCallOrder[0],
     );
-    expect(api.update).toHaveBeenCalledWith(UID, { base_url: "https://gw/v2" });
+    expect(api.update).toHaveBeenCalledWith(UID, {
+      base_url: "https://gw/v2",
+      anthropic_base_url: "https://gw",
+    });
     // The page stays where it is: its address is the uid.
     expect(where()).toBe(`/model-providers/${UID}`);
   });

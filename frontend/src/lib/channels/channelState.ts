@@ -45,6 +45,7 @@ export type ChannelPrimaryAction =
   | "refresh"
   | "replaceSecret"
   | "openSecrets"
+  | "askAgain"
   | "runHere"
   | "runHereConfirm"
   | "turnOn"
@@ -105,7 +106,7 @@ const PRIMARY: Record<ChannelStateKey, ChannelPrimaryAction> = {
   connectFailed: "replaceSecret",
   unreachable: "reconnect",
   waitingApproval: "openSecrets",
-  approvalRefused: "openSecrets",
+  approvalRefused: "askAgain",
   stopped: "replaceSecret",
   notPaired: null,
   connected: null,

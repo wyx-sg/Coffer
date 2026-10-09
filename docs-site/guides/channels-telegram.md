@@ -30,11 +30,13 @@ You do not need to set a description or a command list: Coffer registers the bot
 
 ```text [Web UI]
 Channels → Add channel
-  Type:           Telegram
-  Name:           my-telegram
-  Bot token:      123456789:AAH…
-  Default agent:  claude-code
-→ Create
+  1 Platform:       Telegram
+  2 Connect:
+      Name:           my-telegram
+      Default agent:  claude-code
+      Bot token:      123456789:AAH…
+    → Connect
+  3 Pair:           the code to send the bot (or Pair later)
 ```
 
 The default agent is a registered agent, as the **Agents** page lists it. The channel is bound to the machine you register it from and starts polling immediately. A token reference that does not resolve is rejected and nothing is saved.
@@ -45,7 +47,7 @@ Check that it is running: the channel's header shows its status and where it run
 
 1. Issue a code, on the channel's **Overview** with **Generate pairing code**. The dialog shows the code and the pair link.
 
-2. Open the pair link on the phone signed in to your account (**Open the pairing link** on the web page) and tap **Start**. Or open the bot and send `K7QM3XPA` as a message.
+2. Open the pair link on the phone signed in to your account (**Open in Telegram** on the web page) and tap **Start**. Or open the bot and send `K7QM3XPA` as a message.
 3. The bot confirms the pairing and sends the help once. You are the owner.
 
 The code is single-use, expires after an hour, and is invalidated after 10 wrong guesses. Until you pair, the bot does not answer anyone.
@@ -125,7 +127,7 @@ The Bot API only reports mentions in the text of a plain message, so an @mention
 
 Telegram bots start with **privacy mode on**, which means the bot only sees messages that mention it, reply to it, or are commands. That is what the default `require_mention: true` expects, so nothing needs changing.
 
-If you turn `require_mention` off so the bot acts on every owner message in a group — the channel's **Settings** → **In group chats** → **Answer only when @mentioned** — the bot also needs to see them:
+If you turn `require_mention` off so the bot acts on every owner message in a group — the channel's **Settings** → **Receiving messages** → **Answer only when @mentioned** — the bot also needs to see them:
 
 1. In BotFather, send `/setprivacy`, choose the bot and select **Disable**.
 2. Remove the bot from the group and add it again. The change applies only to groups the bot joins afterwards.
@@ -134,7 +136,7 @@ Until you do, the channel's page shows a warning naming this fix.
 
 ## Rotate the token
 
-On the channel's page, choose **Replace token** (in the header when Telegram rejected the old one, or in the **⋯** menu and under **Settings** → **Secrets**), paste the new token in **Bot token** and choose **Replace and restart**. Coffer checks the token with Telegram as you paste it and says **Works — this is @your_bot**, and for the same bot that the pairing still holds; a token Telegram rejects is named under the field. The token is written under the reference the channel already uses, so pairing and machine binding are untouched.
+On the channel's page, choose **Replace token** in the banner when Telegram rejected the old one, or **Replace key…** under **Settings** → **Connection**; paste the new token in **Bot token** and choose **Replace and restart**. Coffer checks the token with Telegram as you paste it and says **Works — this is @your_bot**, and for the same bot that the pairing still holds; a token Telegram rejects is named under the field. The token is written under the reference the channel already uses, so pairing and machine binding are untouched.
 
 ## Limits
 
@@ -164,7 +166,7 @@ Two consumers are polling the same bot. This happens when the same token is regi
 Mention it or reply to it. If you turned `require_mention` off, check the privacy-mode warning above.
 
 **`telegram.poll.retry` repeats in the daemon log.**
-Polling keeps failing. Besides network trouble, Telegram refuses `getUpdates` while another program polls the same bot, and while the bot has a webhook set — for example from a bot framework you tested with earlier. Coffer does not remove a webhook for you: stop the other program, or clear the webhook with the Bot API's `deleteWebhook` method. Coffer backs off and resumes on its own. **Activity → Daemon** shows these records.
+Polling keeps failing. Besides network trouble, Telegram refuses `getUpdates` while another program polls the same bot, and while the bot has a webhook set — for example from a bot framework you tested with earlier. Coffer does not remove a webhook for you: stop the other program, or clear the webhook with the Bot API's `deleteWebhook` method. Coffer backs off and resumes on its own. **Activity → Daemon log** shows these records.
 
 **Formatting looks flat.**
 The Bot API server does not offer rich messages, so replies use the HTML fallback. Everything is still delivered.

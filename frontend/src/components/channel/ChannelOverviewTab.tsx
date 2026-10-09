@@ -23,6 +23,7 @@ import type { ChannelPerson, ChannelStatus } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import { storedDefaultModel } from "@/lib/channels/editChannel";
 import { useAgentModelList } from "@/lib/hooks/useAgentModelList";
+import { useAgentResolvedDefault } from "@/lib/hooks/useAgentModels";
 import { CHANNEL_KIND } from "@/lib/hooks/useChannels";
 import { ChannelPeopleList } from "./ChannelPeopleList";
 
@@ -64,6 +65,8 @@ export function ChannelOverviewTab({
   const defaultAgent =
     typeof channel.config.default_agent === "string" ? channel.config.default_agent : "";
   const models = useAgentModelList(defaultAgent);
+  // What "Provider default" runs on, named only when Coffer can know it.
+  const resolved = useAgentResolvedDefault(defaultAgent).data ?? null;
   const model = storedDefaultModel(channel.config);
   // A stored id the catalogue does not list still shows as itself.
   const options =
@@ -108,7 +111,11 @@ export function ChannelOverviewTab({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={NO_MODEL}>{t("channels.overview.agents.modelDefault")}</SelectItem>
+              <SelectItem value={NO_MODEL}>
+                {resolved
+                  ? t("channels.overview.agents.modelDefaultNamed", { model: resolved })
+                  : t("channels.overview.agents.modelDefault")}
+              </SelectItem>
               {options.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
                   {m.label || m.id}

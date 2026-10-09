@@ -10,6 +10,7 @@ from __future__ import annotations
 from coffer.application.provider.introspection import ModelIntrospectionService
 from coffer.application.provider.prices import ProviderPriceResolver
 from coffer.application.provider.service import ProviderService
+from coffer.application.provider.windows import ProviderWindowResolver
 
 _provider_service: ProviderService | None = None
 
@@ -57,3 +58,19 @@ def get_price_resolver() -> ProviderPriceResolver:
     if _price_resolver is None:
         raise RuntimeError("price resolver not initialised")
     return _price_resolver
+
+
+_window_resolver: ProviderWindowResolver | None = None
+
+
+def set_window_resolver(resolver: ProviderWindowResolver) -> None:
+    """Called by the composition root once on startup."""
+    global _window_resolver
+    _window_resolver = resolver
+
+
+def get_window_resolver() -> ProviderWindowResolver:
+    """FastAPI Depends() target: where a model's context window comes from."""
+    if _window_resolver is None:
+        raise RuntimeError("window resolver not initialised")
+    return _window_resolver

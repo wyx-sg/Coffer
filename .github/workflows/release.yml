@@ -208,6 +208,7 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/cli-notary"
           cp dist/coffer dist/coffer-daemon dist/coffer-mcp-shim dist/coffer-seatalk-bridge "$RUNNER_TEMP/cli-notary/"
+          cp -R dist/coffer-mcp-shim-lib "$RUNNER_TEMP/cli-notary/"
           ditto -c -k "$RUNNER_TEMP/cli-notary" "$RUNNER_TEMP/coffer-cli.zip"
           bash scripts/release_signing.sh notarize "$RUNNER_TEMP/coffer-cli.zip"
 
@@ -238,16 +239,23 @@ jobs:
               exit 1
             fi
           done
+          # The shim is a one-folder build: its libraries travel beside it.
+          if [ ! -d dist/coffer-mcp-shim-lib ]; then
+            echo "error: dist/coffer-mcp-shim-lib missing — the shim cannot start without it" >&2
+            exit 1
+          fi
           archive="coffer-cli-${triple}.tar.gz"
-          tar -czf "artifacts/$archive" -C dist "${binaries[@]}"
+          tar -czf "artifacts/$archive" -C dist "${binaries[@]}" coffer-mcp-shim-lib
           echo "packaged: artifacts/$archive"
 
       # The .app bundles the very same binaries the archive above ships.
-      # Stage three where tauri.conf.json's `externalBin` looks: Tauri resolves
+      # Stage two where tauri.conf.json's `externalBin` looks: Tauri resolves
       # each `binaries/<name>` entry to `binaries/<name>-<target-triple>`. The
       # SeaTalk bridge is not an externalBin — Tauri re-signs those with the
       # app's keychain entitlement — but a bundle.macOS.files entry
-      # (tauri.macos.conf.json), copied unchanged under its plain name.
+      # (tauri.macos.conf.json), copied unchanged under its plain name. The
+      # one-folder shim is one too, into Contents/Resources: its library
+      # folder carries data files, which Contents/MacOS may not hold.
       # Deliberately a copy of dist/, NOT a second PyInstaller run — freezing
       # these takes the better part of an hour and it is already done.
       - name: stage frozen binaries for the app bundle
@@ -256,12 +264,14 @@ jobs:
           set -euo pipefail
           triple="${{ matrix.triple }}"
           mkdir -p desktop/binaries
-          for b in coffer coffer-daemon coffer-mcp-shim; do
+          for b in coffer coffer-daemon; do
             cp "dist/$b" "desktop/binaries/$b-$triple"
             chmod +x "desktop/binaries/$b-$triple"
           done
           cp dist/coffer-seatalk-bridge desktop/binaries/coffer-seatalk-bridge
           chmod +x desktop/binaries/coffer-seatalk-bridge
+          cp dist/coffer-mcp-shim desktop/binaries/coffer-mcp-shim
+          cp -R dist/coffer-mcp-shim-lib desktop/binaries/coffer-mcp-shim-lib
           ls -la desktop/binaries/
 
       # The npm-published CLI, not `cargo install tauri-cli` — the latter
@@ -321,6 +331,14 @@ jobs:
           app="desktop/target/${{ matrix.triple }}/release/bundle/macos/Coffer.app"
           bash scripts/release_signing.sh verify-no-keychain "$app/Contents/MacOS/coffer-seatalk-bridge"
           bash scripts/release_signing.sh verify "$app/Contents/MacOS/coffer-daemon"
+          bash scripts/release_signing.sh verify "$app/Contents/Resources/coffer-mcp-shim"
+
+      # The app keeps the one-folder shim in Contents/Resources, apart from the
+      # daemon in Contents/MacOS. Prove the bundled copy starts and answers,
+      # the same round-trip the smoke test above ran on dist/.
+      - name: smoke-test the binaries inside the app
+        shell: bash
+        run: bash scripts/smoke_test_bundle.sh "desktop/target/${{ matrix.triple }}/release/bundle/macos/Coffer.app/Contents/MacOS"
 
       # NOTE: a missing bundle dir here is signal, not noise — fail rather than
       # publish a release whose .dmg silently went missing.

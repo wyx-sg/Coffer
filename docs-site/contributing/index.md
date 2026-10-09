@@ -31,7 +31,7 @@ Most of Coffer is written with AI coding agents, mainly Claude Code and Codex. T
 
 - [`AGENTS.md`](https://github.com/wyx-sg/Coffer/blob/main/AGENTS.md) is the operating manual an agent reads at session start. Humans can read it too, and the same rules apply.
 - [`.agents/`](https://github.com/wyx-sg/Coffer/tree/main/.agents) holds one convention file per topic: `workflow.md`, `openspec.md`, `stack.md`, `frontend.md`, `visual-language.md`, `testing.md` and `harness.md`. The pages in this section summarise them and link to them for the fine print.
-- `.claude/` is a checked-in control layer. It holds permissions, hooks that auto-format edited files, a hook that blocks destructive shell commands, a hook that warns when you commit while `make verify` is stale, and the `/opsx:*` OpenSpec commands. [`.agents/harness.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/harness.md) describes each one.
+- `.claude/` is a checked-in control layer. It holds permissions, a hook that auto-formats edited files, a hook that blocks destructive shell commands, and the `/opsx:*` OpenSpec commands and skills. [`.agents/harness.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/harness.md) describes each one.
 
 When an AI agent contributes substantively to a commit, the commit carries a `Co-Authored-By` footer that names the model, for example `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
 

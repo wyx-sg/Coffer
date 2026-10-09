@@ -213,7 +213,7 @@ lint:
 # `npx --yes knip@<pinned>`: the same on-demand pattern `make desktop` uses for
 # the Tauri CLI, so it needs no entry in the lockfile.
 # A missing node_modules fails (it does not skip): a skipped frontend leg would
-# still let `make verify` record a fresh stamp for a tree whose frontend was
+# let `make verify` pass a tree whose frontend was
 # never checked.
 	@if [ ! -d $(FRONTEND)/node_modules ]; then \
 		echo "lint: $(FRONTEND)/node_modules missing — run 'make install' first"; exit 1; \
@@ -477,8 +477,9 @@ bundle-binaries:
 # refuse a browser-downloaded copy on double-click until a Developer ID
 # exists; a locally-built one runs fine.
 #
-# The .app bundles three frozen binaries via tauri.conf.json's `externalBin`
-# and the SeaTalk bridge via tauri.macos.conf.json's bundle.macOS.files, which is why this target has to run PyInstaller first. Tauri
+# The .app bundles two frozen binaries via tauri.conf.json's `externalBin`,
+# and the SeaTalk bridge and the one-folder shim via tauri.macos.conf.json's
+# bundle.macOS.files, which is why this target has to run PyInstaller first. Tauri
 # resolves each `binaries/<name>` entry to `binaries/<name>-<target-triple>`,
 # so the freshly-built binaries are staged under that suffixed name.
 desktop:
@@ -513,12 +514,15 @@ desktop:
 	TRIPLE=$$(rustc -vV | awk '/^host:/ {print $$2}'); \
 	case "$$TRIPLE" in *windows*) EXT=.exe ;; *) EXT= ;; esac; \
 	mkdir -p desktop/binaries; \
-	for b in coffer coffer-daemon coffer-mcp-shim; do \
+	for b in coffer coffer-daemon; do \
 		cp "dist/$$b$$EXT" "desktop/binaries/$$b-$$TRIPLE$$EXT"; \
 		chmod +x "desktop/binaries/$$b-$$TRIPLE$$EXT"; \
 	done; \
 	cp "dist/coffer-seatalk-bridge$$EXT" "desktop/binaries/coffer-seatalk-bridge$$EXT"; \
 	chmod +x "desktop/binaries/coffer-seatalk-bridge$$EXT"; \
+	cp "dist/coffer-mcp-shim$$EXT" "desktop/binaries/coffer-mcp-shim$$EXT"; \
+	rm -rf desktop/binaries/coffer-mcp-shim-lib; \
+	cp -R dist/coffer-mcp-shim-lib desktop/binaries/coffer-mcp-shim-lib; \
 	echo "desktop: staged binaries for $$TRIPLE"
 # (4) Build the .app + .dmg.
 	cd desktop && npx --yes @tauri-apps/cli@^2 build
@@ -544,18 +548,21 @@ desktop-stage-binaries:
 	TRIPLE=$$(rustc -vV | awk '/^host:/ {print $$2}'); \
 	case "$$TRIPLE" in *windows*) EXT=.exe ;; *) EXT= ;; esac; \
 	mkdir -p desktop/binaries; \
-	for b in coffer coffer-daemon coffer-mcp-shim; do \
+	for b in coffer coffer-daemon; do \
 		f="desktop/binaries/$$b-$$TRIPLE$$EXT"; \
 		if [ ! -e "$$f" ]; then \
 			printf '#!/bin/sh\necho "%s: placeholder staged by make desktop-stage-binaries; run make desktop to build the real binary" >&2\nexit 1\n' "$$b" > "$$f"; \
 			chmod +x "$$f"; \
 		fi; \
 	done; \
-	f="desktop/binaries/coffer-seatalk-bridge$$EXT"; \
-	if [ ! -e "$$f" ]; then \
-		printf '#!/bin/sh\necho "coffer-seatalk-bridge: placeholder staged by make desktop-stage-binaries; run make desktop to build the real binary" >&2\nexit 1\n' > "$$f"; \
-		chmod +x "$$f"; \
-	fi
+	for b in coffer-seatalk-bridge coffer-mcp-shim; do \
+		f="desktop/binaries/$$b$$EXT"; \
+		if [ ! -e "$$f" ]; then \
+			printf '#!/bin/sh\necho "%s: placeholder staged by make desktop-stage-binaries; run make desktop to build the real binary" >&2\nexit 1\n' "$$b" > "$$f"; \
+			chmod +x "$$f"; \
+		fi; \
+	done; \
+	mkdir -p desktop/binaries/coffer-mcp-shim-lib
 
 # Compile + lint the crate without bundling anything. This is what CI runs
 # (.github/workflows/desktop.yml): `make desktop` is PyInstaller + Tauri and

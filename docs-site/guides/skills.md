@@ -67,7 +67,7 @@ Because the delivered path is a link, editing `SKILL.md` from inside `~/.claude/
 
 **Skills** (under Capabilities in the sidebar) is your library beside the skill you are reading. The list on the left has a search box and **Check copies**, and groups skills by what needs you: **Needs attention**, **In use**, **Unused**, **Off** and **Built-in**. A row shows the skill's name and its reach as a badge — its description is on the skill's page — and, under the name, only the one thing that needs you: **Master missing**, **Folder in the way in Codex**, **Needs jq · not installed**, **Tool off**, **Secret missing**, **Source unreachable** or **Update available**. The **Reach** filter under the search box narrows the list to the skills that reach one agent (an agent's Skills tab links here with that agent chosen, `/skills?agent=<uid>`). Tick rows (a box appears on hover) to set the reach of several skills at once or to delete them; the selection shows as a bar under the search box and in the reading pane. Folders in `~/.coffer/vault/skills/` that no skill claims are listed apart, under **Not in your library** (see [below](#folders-not-in-your-library)).
 
-The open skill's header carries its name, a state pill (**In use**, **Off**, **Master missing**, **Folder in the way**, **Command missing**, **Tool off**, **Secret missing**, **Source unreachable**), and two fixed buttons: **Reach** and a **⋯** menu with **Open in editor**, **Reveal in Finder**, **Copy master path**, **Check agents' copies**, **Turn off** (removes it from every agent and keeps who you chose) and **Delete…**. Above its tabs, a banner says what needs you — a folder in the way, a missing command, a tool that is off, an update — with the one action that answers it.
+The open skill's header carries its name, a state pill (**In use**, **Off**, **Master missing**, **Folder in the way**, **Command missing**, **Tool off**, **Secret missing**, **Source unreachable**), and two fixed buttons: **Reach** and a **⋯** menu with **Open in editor**, **Reveal in Finder**, **Copy master path** and **Delete…**. Turning a skill off is **Reach** › **Off**; its copies are checked from the **Delivery** tab's **Check again** or the library's **Check copies**. Above its tabs, a banner says what needs you — a folder in the way, a missing command, a tool that is off, an update — with the one action that answers it.
 
 Choosing a skill opens it on the right, at its own address (`/skills/<name>`), with four tabs:
 
@@ -105,7 +105,7 @@ Coffer refuses the whole archive, naming the entries, before unpacking any of it
 ### From a Git repository
 
 ```text
-Skills → Add skill → From Git → Repository URL, and optionally Branch or tag and Folder → Add skill
+Skills → Add skill → From Git → Repository URL, and optionally Branch or tag and Folder in the repository → Clone → Add skill
 ```
 
 Coffer clones the repository with this machine's own `git`, resolves the branch, tag or commit you gave (the default branch when you gave none) to one commit, and looks for skills in the folder you named by the same rule as an archive. A GitHub folder address such as `https://github.com/acme/agent-skills/tree/main/terraform-plan` is read as the repository, the branch and the folder.
@@ -120,14 +120,14 @@ Git runs without a prompt, and Coffer gives it no credential and stores none. A 
 
 Adding a skill whose `name` already exists is refused with a conflict. To replace the existing skill with the new content, choose **Replace** on that row in the dialog. The master folder's content is swapped in one step, and the skill's reach and its delivered links are kept.
 
-A freshly added skill is enabled and reaches every registered agent, so it is linked into each agent's skill folder straight away.
+A freshly added skill is enabled and reaches the agents chosen under **Available to** in the Add skill dialog (every agent by default), so it is linked into each of their skill folders straight away.
 
 ## Update a skill from its repository
 
-A skill added from a Git repository shows its source on its page: the repository, the folder, the pinned commit and whether an update is waiting. Coffer checks the repository in the background on a schedule you choose in **Settings › General › Check skills for updates** — **Every 6 hours** (the default), **Every day**, **Every week** or **Only when I ask** — and you can check at any time with **Check for updates**, in every setting. The choice is kept on this machine only (in `~/.coffer/daemon-config.json`), is not synced, and takes effect at once.
+A skill added from a Git repository shows its source on its page: the repository, the folder, the pinned commit and whether an update is waiting. Coffer checks the repository in the background on a schedule you choose in **Settings › General › Check skills for updates** — **Every 6 hours** (the default), **Every day**, **Every week** or **Only when I ask** — and you can check at any time with **Check again** in the skill's source, in every setting. The choice is kept on this machine only (in `~/.coffer/daemon-config.json`), is not synced, and takes effect at once.
 
 ```text
-Skills → the skill → Check for updates, then Hand off to <Agent> to update when an update is available
+Skills → the skill → Check again, then Hand off to <Agent> to update when an update is available
 ```
 
 When the branch or tag has new commits that change the skill's folder, the skill shows **Update available** with the commit range from the pinned commit to the new one, on the Skills page and on the skill's page. **Coffer does not apply an update itself.** There is no update preview, no **Keep mine**, **Take theirs** or **Compare**, and no merge of its own: bringing new upstream content into a folder that may carry your edits is a job for your agent.
@@ -277,7 +277,7 @@ Each entry is a command name, optionally with a minimum version (`gh>=2.40`); `r
 
 ## Secrets a skill needs
 
-A skill whose commands need a token or key names the Coffer secret under `secrets:` in the mapping form of `requires`:
+A skill whose commands need a token or key names the Coffer secret by its id under `secrets:` in the mapping form of `requires`:
 
 ```yaml
 ---
@@ -285,19 +285,19 @@ name: gh-triage
 description: Label new issues, find duplicates, ask for missing details.
 requires:
   commands: [jq, "gh>=2.40"]
-  secrets: [GITHUB_TOKEN]
+  secrets: [<id>]   # the secret's 32-hex id, from its page on the Secrets page
 ---
 ```
 
-Each entry is a secret's name in Coffer's secret store, never its value. Only the mapping form carries `secrets:`; the list form (`requires: [jq, gh]`) names commands only. A name the secret store would not accept, or one given twice, is skipped with a warning, and a key other than `commands`, `secrets` and `tools` is refused: Coffer reports it as a warning and reads nothing under it.
+Each entry is a secret's id in Coffer's secret store (the `<id>` of `secret/<id>`), never its name or its value. Only the mapping form carries `secrets:`; the list form (`requires: [jq, gh]`) names commands only. An entry that is not a valid id, or one given twice, is skipped with a warning, and a key other than `commands`, `secrets` and `tools` is refused: Coffer reports it as a warning and reads nothing under it.
 
 You set the value yourself on the [Secrets page](/guides/secrets), and allow `coffer run` to use that secret there once ([Secrets → Allow `coffer run` to use it](/guides/secrets#allow-coffer-run-to-use-it)). The skill's commands then receive it when they run under `coffer run --secret`, which sets it only in that command's environment:
 
 ```sh
-coffer run --secret GITHUB_TOKEN -- gh issue list
+coffer run --secret GITHUB_TOKEN=coffer://secret/<id> -- gh issue list
 ```
 
-The skill's **Requires** tab lists each declared secret below its commands, as **Set** or "secret GITHUB_TOKEN is not set" with **Open Secrets**. Coffer answers that from the secret store by name alone and never reads the value. A skill with a secret that is not set also says so in its row and in a banner above its tabs, and appears on the Overview's **Needs you** list, whose action opens the Secrets page. As with commands, the skill is delivered whether or not its secrets are set.
+The skill's **Requires** tab lists each declared secret below its commands, as **Set** or "secret `<id>` is not set" with **Open Secrets**. Coffer answers that from the secret store by id alone and never reads the value. A skill with a secret that is not set also says so in its row and in a banner above its tabs, and appears on the Overview's **Needs you** list, whose action opens the Secrets page. As with commands, the skill is delivered whether or not its secrets are set.
 
 ## Tools a skill needs
 
@@ -309,7 +309,7 @@ name: invoice-chaser
 description: Find overdue invoices and draft reminders.
 requires:
   commands: [jq]
-  secrets: [BILLING_TOKEN]
+  secrets: [<id>]
   tools: [github, {name: billing-api, why: Reads invoices.}]
 ---
 ```
@@ -329,7 +329,7 @@ requires:
   commands:
     - command: gh
       login_check: gh auth status
-  secrets: [EXAMPLE_TOKEN]
+  secrets: [<id>]
 ---
 ```
 

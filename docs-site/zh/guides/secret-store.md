@@ -31,9 +31,8 @@ flowchart LR
 ```sh
 # From stdin, so the value never reaches your shell history
 printf '%s' "$GITHUB_TOKEN" | coffer secret set --name "GitHub token"
-# stored: GitHub token
-#   id:  secret/<id>
-#   uri: coffer://secret/<id>
+# stored: secret/<id>
+# cite it as: coffer://secret/<id>
 
 # Or at a hidden prompt
 coffer secret set --name "GitHub token"
@@ -67,19 +66,19 @@ coffer secret list
 
 ```text
                                      Secrets
-┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Ref          ┃ Name         ┃ Present in store ┃ Used by                 ┃ Readable by local processes ┃
+┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Label        ┃ Ref          ┃ Present in store ┃ Used by                 ┃ Readable by local processes ┃
 ┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ secret/<id>  │ GitHub token │ yes              │ mcp_server github       │ yes                         │
-│ secret/<id>  │ DeepSeek key │ no               │ provider deepseek       │ no                          │
-│ secret/<id>  │ Orders DB    │ yes              │ skill coffer-database   │ yes                         │
-│ secret/<id>  │ Old API      │ yes              │ (unreferenced)          │ yes                         │
+│ GitHub token │ secret/<id>  │ yes              │ mcp_server github       │ yes                         │
+│ DeepSeek key │ secret/<id>  │ no               │ provider deepseek       │ no                          │
+│ Orders DB    │ secret/<id>  │ yes              │ skill coffer-database   │ yes                         │
+│ Old API      │ secret/<id>  │ yes              │ (unreferenced)          │ yes                         │
 └──────────────┴──────────────┴──────────────────┴─────────────────────────┴─────────────────────────────┘
 ```
 
 列表显示存储中保存的每个 ref，以及每个已注册资源引用的每个 ref：
 
-- **Name**——密钥的名称，没有则为空。
+- **Label**——密钥的名称，没有则为空。
 - **Present in store**——存储里是否有值。恢复一个不含密钥的保险库之后，`no` 的那些行就是需要重新设置的。
 - **Used by**——引用该 ref 的资源、文件中引用了独立密钥 `coffer://secret/<id>` 的技能，以及有多少个去处在等待审批。`(unreferenced)` 表示没有任何东西在用这个密钥，可以考虑删除。
 - **Readable by local processes**——以你的身份运行的其他程序，能否在 Coffer 放置该值的地方读到它：stdio MCP 服务器的环境变量，或你已允许 `coffer run` 使用的独立密钥。见[仍然暴露的部分](/zh/architecture/security#what-stays-exposed)。

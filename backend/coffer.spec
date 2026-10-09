@@ -52,7 +52,9 @@ a = Analysis(
     datas=[],
     hiddenimports=hidden,
     hookspath=[],
-    runtime_hooks=[],
+    # Marks the unpack directory with this process's pid so the daemon can
+    # delete it once the process is gone (packaging/rth_unpack_owner.py).
+    runtime_hooks=["packaging/rth_unpack_owner.py"],
     excludes=[
         # Heavy ML stack no coffer binary ships. No coffer source imports any
         # of it — nothing local decodes audio or runs a model; the exclude

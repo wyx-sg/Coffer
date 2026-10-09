@@ -113,11 +113,11 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 | --- | --- |
 | [`backend/coffer/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer) | Python 包，分四层：`domain/`、`application/`、`infrastructure/`、`surfaces/`。见[分层与代码布局](/zh/architecture/layering) |
 | `backend/tests/` | `unit/`、`integration/` 和 `contract/` 三个测试层级 |
-| `backend/*.spec` | `coffer`、`coffer-daemon` 和 `coffer-mcp-shim` 的 PyInstaller spec |
+| `backend/*.spec` | `coffer`、`coffer-daemon`、`coffer-mcp-shim` 和 `coffer-seatalk-bridge` 的 PyInstaller spec |
 | `backend/pyproject.toml`、`backend/uv.lock` | 依赖，以及 ruff、mypy、pytest 和 import-linter 的配置 |
 | [`frontend/`](https://github.com/wyx-sg/Coffer/tree/main/frontend) | React Web 界面。见[前端](/zh/contributing/frontend) |
 | [`desktop/`](https://github.com/wyx-sg/Coffer/tree/main/desktop) | Tauri 2 桌面壳（Rust），承载同一份 `frontend/dist` |
-| [`e2e/`](https://github.com/wyx-sg/Coffer/tree/main/e2e) | Playwright 测试套件：`web/`（浏览器）、`mcp/`（MCP 客户端到 shim 再到守护进程）和 `visual/`（截图基线，`make verify-visual`） |
+| [`e2e/`](https://github.com/wyx-sg/Coffer/tree/main/e2e) | Playwright 测试套件：`web/`（浏览器）、`mcp/`（MCP 客户端到 shim 再到守护进程）、`visual/`（截图基线，`make verify-visual`）、`docs/`（本站的应用截图，`make docs-shots`）和 `installed/`（针对已安装 Coffer 的检查，`make verify-installed-*`） |
 | [`evals/`](https://github.com/wyx-sg/Coffer/tree/main/evals) | 工具搜索和工具路由的评测框架，含数据集和基线 |
 | [`openspec/`](https://github.com/wyx-sg/Coffer/tree/main/openspec) | 产品契约：`specs/`（当前）、`changes/`（进行中和已归档） |
 | [`docs/`](https://github.com/wyx-sg/Coffer/tree/main/docs) | `decisions/`（决策记录）和 `research/`。原则和架构在本站的[架构](/zh/architecture/)部分 |
@@ -137,7 +137,7 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 | `make install-e2e-browsers` | 下载 Playwright 的 Chromium 构建 |
 | `make hooks` | 安装 pre-commit 和 commit-msg 两个 git Hook（行尾空白、YAML/TOML/JSON 检查、ruff、prettier、commitlint） |
 | `make dev` | 同时运行守护进程和 Vite（见上文） |
-| `make verify` | 依次运行 `lint`、`docs-build`、`verify-unit`、`verify-integration`、`verify-contract` 和 `verify-acceptance`，打印每个阶段的耗时，然后记录一个新鲜度戳。这是开 PR 前的门禁 |
+| `make verify` | 依次运行 `lint`、`docs-build`、`verify-unit`、`verify-integration`、`verify-contract` 和 `verify-acceptance`，打印每个阶段的耗时。这是开 PR 前的门禁 |
 | `make verify-all` | `verify` 加上 `verify-e2e` |
 | `make verify-unit` | 单元测试纯度检查、后端单元测试，然后是前端 Vitest 套件 |
 | `make verify-integration` | 后端集成测试 |
@@ -151,6 +151,9 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 | `make format` | 对 `backend`、`evals` 和 `e2e/installed` 运行 `ruff format` 和 `ruff check --fix`。前端由它自己的 prettier 配置格式化，不归这个目标管 |
 | `make verify-visual` | 截图基线：每个路由、浅色和深色。不属于 `verify` 或 `verify-all` |
 | `make visual-update` | 重新录制当前平台的截图基线 |
+| `make docs-shots` | 用一个预置数据的守护进程重新生成本站的应用截图（`docs-site/public/shots/`） |
+| `make verify-installed-mcp OUT=<dir>` | 可选：针对已安装的 Coffer 运行 MCP 验收（用 `DAEMON_JSON=`、`SHIM=` 指向它）。`OUT` 必须在仓库之外。不属于 `verify` 或 `verify-all` |
+| `make verify-installed-cli OUT=<dir>` | 可选：对已安装的 frozen `coffer` 二进制做冒烟测试（用 `COFFER=` 指向它）；不启动守护进程，也不碰你的任何东西。不属于 `verify` 或 `verify-all` |
 | `make test-durations` | 重新测量测试耗时，用于集成测试分片的均衡（串行，约 15 分钟） |
 | `make coverage` | pytest 和 Vitest 覆盖率报告，不设阈值 |
 | `make eval` | 确定性评测套件和基线门禁 |
@@ -163,7 +166,7 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 | `make docs-build` | 按 Pages 工作流的方式构建本站；有解析不了的 Mermaid 图或失效的内部链接就会失败。它是 `make verify` 的第二个阶段 |
 | `make refresh-prices` | 刷新内置的模型价格表（需要联网；不在 `verify` 中） |
 | `make refresh-secret-rules` | 发版前刷新内置的 gitleaks 检测规则（需要联网；不在 `verify` 中） |
-| `make bundle-binaries` | 用 PyInstaller 把 `coffer`、`coffer-daemon` 和 `coffer-mcp-shim` 冻结到 `dist/` |
+| `make bundle-binaries` | 用 PyInstaller 把 `coffer`、`coffer-daemon`、`coffer-mcp-shim` 和 `coffer-seatalk-bridge` 冻结到 `dist/` |
 | `make desktop` | 构建未签名的 `Coffer.app` 和 `.dmg`（很慢，见下文） |
 | `make desktop-lint` | 对桌面 crate 运行 `cargo check` 和 `cargo clippy -D warnings` |
 | `make desktop-test` | 对桌面 crate 运行 `cargo test` |
@@ -185,13 +188,13 @@ make frontend-codegen          # only the last step (= cd frontend && npm run co
 
 ```sh
 npm run build --prefix frontend   # first: the daemon binary embeds frontend/dist
-make bundle-binaries              # dist/coffer, dist/coffer-daemon, dist/coffer-mcp-shim
+make bundle-binaries              # dist/coffer, dist/coffer-daemon, dist/coffer-mcp-shim, dist/coffer-seatalk-bridge
 bash scripts/smoke_test_bundle.sh dist
 ```
 
 只有 `frontend/dist/index.html` 存在时，`coffer-daemon.spec` 才会打包 `frontend/dist`。如果你跳过了前端构建，得到的守护进程能运行，但不提供界面。冒烟测试会在隔离的 `HOME` 下启动打包好的守护进程，检查它是否提供 Web 界面，并通过打包好的 shim 完成一次 MCP `initialize` 往返。
 
-`scripts/check_pyinstaller_specs.py`（`make lint` 的一部分）让三个 `.spec` 文件和代码树保持一致，因为 pull request 上没有任何 CI job 会运行 PyInstaller。
+`scripts/check_pyinstaller_specs.py`（`make lint` 的一部分）让四个 `.spec` 文件和代码树保持一致，因为 pull request 上没有任何 CI job 会运行 PyInstaller。
 
 ## 构建桌面应用 {#build-the-desktop-app}
 

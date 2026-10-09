@@ -43,6 +43,9 @@ class DiscoveredModel:
 
     id: str
     modality: Modality
+    #: The context window the endpoint reported for it, or ``None`` when it
+    #: said nothing (most OpenAI-compatible ``/models`` answers say nothing).
+    context_window: int | None = None
 
 
 @dataclass(frozen=True)
@@ -53,6 +56,8 @@ class ListedModel:
 
     id: str
     price: ModelPrice | None = None
+    #: The context window the endpoint's ``/models`` entry reported.
+    context_window: int | None = None
 
 
 @dataclass(frozen=True)

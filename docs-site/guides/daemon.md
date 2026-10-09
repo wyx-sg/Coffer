@@ -57,9 +57,9 @@ A few behaviours worth knowing:
 
 One daemon per vault does not mean one process. In Activity Monitor or `ps` you will normally see:
 
-- two `coffer-daemon` processes for the daemon itself: the installed binary is a single file that unpacks itself, so a small launcher process stays as the parent of the real one;
+- two `coffer-daemon` processes for the daemon itself: the installed binary is a single file that unpacks itself, so a small launcher process stays as the parent of the real one (the shim is a one-folder build and runs as one process);
 - another `coffer-daemon` pair running `proxy`, the [local model proxy](/architecture/model-proxy);
-- a `coffer-mcp-shim` pair for every agent session that is connected to Coffer, ending when that session ends;
+- a `coffer-mcp-shim` process for every agent session that is connected to Coffer, ending when that session ends;
 - a `coffer-seatalk-bridge` pair while a SeaTalk channel runs.
 
 `coffer daemon status` names any daemon beyond these. A start that cannot finish gives up after two minutes on its own, and a start that finds the daemon busy leaves without starting a second one.
@@ -123,7 +123,7 @@ The login service is macOS only. On any other host the **Start at login** toggle
 | --- | --- |
 | `~/.coffer/daemon.json` | The discovery file every client reads: `version` (the file's schema), `pid`, `port`, `token`, `started_at`. Mode `0600`, written atomically, removed when the daemon exits. A missing or malformed file means "no daemon". |
 | `~/.coffer/daemon.lock` | The lock that keeps it to one daemon per vault. It stays on disk between runs; the lock lives on the open file, not on its existence. |
-| `~/.coffer/daemon-config.json` | Machine-local settings read before anything else opens: `port`, `proxy_port` (the local model proxy's port), `features` (this machine's experimental-feature switches), `machine_id` and `machine_name`. Mode `0600`. Never synced. |
+| `~/.coffer/daemon-config.json` | Machine-local settings read before anything else opens: `port`, `proxy_port` (the local model proxy's port), `features` (this machine's experimental-feature switches), `machine_id`, `machine_name`, and the machine-local switches `price_refresh`, `update_check`, `record_call_content` and `skill_update_check` (see [Configuration](/reference/configuration#daemon-config-json)). Mode `0600`. Never synced. |
 | `~/.coffer/vault/`, `local/`, `content/`, `derived/`, `runs.db` | Coffer's state, in five storage classes; see [Persistence](/architecture/persistence). |
 | `~/.coffer/logs/` | Logs; see below. |
 | `~/.coffer/bin/` | Deployed binaries (frozen builds only); see [Upgrades](#upgrades-and-rollback). |
@@ -143,7 +143,7 @@ Everything the daemon, the processes it spawns and the surfaces acting for it wr
 
 Shim logs and rolled-aside upstream logs older than seven days are pruned automatically. `daemon.log` and its rotations are never deleted, only rotated. Set `COFFER_LOG_DIR` in the daemon's environment to put the directory elsewhere.
 
-You rarely need to open the file: the **Activity → Daemon** tab reads it with a level filter, and `coffer log daemon` prints the same records on the command line (`--errors` for errors only, `--since 1h` for a recent window). `coffer path logs` prints where the directory and `daemon.log` are, so an agent in a shell can grep the file directly. See [Activity and audit](/guides/activity).
+You rarely need to open the file: the **Activity → Daemon log** tab reads it with a level filter, and `coffer log daemon` prints the same records on the command line (`--errors` for errors only, `--since 1h` for a recent window). `coffer path logs` prints where the directory and `daemon.log` are, so an agent in a shell can grep the file directly. See [Activity and audit](/guides/activity).
 
 ## The access token
 
@@ -173,7 +173,7 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.1 (/Users/you/.coffe
 
 Run `coffer daemon restart` and the warning goes away. The desktop app shows the same situation as a **Daemon out of date** notice with a **Restart daemon** button.
 
-To install a new version: the desktop app updates itself, and `coffer update` upgrades the installer's binaries and restarts the daemon on them. See [Install → Upgrade](/start/install#upgrade). `coffer uninstall` removes Coffer and keeps `~/.coffer`; see [Install → Uninstall](/start/install#uninstall).
+To install a new version: the desktop app updates itself, and `coffer update` upgrades the installer's binaries and restarts the daemon on them. See [Install → Upgrade](/start/install#upgrade). A daemon started from the installer's binaries checks GitHub for a newer release once a day and only reports it, on **Settings › About**; it never installs anything. `coffer daemon upgrade-check` checks now, and **Check automatically** there (or `coffer daemon upgrade-auto-check --set enabled=false`, or `COFFER_UPDATE_CHECK=off`) turns the daily check off. `coffer uninstall` removes Coffer and keeps `~/.coffer`; see [Install → Uninstall](/start/install#uninstall).
 
 To roll back to the previous build:
 

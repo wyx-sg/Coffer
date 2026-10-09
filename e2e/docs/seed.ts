@@ -211,6 +211,32 @@ export async function seedDemoWorkspace(): Promise<void> {
 
   await post("/secrets", { label: "LINEAR_API_KEY", value: "demo-not-a-key" });
 
+  // A custom-tool group, so that page shows a lived-in workspace.
+  await post("/custom-tools", {
+    name: "orders-api",
+    base_url: "https://orders.example.com/v1",
+    tools: [
+      {
+        name: "get_order",
+        description: "Read one order by id.",
+        method: "GET",
+        path: "/orders/{id}",
+        input_schema: {
+          type: "object",
+          properties: { id: { type: "string" } },
+          required: ["id"],
+        },
+      },
+      {
+        name: "list_orders",
+        description: "List recent orders.",
+        method: "GET",
+        path: "/orders",
+        input_schema: { type: "object", properties: {} },
+      },
+    ],
+  });
+
   const created = await post("/knowledge/collections", {
     name: "engineering",
     description: "How we build and run our services.",

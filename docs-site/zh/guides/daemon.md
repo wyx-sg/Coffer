@@ -57,9 +57,9 @@ pid:     41822
 
 每个保险库一个守护进程，不等于只有一个进程。在活动监视器或 `ps` 里，正常会看到：
 
-- 守护进程本身对应两个 `coffer-daemon` 进程：安装的程序是会自解压的单文件，一个小的启动进程会留下来，作为真正进程的父进程；
+- 守护进程本身对应两个 `coffer-daemon` 进程：安装的程序是会自解压的单文件，一个小的启动进程会留下来，作为真正进程的父进程（shim 是单文件夹构建，只有一个进程）；
 - 另一对运行 `proxy` 的 `coffer-daemon`，是[本地模型代理](/zh/architecture/model-proxy)；
-- 每个连着 Coffer 的智能体会话一对 `coffer-mcp-shim`，会话结束就退出；
+- 每个连着 Coffer 的智能体会话一个 `coffer-mcp-shim` 进程，会话结束就退出；
 - SeaTalk 渠道运行时一对 `coffer-seatalk-bridge`。
 
 除此之外的守护进程，`coffer daemon status` 会列出来。启动不了的进程两分钟后会自己放弃；发现守护进程正忙的启动会直接退出，不会再起第二个。
@@ -123,7 +123,7 @@ port 38470 is the port Coffer's daemon binds, but something else is already usin
 | --- | --- |
 | `~/.coffer/daemon.json` | 所有客户端都读的发现文件：`version`（文件的 schema 版本）、`pid`、`port`、`token`、`started_at`。权限 `0600`，原子写入，守护进程退出时删除。文件缺失或格式错误即视为「没有守护进程」。 |
 | `~/.coffer/daemon.lock` | 保证每个保险库只有一个守护进程的锁。它在两次运行之间一直留在磁盘上；锁在于打开的文件，而不在于文件是否存在。 |
-| `~/.coffer/daemon-config.json` | 在其他任何东西打开之前读取的本机设置：`port`、`proxy_port`（本地模型代理的端口）、`features`（本机的实验功能开关）、`machine_id` 和 `machine_name`。权限 `0600`。从不同步。 |
+| `~/.coffer/daemon-config.json` | 在其他任何东西打开之前读取的本机设置：`port`、`proxy_port`（本地模型代理的端口）、`features`（本机的实验功能开关）、`machine_id`、`machine_name`，以及本机开关 `price_refresh`、`update_check`、`record_call_content` 和 `skill_update_check`（见[配置](/zh/reference/configuration#daemon-config-json)）。权限 `0600`。从不同步。 |
 | `~/.coffer/vault/`、`local/`、`content/`、`derived/`、`runs.db` | Coffer 的状态，分为五种存储类别；见[持久化](/zh/architecture/persistence)。 |
 | `~/.coffer/logs/` | 日志；见下文。 |
 | `~/.coffer/bin/` | 已部署的二进制（仅冻结构建）；见[升级与回滚](#upgrades-and-rollback)。 |
@@ -173,7 +173,7 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.1 (/Users/you/.coffe
 
 运行 `coffer daemon restart`，警告就会消失。桌面应用会把同样的情况显示为 **守护进程版本过旧** 提示，并附带 **重启守护进程** 按钮。
 
-安装新版本：桌面应用会自我更新，`coffer update` 会升级安装脚本装的二进制，并让守护进程以新版本重启，见[安装 → 升级](/zh/start/install#upgrade)。`coffer uninstall` 会移除 Coffer 并保留 `~/.coffer`，见[安装 → 卸载](/zh/start/install#uninstall)。
+安装新版本：桌面应用会自我更新，`coffer update` 会升级安装脚本装的二进制，并让守护进程以新版本重启，见[安装 → 升级](/zh/start/install#upgrade)。从安装脚本装的二进制启动的守护进程每天向 GitHub 检查一次有没有新版本，只在**设置 › 关于**里报告，从不自行安装。`coffer daemon upgrade-check` 立即检查；那里的**自动检查**（或 `coffer daemon upgrade-auto-check --set enabled=false`、`COFFER_UPDATE_CHECK=off`）可以关掉每天的检查。`coffer uninstall` 会移除 Coffer 并保留 `~/.coffer`，见[安装 → 卸载](/zh/start/install#uninstall)。
 
 回滚到上一个构建：
 
