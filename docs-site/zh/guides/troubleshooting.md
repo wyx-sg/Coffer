@@ -33,7 +33,7 @@ coffer daemon restart
 
 如果占用者被描述为 **another Coffer daemon**，最常见的情况是你自己的守护进程还在启动：等几秒，再运行 `coffer daemon status`。见[选择端口](/zh/guides/daemon#choose-the-port)。
 
-### "daemon failed to start within 10s; check ~/.coffer/logs/daemon.log" {#daemon-failed-to-start-within-10s-check-coffer-logs-daemon-log}
+### "daemon failed to start within 30s; check ~/.coffer/logs/daemon.log" {#daemon-failed-to-start-within-30s-check-coffer-logs-daemon-log}
 
 **原因。** 守护进程已经被拉起，但没能及时发布自己。原因在日志里，因为被拉起的守护进程会把一切（包括它拒绝启动的原因）都写进 `daemon.log`。
 
@@ -115,11 +115,11 @@ shim 自己的日志是 `~/.coffer/logs/shim-<pid>-<time>.log`。
 
 ## Web 界面 {#the-web-ui}
 
-### "Daemon offline" 或 "Daemon not running" {#daemon-offline-or-daemon-not-running}
+### "正在重新连接守护进程…" 或 "Coffer 的守护进程没有运行" {#reconnecting-to-the-daemon-or-coffer-s-daemon-isn-t-running}
 
-**原因。** 页面连不上守护进程（**守护进程离线**），或者守护进程有响应但不接受页面的令牌（**Daemon not running**）；后一种情况会在守护进程启动时短暂出现，或者在它换了新令牌重启之后出现。
+**原因。** 页面连不上守护进程。最初几秒，页面仍然保留，变暗，上方是一条**正在重新连接守护进程…**提示条，在 1、2、4、8 秒后重试（**立即重试**马上再试一次）；守护进程仍然没有响应时，页面会换成**Coffer 的守护进程没有运行**。守护进程有响应、但还没有给这个页面的令牌，说明它还在启动；这会在守护进程启动时短暂出现，或者在它换了新令牌重启之后出现。
 
-**解决办法。** 在浏览器里用的话，在终端运行 `coffer daemon start`；页面每 30 秒检查一次，提示会自己消失。如果一直不消失，就刷新页面：每次加载时，守护进程都会把当前令牌交给页面。在桌面应用里，用**重启守护进程**。
+**解决办法。** 在桌面应用里，点**启动守护进程**。在浏览器里用的话，在终端运行 `coffer daemon start`（页面上有这条命令可以复制）；页面每 30 秒检查一次，或者点**重试**立即检查，守护进程一响应提示就会自己消失。桌面应用里的**打开守护进程日志**，或终端里的 `coffer log daemon`，可以看到它为什么停了。如果一直不消失，就刷新页面：每次加载时，守护进程都会把当前令牌交给页面。
 
 ### Coffer 需要 git {#coffer-needs-git}
 
@@ -149,15 +149,9 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 ## 密钥和 macOS 钥匙串提示 {#secrets-and-macos-keychain-prompts}
 
-### 每次守护进程启动时 macOS 都要求访问钥匙串 {#macos-asks-for-keychain-access-every-time-the-daemon-starts}
-
-**原因。** 某个资源引用了一个不在 Coffer 加密存储里的密钥。每次启动时，Coffer 会在系统钥匙串里查找一次那个引用，找到就把它移进存储。读取被锁定或被拒绝时，会在下次启动时重试，于是又一次提示。
-
-**解决办法。** 用 `coffer secret list` 找出被引用但缺失的密钥，然后在**密钥**页面或用 `coffer secret set <ref>` 逐个存储。
-
 ### 命令以 9 退出："waiting for approval" {#a-command-exits-9-waiting-for-approval}
 
-**原因。** 这次改动把一个密钥发往了它从没去过的地方（第二个引用同一个令牌的 MCP 服务器、改过的命令行或 URL、指向新远端的推送令牌），或者替换了某个已经在用的值，或者把 `secrets.require_approval` 关掉了，或者让 `coffer run` 去用一个你还没允许它使用的独立密钥（该密钥的页面会显示 **允许 `coffer run`…**，见[密钥](/zh/guides/secrets#allow-coffer-run-to-use-it)）。改动已经保存；在你批准之前，密钥会被扣住。命令已经打印了审批 id 和批准它们的命令（`next: coffer approval approve <id>`）。处于这种状态的 MCP 服务器不会启动，它的工具会以 `SECRET_BINDING_PENDING` 失败；自定义工具的调用会返回同样的工具错误，写明审批 id 和同一条命令，而且只影响在等待的那个环境。
+**原因。** 这次改动把一个密钥发往了它从没去过的地方（第二个引用同一个令牌的 MCP 服务器、改过的命令行或 URL、指向新远端的推送令牌），或者把 `secrets.require_approval` 关掉了，或者让 `coffer run` 去用一个你还没允许它使用的独立密钥（该密钥的页面会显示 **允许 `coffer run`…**，见[密钥](/zh/guides/secrets#allow-coffer-run-to-use-it)）。改动已经保存；在你批准之前，密钥会被扣住。命令已经打印了审批 id 和批准它们的命令（`next: coffer approval approve <id>`）。处于这种状态的 MCP 服务器不会启动，它的工具会以 `SECRET_BINDING_PENDING` 失败；自定义工具的调用会返回同样的工具错误，写明审批 id 和同一条命令，而且只影响在等待的那个环境。
 
 **解决办法。** 运行打印出来的 `coffer approval approve <id>`（或让智能体运行），并确认桌面应用弹出的 Touch ID 或密码提示；也可以打开桌面应用直接回应（在**密钥**页面，点**查看**会打开审批对话框）。只批准你认识的目标；其余的用**拒绝**或 `coffer approval reject <id>` 拒绝。改动已经保存，无需重新运行。如果 `coffer approval approve` 以 `11` 退出，说明验证被取消或超时，审批仍在等待；以 `12` 退出，说明桌面应用没在运行且无法启动——打开它再运行一次。见[密钥 → 批准](/zh/guides/secrets#approvals)。
 
@@ -183,7 +177,7 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 **原因。** 请求头的认证方案和已存的密钥对不上。Coffer 发送的是 `<方案> <密钥>`。如果密钥里因为旧的设置已经写着 `Bearer …`，而这一行的方案也是 **Bearer**，服务器收到的就是 `Bearer Bearer …`。如果这一行的方案是 **None**，而 API 要的是 `Authorization: Bearer <key>`，就少了 `Bearer` 这个词。`X-Api-Key` 这类请求头应选 **None**。
 
-**解决。** 打开服务器的**编辑**对话框（或自定义工具分组的），找到那一行请求头，把方案设为 API 文档写的那种。密钥里只存原始密钥：选**替换值**，粘贴不带 `Bearer` 的密钥。保存后点**测试**。见 [MCP 服务器 → 认证方案](/zh/guides/mcp-servers#register-an-http-server)。
+**解决。** 打开服务器的**编辑**对话框（或自定义工具分组的），找到那一行请求头，把方案设为 API 文档写的那种。密钥里只存原始密钥：在密钥那一行的选择器里选**修改 <name> 的值…**（在服务器的页面上是**更换密钥…** › **输入新值**），粘贴不带 `Bearer` 的密钥。保存后点**测试**。见 [MCP 服务器 → 认证方案](/zh/guides/mcp-servers#register-an-http-server)。
 
 ### 无法在终端里打印密钥 {#there-is-no-way-to-print-a-secret-from-the-terminal}
 

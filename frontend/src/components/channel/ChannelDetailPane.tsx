@@ -16,6 +16,7 @@ import type { ResourceOut } from "@/lib/api/resources";
 import type { ChannelTab } from "@/lib/channels/tabs";
 import {
   CHANNEL_KIND,
+  useAskAgainForChannel,
   useChannelAutoSave,
   useChannelView,
   useRebindChannel,
@@ -53,6 +54,7 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
   const machineName = useMachineName();
   const removePerson = useRemoveChannelPerson(channel.uid);
   const reconnect = useReconnectChannel(channel.uid);
+  const askAgain = useAskAgainForChannel(channel.uid);
   const rebind = useRebindChannel(channel.uid, displayName(channel));
   const enable = useEnableResource();
   const del = useDeleteResource();
@@ -91,6 +93,9 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
       case "openSecrets":
         void navigate("/secrets");
         return;
+      case "askAgain":
+        askAgain.mutate();
+        return;
       case "refresh":
         void status.refetch();
         return;
@@ -118,7 +123,7 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
         channel={channel}
         view={view}
         status={status.data}
-        busy={reconnect.isPending || rebind.isPending || enable.isPending}
+        busy={reconnect.isPending || rebind.isPending || enable.isPending || askAgain.isPending}
         onCommand={onCommand}
         onPair={openPair}
       />

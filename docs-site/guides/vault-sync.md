@@ -230,7 +230,7 @@ The **Machines** tab lists every machine with when it was last seen, its last ro
 
 A refused push, a refused sign-in, an unreachable remote and a missing git each come with a prompt for your agent (a plaintext secret has none, above). The prompt names the remote without its credentials, the branch, the secret's name and git's message with tokens scrubbed, and says what to check. It is on the Sync page next to the message. It never carries or asks for a token. **Retry** stays Coffer's own button.
 
-For failures that do not fit here, the round's message is on the **Status** tab, and the daemon log (**Activity → Daemon**) has the detail.
+For failures that do not fit here, the round's message is on the **Status** tab, and the daemon log (**Activity → Daemon log**) has the detail.
 
 ## How it works
 

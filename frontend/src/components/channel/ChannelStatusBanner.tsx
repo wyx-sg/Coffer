@@ -3,7 +3,7 @@
 // quiet), in plain words, with the one button that fixes it inside (boards
 // 3.2.06–17). A problem is a banner — warning, danger, or info for "pair it" —
 // and its button is the fix: Reconnect now, Replace token, Take it back,
-// Retry, Open Secrets, Run it here, Generate pairing code. A missing SeaTalk
+// Retry, Open Secrets, Ask again, Run it here, Generate pairing code. A missing SeaTalk
 // SDK is the one with two ways forward: the person downloads it (it sits
 // behind their SeaTalk login) and hands the rest to an agent (`status.handoff`),
 // offered as a "Hand off to <Agent> ▾" split button beside Retry.

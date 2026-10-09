@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
 import { withInlineApproval } from "@/lib/inlineApproval";
+import { secretsApi } from "@/lib/api/secret";
 import {
   getChannelPersonAvatar,
   getChannelStatus,
@@ -142,6 +143,31 @@ export function useReconnectChannel(uid: string) {
     mutationFn: () => restartChannel(uid),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: channelStatusKey(uid) });
+    },
+    onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+/**
+ * The refused-secret banner's Ask again: puts each refused request for this
+ * channel's secret back in front of the owner. In the desktop app the request
+ * is approved on the spot with Touch ID (the mutation opts in to inline
+ * approval); in a browser it waits on the approvals list. The channel starts
+ * on its next attempt once it is approved.
+ */
+export function useAskAgainForChannel(uid: string) {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async () => {
+      const { approvals } = await secretsApi.rejectedApprovalsFor(uid);
+      return Promise.all(approvals.map((a) => secretsApi.askAgain(a.id)));
+    },
+    meta: { secretDestination: () => uid },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: channelStatusKey(uid) });
+      void qc.invalidateQueries({ queryKey: pendingApprovalsKey });
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });

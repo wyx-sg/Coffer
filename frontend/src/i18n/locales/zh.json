@@ -1138,7 +1138,7 @@
       "handoffAgent": "交接智能体",
       "handoffAgentHelp": "交接按钮启动的智能体。",
       "skillUpdateCheck": "检查技能更新",
-      "skillUpdateCheckHelp": "这台 Mac 多久查看一次从 Git 添加的技能是否有新版本。在技能页面上点“检查更新”随时可用。",
+      "skillUpdateCheckHelp": "这台 Mac 多久查看一次从 Git 添加的技能是否有新版本。在技能页面上点“再次检查”随时可用。",
       "skillUpdateCheck6h": "每 6 小时",
       "skillUpdateCheck1d": "每天",
       "skillUpdateCheck7d": "每周",
@@ -3601,7 +3601,7 @@
       },
       "approvalRefused": {
         "title": "这个渠道的密钥被拒绝了",
-        "body": "你在 Coffer 应用里拒绝了它的密钥，所以渠道无法连接 {{platform}}。打开密钥页点击“重新请求”可以重新发起——配对和设置都会保留。"
+        "body": "你在 Coffer 应用里拒绝了它的密钥，所以渠道无法连接 {{platform}}。点击“重新申请”可以重新发起——配对和设置都会保留。"
       }
     },
     "meta": {
@@ -3628,6 +3628,7 @@
       "replaceSecret": "更换密钥",
       "replaceToken": "更换 token",
       "openSecrets": "打开密钥",
+      "askAgain": "重新申请",
       "runHere": "在本机运行",
       "runHereConfirm": "在本机运行…",
       "turnOn": "开启",
