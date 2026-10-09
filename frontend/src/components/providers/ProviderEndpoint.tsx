@@ -1,15 +1,15 @@
-// src/components/providers/ProviderEndpoint.tsx — the Endpoint section: protocol, runtime, base URL and the API key's secret.
+// src/components/providers/ProviderEndpoint.tsx — the Endpoint section: its addresses (or runtime), and the API key's secret.
 //
 // The key is never shown — only the name of the secret it is stored under
 // (a link to that secret's page), write-only, with Replace key — which a rejected
-// key moves into the problem box above the rows. The
-// protocol is locked while an agent runs on the provider (spec
-// provider-switching "Refuse to move the wire of a live connection"). Route
-// says agents reach it through Coffer's proxy.
+// key moves into the problem box above the rows. A remote provider shows the
+// OpenAI- and Anthropic-compatible addresses it has, each saying which agent
+// uses it (ADR one-connection-serves-both-wires); a local one its runtime and
+// address. Route says agents reach it through Coffer's proxy.
 // Problems of the endpoint show here, in a box above the rows: Unreachable
 // (Hand off to <Agent>) and Key rejected (Replace key…).
 import { useTranslation } from "react-i18next";
-import { KeyRound, Lock } from "lucide-react";
+import { KeyRound } from "lucide-react";
 
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { StatusWord } from "@/components/status/StatusWord";
@@ -18,17 +18,14 @@ import { SecretRefControl } from "@/components/secret/SecretRefControl";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import type { Provider } from "@/lib/api/providers";
 import { useProxyAddress } from "@/lib/hooks/useProviderPrices";
-import { PROTOCOL_LABEL_KEY } from "@/lib/providers/presets";
+import { addressesOf } from "@/lib/providers/addresses";
 import type { ProbeStatus } from "@/lib/providers/probeStatus";
-import type { ProviderUse } from "@/lib/providers/usedBy";
 import { Section } from "@/components/Section";
 import { SettingRow } from "@/components/settings/SettingsLayout";
 import { ProblemBox } from "./ProblemBox";
-import { useLockedBy } from "./useLockedBy";
 
 interface Props {
   provider: Provider;
-  use: ProviderUse;
   status: ProbeStatus;
   /** "401"/"403" (or "") when the endpoint rejects the stored key. */
   rejectedStatus: string | null;
@@ -47,19 +44,18 @@ function hostOf(url: string): string {
 
 export function ProviderEndpoint({
   provider,
-  use,
   status,
   rejectedStatus,
   reason,
   onReplaceKey,
 }: Props) {
   const { t } = useTranslation();
-  const lockedBy = useLockedBy(use);
   const runtime = provider.local_runtime;
   const proxy = useProxyAddress();
   const keyed = provider.protocol !== "ollama";
   const rejected = status === "keyRejected";
   const host = hostOf(provider.base_url);
+  const addresses = addressesOf(provider);
 
   return (
     <Section title={t("providers.endpoint.title")} gap="tight">
@@ -98,32 +94,39 @@ export function ProviderEndpoint({
         </ProblemBox>
       ) : null}
       <div className="flex flex-col divide-y divide-border-subtle">
-        <SettingRow
-          label={runtime ? t("providers.endpoint.runtime") : t("providers.fields.protocol")}
-          description={
-            runtime ? (
-              runtime.wires?.length ? (
-                t("providers.endpoint.wires", {
-                  wires: runtime.wires.map((w) => t(`providers.wires.${w}`, w)).join(", "),
-                })
-              ) : null
-            ) : lockedBy ? (
-              <span className="inline-flex items-center gap-1">
-                <Lock className="size-3.5" aria-hidden />
-                {t("providers.endpoint.locked", { agents: lockedBy })}
+        {runtime ? (
+          <>
+            <SettingRow
+              label={t("providers.endpoint.runtime")}
+              description={
+                runtime.wires?.length
+                  ? t("providers.endpoint.wires", {
+                      wires: runtime.wires.map((w) => t(`providers.wires.${w}`, w)).join(", "),
+                    })
+                  : null
+              }
+            >
+              <span className="text-sm">
+                {`${t(`providers.runtimes.${runtime.runtime}`)}${runtime.version ? ` ${runtime.version}` : ""}`}
               </span>
-            ) : null
-          }
-        >
-          <span className="text-sm">
-            {runtime
-              ? `${t(`providers.runtimes.${runtime.runtime}`)}${runtime.version ? ` ${runtime.version}` : ""}`
-              : t(PROTOCOL_LABEL_KEY[provider.protocol])}
-          </span>
-        </SettingRow>
-        <SettingRow label={t("providers.fields.baseUrl")}>
-          <TruncatedText text={provider.base_url} mono className="max-w-sm text-sm" />
-        </SettingRow>
+            </SettingRow>
+            <SettingRow label={t("providers.fields.baseUrl")}>
+              <TruncatedText text={provider.base_url} mono className="max-w-sm text-sm" />
+            </SettingRow>
+          </>
+        ) : (
+          (["openai", "anthropic"] as const)
+            .filter((key) => addresses[key] !== "")
+            .map((key) => (
+              <SettingRow
+                key={key}
+                label={t(`providers.address.${key}.label`)}
+                description={t(`providers.address.${key}.help`)}
+              >
+                <TruncatedText text={addresses[key]} mono className="max-w-sm text-sm" />
+              </SettingRow>
+            ))
+        )}
         {keyed && !runtime ? (
           <SettingRow
             label={t("providers.endpoint.route")}

@@ -56,6 +56,14 @@ class AgentModelsOut(BaseModel):
     #: The model the agent's own config names as its default; null when it
     #: names none and the agent chooses for itself.
     default_model: str | None = None
+    #: The model the agent's own login runs when its config names none, when the
+    #: agent itself reports it (Codex); null when it does not (Claude Code, whose
+    #: default is decided by its account at turn time).
+    builtin_default: AgentModelOut | None = None
+    #: The model a turn with no model override runs on, when Coffer can know it:
+    #: ``default_model``, else ``builtin_default``'s id; null when neither says
+    #: (spec provider-switching "Name the model a default resolves to").
+    resolved_default: str | None = None
 
 
 def _known(registry: AgentProviderRegistry, agent_key: str) -> None:
@@ -133,8 +141,16 @@ async def list_agent_models(
         if source == "builtin"
         else catalogue.offered(agent_key)
     )
+    builtin = await catalogue.builtin_default(agent_key)
+    native = await catalogue.native_default_model(agent_key)
     return AgentModelsOut(
-        default_model=await catalogue.native_default_model(agent_key),
+        default_model=native,
+        resolved_default=native or (builtin.id if builtin else None),
+        builtin_default=(
+            AgentModelOut(id=builtin.id, label=builtin.label, description=builtin.description)
+            if builtin
+            else None
+        ),
         models=[
             AgentModelOut(
                 id=m.id,

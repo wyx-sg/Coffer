@@ -154,3 +154,73 @@ def test_the_app_daemon_names_the_deployed_shim(tmp_path, monkeypatch):
     monkeypatch.setattr(mcp_service.sys, "executable", str(macos / "coffer-daemon"))
 
     assert default_shim_resolver() == str(public)
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="an installed daemon writes the same shim path however it was started",
+)
+@pytest.mark.parametrize("started_by", ["app", "terminal", "launchd"])
+def test_an_installed_daemon_writes_the_deployed_shim_however_it_was_started(
+    tmp_path, monkeypatch, started_by
+):
+    """The app's daemon (no PATH, no sibling shim), one started from a terminal
+    through the public symlink, and one launchd started with some other shim
+    first on its PATH all answer the same entry, so they never rewrite each
+    other's agent configs."""
+    monkeypatch.delenv("COFFER_MCP_SHIM_PATH", raising=False)
+    home = tmp_path / "home"
+    versioned, public = _deploy(home, "0.9.9")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(mcp_service.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(mcp_service.sysconfig, "get_path", lambda _name: str(tmp_path / "none"))
+    other = _make_shim(tmp_path / "homebrew-bin")
+    if started_by == "app":
+        macos = tmp_path / "Coffer.app" / "Contents" / "MacOS"
+        macos.mkdir(parents=True)
+        monkeypatch.setattr(mcp_service.shutil, "which", lambda _name: None)
+        monkeypatch.setattr(mcp_service.sys, "executable", str(macos / "coffer-daemon"))
+    elif started_by == "terminal":
+        monkeypatch.setattr(mcp_service.shutil, "which", lambda _name: str(public))
+        monkeypatch.setattr(mcp_service.sys, "executable", str(versioned.parent / "coffer"))
+    else:
+        monkeypatch.setattr(mcp_service.shutil, "which", lambda _name: str(other))
+        monkeypatch.setattr(mcp_service.sys, "executable", str(versioned.parent / "coffer"))
+
+    assert default_shim_resolver() == str(public)
+
+
+def test_a_source_daemon_keeps_its_own_shim_beside_a_deploy(tmp_path, monkeypatch):
+    """Only an installed build prefers the deploy: a source daemon runs the code
+    of its own checkout and keeps the shim that came with it."""
+    monkeypatch.delenv("COFFER_MCP_SHIM_PATH", raising=False)
+    home = tmp_path / "home"
+    _deploy(home, "0.9.9")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delattr(mcp_service.sys, "frozen", raising=False)
+    venv_shim = _make_shim(tmp_path / "venv-bin")
+    monkeypatch.setattr(mcp_service.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(mcp_service.sysconfig, "get_path", lambda _name: str(venv_shim.parent))
+
+    assert default_shim_resolver() == str(venv_shim.resolve())
+
+
+def test_an_installed_daemon_without_a_deploy_falls_back_to_the_search(tmp_path, monkeypatch):
+    monkeypatch.delenv("COFFER_MCP_SHIM_PATH", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setattr(mcp_service.sys, "frozen", True, raising=False)
+    found = _make_shim(tmp_path / "bin")
+    monkeypatch.setattr(mcp_service.shutil, "which", lambda _name: str(found))
+
+    assert default_shim_resolver() == str(found.resolve())
+
+
+def test_the_override_still_wins_over_the_deploy_in_an_installed_build(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    _deploy(home, "0.9.9")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(mcp_service.sys, "frozen", True, raising=False)
+    override = _make_shim(tmp_path / "override")
+    monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(override))
+
+    assert default_shim_resolver() == str(override.resolve())

@@ -210,6 +210,7 @@ class CodexRpcModelDiscovery:
                     id=ident.strip(),
                     label=label.strip() if isinstance(label, str) else "",
                     description=description.strip() if isinstance(description, str) else "",
+                    is_default=entry.get("isDefault") is True,
                 )
             )
         return out

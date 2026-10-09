@@ -6,6 +6,8 @@ reads and writes; these are the pure builders it and the reconciler share.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.model_proxy.state import WIRE_PATHS
 from coffer.domain.provider.agent_projection import ProviderProjectionRequest
@@ -26,14 +28,30 @@ def binding_of(agent_cfg: AgentConfig) -> ModelBinding:
     )
 
 
-def projected_models(cfg: ProviderConfig) -> tuple[ProjectedModel, ...]:
-    """The connection's curated TEXT models with what it records about each —
+#: The window of a model on a connection (``ProviderWindowResolver.tokens``).
+WindowOf = Callable[[ProviderConfig, str], int | None]
+
+
+def recorded_window(cfg: ProviderConfig, model: str) -> int | None:
+    """The window the connection itself records — the person's, else the
+    endpoint's; what a projection uses when no bundled list is wired."""
+    curated = cfg.curated(model)
+    if curated is None:
+        return None
+    return curated.user_context_window or curated.context_window
+
+
+def projected_models(
+    cfg: ProviderConfig, window_of: WindowOf = recorded_window
+) -> tuple[ProjectedModel, ...]:
+    """The connection's curated TEXT models with the window each resolves to —
     a model catalogue is the agent's own picker (spec provider-switching
-    "Offer only text models to chat pickers")."""
+    "Offer only text models to chat pickers", "Resolve each provider model's
+    context window")."""
     return tuple(
         ProjectedModel(
             id=m.id,
-            context_window=m.context_window,
+            context_window=window_of(cfg, m.id),
         )
         for m in cfg.models
         if m.modality is Modality.TEXT
@@ -49,6 +67,7 @@ def projection_request(
     coffer_cli: str,
     proxy_root: str,
     wire: Wire,
+    window_of: WindowOf = recorded_window,
 ) -> ProviderProjectionRequest:
     """The one construction of a projection request — what the switch writes
     and what the reconciler compares an agent's file against.
@@ -70,9 +89,18 @@ def projection_request(
         # provider-switching "Take projected model keys from the agent's
         # binding"); an unbound agent projects no model.
         binding=binding_of(agent_cfg),
-        models=projected_models(cfg),
+        models=projected_models(cfg, window_of),
+        # The bound model's window even when it is not curated (an
+        # unrestricted connection): the bundled list may still know it.
+        context_window=window_of(cfg, agent_cfg.model) if agent_cfg.model else None,
         local=cfg.is_local,
     )
 
 
-__all__ = ["binding_of", "projected_models", "projection_request"]
+__all__ = [
+    "WindowOf",
+    "binding_of",
+    "projected_models",
+    "projection_request",
+    "recorded_window",
+]

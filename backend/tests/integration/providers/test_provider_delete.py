@@ -107,7 +107,16 @@ def test_preview_for_two_agents_lists_each_and_changes_nothing(env: pathlib.Path
     with _daemon() as c:
         _register_agent(c, "codex", "cx", cx)
         _register_agent(c, "claude_code", "cc", cc)
-        uid = _new(c, _anthropic("acme"))
+        uid = _new(
+            c,
+            {
+                "name": "acme",
+                "protocol": "openai",
+                "base_url": "https://gw/v1",
+                "anthropic_base_url": "https://gw",
+                "secret_value": "sk-x",
+            },
+        )
         for agent_type in ("codex", "claude_code"):
             r = c.post(f"/api/v1/providers/{uid}/activate", json={"agent_type": agent_type})
             assert r.status_code == 200, r.text

@@ -16,12 +16,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { translateApiError } from "@/lib/api/errors";
 import type { Provider } from "@/lib/api/providers";
 import { useCreateProvider, useDetectLocalRuntimes } from "@/lib/hooks/useProviders";
+import { presetAddresses } from "@/lib/providers/addresses";
 import { presetById, type PresetId } from "@/lib/providers/presets";
 import { AddProviderFooter } from "./AddProviderFooter";
 import { AddEndpointStep } from "./AddEndpointStep";
 import { AddLocalRuntime } from "./AddLocalRuntime";
 import { AddModelsStep, type CandidateModel } from "./AddModelsStep";
-import { createBody, keyOf, localCandidates, localProtocolsOf } from "./addProviderPlan";
+import { createBody, localCandidates, localProtocolsOf, probeOf } from "./addProviderPlan";
 import { labelNewKey } from "./labelNewKey";
 import { ProbeResult } from "./ProbeResult";
 import { endpointSchema, type EndpointValues } from "./providerSchemas";
@@ -37,11 +38,14 @@ interface Props {
 
 function seed(id: PresetId): EndpointValues {
   const p = presetById(id);
+  const addresses = presetAddresses(p);
   return {
     local: !!p.local,
     name: "",
     protocol: p.protocol || "openai",
-    baseUrl: p.local ? "" : p.baseUrl,
+    baseUrl: "",
+    openaiUrl: p.local ? "" : addresses.openai,
+    anthropicUrl: p.local ? "" : addresses.anthropic,
     secret: null,
   };
 }
@@ -139,11 +143,7 @@ export function AddProviderDialog({ preset, onClose, onCreated }: Props) {
     }
   });
 
-  const probe = (v: EndpointValues) => ({
-    provider: v.protocol,
-    base_url: v.baseUrl.trim(),
-    ...keyOf(v.secret),
-  });
+  const probe = probeOf;
 
   const candidates: CandidateModel[] = local
     ? localCandidates(runtime)

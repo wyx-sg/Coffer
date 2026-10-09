@@ -125,3 +125,23 @@ def test_no_template_reaches_a_stored_secret() -> None:
     assert SECRET not in (request.body or b"").decode()
     assert SECRET not in others
     assert [v for k, v in request.headers.items() if k.lower() == "x-api-key"] == [SECRET]
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching", scenario="adding an Anthropic address waits for the key's approval"
+)
+def test_a_provider_key_is_approved_for_its_anthropic_address_too() -> None:
+    """A second, Anthropic address receives the key, so adding it is a new
+    placement (ADR one-connection-serves-both-wires)."""
+    openai = ProviderConfig(
+        protocol=Protocol.OPENAI, base_url="https://api.deepseek.com", secret_ref=REF
+    )
+    both = openai.model_copy(update={"anthropic_base_url": "https://api.deepseek.com/anthropic"})
+    before = provider_destination("p", "ds", openai)
+    gate = _approved(before, "key")
+
+    with pytest.raises(SecretBindingPending):
+        gate.require(provider_destination("p", "ds", both), {"key": REF})
+    # The same address as the base URL sends the key nowhere new.
+    same = openai.model_copy(update={"anthropic_base_url": "https://api.deepseek.com"})
+    gate.require(provider_destination("p", "ds", same), {"key": REF})

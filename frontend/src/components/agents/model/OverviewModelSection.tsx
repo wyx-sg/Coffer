@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { agentTypeLabel } from "@/lib/agents/display";
 import type { AgentOut } from "@/lib/api/agents";
-import { useAgentDefaultModel } from "@/lib/hooks/useAgentModels";
+import { useAgentBuiltinDefault, useAgentDefaultModel } from "@/lib/hooks/useAgentModels";
 import { useProviders } from "@/lib/hooks/useProviders";
 import { useModelPairTest } from "@/lib/hooks/useModelTest";
 import { activeProviderFor } from "@/lib/providers/usedBy";
@@ -48,7 +48,9 @@ export function OverviewModelSection({ agent }: { agent: AgentOut }) {
   const onConnection = !!agent.connection_uid && active !== null;
   const nativeModel = useAgentDefaultModel(onConnection ? "" : agent.type).data ?? null;
   const model = onConnection ? agent.model : nativeModel;
-  const test = useModelPairTest(active, model ?? "");
+  // The built-in default is named only when the agent itself says which it is.
+  const builtinDefault = useAgentBuiltinDefault(onConnection ? "" : agent.type).data ?? null;
+  const test = useModelPairTest(active, model ?? "", "chat", agent.type);
 
   return (
     <Section
@@ -65,7 +67,8 @@ export function OverviewModelSection({ agent }: { agent: AgentOut }) {
           {provider ?? <Skeleton className="h-4 w-40" />}
         </InfoRow>
         <InfoRow label={t(`${K}.model`)} mono={!!model}>
-          {model ?? t(`${K}.auto`)}
+          {model ??
+            (builtinDefault ? t(`${K}.autoNamed`, { model: builtinDefault }) : t(`${K}.auto`))}
         </InfoRow>
         <InfoRow
           label={t(`${K}.route`)}

@@ -1,21 +1,16 @@
 // src/lib/providers/markKind.ts — which official mark a provider is drawn with.
 //
-// Official marks exist for Anthropic, OpenAI, OpenRouter, Ollama, vLLM and
-// llama.cpp; every other provider (Bedrock, Gemini, DeepSeek, LM Studio,
-// gateways, custom) gets Coffer's neutral provider glyph beside its name. The vendor comes from the base URL (preset
-// match, then the host), a local runtime from what detection recorded, and an
-// `ollama`-protocol connection is Ollama whatever its URL says.
+// Every preset vendor, and the runtimes detection finds (Ollama, LM Studio,
+// vLLM, llama.cpp), has its mark (brandMarks.ts); a gateway or custom endpoint
+// gets Coffer's neutral provider glyph beside its name. The vendor comes from
+// the base URL (preset match, then the host), a local runtime from what
+// detection recorded, and an `ollama`-protocol connection is Ollama whatever
+// its URL says.
 import type { Provider } from "@/lib/api/providers";
+import type { BrandId } from "./brandMarks";
 import { vendorOf } from "./presets";
 
-export type ProviderMarkKind =
-  | "anthropic"
-  | "openai"
-  | "openrouter"
-  | "ollama"
-  | "vllm"
-  | "llama-cpp"
-  | "glyph";
+export type ProviderMarkKind = BrandId | "glyph";
 
 function hostOf(url: string): string {
   try {
@@ -34,11 +29,10 @@ export function providerMarkKind(
   if (runtime === "ollama") return "ollama";
   if (runtime === "vllm") return "vllm";
   if (runtime === "llama_server") return "llama-cpp";
-  if (runtime === "lmstudio") return "glyph";
+  if (runtime === "lmstudio") return "lmstudio";
   if (provider.protocol === "ollama") return "ollama";
   const vendor = vendorOf(provider.base_url);
-  if (vendor === "anthropic" || vendor === "openai" || vendor === "ollama") return vendor;
-  if (vendor === "openrouter") return "openrouter";
+  if (vendor !== "custom") return vendor;
   const host = hostOf(provider.base_url);
   if (onHost(host, "anthropic.com")) return "anthropic";
   if (onHost(host, "openai.com")) return "openai";

@@ -20,6 +20,7 @@ def _connection(uid: str, *, transcribe: bool = False, enabled: bool = True) -> 
     cfg = ProviderConfig(
         protocol="openai",
         base_url=f"https://{uid}/v1",
+        anthropic_base_url=f"https://{uid}",
         secret_ref=f"ref-{uid}",
         transcribe_default=transcribe,
     )

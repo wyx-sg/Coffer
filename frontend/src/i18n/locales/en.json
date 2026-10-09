@@ -2481,6 +2481,7 @@
         "route": "Route",
         "test": "Test",
         "auto": "Built-in default",
+        "autoNamed": "Built-in default ({{model}})",
         "routeProxy": "Through Coffer’s proxy",
         "reachable": "reachable",
         "routeDirect": {
@@ -2571,7 +2572,7 @@
         "label": "Provider",
         "none": "No other compatible provider yet. <link>Add one in Model providers</link>",
         "hint": {
-          "claude_code": "Built-in login, or a provider from Model providers.",
+          "claude_code": "Built-in login, or a provider from Model providers. It changes the Claude Code CLI only: the Claude desktop app keeps its own model settings.",
           "codex": "Built-in login (ChatGPT account), or a provider from Model providers."
         }
       },
@@ -2622,6 +2623,7 @@
         "version": "v{{version}}"
       },
       "builtinDefault": "Built-in default",
+      "builtinDefaultNamed": "Built-in default ({{model}})",
       "detail": {
         "mcpMissing": "MCP entry missing",
         "hookStale": "Memory hook is out of date",
@@ -3652,6 +3654,7 @@
         "default": "Default agent",
         "model": "Default model",
         "modelDefault": "Provider default",
+        "modelDefaultNamed": "Provider default ({{model}})",
         "reach": "Agents it may drive",
         "help": "Each message becomes a conversation in Conversations, on the default agent unless /new names another.",
         "reachHint": "/new <agent> in a chat picks only from these."
@@ -6056,7 +6059,6 @@
     },
     "fields": {
       "name": "Name",
-      "protocol": "Protocol",
       "baseUrl": "Base URL",
       "apiKey": "API key"
     },
@@ -6064,7 +6066,8 @@
       "nameRequired": "Enter a name.",
       "baseUrl": "Enter a full URL, e.g. https://api.openai.com/v1",
       "secretRequired": "Enter the API key.",
-      "loopback": "A local runtime must be on this Mac — use localhost or 127.0.0.1."
+      "loopback": "A local runtime must be on this Mac — use localhost or 127.0.0.1.",
+      "address": "Enter at least one address."
     },
     "rejected": {
       "title": "The endpoint rejects the stored key ({{status}})",
@@ -6082,7 +6085,6 @@
     },
     "endpoint": {
       "title": "Endpoint",
-      "locked": "locked while {{agents}} runs on it",
       "runtime": "Runtime",
       "wires": "serves {{wires}}",
       "route": "Route",
@@ -6135,6 +6137,7 @@
       "cols": {
         "model": "Model",
         "price": "Price",
+        "window": "Window",
         "type": "Type"
       }
     },
@@ -6166,7 +6169,7 @@
       "stepEndpoint": "Endpoint",
       "stepModels": "Models",
       "vendor": "Vendor",
-      "vendorHint": "A vendor fills in the protocol and base URL. Custom for gateways and proxies.",
+      "vendorHint": "A vendor fills in its addresses. Custom for gateways and proxies.",
       "custom": "Custom",
       "keyHint": "Pick a stored secret, or paste a new key: it is saved to Secrets when the provider is added.",
       "keyName": "{{name}} API key",
@@ -6174,20 +6177,6 @@
       "next": "Next: Models",
       "back": "Back",
       "submit": "Add provider",
-      "protocols": {
-        "openai": {
-          "title": "OpenAI-compatible",
-          "body": "Codex and chat can use it."
-        },
-        "anthropic": {
-          "title": "Anthropic-compatible",
-          "body": "Claude Code and chat can use it."
-        },
-        "unknown": {
-          "title": "Unknown",
-          "body": "The wire could not be told."
-        }
-      },
       "local": {
         "title": "Found on this Mac",
         "looking": "Looking for model runtimes on this Mac…",
@@ -6212,7 +6201,7 @@
     "edit": {
       "title": "Edit {{name}}",
       "renameHint": "Renaming changes only the label — the key, history and agents stay put.",
-      "locked": "Locked while {{agents}} runs on it.",
+      "locked": "{{agents}} runs on it, so the OpenAI address can't be added or removed until it moves to another provider.",
       "keyHint": "Keys are write-only. Use Replace key to change the value."
     },
     "replace": {
@@ -6279,7 +6268,42 @@
       "providers": "Providers",
       "usage": "Usage"
     },
-    "latency": "{{ms}} ms"
+    "latency": "{{ms}} ms",
+    "window": {
+      "source": {
+        "user": "You set",
+        "endpoint": "From the endpoint",
+        "bundled": "Bundled"
+      },
+      "set": "Set window…",
+      "reset": "Reset to default",
+      "noneAria": "No context window known for {{id}}",
+      "editAria": "{{id}}: {{tokens}} tokens, change the context window",
+      "dialogTitle": "Context window of {{id}}",
+      "dialogBody": "How many tokens this provider serves the model with. Coffer tells Claude Code and Codex this window, so they compact at the right point. It wins over what the endpoint reports and Coffer's bundled list.",
+      "field": "Context window",
+      "hint": "Tokens, for example 128000, 128k or 1m.",
+      "invalid": "Enter a number of tokens between 1k and 100m."
+    },
+    "address": {
+      "openai": {
+        "label": "OpenAI-compatible address",
+        "help": "Codex uses this address."
+      },
+      "anthropic": {
+        "label": "Anthropic-compatible address",
+        "help": "Claude Code uses this address."
+      },
+      "bothHint": "Fill in the addresses your gateway serves. If it serves both at one address, enter the same address in both."
+    },
+    "served": "For {{agents}}",
+    "servedNone": "No agent can use it",
+    "region": {
+      "label": "Region",
+      "intl": "International",
+      "cn": "Mainland China",
+      "hint": "Keys work only in the region they were created in."
+    }
   },
   "skillSources": {
     "add": {

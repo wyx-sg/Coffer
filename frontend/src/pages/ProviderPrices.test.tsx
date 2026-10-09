@@ -1,4 +1,4 @@
-// src/pages/ProviderPrices.test.tsx — prices with their source (spec provider-switching).
+// src/pages/ProviderPrices.test.tsx — prices and context windows with their source (spec provider-switching).
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -15,6 +15,7 @@ vi.mock("@/lib/api/providers", async (orig) => ({
     get: vi.fn(),
     update: vi.fn(),
     prices: vi.fn(),
+    windows: vi.fn(),
   },
 }));
 vi.mock("@/lib/api/proxy", async (orig) => ({
@@ -53,9 +54,11 @@ const provider = (uid: string, over: Partial<Provider> = {}): Provider => ({
   title: null,
   protocol: "openai",
   base_url: "https://openrouter.ai/api/v1",
+  anthropic_base_url: null,
   secret_ref: `provider/${uid}`,
   local_runtime: null,
   compatible_agents: ["codex"],
+  served_agents: ["codex"],
   transcribe_default: false,
   models: [],
   enabled: true,
@@ -112,6 +115,7 @@ describe("prices", () => {
     (secretsApi.pendingApprovals as ReturnType<typeof vi.fn>).mockResolvedValue({
       approvals: [],
     });
+    api.windows.mockResolvedValue({ windows: [] });
     api.prices.mockResolvedValue({
       bundled_version: "genai-prices@x",
       prices: [
@@ -192,5 +196,86 @@ describe("prices", () => {
     });
     renderAt("ollama");
     expect(await screen.findAllByText("Local · no cost")).not.toHaveLength(0);
+  });
+});
+
+describe("context windows", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    endpoint.models = [
+      { id: "mine", modality: "text" },
+      { id: "reported", modality: "text", context_window: 200_000 },
+      { id: "listed", modality: "text" },
+      { id: "unknown", modality: "text" },
+    ];
+    (scopeApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({ scope: null });
+    (secretsApi.pendingApprovals as ReturnType<typeof vi.fn>).mockResolvedValue({
+      approvals: [],
+    });
+    api.prices.mockResolvedValue({ bundled_version: "x", prices: [] });
+    api.windows.mockResolvedValue({
+      windows: [
+        { model: "mine", tokens: 64_000, source: "user" },
+        { model: "reported", tokens: 200_000, source: "endpoint" },
+        { model: "listed", tokens: 1_000_000, source: "bundled" },
+        { model: "unknown", tokens: null, source: null },
+      ],
+    });
+  });
+
+  acceptance(
+    "provider-switching",
+    "each model's window names where it came from and can be set",
+    async () => {
+      serve([provider("router")]);
+      renderAt("router");
+      await waitFor(() => expect(within(rowOf("mine")).getByText("64K")).toBeInTheDocument());
+      expect(within(rowOf("mine")).getByText("You set")).toBeInTheDocument();
+      expect(within(rowOf("reported")).getByText("From the endpoint")).toBeInTheDocument();
+      expect(within(rowOf("listed")).getByText("1M")).toBeInTheDocument();
+      expect(within(rowOf("listed")).getByText("Bundled")).toBeInTheDocument();
+      expect(
+        within(rowOf("unknown")).getByLabelText("No context window known for unknown"),
+      ).toHaveTextContent("—");
+
+      fireEvent.click(within(rowOf("unknown")).getByText("Set window…"));
+      const dialog = await screen.findByRole("dialog");
+      fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "128k" } });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(api.update).toHaveBeenCalled());
+      const models = api.update.mock.calls[0][1].models as ProviderModel[];
+      // An unrestricted provider is written out whole, each row keeping the window
+      // its endpoint reported.
+      expect(models.map((m) => m.id)).toEqual(["mine", "reported", "listed", "unknown"]);
+      expect(models.find((m) => m.id === "reported")?.context_window).toBe(200_000);
+      expect(models.find((m) => m.id === "unknown")?.user_context_window).toBe(128_000);
+    },
+  );
+
+  test("Reset removes the window you set", async () => {
+    serve([
+      provider("router", {
+        models: [{ id: "mine", modality: "text", user_context_window: 64_000 }],
+      }),
+    ]);
+    renderAt("router");
+    const row = await waitFor(() => rowOf("mine"));
+    fireEvent.click(await within(row).findByRole("button", { name: /change the context window/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Reset to default" }));
+    await waitFor(() => expect(api.update).toHaveBeenCalled());
+    expect(api.update.mock.calls[0][1].models[0]).toMatchObject({
+      id: "mine",
+      user_context_window: null,
+    });
+  });
+
+  test("a window that is not a sane token count cannot be saved", async () => {
+    serve([provider("router")]);
+    renderAt("router");
+    fireEvent.click(await within(await waitFor(() => rowOf("unknown"))).findByText("Set window…"));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "12" } });
+    expect(within(dialog).getByText(/between 1k and 100m/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
   });
 });

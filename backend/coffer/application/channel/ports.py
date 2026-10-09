@@ -298,6 +298,12 @@ class ModelSuggestionPort(Protocol):
         ``claude-fable-5-…``), so the card shows a name instead."""
         ...
 
+    async def resolved_default(self, agent_key: str) -> str | None:
+        """The model a turn with no model override runs on, when Coffer can know
+        it (the agent's config, else the built-in default the agent reports);
+        ``None`` when nothing says, and the surface then names no model."""
+        ...
+
 
 class ContextFetchPort(Protocol):
     """Best-effort context reader: the thread a turn lands in, and the message it

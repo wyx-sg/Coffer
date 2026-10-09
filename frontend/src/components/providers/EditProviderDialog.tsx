@@ -1,13 +1,15 @@
-// src/components/providers/EditProviderDialog.tsx — edit a provider's name, protocol and base URL; its key is only named.
+// src/components/providers/EditProviderDialog.tsx — edit a provider's name and addresses; its key is only named.
 //
 // A changed NAME is the kind-agnostic rename (`PATCH /resources/{uid}`), sent
 // FIRST so a taken label fails before anything else lands; nothing navigates,
-// because the page is addressed by uid. The protocol is locked while an agent
-// runs on the provider (409 PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE) and is sent
-// only when it moved. The key is write-only and changed with Replace key, so
+// because the page is addressed by uid. The addresses are the OpenAI- and
+// Anthropic-compatible ones (ADR one-connection-serves-both-wires); they are
+// sent only when one moved. The wire they imply is locked while an agent runs
+// on the provider (409 PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE), so adding or
+// clearing the OpenAI address of a live connection is refused. The key is write-only and changed with Replace key, so
 // here it is a read-only row. Failures render inline.
 import { useEffect } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
 import { Plug } from "lucide-react";
@@ -22,20 +24,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { translateApiError } from "@/lib/api/errors";
-import type { Protocol, Provider, ProviderPatch } from "@/lib/api/providers";
+import type { Provider, ProviderPatch } from "@/lib/api/providers";
 import { useUpdateProvider } from "@/lib/hooks/useProviders";
 import { useRenameResource } from "@/lib/hooks/useResourceMutations";
-import { EDITABLE_PROTOCOLS, PROTOCOL_LABEL_KEY } from "@/lib/providers/presets";
+import { addressesOf, endpointOf, fieldsOf } from "@/lib/providers/addresses";
 import type { ProviderUse } from "@/lib/providers/usedBy";
 import { displayName } from "@/lib/resourceTitle";
+import { AddressInputs } from "./AddressInputs";
 import { FieldError } from "./FieldError";
 import { KeyRefField } from "./KeyRefField";
 import { ProbeResult } from "./ProbeResult";
@@ -58,11 +54,12 @@ export function EditProviderDialog({ open, provider, use, onClose, onSaved }: Pr
   const test = useEndpointTest(t);
   const lockedBy = useLockedBy(use);
   const form = useForm<EditValues>({ resolver: zodResolver(editSchema(t)) });
-  const { register, control, handleSubmit, reset, getValues, formState } = form;
+  const { register, handleSubmit, reset, getValues, formState } = form;
+  const initial = addressesOf(provider);
 
   useEffect(() => {
     if (!open) return;
-    reset({ name: provider.name, protocol: provider.protocol, baseUrl: provider.base_url });
+    reset({ name: provider.name, openaiUrl: initial.openai, anthropicUrl: initial.anthropic });
     test.reset();
     update.reset();
     rename.reset();
@@ -70,18 +67,23 @@ export function EditProviderDialog({ open, provider, use, onClose, onSaved }: Pr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const protocols: readonly Protocol[] = EDITABLE_PROTOCOLS.includes(provider.protocol)
-    ? EDITABLE_PROTOCOLS
-    : [...EDITABLE_PROTOCOLS, provider.protocol];
-
   const save = handleSubmit(async (v) => {
     const name = v.name.trim();
-    const patch: ProviderPatch = { base_url: v.baseUrl.trim() };
-    if (v.protocol !== provider.protocol) patch.protocol = v.protocol;
+    const patch: ProviderPatch = {};
+    const moved =
+      v.openaiUrl.trim() !== initial.openai.trim() ||
+      v.anthropicUrl.trim() !== initial.anthropic.trim();
+    const endpoint = endpointOf({ openai: v.openaiUrl, anthropic: v.anthropicUrl });
+    if (moved && endpoint) {
+      patch.base_url = endpoint.baseUrl;
+      // "" clears a second address the connection had.
+      patch.anthropic_base_url = endpoint.anthropicBaseUrl ?? "";
+      if (endpoint.protocol !== provider.protocol) patch.protocol = endpoint.protocol;
+    }
     try {
       if (name !== provider.name)
         await rename.mutateAsync({ kind: "provider", uid: provider.uid, name });
-      await update.mutateAsync({ uid: provider.uid, patch });
+      if (Object.keys(patch).length > 0) await update.mutateAsync({ uid: provider.uid, patch });
     } catch {
       return; // the failure is the mutation's state, rendered below
     }
@@ -91,9 +93,11 @@ export function EditProviderDialog({ open, provider, use, onClose, onSaved }: Pr
 
   const runTest = () => {
     const v = getValues();
+    const endpoint = endpointOf({ openai: v.openaiUrl, anthropic: v.anthropicUrl });
+    if (!endpoint) return;
     void test.run({
-      provider: v.protocol,
-      base_url: v.baseUrl.trim(),
+      provider: endpoint.protocol,
+      base_url: endpoint.baseUrl,
       secret_ref: provider.secret_ref,
     });
   };
@@ -116,45 +120,22 @@ export function EditProviderDialog({ open, provider, use, onClose, onSaved }: Pr
             <FieldError id="pe-name-error" message={formState.errors.name?.message} />
             <p className="text-xs text-text-muted">{t("providers.edit.renameHint")}</p>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="pe-protocol">{t("providers.fields.protocol")}</Label>
-            <Controller
-              control={control}
-              name="protocol"
-              render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange} disabled={!!lockedBy}>
-                  <SelectTrigger id="pe-protocol">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {protocols.map((p) => (
-                      <SelectItem key={p} value={p}>
-                        {t(PROTOCOL_LABEL_KEY[p])}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            {lockedBy ? (
-              <p className="text-xs text-text-muted">
-                {t("providers.edit.locked", { agents: lockedBy })}
-              </p>
-            ) : null}
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="pe-base" required>
-              {t("providers.fields.baseUrl")}
-            </Label>
-            <Input
-              id="pe-base"
-              inputMode="url"
-              className="font-mono text-xs"
-              aria-describedby="pe-base-error"
-              {...register("baseUrl")}
-            />
-            <FieldError id="pe-base-error" message={formState.errors.baseUrl?.message} />
-          </div>
+          <AddressInputs
+            idPrefix="pe"
+            show={fieldsOf(provider)}
+            openai={register("openaiUrl")}
+            anthropic={register("anthropicUrl")}
+            errors={{
+              openai: formState.errors.openaiUrl?.message,
+              anthropic: formState.errors.anthropicUrl?.message,
+            }}
+            hint
+          />
+          {lockedBy ? (
+            <p className="-mt-2 text-xs text-text-muted">
+              {t("providers.edit.locked", { agents: lockedBy })}
+            </p>
+          ) : null}
           <KeyRefField secretRef={provider.secret_ref} />
           <ProbeResult
             result={test.result}

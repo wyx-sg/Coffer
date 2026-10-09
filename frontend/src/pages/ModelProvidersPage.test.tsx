@@ -86,6 +86,8 @@ const makeProvider = (over: Partial<Provider> = {}): Provider => {
     secret_ref: `provider/${name}/key`,
     local_runtime: null,
     compatible_agents: ["claude_code"],
+    served_agents: ["claude_code"],
+    anthropic_base_url: null,
     transcribe_default: false,
     models: [],
     enabled: true,
@@ -226,9 +228,9 @@ describe("ModelProvidersPage", () => {
       // The active one is marked by the agent running on it.
       expect(within(rowFor("official")).getByRole("img", { name: "Claude Code" })).toBeTruthy();
       expect(within(rowFor("agnes")).queryByRole("img", { name: "Claude Code" })).toBeNull();
-      // The open provider shows its endpoint, and its reach in the shared control.
+      // The open provider shows its address, and the agents its addresses serve.
       expect(await screen.findAllByText("https://gw/anthropic")).not.toHaveLength(0);
-      expect(screen.getByTestId("scope-control")).toBeInTheDocument();
+      expect(screen.getByTestId("provider-header")).toHaveTextContent("For Claude Code");
       // No per-row "Switch": activation is per agent, on its Model tab.
       expect(screen.queryByRole("button", { name: /^switch/i })).toBeNull();
       expect(api.activate).not.toHaveBeenCalled();
@@ -354,7 +356,7 @@ describe("ModelProvidersPage", () => {
     expect(dialog.queryByLabelText("API key")).toBeNull();
   });
 
-  test("Add with Custom: pick the protocol, test the unsaved key, choose models, add", async () => {
+  test("Add with Custom: fill both addresses, test the unsaved key, choose models, add", async () => {
     serve([]);
     api.create.mockResolvedValue(makeProvider({ name: "myconn", protocol: "openai" }));
     listModels.mockResolvedValue({
@@ -369,9 +371,14 @@ describe("ModelProvidersPage", () => {
     const dialog = await openAdd();
 
     fireEvent.click(dialog.getByRole("radio", { name: "Custom" }));
-    fireEvent.click(dialog.getByRole("radio", { name: /^OpenAI-compatible/ }));
+    expect(dialog.queryByRole("radiogroup", { name: "Protocol" })).toBeNull();
     fireEvent.change(dialog.getByLabelText("Name"), { target: { value: "myconn" } });
-    fireEvent.change(dialog.getByLabelText("Base URL"), { target: { value: "https://gw/v1" } });
+    fireEvent.change(dialog.getByLabelText("OpenAI-compatible address"), {
+      target: { value: "https://gw/v1" },
+    });
+    fireEvent.change(dialog.getByLabelText("Anthropic-compatible address"), {
+      target: { value: "https://gw" },
+    });
     fireEvent.change(dialog.getByLabelText("API key"), { target: { value: "sk-x" } });
     fireEvent.click(dialog.getByRole("button", { name: "Test" }));
 
@@ -396,6 +403,7 @@ describe("ModelProvidersPage", () => {
       name: "myconn",
       protocol: "openai",
       base_url: "https://gw/v1",
+      anthropic_base_url: "https://gw",
       secret_value: "sk-x",
       models: [{ id: "gpt-5", modality: "text" }],
     });
@@ -425,9 +433,10 @@ describe("ModelProvidersPage", () => {
     const dialog = await openAdd();
 
     fireEvent.click(dialog.getByRole("radio", { name: "Custom" }));
-    fireEvent.click(dialog.getByRole("radio", { name: /^OpenAI-compatible/ }));
     fireEvent.change(dialog.getByLabelText("Name"), { target: { value: "gw" } });
-    fireEvent.change(dialog.getByLabelText("Base URL"), { target: { value: "https://gw/v1" } });
+    fireEvent.change(dialog.getByLabelText("OpenAI-compatible address"), {
+      target: { value: "https://gw/v1" },
+    });
     // The key field's menu lists what Secrets holds; picking one cites it, nothing is pasted.
     fireEvent.click(dialog.getByRole("button", { name: "Choose a secret for API key" }));
     fireEvent.click(await screen.findByRole("option", { name: /Team gateway key/ }));
@@ -448,7 +457,9 @@ describe("ModelProvidersPage", () => {
     renderAt();
     const dialog = await openAdd();
     fireEvent.click(dialog.getByRole("radio", { name: "Custom" }));
-    fireEvent.change(dialog.getByLabelText("Base URL"), { target: { value: "gw.example" } });
+    fireEvent.change(dialog.getByLabelText("OpenAI-compatible address"), {
+      target: { value: "gw.example" },
+    });
     fireEvent.click(dialog.getByRole("button", { name: "Next: Models" }));
     expect(await dialog.findByText("Enter a name.")).toBeInTheDocument();
     expect(
@@ -457,7 +468,9 @@ describe("ModelProvidersPage", () => {
     expect(dialog.getByText("Enter the API key.")).toBeInTheDocument();
 
     fireEvent.change(dialog.getByLabelText("Name"), { target: { value: "gw" } });
-    fireEvent.change(dialog.getByLabelText("Base URL"), { target: { value: "https://gw/v1" } });
+    fireEvent.change(dialog.getByLabelText("OpenAI-compatible address"), {
+      target: { value: "https://gw/v1" },
+    });
     fireEvent.change(dialog.getByLabelText("API key"), { target: { value: "bad" } });
     fireEvent.click(dialog.getByRole("button", { name: "Test" }));
     expect(await dialog.findByText("The endpoint rejected the key (401)")).toBeInTheDocument();

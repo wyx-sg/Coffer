@@ -109,6 +109,7 @@ def test_a_local_connection_sets_claude_codes_compatibility_keys() -> None:
             **_req().__dict__,
             "binding": ModelBinding(model="qwen"),
             "models": (ProjectedModel(id="qwen", context_window=131072),),
+            "context_window": 131072,
             "local": True,
         }
     )
@@ -116,3 +117,30 @@ def test_a_local_connection_sets_claude_codes_compatibility_keys() -> None:
     assert env["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"] == "1"
     assert env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] == "131072"
     assert {env[f"ANTHROPIC_DEFAULT_{t}_MODEL"] for t in ("OPUS", "SONNET", "HAIKU")} == {"qwen"}
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a provider model's recorded window reaches Claude Code",
+)
+def test_a_provider_models_recorded_window_reaches_claude_code() -> None:
+    """A remote connection too: Claude Code assumes 200k for an id it does not
+    know and warns about it, so the recorded window is written for it. A Claude
+    id's window is Claude Code's own, and an unrecorded one is never guessed."""
+
+    def env_for(model: str, window: int | None) -> dict[str, str]:
+        req = ProviderProjectionRequest(
+            **{
+                **_req().__dict__,
+                "binding": ModelBinding(model=model),
+                "models": (ProjectedModel(id=model, context_window=window),),
+                "context_window": window,
+            }
+        )
+        return json.loads(ClaudeCodeProviderProjection().apply("", req, _CFG).text)["env"]
+
+    env = env_for("agnes-2.5-pro-alpha", 1_000_000)
+    assert env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] == "1000000"
+    assert "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS" not in env
+    assert "CLAUDE_CODE_MAX_CONTEXT_TOKENS" not in env_for("claude-opus-4-8", 1_000_000)
+    assert "CLAUDE_CODE_MAX_CONTEXT_TOKENS" not in env_for("agnes-2.5-pro-alpha", None)

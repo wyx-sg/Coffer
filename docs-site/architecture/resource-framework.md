@@ -108,7 +108,7 @@ Sync has no hook into a kind. A resource file that arrives by sync, like one you
 | `knowledge` | No generic creation, no title, not toggleable, a rename mover (moves the collection directory), delete cleanup |
 | `memory` | No generic creation, not toggleable, `derived` storage, a rename mover, delete cleanup |
 | `channel` | Scope support (inverted, see below), secret references, a registration check, a config-change check, a scope check, delete cleanup |
-| `provider` | Scope support, a default scope, secret references, a registration check, a config-change check |
+| `provider` | Secret references, a registration check, a config-change check (no scope: its addresses decide which agents it serves) |
 
 ### The resource service {#resourceservice}
 
@@ -229,7 +229,7 @@ For every other kind, scope names the agents a resource is *delivered to*. A cha
 | `knowledge` | One collection, a directory under `~/.coffer/vault/knowledge/`. | No, and not `toggleable` | Nowhere: every collection appears in the delivered catalogue. |
 | `memory` | One partition (a repository, or `global`) under `~/.coffer/derived/memory/`, derived from agents' native memory. Derived, never synced. | No, and not `toggleable` | Nowhere: every partition is served to every agent. |
 | `channel` | Transport config, secret refs, `default_agent`, `runs_on` (the one machine whose daemon runs the adapter). | Yes, inverted | Agent routing (`/new <agent>` and the default agent) and the channel runtime, which does not start a switched-off channel. |
-| `provider` | Wire protocol, base URL, one `secret_ref`. | Yes | The provider kind's one projection seam: the switch, per-agent key lookup, post-import reconcile and boot self-heal. |
+| `provider` | Wire protocol, base URL, an optional Anthropic address, one `secret_ref`. | No: its addresses decide | The provider kind's one projection seam: the switch, per-agent key lookup, post-import reconcile and boot self-heal. |
 
 `knowledge` and `memory` carry no scope and no switch because both serve files an agent is handed the path to: a scope or a switch could only ever hide them from a well-behaved lookup, never withhold them.
 
