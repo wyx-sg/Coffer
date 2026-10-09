@@ -69,7 +69,7 @@ def _one_line(value: str) -> str:
     return cleaned[:_DISPLAY_MAX].rstrip()
 
 
-def format_origin(msg: InboundMessage, *, platform: str) -> str:
+def format_origin(msg: InboundMessage, *, platform: str, channel: str = "") -> str:
     """Render a turn's own provenance as a context block.
 
     Spec channels "Open every turn with its message origin".
@@ -78,14 +78,17 @@ def format_origin(msg: InboundMessage, *, platform: str) -> str:
     thread, or platform it is answering in — "which group is this?" becomes a
     guess, and a platform tool call has no chat id to aim at. ``platform`` is the
     binding's channel type (the envelope carries the Coffer resource name, not
-    the platform). Lines with nothing to say are omitted rather than rendered
-    empty.
+    the platform). ``channel`` is the channel's name, which a Coffer tool call
+    that reads the chat takes (``coffer__channel_read_thread``): one platform can
+    carry several channels. Lines with nothing to say are omitted rather than
+    rendered empty.
     """
     title = _one_line(msg.chat_title)
     chat = f'{msg.chat_kind} "{title}"' if title else msg.chat_kind
     lines = [
         "[Message origin]",
         f"platform: {platform}",
+        *([f"channel: {_one_line(channel)}"] if channel else []),
         f"chat: {chat} (id: {msg.chat_id})",
     ]
     if msg.thread_id:

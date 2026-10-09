@@ -42,6 +42,8 @@ export default defineConfig({
       cwd: __dirname,
       env: {
         COFFER_E2E_PORT: String(DAEMON_PORT),
+        // The daemon shuts down once this runner is gone (start_daemon.sh).
+        COFFER_DAEMON_EXIT_WITH_PID: String(process.pid),
         ...(MOVED
           ? {
               COFFER_E2E_HOME_FILE: process.env.COFFER_E2E_HOME_FILE ?? "",

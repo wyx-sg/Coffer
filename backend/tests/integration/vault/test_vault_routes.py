@@ -165,6 +165,9 @@ async def test_restore_is_a_new_commit_through_the_same_checks(
     assert again.json()["versions"][0]["restored_from"] == first
     assert [(e[0], e[1]) for e in audit.events] == [("vault_file_restored", "ui")]
     assert audit.events[0][2]["restored_from"] == first
+    # The row says what the restore changed, line by line.
+    assert audit.events[0][2]["change"] == "modified"
+    assert "-two\n+one\n" in audit.events[0][2]["diff"]
 
 
 async def test_a_restore_is_refused_after_an_edit_on_disk(client: AsyncClient) -> None:
@@ -207,6 +210,9 @@ async def test_restoring_a_folder_removes_files_the_version_did_not_have(
     assert sorted(vault_repository().tree("HEAD", "skills/pdf/")) == ["skills/pdf/SKILL.md"]
     assert not (vault_root() / "skills/pdf/extra.md").exists()
     assert [e[0] for e in audit.events] == ["vault_file_restored"]
+    details = audit.events[0][2]
+    assert (details["modified"], details["deleted"]) == (1, 1)
+    assert "-v2\n+v1\n" in details["diff"]
 
 
 @pytest.mark.acceptance(

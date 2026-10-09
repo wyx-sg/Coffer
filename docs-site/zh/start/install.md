@@ -209,43 +209,51 @@ pid:     48213
 
 ## 升级 {#upgrade}
 
-::: code-group
+**桌面应用。** 应用会在启动时和之后每六小时检查一次新版本，**设置 › 关于**里会显示新版本和更新内容。点**下载并重启**即可安装：应用会校验更新的签名，替换自身，重新启动，并让守护进程以新版本重启。**检查更新**会立即检查，也可以关掉**自动检查**。在终端里，`coffer update` 会通过应用完成同样的事。
 
-```sh [Installer]
-curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
-coffer daemon restart
+**一行安装脚本或发布归档。** 运行：
+
+```sh
+coffer update
 ```
 
-```sh [Source]
+它会下载最新发布的归档，用发布里的 `SHA256SUMS` 校验，替换 `~/.coffer/bin` 里的二进制，再让守护进程以新版本重启。校验不通过的归档不会安装任何东西。`coffer update --check` 只说明有没有新版本。守护进程也会每天检查一次，**设置 › 关于**里会显示新版本，并给出可复制的 `coffer update`；它从不自行安装。可以在那里关掉检查，或者运行 `coffer daemon upgrade-auto-check --set enabled=false`。
+
+**源码安装。**
+
+```sh
 git pull
 source .venv/bin/activate && pip install -e ./backend
 (cd frontend && npm install && npm run build)
 coffer daemon restart
 ```
 
-:::
-
-在浏览器里，**设置 › 关于**会把这次升级做成一段给智能体的提示词，并写明当前运行的版本和这份副本的安装方式。
-
-对于桌面应用：退出 Coffer，用 `coffer daemon stop` 停掉守护进程，用新版本替换 `Coffer.app`，再清除一次它的隔离标记。下次启动时会运行新的守护进程，由它部署新的二进制。
+**设置 › 关于**也可以把升级交给你的智能体：它会生成一段提示词，写明当前运行的版本和这份副本的安装方式。
 
 重启很重要，因为已经在运行的守护进程会继续跑旧版本。当 CLI 或 shim 发现守护进程的版本和自己不同时，会在 stderr 上打印一行警告，写明守护进程的可执行文件。新构建在执行 schema 迁移之前，会先保存 `runs.db.pre-<revision>`。
 
 ## 卸载 {#uninstall}
 
-1. 在**智能体**页面，从每个智能体的 **⋯** 菜单选择**断开连接…**，这会从它的配置中删掉 Coffer 的条目。然后在**技能**页面把每个技能的生效范围设为**关闭**，这会删除 Coffer 投递给智能体的技能链接。
+在桌面应用里，打开**设置 › 关于**，选择**卸载 Coffer…**。没有应用时，运行：
 
-2. 如果打开过**设置 › 守护进程**里的**开机自启动**，先把它关掉，然后停止守护进程：
+```sh
+coffer uninstall
+```
 
-   ```sh
-   coffer daemon stop
-   ```
+两种方式都会让 Coffer 撤回它写在 `~/.coffer` 之外的所有内容，然后停止运行：
 
-3. 删除二进制：`rm -r ~/.coffer/bin`。从你的 shell 配置文件里删掉 `# Added by Coffer installer` 这一行及其后的 `PATH` 行。对于桌面应用，把 `Coffer.app` 从**应用程序**移到废纸篓。
-4. 如有需要，删除保险库本身。
+- 每个智能体配置里 Coffer 的 MCP 条目、记忆钩子和模型路由；
+- 它投递到智能体技能目录里的技能链接；
+- 开机自启动；
+- `~/.coffer/bin` 里的命令行工具，以及安装脚本加到 shell 配置文件里的 `PATH` 行；
+- `Coffer.app`，它会把自己移到废纸篓。
+
+`~/.coffer` 会保留：重新安装 Coffer 后，你的保险库、密钥、技能、知识和设置都还在。重新安装后需要重新连接智能体。源码检出和它的 `.venv` 需要你自己删除。已经打开的 shell 在重启之前仍使用旧的 `PATH`。
+
+如果也要删除数据，在对话框里勾选**同时删除我的数据**；Coffer 会在删除任何东西之前要求 Touch ID。应用还会在守护进程停止后删除主密钥的钥匙串条目。在终端里，`coffer uninstall --delete-data` 会要求你输入 `delete my data`，没有可输入的终端时什么也不做；它会删除 `~/.coffer`，但不碰钥匙串（只有 Coffer 的守护进程会访问钥匙串），请自己在“钥匙串访问”里删除 `coffer` 条目。移到别处的保险库会保留在原处。
 
 ::: danger 删除 ~/.coffer 不可恢复
-`~/.coffer` 里有你的数据库、知识集、技能库和加密的密钥。删除它会销毁所有已保存的密钥，以及只存在于那里的所有文档。如果以后可能还要用，先把它复制到别处。
+`~/.coffer` 里有你的数据库、知识集、技能库和加密的密钥。删除它会销毁所有已保存的密钥，以及只存在于那里的所有文档，包括 Coffer 从智能体那里接管的技能。如果以后可能还要用，先[备份主密钥](/zh/guides/secrets#the-master-key-and-its-backup)。
 :::
 
 ## 实验功能 {#experimental-features}

@@ -44,6 +44,16 @@ const BACKUP_PAGE: &str = "/settings/security?backup=1";
 /// The page that holds the master key import dialog.
 const IMPORT_PAGE: &str = "/settings/security?import=1";
 
+/// Where `coffer uninstall` opens the confirmation; with `--delete-data` the
+/// box starts ticked. The person confirms there, never the command line.
+fn uninstall_page(delete_data: bool) -> &'static str {
+    if delete_data {
+        "/settings/about?uninstall=1&delete=1"
+    } else {
+        "/settings/about?uninstall=1"
+    }
+}
+
 /// The backup request waiting on the dialog, if one is: its id. One at a time,
 /// because the daemon hands out nothing new while a request is claimed.
 static WAITING_BACKUP: Mutex<Option<String>> = Mutex::new(None);
@@ -240,6 +250,17 @@ fn handle(app: &AppHandle, request: &Value) -> Option<Ending> {
                 None,
             )
         }
+        "uninstall" => {
+            let delete_data = request
+                .get("enabled")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            tray_nav::open_page(app, uninstall_page(delete_data));
+            Ending::done(
+                Some("opened Uninstall Coffer in the Coffer app".into()),
+                None,
+            )
+        }
         "update_status" => Ending::done(None, serde_json::to_value(updater::status(app)).ok()),
         "update_check" => match tauri::async_runtime::block_on(updater::run_check(app)) {
             Ok(status) => Ending::done(None, serde_json::to_value(status).ok()),
@@ -349,6 +370,13 @@ mod tests {
         *WAITING_BACKUP.lock().unwrap() = Some("r1".into());
         assert_eq!(take_backup().as_deref(), Some("r1"));
         assert_eq!(take_backup(), None);
+    }
+
+    // acceptance(spec = "desktop-app", scenario = "the shell opens the uninstall dialog for the command line")
+    #[test]
+    fn coffer_uninstall_opens_the_dialog_and_removes_nothing() {
+        assert_eq!(uninstall_page(false), "/settings/about?uninstall=1");
+        assert_eq!(uninstall_page(true), "/settings/about?uninstall=1&delete=1");
     }
 
     #[test]

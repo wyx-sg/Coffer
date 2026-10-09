@@ -144,16 +144,31 @@ export function useCheckGitAgain() {
 }
 
 /**
- * The hand-off that upgrades Coffer on this machine the way it was installed
- * (spec daemon "Hand an upgrade of Coffer to an agent") — for Settings › About
- * in a browser, where no control can install an update. Asked only when
- * `enabled`, so the desktop shell, which updates itself, never asks.
+ * How Coffer is upgraded on this machine (spec daemon "Hand an upgrade of
+ * Coffer to an agent") and, on the installer's binaries, what the daemon's own
+ * release check found (spec daemon "Check the installed binaries for a new
+ * release") — for Settings › About in a browser, where no control can install
+ * an update. Asked only when `enabled`, so the desktop shell, which updates
+ * itself, never asks.
  */
-export function useUpgradeHandoff(enabled: boolean) {
+export function useDaemonUpgrade(enabled: boolean) {
   return useQuery({
     queryKey: daemonUpgradeKey,
     enabled,
-    staleTime: Infinity,
-    queryFn: daemonApi.upgradePrompt,
+    staleTime: 60_000,
+    queryFn: daemonApi.upgrade,
   });
+}
+
+/** Check now, and switch the daily check: each answer replaces the record. */
+export function useDaemonUpgradeActions() {
+  const qc = useQueryClient();
+  const store = (data: Awaited<ReturnType<typeof daemonApi.upgrade>>) =>
+    qc.setQueryData(daemonUpgradeKey, data);
+  const check = useMutation({ mutationFn: daemonApi.checkUpgrade, onSuccess: store });
+  const setAutoCheck = useMutation({
+    mutationFn: daemonApi.setUpgradeAutoCheck,
+    onSuccess: store,
+  });
+  return { check, setAutoCheck };
 }

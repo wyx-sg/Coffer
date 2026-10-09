@@ -228,17 +228,6 @@ async def test_step_lines_are_switched_off_then_on(ctx: _Ctx) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="the ping threshold is edited in the channel's settings"
-)
-async def test_the_ping_threshold_is_edited_and_bounded(ctx: _Ctx) -> None:
-    uid = (await _register(ctx))["uid"]
-    assert (await _patch(ctx, uid, notify_after_seconds=0)).status_code == 200
-    assert (await _config(ctx, uid))["notify_after_seconds"] == 0
-    refused = await _patch(ctx, uid, notify_after_seconds=3601)
-    assert refused.status_code == 422, refused.text
-
-
-@pytest.mark.acceptance(
     spec="channels/seatalk", scenario="status names the websocket connection state"
 )
 async def test_status_reports_only_the_websocket_state(ctx: _Ctx) -> None:
@@ -268,3 +257,38 @@ async def test_status_names_the_workspace_new_conversations_fall_back_to(ctx: _C
     body = (await ctx.http.get(f"/api/v1/channels/{uid}/status")).json()
 
     assert body["workspace_directory"] == str(content_root() / "workspace")
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="the system prompts are edited through a dialog on the Settings tab"
+)
+async def test_the_system_prompts_are_saved_and_reported_in_the_settings(ctx: _Ctx) -> None:
+    uid = (await _register(ctx))["uid"]
+    before = (await ctx.http.get(f"/api/v1/channels/{uid}/status")).json()["settings"]
+    assert (before["direct_system_prompt"], before["group_system_prompt"]) == ("", "")
+
+    r = await _patch(
+        ctx, uid, direct_system_prompt="Answer in Chinese.\nBe brief.", group_system_prompt=""
+    )
+    assert r.status_code == 200, r.text
+
+    settings = (await ctx.http.get(f"/api/v1/channels/{uid}/status")).json()["settings"]
+    assert settings["direct_system_prompt"] == "Answer in Chinese.\nBe brief."
+    assert settings["group_system_prompt"] == ""
+    # Every other setting and ref is as it was.
+    assert {k: v for k, v in settings.items() if not k.endswith("_system_prompt")} == {
+        k: v for k, v in before.items() if not k.endswith("_system_prompt")
+    }
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a system prompt longer than 4,000 characters is refused"
+)
+async def test_a_too_long_system_prompt_is_refused_and_nothing_changes(ctx: _Ctx) -> None:
+    uid = (await _register(ctx))["uid"]
+    assert (await _patch(ctx, uid, group_system_prompt="Be brief.")).status_code == 200
+
+    refused = await _patch(ctx, uid, group_system_prompt="x" * 4001)
+
+    assert refused.status_code == 422, refused.text
+    assert (await _config(ctx, uid))["group_system_prompt"] == "Be brief."

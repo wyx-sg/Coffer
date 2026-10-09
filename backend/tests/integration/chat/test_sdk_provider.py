@@ -632,3 +632,45 @@ async def test_an_unmanaged_type_is_not_available_and_runs_no_turn(tmp_path) -> 
     assert await provider.availability() is True
     await provider.build_adapter(conv.id)
     await engine.dispose()
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="an edited system prompt applies from the next turn"
+)
+@pytest.mark.asyncio
+async def test_a_resumed_session_carries_the_owner_prompt_as_it_is_now(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """The system prompt is not part of Claude Code's stored session: each turn
+    resumes the session with the append composed for that turn, so a prompt the
+    owner edited between two turns reaches the very next one."""
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
+    prompt = ["Answer in Chinese."]
+
+    async def _note(uid: str, conversation_id: str) -> ChannelNote | None:
+        return ChannelNote(
+            name="tg", platform="Telegram", chat_kind="direct", owner_prompt=prompt[0]
+        )
+
+    factory, captured = _make_factory(_simple_messages("sess-1"))
+    provider = ClaudeSdkProvider(conversations=repo, session_factory=factory, resolve_channel=_note)
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    await _collect(await provider.build_adapter(conv.id), _user_turn("hi", conv.id))
+    first = captured[0].system_prompt["append"]  # type: ignore[index]
+    assert "Instructions from the channel's owner:\nAnswer in Chinese." in first
+
+    prompt[0] = "Answer in English."
+    factory2, captured2 = _make_factory(_simple_messages("sess-1"))
+    provider2 = ClaudeSdkProvider(
+        conversations=repo, session_factory=factory2, resolve_channel=_note
+    )
+    await _collect(await provider2.build_adapter(conv.id), _user_turn("again", conv.id))
+
+    assert captured2[0].resume == "sess-1"
+    second = captured2[0].system_prompt["append"]  # type: ignore[index]
+    assert "Instructions from the channel's owner:\nAnswer in English." in second
+    assert "Answer in Chinese." not in second
+    # The owner's text follows Coffer's note and comes before the model note.
+    assert second.index("You are replying in") < second.index("Instructions from the channel")
+    assert second.index("Instructions from the channel") < second.index("Coffer set no model")
+
+    await engine.dispose()

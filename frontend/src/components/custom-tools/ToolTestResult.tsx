@@ -106,8 +106,10 @@ export function ToolTestResult({
   const status = (result.status_line ?? "").replace(/^HTTP /, "");
   const rejected = (result.status === 401 || result.status === 403) && secret !== null;
   const failed = result.failure !== null;
-  const good = result.ok && !failed;
-  const size = formatBytes(new TextEncoder().encode(result.body).length);
+  const ruleFailure = result.rule_failure ?? null;
+  const good = result.ok && !failed && ruleFailure === null;
+  const bytes = result.body_bytes || new TextEncoder().encode(result.body).length;
+  const size = bytes === 0 ? t("customTools.test.emptyBody") : formatBytes(bytes);
 
   const title = failed
     ? t(`customTools.test.failure.${result.failure}`, { host, seconds: timeoutSeconds })
@@ -138,9 +140,11 @@ export function ToolTestResult({
             environment: result.environment,
           })
         : t("customTools.test.hint.rejected", { secret: displayOf(secret), group })
-      : !result.ok
-        ? t("customTools.test.hint.httpError")
-        : null;
+      : ruleFailure
+        ? t("customTools.test.hint.ruleFailed")
+        : !result.ok
+          ? t("customTools.test.hint.httpError")
+          : null;
   // The daemon sends the prompt for a failure that depends on this machine (no connection, timeout).
   const handoff = result.handoff?.prompt ?? null;
   const actions =
@@ -186,6 +190,12 @@ export function ToolTestResult({
         {result.environment ? (
           <p className="text-xs text-text-muted">
             {t("customTools.test.ranIn", { environment: result.environment })}
+          </p>
+        ) : null}
+        {ruleFailure ? (
+          <p role="alert" className="text-xs leading-[1.45] text-danger">
+            <span className="font-label">{t("customTools.test.ruleFailed")}</span>{" "}
+            <span className="break-all">{ruleFailure.summary}</span>
           </p>
         ) : null}
         {result.url ? <UrlLine method={method} url={result.url} /> : null}

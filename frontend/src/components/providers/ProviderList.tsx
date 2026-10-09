@@ -3,13 +3,16 @@
 // The filter matches the name, title, endpoint and description. There is no
 // count and no per-row switch or reach control here: activation is per agent
 // (its Model tab), and reach is changed on the provider's own header. Rows
-// come sorted by name.
+// come sorted by name. A row whose connection fails says so in place of its
+// sub-line: the open one from its own probe once that has answered, every
+// other from the daemon's kept health verdict.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { SearchInput } from "@/components/SearchInput";
-import type { Provider } from "@/lib/api/providers";
+import type { Provider, ProviderHealth } from "@/lib/api/providers";
+import type { ProbeStatus } from "@/lib/providers/probeStatus";
 import type { ProviderUse } from "@/lib/providers/usedBy";
 import { searchableName } from "@/lib/resourceTitle";
 import { ProviderListRow } from "./ProviderListRow";
@@ -22,8 +25,32 @@ interface Props {
   onRetry?: () => void;
   selectedUid: string | undefined;
   usageOf: (provider: Provider) => ProviderUse;
-  /** What the open provider's probe found wrong, when it did: its row says so in place of its sub-line. */
-  selectedProblem?: "keyRejected" | "unreachable" | null;
+  /** The daemon's kept verdict per connection uid. */
+  health?: ReadonlyMap<string, ProviderHealth>;
+  /** What the open provider's own probe says. */
+  selectedStatus?: ProbeStatus;
+}
+
+type Problem = "keyRejected" | "unreachable";
+
+const KEPT: Record<ProviderHealth["status"], Problem | null> = {
+  reachable: null,
+  key_rejected: "keyRejected",
+  unreachable: "unreachable",
+};
+
+/** What a row says is wrong: the open row's probe once it answered, else the kept verdict. */
+function problemOf(
+  uid: string,
+  selected: boolean,
+  status: ProbeStatus | undefined,
+  health: ReadonlyMap<string, ProviderHealth> | undefined,
+): Problem | null {
+  if (selected && status && status !== "checking") {
+    return status === "reachable" ? null : status;
+  }
+  const kept = health?.get(uid);
+  return kept ? KEPT[kept.status] : null;
 }
 
 export function ProviderList({
@@ -33,7 +60,8 @@ export function ProviderList({
   onRetry,
   selectedUid,
   usageOf,
-  selectedProblem,
+  health,
+  selectedStatus,
 }: Props) {
   const { t } = useTranslation();
   const [filter, setFilter] = useState("");
@@ -65,7 +93,7 @@ export function ProviderList({
               provider={p}
               use={usageOf(p)}
               selected={p.uid === selectedUid}
-              problem={p.uid === selectedUid ? selectedProblem : null}
+              problem={problemOf(p.uid, p.uid === selectedUid, selectedStatus, health)}
             />
           ))
         )}

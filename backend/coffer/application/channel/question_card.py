@@ -33,7 +33,6 @@ __all__ = [
     "closed_line",
     "local_time",
     "parse_callback",
-    "question_ping",
 ]
 
 #: The callback namespace a question's buttons live in.
@@ -146,9 +145,3 @@ def closed_line(answer: QuestionAnswer | None, *, web: bool, moment: str | None)
 def closed_body(block: QuestionBlock, index: int, line: str) -> str:
     """A rewritten card: what it asked, then how it ended — no buttons, no footer."""
     return "\n\n".join([*_head(block, index), block.questions[index].question, line])
-
-
-def question_ping(elapsed: str, question: str) -> str:
-    """``❓ Needs you · 4m 05s — <question>`` — the long-task ping of a turn that
-    is waiting on the owner."""
-    return f"❓ Needs you · {elapsed} — {question}"

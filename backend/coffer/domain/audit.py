@@ -33,6 +33,7 @@ class AuditEventType(StrEnum):
     # start its successor and exit
     DAEMON_RESTARTED = "daemon_restarted"
     RETENTION_UPDATED = "retention_updated"
+    CALL_CONTENT_RECORDING_UPDATED = "call_content_recording_updated"
     # spec web-ui "Let the user ignore any item on Overview": a
     # "needs you" item ignored on this machine, or no longer.
     ATTENTION_IGNORED = "attention_ignored"

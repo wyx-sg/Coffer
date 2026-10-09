@@ -16,9 +16,9 @@ command), otherwise :func:`fallback_handoff` writes one from the item itself,
 so every Overview row can be copied to an agent or opened in a conversation.
 
 A source is added by the kind that owns the signal, registered at the
-composition root. A signal nothing records yet (a provider key the endpoint
-rejected) has no source: a list that reports only what the backend can know is
-the contract, and a new source is the extension point.
+composition root. A signal nothing records has no source: a list that reports
+only what the backend can know is the contract, and a new source is the
+extension point.
 
 **Ignoring.** Any item — an agent the person chose not to connect, a
 server that stays broken on purpose — can be ignored by its stable key
@@ -278,7 +278,7 @@ class AttentionService:
             raise AttentionNotIgnorable(key)
         if await self._ignores.add(key):
             self.invalidate()
-            await self._record(AuditEventType.ATTENTION_IGNORED, key, actor)
+            await self._record(AuditEventType.ATTENTION_IGNORED, key, actor, item)
 
     async def unignore(self, key: str, *, actor: str) -> None:
         """Stop ignoring ``key``. A key that is not ignored is a no-op."""
@@ -286,9 +286,16 @@ class AttentionService:
             self.invalidate()
             await self._record(AuditEventType.ATTENTION_UNIGNORED, key, actor)
 
-    async def _record(self, event: AuditEventType, key: str, actor: str) -> None:
-        if self._audit is not None:
-            await self._audit.record(event.value, actor=actor, details={"key": key})
+    async def _record(
+        self, event: AuditEventType, key: str, actor: str, item: AttentionItem | None = None
+    ) -> None:
+        if self._audit is None:
+            return
+        details: dict[str, object] = {"key": key}
+        if item is not None:
+            # What the ignored item said, for a reader who cannot decode the key.
+            details.update(kind=item.kind, title=item.title, reason_code=item.reason_code)
+        await self._audit.record(event.value, actor=actor, details=details)
 
 
 __all__ = [

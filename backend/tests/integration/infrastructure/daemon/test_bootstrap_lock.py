@@ -245,3 +245,50 @@ def test_concurrent_acquire_blocks_racer_until_first_is_serving(
     finally:
         for s in bound:
             s.close()
+
+
+@pytest.mark.acceptance(
+    spec="daemon", scenario="a start stuck behind a boot that never finishes gives up"
+)
+def test_a_start_gives_up_on_a_lock_held_past_the_bound_and_names_the_holder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A holder that never releases must not make the next start queue forever:
+    past the bound the wait raises SpawnLockBusy naming the pid the holder wrote
+    into the lock file, and nothing is bound or published."""
+    home = _setup_home(tmp_path, monkeypatch)
+    held_fd = bootstrap._acquire_spawn_lock()
+    now = [0.0]
+
+    def _sleep(seconds: float) -> None:
+        now[0] += seconds
+
+    try:
+        with pytest.raises(bootstrap.SpawnLockBusy) as caught:
+            bootstrap._acquire_spawn_lock(timeout=1.0, clock=lambda: now[0], sleep=_sleep)
+    finally:
+        bootstrap._release_spawn_lock(held_fd)
+    import os
+
+    assert caught.value.holder_pid == os.getpid()
+    assert str(os.getpid()) in str(caught.value)
+    assert now[0] >= 1.0
+    assert not (home / ".coffer" / "daemon.json").exists()
+    assert _lock_is_free()
+
+
+def test_a_lock_freed_within_the_bound_is_taken(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _setup_home(tmp_path, monkeypatch)
+    held_fd = bootstrap._acquire_spawn_lock()
+    released = []
+
+    def _sleep(_seconds: float) -> None:
+        if not released:
+            bootstrap._release_spawn_lock(held_fd)
+            released.append(True)
+
+    fd = bootstrap._acquire_spawn_lock(timeout=60.0, sleep=_sleep)
+    bootstrap._release_spawn_lock(fd)
+    assert released == [True]

@@ -32,6 +32,11 @@ def test_group_origin_lists_platform_chat_thread_and_sender():
     ]
 
 
+def test_origin_names_the_channel_a_tool_call_takes():
+    out = format_origin(_msg(chat_kind="group", thread_id="t7"), platform="seatalk", channel="ops")
+    assert out.splitlines()[1:3] == ["platform: seatalk", "channel: ops"]
+
+
 def test_group_without_title_still_carries_the_chat_id():
     out = format_origin(_msg(chat_kind="group"), platform="seatalk")
     assert "chat: group (id: NTUzODkwODM1NzAz)" in out

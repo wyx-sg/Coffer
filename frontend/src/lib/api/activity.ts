@@ -122,3 +122,23 @@ export function fetchDaemonPage(
     }),
   );
 }
+
+export type InvocationDetail = components["schemas"]["InvocationDetailOut"];
+export type CapturedPart = components["schemas"]["CapturedPartOut"];
+
+/** One call with its redacted content; lists never carry it. */
+export function fetchCall(id: number, signal?: AbortSignal): Promise<InvocationDetail> {
+  return unwrap(
+    getApiClient().GET("/mcp/invocations/{invocation_id}", {
+      signal,
+      params: { path: { invocation_id: id } },
+    }),
+  );
+}
+
+/** Whether tool calls record their arguments and results on this machine. */
+export const callContentApi = {
+  get: (): Promise<{ enabled: boolean }> => unwrap(getApiClient().GET("/settings/call-content")),
+  set: (enabled: boolean): Promise<{ enabled: boolean }> =>
+    unwrap(getApiClient().PUT("/settings/call-content", { body: { enabled } })),
+};

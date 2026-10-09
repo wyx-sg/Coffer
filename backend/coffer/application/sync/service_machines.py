@@ -151,9 +151,10 @@ class MachinesMixin:
         if machine_id == self._machine.machine_id():
             raise CannotRetireSelf(machine_id)
 
-        def retire() -> None:
+        def retire() -> MachineDescriptor:
             d = self._engine.d
-            if machine_id not in self._descriptors():
+            retired = self._descriptors().get(machine_id)
+            if retired is None:
                 raise SyncMachineNotFound(machine_id)
             meta = CommitMeta(
                 writer=WRITER_USER,
@@ -162,12 +163,18 @@ class MachinesMixin:
                 actor=actor,
             )
             d.writer.delete_file(descriptor_path(machine_id), meta=meta, expected=Expect.HEAD)
+            return retired
 
-        await self._locked(retire)
+        retired: MachineDescriptor = await self._locked(retire)
         await self._audit.record(
             AuditEventType.SYNC_MACHINE_REMOVED.value,
             actor=actor,
-            details={"machine_id": machine_id},
+            details={
+                "machine_id": machine_id,
+                "name": retired.name,
+                "hostname": retired.hostname,
+                "os": retired.os,
+            },
         )
 
     async def restore_machine(self, machine_id: str, *, actor: str) -> MachineView:

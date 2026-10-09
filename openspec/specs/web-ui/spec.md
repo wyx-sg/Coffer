@@ -906,7 +906,13 @@ daemon record's message and traceback — then the records written within five
 minutes of it, ending in its raw underlying record, pretty-printed in a
 monospace, scrollable block, open and foldable. The footer holds
 the next step: **Open** the resource's own detail page beside **Copy details**. A call's drawer
-shows its metadata only, since Coffer stores no call's arguments or results. A
+shows, after its answer, the content the call recorded ([mcp-gateway](../mcp-gateway/spec.md)
+"Record invocations with redacted, bounded content"), read when the drawer opens: **Arguments**,
+**Result** (or **Error**), and for a custom tool **Request** and **Response**, each a foldable
+monospace block — JSON laid out, other text as it is — with **Copy**, and a cut part ending in
+"Cut at 16 KB — the call carried N KB". A call recorded while recording was off says "Content
+was not recorded for this call" with a link to the setting, and the drawer notes that secret
+values are masked before anything is stored. A
 change whose event the page has no sentence for reads through the same facts and
 diff. On the Daemon log a row opens in place under its own line instead, with its
 traceback, **Copy record** and, when the record names a server and tool, **Show
@@ -927,6 +933,12 @@ the tool call**, which opens the Tool calls tab looking for that call.
 - **GIVEN** Everything holding a call by an agent, a change made in the web UI, a change made from the command line and a daemon warning
 - **WHEN** the user chooses the agent and "You" under By, then Tool calls and Changes under Kind
 - **THEN** the list keeps the agent's call and the web UI's change and drops the others, and the Kind pill reads "Kind: Tool calls, Changes"
+
+#### Scenario: a call's drawer shows its arguments and result
+- **GIVEN** a recorded tool call with arguments, a cut result and a call recorded while recording was off
+- **WHEN** the user opens each on the Tool calls tab
+- **THEN** the first drawer shows Arguments and Result as laid-out JSON with Copy, the result ending in its cut note
+- **AND** the second says its content was not recorded and links to Settings › Data
 
 ### Requirement: Query only the visible Activity tab and isolate failures
 Only the visible tab pages through records — Everything through all three
@@ -1099,7 +1111,10 @@ machine only is a setting shown on the tab it belongs to:
   window deletes.
 - **History** — the retention of each record kind — changes, tool calls,
   **Skill working files** (the logs, journals and temporary files skill scripts write under `~/.coffer/skill-data`, 30 days by default, a row whose confirmation counts files) and **Config backups** (the copies Coffer keeps of an agent's config file before it rewrites it, under `~/.coffer/config-backups`, 30 days by default, with the newest copy of each file always kept; a row whose confirmation counts files) — Keep forever or a number of days, cleaned up by the retention
-  worker's schedule (at daemon start and every six hours), with a
+  worker's schedule (at daemon start and every six hours), and, under the tool
+  calls row, a **Record tool call content** switch (on by default; [mcp-gateway](../mcp-gateway/spec.md)
+  "Switch call content recording per machine") whose help says that arguments and
+  results are kept with secrets masked and that turning it off keeps metadata only, with a
   **Clear expired now** action behind a confirmation, which reports what it
   removed; the last cleanup reads "Last cleared today at 12:00 — 1,284 rows" ("30 Sep at 12:00" for another day); a saved value survives a reload. Shortening a
   window (or turning Keep forever off) MUST ask first, and the confirmation
@@ -1123,7 +1138,7 @@ Edits auto-save, like every settings surface: there is no Save button.
 #### Scenario: the data tab shows four blocks and no this-mac block
 - **GIVEN** a vault with versions, channel media on disk, and memory partitions
 - **WHEN** the user opens `/settings/data`
-- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced, and the Attachments retention row), History (retention for changes, tool calls, skill working files and config backups with Clear expired now) and Rebuildable cache (memory tree with Clear), and no This Mac only block
+- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced, and the Attachments retention row), History (retention for changes, tool calls, skill working files and config backups, the Record tool call content switch, and Clear expired now) and Rebuildable cache (memory tree with Clear), and no This Mac only block
 
 #### Scenario: the attachments retention is set where the attachments are listed
 - **GIVEN** attachments kept for 30 days
@@ -1160,6 +1175,11 @@ Edits auto-save, like every settings surface: there is no Save button.
 - **WHEN** the user opens `/settings/data`
 - **THEN** History has a Config backups row at 30 days, after Skill working files, whose help text says the newest backup of each file is always kept
 - **AND** shortening it asks first and the confirmation counts files, not records
+
+#### Scenario: tool call content recording is switched on the Data tab
+- **GIVEN** recording on, its default
+- **WHEN** the user turns Record tool call content off on `/settings/data` and reloads
+- **THEN** the switch reads off, and calls made from then on open with "Content was not recorded for this call"
 
 ### Requirement: Switch language from the sidebar
 The English / 简体中文 switch MUST be reachable from every screen in Settings ›
@@ -1354,13 +1374,20 @@ control MUST show that it is busy — a download its progress — and not accept
 second press; a check or a download that fails MUST show a readable error on
 the tab, keep the last successful check's time, and leave the running version
 untouched. A desktop build made without an updater key MUST say it does not
-check for updates. In a browser, About MUST show the version and say that
-updates are installed by the desktop app, with no update control, because a page
-the daemon serves cannot replace the application; it MUST instead offer the
-daemon's upgrade hand-off (spec [daemon](../daemon/spec.md) "Hand an upgrade of
-Coffer to an agent") — Copy prompt, and Ask an agent when a managed agent is
-available — and name no install command itself. The desktop shell never asks
-for that hand-off.
+check for updates.
+
+In a browser, a page the daemon serves cannot replace the application, so About
+MUST NOT offer Download and restart. When the daemon runs from the installer's
+binaries, About MUST show the daemon's own check (spec
+[daemon](../daemon/spec.md) "Check the installed binaries for a new release") —
+when it last checked, up to date or the newer version with its notes, a
+**Check for updates** control and the **Check automatically** switch, which
+here sets the daemon's switch — and, when a newer version is found, the command
+`coffer update` with a copy button. Otherwise it MUST say that updates are
+installed by the desktop app. In both cases it MUST offer the daemon's upgrade
+hand-off (spec [daemon](../daemon/spec.md) "Hand an upgrade of Coffer to an
+agent") — Copy prompt, and Ask an agent when a managed agent is available. The
+desktop shell never asks for that hand-off.
 
 #### Scenario: about shows the version and when updates were last checked
 - **GIVEN** the desktop shell running version 1.0.0, last checked at launch, with no newer release
@@ -1386,10 +1413,15 @@ for that hand-off.
 - **AND** the running version is unchanged
 
 #### Scenario: about in a browser offers no update control
-- **GIVEN** the web UI opened in a browser
+- **GIVEN** the web UI opened in a browser on a daemon running from the desktop app
 - **WHEN** the user opens `/settings/about`
 - **THEN** the tab shows the version and says updates are installed by the desktop app
 - **AND** it shows no Check for updates or Download and restart control, and offers Copy prompt with the daemon's upgrade hand-off
+
+#### Scenario: about in a browser shows the daemon's check and coffer update
+- **GIVEN** the web UI opened in a browser on a daemon running from the installer's binaries that found a newer release
+- **WHEN** the user opens `/settings/about`
+- **THEN** the tab shows the newer version, its notes, when the daemon checked, the Check automatically switch and `coffer update` with a copy button, and no Download and restart control
 
 ### Requirement: Test a server in the Add dialog before adding it
 The Add server dialog's one-server form MUST offer Test, which tests the
@@ -2837,14 +2869,20 @@ Required, where the request uses it — the path, a query key, a header or the
 body — and the description agents read under it; an argument no hole names is
 marked not used with **Add as query parameter** and **Remove argument**, and a
 hole no argument names is listed with **Add argument <name>**; the tab counts
-those problems) and **Response** (when a call counts as failed — a status of 400
-or more, or no answer — and what the agent gets: the status line and the body,
-cut at 1 MiB). A new tool opens on General, a saved one on Request.
+those problems) and **Response** (whether the tool follows its group's response
+rules, shown one per line, or has rules of its own — edited with the same rule
+editor as the group's, where an empty list judges by the HTTP status alone
+([mcp-gateway](../mcp-gateway/spec.md) "Judge a custom tool's answer by its
+group's response rules") — and what the agent gets: the status line, the
+headers the group names, the broken rule if any, and the body or a note that it
+was empty, cut at 1 MiB). A new tool opens on General, a saved one on Request.
 **Try it** takes a sample value per argument, and its Run runs the request as the form
 holds it once and shows the answer — the status and time in a block, the response
 in a viewer under it — the API's error body, a timeout, a failed
 connection (each of these two with the daemon's hand-off and, for a timeout,
-**Change timeout**) or a response cut short, with the response headers that
+**Change timeout**), a response cut short or an answer that broke a response
+rule (the block turns to a failure and names the rule, the value read and the
+API's message), with the body's size and the response headers that
 name the request on the API's side ([mcp-gateway](../mcp-gateway/spec.md)
 "Report what a custom tool's test reached"); a saved group's form previews and
 tests in one environment ("Preview and test a custom tool in one chosen
@@ -2868,7 +2906,8 @@ A group's detail page (`/custom-tools/<group>/<tab>`) MUST carry, under its
 header — its **reach** and a one-line summary of the last 24 hours (calls and
 failures) — two tabs laid out like every other detail page's. **Overview** (the
 default, at the bare `/custom-tools/<group>`) stacks the group's **definition**
-(its description, the name agents see, its timeout and, for an imported group,
+(its description, the name agents see, its timeout, its diagnostic headers and
+response rules — "HTTP status only" when it has none — and, for an imported group,
 its spec), then **Environments** — one row per environment, however many there
 are, each with its switch, base URL, secret state and variables, edited from the
 row — then
@@ -2898,7 +2937,11 @@ a tool opens the tool editor in a 1040-wide **drawer** below the title bar —
 the headers the chosen environment already adds shown as
 "from the group" ("from <environment>" when the group has several),
 no switch, which lives in the table — with **Delete tool**, Cancel and Save
-in its footer. **Edit group** edits only the group's description and timeout:
+in its footer. **Edit group** edits the group's description, timeout and response
+settings — the **diagnostic headers** to report and the **response rules**, one
+card per rule (read the HTTP status, a response header or a JSON field; the
+success values; what a missing value means; where the API's error message is),
+whose mistakes are named under the field and keep Save off:
 base URLs, headers, secrets and variables are the environments', edited from
 their rows, so a group with one environment is edited the same way as one with
 several. Script tools are not offered: they are deferred past 1.0.
@@ -3007,10 +3050,26 @@ the gateway").
 - **THEN** `query` reads as used in `?q=`, `status` as not used with Add as query parameter and Remove argument, and `{org}` is listed with Add argument org, and the tab counts two problems
 - **AND** Add as query parameter adds `status={status}` to the path, which the Request tab's query parameters show as an argument row
 
-#### Scenario: Edit group edits only the description and timeout
+#### Scenario: Edit group edits the description, timeout and response settings
 - **GIVEN** the `billing` group with one environment
 - **WHEN** the user opens Edit group, changes the timeout to 45 s and saves
-- **THEN** the dialog shows no base URL or header rows and says they belong to the environments, and the group is saved with its description and 45 s only
+- **THEN** the dialog shows no base URL or header rows and says they belong to the environments, and the group is saved with its description, 45 s and its response settings as they were
+
+#### Scenario: a response rule is added to a group and a refused header keeps Save off
+- **GIVEN** the `billing` group with no response rules
+- **WHEN** the user opens Edit group, names `X-Trace-Id` as a diagnostic header, adds a rule reading the header `X-Result-Code` with the success values `OK, 0`, and saves; then adds a rule reading `Set-Cookie`
+- **THEN** the group is saved with that diagnostic header and that rule
+- **AND** the rule on `Set-Cookie` is named as a header that carries credentials or cookies, and Save is off
+
+#### Scenario: a tool follows its group's response rules or sets its own
+- **GIVEN** a group whose rule reads `x-result-code`, and one of its tools
+- **WHEN** the user opens the tool's Response tab, picks rules for this tool only, changes the success values, then removes the rule
+- **THEN** the tab first shows the group's rule and the tool follows it; the tool's own rules start as a copy of the group's, and removing the last one leaves the tool judged by its HTTP status alone
+
+#### Scenario: Try it names the response rule an answer broke
+- **GIVEN** a tool whose answer breaks a response rule
+- **WHEN** the user runs it in Try it
+- **THEN** the block reads as a failure, names the rule failed with the value read, the success values and the API's message, and the body's size is shown
 
 ### Requirement: Draw every diff in the web UI with one renderer
 Every diff the web UI shows of a file's changed lines — a change preview of a write Coffer is about to make, a version on a History tab, a skill's copy or folder-in-the-way review, and a custom-tool group's re-import — MUST be drawn by one renderer: old and new line numbers, a sign, additions and deletions on their colour, hunk headers muted, and a long line wrapped at a word boundary with a ↳ on its continuation rows, never cut off. Each file is shown under its path, operation and line counts.
@@ -3219,3 +3278,40 @@ its place.
 - **WHEN** `test` is switched off, then deleted, while the drawer stays open
 - **THEN** Try it says `test` is off, then that it was deleted, with Run off and no preview each time
 - **AND** Run comes back only once the person picks another environment
+
+### Requirement: Offer uninstall on Settings › About
+Settings › About MUST end with an **Uninstall** section. In the desktop shell it
+MUST offer **Uninstall Coffer…**, which opens the shell's one confirmation
+dialog ("Confirm a destructive action in one dialog that names its cost"),
+titled "Uninstall Coffer?", listing what uninstalling does — disconnect every
+agent and take Coffer's model routing out of their settings, remove the skill
+links Coffer delivered, turn off start at login, remove the command-line tools
+and the installer's `PATH` lines, move the app to the Trash — and saying that
+the vault, secrets, skills and settings in `~/.coffer` stay, so installing again
+finds them, and that the agents must be connected again. It MUST carry an
+unticked **Also delete my data (~/.coffer)**; ticking it MUST say, as a danger
+note, that this deletes every secret, skill, knowledge collection and the
+master key for good, offer **Back up the master key** first, and turn the
+confirm button into **Uninstall and delete data**. Confirming runs the shell's
+uninstall (spec [desktop-app](../desktop-app/spec.md) "Uninstall Coffer from
+the app"); while it runs the dialog cannot be left, a failure stays in it with
+the reason, and on success it shows each step's outcome before the app quits.
+`?uninstall=1` (and `&delete=1`) in the address MUST open the dialog (with the
+data option ticked). In a browser the section MUST instead say that uninstalling
+runs from the desktop app or the command line and show `coffer uninstall` with a
+copy button.
+
+#### Scenario: the uninstall dialog names what it removes and keeps the data by default
+- **GIVEN** Settings › About open in the desktop shell
+- **WHEN** the user chooses Uninstall Coffer…
+- **THEN** the dialog lists each step, says `~/.coffer` stays, and shows Also delete my data unticked with the confirm button reading Uninstall
+
+#### Scenario: ticking delete my data warns and offers a backup
+- **GIVEN** the uninstall dialog open
+- **WHEN** the user ticks Also delete my data
+- **THEN** a danger note says the data and the master key are deleted for good, Back up the master key is offered, and the confirm button reads Uninstall and delete data
+
+#### Scenario: about in a browser shows the uninstall command
+- **GIVEN** the web UI opened in a browser
+- **WHEN** the user opens `/settings/about`
+- **THEN** the Uninstall section shows `coffer uninstall` with a copy button and no Uninstall Coffer… control

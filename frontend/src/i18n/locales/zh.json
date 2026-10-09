@@ -787,6 +787,7 @@
       "resource_scope_updated": "更新了 {{resource}} 的生效范围",
       "resource_updated": "重新配置了 {{resource}}",
       "retention_updated": "更新了数据保留策略",
+      "call_content_recording_updated": "更改了是否记录工具调用内容",
       "cli_tool_added": "添加了命令行工具 {{command}}",
       "cli_tool_edited": "编辑了命令行工具 {{command}}",
       "cli_tool_removed": "移除了命令行工具 {{command}}",
@@ -1001,7 +1002,7 @@
         "denied": "对 {{server}} 的调用被拒绝",
         "unreachable": "无法连接 {{server}}"
       },
-      "callNote": "Coffer 只记录谁在何时调用了哪个工具、结果如何。参数和返回内容直接透传，从不存储。",
+      "callNote": "密钥的值在存储前就会被遮盖。每一部分最多保留前 16 KB，随工具调用历史一起按保留期删除。",
       "level": "级别",
       "logger": "记录器",
       "around": "同一时间前后",
@@ -1019,7 +1020,18 @@
       "whenToday": "今天 {{time}}",
       "whenYesterday": "昨天 {{time}}",
       "whenOn": "{{date}} {{time}}",
-      "environment": "环境"
+      "environment": "环境",
+      "content": {
+        "arguments": "参数",
+        "result": "返回结果",
+        "error": "错误",
+        "request": "请求",
+        "response": "响应",
+        "copy": "复制{{part}}",
+        "cut": "已截断到 16 KB，原始大小 {{size}} KB。",
+        "notRecorded": "这次调用没有记录内容。",
+        "setting": "记录工具调用内容"
+      }
     },
     "daemon": {
       "noMessage": "（没有消息的日志记录）"
@@ -1265,13 +1277,61 @@
         "auto": "自动检查",
         "autoHelp": "在启动时以及每 6 小时检查一次，安装前会先征得你的同意。",
         "browser": "更新由 Coffer 桌面应用安装。在浏览器中，可以把升级交给智能体：提示词里写明了这份 Coffer 的安装方式。",
-        "unconfigured": "此版本构建时没有更新密钥，因此不会检查更新。新版本发布在 GitHub Releases 页面。"
+        "unconfigured": "此版本构建时没有更新密钥，因此不会检查更新。新版本发布在 GitHub Releases 页面。",
+        "daemonNeverChecked": "守护进程会在启动一分钟后检查，之后每天检查一次。",
+        "commandHelp": "在终端运行这条命令：它会下载这个版本、校验后让守护进程换用它重启。",
+        "daemonAutoHelp": "守护进程每天向 GitHub 检查一次，不会自行安装任何东西。"
       },
       "diagnosticsCopied": "诊断信息已复制，可粘贴到问题报告中。",
       "versionLine": "版本 {{version}}",
       "versionLineLoading": "正在读取版本…",
       "details": "详细信息",
-      "versionWithCommit": "{{version}}（{{commit}}）"
+      "versionWithCommit": "{{version}}（{{commit}}）",
+      "uninstall": {
+        "title": "卸载",
+        "label": "卸载 Coffer",
+        "description": "从这台 Mac 上移除 Coffer。除非你选择删除，~/.coffer 里的数据会保留。",
+        "open": "卸载 Coffer…",
+        "browser": "卸载会连同应用一起移除，所以要在 Coffer 桌面应用（设置 › 关于）里进行，或者在终端运行：",
+        "dialog": {
+          "title": "卸载 Coffer？",
+          "body": "Coffer 会撤回它写在 ~/.coffer 之外的所有内容，然后停止运行，应用会把自己移到废纸篓。",
+          "removes": "移除",
+          "removesValue": "每个智能体里 Coffer 的 MCP 条目、记忆钩子和模型路由；Coffer 投递的技能链接；开机自启动；命令行工具和安装脚本加的 PATH 行；Coffer.app",
+          "keeps": "保留",
+          "keepsValue": "~/.coffer：你的保险库、密钥、技能、知识和设置。重新安装 Coffer 后它们都还在；需要重新连接智能体。",
+          "keepsNothing": "不保留。~/.coffer 和主密钥都会被删除。",
+          "deleteData": "同时删除我的数据（~/.coffer）",
+          "deleteDataHelp": "会先要求 Touch ID。",
+          "dangerTitle": "此操作无法撤销",
+          "danger": "~/.coffer 里的所有密钥、技能、知识集和记忆笔记，以及打开密钥所用的主密钥，都会被永久删除，包括 Coffer 从智能体那里接管的技能。移到别处的保险库会保留在原处。",
+          "backup": "先备份主密钥",
+          "confirm": "卸载",
+          "confirmDelete": "卸载并删除数据",
+          "pending": "正在卸载…",
+          "failed": "无法卸载 Coffer"
+        },
+        "done": {
+          "title": "Coffer 已卸载",
+          "body": "~/.coffer 里的数据已保留。Coffer 正在退出，并把自己移到废纸篓。",
+          "bodyDeleted": "守护进程停止后，你的数据会被删除。Coffer 正在退出，并把自己移到废纸篓。"
+        },
+        "steps": {
+          "agents": "读取智能体",
+          "provider_routing": "已撤回智能体里的模型路由",
+          "agent_connections": "已断开智能体",
+          "skill_links": "已移除技能链接",
+          "login_job": "已关闭开机自启动",
+          "terminal_files": "已移除终端启动文件",
+          "path_lines": "已移除安装脚本加的 PATH 行",
+          "binaries": "已移除命令行工具"
+        },
+        "outcome": {
+          "done": "完成",
+          "nothing": "无需处理",
+          "failed": "失败"
+        }
+      }
     },
     "security": {
       "masterKey": {
@@ -1487,7 +1547,12 @@
       },
       "history": {
         "title": "历史记录",
-        "description": "发生过的事情的记录。旧记录按下面的期限删除。"
+        "description": "发生过的事情的记录。旧记录按下面的期限删除。",
+        "callContent": {
+          "label": "记录工具调用内容",
+          "description": "保存每次调用的参数和返回结果，密钥的值会被遮盖。关闭后只记录谁在何时调用了什么、结果如何。",
+          "notSaved": "未保存"
+        }
       },
       "cache": {
         "title": "可重建的缓存",
@@ -1674,6 +1739,7 @@
     "CONFIG_FILE_NOT_ALLOWED": "该配置文件不适用于此智能体",
     "CONFIG_FILE_STALE": "配置文件在你加载后已被磁盘上的改动覆盖，请重新加载后重试。",
     "CONFIG_INVALID": "配置无效",
+    "CONFIG_INVALID_stored_key_destination": "已存的密钥只会发往保存它的那个连接的接入地址，所以这次没有发出任何请求。要测试这个地址，请直接粘贴密钥；或者先添加这个提供方并批准它的密钥发往该地址，再到提供方页面测试。",
     "CONVERSATION_NOT_FOUND": "未找到对话",
     "CURSOR_INVALID": "该分页位置已失效，请从第一页重新加载列表。",
     "DAEMON_NOT_READY": "Coffer 守护进程仍在启动，请稍后重试。",
@@ -1816,6 +1882,7 @@
     "CUSTOM_TOOL_ENVIRONMENT_NOT_FOUND": "这个分组没有这个名字的环境。",
     "CUSTOM_TOOL_ENVIRONMENT_REQUIRED": "请选择一个环境：这个分组开启了不止一个环境。",
     "CUSTOM_TOOL_ENVIRONMENT_UNKNOWN": "这个环境没有在该分组中登记。",
+    "INVOCATION_NOT_FOUND": "日志里没有这次工具调用，可能已按保留期清理。",
     "CUSTOM_TOOL_LAST_ENVIRONMENT": "分组至少需要一个环境，最后一个不能删除。",
     "DESKTOP_REQUEST_NOT_FOUND": "这个发给 Coffer 应用的请求已过期或已处理。"
   },
@@ -3601,6 +3668,19 @@
       "replying": {
         "title": "回复与会话"
       },
+      "prompts": {
+        "title": "系统提示词",
+        "description": "你给智能体的指令，每个回合都追加在 Coffer 关于这个聊天的说明之后。修改从下一条消息起生效。",
+        "direct": "私聊",
+        "directHint": "与机器人的私聊，以及在私聊中开出的话题。",
+        "group": "群聊",
+        "groupHint": "群的主聊天及其中的话题。",
+        "editAria": "编辑系统提示词",
+        "dialogTitle": "编辑系统提示词",
+        "dialogDescription": "例如回复用的语言，或每次都要包含的内容。留空则不追加任何内容。",
+        "count": "{{count}} / {{max}}",
+        "tooLong": "最多 {{max}} 个字符。"
+      },
       "unavailable": "这个渠道已保存的设置无效，无法在此显示。请修正 `~/.coffer/vault/resources/channel/` 下这个渠道的文件，或删除这个渠道后重新添加。",
       "machine": {
         "runsOn": "运行在",
@@ -3777,8 +3857,6 @@
         "invalid": "请输入 {{min}} 到 {{max}} 之间的秒数。"
       },
       "replies": {
-        "notifyAfter": "长任务完成提醒",
-        "notifyAfterHint": "运行达到这个时长的回合结束时发一条简短的“完成”消息。0 表示关闭。",
         "showSteps": "显示步骤行",
         "showStepsHint": "工作中在状态行下显示最近 3 个步骤。"
       },
@@ -4969,7 +5047,11 @@
       "timeout": "超时",
       "timeoutValue": "每次调用 {{seconds}} 秒",
       "spec": "规范",
-      "fetched": "获取于 {{date}}"
+      "fetched": "获取于 {{date}}",
+      "diagnosticHeaders": "诊断响应头",
+      "responseRules": "响应规则",
+      "statusOnly": "仅看 HTTP 状态码",
+      "none": "无"
     },
     "tools": {
       "switch": "开关",
@@ -5055,9 +5137,13 @@
       "hintReadOnly": "只读",
       "response": {
         "success": "成功",
-        "rule": "API 返回的状态码小于 400 时调用成功。状态码 400 及以上，或完全没有响应，都算调用失败：计入分组的错误数，智能体收到的是一条错误。",
+        "rule": "HTTP 400 及以上，或完全没有响应，调用就算失败。下面的规则还能让响应头或 JSON 字段里声明了失败的响应失败。",
         "agentGets": "智能体收到的",
-        "agentGetsBody": "先是状态行（例如 HTTP 200 OK），然后是响应正文，最多 1 MiB。密钥的值不会出现在其中。"
+        "agentGetsBody": "状态行（例如 HTTP 200 OK）、分组指定的响应头（调用失败时为全部诊断响应头）、未通过的规则（如果有），然后是响应正文或“(empty body)”，最多 1 MiB。密钥的值不会出现在其中。",
+        "follow": "使用分组的规则",
+        "statusOnly": "仅看 HTTP 状态码",
+        "own": "仅此工具使用的规则",
+        "ownHelp": "从分组的规则开始修改。没有规则时，只有 HTTP 400 及以上才算失败。"
       }
     },
     "test": {
@@ -5091,7 +5177,8 @@
         "rejected": "API 拒绝了 {{secret}}。如果它已过期，请修改它的值；{{group}} 中的每个工具都使用同一个密钥。",
         "httpError": "API 返回了错误，响应见下方。请检查路径和参数的值，然后重试。没有保存任何内容。",
         "rejectedEnv": "API 拒绝了 {{secret}}。如果它已过期，请修改它的值；这个分组的每个工具在 {{environment}} 中都使用它。",
-        "timeoutEnv": "Coffer 在环境 {{environment}} 自己的 {{seconds}} 秒超时后停止了等待。如果只是 API 慢，请在“环境”中调大超时；如果它本该很快响应，请交给智能体查原因。没有保存任何内容。"
+        "timeoutEnv": "Coffer 在环境 {{environment}} 自己的 {{seconds}} 秒超时后停止了等待。如果只是 API 慢，请在“环境”中调大超时；如果它本该很快响应，请交给智能体查原因。没有保存任何内容。",
+        "ruleFailed": "API 有响应，但响应没有通过某条响应规则。请检查「响应」里的规则或请求，然后重试。没有保存任何内容。"
       },
       "cutShort": "已在 {{size}} 处截断。",
       "cutShortBody": "智能体也只会拿到前 {{size}}。请用参数缩小请求范围，或让 API 返回更少内容。",
@@ -5113,7 +5200,9 @@
       },
       "responseHeaders": "响应头",
       "resultTab": "结果",
-      "requestTab": "预览"
+      "requestTab": "预览",
+      "emptyBody": "0 字节 · 响应正文为空",
+      "ruleFailed": "响应规则未通过"
     },
     "editGroup": {
       "title": "编辑 {{name}}",
@@ -5125,7 +5214,16 @@
       "nameHelp": "固定不变——智能体以 {{prefix}} 调用它的工具。",
       "descriptionHelp": "智能体搜索工具时会读到它，写清这组 API 是做什么的。",
       "descriptionPlaceholder": "例如：计费系统的发票和付款",
-      "environmentsNote": "基础 URL、请求头、密钥和变量属于各个环境，在「环境」里对应的行上编辑。"
+      "environmentsNote": "基础 URL、请求头、密钥和变量属于各个环境，在「环境」里对应的行上编辑。",
+      "diagnosticHeaders": "诊断响应头",
+      "diagnosticHeadersHelp": "用逗号分隔的响应头名称。测试和智能体收到的结果里会与请求 id、追踪 id 一起报告。不能指定携带凭据或 Cookie 的响应头。",
+      "diagnosticProblem": {
+        "refused": "不能指定携带凭据或 Cookie 的响应头。",
+        "invalid": "请使用普通的响应头名称，并用逗号分隔。",
+        "many": "最多 20 个响应头。"
+      },
+      "responseRules": "响应规则",
+      "responseRulesHelp": "每条规则都满足，调用才算成功。没有规则时，只有 HTTP 400 及以上才算失败。"
     },
     "reimport": {
       "action": "重新导入",
@@ -5223,6 +5321,33 @@
         "environment": "超时 {{seconds}} 秒（环境 {{environment}} 自己的）",
         "group": "超时 {{seconds}} 秒（分组的）"
       }
+    },
+    "responseRules": {
+      "add": "添加规则",
+      "remove": "删除规则",
+      "read": "读取",
+      "name": "响应头或字段",
+      "values": "成功值",
+      "missing": "缺失时",
+      "message": "错误信息来自",
+      "messageName": "信息名称",
+      "source": {
+        "status": "HTTP 状态码",
+        "header": "响应头",
+        "json": "JSON 字段"
+      },
+      "missingOk": "成功",
+      "missingError": "失败",
+      "messageNone": "不读取错误信息",
+      "problem": {
+        "name": "请填写要读取的响应头或 JSON 字段。",
+        "pointer": "JSON 字段以 / 开头（例如 /status/code）。",
+        "refused": "不能读取携带凭据或 Cookie 的响应头。",
+        "invalid": "这不是有效的响应头名称。",
+        "noValues": "至少填写一个成功值，用逗号分隔。",
+        "status": "状态码是 100 到 599 的数字。",
+        "long": "最多 20 个值，每个最多 200 个字符。"
+      }
     }
   },
   "clis": {
@@ -5310,7 +5435,8 @@
       "description": "描述",
       "descriptionPlaceholder": "用一句话说明用途",
       "loginCheck": "登录检查",
-      "loginCheckHint": "已登录时退出码为 0。点「检查」时运行。",
+      "loginCheckHint": "以命令名开头（例如 /opt/bin/gh 写 gh），已登录时退出码为 0。点「检查」时运行。",
+      "loginCheckCommand": "登录检查必须以命令名 {{command}} 开头，不能写路径或其他程序。它运行的是你添加的这个工具。",
       "submit": "添加",
       "addFailed": "无法添加 {{command}}",
       "editFailed": "无法保存 {{command}}"
@@ -6013,6 +6139,7 @@
       "rejected": "接入地址拒绝了密钥（{{status}}）",
       "noStatus": "认证失败",
       "failed": "无法连接接入地址",
+      "refused": "未测试：这个已存密钥暂时不能发往该接入地址",
       "again": "重新测试",
       "listed_one": "连接成功——接入地址列出了 {{count}} 个模型。",
       "listed_other": "连接成功——接入地址列出了 {{count}} 个模型。",

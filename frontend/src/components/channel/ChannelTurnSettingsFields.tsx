@@ -3,8 +3,8 @@
 // the tab draws (the tab owns the section cards; these are rows only):
 // `ChannelReceivingFields` — when it answers in a group and how long it waits
 // for a burst of messages to end; `ChannelReplyFields` — how a running turn shows
-// itself (the completion ping, the step lines) and when a chat starts a fresh
-// conversation; `ChannelDirectoryFields` — its working directories. Switches and
+// itself (the step lines, where the platform has a live status line) and when a
+// chat starts a fresh conversation; `ChannelDirectoryFields` — its working directories. Switches and
 // list edits save at once; typed values save a moment after typing stops, and
 // only when valid (useSettingDraft).
 //
@@ -13,9 +13,10 @@
 import { useState } from "react";
 
 import type { ChannelSettings } from "@/lib/api/channels";
-import { parseBurstWait, parseIdleHours, parseNotifyAfter } from "./channelTurnSettings";
+import { parseBurstWait, parseIdleHours } from "./channelTurnSettings";
 import {
   honoursRequireMention,
+  showsStepLines,
   storedDefaultDirectory,
   type ChannelEditValues,
 } from "@/lib/channels/editChannel";
@@ -77,11 +78,6 @@ export function ChannelReceivingFields({
 
 export function ChannelReplyFields({ settings, save }: { settings: ChannelSettings; save: Save }) {
   const [showSteps, setShowSteps] = useState(() => settings.show_steps);
-  const notifyAfter = useSettingDraft(
-    String(settings.notify_after_seconds),
-    parseNotifyAfter,
-    (v) => save({ notify_after_seconds: v }),
-  );
   const idle = useSettingDraft(
     String(settings.new_conversation_after_idle_hours),
     parseIdleHours,
@@ -90,16 +86,15 @@ export function ChannelReplyFields({ settings, save }: { settings: ChannelSettin
 
   return (
     <>
-      <EditChannelReplyFields
-        draft={{ showSteps, notifyAfter: notifyAfter.text }}
-        onChange={(patch) => {
-          if (patch.showSteps !== undefined) {
-            setShowSteps(patch.showSteps);
-            save({ show_steps: patch.showSteps });
-          }
-          if (patch.notifyAfter !== undefined) notifyAfter.change(patch.notifyAfter);
-        }}
-      />
+      {showsStepLines(settings.channel_type) && (
+        <EditChannelReplyFields
+          showSteps={showSteps}
+          onChange={(next) => {
+            setShowSteps(next);
+            save({ show_steps: next });
+          }}
+        />
+      )}
       <div onBlur={idle.flush}>
         <EditChannelIdleField value={idle.text} onChange={idle.change} />
       </div>

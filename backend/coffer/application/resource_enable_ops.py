@@ -37,7 +37,12 @@ async def set_enabled(service: ResourceService, uid: str, enabled: bool, *, acto
         return before  # idempotent — no audit, no hook
     updated = await service._repo.set_enabled(uid, enabled)
     event = AuditEventType.RESOURCE_ENABLED if enabled else AuditEventType.RESOURCE_DISABLED
-    await service._audit.record(event.value, resource=updated, actor=actor)
+    await service._audit.record(
+        event.value,
+        resource=updated,
+        actor=actor,
+        details={"from": before.enabled, "to": enabled},
+    )
     # Kind-level reconciliation, exactly as ``update_scope`` fires
     # ``on_scope_changed``: AFTER persistence + audit, and handed the row
     # carrying the flag that triggered it. Fired only on a real transition

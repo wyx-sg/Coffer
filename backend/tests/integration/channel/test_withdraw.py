@@ -298,36 +298,30 @@ async def test_the_ledger_finds_a_reply_by_any_message_and_prunes_the_old(
 
 @pytest.mark.acceptance(
     spec="channels",
-    scenario="a group turn opens no live surface on a transport that cannot stream in a group",
+    scenario="a direct-chat reply the transport cannot take back is not recorded",
 )
-async def test_a_group_turn_opens_no_live_surface_where_groups_cannot_stream(
+async def test_a_direct_reply_a_transport_cannot_withdraw_is_not_recorded(
     env: ChannelEnv,
 ) -> None:
+    # SeaTalk-shaped: it can rewrite a card for 168 hours but cannot delete, so a
+    # plain text reply in a direct chat is beyond its reach.
     adapter = FakeChannelAdapter(
-        supports_edit=True,
-        live_text_persists=True,
+        supports_edit=False,
+        supports_live_text=False,
         supports_buttons=True,
-        streams_in_groups=False,
+        withdraw_window_hours=168,
+        withdraw_removes=False,
     )
-    resource = await env.register_channel("tg")
-    env.bind(resource, adapter)
-    await env.pair(resource, "owner", sender_id=_OWNER)
-
-    await env.processor.on_message(
-        inbound("tg", _GROUP, "hello", chat_kind="group", sender_id=_OWNER)
-    )
-    await wait_until(lambda: "Hello world" in adapter.texts())
-
-    assert adapter.live_handles == []
-
-
-async def test_a_direct_turn_still_streams_on_that_transport(env: ChannelEnv) -> None:
-    adapter = FakeChannelAdapter(
-        supports_edit=True, live_text_persists=True, supports_buttons=True, streams_in_groups=False
-    )
-    resource = await env.register_channel("tg")
+    resource = await env.register_channel("st")
     env.bind(resource, adapter)
     await env.pair(resource, "owner")
 
-    await env.processor.on_message(inbound("tg", "owner", "hi"))
-    await wait_until(lambda: len(adapter.live_handles) == 1)
+    await env.processor.on_message(inbound("st", "owner", "hello"))
+    await wait_until(lambda: "Hello world" in adapter.texts())
+    await asyncio.sleep(0.05)
+    assert await _ledger(env).latest(resource.uid, "owner", None) is None
+
+    await env.processor.on_message(inbound("st", "owner", "/del"))
+
+    assert adapter.withdrawn == []
+    assert any("no reply of mine" in text for text in adapter.texts())

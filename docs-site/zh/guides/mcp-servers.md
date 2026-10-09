@@ -27,7 +27,7 @@ flowchart LR
 - 给每个上游工具和提示词加上服务器名前缀——`github__search_issues`、`filesystem__read_file`——给每个资源 URI 加上 `coffer://<server>/` 前缀，这样两个都暴露名为 `search` 的工具的服务器永远不会冲突；
 - 把每次调用以工具的原名路由回它所属的服务器，并原样返回上游的结果；
 - 转发工具、资源和提示词，包括 list-changed 通知；
-- 记录每次调用的目标、时间、耗时和结果——从不记录参数或返回内容。
+- 记录每次调用的目标、时间、耗时和结果，以及遮盖了密钥之后的参数和返回内容。
 
 ## 前提 {#prerequisites}
 
@@ -244,7 +244,7 @@ stdio 服务器的 stderr 写到它自己的文件 `~/.coffer/logs/upstream/<nam
 
 ## 调用日志 {#the-invocation-log}
 
-每次工具调用、资源读取和提示词获取都会记录时间、服务器、能力、耗时和状态——`ok`、`error`、`timeout` 或 `denied`。返回结果带 `isError` 标记的工具记为 `error`。参数和结果从不存储。条目默认保留 30 天（修改保留期见[活动与审计](/zh/guides/activity)）。
+每次工具调用、资源读取和提示词获取都会记录时间、服务器、能力、耗时和状态——`ok`、`error`、`timeout` 或 `denied`。返回结果带 `isError` 标记的工具记为 `error`。参数和返回结果也会保存，密钥的值被遮盖，每一部分在 16 KB 处截断（[调用记录了什么](/zh/guides/activity#what-a-call-records)）。条目默认保留 30 天（修改保留期见[活动与审计](/zh/guides/activity)）。
 
 **Web 界面：** 它概览里的**最近 24 小时**区块（调用和错误，按调用方智能体）、它的**服务器日志**抽屉（stdio 服务器），或覆盖所有服务器的**活动**页面（它的搜索会匹配服务器名称，所以**在活动中查看**打开时就已经在搜索了）。
 

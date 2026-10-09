@@ -417,7 +417,7 @@ async def test_media_returned_in_a_group_thread_is_uploaded_into_that_thread(
 
 # ---------------------------------------------------------------------------
 # Streaming the reply into one editable status message (supports_edit) — see
-# "Grow a reply in place on one live surface"
+# "Show a turn's progress on one live surface"
 # ---------------------------------------------------------------------------
 
 
@@ -699,93 +699,23 @@ async def test_no_interim_signal_without_a_live_text_surface_in_a_group() -> Non
 
 
 # ---------------------------------------------------------------------------
-# A transport that cannot edit but CAN stream (SeaTalk) — see "Grow a reply in
-# place on one live surface"
+# A live surface is scaffolding — see "Show a turn's progress on one live surface"
 # ---------------------------------------------------------------------------
 
 
-def _streaming_adapter(**kwargs: Any) -> FakeChannelAdapter:
-    """SeaTalk-shaped: no edit, no delete — but one message that grows in place
-    and, once finished, IS the reply."""
-    kwargs.setdefault("live_text_persists", True)
-    adapter = FakeChannelAdapter(supports_edit=False, supports_live_text=True, **kwargs)
-    adapter.live_text_finalizes = True
-    return adapter
+@pytest.mark.acceptance(spec="channels", scenario="a live surface is never the reply")
+async def test_the_live_surface_is_closed_and_the_reply_is_a_new_message() -> None:
+    adapter = FakeChannelAdapter(supports_edit=True)
 
-
-@pytest.mark.acceptance(
-    spec="channels",
-    scenario="a reply grows in place on a transport that streams but cannot edit",
-)
-async def test_streaming_transport_grows_one_message_instead_of_sending_fragments() -> None:
-    adapter = _streaming_adapter()
-
-    async def send(text: str) -> None:
-        await adapter.send_text("gid-1", text, thread_id="t1", chat_kind="group")
-
-    renderer = TurnRenderer(
-        channel="st",
-        adapter=adapter,
-        chat_id="gid-1",
-        conversation_id="c1",
-        send=send,
-        now=_ticking(),
-        thread_id="t1",
-        chat_kind="group",
-    )
-    queue: asyncio.Queue[Any] = asyncio.Queue()
-    for event in [
-        ToolCall(tool_use_id="t1", tool_name="search", tool_input={"q": "cats"}),
-        TextDelta(text="I found "),
-        TextDelta(text="three "),
-        TextDelta(text="cats."),
-        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
-    ]:
-        queue.put_nowait(event)
-    queue.put_nowait(None)
-    await renderer.consume(queue)
+    await _render(adapter, _TOOL_TURN, now=_ticking())
 
     [live] = adapter.live_handles
-    # The tool line opens the surface, then every later snapshot carries the FULL
-    # accumulated reply — the platform re-renders the latest text, never a delta.
-    # The surface opens the moment the turn starts, with the acknowledgement —
-    # the reply grows out of that same message.
-    assert _is_status(live.snapshots[0]) and _RULE not in live.snapshots[0]
-    assert live.snapshots[1].endswith("⏳ search")
-    assert [_answer(s) for s in live.snapshots[2:]] == [
-        "I found",
-        "I found three",
-        "I found three cats.",
-    ]
-    assert live.closed and live.final == "I found three cats."
-    # Exactly ONE message reached the chat (the stream's own), routed into the
-    # originating group thread — no fragments, and no duplicate final send.
-    # The ONE message the turn ever posts is the stream's opening one — the
-    # acknowledgement — which every later snapshot rewrites in place.
-    assert adapter.sent == [("gid-1", live.snapshots[0])]
-    assert adapter.sent_routed == [("gid-1", live.snapshots[0], "t1", "group")]
-    assert adapter.edits == [] and adapter.deleted == []  # it can do neither
-
-
-async def test_streaming_transport_delivers_an_interrupted_reply_in_place() -> None:
-    # The stream is the message: an abnormal ending still closes it with the
-    # final body, and no separate summary follows.
-    adapter = _streaming_adapter()
-
-    await _render(
-        adapter,
-        [
-            TextDelta(text="partial"),
-            TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="interrupted"),
-        ],
-        now=_ticking(),
-    )
-
-    [live] = adapter.live_handles
-    assert live.final.startswith("partial\n\n⏹ Stopped after ")
-    texts = adapter.texts()
-    assert _is_status(texts[0])  # opened at once, then grown
-    assert len(texts) == 1  # no separate summary follows it
+    assert live.closed
+    # The surface's message was deleted, and the answer went out after it as a
+    # message of its own — the one that notifies.
+    assert adapter.deleted == [("owner", live.message_id)]
+    assert adapter.texts()[-1] == "found 3 cats"
+    assert len(adapter.texts()) == 2  # the scaffolding, then the reply
 
 
 async def test_a_transport_that_refuses_a_live_surface_is_asked_once_and_degrades() -> None:
@@ -802,29 +732,12 @@ async def test_a_transport_that_refuses_a_live_surface_is_asked_once_and_degrade
     assert adapter.edits == [] and adapter.deleted == []
 
 
-async def test_a_persisting_surface_acknowledges_before_the_turn_produces_anything() -> None:
-    """The wait between a message and an answer is all the user sees otherwise,
-    and on a long turn it reads as the bot having missed them. Where the surface
-    BECOMES the reply, opening it at once costs nothing: the acknowledgement is
-    the same message the answer grows out of, never a second one."""
-    adapter = _streaming_adapter()
-
-    await _render(adapter, [TextDelta(text="the answer")], now=_ticking())
-
-    [live] = adapter.live_handles
-    assert _is_status(live.snapshots[0])  # opened straight into the status header
-    assert live.final == "the answer"  # replaced in place by the reply
-    # The stream's opening message is the ONLY message: the reply is that same
-    # one, grown — never an acknowledgement followed by a second answer.
-    assert adapter.texts() == [live.snapshots[0]]
-
-
 async def test_a_scaffolding_surface_is_not_opened_before_there_is_something_to_show() -> None:
     """Telegram's live surface is a status message the renderer DELETES before
     sending the real reply. Opening it to acknowledge would post something only
     to take it away again, so no acknowledgement is offered there — its 👀
     receipt reaction already says the message was heard."""
-    adapter = FakeChannelAdapter(supports_edit=True)  # live_text_persists stays False
+    adapter = FakeChannelAdapter(supports_edit=True)
 
     # A clock that never advances: the reply lands well inside the window below
     # which a scaffolding surface is not worth opening.
@@ -966,49 +879,14 @@ async def test_a_sender_with_no_mention_id_gets_a_clean_reply() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="channels",
-    scenario="a streamed group reply is created already mentioning the asker",
+    spec="channels", scenario="a live surface carries no mention and the reply does"
 )
-async def test_the_mention_is_in_the_message_the_stream_is_created_as() -> None:
-    """A platform decides @ notifications when the message is CREATED. The
-    mention used to go on the finished snapshot alone, which RENDERED as a name
-    (the tag is in the content the client shows) while notifying nobody —
-    observed live. So the very first snapshot, the one that posts the message,
-    carries it; and every snapshot after it does too, or the mention would appear
-    at creation, vanish for the whole stream, and come back at the end."""
-    adapter = _streaming_adapter(mention_template=_MENTION)
-
-    await _group_reply(
-        adapter,
-        mention_user_id="st-77",
-        events=[
-            TextDelta(text="I found "),
-            TextDelta(text="three "),
-            TextDelta(text="cats."),
-            TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
-        ],
-    )
-
-    tag = '<mention-tag target="seatalk://user?id=st-77"/>'
-    [live] = adapter.live_handles
-    # The snapshot that CREATES the message — the acknowledgement — is mentioned.
-    assert live.snapshots[0].startswith(f"{tag} ⏳ Working")
-    # …as is every interim one after it, and the body that closes the stream.
-    assert live.snapshots and all(s.startswith(tag) for s in live.snapshots)
-    assert live.final == f"{tag} I found three cats."
-    # Exactly once each: no path prefixes a snapshot that is already prefixed.
-    assert all(s.count("mention-tag") == 1 for s in [*live.snapshots, live.final])
-    # The stream IS the reply, so nothing is sent a second time.
-    assert adapter.texts() == [live.snapshots[0]]
-
-
 async def test_a_scaffolding_surface_carries_no_mention_and_the_reply_one() -> None:
-    """The mention rides on every snapshot only where the surface PERSISTS as the
-    reply (the platform decides @ notifications at creation). A scaffolding
-    surface is deleted before the answer is sent, so its snapshots stay plain —
-    a mention there would render as raw markup — and the reply that closes it
-    carries the mention exactly once."""
-    adapter = _streaming_adapter(mention_template=_MENTION, live_text_persists=False)
+    """A platform decides @ notifications when a message is created, and the
+    reply is always a new message, so it carries the mention. The live surface
+    is scaffolding deleted before the answer is sent, so its snapshots stay
+    plain — a mention there would only render as raw markup."""
+    adapter = FakeChannelAdapter(supports_edit=True, mention_template=_MENTION)
 
     await _group_reply(
         adapter,
@@ -1025,6 +903,8 @@ async def test_a_scaffolding_surface_carries_no_mention_and_the_reply_one() -> N
     assert live.snapshots  # the lazy open really happened
     assert all(s.count("mention-tag") == 0 for s in live.snapshots)
     assert live.final.count("mention-tag") == 1
+    assert adapter.texts()[-1].startswith('<mention-tag target="seatalk://user?id=st-77"/> ')
+    assert adapter.texts()[-1].count("mention-tag") == 1
 
 
 @pytest.mark.acceptance(

@@ -177,6 +177,32 @@ def test_an_absolute_path_names_the_command_and_stays_on_this_machine(
     assert json.loads(local) == {"tool": "/fake/bin/tool"}
 
 
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="a path command's login check starts with its file name"
+)
+def test_a_path_commands_login_check_starts_with_its_file_name(daemon: CliDaemon) -> None:
+    # A command given as a path is registered under its file name; the login
+    # check starts with that name, and a refusal names the field and the name.
+    daemon.probe.commands["tool"] = FakeCommand("1.0")  # type: ignore[attr-defined]
+    refused = daemon.client.post(
+        "/clis", json={"command": "/fake/bin/tool", "login_check": "/fake/bin/tool auth status"}
+    )
+    assert refused.status_code == 400, refused.text
+    error = refused.json()["error"]
+    assert error["code"] == "CLI_TOOL_INVALID"
+    assert error["details"] == {
+        "reason": "login_check_command",
+        "field": "login_check",
+        "command": "tool",
+    }
+    assert daemon.client.get("/clis").json()["items"] == []
+    added = daemon.client.post(
+        "/clis", json={"command": "/fake/bin/tool", "login_check": "tool auth status"}
+    )
+    assert added.status_code == 201, added.text
+    assert added.json()["login"]["check"] == ["tool", "auth", "status"]
+
+
 @pytest.mark.acceptance(spec="skill-manager", scenario="add, edit and remove a tool over REST")
 def test_a_tool_is_added_edited_and_removed(daemon: CliDaemon) -> None:
     added = daemon.client.post("/clis", json={"command": "jq", "title": "JSON"})

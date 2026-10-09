@@ -5,6 +5,9 @@
 **Deciders**: Yuxing Wu
 **Related**: [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Coffer Ships Its Own Skill](coffer-ships-its-own-skill.md), [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md), [Kind Plugin Contract](kind-plugin-contract.md), [Aggregate Agent Memory, Never Write It](aggregate-agent-memory-never-write-it.md), spec vault-sync, spec memory, spec knowledge, PR #405
 
+
+**Partly superseded** (2026-10-09): memory is no longer derived output: the memory hub lives in the vault and syncs, see [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md).
+
 ## Context
 
 Some of what Coffer holds is not authored by anyone; each machine

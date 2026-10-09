@@ -29,7 +29,9 @@ import uvicorn
 
 from coffer.application.runtime.supervisor import spawn
 from coffer.domain.agent.descriptor import AGENT_DESCRIPTORS
-from coffer.infrastructure.daemon import bootstrap, login_service, self_restart
+from coffer.infrastructure.daemon import bootstrap, data_purge, login_service, self_restart
+from coffer.infrastructure.daemon.force_stop import stop_daemon_process
+from coffer.infrastructure.daemon.orphan_sweep import serves_our_vault
 from coffer.infrastructure.daemon.phase import set_daemon_phase
 from coffer.infrastructure.daemon.port_alloc import PortInUse
 from coffer.infrastructure.daemon.unpack_keepalive import keep_unpack_dir_alive
@@ -163,6 +165,39 @@ async def _evict_when_superseded(
         return
 
 
+#: A test harness's leash: the pid whose exit this daemon follows. Set only by
+#: test runners (the e2e daemon script, tests that start a shim), never by a
+#: user-facing surface. A daemon never idles out, so a test daemon whose runner
+#: was killed before its teardown ran would otherwise live for good.
+EXIT_WITH_PID_ENV = "COFFER_DAEMON_EXIT_WITH_PID"
+_EXIT_WITH_CHECK_INTERVAL = 2.0
+
+
+def _exit_with_pid(environ: MutableMapping[str, str]) -> int | None:
+    """The pid named by :data:`EXIT_WITH_PID_ENV`, removed from ``environ`` so
+    nothing the daemon spawns inherits it; ``None`` when unset or malformed."""
+    raw = environ.pop(EXIT_WITH_PID_ENV, None)
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        _logger.warning("ignoring malformed %s=%r", EXIT_WITH_PID_ENV, raw)
+        return None
+
+
+async def _exit_with(
+    server: uvicorn.Server, pid: int, *, interval: float = _EXIT_WITH_CHECK_INTERVAL
+) -> None:
+    """Shut down once ``pid`` — the test runner that started us — has exited."""
+    while True:
+        await asyncio.sleep(interval)
+        if self_restart.process_is_gone(pid):
+            _logger.warning("daemon leash pid=%s exited; shutting down", pid)
+            server.should_exit = True
+            return
+
+
 # How long the daemon keeps answering ``/daemon/status`` as ``draining`` once
 # shutdown has begun, before uvicorn closes its listener. Long enough for a
 # poller (the app's footer, a restart's successor) to see the phase; short
@@ -185,7 +220,9 @@ class _DaemonServer(uvicorn.Server):
         await super().shutdown(sockets)
 
 
-def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
+def _run_server(
+    sock: socket.socket, on_started: Callable[[], None], *, exit_with: int | None = None
+) -> None:
     """Serve the app on the pre-bound loopback fd; call ``on_started`` once the
     server is actually serving HTTP (uvicorn ``Server.started``).
 
@@ -229,12 +266,15 @@ def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
         # daemon.json from us, so the watcher starts here rather than at boot.
         evictor = spawn(_evict_when_superseded(server), name="daemon-orphan-evictor")
         keepalive = spawn(keep_unpack_dir_alive(), name="daemon-unpack-keepalive")
+        watchers = [evictor, keepalive]
+        if exit_with is not None:
+            watchers.append(spawn(_exit_with(server, exit_with), name="daemon-exit-with"))
         try:
             await serve_task
         finally:
-            for task in (evictor, keepalive):
+            for task in watchers:
                 task.cancel()
-            for task in (evictor, keepalive):
+            for task in watchers:
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
 
@@ -267,10 +307,18 @@ def main() -> None:
     # First, before anything can spawn an agent process that inherits them.
     scrub_agent_home_env(os.environ)
     _raise_fd_soft_limit()
+    exit_with = _exit_with_pid(os.environ)
     _install_signal_handlers()
     # A restart the daemon asked for itself: the predecessor that spawned us
     # must be gone before we take the lock and bind its port (self_restart).
-    self_restart.await_predecessor(os.environ)
+    # One that never exits is forced out: the restart was asked for, and a
+    # wedged predecessor would keep the port (spec daemon "Force out a wedged
+    # daemon on an explicit restart"). It already signalled itself, and the
+    # wait above was its grace.
+    self_restart.await_predecessor(
+        os.environ,
+        on_timeout=lambda pid: stop_daemon_process(pid, grace=0, already_signalled=True),
+    )
     # Detect-or-spawn: probe + bind happen under one flock (acquire_or_existing). If a
     # daemon is already reachable, sock is None and we exit cleanly so the
     # auto-spawn caller (CLI/shim) discovers it; otherwise we hold the bound
@@ -279,7 +327,24 @@ def main() -> None:
     # can't bind a second port during the boot window and orphan a daemon.
     try:
         info, sock, release_lock = bootstrap.acquire_or_existing()
+    except bootstrap.SpawnLockBusy as exc:
+        # Another start holds the lock and is not finishing. Queueing behind it
+        # would only add one more idle process; that start owns this vault's
+        # boot, so this one is a duplicate and leaves cleanly (exit 0, which a
+        # login service does not restart).
+        _logger.warning("daemon start abandoned: %s", exc)
+        return
     except PortInUse as exc:
+        if exc.holder is not None and serves_our_vault(exc.holder.pid):
+            # Our own vault's daemon holds the port but missed the liveness
+            # probe — busy, not absent. This start is the duplicate: exit 0, so
+            # a login service does not restart it every few seconds.
+            _logger.warning(
+                "daemon already running but busy (pid=%s holds port %s); exiting",
+                exc.holder.pid,
+                exc.port,
+            )
+            return
         # The user fixed this port precisely so it would not move, so there is
         # nothing sensible to fall back to. Say what holds it and stop. stderr
         # is the daemon log when we were spawned detached, and the terminal
@@ -288,7 +353,10 @@ def main() -> None:
         print(str(exc), file=sys.stderr)
         raise SystemExit(2) from None
     if sock is None:
-        _logger.info(
+        # WARNING, not INFO: logging is not configured yet, and only WARNING
+        # and above reach the daemon log here. Every duplicate start a client
+        # or launchd made should leave this line behind.
+        _logger.warning(
             "daemon already running (pid=%s, port=%s); exiting",
             info.pid,
             info.port,
@@ -300,7 +368,7 @@ def main() -> None:
     # That also removes the old EADDRINUSE retry loop entirely — we own the
     # socket, so uvicorn cannot fail to bind it.
     try:
-        _run_server(sock, release_lock)
+        _run_server(sock, release_lock, exit_with=exit_with)
     finally:
         # Single release site (normal shutdown / uvicorn return); the SIGTERM
         # handler covers signalled termination. release_lock is idempotent, so
@@ -308,6 +376,9 @@ def main() -> None:
         release_lock()
         bootstrap.release()
         sock.close()
+        # Once nothing serves, because it deletes ~/.coffer: the data an
+        # uninstall asked to delete (spec daemon "Uninstall Coffer from this machine").
+        data_purge.purge_if_requested()
         # Last, because it ends this process: a login service uninstalled while
         # this daemon was the launchd job is booted out now that it is leaving.
         login_service.release_job_if_uninstalled()

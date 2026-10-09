@@ -199,7 +199,7 @@ The gates are request-time:
 
 - Every router whose prefix falls under a feature's prefix is mounted with a feature-gate dependency that checks the feature's state. The routes stay registered, so the OpenAPI document never changes with the switch, and a switch takes effect on the next request.
 - The kind-agnostic `/api/v1/resources` routes refuse a resource whose kind a switched-off feature owns, and leave such resources out of lists.
-- The MCP gateway's one builtin tool, `coffer__search_tools`, belongs to no feature, so switching a feature on or off never changes the tool list.
+- The MCP gateway's builtin tools — `coffer__search_tools`, and inside a Coffer turn `coffer__ask` and `coffer__channel_read_thread` — belong to no feature, so switching a feature on or off never changes the tool list.
 - CLI commands reach the daemon over the gated routes and print the daemon's one line naming **Settings › Features** as where to switch it on, then exit 1.
 - Background passes owned by the feature skip their rounds: the knowledge sweep while `knowledge` is off, and distil and aggregate while `memory` is off.
 - Whatever a feature put in front of agents is withdrawn and returns on switch-on: the memory delivery hook and the memory root named in the guide (`memory`), and the knowledge sections of the `coffer-guide` skill (`knowledge`).
@@ -240,6 +240,10 @@ sequenceDiagram
 ```
 
 The updater (Tauri's updater plugin) runs in the shell's Rust process; the webview has none of its permissions and its content policy stays loopback-only. The shell checks the manifest named as the updater endpoint in its Tauri configuration and verifies each archive against the public key it was compiled with. The updater also requires the signed version to match, rejecting an archive signed for a different version than the manifest names, so an altered manifest cannot pair a new version number with an older release. A build compiled without a key never checks. After installing, the shell relaunches with a marker in its environment, and the relaunched shell's first handshake replaces the previous version's daemon through the same restart the menu bar uses. See [Desktop app → Update](/guides/desktop-app#update).
+
+### How the installer's binaries update
+
+A daemon started from `~/.coffer/bin` (the one-line installer or the release archive) has no shell to update it. It reads `releases/latest` from the GitHub API a minute after it starts and once a day after that, unless `update_check` is off or `COFFER_UPDATE_CHECK=off`, and reports a newer version on **Settings › About** and `GET /api/v1/daemon/upgrade`. It never installs anything. `coffer update` does, with the same steps as `install.sh`: it downloads `coffer-cli-<triple>.tar.gz` and `SHA256SUMS`, refuses an archive whose SHA-256 is not the one listed, extracts it, puts each binary over its public name in `~/.coffer/bin` by a temporary sibling and a rename, and restarts the daemon from there. The new daemon deploys itself into its versioned directory on start, as any frozen start does. The checksum file comes from the same release as the archive, so this guards against a damaged download, not a compromised release; the desktop app's signed feed is what guards against that.
 
 ### An unsigned release
 

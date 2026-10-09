@@ -24,11 +24,13 @@ Exactly one daemon runs per vault. If two surfaces race to start one, a lock on 
 ```sh
 coffer daemon start      # spawn it in the background, if none is running
 coffer daemon status     # ask the running daemon how it is; never starts one
-coffer daemon stop       # SIGTERM, then wait for it to exit
-coffer daemon restart    # stop (if running), then start
+coffer daemon stop       # SIGTERM, then wait up to 15 s for it to exit
+coffer daemon restart    # stop (if running, by force if it will not), then start
 ```
 
 In the web UI, **Settings → Daemon → Restart** restarts it from a browser too: the daemon starts its successor, which waits for it to exit before binding the port, then exits itself, and the page reloads from the new daemon (which has a new token). The desktop app's Restart stops and starts the daemon from outside instead. `coffer daemon restart` keeps doing it from outside, so it also works on a daemon that no longer answers.
+
+Every restart replaces a daemon that is stuck. A daemon that does not exit within its grace period, or does not answer at all, is killed before its replacement starts, so a wedged daemon cannot keep the port and leave the new one refusing beside it. Only a process that is provably this vault's Coffer daemon is ever killed, and only when you ask for a restart: a command or an agent that starts the daemon on its own never kills one.
 
 `coffer daemon status` prints what the daemon reports about itself:
 
@@ -47,8 +49,20 @@ A few behaviours worth knowing:
 
 - `start` decides "already running" by asking the daemon, not by checking whether `daemon.json` exists. A discovery file left behind by a crash never blocks a start. `start` reports success only once the new daemon answers its status call; if the daemon refuses to start (a vault migration is required, git is too old) it says so and points at `daemon.log`.
 - `start` checks the port before spawning. If something else holds it, you get the diagnosis at once instead of a ten-second timeout (see [When the port is taken](#when-the-port-is-taken)).
-- `stop` checks that the recorded pid really is a Coffer daemon before signalling it. If the pid has been recycled onto another process, `stop` removes the stale `daemon.json` and says so instead of killing a stranger.
+- `stop` checks that the recorded pid really is a Coffer daemon before signalling it. If the pid has been recycled onto another process, `stop` removes the stale `daemon.json` and says so instead of killing a stranger. A daemon that has not exited after 15 seconds is reported, not killed; `restart` is the command that replaces it.
+- `status` also lists any other daemon process serving this vault (`other daemon processes for this vault: …`, `other_daemon_pids` under `--json`): a start still booting, or a stray. One daemon serves a vault, so this line is normally absent.
 - `restart` is how a setting read before the daemon binds (the port) takes effect.
+
+### Why several Coffer processes run
+
+One daemon per vault does not mean one process. In Activity Monitor or `ps` you will normally see:
+
+- two `coffer-daemon` processes for the daemon itself: the installed binary is a single file that unpacks itself, so a small launcher process stays as the parent of the real one;
+- another `coffer-daemon` pair running `proxy`, the [local model proxy](/architecture/model-proxy);
+- a `coffer-mcp-shim` pair for every agent session that is connected to Coffer, ending when that session ends;
+- a `coffer-seatalk-bridge` pair while a SeaTalk channel runs.
+
+`coffer daemon status` names any daemon beyond these. A start that cannot finish gives up after two minutes on its own, and a start that finds the daemon busy leaves without starting a second one.
 
 To open the UI the daemon serves, browse to `http://127.0.0.1:<port>`; the port is in `~/.coffer/daemon.json` (38470 by default). The [desktop app](/guides/desktop-app) opens it for you.
 
@@ -158,6 +172,8 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.1 (/Users/you/.coffe
 ```
 
 Run `coffer daemon restart` and the warning goes away. The desktop app shows the same situation as a **Daemon out of date** notice with a **Restart daemon** button.
+
+To install a new version: the desktop app updates itself, and `coffer update` upgrades the installer's binaries and restarts the daemon on them. See [Install → Upgrade](/start/install#upgrade). `coffer uninstall` removes Coffer and keeps `~/.coffer`; see [Install → Uninstall](/start/install#uninstall).
 
 To roll back to the previous build:
 

@@ -152,7 +152,7 @@ export function useReconnectChannel(uid: string) {
  * button). Each call PATCHes the whole config, so calls are queued and each
  * plans from the config the previous one wrote — two fields saved a moment
  * apart must not each PATCH back the config from before the other. A failure
- * is toasted; the field keeps what was typed.
+ * is toasted; the field keeps what was typed. Resolves to whether it landed.
  */
 export function useChannelAutoSave(channel: ResourceOut) {
   const qc = useQueryClient();
@@ -168,9 +168,9 @@ export function useChannelAutoSave(channel: ResourceOut) {
   }, [channel.config]);
 
   const save = useCallback(
-    (values: Partial<ChannelEditValues>) => {
+    (values: Partial<ChannelEditValues>): Promise<boolean> => {
       pending.current += 1;
-      queue.current = queue.current.then(async () => {
+      const run = queue.current.then(async (): Promise<boolean> => {
         const config = latest.current;
         const agent = typeof config.default_agent === "string" ? config.default_agent : "";
         const plan = planChannelEdit({
@@ -188,13 +188,16 @@ export function useChannelAutoSave(channel: ResourceOut) {
           void qc.invalidateQueries({ queryKey: resourcesKey });
           void qc.invalidateQueries({ queryKey: channelStatusKey(channel.uid) });
           void qc.invalidateQueries({ queryKey: pendingApprovalsKey });
+          return true;
         } catch (error) {
           toast.error(translateApiError(t, error));
+          return false;
         } finally {
           pending.current -= 1;
         }
       });
-      return queue.current;
+      queue.current = run.then(() => undefined);
+      return run;
     },
     [channel.uid, channel.name, qc, t, toast],
   );
@@ -227,10 +230,8 @@ export function useUpdateChannel() {
   });
 }
 
-/** What a rebind needs: the channel's CURRENT config (so the PATCH preserves
- *  every secret ref and platform field beside the binding) and the machine
- *  it should run on. */
-/** @ui-only mutation arguments; never crosses the wire. */
+/** @ui-only What a rebind needs: the channel's CURRENT config (so the PATCH
+ *  keeps every ref and platform field) and the machine it should run on. */
 export interface ChannelRebind {
   config: Record<string, unknown>;
   runsOn: string;

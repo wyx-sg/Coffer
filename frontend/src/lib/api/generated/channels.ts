@@ -351,8 +351,18 @@ export interface components {
             default_agent_config: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Direct System Prompt
+             * @default
+             */
+            direct_system_prompt: string;
             /** Directories */
             directories: string[];
+            /**
+             * Group System Prompt
+             * @default
+             */
+            group_system_prompt: string;
             /**
              * Ignore Other Mentions
              * @default false
@@ -363,11 +373,6 @@ export interface components {
              * @default 24
              */
             new_conversation_after_idle_hours: number;
-            /**
-             * Notify After Seconds
-             * @default 90
-             */
-            notify_after_seconds: number;
             /**
              * Require Mention
              * @default true
@@ -423,8 +428,18 @@ export interface components {
             default_agent_config: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Direct System Prompt
+             * @default
+             */
+            direct_system_prompt: string;
             /** Directories */
             directories: string[];
+            /**
+             * Group System Prompt
+             * @default
+             */
+            group_system_prompt: string;
             /**
              * Ignore Other Mentions
              * @default false
@@ -435,11 +450,6 @@ export interface components {
              * @default 24
              */
             new_conversation_after_idle_hours: number;
-            /**
-             * Notify After Seconds
-             * @default 90
-             */
-            notify_after_seconds: number;
             /**
              * Require Mention
              * @default true

@@ -24,6 +24,7 @@ from coffer.domain.channel.envelopes import (
     SentMessage,
 )
 from coffer.domain.channel.rich_content import ForwardedItem
+from coffer.domain.channel.thread_messages import ThreadMessage, ThreadRead
 from coffer.domain.resource import Resource
 from coffer.domain.scope import Scope
 
@@ -50,18 +51,17 @@ class AdapterCallbacks:
 
 
 class LiveText(Protocol):
-    """A surface the core can keep updating while a turn runs (see "Grow a reply in
-    place on one live surface").
+    """A surface the core can keep updating while a turn runs (see "Show a turn's
+    progress on one live surface").
 
-    One handle == one message that grows in place. ``text`` is ALWAYS the full
-    accumulated snapshot, never a delta: the transport underneath may render
-    the latest snapshot (SeaTalk streaming) or rewrite the message with it
-    (Telegram edit), and neither can reconstruct a text from fragments.
+    One handle == one preview of the turn's progress. ``text`` is ALWAYS the full
+    accumulated snapshot, never a delta: the transport underneath shows the
+    latest snapshot (a Telegram draft) or rewrites a message with it (a Telegram
+    edit), and neither can reconstruct a text from fragments.
 
-    The handle is terminal after ``close``: a finished/failed surface is never
-    reused (a SeaTalk stream id that ended is rejected by the platform), and a
-    handle that gave up simply hands its text back so the ordinary send path
-    delivers the reply.
+    The surface is scaffolding, never the reply, and the handle is terminal after
+    ``close``: a finished/failed surface is never reused, and a handle that gave
+    up simply hands its text back so the ordinary send path delivers the reply.
     """
 
     async def update(self, text: str) -> None:
@@ -77,10 +77,9 @@ class LiveText(Protocol):
         caller must STILL send through the ordinary send path ("" when the
         surface delivered all of it).
 
-        Telegram returns ``text`` unchanged — its status message is deleted and
-        the final reply is sent rendered and chunked. SeaTalk finishes its
-        stream with the text (that streamed message IS the reply) and returns
-        only the overflow past the platform's per-stream budget."""
+        Telegram returns ``text`` unchanged — its status message is deleted (a
+        draft simply expires) and the final reply is sent rendered and chunked as
+        a new message."""
         ...
 
 
@@ -136,11 +135,11 @@ class ChannelAdapter(Protocol):
     async def open_live_text(
         self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
     ) -> LiveText | None:
-        """Open a surface the core can keep updating for this turn (see "Grow a reply in
-        place on one live surface"), or ``None`` when this transport has none — the
-        caller then falls back to sending the finished reply. Only called when the
-        transport declares ``capabilities.supports_live_text``; the mechanism (edit vs
-        streaming) is the adapter's business."""
+        """Open a surface the core can keep updating for this turn (see "Show a turn's
+        progress on one live surface"), or ``None`` when this transport has none — the
+        caller then sends only the finished reply. Only called when the transport
+        declares ``capabilities.supports_live_text``; the mechanism (an edited message,
+        a draft) is the adapter's business."""
         ...
 
     async def update_card(
@@ -255,8 +254,6 @@ class ChannelBinding:
     wait_after_forward_seconds: float = 5.0
     # "Show a turn's working state as one status line": list the step lines.
     show_steps: bool = True
-    # "Ping the asker when a long turn ends": the threshold in seconds, 0 = off.
-    notify_after_seconds: float = 90.0
     # "Open a new conversation after an idle period": a chat idle longer than this
     # many hours opens a new conversation on its next message; 0 never does.
     new_conversation_after_idle_hours: float = 24.0
@@ -308,20 +305,24 @@ class ContextFetchPort(Protocol):
 
     Threads are no longer a group-@mention-only affair — SeaTalk exposes a DM
     thread endpoint too (``single_chat/get_thread_by_thread_id``, app v3.62.1+),
-    so a DM thread fetches its own context exactly like a group one; ``chat_kind``
-    is what picks the endpoint. Group-MAIN chatter is still never fetched
-    (reading a whole group is undesirable — the group-chat-history permission is
-    intentionally not granted). Platforms without a history-fetch API (Telegram's
-    Bot API) satisfy this by always returning ``([], ())``."""
+    so a DM thread is read exactly like a group one; ``chat_kind`` is what picks
+    the endpoint. Group-MAIN chatter is still never fetched (reading a whole
+    group is undesirable — the group-chat-history permission is intentionally
+    not granted). Platforms without a history-fetch API (Telegram's Bot API)
+    satisfy this with empty reads."""
 
     async def fetch_thread(
-        self, chat_id: str, thread_id: str, *, limit: int = 100, chat_kind: str = "group"
-    ) -> FetchedContext:
-        """Return EVERY message of the thread (all pages; ``limit`` is the page
-        size) with the images/files they carry (see "Download the media a thread's
-        messages carry"), so an in-thread @mention reaches the turn with the whole
-        conversation and the real pictures, not dead file links. Degrades to
-        ``([], ())`` on any error."""
+        self, chat_id: str, thread_id: str, *, chat_kind: str = "group"
+    ) -> ThreadRead:
+        """Every message of the thread the platform returns (all pages), oldest
+        first, with NO media downloaded: the core picks which messages reach a
+        turn or a tool result and downloads only theirs. A failed read is
+        ``ThreadRead(failed=True)``, never an exception."""
+        ...
+
+    async def fetch_message_media(self, message: ThreadMessage) -> tuple[InboundAttachment, ...]:
+        """Download the images/files ``message`` carries (see "Download the media
+        a thread's messages carry"). A failed download is skipped, never raised."""
         ...
 
     async def fetch_quoted(self, message_id: str) -> FetchedContext:

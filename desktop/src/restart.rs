@@ -29,7 +29,9 @@ pub fn restart_rate_limit_refusal(
         .as_secs()
         .saturating_sub(elapsed.as_secs())
         .max(1);
-    Some(format!("restart_daemon: rate-limited; retry in {remaining}s"))
+    Some(format!(
+        "restart_daemon: rate-limited; retry in {remaining}s"
+    ))
 }
 
 /// Record a restart attempt's outcome against the rate-limit window.
@@ -52,37 +54,49 @@ pub fn record_restart_outcome<T, E>(
 /// The stop half of a restart, over injected probes so both the ORDER of the
 /// steps and the refusal to continue are unit-testable without a real daemon.
 ///
-/// `Ok(Some(port))` — a responsive daemon was asked to shut down and the port
-/// was observed free. `Ok(None)` — nothing responsive to stop, so the caller
-/// goes straight to spawning. `Err` — a responsive daemon was asked to stop
-/// and the port never freed; the caller propagates that instead of spawning a
-/// replacement that could not bind (see "Restart by stopping the running daemon
-/// first").
-pub fn stop_running_daemon<R, P, S, F>(
+/// `Ok(Some(port))` — the daemon on `port` is gone: it shut down when asked,
+/// or it was forced out. `Ok(None)` — nothing was there to stop, so the caller
+/// goes straight to spawning. `Err` — the port could not be freed; the caller
+/// propagates that instead of spawning a replacement that could not bind (see
+/// "Restart by stopping the running daemon first").
+///
+/// `force_stop` is the escalation for a wedged daemon — one that does not
+/// answer, or answered the shutdown request but kept its port. A restart is
+/// the user asking for the daemon to be replaced, so the wedged one is ended
+/// rather than left holding the port (spec daemon "Force out a wedged daemon
+/// on an explicit restart"). It returns `Ok(true)` when it ended a daemon and
+/// the port is free, `Ok(false)` when daemon.json names no live Coffer daemon
+/// (a stale file), and `Err` when it could not free the port.
+pub fn stop_running_daemon<R, P, S, F, K>(
     read_info: R,
     responds: P,
     shutdown: S,
     port_free: F,
+    force_stop: K,
 ) -> Result<Option<u16>, String>
 where
     R: FnOnce() -> Option<(u16, String)>,
     P: FnOnce(u16) -> bool,
     S: FnOnce(u16, &str) -> Result<(), String>,
     F: FnOnce(u16) -> bool,
+    K: FnOnce(u16) -> Result<bool, String>,
 {
     let Some((port, token)) = read_info() else {
         return Ok(None);
     };
     if !responds(port) {
-        return Ok(None);
+        return Ok(force_stop(port)?.then_some(port));
     }
     shutdown(port, &token)?;
-    if !port_free(port) {
-        return Err(format!(
-            "daemon on port {port} did not stop within 8s of the shutdown request"
-        ));
+    if port_free(port) {
+        return Ok(Some(port));
     }
-    Ok(Some(port))
+    match force_stop(port)? {
+        true => Ok(Some(port)),
+        false => Err(format!(
+            "daemon on port {port} did not stop within 8s of the shutdown request"
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -201,6 +215,10 @@ mod tests {
                 assert_eq!(port, 38470);
                 true
             },
+            |_| {
+                calls.note("force_stop");
+                Ok(true)
+            },
         );
 
         assert_eq!(stopped, Ok(Some(38470)));
@@ -217,6 +235,7 @@ mod tests {
             |_| true,
             |_, _| Ok(()),
             |_| false,
+            |_| Err("daemon on port 38470 did not stop even when killed".to_string()),
         )
         .unwrap_err();
         assert!(err.contains("38470"), "{err}");
@@ -233,6 +252,10 @@ mod tests {
             |_| {
                 calls.note("port_free");
                 true
+            },
+            |_| {
+                calls.note("force_stop");
+                Ok(true)
             },
         )
         .unwrap_err();
@@ -257,15 +280,19 @@ mod tests {
                 Ok(())
             },
             |_| true,
+            |_| {
+                calls.note("force_stop");
+                Ok(true)
+            },
         );
         assert_eq!(stopped, Ok(None));
         assert!(calls.seen().is_empty());
     }
 
     #[test]
-    fn a_recorded_but_unresponsive_daemon_is_not_asked_to_shut_down() {
-        // daemon.json outlived its daemon: there is nothing listening to take
-        // a shutdown request, so we go straight to spawning.
+    fn a_stale_discovery_file_with_no_daemon_behind_it_goes_straight_to_spawning() {
+        // daemon.json outlived its daemon: nothing is listening to take a
+        // shutdown request and no daemon process is left to end.
         let calls = StopCalls::default();
         let stopped = stop_running_daemon(
             || Some((38470, "tok".to_string())),
@@ -275,8 +302,58 @@ mod tests {
                 Ok(())
             },
             |_| true,
+            |_| {
+                calls.note("force_stop");
+                Ok(false)
+            },
         );
         assert_eq!(stopped, Ok(None));
-        assert!(calls.seen().is_empty());
+        assert_eq!(calls.seen(), vec!["force_stop"]);
+    }
+
+    // acceptance(spec = "desktop-app", scenario = "a restart forces out a daemon that will not stop")
+    #[test]
+    fn an_unresponsive_daemon_is_forced_out_without_a_shutdown_request() {
+        let calls = StopCalls::default();
+        let stopped = stop_running_daemon(
+            || Some((38470, "tok".to_string())),
+            |_| false,
+            |_, _| {
+                calls.note("shutdown");
+                Ok(())
+            },
+            |_| true,
+            |port| {
+                calls.note("force_stop");
+                assert_eq!(port, 38470);
+                Ok(true)
+            },
+        );
+        assert_eq!(stopped, Ok(Some(38470)));
+        assert_eq!(calls.seen(), vec!["force_stop"]);
+    }
+
+    // acceptance(spec = "desktop-app", scenario = "a restart forces out a daemon that will not stop")
+    #[test]
+    fn a_daemon_that_keeps_its_port_after_shutdown_is_forced_out() {
+        let calls = StopCalls::default();
+        let stopped = stop_running_daemon(
+            || Some((38470, "tok".to_string())),
+            |_| true,
+            |_, _| {
+                calls.note("shutdown");
+                Ok(())
+            },
+            |_| {
+                calls.note("port_free");
+                false
+            },
+            |_| {
+                calls.note("force_stop");
+                Ok(true)
+            },
+        );
+        assert_eq!(stopped, Ok(Some(38470)));
+        assert_eq!(calls.seen(), vec!["shutdown", "port_free", "force_stop"]);
     }
 }

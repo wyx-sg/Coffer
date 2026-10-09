@@ -787,6 +787,7 @@
       "resource_scope_updated": "Updated reach for {{resource}}",
       "resource_updated": "Reconfigured {{resource}}",
       "retention_updated": "Updated a data-retention policy",
+      "call_content_recording_updated": "Changed whether tool calls record their content",
       "cli_tool_added": "Added command-line tool {{command}}",
       "cli_tool_edited": "Edited command-line tool {{command}}",
       "cli_tool_removed": "Removed command-line tool {{command}}",
@@ -1001,7 +1002,7 @@
         "denied": "The call to {{server}} was denied",
         "unreachable": "Couldn't reach {{server}}"
       },
-      "callNote": "Coffer records who called which tool, when and how it went. Arguments and results pass straight through and are never stored.",
+      "callNote": "Secret values are masked before anything is stored. Each part keeps its first 16 KB; the record is deleted with the tool call history.",
       "level": "Level",
       "logger": "Logger",
       "around": "Around the same time",
@@ -1019,7 +1020,18 @@
       "whenToday": "{{time}} today",
       "whenYesterday": "{{time}} yesterday",
       "whenOn": "{{time}}, {{date}}",
-      "environment": "Environment"
+      "environment": "Environment",
+      "content": {
+        "arguments": "Arguments",
+        "result": "Result",
+        "error": "Error",
+        "request": "Request",
+        "response": "Response",
+        "copy": "Copy {{part}}",
+        "cut": "Cut at 16 KB — the call carried {{size}} KB.",
+        "notRecorded": "Content was not recorded for this call.",
+        "setting": "Record tool call content"
+      }
     },
     "daemon": {
       "noMessage": "(log record with no message)"
@@ -1265,13 +1277,61 @@
         "auto": "Check automatically",
         "autoHelp": "Checks at launch and every 6 hours, and asks before installing.",
         "browser": "Updates are installed by the Coffer desktop app. Here in a browser, hand the upgrade to an agent: the prompt says how this copy of Coffer was installed.",
-        "unconfigured": "This build was made without an update key, so it does not check for updates. New versions are on the GitHub Releases page."
+        "unconfigured": "This build was made without an update key, so it does not check for updates. New versions are on the GitHub Releases page.",
+        "daemonNeverChecked": "The daemon checks a minute after it starts, then daily.",
+        "commandHelp": "Run this in a terminal: it downloads the release, verifies it and restarts the daemon on it.",
+        "daemonAutoHelp": "The daemon checks GitHub once a day and installs nothing by itself."
       },
       "diagnosticsCopied": "Diagnostics copied — paste them into your bug report.",
       "versionLine": "Version {{version}}",
       "versionLineLoading": "Reading the version…",
       "details": "Details",
-      "versionWithCommit": "{{version}} ({{commit}})"
+      "versionWithCommit": "{{version}} ({{commit}})",
+      "uninstall": {
+        "title": "Uninstall",
+        "label": "Uninstall Coffer",
+        "description": "Remove Coffer from this Mac. Your data in ~/.coffer stays unless you choose to delete it.",
+        "open": "Uninstall Coffer…",
+        "browser": "Uninstalling removes the app too, so it runs from the Coffer desktop app (Settings › About) or in a terminal:",
+        "dialog": {
+          "title": "Uninstall Coffer?",
+          "body": "Coffer takes back everything it wrote outside ~/.coffer, stops, and the app moves itself to the Trash.",
+          "removes": "Removes",
+          "removesValue": "Coffer's MCP entry, memory hook and model routing from each agent; the skill links it delivered; start at login; the command-line tools and the installer's PATH lines; Coffer.app",
+          "keeps": "Keeps",
+          "keepsValue": "~/.coffer: your vault, secrets, skills, knowledge and settings. Install Coffer again and they are there; connect your agents again.",
+          "keepsNothing": "Nothing. ~/.coffer and the master key are deleted.",
+          "deleteData": "Also delete my data (~/.coffer)",
+          "deleteDataHelp": "Asks for Touch ID first.",
+          "dangerTitle": "This cannot be undone",
+          "danger": "Every secret, skill, knowledge collection and memory note in ~/.coffer, and the master key that opens your secrets, are deleted for good — including skills Coffer adopted from your agents. A vault you moved elsewhere is left in place.",
+          "backup": "Back up the master key first",
+          "confirm": "Uninstall",
+          "confirmDelete": "Uninstall and delete data",
+          "pending": "Uninstalling…",
+          "failed": "Couldn’t uninstall Coffer"
+        },
+        "done": {
+          "title": "Coffer is uninstalled",
+          "body": "Your data in ~/.coffer is kept. Coffer is quitting and moving itself to the Trash.",
+          "bodyDeleted": "Your data is deleted once the daemon has stopped. Coffer is quitting and moving itself to the Trash."
+        },
+        "steps": {
+          "agents": "Read the agents",
+          "provider_routing": "Model routing taken out of the agents",
+          "agent_connections": "Agents disconnected",
+          "skill_links": "Skill links removed",
+          "login_job": "Start at login turned off",
+          "terminal_files": "Terminal launch files removed",
+          "path_lines": "Installer's PATH lines removed",
+          "binaries": "Command-line tools removed"
+        },
+        "outcome": {
+          "done": "done",
+          "nothing": "nothing to do",
+          "failed": "failed"
+        }
+      }
     },
     "security": {
       "masterKey": {
@@ -1487,7 +1547,12 @@
       },
       "history": {
         "title": "History",
-        "description": "The record of what happened. Old entries are deleted on the schedule below."
+        "description": "The record of what happened. Old entries are deleted on the schedule below.",
+        "callContent": {
+          "label": "Record tool call content",
+          "description": "Keep each call's arguments and result, with secret values masked. Off keeps only who called what, when and how it went.",
+          "notSaved": "Not saved"
+        }
       },
       "cache": {
         "title": "Rebuildable cache",
@@ -1674,6 +1739,7 @@
     "CONFIG_FILE_NOT_ALLOWED": "That config file isn't allowed for this agent",
     "CONFIG_FILE_STALE": "The config file changed on disk since you loaded it. Reload and retry.",
     "CONFIG_INVALID": "Configuration is invalid",
+    "CONFIG_INVALID_stored_key_destination": "A stored key is sent only to the endpoint of the saved connection that holds it, so nothing was sent. To test this endpoint, paste the key. Or add the provider and approve its key for this endpoint, then test it from the provider's page.",
     "CONVERSATION_NOT_FOUND": "Conversation not found",
     "CURSOR_INVALID": "The list's page position is no longer valid — reload the list from the start.",
     "DAEMON_NOT_READY": "Coffer daemon is still starting up. Try again in a moment.",
@@ -1816,6 +1882,7 @@
     "CUSTOM_TOOL_ENVIRONMENT_NOT_FOUND": "This group has no environment with that name.",
     "CUSTOM_TOOL_ENVIRONMENT_REQUIRED": "Choose an environment: this group has more than one turned on.",
     "CUSTOM_TOOL_ENVIRONMENT_UNKNOWN": "That environment isn't registered in this group.",
+    "INVOCATION_NOT_FOUND": "That tool call isn't in the log. It may have been cleared by retention.",
     "CUSTOM_TOOL_LAST_ENVIRONMENT": "A group needs at least one environment, so its last one can't be deleted.",
     "DESKTOP_REQUEST_NOT_FOUND": "That request to the Coffer app has expired or was already handled."
   },
@@ -3598,6 +3665,19 @@
       "replying": {
         "title": "Replies and conversations"
       },
+      "prompts": {
+        "title": "System prompts",
+        "description": "Your own instructions for the agent, added after Coffer's note about the chat on every turn. A change applies from the next message.",
+        "direct": "Direct chats",
+        "directHint": "Direct chats with the bot, and the threads opened in them.",
+        "group": "Group chats",
+        "groupHint": "A group's main chat and its threads.",
+        "editAria": "Edit system prompts",
+        "dialogTitle": "Edit system prompts",
+        "dialogDescription": "For example, the language to answer in or what to always include. Leave one empty to add nothing.",
+        "count": "{{count}} / {{max}}",
+        "tooLong": "At most {{max}} characters."
+      },
       "directories": {
         "description": "/dir may switch to these and the folders under them; new conversations start in the default. With no default they start in Coffer's workspace; with no directories /dir is off."
       },
@@ -3777,8 +3857,6 @@
         "invalid": "Enter a number of seconds from {{min}} to {{max}}."
       },
       "replies": {
-        "notifyAfter": "Long-task ping after",
-        "notifyAfterHint": "A turn that runs this long ends with a short Done message. 0 turns it off.",
         "showSteps": "Show step lines",
         "showStepsHint": "While working, show the last 3 steps under the status line."
       },
@@ -4969,7 +5047,11 @@
       "timeout": "Timeout",
       "timeoutValue": "{{seconds}} s per call",
       "spec": "Spec",
-      "fetched": "fetched {{date}}"
+      "fetched": "fetched {{date}}",
+      "diagnosticHeaders": "Diagnostic headers",
+      "responseRules": "Response rules",
+      "statusOnly": "HTTP status only",
+      "none": "None"
     },
     "tools": {
       "switch": "On",
@@ -5055,9 +5137,13 @@
       "hintReadOnly": "read-only",
       "response": {
         "success": "Success",
-        "rule": "A call succeeds when the API answers with a status below 400. A status of 400 or more, or no answer at all, is a failed call: it is counted in the group's errors and the agent gets it as an error.",
+        "rule": "A call fails on HTTP 400 and above, or when no answer comes. The rules below can also fail an answer that says so in a header or a JSON field.",
         "agentGets": "What agents get",
-        "agentGetsBody": "The status line (for example HTTP 200 OK), then the response body, cut at 1 MiB. The secret's value never appears in it."
+        "agentGetsBody": "The status line (for example HTTP 200 OK), the response headers the group names (all of them when the call failed), the failed rule if any, then the body or “(empty body)”, cut at 1 MiB. The secret's value never appears in it.",
+        "follow": "Use the group's rules",
+        "statusOnly": "HTTP status only",
+        "own": "Rules for this tool only",
+        "ownHelp": "Start from the group's rules and change them. With none, this tool fails only on HTTP 400 and above."
       }
     },
     "test": {
@@ -5091,7 +5177,8 @@
         "rejected": "The API rejected {{secret}}. If it has expired, change its value; every tool in {{group}} uses the same secret.",
         "httpError": "The API answered with an error; its response is below. Check the path and the argument values, then run again. Nothing was saved.",
         "rejectedEnv": "The API rejected {{secret}}. If it has expired, change its value; every tool of this group uses it in {{environment}}.",
-        "timeoutEnv": "Coffer stopped waiting after {{environment}}'s own {{seconds}} s timeout. If the API is only slow, raise it under Environments; if it should answer quickly, hand it to an agent to find out why. Nothing was saved."
+        "timeoutEnv": "Coffer stopped waiting after {{environment}}'s own {{seconds}} s timeout. If the API is only slow, raise it under Environments; if it should answer quickly, hand it to an agent to find out why. Nothing was saved.",
+        "ruleFailed": "The API answered, but the answer broke one of the response rules. Check the rules under Response, or the request, then run again. Nothing was saved."
       },
       "cutShort": "Cut short at {{size}}.",
       "cutShortBody": "Agents get the same first {{size}}. Narrow the request with arguments, or return less from the API.",
@@ -5113,7 +5200,9 @@
       },
       "responseHeaders": "Response headers",
       "resultTab": "Result",
-      "requestTab": "Preview"
+      "requestTab": "Preview",
+      "emptyBody": "0 bytes · empty body",
+      "ruleFailed": "Response rule failed"
     },
     "editGroup": {
       "title": "Edit {{name}}",
@@ -5125,7 +5214,16 @@
       "nameHelp": "Fixed — agents call its tools as {{prefix}}.",
       "descriptionHelp": "Agents read it when they search for a tool, so say what this API is for.",
       "descriptionPlaceholder": "e.g. Invoices and payments in the billing system",
-      "environmentsNote": "Base URLs, headers, secrets and variables belong to the environments; edit them from their rows under Environments."
+      "environmentsNote": "Base URLs, headers, secrets and variables belong to the environments; edit them from their rows under Environments.",
+      "diagnosticHeaders": "Diagnostic headers",
+      "diagnosticHeadersHelp": "Comma-separated response header names. Reported in tests and agent results beside the request and trace ids. Credentials and cookies can't be named.",
+      "diagnosticProblem": {
+        "refused": "A header that carries credentials or cookies can't be named.",
+        "invalid": "Use plain header names, separated by commas.",
+        "many": "At most 20 headers."
+      },
+      "responseRules": "Response rules",
+      "responseRulesHelp": "Every rule must hold for a call to succeed. With none, a call fails only on HTTP 400 and above."
     },
     "reimport": {
       "action": "Re-import",
@@ -5223,6 +5321,33 @@
         "environment": "Timeout {{seconds}} s ({{environment}}'s own)",
         "group": "Timeout {{seconds}} s (the group's)"
       }
+    },
+    "responseRules": {
+      "add": "Add rule",
+      "remove": "Remove rule",
+      "read": "Read",
+      "name": "Header or field",
+      "values": "Success values",
+      "missing": "If missing",
+      "message": "Error message from",
+      "messageName": "Message name",
+      "source": {
+        "status": "HTTP status",
+        "header": "Response header",
+        "json": "JSON field"
+      },
+      "missingOk": "Success",
+      "missingError": "Failure",
+      "messageNone": "No error message",
+      "problem": {
+        "name": "Name the header or JSON field to read.",
+        "pointer": "A JSON field starts with / (for example /status/code).",
+        "refused": "A header that carries credentials or cookies can't be read.",
+        "invalid": "That isn't a valid header name.",
+        "noValues": "Add at least one success value, comma-separated.",
+        "status": "Statuses are numbers from 100 to 599.",
+        "long": "At most 20 values of 200 characters each."
+      }
     }
   },
   "clis": {
@@ -5310,7 +5435,8 @@
       "description": "Description",
       "descriptionPlaceholder": "What it’s for, in a sentence",
       "loginCheck": "Login check",
-      "loginCheckHint": "Exits 0 when you’re logged in. Runs when you press Check.",
+      "loginCheckHint": "Starts with the command name (for /opt/bin/gh, gh) and exits 0 when you’re logged in. Runs when you press Check.",
+      "loginCheckCommand": "The login check must start with the command name {{command}}, not a path or another program. It runs the tool you added.",
       "submit": "Add",
       "addFailed": "Couldn’t add {{command}}",
       "editFailed": "Couldn’t save {{command}}"
@@ -6013,6 +6139,7 @@
       "rejected": "The endpoint rejected the key ({{status}})",
       "noStatus": "authentication failed",
       "failed": "Couldn't reach the endpoint",
+      "refused": "Not tested: this stored key can't go to this endpoint yet",
       "again": "Test again",
       "listed_one": "Connected — the endpoint listed {{count}} model.",
       "listed_other": "Connected — the endpoint listed {{count}} models.",

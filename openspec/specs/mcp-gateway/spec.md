@@ -74,8 +74,11 @@ list-changed notifications) between clients and upstream MCP servers.
   resources/prompts set (HTTP 200), not an error.
 - **Built-in tools.** Coffer's own built-in tools under the reserved `coffer__` prefix MUST be exactly
   `coffer__search_tools`, which MUST always be advertised in
-  `tools/list`. A call to any other `coffer__` name MUST be
-  answered as an unknown tool.
+  `tools/list`, plus — only for a session whose requests carry the `X-Coffer-Turn` token of a turn
+  Coffer is running — the turn-scoped `coffer__ask` (see "Let an agent ask the owner a question during a Coffer turn")
+  and `coffer__channel_read_thread` ([channels](../channels/spec.md) "Read a thread's earlier messages on demand").
+  A call to any other `coffer__` name MUST be
+  answered as an unknown tool, and so MUST a call to `coffer__channel_read_thread` outside a turn.
 - **Built-in tool retrieval.** `coffer__search_tools`
   ([Tool Overload](../../../docs/decisions/tool-overload-tier-the-list-search-the-rest.md)) has the contract
   `coffer__search_tools(query: string [required], top_k?: int = 5, max 20) -> { tools: [{ name, description,
@@ -356,59 +359,6 @@ The system MUST enable a previously unseen capability by default when it is disc
 - **GIVEN** a registered server whose capabilities have already been discovered,
 - **WHEN** an upgrade adds a new tool to that server,
 - **THEN** the new tool is enabled, its first sighting on this machine is recorded as its `first_seen_at`, and the user can disable it through the per-capability toggle ("Toggle individual capabilities").
-
-### Requirement: Record invocations without content
-The system MUST record an invocation entry for every tool call, resource read, and prompt fetch — its target,
-timestamp, duration and outcome — without recording arguments or return contents. Each entry MUST also carry
-its row `id`, and MUST name the agent whose session made the call (`agent_uid`) when that session reported one
-on its handshake (see "Take the agent identity from the handshake"); a session that reported none writes
-entries naming no agent, never a guessed one. A custom tool's call MUST also name the environment it was made
-in (`environment`), and no entry carries a header, a variable or a credential. How long those entries are
-kept, and the background pass that prunes them, are [resource-framework](../resource-framework/spec.md) "Prune each registered log table on its own retention period" — the retention contract
-every log-writing kind inherits — not this spec's own rule. This spec contributes `mcp_invocations` to that
-registry with a 30-day default. The record is read per server
-(`GET /api/v1/resources/mcp_server/{uid}/invocations`, `coffer log mcp --server <server>`) or across every
-server (`GET /api/v1/mcp/invocations`, `coffer log mcp` with no server), the cross-server read
-including Coffer's own built-in calls (`coffer`) and the rows of servers since deleted (their uid, with no name). Both HTTP reads
-can be narrowed to one agent's calls with `agent_uid`. Both reads
-page newest first by cursor ([resource-framework](../resource-framework/spec.md) "Page growing lists by an opaque cursor"),
-and both CLI forms take `--status`, `--since`, `--limit`, `--cursor` and `--json`. One server's calls since a moment
-(24 hours ago by default) are also read counted, for its page:
-`GET /api/v1/resources/mcp_server/{uid}/invocations/summary` answers the calls, the errors (every call that
-did not end `ok`) and the last call's time, per calling agent and per tool.
-
-#### Scenario: invocation log records calls without arguments
-- **GIVEN** an MCP client has invoked tools,
-- **WHEN** the user views the invocation log,
-- **THEN** every call is present with timestamp, target capability, duration, and outcome, and **no call arguments or return contents are stored**.
-
-#### Scenario: the command line reads the invocation log
-- **GIVEN** a running daemon that has recorded invocations on two servers, on a Coffer built-in tool and on a deleted server
-- **WHEN** the user runs `coffer log mcp --server <server>` and then `coffer log mcp --status error --json`
-- **THEN** the first prints only that server's calls, newest first
-- **AND** the second prints, under `invocations`, only failed calls across every server, each naming its server, including `coffer` and the rows of a deleted server
-
-#### Scenario: the invocation log pages by cursor
-- **GIVEN** a server with three recorded invocations
-- **WHEN** its invocations are read with `limit=2` and then with the answer's `next_cursor`
-- **THEN** the first page holds the two newest calls and the second the oldest, with a `null` `next_cursor`
-
-#### Scenario: a server's page reads its calls counted
-- **GIVEN** a server with four calls in the last day — two by one agent, one of them failed, one by another agent and one by a session that reported none — and one older call
-- **WHEN** `GET /api/v1/resources/mcp_server/{uid}/invocations/summary` is read
-- **THEN** it answers four calls and one error, per agent 2/1, 1/0 and 1/0 for the session that reported none, and per tool the calls and errors of each tool
-- **AND** the older call and another server's calls are not counted
-
-#### Scenario: the invocation log names the calling agent
-- **GIVEN** an agent's session connected through its shim made a call, and a session that reported no agent made another
-- **WHEN** the invocation log is read, and read again with `agent_uid` set to that agent's uid
-- **THEN** the first call's entry names that agent's uid and the second's names none
-- **AND** the filtered read holds only the first call
-
-#### Scenario: a custom tool's call names its environment in the log
-- **GIVEN** a custom-tool group with the environments `test` and `live`
-- **WHEN** an agent calls one of its tools in `live` and the invocation log is read
-- **THEN** the entry names `live` as its environment and carries no header or credential
 
 ### Requirement: Name a missing stdio launcher
 A stdio server whose launcher command does not resolve on this machine (an imported server referencing e.g.
@@ -695,8 +645,13 @@ POST, PUT and PATCH — add the environment's secret headers with each secret's
 value last, send it with the environment's timeout (the group's when it sets
 none) without following redirects, read at most 1 MiB of the response, and
 return one text result that starts with the HTTP status line. A status of 400 or
-more MUST be returned as an in-band tool error; a redirect MUST be returned, not
-followed; a timeout MUST be recorded as `timeout`. The secret's value MUST NOT
+more MUST be returned as an in-band tool error, and so MUST an answer that
+breaks one of the tool's response rules ("Judge a custom tool's answer by its
+group's response rules"); a redirect MUST be returned, not followed; a timeout
+MUST be recorded as `timeout`. After the status line the result MUST name the
+response headers the group asks to see ("Report what a custom tool's test
+reached") — every reported header when the call failed — then the broken rule,
+if any, and then the body, or `(empty body)` when the answer had none. The secret's value MUST NOT
 appear in the result, the tool's description or schema, or any log, invocation
 or audit record: an occurrence in the response is masked as `***`. Every call
 MUST be recorded like any other tool call ("Record invocations without
@@ -1323,8 +1278,9 @@ Every custom-tool operation of the Custom tools page MUST be available as a
 `coffer custom-tool` command that calls the same REST route: list, show, create,
 update and delete a group; enable and disable it; set its reach; add, show,
 update, enable, disable and delete a tool, including its method, path, headers,
-body template, argument schema and `changes_data` (a read-only `POST` may set
-`changes_data=false`); add, update, rename, enable, disable and delete an
+body template, argument schema, `changes_data` (a read-only `POST` may set
+`changes_data=false`) and its own response rules; set a group's response
+settings; add, update, rename, enable, disable and delete an
 environment and bind a secret to one of its headers; test a draft tool and a
 saved tool in a chosen environment; read an OpenAPI document; and preview and
 apply a re-import. A tool's definition, request template and schema MUST be
@@ -1405,17 +1361,30 @@ help find the request on the API's side: `date`, `server`, `via`,
 `x-correlation-id`, `x-trace-id`, `traceparent`, `x-b3-traceid`,
 `x-amzn-requestid`, `x-amzn-trace-id`, `x-amz-request-id`, `x-amz-cf-id`,
 `cf-ray`), names lower-cased, each value with the environment's secret values
-masked and cut at 256 characters. Every other header — `set-cookie`,
-`www-authenticate`, anything not on the list — MUST be left out. A test that got
-no answer returns none. The command line prints them after the status, and the
-Custom tools page shows them in the test's result. An agent's tool call is
-unchanged.
+masked and cut at 256 characters. A group MAY name further headers to report
+(its **diagnostic headers**, at most 20), and every header a response rule reads
+is reported too; a header that carries credentials or cookies
+(`authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `set-cookie2`,
+`www-authenticate`, `proxy-authenticate`, `x-api-key`, `api-key`) MUST be
+refused when it is named and MUST never be reported. Every other header — a
+cookie, an auth challenge, anything neither listed nor named — MUST be left out.
+A test MUST also return the number of body bytes read. A test that got no answer
+returns no headers. The command line prints them after the status, and the
+Custom tools page shows them in the test's result. An agent's tool result names
+the group's diagnostic headers and the headers its rules read, and every
+reported header when the call failed.
 
 #### Scenario: a test reports the request id but no cookie or credential
 - **GIVEN** an environment with a secret header, and an API that answers `403` with an HTML body, `X-Request-Id`, an `X-Trace-Id` that contains the secret's value, `Set-Cookie`, `WWW-Authenticate` and an unknown header
 - **WHEN** a draft tool is tested in that environment
 - **THEN** the result carries `x-request-id`, `x-trace-id` with the value masked, `server` and `date`
 - **AND** it carries no `set-cookie`, `www-authenticate` or unknown header, and neither the secret's value nor the cookie appears anywhere in it
+
+#### Scenario: a group's named headers reach the agent and a credential header cannot be named
+- **GIVEN** a group whose diagnostic headers name `X-Backend-Region`, and an API that answers `200` with `X-Backend-Region`, `Server` and a JSON body
+- **WHEN** an agent calls a tool, and a person then tries to add `Set-Cookie` to the group's diagnostic headers
+- **THEN** the agent's result names `x-backend-region` and not `server`, and a test reports both
+- **AND** the change naming `Set-Cookie` is refused as a validation error, and the group is unchanged
 
 ### Requirement: Preview a resource or a prompt from the server page
 The daemon MUST read one of a registered server's resources, and fill one of its prompts with given arguments, for the server page's row details: `POST /resources/mcp_server/{uid}/resources/read` (a `uri`) and `POST /resources/mcp_server/{uid}/prompts/get` (a `name` and its `arguments`), over the same connection the capability listings use. A text body MUST be cut at 64 KB and marked cut; a binary body MUST be described by its MIME type and size and its bytes not sent. An error the server answers with MUST come back in the body's `error`, named by its JSON-RPC code and never by the server's own text (which can echo a credential), with no contents, and MUST NOT close the connection; a server that cannot be reached is `UPSTREAM_UNAVAILABLE`. A preview is the owner looking, not an agent calling: it MUST NOT be recorded as an invocation, and it works on a row that is switched off. `coffer mcp resource read` and `coffer mcp prompt get` call the same routes.
@@ -1506,3 +1475,207 @@ never asked, and the upstream is told the capability is not supported.
 - **GIVEN** a session whose client declared neither capability
 - **WHEN** it calls a tool that asks for sampling and one that asks for roots
 - **THEN** both tools report that the client refused, and the client is asked nothing
+
+### Requirement: Record invocations with redacted, bounded content
+The system MUST record an invocation entry for every tool call, resource read, and prompt fetch — its target,
+timestamp, duration and outcome. Each entry MUST also carry
+its row `id`, and MUST name the agent whose session made the call (`agent_uid`) when that session reported one
+on its handshake (see "Take the agent identity from the handshake"); a session that reported none writes
+entries naming no agent, never a guessed one. A custom tool's call MUST also name the environment it was made
+in (`environment`).
+
+While call content recording is on ("Switch call content recording per machine"), the entry MUST also
+carry the call's **content**: its `arguments` (a tool's or a prompt's arguments, a resource's uri), its
+`result` (the coerced answer the agent received, an in-band `isError` result included), and its `error`
+(the text of an exception the upstream raised or answered with, which the entry's `error_message` keeps
+reducing to a Coffer-authored summary). A custom HTTP tool's call MUST also carry the `request` it sent
+(method, final URL, headers and body) and the `response` it got (status, headers and body), and a Coffer
+built-in tool's call carries its arguments and result like any other. A call refused before it reached an
+upstream (`denied`) carries its arguments only.
+
+Content MUST be redacted before it is written anywhere — the database, a log line, the wire — and in this
+order: every value Coffer injected into that upstream for the call (a stdio or HTTP server's secret overlay,
+a custom tool's resolved headers) is replaced with `••••••` wherever it appears; a header that carries
+credentials (`Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key`, `X-Auth-Token`
+and any header whose name holds `token`, `secret`, `key` or `auth`) and the value of any field whose name
+says it holds a secret (`password`, `passwd`, `secret`, `token`, `api_key`, `apikey`, `access_key`,
+`private_key`, `client_secret`, `credential`, `authorization`, `cookie`, alone or as a name's last word)
+is replaced whole; then every remaining string is scanned with the bundled plaintext-secret rules
+([secret](../secret/spec.md) "Detect plaintext secrets with the bundled rules") and each finding replaced.
+Each part (`arguments`, `result`, `error`, `request`, `response`) is serialised as JSON and MUST be cut at
+16 KB (UTF-8), keeping the start; a cut part says so (`truncated: true`) and keeps its size before the cut
+(`bytes`). Content is never written to `daemon.log`, and model-provider traffic is not a call here: its
+prompts and completions are never recorded.
+
+How long entries are kept, and the background pass that prunes them, are
+[resource-framework](../resource-framework/spec.md) "Prune each registered log table on its own retention period" — the retention contract
+every log-writing kind inherits — not this spec's own rule. This spec contributes `mcp_invocations` to that
+registry with a 30-day default. The record is read per server
+(`GET /api/v1/resources/mcp_server/{uid}/invocations`, `coffer log mcp --server <server>`) or across every
+server (`GET /api/v1/mcp/invocations`, `coffer log mcp` with no server), the cross-server read
+including Coffer's own built-in calls (`coffer`) and the rows of servers since deleted (their uid, with no name). Both HTTP reads
+can be narrowed to one agent's calls with `agent_uid`. Both reads
+page newest first by cursor ([resource-framework](../resource-framework/spec.md) "Page growing lists by an opaque cursor"),
+and both CLI forms take `--status`, `--since`, `--limit`, `--cursor` and `--json`. A list carries no content;
+one call is read with its content by `GET /api/v1/mcp/invocations/{id}` and `coffer log call <id>`
+(404 `INVOCATION_NOT_FOUND`, exit `4`, for an id the log does not hold), whose `content` is `null` for a
+call recorded while recording was off. One server's calls since a moment
+(24 hours ago by default) are also read counted, for its page:
+`GET /api/v1/resources/mcp_server/{uid}/invocations/summary` answers the calls, the errors (every call that
+did not end `ok`) and the last call's time, per calling agent and per tool.
+
+#### Scenario: invocation log records a call's arguments and result
+- **GIVEN** content recording is on and an MCP client has called a tool with arguments `{"query": "coffer"}`
+- **WHEN** the user lists the invocation log, then reads that call by its id
+- **THEN** the list entry carries the timestamp, target capability, duration and outcome and no content
+- **AND** the call read by id carries `arguments` `{"query": "coffer"}` and the result the client received
+
+#### Scenario: an injected secret echoed by the upstream is masked in the record
+- **GIVEN** a stdio server started with a secret injected into its environment, whose tool echoes that value in its result and in an error
+- **WHEN** the tool is called twice, once succeeding and once raising, and both calls are read by id
+- **THEN** the value appears in neither record, each place it stood reading `••••••`
+- **AND** no file or table under `~/.coffer` holds the value
+
+#### Scenario: secret-named fields and credential headers are masked whole
+- **GIVEN** a call whose arguments hold `{"password": "hunter2-long", "max_tokens": 64, "headers": {"Authorization": "Bearer abc123def456"}}`
+- **WHEN** the call is read by id
+- **THEN** `password` and `Authorization` read `••••••` and `max_tokens` reads `64`
+
+#### Scenario: a plaintext key the rules know is masked
+- **GIVEN** a tool whose result holds a GitHub token in free text
+- **WHEN** the call is read by id
+- **THEN** the token reads `••••••` and the rest of the text is kept
+
+#### Scenario: content past 16 KB is cut and says so
+- **GIVEN** a tool whose result serialises to 40 KB
+- **WHEN** the call is read by id
+- **THEN** its `result` holds the first 16 KB with `truncated: true` and `bytes` of about 40 KB, and its `arguments` are whole
+
+#### Scenario: a custom tool's call records its request and response
+- **GIVEN** a custom-tool group whose `live` environment sends a secret `Authorization` header, and a tool whose API answers `200` with header `X-Sp-Error: 101` and body `{"error": "denied"}`
+- **WHEN** an agent calls the tool in `live` and the call is read by id
+- **THEN** `request` holds the method, the final URL, the headers with `Authorization` reading `••••••`, and the body
+- **AND** `response` holds status `200`, the `X-Sp-Error` header and the body `{"error": "denied"}`
+
+#### Scenario: a refused call records its arguments only
+- **GIVEN** a tool switched off on its server
+- **WHEN** an agent calls it with arguments and the call is read by id
+- **THEN** the entry is `denied`, carries the arguments, and carries no result
+
+#### Scenario: the command line reads the invocation log
+- **GIVEN** a running daemon that has recorded invocations on two servers, on a Coffer built-in tool and on a deleted server
+- **WHEN** the user runs `coffer log mcp --server <server>` and then `coffer log mcp --status error --json`
+- **THEN** the first prints only that server's calls, newest first, each with its id
+- **AND** the second prints, under `invocations`, only failed calls across every server, each naming its server, including `coffer` and the rows of a deleted server
+
+#### Scenario: the command line reads one call with its content
+- **GIVEN** a recorded call with arguments and a result, and an id the log does not hold
+- **WHEN** the user runs `coffer log call <id>` for each
+- **THEN** the first prints the call's metadata, then its arguments and result as indented JSON, a cut part marked as cut
+- **AND** the second exits `4` saying no call has that id
+
+#### Scenario: the invocation log pages by cursor
+- **GIVEN** a server with three recorded invocations
+- **WHEN** its invocations are read with `limit=2` and then with the answer's `next_cursor`
+- **THEN** the first page holds the two newest calls and the second the oldest, with a `null` `next_cursor`
+
+#### Scenario: a server's page reads its calls counted
+- **GIVEN** a server with four calls in the last day — two by one agent, one of them failed, one by another agent and one by a session that reported none — and one older call
+- **WHEN** `GET /api/v1/resources/mcp_server/{uid}/invocations/summary` is read
+- **THEN** it answers four calls and one error, per agent 2/1, 1/0 and 1/0 for the session that reported none, and per tool the calls and errors of each tool
+- **AND** the older call and another server's calls are not counted
+
+#### Scenario: the invocation log names the calling agent
+- **GIVEN** an agent's session connected through its shim made a call, and a session that reported no agent made another
+- **WHEN** the invocation log is read, and read again with `agent_uid` set to that agent's uid
+- **THEN** the first call's entry names that agent's uid and the second's names none
+- **AND** the filtered read holds only the first call
+
+#### Scenario: a custom tool's call names its environment in the log
+- **GIVEN** a custom-tool group with the environments `test` and `live`
+- **WHEN** an agent calls one of its tools in `live` and the invocation log is read
+- **THEN** the entry names `live` as its environment and carries no credential
+
+### Requirement: Switch call content recording per machine
+Whether calls record their content MUST be one setting per machine, on by default, kept in
+`~/.coffer/daemon-config.json` (`record_call_content`) and read with `GET /api/v1/settings/call-content`
+and changed with `PUT /api/v1/settings/call-content` (`{"enabled": bool}`), and on the command line with
+`coffer settings call-content show` and `coffer settings call-content set`. A change MUST take effect for
+the next call in every session without a restart, MUST be audited (`call_content_recording_updated`,
+naming the old and new value), and MUST NOT rewrite rows already recorded: turning recording off keeps
+earlier content until retention prunes it, and turning it on records nothing for calls made while it was
+off.
+
+#### Scenario: recording is on by default and can be switched off
+- **GIVEN** a fresh `~/.coffer` with no `record_call_content` setting
+- **WHEN** the setting is read, an agent calls a tool, recording is switched off, and the agent calls it again
+- **THEN** the setting reads on, the first call's record carries its content and the second's `content` is `null`
+- **AND** the audit log holds `call_content_recording_updated` from on to off
+
+### Requirement: Judge a custom tool's answer by its group's response rules
+A custom-tool group MUST carry **response rules** that decide whether an answer
+the API gave is a success, and a tool MAY carry its own, which replace the
+group's as a whole (an empty list judges the tool by its HTTP status alone; no
+list follows the group). A rule MUST read one value of the answer — the HTTP
+status, one response header (by name, case-insensitive) or one field of a JSON
+body (by a JSON Pointer such as `/code` or `/error/0/code`) — and MUST list the
+values that mean success (1 to 20, compared as text: a JSON string as it is, a
+number as written with `0.0` read as `0`, `true`, `false` and `null` as those
+words, an object or array as compact JSON). A rule MUST say what an answer
+without the value means — success (the default) or failure — and a JSON field
+is missing when the pointer names nothing, the body is not JSON, or the body was
+cut at 1 MiB. A rule MAY name where the API puts its own error message: a
+response header or a JSON Pointer. An answer MUST be a success only when its
+status is below 400 and every rule holds; a group without rules is judged by its
+status alone, so an empty `200` or a `204` is a success and no field of a JSON
+body is read. A failed rule MUST make the agent's result an in-band tool error
+that names the rule, the value read (or that it was missing), the success values
+and the message, masked and cut at 256 characters, and the call MUST be recorded
+as `error`. A test MUST judge the answer the same way, returning `ok` false and
+the failed rule. The judgement MUST know no API's convention: no header name,
+field or code is built in, and an API's convention is expressed only as rules. A
+group or tool whose rule is malformed — more than 10 rules, no success value, a
+status rule naming a header or a non-status value, a header rule naming a
+credential or cookie header ("Report what a custom tool's test reached"), a JSON
+rule whose name is not a JSON Pointer — MUST be refused when it is saved, with
+nothing persisted. The group's rules and diagnostic headers MUST be read and set
+through the group's routes and `coffer custom-tool group create|update
+--response`, a tool's through the tool's routes and `coffer custom-tool tool
+add|update --response-rules`, and on the Custom tools page.
+
+#### Scenario: an answer with no response rules is judged by its status
+- **GIVEN** a group with no response rules, and an API that answers `200` with an empty body to one tool and `200` with `{"code": 7}` to another
+- **WHEN** an agent calls each
+- **THEN** both are successes recorded `ok`, the first result reads `HTTP 200 OK` and `(empty body)`, and the second carries the body
+
+#### Scenario: a header rule turns a 200 into an error with the API's message
+- **GIVEN** a group whose rule reads the header `X-Result-Code`, takes `OK` as success and reads its message from `X-Result-Text`
+- **WHEN** the API answers `200` with an empty body, `X-Result-Code: DENIED` and `X-Result-Text: quota exhausted`, and then `200` with `X-Result-Code: OK` and a body
+- **THEN** the first result is an in-band error naming `x-result-code`, `DENIED`, the success value `OK` and `quota exhausted`, recorded `error`
+- **AND** the second is a success recorded `ok` that carries the body
+
+#### Scenario: a JSON field rule judges the body and a missing field follows the rule
+- **GIVEN** a tool whose own rule reads `/status/code`, takes `0` as success, counts a missing field as failure and reads its message from `/status/message`
+- **WHEN** the API answers `{"status": {"code": 0}}`, then `{"status": {"code": 3, "message": "not found"}}`, then a body that is not JSON
+- **THEN** the first is a success, the second an error naming `/status/code`, `3` and `not found`, and the third an error saying the field is missing
+
+#### Scenario: a tool's own rules replace its group's
+- **GIVEN** a group whose rule fails every answer without the header `X-Result-Code`, and two tools of it: one following the group, one with its own empty list of rules
+- **WHEN** an agent calls both against an API that sends no such header
+- **THEN** the first is an error and the second a success
+
+#### Scenario: a malformed response rule is refused
+- **GIVEN** a group
+- **WHEN** a change sets a header rule on `Authorization`, a JSON rule named `code` with no leading `/`, a status rule with the success value `OK`, or a rule with no success value
+- **THEN** each change is refused as a validation error and the group is unchanged
+
+#### Scenario: a test, the command line and the agent judge an answer alike
+- **GIVEN** a group whose rule reads the header `X-Result-Code` with the success value `OK`, and an API answering `200`, an empty body and `X-Result-Code: DENIED`
+- **WHEN** the tool is tested on its route, with `coffer custom-tool tool test --json`, and called by an agent
+- **THEN** the test answers `ok` false, `body_bytes` 0, the failed rule and `x-result-code` among its headers; the command prints the same and exits `7`; and the agent's result is an in-band error recorded `error`
+
+#### Scenario: an API's error header convention is a rule the group declares
+- **GIVEN** a group shaped like an RPC gateway that answers every call `200` and puts its error code in `X-Sp-Error` and its text in `X-Sp-Errmsg`, with the rule: header `x-sp-error`, success `0`, a missing header a success, message from `x-sp-errmsg`
+- **WHEN** the API answers `200`, an empty body, `X-Sp-Error: 101` and `X-Sp-Errmsg: ERROR_SP_NEED_AUTH`, then `200`, `X-Sp-Error: 0`, `X-Sp-Errmsg: SUCCESS` and a JSON body
+- **THEN** the first result is an in-band error naming `101` and `ERROR_SP_NEED_AUTH`, recorded `error`, and the second a success carrying the body
+- **AND** the same group with no rules judges both answers a success

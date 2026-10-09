@@ -15,7 +15,8 @@ CLI's ``--status`` both name), the gateway writes a fixed, Coffer-authored
 ``error_message`` for the first kind, and :func:`is_upstream_answered` is how a
 reader — the server-status route — tells them apart. Both markers are
 Coffer-authored text, never upstream content (spec mcp-gateway "Record
-invocations without content").
+invocations with redacted, bounded content": upstream text lives in the row's
+redacted content, not in ``error_message``).
 """
 
 from __future__ import annotations

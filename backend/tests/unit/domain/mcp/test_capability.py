@@ -45,15 +45,14 @@ def test_mcp_prompt_with_arguments():
     assert p.arguments[0].required is True
 
 
-def test_mcp_invocation_never_carries_args_or_result_content():
-    """Security invariant (the dataclass docstring): an invocation record must
-    NOT have any field that could hold call arguments or result content. This
-    guards against a future field like `arguments`/`result` silently leaking
-    user data into the persisted invocation log."""
+def test_mcp_invocation_content_is_its_only_payload_field():
+    """A call's arguments and result live in ``content`` alone, which the
+    gateway fills already redacted (spec mcp-gateway "Record invocations with
+    redacted, bounded content"); no other field may grow to carry them raw."""
     field_names = {f.name for f in dataclasses.fields(MCPInvocation)}
-    forbidden = {"arguments", "args", "result", "content", "params", "payload", "output"}
+    forbidden = {"arguments", "args", "result", "params", "payload", "output"}
     assert field_names.isdisjoint(forbidden), (
-        f"MCPInvocation gained a content-bearing field: {field_names & forbidden}"
+        f"MCPInvocation gained a raw content field: {field_names & forbidden}"
     )
     # And the optional fields default away when omitted.
     inv = MCPInvocation(
@@ -67,3 +66,4 @@ def test_mcp_invocation_never_carries_args_or_result_content():
     )
     assert inv.error_message is None
     assert inv.session_id is None
+    assert inv.content is None

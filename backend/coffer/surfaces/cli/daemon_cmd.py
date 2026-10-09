@@ -17,6 +17,8 @@ from typing import Any
 import typer
 
 from coffer.infrastructure.daemon import bootstrap, port_alloc
+from coffer.infrastructure.daemon.force_stop import GRACEFUL_STOP_SECONDS, stop_daemon_process
+from coffer.infrastructure.daemon.orphan_sweep import other_daemons_of_our_vault
 from coffer.infrastructure.daemon.pid_lock import pid_is_coffer_daemon
 from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
 from coffer.infrastructure.vault.home import daemon_json_path
@@ -50,7 +52,7 @@ def _wait_until_serving(proc: Any, timeout: float = START_TIMEOUT_SECONDS) -> st
         time.sleep(0.2)
 
 
-def _wait_for_daemon_json_gone(path: Path, timeout: float = 5.0) -> bool:
+def _wait_for_daemon_json_gone(path: Path, timeout: float = GRACEFUL_STOP_SECONDS) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
         if not path.exists():
@@ -126,7 +128,8 @@ def _start_daemon() -> None:
         typer.echo(f"daemon exited at startup (code {proc.returncode}); check daemon.log", err=True)
         raise typer.Exit(1)
     if outcome == "timeout":
-        proc.kill()
+        # Not killed: see _client.client_or_exit — a slow boot finishes, and a
+        # stuck one gives up on the spawn lock by itself.
         typer.echo(
             f"daemon did not answer within {START_TIMEOUT_SECONDS:.0f}s; check daemon.log",
             err=True,
@@ -148,12 +151,16 @@ def start() -> None:
     _start_daemon()
 
 
-def _stop_daemon() -> bool:
+def _stop_daemon(*, force: bool = False) -> bool:
     """Body of ``stop``, shared with ``restart``.
 
     Returns False when there was nothing to stop. The two callers differ only
     in what that means — an error for ``stop``, the normal case for
     ``restart`` — so the decision is theirs, not this helper's.
+
+    ``force`` is ``restart``'s: a daemon that does not exit within the grace
+    period is killed rather than reported, so the replacement can bind (spec
+    daemon "Force out a wedged daemon on an explicit restart").
     """
     info = _cli_client.discover()
     if info is None:
@@ -168,6 +175,22 @@ def _stop_daemon() -> bool:
         typer.echo("daemon pid is not a coffer daemon; cleaned up stale daemon.json")
         return True
 
+    if force:
+        outcome = stop_daemon_process(info.pid)
+        if outcome == "killed":
+            bootstrap.release_for(info.pid)
+            typer.echo(
+                f"daemon (pid {info.pid}) did not exit within "
+                f"{GRACEFUL_STOP_SECONDS:.0f}s and was killed"
+            )
+            return True
+        if outcome != "not_ours":
+            _wait_for_daemon_json_gone(daemon_json_path(), timeout=1.0)
+            bootstrap.release_for(info.pid)
+            typer.echo("daemon stopped")
+            return True
+        # A Coffer daemon, but not provably this vault's: never forced.
+
     try:
         os.kill(info.pid, signal.SIGTERM)
     except ProcessLookupError:
@@ -176,10 +199,14 @@ def _stop_daemon() -> bool:
         typer.echo("daemon already exited; cleaned up stale daemon.json")
         return True
 
-    if _wait_for_daemon_json_gone(daemon_json_path(), timeout=5.0):
+    if _wait_for_daemon_json_gone(daemon_json_path(), timeout=GRACEFUL_STOP_SECONDS):
         typer.echo("daemon stopped")
         return True
-    typer.echo("daemon did not clean up daemon.json in 5s", err=True)
+    typer.echo(
+        f"daemon did not exit within {GRACEFUL_STOP_SECONDS:.0f}s; "
+        "coffer daemon restart replaces it by force",
+        err=True,
+    )
     raise typer.Exit(1)
 
 
@@ -198,7 +225,7 @@ def restart() -> None:
     The way a changed setting — a fixed port above all — actually takes effect,
     since a running daemon owns its bound socket and cannot move without one.
     """
-    _stop_daemon()
+    _stop_daemon(force=True)
     _start_daemon()
 
 
@@ -247,15 +274,29 @@ def status(
             r = c.get("/upkeep/runs")
             _cli_client.check(r, verbose=verbose, as_json=output_json)
             runs = r.json()["runs"]
+    others = other_daemons_of_our_vault(info.pid)
     if output_json:
         typer.echo(
-            _json.dumps({**data, "port": info.port, "pid": info.pid, "passes_in_flight": runs})
+            _json.dumps(
+                {
+                    **data,
+                    "port": info.port,
+                    "pid": info.pid,
+                    "passes_in_flight": runs,
+                    "other_daemon_pids": others,
+                }
+            )
         )
         return
     typer.echo(f"status:  {data['status']}")
     typer.echo(f"version: {data['version']}")
     typer.echo(f"port:    {info.port}")
     typer.echo(f"pid:     {info.pid}")
+    if others:
+        # One daemon serves a vault; any other daemon process of this vault is
+        # a start still booting or queued, or a stray (spec daemon "Keep
+        # exactly one daemon per vault").
+        typer.echo(f"other daemon processes for this vault: {', '.join(map(str, others))}")
     for line in _runtime_lines(data.get("runtime")):
         typer.echo(line)
     if setup is not None:

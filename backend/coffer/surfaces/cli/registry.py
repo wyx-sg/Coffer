@@ -122,6 +122,7 @@ SHELL_COMMANDS: dict[str, str | tuple[Category, str]] = {
     "check_for_updates": "app update check",
     "install_update": "app update install",
     "set_update_auto_check": "app update auto-check",
+    "uninstall_coffer": "uninstall",
 }
 
 

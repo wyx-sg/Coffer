@@ -14,7 +14,11 @@ the daemon — the only writer — ingests them here. Per completed file:
 3. write the detail rows and their daily rollup in ONE transaction, the rollup
    counting only the rows that were new — so a file ingested twice (a crash
    between commit and delete) writes nothing twice;
-4. delete the file, only after that commit.
+4. delete the file, only after that commit;
+5. hand the file's records to :attr:`UsageIngestService.observe` when one is
+   set — the provider kind reads what each request says about its
+   connection's health from them (spec provider-switching "Know each
+   connection's health without opening it").
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, tzinfo
 
@@ -74,6 +79,8 @@ class UsageIngestService:
         self._tz = tz or local_tz()
         self._stop = asyncio.Event()
         self._lock = asyncio.Lock()
+        #: Told every ingested file's records, after their commit.
+        self.observe: Callable[[Sequence[UsageRecord]], Awaitable[None]] | None = None
 
     async def price(self, record: UsageRecord) -> PricedRecord:
         """``record`` with its estimated cost and the label of the price used."""
@@ -114,6 +121,11 @@ class UsageIngestService:
                     self._spool.delete(path)
                 except OSError:
                     _logger.warning("usage.ingest.delete_failed", extra={"file": str(path)})
+                if self.observe is not None and batch.records:
+                    try:
+                        await self.observe(batch.records)
+                    except Exception:
+                        _logger.warning("usage.ingest.observe_failed", exc_info=True)
                 files += 1
                 inserted += new
                 duplicates += len(rows) - new

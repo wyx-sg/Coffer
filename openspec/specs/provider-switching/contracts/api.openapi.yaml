@@ -224,6 +224,41 @@ paths:
       summary: Detect Local
       tags:
       - providers
+  /api/v1/providers/health:
+    get:
+      description: Each connection's kept verdict; touches no endpoint.
+      operationId: list_provider_health_api_v1_providers_health_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderHealthListOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: List Provider Health
+      tags:
+      - providers
   /api/v1/providers/model-switch/apply:
     post:
       description: |-
@@ -642,6 +677,47 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Activate Provider
+      tags:
+      - providers
+  /api/v1/providers/{uid}/check:
+    post:
+      description: List ``uid``'s models now and keep the verdict (404 for no such connection).
+      operationId: check_provider_api_v1_providers__uid__check_post
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderCheckOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Check Provider
       tags:
       - providers
   /api/v1/providers/{uid}/delete-preview:
@@ -1385,6 +1461,19 @@ components:
       - prompt
       title: HandoffOut
       type: object
+    HealthSource:
+      enum:
+      - check
+      - request
+      title: HealthSource
+      type: string
+    HealthStatus:
+      enum:
+      - reachable
+      - key_rejected
+      - unreachable
+      title: HealthStatus
+      type: string
     ListModelsIn:
       properties:
         base_url:
@@ -1392,6 +1481,11 @@ components:
           - type: string
           - type: 'null'
           title: Base Url
+        connection_uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Connection Uid
         provider:
           title: Provider
           type: string
@@ -1800,6 +1894,19 @@ components:
       - unknown
       title: Protocol
       type: string
+    ProviderCheckOut:
+      description: |-
+        What a check found; ``health`` is ``None`` when nothing was checked (the
+        connection's key waits for approval, or it is a retired connection).
+      properties:
+        health:
+          anyOf:
+          - $ref: '#/components/schemas/ProviderHealthOut'
+          - type: 'null'
+      required:
+      - health
+      title: ProviderCheckOut
+      type: object
     ProviderCreate:
       description: |-
         Create an LLM connection. For ``anthropic`` / ``openai`` / ``unknown``
@@ -1867,6 +1974,48 @@ components:
       required:
       - agents
       title: ProviderDeletePreviewOut
+      type: object
+    ProviderHealthListOut:
+      description: Every connection that has a verdict; one without has never been checked.
+      properties:
+        connections:
+          items:
+            $ref: '#/components/schemas/ProviderHealthOut'
+          title: Connections
+          type: array
+      required:
+      - connections
+      title: ProviderHealthListOut
+      type: object
+    ProviderHealthOut:
+      description: 'One connection''s last verdict: does its endpoint answer, and take its key.'
+      properties:
+        checked_at:
+          format: date-time
+          title: Checked At
+          type: string
+        message:
+          title: Message
+          type: string
+        since:
+          format: date-time
+          title: Since
+          type: string
+        source:
+          $ref: '#/components/schemas/HealthSource'
+        status:
+          $ref: '#/components/schemas/HealthStatus'
+        uid:
+          title: Uid
+          type: string
+      required:
+      - uid
+      - status
+      - checked_at
+      - since
+      - source
+      - message
+      title: ProviderHealthOut
       type: object
     ProviderListOut:
       description: Every connection, by name.

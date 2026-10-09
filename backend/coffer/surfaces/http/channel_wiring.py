@@ -24,15 +24,17 @@ from typing import TYPE_CHECKING, Any
 from fastapi import FastAPI
 
 from coffer.application.audit_service import AuditService
+from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.avatars import PersonAvatars
 from coffer.application.channel.inbound import InboundProcessor
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.places import ChannelPlaces
-from coffer.application.channel.ports import ChannelAdapter
+from coffer.application.channel.ports import ChannelAdapter, ChannelBinding
 from coffer.application.channel.prompt_note import ChannelNoteReader
 from coffer.application.channel.runtime import ChannelRuntime
 from coffer.application.channel.service import ChannelService
+from coffer.application.channel.thread_tool import ThreadReader, channel_read_thread_tool
 from coffer.application.chat import questions
 from coffer.domain.channel.config import parse_channel_config
 from coffer.domain.chat.question import QuestionBlock
@@ -44,6 +46,7 @@ from coffer.infrastructure.channel.persistence import (
     ChannelPeerRepo,
     ChannelReplyRepo,
     ChannelThreadConversationRepo,
+    ChannelThreadCursorRepo,
 )
 from coffer.infrastructure.channel.seatalk import SeaTalkAdapter
 from coffer.infrastructure.channel.seatalk_ws_controller import SeaTalkWebSocketController
@@ -122,6 +125,7 @@ def wire_channel_kind(
     vault: VaultStores,
     secret_store: EncryptedSecretStore,
     chat: ChatWiring,
+    builtin_tools: BuiltinToolRegistry,
 ) -> ChannelRuntime:
     # Derived from the host, cached in ``daemon-config.json``, and stable for
     # the life of the daemon — so it is resolved once here rather than on every
@@ -139,6 +143,7 @@ def wire_channel_kind(
     threads = ChannelThreadConversationRepo(sm)
     outbox = ChannelOutboxRepo(sm)
     replies = ChannelReplyRepo(sm)
+    cursors = ChannelThreadCursorRepo(sm)
     pairing = PairingManager()
     processor = InboundProcessor(
         peers=peers,
@@ -155,6 +160,9 @@ def wire_channel_kind(
         # Which platform messages make up each reply, so the owner can withdraw it (spec
         # channels "Withdraw a bot reply on the owner's command").
         replies=replies,
+        # How far each conversation has seen each thread (spec channels "Ground a
+        # thread turn in a bounded slice of the thread").
+        cursors=cursors,
         # Questions an agent asks the owner (spec channels "Ask the owner in the
         # chat and take the chat's answer back to the agent").
         questions=ChatQuestions(),
@@ -228,6 +236,7 @@ def wire_channel_kind(
         await threads.delete_for_channel(channel.uid)
         await outbox.delete_for_channel(channel.uid)
         await replies.delete_for_channel(channel.uid)
+        await cursors.delete_for_channel(channel.uid)
 
     async def agent_names() -> dict[str, str]:
         """Every registered agent's UID mapped to its name.
@@ -261,6 +270,19 @@ def wire_channel_kind(
         audit=audit,
     )
     set_channel_service(service)
+
+    async def running_channel(ref: str) -> ChannelBinding | None:
+        """The running binding of the channel named (or uid'd) ``ref``."""
+        for channel in await resource_svc.list(kind="channel"):
+            if ref in (channel.uid, channel.name):
+                return processor.binding(channel.uid)
+        return None
+
+    # An agent reads a thread's older messages on demand (spec channels "Read a
+    # thread's earlier messages on demand").
+    builtin_tools.register(
+        channel_read_thread_tool(ThreadReader(resolve=running_channel, peers=peers))
+    )
     set_credential_check(build_credential_check(resource_svc, materialize))
     return runtime
 

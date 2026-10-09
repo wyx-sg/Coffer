@@ -12,13 +12,15 @@ put back — audited as ``vault_file_restored`` after its commit.
 
 from __future__ import annotations
 
-from typing import Literal
+import asyncio
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
 
 from coffer.application.audit_service import AuditService
 from coffer.application.vault.history_service import Restored, VaultHistoryService
 from coffer.domain.audit import AuditEventType
+from coffer.domain.audit_diff import commit_change
 from coffer.domain.vault.writers import OP_RESTORE
 from coffer.infrastructure.vault.actor_meta import commit_meta
 from coffer.infrastructure.vault.instance import vault_repository, vault_writer
@@ -43,19 +45,24 @@ def get_vault_history(
 ) -> VaultHistoryService:
     """The history service over this HOME's vault, auditing every restore."""
 
-    async def record(result: Restored, actor: str) -> None:
-        await audit.record(
-            AuditEventType.VAULT_FILE_RESTORED.value,
-            actor=actor,
-            details={
-                "path": result.path,
-                "version": result.version,
-                "restored_from": result.restored_from,
-                "paths": list(result.paths),
-            },
-        )
+    repo = vault_repository()
 
-    return VaultHistoryService(vault_repository(), vault_writer(), on_restored=record)
+    async def record(result: Restored, actor: str) -> None:
+        details: dict[str, Any] = {
+            "path": result.path,
+            "version": result.version,
+            "restored_from": result.restored_from,
+            "paths": list(result.paths),
+        }
+        if result.version is not None:
+            # What the restore changed, with the diff of knowledge and skill
+            # text (never of config; ``secret/`` is not restored at all).
+            details.update(
+                await asyncio.to_thread(commit_change, repo.read, result.version, result.paths)
+            )
+        await audit.record(AuditEventType.VAULT_FILE_RESTORED.value, actor=actor, details=details)
+
+    return VaultHistoryService(repo, vault_writer(), on_restored=record)
 
 
 @router.get("/history", response_model=VaultHistoryOut)

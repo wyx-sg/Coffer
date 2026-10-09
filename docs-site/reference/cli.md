@@ -38,6 +38,8 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | Group | Description |
 | --- | --- |
 | [`coffer run`](/reference/cli/run) | Run a command with secrets set only in its environment. |
+| [`coffer update`](/reference/cli/update) | Upgrade Coffer to the newest release and restart the daemon on it. |
+| [`coffer uninstall`](/reference/cli/uninstall) | Remove Coffer from this Mac: disconnect the agents, remove the skill links, start at login, the binaries and the installer's PATH lines, then stop the daemon. |
 | [`coffer daemon`](/reference/cli/daemon) | The Coffer daemon: start, stop, status, and its settings. |
 | [`coffer config`](/reference/cli/config) | Daemon settings read before it binds (work while it is down). |
 | [`coffer log`](/reference/cli/log) | Read Coffer's audit, MCP and daemon logs. |

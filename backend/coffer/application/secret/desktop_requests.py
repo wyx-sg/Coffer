@@ -41,6 +41,7 @@ DesktopOp = Literal[
     "update_check",
     "update_install",
     "update_auto_check",
+    "uninstall",
 ]
 DesktopStatus = Literal["waiting", "claimed", "done", "cancelled", "failed", "expired"]
 TERMINAL: frozenset[str] = frozenset({"done", "cancelled", "failed", "expired"})
@@ -65,7 +66,8 @@ class DesktopRequest:
     approvals: dict[str, str] = field(default_factory=dict)
     #: ``reveal``: the secret's ref.
     ref: str | None = None
-    #: ``update_auto_check``: the switch's new position.
+    #: ``update_auto_check``: the switch's new position; ``uninstall``: whether
+    #: the dialog opens with Also delete my data ticked.
     enabled: bool | None = None
     #: What the shell reported (the updater's state); never a secret.
     result: dict[str, Any] | None = None

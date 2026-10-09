@@ -34,6 +34,7 @@ from coffer.domain.mcp.http_api_environment import (
 )
 from coffer.domain.mcp.http_api_headers import check_headers
 from coffer.domain.mcp.http_api_render import template_holes
+from coffer.domain.mcp.http_api_response import MAX_RULES, HttpApiResponse, ResponseRule
 from coffer.domain.mcp.json_schema_check import InvalidSchema, check_schema
 
 HttpMethod = Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
@@ -74,6 +75,10 @@ class HttpApiTool(BaseModel):
     #: The operation's text in the spec it was imported from, so a re-import
     #: can show what changed in it.
     source_text: str | None = Field(default=None, max_length=SOURCE_TEXT_LIMIT)
+    #: The rules this tool's answers are judged by; ``None`` follows the
+    #: group's (spec mcp-gateway "Judge a custom tool's answer by its group's
+    #: response rules"). An empty list judges by the HTTP status alone.
+    response_rules: list[ResponseRule] | None = Field(default=None, max_length=MAX_RULES)
 
     @field_validator("name")
     @classmethod
@@ -177,6 +182,8 @@ class HttpApiTransport(BaseModel):
     timeout_seconds: int = Field(default=30, ge=1, le=300)
     source: OpenApiSource | None = None
     tools: list[HttpApiTool] = Field(default_factory=list)
+    #: Extra headers to report and the rules every tool's answer is judged by.
+    response: HttpApiResponse = Field(default_factory=HttpApiResponse)
     #: Derived from the environments on every validation: ``{slot: ref}``.
     secret_refs: dict[str, str] = Field(default_factory=dict)
 
@@ -219,6 +226,10 @@ class HttpApiTransport(BaseModel):
 
     def timeout_for(self, env: HttpApiEnvironment) -> int:
         return env.timeout_seconds or self.timeout_seconds
+
+    def rules_for(self, tool: HttpApiTool) -> list[ResponseRule]:
+        """The rules ``tool``'s answers are judged by: its own, else the group's."""
+        return tool.response_rules if tool.response_rules is not None else self.response.rules
 
 
 def http_api_target(env: HttpApiEnvironment) -> str:

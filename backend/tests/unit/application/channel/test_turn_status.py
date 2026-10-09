@@ -66,7 +66,28 @@ def test_reply_text_joins_deltas_and_breaks_at_tool_boundaries() -> None:
     assert reply.boundary() == "Let me check."
     assert reply.tail == ""
     reply.add("Found it.")
-    assert reply.full() == "Let me check.\n\nFound it."
+    assert reply.answer() == "Found it."
+
+
+def test_the_answer_is_the_text_after_the_last_tool_call() -> None:
+    reply = ReplyText()
+    reply.add("Let me check the logs.")
+    reply.boundary()
+    reply.add("Now the deploy.")
+    reply.boundary()
+    reply.add("The deploy is green.")
+    assert reply.answer() == "The deploy is green."
+
+
+def test_a_turn_that_ends_on_a_tool_call_answers_with_its_last_text() -> None:
+    reply = ReplyText()
+    reply.add("First look.")
+    reply.boundary()
+    reply.add("The deploy is green.")
+    reply.boundary()  # a tool ran after the last text, and nothing followed it
+    reply.boundary()
+    assert reply.answer() == "The deploy is green."
+    assert ReplyText().answer() == ""
 
 
 def test_a_snapshot_splits_into_its_block_and_its_answer() -> None:

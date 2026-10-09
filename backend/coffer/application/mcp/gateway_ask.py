@@ -13,6 +13,7 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
+from coffer.application.mcp.call_content import call_content
 from coffer.application.mcp.gateway_builtin import _log, _to_call_tool_result, _tool_error_text
 from coffer.application.mcp.ports import MCPInvocationRepoPort
 from coffer.application.turn_ask import (
@@ -21,6 +22,12 @@ from coffer.application.turn_ask import (
     ask_tool_descriptor,
     current_turn_ask,
 )
+
+
+def turn_is_live(port: TurnAskPort | None, token: str | None) -> bool:
+    """Whether ``token`` names a turn Coffer is running now."""
+    port = port or current_turn_ask()
+    return port is not None and token is not None and port.is_live(token)
 
 
 def with_ask_tool(
@@ -62,6 +69,9 @@ async def dispatch_turn_ask(
             error_message=type(exc).__name__,
             session_id=session_id,
             agent_uid=session_agent_uid,
+            content=call_content(
+                {"arguments": params.get("arguments"), "error": f"{type(exc).__name__}: {exc}"}
+            ),
         )
         return {"content": [{"type": "text", "text": _tool_error_text(exc)}], "isError": True}
     await _log(
@@ -73,5 +83,6 @@ async def dispatch_turn_ask(
         error_message=None,
         session_id=session_id,
         agent_uid=session_agent_uid,
+        content=call_content({"arguments": params.get("arguments"), "result": result}),
     )
     return _to_call_tool_result(result)

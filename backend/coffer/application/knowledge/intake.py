@@ -82,7 +82,10 @@ async def adopt_dropped_files(service: KnowledgeService) -> list[str]:
                 details={
                     "title": title,
                     "item": name,
+                    "path": inbox.inbox_path(collection, name),
                     "actor_reported": reported,
+                    # Found in the inbox folder, not submitted through Coffer.
+                    "trigger": "dropped_file",
                 },
             )
             adopted.append(inbox.inbox_path(collection, name))

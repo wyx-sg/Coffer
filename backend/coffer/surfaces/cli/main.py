@@ -16,6 +16,7 @@ from coffer.surfaces.cli import (
     config_cmd,
     daemon_cmd,
     groups,
+    lifecycle_cmd,
     log_cmd,
     memory_cmd,
     path_cmd,
@@ -74,6 +75,9 @@ app.command(
     "run",
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
 )(run_cmd.run)
+# `coffer update` / `coffer uninstall`: this machine's Coffer as a whole.
+app.command("update")(lifecycle_cmd.update)
+app.command("uninstall")(lifecycle_cmd.uninstall)
 groups.adopt("memory", memory_cmd.app)
 groups.adopt("proxy", proxy_cmd.app)
 groups.adopt("vault", vault_cmd.app)

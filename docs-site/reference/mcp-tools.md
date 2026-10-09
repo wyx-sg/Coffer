@@ -18,8 +18,9 @@ integrations against Coffer. For how the gateway works internally, see
 | --- | --- | --- |
 | [`coffer__search_tools`](#coffer-search-tools) | Rank the upstream tool catalogue against an intent. | Always. |
 | [`coffer__ask`](#coffer-ask) | Ask the owner a question and wait for the answer. | Only inside a turn Coffer runs. |
+| [`coffer__channel_read_thread`](#coffer-channel-read-thread) | Read a chat thread's earlier messages, page by page. | Only inside a turn Coffer runs. |
 
-Those two are the whole list. Coffer's knowledge, its memory notes and its own records have no
+Those three are the whole list. Coffer's knowledge, its memory notes and its own records have no
 tool: agents change and read knowledge and memory with their own file tools, and read the
 records with the `coffer` command line. See
 [Knowledge, memory and logs without a tool](#memory-and-logs-without-a-tool).
@@ -151,6 +152,60 @@ The owner can always type their own answer instead of choosing an option.
 not both). When no answer came (the owner stopped the task, or 24 hours passed) the result
 is `{"answered": false, "message": "…"}`. A malformed ask fails with `isError: true` and a
 message saying what to fix.
+
+## coffer\_\_channel\_read\_thread {#coffer-channel-read-thread}
+
+Reads a chat thread's messages page by page, newest page first. A thread turn on a
+[channel](/guides/channels#groups-and-threads) carries only the thread's latest messages (or
+only what is new since the conversation's previous turn there); when it leaves older ones
+out, its context ends with a note naming this tool and the `before` to pass. The agent copies
+the other arguments from the turn's `[Message origin]` block.
+
+It reads only through a channel running on this machine, only a thread of a chat that channel
+has paired (your direct chat with the bot, or a group you have addressed the bot in), and never
+a chat's main history. Images and files on the returned messages are downloaded with the bot's
+credentials, and the result gives their local paths. On Telegram, which has no history API,
+the call fails saying so. Like `coffer__ask` it is **turn-scoped**: listed and served only in a
+session whose `X-Coffer-Turn` header names a live turn, so an agent started in a terminal never
+sees it, and the handshake instructions do not name it. The channel note of a turn on a
+platform that can read threads tells the agent about it.
+
+### Input {#input-2}
+
+| Property | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `channel` | string | yes | | The channel's name (the origin block's `channel:` line), or its uid. |
+| `chat_id` | string | yes | | The chat id from the origin block. |
+| `chat_kind` | string | yes | | `direct` or `group`, from the origin block. |
+| `thread_id` | string | yes | | The thread id from the origin block. |
+| `before` | string | no | | A message id: return the messages older than it. Omit for the newest page. |
+| `limit` | integer | no | `20` | Messages per page, 1–100 (a larger value is read as 100). |
+
+### Result {#result-2}
+
+```json
+{
+  "messages": [
+    {
+      "message_id": "m-5",
+      "sender": "alice@example.com",
+      "sent_at": "2026-10-01T08:05:00+00:00",
+      "from_bot": false,
+      "text": "the deploy is red again",
+      "files": [{ "path": "/Users/you/.coffer/tmp/seatalk-media/3f…a1.png", "mime": "image/png", "filename": "chart.png" }]
+    }
+  ],
+  "has_more": true,
+  "next_before": "m-5"
+}
+```
+
+`messages` is the page, oldest first. Pass `next_before` as `before` to read the page before
+it; it is `null` when `has_more` is `false`. When the platform cannot return part of the
+thread (SeaTalk returns only the last 7 days of replies), the result also carries a `note`
+saying so. A channel that is not running, a chat the channel has not paired, a missing
+`thread_id`, a `before` that is not in the thread and a read the platform refused each fail
+with `isError: true` and a message saying which.
 
 ## Upstream names
 

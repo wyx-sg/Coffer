@@ -22,6 +22,8 @@ coffer provider [OPTIONS] COMMAND [ARGS]...
 | [`provider show`](#provider-show) | One connection. |
 | [`provider add`](#provider-add) | Add a connection. |
 | [`provider update`](#provider-update) | Change a connection. |
+| [`provider health`](#provider-health) | Each connection's last health verdict: reachable, key_rejected or unreachable. |
+| [`provider check`](#provider-check) | List a connection's models now and keep its health verdict. |
 | [`provider delete-preview`](#provider-delete-preview) | What deleting a connection would change. |
 | [`provider delete`](#provider-delete) | Delete a connection. |
 | [`provider prices`](#provider-prices) | Prices of the given models on this connection. |
@@ -102,6 +104,39 @@ coffer provider update [OPTIONS] UID
 | `UID` <span class="cli-chip">参数</span> | text | 必填 | The provider's name or uid |
 | `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
 | `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## provider health
+
+Each connection's last health verdict: reachable, key_rejected or unreachable.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer provider health [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## provider check
+
+List a connection's models now and keep its health verdict.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer provider check [OPTIONS] UID
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `UID` <span class="cli-chip">参数</span> | text | 必填 | The provider's name or uid |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## provider delete-preview

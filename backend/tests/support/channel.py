@@ -7,7 +7,7 @@ without a network. Inbound traffic is simulated by calling the callbacks the
 core handed to :meth:`FakeChannelAdapter.start` (``adapter.callbacks``) —
 ``tap`` does it for a card button. Every capability flag is a constructor
 argument, so one fake stands in for a Telegram-shaped transport (edits, live
-text) or a SeaTalk-shaped one (streams, mentions, groups, threads).
+text) or a SeaTalk-shaped one (typing only, mentions, groups, threads).
 
 It lives here rather than in ``integration/channel/conftest.py`` so tiers other
 than the channel core's (the daemon, the HTTP routes) can wire a channel without
@@ -29,6 +29,7 @@ from coffer.domain.channel.envelopes import (
     SentMessage,
 )
 from coffer.domain.channel.rich_content import ForwardedItem
+from coffer.domain.channel.thread_messages import ThreadMessage, ThreadRead
 
 #: The progress marks a reacting fake declares unless a test names others —
 #: Telegram's, so a reacting fake reads like the transport it stands in for.
@@ -45,7 +46,6 @@ class FakeChannelAdapter:
         *,
         supports_edit: bool = True,
         supports_live_text: bool | None = None,
-        live_text_persists: bool = False,
         supports_typing: bool = True,
         max_message_chars: int = 4096,
         supports_buttons: bool = False,
@@ -61,11 +61,10 @@ class FakeChannelAdapter:
         **capabilities: Any,
     ) -> None:
         # ``supports_edit`` is this fake's own switch, not a capability: a fake that
-        # edits (``edit_text`` records) has a live surface by definition, one that
-        # does not may still stream (SeaTalk) — a test says so explicitly.
+        # edits (``edit_text`` records) has a live surface by definition; a test
+        # may say otherwise explicitly.
         self._caps = ChannelCapabilities(
             supports_live_text=supports_edit if supports_live_text is None else supports_live_text,
-            live_text_persists=live_text_persists,
             supports_typing=supports_typing,
             max_message_chars=max_message_chars,
             supports_buttons=supports_buttons,
@@ -146,13 +145,18 @@ class FakeChannelAdapter:
         # routing detail for each upload, kept separate so every existing
         # ``.media`` assertion stays a plain 4-tuple (mirrors ``sent_routed``).
         self.media_routed: list[tuple[str, str, str | None, bool, str, str]] = []
-        # Scriptable ``fetch_thread`` result (Task 7b) — a test sets this to a
-        # list of ``ForwardedItem`` for its scenario; unset yields ``[]``.
+        # Scriptable ``fetch_thread`` result: the thread's messages, oldest
+        # first. ``thread_items`` is the shorthand — one message per item, with
+        # ids ``tm-0``, ``tm-1``, … — for a test that cares only about text.
+        self.thread_messages: list[ThreadMessage] = []
         self.thread_items: list[ForwardedItem] = []
-        # Scriptable thread-history attachments ("Download the media a thread's
-        # messages carry") — the images/files the
-        # thread's own messages carry, already downloaded; unset yields ``()``.
-        self.thread_attachments: tuple[InboundAttachment, ...] = ()
+        self.thread_window_note = ""
+        self.thread_read_fails = False
+        # Scriptable per-message media ("Download the media a thread's messages
+        # carry"): what ``fetch_message_media`` hands back for a message id, and
+        # every id the core asked it to download.
+        self.thread_media: dict[str, tuple[InboundAttachment, ...]] = {}
+        self.media_downloads: list[str] = []
         # (chat_id, thread_id) for every ``fetch_thread`` call the core made,
         # so a test can assert the fetch happened (or, on a non-fetching
         # transport, that it never did).
@@ -166,14 +170,11 @@ class FakeChannelAdapter:
         self.quoted_items: list[ForwardedItem] = []
         self.quoted_attachments: tuple[InboundAttachment, ...] = ()
         self.fetch_quoted_calls: list[str] = []
-        # "Grow a reply in place on one live surface": every live-text handle the
+        # "Show a turn's progress on one live surface": every live-text handle the
         # core opened this session, and the
         # switch that makes the transport refuse to open one.
         self.live_handles: list[FakeLiveText] = []
         self.live_text_unavailable = False
-        # When True the live surface IS the reply (SeaTalk's stream): closing it
-        # finishes the message in place and leaves the caller nothing to send.
-        self.live_text_finalizes = False
         # (chat_id, mark, body, thread_id) for every ``open_thread`` the core
         # asked for ("Open parallel conversations beside a direct chat"), and the
         # scripted refusal a transport with no threads available raises.
@@ -306,11 +307,27 @@ class FakeChannelAdapter:
         return SentMessage(message_id=self._new_id())
 
     async def fetch_thread(
-        self, chat_id: str, thread_id: str, *, limit: int = 50, chat_kind: str = "group"
-    ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
+        self, chat_id: str, thread_id: str, *, chat_kind: str = "group"
+    ) -> ThreadRead:
         self.fetch_thread_calls.append((chat_id, thread_id))
         self.fetch_thread_kinds.append(chat_kind)
-        return list(self.thread_items), self.thread_attachments
+        if self.thread_read_fails:
+            return ThreadRead(failed=True)
+        messages = list(self.thread_messages) or [
+            ThreadMessage(
+                message_id=f"tm-{n}",
+                sender=item.sender,
+                sent_at=None,
+                items=(item,),
+                has_media=f"tm-{n}" in self.thread_media,
+            )
+            for n, item in enumerate(self.thread_items)
+        ]
+        return ThreadRead(messages=tuple(messages), window_note=self.thread_window_note)
+
+    async def fetch_message_media(self, message: ThreadMessage) -> tuple[InboundAttachment, ...]:
+        self.media_downloads.append(message.message_id)
+        return self.thread_media.get(message.message_id, ())
 
     async def fetch_quoted(
         self, message_id: str
@@ -329,7 +346,7 @@ class FakeChannelAdapter:
 
 
 class FakeLiveText:
-    """The fake's live surface ("Grow a reply in place on one live surface"),
+    """The fake's live surface ("Show a turn's progress on one live surface"),
     shaped like Telegram's: the first
     update sends a message, later ones edit it, and closing deletes it and hands
     the whole final text back for the ordinary send path."""
@@ -359,16 +376,11 @@ class FakeLiveText:
             )
             self.message_id = sent.message_id
             return
-        if self._adapter.live_text_finalizes:
-            return  # a stream re-renders its own message — no new chat traffic
         await self._adapter.edit_text(self._chat_id, self.message_id, text)
 
     async def close(self, text: str) -> str:
         self.closed = True
         self.final = text
-        if self._adapter.live_text_finalizes:
-            # A stream cannot be deleted: it finishes carrying the final text.
-            return ""
         if self.message_id:
             await self._adapter.delete_message(self._chat_id, self.message_id)
         return text

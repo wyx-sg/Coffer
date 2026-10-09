@@ -48,11 +48,18 @@ class InternalEngineConfigService:
         operator may also be changing on another machine (they converge through
         vault sync).
         """
+        was = (await self.get()).upkeep(pass_name)
         saved = await self._repo.set(upkeep={pass_name: setting})
         await self._audit.record(
             AuditEventType.INTERNAL_ENGINE_MODEL_SET.value,
             actor=actor,
             details={
+                # The pass this edit changed, as it was and as it is now.
+                "pass": pass_name,
+                "enabled_from": was.enabled,
+                "enabled_to": setting.enabled,
+                "interval_s_from": was.interval_s,
+                "interval_s_to": setting.interval_s,
                 "auto_aggregate_enabled": saved.auto_aggregate_enabled,
                 "aggregate_interval_s": saved.aggregate_interval_s,
                 "auto_distil_enabled": saved.auto_distil_enabled,
@@ -72,10 +79,11 @@ class InternalEngineConfigService:
         machine.
         """
         cleaned = model.strip() if model and model.strip() else None
+        was = (await self.get()).transcribe_model
         saved = await self._repo.set_transcribe_model(cleaned)
         await self._audit.record(
             AuditEventType.INTERNAL_ENGINE_MODEL_SET.value,
             actor=actor,
-            details={"transcribe_model": saved.transcribe_model},
+            details={"transcribe_model": saved.transcribe_model, "transcribe_model_from": was},
         )
         return saved

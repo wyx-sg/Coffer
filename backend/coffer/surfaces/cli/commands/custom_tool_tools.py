@@ -25,6 +25,7 @@ from coffer.surfaces.cli.commands.custom_tool_common import (
     json_arg,
     pairs,
     read_group,
+    set_rules,
     show_group,
     show_preview,
     show_test,
@@ -51,6 +52,7 @@ def _tool_body(
     body_template: str | None = None,
     schema: str | None = None,
     changes_data: bool | None = None,
+    response_rules: str | None = None,
 ) -> dict[str, Any]:
     body = _io.body_from(data, sets, as_json=as_json)
     for key, value in (
@@ -68,6 +70,7 @@ def _tool_body(
         body["body_template"] = _io.read_text(body_template, as_json=as_json)
     if schema is not None:
         body["input_schema"] = json_arg(schema, "--schema", as_json=as_json)
+    set_rules(body, response_rules, as_json=as_json)
     return body
 
 
@@ -95,6 +98,11 @@ _C = typer.Option(
     None,
     "--changes-data/--read-only",
     help="Whether the tool changes data (default: on for every method but GET)",
+)
+_R = typer.Option(
+    None,
+    "--response-rules",
+    help="Own response rules, a JSON array (text, @file or -); 'group' follows the group's",
 )
 
 
@@ -148,6 +156,7 @@ def add(
     body_template: str | None = _B,
     schema: str | None = _S,
     changes_data: bool | None = _C,
+    response_rules: str | None = _R,
     data: str | None = _io.data_option("The tool as JSON (text, @file or -)"),
     sets: list[str] | None = _io.set_option(),
     as_json: bool = _io.json_option(),
@@ -165,6 +174,7 @@ def add(
         body_template=body_template,
         schema=schema,
         changes_data=changes_data,
+        response_rules=response_rules,
     )
     _io.emit(
         _io.call("POST", group_path(name) + "/tools", as_json=as_json, body=body),
@@ -186,6 +196,7 @@ def update(
     body_template: str | None = _B,
     schema: str | None = _S,
     changes_data: bool | None = _C,
+    response_rules: str | None = _R,
     data: str | None = _io.data_option("Fields to change, as JSON (text, @file or -)"),
     sets: list[str] | None = _io.set_option(),
     as_json: bool = _io.json_option(),
@@ -203,6 +214,7 @@ def update(
         body_template=body_template,
         schema=schema,
         changes_data=changes_data,
+        response_rules=response_rules,
     )
     _io.emit(
         _io.call("PATCH", f"{group_path(name)}/tools/{tool}", as_json=as_json, body=body),
@@ -312,13 +324,10 @@ def test(
     body = {"arguments": _args(args, as_json=as_json), "environment": env}
     path = f"{group_path(name)}/tools/{tool}"
     if dry_run:
-        _preview(_io.call("POST", path + "/preview", as_json=as_json, body=body), as_json=as_json)
+        result = _io.call("POST", path + "/preview", as_json=as_json, body=body)
+        _io.emit(result, as_json=as_json, human=show_preview)
         return
     _report(_io.call("POST", path + "/test", as_json=as_json, body=body), as_json=as_json)
-
-
-def _preview(result: dict[str, Any], *, as_json: bool) -> None:
-    _io.emit(result, as_json=as_json, human=show_preview)
 
 
 @tools.command("test-draft")
@@ -333,6 +342,7 @@ def test_draft(
     env: str | None = _E,
     args: str | None = _A,
     dry_run: bool = _DRY,
+    response_rules: str | None = _R,
     data: str | None = _io.data_option("The draft tool as JSON (text, @file or -)"),
     sets: list[str] | None = _io.set_option(),
     as_json: bool = _io.json_option(),
@@ -341,12 +351,11 @@ def test_draft(
 
     ``--dry-run`` prints the request instead of sending it."""
     draft = _io.body_from(data, sets, as_json=as_json)
+    set_rules(draft, response_rules, as_json=as_json)
     body = {"tool": draft, "arguments": _args(args, as_json=as_json), "environment": env}
     if dry_run:
-        _preview(
-            _io.call("POST", group_path(name) + "/preview", as_json=as_json, body=body),
-            as_json=as_json,
-        )
+        result = _io.call("POST", group_path(name) + "/preview", as_json=as_json, body=body)
+        _io.emit(result, as_json=as_json, human=show_preview)
         return
     _report(
         _io.call("POST", group_path(name) + "/test", as_json=as_json, body=body), as_json=as_json
@@ -366,6 +375,9 @@ def test_unsaved(
     ),
     var: list[str] | None = typer.Option(None, "--var", help="NAME=value for {env:NAME}; repeat"),
     timeout: int = typer.Option(30, "--timeout"),
+    response: str | None = typer.Option(
+        None, "--response", help="The draft group's response settings as JSON: text, @file or -"
+    ),
     args: str | None = _A,
     data: str | None = _io.data_option("The draft tool as JSON (text, @file or -)"),
     sets: list[str] | None = _io.set_option(),
@@ -380,6 +392,8 @@ def test_unsaved(
         "tool": _io.body_from(data, sets, as_json=as_json),
         "arguments": _args(args, as_json=as_json),
     }
+    if response is not None:
+        body["response"] = json_arg(response, "--response", as_json=as_json)
     _report(_io.call("POST", GROUPS + "/test", as_json=as_json, body=body), as_json=as_json)
 
 

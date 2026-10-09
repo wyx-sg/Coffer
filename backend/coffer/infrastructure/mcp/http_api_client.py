@@ -20,6 +20,13 @@ environment's base URL — so a missing or unapproved secret stops only calls in
 that environment; a value is masked out of every result before it leaves this
 module.
 
+An answer is judged by the HTTP status (400 or more fails) and then by the
+tool's response rules (``domain/mcp/http_api_response``): a 200 whose header or
+JSON field says the API failed is an error result, explained with the value
+read and the API's own message. The result names the headers the group asked
+to see, every diagnostic header when the call failed, and says when the body
+was empty.
+
 The base URL is an endpoint the user configured as their own, so these calls
 are exempt from the SSRF guard (Principles → Network defaults).
 """
@@ -28,13 +35,13 @@ from __future__ import annotations
 
 import time
 from collections.abc import Awaitable, Callable
-from http import HTTPStatus
 from typing import Any
 
 import httpx
 import mcp.types as mcp_types
 from mcp import MCPError
 
+from coffer.application.mcp.call_content import publish_exchange
 from coffer.domain.error_base import CofferError
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
@@ -45,36 +52,18 @@ from coffer.domain.mcp.http_api_environment import (
 )
 from coffer.domain.mcp.http_api_render import ArgumentsInvalid, RenderedRequest, RenderError
 from coffer.domain.mcp.http_api_request import build_request
+from coffer.domain.mcp.http_api_response import SENSITIVE_HEADERS, judge
 from coffer.domain.secret_errors import SecretBindingPending
-
-#: The most of a response body a tool returns (spec: "read at most 1 MiB").
-MAX_RESPONSE_BYTES = 1024 * 1024
-MASK = "***"
-#: The response headers a test reports (spec mcp-gateway "Report what a custom
-#: tool's test reached"): ids that name the request on the API's side, and who
-#: answered when. Every other header — cookies, auth challenges, anything
-#: unknown — is left out.
-DIAGNOSTIC_HEADERS = frozenset(
-    {
-        "date",
-        "server",
-        "via",
-        "retry-after",
-        "x-request-id",
-        "request-id",
-        "x-correlation-id",
-        "x-trace-id",
-        "traceparent",
-        "x-b3-traceid",
-        "x-amzn-requestid",
-        "x-amzn-trace-id",
-        "x-amz-request-id",
-        "x-amz-cf-id",
-        "cf-ray",
-    }
+from coffer.infrastructure.mcp.http_api_exchange import request_record, response_record
+from coffer.infrastructure.mcp.http_api_outcome import (
+    DIAGNOSTIC_HEADERS,
+    MAX_RESPONSE_BYTES,
+    HttpCallOutcome,
+    ResponseCheck,
+    diagnostic_headers,
+    mask_secrets,
+    response_check,
 )
-#: The longest diagnostic header value kept.
-DIAGNOSTIC_VALUE_MAX = 256
 
 NotificationCallback = Callable[[Any], Awaitable[None]]
 #: Resolve one environment's secret headers: ``{header: value}``. Raises
@@ -109,83 +98,6 @@ def _text_result(text: str, *, is_error: bool) -> mcp_types.CallToolResult:
     )
 
 
-class HttpCallOutcome:
-    """What one request returned, before it is shaped into a tool result."""
-
-    __slots__ = (
-        "body",
-        "content_type",
-        "duration_ms",
-        "headers",
-        "location",
-        "status",
-        "truncated",
-        "url",
-    )
-
-    def __init__(
-        self,
-        *,
-        url: str,
-        status: int,
-        body: str,
-        truncated: bool,
-        duration_ms: int,
-        content_type: str | None,
-        location: str | None,
-        headers: dict[str, str] | None = None,
-    ) -> None:
-        self.url = url
-        #: The allow-listed response headers (:func:`diagnostic_headers`).
-        self.headers = headers or {}
-        self.status = status
-        self.body = body
-        self.truncated = truncated
-        self.duration_ms = duration_ms
-        self.content_type = content_type
-        self.location = location
-
-    @property
-    def is_error(self) -> bool:
-        return self.status >= 400
-
-    def status_line(self) -> str:
-        try:
-            reason = HTTPStatus(self.status).phrase
-        except ValueError:
-            reason = ""
-        return f"HTTP {self.status} {reason}".rstrip()
-
-    def as_text(self) -> str:
-        parts = [self.status_line()]
-        if self.location is not None:
-            parts.append(f"Location: {self.location} (not followed)")
-        text = "\n".join(parts)
-        if self.body:
-            text += "\n\n" + self.body
-        if self.truncated:
-            text += f"\n\n[response cut at {MAX_RESPONSE_BYTES} bytes]"
-        return text
-
-
-def mask_secrets(text: str, secrets: list[str]) -> str:
-    for value in secrets:
-        if value:
-            text = text.replace(value, MASK)
-    return text
-
-
-def diagnostic_headers(headers: httpx.Headers, secrets: list[str]) -> dict[str, str]:
-    """The allow-listed response headers, names lower-cased, each value
-    masked and cut to :data:`DIAGNOSTIC_VALUE_MAX` characters."""
-    out: dict[str, str] = {}
-    for name, value in headers.items():
-        key = name.lower()
-        if key in DIAGNOSTIC_HEADERS:
-            out[key] = mask_secrets(value, secrets)[:DIAGNOSTIC_VALUE_MAX]
-    return out
-
-
 def overlay_for(env: HttpApiEnvironment, overlay: dict[str, str]) -> dict[str, str]:
     """``{header: value}`` of ``env`` out of an overlay keyed by slot."""
     slots = env.slot_refs()
@@ -213,13 +125,16 @@ async def send_request(
     timeout_seconds: float,
     secrets: list[str],
     client_factory: Callable[[], httpx.AsyncClient] | None = None,
+    check: ResponseCheck | None = None,
 ) -> HttpCallOutcome:
-    """Send one request. Raises ``UpstreamTimeout``; returns every answer.
+    """Send one request and judge the answer by ``check``. Raises
+    ``UpstreamTimeout``; returns every answer.
 
     A connection failure is reported as an outcome with status 0 rather than
     raised: the "upstream" is this module, and it is healthy.
     """
     started = time.monotonic()
+    check = check or ResponseCheck()
     client = (
         client_factory()
         if client_factory is not None
@@ -241,17 +156,39 @@ async def send_request(
                 chunks.append(chunk)
                 size += len(chunk)
             raw = b"".join(chunks)
-            body = raw.decode(response.encoding or "utf-8", errors="replace")
+            body = mask_secrets(raw.decode(response.encoding or "utf-8", errors="replace"), secrets)
             location = response.headers.get("location") if response.is_redirect else None
+            # Rules read the masked headers: a value never leaves this module
+            # unmasked, not even inside a failure's explanation.
+            masked = {
+                k.lower(): mask_secrets(v, secrets)
+                for k, v in response.headers.items()
+                if k.lower() not in SENSITIVE_HEADERS
+            }
+            failure = (
+                judge(
+                    check.rules,
+                    status=response.status_code,
+                    headers=masked,
+                    body=body,
+                    truncated=truncated,
+                )
+                if response.status_code < 400
+                else None
+            )
             return HttpCallOutcome(
                 url=mask_secrets(request.url, secrets),
                 status=response.status_code,
-                body=mask_secrets(body, secrets),
+                body=body,
                 truncated=truncated,
                 duration_ms=int((time.monotonic() - started) * 1000),
                 content_type=response.headers.get("content-type"),
                 location=mask_secrets(location, secrets) if location else None,
-                headers=diagnostic_headers(response.headers, secrets),
+                headers=diagnostic_headers(response.headers, secrets, check.headers),
+                body_bytes=len(raw),
+                rule_failure=failure,
+                named=check.headers,
+                all_headers={k: mask_secrets(v, secrets) for k, v in response.headers.items()},
             )
     except httpx.TimeoutException as e:
         raise UpstreamTimeout(f"request timed out after {timeout_seconds:g}s") from e
@@ -345,12 +282,19 @@ class HttpApiUpstreamConnection:
             request = build_request(self._transport, env, tool, args, overlay)
         except RenderError as e:
             return _text_result(mask_secrets(refusal_text(e), secrets), is_error=True)
-        outcome = await send_request(
-            request,
-            timeout_seconds=self._transport.timeout_for(env),
-            secrets=secrets,
-            client_factory=self._client_factory,
-        )
+        sent = request_record(request, secrets)
+        try:
+            outcome = await send_request(
+                request,
+                timeout_seconds=self._transport.timeout_for(env),
+                secrets=secrets,
+                client_factory=self._client_factory,
+                check=response_check(self._transport, tool),
+            )
+        except UpstreamTimeout:
+            publish_exchange(request=sent, response=None)
+            raise
+        publish_exchange(request=sent, response=response_record(outcome, MAX_RESPONSE_BYTES))
         return _text_result(outcome.as_text(), is_error=outcome.is_error or outcome.status == 0)
 
     async def close(self) -> None:
@@ -364,12 +308,14 @@ __all__ = [
     "EnvSecrets",
     "HttpApiUpstreamConnection",
     "HttpCallOutcome",
+    "ResponseCheck",
     "build_request",
     "diagnostic_headers",
     "list_tools_result",
     "mask_secrets",
     "overlay_for",
     "refusal_text",
+    "response_check",
     "send_request",
     "tool_annotations",
 ]

@@ -102,6 +102,8 @@ class Reconciler:
         self._last: PassReport | None = None
         self._holder: asyncio.Task[object] | None = None
         self._listeners: list[PassListener] = []
+        #: Set by :meth:`freeze`: no pass writes again in this process.
+        self._frozen = False
 
     # --- registry ------------------------------------------------------------
 
@@ -209,6 +211,14 @@ class Reconciler:
             finally:
                 self._holder = None
 
+    def freeze(self) -> None:
+        """Run no pass again in this process. The uninstall's last word on the
+        agents' files (spec daemon "Uninstall Coffer from this machine"): a
+        periodic pass between removing the skill links and the daemon's exit
+        would otherwise put them back. A frozen pass plans nothing and writes
+        nothing."""
+        self._frozen = True
+
     async def serve(self) -> None:
         """The periodic loop. The boot pass is the lifespan's to await; this
         waits one period (or a hint) before its first pass. Runs until
@@ -270,6 +280,8 @@ class Reconciler:
         clock = time.monotonic()
         results: list[ItemResult] = []
         failures: list[TargetFailure] = []
+        if self._frozen:
+            names = ()
         async with self._locked():
             token = _in_pass.set(True)
             try:

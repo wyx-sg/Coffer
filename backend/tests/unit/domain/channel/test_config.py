@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from coffer.domain.channel.config import (
+    SYSTEM_PROMPT_MAX_LENGTH,
     ChannelConfigModel,
     SeaTalkChannelConfig,
     TelegramChannelConfig,
@@ -152,18 +153,15 @@ def test_steps_are_shown_unless_the_channel_hides_them():
     assert parse_channel_config({**TELEGRAM_CONFIG, "show_steps": False}).show_steps is False
 
 
-@pytest.mark.acceptance(
-    spec="channels", scenario="the ping threshold comes from the channel's settings"
-)
-def test_the_ping_threshold_defaults_to_ninety_seconds_and_zero_turns_it_off():
-    """spec channels "Ping the asker when a long turn ends"."""
-    assert parse_channel_config(SEATALK_CONFIG).notify_after_seconds == 90.0
-    assert (
-        parse_channel_config({**SEATALK_CONFIG, "notify_after_seconds": 0}).notify_after_seconds
-        == 0
-    )
-    with pytest.raises(ValidationError):
-        parse_channel_config({**SEATALK_CONFIG, "notify_after_seconds": 3601})
+def test_a_stored_config_with_the_retired_ping_threshold_still_parses():
+    """The long-turn ping was removed; a config written before keeps loading,
+    and the key is gone from what is read back (and so from the next write)."""
+    for config in (SEATALK_CONFIG, TELEGRAM_CONFIG):
+        stored = {**config, "notify_after_seconds": 300}
+        parsed = parse_channel_config(stored)
+        assert "notify_after_seconds" not in parsed.model_dump()
+        dumped = ChannelConfigModel.model_validate(stored).model_dump(mode="json")
+        assert "notify_after_seconds" not in dumped
 
 
 @pytest.mark.acceptance(
@@ -250,9 +248,10 @@ def test_root_model_round_trips_flat_dict():
         "wait_after_text_seconds": 1.5,
         "wait_after_forward_seconds": 5.0,
         "show_steps": True,
-        "notify_after_seconds": 90.0,
         "new_conversation_after_idle_hours": 24.0,
         "directories": [],
+        "direct_system_prompt": "",
+        "group_system_prompt": "",
         "runs_on": None,
     }
 
@@ -269,9 +268,10 @@ def test_root_model_round_trips_seatalk_dict():
         "wait_after_text_seconds": 1.5,
         "wait_after_forward_seconds": 5.0,
         "show_steps": True,
-        "notify_after_seconds": 90.0,
         "new_conversation_after_idle_hours": 24.0,
         "directories": [],
+        "direct_system_prompt": "",
+        "group_system_prompt": "",
         "runs_on": None,
     }
 
@@ -321,3 +321,24 @@ def test_the_default_directory_must_be_absolute() -> None:
     assert parsed.default_agent_config == {"cwd": "/src/app"}
     with pytest.raises(ValidationError, match="absolute"):
         parse_channel_config({**base, "default_agent_config": {"cwd": "src/app"}})
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a system prompt longer than 4,000 characters is refused"
+)
+@pytest.mark.parametrize("field", ["direct_system_prompt", "group_system_prompt"])
+def test_a_system_prompt_is_capped_at_4000_characters(field: str) -> None:
+    at_limit = parse_channel_config({**TELEGRAM_CONFIG, field: "x" * SYSTEM_PROMPT_MAX_LENGTH})
+    assert len(getattr(at_limit, field)) == SYSTEM_PROMPT_MAX_LENGTH == 4000
+    with pytest.raises(ValidationError):
+        parse_channel_config({**TELEGRAM_CONFIG, field: "x" * (SYSTEM_PROMPT_MAX_LENGTH + 1)})
+
+
+def test_system_prompts_default_to_empty_and_are_trimmed_but_kept_inside() -> None:
+    parsed = parse_channel_config(
+        {**SEATALK_CONFIG, "group_system_prompt": "\n  Reply in English.\n\n- Be brief.  \n"}
+    )
+    assert parsed.direct_system_prompt == ""
+    assert parsed.group_system_prompt == "Reply in English.\n\n- Be brief."
+    blank = parse_channel_config({**TELEGRAM_CONFIG, "direct_system_prompt": " \n\t"})
+    assert blank.direct_system_prompt == ""

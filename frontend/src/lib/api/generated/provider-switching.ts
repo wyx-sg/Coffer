@@ -96,6 +96,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/providers/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Provider Health
+         * @description Each connection's kept verdict; touches no endpoint.
+         */
+        get: operations["list_provider_health_api_v1_providers_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/providers/model-switch/apply": {
         parameters: {
             query?: never;
@@ -230,6 +250,26 @@ export interface paths {
          *     scope does not name the agent).
          */
         post: operations["activate_provider_api_v1_providers__uid__activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/providers/{uid}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Provider
+         * @description List ``uid``'s models now and keep the verdict (404 for no such connection).
+         */
+        post: operations["check_provider_api_v1_providers__uid__check_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -574,10 +614,22 @@ export interface components {
             /** Prompt */
             prompt: string;
         };
+        /**
+         * HealthSource
+         * @enum {string}
+         */
+        HealthSource: "check" | "request";
+        /**
+         * HealthStatus
+         * @enum {string}
+         */
+        HealthStatus: "reachable" | "key_rejected" | "unreachable";
         /** ListModelsIn */
         ListModelsIn: {
             /** Base Url */
             base_url?: string | null;
+            /** Connection Uid */
+            connection_uid?: string | null;
             /** Provider */
             provider: string;
             /** Secret Ref */
@@ -797,6 +849,14 @@ export interface components {
          */
         Protocol: "anthropic" | "openai" | "ollama" | "unknown";
         /**
+         * ProviderCheckOut
+         * @description What a check found; ``health`` is ``None`` when nothing was checked (the
+         *     connection's key waits for approval, or it is a retired connection).
+         */
+        ProviderCheckOut: {
+            health: components["schemas"]["ProviderHealthOut"] | null;
+        };
+        /**
          * ProviderCreate
          * @description Create an LLM connection. For ``anthropic`` / ``openai`` / ``unknown``
          *     supply EXACTLY one of ``secret_value`` / ``secret_ref`` (a local runtime may
@@ -831,6 +891,36 @@ export interface components {
         ProviderDeletePreviewOut: {
             /** Agents */
             agents: components["schemas"]["DeletePreviewAgentOut"][];
+        };
+        /**
+         * ProviderHealthListOut
+         * @description Every connection that has a verdict; one without has never been checked.
+         */
+        ProviderHealthListOut: {
+            /** Connections */
+            connections: components["schemas"]["ProviderHealthOut"][];
+        };
+        /**
+         * ProviderHealthOut
+         * @description One connection's last verdict: does its endpoint answer, and take its key.
+         */
+        ProviderHealthOut: {
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /** Message */
+            message: string;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            source: components["schemas"]["HealthSource"];
+            status: components["schemas"]["HealthStatus"];
+            /** Uid */
+            uid: string;
         };
         /**
          * ProviderListOut
@@ -1421,6 +1511,46 @@ export interface operations {
             };
         };
     };
+    list_provider_health_api_v1_providers_health_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderHealthListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     apply_model_switch_api_v1_providers_model_switch_apply_post: {
         parameters: {
             query?: never;
@@ -1792,6 +1922,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActivateOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    check_provider_api_v1_providers__uid__check_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderCheckOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

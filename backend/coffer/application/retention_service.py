@@ -123,11 +123,13 @@ class RetentionService:
             raise UnknownPrunableTable(f"{table_name!r} follows another table's policy")
         if days is not None and days <= 0:
             raise ValueError(f"retention_days must be None or positive, got {days}")
+        previous = (await self._repo.get(table_name)).retention_days
         await self._repo.update_retention(table_name, days)
         await self._audit.record(
             AuditEventType.RETENTION_UPDATED.value,
             actor=actor,
-            details={"table": table_name, "retention_days": days},
+            # ``None`` on either side is "keep forever".
+            details={"table": table_name, "retention_days": days, "previous_days": previous},
         )
 
     async def preview(

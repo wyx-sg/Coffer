@@ -1,8 +1,8 @@
 """Remembering what a turn's reply was delivered as, so it can be withdrawn (spec
 channels "Withdraw a bot reply on the owner's command").
 
-A reply is more than one platform message: a long answer is cut into parts, the
-files it carries and a details card are messages of their own. ``ReplyTracker``
+A reply is more than one platform message: a long answer is cut into parts, and
+the files it carries are messages of their own. ``ReplyTracker``
 collects the ids of every message one turn's reply produced and files them under
 one ``reply_id`` once the reply is out, which is what ``/del`` and the 🗑 button
 resolve. In a group the reply's last text message carries that button.
@@ -107,8 +107,15 @@ class ReplyTracker:
             self.note(sent)
 
     async def send(self, text: str) -> None:
-        """Send ``text`` as part of the reply (the group's 🗑 button riding on it)."""
-        self.note(await self.send_reply(text, self.buttons()))
+        """Send ``text`` as part of the reply (the group's 🗑 button riding on it).
+
+        What goes out without buttons is plain text, which only a transport that
+        REMOVES messages can take back; SeaTalk can rewrite only a card, so its
+        direct-chat text is not remembered and ``/del`` finds nothing there."""
+        buttons = self.buttons()
+        sent = await self.send_reply(text, buttons)
+        if buttons or self.capabilities.withdraw_removes:
+            self.note(sent)
 
     async def commit(self) -> None:
         """File what the reply turned out to be. Best-effort: a ledger that fails

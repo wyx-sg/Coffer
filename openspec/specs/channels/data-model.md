@@ -19,9 +19,10 @@ ChannelConfig (discriminator: channel_type)
 │   ├── wait_after_text_seconds: float = 1.5     # burst quiet window after text (0–60)
 │   ├── wait_after_forward_seconds: float = 5.0  # …after a forward or bare files (0–60)
 │   ├── show_steps: bool = True             # step lines under the live status line
-│   ├── notify_after_seconds: float = 90.0  # long-turn ping threshold (0–3600; 0 = off)
 │   ├── new_conversation_after_idle_hours: float = 24.0  # idle hours before a chat's next message opens a new conversation (0–8760; 0 = never)
 │   ├── directories: list[str] = []         # absolute paths `/dir` may switch into (≤32)
+│   ├── direct_system_prompt: str = ""      # owner's prompt for direct chats + their threads (≤4000, trimmed)
+│   ├── group_system_prompt: str = ""       # owner's prompt for group main chats + threads (≤4000, trimmed)
 │   └── runs_on: str | None = None          # machine_id that runs the adapter
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
@@ -34,6 +35,11 @@ ChannelConfig (discriminator: channel_type)
 
 Validation rules:
 
+- `direct_system_prompt` and `group_system_prompt` are plain text of at most
+  4,000 characters (`SYSTEM_PROMPT_MAX_LENGTH`), stripped of surrounding
+  whitespace; empty means none. They are read from the stored config each time a
+  turn's system prompt is composed (`ChannelNoteReader` → `ChannelNote.owner_prompt`),
+  never copied onto the live binding, so an edit applies from the next turn.
 - `*_ref` fields must not look like raw secrets (a Telegram token pattern or
   a long high-entropy string is rejected with a pointer to the secret
   store) — same posture as `mcp_server`'s static-value secret rejection.
@@ -161,11 +167,11 @@ directory (`FileAvatarStore`, `infrastructure/channel/avatar_store.py`).
 
 ## `runs.db` — the thread tables
 
-The three tables below are history and machine-local: they name
+The tables below are history and machine-local: they name
 conversations, and conversations do not travel. Each names its channel by
 `resource_uid`. No
 foreign key points at the channel — it is a file — so the channel's `on_delete`
-deletes its thread, history and outbox rows (`delete_for_channel`).
+deletes its thread, history, cursor, outbox and reply rows (`delete_for_channel`).
 
 ### `channel_thread_conversations`
 
@@ -234,6 +240,33 @@ earlier conversation from chat") reads.
 | `opened_at`       | DATETIME (UTC)                               |                                           |
 
 Index on `(resource_uid, chat_id, thread_id)`.
+
+### `channel_thread_cursors`
+
+How far each conversation has seen each **platform** thread ("Ground a thread
+turn in a bounded slice of the thread"): the message that triggered the
+conversation's latest turn there. A conversation with no row for a thread gets
+the thread's latest messages on its next turn there; one with a row gets only
+what was posted after that message. Ids and times only — never a message's text.
+
+| column            | type             | notes                                                                                           |
+| ----------------- | ---------------- | ----------------------------------------------------------------------------------------------- |
+| `resource_uid`    | VARCHAR NOT NULL | the channel's uid                                                                               |
+| `chat_id`         | VARCHAR NOT NULL | the chat                                                                                        |
+| `thread_id`       | VARCHAR NOT NULL | the platform thread the messages live in (not the conversation thread)                          |
+| `conversation_id` | VARCHAR NOT NULL | soft reference into `conversations`; `""` while the conversation the turn opens does not exist |
+| `last_message_id` | VARCHAR NOT NULL | the message that triggered that conversation's latest turn in the thread                        |
+| `last_message_at` | DATETIME (UTC)   | when that message was sent — finds the place when the platform no longer returns the message   |
+| `updated_at`      | DATETIME (UTC)   | when the row was written                                                                        |
+
+Primary key `(resource_uid, chat_id, thread_id, conversation_id)`.
+
+A message read before its conversation exists (the thread's first, after `/new`,
+after an idle rollover) writes its row under `conversation_id = ""`; the turn,
+once its conversation is open, renames that row to the conversation's id — or
+drops it, when the conversation already has a row there. A `""` row older than
+ten minutes is not trusted (its turn never opened a conversation). A row is never
+written for a read that failed, so nothing posted in between is skipped.
 
 ### `channel_outbox`
 
@@ -320,13 +353,14 @@ EphemeralTarget:    who a privately-delivered reply is addressed to
 SentMessage:        what a send returned — the last message's id and the ids of
                     every message the send produced — so a later rewrite or
                     withdrawal can address them
-ChannelCapabilities: supports_live_text, live_text_persists,
+ChannelCapabilities: supports_live_text,
                     supports_card_update, supports_buttons, supports_typing,
                     supports_reactions, supports_media,
                     supports_history_fetch, max_message_chars,
                     withdraw_window_hours, withdraw_removes (can a bot message be
                     taken back, for how long, and does that remove it),
-                    streams_in_groups,
+                    collapses_details (does the transport fold a reply's
+                    `## Details` section itself),
                     mention_template, mention_email_template — how the
                     transport spells an @mention of an id (or of an email
                     address); an empty template means it cannot mention
@@ -335,8 +369,7 @@ ChannelCapabilities: supports_live_text, live_text_persists,
 Adapters translate platform payloads to/from these; the application core
 never sees a Telegram update or SeaTalk event shape. The core asks `supports_live_text`
 ("is there a surface I can keep updating?"), never whether a delivered text message can be
-rewritten, because SeaTalk streams one without being able to (see "Grow a reply in place on
-one live surface").
+rewritten (see "Show a turn's progress on one live surface").
 
 ## Audit events (spec channels)
 

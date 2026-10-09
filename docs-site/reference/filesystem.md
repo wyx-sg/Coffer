@@ -141,6 +141,8 @@ See [Daemon and processes](/architecture/daemon) and [Running the daemon](/guide
 
 To undo an upgrade by hand, point the symlinks back at the previous version directory. A frozen daemon deploys its sibling binaries here on start; a source install uses the console scripts `pip` put on `PATH` instead. See [Distribution and releases](/architecture/distribution).
 
+`coffer update` replaces the binaries here with a newer release's. `coffer uninstall` deletes `bin/` and leaves the rest of `~/.coffer` in place; see [Install → Uninstall](/start/install#uninstall).
+
 ### Skill working files
 
 | Path | Purpose | Owner | Syncs | Safe to delete |

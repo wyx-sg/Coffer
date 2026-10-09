@@ -240,3 +240,71 @@ def test_port_clear_away_from_a_daemon_on_a_chosen_port_asks_for_a_restart(
     assert res.exit_code == 0, res.output
     assert _config(home)["port"] is None
     assert "coffer daemon restart" in res.output
+
+
+def _publish(home: Path, pid: int) -> Path:
+    path = home / ".coffer" / "daemon.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    from coffer.infrastructure.daemon.pid_lock import write
+
+    write(
+        path,
+        DaemonInfo(
+            version=1,
+            pid=pid,
+            port=1,
+            token="t",
+            started_at=datetime.now(tz=UTC),
+            binary_path="/x",
+        ),
+    )
+    return path
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="a restart replaces a daemon that does not answer")
+def test_restart_kills_a_daemon_that_does_not_exit_and_starts_another(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from coffer.surfaces.cli import daemon_cmd
+
+    path = _publish(home, 4242)
+    forced: list[int] = []
+    started: list[bool] = []
+    monkeypatch.setattr(daemon_cmd, "pid_is_coffer_daemon", lambda _pid: True)
+
+    def _force(pid: int) -> str:
+        forced.append(pid)
+        return "killed"
+
+    monkeypatch.setattr(daemon_cmd, "stop_daemon_process", _force)
+    monkeypatch.setattr(daemon_cmd, "_start_daemon", lambda: started.append(True))
+
+    res = runner.invoke(app, ["daemon", "restart"])
+
+    assert res.exit_code == 0, res.output
+    assert forced == [4242]
+    assert "was killed" in res.output
+    assert not path.exists(), "the killed daemon's discovery file is removed"
+    assert started == [True]
+
+
+def test_stop_reports_a_daemon_that_does_not_exit_and_points_at_restart(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`stop` never kills: past the grace it says so and names `restart`."""
+    from coffer.surfaces.cli import daemon_cmd
+
+    _publish(home, 4242)
+    signalled: list[int] = []
+    monkeypatch.setattr(daemon_cmd, "pid_is_coffer_daemon", lambda _pid: True)
+    monkeypatch.setattr(daemon_cmd.os, "kill", lambda pid, _sig: signalled.append(pid))
+    monkeypatch.setattr(daemon_cmd, "_wait_for_daemon_json_gone", lambda *_a, **_k: False)
+    monkeypatch.setattr(
+        daemon_cmd, "stop_daemon_process", lambda _pid: pytest.fail("stop must not force")
+    )
+
+    res = runner.invoke(app, ["daemon", "stop"])
+
+    assert res.exit_code == 1
+    assert signalled == [4242]
+    assert "coffer daemon restart" in res.output

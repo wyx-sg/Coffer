@@ -16,8 +16,9 @@ schema 和返回结果，Coffer 聚合的上游工具、资源和提示词的命
 | --- | --- | --- |
 | [`coffer__search_tools`](#coffer-search-tools) | 按意图对上游工具目录排序。 | 始终存在。 |
 | [`coffer__ask`](#coffer-ask) | 向所有者提问并等待回答。 | 仅在 Coffer 运行的对话轮次内。 |
+| [`coffer__channel_read_thread`](#coffer-channel-read-thread) | 一页一页地读取聊天会话串里较早的消息。 | 仅在 Coffer 运行的对话轮次内。 |
 
-完整列表就这两个。Coffer 的知识、记忆笔记和它自己的记录都没有对应工具：
+完整列表就这三个。Coffer 的知识、记忆笔记和它自己的记录都没有对应工具：
 智能体用自己的文件工具修改和读取知识与记忆，用 `coffer` 命令行读记录。见
 [不用工具处理知识、记忆和日志](#memory-and-logs-without-a-tool)。
 
@@ -138,6 +139,44 @@ BM25，依据每个工具的服务器、名称和描述。Coffer 自己的 `coff
 `selected` 是选中的标签，`text` 是所有者自己输入的话（二者可以有一个为空，但不会同时为空）。
 没有得到回答时（所有者停止了任务，或过了 24 小时），结果是 `{"answered": false, "message": "…"}`。
 格式不对的提问会以 `isError: true` 失败，并附上要修正的内容。
+
+## coffer\_\_channel\_read\_thread {#coffer-channel-read-thread}
+
+一页一页地读取一个聊天会话串里的消息，最新的一页在前。[消息渠道](/zh/guides/channels#groups-and-threads)上会话串里的轮次只带上会话串最近的消息（或者只带上自该对话在那里上一轮以来的新消息）；略去较早的消息时，它的上下文末尾有一行说明，写明这个工具和要传入的 `before`。其余参数由智能体从轮次的 `[Message origin]` 块里抄过来。
+
+它只通过本机上运行着的消息渠道读取，只读取该消息渠道已配对的聊天里的会话串（你和机器人的私聊，或你已经 @ 过机器人的群组），从不读取聊天的主历史。返回消息上的图片和文件用机器人的凭据下载，结果里给出它们的本地路径。在没有历史接口的 Telegram 上，调用会失败并说明这一点。它和 `coffer__ask` 一样是**按轮次限定**的：只在 `X-Coffer-Turn` 头指向一个正在运行的轮次的会话中列出并提供，所以在终端里启动的智能体永远看不到它，握手说明也不提它。在能读取会话串的平台上，轮次的渠道提示会告诉智能体这个工具。
+
+### 输入 {#input-2}
+
+| 属性 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `channel` | string | 是 | | 消息渠道的名称（来源块里的 `channel:` 行），或它的 uid。 |
+| `chat_id` | string | 是 | | 来源块里的聊天 ID。 |
+| `chat_kind` | string | 是 | | `direct` 或 `group`，取自来源块。 |
+| `thread_id` | string | 是 | | 来源块里的会话串 ID。 |
+| `before` | string | 否 | | 一个消息 ID：返回比它更早的消息。省略时返回最新的一页。 |
+| `limit` | integer | 否 | `20` | 每页消息数，1–100（更大的值按 100 读取）。 |
+
+### 结果 {#result-2}
+
+```json
+{
+  "messages": [
+    {
+      "message_id": "m-5",
+      "sender": "alice@example.com",
+      "sent_at": "2026-10-01T08:05:00+00:00",
+      "from_bot": false,
+      "text": "the deploy is red again",
+      "files": [{ "path": "/Users/you/.coffer/tmp/seatalk-media/3f…a1.png", "mime": "image/png", "filename": "chart.png" }]
+    }
+  ],
+  "has_more": true,
+  "next_before": "m-5"
+}
+```
+
+`messages` 是这一页，最早的在前。把 `next_before` 作为 `before` 传入，就能读取前一页；`has_more` 为 `false` 时它是 `null`。平台无法返回会话串的一部分时（SeaTalk 只返回最近 7 天的回复），结果里还有一个 `note` 说明这一点。消息渠道没有运行、聊天未被该消息渠道配对、缺少 `thread_id`、`before` 不在会话串里，以及平台拒绝读取，都会以 `isError: true` 失败，并附上说明是哪一种的消息。
 
 ## 上游名称 {#upstream-names}
 
