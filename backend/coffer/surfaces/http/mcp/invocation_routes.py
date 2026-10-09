@@ -10,8 +10,8 @@ from fastapi import APIRouter, Depends, Query
 
 from coffer.application.mcp.invocation_outcome import is_upstream_answered
 from coffer.application.resource_service import ResourceService
-from coffer.domain.errors import InvocationNotFound
 from coffer.domain.mcp.capability import MCPInvocation
+from coffer.domain.mcp.invocation_errors import InvocationNotFound
 from coffer.domain.pagination import Page, decode_cursor, paginate, position_of, time_and_id
 from coffer.infrastructure.mcp.persistence import MCPInvocationRepo
 from coffer.surfaces.http.auth import require_token
