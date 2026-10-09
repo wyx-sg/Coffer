@@ -44,6 +44,7 @@ from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
 from coffer.surfaces.http.cli_routes import router as cli_router
 from coffer.surfaces.http.daemon_port_routes import router as daemon_port_router
 from coffer.surfaces.http.daemon_restart_routes import router as daemon_restart_router
+from coffer.surfaces.http.daemon_uninstall_routes import router as daemon_uninstall_router
 from coffer.surfaces.http.daemon_upgrade_routes import router as daemon_upgrade_router
 from coffer.surfaces.http.desktop_request_routes import reset_desktop_requests
 from coffer.surfaces.http.desktop_request_routes import router as desktop_request_router
@@ -104,7 +105,8 @@ def include_all_routers(app: FastAPI) -> None:
         daemon_port_router,  # spec daemon (the port of the next start)
         daemon_restart_router,  # spec daemon (restart itself on request)
         setup_router,  # spec daemon (wait in a setup state for git)
-        daemon_upgrade_router,  # spec daemon (the upgrade hand-off)
+        daemon_upgrade_router,  # spec daemon (the upgrade hand-off and release check)
+        daemon_uninstall_router,  # spec daemon (uninstall)
         storage_router,  # spec daemon (Settings > Data: what Coffer stores)
         feature_router,  # spec experimental-features
         resource_router,

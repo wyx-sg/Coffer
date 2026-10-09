@@ -149,14 +149,69 @@ class DaemonRestartOut(BaseModel):
     port: int
 
 
+class ReleaseOut(BaseModel):
+    """A published release of Coffer."""
+
+    version: str
+    notes: str
+    #: When GitHub published it (ISO 8601), when known.
+    published_at: str | None = None
+    #: The release's page.
+    url: str
+
+
 class DaemonUpgradeOut(BaseModel):
-    """How to upgrade this Coffer (spec daemon "Hand an upgrade of Coffer to an agent")."""
+    """How to upgrade this Coffer (spec daemon "Hand an upgrade of Coffer to an
+    agent" and "Check the installed binaries for a new release")."""
 
     #: ``binaries`` (the installer's frozen binaries), ``app`` (the macOS
     #: desktop app) or ``source`` (a source checkout).
     install_method: Literal["binaries", "app", "source"]
     #: The prompt that has the person's agent upgrade it that way.
     handoff: HandoffOut
+    #: Whether this daemon checks for releases at all: only one running from
+    #: the installer's binaries does (the app checks itself).
+    checks: bool = False
+    #: The Check automatically switch (``update_check`` in daemon-config.json).
+    auto_check: bool = True
+    #: The last successful check.
+    checked_at: datetime | None = None
+    #: Why the last check failed, while it keeps failing.
+    last_error: str | None = None
+    #: The newest release found, when it is newer than the running version.
+    available: ReleaseOut | None = None
+
+
+class UninstallIn(BaseModel):
+    """An uninstall (spec daemon "Uninstall Coffer from this machine"); deleting
+    the data needs the app's presence grant for ``uninstall`` over ``delete-data``."""
+
+    delete_data: bool = False
+    nonce: str | None = None
+    signature: str | None = None
+
+
+class UninstallStepOut(BaseModel):
+    """One step of an uninstall: done, nothing to do, or failed with the reason."""
+
+    #: provider_routing, agent_connections, skill_links, login_job,
+    #: terminal_files, path_lines, binaries (and agents when listing failed).
+    key: str
+    outcome: str
+    detail: str = ""
+
+
+class UninstallOut(BaseModel):
+    """What an uninstall did, step by step; the daemon stops right after."""
+
+    ok: bool
+    steps: list[UninstallStepOut]
+    #: Whether the data is deleted once the daemon has stopped.
+    deletes_data: bool
+
+
+class UpgradeAutoCheckIn(BaseModel):
+    enabled: bool
 
 
 class DaemonResidencyOut(BaseModel):

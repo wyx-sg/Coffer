@@ -27,6 +27,7 @@ def test_the_prompt_names_the_version_the_install_method_and_the_upgrade_page() 
     assert "Coffer 0.3.1." in prompt
     assert "/h/.coffer/bin/0.3.1/coffer-daemon" in prompt
     assert f"{INSTALL_PAGE}#upgrade" in prompt
+    assert "`coffer update`" in prompt
     assert "Keep ~/.coffer exactly as it is" in prompt
     assert "`coffer daemon status`" in prompt and "`coffer --version`" in prompt
     assert "macOS 15.6, arm64" in prompt

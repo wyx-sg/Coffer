@@ -593,6 +593,54 @@ paths:
       summary: Get Status
       tags:
       - daemon
+  /api/v1/daemon/uninstall:
+    post:
+      operationId: uninstall_api_v1_daemon_uninstall_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UninstallIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UninstallOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Uninstall
+      tags:
+      - daemon
   /api/v1/daemon/upgrade:
     get:
       operationId: get_upgrade_api_v1_daemon_upgrade_get
@@ -625,6 +673,82 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Get Upgrade
+      tags:
+      - daemon
+  /api/v1/daemon/upgrade/auto-check:
+    put:
+      description: Switch the daily check on or off; the loop reads it on its next tick.
+      operationId: set_upgrade_auto_check_api_v1_daemon_upgrade_auto_check_put
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpgradeAutoCheckIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonUpgradeOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Set Upgrade Auto Check
+      tags:
+      - daemon
+  /api/v1/daemon/upgrade/check:
+    post:
+      description: Check for a newer release now (a daemon that does not check answers as is).
+      operationId: check_upgrade_api_v1_daemon_upgrade_check_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DaemonUpgradeOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Check Upgrade
       tags:
       - daemon
   /api/v1/fs/browse:
@@ -1279,8 +1403,28 @@ components:
       title: DaemonStatusOut
       type: object
     DaemonUpgradeOut:
-      description: How to upgrade this Coffer (spec daemon "Hand an upgrade of Coffer to an agent").
+      description: |-
+        How to upgrade this Coffer (spec daemon "Hand an upgrade of Coffer to an
+        agent" and "Check the installed binaries for a new release").
       properties:
+        auto_check:
+          default: true
+          title: Auto Check
+          type: boolean
+        available:
+          anyOf:
+          - $ref: '#/components/schemas/ReleaseOut'
+          - type: 'null'
+        checked_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Checked At
+        checks:
+          default: false
+          title: Checks
+          type: boolean
         handoff:
           $ref: '#/components/schemas/HandoffOut'
         install_method:
@@ -1290,9 +1434,19 @@ components:
           - source
           title: Install Method
           type: string
+        last_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Error
       required:
       - install_method
       - handoff
+      - checks
+      - auto_check
+      - checked_at
+      - last_error
+      - available
       title: DaemonUpgradeOut
       type: object
     EditorOptionOut:
@@ -1557,6 +1711,30 @@ components:
       - bytes
       title: LocalContentUsageOut
       type: object
+    ReleaseOut:
+      description: A published release of Coffer.
+      properties:
+        notes:
+          title: Notes
+          type: string
+        published_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Published At
+        url:
+          title: Url
+          type: string
+        version:
+          title: Version
+          type: string
+      required:
+      - version
+      - notes
+      - published_at
+      - url
+      title: ReleaseOut
+      type: object
     RuntimeHealthOut:
       description: |-
         The event loop's health and the background tasks' crash count.
@@ -1664,6 +1842,75 @@ components:
       required:
       - token
       title: TokenRotationOut
+      type: object
+    UninstallIn:
+      description: |-
+        An uninstall (spec daemon "Uninstall Coffer from this machine"); deleting
+        the data needs the app's presence grant for ``uninstall`` over ``delete-data``.
+      properties:
+        delete_data:
+          default: false
+          title: Delete Data
+          type: boolean
+        nonce:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Nonce
+        signature:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Signature
+      title: UninstallIn
+      type: object
+    UninstallOut:
+      description: What an uninstall did, step by step; the daemon stops right after.
+      properties:
+        deletes_data:
+          title: Deletes Data
+          type: boolean
+        ok:
+          title: Ok
+          type: boolean
+        steps:
+          items:
+            $ref: '#/components/schemas/UninstallStepOut'
+          title: Steps
+          type: array
+      required:
+      - ok
+      - steps
+      - deletes_data
+      title: UninstallOut
+      type: object
+    UninstallStepOut:
+      description: 'One step of an uninstall: done, nothing to do, or failed with the reason.'
+      properties:
+        detail:
+          default: ''
+          title: Detail
+          type: string
+        key:
+          title: Key
+          type: string
+        outcome:
+          title: Outcome
+          type: string
+      required:
+      - key
+      - outcome
+      - detail
+      title: UninstallStepOut
+      type: object
+    UpgradeAutoCheckIn:
+      properties:
+        enabled:
+          title: Enabled
+          type: boolean
+      required:
+      - enabled
+      title: UpgradeAutoCheckIn
       type: object
     UpstreamSummary:
       properties:

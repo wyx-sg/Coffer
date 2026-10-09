@@ -138,6 +138,16 @@ class KeychainAccessGroupBackend:
         if status not in (ERR_SEC_SUCCESS, ERR_SEC_ITEM_NOT_FOUND):
             raise SecretLocked(_describe(status))
 
+    def delete_all(self) -> None:
+        """Delete every item of Coffer's in the access group — the key and each
+        ``master-key.bak-*`` an import kept — in one call: a query without an
+        account matches them all (spec daemon "Uninstall Coffer from this
+        machine")."""
+        query = {k: v for k, v in self._query().items() if k != "kSecAttrAccount"}
+        status = self._api.delete(query)
+        if status not in (ERR_SEC_SUCCESS, ERR_SEC_ITEM_NOT_FOUND):
+            raise SecretLocked(_describe(status))
+
 
 def _describe(status: int) -> str:
     if status == ERR_SEC_MISSING_ENTITLEMENT:

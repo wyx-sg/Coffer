@@ -93,6 +93,7 @@ from coffer.surfaces.http.reconcile_wiring import (
     start_reconciler,
     wire_attention,
 )
+from coffer.surfaces.http.release_check_wiring import wire_release_check
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.secret_boundary_wiring import (
     remember_destination_sources,
@@ -279,6 +280,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Frozen builds only; no-op from source (spec daemon "Deploy frozen sibling
     # binaries and back up the history database before migrating", see binary_deploy).
     await asyncio.to_thread(deploy_frozen_sidecars)
+    wire_release_check()
     # Leftover of the retired transcript summary cache (derived, safe to drop).
     await asyncio.to_thread(remove_transcript_sidecar)
     # ONE-TIME (require-an-agent-while-on): an empty agent list becomes off.
