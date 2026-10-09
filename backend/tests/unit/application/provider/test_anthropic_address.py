@@ -22,10 +22,9 @@ def _cfg(**over: Any) -> ProviderConfig:
     return ProviderConfig.model_validate(data)
 
 
-_SPEC = "provider-switching"
-
-
-@pytest.mark.acceptance(spec=_SPEC, scenario="a gateway Claude Code runs on keeps working")
+@pytest.mark.acceptance(
+    spec="provider-switching", scenario="a gateway Claude Code runs on keeps working"
+)
 def test_a_gateway_claude_code_runs_on_gets_its_own_base_url() -> None:
     assert (
         anthropic_address_for(_cfg(), claude_code_on_it=True, codex_on_it=True)
@@ -39,7 +38,7 @@ def test_a_gateway_nothing_runs_on_is_left_for_the_person() -> None:
 
 
 @pytest.mark.acceptance(
-    spec=_SPEC, scenario="a DeepSeek connection gets DeepSeek's Anthropic address"
+    spec="provider-switching", scenario="a DeepSeek connection gets DeepSeek's Anthropic address"
 )
 def test_a_known_vendor_gets_its_anthropic_root() -> None:
     ds = _cfg(base_url="https://api.deepseek.com/")
