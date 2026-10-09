@@ -22,11 +22,11 @@ from __future__ import annotations
 import dataclasses
 import os
 import pathlib
-from typing import Any
 import re
 import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import Any
 
 from coffer.domain.knowledge.entry import Finding, KnowledgeFile, LinkRef, PageRef, SourceRef
 from coffer.infrastructure.knowledge import paths
