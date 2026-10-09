@@ -20,7 +20,6 @@ supersession check. Written atomically at mode `0600`
 | `port` | int | The bound port. The one authority for "where is Coffer" (spec daemon "Publish one private discovery file"). |
 | `token` | string | The API token for this daemon's lifetime (spec daemon "Require a token on every management call"). Why the file is `0600`. |
 | `started_at` | ISO-8601 | When this daemon bound its port. Reported by `/daemon/status`. |
-| `binary_path` | string | The executable that is serving — the frozen binary, or the interpreter of a run-from-source daemon. Named in the version-skew warning. |
 
 Lifecycle:
 

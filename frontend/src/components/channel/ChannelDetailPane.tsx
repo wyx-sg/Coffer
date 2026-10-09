@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ChannelPerson } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import type { ChannelTab } from "@/lib/channels/tabs";
+import { useAskAgainForChannel } from "@/lib/hooks/useChannelAskAgain";
 import {
   CHANNEL_KIND,
   useChannelAutoSave,
@@ -50,6 +51,7 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
   const { status, view } = useChannelView(channel);
   const removePerson = useRemoveChannelPerson(channel.uid);
   const reconnect = useReconnectChannel(channel.uid);
+  const askAgain = useAskAgainForChannel(channel.uid);
   const enable = useEnableResource();
   const del = useDeleteResource();
   const { save } = useChannelAutoSave(channel);
@@ -81,6 +83,9 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
       case "openSecrets":
         void navigate("/secrets");
         return;
+      case "askAgain":
+        askAgain.mutate();
+        return;
       case "refresh":
         void status.refetch();
         return;
@@ -102,7 +107,7 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
         channel={channel}
         view={view}
         status={status.data}
-        busy={reconnect.isPending || enable.isPending}
+        busy={reconnect.isPending || enable.isPending || askAgain.isPending}
         onCommand={onCommand}
         onPair={openPair}
       />

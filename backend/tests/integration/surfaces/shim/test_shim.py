@@ -200,7 +200,6 @@ def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             port=port,
             token=token,
             started_at=datetime.now(tz=UTC),
-            binary_path=sys.executable,
         ),
     )
 

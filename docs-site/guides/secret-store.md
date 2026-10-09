@@ -31,9 +31,8 @@ Every secret has one ref shape, `secret/<id>`, where `<id>` is 32 hex characters
 ```sh
 # From stdin, so the value never reaches your shell history
 printf '%s' "$GITHUB_TOKEN" | coffer secret set --name "GitHub token"
-# stored: GitHub token
-#   id:  secret/<id>
-#   uri: coffer://secret/<id>
+# stored: secret/<id>
+# cite it as: coffer://secret/<id>
 
 # Or at a hidden prompt
 coffer secret set --name "GitHub token"
@@ -67,19 +66,19 @@ coffer secret list
 
 ```text
                                      Secrets
-┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Ref          ┃ Name         ┃ Present in store ┃ Used by                 ┃ Readable by local processes ┃
+┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Label        ┃ Ref          ┃ Present in store ┃ Used by                 ┃ Readable by local processes ┃
 ┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ secret/<id>  │ GitHub token │ yes              │ mcp_server github       │ yes                         │
-│ secret/<id>  │ DeepSeek key │ no               │ provider deepseek       │ no                          │
-│ secret/<id>  │ Orders DB    │ yes              │ skill coffer-database   │ yes                         │
-│ secret/<id>  │ Old API      │ yes              │ (unreferenced)          │ yes                         │
+│ GitHub token │ secret/<id>  │ yes              │ mcp_server github       │ yes                         │
+│ DeepSeek key │ secret/<id>  │ no               │ provider deepseek       │ no                          │
+│ Orders DB    │ secret/<id>  │ yes              │ skill coffer-database   │ yes                         │
+│ Old API      │ secret/<id>  │ yes              │ (unreferenced)          │ yes                         │
 └──────────────┴──────────────┴──────────────────┴─────────────────────────┴─────────────────────────────┘
 ```
 
 The list shows every ref the store holds and every ref a registered resource cites:
 
-- **Name** — the secret's name, or empty if it has none.
+- **Label** — the secret's name, or empty if it has none.
 - **Present in store** — whether the store holds a value. After restoring a vault without its secrets, the `no` rows are the ones to set again.
 - **Used by** — the resources that cite the ref, the skills whose files cite a standalone secret's `coffer://secret/<id>`, and how many destinations wait for approval. `(unreferenced)` marks a secret nothing uses: a candidate to delete.
 - **Readable by local processes** — whether another program running as you can read the value where Coffer puts it: a stdio MCP server's environment, or a standalone secret you have allowed `coffer run` to use. See [what stays exposed](/architecture/security#what-stays-exposed).

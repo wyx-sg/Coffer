@@ -20,6 +20,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from coffer.application.channel.command_text import (
+    default_model_text,
     model_display,
 )
 from coffer.application.channel.conversation_ops import (
@@ -118,20 +119,27 @@ async def say_model(ctx: CommandContext) -> None:
     """``Model: Claude Sonnet 5.5 — from your next message``."""
     settings = await ctx.settings()
     model = settings.model
-    shown = await model_display(ctx.commands, settings.agent, model) if model else "Default model"
+    shown = await model_display(ctx.commands, settings.agent, model)
     await ctx.say(f"Model: {shown}{_where(ctx)}")
 
 
 async def _clear(ctx: CommandContext) -> None:
     if await _set(ctx, model=None):
-        await ctx.say(f"Model: the agent's default{_where(ctx)}")
+        settings = await ctx.settings()
+        shown = await default_model_text(ctx.commands, settings.agent)
+        await ctx.say(f"Model: {shown}{_where(ctx)}")
 
 
 async def _show(ctx: CommandContext) -> None:
     """Bare `/model`: the model card, else the settings in text."""
     settings = await ctx.settings()
     labels = await ctx.commands._model_suggestions.model_labels(settings.agent)
-    card = model_card(current=settings.model, picks=list(labels), labels=labels)
+    card = model_card(
+        current=settings.model,
+        picks=list(labels),
+        labels=labels,
+        default_label=await default_model_text(ctx.commands, settings.agent),
+    )
     if await ctx.show(card):
         return
     shown = await model_display(ctx.commands, settings.agent, settings.model)
@@ -150,4 +158,5 @@ async def current_model_card(ctx: CommandContext, *, page: int | None = None) ->
         picks=list(labels),
         labels=labels,
         page=page,
+        default_label=await default_model_text(ctx.commands, settings.agent),
     )

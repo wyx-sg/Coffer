@@ -280,3 +280,23 @@ async def test_the_probe_starts_in_a_directory_that_exists(tmp_path: pathlib.Pat
         agent_key="codex", config_dir=tmp_path / "does-not-exist"
     )
     assert built2[0].cwd == str(pathlib.Path.home())
+
+
+async def test_the_model_codex_marks_as_default_is_flagged() -> None:
+    peer = FakeCodexPeer(
+        [
+            {
+                "data": [
+                    _model("gpt-x"),
+                    _model("gpt-y", isDefault=True),
+                    _model("gpt-z", isDefault="yes"),
+                ],
+                "nextCursor": None,
+            }
+        ]
+    )
+    make, _ = _factory(peer)
+
+    models = await CodexRpcModelDiscovery(make).discover(agent_key="codex", config_dir=None)
+
+    assert [m.id for m in models if m.is_default] == ["gpt-y"]

@@ -14,7 +14,7 @@ Coffer 保存的、你希望带到另一台机器上的一切——MCP 服务器
 ├── resources/<kind>/<name>.json        one file per MCP server, skill, provider, knowledge collection
 ├── state/mcp-preferences/<server>.json the tools, prompts and resources you switched off on a server
 ├── state/settings/internal-engine.json 语音转文字模型和定期维护设置
-├── knowledge/<collection>/…            knowledge documents (Markdown)
+├── knowledge/<collection>/…            knowledge collections (README.md, sources/, pages/)
 ├── skills/<name>/…                     skill folders (SKILL.md and the rest)
 ├── secret/<ref>.enc                    encrypted secrets (never edit these)
 └── machines/<id>.json                  one descriptor per machine that syncs
@@ -75,7 +75,7 @@ Coffer 还会每分钟以及启动时扫描一次保险库，所以守护进程�
 
 保险库的每一次被接受的改动都是一个版本，记录时间、写入者（你、在磁盘上编辑、智能体、Coffer 或同步）以及哪台机器。任何文件或文件夹都有历史。密钥没有可读的历史，不能恢复。
 
-在 Web 界面里，知识文档和技能各有一个**历史**标签。它按最新在前列出各个版本，每个都写明做了什么、谁写的（**你**、**在磁盘上编辑**、按名字显示的智能体、**Coffer** 或**同步**）和什么时候，显示选中版本的差异，并提供**恢复此版本…**。Coffer 会先询问，然后把该文件（技能则是文件夹里的每个文件）写回那个版本，作为一个由你写入的新版本，并在审计日志里记为 `vault_file_restored`。如果文件在你打开标签之后又变了，恢复会被拒绝并返回 `VAULT_FILE_STALE`；重新打开标签再试即可。打开标签时，你在磁盘上做的编辑会先记成它自己的一个版本。Coffer 的内置技能也有这个标签，但没有历史，因为它在每次启动时重建。见[找回较早的版本](/zh/guides/knowledge#bring-back-an-earlier-version)。
+在 Web 界面里，技能有一个**历史**标签，知识页面或来源则有一个**历史**抽屉，从它窗格栏里的**历史**打开。两者都按最新在前列出各个版本，每个都写明做了什么、谁写的（**你**、**在磁盘上编辑**、按名字显示的智能体、**Coffer** 或**同步**）和什么时候，显示选中版本的差异，并提供**恢复此版本…**。Coffer 会先询问，然后把该文件（技能则是文件夹里的每个文件）写回那个版本，作为一个由你写入的新版本，并在审计日志里记为 `vault_file_restored`。如果文件在你打开历史之后又变了，恢复会被拒绝并返回 `VAULT_FILE_STALE`；重新打开历史再试即可。打开历史时，你在磁盘上做的编辑会先记成它自己的一个版本。Coffer 的内置技能也有这个标签，但没有历史，因为它在每次启动时重建。见[找回较早的版本](/zh/guides/knowledge#bring-back-an-earlier-version)。
 
 你也可以用 git 读历史：`git -C ~/.coffer/vault log -p -- <path>`。
 

@@ -5,7 +5,8 @@
 // internal-engine "Show the speech-to-text pair in Settings › General"):
 //
 //   • `chat` (an agent's model) — one `POST /api/v1/models/test-connection`, a
-//     minimal chat request to the chosen connection and model.
+//     minimal chat request to the chosen connection and model, on the wire
+//     the agent speaks (`probeEndpoint`).
 //   • `list` (speech to text) — one `POST /api/v1/models/list-models` for the
 //     chosen connection. A chat probe would fail on a speech model even on a
 //     healthy endpoint, so this asks the endpoint what it serves instead: it
@@ -22,6 +23,7 @@ import { useTranslation } from "react-i18next";
 import type { Provider } from "@/lib/api/providers";
 import { translateApiError } from "@/lib/api/errors";
 import { useListProviderModels, useTestConnection } from "@/lib/hooks/useModelIntrospection";
+import { probeEndpoint } from "@/lib/hooks/useModelSwitchTest";
 
 export type PairTestMode = "chat" | "list";
 
@@ -37,6 +39,7 @@ export function useModelPairTest(
   connection: Provider | null,
   model: string,
   mode: PairTestMode = "chat",
+  agentType?: string,
 ) {
   const { t } = useTranslation();
   const chat = useTestConnection();
@@ -52,8 +55,7 @@ export function useModelPairTest(
     const onError = (error: unknown) =>
       settle({ outcome: "failed", message: translateApiError(t, error) });
     const probe = {
-      provider: connection.protocol,
-      base_url: connection.base_url,
+      ...probeEndpoint(connection, agentType),
       secret_ref: connection.secret_ref,
     };
     if (mode === "chat") {

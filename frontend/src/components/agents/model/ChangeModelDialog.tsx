@@ -53,7 +53,7 @@ export function ChangeModelDialog({ agent, open, onOpenChange }: Props) {
 function Form({ agent, onClose }: { agent: AgentOut; onClose: () => void }) {
   const { t } = useTranslation();
   const draft = useAgentConnectionDraft(agent);
-  const test = useModelSwitchTest(draft.draftConnObj, draft.draftModel);
+  const test = useModelSwitchTest(draft.draftConnObj, draft.draftModel, agent.type);
   const [reviewing, setReviewing] = useState(false);
   if (draft.loading) return <Skeleton className="h-40 w-full" />;
   // A provider must have answered with this model before its change can be

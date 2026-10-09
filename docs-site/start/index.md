@@ -37,7 +37,7 @@ Everything Coffer manages is a **resource** of one of seven **kinds**. Every res
 | `mcp_server` | An upstream MCP server (stdio or HTTP) that Coffer runs and re-exposes to every agent | [MCP servers](/guides/mcp-servers) |
 | `agent` | A registered local coding agent: Claude Code or Codex | [Agents](/guides/agents) |
 | `skill` | An [AgentSkills](https://agentskills.io) folder, delivered into agents' `skills/` directories | [Skills](/guides/skills) |
-| `knowledge` | A collection: a folder of Markdown documents under `~/.coffer/vault/knowledge/` | [Knowledge](/guides/knowledge) |
+| `knowledge` | A collection: a wiki of Markdown pages compiled from kept sources, under `~/.coffer/vault/knowledge/` | [Knowledge](/guides/knowledge) |
 | `memory` | A partition of notes that Coffer builds from the agents' own memory, one per repository plus `global` | [Memory](/guides/memory) |
 | `channel` | A Telegram or SeaTalk bot you use to chat with your agents from your phone | [Channels](/guides/channels) |
 | `provider` | A model-provider profile (protocol, base URL, key) that Coffer writes into each agent's config | [Model providers](/guides/providers) |

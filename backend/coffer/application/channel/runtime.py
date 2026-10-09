@@ -116,9 +116,9 @@ class ChannelRuntime:
         """Whether nothing has been decided yet about this channel's start.
 
         True for a channel that is not running and that no pass has tried to
-        start, found unroutable, or held on its secret: switched on (or bound
-        here) since the last tick, which reaches it within one interval. The
-        caller asks this only of a channel enabled for this machine; a status
+        start, found unroutable, or held on its secret: switched on since the
+        last tick, which reaches it within one interval. The caller asks this
+        only of an enabled channel; a status
         read in that window is "starting", never "not running" — the latter
         names a start that was attempted and failed.
         """
@@ -218,10 +218,10 @@ class ChannelRuntime:
             desired = await self._enabled_channels()
             for channel_uid in set(self._withheld) - set(desired):
                 del self._withheld[channel_uid]
-            # A failure belongs to the run it ended. A channel switched off (or
-            # bound away) forgets it, so switching it back on starts a new run at
-            # once — not after the old run's retry wait, and not reported as
-            # that run's failure while it starts.
+            # A failure belongs to the run it ended. A channel switched off
+            # forgets it, so switching it back on starts a new run at once — not
+            # after the old run's retry wait, and not reported as that run's
+            # failure while it starts.
             for channel_uid in set(self._failed_at) - set(desired):
                 del self._failed_at[channel_uid]
             for channel_uid in list(self._running):

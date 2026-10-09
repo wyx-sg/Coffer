@@ -1,7 +1,6 @@
 """What about the channels needs a person (the Overview list).
 
-Asked only of enabled channels bound to this machine — a channel another
-machine runs is not this daemon's to report on:
+Asked only of enabled channels:
 
 - ``channel_reconnecting`` — its SeaTalk websocket is (re)connecting;
 - ``channel_sdk_missing`` — SeaTalk's WebSocket SDK is not where the daemon

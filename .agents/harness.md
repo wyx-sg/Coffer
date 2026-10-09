@@ -106,4 +106,4 @@ Non-deterministic AI behaviour — tool-search ranking and tool routing — is m
 ## Conventions
 
 - Hooks are Python (no `jq` dependency; the project guarantees Python 3.12). A hook must never break the agent — on any error it exits 0 with no decision.
-- `.claude/settings.json`, the four `.claude/hooks/` scripts, the six `.claude/commands/opsx/*.md` commands and the six `.claude/skills/openspec-*/SKILL.md` skills are the tracked files under `.claude/` — that is the whole harness. The repo's `.gitignore` ignores `.claude/settings.local.json` (personal overrides), every other `.claude/commands/*` entry (it un-ignores only `opsx/`), `.claude/worktrees/` and the loop/scheduler state files.
+- `.claude/settings.json`, the two `.claude/hooks/` scripts, the six `.claude/commands/opsx/*.md` commands and the six `.claude/skills/openspec-*/SKILL.md` skills are the tracked files under `.claude/` — that is the whole harness. The repo's `.gitignore` ignores `.claude/settings.local.json` (personal overrides), every other `.claude/commands/*` entry (it un-ignores only `opsx/`), `.claude/worktrees/` and the loop/scheduler state files.

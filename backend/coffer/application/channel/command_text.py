@@ -38,6 +38,7 @@ __all__ = [
     "age",
     "agent_display",
     "default_cwd",
+    "default_model_text",
     "dir_display",
     "model_display",
     "resolve_agent",
@@ -182,10 +183,20 @@ def default_cwd(binding: ChannelBinding) -> str | None:
     return str(cwd) if cwd else None
 
 
-async def model_display(commands: ChannelCommands, agent: str, model: str | None) -> str:
-    """A model by the name its card button shows, else its id, else ``default model``."""
-    if not model:
-        return "default model"
+async def default_model_text(commands: ChannelCommands, agent: str) -> str:
+    """``Default model (Opus 5.5)`` — the no-override choice, naming the model it
+    resolves to when Coffer can know it, and plain ``Default model`` when it
+    cannot (spec channels "Name the model the default resolves to")."""
+    try:
+        resolved = await commands._model_suggestions.resolved_default(agent)
+    except Exception:
+        resolved = None
+    if not resolved:
+        return "Default model"
+    return f"Default model ({await _model_name(commands, agent, resolved)})"
+
+
+async def _model_name(commands: ChannelCommands, agent: str, model: str) -> str:
     try:
         labels = await commands._model_suggestions.model_labels(agent)
     except Exception:
@@ -193,15 +204,19 @@ async def model_display(commands: ChannelCommands, agent: str, model: str | None
     return labels.get(model) or model
 
 
+async def model_display(commands: ChannelCommands, agent: str, model: str | None) -> str:
+    """A model by the name its card button shows, else its id, else the default
+    (with the model it resolves to, when known)."""
+    if not model:
+        return await default_model_text(commands, agent)
+    return await _model_name(commands, agent, model)
+
+
 async def settings_line(commands: ChannelCommands, settings: Settings) -> str:
     """``Claude Code · Opus 4.8 · ~/src/app`` — one line naming what a
     turn runs on: the agent, the model and the working directory.
     The `/new` card and `/status` both read it."""
-    model = (
-        await model_display(commands, settings.agent, settings.model)
-        if settings.model
-        else "Default model"
-    )
+    model = await model_display(commands, settings.agent, settings.model)
     parts = [agent_display(commands._agents, settings.agent), model]
     parts.append(dir_display(settings.cwd))
     return " · ".join(parts)

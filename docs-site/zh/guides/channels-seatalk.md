@@ -51,17 +51,19 @@ SDK 由 `coffer-seatalk-bridge` 加载，这是放在守护进程旁边的一个
 
 ```text [Web UI]
 Channels → Add channel
-  Type:           SeaTalk
-  Name:           my-seatalk
-  App ID:         <APP_ID>
-  App secret:     <APP_SECRET>
-  Default agent:  claude-code
-→ Create
+  1 Platform:       SeaTalk
+  2 Connect:
+      Name:           my-seatalk
+      Default agent:  claude-code
+      App ID:         <APP_ID>
+      App secret:     <APP_SECRET>
+    → Connect
+  3 Pair:           Pair later (pair in step 5)
 ```
 
 配置内容是 App ID 和指向 App Secret 的引用，外加每个消息渠道都有的字段。消息渠道只保存在本机，并立刻开始连接。
 
-检查连接：消息渠道状态行上的 **SeaTalk connection** 标记连上后显示**已连接**（Connected）。等到它连上再做下一步。
+检查连接：连上后消息渠道的页头显示「WebSocket 已连接」（在第 5 步之前，状态一直是**未配对**）。等到它连上再做下一步。
 
 ## 4. 把应用切换到 WebSocket 投递 {#_4-switch-the-app-to-websocket-delivery}
 
@@ -80,7 +82,7 @@ SeaTalk 没有启动链接，所以要你手动输入配对码。它只能用一
 
 ## 连接状态 {#connection-states}
 
-消息渠道页面上的 **SeaTalk connection** 标记把连接作为消息渠道的入站状态报告。通过 REST 读取时，字段是 `status.inbound.websocket_state` 和 `status.inbound.websocket_error`。
+消息渠道的页头报告连接情况：状态词，以及元信息行（`SeaTalk 应用 <id> · WebSocket`）。通过 REST 读取时，字段是 `status.inbound.websocket_state` 和 `status.inbound.websocket_error`。
 
 | 状态 | 消息渠道页面上的显示 | 含义 |
 | --- | --- | --- |
@@ -120,7 +122,7 @@ SeaTalk 没有启动链接，所以要你手动输入配对码。它只能用一
 
 因为在主聊天里 @ 提及总会开一个新线程，所以在主聊天里发 `@bot /new <agent>` 设置的是**群组的默认智能体**，群组里每个新线程都从它开始；`@bot /stop` 停止群组里正在运行的所有轮次。`/del` 撤回回复，见[回复的样子](#how-replies-look)。`/model`、`/dir`、`/status`、`/resume` 和 `/thread` 只能在私聊里用，在群里发会得到一行私下的提示。在群组线程里，`/new` 和 `/stop` 只作用于该线程。见 [SeaTalk 上的群组默认值](/zh/reference/channel-commands#group-defaults-on-seatalk)。
 
-如果希望机器人不理会同时 @ 了其他人的消息，在消息渠道**设置**标签页的**群聊中**下打开**忽略同时 @ 了其他人的消息**。SeaTalk 没有**仅在被 @ 时回复**开关：它本来就只投递 @ 提及。
+如果希望机器人不理会同时 @ 了其他人的消息，在消息渠道**设置**标签页的**接收消息**下打开**忽略同时 @ 了其他人的消息**。SeaTalk 没有**仅在被 @ 时回复**开关：它本来就只投递 @ 提及。
 
 机器人从不读取群组主聊天里的最近消息。SeaTalk 不给自建应用这个权限，而且你发给机器人的那条消息本就应该带上它需要的内容。
 
@@ -157,7 +159,7 @@ SeaTalk 能附带的一切都会驱动一个轮次：图片、文件和文档、
 
 ## 轮换 App Secret {#rotate-the-app-secret}
 
-在消息渠道页面选择**更换密钥**（在 **⋯** 菜单里，或在**设置** → **密钥**下），粘贴到 **App Secret**，然后选**更换并重启**。粘贴时 Coffer 会向 SeaTalk 检查 App ID 和 secret，被拒绝的 secret 会在字段下说明。secret 会写到消息渠道现有的引用下，所以配对不变。在**设置** → **密钥**下，App Secret 显示为密钥的名字（链接到它的页面），旁边是**更换密钥…**；其中的**改用其他密钥**会让消息渠道改用另一个已存的密钥，并让适配器用它重启。**App ID** 在**设置** → **密钥**下原地编辑。
+在 SeaTalk 拒绝旧 secret 时选择消息渠道页面横幅里的**更换密钥**，或者**设置** → **连接**下的**更换密钥…**；粘贴到 **App Secret**，然后选**更换并重启**。粘贴时 Coffer 会向 SeaTalk 检查 App ID 和 secret，被拒绝的 secret 会在字段下说明。secret 会写到消息渠道现有的引用下，所以配对不变。在**设置** → **连接**下，App Secret 显示为密钥的名字（链接到它的页面），旁边是**更换密钥…**；其中的**改用其他密钥**会让消息渠道改用另一个已存的密钥，并让适配器用它重启。**App ID** 在**设置** → **连接**下原地编辑。
 
 ## 上限 {#limits}
 
@@ -180,10 +182,10 @@ SeaTalk 能附带的一切都会驱动一个轮次：图片、文件和文档、
 另一个进程占用了这个应用的连接。常见原因：同一个应用在第二台机器上也登记成了消息渠道，或者某个测试脚本用了同一个 App ID。停掉另一个；Coffer 大约一分钟内会重连。要在机器之间迁移消息渠道，见[在另一台机器上使用机器人](/zh/guides/channels#using-the-bot-on-another-machine)。
 
 **开发者后台里 Re-verify 失败。**
-消息渠道还没连上。等 **SeaTalk connection** 标记显示已连接（Connected）后再点一次 **Re-verify**。
+消息渠道还没连上。等消息渠道的页头显示「WebSocket 已连接」后再点一次 **Re-verify**。
 
 **显示 `connected`，但机器人从不回答。**
-检查配对（`peer: not paired` 表示机器人不回复任何人），以及在群组里你是否 @ 了它。然后检查后台的投递方式是否设为 WebSocket；用其他投递方式时，SeaTalk 会把事件发到别处。
+检查配对（显示**未配对**的消息渠道不回复任何人），以及在群组里你是否 @ 了它。然后检查后台的投递方式是否设为 WebSocket；用其他投递方式时，SeaTalk 会把事件发到别处。
 
 **机器人说它只能看到线程里的几条消息。**
 SeaTalk 只返回线程最近 7 天的回复（见[群组和线程](#groups-and-threads)），所以更早的讨论即使你能滚动看到，机器人也看不到。把更早的消息转发或引用过来，给智能体补上这部分上下文。在这个窗口之内，一个轮次只带上线程最近的消息；让智能体往前多读，它会使用 `coffer__channel_read_thread`。

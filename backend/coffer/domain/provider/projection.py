@@ -21,9 +21,10 @@ settings without clobbering them"):
 - ``modelPicker`` — the connection's curated models in Claude Code's ``/model``
   picker, replacing the built-in rows on an endpoint that serves no Claude ids.
 - for a local runtime, ``CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`` (local
-  runtimes reject Claude Code's beta request fields) and
-  ``CLAUDE_CODE_MAX_CONTEXT_TOKENS`` (Claude Code assumes 200k for an id it
-  does not know).
+  runtimes reject Claude Code's beta request fields).
+- ``CLAUDE_CODE_MAX_CONTEXT_TOKENS`` when the agent's model is not a Claude id
+  and its window is recorded: Claude Code assumes 200k for an id it does not
+  know, warns about it, and compacts there.
 - ``env.NO_PROXY`` gains ``127.0.0.1,localhost`` when the base URL is the local
   model proxy, so a corporate ``HTTPS_PROXY`` never captures the loopback leg.
 """
@@ -145,7 +146,7 @@ def apply_anthropic_settings(
     tier_models: Mapping[str, str] | None = None,
     picker_models: Sequence[str] = (),
     replace_builtin_picker: bool = False,
-    local_context_window: int | None = None,
+    context_window: int | None = None,
     local: bool = False,
 ) -> str:
     """Return new ``settings.json`` text with Coffer's keys.
@@ -178,8 +179,8 @@ def apply_anthropic_settings(
         env[_DISABLE_BETAS] = "1"
     else:
         env.pop(_DISABLE_BETAS, None)
-    if local and local_context_window:
-        env[_MAX_CONTEXT] = str(local_context_window)
+    if context_window:
+        env[_MAX_CONTEXT] = str(context_window)
     else:
         env.pop(_MAX_CONTEXT, None)
     _add_no_proxy(env)

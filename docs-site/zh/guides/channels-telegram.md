@@ -30,11 +30,13 @@ Telegram 是你完全可以自己搞定的消息渠道。它不需要公网 URL�
 
 ```text [Web UI]
 Channels → Add channel
-  Type:           Telegram
-  Name:           my-telegram
-  Bot token:      123456789:AAH…
-  Default agent:  claude-code
-→ Create
+  1 Platform:       Telegram
+  2 Connect:
+      Name:           my-telegram
+      Default agent:  claude-code
+      Bot token:      123456789:AAH…
+    → Connect
+  3 Pair:           the code to send the bot (or Pair later)
 ```
 
 默认智能体是一个已登记的智能体，和**智能体**页面列出的一致。消息渠道只保存在本机，并立刻开始轮询。无法解析的令牌引用会被拒绝，不会保存任何东西。
@@ -45,7 +47,7 @@ Channels → Add channel
 
 1. 生成一个配对码：在消息渠道的**总览**里点**生成配对码**。对话框会显示配对码和配对链接。
 
-2. 在登录了你账号的手机上打开配对链接（网页上的 **Open the pairing link**），点 **Start**。或者打开机器人，把 `K7QM3XPA` 作为消息发过去。
+2. 在登录了你账号的手机上打开配对链接（网页上的**在 Telegram 中打开**），点 **Start**。或者打开机器人，把 `K7QM3XPA` 作为消息发过去。
 3. 机器人确认配对，并发一次帮助信息。你就是所有者了。
 
 配对码只能用一次，一小时后过期，猜错 10 次后作废。配对之前，机器人不回复任何人。
@@ -125,7 +127,7 @@ Bot API 只报告普通消息正文里的提及，所以照片或文件说明文
 
 Telegram 机器人默认**开启隐私模式**，即机器人只能看到提及它、回复它或者是命令的消息。这正是默认的 `require_mention: true` 所期望的，所以不需要改。
 
-如果你关掉 `require_mention`，让机器人对群组里所有者的每条消息都做出反应（消息渠道的**设置** → **群聊中** → **仅在被 @ 时回复**），机器人还需要能看到这些消息：
+如果你关掉 `require_mention`，让机器人对群组里所有者的每条消息都做出反应（消息渠道的**设置** → **接收消息** → **仅在被 @ 时回复**），机器人还需要能看到这些消息：
 
 1. 在 BotFather 里发送 `/setprivacy`，选择这个机器人，再选 **Disable**。
 2. 把机器人移出群组再重新加入。这个改动只对机器人之后加入的群组生效。
@@ -134,7 +136,7 @@ Telegram 机器人默认**开启隐私模式**，即机器人只能看到提及�
 
 ## 轮换令牌 {#rotate-the-token}
 
-在消息渠道页面选择**更换 token**（Telegram 拒绝旧令牌时在页头里，也可以在 **⋯** 菜单里和**设置** → **密钥**下找到），把新令牌粘贴到 **Bot token**，然后选**更换并重启**。粘贴时 Coffer 会向 Telegram 检查这个令牌，并显示**可用——这是 @your_bot**；如果是同一个机器人，还会说明配对仍然有效；被 Telegram 拒绝的令牌会在字段下说明。令牌会写到消息渠道已经在用的那个引用下，所以配对不受影响。
+在消息渠道页面在 Telegram 拒绝旧令牌时选择横幅里的**更换 token**，或者**设置** → **连接**下的**更换密钥…**；把新令牌粘贴到 **Bot token**，然后选**更换并重启**。粘贴时 Coffer 会向 Telegram 检查这个令牌，并显示**可用——这是 @your_bot**；如果是同一个机器人，还会说明配对仍然有效；被 Telegram 拒绝的令牌会在字段下说明。令牌会写到消息渠道已经在用的那个引用下，所以配对不受影响。
 
 ## 上限 {#limits}
 
@@ -162,7 +164,7 @@ Telegram 机器人默认**开启隐私模式**，即机器人只能看到提及�
 提及它或回复它。如果你关掉了 `require_mention`，检查上面提到的隐私模式警告。
 
 **守护进程日志里反复出现 `telegram.poll.retry`。**
-轮询一直失败。除了网络问题，当另一个程序在轮询同一个机器人，或者机器人设置了 webhook（比如你之前测试过的某个机器人框架设的）时，Telegram 也会拒绝 `getUpdates`。Coffer 不会替你删除 webhook：停掉另一个程序，或者用 Bot API 的 `deleteWebhook` 方法清除 webhook。Coffer 会自己退避并恢复。**活动 → 守护进程**会显示这些记录。
+轮询一直失败。除了网络问题，当另一个程序在轮询同一个机器人，或者机器人设置了 webhook（比如你之前测试过的某个机器人框架设的）时，Telegram 也会拒绝 `getUpdates`。Coffer 不会替你删除 webhook：停掉另一个程序，或者用 Bot API 的 `deleteWebhook` 方法清除 webhook。Coffer 会自己退避并恢复。**活动 → 守护进程日志**会显示这些记录。
 
 **格式看起来很平。**
 Bot API 服务器不提供富文本消息，所以回复用的是 HTML 回退。所有内容仍然会送达。

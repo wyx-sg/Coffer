@@ -45,7 +45,7 @@ Coffer is a **custodian, not an owner**. It holds your assets on your machine, h
 
 Sync is bidirectional but only under the sync spec's safety rules: git computes the merge outside the vault, only a clean merge is applied, any conflict stops the round for you with nothing changed, a round that would lose too much stops and asks, and every round can be rolled back from its snapshot.
 
-**In the code.** The daemon binds `127.0.0.1` when it allocates its port. Channels reach Telegram and SeaTalk only over connections the daemon opens, so the loopback socket is the only one Coffer listens on. The sync remote defaults to absent, and secret ciphertext is carried only when you set `--with-secrets`.
+**In the code.** The daemon binds `127.0.0.1` when it allocates its port. Channels reach Telegram and SeaTalk only over connections the daemon opens, so the loopback socket is the only one Coffer listens on. The sync remote defaults to absent, and secret ciphertext is carried only when you turn on `include_secret` for the remote.
 
 **Rules out.** A hosted Coffer endpoint; a "Coffer cloud" account; any design where losing the remote loses data; a sync that overwrites a vault wholesale; replicating vault state to a vendor-controlled service.
 
@@ -125,7 +125,7 @@ Sync is bidirectional but only under the sync spec's safety rules: git computes 
 
 **Rationale.** A central gate would have to sit on every kind's read path and know every kind's notion of "use". The gateway already knows which agent is asking for tools; skill delivery already iterates agents; the provider projection already knows which config file it is writing. Putting the check there costs one function call and no new machinery.
 
-**In the code.** `mcp_server` filters in the gateway, `skill` in delivery reconciliation, `provider` where the provider projection chooses which agent config files to write, and `channel` — whose scope is inverted to name the agents it may *drive* — in its agent routing and its runtime. An unidentified session matches only an unrestricted scope, so it sees strictly less, never more. See the [kinds table](/architecture/resource-framework#the-seven-kinds).
+**In the code.** `mcp_server` filters in the gateway, `skill` in delivery reconciliation, and `channel` — whose scope is inverted to name the agents it may *drive* — in its agent routing and its runtime. An unidentified session matches only an unrestricted scope, so it sees strictly less, never more. A `provider` connection declares no scope: it serves the agents its addresses speak to. See the [kinds table](/architecture/resource-framework#the-seven-kinds).
 
 **Rules out.** A reach evaluator object; a deny-list (a new agent would silently gain access); a kind inventing its own "which agents" field.
 

@@ -80,7 +80,7 @@ describe("describeChannel", () => {
       "approvalRefused",
       "attention",
       "err",
-      "openSecrets",
+      "askAgain",
     ],
     ["not paired", { people: [] }, "notPaired", "attention", "warn", null],
   ])("%s", (_label, status, state, group, tone, primary) => {

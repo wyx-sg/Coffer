@@ -31,6 +31,10 @@ class AgentModel:
     id: str
     label: str = ""
     description: str = ""
+    #: The agent itself reported this as the model it runs when its config names
+    #: none (Codex's ``model/list`` ``isDefault``). Never inferred: a source
+    #: that does not say leaves every entry ``False``.
+    is_default: bool = False
 
 
 __all__ = ["AgentModel"]

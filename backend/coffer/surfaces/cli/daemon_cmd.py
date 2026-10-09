@@ -233,13 +233,17 @@ def restart() -> None:
 def status(
     ctx: typer.Context,
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
+    show_tasks: bool = typer.Option(
+        False, "--tasks", help="Also list the running background tasks, counted by name"
+    ),
 ) -> None:
     """Show whether the daemon is running, and the passes it is running right now.
 
     Reports its version, port and pid, the event loop's lag (p99 and
     maximum over the last few minutes), how many background tasks are running
     and how many have crashed, and the long passes in flight (kind, target,
-    start time), oldest first.
+    start time), oldest first. --tasks adds the running tasks counted by name
+    (reconciler, seatalk-ws, coffer-mcp-http-upstream, ...), largest first.
 
     Read-only: when no daemon is running it says so and exits 3 instead of
     starting one.
@@ -299,6 +303,9 @@ def status(
         typer.echo(f"other daemon processes for this vault: {', '.join(map(str, others))}")
     for line in _runtime_lines(data.get("runtime")):
         typer.echo(line)
+    if show_tasks:
+        for line in _task_lines(data.get("runtime")):
+            typer.echo(line)
     if setup is not None:
         typer.echo("")
         _cli_client.print_waiting_for_git(setup)
@@ -309,6 +316,16 @@ def status(
         typer.echo("  no pass is running")
     for run in runs:
         typer.echo(f"  {run['kind']:<10} {run['name']}  (started {run['started_at']})")
+
+
+def _task_lines(runtime: dict[str, Any] | None) -> list[str]:
+    """The running tasks by name, largest count first."""
+    counts: dict[str, int] = (runtime or {}).get("tasks_by_name") or {}
+    if not counts:
+        return []
+    width = max(len(name) for name in counts)
+    ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    return [f"         {name:<{width}}  {count}" for name, count in ordered]
 
 
 def _runtime_lines(runtime: dict[str, Any] | None) -> list[str]:

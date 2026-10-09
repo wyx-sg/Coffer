@@ -50,7 +50,6 @@ async def _client(tmp_path: Path, *, port: int = 38470):
             port=port,
             token="initial-token",
             started_at=dt.now(tz=UTC),
-            binary_path="/test/binary",
         ),
     )
     set_active_token("initial-token")
@@ -171,7 +170,6 @@ async def _client_with_audit(tmp_path: Path, *, port: int = 38470):
             port=port,
             token="initial-token",
             started_at=dt.now(tz=UTC),
-            binary_path="/test/binary",
         ),
     )
     # Create an actual runs.db for the daemon-status probes

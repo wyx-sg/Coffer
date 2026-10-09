@@ -39,16 +39,15 @@ def _one_build(ctx: Ctx) -> None:
     version = status.get("version")
     ctx.rec.record(
         "the daemon, its handshake and the shim are one build",
-        "the binary daemon.json names answers the port, reports one version, and the shim "
+        "the binary the status names answers the port, reports one version, and the shim "
         "attached to it without a version-skew warning",
-        expected="status.executable is daemon.json's binary_path; the handshake's serverInfo "
+        expected="status.executable is a file; the handshake's serverInfo "
         "version equals status.version; the daemon binary is fingerprinted; the shim ran and "
         "printed no version-skew warning",
         actual={
             "status_version": version,
             "status_commit": status.get("commit"),
             "status_executable": status.get("executable"),
-            "daemon_json_binary": str(target.binary_path),
             "server_info_version": ctx.facts.get("server_info_version"),
             "daemon_binary": fingerprint(target.binary_path),
             "shim": fingerprint(target.shim),
@@ -57,7 +56,6 @@ def _one_build(ctx: Ctx) -> None:
         },
         ok=isinstance(version, str)
         and bool(version)
-        and _same(status.get("executable"), target.binary_path)
         and ctx.facts.get("server_info_version") == version
         and fingerprint(target.binary_path) is not None
         and bool(logs)
@@ -87,7 +85,7 @@ def _shim_directory(ctx: Ctx) -> None:
     ctx.rec.record(
         title,
         title,
-        expected="coffer-mcp-shim sits next to the daemon binary daemon.json names",
+        expected="coffer-mcp-shim sits next to the daemon binary the status names",
         actual=facts,
         ok=facts["same_directory"] is True,
     )

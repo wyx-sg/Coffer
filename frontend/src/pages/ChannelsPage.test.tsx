@@ -227,7 +227,7 @@ describe("the header says what state the channel is in", () => {
       }),
       "Secret refused",
       "approvalRefused",
-      "Open Secrets",
+      "Ask again",
     ],
     ["off", OPS, makeStatus(OPS, { running: false }), "Off", "quiet:off", "Turn on"],
     ["not paired", TEAM, makeStatus(TEAM, { people: [] }), "Not paired", "notPaired", null],
@@ -391,6 +391,40 @@ test("reconnect asks the daemon to restart the channel's adapter", async () => {
   await waitFor(() => expect(restartChannel).toHaveBeenCalledWith(KICKED.uid));
   // One request, addressed to the channel; no off-and-on through enable/disable.
   expect(h.client.POST).not.toHaveBeenCalled();
+});
+
+test("Ask again on a refused secret asks again for each refused request of this channel", async () => {
+  serve([
+    [
+      TEAM,
+      makeStatus(TEAM, {
+        running: false,
+        secret_approval: { state: "refused", secret_ref: "channel/team/app-secret" },
+      }),
+    ],
+  ]);
+  h.client.GET.mockImplementation(async (path: string) =>
+    path === "/resources"
+      ? { data: { resources: h.channels }, error: undefined }
+      : path === "/secrets/approvals"
+        ? { data: { approvals: [{ id: "apr-1" }] }, error: undefined }
+        : { data: undefined, error: undefined },
+  );
+  h.client.POST.mockImplementation(async () => ({ data: { approvals: [] }, error: undefined }));
+  renderChannelsPage(`/channels/${TEAM.uid}`);
+  fireEvent.click(
+    await within(await screen.findByTestId("channel-banner")).findByRole("button", {
+      name: /ask again/i,
+    }),
+  );
+  await waitFor(() =>
+    expect(h.client.POST).toHaveBeenCalledWith("/secrets/approvals/{approval_id}/ask-again", {
+      params: { path: { approval_id: "apr-1" } },
+    }),
+  );
+  expect(h.client.GET).toHaveBeenCalledWith("/secrets/approvals", {
+    params: { query: { status: "rejected", destination_uid: TEAM.uid } },
+  });
 });
 
 test("the ⋯ menu holds only Reconnect: Send test and the Settings actions are not repeated", async () => {

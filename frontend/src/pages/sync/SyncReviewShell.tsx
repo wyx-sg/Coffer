@@ -27,9 +27,9 @@ export function SyncReviewShell({
 }) {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface-raised">
-      <div className="flex min-h-[420px]">
+      <div className="flex h-[clamp(420px,70vh,720px)]">
         {nav}
-        {children}
+        <div className="flex min-w-0 flex-1 overflow-y-auto">{children}</div>
       </div>
       <div className="flex flex-wrap items-center gap-3 border-t border-border bg-surface-footer px-5 py-3">
         {footer}
@@ -60,7 +60,7 @@ export function SyncReviewNav({
   return (
     <nav
       aria-label={t("sync.resolve.filesLabel")}
-      className="flex max-h-[640px] w-[300px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border bg-surface-sidebar px-2 py-3"
+      className="flex w-[300px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border bg-surface-sidebar px-2 py-3"
     >
       <p className="px-2.5 pb-1 text-2xs font-semibold uppercase tracking-[.02em] text-text-muted">
         {t("sync.resolve.files")}

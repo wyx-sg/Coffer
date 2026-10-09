@@ -66,6 +66,8 @@ flowchart LR
 ├── resources/<kind>/<name>.json        mcp_server, skill, provider, knowledge
 ├── state/mcp-preferences/<server>.json the capabilities you switched off
 ├── state/settings/internal-engine.json upkeep and speech-to-text model settings (absent = defaults)
+├── state/secret-notes/notes.json       each secret's label and description
+├── state/cli-tools/tools.json          the command-line tools you added by hand, and your edits to required ones
 ├── knowledge/<collection>/…            Markdown documents, hidden .inbox/ for new material
 ├── skills/<name>/…                     skill master folders
 ├── secret/<ref>.enc                    Fernet ciphertext, one file per secret
@@ -111,10 +113,11 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 ├── engine.json                   when this machine last changed engine settings
 ├── retention.json                retention policy per prunable table
 ├── skill-source-status.json      what this machine last found at a Git-imported skill's source
-├── secret/                       machine-local ciphertext (proxy tokens)
+├── secret/                       machine-local ciphertext (proxy tokens), the not-a-secret list (plaintext-ignored.json)
 ├── secret-boundary/              bindings, approvals, switches, first-stored times
 ├── sync/remote.json              the one sync remote
-└── sync/round.json               a stopped round, a hold, a join's pending choices
+├── sync/round.json               a stopped round, a hold, a join's pending choices
+└── sync/removed-remote.json       the remote Stop syncing removed, kept for its Undo
 ```
 
 每个文件是一个 JSON 对象，整体读取，在按文件的锁下修改，再原子写回（先写一个同级临时文件，再改名）。缺失的文件读作空。解析不了的文件会被挪到一边，命名为 `<name>.unreadable-<n>`，记日志，并读作空：本地状态可以重新设置，一个因为设置文件而拒绝启动的守护进程，比一个忘了设置的守护进程更糟。
@@ -134,6 +137,8 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 | `conversations` | 对话索引：标题、智能体、目录、智能体的会话 id，以及拥有它的消息渠道线程。不含对话文本：文本留在智能体自己的会话里。随对话（或它的会话）一起删除；没有保留策略。 |
 | `channel_thread_conversations`、`channel_thread_history` | IM 线程对应哪个对话，以及一个线程开过的每个对话。 |
 | `channel_outbox` | Coffer 欠某个聊天、还没送达的回复。 |
+| `channel_replies` | Coffer 发出的每条回复由哪些平台消息 id 组成，以便所有者撤回它（`/del`）。只存 id 和时间，从不存文本。 |
+| `channel_thread_cursors` | 每个对话把每个平台线程读到了哪里，以便之后的轮次只纳入新内容。只存 id 和时间。 |
 | `sync_runs` | 这台机器跑过的每一轮同步。默认 90 天后清理。 |
 | `usage_requests`、`usage_daily` | 模型代理暂存的上游尝试，以及用量标签页读取的按天汇总。 |
 | `attention_ignores` | 这台机器上有人忽略掉的“需要你处理”项，按项键记录，附带忽略时间。待处理列表会把它们排除在条目和计数之外。 |
@@ -161,6 +166,9 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 ~/.coffer/derived/
 ├── channel-avatars/            已配对的人在平台上的头像，由各消息渠道的适配器拉取
 ├── derived.db                   MCP server and model provider health, skill deliveries, capability first/last seen
+├── genai-prices.json            the refreshed model price list
+├── reported-prices.json         prices a provider reported for its own models
+├── secret-citations.json        which resources cite which secret, rebuilt on change
 ├── memory/<partition>/          the memory tree (MEMORY.md, notes/, RETIRED.md, .raw/)
 ├── resources/                   derived resource files (memory partitions, coffer-guide)
 ├── skills/coffer-guide/         Coffer's own guide skill, rendered from the build
@@ -190,13 +198,13 @@ flowchart LR
 
 手工编辑是被发现的，而不是被拦截的。文件事件只是提示（防抖到路径安静一秒为止），每 60 秒一次以及启动时的扫描才是准绳。有效的编辑以 `disk` 写入提交，并以人为操作者审计为 `vault_file_edited`。无效的编辑留在工作区里、不提交，会在待处理列表和 `coffer vault problems` 里被标记出来，同时 `HEAD` 继续生效。生效的状态永远是 `HEAD`：各个存储从一个由 `HEAD` 加载、每次提交后刷新的缓存里读取文档。
 
-保险库里的每个文件和文件夹都有历史，你可以在知识文档或技能的**历史**标签里读，也可以用 `git log -p` 读。这个标签由 `GET /api/v1/vault/history?path=`（一个文件，或以 `/` 结尾的文件夹）、`GET /api/v1/vault/diff?path&version&against=previous|current` 和 `POST /api/v1/vault/restore {path, version, expected_current}` 提供。`secret/` 下和保险库之外的路径会被拒绝，返回 `VAULT_PATH_INVALID`；未知的版本是 `404 VAULT_VERSION_NOT_FOUND`。读取历史时会先把在磁盘上做的编辑提交为它自己的一个版本，所以最新的版本就是文件现在的样子。恢复是 Coffer 自己的写入：一次由用户写入的新提交，带 `Coffer-Operation: restore` 和 `Coffer-Restored-From`，走和其他写入一样的比较后提交，所以读取历史之后又变了的文件会被拒绝，返回 `VAULT_FILE_STALE`。历史从不被改写。见[手工编辑保险库](/zh/guides/vault-files)。
+保险库里的每个文件和文件夹都有历史，你可以在知识文件的**历史**抽屉、技能的**历史**标签里读，也可以用 `git log -p` 读。历史由 `GET /api/v1/vault/history?path=`（一个文件，或以 `/` 结尾的文件夹）、`GET /api/v1/vault/diff?path&version&against=previous|current` 和 `POST /api/v1/vault/restore {path, version, expected_current}` 提供。`secret/` 下和保险库之外的路径会被拒绝，返回 `VAULT_PATH_INVALID`；未知的版本是 `404 VAULT_VERSION_NOT_FOUND`。读取历史时会先把在磁盘上做的编辑提交为它自己的一个版本，所以最新的版本就是文件现在的样子。恢复是 Coffer 自己的写入：一次由用户写入的新提交，带 `Coffer-Operation: restore` 和 `Coffer-Restored-From`，走和其他写入一样的比较后提交，所以读取历史之后又变了的文件会被拒绝，返回 `VAULT_FILE_STALE`。历史从不被改写。见[手工编辑保险库](/zh/guides/vault-files)。
 
 保险库需要 `git` 2.40 或更高版本。没有可用的 git 时，守护进程会启动，但会[等待 git](/zh/architecture/daemon#waiting-for-git)，并在每个界面上说明原因。git 怎么装取决于这台机器，所以 `GIT_MISSING` 错误不点名任何安装程序，而是在 `details.handoff` 里带上交给你的智能体的安装提示词；同步状态也会报告问题 `git_missing`，附带同一段提示词。
 
 ## runs.db 的迁移 {#migrations-of-runs-db}
 
-`runs.db` 的 Alembic 历史从一个基线修订 `0146` 开始，它一步创建出完整的 schema。之后的每次 schema 变更都是叠在它上面的一个新修订，放在持久化包里，每个修订一个文件，命名为 `YYYYMMDD_NNNN_<slug>`（下一个是 `0147`），并带有可用的 `downgrade()`。schema 变更永远是一个修订，从不由模型隐式建表。
+`runs.db` 的 Alembic 历史从一个基线修订 `0146` 开始，它一步创建出完整的 schema。之后的每次 schema 变更都是叠在它上面的一个新修订，放在持久化包里，每个修订一个文件，命名为 `YYYYMMDD_NNNN_<slug>`，并带有可用的 `downgrade()`。schema 变更永远是一个修订，从不由模型隐式建表。
 
 迁移在守护进程的 lifespan 里、在构建任何服务之前运行：
 
@@ -221,7 +229,7 @@ flowchart TB
 
 ## 不属于任何类别的设置 {#settings-that-live-outside-every-class}
 
-`~/.coffer` 下直接放着两个小 JSON 文件。`daemon.json` 是守护进程启动时写、退出时删的运行时状态（pid、端口、令牌）：每个使用方都靠读它来找到守护进程。`daemon-config.json` 是守护进程绑定端口之前读取的配置：固定端口、模型代理的端口、机器名和 id，以及实验功能开关。它必须在任何升级运行之前就能读取，所以它既不是保险库也不是本地状态。两者都以 `0600` 权限原子写入。它们的内容见[守护进程与进程](/zh/architecture/daemon#two-files-configuration-in-runtime-state-out)，逐键说明见[配置](/zh/reference/configuration#daemon-config-json)。
+`~/.coffer` 下直接放着两个小 JSON 文件。`daemon.json` 是守护进程启动时写、退出时删的运行时状态（pid、端口、令牌）：每个使用方都靠读它来找到守护进程。`daemon-config.json` 是守护进程绑定端口之前读取的配置：固定端口、模型代理的端口、机器名和 id、实验功能开关，发布检查、技能更新检查和价格表刷新的开关，以及是否记录调用内容。它必须在任何升级运行之前就能读取，所以它既不是保险库也不是本地状态。两者都以 `0600` 权限原子写入。它们旁边的 `daemon.lock` 是启动锁：每次启动守护进程都要对它加排他锁，所以一个保险库只有一个守护进程。它们的内容见[守护进程与进程](/zh/architecture/daemon#two-files-configuration-in-runtime-state-out)，逐键说明见[配置](/zh/reference/configuration#daemon-config-json)。
 
 还有一个短命的目录也在这些类别之外：`~/.coffer/tmp/handoff/` 存放从 Coffer 在终端里启动的会话的提示词，每次启动一个 `0600` 文件，由读取它的命令删除（见[原生会话与终端](/zh/architecture/chat#native-sessions)）。那里的东西不需要备份。
 

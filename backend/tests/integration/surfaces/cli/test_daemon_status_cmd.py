@@ -57,7 +57,6 @@ def test_status_treats_a_stale_daemon_json_as_not_running(no_daemon):
                 "port": 1,
                 "token": "t",
                 "started_at": "2026-01-01T00:00:00+00:00",
-                "binary_path": "/x",
             }
         )
     )
@@ -114,7 +113,6 @@ def live_daemon(tmp_path, monkeypatch):
             port=38470,
             token=_TOKEN,
             started_at=datetime.now(tz=UTC),
-            binary_path="/test",
         )
         return client, info
 
@@ -228,6 +226,28 @@ def test_status_prints_loop_lag_and_task_crashes(live_daemon):
     as_json = json.loads(CliRunner().invoke(app, ["daemon", "status", "--json"]).stdout)
     assert as_json["runtime"]["loop_lag_samples"] >= 1
     assert as_json["runtime"]["task_crashes"] == tasks().stats().crashes
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="the command line lists running tasks by name")
+def test_status_tasks_lists_running_tasks_by_name(live_daemon, monkeypatch):
+    from coffer.application.runtime.supervisor import tasks
+
+    monkeypatch.setattr(
+        tasks(), "running_by_name", lambda: {"reconciler": 1, "seatalk-ws": 2, "turn": 2}
+    )
+    plain = CliRunner().invoke(app, ["daemon", "status"], env={"COLUMNS": "200"})
+    assert plain.exit_code == 0, plain.output
+    assert "seatalk-ws" not in plain.stdout
+
+    res = CliRunner().invoke(app, ["daemon", "status", "--tasks"], env={"COLUMNS": "200"})
+    assert res.exit_code == 0, res.output
+    lines = res.stdout.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith("tasks:")) + 1
+    listed = [line.split() for line in lines[start : start + 3]]
+    assert listed == [["seatalk-ws", "2"], ["turn", "2"], ["reconciler", "1"]]
+
+    as_json = json.loads(CliRunner().invoke(app, ["daemon", "status", "--json"]).stdout)
+    assert as_json["runtime"]["tasks_by_name"] == {"reconciler": 1, "seatalk-ws": 2, "turn": 2}
 
 
 def _fake_daemon_pair(home):

@@ -266,7 +266,7 @@ def test_the_update_check_setting_over_rest(c: TestClient, up: Upstream) -> None
         assert json.loads(config.read_text())["skill_update_check"] == choice
         assert c.get("/api/v1/skills/update-check").json() == {"interval": choice}
     assert c.put("/api/v1/skills/update-check", json={"interval": "hourly"}).status_code == 422
-    # Check for updates on a skill works whatever the choice.
+    # Check again on a skill works whatever the choice.
     item = _add(c, up, path="skills/review")
     c.put("/api/v1/skills/update-check", json={"interval": "manual"})
     assert c.post(f"/api/v1/skills/{item['uid']}/source/check").status_code == 200

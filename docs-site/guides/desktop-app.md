@@ -19,7 +19,7 @@ The app shows the same UI as a browser tab at the daemon's address — built fro
 - **Updates.** It checks for a newer signed release at launch and every six hours, and installs it when you choose **Download and restart** on **Settings › About**. See [Update](#update).
 - **Presence checks.** Revealing or copying a secret, backing up the master key, importing a master key and approving an approval each ask for Touch ID or your login password first. A browser cannot run that check, so a browser tab shows **Open in Coffer app** in their place. See [Presence checks and approvals](#presence-checks-and-approvals).
 - **Approval alerts.** When a secret waits to be sent somewhere new, the app posts a notification and opens a sheet to answer it.
-- **Presence checks the command line asks for.** `coffer approval approve`, `coffer secret reveal`, `coffer secret backup-key` and `coffer app update …` leave a request with the daemon; the app picks it up within about a second and runs the same flow its own buttons run, so the Touch ID prompt, the revealed value and the backup's passphrase all stay in the app. A command that finds the app closed starts it. See [Secrets → On the command line](/guides/secrets#on-the-command-line).
+- **Presence checks the command line asks for.** `coffer approval approve`, `coffer secret reveal`, `coffer secret backup-key`, `coffer secret import-key` and `coffer app update …` (and, on an app install, `coffer update` and `coffer uninstall`) leave a request with the daemon; the app picks it up within about a second and runs the same flow its own buttons run, so the Touch ID prompt, the revealed value and the backup's passphrase all stay in the app. A command that finds the app closed starts it. See [Secrets → On the command line](/guides/secrets#on-the-command-line).
 
 Everything else — opening files in your editor, choosing folders — goes through the daemon's HTTP routes exactly as it does in a browser.
 
@@ -112,12 +112,12 @@ Coffer's item in the menu bar is the Coffer mark, drawn in the menu bar's own co
 | Item | What it does |
 | --- | --- |
 | **Daemon running · port 38470 · 1.0.0** | Status only: the daemon's port and version, or **Daemon offline**. |
-| **N things need you** | Shown only when Overview lists something that needs you; opens Overview. A single sync problem is named instead, such as **Sync needs attention — conflict**. |
+| **N things need you** | Shown only when Overview lists something that needs you; opens Overview. |
 | **Open Coffer** | Shows and focuses the window. |
 | **Restart daemon** | Stops the running daemon and starts a fresh one. Reads **Start daemon** while none is running. |
 | **Quit Coffer** ⌘Q | Quits the app. The daemon keeps running. |
 
-The menu is deliberately short: conversations, Settings, **Start at login** (in **Settings › Daemon**) and updates (the card above the sidebar footer and **Settings › About**) are all reached from the window. The menu follows the daemon on its own: it reads the daemon's status every 10 seconds and what needs you every minute.
+The menu is deliberately short: conversations, Settings, **Start at login** (in **Settings › Daemon**) and updates (the card above the sidebar footer and **Settings › About**) are all reached from the window. The menu follows the daemon on its own: it reads the daemon's status every 10 seconds and what needs you every 20 seconds.
 
 The menu, its tooltip and the sync notification use the interface language you pick in **Settings › General** (English or 中文). Switching language relabels the menu at once. Until the window has loaded, it uses your macOS language.
 
@@ -180,7 +180,7 @@ Turn on **Settings → Daemon → Start at login** to start the daemon when you 
 
 ## Logs
 
-The app writes its own records — which daemon binary it chose, whether a handshake reused, started or failed, a menu bar restart that failed, an update check or install that failed — as one-line JSON with the logger name `coffer.desktop` into `~/.coffer/logs/daemon.log`, beside the daemon's own lines. Read them on **Activity → Daemon**, or:
+The app writes its own records — which daemon binary it chose, whether a handshake reused, started or failed, a menu bar restart that failed, an update check or install that failed — as one-line JSON with the logger name `coffer.desktop` into `~/.coffer/logs/daemon.log`, beside the daemon's own lines. Read them on **Activity → Daemon log**, or:
 
 ```sh
 grep coffer.desktop ~/.coffer/logs/daemon.log | tail

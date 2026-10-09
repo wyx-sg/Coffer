@@ -51,17 +51,19 @@ To keep it somewhere else, set `COFFER_SEATALK_SDK_DIR` to the directory that **
 
 ```text [Web UI]
 Channels → Add channel
-  Type:           SeaTalk
-  Name:           my-seatalk
-  App ID:         <APP_ID>
-  App secret:     <APP_SECRET>
-  Default agent:  claude-code
-→ Create
+  1 Platform:       SeaTalk
+  2 Connect:
+      Name:           my-seatalk
+      Default agent:  claude-code
+      App ID:         <APP_ID>
+      App secret:     <APP_SECRET>
+    → Connect
+  3 Pair:           Pair later (pair in step 5)
 ```
 
 The configuration is the App ID and a reference to the App Secret, plus the fields every channel has. The channel is held on this machine only and starts connecting immediately.
 
-Check the connection: the **SeaTalk connection** badge on the channel's status line reads **Connected** when it is up. Wait for it before the next step.
+Check the connection: the channel's header reads *WebSocket connected* when it is up (its state stays **Not paired** until step 5). Wait for it before the next step.
 
 ## 4. Switch the app to WebSocket delivery
 
@@ -80,7 +82,7 @@ Send the bot a message. A typing indicator appears at once, the answer arrives a
 
 ## Connection states
 
-The **SeaTalk connection** badge on the channel's page reports the connection as the channel's inbound state. Over REST, the fields are `status.inbound.websocket_state` and `status.inbound.websocket_error`.
+The channel's header reports the connection: its state word, and the meta line (`SeaTalk app <id> · WebSocket`). Over REST, the fields are `status.inbound.websocket_state` and `status.inbound.websocket_error`.
 
 | State | Shown on the channel's page | Meaning |
 | --- | --- | --- |
@@ -120,7 +122,7 @@ Each group thread is its own conversation, so you can run Claude Code in one thr
 
 Because a main-chat @mention always roots a new thread, `@bot /new <agent>` in the main chat sets the **group's default agent**, which every new thread in the group starts on, and `@bot /stop` stops every turn running in the group. `/del` withdraws a reply, as described under [How replies look](#how-replies-look). `/model`, `/dir`, `/status`, `/resume` and `/thread` work only in a direct chat; sent in a group they get one private line saying so. Inside a group thread, `/new` and `/stop` apply to that thread. See [Group defaults on SeaTalk](/reference/channel-commands#group-defaults-on-seatalk).
 
-To have the bot leave alone a message that also @mentions another person, turn on **Ignore messages that @mention someone else** on the channel's **Settings** tab under **In group chats**. SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions.
+To have the bot leave alone a message that also @mentions another person, turn on **Ignore messages that @mention someone else** on the channel's **Settings** tab under **Receiving messages**. SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions.
 
 The bot never reads recent messages from a group's main chat. SeaTalk does not grant that permission to a self-built app, and the message you address to the bot is meant to carry what it needs.
 
@@ -157,7 +159,7 @@ The agent sends a file back with a `MEDIA:/absolute/path` line. It arrives as an
 
 ## Rotate the app secret
 
-On the channel's page choose **Replace secret** (in the **⋯** menu, or under **Settings** → **Secrets**), paste the secret in **App secret** and choose **Replace and restart**. Coffer checks the App ID and secret with SeaTalk as you paste, and a secret SeaTalk rejects is named under the field. The secret is written under the channel's existing reference, so the pairing is unchanged. Under **Settings** → **Secrets** the App Secret shows as the secret's name, linking to its page, with **Replace key…** beside it; **Use another secret** there points the channel at a different stored secret and restarts the adapter on it. The **App ID** is edited in place under **Settings** → **Secrets**.
+On the channel's page choose **Replace secret** in the banner when SeaTalk rejected the old one, or **Replace key…** under **Settings** → **Connection**; paste the secret in **App secret** and choose **Replace and restart**. Coffer checks the App ID and secret with SeaTalk as you paste, and a secret SeaTalk rejects is named under the field. The secret is written under the channel's existing reference, so the pairing is unchanged. Under **Settings** → **Connection** the App Secret shows as the secret's name, linking to its page, with **Replace key…** beside it; **Use another secret** there points the channel at a different stored secret and restarts the adapter on it. The **App ID** is edited in place under **Settings** → **Connection**.
 
 ## Limits
 
@@ -180,10 +182,10 @@ Check that `~/.coffer/vendor/seatalk_oapi_sdk/` exists (or `$COFFER_SEATALK_SDK_
 Another process holds this app's connection. Common causes: the same app registered as a channel on a second machine, or a test script using the same App ID. Stop the other one; Coffer reconnects within about a minute. To move the channel between machines, see [Using the bot on another machine](/guides/channels#using-the-bot-on-another-machine).
 
 **Re-verify fails in the Developer Portal.**
-The channel is not connected yet. Wait until the **SeaTalk connection** badge reads **Connected**, then press **Re-verify** again.
+The channel is not connected yet. Wait until the channel's header reads *WebSocket connected*, then press **Re-verify** again.
 
 **`connected`, but the bot never answers.**
-Check pairing (`peer: not paired` means the bot answers nobody), and that you @mentioned it in a group. Then check that the portal's delivery is set to WebSocket; with another delivery method, SeaTalk sends events somewhere else.
+Check pairing (a channel that shows **Not paired** answers nobody), and that you @mentioned it in a group. Then check that the portal's delivery is set to WebSocket; with another delivery method, SeaTalk sends events somewhere else.
 
 **The bot says it can only see a few messages of a thread.**
 SeaTalk returns only the last 7 days of a thread's replies (see [Groups and threads](#groups-and-threads)), so an older discussion is invisible to the bot even though you can scroll to it. Forward or quote the older messages to give the agent that context. Within the window, a turn carries only the thread's latest messages; ask the agent to read further back and it uses `coffer__channel_read_thread`.

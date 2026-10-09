@@ -59,7 +59,7 @@ class SecretApproval:
     """The channel's secret is the reason its adapter is not running.
 
     ``pending`` waits for the owner's approval in the Coffer app; ``refused`` was
-    declined and stays so until the owner asks again from the Secrets page.
+    declined and stays so until the owner asks again (the channel banner's Ask again).
     ``secret_ref`` names the secret (never its value).
     """
 

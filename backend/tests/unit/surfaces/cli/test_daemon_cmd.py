@@ -211,7 +211,6 @@ def _fake_info(port: int = 9000, pid: int = 5555) -> DaemonInfo:
         port=port,
         token="t",
         started_at=datetime.now(tz=UTC),
-        binary_path="/usr/bin/python3",
     )
 
 

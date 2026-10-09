@@ -36,6 +36,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.binary_deploy import deploy_frozen_sidecars
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
+from coffer.application.provider.reach_retirement import migrate_saved_connections
 from coffer.application.reconcile.hints import HintingResourceRepo
 from coffer.application.resource_service import ResourceService
 from coffer.application.runtime import loop_lag
@@ -261,8 +262,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     register_delivery_hook_target(
         reconciler, kinds.memory.delivery_service, features, connection.connected_agents
     )
-    # The boot pass converges every target at once — MCP entries, skill links,
-    # provider projections, delivery hooks — before the daemon reports ready.
+    # One boot pass converges every target (MCP, skills, providers, hooks) before ready.
+    await migrate_saved_connections(kinds.provider.service)
     await run_boot_pass(reconciler)
     follow_memory_switch(reconciler, kinds.guide, features)
     # Coffer's own skill, re-rendered from this build and the corpus every boot
@@ -332,12 +333,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # session + per-session supervisor + upstream subprocesses indefinitely.
     reaper_task = start_session_reaper(**reaper_kwargs_from_env())
 
-    # Set the lifecycle phase
     daemon_routes.set_daemon_phase("ready")
-
     try:
         yield
     finally:
+        # First: the scanner audits edits into the database shutdown() disposes.
+        await _best_effort("vault_scanner", vault_scanning.stop())
         await shutdown(
             Running(
                 workers=workers,
@@ -350,7 +351,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 engine=engine,
             )
         )
-        await _best_effort("vault_scanner", vault_scanning.stop())
         await _best_effort("derived_db", vault.derived_engine.dispose())
 
 
