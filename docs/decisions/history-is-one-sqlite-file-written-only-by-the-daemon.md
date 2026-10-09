@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-15
 **Deciders**: Yuxing Wu
-**Related**: [principles](../../docs-site/architecture/principles.md) (Technology & architectural constraints — Persistence; Guarantees — Single SQLite writer), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Code Layout — Layer-First](code-layout-layer-first.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Distribution — PyInstaller](distribution-pyinstaller.md), [Persistence](../../docs-site/architecture/persistence.md), spec daemon "Deploy frozen sibling binaries and back up the history database before migrating", PR #14, PR #48, PR #386
+**Related**: [principles](../../docs-site/architecture/principles.md) (Technology & architectural constraints — Persistence; Guarantees — Single SQLite writer), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Audit Every Change With Its Actor, Log Every Invocation, Prune Per Table](audit-and-retention.md), [Code Layout — Layer-First](code-layout-layer-first.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Distribution — PyInstaller](distribution-pyinstaller.md), [Persistence](../../docs-site/architecture/persistence.md), spec daemon "Deploy frozen sibling binaries and back up the history database before migrating", PR #14, PR #48, PR #386
 
 ## Context
 

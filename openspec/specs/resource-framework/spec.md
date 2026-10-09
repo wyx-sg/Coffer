@@ -331,10 +331,33 @@ one. The event-type vocabulary is shared: this spec defines the resource and ret
 events and every kind contributes its own, so one record answers "what happened" for the
 whole vault rather than each kind growing a private log.
 
+An entry's `details` MUST say what changed, not only that something did: a value that
+changed carries its value before and after (a name, a scope, a switch, a retention period,
+a provider), an action over several things names them or counts them (the agents, files,
+skills or pages it touched), and an action with a cause the caller knows names it. A text
+edit to a vault file Coffer writes or commits — a knowledge page, a memory note, a skill
+file — carries a unified diff of the edit, cut at 8 KB (UTF-8) with `diff_truncated: true`
+and its size before the cut (`diff_bytes`). `details` MUST NOT hold a secret value: a
+secret is named by its reference, and a resource's configuration passes its kind's
+redactor first. Every audited event is also written to `daemon.log` as one `coffer.<event>`
+line carrying the actor, the resource and the entry's `details`, cut at 2 KB with
+`details_truncated: true`.
+
 #### Scenario: audit lifecycle changes
 - **GIVEN** the user performs any add / enable / disable / update / delete on a server or capability,
 - **WHEN** they open the Activity page's audit tab or run `coffer log audit`,
 - **THEN** they see one row per change with actor, timestamp, and a payload describing what changed.
+
+#### Scenario: a rename and a knowledge edit say what changed
+- **GIVEN** a skill renamed from `notes` to `journal`, and a knowledge page whose one line was edited
+- **WHEN** the audit log is read
+- **THEN** the rename's details carry `notes` before and `journal` after
+- **AND** the edit's details carry a unified diff with the line removed and the line added
+
+#### Scenario: the daemon log line carries the event's details
+- **GIVEN** a retention period changed from 30 to 7 days
+- **WHEN** `daemon.log` is read
+- **THEN** its `coffer.retention_updated` line carries the actor, the table and both periods
 
 ### Requirement: Prune each registered log table on its own retention period
 The system MUST provide per-table retention configuration (in days, or "keep forever")

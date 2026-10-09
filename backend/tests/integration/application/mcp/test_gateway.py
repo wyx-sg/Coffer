@@ -6,7 +6,7 @@ import sys
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -973,6 +973,9 @@ class _SpySupervisor:
         self._boom_conn = boom_conn
         self._evicted = evicted
 
+    def mask_values(self, name: str) -> tuple[str, ...]:
+        return ()
+
     async def get_or_spawn(self, name: str) -> object:
         return self._boom_conn
 
@@ -1031,7 +1034,7 @@ async def _build_crash_harness(
 
 
 # ---------------------------------------------------------------------------
-# spec mcp-gateway "Record invocations without content": disabled (denied) +
+# spec mcp-gateway "Record invocations with redacted, bounded content": disabled (denied) +
 # timeout invocation rows for resources/prompts
 # ---------------------------------------------------------------------------
 
@@ -1159,7 +1162,8 @@ async def test_handler_disabled_records_denied_invocation(
             await handler(
                 params_factory(),  # type: ignore[operator]
                 resources=rsvc,
-                supervisor=AsyncMock(),
+                # A denied call never reaches the supervisor; only its mask is read.
+                supervisor=AsyncMock(mask_values=MagicMock(return_value=())),
                 prefs=prefs,
                 invocations=inv,
                 session_id="t",
@@ -1235,6 +1239,9 @@ async def test_handler_records_timeout_invocation_on_upstream_timeout(
         evicted: list[str] = []
 
         class _SpySup:
+            def mask_values(self, name: str) -> tuple[str, ...]:
+                return ()
+
             async def get_or_spawn(self, name: str) -> object:
                 return boom_conn
 
@@ -1410,6 +1417,9 @@ async def test_mcp_error_does_not_evict_healthy_upstream(
     evicted: list[str] = []
 
     class _SpySup:
+        def mask_values(self, name: str) -> tuple[str, ...]:
+            return ()
+
         async def get_or_spawn(self, name: str) -> object:
             return boom_conn
 
@@ -1477,6 +1487,9 @@ async def test_inband_iserror_result_is_recorded_as_error(
     evicted: list[str] = []
 
     class _SpySup:
+        def mask_values(self, name: str) -> tuple[str, ...]:
+            return ()
+
         async def get_or_spawn(self, name: str) -> object:
             return err_conn
 
@@ -1541,6 +1554,9 @@ async def test_transport_drop_still_evicts_for_self_heal(
     evicted: list[str] = []
 
     class _SpySup:
+        def mask_values(self, name: str) -> tuple[str, ...]:
+            return ()
+
         async def get_or_spawn(self, name: str) -> object:
             return boom_conn
 

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-09
 **Deciders**: Yuxing Wu
-**Related**: [MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream](mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), [Coffer Ships Its Own Skill](coffer-ships-its-own-skill.md), [Eval Capture and Regression Gate](eval-capture-and-regression-gate.md), [Session Subprocess Model](session-subprocess-model.md), spec mcp-gateway "Forward tools, resources and prompts", spec mcp-gateway "Toggle individual capabilities", spec mcp-gateway "Gate server exposure by scope per session", spec mcp-gateway "Record invocations without content", research note [MCP gateways](../research/mcp-gateways.md), PR #76, PR #310
+**Related**: [MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream](mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), [Coffer Ships Its Own Skill](coffer-ships-its-own-skill.md), [Eval Capture and Regression Gate](eval-capture-and-regression-gate.md), [Session Subprocess Model](session-subprocess-model.md), spec mcp-gateway "Forward tools, resources and prompts", spec mcp-gateway "Toggle individual capabilities", spec mcp-gateway "Gate server exposure by scope per session", spec mcp-gateway "Record invocations with redacted, bounded content", research note [MCP gateways](../research/mcp-gateways.md), PR #76, PR #310
 
 ## Context
 

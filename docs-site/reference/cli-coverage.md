@@ -194,6 +194,7 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | UI operation | Route | Command | Acceptance |
 | --- | --- | --- | --- |
 | Activity · Audit | `GET /audit` | `coffer log audit` | `test_log_cmd.py` |
+| Activity · tool call drawer | `GET /mcp/invocations/{invocation_id}` | `coffer log call` | `test_log_cmd.py` |
 | Activity · Daemon log | `GET /daemon/logs` | `coffer log daemon` | `test_log_cmd.py` |
 | Activity · MCP calls | `GET /mcp/invocations` | `coffer log mcp` | `test_log_cmd.py` |
 | MCP servers · Calls tab | `GET /resources/mcp_server/{uid}/invocations` | `coffer log mcp` | `test_log_cmd.py` |
@@ -317,6 +318,8 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | --- | --- | --- | --- |
 | Settings · Secrets · approvals | `PUT /settings/secret-boundary` | `coffer settings approvals set` | `test_cli_parity.py` |
 | Settings · Secrets · approvals | `GET /settings/secret-boundary` | `coffer settings approvals show` | `test_cli_parity.py` |
+| Settings · Data · History · Record tool call content | `PUT /settings/call-content` | `coffer settings call-content set` | `test_cli_parity.py` |
+| Settings · Data · History · Record tool call content | `GET /settings/call-content` | `coffer settings call-content show` | `test_cli_parity.py` |
 | Settings · Engine | `GET /internal-engine-config` | `coffer settings engine show` | `test_cli_parity.py` |
 | Settings · Engine · transcription | `PUT /internal-engine-config/transcribe-model` | `coffer settings engine transcribe-model` | `test_cli_parity.py` |
 | Settings · Engine · upkeep | `PUT /internal-engine-config/upkeep` | `coffer settings engine upkeep` | `test_cli_parity.py` |

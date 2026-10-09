@@ -262,7 +262,13 @@ class KnowledgeService:
             AuditEventType.KNOWLEDGE_WRITTEN.value,
             resource=row,
             actor=actor,
-            details={"title": title, "path": document.path},
+            details={
+                "title": title,
+                "path": document.path,
+                "description": description,
+                "bytes": len(body.encode("utf-8")),
+                "writer": actor_kind,
+            },
         )
         self.announce(row.uid)
         # A new document is a new entry in the catalogue the skill carries.

@@ -257,7 +257,13 @@ class MemoryService:
             AuditEventType.MEMORY_NOTE_DELETED.value,
             resource=row,
             actor=actor,
-            details={"partition": row.name, "note": slug},
+            details={
+                "partition": row.name,
+                "note": slug,
+                "title": record.title,
+                "entries": len(record.entry_ids),
+                "reason": DELETED_BY_HAND_REASON,
+            },
         )
         self._say_changed(uid)
 

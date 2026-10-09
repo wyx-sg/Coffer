@@ -8,7 +8,7 @@
 // this page has no words for — a new kind of record — still reads through the same facts and diff.
 import type { ReactNode } from "react";
 import type { TFunction } from "i18next";
-import { AlertCircle, AlertTriangle, Info, ShieldCheck } from "lucide-react";
+import { AlertCircle, AlertTriangle, ShieldCheck } from "lucide-react";
 
 import { Section } from "@/components/Section";
 
@@ -27,6 +27,7 @@ import {
 import { actorLong, callProblemTitle, serverFailureLine } from "@/lib/activity/recordText";
 import { changedFields, diffCounts, diffValues } from "@/lib/activity/valueDiff";
 import type { ServerFailures } from "@/lib/hooks/useServerFailures";
+import { CallContent } from "./CallContent";
 import { cn } from "@/lib/utils";
 import { LevelWord, type AgentLook } from "./activityCells";
 import { ValueDiffBlock } from "./ValueDiffBlock";
@@ -211,10 +212,7 @@ export function CallBody({
         </Fact>
         <TraceFact t={t} traceId={call.trace_id} />
       </div>
-      <p className="flex items-start gap-1.5 text-xs leading-[1.45] text-text-muted">
-        <Info className="mt-px size-3.5 shrink-0 text-text-subtle" aria-hidden />
-        {t("activity.drawer.callNote")}
-      </p>
+      <CallContent id={call.id} />
     </>
   );
 }

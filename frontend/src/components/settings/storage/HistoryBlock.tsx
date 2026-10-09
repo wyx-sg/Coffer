@@ -1,12 +1,13 @@
 // src/components/settings/storage/HistoryBlock.tsx — Settings › Data's History block (canvas 1.4.11, 1.4.12).
 //
 // Spec web-ui "Group the Data tab by what kind of data it is": the retention
-// of each record kind — changes, tool calls, skill working
-// files and config backups — Keep forever or a number of days, cleaned up nightly, with Clear expired now (which also
+// of each record kind — changes, tool calls (with the Record tool call content
+// switch under them), skill working files and config backups — Keep forever or
+// a number of days, cleaned up nightly, with Clear expired now (which also
 // clears expired attachments, a row of Local content). Every row auto-saves; a
 // shortening asks first (RetentionPolicySection); a failed save is announced
 // by RetentionSaveFailed above the blocks, and the row reads "Not saved".
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderOpen } from "lucide-react";
 
@@ -24,6 +25,7 @@ import {
   type useUpdateRetentionPolicy,
 } from "@/lib/hooks/useRetention";
 import { formatMoment } from "@/lib/time";
+import { CallContentRow } from "./CallContentRow";
 import { RetentionPolicySection } from "./RetentionPolicySection";
 import { DataBlock } from "./DataBlock";
 
@@ -112,15 +114,17 @@ export function HistoryBlock({ size, path, onReveal, update }: Props) {
           />
         ) : (
           rows.map((policy) => (
-            <RetentionPolicySection
-              key={policy.table_name}
-              policy={policy}
-              failed={failedTable === policy.table_name}
-              updating={update.isPending}
-              onUpdate={(retentionDays) =>
-                update.mutate({ tableName: policy.table_name, retentionDays })
-              }
-            />
+            <Fragment key={policy.table_name}>
+              <RetentionPolicySection
+                policy={policy}
+                failed={failedTable === policy.table_name}
+                updating={update.isPending}
+                onUpdate={(retentionDays) =>
+                  update.mutate({ tableName: policy.table_name, retentionDays })
+                }
+              />
+              {policy.table_name === "mcp_invocations" ? <CallContentRow /> : null}
+            </Fragment>
           ))
         )}
         <SettingRow

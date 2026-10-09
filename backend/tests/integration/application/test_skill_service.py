@@ -582,6 +582,12 @@ async def test_reimport_overwrite_replaces_and_preserves_bindings(tmp_path):
     # (e) SKILL_UPDATED audit row was recorded
     updated_events = await audit.query(event_type=AuditEventType.SKILL_UPDATED.value)
     assert len(updated_events) == 1
+    # ...saying which version it replaced and how SKILL.md changed.
+    details = updated_events[0].details
+    assert details["overwrite"] is True
+    assert details["previous_version_hash"] == r1.config["version_hash"]
+    assert details["version_hash"] == r2.config["version_hash"]
+    assert "-version one\n+version two\n" in details["diff"]
 
     await graph.dispose()
 

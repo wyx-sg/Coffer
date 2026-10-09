@@ -56,6 +56,7 @@ from coffer.surfaces.http.internal_engine_routes import router as internal_engin
 from coffer.surfaces.http.knowledge import change_router as knowledge_change_router
 from coffer.surfaces.http.knowledge import router as knowledge_router
 from coffer.surfaces.http.mcp.builtin_routes import router as mcp_builtin_router
+from coffer.surfaces.http.mcp.call_content_routes import router as call_content_router
 from coffer.surfaces.http.mcp.capability_preview_routes import router as mcp_preview_router
 from coffer.surfaces.http.mcp.capability_routes import router as mcp_capability_router
 from coffer.surfaces.http.mcp.config_test_routes import router as mcp_config_test_router
@@ -121,6 +122,7 @@ def include_all_routers(app: FastAPI) -> None:
         secret_router,
         secret_notes_router,
         settings_router,
+        call_content_router,
         sync_router,  # spec vault-sync
         vault_router,  # spec vault-storage
         internal_engine_router,  # spec internal-engine

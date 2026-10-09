@@ -10,13 +10,19 @@ from fastapi import APIRouter, Depends, Query
 
 from coffer.application.mcp.invocation_outcome import is_upstream_answered
 from coffer.application.resource_service import ResourceService
+from coffer.domain.errors import InvocationNotFound
 from coffer.domain.mcp.capability import MCPInvocation
 from coffer.domain.pagination import Page, decode_cursor, paginate, position_of, time_and_id
 from coffer.infrastructure.mcp.persistence import MCPInvocationRepo
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_resource_service
 from coffer.surfaces.http.handoff_schemas import handoff_out
-from coffer.surfaces.http.log_schemas import InvocationListOut, InvocationOut
+from coffer.surfaces.http.log_schemas import (
+    InvocationContentOut,
+    InvocationDetailOut,
+    InvocationListOut,
+    InvocationOut,
+)
 from coffer.surfaces.http.mcp.dependencies import get_invocation_repo, require_mcp_server
 from coffer.surfaces.http.mcp.handoff_views import call_failure_prompt
 
@@ -296,3 +302,21 @@ async def list_all_invocations(
         q_resources=resource_service,
     )
     return await _project(page, total, resource_service, repo)
+
+
+@aggregate_router.get("/invocations/{invocation_id}", response_model=InvocationDetailOut)
+async def get_invocation(
+    invocation_id: int,
+    repo: MCPInvocationRepo = Depends(get_invocation_repo),  # noqa: B008
+    resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
+) -> InvocationDetailOut:
+    """One call with its redacted content (spec mcp-gateway "Record invocations
+    with redacted, bounded content"); lists never carry it."""
+    row = await repo.get(invocation_id)
+    if row is None:
+        raise InvocationNotFound(invocation_id)
+    listed = await _project(Page(items=[row], next_cursor=None), 1, resource_service, repo)
+    return InvocationDetailOut(
+        **listed.invocations[0].model_dump(),
+        content=InvocationContentOut.model_validate(row.content) if row.content else None,
+    )

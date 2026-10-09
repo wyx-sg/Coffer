@@ -147,7 +147,13 @@ class CliToolService:
             await asyncio.to_thread(self._paths.set, command, raw.strip())
         await self._save([*tools, tool], f"Added the command-line tool {command}", actor)
         await self._audit.record(
-            AuditEventType.CLI_TOOL_ADDED.value, actor=actor, details={"command": command}
+            AuditEventType.CLI_TOOL_ADDED.value,
+            actor=actor,
+            details={
+                "command": command,
+                "path": raw.strip() if is_path(raw) else None,
+                **_fields(tool),
+            },
         )
         return await self._after(command)
 
@@ -165,7 +171,7 @@ class CliToolService:
             await self._audit.record(
                 AuditEventType.CLI_TOOL_EDITED.value,
                 actor=actor,
-                details={"command": command, "fields": sorted(changes)},
+                details={"command": command, "fields": sorted(changes), **_diff(current, edited)},
             )
         return await self._after(command)
 
@@ -190,7 +196,12 @@ class CliToolService:
             await self._audit.record(
                 AuditEventType.CLI_TOOL_EDITED.value,
                 actor=actor,
-                details={"command": command, "fields": sorted(changes)},
+                details={
+                    "command": command,
+                    "fields": sorted(changes),
+                    "required": True,
+                    **_diff(current, edited),
+                },
             )
         return await self._after(command)
 
@@ -198,12 +209,15 @@ class CliToolService:
         tools = self._declared.all()
         if not any(t.command == command for t in tools):
             raise CliToolNotDeclared(command)
+        removed = next(t for t in tools if t.command == command)
         rest = [t for t in tools if t.command != command]
         await self._save(rest, f"Removed the command-line tool {command}", actor)
         await asyncio.to_thread(self._paths.drop, command)
         self._requirements.forget(command)
         await self._audit.record(
-            AuditEventType.CLI_TOOL_REMOVED.value, actor=actor, details={"command": command}
+            AuditEventType.CLI_TOOL_REMOVED.value,
+            actor=actor,
+            details={"command": command, **_fields(removed)},
         )
 
     async def _save(self, tools: list[DeclaredTool], summary: str, actor: str) -> None:
@@ -212,6 +226,23 @@ class CliToolService:
     async def _after(self, command: str) -> CliView:
         self._requirements.forget(command)
         return await self._requirements.check(command)
+
+
+def _fields(tool: DeclaredTool) -> dict[str, Any]:
+    """A tool's editable fields, as an audit row carries them."""
+    return {
+        "title": tool.title,
+        "description": tool.description,
+        "min_version": tool.min_version,
+        "login_check": list(tool.login_check) if tool.login_check is not None else None,
+    }
+
+
+def _diff(before: DeclaredTool, after: DeclaredTool) -> dict[str, Any]:
+    """``from``/``to`` of every field an edit changed."""
+    old, new = _fields(before), _fields(after)
+    moved = [k for k in old if old[k] != new[k]]
+    return {"from": {k: old[k] for k in moved}, "to": {k: new[k] for k in moved}}
 
 
 def _apply(tool: DeclaredTool, changes: dict[str, Any]) -> DeclaredTool:

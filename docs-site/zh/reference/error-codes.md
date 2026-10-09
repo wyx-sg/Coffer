@@ -46,6 +46,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
 | `RESOURCE_NOT_FOUND` | 404 | 你给的 uid 或名字没有对应的资源。 | 在该类型的页面上核对名字；名字只在同一类型内唯一。 |
+| `INVOCATION_NOT_FOUND` | 404 | 日志里没有这个 id 的工具调用：从未存在，或已被保留期清理。 | 从 `coffer log mcp` 或活动页取 id。 |
 | `RESOURCE_ALREADY_EXISTS` | 409 | 该类型已有同名资源。 | 换个名字，或编辑已有的资源。 |
 | `UNKNOWN_KIND` | 400 | 该类型不是本守护进程注册的类型。 | 使用已注册的类型，例如 `mcp_server`、`skill` 或 `agent`。 |
 | `GENERIC_CREATE_NOT_ALLOWED` | 409 | 这个类型不能通过通用的 `/resources` 端点创建或更新。 | 使用该类型自己的端点，或它在 Web 界面里的页面。 |

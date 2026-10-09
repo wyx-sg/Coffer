@@ -127,6 +127,9 @@ class _Supervisor:
         self.spawns = 0
         self.evicted: list[str] = []
 
+    def mask_values(self, name: str) -> tuple[str, ...]:
+        return ()
+
     async def get_or_spawn(self, name: str) -> _Conn:
         self.spawns += 1
         if self._spawn_error is not None:
@@ -159,9 +162,6 @@ async def _call(
     )
 
 
-@pytest.mark.acceptance(
-    spec="mcp-gateway", scenario="invocation log records calls without arguments"
-)
 @pytest.mark.asyncio
 async def test_call_against_an_upstream_that_will_not_start_is_recorded() -> None:
     """A cooldown / exhausted spawn ladder is still a call: exactly one

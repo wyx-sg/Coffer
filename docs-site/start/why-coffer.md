@@ -35,7 +35,7 @@ This page explains the decisions that shape Coffer, for readers deciding whether
 
 **The decision.** Each agent's MCP config holds one entry, `coffer`, which runs `coffer-mcp-shim`. Coffer runs every upstream server you register and lists their tools under a `<server>__<tool>` prefix, so two servers can both have a `search` tool without clashing. You decide which tools a server exposes, and which agents can see it, in Coffer rather than in each agent.
 
-**Why.** With N agents and M servers you would otherwise maintain N×M entries by hand. One endpoint turns that into M registrations. It also gives Coffer a single point where it can apply per-agent scope and record every call (which tool, when, how long, and the outcome, but never the arguments or results).
+**Why.** With N agents and M servers you would otherwise maintain N×M entries by hand. One endpoint turns that into M registrations. It also gives Coffer a single point where it can apply per-agent scope and record every call (which tool, when, how long, the outcome, and its arguments and result with secrets masked).
 
 **What it means for you.**
 

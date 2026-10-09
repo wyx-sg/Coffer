@@ -234,6 +234,7 @@ async def put_residency(
     The change takes effect immediately, because launchd is a different
     process and does not care what this one is doing.
     """
+    was_installed = login_service.is_supported() and login_service.is_installed()
     if login_service.is_supported():
         # `launchctl` and the login-shell PATH probe are blocking subprocess
         # calls; on the event loop they stall every other request for their
@@ -249,7 +250,11 @@ async def put_residency(
     await audit.record(
         AuditEventType.DAEMON_RESIDENCY_UPDATED.value,
         actor=actor,
-        details={"login_service_installed": after.login_service_installed},
+        details={
+            "login_service_installed": after.login_service_installed,
+            "was_installed": was_installed,
+            "requested": body.login_service_installed,
+        },
     )
     return after
 

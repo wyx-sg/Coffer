@@ -339,7 +339,8 @@ class AgentPluginService:
             AuditEventType.AGENT_PLUGIN_TOGGLED.value,
             resource=agent,
             actor=actor,
-            details={"plugin": plugin_id, "enabled": enabled},
+            # The file it rewrote, by path only: it is the agent's config.
+            details={"plugin": plugin_id, "enabled": enabled, "path": str(spec_path)},
         )
 
     # ------------------------------------------------------------------

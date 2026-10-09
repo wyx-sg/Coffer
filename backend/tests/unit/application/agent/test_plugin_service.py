@@ -569,7 +569,11 @@ async def test_toggle_codex_writes_config_only(store, audit_svc):
     # Audit event
     entries = await audit_svc.query(event_type=AuditEventType.AGENT_PLUGIN_TOGGLED.value)
     assert len(entries) == 1
-    assert entries[0].details == {"plugin": "lint-tool@npm", "enabled": False}
+    assert entries[0].details == {
+        "plugin": "lint-tool@npm",
+        "enabled": False,
+        "path": str(_CODEX_CONFIG),
+    }
     assert entries[0].actor == "cli"
 
 
@@ -619,7 +623,11 @@ async def test_toggle_claude_writes_settings_only_internal_untouched(store, audi
     # Audit pinned
     entries = await audit_svc.query(event_type=AuditEventType.AGENT_PLUGIN_TOGGLED.value)
     assert len(entries) == 1
-    assert entries[0].details == {"plugin": "plugin-a@npm", "enabled": False}
+    assert entries[0].details == {
+        "plugin": "plugin-a@npm",
+        "enabled": False,
+        "path": str(_CLAUDE_SETTINGS),
+    }
 
 
 # ---------------------------------------------------------------------------

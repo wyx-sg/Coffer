@@ -116,7 +116,8 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
   "machine_name": "studio",
   "machine_id": "3f0c9a…",
   "features": {},
-  "price_refresh": true
+  "price_refresh": true,
+  "record_call_content": true
 }
 ```
 
@@ -128,6 +129,7 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 | `machine_id` | 字符串 | 由主机派生 | 由主机派生的机器 id 的缓存，在同步的保险库中用来指代本机。删除后会重新算出同一个值。 | 由守护进程写入 |
 | `features` | 布尔值组成的对象 | `{}` | 本机的实验功能开关。立即生效。注册表中没有声明的键会被忽略。 | **设置 → 功能** |
 | `price_refresh` | 布尔值 | `true` | 守护进程是否每天从 genai-prices 刷新一次模型价格表。关闭时使用构建中附带的价格表。每次刷新时读取。 | **设置 › 通用 → 刷新模型价格** |
+| `record_call_content` | 布尔值 | `true` | 每次 MCP 工具调用是否在调用日志里保存它的参数和返回结果（以及自定义工具的请求和响应），先遮盖密钥并截断到 16 KB。关闭后新的行只保留元数据。立即生效。 | **设置 › 数据 → 历史记录 → 记录工具调用内容**，或 `coffer settings call-content set` |
 
 守护进程的运行时状态——它的 pid、端口和 API 令牌——在另一个文件 `~/.coffer/daemon.json` 中，启动时创建、退出时删除。见[文件与目录](/zh/reference/filesystem#daemon-files)。
 
@@ -225,6 +227,8 @@ Coffer 自身工作的设置是保险库中的一个文档 `state/settings/inter
 | **Skill 临时数据** | `skill_data` | 30 天 | 删除 `~/.coffer/skill-data` 下任意位置最后修改时间早于窗口的文件，再删除因此清空的文件夹（`skill-data` 本身不删）。 |
 | **附件** | `attachments` | 30 天 | 删除 `~/.coffer/content/channel-media` 中最后修改时间早于窗口的文件。显示在**本地内容**下。 |
 | 仅 REST | `sync_runs` | 90 天 | 删除同步轮次的历史。 |
+
+**MCP 调用**下面的**记录工具调用内容**决定新的调用是否保存参数和返回结果，先遮盖密钥并截断到 16 KB（默认开启；即 [daemon-config.json](#daemon-config-json) 里的 `record_call_content`）。见[调用记录了什么](/zh/guides/activity#what-a-call-records)。
 
 对话没有保留策略：Coffer 不保存对话文本，智能体自己的会话由智能体自己的清理机制处理（见[对话](/zh/guides/chat#chat-and-the-agent-s-own-sessions)）。旧版本留在 `retention.json` 里的 `conversations` 或 `conversations_archive` 条目会在守护进程启动时被丢弃。策略可以设为 **永久保留**（值为 `forever`）。同一次运行还会删除超过 7 天的旧 shim 日志和上游日志。
 

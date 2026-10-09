@@ -120,6 +120,21 @@ SPECS = [
         body=True,
     ),
     RouteCommand(
+        "settings call-content show",
+        "GET",
+        "/settings/call-content",
+        _UI + "Data · History · Record tool call content",
+        "Whether tool calls record their arguments and results.",
+    ),
+    RouteCommand(
+        "settings call-content set",
+        "PUT",
+        "/settings/call-content",
+        _UI + "Data · History · Record tool call content",
+        "Switch recording a call's content. Body: enabled.",
+        body=True,
+    ),
+    RouteCommand(
         "settings storage show",
         "GET",
         "/storage",

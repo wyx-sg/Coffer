@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from coffer.application.skill.builtin_seed import is_builtin
 from coffer.domain.audit import AuditEventType
+from coffer.domain.audit_diff import as_text, text_diff
 from coffer.domain.errors import ResourceAlreadyExists, ResourceProtected
 from coffer.domain.resource import Resource
 from coffer.domain.skill.config import SkillConfig
@@ -25,6 +26,23 @@ if TYPE_CHECKING:
     from coffer.application.skill.service import SkillService
 
 logger = logging.getLogger(__name__)
+
+
+def _read_text(path: pathlib.Path) -> str | None:
+    try:
+        return as_text(path.read_bytes())
+    except OSError:
+        return None
+
+
+def _skill_md_diff(service: SkillService, src: pathlib.Path, name: str) -> dict[str, object]:
+    """The diff an overwrite makes to the master's SKILL.md (``{}`` when
+    either side is unreadable or nothing changed)."""
+    before = _read_text(service._store.paths_for(name).skill_md)
+    after = _read_text(src / "SKILL.md")
+    if before is None or after is None:
+        return {}
+    return text_diff(before, after, f"skills/{name}/SKILL.md")
 
 
 def _refuse_overwriting_a_builtin(existing: list[Resource], name: str) -> None:
@@ -84,7 +102,14 @@ async def register_from_validated(
         "version_hash": validation.skill_md_sha256,
     }
 
+    changed: dict[str, object] = {}
     if name_taken:
+        # What an overwrite changes, read before the swap: the version it
+        # replaces and SKILL.md's diff (the skill's own text, never config).
+        changed["overwrite"] = True
+        if existing_row is not None:
+            changed["previous_version_hash"] = existing_row.config.get("version_hash")
+        changed.update(_skill_md_diff(service, src, name))
         # Overwrite path: swap the master folder in place (atomic_replace also
         # covers an orphan master folder with no row — DriftKind.ORPHAN_MASTER).
         service._store.atomic_replace(src=src, name=name, meta=meta)
@@ -135,7 +160,12 @@ async def register_from_validated(
         audit_event.value,
         resource=r,
         actor=actor,
-        details={"version_hash": validation.skill_md_sha256, **(audit_details or {})},
+        details={
+            "version_hash": validation.skill_md_sha256,
+            "source_type": source_meta.type,
+            **changed,
+            **(audit_details or {}),
+        },
     )
     # Deliver to every agent the skill's own state grants (spec skill-manager
     # "Deliver a skill only where it is enabled and in scope"). An overwrite

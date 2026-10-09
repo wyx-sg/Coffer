@@ -86,6 +86,9 @@ async def _service(tmp_path, *, on_rename=None, on_delete=None):
 @pytest.mark.acceptance(
     spec="resource-framework", scenario="renaming a resource is an ordinary edit"
 )
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="a rename and a knowledge edit say what changed"
+)
 async def test_rename_moves_the_label_and_nothing_else(tmp_path):
     svc, audit, store, engine, _sm = await _service(tmp_path)
     try:
@@ -117,6 +120,14 @@ async def test_rename_moves_the_label_and_nothing_else(tmp_path):
         types = [e.event_type for e in trail]
         assert AuditEventType.RESOURCE_CREATED.value in types
         assert AuditEventType.RESOURCE_RENAMED.value in types
+        renamed_row = next(
+            e for e in trail if e.event_type == AuditEventType.RESOURCE_RENAMED.value
+        )
+        # The row says what the label was and became, not only that it moved.
+        assert renamed_row.details["from"] == "before"
+        assert renamed_row.details["to"] == "after"
+        assert renamed_row.details["moved_folder"] is False
+        assert "title" in renamed_row.details
         created_row = next(
             e for e in trail if e.event_type == AuditEventType.RESOURCE_CREATED.value
         )

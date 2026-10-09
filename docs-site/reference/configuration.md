@@ -116,7 +116,8 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
   "machine_name": "studio",
   "machine_id": "3f0c9a…",
   "features": {},
-  "price_refresh": true
+  "price_refresh": true,
+  "record_call_content": true
 }
 ```
 
@@ -128,6 +129,7 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
 | `machine_id` | string | derived from the host | Cache of the host-derived machine id that names this machine in a synced vault. Deleting it recomputes the same value. | written by the daemon |
 | `features` | object of booleans | `{}` | This machine's experimental-feature switches. Takes effect at once. A key the registry does not declare is ignored. | **Settings → Features** |
 | `price_refresh` | boolean | `true` | Whether the daemon refreshes the model price list from genai-prices once a day. Off, it prices from the list shipped in the build. Read at each refresh. | **Settings › General → Refresh model prices** |
+| `record_call_content` | boolean | `true` | Whether each MCP tool call keeps its arguments and result (and a custom tool's request and response), masked and cut at 16 KB, in the invocation log. Off, new rows keep metadata only. Takes effect at once. | **Settings › Data → History → Record tool call content**, or `coffer settings call-content set` |
 
 The daemon's runtime state — its pid, port and API token — lives in a different file, `~/.coffer/daemon.json`, which is created on start and removed on exit. See [Files and directories](/reference/filesystem#daemon-files).
 
@@ -225,6 +227,8 @@ The window is set in **Settings → Data → History**, which shows four policie
 | **Config backups** | `config_backups` | 30 days | Deletes files under `~/.coffer/config-backups` whose last-modified time is older than the window, except the newest backup of each config file, which is always kept so the last write can be undone; folders left empty are removed. |
 | **Attachments** | `attachments` | 30 days | Deletes files in `~/.coffer/content/channel-media` whose last-modified time is older than the window. Shown under **Local content**. |
 | REST only | `sync_runs` | 90 days | Deletes the history of sync rounds. |
+
+Under **MCP calls**, **Record tool call content** decides whether new calls keep their arguments and result, masked and cut at 16 KB (on by default; `record_call_content` in [daemon-config.json](#daemon-config-json)). See [What a call records](/guides/activity#what-a-call-records).
 
 Conversations have no retention policy: Coffer keeps no conversation text, and the agent's own sessions follow the agent's own clean-up (see [Conversations](/guides/chat#chat-and-the-agent-s-own-sessions)). A `conversations` or `conversations_archive` entry left in `retention.json` by an older version is dropped when the daemon starts. A policy can be set to **Keep forever** (the value `forever`). The same run also deletes aged shim and upstream logs older than 7 days.
 

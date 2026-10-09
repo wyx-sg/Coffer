@@ -1,6 +1,6 @@
 """One server's calls since a moment, counted in SQL.
 
-Spec mcp-gateway "Record invocations without content".
+Spec mcp-gateway "Record invocations with redacted, bounded content".
 
 The MCP server page's "Last 24 hours": how many calls and errors, per calling
 agent, and per tool. An error is any call that did not end ``ok``. The totals

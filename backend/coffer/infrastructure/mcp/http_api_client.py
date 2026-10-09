@@ -35,6 +35,7 @@ import httpx
 import mcp.types as mcp_types
 from mcp import MCPError
 
+from coffer.application.mcp.call_content import publish_exchange
 from coffer.domain.error_base import CofferError
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
@@ -46,6 +47,7 @@ from coffer.domain.mcp.http_api_environment import (
 from coffer.domain.mcp.http_api_render import ArgumentsInvalid, RenderedRequest, RenderError
 from coffer.domain.mcp.http_api_request import build_request
 from coffer.domain.secret_errors import SecretBindingPending
+from coffer.infrastructure.mcp.http_api_exchange import request_record, response_record
 
 #: The most of a response body a tool returns (spec: "read at most 1 MiB").
 MAX_RESPONSE_BYTES = 1024 * 1024
@@ -113,6 +115,7 @@ class HttpCallOutcome:
     """What one request returned, before it is shaped into a tool result."""
 
     __slots__ = (
+        "all_headers",
         "body",
         "content_type",
         "duration_ms",
@@ -134,8 +137,11 @@ class HttpCallOutcome:
         content_type: str | None,
         location: str | None,
         headers: dict[str, str] | None = None,
+        all_headers: dict[str, str] | None = None,
     ) -> None:
         self.url = url
+        #: Every response header, masked: what the call's record keeps.
+        self.all_headers = all_headers or {}
         #: The allow-listed response headers (:func:`diagnostic_headers`).
         self.headers = headers or {}
         self.status = status
@@ -252,6 +258,7 @@ async def send_request(
                 content_type=response.headers.get("content-type"),
                 location=mask_secrets(location, secrets) if location else None,
                 headers=diagnostic_headers(response.headers, secrets),
+                all_headers={k: mask_secrets(v, secrets) for k, v in response.headers.items()},
             )
     except httpx.TimeoutException as e:
         raise UpstreamTimeout(f"request timed out after {timeout_seconds:g}s") from e
@@ -345,12 +352,18 @@ class HttpApiUpstreamConnection:
             request = build_request(self._transport, env, tool, args, overlay)
         except RenderError as e:
             return _text_result(mask_secrets(refusal_text(e), secrets), is_error=True)
-        outcome = await send_request(
-            request,
-            timeout_seconds=self._transport.timeout_for(env),
-            secrets=secrets,
-            client_factory=self._client_factory,
-        )
+        sent = request_record(request, secrets)
+        try:
+            outcome = await send_request(
+                request,
+                timeout_seconds=self._transport.timeout_for(env),
+                secrets=secrets,
+                client_factory=self._client_factory,
+            )
+        except UpstreamTimeout:
+            publish_exchange(request=sent, response=None)
+            raise
+        publish_exchange(request=sent, response=response_record(outcome, MAX_RESPONSE_BYTES))
         return _text_result(outcome.as_text(), is_error=outcome.is_error or outcome.status == 0)
 
     async def close(self) -> None:

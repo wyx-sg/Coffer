@@ -382,3 +382,12 @@ class DatabaseSchemaTooNew(CofferError):  # noqa: N818
 from coffer.domain.kb_errors import (  # noqa: E402
     EngineUnavailable as EngineUnavailable,
 )
+
+
+class InvocationNotFound(CofferError):  # noqa: N818
+    """No call in the invocation log has this id (it never existed, or retention pruned it)."""
+
+    code = "INVOCATION_NOT_FOUND"
+
+    def __init__(self, invocation_id: int) -> None:
+        super().__init__(f"no call with id {invocation_id} in the invocation log")

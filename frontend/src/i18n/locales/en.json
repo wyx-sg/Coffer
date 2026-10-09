@@ -787,6 +787,7 @@
       "resource_scope_updated": "Updated reach for {{resource}}",
       "resource_updated": "Reconfigured {{resource}}",
       "retention_updated": "Updated a data-retention policy",
+      "call_content_recording_updated": "Changed whether tool calls record their content",
       "cli_tool_added": "Added command-line tool {{command}}",
       "cli_tool_edited": "Edited command-line tool {{command}}",
       "cli_tool_removed": "Removed command-line tool {{command}}",
@@ -1001,7 +1002,7 @@
         "denied": "The call to {{server}} was denied",
         "unreachable": "Couldn't reach {{server}}"
       },
-      "callNote": "Coffer records who called which tool, when and how it went. Arguments and results pass straight through and are never stored.",
+      "callNote": "Secret values are masked before anything is stored. Each part keeps its first 16 KB; the record is deleted with the tool call history.",
       "level": "Level",
       "logger": "Logger",
       "around": "Around the same time",
@@ -1019,7 +1020,18 @@
       "whenToday": "{{time}} today",
       "whenYesterday": "{{time}} yesterday",
       "whenOn": "{{time}}, {{date}}",
-      "environment": "Environment"
+      "environment": "Environment",
+      "content": {
+        "arguments": "Arguments",
+        "result": "Result",
+        "error": "Error",
+        "request": "Request",
+        "response": "Response",
+        "copy": "Copy {{part}}",
+        "cut": "Cut at 16 KB — the call carried {{size}} KB.",
+        "notRecorded": "Content was not recorded for this call.",
+        "setting": "Record tool call content"
+      }
     },
     "daemon": {
       "noMessage": "(log record with no message)"
@@ -1491,7 +1503,12 @@
       },
       "history": {
         "title": "History",
-        "description": "The record of what happened. Old entries are deleted on the schedule below."
+        "description": "The record of what happened. Old entries are deleted on the schedule below.",
+        "callContent": {
+          "label": "Record tool call content",
+          "description": "Keep each call's arguments and result, with secret values masked. Off keeps only who called what, when and how it went.",
+          "notSaved": "Not saved"
+        }
       },
       "cache": {
         "title": "Rebuildable cache",
@@ -1820,6 +1837,7 @@
     "CUSTOM_TOOL_ENVIRONMENT_NOT_FOUND": "This group has no environment with that name.",
     "CUSTOM_TOOL_ENVIRONMENT_REQUIRED": "Choose an environment: this group has more than one turned on.",
     "CUSTOM_TOOL_ENVIRONMENT_UNKNOWN": "That environment isn't registered in this group.",
+    "INVOCATION_NOT_FOUND": "That tool call isn't in the log. It may have been cleared by retention.",
     "CUSTOM_TOOL_LAST_ENVIRONMENT": "A group needs at least one environment, so its last one can't be deleted.",
     "DESKTOP_REQUEST_NOT_FOUND": "That request to the Coffer app has expired or was already handled."
   },

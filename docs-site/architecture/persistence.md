@@ -129,7 +129,7 @@ Each file is one JSON object, read whole, changed under a per-file lock and writ
 | Table | Purpose |
 | --- | --- |
 | `audit_log` | Every lifecycle change: time, event type, actor, the resource's uid and its kind and name at the time, redacted details. |
-| `mcp_invocations` | One row per tool call through the gateway, written by a batched writer. Pruned after 30 days by default. |
+| `mcp_invocations` | One row per tool call through the gateway, with its masked and cut content, written by a batched writer. Pruned after 30 days by default. |
 | `conversations` | The conversation index: title, agent, directory, the agent's session id and the channel thread that owns it. No conversation text: that stays in the agent's own session. Deleted with the conversation (or its session); there is no retention policy. |
 | `channel_thread_conversations`, `channel_thread_history` | Which conversation an IM thread maps to, and every conversation a thread has opened. |
 | `channel_outbox` | Replies Coffer owes a chat and has not delivered yet. |

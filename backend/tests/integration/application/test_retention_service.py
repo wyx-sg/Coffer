@@ -80,7 +80,12 @@ async def test_set_retention_audits(tmp_path):
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     entries = await audit.query(event_type=AuditEventType.RETENTION_UPDATED.value)
     assert len(entries) == 1
-    assert entries[0].details == {"table": "audit_log", "retention_days": 180}
+    # The window it replaced too (the default, 365 days).
+    assert entries[0].details == {
+        "table": "audit_log",
+        "retention_days": 180,
+        "previous_days": 365,
+    }
     assert entries[0].actor == "api"
     await engine.dispose()
 
