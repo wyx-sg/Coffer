@@ -137,6 +137,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`one-level-triggered-reconciler-compares-parameters`](one-level-triggered-reconciler-compares-parameters.md) | One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters |
 | [`wire-contract-generated-from-the-pydantic-models`](wire-contract-generated-from-the-pydantic-models.md) | The Wire Contract Is Generated From the Pydantic Models, and the Frontend Client From the Contract |
 | [`background-work-runs-supervised-and-correlated`](background-work-runs-supervised-and-correlated.md) | Background Work Runs Supervised, and Every Record Carries One Correlation Id |
+| [`background-workers-wake-on-events`](background-workers-wake-on-events.md) | Background Workers Wake on Events, Fall Back Rarely, and Stop When Nothing Needs Them |
 | [`platform-differences-live-behind-one-platform-port`](platform-differences-live-behind-one-platform-port.md) | Platform Differences Live Behind One Platform Port; Only macOS Ships |
 
 ### Daemon, shell & distribution
@@ -192,6 +193,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`managed-agents-run-with-full-permissions`](managed-agents-run-with-full-permissions.md) | Managed Agents Run With Full Permissions; Owner Pairing Is the Gate |
 | [`chat-single-owner-live-mirror`](chat-single-owner-live-mirror.md) | Chat Is a Single-Owner Live Mirror |
 | [`channel-adapter-framework`](channel-adapter-framework.md) | Channels Are Thin Transport Adapters Over One Shared Core, Supervised In-Daemon |
+| [`channels-are-machine-local-resources`](channels-are-machine-local-resources.md) | Channels Are Machine-Local Resources, Like Agents |
 | [`channel-owner-gate`](channel-owner-gate.md) | A Channel Answers Only Its Paired Owner, and Fails Closed in Groups |
 | [`channel-conversation-identity-and-context`](channel-conversation-identity-and-context.md) | A Channel Conversation Is Keyed by (Channel, Chat, Thread) and Grounded in Its Thread and Quote |
 | [`channel-switches-structural-vs-parametric`](channel-switches-structural-vs-parametric.md) | Channel Switches: the Agent Opens a New Conversation, the Model Applies Next Turn |

@@ -4,10 +4,8 @@
 // it names (addChannel.ts; the schema's messages are i18n keys); a server
 // failure is toasted by the hook and also stated inline.
 //
-// The channel is bound to THIS machine at creation (spec channels "Bind each
-// channel to the one machine that runs it") — a channel naming no machine is
-// one no daemon starts — and to the agent chosen here: `default_agent` is an
-// agent resource uid, so the form offers this vault's agents and refuses to
+// The channel drives the agent chosen here: `default_agent` is an agent
+// resource uid, so the form offers this vault's agents and refuses to
 // register a channel that drives nobody.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -25,7 +23,6 @@ import { useAgents } from "@/lib/hooks/useAgents";
 import { useCreateChannel } from "@/lib/hooks/useChannels";
 import { useCredentialCheck } from "@/lib/hooks/useCredentialCheck";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
-import { useThisMachineId } from "@/lib/hooks/useMachines";
 import { TITLE_MAX_LENGTH } from "@/lib/resourceTitle";
 import { EMPTY_SECRET_DRAFT, validateAddChannel } from "./addChannel";
 import {
@@ -46,7 +43,6 @@ interface Props {
 
 export function AddChannelConnectStep({ platform, onBack, onCancel, onCreated }: Props) {
   const { t } = useTranslation();
-  const { machineId } = useThisMachineId();
   const { data: agents } = useAgents();
   const [agentUid, setAgentUid] = useState("");
   const defaultAgentUid = agentUid || (agents?.[0]?.uid ?? "");
@@ -72,15 +68,11 @@ export function AddChannelConnectStep({ platform, onBack, onCancel, onCreated }:
       setFieldErrors(parsed.fieldErrors);
       return;
     }
-    if (machineId === null) {
-      setFormError(t("channels.dialog.machineUnknown"));
-      return;
-    }
     if (defaultAgentUid === "") {
       setFormError(t("channels.dialog.errors.agent"));
       return;
     }
-    create.mutate(planChannel(parsed.values, machineId, defaultAgentUid), {
+    create.mutate(planChannel(parsed.values, defaultAgentUid), {
       onSuccess: onCreated,
       onError: (e) => setFormError(translateApiError(t, e)),
     });

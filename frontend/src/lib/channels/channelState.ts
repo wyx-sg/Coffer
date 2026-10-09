@@ -2,23 +2,17 @@
 // One answer to "what state is this channel in?", shared by the list row, the
 // detail header and the status banner so the three can never disagree.
 //
-// The inputs are the resource (enabled, its configured machine), the live
-// status (`GET /channels/{uid}/status`, which may still be loading or may have
-// failed) and the machine registry. The answer names a state, the list group
-// it belongs to, the tone of its status word and the fix its banner
-// offers. Order matters: where the channel runs comes first (a channel another
-// machine runs is quiet here by design, whatever its local adapter says), then
-// whether it is switched on, then the connection, then pairing.
+// The inputs are the resource (enabled), the live status
+// (`GET /channels/{uid}/status`, which may still be loading or may have
+// failed). The answer names a state, the list group it belongs to, the tone
+// of its status word and the fix its banner offers. Order matters: whether it
+// is switched on comes first, then the connection, then pairing.
 import type { StatusTone } from "@/lib/statusTone";
 import type { ChannelStatus } from "@/lib/api/channels";
-import { bindingState } from "@/lib/channels/channelBinding";
 
 export type ChannelStateKey =
   | "loading"
   | "unavailable"
-  | "unbound"
-  | "unknownMachine"
-  | "elsewhere"
   | "off"
   | "connecting"
   | "reconnecting"
@@ -33,7 +27,7 @@ export type ChannelStateKey =
   | "connected";
 
 /** The list's groups, in the order the list shows them. */
-export const CHANNEL_GROUPS = ["attention", "connected", "elsewhere", "off"] as const;
+export const CHANNEL_GROUPS = ["attention", "connected", "off"] as const;
 type ChannelGroup = (typeof CHANNEL_GROUPS)[number];
 
 /** The one fix a state offers, drawn inside its banner (or grey box); null when
@@ -46,8 +40,6 @@ export type ChannelPrimaryAction =
   | "replaceSecret"
   | "openSecrets"
   | "askAgain"
-  | "runHere"
-  | "runHereConfirm"
   | "turnOn"
   | null;
 
@@ -56,28 +48,18 @@ export interface ChannelView {
   group: ChannelGroup;
   tone: StatusTone;
   primary: ChannelPrimaryAction;
-  /** The machine the channel is bound to (null when unbound). */
-  runsOn: string | null;
-  /** Whether this machine runs it. */
-  runsHere: boolean;
 }
 
 export interface ChannelStateInput {
   enabled: boolean;
-  config: Record<string, unknown>;
   status: ChannelStatus | undefined;
   /** The status read failed (the adapter or the daemon did not answer). */
   statusFailed: boolean;
-  selfId: string | null;
-  knownMachines: readonly string[];
 }
 
 const TONE: Record<ChannelStateKey, StatusTone> = {
   loading: "off",
   unavailable: "warn",
-  unbound: "err",
-  unknownMachine: "err",
-  elsewhere: "off",
   off: "off",
   connecting: "warn",
   reconnecting: "warn",
@@ -95,9 +77,6 @@ const TONE: Record<ChannelStateKey, StatusTone> = {
 const PRIMARY: Record<ChannelStateKey, ChannelPrimaryAction> = {
   loading: null,
   unavailable: "refresh",
-  unbound: "runHere",
-  unknownMachine: "runHere",
-  elsewhere: "runHereConfirm",
   off: "turnOn",
   connecting: null,
   reconnecting: "reconnect",
@@ -111,11 +90,6 @@ const PRIMARY: Record<ChannelStateKey, ChannelPrimaryAction> = {
   notPaired: null,
   connected: null,
 };
-
-function configuredMachine(config: Record<string, unknown>): string | null {
-  const v = config.runs_on;
-  return typeof v === "string" && v !== "" ? v : null;
-}
 
 function localState(status: ChannelStatus): ChannelStateKey {
   const ws = status.inbound?.websocket_state ?? null;
@@ -146,24 +120,15 @@ function localState(status: ChannelStatus): ChannelStateKey {
   return status.people.length === 0 ? "notPaired" : "connected";
 }
 
-function stateOf(input: ChannelStateInput, runsOn: string | null): ChannelStateKey {
+function stateOf(input: ChannelStateInput): ChannelStateKey {
   const { status } = input;
   if (input.statusFailed && status === undefined) return "unavailable";
-  const binding = bindingState(runsOn, {
-    selfId: input.selfId,
-    known: input.knownMachines,
-    runsHere: status?.runs_here,
-  });
-  if (binding === "unbound") return "unbound";
-  if (binding === "unknown") return "unknownMachine";
-  if (binding === "other") return "elsewhere";
   if (!input.enabled) return "off";
   if (status === undefined) return "loading";
   return localState(status);
 }
 
 function groupOf(state: ChannelStateKey, status: ChannelStatus | undefined): ChannelGroup {
-  if (state === "elsewhere") return "elsewhere";
   if (state === "off") return "off";
   if (state === "loading" || state === "connecting") return "connected";
   if (state === "connected") {
@@ -174,16 +139,12 @@ function groupOf(state: ChannelStateKey, status: ChannelStatus | undefined): Cha
 
 /** Describe one channel: its state, list group, status tone and fix action. */
 export function describeChannel(input: ChannelStateInput): ChannelView {
-  // The daemon's answer wins once there is one; the config is the fallback.
-  const runsOn = input.status ? input.status.runs_on : configuredMachine(input.config);
-  const state = stateOf(input, runsOn);
+  const state = stateOf(input);
   return {
     state,
     group: groupOf(state, input.status),
     tone: TONE[state],
     primary: PRIMARY[state],
-    runsOn,
-    runsHere: input.status?.runs_here ?? (runsOn !== null && runsOn === input.selfId),
   };
 }
 

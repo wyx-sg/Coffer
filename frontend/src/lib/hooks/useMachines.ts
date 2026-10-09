@@ -2,14 +2,8 @@
 //
 // The machine registry (spec vault-sync "Derive the registry from the
 // descriptors"): every installation of Coffer that has converged with this
-// remote, read from the descriptors under `machines/` in the vault.
-//
-// The list is not only the Machines tab's data — it is also the pick-list the
-// channel binding control offers (spec channels, "Bind each channel to the one machine that runs it"),
-// which is why it lives in its own hook file rather than inside the Sync
-// page's tree. `scope` has no machine axis and never did name a machine; the
-// binding does, by DERIVED id rather than display name, so renaming a machine
-// is free and a mistyped id can never be entered by hand.
+// remote, read from the descriptors under `machines/` in the vault. The Sync
+// page reads it.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { syncApi } from "@/lib/api/sync";
 import { resourcesKey, scopeKey, skillsKey, syncMachinesKey } from "@/lib/api/queryKeys";

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-14
 **Deciders**: Yuxing Wu
-**Related**: [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [A Channel Answers Only Its Paired Owner, and Fails Closed in Groups](channel-owner-gate.md), [A Kind Plugs In as One Frozen Record of Optional Hooks: Validators Before the Write, Reactions After](kind-plugin-contract.md), [Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry](agent-mechanisms-are-optional-facets-on-the-descriptor.md), spec resource-framework "Carry a per-agent reach on every resource", spec vault-sync "Keep reach machine-local", spec vault-sync "Scope names agents only", spec channels "Limit the agents a channel may drive to its scope", spec channels "Bind each channel to the one machine that runs it", spec mcp-gateway "Gate server exposure by scope per session", spec mcp-gateway "Take the agent identity from the handshake", research note [multi-machine sync](../research/multi-machine-sync.md), PRs #296, #381, #382
+**Related**: [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [A Channel Answers Only Its Paired Owner, and Fails Closed in Groups](channel-owner-gate.md), [Channels Are Machine-Local Resources, Like Agents](channels-are-machine-local-resources.md), [A Kind Plugs In as One Frozen Record of Optional Hooks: Validators Before the Write, Reactions After](kind-plugin-contract.md), [Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry](agent-mechanisms-are-optional-facets-on-the-descriptor.md), spec resource-framework "Carry a per-agent reach on every resource", spec vault-sync "Keep reach machine-local", spec vault-sync "Scope names agents only", spec channels "Limit the agents a channel may drive to its scope", spec mcp-gateway "Gate server exposure by scope per session", spec mcp-gateway "Take the agent identity from the handshake", research note [multi-machine sync](../research/multi-machine-sync.md), PRs #296, #381, #382
 
 ## Context
 
@@ -148,26 +148,22 @@ Replace the one-identity predicate with `is_active(reach, ctx)` over a
   delivered assets exists
   ([Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md)).
 - A channel's "agents it may drive" becomes a field of the channel's own
-  config, validated with `default_agent` in one file, so the invariant that the
-  default agent is inside the allow-list is no longer split between a synced
-  document and a machine-local record.
+  config, validated with `default_agent` in one file.
 
 - **Pros.** One predicate and one answer per site; a second dimension is a key,
-  not a signature change; the channel's two fields that must agree live in one
-  validated file.
+  not a signature change.
 - **Cons.** Every enforcement site changes once (the predicate is called from
   over a dozen places in `application/`, several of them in the channel runtime); a
   dimension the context cannot supply narrows to nothing, which a caller that
-  forgets to pass one sees as a resource that vanished; channel routing would
-  become a synced setting, so narrowing it on one machine narrows it on the
-  machine that runs the channel.
+  forgets to pass one sees as a resource that vanished.
 - **Why it is not adopted.** No second dimension has a consumer. The record
   already reserves `projects`, so adding the dimension later costs one key and
-  a change of call signature, not a migration of stored data. The channel
-  invariant is real, and today it is held by two checks (the kind's config
-  check and its scope check, on both write paths) plus a runtime guard that
-  refuses to start a channel whose scope excludes its own default agent and
-  says why. It becomes worth building with the first project-level consumer.
+  a change of call signature, not a migration of stored data. A channel's
+  default agent staying inside its scope is held today by two checks (the
+  kind's config check and its scope check, on both write paths) plus a runtime
+  guard that refuses to start a channel whose scope excludes its own default
+  agent and says why; both fields are machine-local, so they cannot disagree
+  across machines. It becomes worth building with the first project-level consumer.
 
 ## Decision
 
@@ -179,15 +175,14 @@ names agents only, by uid; there is no machine axis. Each kind enforces reach at
 its own choke point.
 
 What does travel is the resource itself: identity, name, description and
-config. Two things that look like reach are deliberately *not* reach and do
-converge:
+config. One thing that looks like reach is deliberately *not* reach and does
+converge: the **per-capability toggles** on an MCP server (the disabled tool
+set) converge as a state document in the vault, because they describe the
+server, not this machine.
 
-- **Which machine runs a channel** is a field in the channel's config
-  (`runs_on`), because it is one answer every machine must share — an arriving
-  channel starts nothing on a machine it does not name (spec channels "Bind
-  each channel to the one machine that runs it").
-- **Per-capability toggles** on an MCP server (the disabled tool set) converge
-  as a state document in the vault: they describe the server, not this machine.
+A channel is not a counter-example: it is a machine-local resource in its
+entirety ([Channels Are Machine-Local Resources, Like Agents](channels-are-machine-local-resources.md)),
+so its scope and everything else about it stay on the machine that runs it.
 
 Rows a kind *derives* on each machine — Coffer's own generated `coffer-guide`
 skill — are withheld from sync for a different
@@ -206,8 +201,9 @@ reason, covered in [Sync Withholds Derived Output](sync-withholds-derived-output
   who wants it dark on this machine turns it off here. That is visible on the
   page and one click to change.
 - A channel's scope is still reach: it names the agents the channel may drive,
-  stays machine-local, and is checked against the synced `default_agent` at
-  write time and again when the adapter would start.
+  stays machine-local, and is checked against the channel's `default_agent`
+  (an agent uid on the same machine) at write time and again when the adapter
+  would start.
 - Not built yet: the context predicate of Option F — there is no `ReachContext`,
   `is_active` takes one agent uid, enforcement sites still combine `enabled`
   and scope themselves, `projects` is stored as `null` and enforced nowhere,

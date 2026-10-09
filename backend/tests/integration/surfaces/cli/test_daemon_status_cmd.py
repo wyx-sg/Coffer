@@ -243,6 +243,8 @@ def test_status_tasks_lists_running_tasks_by_name(live_daemon, monkeypatch):
     assert res.exit_code == 0, res.output
     lines = res.stdout.splitlines()
     start = next(i for i, line in enumerate(lines) if line.startswith("tasks:")) + 1
+    # An earlier test in this process may have left a crash to report.
+    start += lines[start].lstrip().startswith("last crash:")
     listed = [line.split() for line in lines[start : start + 3]]
     assert listed == [["seatalk-ws", "2"], ["turn", "2"], ["reconciler", "1"]]
 
@@ -300,3 +302,42 @@ def test_status_names_no_other_daemon_when_there_is_none(live_daemon):
     assert json.loads(res.stdout)["other_daemon_pids"] == []
     table = CliRunner().invoke(app, ["daemon", "status"])
     assert not [x for x in table.stdout.splitlines() if x.startswith("other daemon")]
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="the command line lists each worker's schedule")
+def test_status_workers_lists_each_worker(live_daemon, monkeypatch):
+    from datetime import UTC, datetime, timedelta
+
+    from coffer.application.runtime.workers import WorkerMode, WorkerRecord, workers
+
+    now = datetime.now(tz=UTC)
+    rows = [
+        WorkerRecord(
+            name="reconciler",
+            mode=WorkerMode.EVENT_FALLBACK,
+            runs=3,
+            last_started_at=now,
+            last_duration_ms=12.5,
+            last_ok=True,
+            next_run_at=now + timedelta(seconds=120),
+        ),
+        WorkerRecord(name="usage-ingest", mode=WorkerMode.ON_DEMAND, state="parked"),
+    ]
+    monkeypatch.setattr(workers(), "snapshot", lambda: rows)
+    plain = CliRunner().invoke(app, ["daemon", "status"], env={"COLUMNS": "200"})
+    assert plain.exit_code == 0, plain.output
+    assert "usage-ingest" not in plain.stdout
+
+    res = CliRunner().invoke(app, ["daemon", "status", "--workers"], env={"COLUMNS": "200"})
+    assert res.exit_code == 0, res.output
+    lines = res.stdout.splitlines()
+    start = lines.index("workers:") + 1
+    reconciler, ingest = (line.split() for line in lines[start : start + 2])
+    assert reconciler[:6] == ["reconciler", "event+fallback", "waiting", "3", "runs", "last"]
+    assert "12.5" in reconciler and "ok" in reconciler
+    assert reconciler[-3:-1] == ["next", "in"]
+    assert 115 <= int(reconciler[-1].rstrip("s")) <= 120
+    assert ingest == ["usage-ingest", "on-demand", "parked", "0", "runs"]
+
+    as_json = json.loads(CliRunner().invoke(app, ["daemon", "status", "--json"]).stdout)
+    assert [w["name"] for w in as_json["runtime"]["workers"]] == ["reconciler", "usage-ingest"]

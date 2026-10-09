@@ -46,6 +46,7 @@ from datetime import UTC, datetime
 from coffer.application.audit_service import AuditService
 from coffer.application.reconcile.pass_ops import log_report, plan_target, settle_change
 from coffer.application.reconcile.ports import ReconcileTarget
+from coffer.application.runtime.wakeable import WakeableLoop
 from coffer.domain.reconcile import (
     Changed,
     ItemResult,
@@ -90,15 +91,22 @@ class Reconciler:
     ) -> None:
         self._audit = audit
         self._period = period_seconds
-        self._settle = settle_seconds
         self._targets: dict[str, ReconcileTarget] = {}
         self._lock = asyncio.Lock()
-        self._wake = asyncio.Event()
+        self._loop = WakeableLoop(
+            "reconciler",
+            self._serve_once,
+            fallback=period_seconds,
+            settle=settle_seconds,
+            failure_event="reconcile.pass_failed",
+        )
         #: The (kind, uid) pairs hinted since the last hinted pass.
         self._pending: set[tuple[str, str]] = set()
         #: When each still-open difference was first seen by a writing pass —
         #: the "since" the attention list shows.
         self._first_seen: dict[str, datetime] = {}
+        #: The targets the last writing pass failed to plan (see _idle_period).
+        self._last_period_failures: frozenset[str] = frozenset()
         self._last: PassReport | None = None
         self._holder: asyncio.Task[object] | None = None
         self._listeners: list[PassListener] = []
@@ -140,8 +148,10 @@ class Reconciler:
         return tuple(n for n, t in self._targets.items() if kind in t.kinds)
 
     def add_pass_listener(self, listener: PassListener) -> None:
-        """Call ``listener`` after every writing pass (never a dry-run). One
-        that raises is logged; it never fails the pass."""
+        """Call ``listener`` after every writing pass (never a dry-run) that
+        could have changed what a listener derives: any pass but a periodic one
+        that wrote nothing, failed nothing new and left the same differences
+        open. One that raises is logged; it never fails the pass."""
         self._listeners.append(listener)
 
     # --- hints ---------------------------------------------------------------
@@ -150,7 +160,7 @@ class Reconciler:
         """Bring the next pass forward for the targets that follow
         ``changed.kind``. Never blocks and never raises."""
         self._pending.add((changed.kind, changed.uid))
-        self._wake.set()
+        self._loop.poke()
 
     # --- passes --------------------------------------------------------------
 
@@ -175,7 +185,7 @@ class Reconciler:
             # waiting for the lock would wait on ourselves. Defer to a hint.
             for name in names:
                 self._pending.add(("target", name))
-            self._wake.set()
+            self._loop.poke()
             now = datetime.now(tz=UTC)
             return PassReport(trigger, False, now, now, ())
         return await self._pass(names, trigger, dry_run=False, actor=actor)
@@ -223,21 +233,16 @@ class Reconciler:
         """The periodic loop. The boot pass is the lifespan's to await; this
         waits one period (or a hint) before its first pass. Runs until
         cancelled; a pass that fails is logged and the loop carries on."""
-        while True:
-            hinted = await self._wait()
-            try:
-                if hinted:
-                    await asyncio.sleep(self._settle)
-                    names = self._drain_hinted()
-                    if names:
-                        await self.run(targets=names, trigger=Trigger.HINT)
-                else:
-                    self._pending.clear()
-                    await self.run(trigger=Trigger.PERIOD)
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                _log.exception("reconcile.pass_failed")
+        await self._loop.serve()
+
+    async def _serve_once(self, hinted: bool) -> None:
+        if hinted:
+            names = self._drain_hinted()
+            if names:
+                await self.run(targets=names, trigger=Trigger.HINT)
+        else:
+            self._pending.clear()
+            await self.run(trigger=Trigger.PERIOD)
 
     # --- internals -----------------------------------------------------------
 
@@ -249,15 +254,7 @@ class Reconciler:
             raise KeyError(f"unknown reconcile target(s): {', '.join(sorted(unknown))}")
         return tuple(n for n in self._targets if n in set(targets))
 
-    async def _wait(self) -> bool:
-        try:
-            await asyncio.wait_for(self._wake.wait(), timeout=self._period)
-        except TimeoutError:
-            return False
-        return True
-
     def _drain_hinted(self) -> tuple[str, ...]:
-        self._wake.clear()
         pending, self._pending = self._pending, set()
         names: set[str] = set()
         for kind, uid in pending:
@@ -316,10 +313,29 @@ class Reconciler:
         if elapsed > PASS_BUDGET_SECONDS:
             _log.warning("reconcile.pass_over_budget", extra={"seconds": round(elapsed, 3)})
         if not dry_run:
+            open_before = set(self._first_seen)
             self._remember(report, names, only is None)
             log_report(report)
-            self._tell_listeners(report)
+            if not self._idle_period(report, open_before):
+                self._tell_listeners(report)
         return report
+
+    def _idle_period(self, report: PassReport, open_before: set[str]) -> bool:
+        """A periodic pass that changed nothing anyone derives from.
+
+        The period exists to catch drift nothing hinted; when it finds none,
+        the proxy state and the attention list built after the previous pass
+        still hold, and rebuilding them every minute is the idle daemon's
+        cost, not the user's benefit.
+        """
+        failed = frozenset(f.target for f in report.failures)
+        last_failed, self._last_period_failures = self._last_period_failures, failed
+        return (
+            report.trigger is Trigger.PERIOD
+            and all(r.outcome is Outcome.PLANNED for r in report.results)
+            and failed == last_failed
+            and set(self._first_seen) == open_before
+        )
 
     def _tell_listeners(self, report: PassReport) -> None:
         for listener in self._listeners:

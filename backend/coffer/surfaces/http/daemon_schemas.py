@@ -34,6 +34,31 @@ class TaskCrashOut(BaseModel):
     restarting: bool
 
 
+class WorkerOut(BaseModel):
+    """One background worker built on the shared wakeable loop: how it is
+    woken and what it did last (ADR background-workers-wake-on-events)."""
+
+    #: A fixed name (``reconciler``, ``vault-scanner``), never a channel,
+    #: server or chat: this route needs no token.
+    name: str
+    #: ``event`` — only an event wakes it; ``event+fallback`` — an event, or a
+    #: fallback timer that catches a lost one; ``on-demand`` — parked with no
+    #: timer while nothing needs it.
+    mode: Literal["event", "event+fallback", "on-demand"]
+    state: Literal["waiting", "running", "parked"]
+    #: Runs since it started, and how many of them raised.
+    runs: int
+    failures: int
+    last_started_at: datetime | None
+    last_duration_ms: float | None
+    #: Whether the last run ended without raising; null before the first.
+    last_ok: bool | None
+    #: When it runs next: the fallback's deadline, or the end of the settle once
+    #: an event has woken it. Null while it runs, is parked, or waits for an
+    #: event only.
+    next_run_at: datetime | None
+
+
 class RuntimeHealthOut(BaseModel):
     """The event loop's health and the background tasks' crash count.
 
@@ -57,6 +82,8 @@ class RuntimeHealthOut(BaseModel):
     #: Background task crashes since the daemon started.
     task_crashes: int
     last_crash: TaskCrashOut | None = None
+    #: The background workers on the shared wakeable loop, by name.
+    workers: list[WorkerOut] = []
 
 
 class DaemonSetupOut(BaseModel):

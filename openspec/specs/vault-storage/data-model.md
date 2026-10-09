@@ -20,7 +20,7 @@ with no per-tree override, and `coffer path logs` prints the log directory).
 | Class | Directory | What | Travels |
 | --- | --- | --- | --- |
 | vault | `~/.coffer/vault/` | the user's configuration and content — the only copy | a git repository from first use; committed, and pushed when a sync remote is set |
-| local | `~/.coffer/local/` | what is true of this machine only: agents, reach, the sync remote, retention, the secret boundary | never committed or pushed; can be set again |
+| local | `~/.coffer/local/` | what is true of this machine only: agents, channels and their pairings, reach, the sync remote, retention, the secret boundary | never committed or pushed; can be set again |
 | content | `~/.coffer/content/` | media and the chat workspace — the user's only copy | not synced |
 | runs | `~/.coffer/runs.db` (+`-wal`/`-shm`) | append-only history | never synced; pruned by retention |
 | derived | `~/.coffer/derived/` | rebuilt from other state | never; deleting it is always safe |
@@ -29,8 +29,8 @@ with no per-tree override, and `coffer path logs` prints the log directory).
 ~/.coffer/
   vault/
     manifest.json                          {"schema_version": 3}
-    resources/<kind>/<name>.json           mcp_server, skill, channel, provider, knowledge
-    state/mcp-preferences/<server>.json    state/channel-peers/<channel>.json
+    resources/<kind>/<name>.json           mcp_server, skill, provider, knowledge
+    state/mcp-preferences/<server>.json
     state/settings/internal-engine.json
     knowledge/<collection>/...
     skills/<name>/...                      skill master folders
@@ -39,7 +39,8 @@ with no per-tree override, and `coffer path logs` prints the log directory).
     machines/<machine id>.json             one descriptor per machine
     .git/                                  info/exclude, tags coffer/pre-apply/<time>
   local/
-    resources/agent/<name>.json
+    resources/agent/<name>.json  resources/channel/<name>.json
+    channel-peers.json                     {channel uid: {peers: [...]}}
     reach.json  engine.json  retention.json
     memory-sync.json  memory-sync-preview.json
     skill-source-status.json
@@ -64,8 +65,8 @@ rendezvous every surface reads (spec daemon).
 
 | Kind | `Kind.storage` | Resource files under |
 | --- | --- | --- |
-| `mcp_server`, `skill`, `channel`, `provider`, `knowledge` | `vault` | `vault/resources/<kind>/` |
-| `agent` | `local` | `local/resources/agent/` |
+| `mcp_server`, `skill`, `provider`, `knowledge` | `vault` | `vault/resources/<kind>/` |
+| `agent`, `channel` | `local` | `local/resources/<kind>/` |
 | `skill` `coffer-guide` (`Kind.storage_row`) | `derived` | `derived/resources/skill/` |
 
 ## Inside the vault: areas
@@ -156,7 +157,6 @@ owner is renamed or deleted. Only one document per owner is admitted.
 | Area | Owner key | Own keys | Spec |
 | --- | --- | --- | --- |
 | `mcp-preferences` | `server_uid` | `disabled` — `{capability_type: [key, ...]}` | mcp-gateway |
-| `channel-peers` | `channel_uid` | `peers` — `[{chat_id, sender_id, display_name, paired_at}]` | channels |
 | `settings` (`internal-engine.json` only) | — | `transcribe_model`, `upkeep` (`memory_sync`); an older document's `model`, `curate_owner_machine_id`, `model_timeout_s`, `upkeep.curate` and `upkeep.distil` are retired and dropped on write, and its `upkeep.aggregate` carries over to `memory_sync` | internal-engine |
 
 Every state document carries `format_version` (1). A key this build does not

@@ -48,6 +48,8 @@ Passes never overlap. Some operations are several writes in a row — a provider
 
 A target that fails while being read is reported and skipped; the other targets are still reconciled. A write that fails fails only its own item, and the next pass tries again.
 
+After a pass, what is derived from the agents' files is brought up to date: the [model proxy](/architecture/model-proxy) is pushed its state and the Overview's attention list is recomputed. A periodic pass that wrote nothing, failed no new target and left the same differences open skips this, because nothing those two read has changed; it is the common case on an idle daemon, once a minute.
+
 ## Preview without writing
 
 The same pass can run as a **dry-run**: it computes exactly the plan a real pass would carry out and writes nothing — no file, no database row, no audit entry, not even an announcement. This is what the drift view and a change preview read: for each item the operation, the file, what is there and what would be written (rendered so that no secret value ever appears), and what the policy says. Because it is the same computation, what the preview shows is what a pass does.

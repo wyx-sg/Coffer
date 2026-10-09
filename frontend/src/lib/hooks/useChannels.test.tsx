@@ -1,16 +1,14 @@
 // frontend/src/lib/hooks/useChannels.test.tsx
 //
 // Every hook here that names one channel takes its `uid`: the status, pairing
-// and notify routes are `/channels/{uid}/…`, and a rebind is a PATCH of
-// `/resources/{uid}`. The name travels beside it only where a person reads it
-// (the rebind toast), which is why `useRebindChannel` takes both and the
-// fixtures below spell the two differently.
+// and notify routes are `/channels/{uid}/…`. The fixtures below spell uid and
+// name differently so an assertion about the address cannot pass on the label.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
 
-import { useChannels, useChannelStatus, useCreateChannel, useRebindChannel } from "./useChannels";
+import { useChannels, useChannelStatus, useCreateChannel } from "./useChannels";
 import { useIssuePairingCode } from "./useChannelPairing";
 import { mockApiClient } from "@/test/mockApiClient";
 import { resourcesKey } from "@/lib/api/queryKeys";
@@ -101,8 +99,6 @@ describe("useChannels hooks", () => {
       commands: [],
       people: [],
       inbound: null,
-      runs_on: "machine-here",
-      runs_here: true,
       handoff: null,
       settings: null,
     };
@@ -143,38 +139,6 @@ describe("useChannels hooks", () => {
     expect(api.POST).toHaveBeenCalledWith("/channels/{uid}/pairing-code", {
       params: { path: { uid: TG.uid } },
       body: { replaces: "alex" },
-    });
-  });
-
-  test("useRebindChannel PATCHes the config with the new binding, keeping the rest", async () => {
-    // A rebind is an ordinary config edit — there is no command reaching
-    // across to the other machine — so every other field has to survive it.
-    // Dropping a secret ref here would move the channel and break it in
-    // the same request.
-    const api = mockApiClient();
-    getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
-
-    const { result } = renderHook(() => useRebindChannel(TG.uid, TG.name), {
-      wrapper: makeWrapper(),
-    });
-    act(() =>
-      result.current.mutate({
-        config: { channel_type: "telegram", bot_token_ref: "channel/tg/bot-token" },
-        runsOn: "machine-there",
-        machine: "Desktop",
-      }),
-    );
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(api.PATCH).toHaveBeenCalledWith("/resources/{uid}", {
-      params: { path: { uid: TG.uid } },
-      body: {
-        config: {
-          channel_type: "telegram",
-          bot_token_ref: "channel/tg/bot-token",
-          runs_on: "machine-there",
-        },
-      },
     });
   });
 

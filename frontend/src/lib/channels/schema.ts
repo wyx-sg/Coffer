@@ -121,21 +121,11 @@ export interface ChannelEditPlan extends ChannelPlan {
 /**
  * Turn validated form values into the resource config plus the secret-store
  * writes. Pure (no network) — the config is fully built before any side
- * effect runs, mirroring AddMcpServerDialog's planServer. `runsOn` is passed in
- * for the same reason the values are, and so is `defaultAgentUid`: this
- * function may not go looking for either.
- *
- * Every created channel is BOUND, to the machine it was created from (spec
- * channels, "Bind each channel to the one machine that runs it"). A channel naming no machine means the
- * same thing on every machine that holds it, so no daemon can read it as "me"
- * and it runs nowhere — an unbound channel is a bot that never answers, which
- * is not a state a user should be able to fall into by filling in a form.
+ * effect runs, mirroring AddMcpServerDialog's planServer. `defaultAgentUid`
+ * is passed in for the same reason the values are: this function may not go
+ * looking for it.
  */
-export function planChannel(
-  values: AddChannelFormValues,
-  runsOn: string,
-  defaultAgentUid: string,
-): ChannelPlan {
+export function planChannel(values: AddChannelFormValues, defaultAgentUid: string): ChannelPlan {
   if (values.channel_type === "telegram") {
     const token = citeSecret(values.bot_token);
     return {
@@ -144,7 +134,6 @@ export function planChannel(
         channel_type: "telegram" satisfies ChannelType,
         bot_token_ref: token.ref,
         default_agent: defaultAgentUid,
-        runs_on: runsOn,
       },
       secrets: token.writes,
     };
@@ -159,7 +148,6 @@ export function planChannel(
       app_id: values.app_id,
       app_secret_ref: appSecret.ref,
       default_agent: defaultAgentUid,
-      runs_on: runsOn,
     },
     secrets: appSecret.writes,
   };

@@ -327,3 +327,34 @@ async def test_pass_listeners_hear_every_writing_pass_and_never_a_dry_run() -> N
     report = await rec.run(trigger=Trigger.PERIOD)
     assert heard == [Trigger.PERIOD]
     assert report.count(Outcome.APPLIED) == 1
+
+
+@pytest.mark.acceptance(
+    spec="daemon", scenario="a periodic pass that changes nothing tells no pass listener"
+)
+async def test_a_periodic_pass_that_changes_nothing_tells_no_listener() -> None:
+    """The period catches drift nothing hinted; finding none, the proxy state
+    and attention list built after the previous pass still hold."""
+    rec, _ = _reconciler()
+    t = _Target(
+        wanted={"a": {"command": "new"}},
+        actual={"a": {"command": "new"}, "foreign1": {"command": "theirs"}},
+    )
+    rec.register(t)
+    heard: list[Trigger] = []
+    rec.add_pass_listener(lambda report: heard.append(report.trigger))
+
+    await rec.run(trigger=Trigger.PERIOD)  # the report-only difference is new
+    assert heard == [Trigger.PERIOD]
+    await rec.run(trigger=Trigger.PERIOD)  # same open difference, nothing written
+    assert heard == [Trigger.PERIOD]
+    await rec.run(trigger=Trigger.HINT)  # a hinted pass is always heard
+    assert heard == [Trigger.PERIOD, Trigger.HINT]
+
+    t.actual["a"] = {"command": "old"}  # drift nothing hinted: repaired, heard
+    await rec.run(trigger=Trigger.PERIOD)
+    assert heard[-1] is Trigger.PERIOD and len(heard) == 3
+
+    del t.actual["foreign1"]  # an open difference closing is heard too
+    await rec.run(trigger=Trigger.PERIOD)
+    assert len(heard) == 4

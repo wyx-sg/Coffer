@@ -35,8 +35,6 @@ from coffer.infrastructure.persistence.engine import (
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from tests.support.vault_stores import make_resource_repo
 
-MACHINE = "machine-under-test"
-
 #: Refs in the shape `lib/secretRef.ts` now mints — opaque body, readable
 #: tail. Written out as literals rather than generated, so the test states the
 #: shape it is defending instead of agreeing with whatever the code produced.
@@ -81,7 +79,7 @@ async def _service(tmp_path):
     kinds: dict[str, Kind] = {
         "agent": Kind(name="agent", display_name="Agent", config_schema=_AgentConfig),
         "mcp_server": make_mcp_kind({}),
-        "channel": make_channel_kind(agent_names=agent_names, local_machine_id=MACHINE),
+        "channel": make_channel_kind(agent_names=agent_names),
     }
     store = _Store()
     store.values[BOT_TOKEN_REF] = "telegram-bot-token"
@@ -153,7 +151,6 @@ async def test_renaming_a_channel_keeps_its_secret_reachable(tmp_path):
                 "channel_type": "telegram",
                 "bot_token_ref": BOT_TOKEN_REF,
                 "default_agent": agent.uid,
-                "runs_on": MACHINE,
             },
             actor="test",
         )

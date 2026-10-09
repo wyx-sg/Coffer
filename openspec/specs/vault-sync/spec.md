@@ -105,8 +105,8 @@ and system litter are kept out by the repository's own exclude file.
 ### Requirement: Converge shared state areas
 Module-owned shared state that belongs to the vault rather than to one machine
 MUST converge as vault state documents under `vault/state/<area>/`: MCP
-capability switches (`state/mcp-preferences/<server>.json`), channel peer
-pairings (`state/channel-peers/<channel>.json`) and Coffer's own settings — the
+capability switches (`state/mcp-preferences/<server>.json`) and Coffer's own
+settings — the
 speech-to-text model and the upkeep switches
 (`state/settings/internal-engine.json`). A state document names its owner by
 uid; an area with nothing but its defaults has no document. The plugin
@@ -114,22 +114,10 @@ inventory is not a state area: it is carried in each machine's descriptor (see
 "Record plugins as an inventory, not a replicator").
 
 #### Scenario: each shared state area reaches the working tree
-- **GIVEN** a switched-off MCP capability, a channel pairing and a non-default Coffer setting
+- **GIVEN** a switched-off MCP capability and a non-default Coffer setting
 - **WHEN** each is stored
 - **THEN** each is a vault document under its area, named by its owner, and when each capability was first and last seen stays in `derived/`
 - **AND** Coffer settings at their defaults have no document
-
-### Requirement: Carry channel pairings as platform identity
-Channel peer pairings MUST travel as **platform identity** — chat id, sender id,
-display name and pairing time — in the channel's state document, keyed by the
-channel's uid, because a channel that moved to another machine without its
-pairings would make the owner re-pair from their phone on every rebind. Renaming
-the channel MUST move its pairings document in the same commit.
-
-#### Scenario: a channel's pairings travel with it
-- **GIVEN** a paired `channel`
-- **WHEN** the channel is renamed
-- **THEN** one commit moves both the channel's file and its pairings document, and the pairings and the owner's identity are unchanged
 
 ### Requirement: Record plugins as an inventory, not a replicator
 The plugin inventory MUST be an **inventory, not a replicator**: each machine's
@@ -156,9 +144,9 @@ never holds its value.
 - **THEN** the ciphertext is in no commit and the other machine has no copy
 - **AND** once both remotes carry secrets, the ciphertext reaches the other machine byte for byte
 
-#### Scenario: a synced channel carries a secret reference, never a secret
-- **GIVEN** a `channel` whose configuration cites a secret ref for its bot token or its app secret
-- **WHEN** the channel's resource file is committed and pushed
+#### Scenario: a synced resource carries a secret reference, never a secret
+- **GIVEN** an `mcp_server` whose configuration cites a secret ref for its credential
+- **WHEN** the server's resource file is committed and pushed
 - **THEN** the file holds the ref and no secret material, and the secret itself travels only as ciphertext under `secret/` when the remote carries secrets
 
 ### Requirement: Publish one descriptor per machine
@@ -275,8 +263,7 @@ returning machine reads back from its own descriptor.
 `machine_id` MUST survive reinstalling and uninstalling Coffer. A machine that
 comes back under a new identity becomes a ghost: it rejoins as a stranger, its
 old descriptor lingers in the registry with nobody to update it, and anything
-that named it — a channel's binding — silently stops meaning
-this machine.
+that named it silently stops meaning this machine.
 
 #### Scenario: a machine identity survives reinstalling Coffer
 - **GIVEN** a machine whose cached identity is lost, on a host that exposes a stable identifier
@@ -753,7 +740,7 @@ path accepts a sentinel path.
   literal path, and the applied resource names the second machine's own home.
 
 #### Scenario: an absolute path under the home directory passes validation
-- **GIVEN** a channel whose working directories are under this machine's home
+- **GIVEN** a resource whose config holds working directories that must be absolute, under this machine's home
 - **WHEN** a directory is added, removed or made the default
 - **THEN** the file stores each path against the `${HOME}` sentinel and the
   write is committed, not refused as a relative path
@@ -1163,39 +1150,20 @@ import pass and undo what another machine changed (a provider switch).
 - **AND** with the real reconciler running, no hinted pass ran before the import pass
 
 ### Requirement: Converge resources as their own files
-`mcp_server`, `skill`, `channel`, `provider` and `knowledge` resources MUST
+`mcp_server`, `skill`, `provider` and `knowledge` resources MUST
 converge as their files, `vault/resources/<kind>/<name>.json` — the file is the
 resource, not a serialization of a row kept elsewhere ([vault-storage](../vault-storage/spec.md)
 "Identify a resource by the uid inside its file"). A resource file is identity,
 title, description and config — what the resource *is*; what it reaches is not
-in it (see "Keep reach machine-local"). Agents are machine-local and never
-converge. The `title` is optional: a resource with no title has no `title` key.
+in it (see "Keep reach machine-local"). Agents and channels are machine-local
+and never converge: a channel's file, like an agent's, is under `local/`
+([channels](../channels/spec.md) "Keep each channel on the machine that holds it"). The `title` is optional: a resource with no title has no `title` key.
 
 #### Scenario: a resource document is identity, description and config
 - **GIVEN** a registered resource with a description, a config and a reach of its own
 - **WHEN** its file is read from the vault
 - **THEN** the file holds its uid, kind, name, description and config
 - **AND** it holds no `enabled` flag and no `scope`, and the vault's history never carries them
-
-### Requirement: Carry a channel's file but not its adapter
-A `channel` file MUST travel while its adapter does not. A channel is an inbound
-surface — a polled bot or a held websocket connection, each of which a platform
-serves to one consumer at a time — so its config names the one machine that may
-answer: `runs_on`, the `machine_id` whose daemon starts the adapter ([channels](../channels/spec.md)
-"Bind each channel to the one machine that runs it"). Every other machine holds
-the channel's configuration, its credential references and its pairings, starts
-nothing for it, and does not judge it against agents it happens to have, so
-taking over a bot is a rebind rather than a re-registration.
-
-A channel's machine binding is not the retired machine axis of `scope` coming
-back. Reach is "which agents, here" — a local answer each machine gives itself.
-The binding is "which machine runs the adapter" — one answer the machines share,
-so it lives in the channel's file and travels with it.
-
-#### Scenario: a channel travels and runs only on the machine it names
-- **GIVEN** a `channel` bound to one machine, held by two
-- **WHEN** both daemons start their channels
-- **THEN** only the machine it names starts an adapter for it, and the other holds the channel and runs nothing
 
 ### Requirement: Snapshot before checking out and roll a round back from it
 Bidirectional convergence writes the vault without a human in the loop, so two

@@ -39,6 +39,9 @@ from coffer.surfaces.http.sync_wiring import stop_sync_worker
 
 _logger = logging.getLogger(__name__)
 
+#: How long shutdown lets a reconcile pass already running finish.
+_PASS_GRACE_S = 5.0
+
 
 @dataclass(frozen=True)
 class Running:
@@ -58,6 +61,8 @@ class Running:
     attention_watch_task: asyncio.Task[None]
     kinds: Any
     engine: AsyncEngine
+    #: The reconciler itself, so a pass already writing can finish first.
+    reconciler: Any = None
 
 
 async def best_effort(step: str, awaitable: Any) -> None:
@@ -80,14 +85,29 @@ async def best_effort(step: str, awaitable: Any) -> None:
         _logger.exception("shutdown.step_failed", extra={"step": step})
 
 
+async def _stop_reconciler(running: Running) -> None:
+    """Cancel the reconciler's loop between passes, not inside one.
+
+    A pass cancelled mid-query leaves its database connection closing while
+    the engine is disposed further down, and that close never returns: the
+    whole teardown hangs on it. Holding the reconciler's lock waits for the
+    pass in flight (bounded, so a stuck pass cannot hold shutdown hostage).
+    """
+    if running.reconciler is not None:
+        with contextlib.suppress(TimeoutError):
+            async with asyncio.timeout(_PASS_GRACE_S), running.reconciler.hold():
+                running.reconciler_task.cancel()
+    running.reconciler_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError, Exception):
+        await running.reconciler_task
+
+
 async def shutdown(running: Running) -> None:
     """Stop everything, in the order above."""
     daemon_routes.set_daemon_phase("draining")
     # The unified reconciler first: a pass writes into agents' config files
     # and records audit rows, so it must not start while the rest goes down.
-    running.reconciler_task.cancel()
-    with contextlib.suppress(asyncio.CancelledError, Exception):
-        await running.reconciler_task
+    await _stop_reconciler(running)
     # Its listener next: nothing is left to change what it watches.
     running.attention_watch_task.cancel()
     with contextlib.suppress(asyncio.CancelledError, Exception):

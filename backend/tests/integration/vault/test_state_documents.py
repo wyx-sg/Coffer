@@ -1,6 +1,7 @@
 """A kind's state as vault documents (spec vault-storage): MCP
-capability switches, channel pairings and the engine's settings, each read at
-``HEAD`` and following its owner's rename and delete in the owner's commit."""
+capability switches and the engine's settings, each read at ``HEAD`` and
+following its owner's rename and delete in the owner's commit — and a
+channel's pairings, which stay on this machine beside the channel."""
 
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ from coffer.application.channel.store_ports import ChannelPeer
 from coffer.application.resource_service import ResourceService
 from coffer.domain.internal_engine_config import MEMORY_SYNC, UpkeepSetting
 from coffer.domain.resource import Kind
+from coffer.domain.vault.layout import StorageClass
 from coffer.infrastructure.channel.persistence import ChannelPeerRepo
 from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceStore
 from coffer.infrastructure.persistence.internal_engine_repo import VaultInternalEngineConfigRepo
@@ -35,7 +37,12 @@ class _NullAudit:
 def _kinds() -> dict[str, Kind]:
     return {
         "mcp_server": Kind(name="mcp_server", display_name="MCP", config_schema=_Config),
-        "channel": Kind(name="channel", display_name="Channel", config_schema=_Config),
+        "channel": Kind(
+            name="channel",
+            display_name="Channel",
+            config_schema=_Config,
+            storage=StorageClass.LOCAL,
+        ),
     }
 
 
@@ -87,34 +94,33 @@ async def test_a_switched_off_capability_never_seen_here_still_reads_off() -> No
         assert found is not None and found.enabled is False
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a channel's pairings travel with it")
 @pytest.mark.acceptance(
-    spec="vault-sync", scenario="each shared state area reaches the working tree"
+    spec="channels", scenario="a channel stays on the machine that registered it"
 )
-async def test_channel_pairings_follow_a_rename_in_the_same_commit() -> None:
+async def test_a_channel_and_its_pairings_stay_under_local() -> None:
     kinds = _kinds()
     repo = make_resource_repo(kinds)
     svc = ResourceService(kinds=kinds, repo=repo, audit=AuditService(_NullAudit()))  # type: ignore[arg-type]
     channel = await svc.register("channel", "tg", {}, actor="user")
-    peers = ChannelPeerRepo(name_of=repo.name_of)
-    repo.add_follower(peers.documents.follow)
+    peers = ChannelPeerRepo()
     now = datetime.now(tz=UTC)
     await peers.upsert(ChannelPeer(channel.uid, "dm", "Owner", now, sender_id="s1"))
     await peers.upsert(ChannelPeer(channel.uid, "grp", "Group", now))
     assert (await peers.owner_peer(channel.uid)).chat_id == "dm"  # type: ignore[union-attr]
     assert await peers.sender_ids(channel.uid) == {"s1"}
     await svc.rename(channel.uid, "tg2", actor="user")
-    last = vault_repository().log(limit=1)[0]
-    assert {p.path for p in last.paths} == {
-        "resources/channel/tg.json",
-        "resources/channel/tg2.json",
-        "state/channel-peers/tg.json",
-        "state/channel-peers/tg2.json",
-    }
+    assert (local_root() / "resources/channel/tg2.json").is_file()
+    assert channel.uid in json.loads((local_root() / "channel-peers.json").read_text())
+    assert not (vault_root() / "resources/channel").exists()
+    assert not (vault_root() / "state/channel-peers").exists()
+    touched = {c.path for commit in vault_repository().log() for c in commit.paths}
+    assert not [p for p in touched if p.startswith(("resources/channel/", "state/channel-"))]
     assert [p.chat_id for p in await peers.list_by_resource(channel.uid)] == ["dm", "grp"]
     await peers.delete_by_chat(channel.uid, "grp")
-    await peers.delete_by_chat(channel.uid, "grp")  # agreement, not a failure
+    await peers.delete_by_chat(channel.uid, "grp")  # already gone: a no-op
     assert [p.chat_id for p in await peers.list_by_resource(channel.uid)] == ["dm"]
+    peers.forget(channel.uid)
+    assert await peers.list_by_resource(channel.uid) == []
 
 
 @pytest.mark.acceptance(

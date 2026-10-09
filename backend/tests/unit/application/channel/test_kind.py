@@ -95,10 +95,8 @@ def test_extractor_skips_missing_empty_and_non_string_values():
 # in-memory registry could answer for.
 
 
-def _create_validate(config: dict, agent_names=_agent_names, local_machine_id=None):
-    validator = make_channel_kind(
-        agent_names=agent_names, local_machine_id=local_machine_id
-    ).validate_config
+def _create_validate(config: dict, agent_names=_agent_names):
+    validator = make_channel_kind(agent_names=agent_names).validate_config
     assert validator is not None
     result = validator(config)
     assert result is not None  # async: ResourceService awaits it
@@ -121,15 +119,6 @@ def test_create_rejects_a_default_agent_naming_no_registered_agent():
 
 def test_create_accepts_a_channel_that_names_no_agent_yet():
     _create_validate({"channel_type": "telegram"})
-
-
-def test_create_skips_a_channel_bound_to_another_machine():
-    # Its agents are that machine's business; refusing the document here would
-    # hold it out of the vault for a fault on nobody's machine.
-    _create_validate(
-        {"channel_type": "telegram", "default_agent": "uid-of-nothing", "runs_on": "other"},
-        local_machine_id="mine",
-    )
 
 
 def test_create_skips_when_registry_empty():

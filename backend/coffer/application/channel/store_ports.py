@@ -1,10 +1,10 @@
 """The two tables a channel owns, and how they are read and written.
 
 A channel keeps two kinds of state of its own: its pairings (which chats on the
-platform belong to the owner), a vault document per channel
-(``state/channel-peers/<channel name>.json``) because the pairing is the
-person's and travels; and ``channel_thread_conversations``, what each of those
-chats is in the middle of, history in ``runs.db``. Both name the channel by its
+platform belong to the owner), kept on this machine beside the channel
+(``local/channel-peers.json``), because a channel is machine-local; and
+``channel_thread_conversations``, what each of those chats is in the middle
+of, history in ``runs.db``. Both name the channel by its
 uid (ADR identity-is-the-uid-inside-the-file).
 
 Split from ``ports``, which describes the TRANSPORT: what an adapter must do,

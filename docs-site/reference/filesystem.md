@@ -44,9 +44,8 @@ State is kept in five [storage classes](/architecture/persistence), one director
 ```text
 ~/.coffer/vault/
 ├── manifest.json                       # {"schema_version": 3}
-├── resources/<kind>/<name>.json        # mcp_server, skill, channel, provider, knowledge
+├── resources/<kind>/<name>.json        # mcp_server, skill, provider, knowledge
 ├── state/mcp-preferences/<server>.json
-├── state/channel-peers/<channel>.json
 ├── state/settings/internal-engine.json
 ├── state/secret-notes/notes.json
 ├── state/cli-tools/tools.json
@@ -64,7 +63,6 @@ State is kept in five [storage classes](/architecture/persistence), one director
 | `manifest.json` | The vault's layout number, `schema_version`, read before a sync round merges anything. | daemon | Yes | No |
 | `resources/<kind>/<name>.json` | One JSON file per resource: `uid`, `kind`, `format_version`, `name`, an optional `title`, `description`, `config`. Identity is the `uid` inside, not the path. | you, daemon | Yes | No: the resource is gone on every machine that syncs. |
 | `state/mcp-preferences/<server>.json` | The tools, prompts and resources you switched off on one MCP server, with that server's uid. | you, daemon | Yes | Yes: everything on that server is switched back on. |
-| `state/channel-peers/<channel>.json` | The identities paired with one channel, including the owner. | daemon | Yes | The pairings are lost. |
 | `state/settings/internal-engine.json` | The speech-to-text model, and the memory sync's switch and interval. Absent means defaults. | you, daemon | Yes | Yes: the settings return to their defaults. |
 | `state/secret-notes/notes.json` | Each secret's label and description (never its value). | you, daemon | Yes | The labels and descriptions are lost; the values stay. |
 | `state/cli-tools/tools.json` | The command-line tools you added by hand, and your edits to ones a skill requires. | you, daemon | Yes | Yes: hand-added tools and your edits are gone. |
@@ -83,6 +81,8 @@ State is kept in five [storage classes](/architecture/persistence), one director
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
 | `local/resources/agent/<name>.json` | This machine's agents, one resource file each. | daemon | Never | The agent is unregistered here. |
+| `local/resources/channel/<name>.json` | This machine's channels (Telegram bots and SeaTalk apps), one resource file each. | you, daemon | Never | The channel is gone here; create it again and pair again. |
+| `local/channel-peers.json` | The identities paired with each channel, including the owner, keyed by channel uid. | daemon | Never | The pairings are lost; pair again. |
 | `local/reach.json` | Every resource's reach on this machine: enabled, and for which agents. | daemon | Never | Every resource returns to its kind's default reach. |
 | `local/engine.json` | When this machine last changed Coffer's settings document (speech-to-text and upkeep). | daemon | Never | Yes. |
 | `local/cli-paths.json` | Where each command-line tool you added by an absolute path is found on this machine. | daemon | Never | Those tools are looked up on `PATH` again. |

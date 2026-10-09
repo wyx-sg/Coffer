@@ -213,13 +213,6 @@ export interface components {
             people: components["schemas"]["ChannelPersonOut"][];
             /** Running */
             running: boolean;
-            /**
-             * Runs Here
-             * @default false
-             */
-            runs_here: boolean;
-            /** Runs On */
-            runs_on: string | null;
             secret_approval: components["schemas"]["SecretApprovalOut"] | null;
             /** Settings */
             settings: (components["schemas"]["TelegramChannelConfig"] | components["schemas"]["SeaTalkChannelConfig"]) | null;
@@ -378,8 +371,6 @@ export interface components {
              * @default true
              */
             require_mention: boolean;
-            /** Runs On */
-            runs_on: string | null;
             /**
              * Show Steps
              * @default true
@@ -455,8 +446,6 @@ export interface components {
              * @default true
              */
             require_mention: boolean;
-            /** Runs On */
-            runs_on: string | null;
             /**
              * Show Steps
              * @default true

@@ -23,6 +23,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from coffer.application.runtime.supervisor import spawn
+from coffer.application.runtime.wakeable import WakeableLoop
 from coffer.domain.vault.writes import CommitResult
 from coffer.infrastructure.vault.writer import VaultWriter
 
@@ -30,6 +31,14 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_QUIET_S = 1.0
 DEFAULT_INTERVAL_S = 60.0
+#: How often watchfiles' native loop wakes to check for a stop. Its default,
+#: 50 ms, took the GIL twenty times a second on an idle daemon; an edit is
+#: settled after DEFAULT_QUIET_S anyway, so half a second costs no latency
+#: anyone sees. It also bounds how long cancelling the watch waits.
+_WATCH_STEP_MS = 500
+#: How long one native wait lasts before it hands back to Python with nothing.
+#: The default, 5 s, re-entered a worker thread every 5 s for no event.
+_WATCH_TIMEOUT_MS = 60_000
 
 
 class VaultScanner:
@@ -50,7 +59,7 @@ class VaultScanner:
         self._watch = watch
         self._clock = clock
         self._seen: dict[str, tuple[str | None, float]] = {}
-        self._wake = asyncio.Event()
+        self._loop = WakeableLoop("vault-scanner", self._look, fallback=interval)
 
     def boot_scan(self) -> CommitResult | None:
         """Settle everything that differs from ``HEAD`` now."""
@@ -80,31 +89,30 @@ class VaultScanner:
 
     def poke(self) -> None:
         """A hint that something changed (a file event, a CLI call)."""
-        self._wake.set()
+        self._loop.poke()
 
     async def run(self) -> None:
         """Until cancelled: look on every hint (after it has been quiet) and on
         every interval."""
         watcher = spawn(self._watch_files(), name="vault-file-watch") if self._watch else None
         try:
-            while True:
-                with contextlib.suppress(TimeoutError):
-                    await asyncio.wait_for(self._wake.wait(), timeout=self._interval)
-                self._wake.clear()
-                # Two looks a quiet period apart: the first records, the second settles.
-                for _ in range(2):
-                    try:
-                        await asyncio.to_thread(self.tick)
-                    except Exception:
-                        logger.warning("vault.scan_failed", exc_info=True)
-                    if not self._seen:
-                        break
-                    await asyncio.sleep(self._quiet)
+            await self._loop.serve()
         finally:
             if watcher is not None:
                 watcher.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await watcher
+
+    async def _look(self, _poked: bool) -> None:
+        # Two looks a quiet period apart: the first records, the second settles.
+        for _ in range(2):
+            try:
+                await asyncio.to_thread(self.tick)
+            except Exception:
+                logger.warning("vault.scan_failed", exc_info=True)
+            if not self._seen:
+                break
+            await asyncio.sleep(self._quiet)
 
     async def _watch_files(self) -> None:
         try:
@@ -121,7 +129,13 @@ class VaultScanner:
                 if not Path(root).is_dir():
                     await asyncio.sleep(self._interval)
                     continue
-                async for _changes in awatch(root, watch_filter=outside_git, debounce=200):
+                async for _changes in awatch(
+                    root,
+                    watch_filter=outside_git,
+                    debounce=200,
+                    step=_WATCH_STEP_MS,
+                    rust_timeout=_WATCH_TIMEOUT_MS,
+                ):
                     self.poke()
             except asyncio.CancelledError:
                 raise

@@ -238,7 +238,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # The channel kind AFTER wire_chat: its turns run through the chat platform.
     channel_runtime = wire_channel_kind(
-        app, resource_svc, audit, sm, vault, secret_store, chat, builtin_tools
+        app, resource_svc, audit, sm, vault, secret_store, chat, builtin_tools, events
     )
 
     # Every kind has registered its secret destinations; the approval refresh reads them.
@@ -338,6 +338,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 attention_watch_task=attention_watch_task,
                 kinds=kinds,
                 engine=engine,
+                reconciler=reconciler,
             )
         )
         await _best_effort("derived_db", vault.derived_engine.dispose())

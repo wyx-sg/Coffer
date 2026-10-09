@@ -481,15 +481,6 @@ components:
         running:
           title: Running
           type: boolean
-        runs_here:
-          default: false
-          title: Runs Here
-          type: boolean
-        runs_on:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Runs On
         secret_approval:
           anyOf:
           - $ref: '#/components/schemas/SecretApprovalOut'
@@ -533,8 +524,6 @@ components:
       - inbound
       - diagnostics
       - secret_approval
-      - runs_on
-      - runs_here
       - starting
       - title
       - handoff
@@ -781,12 +770,6 @@ components:
           default: true
           title: Require Mention
           type: boolean
-        runs_on:
-          anyOf:
-          - maxLength: 64
-            type: string
-          - type: 'null'
-          title: Runs On
         show_steps:
           default: true
           title: Show Steps
@@ -815,7 +798,6 @@ components:
       - directories
       - direct_system_prompt
       - group_system_prompt
-      - runs_on
       - channel_type
       - app_id
       - app_secret_ref
@@ -898,12 +880,6 @@ components:
           default: true
           title: Require Mention
           type: boolean
-        runs_on:
-          anyOf:
-          - maxLength: 64
-            type: string
-          - type: 'null'
-          title: Runs On
         show_steps:
           default: true
           title: Show Steps
@@ -932,7 +908,6 @@ components:
       - directories
       - direct_system_prompt
       - group_system_prompt
-      - runs_on
       - channel_type
       - bot_token_ref
       title: TelegramChannelConfig

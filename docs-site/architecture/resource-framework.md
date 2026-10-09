@@ -62,7 +62,7 @@ A kind is described by one fixed, immutable descriptor. Everything it declares i
 | Generic creation | allowed | Whether `POST /api/v1/resources` (and a generic config update) may touch this kind. |
 | `supports_scope` | no | Whether the kind carries a per-agent scope. A kind without it rejects any non-null scope (`SCOPE_INVALID`, 422). |
 | `toggleable` | yes | Whether the kind has an enabled switch at all. `knowledge` and `agent` are not toggleable: every one of their resources reads as enabled and served (including one whose stored reach says off, left from before its kind became non-toggleable), and enabling or disabling one is refused with `RESOURCE_NOT_TOGGLEABLE` (409), changing nothing. |
-| Storage class | `vault` | The storage class the kind's resource files live in: `vault` (synced) or `local` (`agent`); a single row can be `derived` through per-row storage. The directory is the sync policy. |
+| Storage class | `vault` | The storage class the kind's resource files live in: `vault` (synced) or `local` (`agent`, `channel`); a single row can be `derived` through per-row storage. The directory is the sync policy. |
 | Per-row storage | none | A refinement of the storage class per row, decided by the config alone. The `skill` kind files the builtin `coffer-guide` as `derived`. |
 | Exclusive flags | none | Config flags at most one resource of the kind may hold. The service keeps each of its writes to one holder, and the vault validator refuses any commit (a hand edit, a sync merge) that would leave two. `provider` declares `transcribe_default`. |
 | Fixed name | no | Whether the name is fixed once registered because it is quoted outside Coffer, or derived from the config. A `PATCH` with a different name is refused with `409 NAME_IMMUTABLE`. |
@@ -96,7 +96,7 @@ A kind is described by one fixed, immutable descriptor. Everything it declares i
 | Scope reaction | scope persisted | Reconcile with the new scope (for example, deliver or reclaim skills). |
 | Enabled reaction | `enabled` flipped | Reconcile with the new flag. Not fired when the value did not change. |
 
-Sync has no hook into a kind. A resource file that arrives by sync, like one you edit by hand, meets the same validator every write meets before it is checked out, and after the round the reconciler re-projects what changed. Agents never arrive by sync at all: the `agent` kind is machine-local. See [Vault sync](/architecture/vault-sync).
+Sync has no hook into a kind. A resource file that arrives by sync, like one you edit by hand, meets the same validator every write meets before it is checked out, and after the round the reconciler re-projects what changed. Agents and channels never arrive by sync at all: the `agent` and `channel` kinds are machine-local. See [Vault sync](/architecture/vault-sync).
 
 ### What each kind sets
 
@@ -106,7 +106,7 @@ Sync has no hook into a kind. A resource file that arrives by sync, like one you
 | `agent` | No generic creation, a name from config and a fixed name (one agent per type, named by it), no title, not toggleable, `local` storage, delete cleanup |
 | `skill` | No generic creation, scope support, a name rule (the `SKILL.md` frontmatter rule), a delete guard (refuses deleting the builtin `coffer-guide`), per-row storage (files `coffer-guide` as derived), a fixed name (the name is the folder an agent loads it from), no title, delete cleanup, a scope reaction, an enabled reaction |
 | `knowledge` | No generic creation, no title, not toggleable, a rename mover (moves the collection directory), delete cleanup |
-| `channel` | Scope support (inverted, see below), secret references, a registration check, a config-change check, a scope check, delete cleanup |
+| `channel` | `local` storage, scope support (inverted, see below), secret references, a registration check, a config-change check, a scope check, delete cleanup |
 | `provider` | An exclusive flag (`transcribe_default`), secret references, a registration check, a config-change check (no scope: its addresses decide which agents it serves) |
 
 ### The resource service {#resourceservice}
@@ -226,7 +226,7 @@ For every other kind, scope names the agents a resource is *delivered to*. A cha
 | `agent` | Agent type, config directory, Coffer-MCP install state. Everything else is read from the agent's own files. | No — it is the agent | — |
 | `skill` | Its source, the `SKILL.md` description and a version hash of the master folder under `~/.coffer/vault/skills/`. | Yes | Delivery: a skill reaches an agent if and only if it is enabled and its scope admits that agent; anything else is reclaimed. |
 | `knowledge` | One collection, a directory under `~/.coffer/vault/knowledge/`. | No, and not `toggleable` | Nowhere: every collection appears in the delivered catalogue. |
-| `channel` | Transport config, secret refs, `default_agent`, `runs_on` (the one machine whose daemon runs the adapter). | Yes, inverted | Agent routing (`/new <agent>` and the default agent) and the channel runtime, which does not start a switched-off channel. |
+| `channel` | Transport config, secret refs, `default_agent`, working directories. Machine-local, like an agent. | Yes, inverted | Agent routing (`/new <agent>` and the default agent) and the channel runtime, which does not start a switched-off channel. |
 | `provider` | Wire protocol, base URL, an optional Anthropic address, one `secret_ref`. | No: its addresses decide | The provider kind's one projection seam: the switch, per-agent key lookup, post-import reconcile and boot self-heal. |
 
 `knowledge` carries no scope and no switch because it serves files an agent is handed the path to: a scope or a switch could only ever hide them from a well-behaved lookup, never withhold them. Memory is not a resource kind at all: it is files in the vault's `memory/` hub and in each agent's own memory (see [Memory](/architecture/memory)).

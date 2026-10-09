@@ -1708,6 +1708,12 @@ components:
         tasks_running:
           title: Tasks Running
           type: integer
+        workers:
+          default: []
+          items:
+            $ref: '#/components/schemas/WorkerOut'
+          title: Workers
+          type: array
       required:
       - loop_lag_p99_ms
       - loop_lag_max_ms
@@ -1717,6 +1723,7 @@ components:
       - tasks_by_name
       - task_crashes
       - last_crash
+      - workers
       title: RuntimeHealthOut
       type: object
     StorageSummaryOut:
@@ -1888,4 +1895,66 @@ components:
       - bytes
       - versions
       title: VaultUsageOut
+      type: object
+    WorkerOut:
+      description: |-
+        One background worker built on the shared wakeable loop: how it is
+        woken and what it did last (ADR background-workers-wake-on-events).
+      properties:
+        failures:
+          title: Failures
+          type: integer
+        last_duration_ms:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Last Duration Ms
+        last_ok:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Last Ok
+        last_started_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Started At
+        mode:
+          enum:
+          - event
+          - event+fallback
+          - on-demand
+          title: Mode
+          type: string
+        name:
+          title: Name
+          type: string
+        next_run_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Next Run At
+        runs:
+          title: Runs
+          type: integer
+        state:
+          enum:
+          - waiting
+          - running
+          - parked
+          title: State
+          type: string
+      required:
+      - name
+      - mode
+      - state
+      - runs
+      - failures
+      - last_started_at
+      - last_duration_ms
+      - last_ok
+      - next_run_at
+      title: WorkerOut
       type: object

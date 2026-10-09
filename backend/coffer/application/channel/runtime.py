@@ -1,17 +1,12 @@
 """ChannelRuntime — reconcile adapter tasks with the resource table.
 
-The RetentionWorker pattern, applied to lifecycle: every tick, diff the
-enabled channel resources against the running adapters and converge.
-Enable, disable, config edits, and delete all take effect within a tick;
-REST/CLI/UI never start or stop adapters directly, so reported status is
-always what is actually running.
-
-A channel travels between machines now, so "the enabled channel resources" is
-no longer the same set on every machine: the reconciler answers to the
-channel's **machine binding** as well, and a channel bound elsewhere is simply
-not in this machine's wanted set. That is also why rebinding needs no restart —
-the binding is config, a config change is a tick, and both ends of a rebind are
-reached by the same loop that already handles enable and disable.
+Each pass diffs the enabled channel resources against the running adapters and
+converges. A pass runs when something it reads may have changed — a resource
+write, a vault commit, a secret stored or approved — and when a failed start's
+retry wait is over, with a long fallback for anything no event announces (ADR
+background-workers-wake-on-events). Enable, disable, config edits and delete
+therefore take effect at once; REST/CLI/UI never start or stop adapters
+directly, so reported status is always what is actually running.
 """
 
 from __future__ import annotations
@@ -40,6 +35,7 @@ from coffer.application.channel.runtime_supervision import (
 )
 from coffer.application.channel.supervision_ports import WebSocketControllerPort
 from coffer.application.channel.wanted import Gate, Routing
+from coffer.application.runtime.wakeable import WakeableLoop
 from coffer.domain.channel.config import parse_channel_config
 from coffer.domain.resource import Resource
 from coffer.domain.secret_errors import SecretBindingPending, SecretBindingRejected
@@ -49,7 +45,8 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
-_DEFAULT_INTERVAL_SECONDS = 2.0
+#: How long the runtime waits with nothing waking it before it looks anyway.
+_FALLBACK_SECONDS = 300.0
 
 #: ``(channel uid, config) -> adapter``: the adapter is named by the channel's
 #: uid, which is what its inbound messages carry in ``channel`` and what every
@@ -81,8 +78,7 @@ class ChannelRuntime:
         pairing: PairingManager,
         websockets: WebSocketControllerPort | None = None,
         materialize: MaterializeFn | None = None,
-        interval_seconds: float = _DEFAULT_INTERVAL_SECONDS,
-        machine_id: Callable[[], Awaitable[str]] | None = None,
+        fallback_seconds: float = _FALLBACK_SECONDS,
         secret_revision: SecretRevision | None = None,
     ) -> None:
         self._resources = resources
@@ -92,11 +88,15 @@ class ChannelRuntime:
         self._websockets = websockets
         self._materialize = materialize
         self._secret_revision = secret_revision
-        self._interval = interval_seconds
-        # Which channels are this machine's to run — enabled, bound here, and
-        # able to drive their own default agent. Three gates, one predicate,
-        # kept out of the lifecycle loop (see ``wanted.py``).
-        self._gate = Gate(machine_id_provider=machine_id)
+        self._loop = WakeableLoop(
+            "channel-runtime", self._pass, fallback=fallback_seconds, settle=0.2
+        )
+        #: The poke that retries a failed start once its wait is over.
+        self._retry: asyncio.TimerHandle | None = None
+        # Which channels are this machine's to run — enabled, and able to drive
+        # their own default agent. Two gates, one predicate, kept out of the
+        # lifecycle loop (see ``wanted.py``).
+        self._gate = Gate()
         self._running: dict[str, _Running] = {}
         self._failed_at: dict[str, float] = {}
         # Why a channel's adapter did not start when the cause is its secret
@@ -124,9 +124,9 @@ class ChannelRuntime:
         """Whether nothing has been decided yet about this channel's start.
 
         True for a channel that is not running and that no pass has tried to
-        start, found unroutable, or held on its secret: switched on (or bound
-        here) since the last tick, which reaches it within one interval. The
-        caller asks this only of a channel enabled for this machine; a status
+        start, found unroutable, or held on its secret: switched on since the
+        last pass, which the write that switched it on brings forward. The caller asks this
+        only of an enabled channel; a status
         read in that window is "starting", never "not running" — the latter
         names a start that was attempted and failed.
         """
@@ -155,15 +155,41 @@ class ChannelRuntime:
     # -- lifecycle -----------------------------------------------------------
 
     def stop(self) -> None:
-        """Signal the run loop to exit cleanly."""
+        """Run no pass again; the run loop parks until it is cancelled."""
         self._stop.set()
+        self._loop.set_demand(False)
+        if self._retry is not None:
+            self._retry.cancel()
+
+    def poke(self) -> None:
+        """Something a pass reads may have changed: run one soon."""
+        if not self._stop.is_set():
+            self._loop.poke()
+
+    def on_changed(self, _changed: object) -> None:
+        """A resource write of any kind (a ``HintSink``): routing reads agents."""
+        self.poke()
 
     async def run(self) -> None:
-        """Reconcile until stop() is called."""
-        while not self._stop.is_set():
-            await self.reconcile_once()
-            with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(self._stop.wait(), timeout=self._interval)
+        """Reconcile now, then whenever poked, until stop() is called."""
+        await self._pass(False)
+        await self._loop.serve()
+
+    async def _pass(self, _poked: bool) -> None:
+        if self._stop.is_set():
+            return
+        await self.reconcile_once()
+        self._schedule_retry()
+
+    def _schedule_retry(self) -> None:
+        """Poke when the earliest failed start may be tried again."""
+        if self._retry is not None:
+            self._retry.cancel()
+            self._retry = None
+        if not self._failed_at or self._stop.is_set():
+            return
+        due = min(self._failed_at.values()) + FAILURE_RETRY_SECONDS - time.monotonic()
+        self._retry = asyncio.get_running_loop().call_later(max(due, 0.0) + 0.05, self.poke)
 
     async def dispose(self) -> None:
         """Stop every adapter and websocket connection (daemon shutdown / final)."""
@@ -226,10 +252,10 @@ class ChannelRuntime:
             desired = await self._enabled_channels()
             for channel_uid in set(self._withheld) - set(desired):
                 del self._withheld[channel_uid]
-            # A failure belongs to the run it ended. A channel switched off (or
-            # bound away) forgets it, so switching it back on starts a new run at
-            # once — not after the old run's retry wait, and not reported as
-            # that run's failure while it starts.
+            # A failure belongs to the run it ended. A channel switched off
+            # forgets it, so switching it back on starts a new run at once — not
+            # after the old run's retry wait, and not reported as that run's
+            # failure while it starts.
             for channel_uid in set(self._failed_at) - set(desired):
                 del self._failed_at[channel_uid]
             for channel_uid in list(self._running):
@@ -265,16 +291,6 @@ class ChannelRuntime:
         if binding is not None:
             self._processor.bind(dataclasses.replace(binding, resource=resource))
         self._running[channel_uid] = dataclasses.replace(entry, name=resource.name)
-
-    async def local_machine_id(self) -> str | None:
-        """This machine's id, or ``None`` when no provider is wired.
-
-        Public because the management surface answers "is this channel bound
-        here?" with the same value the gate uses — two answers to that question,
-        derived two ways, is how a surface comes to report a channel as running
-        that nothing ever started.
-        """
-        return await self._gate.machine_id()
 
     async def _enabled_channels(self) -> Desired:
         """The channels this machine should run (see ``wanted``)."""

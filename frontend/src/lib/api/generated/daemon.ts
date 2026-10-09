@@ -833,6 +833,11 @@ export interface components {
             };
             /** Tasks Running */
             tasks_running: number;
+            /**
+             * Workers
+             * @default []
+             */
+            workers: components["schemas"]["WorkerOut"][];
         };
         /**
          * StorageSummaryOut
@@ -942,6 +947,37 @@ export interface components {
             path: string;
             /** Versions */
             versions: number | null;
+        };
+        /**
+         * WorkerOut
+         * @description One background worker built on the shared wakeable loop: how it is
+         *     woken and what it did last (ADR background-workers-wake-on-events).
+         */
+        WorkerOut: {
+            /** Failures */
+            failures: number;
+            /** Last Duration Ms */
+            last_duration_ms: number | null;
+            /** Last Ok */
+            last_ok: boolean | null;
+            /** Last Started At */
+            last_started_at: string | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "event" | "event+fallback" | "on-demand";
+            /** Name */
+            name: string;
+            /** Next Run At */
+            next_run_at: string | null;
+            /** Runs */
+            runs: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "waiting" | "running" | "parked";
         };
     };
     responses: never;

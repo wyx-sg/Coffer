@@ -6,13 +6,9 @@ controller, and the reconciling runtime. Runs
 AFTER ``wire_chat``, whose result it takes as
 parameters.
 
-It also resolves this machine's identity, because a channel names the one
-machine whose daemon runs its adapter (spec channels "Bind each channel to the
-one machine that runs it") and both the runtime's gate and the kind's
-validators need the same answer. It is read here rather than taken from the
-sync module because sync is wired LATER — and because the binding is not a sync
-feature: it decides which daemon starts an adapter whether or not this vault
-converges with anything.
+A channel and its pairings are machine-local (ADR
+channels-are-machine-local-resources): the channel's file is under ``local/``
+like an agent's and its pairings are ``local/channel-peers.json``.
 """
 
 from __future__ import annotations
@@ -52,7 +48,6 @@ from coffer.infrastructure.channel.seatalk import SeaTalkAdapter
 from coffer.infrastructure.channel.seatalk_ws_controller import SeaTalkWebSocketController
 from coffer.infrastructure.channel.telegram import TelegramAdapter
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
-from coffer.infrastructure.sync.identity import resolve_identity
 from coffer.surfaces.http.channel_credential_wiring import build_credential_check
 from coffer.surfaces.http.channel_routes import (
     get_channel_service,
@@ -62,7 +57,11 @@ from coffer.surfaces.http.channel_routes import (
 )
 from coffer.surfaces.http.chat.dependencies import set_channel_note_reader, set_channel_places
 from coffer.surfaces.http.chat_wiring import ChatWiring
-from coffer.surfaces.http.secret_boundary_wiring import register_resource_destination
+from coffer.surfaces.http.event_wiring import EventStream
+from coffer.surfaces.http.secret_boundary_wiring import (
+    on_approval_applied,
+    register_resource_destination,
+)
 from coffer.surfaces.http.secret_composition import boundary_resolver
 from coffer.surfaces.http.vault_composition import VaultStores
 
@@ -126,20 +125,12 @@ def wire_channel_kind(
     secret_store: EncryptedSecretStore,
     chat: ChatWiring,
     builtin_tools: BuiltinToolRegistry,
+    events: EventStream,
 ) -> ChannelRuntime:
-    # Derived from the host, cached in ``daemon-config.json``, and stable for
-    # the life of the daemon — so it is resolved once here rather than on every
-    # reconcile tick and every status read.
-    machine_id = resolve_identity().machine_id
-
-    async def local_machine_id() -> str:
-        return machine_id
-
-    # Pairings are a vault document per channel that goes with it (spec
-    # vault-storage); what each thread is doing is history in runs.db.
-    peers = ChannelPeerRepo(name_of=vault.resources.name_of)
-    vault.resources.add_follower(peers.documents.follow)
-    peers.documents.add_owner_listener(vault.resources.announce)
+    # Pairings are this machine's record beside the channel, keyed by its uid;
+    # what each thread is doing is history in runs.db. A pairing change hints
+    # the channel, so the Channels page sees it without a refresh.
+    peers = ChannelPeerRepo(on_change=vault.resources.announce)
     threads = ChannelThreadConversationRepo(sm)
     outbox = ChannelOutboxRepo(sm)
     replies = ChannelReplyRepo(sm)
@@ -219,8 +210,11 @@ def wire_channel_kind(
         websockets=SeaTalkWebSocketController(ingest=_ingest_websocket_event),
         materialize=materialize,
         secret_revision=secret_revision,
-        machine_id=local_machine_id,
     )
+    # What a pass reads changes on a resource write (sync and hand edits
+    # included) or a secret stored or approved; those bring the next pass forward.
+    events.late_sinks.append(runtime.on_changed)
+    on_approval_applied(runtime.poke)
 
     # Each paired person's picture, asked of the running adapter when the
     # Channels page wants it (spec channels "Show each paired person's platform
@@ -231,6 +225,7 @@ def wire_channel_kind(
     async def on_delete(channel: Resource) -> None:
         await runtime.evict(channel)
         avatars.forget(channel.uid)
+        peers.forget(channel.uid)
         # The history rows name the channel by uid and nothing cascades from
         # a file, so they go here, with the channel.
         await threads.delete_for_channel(channel.uid)
@@ -255,10 +250,6 @@ def wire_channel_kind(
         # BOTH write paths, so a channel cannot be created — or edited — bound
         # to an agent that does not exist and fail silently on the first turn.
         agent_names=agent_names,
-        # ...except for a channel bound to another machine, whose agents are
-        # that machine's business. Without this a converged channel would be
-        # refused at this registry's door for a fault on nobody's machine.
-        local_machine_id=machine_id,
     )
 
     service = ChannelService(

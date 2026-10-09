@@ -78,7 +78,7 @@ upstream tools. There are three: `coffer__search_tools`, always listed, and `cof
 A messaging-app bot (Telegram or SeaTalk) through which you chat with your agents and
 receive notifications when you are away from the machine. A channel is a
 [resource](#resource) of kind `channel`, used by its paired owner only
-([owner pairing](#owner-pairing)) and run by one machine ([`runs_on`](#runs-on)). See
+([owner pairing](#owner-pairing)) and held on one machine only, like an [agent](#agent). See
 [Channels](/guides/channels).
 
 ### Collection
@@ -209,8 +209,7 @@ See [Resource framework](/architecture/resource-framework#the-six-kinds).
 ### Machine id
 
 A stable identifier for one machine, derived from the host and hashed before it leaves the
-machine. [Vault sync](#vault-sync) uses it to tell machines apart, and a channel's
-[`runs_on`](#runs-on) names one. See [Vault sync](/guides/vault-sync).
+machine. [Vault sync](#vault-sync) uses it to tell machines apart. See [Vault sync](/guides/vault-sync).
 
 ### Master key
 
@@ -321,12 +320,6 @@ or provider connection. Every resource has a [kind](#kind), an immutable
 Per-table limits on how long Coffer keeps log-like rows, such as the audit log and the
 [invocation log](#invocation-log), enforced by a background pruner. Manage it in
 **Settings → Data**. See [Observability](/architecture/observability#retention).
-
-### `runs_on`
-
-The [machine id](#machine-id) of the one machine whose daemon runs a [channel's](#channel)
-adapter. The channel's settings sync to every machine; only that machine connects to the
-messaging platform. Set on the channel's page. See [Channels](/guides/channels).
 
 ## S
 

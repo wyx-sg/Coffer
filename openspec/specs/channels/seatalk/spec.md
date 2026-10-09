@@ -147,7 +147,7 @@ alternative either: none is published. See
 - **AND** once the websocket connects, `handoff` is null
 
 #### Scenario: a missing sdk is handed to an agent on the Overview
-- **GIVEN** an enabled SeaTalk channel bound to this machine whose websocket reports `sdk_missing`
+- **GIVEN** an enabled SeaTalk channel whose websocket reports `sdk_missing`
 - **WHEN** the attention list is read
 - **THEN** the channel's item has reason code `channel_sdk_missing`, a reason that names no command, and the same hand-off prompt as its status
 

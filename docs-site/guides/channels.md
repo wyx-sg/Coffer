@@ -5,16 +5,15 @@ description: Connect a Telegram bot or SeaTalk app to Coffer, pair it to your ow
 
 # Channels
 
-A **channel** connects one Telegram bot or one SeaTalk app to Coffer, so you can talk to your agents from your phone and receive notifications Coffer pushes. This page covers what every channel shares — pairing, the default agent and scope, the machine a channel runs on, commands, media and security. For platform setup, follow [Telegram](/guides/channels-telegram) or [SeaTalk](/guides/channels-seatalk).
+A **channel** connects one Telegram bot or one SeaTalk app to Coffer, so you can talk to your agents from your phone and receive notifications Coffer pushes. This page covers what every channel shares — pairing, the default agent and scope, commands, media and security. For platform setup, follow [Telegram](/guides/channels-telegram) or [SeaTalk](/guides/channels-seatalk).
 
 ## What a channel is
 
-A channel is a registered resource of kind `channel`. It holds:
+A channel is a registered resource of kind `channel`, held on this machine only. It holds:
 
 - the platform type, `telegram` or `seatalk`, and that platform's settings;
 - **references** to its secrets in Coffer's [secret store](/guides/secret-store), never the secrets themselves;
 - a **default agent** — the agent a new conversation on this channel starts on;
-- `runs_on` — the one machine whose daemon runs the channel's adapter.
 
 A message from you becomes a turn in an ordinary Coffer conversation, and the agent's reply goes back to the IM chat. The web [Conversations](/guides/chat) page lists it, with the channel it came from, so you can start a task on your phone and pick it up at your desk: opening the row resumes the agent's session in your terminal (see [Open a conversation in your terminal](/guides/chat#open-in-terminal)). The page is a list; there is no reply box, and nothing you do there is sent into the chat.
 
@@ -41,7 +40,7 @@ In the web UI, **Add channel** walks three steps. **Platform** lists each platfo
 
 A registration whose secret reference does not resolve is rejected and nothing is saved. So is one naming a default agent that is not registered in this vault.
 
-A new channel is bound to the machine you register it from and may drive every registered agent. Its adapter starts as soon as it is saved.
+A new channel runs on the machine you register it on and may drive every registered agent. Its adapter starts as soon as it is saved.
 
 ## Pair your account
 
@@ -182,19 +181,15 @@ Like every reach setting, scope and the enabled switch are set per machine and a
 A channel with no default agent, a default agent outside its scope, or a default agent not registered on this machine does not start, and its status says why. Coffer never substitutes another agent.
 :::
 
-## The machine a channel runs on
+## Using the bot on another machine {#using-the-bot-on-another-machine}
 
-A bot tolerates exactly one consumer: two machines polling one Telegram bot, or holding one SeaTalk app's connection, fight over its messages. So each channel names the one machine that runs it, in `runs_on`. Unlike reach, `runs_on` is part of the channel's configuration and travels with it through [vault sync](/guides/vault-sync), so every machine reads the same answer.
+A channel belongs to the machine you registered it on, like an agent: its file and its pairings stay there and are never synced. A bot tolerates exactly one consumer: two machines polling one Telegram bot, or holding one SeaTalk app's connection, fight over its messages. So Coffer never runs a channel anywhere you did not create it.
 
-- A channel registered from any Coffer surface is bound to the registering machine.
-- Only the named machine starts the adapter. A channel bound to another machine is shown as running elsewhere, not as stopped.
-- A channel with no binding, or bound to a machine the registry does not know, runs nowhere and says so on its page.
+To use the same bot on another machine:
 
-To move a channel, change **Runs on** on its **Settings** tab, or choose **Run it here…** on a channel another machine runs (it asks first, since both machines may answer until the other syncs).
-
-Rebinding needs no restart. The machine losing the channel stops its adapter within a reconcile tick; the machine gaining it starts one after the next sync round brings the change over. Rebind from the machine that currently runs the channel for a clean handover. Binding a channel to the machine you are on while another machine still runs it can leave both answering until that machine's next sync round.
-
-Your pairing travels with the channel, so moving it does not make you pair again.
+1. On the machine that has it now, switch the channel off or delete it, so only one machine talks to the bot.
+2. On the other machine, create the channel again and choose the existing secret for the bot token or app secret. The secret reaches that machine through [vault sync](/guides/vault-sync) only when the remote carries encrypted secrets; otherwise enter it again.
+3. Pair your account with the channel there.
 
 ## Groups and threads
 
@@ -268,9 +263,9 @@ Coffer can push a message to the paired owner with no inbound message, through `
 
 The **Channels** page is where a channel is set up and looked after: its setup, connection status and settings. It shows no messages — a channel's conversations are on the [Conversations](/guides/chat) page, and each channel's Overview links there with **Conversations from this channel →**, which opens the list filtered to it (`/conversations?source=<uid>`).
 
-The channel list sits beside the open channel. It groups channels by what they need from you: **Needs attention** (reconnecting, kicked, can't start, not paired, bound to no machine or to one Coffer does not know), **Connected**, **Elsewhere** (run by another machine) and, when there are any, **Off**. **Filter** narrows it by name or platform. A channel is addressed by its uid — `/channels/<uid>` for its **Overview**, `/channels/<uid>/settings` for its **Settings** — so a rename never breaks a link.
+The channel list sits beside the open channel. It groups channels by what they need from you: **Needs attention** (reconnecting, kicked, can't start, not paired), **Connected** and, when there are any, **Off**. **Filter** narrows it by name or platform. A channel is addressed by its uid — `/channels/<uid>` for its **Overview**, `/channels/<uid>/settings` for its **Settings** — so a rename never breaks a link.
 
-The header names the channel, its status and where it runs (`SeaTalk app 8231 · WebSocket · runs on this Mac`), and it looks the same in every state: a **Send test** button and a **⋯** menu holding **Reconnect**. A button that cannot run right now is greyed out, and **Send test** says why when you hover it. Whenever something is wrong, a banner under the header says why and holds the one button that fixes it — **Reconnect now**, **Replace token** or **Replace secret**, **Take it back**, **Retry**, **Open Secrets**, **Ask again**, **Run it here**, **Generate pairing code**: lost connection and reconnecting, another process took the SeaTalk connection, the SeaTalk SDK is missing (with **Hand off to &lt;Agent&gt;** to hand the rest over), the platform rejected the token or refused the connection, the channel's secret waiting for your approval (or refused), the status could not be read, the channel is set to run on a Mac outside your sync group, or it is not paired yet. A channel that is off, or that another Mac runs by design, is not a problem, so it gets a quiet grey box instead — **Turn on**, or **Run it here…** (it asks first). Changing the machine, replacing a secret and deleting the channel are in **Settings**. **Reconnect** restarts the channel's adapter: the daemon stops it and its connection, starts them again from the stored configuration and reads the secret as it is now, and a channel that was waiting out a failed start is retried at once. The REST equivalent is `POST /api/v1/channels/{uid}/restart`.
+The header names the channel, its status (`SeaTalk app 8231 · WebSocket`), and it looks the same in every state: a **Send test** button and a **⋯** menu holding **Reconnect**. A button that cannot run right now is greyed out, and **Send test** says why when you hover it. Whenever something is wrong, a banner under the header says why and holds the one button that fixes it — **Reconnect now**, **Replace token** or **Replace secret**, **Take it back**, **Retry**, **Open Secrets**, **Ask again**, **Generate pairing code**: lost connection and reconnecting, another process took the SeaTalk connection, the SeaTalk SDK is missing (with **Hand off to &lt;Agent&gt;** to hand the rest over), the platform rejected the token or refused the connection, the channel's secret waiting for your approval (or refused), the status could not be read, or it is not paired yet. A channel that is off is not a problem, so it gets a quiet grey box instead — **Turn on**. Replacing a secret and deleting the channel are in **Settings**. **Reconnect** restarts the channel's adapter: the daemon stops it and its connection, starts them again from the stored configuration and reads the secret as it is now, and a channel that was waiting out a failed start is retried at once. The REST equivalent is `POST /api/v1/channels/{uid}/restart`.
 
 **Overview** is one column, with these sections stacked:
 
@@ -278,7 +273,7 @@ The header names the channel, its status and where it runs (`SeaTalk app 8231 ·
 - **Agents** — **Default agent** and **Default model** (each saved as soon as you pick it) and **Agents it may drive**, the channel's scope (see [Default agent and scope](#default-agent-and-scope)).
 - **Conversations from this channel →** — one link to the Conversations page filtered to this channel. The commands the bot answers are not listed here; see [Channel commands](/reference/channel-commands).
 
-**Settings** is one column of sections — **Connection**, **Receiving messages**, **Replies and conversations**, **System prompts** and **Working directories** — each setting with its own one-line explanation beneath it, and a **Delete channel** row at the bottom. It saves each change as you make it, with no Save button and no saved line: a typed value (a number, the title, the App ID) when you leave the field or press Enter, and only when it is valid and changed, so a number you are still typing never takes effect; a switch, a choice or a change to the directory list at once. A save that fails says so in a toast. The exception is **System prompts**, which shows the **Direct chats** and **Group chats** prompts as written (blank when empty) and edits them through its **Edit** button and dialog (see [Your own system prompts](#your-own-system-prompts)). **Connection** holds the channel's name, the SeaTalk **App ID**, the secret or token by its name (linking to its page on the Secrets page, with **Replace key…**) and **Runs on**; **Receiving messages** the @mention switches and the two batching waits; **Replies and conversations** **Show step lines** and **Start a new conversation after**. **Working directories** lists the folders `/dir` may switch to — each row has **Set as default** and a remove ✕; the default's row reads *default* and has **Unset default**; with no default, new conversations start in Coffer's workspace, shown at the top of the list as *default · Coffer workspace*; a long list scrolls in its box. Every field starts from the settings the daemon reports for the channel, defaults included. A replaced secret is written under the reference the channel already uses and the daemon notices the new value and restarts the adapter on it by itself — also when you replace it with `coffer secret set` — so rotating a secret changes neither pairing nor binding. Deleting a channel stops the bot and removes its pairing; its conversations stay on the Conversations page.
+**Settings** is one column of sections — **Connection**, **Receiving messages**, **Replies and conversations**, **System prompts** and **Working directories** — each setting with its own one-line explanation beneath it, and a **Delete channel** row at the bottom. It saves each change as you make it, with no Save button and no saved line: a typed value (a number, the title, the App ID) when you leave the field or press Enter, and only when it is valid and changed, so a number you are still typing never takes effect; a switch, a choice or a change to the directory list at once. A save that fails says so in a toast. The exception is **System prompts**, which shows the **Direct chats** and **Group chats** prompts as written (blank when empty) and edits them through its **Edit** button and dialog (see [Your own system prompts](#your-own-system-prompts)). **Connection** holds the channel's name, the SeaTalk **App ID**, the secret or token by its name (linking to its page on the Secrets page, with **Replace key…**); **Receiving messages** the @mention switches and the two batching waits; **Replies and conversations** **Show step lines** and **Start a new conversation after**. **Working directories** lists the folders `/dir` may switch to — each row has **Set as default** and a remove ✕; the default's row reads *default* and has **Unset default**; with no default, new conversations start in Coffer's workspace, shown at the top of the list as *default · Coffer workspace*; a long list scrolls in its box. Every field starts from the settings the daemon reports for the channel, defaults included. A replaced secret is written under the reference the channel already uses and the daemon notices the new value and restarts the adapter on it by itself — also when you replace it with `coffer secret set` — so rotating a secret changes neither pairing nor binding. Deleting a channel stops the bot and removes its pairing; its conversations stay on the Conversations page.
 
 The channel's page also warns about a setting on the platform that defeats the channel's configuration, such as Telegram privacy mode. To rotate a secret, use **Replace key…** under **Connection** on the **Settings** tab: **Enter a new value** overwrites the secret the channel already uses, **Use another secret** points the channel at another stored secret (the adapter restarts on it as well).
 
@@ -316,7 +311,7 @@ The channel layer meets the agents only at the turn platform's seams — convers
 - [SeaTalk setup](/guides/channels-seatalk)
 - [Conversations](/guides/chat) — the same conversations in the browser.
 - [Secret store](/guides/secret-store) — where channel secrets live.
-- [Vault sync](/guides/vault-sync) — how a channel's binding and pairing travel between machines.
+- [Vault sync](/guides/vault-sync) — what travels between machines; a channel does not.
 - [Security model](/architecture/security)
 - [Spec: channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md)
 - [Channel Adapter Framework](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md), [Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md)

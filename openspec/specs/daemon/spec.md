@@ -812,7 +812,9 @@ proxy of the same version found through `~/.coffer/proxy.json` (`port`, `pid`, `
 it once it exits, and spawns one when none is running; it health-checks the proxy on a short period
 and restarts it after a crash. It pushes the proxy what it serves — the agents' token digests and
 each agent's route with the decrypted keys, held only in the proxy's memory — over the proxy's
-authenticated loopback control route after every reconcile pass and whenever a token changes. The
+authenticated loopback control route after every reconcile pass that could have changed it — every
+pass but a periodic one that wrote nothing, failed no new target and left the same differences
+open — and whenever a token changes. The
 daemon stopping or restarting MUST NOT stop the proxy, so agents' in-flight model streams outlive a
 daemon upgrade. `GET /api/v1/proxy/status` reports whether it runs, its
 port, pid, version, restart count and last error.
@@ -836,6 +838,12 @@ challenge, or a proxy that holds no key, MUST be sent nothing and is logged as
 - **GIVEN** a proxy started by an earlier supervisor that has since stopped
 - **WHEN** a new supervisor starts
 - **THEN** it attaches to the same proxy process rather than spawning another
+
+#### Scenario: a periodic pass that changes nothing tells no pass listener
+- **GIVEN** a reconciler with a pass listener, whose first periodic pass found a difference it only reports
+- **WHEN** a second periodic pass finds the same difference and writes nothing
+- **THEN** the listener is not called for it
+- **AND** a hinted pass, a periodic pass that repairs drift, and a periodic pass after which a difference closed are each heard
 
 ### Requirement: Restart itself on request
 A page in a browser is served by the daemon, so it cannot stop the daemon and
@@ -1375,3 +1383,73 @@ outright, and each leftover is the size of the whole archive.
 - **WHEN** a frozen daemon starts
 - **THEN** the directory of the exited process is deleted
 - **AND** the other two, and the daemon's own unpack directory, are left as they were
+
+### Requirement: Report each background worker's schedule on the status
+A background worker that sleeps until an event wakes it, with or without a
+fallback timer, MUST report what it is doing, because a worker idle for lack of
+events and one whose wake-up was lost otherwise look the same.
+`GET /api/v1/daemon/status`'s `runtime` block MUST carry `workers`: one row per
+such worker, by name, with how it is woken (`event` — only by an event;
+`event+fallback` — by an event or a fallback timer; `on-demand` — parked with
+no timer while nothing needs it), its state (`waiting`, `running` or `parked`),
+its runs since it started and how many of them raised, when its last run
+started, how long it took and whether it ended without raising, and when its
+worker runs next: its fallback's deadline, or the end of the settle once an
+event has woken it (null while it runs, is parked, or waits for an event only). A worker's name MUST be a fixed string, never a channel, server
+or chat, since the route answers without a token. A run that raises MUST be
+logged to `daemon.log` and counted, and the worker MUST carry on.
+`coffer daemon status --workers` MUST print one line per worker with the same
+facts, and `--json` MUST carry `workers` as the route answers it.
+
+#### Scenario: the status lists each background worker
+- **GIVEN** a running daemon
+- **WHEN** `GET /api/v1/daemon/status` is called with no token
+- **THEN** `runtime.workers` lists `reconciler`, `attention-watch` and `vault-scanner`
+- **AND** the reconciler is woken by `event+fallback`, has no failures, and while it waits carries when its fallback runs next
+
+#### Scenario: the command line lists each worker's schedule
+- **GIVEN** a running daemon with a waiting `reconciler` whose last run took 12.5 ms and whose fallback runs in two minutes, and a parked on-demand `usage-ingest`
+- **WHEN** the user runs `coffer daemon status --workers`
+- **THEN** below a `workers:` line it prints each worker with its mode, state and runs, the reconciler's last run and `next in` about 120 seconds, and the parked worker with no next run
+- **AND** without `--workers` the workers are not printed, and `--json` carries `workers`
+
+### Requirement: Wake background workers on events and park them without demand
+A background worker whose work follows from a change MUST run when that change
+is announced rather than on a short timer, and a worker with nothing to serve
+MUST park with no timer at all, because an idle daemon that wakes several times
+a second costs the machine's battery for nothing. The channel runtime MUST run a
+pass on every resource write (sync and hand edits included), on every secret
+stored or approved, and when a failed start's retry wait is over, and otherwise
+at most every 5 minutes. The model proxy watchdog MUST park while no proxy runs
+and none is needed, until the next state push; while a proxy runs it MUST keep
+probing it and restart it after a crash. The usage ingest MUST empty the spool
+on its period only while a proxy runs, MUST run one more pass when the proxy
+stops, and then park. The MCP session reaper MUST park while no session is
+open. Each of them MUST be listed on `runtime.workers`.
+
+#### Scenario: a resource write brings the channel runtime's next pass forward
+- **GIVEN** a running channel runtime whose fallback is far off, and a channel switched on without its pass having run
+- **WHEN** the resource write is announced to it
+- **THEN** the channel's adapter starts without waiting for the fallback
+- **AND** before that announcement no pass has started it
+
+#### Scenario: a failed channel start is retried when its wait is over
+- **GIVEN** a channel whose first start fails
+- **WHEN** the retry wait passes with nothing else waking the runtime
+- **THEN** the runtime starts the channel again, and it runs
+
+#### Scenario: an idle model proxy watchdog parks until a push wakes it
+- **GIVEN** no agent routed through the model proxy and no proxy running
+- **WHEN** the supervisor has found none is needed
+- **THEN** `model-proxy` is listed as `parked` with no next run, and it asks nothing while parked
+- **AND** a state push after an agent is routed wakes it, and it tries to start a proxy
+
+#### Scenario: the usage ingest drains once when the proxy stops and then parks
+- **GIVEN** the usage ingest running while a proxy runs
+- **WHEN** the proxy stops with a spool file it just completed
+- **THEN** that file is ingested and `usage-ingest` is then listed as `parked`
+
+#### Scenario: the MCP session reaper parks with no session open
+- **GIVEN** the reaper started with no session open
+- **WHEN** a session becomes active and is later reaped as idle
+- **THEN** the reaper is `parked` before the session, runs while it is open, and is `parked` again once it is reaped

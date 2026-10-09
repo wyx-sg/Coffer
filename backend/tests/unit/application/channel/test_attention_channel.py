@@ -1,4 +1,4 @@
-"""ChannelAttentionSource: enabled channels bound to this machine."""
+"""ChannelAttentionSource: this machine's enabled channels."""
 
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ def _status(
     uid: str,
     *,
     running: bool = True,
-    runs_here: bool = True,
     ws: tuple[str, str | None] | None = None,
     seatalk: bool = True,
     title: str | None = None,
@@ -37,7 +36,6 @@ def _status(
         pending_pairing=False,
         people=(),
         inbound=inbound,
-        runs_here=runs_here,
         title=title,
         secret_approval=SecretApproval(state=approval, secret_ref="coffer://secret/x")
         if approval
@@ -131,11 +129,10 @@ async def test_a_stopped_adapter_with_no_websocket_state_is_not_running() -> Non
     assert item.action == _check("t1")
 
 
-async def test_healthy_or_elsewhere_channels_report_nothing() -> None:
+async def test_healthy_channels_report_nothing() -> None:
     source = _source(
         _status("ok", ws=("connected", None)),
         _status("tg", seatalk=False),
-        _status("away", running=False, runs_here=False, ws=("error", "boom")),
     )
     assert await source.items() == []
 

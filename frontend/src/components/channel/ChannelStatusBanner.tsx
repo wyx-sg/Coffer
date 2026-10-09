@@ -3,12 +3,12 @@
 // quiet), in plain words, with the one button that fixes it inside (boards
 // 3.2.06–17). A problem is a banner — warning, danger, or info for "pair it" —
 // and its button is the fix: Reconnect now, Replace token, Take it back,
-// Retry, Open Secrets, Ask again, Run it here, Generate pairing code. A missing SeaTalk
+// Retry, Open Secrets, Ask again, Generate pairing code. A missing SeaTalk
 // SDK is the one with two ways forward: the person downloads it (it sits
 // behind their SeaTalk login) and hands the rest to an agent (`status.handoff`),
 // offered as a "Hand off to <Agent> ▾" split button beside Retry.
-// Two states are not problems and get a quiet grey box instead: the channel is
-// off, or another Mac runs it. A healthy channel shows nothing. The daemon's
+// One state is not a problem and gets a quiet grey box instead: the channel is
+// off. A healthy channel shows nothing. The daemon's
 // diagnostics (a setting the platform will not honour) follow as their own
 // banners.
 import { Trans, useTranslation } from "react-i18next";
@@ -23,7 +23,6 @@ import { channelPlatform } from "@/lib/channels/channelState";
 import { displayName } from "@/lib/resourceTitle";
 import type { ChannelCommand } from "./ChannelDetailHeader";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
-import { useMachineName } from "./channelLabels";
 import { platformLabel } from "./PlatformMark";
 
 type Variant = "info" | "warning" | "error";
@@ -33,8 +32,6 @@ const SEATALK_SDK_DOCS = "https://open.seatalk.io/docs/WebSocket-Event-Callback"
 
 const VARIANT: Partial<Record<ChannelStateKey, Variant>> = {
   unavailable: "warning",
-  unbound: "error",
-  unknownMachine: "error",
   reconnecting: "warning",
   kicked: "error",
   sdkMissing: "error",
@@ -53,7 +50,6 @@ const ICON = { info: Info, warning: AlertTriangle, error: AlertCircle } as const
 function copyKey(state: ChannelStateKey, platform: string): string {
   if (state === "connectFailed" || state === "stopped")
     return `tokenRejected.${platform === "seatalk" ? "seatalk" : "telegram"}`;
-  if (state === "unbound") return "unknownMachine";
   return state;
 }
 
@@ -61,7 +57,7 @@ interface Props {
   channel: ResourceOut;
   view: ChannelView;
   status: ChannelStatus | undefined;
-  /** Runs the banner's fix (Reconnect now, Take it back, Run it here, …). */
+  /** Runs the banner's fix (Reconnect now, Take it back, …). */
   onCommand: (command: ChannelCommand) => void;
   /** Opens the pairing dialog; offered in a not-paired channel's banner. */
   onPair: () => void;
@@ -70,11 +66,9 @@ interface Props {
 
 export function ChannelStatusBanner({ channel, view, status, onCommand, onPair, busy }: Props) {
   const { t } = useTranslation();
-  const machineName = useMachineName();
   const platformKey = channelPlatform(channel.config);
   const vars = {
     platform: platformLabel(platformKey),
-    machine: machineName(view.runsOn),
     appId: typeof channel.config.app_id === "string" ? channel.config.app_id : "",
     name: displayName(channel),
   };
@@ -138,9 +132,7 @@ export function ChannelStatusBanner({ channel, view, status, onCommand, onPair, 
           </AlertDescription>
         </Alert>
       ) : null}
-      {view.state === "off" || view.state === "elsewhere" ? (
-        <QuietBox view={view} vars={vars} busy={busy} onCommand={onCommand} />
-      ) : null}
+      {view.state === "off" ? <QuietBox vars={vars} busy={busy} onCommand={onCommand} /> : null}
       {diagnostics.map((d) => (
         // A setting that reads correctly here and does nothing in the chat
         // (spec channels/telegram "Report privacy mode that defeats the group
@@ -156,37 +148,27 @@ export function ChannelStatusBanner({ channel, view, status, onCommand, onPair, 
   );
 }
 
-/** Off, or run by another Mac: nothing is wrong, so no banner — a neutral box
- *  with one small button to change it (boards 3.2.13, 3.2.14). */
+/** Off: nothing is wrong, so no banner — a neutral box with one small button
+ *  to turn it on (board 3.2.13). */
 function QuietBox({
-  view,
   vars,
   busy,
   onCommand,
 }: {
-  view: ChannelView;
-  vars: { name: string; machine: string };
+  vars: { name: string };
   busy?: boolean;
   onCommand: (command: ChannelCommand) => void;
 }) {
   const { t } = useTranslation();
-  const off = view.state === "off";
   return (
     <div
       data-testid="channel-quiet"
-      data-state={view.state}
+      data-state="off"
       className="flex items-center gap-3 rounded-lg border border-border bg-surface-sunken px-3.5 py-3"
     >
-      <p className="min-w-0 flex-1 text-sm text-text">
-        {off ? t("channels.quiet.off", vars) : t("channels.quiet.elsewhere", vars)}
-      </p>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={busy}
-        onClick={() => onCommand(off ? "turnOn" : "runHereConfirm")}
-      >
-        {off ? t("channels.actions.turnOn") : t("channels.actions.runHereConfirm")}
+      <p className="min-w-0 flex-1 text-sm text-text">{t("channels.quiet.off", vars)}</p>
+      <Button size="sm" variant="outline" disabled={busy} onClick={() => onCommand("turnOn")}>
+        {t("channels.actions.turnOn")}
       </Button>
     </div>
   );

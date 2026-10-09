@@ -13,7 +13,7 @@ import pytest
 from coffer.application.channel.pairing import claim_pairing
 from coffer.domain.channel.commands import help_text
 from coffer.domain.resource import Resource
-from coffer.infrastructure.vault.writer import Transaction
+from coffer.infrastructure.vault.json_store import JsonStore
 
 from .conftest import ChannelEnv, FakeChannelAdapter, inbound, wait_until
 
@@ -214,13 +214,13 @@ async def test_a_failed_person_swap_leaves_the_previous_person_in_place(
     )
     code, _ = env.pairing.issue(resource.uid, replaces="old-1")
 
-    def _refuse_write(self: Transaction, *_args: object, **_kwargs: object) -> None:
+    def _refuse_write(self: JsonStore, *_args: object, **_kwargs: object) -> None:
         raise RuntimeError("disk full")
 
-    # The pairings are one vault document: the write that replaces the owner
-    # is refused before it reaches the file.
-    monkeypatch.setattr(Transaction, "write", _refuse_write)
-    with pytest.raises(RuntimeError, match="disk full"):
+    # The pairings are one file: the write that replaces the owner is refused
+    # before it reaches the file.
+    with monkeypatch.context() as patch, pytest.raises(RuntimeError, match="disk full"):
+        patch.setattr(JsonStore, "_dump", _refuse_write)
         await claim_pairing(
             SimpleNamespace(resource=resource),  # type: ignore[arg-type]
             text=code,
@@ -231,7 +231,6 @@ async def test_a_failed_person_swap_leaves_the_previous_person_in_place(
             peers=env.peers,
             audit=env.audit,
         )
-    monkeypatch.undo()
 
     after = sorted((p.chat_id, p.sender_id) for p in await env.peers.list_by_resource(resource.uid))
     assert after == before == [("grp-1", "old-1"), ("old-dm", "old-1")]
