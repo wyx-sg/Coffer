@@ -101,6 +101,10 @@ class AuditEventType(StrEnum):
     MEMORY_DELIVERY_INSTALLED = "memory_delivery_installed"
     MEMORY_DELIVERY_REMOVED = "memory_delivery_removed"
     MEMORY_DISTILLED = "memory_distilled"
+    # spec memory: the sync into each agent's own memory
+    MEMORY_SYNCED = "memory_synced"
+    MEMORY_SYNC_UNDONE = "memory_sync_undone"
+    MEMORY_CURATION_REQUESTED = "memory_curation_requested"
     # no longer emitted; kept so recorded events still read
     MEMORY_NOTE_EDITED = "memory_note_edited"
     MEMORY_NOTE_DELETED = "memory_note_deleted"

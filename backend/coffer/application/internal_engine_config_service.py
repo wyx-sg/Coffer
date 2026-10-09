@@ -64,6 +64,8 @@ class InternalEngineConfigService:
                 "aggregate_interval_s": saved.aggregate_interval_s,
                 "auto_distil_enabled": saved.auto_distil_enabled,
                 "distil_interval_s": saved.distil_interval_s,
+                "memory_sync_enabled": saved.memory_sync_enabled,
+                "memory_sync_interval_s": saved.memory_sync_interval_s,
             },
         )
         return saved

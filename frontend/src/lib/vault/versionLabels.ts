@@ -22,6 +22,7 @@ export function vaultWriterLabel(t: TFunction, displayWriter: string): string {
       return t("history.writer.agent");
     case "daemon":
     case "curation":
+    case "memory-sync":
       return t("history.writer.daemon");
     case "sync":
       return t("history.writer.sync");

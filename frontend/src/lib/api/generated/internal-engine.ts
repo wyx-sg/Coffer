@@ -161,7 +161,7 @@ export interface components {
              * Pass
              * @enum {string}
              */
-            pass: "aggregate" | "distil";
+            pass: "aggregate" | "distil" | "memory_sync";
             /**
              * Use Default Interval
              * @default false

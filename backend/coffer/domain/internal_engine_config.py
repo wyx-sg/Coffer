@@ -12,6 +12,8 @@ from datetime import datetime
 #: exactly these two without importing two application modules.
 AGGREGATE = "aggregate"
 DISTIL = "distil"
+#: The memory sync (spec memory "Sync on an interval and on demand").
+MEMORY_SYNC = "memory_sync"
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,10 @@ class GlobalInternalEngineConfig:
     #: this defaults ON for the same reason.
     auto_distil_enabled: bool = True
     distil_interval_s: int | None = None
+    #: The memory sync: it writes into the agents' own memory, so it stays
+    #: OFF until the person turns it on.
+    memory_sync_enabled: bool = False
+    memory_sync_interval_s: int | None = None
     #: The speech-to-text model, on the connection marked ``transcribe_default``
     #: (spec internal-engine "Transcribe speech on its own connection and
     #: model"). ``None`` until the operator picks one,
@@ -63,4 +69,6 @@ class GlobalInternalEngineConfig:
             return UpkeepSetting(self.auto_aggregate_enabled, self.aggregate_interval_s)
         if pass_name == DISTIL:
             return UpkeepSetting(self.auto_distil_enabled, self.distil_interval_s)
+        if pass_name == MEMORY_SYNC:
+            return UpkeepSetting(self.memory_sync_enabled, self.memory_sync_interval_s)
         raise ValueError(f"unknown upkeep pass: {pass_name}")

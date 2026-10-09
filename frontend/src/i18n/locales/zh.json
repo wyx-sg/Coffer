@@ -828,7 +828,10 @@
       "secret_set": "已存储密钥",
       "attention_ignored": "在总览中忽略了一项",
       "attention_unignored": "在总览中不再忽略一项",
-      "secret_revealed": "在 Coffer 应用中查看了密钥"
+      "secret_revealed": "在 Coffer 应用中查看了密钥",
+      "memory_synced": "在各智能体之间同步了记忆",
+      "memory_sync_undone": "移除了 Coffer 同步进各智能体的记忆",
+      "memory_curation_requested": "请一个智能体整理它自己的记忆"
     },
     "capType": {
       "tool": "工具",
@@ -1884,7 +1887,9 @@
     "CUSTOM_TOOL_ENVIRONMENT_UNKNOWN": "这个环境没有在该分组中登记。",
     "INVOCATION_NOT_FOUND": "日志里没有这次工具调用，可能已按保留期清理。",
     "CUSTOM_TOOL_LAST_ENVIRONMENT": "分组至少需要一个环境，最后一个不能删除。",
-    "DESKTOP_REQUEST_NOT_FOUND": "这个发给 Coffer 应用的请求已过期或已处理。"
+    "DESKTOP_REQUEST_NOT_FOUND": "这个发给 Coffer 应用的请求已过期或已处理。",
+    "MEMORY_SYNC_RUNNING": "已有一次记忆同步在运行",
+    "MEMORY_SYNC_NO_PREVIEW": "没有等待写入的记忆同步预览"
   },
   "pagination": {
     "showing": "显示 {{shown}} / {{total}} 条",
@@ -4041,7 +4046,8 @@
         "skills": "技能",
         "resources": "MCP 服务器与工具",
         "secret": "加密的 secret",
-        "machines": "机器"
+        "machines": "机器",
+        "memory": "记忆"
       }
     },
     "resolve": {

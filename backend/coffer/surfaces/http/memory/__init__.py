@@ -20,13 +20,15 @@ identity-is-the-uid-inside-the-file). The only name a caller supplies is
 ``path``, inside an already-identified partition, which is a filesystem path
 and nothing else.
 
-Six route modules, mounted in order. They are split by *subject*, not by size:
+Seven route modules, mounted in order. They are split by *subject*, not by size:
 ``partition_routes`` owns the list and the two passes that rewrite the tree,
 ``note_routes`` and ``file_routes`` are the two read families over one
 partition, ``hook_routes`` (one fire of the memory hook) is the one whose
 caller is an agent rather than a person,
-``stats_routes`` the two delivery views of the Memory page, and
-``reading_routes`` when the agents' memory was last read. Each declares the
+``stats_routes`` the two delivery views of the Memory page,
+``reading_routes`` when the agents' memory was last read, and
+``sync_routes`` the memory sync into each agent's own memory (spec memory
+"Manage memory sync in the web UI"). Each declares the
 same prefix, tags and token dependency — as ``surfaces/http/mcp/``'s modules do.
 """
 
@@ -38,6 +40,7 @@ from coffer.surfaces.http.memory.note_routes import router as _note_router
 from coffer.surfaces.http.memory.partition_routes import router as _partition_router
 from coffer.surfaces.http.memory.reading_routes import router as _reading_router
 from coffer.surfaces.http.memory.stats_routes import router as _stats_router
+from coffer.surfaces.http.memory.sync_routes import router as _sync_router
 
 routers: tuple[APIRouter, ...] = (
     _partition_router,
@@ -46,6 +49,7 @@ routers: tuple[APIRouter, ...] = (
     _hook_router,
     _stats_router,
     _reading_router,
+    _sync_router,
 )
 
 __all__ = ["routers"]
