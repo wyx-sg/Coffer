@@ -22,7 +22,7 @@ export const KNOWLEDGE_ROOT = "/knowledge";
 export const HISTORY_PARAM = "history";
 
 /** A collection's base address. */
-export function collectionBasePath(uid: string): string {
+function collectionBasePath(uid: string): string {
   return `${KNOWLEDGE_ROOT}/${encodeURIComponent(uid)}`;
 }
 

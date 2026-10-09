@@ -5,8 +5,8 @@ import type { TFunction } from "i18next";
 import i18n from "@/i18n";
 import type { ChangeOut } from "@/lib/api/knowledge";
 
-import { agentLabel, dayKey, whenLabel, writerLabel } from "./changes";
-import { collectionPath, pathInCollection } from "./routes";
+import { agentLabel, dayKey, operationLabel, whenLabel, writerLabel } from "./changes";
+import { collectionPath, legacyRedirect, pathInCollection } from "./routes";
 
 const t = i18n.getFixedT("en") as TFunction;
 
@@ -37,6 +37,15 @@ describe("wording", () => {
     expect(agentLabel(t, "codex")).toBe("Codex");
     expect(agentLabel(t, "user")).toBe("You");
     expect(agentLabel(t, "agent")).toBe("An agent");
+    expect(writerLabel(t, change({ writer: "daemon" }))).toBe("Coffer");
+  });
+
+  test("says what a change did", () => {
+    expect(operationLabel(t, change({ operation: "layout" }))).toBe("Filed into pages");
+    expect(operationLabel(t, change({ operation: "pass" }))).toBe("Curated");
+    expect(operationLabel(t, change({ operation: "unknown", summary: "Something" }))).toBe(
+      "Something",
+    );
   });
 
   test("words a time as today, yesterday or a date", () => {
@@ -52,6 +61,19 @@ describe("addresses", () => {
   test("builds the page's addresses", () => {
     expect(collectionPath("kn-1")).toBe("/knowledge/kn-1");
     expect(collectionPath("kn-1", "c/a b.md")).toBe("/knowledge/kn-1?file=c%2Fa%20b.md");
+    expect(collectionPath("kn-1", "c/a.md", { history: true })).toBe(
+      "/knowledge/kn-1?file=c%2Fa.md&history=1",
+    );
     expect(pathInCollection("c/dir/doc.md")).toBe("dir/doc.md");
+  });
+
+  test("sends the old History tab address to the drawer, any other segment to the bare address", () => {
+    expect(legacyRedirect("kn-1", "history", "?file=c%2Fa.md")).toBe(
+      "/knowledge/kn-1?file=c%2Fa.md&history=1",
+    );
+    expect(legacyRedirect("kn-1", "changes", "?file=c%2Fa.md")).toBe(
+      "/knowledge/kn-1?file=c%2Fa.md",
+    );
+    expect(legacyRedirect("kn-1", "history", "")).toBe("/knowledge/kn-1");
   });
 });

@@ -53,9 +53,6 @@ export type ChangesOut = Schemas["ChangesOut"];
 /** A page's resolved `[[link]]`: the path it names, or null when dead. */
 export type LinkRefOut = Schemas["LinkRefOut"];
 
-/** One of a page's `sources:` entries, resolved; `path` null when missing. */
-export type SourceRefOut = Schemas["SourceRefOut"];
-
 /** One mechanical finding of a collection's check. */
 export type FindingOut = Schemas["FindingOut"];
 

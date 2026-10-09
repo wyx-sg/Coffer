@@ -40,7 +40,7 @@ export function KnowledgeDocumentReader({ file, collectionUid, source }: Props) 
     () =>
       page
         ? {
-            a: ({ href, children, node: _node, ...props }) => {
+            a: ({ href, title: hint, children }) => {
               const target = wikiTargetOf(href);
               return target === null ? (
                 <a
@@ -48,7 +48,7 @@ export function KnowledgeDocumentReader({ file, collectionUid, source }: Props) 
                   target="_blank"
                   rel="noreferrer"
                   href={href}
-                  {...props}
+                  title={hint}
                 >
                   {children}
                 </a>
