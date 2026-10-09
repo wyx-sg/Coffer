@@ -6,7 +6,7 @@
 
 ## 2. Bounded fold with a per-conversation cursor
 
-- [x] 2.1 `channel_thread_cursors` table, repo and migration `0152`; delete with the channel
+- [x] 2.1 `channel_thread_cursors` table, repo and migration `0153`; delete with the channel
 - [x] 2.2 `predict_conversation` beside `ensure_conversation`
 - [x] 2.3 `ThreadContextFolder`: seed of 20, news since the cursor, bot replies left out, older-messages note, window note on the seed
 - [x] 2.4 Pending cursor written before the conversation exists, claimed in `TurnDriver.submit`

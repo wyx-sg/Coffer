@@ -5,8 +5,8 @@ only the messages posted since that conversation's previous turn there (spec
 channels "Ground a thread turn in a bounded slice of the thread"; change
 fetch-thread-history-on-demand). Ids and times only.
 
-Revision ID: 0152
-Revises: 0151
+Revision ID: 0153
+Revises: 0152
 Create Date: 2026-10-09
 """
 
@@ -17,8 +17,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0152"
-down_revision: str | None = "0151"
+revision: str = "0153"
+down_revision: str | None = "0152"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -69,7 +69,7 @@ None.
   `domain/channel/thread_messages.py` (new), `rich_content.py` (channel line),
   `application/builtin_tools.py` (turn-scoped tools), the gateway's built-in
   view, `infrastructure/channel/seatalk_history.py`, `seatalk.py`,
-  `telegram.py`, `cursor_persistence.py` (new), migration `0152`, the channel
+  `telegram.py`, `cursor_persistence.py` (new), migration `0153`, the channel
   note (`domain/chat/channel_note.py`, `prompt_note.py`, `adapter_support.py`),
   and `surfaces/http/channel_wiring.py` / `app.py`.
 - No REST route, no wire contract and no web UI change. The new table is
