@@ -9,6 +9,9 @@
 
 **Partly superseded** (2026-10-05): the web UI has no History tab, Recent changes or Restore button; a tidy that went wrong is repaired by handing the restore of an earlier version to an agent from the document's History… dialog, see the OpenSpec change `hand-files-to-external-tools`.
 
+
+**Partly superseded** (2026-10-09): the memory half (Tidy on a memory partition) is superseded: each agent curates the copies Coffer writes into its own memory, see [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md).
+
 ## Context
 
 Knowledge and memory both rot unless something tidies them. Knowledge documents
