@@ -1,6 +1,5 @@
-// src/components/custom-tools/EditGroupDialog.test.tsx — Edit group (640): the group's headers are the shared rows —
-// a secret row sends {name, secret} (the whole value, no prefix), a plain row {name, value}; a typed-in new secret
-// is written to Secrets before the group names it; there is no reach field.
+// src/components/custom-tools/EditGroupDialog.test.tsx — Edit group (640): the description and timeout only — base
+// URLs, headers and secrets are the environments' — and no reach field.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -68,68 +67,30 @@ beforeEach(() => {
 });
 
 describe("EditGroupDialog", () => {
-  test("is 640 wide, Cancel is ghost, and there is no Available to field", async () => {
+  test("is 640 wide, Cancel is ghost, and there is no Available to field", () => {
     const dialog = open();
     expect(dialog.className).toContain("max-w-[640px]");
     expect(within(dialog).queryByText("Available to")).not.toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Cancel" }).className).toContain(
       "bg-transparent",
     );
-    expect(
-      await within(dialog).findByRole("button", { name: /Choose a secret|billing-token/ }),
-    ).toBeTruthy();
   });
 
-  test("saves secret rows by name and plain rows by value, sending the whole headers list", async () => {
+  test("edits only the description and timeout: base URLs and headers are the environments'", async () => {
     const onOpenChange = vi.fn();
     const dialog = open(onOpenChange);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add header" }));
-    fireEvent.change(within(dialog).getAllByLabelText("Headers name")[1], {
-      target: { value: "X-Team" },
-    });
-    fireEvent.change(within(dialog).getByLabelText("Value of X-Team"), {
-      target: { value: "core" },
-    });
+    expect(within(dialog).queryByLabelText(/Base URL/)).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: "Add header" })).toBeNull();
+    expect(within(dialog).getByText(/belong to the environments/)).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText("Timeout"), { target: { value: "45" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() =>
-      expect(update).toHaveBeenCalledWith(
-        "billing",
-        expect.objectContaining({
-          headers: [
-            { name: "Authorization", secret: TOKEN_ID, scheme: "Bearer" },
-            { name: "X-Team", value: "core" },
-          ],
-          timeout_seconds: 30,
-        }),
-      ),
+      expect(update).toHaveBeenCalledWith("billing", {
+        description: group.description,
+        timeout_seconds: 45,
+      }),
     );
     expect(secretsApi.set).not.toHaveBeenCalled();
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
-  });
-
-  test("a pasted secret is written to Secrets before the group is saved", async () => {
-    const dialog = open();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add header" }));
-    fireEvent.change(within(dialog).getAllByLabelText("Headers name")[1], {
-      target: { value: "X-Api-Key" },
-    });
-    // Choosing "new" happens through the row's own "Store it in Coffer?" hint on a secret-looking value.
-    fireEvent.change(within(dialog).getByLabelText("Value of X-Api-Key"), {
-      target: { value: "k-9f8e7d6c5b4a3210" },
-    });
-    fireEvent.click(await within(dialog).findByRole("button", { name: /Store it in Coffer/ }));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(update).toHaveBeenCalled());
-    // Stored under a minted id, labelled after the group and header; the header cites the id.
-    const [ref, value] = vi.mocked(secretsApi.set).mock.calls[0];
-    expect(ref).toMatch(/^secret\/[0-9a-f]{32}$/);
-    expect(value).toBe("k-9f8e7d6c5b4a3210");
-    expect(secretsApi.setNotes).toHaveBeenCalledWith(ref, { label: "billing-X-Api-Key" });
-    const body = update.mock.calls[0][1] as { headers: unknown[] };
-    expect(body.headers).toContainEqual({
-      name: "X-Api-Key",
-      secret: ref.slice("secret/".length),
-      scheme: null,
-    });
   });
 });

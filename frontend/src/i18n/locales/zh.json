@@ -4914,10 +4914,8 @@
       "title": "定义",
       "description": "Coffer 如何发出每一次调用；密钥不会到达你的智能体。",
       "agentsSee": "智能体看到",
-      "auth": "认证",
       "timeout": "超时",
       "timeoutValue": "每次调用 {{seconds}} 秒",
-      "noAuth": "无认证请求头",
       "spec": "规范",
       "fetched": "获取于 {{date}}"
     },
@@ -4975,10 +4973,43 @@
       "addHeaderThis": "为此请求添加请求头",
       "requestHelpEnv": "拼接在环境 {{environment}} 的基础 URL {{url}} 后面。",
       "requestHelpNoEnv": "拼接在请求所在环境的基础 URL 后面。",
-      "fromEnvironment": "来自环境 {{environment}}"
+      "fromEnvironment": "来自环境 {{environment}}",
+      "nameFixed": "添加后不可更改——它是智能体调用的名称的一部分。",
+      "bodyGet": "GET 不发送请求体。把方法改为 POST、PUT 或 PATCH 才能写 JSON 请求体，其中的 {argument} 占位来自参数。",
+      "query": "查询参数",
+      "queryHelp": "与请求路径保持同步。",
+      "queryKey": "参数名",
+      "queryValue": "值",
+      "queryValueFor": "{{key}} 的值",
+      "fromArgument": "来自参数",
+      "removeQuery": "移除 {{key}}",
+      "addQuery": "添加查询参数",
+      "argUsedIn": "用在",
+      "argUnused": "未使用",
+      "noArguments": "还没有参数。请求里的每个 {占位} 都要有一个参数。",
+      "unusedArgument": "请求里没有用到 {{name}}，智能体传的值会被丢掉。",
+      "addToQuery": "加为查询参数",
+      "missingArgument": "请求里用到了 {{name}}，但没有名为 {{name}} 的参数，它永远填不上。",
+      "addArgumentNamed": "添加参数 {{name}}",
+      "argumentsHelp": "类型、取值和必填会作为工具的输入 schema 交给智能体。",
+      "tabs": {
+        "general": "概览",
+        "request": "请求",
+        "arguments": "参数",
+        "response": "响应"
+      },
+      "agentPreview": "智能体看到的",
+      "hintChanges": "会修改数据",
+      "hintReadOnly": "只读",
+      "response": {
+        "success": "成功",
+        "rule": "API 返回的状态码小于 400 时调用成功。状态码 400 及以上，或完全没有响应，都算调用失败：计入分组的错误数，智能体收到的是一条错误。",
+        "agentGets": "智能体收到的",
+        "agentGetsBody": "先是状态行（例如 HTTP 200 OK），然后是响应正文，最多 1 MiB。密钥的值不会出现在其中。"
+      }
     },
     "test": {
-      "title": "测试",
+      "title": "试运行",
       "valueFor": "{{name}} 的取值",
       "run": "运行",
       "runAgain": "重新运行",
@@ -5028,7 +5059,9 @@
         "disabled": "环境 {{environment}} 已关闭，测试不会运行。请选择一个已开启的环境，或在“环境”中重新开启它。",
         "deleted": "环境 {{environment}} 已被删除，测试不会运行。请选择其他环境。"
       },
-      "responseHeaders": "响应头"
+      "responseHeaders": "响应头",
+      "resultTab": "结果",
+      "requestTab": "预览"
     },
     "editGroup": {
       "title": "编辑 {{name}}",
@@ -5039,7 +5072,8 @@
       "name": "名称",
       "nameHelp": "固定不变——智能体以 {{prefix}} 调用它的工具。",
       "descriptionHelp": "智能体搜索工具时会读到它，写清这组 API 是做什么的。",
-      "descriptionPlaceholder": "例如：计费系统的发票和付款"
+      "descriptionPlaceholder": "例如：计费系统的发票和付款",
+      "environmentsNote": "基础 URL、请求头、密钥和变量属于各个环境，在「环境」里对应的行上编辑。"
     },
     "reimport": {
       "action": "重新导入",
@@ -5114,8 +5148,6 @@
       "deleteTitle": "删除环境 {{name}}？",
       "deleteBody": "之后的调用不能再指明它。{{group}} 的工具和其他环境保持不变。",
       "deleteConfirm": "删除环境",
-      "editGroupNote_one": "这个组有 {{count}} 个环境；它的基础 URL 和请求头在“环境”中编辑。",
-      "editGroupNote_other": "这个组有 {{count}} 个环境；每个环境的基础 URL 和请求头在“环境”中编辑。",
       "secret": {
         "present": "密钥已设置",
         "missing": "缺少密钥",
