@@ -69,7 +69,7 @@ _RETIRED_EFFORT_KEYS = ("effort_levels", "default_effort")
 #: Connection keys an older build wrote and this one ignores.
 _RETIRED_PROVIDER_KEYS = ("internal_default",)
 
-_OPTIONAL_FACTS = ("context_window", "price")
+_OPTIONAL_FACTS = ("context_window", "user_context_window", "price")
 
 
 class CuratedPrice(BaseModel):
@@ -115,13 +115,14 @@ class CuratedModel(BaseModel):
 
     id: str
     modality: Modality = Modality.TEXT
-    #: The context window the endpoint serves this model with, in tokens —
-    #: read from the endpoint where it reports one (a local runtime's served
-    #: window); the person never chooses it. ``None`` is unknown, and an
-    #: unknown window is left out of what Coffer writes rather than guessed
-    #: (spec provider-switching "Record a context window with each curated
-    #: model").
+    #: The context window the endpoint reports serving this model with, in
+    #: tokens (a local runtime's served window, a listing's
+    #: ``max_input_tokens`` / ``context_length``). ``None``: it reported none.
     context_window: int | None = Field(default=None, ge=1024, le=100_000_000)
+    #: The window the person set for this model on this connection; it wins
+    #: over the endpoint's and the bundled list's (spec provider-switching
+    #: "Resolve each provider model's context window"). ``None``: not set.
+    user_context_window: int | None = Field(default=None, ge=1024, le=100_000_000)
     #: This connection's own price for the model; ``None``: resolved elsewhere.
     price: CuratedPrice | None = None
 

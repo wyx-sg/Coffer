@@ -1,7 +1,8 @@
 // src/components/providers/AddEndpointStep.tsx — step 1 of Add: vendor, protocol, name, base URL, key, and Test.
 //
 // A vendor fills the protocol and base URL; Custom asks for the protocol by
-// what can use it. The key is the one secret field: a stored secret, or a
+// what can use it, and so does a vendor that serves the Anthropic wire at its
+// own root (DeepSeek), where picking the wire also picks the base URL. The key is the one secret field: a stored secret, or a
 // pasted value stored as a new secret when the provider is added. The local path (Ollama /
 // a runtime on this Mac) has no key: detection finds what answers instead.
 import type { ReactNode } from "react";
@@ -12,7 +13,13 @@ import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SecretField } from "@/components/secret/SecretField";
-import { CUSTOM_PROTOCOLS, PRESETS, type PresetId } from "@/lib/providers/presets";
+import {
+  CUSTOM_PROTOCOLS,
+  PRESETS,
+  presetBaseUrl,
+  presetById,
+  type PresetId,
+} from "@/lib/providers/presets";
 import { FieldError } from "./FieldError";
 import { ProtocolCards } from "./ProtocolCards";
 import { VendorGrid } from "./VendorGrid";
@@ -53,7 +60,8 @@ export function AddEndpointStep({
     value: p.id,
     label: p.id === "custom" ? t("providers.add.custom") : p.label,
   }));
-  const protocols = presetId === "custom" ? CUSTOM_PROTOCOLS : [];
+  const preset = presetById(presetId);
+  const twoWires = presetId === "custom" || !!preset.anthropicBaseUrl;
   const vendorLabel = vendors.find((v) => v.value === presetId)?.label ?? "";
   const edited = { onChange: onEdited };
 
@@ -71,14 +79,15 @@ export function AddEndpointStep({
           {local ? t("providers.add.vendorHintLocal") : t("providers.add.vendorHint")}
         </p>
       </div>
-      {!local && presetId === "custom" ? (
+      {!local && twoWires ? (
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-label text-text">{t("providers.fields.protocol")}</span>
           <ProtocolCards
             value={protocol}
-            options={protocols}
+            options={CUSTOM_PROTOCOLS}
             onChange={(p) => {
               setValue("protocol", p);
+              if (preset.anthropicBaseUrl) setValue("baseUrl", presetBaseUrl(preset, p));
               onEdited();
             }}
           />

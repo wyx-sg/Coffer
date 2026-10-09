@@ -635,10 +635,13 @@ export interface components {
         };
         /** AgentModelsOut */
         AgentModelsOut: {
+            builtin_default: components["schemas"]["AgentModelOut"] | null;
             /** Default Model */
             default_model: string | null;
             /** Models */
             models: components["schemas"]["AgentModelOut"][];
+            /** Resolved Default */
+            resolved_default: string | null;
         };
         /** AgentOut */
         AgentOut: {

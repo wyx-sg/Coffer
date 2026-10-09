@@ -345,6 +345,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/providers/{uid}/windows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Model Windows
+         * @description Each model's context window on this provider, with its source: You set,
+         *     the endpoint, or the bundled list — or none (spec provider-switching
+         *     "Resolve each provider model's context window"). Read-only; nothing is
+         *     fetched from the network.
+         */
+        post: operations["model_windows_api_v1_providers__uid__windows_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/proxy/status": {
         parameters: {
             query?: never;
@@ -800,6 +823,25 @@ export interface components {
             /** Files */
             files: components["schemas"]["ModelSwitchFile"][];
         };
+        /**
+         * ModelWindowOut
+         * @description One model's context window on a provider and where it came from (spec
+         *     provider-switching "Resolve each provider model's context window").
+         *     ``source`` ``None`` means no window is known and ``tokens`` is ``None``:
+         *     nothing is written for it, nothing is guessed.
+         */
+        ModelWindowOut: {
+            /** Model */
+            model: string;
+            source: components["schemas"]["WindowSource"] | null;
+            /** Tokens */
+            tokens: number | null;
+        };
+        /** ModelWindowsOut */
+        ModelWindowsOut: {
+            /** Windows */
+            windows: components["schemas"]["ModelWindowOut"][];
+        };
         /** PriceListIn */
         PriceListIn: {
             /** Refresh */
@@ -948,6 +990,8 @@ export interface components {
             /** @default text */
             modality?: components["schemas"]["Modality"];
             price?: components["schemas"]["CuratedPrice"] | null;
+            /** User Context Window */
+            user_context_window?: number | null;
         };
         /**
          * ProviderModelsOut
@@ -1285,6 +1329,11 @@ export interface components {
             /** Web Search Requests */
             web_search_requests: number;
         };
+        /**
+         * WindowSource
+         * @enum {string}
+         */
+        WindowSource: "user" | "endpoint" | "bundled";
     };
     responses: never;
     parameters: never;
@@ -2095,6 +2144,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    model_windows_api_v1_providers__uid__windows_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelPricesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelWindowsOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

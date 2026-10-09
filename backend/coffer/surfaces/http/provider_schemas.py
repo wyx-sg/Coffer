@@ -22,7 +22,6 @@ from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import CuratedPrice, Protocol
 from coffer.domain.provider.local_runtime import LocalRuntime
 from coffer.domain.provider.modality import Modality
-from coffer.domain.usage.pricing import PriceSource
 from coffer.surfaces.http.handoff_schemas import HandoffOut
 
 
@@ -38,9 +37,12 @@ class ProviderModel(BaseModel):
 
     id: str = Field(min_length=1, max_length=200)
     modality: Modality = Modality.TEXT
-    #: The context window the endpoint serves the model with, in tokens;
-    #: ``None`` when unknown (never guessed).
+    #: The context window the endpoint reports serving the model with, in
+    #: tokens; ``None`` when unknown (never guessed).
     context_window: int | None = Field(default=None, ge=1024, le=100_000_000)
+    #: The window the person set for the model on this connection; it wins
+    #: over the endpoint's and the bundled list's. ``None``: not set.
+    user_context_window: int | None = Field(default=None, ge=1024, le=100_000_000)
     #: This connection's own price for the model (USD per million tokens);
     #: ``None``: the provider API's, the bundled list's, or none.
     price: CuratedPrice | None = None
@@ -149,41 +151,6 @@ class ProviderListOut(BaseModel):
     """Every connection, by name."""
 
     providers: list[ProviderOut]
-
-
-class ModelPricesIn(BaseModel):
-    """The models whose price on this provider to resolve."""
-
-    models: list[str] = Field(max_length=1000)
-
-
-class ModelPriceOut(BaseModel):
-    """One model's price on a provider and where it came from (spec
-    provider-switching "Resolve each model's price from the provider, its API,
-    or the bundled list"). USD per million tokens; ``source`` ``None`` means no
-    price is known and every rate is ``None`` — shown as "—", never as zero.
-    ``source_name`` names the provider whose API reported it (``provider``) or
-    the price list's provider (``bundled``). ``tiered``: the rates shown are
-    the base tier; past a threshold of input tokens the request pays more."""
-
-    model: str
-    source: PriceSource | None = None
-    source_name: str | None = None
-    input: float | None = None
-    output: float | None = None
-    cache_write_5m: float | None = None
-    cache_write_1h: float | None = None
-    cache_read: float | None = None
-    tiered: bool = False
-    #: For ``bundled``: the day the price list in use was taken from
-    #: genai-prices — "Bundled · updated <date>".
-    source_updated: date | None = None
-
-
-class ModelPricesOut(BaseModel):
-    prices: list[ModelPriceOut]
-    #: The price list in use (``genai-prices@<commit or refresh day>…``).
-    bundled_version: str
 
 
 class PriceListOut(BaseModel):

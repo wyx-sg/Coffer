@@ -1,6 +1,7 @@
 // frontend/src/lib/hooks/useProviderPrices.ts — prices and the proxy route (spec provider-switching).
 //
 // Model prices resolve on the daemon (You set → the provider's own API → the
+// bundled list), and so do context windows (You set → the endpoint → the
 // bundled list); an agent's route names the provider it runs on.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -16,6 +17,19 @@ export function useModelPrices(uid: string, models: readonly string[], listedAt:
   return useQuery({
     queryKey: providerPricesKey(uid, models, listedAt),
     queryFn: async () => (await providersApi.prices(uid, [...models])).prices,
+    enabled: uid !== "" && models.length > 0,
+    placeholderData: (previous) => previous,
+  });
+}
+
+/** Each of `models`' context window on the provider (you set → endpoint →
+ *  bundled list); refetched after every listing, like prices. */
+export function useModelWindows(uid: string, models: readonly string[], listedAt: number) {
+  return useQuery({
+    // Under "providers" so saving a provider refetches it, as prices are
+    // (kept here: queryKeys.ts is at its size limit).
+    queryKey: ["providers", uid, "windows", models, listedAt] as const,
+    queryFn: async () => (await providersApi.windows(uid, [...models])).windows,
     enabled: uid !== "" && models.length > 0,
     placeholderData: (previous) => previous,
   });

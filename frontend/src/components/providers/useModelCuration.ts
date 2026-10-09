@@ -9,7 +9,10 @@
 // picked on a row not offered yet is held here until its switch carries it in
 // (spec provider-switching "Introspect the endpoint when the Models tab opens").
 // Bulk on/off (`setMany`) computes the new set from the same base and saves once.
-// A failed or empty probe leaves the stored selection exactly as it was.
+// A failed or empty probe leaves the stored selection exactly as it was. A row
+// switched on keeps the window the endpoint reported for it, so the projection
+// can tell the agent (spec provider-switching "Resolve each provider model's
+// context window").
 import { useState } from "react";
 
 import type { CuratedPrice, Modality, Provider, ProviderModel } from "@/lib/api/providers";
@@ -34,16 +37,22 @@ export function useModelCuration(provider: Provider, fetched: readonly ProviderM
   const write = (models: ProviderModel[]) =>
     update.mutate({ uid: provider.uid, patch: { models } });
 
+  /** A row as a new curated entry: its kind and the window the endpoint reported. */
+  const entry = (row: ProviderModel): ProviderModel => ({
+    id: row.id,
+    modality: modalityOf(row),
+    ...(row.context_window ? { context_window: row.context_window } : {}),
+  });
+
   /** The explicit list equivalent to what is on screen right now. */
-  const materialised = (): ProviderModel[] =>
-    unrestricted ? fetched.map((m) => ({ id: m.id, modality: modalityOf(m) })) : selected;
+  const materialised = (): ProviderModel[] => (unrestricted ? fetched.map(entry) : selected);
 
   const toggle = (row: ProviderModel) => {
     const base = materialised();
     write(
       base.some((m) => m.id === row.id)
         ? base.filter((m) => m.id !== row.id)
-        : [...base, { id: row.id, modality: modalityOf(row) }],
+        : [...base, entry(row)],
     );
   };
 
@@ -53,12 +62,7 @@ export function useModelCuration(provider: Provider, fetched: readonly ProviderM
     const ids = new Set(picked.map((m) => m.id));
     write(
       on
-        ? [
-            ...base,
-            ...picked
-              .filter((m) => !base.some((b) => b.id === m.id))
-              .map((m) => ({ id: m.id, modality: modalityOf(m) })),
-          ]
+        ? [...base, ...picked.filter((m) => !base.some((b) => b.id === m.id)).map(entry)]
         : base.filter((m) => !ids.has(m.id)),
     );
   };
@@ -82,7 +86,18 @@ export function useModelCuration(provider: Provider, fetched: readonly ProviderM
     write(
       base.some((m) => m.id === row.id)
         ? base.map((m) => (m.id === row.id ? { ...m, price } : m))
-        : [...base, { id: row.id, modality: modalityOf(row), price }],
+        : [...base, { ...entry(row), price }],
+    );
+  };
+
+  /** Record the window the user set on a model ("You set"), or `null` to reset
+   *  it — written out the way a price is. */
+  const setWindow = (row: ProviderModel, tokens: number | null) => {
+    const base = materialised();
+    write(
+      base.some((m) => m.id === row.id)
+        ? base.map((m) => (m.id === row.id ? { ...m, user_context_window: tokens } : m))
+        : [...base, { ...entry(row), user_context_window: tokens }],
     );
   };
 
@@ -94,6 +109,7 @@ export function useModelCuration(provider: Provider, fetched: readonly ProviderM
     setMany,
     setModality,
     setPrice,
+    setWindow,
     pending: update.isPending,
     unrestricted,
   };

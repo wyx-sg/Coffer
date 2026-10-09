@@ -25,7 +25,7 @@ from coffer.domain.agent.tiers import is_claude_model_id, suggest_tier_models
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.codex_projection import CodexAuthCommand
 from coffer.domain.provider.config import Protocol
-from coffer.domain.provider.model_binding import ModelBinding, ProjectedModel, find_model
+from coffer.domain.provider.model_binding import ModelBinding, ProjectedModel
 from coffer.domain.provider.projection import (
     apply_anthropic_settings,
     apply_codex_provider,
@@ -59,6 +59,9 @@ class ProviderProjectionRequest:
     models: tuple[ProjectedModel, ...] = ()
     #: The connection is a model runtime on this machine.
     local: bool = False
+    #: The window the bound model resolves to on the connection (you set →
+    #: endpoint → bundled list), curated or not; ``None``: unknown.
+    context_window: int | None = None
 
     @property
     def model_ids(self) -> tuple[str, ...]:
@@ -150,7 +153,7 @@ class ClaudeCodeProviderProjection:
     def apply(
         self, text: str, req: ProviderProjectionRequest, config_file: pathlib.Path
     ) -> ProjectionPlan:
-        chosen = find_model(req.models, req.binding.model)
+        model = req.binding.model
         return ProjectionPlan(
             apply_anthropic_settings(
                 text,
@@ -163,7 +166,11 @@ class ClaudeCodeProviderProjection:
                 # fail: an endpoint that serves no Claude ids.
                 replace_builtin_picker=not any(is_claude_model_id(m) for m in req.model_ids),
                 local=req.local,
-                local_context_window=chosen.context_window if chosen else None,
+                # Claude Code knows a Claude id's window itself and assumes 200k
+                # for any other id; the resolved window corrects that.
+                context_window=(
+                    req.context_window if model and not is_claude_model_id(model) else None
+                ),
             )
         )
 

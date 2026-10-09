@@ -250,3 +250,51 @@ async def test_model_labels_name_each_choice_and_spell_out_the_1m_variant(
         "claude-fable-5-1[1m]": "Fable 1M",
         "custom-model": "custom-model",
     }
+
+
+class _FakeNativeDefault:
+    def __init__(self, model: str | None) -> None:
+        self.model = model
+
+    async def read(self, *, agent_key: str, config_dir: pathlib.Path | None) -> str | None:
+        return self.model
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching", scenario="a default names the model it resolves to only when known"
+)
+async def test_the_default_resolves_to_the_config_model_then_the_reported_builtin() -> None:
+    """The config's model wins; with none, the model the agent itself marks as its
+    default; with neither (Claude Code says nothing), no model at all."""
+    reported = [AgentModel("gpt-5"), AgentModel("gpt-5-codex", "GPT-5 Codex", is_default=True)]
+    silent = [AgentModel("opus", "Opus 5.5"), AgentModel("sonnet", "Sonnet 5.5")]
+
+    def svc(models: list[AgentModel], native: str | None) -> AgentModelCatalogueService:
+        return AgentModelCatalogueService(
+            agents=_FakeAgents([]),
+            discovery=_FakeDiscovery(models),
+            native_default=_FakeNativeDefault(native),
+        )
+
+    configured = svc(reported, "gpt-5")
+    assert await configured.resolved_default("codex") == "gpt-5"
+
+    builtin = svc(reported, None)
+    assert (await builtin.builtin_default("codex")) == reported[1]
+    assert await builtin.resolved_default("codex") == "gpt-5-codex"
+
+    unknown = svc(silent, None)
+    assert await unknown.builtin_default("claude_code") is None
+    assert await unknown.resolved_default("claude_code") is None
+
+
+async def test_a_connection_that_replaces_codexs_list_reports_no_builtin_default() -> None:
+    """While Coffer's catalogue replaces Codex's own list, Codex would only echo
+    the connection's ids back, so nothing is named as its built-in default."""
+    svc = AgentModelCatalogueService(
+        agents=_FakeAgents([]),
+        discovery=_FakeDiscovery([AgentModel("gpt-5-codex", is_default=True)]),
+        provider_models=_FakeConnection(["deepseek-flash"]),
+    )
+
+    assert await svc.builtin_default("codex") is None

@@ -2476,6 +2476,7 @@
         "route": "Route",
         "test": "Test",
         "auto": "Built-in default",
+        "autoNamed": "Built-in default ({{model}})",
         "routeProxy": "Through Coffer’s proxy",
         "reachable": "reachable",
         "routeDirect": {
@@ -2566,7 +2567,7 @@
         "label": "Provider",
         "none": "No other compatible provider yet. <link>Add one in Model providers</link>",
         "hint": {
-          "claude_code": "Built-in login, or a provider from Model providers.",
+          "claude_code": "Built-in login, or a provider from Model providers. It changes the Claude Code CLI only: the Claude desktop app keeps its own model settings.",
           "codex": "Built-in login (ChatGPT account), or a provider from Model providers."
         }
       },
@@ -2617,6 +2618,7 @@
         "version": "v{{version}}"
       },
       "builtinDefault": "Built-in default",
+      "builtinDefaultNamed": "Built-in default ({{model}})",
       "detail": {
         "mcpMissing": "MCP entry missing",
         "hookStale": "Memory hook is out of date",
@@ -3592,6 +3594,7 @@
         "default": "Default agent",
         "model": "Default model",
         "modelDefault": "Provider default",
+        "modelDefaultNamed": "Provider default ({{model}})",
         "reach": "Agents it may drive",
         "help": "Each message becomes a conversation in Conversations, on the default agent unless /new names another.",
         "reachHint": "/new <agent> in a chat picks only from these."
@@ -6074,6 +6077,7 @@
       "cols": {
         "model": "Model",
         "price": "Price",
+        "window": "Window",
         "type": "Type"
       }
     },
@@ -6218,7 +6222,23 @@
       "providers": "Providers",
       "usage": "Usage"
     },
-    "latency": "{{ms}} ms"
+    "latency": "{{ms}} ms",
+    "window": {
+      "source": {
+        "user": "You set",
+        "endpoint": "From the endpoint",
+        "bundled": "Bundled"
+      },
+      "set": "Set window…",
+      "reset": "Reset to default",
+      "noneAria": "No context window known for {{id}}",
+      "editAria": "{{id}}: {{tokens}} tokens, change the context window",
+      "dialogTitle": "Context window of {{id}}",
+      "dialogBody": "How many tokens this provider serves the model with. Coffer tells Claude Code and Codex this window, so they compact at the right point. It wins over what the endpoint reports and Coffer's bundled list.",
+      "field": "Context window",
+      "hint": "Tokens, for example 128000, 128k or 1m.",
+      "invalid": "Enter a number of tokens between 1k and 100m."
+    }
   },
   "skillSources": {
     "add": {

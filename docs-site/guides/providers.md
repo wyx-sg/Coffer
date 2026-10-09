@@ -43,7 +43,7 @@ Coffer keeps each provider's health itself, so a broken one shows before you ope
 
 Open **Model providers** and click **Add provider**. The dialog has two steps.
 
-1. **Endpoint.** Pick a **Vendor** from the grid — **Anthropic**, **OpenAI**, **Google Gemini**, **DeepSeek**, **OpenRouter**, **Ollama**, **LM Studio** — which fills in the protocol and base URL, or **Custom** for a gateway or relay, which asks for the protocol by what can use it: **OpenAI-compatible** (Codex and chat) or **Anthropic-compatible** (Claude Code and chat). Give it a **Name** and, under **API key**, pick a secret Coffer already holds or paste a new key; a pasted key becomes a new secret in this Mac's keychain-encrypted store and is never shown again. **Test** lists the endpoint's models with that key — "Connected in 180 ms", or "The endpoint rejected the key (401)" — and nothing is saved until you add the provider. A stored key is sent only to the endpoint of the connection that holds it, so testing one against a new endpoint reads "Not tested: this stored key can't go to this endpoint yet" and sends nothing: paste the key to test it, or add the provider, approve its key for the endpoint, and test it from the provider's page. Missing or malformed fields are named under each field.
+1. **Endpoint.** Pick a **Vendor** from the grid — **Anthropic**, **OpenAI**, **Google Gemini**, **DeepSeek**, **OpenRouter**, **Ollama**, **LM Studio** — which fills in the protocol and base URL, or **Custom** for a gateway or relay, which asks for the protocol by what can use it: **OpenAI-compatible** (Codex and chat) or **Anthropic-compatible** (Claude Code and chat). **DeepSeek** asks the same, because it serves the two at different addresses: **OpenAI-compatible** fills `https://api.deepseek.com` (for Codex), **Anthropic-compatible** fills `https://api.deepseek.com/anthropic` (for Claude Code). To use DeepSeek from both agents, add it twice, once per protocol, and pick the same stored key the second time. Give it a **Name** and, under **API key**, pick a secret Coffer already holds or paste a new key; a pasted key becomes a new secret in this Mac's keychain-encrypted store and is never shown again. **Test** lists the endpoint's models with that key — "Connected in 180 ms", or "The endpoint rejected the key (401)" — and nothing is saved until you add the provider. A stored key is sent only to the endpoint of the connection that holds it, so testing one against a new endpoint reads "Not tested: this stored key can't go to this endpoint yet" and sends nothing: paste the key to test it, or add the provider, approve its key for the endpoint, and test it from the provider's page. Missing or malformed fields are named under each field.
 2. **Models.** Tick the models the provider should offer, with search and a type filter. Nothing ticked means every model the endpoint serves is offered. **Add provider** saves it and opens it.
 
 Choosing **Ollama** or **LM Studio** takes the local path instead: no key, and Coffer looks for a runtime on this Mac (see [Local model runtimes](#local-model-runtimes)). The next step stays greyed out until a runtime is detected, and the **Name** field appears once a runtime is chosen.
@@ -78,6 +78,10 @@ The file Coffer writes is chosen by the **agent**, not by the protocol. Reaching
 6. Click **Apply**. Coffer writes the files and records the model and the provider on the agent in one step. If a file changed after the review was drawn, nothing is written and the review offers **Reload preview**. After a successful apply a notice says the change takes effect once you restart that agent; sessions already open keep the old setting.
 
 Picking the **Built-in login** puts the agent back on its own login; the form then asks only for its **Model** — the agent's own default, or one of its own models. The details of the form are in [Change an agent's model](/guides/agents#change-an-agent-s-model).
+
+**Built-in default** names the model it runs on when the agent itself reports it, as in **Built-in default (GPT-5 Codex)**: Codex marks its default model. Claude Code picks its default from your account at each turn and nothing on your machine records it, so with no model in its own config it reads plain **Built-in default**.
+
+Switching Claude Code changes the Claude Code CLI only. The Claude desktop app reads its model routing from its own third-party inference settings, not from `settings.json`, so it keeps its own model.
 
 The agent's **Overview › Model** section then reads the provider, the model and the **Route** — through Coffer's proxy, with a **Test** button. **Rotate proxy token**, which replaces the agent's own local token for Coffer's proxy, is in the agent page's **⋯** menu, offered only while the agent runs on a provider; the built-in login bypasses the proxy.
 
@@ -119,6 +123,7 @@ Coffer merges only its own keys into the agent's file and leaves everything else
 - **The model** goes in the top-level `model` key, which `/model` also saves to, so choosing another model inside Claude Code sticks. Coffer writes no effort key: the agent runs at the effort its own configuration names, and an `effortLevel` an earlier version wrote stays in your file as your own setting.
 - **Every tier is pinned.** Claude Code asks for models by tier — Opus, Sonnet, Haiku (which also runs its background tasks) and Fable. On an endpoint that serves no Claude ids each tier is the agent's model; on a gateway serving Claude ids each tier is the model whose name carries it. **Model per tier** in the Change model dialog sets one yourself.
 - **`modelPicker`** puts the provider's models in `/model`, replacing the built-in rows when the provider serves no Claude ids.
+- **`CLAUDE_CODE_MAX_CONTEXT_TOKENS`** is the agent's model's context window, when the model is not a Claude model and its window is known (see [Context windows](#context-windows)). Claude Code otherwise assumes 200k tokens for a model it does not know, warns that it "isn't described by this version's model catalog", and compacts there. The value holds for the session: a model you pick later with `/model` keeps it until Coffer switches the agent again.
 
 The helper names the `coffer` CLI by absolute path (shell-quoted if the path holds a space), because Claude Code started from the Dock or Finder does not get your login shell's `PATH`. For an install under `~/.coffer/bin` the path is the stable `~/.coffer/bin/coffer`, so an upgrade does not break it.
 
@@ -140,7 +145,7 @@ auth = { command = "/Users/you/.coffer/bin/coffer", args = ["proxy", "token", "-
 
 The file is edited with `tomlkit`, so your comments and key order survive. Codex runs the `auth` command for its token itself, so a Codex you start in your own terminal needs nothing exported (`timeout_ms` raises Codex's 5 second default so a cold start is not cut off), and no key is in any Codex process's environment. The command-backed `auth` table needs **Codex 0.155.1 or later**. `supports_websockets = false` keeps Codex from trying the Responses WebSocket transport first, which stalls against any base URL but OpenAI's.
 
-When the provider curates models, Coffer writes its own catalogue next to `config.toml` so Codex's picker lists them. Each entry carries the model's context window, and an auto-compact limit at 90% of it, from what the provider records for the model. Coffer writes no `model_reasoning_effort`; one an earlier version wrote stays in your file as your own setting.
+When the provider curates models, Coffer writes its own catalogue next to `config.toml` so Codex's picker lists them. Each entry carries the model's context window, and an auto-compact limit at 90% of it, where the model's window is known (see [Context windows](#context-windows)). Coffer writes no `model_reasoning_effort`; one an earlier version wrote stays in your file as your own setting.
 
 Reverting to the built-in login removes exactly the keys Coffer wrote. The form there also sets the agent's own `model` (or clears it to the built-in default), and a `model` you changed since with `/model` is yours and stays, and so is any effort key an earlier version wrote.
 
@@ -163,7 +168,7 @@ A gateway account often serves dozens of models when you use two or three. The p
 
 1. Open **Model providers** and choose the provider.
 2. Scroll to **Models**. Coffer lists the endpoint's models when the provider opens, and says when it last did; **Refresh**, beside the section's title, asks again. If listing fails, the title reads **Listing failed · last listed &lt;date&gt;**, a box says what failed, and **Refresh** is the way to try again; your current selection is left alone and still offered. An endpoint that lists nothing says so: leave it like that and every model the endpoint accepts stays available.
-3. Switch on the models to offer, and correct each one's **Type** if the guess is wrong — it reads as plain text with a chevron and opens a menu: **Text / chat**, **Embedding**, **Image**, **Video** or **Audio**. A search and a **Type** filter narrow the list; a model speech to text or an agent uses carries a tag saying so. The list is a table — Model, Price, Type — and rows can be ticked (the header box ticks every model the search and filter show): a selection bar then replaces the search with **Turn on** and **Turn off** for the ticked models.
+3. Switch on the models to offer, and correct each one's **Type** if the guess is wrong — it reads as plain text with a chevron and opens a menu: **Text / chat**, **Embedding**, **Image**, **Video** or **Audio**. A search and a **Type** filter narrow the list; a model speech to text or an agent uses carries a tag saying so. The list is a table — Model, Price, Window, Type — and rows can be ticked (the header box ticks every model the search and filter show): a selection bar then replaces the search with **Turn on** and **Turn off** for the ticked models.
 
 Only switched-on models appear in agent, chat and channel pickers, and chat pickers list text models only. (The section's help tip says so too.)
 
@@ -176,6 +181,15 @@ The line under the **Models** title says once where most prices come from — "b
 - **Bundled · updated `<date>`** — Coffer's price list: pydantic's genai-prices, with Coffer's own Anthropic rates for the newest models. It knows prices per provider, historical prices and long-context tiers. A copy ships with each release, and the daemon refreshes it from genai-prices once a day; the date is when the data in use was taken. **Refresh model prices** in **Settings › General** turns the refresh off on a firewalled machine. No price is ever looked up while a request is being costed.
 - **Local · no cost** — a model runtime on this Mac.
 - **—** — nothing prices it, with **Set price…**. [Usage](/guides/usage) shows `—` for it until you set one.
+
+### Context windows {#context-windows}
+
+The **Window** column shows each model's context window ("1M", "128K") and where it came from. Coffer tells Claude Code and Codex this window so they compact at the right point:
+
+- **You set** — a window you recorded for the model on this provider; it wins. Click the window, or **Set window…**, to open a form with one field in tokens (`128000`, `128k` or `1m`) and, at the bottom left, **Reset to default**, which removes it.
+- **From the endpoint** — the provider reported it when its models were listed (Anthropic, OpenRouter, some gateways and local runtimes do).
+- **Bundled** — the window Coffer's price list records for the model at this provider.
+- **—** — nothing knows it, with **Set window…**. Coffer then writes no window, and Claude Code uses its own default (200k for a model it does not know).
 
 An empty selection means no restriction: every model the endpoint serves. Model ids are passed to the vendor verbatim and never checked against a list inside Coffer. The one exception is a connection with a selection: if a client asks it for a model outside that selection (the Codex desktop app under a workspace model policy does this on every new thread), Coffer's proxy substitutes the agent's default model for that request and logs the swap.
 
@@ -236,6 +250,7 @@ The two memory passes that run on a timer, reading agents' memory and turning it
 | The agent gets `503` "no connection is active" from the proxy | The provider the agent runs on was disabled, no longer reaches the agent, or its key is missing | Check the provider's reach and key. |
 | The agent gets `401` from the proxy | The helper printed no token, or a stale one | Run the `apiKeyHelper` / `auth` command from the agent's file yourself; **Rotate proxy token** in the agent page's **⋯** menu issues a fresh one. |
 | Nothing answers on `127.0.0.1:38471` | The proxy is not running | The daemon restarts a crashed proxy within a few seconds; `coffer daemon status` shows whether the daemon is up. |
+| Claude Code says "There's an issue with the selected model (…)" on every turn | The provider answered 404. Usually it serves no Anthropic-compatible API at its base URL (an OpenAI-compatible provider such as DeepSeek at `https://api.deepseek.com`); otherwise it does not serve that model id | `~/.coffer/logs/proxy.log` has a `model_proxy.upstream_failed … status=404` line naming the model. Add the provider again as **Anthropic-compatible** at its Anthropic address (DeepSeek: `https://api.deepseek.com/anthropic`) and switch Claude Code to it; **Change model** tests the provider the way Claude Code calls it, so a provider that cannot serve Claude Code fails there. |
 | The agent page shows the built-in login | Coffer's regular check found the agent's config no longer carries the projection, and cleared the agent's provider rather than re-route it | Switch again if you still want the provider. |
 
 ## Related

@@ -317,6 +317,27 @@ describe("ChangeModelDialog", () => {
 
   acceptance(
     "provider-switching",
+    "Claude Code tests an OpenAI-protocol connection on the Anthropic wire",
+    async () => {
+      const openai = { ...PROVIDER, protocol: "openai" } as Provider;
+      call.mockImplementation(async (path: string) => {
+        if (path === "/providers") return { providers: [openai] };
+        if (path.startsWith("/agent-providers/")) return { models: [], default_model: null };
+        if (path === "/models/test-connection") return testResult;
+        throw new Error(`unexpected ${path}`);
+      });
+      renderDialog();
+      const model = await screen.findByRole("combobox", { name: "Default model" });
+      fireEvent.keyDown(model, { key: "ArrowDown" });
+      fireEvent.click(await screen.findByRole("option", { name: "m2" }));
+      expect(await screen.findByText(/Connection OK/)).toBeInTheDocument();
+      const probe = call.mock.calls.find(([p]) => p === "/models/test-connection");
+      expect((probe?.[1] as { body: unknown }).body).toMatchObject({ provider: "anthropic" });
+    },
+  );
+
+  acceptance(
+    "provider-switching",
     "a failed connection test keeps Review changes off and offers Retry",
     async () => {
       testResult = { ok: false, message: "401 unauthorized" };
@@ -346,5 +367,42 @@ describe("ChangeModelDialog", () => {
     );
     expect(call.mock.calls.filter(([p]) => p === "/models/test-connection")).toHaveLength(0);
     expect(within(dialog).queryByText(/Connection OK|Testing connection/)).toBeNull();
+  });
+
+  acceptance(
+    "provider-switching",
+    "the Change model dialog names what a Claude Code switch reaches",
+    async () => {
+      renderDialog();
+      const dialog = await screen.findByRole("dialog");
+      expect(
+        await within(dialog).findByText(/Claude Code CLI only: the Claude desktop app keeps/),
+      ).toBeInTheDocument();
+    },
+  );
+
+  test("Codex's Built-in default names the model Codex reports as its default", async () => {
+    call.mockImplementation(async (path: string, opts) => {
+      if (path === "/providers") return { providers: [] };
+      if (path.startsWith("/agent-providers/"))
+        return {
+          models: [{ id: "gpt-5-codex", label: "GPT-5 Codex", description: "" }],
+          default_model: null,
+          builtin_default: { id: "gpt-5-codex", label: "GPT-5 Codex", description: "" },
+          resolved_default: "gpt-5-codex",
+        };
+      throw new Error(`unexpected ${opts.method} ${path}`);
+    });
+    renderDialog({
+      ...AGENT,
+      uid: "u-cx",
+      type: "codex",
+      config_dir: "/Users/me/.codex",
+      connection_uid: null,
+      model: null,
+      tier_models: null,
+    });
+    const model = await screen.findByRole("combobox", { name: "Default model" });
+    await waitFor(() => expect(model).toHaveTextContent("Built-in default (GPT-5 Codex)"));
   });
 });

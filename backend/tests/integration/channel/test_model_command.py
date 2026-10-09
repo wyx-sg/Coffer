@@ -79,7 +79,7 @@ async def test_default_clears_the_model(env: ChannelEnv) -> None:
 
     assert await _config(env, resource) is None
     assert await _sticky(env, resource) is None
-    assert adapter.texts()[-1] == "Model: the agent's default — from your next message"
+    assert adapter.texts()[-1] == "Model: Default model — from your next message"
 
 
 async def test_bare_model_without_buttons_answers_in_text(env: ChannelEnv) -> None:
@@ -89,8 +89,23 @@ async def test_bare_model_without_buttons_answers_in_text(env: ChannelEnv) -> No
     await env.processor.on_message(inbound("tg", "owner", "/model"))
 
     [text] = adapter.texts()
-    assert text.startswith("Model: default model")
+    assert text.startswith("Model: Default model")
     assert "Available: opus, sonnet" in text
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="the default model names the model it resolves to"
+)
+async def test_the_default_model_names_the_model_it_resolves_to(env: ChannelEnv) -> None:
+    env.model_suggestions.add("builtin", ["gpt-5-codex"], labels={"gpt-5-codex": "GPT-5 Codex"})
+    env.model_suggestions.set_default("builtin", "gpt-5-codex")
+    _resource, adapter = await env.paired_channel()
+
+    await env.processor.on_message(inbound("tg", "owner", "/model default"))
+    await env.processor.on_message(inbound("tg", "owner", "/model"))
+
+    assert adapter.texts()[0] == "Model: Default model (GPT-5 Codex) — from your next message"
+    assert adapter.texts()[1].startswith("Model: Default model (GPT-5 Codex)")
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a model card button shows the model's name")

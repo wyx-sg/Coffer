@@ -272,6 +272,7 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Agents · switch model · review | `POST /providers/model-switch/preview` | `coffer provider switch preview` | `test_cli_parity.py` |
 | Model providers · Use for transcription | `POST /providers/{uid}/transcribe-default` | `coffer provider transcribe-default` | `test_cli_parity.py` |
 | Model providers · edit a connection | `PATCH /providers/{uid}` | `coffer provider update` | `test_cli_parity.py` |
+| Model providers · model context windows | `POST /providers/{uid}/windows` | `coffer provider windows` | `test_cli_parity.py` |
 
 ## `coffer proxy` {#proxy}
 

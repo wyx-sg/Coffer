@@ -857,6 +857,7 @@ def test_curated_models_round_trip(tmp_path, monkeypatch):
         # ``text``, the kind every curated set held before modalities existed.
         unknown = {
             "context_window": None,
+            "user_context_window": None,
             "price": None,
         }
         curated_set = [
@@ -912,6 +913,7 @@ def test_uncurated_connection_is_unrestricted(tmp_path, monkeypatch):
                 "id": "opus",
                 "modality": "text",
                 "context_window": None,
+                "user_context_window": None,
                 "price": None,
             }
         ]

@@ -869,6 +869,57 @@ paths:
       summary: Set Transcribe Default Provider
       tags:
       - providers
+  /api/v1/providers/{uid}/windows:
+    post:
+      description: |-
+        Each model's context window on this provider, with its source: You set,
+        the endpoint, or the bundled list — or none (spec provider-switching
+        "Resolve each provider model's context window"). Read-only; nothing is
+        fetched from the network.
+      operationId: model_windows_api_v1_providers__uid__windows_post
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelPricesIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelWindowsOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Model Windows
+      tags:
+      - providers
   /api/v1/proxy/status:
     get:
       description: The supervised proxy's state, as the daemon last saw it.
@@ -1812,6 +1863,42 @@ components:
       - files
       title: ModelSwitchOut
       type: object
+    ModelWindowOut:
+      description: |-
+        One model's context window on a provider and where it came from (spec
+        provider-switching "Resolve each provider model's context window").
+        ``source`` ``None`` means no window is known and ``tokens`` is ``None``:
+        nothing is written for it, nothing is guessed.
+      properties:
+        model:
+          title: Model
+          type: string
+        source:
+          anyOf:
+          - $ref: '#/components/schemas/WindowSource'
+          - type: 'null'
+        tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Tokens
+      required:
+      - model
+      - tokens
+      - source
+      title: ModelWindowOut
+      type: object
+    ModelWindowsOut:
+      properties:
+        windows:
+          items:
+            $ref: '#/components/schemas/ModelWindowOut'
+          title: Windows
+          type: array
+      required:
+      - windows
+      title: ModelWindowsOut
+      type: object
     PriceListIn:
       properties:
         refresh:
@@ -2058,6 +2145,13 @@ components:
           anyOf:
           - $ref: '#/components/schemas/CuratedPrice'
           - type: 'null'
+        user_context_window:
+          anyOf:
+          - maximum: 100000000.0
+            minimum: 1024.0
+            type: integer
+          - type: 'null'
+          title: User Context Window
       required:
       - id
       title: ProviderModel
@@ -2703,3 +2797,10 @@ components:
       - estimated_cost_usd
       title: UsageTotalsOut
       type: object
+    WindowSource:
+      enum:
+      - user
+      - endpoint
+      - bundled
+      title: WindowSource
+      type: string

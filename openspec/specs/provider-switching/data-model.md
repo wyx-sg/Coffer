@@ -108,7 +108,7 @@ value object.
 Pure (I/O-free) functions that take the file's existing text and return the new
 text, analogous to `domain/agent/mcp_install.py`'s `apply_install`.
 
-- `apply_anthropic_settings(text, *, base_url, api_key_helper, model, tier_models, picker_models, replace_builtin_picker, local, local_context_window, loopback_proxy) -> str`
+- `apply_anthropic_settings(text, *, base_url, api_key_helper, model, tier_models, picker_models, replace_builtin_picker, local, context_window, loopback_proxy) -> str`
   and its inverse `remove_anthropic_settings(text, *, managed_model) -> str`
 - `apply_codex_provider(text, *, base_url, model, display_name, auth, provider_id, catalog_path) -> str`
   (in `domain/provider/codex_projection.py`) and its inverse
@@ -149,12 +149,13 @@ is preserved, and the projection tests assert exactly this set.
 | `model` | the AGENT binding's `model`; left untouched when unbound, removed on de-projection only while it still equals the binding |
 | `env.ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU,FABLE}_MODEL` | the binding's `tier_models`, else Coffer's suggestion (`suggest_tier_models`); an unpinned tier is removed |
 | `modelPicker` | the connection's curated text models, each option described `via Coffer` (the ownership marker); `replaceBuiltInOptions` true when no curated id is a Claude id |
-| `env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` / `env.CLAUDE_CODE_MAX_CONTEXT_TOKENS` | a local runtime only: `"1"` and the chosen model's recorded window |
+| `env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` | a local runtime only: `"1"` |
+| `env.CLAUDE_CODE_MAX_CONTEXT_TOKENS` | the chosen model's recorded window, when it records one and is not a Claude id, on any connection |
 
 `ANTHROPIC_API_KEY` is never written — it would override the helper.
 
-What is Coffer's: the `env` keys above (base URL, tier pins, the two
-local-runtime keys and the `NO_PROXY` pair) carry no mark of their own, so they
+What is Coffer's: the `env` keys above (base URL, tier pins, the
+compatibility and window keys and the `NO_PROXY` pair) carry no mark of their own, so they
 are Coffer's only while Coffer's `apiKeyHelper` is in the file. A file whose
 helper is absent or the user's own, but which holds an `ANTHROPIC_BASE_URL` or
 tier pins, is the user's own gateway setup: de-projection leaves it byte-for-byte
@@ -179,7 +180,8 @@ recognises it — the `coffer` CLI (bare or by any path) followed by
 | `model_providers.coffer.auth` | `{command = "<absolute path to coffer>", args = ["proxy", "token", "--agent-uid", "<agent uid>"]}` |
 
 Each catalogue entry carries `context_window`, `max_context_window` and
-`auto_compact_token_limit` (90%) when the curated model records a window, and
+`auto_compact_token_limit` (90%) when the model's window resolves (you set →
+endpoint → bundled list), and
 an empty `supported_reasoning_levels` (Codex's parser requires the field) and no `default_reasoning_level`. Coffer writes no `model_reasoning_effort`; one in the file is the user's own.
 
 The catalogue file is written before `config.toml` points at it, and the
@@ -386,7 +388,8 @@ from the stored document when unset.
 
 ### Curated-model facts
 
-`CuratedModel` gains `context_window` and
+`CuratedModel` gains `context_window` (what the endpoint reported),
+`user_context_window` (what the person set; it wins) and
 `price` (`CuratedPrice {input, output, cache_write_5m?, cache_write_1h?,
 cache_read?, web_search?}`, USD per million tokens / per thousand searches), each
 omitted from the stored document while unknown. The retired `effort_levels` and `default_effort` keys are dropped before validation, so a connection stored before reasoning effort was removed still loads and loses them on its next write.
