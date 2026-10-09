@@ -176,7 +176,7 @@ The vocabulary is a closed enumeration, defined in the domain layer.
 | Resources | `resource_created`, `resource_updated`, `resource_enabled`, `resource_disabled`, `resource_deleted`, `resource_renamed`, `resource_scope_updated` |
 | MCP capabilities | `capability_enabled`, `capability_disabled` |
 | Daemon | `token_rotated`, `daemon_residency_updated`, `daemon_restarted`, `retention_updated`, `internal_engine_model_set` |
-| Secrets | `secret_set`, `secret_revealed`, `secret_deleted`, `master_key_relocated`, `secret_resolved`, `secret_local_access_revoked`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected` |
+| Secrets | `secret_set`, `secret_revealed`, `secret_deleted`, `secret_resolved`, `secret_local_access_revoked`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected` |
 | Agents | `agent_mcp_installed`, `agent_mcp_uninstalled`, `agent_mcp_entry_removed`, `agent_mcp_entry_adopted`, `agent_plugin_toggled`, `agent_plugin_uninstalled` |
 | Skills | `skill_imported`, `skill_updated`, `skill_update_merged`, `skill_bound`, `skill_unbound`, `skill_relinked`, `skill_drift_remediated`, `skill_adopted`, `skill_unmanaged_deleted` |
 | Knowledge | `knowledge_written`, `knowledge_edited`, `knowledge_deleted` |

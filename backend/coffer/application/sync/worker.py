@@ -44,13 +44,8 @@ class SyncWorker:
         start_delay_s: float = START_DELAY_S,
         idle_poll_s: float = IDLE_POLL_S,
         clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC),
-        is_enabled: Callable[[], bool] = lambda: True,
     ) -> None:
         self._service = service
-        # Whether the ``sync`` feature is on right now, read at the top of every
-        # round (spec experimental-features "Close every surface of a
-        # switched-off feature"): a round while it is off is skipped, not run.
-        self._is_enabled = is_enabled
         self._start_delay = start_delay_s
         self._idle_poll = idle_poll_s
         self._clock = clock
@@ -78,9 +73,6 @@ class SyncWorker:
 
     async def tick(self) -> float:
         """One scheduled round when a remote is on; answers how long to wait."""
-        if not self._is_enabled():
-            self._service.set_next_round(None)
-            return self._idle_poll
         remote = self._service.remote()
         if remote is None or not remote.enabled:
             self._service.set_next_round(None)

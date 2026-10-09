@@ -157,7 +157,7 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 ```text
 ~/.coffer/derived/
 ├── channel-avatars/            已配对的人在平台上的头像，由各消息渠道的适配器拉取
-├── derived.db                   MCP server health, skill deliveries, capability first/last seen
+├── derived.db                   MCP server and model provider health, skill deliveries, capability first/last seen
 ├── memory/<partition>/          the memory tree (MEMORY.md, notes/, RETIRED.md, .raw/)
 ├── resources/                   derived resource files (memory partitions, coffer-guide)
 ├── skills/coffer-guide/         Coffer's own guide skill, rendered from the build
@@ -214,7 +214,7 @@ flowchart TB
 
 ## 静态存储的密钥 {#secrets-at-rest}
 
-密钥的密文是一个文件 `vault/secret/<ref>.enc`：Fernet 令牌加一个结尾换行，权限 `0600`，所在目录权限 `0700`。本机专属的 ref（比如模型代理的令牌）改放在 `local/secret/`，从不进入保险库。密文放在保险库里是安全的，因为密钥不在那里：主密钥留在操作系统的密钥存储里，或者 `0600` 权限的文件 `~/.coffer/master.key` 里。`vault/secret/` 是否提交由你的同步远端的 `include_secret` 设置决定；在那之前它被排除在仓库之外。密钥边界的绑定、批准和开关在 `local/secret-boundary/`。见[安全模型](/zh/architecture/security)。
+密钥的密文是一个文件 `vault/secret/<ref>.enc`：Fernet 令牌加一个结尾换行，权限 `0600`，所在目录权限 `0700`。本机专属的 ref（比如模型代理的令牌）改放在 `local/secret/`，从不进入保险库。密文放在保险库里是安全的，因为密钥不在那里：主密钥留在 macOS 钥匙串里。`vault/secret/` 是否提交由你的同步远端的 `include_secret` 设置决定；在那之前它被排除在仓库之外。密钥边界的绑定、批准和开关在 `local/secret-boundary/`。见[安全模型](/zh/architecture/security)。
 
 ## 不属于任何类别的设置 {#settings-that-live-outside-every-class}
 

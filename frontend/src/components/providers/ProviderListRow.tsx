@@ -22,7 +22,7 @@ interface Props {
   provider: Provider;
   use: ProviderUse;
   selected: boolean;
-  /** Set on the open row when its probe found a problem: the sub-line says so, in red. */
+  /** What is wrong with the connection, when something is: the sub-line says so, in red. */
   problem?: "keyRejected" | "unreachable" | null;
 }
 

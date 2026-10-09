@@ -64,10 +64,10 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | --- | --- | --- | --- |
 | `SECRET_MISSING` | 400 | 所引用的密钥 ref 下没有存储任何密钥。 | 存入它：`coffer secret set <ref>`，或在资源表单中重新填写。 |
 | `SECRET_IN_USE` | 409 | 仍有资源引用该密钥，不能删除。消息会列出这些资源。 | 先解除关联或删除那些资源。 |
-| `SECRET_LOCKED` | 503 | 系统钥匙串已锁定或不可用，或者一次钥匙串写入无法验证。 | 解锁钥匙串（登录桌面会话）后重试。 |
+| `SECRET_LOCKED` | 503 | macOS 钥匙串已锁定或不可用、拒绝把主密钥交给守护进程，或者一次钥匙串写入无法验证。 | 解锁钥匙串（登录桌面会话）后重试。 |
 | `SECRET_UNREADABLE` | 500 | 某个已存的密钥无法用当前主密钥解密。 | 恢复与之匹配的主密钥，或重新填写该密钥。见[密钥存储](/zh/guides/secret-store)。 |
-| `MASTER_KEY_MISSING` | 503 | 存在加密的密钥，但主密钥既不在密钥文件中也不在钥匙串中。在守护进程启动时抛出。 | 恢复 `~/.coffer/master.key`，或者重新填写你的密钥。 |
-| `MASTER_KEY_FILE_INVALID` | 422 | 要导入的主密钥文件不存在或不是有效的主密钥，或者 `.cfk` 备份的指纹与其主密钥不符。 | 导入桌面应用写出的主密钥备份。 |
+| `MASTER_KEY_MISSING` | 503 | 存在加密的密钥，但钥匙串中没有主密钥。在守护进程启动时抛出。 | 在桌面应用中导入你的主密钥备份（**设置 › 安全 › 导入主密钥**），或者重新填写你的密钥。 |
+| `MASTER_KEY_FILE_INVALID` | 422 | 要导入的主密钥备份（`.cfk`）不存在或不是有效的备份，或者它的指纹与其主密钥不符。 | 导入桌面应用写出的主密钥备份。 |
 | `MASTER_KEY_PASSPHRASE_WRONG` | 422 | 导入受口令保护的主密钥备份（`.cfk`）时口令错误或没给口令。 | 输入在另一台 Mac 上导出主密钥时设置的口令。 |
 | `MASTER_KEY_PASSPHRASE_TOO_SHORT` | 422 | 请求主密钥备份时给的口令不足八个字符。什么都没写入。 | 选一个更长的口令。 |
 | `SECRET_BINDING_PENDING` | 409 | 某个密钥将发往一个没有人批准过的去处或目标。什么都没发送。`details.approval_ids` 列出等待中的审批。 | 运行 `coffer approval approve <id>` 并在 Coffer 桌面应用中确认（或直接在应用里批准），或用 `coffer approval reject <id>` 或在**设置 › 安全**（**审阅**）里拒绝。自定义工具的调用会以带内方式返回它，写明审批 id 和同一条命令，而且只影响在等待的那个环境。`coffer run` 遇到无人允许它使用的独立密钥时也会返回它，见[密钥 → 允许 `coffer run` 使用它](/zh/guides/secrets#allow-coffer-run-to-use-it)。 |
@@ -266,7 +266,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
 | `FEATURE_DISABLED` | 404 | 该路由或资源属于一个在本机上已关闭的实验功能。`details.feature` 给出功能名。 | 在**设置 → 功能**里开启它。见[实验功能](/zh/guides/experimental-features)。 |
-| `FEATURE_UNKNOWN` | 404 | 该键不是实验功能。键只有 `knowledge`、`memory`、`sync` 和 `models`。 | 使用这四个键之一。 |
+| `FEATURE_UNKNOWN` | 404 | 该键不是实验功能。键只有 `knowledge` 和 `memory`；`sync` 和 `models` 已经转正，不再是功能。 | 使用这两个键之一。 |
 | `FEATURE_PINNED` | 409 | `COFFER_FEATURES` 在守护进程的生命周期内固定了该功能。 | 修改 `COFFER_FEATURES` 并重启守护进程。 |
 
 ## 启动错误 {#startup-errors}

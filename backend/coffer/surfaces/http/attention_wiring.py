@@ -22,6 +22,7 @@ from coffer.application.attention import AttentionSource
 from coffer.application.channel.attention import ChannelAttentionSource
 from coffer.application.channel.service import ChannelService
 from coffer.application.mcp.attention import McpAttentionSource
+from coffer.application.provider.attention import HealthPort, ProviderAttentionSource
 from coffer.application.resource_service import ResourceService
 from coffer.application.secret.attention import PendingApprovalsPort, SecretAttentionSource
 from coffer.application.skill.cli_attention import CliAttentionSource
@@ -50,6 +51,7 @@ def build_attention_sources(
     protections_on: Callable[[], bool] | None = None,
     memory_on: Callable[[], bool] | None = None,
     approvals: PendingApprovalsPort | None = None,
+    provider_health: HealthPort | None = None,
 ) -> list[AttentionSource]:
     """Every kind's source, in the order the Overview groups them."""
     sources: list[AttentionSource] = []
@@ -71,6 +73,8 @@ def build_attention_sources(
             memory_on=memory_on,
         )
     )
+    if provider_health is not None:
+        sources.append(ProviderAttentionSource(resources=resource_svc, health=provider_health))
     if channel_service is not None:
         sources.append(
             ChannelAttentionSource(
@@ -111,12 +115,14 @@ def lifespan_attention_sources(
 ) -> list[AttentionSource]:
     """:func:`build_attention_sources` with the services the kinds published
     while they were wired (the channel service, the agent detector, the MCP
-    health store) looked up where they were published."""
+    health store, the provider health service) looked up where they were
+    published."""
     from coffer.surfaces.http.agent_dependencies import get_auto_detect_service
     from coffer.surfaces.http.channel_routes import get_channel_service
     from coffer.surfaces.http.cli_dependencies import get_cli_requirement_service_optional
     from coffer.surfaces.http.feature_dependencies import get_feature_service_optional
     from coffer.surfaces.http.mcp.dependencies import get_health_repo_optional
+    from coffer.surfaces.http.provider_health_routes import get_provider_health_service_optional
     from coffer.surfaces.http.secret_boundary_wiring import get_secret_boundary
     from coffer.surfaces.http.workspace_dependencies import get_agent_hooks_service
 
@@ -139,6 +145,7 @@ def lifespan_attention_sources(
         protections_on=lambda: not get_secret_boundary().off_by_choice(),
         memory_on=memory_on,
         approvals=_LiveApprovals(),
+        provider_health=get_provider_health_service_optional(),
     )
 
 

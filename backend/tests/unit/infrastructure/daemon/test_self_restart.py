@@ -67,13 +67,23 @@ def test_the_successor_waits_until_the_predecessor_is_gone() -> None:
     assert PREDECESSOR_ENV not in environ
 
 
-def test_a_predecessor_that_never_exits_is_given_up_on() -> None:
+@pytest.mark.acceptance(
+    spec="daemon", scenario="the successor binds only after its predecessor has exited"
+)
+def test_a_predecessor_that_never_exits_is_handed_to_be_forced_out() -> None:
     environ = {PREDECESSOR_ENV: "77"}
     clock = _Clock()
+    forced: list[int] = []
     assert not await_predecessor(
-        environ, gone=lambda _pid: False, sleep=clock.sleep, clock=clock, timeout=1.0
+        environ,
+        gone=lambda _pid: False,
+        sleep=clock.sleep,
+        clock=clock,
+        timeout=1.0,
+        on_timeout=forced.append,
     )
     assert clock.now >= 1.0
+    assert forced == [77]
 
 
 def test_a_malformed_predecessor_is_ignored() -> None:

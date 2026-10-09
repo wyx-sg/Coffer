@@ -701,8 +701,15 @@ whose key the upstream refused reads `mcp_key_rejected` and offers
 whose launcher is missing or whose cited secret is absent, agents whose program is
 missing, whose connection is partial or who are not connected, whose Coffer memory hook the agent has not approved or has never run, a sync stopped on
 a conflict or holding deletions, channels reconnecting, disconnected or not
-running, and commands a skill requires that are missing, older than a skill's
-minimum or not logged in (kind `cli`, the command as the uid). Each item MUST carry its kind, the resource's uid and title, a stable
+running, model provider connections that an agent or Coffer's speech to text
+runs on whose endpoint does not answer (`provider_unreachable`, offering
+`check` through `POST /api/v1/providers/{uid}/check`, run in place) or refuses
+the key (`provider_key_rejected`, offering `replace_key`, which opens the
+connection's page) — read from the kept health verdict
+([provider-switching](../provider-switching/spec.md) "Know each connection's
+health without opening it"), only while `models` is on — and commands a skill
+requires that are missing, older than a skill's minimum or not logged in (kind
+`cli`, the command as the uid). Each item MUST carry its kind, the resource's uid and title, a stable
 reason code with one sentence, a severity (`error`, `warning`, `info`), when
 the condition was first seen where that is known, and exactly one action: a
 verb and the REST route and body the kind's own page uses — the list has no
@@ -745,6 +752,12 @@ items, and the answer MUST count the items per kind.
 - **WHEN** the attention list is read
 - **THEN** it carries one `cli` item for `gh` with reason `cli_outdated` whose action is `check` through `POST /api/v1/clis/gh/check`
 - **AND** once `gh` is current, present and logged in, no `cli` item is listed
+
+#### Scenario: a connection an agent runs on that fails is listed
+- **GIVEN** Claude Code runs on connection A, whose verdict is `unreachable`, and connection B, which nothing runs on, whose verdict is `key_rejected`
+- **WHEN** the attention list is read
+- **THEN** it carries one `provider` item for A with reason `provider_unreachable` whose action is `check` through `POST /api/v1/providers/{uid}/check`, and none for B
+- **AND** once A's verdict is `key_rejected`, its item reads `provider_key_rejected` and offers `replace_key`
 
 ### Requirement: Announce every write to a resource as an in-process hint
 Every change to a resource MUST emit an in-process hint naming the kind, the uid and

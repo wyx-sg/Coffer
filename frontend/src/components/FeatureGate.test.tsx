@@ -56,7 +56,7 @@ beforeEach(() => {
 
 describe("FeatureGate", () => {
   acceptance("experimental-features", "a switched-off feature's page is not found", async () => {
-    daemon({ knowledge: false, models: true });
+    daemon({ knowledge: false, memory: true });
     renderGate();
 
     expect(await screen.findByText("the not-found page")).toBeInTheDocument();
@@ -66,7 +66,7 @@ describe("FeatureGate", () => {
   });
 
   test("a switched-on feature's page renders", async () => {
-    daemon({ knowledge: true, models: false });
+    daemon({ knowledge: true, memory: false });
     renderGate();
 
     expect(await screen.findByText("the fake page")).toBeInTheDocument();
@@ -91,10 +91,8 @@ describe("FeatureGate", () => {
 // sidebar entry carries: a deep link lands on the not-found page, not on the page.
 describe("the route table", () => {
   const GATED: Record<string, string[]> = {
-    models: ["/model-providers", "/model-providers/abc"],
     knowledge: ["/knowledge", "/knowledge/abc/history"],
     memory: ["/memory", "/memory/abc/delivered"],
-    sync: ["/sync", "/sync/conflicts", "/sync/deletions"],
   };
 
   acceptance("web-ui", "a switched-off feature's address is not found", () => {
@@ -132,6 +130,11 @@ describe("the route table", () => {
       "/activity",
       "/conversations",
       "/channels",
+      "/model-providers",
+      "/model-providers/abc",
+      "/sync",
+      "/sync/conflicts",
+      "/sync/deletions",
       "/",
     ]) {
       const matches = matchRoutes(appRoutes, path) ?? [];

@@ -1,6 +1,6 @@
 """A test-only experimental feature, for the tests of the feature mechanism.
 
-The registry (``coffer.domain.features.EXPERIMENTAL_FEATURES``) names the four
+The registry (``coffer.domain.features.EXPERIMENTAL_FEATURES``) names the two
 experimental features, and the daemon's own wiring asks about them, so a test
 registers its fake feature BESIDE them rather than in their place. The gates,
 the switch, the pins and the listings are then exercised against a feature
@@ -24,14 +24,14 @@ FAKE_FEATURE = "fake_feature"
 FAKE_PREFIX = "/api/v1/fake-feature"
 
 
-#: The registry as shipped: the four experimental features.
+#: The registry as shipped: the two experimental features.
 REAL_FEATURES = domain_features.EXPERIMENTAL_FEATURES
 
 
 def enable_all_in_config() -> None:
     """Switch every shipped feature on in this test's ``daemon-config.json``.
 
-    The suite pins all four on (``tests/conftest.py``); a test of the switch
+    The suite pins both on (``tests/conftest.py``); a test of the switch
     itself removes that pin (``monkeypatch.delenv(daemon_config.FEATURES_ENV)``)
     and starts from this, so a switch it makes is a setting rather than a
     refused write to a pinned feature.

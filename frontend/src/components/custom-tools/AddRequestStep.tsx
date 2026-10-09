@@ -10,19 +10,11 @@ import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { translateApiError } from "@/lib/api/errors";
 import type { CustomToolGroup, CustomToolHeaderOut } from "@/lib/api/customTools";
-import { ToolArgumentsField } from "./ToolArgumentsField";
-import { ToolHeadersField } from "./ToolHeadersField";
-import {
-  BodyField,
-  ChangesDataField,
-  DescriptionField,
-  NameField,
-  RequestField,
-} from "./ToolRequestFields";
-import { ToolTestSection, type TestTarget } from "./ToolTestSection";
+import { ToolEditorForm } from "./ToolEditorForm";
+import type { TestTarget } from "./ToolTestSection";
 import type { GroupDraft } from "./addFlow";
 import { WaySummary } from "./WaySummary";
-import { formOf, formReady, toolOf, type ToolForm } from "./toolForm";
+import { formOf, formReady, type ToolForm } from "./toolForm";
 import { headersIn } from "./headerRows";
 import { useToolEnvironment } from "./useToolEnvironment";
 
@@ -81,31 +73,22 @@ export function AddRequestStep({ group, pending, error, onChangeWay, onCancel, o
           sub={t("customTools.add.handSummary")}
           onChange={onChangeWay}
         />
-        <NameField form={form} onChange={setForm} group={name} />
-        <DescriptionField form={form} onChange={setForm} />
-        <RequestField
+        <ToolEditorForm
           form={form}
           onChange={setForm}
+          group={name}
+          nameLocked={false}
           baseUrl={baseUrl}
           environment={several ? (shown?.name ?? null) : null}
-          adding
-        />
-        <ChangesDataField form={form} onChange={setForm} short />
-        <ToolHeadersField
           groupHeaders={groupHeaders}
-          headers={form.headers}
-          onChange={(headers) => setForm({ ...form, headers })}
-          environment={several ? (shown?.name ?? null) : null}
-        />
-        <BodyField form={form} onChange={setForm} />
-        <ToolArgumentsField args={form.args} onChange={(args) => setForm({ ...form, args })} />
-        <ToolTestSection
-          target={target}
+          environments={
+            saved ? (saved.environments ?? []).filter((e) => e.enabled).map((e) => e.name) : []
+          }
+          test={target}
           timeoutSeconds={30}
-          args={form.args}
-          draft={() => toolOf(form)}
-          ready={form.path.trim() !== "" && form.name !== ""}
           saveWord="add"
+          initialTab="general"
+          className="-mx-5 h-[min(620px,64vh)] flex-none border-y border-border-subtle pt-1"
         />
         {error ? (
           <div role="alert" className="flex items-start gap-2 text-sm text-danger">

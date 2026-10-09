@@ -25,6 +25,7 @@ vi.mock("@/lib/api/providers", async (orig) => ({
     remove: vi.fn(),
     activate: vi.fn(),
     detectLocal: vi.fn(),
+    health: vi.fn(),
   },
 }));
 vi.mock("@/components/usage/UsageTab", () => ({ UsageTab: () => <p>usage tab body</p> }));
@@ -164,7 +165,43 @@ describe("ModelProvidersPage", () => {
     (secretsApi.pendingApprovals as ReturnType<typeof vi.fn>).mockResolvedValue({
       approvals: [],
     });
+    api.health.mockResolvedValue({ connections: [] });
   });
+
+  acceptance(
+    "provider-switching",
+    "a connection that never opened is marked in the list",
+    async () => {
+      serve([
+        makeProvider({ name: "official" }),
+        makeProvider({ name: "agnes", protocol: "openai" }),
+        makeProvider({ name: "groq", protocol: "openai" }),
+      ]);
+      const verdict = (uid: string, status: string) => ({
+        uid,
+        status,
+        checked_at: "2026-10-09T02:00:00Z",
+        since: "2026-10-09T01:00:00Z",
+        source: "check",
+        message: status === "reachable" ? "" : "Error code: 401",
+      });
+      api.health.mockResolvedValue({
+        connections: [
+          verdict(UIDS.agnes, "key_rejected"),
+          verdict(UIDS.groq, "unreachable"),
+          verdict(UIDS.official, "reachable"),
+        ],
+      });
+      renderAt();
+      // The first provider opens, and its own probe answered: it reads normally.
+      await waitFor(() => expect(rowFor("official")).toHaveAttribute("aria-current", "page"));
+      // The rows nobody opened read the daemon's kept verdict, in red.
+      await waitFor(() => expect(rowFor("agnes")).toHaveTextContent("Key rejected"));
+      expect(rowFor("groq")).toHaveTextContent("Unreachable");
+      expect(rowFor("agnes").querySelector(".text-danger")).toHaveTextContent("Key rejected");
+      expect(rowFor("official")).toHaveTextContent("Anthropic · all models");
+    },
+  );
 
   acceptance(
     "provider-switching",
@@ -232,9 +269,9 @@ describe("ModelProvidersPage", () => {
     serve([makeProvider({ name: "official" })]);
     renderAt();
     expect(await screen.findByRole("heading", { name: "Model providers" })).toBeInTheDocument();
-    // The header names the feature as experimental and carries the primary
-    // button for both tabs.
-    expect(screen.getByText("Experimental")).toBeInTheDocument();
+    // The header carries no Experimental tag, and the primary button for both
+    // tabs.
+    expect(screen.queryByText("Experimental")).toBeNull();
     expect(
       screen.getByText(
         "Where your agents’ models come from, and what requests through Coffer cost.",
@@ -248,7 +285,6 @@ describe("ModelProvidersPage", () => {
     expect(await screen.findByText("usage tab body")).toBeInTheDocument();
     // The header, with its Add provider, is the same one on both tabs.
     expect(screen.getByRole("button", { name: /Add provider/ })).toBeInTheDocument();
-    expect(screen.getByText("Experimental")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Endpoint" })).toBeNull();
   });
 

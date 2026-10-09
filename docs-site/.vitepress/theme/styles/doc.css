@@ -439,6 +439,14 @@ html[lang="zh-CN"] .vp-doc h1 + p {
   justify-content: center;
   margin: 1.5rem 0;
 }
+/* Mermaid sizes each label box at its own line height (1.5) and wraps the
+   text in a <p>; the prose line heights above would make that <p> taller than
+   its box and clip the last line, worst in Chinese. */
+.vp-doc .mermaid p,
+html[lang="zh-CN"] .vp-doc .mermaid p {
+  margin: 0;
+  line-height: inherit;
+}
 .cli-ref .VPDocOutlineItem .outline-link {
   font-family: var(--vp-font-family-mono);
   font-size: 12.5px;

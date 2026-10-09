@@ -167,9 +167,8 @@ It calls no model. See [Memory](/architecture/memory#the-distil-pass).
 
 ### Experimental feature
 
-A capability that ships switched off and can be switched on per machine. Four are: `knowledge`
-(Knowledge), `memory` (Memory), `sync` (Vault sync) and `models` (Model providers, the proxy and
-Usage). While a feature is off its routes answer `404 FEATURE_DISABLED`, its tools leave the MCP
+A capability that ships switched off and can be switched on per machine. Two are: `knowledge`
+(Knowledge) and `memory` (Memory). Vault sync and model providers graduated and are always on. While a feature is off its routes answer `404 FEATURE_DISABLED`, its tools leave the MCP
 tool list, and its UI looks absent; its data is kept. See [Experimental features](/guides/experimental-features) and
 [Configuration](/reference/configuration#experimental-features).
 
@@ -216,9 +215,8 @@ machine. [Vault sync](#vault-sync) uses it to tell machines apart, and a channel
 
 ### Master key
 
-The key that decrypts every stored secret. A signed release keeps it in a Keychain item
-only Coffer's signed binaries can read; a development build keeps it in `master.key` beside the
-database (mode `0600`), or in the OS keychain if you move it there. It never syncs. Back it up
+The key that decrypts every stored secret. It is one item in the macOS Keychain that only
+Coffer's signed binaries can read, and the daemon keeps it in memory while it runs. It never syncs. Back it up
 in the desktop app, which writes a key file behind a presence check, and install it on another
 machine from **Settings › Security › Import a master key**. See [Secret store](/guides/secret-store#where-the-master-key-lives).
 
@@ -291,7 +289,7 @@ The proof that a person was at the Mac. The desktop app runs Touch ID or the log
 for one operation — reveal a secret, write a key backup, approve an approval — then signs a
 one-time challenge from the daemon, bound to that operation and its target, with a key
 derived from the master key. The daemon acts only on a grant that verifies; a grant is used
-once and expires within two minutes. It holds only in a signed release. See
+once and expires within two minutes. See
 [Security model](/architecture/security#plaintext-reaches-only-a-present-human).
 
 ### Projection

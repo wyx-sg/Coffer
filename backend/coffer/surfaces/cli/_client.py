@@ -7,8 +7,6 @@ run ``coffer daemon start``.
 
 from __future__ import annotations
 
-import contextlib
-import subprocess
 import sys
 import time
 import traceback
@@ -24,8 +22,11 @@ from coffer.infrastructure.daemon.version_skew import skew_warning
 from coffer.infrastructure.vault.home import daemon_json_path
 from coffer.surfaces.cli._options import ExitCode
 
-# How long (seconds) to wait for daemon.json to appear after spawning.
-_DAEMON_BOOT_TIMEOUT: float = 10.0
+# How long (seconds) to wait for a spawned daemon to answer. The same budget as
+# `coffer daemon start`: a real vault's boot (migrations, the secret store, the
+# first scan) takes several seconds, and a shorter wait gave up on boots that
+# were about to succeed.
+_DAEMON_BOOT_TIMEOUT: float = 30.0
 
 
 #: What the CLI says when the running daemon's answer lacks a field this CLI
@@ -86,23 +87,18 @@ def _wait_for_daemon(timeout: float = _DAEMON_BOOT_TIMEOUT) -> DaemonInfo | None
     return None
 
 
-def _spawn_daemon() -> subprocess.Popen[bytes] | None:
+def _spawn_daemon() -> None:
     """Detached best-effort spawn of the daemon process.
 
     Stdout/stderr go to ~/.coffer/logs/daemon.log; stdin is DEVNULL — the
     shared :func:`spawn_detached_daemon`, so the daemon's own refusal (a
     squatted port) lands in the log this surface tells the user to read.
-    The caller is responsible for waiting for daemon.json to appear.
-
-    Returns the ``Popen`` handle so the caller can ``kill()`` the
-    half-started daemon if it never publishes daemon.json within the boot
-    timeout; returns ``None`` if the spawn itself failed (OSError).
+    The caller is responsible for waiting for the daemon to answer.
     """
     try:
-        return spawn_detached_daemon()
+        spawn_detached_daemon()
     except OSError as e:
         print(f"coffer: failed to spawn daemon: {e}", file=sys.stderr)
-        return None
 
 
 #: How long the version-skew probe waits. Short: the daemon just answered the
@@ -174,14 +170,15 @@ def client_or_exit(
     info = live_daemon()
     if info is None:
         # Detect-or-spawn: auto-spawn the daemon rather than asking the user.
-        proc = _spawn_daemon()
+        _spawn_daemon()
         info = _wait_for_daemon(timeout=_DAEMON_BOOT_TIMEOUT)
         if info is None:
-            # Kill the half-started daemon so it can't finish booting *after*
-            # we gave up and leave a daemon.json the user was told failed.
-            if proc is not None:
-                with contextlib.suppress(OSError):
-                    proc.kill()
+            # The spawned process is left alone: killing a boot mid-migration
+            # is worse than a late start, and in a one-file build the handle is
+            # only the bootloader, so a kill used to leave the real daemon
+            # running unseen. A start that cannot finish exits by itself once
+            # the spawn lock's wait runs out (spec daemon "Keep exactly one
+            # daemon per vault").
             message = (
                 "daemon failed to start within "
                 f"{_DAEMON_BOOT_TIMEOUT:.0f}s; check ~/.coffer/logs/daemon.log"

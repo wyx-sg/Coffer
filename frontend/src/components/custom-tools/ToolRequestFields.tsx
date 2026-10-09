@@ -1,5 +1,5 @@
 // src/components/custom-tools/ToolRequestFields.tsx — the fields of one request, which the Add a request
-// step and the tool drawer lay out in their own order: the tool's name, method + path (one compound
+// step and the tool drawer lay out on the editor's tabs (ToolEditorForm): the tool's name, method + path (one compound
 // field), the description agents read, the changes-data flag and the body template. The base URL the
 // path is added to is the form's chosen environment's.
 import { useId } from "react";
@@ -29,20 +29,32 @@ function holesOf(path: string): string[] {
   return [...path.matchAll(/\{([A-Za-z_][A-Za-z0-9_.-]*)\}/g)].map((m) => m[1]);
 }
 
-export function NameField({ form, onChange, group }: FieldProps & { group: string }) {
+/** `locked`: a saved tool, whose name is fixed — it is part of the name agents call. */
+export function NameField({
+  form,
+  onChange,
+  group,
+  locked = false,
+}: FieldProps & { group: string; locked?: boolean }) {
   const { t } = useTranslation();
   const id = useId();
   return (
     <FormField
       label={t("customTools.editor.name")}
       htmlFor={id}
-      required
-      help={t("customTools.editor.nameHelp", { name: `${group}__${form.name || "…"}` })}
+      required={!locked}
+      help={
+        locked
+          ? t("customTools.editor.nameFixed")
+          : t("customTools.editor.nameHelp", { name: `${group}__${form.name || "…"}` })
+      }
     >
       <Input
         id={id}
         className="font-mono"
         value={form.name}
+        disabled={locked}
+        readOnly={locked}
         onChange={(e) => onChange({ ...form, name: e.target.value.trim() })}
       />
     </FormField>
@@ -157,15 +169,21 @@ export function ChangesDataField({
 export function BodyField({ form, onChange }: FieldProps) {
   const { t } = useTranslation();
   const id = useId();
+  // A GET sends no body: the field says so instead of showing a box that takes nothing.
+  if (form.method === "GET")
+    return (
+      <FormField label={t("customTools.editor.body")}>
+        <p className="text-xs text-text-muted">{t("customTools.editor.bodyGet")}</p>
+      </FormField>
+    );
   return (
     <FormField label={t("customTools.editor.body")} htmlFor={id}>
       <Textarea
         id={id}
-        rows={2}
+        rows={4}
         className="font-mono text-xs"
         placeholder={t("customTools.editor.bodyHelp")}
         value={form.body}
-        disabled={form.method === "GET"}
         onChange={(e) => onChange({ ...form, body: e.target.value })}
       />
     </FormField>

@@ -62,15 +62,13 @@ acceptance(
   "a pinned feature's switch is disabled",
   async ({ page }) => {
     // The e2e daemon pins every experimental feature on (`COFFER_FEATURES`),
-    // so the tab lists the four in registry order, each with its Experimental
+    // so the tab lists the two in registry order, each with its Experimental
     // mark, and every switch is disabled with the pin named as the reason.
     await page.goto("/settings/features");
     const pane = page.getByTestId("settings-pane-features");
     for (const [key, name] of [
       ["knowledge", "Knowledge"],
       ["memory", "Memory"],
-      ["sync", "Sync"],
-      ["models", "Model providers"],
     ]) {
       const row = pane.getByTestId(`feature-${key}`);
       await expect(row).toContainText("Experimental");
@@ -79,6 +77,9 @@ acceptance(
       await expect(toggle).toBeChecked();
       await expect(toggle).toBeDisabled();
     }
+    // Sync and model providers graduated: no switch.
+    await expect(pane.getByTestId("feature-sync")).toHaveCount(0);
+    await expect(pane.getByTestId("feature-models")).toHaveCount(0);
   },
 );
 

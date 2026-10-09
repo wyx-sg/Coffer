@@ -133,6 +133,9 @@ export function spawnShim(): ShimHandle {
         ...process.env,
         HOME: homePath,
         PYTHONPATH: path.join(REPO_ROOT, "backend"),
+        // A daemon this shim had to spawn follows the test worker out
+        // instead of outliving the run.
+        COFFER_DAEMON_EXIT_WITH_PID: String(process.pid),
       },
     },
   );

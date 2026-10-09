@@ -45,7 +45,6 @@ from datetime import datetime
 from typing import Protocol
 
 from coffer.application.attention import AttentionAction, AttentionItem, Severity
-from coffer.domain.features import SYNC
 from coffer.domain.sync.handoffs import remote_failure_handoff, scrub_git_text
 from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import APPROVAL_WAIT, RoundRecord, RoundStatus
@@ -105,7 +104,7 @@ def _files(n: int) -> str:
 
 class SyncAttentionSource:
     name = "sync"
-    feature: str | None = SYNC
+    feature: str | None = None
 
     def __init__(self, *, sync: SyncStatePort) -> None:
         self._sync = sync

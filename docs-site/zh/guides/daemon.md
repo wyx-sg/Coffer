@@ -24,11 +24,13 @@ Coffer 的其他部分都是守护进程的客户端：`coffer` 命令行、你�
 ```sh
 coffer daemon start      # spawn it in the background, if none is running
 coffer daemon status     # ask the running daemon how it is; never starts one
-coffer daemon stop       # SIGTERM, then wait for it to exit
-coffer daemon restart    # stop (if running), then start
+coffer daemon stop       # SIGTERM, then wait up to 15 s for it to exit
+coffer daemon restart    # stop (if running, by force if it will not), then start
 ```
 
 在 Web 界面里，**设置 → 守护进程 → 重启** 也能从浏览器重启它：守护进程先启动继任者，继任者等它退出后再绑定端口，然后它自己退出，页面从新守护进程（带着新令牌）重新加载。桌面应用的重启则是从外部先停再启。`coffer daemon restart` 始终从外部执行，所以对已经不响应的守护进程也有效。
+
+每一种重启都会替换卡住的守护进程。守护进程在宽限期内没有退出，或者根本不响应，就会在新进程启动前被强制结束，这样卡死的进程不会一直占着端口，让新进程只能在旁边拒绝启动。只有能确认是本保险库 Coffer 守护进程的进程才会被结束，而且只在你要求重启时才会：命令或智能体自动拉起守护进程时从不结束任何进程。
 
 `coffer daemon status` 打印守护进程对自身的报告：
 
@@ -39,7 +41,7 @@ port:    38470
 pid:     41822
 ```
 
-守护进程正常服务时 `status` 为 `ready`，关闭过程中为 `draining`，等待 git 时为 `setup`：这时命令还会打印原因和一段给智能体的提示词（见 [Coffer 需要 git](/zh/guides/troubleshooting#coffer-needs-git)）。没有更早的阶段可看：守护进程启动完成后才打开端口。四个[实验功能](/zh/guides/experimental-features)在你开启之前都是关闭的。脚本里可加 `--json`。
+守护进程正常服务时 `status` 为 `ready`，关闭过程中为 `draining`，等待 git 时为 `setup`：这时命令还会打印原因和一段给智能体的提示词（见 [Coffer 需要 git](/zh/guides/troubleshooting#coffer-needs-git)）。没有更早的阶段可看：守护进程启动完成后才打开端口。两个[实验功能](/zh/guides/experimental-features)——知识和记忆——在你开启之前都是关闭的。脚本里可加 `--json`。
 
 没有守护进程运行时，`coffer daemon status` 打印 `status:  not running`（`--json` 下为 `{"status": "stopped"}`），退出码为 3。它不会启动守护进程，所以它的回答不会改变它所报告的对象；要启动请用 `coffer daemon start`。
 
@@ -47,8 +49,20 @@ pid:     41822
 
 - `start` 判断「已在运行」靠的是询问守护进程，而不是检查 `daemon.json` 是否存在。崩溃后残留的发现文件不会阻止启动。只有新的守护进程应答了状态调用，`start` 才报告成功；如果守护进程拒绝启动（需要先迁移保险库、git 太旧），它会说明原因并指向 `daemon.log`。
 - `start` 在拉起进程前先检查端口。如果端口被其他程序占用，你会立刻看到诊断，而不是等十秒超时（见[端口被占用时](#when-the-port-is-taken)）。
-- `stop` 在发信号前先确认记录的 pid 确实是 Coffer 守护进程。如果该 pid 已被其他进程复用，`stop` 会删除过期的 `daemon.json` 并说明情况，而不会误杀无关进程。
+- `stop` 在发信号前先确认记录的 pid 确实是 Coffer 守护进程。如果该 pid 已被其他进程复用，`stop` 会删除过期的 `daemon.json` 并说明情况，而不会误杀无关进程。15 秒后仍未退出的守护进程只会被报告，不会被结束；要替换它，用 `restart`。
+- `status` 还会列出服务同一保险库的其他守护进程（`other daemon processes for this vault: …`，`--json` 下是 `other_daemon_pids`），比如还在启动的进程或残留进程。一个保险库只有一个守护进程在服务，所以这一行平时不会出现。
 - 在守护进程绑定前读取的设置（端口），要靠 `restart` 才能生效。
+
+### 为什么会有好几个 Coffer 进程 {#why-several-coffer-processes-run}
+
+每个保险库一个守护进程，不等于只有一个进程。在活动监视器或 `ps` 里，正常会看到：
+
+- 守护进程本身对应两个 `coffer-daemon` 进程：安装的程序是会自解压的单文件，一个小的启动进程会留下来，作为真正进程的父进程；
+- 另一对运行 `proxy` 的 `coffer-daemon`，是[本地模型代理](/zh/architecture/model-proxy)；
+- 每个连着 Coffer 的智能体会话一对 `coffer-mcp-shim`，会话结束就退出；
+- SeaTalk 渠道运行时一对 `coffer-seatalk-bridge`。
+
+除此之外的守护进程，`coffer daemon status` 会列出来。启动不了的进程两分钟后会自己放弃；发现守护进程正忙的启动会直接退出，不会再起第二个。
 
 要打开守护进程提供的界面，在浏览器里访问 `http://127.0.0.1:<port>`；端口在 `~/.coffer/daemon.json` 里（默认 38470）。[桌面应用](/zh/guides/desktop-app)会替你打开。
 
@@ -206,7 +220,6 @@ Coffer 保存的一切都在 `~/.coffer` 下。无法重建的部分是：
 | `local/` | 本机的智能体、生效范围、保留策略、同步远端和密钥审批。 |
 | `content/` | 附件和聊天工作目录。 |
 | `runs.db`（+ `-wal`、`-shm`） | 对话、审计日志、调用日志、同步轮次、用量。 |
-| `master.key` | 解密所有已存密钥的钥匙。如果你把主密钥移到了系统钥匙串（**设置 → 安全**），这个文件就不存在。 |
 
 `derived/`，包括从智能体自己的记忆文件派生出的记忆树，都可以重新生成。要取得一致的副本，先停止守护进程：
 
@@ -217,7 +230,7 @@ coffer daemon start
 ```
 
 ::: warning
-包含 `master.key` 的备份能解密其中的所有密钥，请像对待密码一样保管它。不含主密钥的备份里，密钥只是谁也读不了的密文。
+这份副本不包含主密钥，主密钥在 macOS 钥匙串中：没有它，副本里的密钥只是谁也读不了的密文。在桌面应用中备份主密钥（**设置 › 安全 › 备份主密钥**），并像对待密码一样保管这份备份。
 :::
 
 如果你在多台机器上用 Coffer，[保险库同步](/zh/guides/vault-sync)会把保险库仓库连同历史推送到你自己的 git 仓库，这也顺带成了知识、技能和资源定义的异地备份。

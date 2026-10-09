@@ -256,9 +256,11 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | UI operation | Route | Command | Acceptance |
 | --- | --- | --- | --- |
 | Model providers · Add connection | `POST /providers` | `coffer provider add` | `test_cli_parity.py` |
+| Overview · Needs you · Check | `POST /providers/{uid}/check` | `coffer provider check` | `test_cli_parity.py` |
 | Model providers · Delete | `DELETE /providers/{uid}` | `coffer provider delete` | `test_cli_parity.py` |
 | Model providers · Delete… (what it affects) | `GET /providers/{uid}/delete-preview` | `coffer provider delete-preview` | `test_cli_parity.py` |
 | Model providers · Add · detect a local runtime | `POST /providers/detect-local` | `coffer provider detect-local` | `test_cli_parity.py` |
+| Model providers · the list's health marks | `GET /providers/health` | `coffer provider health` | `test_cli_parity.py` |
 | Model providers · list | `GET /providers` | `coffer provider list` | `test_cli_parity.py` |
 | Settings · Usage · Refresh prices | `PUT /providers/price-list` | `coffer provider price-list refresh` | `test_cli_parity.py` |
 | Settings · Usage · price list | `GET /providers/price-list` | `coffer provider price-list show` | `test_cli_parity.py` |

@@ -78,6 +78,10 @@ export type DetectLocalOut = Schemas["DetectLocalOut"];
 export type ModelPrice = Schemas["ModelPriceOut"];
 /** The agent config changes deleting a provider makes (the review before Delete). */
 export type ProviderDeletePreview = Schemas["ProviderDeletePreviewOut"];
+/** A connection's kept health verdict (spec provider-switching "Know each
+ *  connection's health without opening it"): reachable, key_rejected or
+ *  unreachable, from a model-list check or an agent's real request. */
+export type ProviderHealth = Schemas["ProviderHealthOut"];
 /** The price list pricing reads now, and whether its daily refresh is on. */
 export type PriceList = Schemas["PriceListOut"];
 /** Its query key (kept here: queryKeys.ts is at its size limit). */
@@ -147,6 +151,13 @@ export const providersApi = {
    *  non-loopback URL is refused as 422. */
   detectLocal: (baseUrl: string | null) =>
     unwrap(getApiClient().POST("/providers/detect-local", { body: { base_url: baseUrl } })),
+
+  /** Every connection's kept health verdict. Read-only; calls no endpoint. */
+  health: () => unwrap(getApiClient().GET("/providers/health")),
+
+  /** List this connection's models now and keep the verdict. */
+  check: (uid: string) =>
+    unwrap(getApiClient().POST("/providers/{uid}/check", { params: { path: { uid } } })),
 
   /** Make this connection the one Coffer transcribes speech on (clears the flag
    * on all others). */

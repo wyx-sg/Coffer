@@ -41,6 +41,7 @@ mod daemon_http;
 mod desktop_requests;
 mod discovery;
 mod env_path;
+mod force_stop;
 mod logging;
 mod master_key;
 mod presence;

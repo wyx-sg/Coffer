@@ -246,11 +246,10 @@ describe("CustomToolsPage", () => {
     ).toEqual(["Overview", "Tools"]);
     expect(screen.queryByRole("region", { name: "Tools" })).not.toBeInTheDocument();
     expect(within(definition).getByText("billing__<tool>")).toBeInTheDocument();
-    // The group's header reads `name ← 🔑 secret` (the secret is the whole value, no prefix).
-    expect(within(definition).getByText("Authorization")).toBeInTheDocument();
-    expect(within(definition).getByRole("link", { name: "Billing token" })).toHaveAttribute(
-      "href",
-      `/secrets/${encodeURIComponent("secret/billing-token")}`,
+    // Where calls go is the environments', even with one: the definition names no base URL or header.
+    expect(within(definition).queryByText("Authorization")).not.toBeInTheDocument();
+    expect(screen.getByTestId("environment-default")).toHaveTextContent(
+      "https://billing.internal.example/v2",
     );
     expect(within(definition).getByText("30 s per call")).toBeInTheDocument();
     expect(within(definition).queryByText(/Available to/)).not.toBeInTheDocument();
@@ -278,8 +277,9 @@ describe("CustomToolsPage", () => {
 
     fireEvent.click(within(tools).getByText("get_invoice"));
     const drawer = await screen.findByRole("dialog");
-    expect(within(drawer).getByRole("region", { name: "Test" })).toBeInTheDocument();
-    expect(within(drawer).getByText(/Not run yet/)).toBeInTheDocument();
+    expect(within(drawer).getByRole("region", { name: "Try it" })).toBeInTheDocument();
+    // Before a run, Try it shows the request it would send.
+    expect(within(drawer).getByTestId("custom-tool-request-preview")).toBeInTheDocument();
     fireEvent.change(within(drawer).getByLabelText("Value for id"), { target: { value: "7" } });
     fireEvent.click(within(drawer).getByRole("button", { name: "Run" }));
     expect(await within(drawer).findByText(/200 OK · 180 ms/)).toBeInTheDocument();
@@ -384,6 +384,8 @@ describe("CustomToolsPage", () => {
     fireEvent.change(within(dialog).getByLabelText(/Tool description/), {
       target: { value: "List refunds" },
     });
+    // Name and description are on General, where a new tool opens; the request is on its own tab.
+    fireEvent.mouseDown(within(dialog).getByRole("tab", { name: "Request" }));
     fireEvent.change(within(dialog).getByRole("textbox", { name: /Request/ }), {
       target: { value: "/refunds" },
     });
@@ -439,6 +441,7 @@ describe("CustomToolsPage", () => {
     fireEvent.change(within(dialog).getByLabelText(/Tool description/), {
       target: { value: "Find things" },
     });
+    fireEvent.mouseDown(within(dialog).getByRole("tab", { name: "Request" }));
     fireEvent.change(within(dialog).getByRole("textbox", { name: /Request/ }), {
       target: { value: "/find" },
     });

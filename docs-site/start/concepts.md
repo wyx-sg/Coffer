@@ -132,7 +132,7 @@ Guide: [Channels](/guides/channels), [Conversations](/guides/chat). Architecture
 
 ## Secret refs
 
-Coffer stores secrets only as Fernet ciphertext, under a master key kept in a `0600` file (or in the macOS keychain if you choose). Resources never contain a secret. They contain a **secret ref**, a name such as `github.token`, which the daemon resolves only at the moment it starts an upstream server or sends a request. Set a secret with `coffer secret set <ref>`. Plaintext never reaches the database, the logs or the audit log.
+Coffer stores secrets only as Fernet ciphertext, under a master key kept in the macOS Keychain, where only Coffer's signed binaries can read it. Resources never contain a secret. They contain a **secret ref**, a name such as `github.token`, which the daemon resolves only at the moment it starts an upstream server or sends a request. Set a secret with `coffer secret set <ref>`. Plaintext never reaches the database, the logs or the audit log.
 
 Guide: [Secret store](/guides/secret-store). Architecture: [Security model](/architecture/security).
 
@@ -144,7 +144,7 @@ Guide: [Activity and audit](/guides/activity). Architecture: [Observability](/ar
 
 ## Experimental features
 
-A capability that is not ready for everyone yet ships as an experimental feature: it starts switched off and you switch it on, machine by machine. Switching one off makes it look absent — its pages, commands and `coffer__` tools disappear — but deletes nothing. When a feature is ready it graduates and loses its switch. Four features are experimental: Knowledge, Memory, Sync and Model providers. Settings → Features lists them.
+A capability that is not ready for everyone yet ships as an experimental feature: it starts switched off and you switch it on, machine by machine. Switching one off makes it look absent — its pages, commands and `coffer__` tools disappear — but deletes nothing. When a feature is ready it graduates and loses its switch. Two features are experimental: Knowledge and Memory. Settings → Features lists them. Sync and Model providers have graduated and are always on.
 
 Guide: [Experimental features](/guides/experimental-features).
 
