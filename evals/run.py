@@ -27,6 +27,10 @@ from evals.tool_search_eval import run_tool_search_eval
 # question — does an agent reading the catalogue open the right file? — needs a
 # model, so it does not belong in the deterministic gate.
 _TOLERANCE = {"routing": 0.10, "tool_search": 0.05}
+# Secondary metrics held to the same floor as the primary one. Tool search
+# gates MRR too: recall@k alone cannot see the right tool sliding from first
+# to fifth, which costs the agent the most.
+_GATED_SECONDARY = {"tool_search": ("mrr",)}
 
 
 def _baseline_path(suite: str):
@@ -38,12 +42,22 @@ def _load_baseline(suite: str) -> dict | None:
     return json.loads(path.read_text()) if path.exists() else None
 
 
+def _gated_secondary(report: dict) -> dict:
+    keys = _GATED_SECONDARY.get(report["suite"], ())
+    gated = {k: v for k, v in report.get("secondary", {}).items() if k in keys}
+    return {"secondary": gated} if gated else {}
+
+
 def _save_baseline(report: dict) -> None:
     BASELINES.mkdir(exist_ok=True)
     suite = report["suite"]
     _baseline_path(suite).write_text(
         json.dumps(
-            {"primary": report["primary"], "tolerance": _TOLERANCE.get(suite, 0.05)},
+            {
+                "primary": report["primary"],
+                **_gated_secondary(report),
+                "tolerance": _TOLERANCE.get(suite, 0.05),
+            },
             indent=2,
         )
         + "\n"
@@ -66,22 +80,29 @@ def _evaluate(report: dict, *, update: bool) -> bool:
     if baseline is None:
         print("    no baseline yet — run with --update-baseline to record one.")
         return True
-    floor = baseline["primary"]["value"] - baseline.get("tolerance", 0.05)
-    if primary["value"] + 1e-9 < floor:
-        print(
-            f"    REGRESSION: {primary['value']:.3f} < {floor:.3f} (baseline "
-            f"{baseline['primary']['value']:.3f} - tol {baseline.get('tolerance')})"
-        )
-        return False
-    print(f"    OK vs baseline {baseline['primary']['value']:.3f} (floor {floor:.3f}).")
-    return True
+    tolerance = baseline.get("tolerance", 0.05)
+    checks = [(primary["name"], primary["value"], baseline["primary"]["value"])]
+    for key, floor_value in baseline.get("secondary", {}).items():
+        checks.append((key, report.get("secondary", {}).get(key, 0.0), floor_value))
+    passed = True
+    for name, value, base in checks:
+        floor = base - tolerance
+        if value + 1e-9 < floor:
+            print(
+                f"    REGRESSION: {name} {value:.3f} < {floor:.3f} (baseline "
+                f"{base:.3f} - tol {tolerance})"
+            )
+            passed = False
+        else:
+            print(f"    OK: {name} vs baseline {base:.3f} (floor {floor:.3f}).")
+    return passed
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run Coffer eval suites.")
     parser.add_argument("--routing", action="store_true", help="also run the tool-routing suite")
     parser.add_argument("--update-baseline", action="store_true", help="record current as baseline")
-    parser.add_argument("--top-k", type=int, default=3)
+    parser.add_argument("--top-k", type=int, default=5)
     args = parser.parse_args(argv)
 
     reports: list[dict] = [run_tool_search_eval(top_k=args.top_k)]

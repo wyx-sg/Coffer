@@ -1,7 +1,10 @@
 {
   "primary": {
-    "name": "recall@3",
-    "value": 1.0
+    "name": "recall@5",
+    "value": 0.7753
+  },
+  "secondary": {
+    "mrr": 0.633
   },
   "tolerance": 0.05
 }
