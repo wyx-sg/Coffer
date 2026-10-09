@@ -20,10 +20,10 @@ import pytest
 
 from coffer.application.audit_service import AuditService
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
-from coffer.application.memory import aggregate_worker
-from coffer.application.memory.aggregate_worker import AggregateWorker
+from coffer.application.memory import sync_worker
+from coffer.application.memory.sync_worker import MemorySyncWorker
 from coffer.application.upkeep_schedule import wait_for_next_pass
-from coffer.domain.internal_engine_config import AGGREGATE, DISTIL, MEMORY_SYNC, UpkeepSetting
+from coffer.domain.internal_engine_config import MEMORY_SYNC, RETIRED_AGGREGATE, UpkeepSetting
 from coffer.domain.vault.writers import WRITER_SYNC, CommitMeta
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
@@ -71,7 +71,7 @@ async def test_the_defaults_publish_nothing_and_a_choice_publishes_one_document(
     # Written, but back to the defaults: the same decision as no document.
     await machine.service.set_transcribe_model("hears", actor="api")
     await machine.service.set_transcribe_model(None, actor="api")
-    await machine.service.set_upkeep(DISTIL, UpkeepSetting(enabled=True), actor="api")
+    await machine.service.set_upkeep(MEMORY_SYNC, UpkeepSetting(enabled=True), actor="api")
     assert vault_repository().tree("HEAD", "state/") == {}
 
     await machine.service.set_transcribe_model("hears", actor="api")
@@ -93,6 +93,7 @@ async def test_keys_an_older_build_wrote_are_ignored_and_dropped_on_the_next_wri
     doc["curate_owner_machine_id"] = "laptop-1"
     doc["model_timeout_s"] = 200
     doc["upkeep"]["curate"] = {"enabled": False, "interval_s": 600}
+    doc["upkeep"]["distil"] = {"enabled": False, "interval_s": 600}
     doc["written_by_a_newer_build"] = {"kept": True}
     path.write_text(json.dumps(doc, indent=2) + "\n")
     vault_writer().settle([DOC])
@@ -102,16 +103,17 @@ async def test_keys_an_older_build_wrote_are_ignored_and_dropped_on_the_next_wri
     assert held.transcribe_model == "hears"
     assert not hasattr(held, "model")
     assert not hasattr(held, "curate_owner_machine_id")
-    assert [held.upkeep(name).enabled for name in (AGGREGATE, DISTIL)] == [True, True]
-    with pytest.raises(ValueError):
-        held.upkeep("curate")
+    assert held.upkeep(MEMORY_SYNC).enabled is True
+    for retired in ("curate", "distil"):
+        with pytest.raises(ValueError):
+            held.upkeep(retired)
 
     await machine.service.set_transcribe_model("hears-2", actor="api")
     stored = json.loads(vault_writer().repo.read("HEAD", DOC) or b"{}")
     assert "model" not in stored
     assert "curate_owner_machine_id" not in stored
     assert "model_timeout_s" not in stored
-    assert set(stored["upkeep"]) == {AGGREGATE, DISTIL, MEMORY_SYNC}
+    assert set(stored["upkeep"]) == {MEMORY_SYNC}
     assert stored["transcribe_model"] == "hears-2"
     assert stored["written_by_a_newer_build"] == {"kept": True}
 
@@ -125,7 +127,7 @@ async def test_keys_an_older_build_wrote_are_ignored_and_dropped_on_the_next_wri
     scenario="the engine's settings converge and a deletion means the defaults",
 )
 async def test_a_deleted_document_resets_every_setting(machine: _Machine) -> None:
-    await machine.service.set_upkeep(DISTIL, UpkeepSetting(enabled=False, interval_s=600))
+    await machine.service.set_upkeep(MEMORY_SYNC, UpkeepSetting(enabled=False, interval_s=600))
     await machine.service.set_transcribe_model("hears")
 
     # Another machine's deletion, arriving as a commit.
@@ -135,8 +137,7 @@ async def test_a_deleted_document_resets_every_setting(machine: _Machine) -> Non
 
     held = await machine.service.get()
     assert held.transcribe_model is None
-    for name in (AGGREGATE, DISTIL):
-        assert held.upkeep(name) == UpkeepSetting(enabled=True, interval_s=None)
+    assert held.upkeep(MEMORY_SYNC) == UpkeepSetting(enabled=True, interval_s=None)
 
 
 def _enabled(service: InternalEngineConfigService, name: str):  # type: ignore[no-untyped-def]
@@ -171,7 +172,7 @@ async def test_a_running_worker_follows_the_row_without_being_rebuilt(
     passes: list[float] = []
     done = asyncio.Event()
 
-    async def aggregate(*, actor: str) -> None:
+    async def sync(actor: str) -> None:
         passes.append(now)
 
     async def sleep(seconds: float) -> None:
@@ -180,11 +181,13 @@ async def test_a_running_worker_follows_the_row_without_being_rebuilt(
         # Operator actions, at virtual times inside the worker's waits.
         if now == 60.0:
             # Mid-way through the first wait, which started at a 3600s interval.
-            await machine.service.set_upkeep(AGGREGATE, UpkeepSetting(enabled=True, interval_s=120))
+            await machine.service.set_upkeep(
+                MEMORY_SYNC, UpkeepSetting(enabled=True, interval_s=120)
+            )
         elif now == 150.0:
             # Inside the second wait: the pass is switched off.
             await machine.service.set_upkeep(
-                AGGREGATE, UpkeepSetting(enabled=False, interval_s=120)
+                MEMORY_SYNC, UpkeepSetting(enabled=False, interval_s=120)
             )
         elif now >= 300.0:
             done.set()
@@ -192,15 +195,15 @@ async def test_a_running_worker_follows_the_row_without_being_rebuilt(
         await asyncio.sleep(0)
 
     monkeypatch.setattr(
-        aggregate_worker,
+        sync_worker,
         "wait_for_next_pass",
         functools.partial(wait_for_next_pass, slice_s=30.0, sleep=sleep),
     )
-    await machine.service.set_upkeep(AGGREGATE, UpkeepSetting(enabled=True, interval_s=3600))
-    worker = AggregateWorker(
-        aggregate=aggregate,
-        is_enabled=_enabled(machine.service, AGGREGATE),
-        read_interval=_interval(machine.service, AGGREGATE),
+    await machine.service.set_upkeep(MEMORY_SYNC, UpkeepSetting(enabled=True, interval_s=3600))
+    worker = MemorySyncWorker(
+        sync=sync,
+        is_enabled=_enabled(machine.service, MEMORY_SYNC),
+        read_interval=_interval(machine.service, MEMORY_SYNC),
     )
 
     task = asyncio.create_task(worker.run_forever())
@@ -214,3 +217,28 @@ async def test_a_running_worker_follows_the_row_without_being_rebuilt(
     # The catch-up pass at start; then the wait that began at 3600s ended at
     # the 120s set during it; then, switched off, the pass due at 240 did not run.
     assert passes == [0.0, 120.0]
+
+
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="an older build's aggregation switch carries over to the memory sync",
+)
+async def test_the_retired_aggregation_switch_becomes_the_memory_syncs(
+    machine: _Machine,
+) -> None:
+    """A vault an older build wrote carries ``upkeep.aggregate`` and no
+    ``upkeep.memory_sync``: the person's choice carries over, and the next
+    write records it under the memory sync's own name."""
+    await machine.service.set_transcribe_model("hears", actor="api")
+    path = vault_root() / DOC
+    doc = json.loads(path.read_text())
+    doc["upkeep"] = {RETIRED_AGGREGATE: {"enabled": False, "interval_s": 900}}
+    path.write_text(json.dumps(doc, indent=2) + "\n")
+    vault_writer().settle([DOC])
+
+    held = await machine.service.get()
+    assert held.upkeep(MEMORY_SYNC) == UpkeepSetting(enabled=False, interval_s=900)
+
+    await machine.service.set_transcribe_model("hears-2", actor="api")
+    stored = json.loads(vault_writer().repo.read("HEAD", DOC) or b"{}")
+    assert stored["upkeep"] == {MEMORY_SYNC: {"enabled": False, "interval_s": 900}}

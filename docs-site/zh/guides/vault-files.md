@@ -15,6 +15,7 @@ Coffer 保存的、你希望带到另一台机器上的一切——MCP 服务器
 ├── state/mcp-preferences/<server>.json the tools, prompts and resources you switched off on a server
 ├── state/settings/internal-engine.json 语音转文字模型和定期维护设置
 ├── knowledge/<collection>/…            knowledge collections (README.md, sources/, pages/)
+├── memory/global/, memory/projects/<key>/  记忆中心库，由记忆同步写入
 ├── skills/<name>/…                     skill folders (SKILL.md and the rest)
 ├── secret/<ref>.enc                    encrypted secrets (never edit these)
 └── machines/<id>.json                  one descriptor per machine that syncs

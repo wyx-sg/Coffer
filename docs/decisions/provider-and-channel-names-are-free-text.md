@@ -8,7 +8,7 @@
 ## Context
 
 Every resource had a `name` held to `^[a-zA-Z0-9_.-]+$` (at most 64
-characters), and a provider, a channel or a memory could carry a second label,
+characters), and a provider or a channel could carry a second label,
 an optional free-text `title` of at most 80 characters that surfaces showed in
 the name's place. The slug rule exists for the kinds whose name is quoted
 outside Coffer — an MCP server's name is in every tool name an agent calls, a

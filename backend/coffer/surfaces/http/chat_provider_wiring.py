@@ -21,10 +21,8 @@ from coffer.application.engine.resolve import resolve_transcribe_connection
 from coffer.domain.agent.facets import AgentCatalog
 from coffer.infrastructure.chat.adapter_support import (
     ChannelNoteResolver,
-    MemoryContextComposer,
 )
 from coffer.infrastructure.chat.drivers import DriverDeps
-from coffer.infrastructure.chat.prompt_memory import MemoryRetriever
 from coffer.infrastructure.llm.transcription import remote_transcriber_factory
 from coffer.surfaces.http.agent_dependencies import (
     get_agent_model_catalogue,
@@ -79,9 +77,7 @@ def build_agent_provider_registry(
     conv_repo: ConversationRepo,
     agent_catalog: AgentCatalog,
     secret_resolver: Callable[[str], str] | None = None,
-    compose_memory_context: MemoryContextComposer | None = None,
     resolve_channel: ChannelNoteResolver | None = None,
-    retrieve_memory: MemoryRetriever | None = None,
 ) -> AgentProviderRegistry:
     """Construct and populate the agent-provider registry.
 
@@ -101,19 +97,6 @@ def build_agent_provider_registry(
     is told what the channel is called NOW rather than when the thread started.
     ``None`` means the append still happens — the turn really did arrive over a
     channel — without naming it.
-
-    ``compose_memory_context`` is the memory kind's own system-prompt append
-    (spec memory "Deliver to channel turns through the system prompt") for a
-    channel-driven turn — a plain callable so this module, like
-    ``claude_sdk_provider``, never imports anything from ``application.memory``
-    itself. The composition root builds the real closure over ``MemoryService``
-    (``memory_turn_wiring.memory_context_composer``) and hands it through
-    ``wire_chat``. ``None`` means no memory append at all, not a header with
-    nothing under it.
-
-    ``retrieve_memory`` ranks a channel turn's prompt against the notes (spec
-    memory "Retrieve the notes a prompt names for a channel turn"); the
-    composition root builds it (``memory_turn_wiring``). ``None`` means none.
     """
     registry = AgentProviderRegistry()
 
@@ -146,11 +129,9 @@ def build_agent_provider_registry(
         conversations=conv_repo,
         list_models=_list_models,
         transcriber_factory=transcriber_factory,
-        compose_memory_context=compose_memory_context,
         resolve_channel=resolve_channel,
         resolve_home_env=agent_home_env_resolver,
         is_managed=agent_is_managed,
-        retrieve_memory=retrieve_memory,
     )
     # Every agent with a driver facet, in agent-type order.
     for driver in agent_catalog.drivers():

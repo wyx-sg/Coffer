@@ -61,12 +61,7 @@ export function dayLabel(t: TFunction, at: string | null, now: Date, locale: str
 
 /** The route a change's resource lives at, when it has a page of its own. */
 /** The kinds whose detail page is addressed by uid, which an audit entry does not carry. */
-export const UID_ADDRESSED_KINDS: readonly string[] = [
-  "provider",
-  "channel",
-  "knowledge",
-  "memory",
-];
+export const UID_ADDRESSED_KINDS: readonly string[] = ["provider", "channel", "knowledge"];
 
 /**
  * Where a change's "Open X" goes: the resource's own detail page. A kind whose
@@ -91,8 +86,6 @@ export function changeLink(entry: AuditEntry, uid?: string): { to: string; name:
       return { to: byUid("/channels"), name };
     case "knowledge":
       return { to: byUid("/knowledge"), name };
-    case "memory":
-      return { to: byUid("/memory"), name };
     default:
       return null;
   }

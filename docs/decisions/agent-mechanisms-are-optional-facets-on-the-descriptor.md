@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md), [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md), [Coffer Drives Claude Code Through the Agent SDK and Codex Through `codex app-server`](driving-agents-through-sdk-and-app-server.md), [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md), [Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale](agent-hook-installation.md), [Skills Reach an Agent as a Directory Link to One Master Folder](cross-platform-skill-delivery.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database](one-level-triggered-reconciler-compares-parameters.md), research note [agent plugins](../research/agent-plugins.md), research note [agent chat clients](../research/agent-chat-clients.md), spec agent-registry "Support exactly the Claude Code and Codex agent types", spec chat "Run Claude Code and Codex as subprocess providers on the type's one agent", spec provider-switching "Keep projection transforms pure", PR #87, PR #309
+**Related**: [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md), [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md), [Coffer Drives Claude Code Through the Agent SDK and Codex Through `codex app-server`](driving-agents-through-sdk-and-app-server.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [Skills Reach an Agent as a Directory Link to One Master Folder](cross-platform-skill-delivery.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database](one-level-triggered-reconciler-compares-parameters.md), research note [agent plugins](../research/agent-plugins.md), research note [agent chat clients](../research/agent-chat-clients.md), spec agent-registry "Support exactly the Claude Code and Codex agent types", spec chat "Run Claude Code and Codex as subprocess providers on the type's one agent", spec provider-switching "Keep projection transforms pure", PR #87, PR #309
 
 ## Context
 
@@ -19,7 +19,6 @@ code that translates, runs or reads. Before this decision they branched on
   type**; deactivation, the boot heal and a `use-builtin/{wire}` route all
   relied on it. A second agent that speaks the Anthropic protocol had no
   representation.
-- **Memory delivery** held a dict of adapters keyed by `AgentType`.
 - **Native memory and transcripts** branched on the agent type in the domain
   and in the readers under `infrastructure/memory/readers/` and
   `infrastructure/agent/`.
@@ -29,7 +28,7 @@ code that translates, runs or reads. Before this decision they branched on
 
 Adding a third agent meant finding each of those by search, the failure
 mode the descriptor ADR's Option A lost for. And the set of things Coffer
-places into an agent grows past MCP, skills, providers and hooks (rules,
+places into an agent grows past MCP, skills and providers (rules,
 commands, subagents, permissions), each of which lands in a different file
 per agent, at user level, project level, or in a directory several agents
 share.
@@ -57,10 +56,10 @@ the implementation):
 
 | Facet | Answers | Code it absorbs |
 | --- | --- | --- |
-| `projection` | Which asset types this agent can receive, where each lands, and how Coffer's asset is translated into the agent's native shape | the MCP injection spec, the skill subpath, the provider translation (`domain/provider/agent_projection.py`), the memory delivery adapters (`infrastructure/memory/delivery/`) |
+| `projection` | Which asset types this agent can receive, where each lands, and how Coffer's asset is translated into the agent's native shape | the MCP injection spec, the skill subpath, the provider translation (`domain/provider/agent_projection.py`) |
 | `driver` | How Coffer runs a turn on this agent | the Claude Code and Codex chat drivers (`infrastructure/chat/drivers.py`) |
-| `memory_reader` | How the agent's native memory and transcripts are read (read only, per [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md)) | `domain/agent/native_memory.py`, `domain/agent/transcripts.py`, `infrastructure/memory/readers/` |
-| `dependency_probe` | Whether the agent is installed here, which version, and what that version supports (model catalogue, hook events) | the program probe (`infrastructure/agent/program_probe.py`), the model catalogue probes |
+| `memory_reader` | How the agent's native memory is read, so what the agent learned can enter the memory hub ([Sync Memory Into Each Agent's Own Memory](sync-memory-into-each-agents-own-memory.md)) | `domain/agent/native_memory.py`, `domain/agent/codex_memory.py`, `infrastructure/memory/readers/` |
+| `dependency_probe` | Whether the agent is installed here, which version, and what that version supports (model catalogue) | the program probe (`infrastructure/agent/program_probe.py`), the model catalogue probes |
 
 The projection facet is a **registry keyed by asset type × landing point**.
 Each entry states:
@@ -72,8 +71,7 @@ Each entry states:
   fragment, as spec provider-switching "Keep projection transforms pure"
   already requires for providers;
 - a capability declaration: only the fields the two shipped agents actually
-  use (for providers, the protocols the agent accepts, which may be none; for
-  hooks, the events it offers).
+  use (for providers, the protocols the agent accepts, which may be none).
 
 Provider projection is not keyed by protocol: an agent declares which
 protocols it accepts, a connection reaches agents by scope, and deactivation
@@ -142,8 +140,6 @@ agent's own plugin loader place it.
   master folder, reach applied by the reconciler).
 - **Why it loses.** The evidence. Plugins remain something Coffer *reads and
   toggles* (the descriptor's `plugins` capability), not a place it writes to.
-  The single open use — a hook-only plugin in Claude Code's skills directory —
-  can be revisited as a projection entry if the hook file becomes unworkable.
 
 ### Option E — ACP as the one driver for every agent
 

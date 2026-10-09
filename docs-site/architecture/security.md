@@ -412,7 +412,7 @@ See [Vault sync](/architecture/vault-sync) for the full protocol.
 ## Trade-offs and alternatives
 
 - **Token scopes as the boundary** — an admin token for changes, per-agent tokens for the gateway. Rejected: the `coffer` CLI runs as you, so an agent that can run it holds the admin token, and registering an MCP server is running a command, which the agent can do with its own shell anyway. It guards "who may change config" and leaves "where may a secret go" open. Per-agent tokens remain useful for attribution, not as the boundary.
-- **Read-deny rules on `~/.coffer` in every agent's config.** Rejected: agents are meant to read knowledge and memory there, and once no plaintext and no key lives there, the rule protects nothing. It does nothing in bypass mode.
+- **Read-deny rules on `~/.coffer` in every agent's config.** Rejected: agents are meant to read knowledge there, and once no plaintext and no key lives there, the rule protects nothing. It does nothing in bypass mode.
 - **Plaintext on the CLI with a Touch ID reuse window** (the password-manager CLI model). Rejected: a window is a gift to whoever acts next — an agent started from that terminal inherits the session — and the value lands in a terminal the agent may be reading.
 - **A presence flag on the master key itself.** Rejected: the daemon would prompt at every start and run locked after an unattended crash restart. Presence belongs on the operations that let plaintext out.
 - **The daemon as a separate OS user.** Rejected: an installer with privilege separation for a single-user tool, while upstream servers still run as you, which puts their environments back in reach.

@@ -3,10 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-18
 **Deciders**: Yuxing Wu
-**Related**: [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Coffer Ships Its Own Skill](coffer-ships-its-own-skill.md), [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md), [Kind Plugin Contract](kind-plugin-contract.md), [Aggregate Agent Memory, Never Write It](aggregate-agent-memory-never-write-it.md), spec vault-sync, spec memory, spec knowledge, PR #405
-
-
-**Partly superseded** (2026-10-09): memory is no longer derived output: the memory hub lives in the vault and syncs, see [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md).
+**Related**: [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Coffer Ships Its Own Skill](coffer-ships-its-own-skill.md), [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md), [Kind Plugin Contract](kind-plugin-contract.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), spec vault-sync, spec memory, spec knowledge, PR #405
 
 ## Context
 
@@ -17,13 +14,18 @@ Some of what Coffer holds is not authored by anyone; each machine
   Its master folder and its `skill` resource row (whose `version_hash` is that
   folder's digest) are regenerated at every boot and after a knowledge change, from the
   running build, the knowledge files and **this machine's own inputs**: its own
-  knowledge and memory root paths.
-- **The memory tree and its `memory` partition rows**, aggregated from the
-  agents installed on *this* machine
-  ([Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md)).
+  knowledge root path and feature switches.
 - **Per-machine side effects of converged resources**: agent-native config
   projections, the stdio shim entries, skill deliveries into each agent's
-  directory.
+  directory, and the copies of memory entries written into each agent's own
+  memory.
+
+Memory itself is not rendered output. The hub of memory entries under
+`vault/memory/` is what the person's agents learned, kept nowhere else, so it
+is vault content and syncs; each machine writes its own copies from it into
+the agents installed there and records them in the machine-local
+`local/memory-sync.json`
+([Sync Memory Into Each Agent's Own Memory](sync-memory-into-each-agents-own-memory.md)).
 
 [Sync](sync-applies-clean-merges-and-stops-on-any-conflict.md) publishes the
 whole vault repository, so anything stored in the vault would be carried. For
@@ -47,9 +49,9 @@ output a machine derives lives in the **derived** class, `derived/`, which is
 simply not in the repository (spec vault-sync "Withhold derived output in both halves"):
 
 - **A whole kind** declares its storage class on its `Kind`
-  (`storage`, in `domain/resource.py`). `memory` is the only kind filed as
-  derived (`application/memory/kind.py`); its rows and the memory tree live
-  under `derived/memory/`.
+  (`storage`, in `domain/resource.py`), as `agent` files every row as local.
+  No kind is filed wholly as derived today; a generated kind would say so
+  there.
 - **One row of a kind that otherwise lives in the vault** is filed through
   `Kind.storage_row`, a function of the row's config: `skill` answers derived
   for a `builtin` source (`application/skill/kind.py`), so every skill a person
@@ -127,8 +129,8 @@ the same bytes. This was the first answer.
 Pros: nothing special in sync.
 
 Cons: determinism removes only accidental differences. Some inputs to the
-manual are *meant* to differ per machine, its own knowledge and memory root
-paths; no byte ordering makes a laptop and a desktop with different roots
+manual are *meant* to differ per machine, such as its own knowledge root
+path; no byte ordering makes a laptop and a desktop with different roots
 agree. Version skew defeats it again on every release.
 
 Lost: the two machines are not supposed to agree. Determinism survives for a
@@ -187,8 +189,7 @@ re-rendered locally after every checkout from reconciler hints.
 
 - Adding a new generated artifact requires filing it under `derived/` at the
   same time; otherwise it lives in the vault and churns.
-- `coffer-guide` and the memory tree can differ between machines, and that is
-  correct.
+- `coffer-guide` can differ between machines, and that is correct.
 - Derived output can be deleted at any time; it is rebuilt.
 - The breaker never sees derived paths, so a fleet mid-upgrade is not held over
   them.

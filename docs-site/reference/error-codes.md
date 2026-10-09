@@ -60,8 +60,8 @@ give the status each code is actually sent with.
 | `NAME_IMMUTABLE` | 409 | The resource's kind fixes its name once registered, because agents quote it: an MCP server's name prefixes its tool names, and a skill's name is its folder. An agent's name is its type and cannot change at all. The message names what a re-registration resets. | Delete the MCP server or skill and register it again under the new name. |
 | `SCOPE_INVALID` | 422 | A reach (activation scope) payload is invalid, or the kind has no reach. | Send an agent allow-list, or set the reach from the page of a kind that supports it. See [reach](/architecture/resource-framework#reach). |
 | `RESOURCE_PROTECTED` | 409 | The resource is managed by Coffer itself (for example a skill Coffer generates) and cannot be taken over or deleted. | Leave it; Coffer maintains it. |
-| `RESOURCE_NOT_TOGGLEABLE` | 409 | The resource's kind cannot be enabled or disabled: every knowledge collection and memory partition is always served. | Delete the resource if it should no longer be served. |
-| `UPKEEP_ALREADY_RUNNING` | 409 | An upkeep pass (aggregate or distil) is already running for this memory partition; clearing the derived cache while one runs gets it too. | Wait for the running pass to finish; `coffer daemon status` and the UI show it. |
+| `RESOURCE_NOT_TOGGLEABLE` | 409 | The resource's kind cannot be enabled or disabled: every knowledge collection is always served. | Delete the resource if it should no longer be served. |
+| `UPKEEP_ALREADY_RUNNING` | 409 | A long pass over the same target is already running in this daemon. | Wait for the running pass to finish; `coffer daemon status` and the UI show it. |
 | `UNKNOWN_PRUNABLE_TABLE` | 404 | A retention request named a table that has no retention policy. | Use a table listed in **Settings → Data**. |
 | `ATTENTION_NOT_IGNORABLE` | 409 | The key names no attention item that can be ignored: nothing is listed under it, or the item is a failure rather than a notice. | Refresh the attention list; fix a failure instead of ignoring it. |
 
@@ -193,14 +193,11 @@ give the status each code is actually sent with.
 
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
-| `MEMORY_NOTE_NOT_FOUND` | 404 | No note with that slug in the partition. | List notes on the partition's page. |
-| `MEMORY_RAW_ENTRY_NOT_FOUND` | 404 | No raw entry with that id in the partition. | Refresh; the entry may have become a note and been removed. |
-| `MEMORY_UNSAFE_PATH` | 400 | A path segment is hidden, all dots, or otherwise unsafe. | Use a path inside the partition. |
+| `MEMORY_UNSAFE_PATH` | 400 | A path built from an agent's memory is hidden, all dots, or otherwise unsafe. | Rename the memory the message names in the agent's own memory directory. |
 | `MEMORY_UNREADABLE` | 422 | An agent's native memory file cannot be parsed. | Repair the file the message names. |
 | `MEMORY_SYNC_RUNNING` | 409 | A memory sync is already running. | Wait for it to finish, then sync again. |
 | `MEMORY_SYNC_NO_PREVIEW` | 409 | No memory sync preview is waiting to be written or cancelled. | Refresh the Memory page. |
-| `MEMORY_DELIVERY_UNSUPPORTED` | 422 | This agent type has no memory hook Coffer can install. | None; that agent reads memory notes from the memory root the `coffer-guide` skill names, with its own file tools. |
-| `MEMORY_DELIVERY_CONFIG_INVALID` | 422 | The agent's settings or hooks file is not a JSON object Coffer can edit. | Repair the file, then install delivery again. |
+| `MEMORY_DELIVERY_CONFIG_INVALID` | 422 | The agent's settings or hooks file is not a JSON object, so the retired memory hook could not be removed from it. | Repair the file; the next start removes the hook. |
 
 ## Chat and channels
 

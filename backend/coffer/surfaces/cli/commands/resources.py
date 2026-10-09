@@ -17,7 +17,6 @@ KINDS = {
     "mcp": ("mcp_server", "MCP servers", "server"),
     "channel": ("channel", "Channels", "channel"),
     "knowledge": ("knowledge", "Knowledge", "collection"),
-    "memory": ("memory", "Memory", "partition"),
     "skill": ("skill", "Skills", "skill"),
 }
 
@@ -136,7 +135,7 @@ for group, (kind, page, noun) in KINDS.items():
                 names=named,
             )
         )
-    if kind not in ("knowledge", "memory"):
+    if kind != "knowledge":
         SPECS += [
             RouteCommand(
                 f"{group} enable",

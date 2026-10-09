@@ -92,7 +92,7 @@ describe("FeatureGate", () => {
 describe("the route table", () => {
   const GATED: Record<string, string[]> = {
     knowledge: ["/knowledge", "/knowledge/abc/history"],
-    memory: ["/memory", "/memory/abc/delivered"],
+    memory: ["/memory", "/memory/global", "/memory/projects/abc"],
   };
 
   acceptance("web-ui", "a switched-off feature's address is not found", () => {

@@ -1,8 +1,8 @@
 """Coffer's own settings service (spec internal-engine "Carry a switch and interval for
-each of the two unattended passes").
+each unattended pass").
 
-One singleton holds the aggregate and distil switches and timers and the
-speech-to-text model."""
+One singleton holds the memory sync's switch and timer and the speech-to-text
+model."""
 
 from __future__ import annotations
 
@@ -60,10 +60,6 @@ class InternalEngineConfigService:
                 "enabled_to": setting.enabled,
                 "interval_s_from": was.interval_s,
                 "interval_s_to": setting.interval_s,
-                "auto_aggregate_enabled": saved.auto_aggregate_enabled,
-                "aggregate_interval_s": saved.aggregate_interval_s,
-                "auto_distil_enabled": saved.auto_distil_enabled,
-                "distil_interval_s": saved.distil_interval_s,
                 "memory_sync_enabled": saved.memory_sync_enabled,
                 "memory_sync_interval_s": saved.memory_sync_interval_s,
             },

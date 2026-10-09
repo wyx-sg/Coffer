@@ -3,7 +3,8 @@ database (spec memory "Audit every sync, undo and curation request", "Add no
 table or resource kind", "Sync on an interval and on demand").
 
 Boots the real app against a fresh SQLite file with ``HOME`` pinned into
-``tmp_path``; the sync worker is off by default, so only requested syncs run.
+``tmp_path``. The sync worker is on by default; its first sync on a machine
+only stages a preview, so what a test asks for is what gets written.
 """
 
 from __future__ import annotations
@@ -99,7 +100,7 @@ def test_keep_the_hub_and_the_ledger_as_files_only(client: TestClient, home: pat
     assert list((home / ".coffer" / "vault" / "memory").rglob("*.md"))
 
 
-def test_memory_sync_is_off_by_default(client: TestClient) -> None:
+def test_memory_sync_is_on_by_default(client: TestClient) -> None:
     cfg = client.get("/api/v1/internal-engine-config").json()
-    assert cfg["upkeep"]["memory_sync"]["enabled"] is False
+    assert cfg["upkeep"]["memory_sync"]["enabled"] is True
     assert cfg["upkeep"]["memory_sync"]["default_interval_s"] == 3600

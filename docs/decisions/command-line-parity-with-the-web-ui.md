@@ -69,8 +69,8 @@ and no help, no stable exit codes and no presence hand-off.
 
 Every management operation a person can do on a web UI page or in the desktop
 app has a `coffer` command calling the same route. Exempt are only plain file
-contents a spec declares directly editable (knowledge documents, memory notes,
-a skill's files, agents' own config and native-memory files) and acts that are
+contents a spec declares directly editable (knowledge documents, a skill's files,
+agents' own config and native-memory files) and acts that are
 the window itself; registering, binding, reach, delivery and history restore
 stay commands even where what they manage is a file. Internal YAML, `runs.db`
 and secret ciphertext are never a reason to skip a command: no command and no

@@ -46,7 +46,6 @@ from coffer.infrastructure.chat.document_extract import (
     extract_document_attachments,
     prompt_with_document_text,
 )
-from coffer.infrastructure.chat.prompt_memory import PromptMemory, prompt_with_memory
 from coffer.infrastructure.chat.transcribe import (
     Transcriber,
     prompt_with_transcripts,
@@ -141,7 +140,6 @@ class ClaudeSdkAgentAdapter:
         system_context: str | None = None,
         transcriber: Transcriber | None = None,
         document_extractor: DocumentExtractor | None = None,
-        prompt_memory: PromptMemory | None = None,
         ask_owner: AskOwner | None = None,
     ) -> None:
         self._cwd = cwd
@@ -153,8 +151,6 @@ class ClaudeSdkAgentAdapter:
         self._system_context = system_context
         self._transcriber = transcriber
         self._document_extractor = document_extractor
-        # A channel turn's retrieval: the notes its prompt names.
-        self._prompt_memory = prompt_memory
         # Raises a Coffer question for Claude Code's own ``AskUserQuestion`` (spec
         # chat "Pause a turn on a question for the owner"); ``None`` outside a
         # turn Coffer registered, leaving the CLI's own handling of the tool.
@@ -277,7 +273,6 @@ class ClaudeSdkAgentAdapter:
             attachments, self._document_extractor
         )
         prompt = prompt_with_transcripts(prompt.strip(), transcripts)
-        prompt = await prompt_with_memory(prompt, self._prompt_memory)
         prompt = prompt_with_document_text(prompt, extracts)
         content = self._build_content(prompt, attachments)
         if not content:

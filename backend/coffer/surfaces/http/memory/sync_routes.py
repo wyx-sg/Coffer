@@ -1,5 +1,5 @@
 """``/api/v1/memory/sync/*``: the memory sync (spec memory "Manage memory
-sync in the web UI").
+sync in the web UI and on the command line").
 
 The sync's state, **Sync now**, the pending preview's **Write** and
 **Cancel**, **Undo sync…**, the person's answer to "Codex imports Claude

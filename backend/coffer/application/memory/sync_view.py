@@ -1,6 +1,6 @@
 """What the Memory page reads about the sync, and **Curate now** (spec memory
-"Manage memory sync in the web UI", "Show each agent's own curation and ask it
-to curate now").
+"Manage memory sync in the web UI and on the command line", "Show each agent's
+own curation and ask it to curate now").
 
 Read-only views over the hub, the ledger and the agents' own settings, plus
 the one action that asks an agent to curate its own memory.

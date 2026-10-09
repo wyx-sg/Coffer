@@ -17,14 +17,12 @@ from coffer.application.chat import questions
 from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.question_agents import asker_for
 from coffer.application.chat.service import ConversationRepo
-from coffer.domain.channel_turn import channel_turn_env
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.infrastructure.chat.adapter_support import (
     ChannelNoteResolver,
     HomeEnvResolver,
     ManagedCheck,
-    MemoryContextComposer,
     ModelLister,
     compose_system_context,
     require_managed,
@@ -36,20 +34,12 @@ from coffer.infrastructure.chat.claude_sdk_agent import (
 )
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 from coffer.infrastructure.chat.document_extract import default_document_extractor
-from coffer.infrastructure.chat.prompt_memory import MemoryRetriever, bind_prompt_memory
 from coffer.infrastructure.chat.transcribe import Transcriber
 from coffer.infrastructure.platform.user_path import which_on_user_path
 
 #: The model ids this agent can be put on, looked up per turn. A narrow callable
 #: rather than the application catalogue service itself, so infrastructure keeps
 #: no dependency on an application type it would only read one list from.
-
-#: The memory-context append a channel turn carries (spec memory "Deliver to
-#: channel turns through the system prompt") arrives as a
-#: ``MemoryContextComposer`` — a narrow callable, never
-#: ``application.memory.context.compose_context`` imported here, so this layer
-#: never reaches into the memory kind itself. The composition root builds the
-#: real closure over ``MemoryService`` (``memory_turn_wiring.memory_context_composer``).
 
 #: Builds the transcriber for one turn, or ``None`` to leave audio untouched.
 #: Resolved per turn so designating (or clearing) the internal connection takes
@@ -76,11 +66,9 @@ class ClaudeSdkProvider:
         which: Any = which_on_user_path,
         list_models: ModelLister | None = None,
         transcriber_factory: TranscriberFactory | None = None,
-        compose_memory_context: MemoryContextComposer | None = None,
         resolve_channel: ChannelNoteResolver | None = None,
         resolve_home_env: HomeEnvResolver | None = None,
         is_managed: ManagedCheck | None = None,
-        retrieve_memory: MemoryRetriever | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: SdkSessionFactory = session_factory or default_session_factory
@@ -91,10 +79,6 @@ class ClaudeSdkProvider:
         # None ⇒ voice is never transcribed and the audio file reaches the agent
         # as-is. That is the default: nothing leaves the machine unasked.
         self._transcriber_factory = transcriber_factory
-        # None ⇒ no memory append at all (feature not wired yet, or this
-        # provider used outside the composition root that wires it) — never a
-        # header with nothing under it.
-        self._compose_memory_context = compose_memory_context
         # Turns the conversation's stored channel uid into the name the system
         # prompt reads. ``None`` ⇒ a channel turn still gets its channel append,
         # just without naming the channel — the uid is what decides that it IS a
@@ -108,9 +92,6 @@ class ClaudeSdkProvider:
         # Whether an enabled agent of this type is managed by Coffer; chat offers
         # and runs managed agents only. ``None`` ⇒ not asked.
         self._is_managed = is_managed
-        # A channel turn's per-prompt notes (spec memory "Retrieve the notes a
-        # prompt names for a channel turn"). ``None`` ⇒ none.
-        self._retrieve_memory = retrieve_memory
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -155,10 +136,8 @@ class ClaudeSdkProvider:
         system_context = await compose_system_context(
             agent_key=self.agent_key,
             channel_uid=conv.channel_uid or "",
-            cwd=config.cwd,
             model=config.model,
             list_models=self._list_models,
-            compose_memory=self._compose_memory_context,
             resolve_channel=self._resolve_channel,
             conversation_id=conversation_id,
         )
@@ -166,10 +145,6 @@ class ClaudeSdkProvider:
         # Overrides only: the SDK merges ``options.env`` over the daemon's own
         # environment itself. Empty for the default config dir.
         home_env = dict(await self._resolve_home_env()) if self._resolve_home_env else {}
-        # A channel turn's process is marked, so the memory hook Claude Code runs
-        # inside it leaves to this turn the index and notes it already carries
-        # (spec memory "Deliver to channel turns through the system prompt").
-        home_env.update(channel_turn_env(conv.channel_uid or ""))
         # The turn's token: the shim in the agent's MCP entry forwards it so
         # ``coffer__ask`` reaches this turn (spec mcp-gateway "Let an agent ask the
         # owner a question during a Coffer turn").
@@ -193,13 +168,6 @@ class ClaudeSdkProvider:
             # agent as text rather than a vision/binary block (spec chat
             # "Extract document attachments to text").
             document_extractor=default_document_extractor(),
-            prompt_memory=bind_prompt_memory(
-                self._retrieve_memory,
-                channel_uid=conv.channel_uid or "",
-                agent_key=self.agent_key,
-                cwd=config.cwd,
-                conversation_id=conversation_id,
-            ),
         )
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:

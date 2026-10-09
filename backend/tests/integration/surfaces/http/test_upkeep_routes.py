@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.application.memory.service import KIND_MEMORY
 from coffer.application.upkeep_runs import UPKEEP_RUNS
 
 
@@ -24,19 +23,19 @@ from coffer.application.upkeep_runs import UPKEEP_RUNS
 def test_upkeep_runs_names_every_pass_in_flight_and_empties_out(client) -> None:
     assert client.get("/api/v1/upkeep/runs").json()["runs"] == []
 
-    UPKEEP_RUNS.claim(KIND_MEMORY, "shopee")
-    UPKEEP_RUNS.claim(KIND_MEMORY, "coffer")
+    UPKEEP_RUNS.claim("knowledge", "shopee")
+    UPKEEP_RUNS.claim("knowledge", "coffer")
     try:
         runs = client.get("/api/v1/upkeep/runs").json()["runs"]
         assert {(r["kind"], r["name"]) for r in runs} == {
-            ("memory", "shopee"),
-            ("memory", "coffer"),
+            ("knowledge", "shopee"),
+            ("knowledge", "coffer"),
         }
         # Every run says when it started, so a surface can report duration.
         assert all(r["started_at"] for r in runs)
     finally:
-        UPKEEP_RUNS.release(KIND_MEMORY, "shopee")
-        UPKEEP_RUNS.release(KIND_MEMORY, "coffer")
+        UPKEEP_RUNS.release("knowledge", "shopee")
+        UPKEEP_RUNS.release("knowledge", "coffer")
 
     assert client.get("/api/v1/upkeep/runs").json()["runs"] == []
 

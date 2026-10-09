@@ -21,7 +21,7 @@ import pathlib
 
 import pytest
 
-from coffer.domain.memory.note import TYPE_PROJECT, TYPE_USER
+from coffer.domain.memory.hub import TYPE_PROJECT, TYPE_USER
 from coffer.infrastructure.memory.readers.codex import CodexMemoryReader
 
 _MEMORY_MD = """# Task Group: alpha service configuration and rollout
@@ -228,7 +228,6 @@ def test_a_group_with_no_recorded_cwd_yields_an_empty_project_root(
     assert beta[0].project_root == ""
 
 
-@pytest.mark.acceptance(spec="memory", scenario="the Codex profile becomes global raw entries")
 def test_the_profile_becomes_entries_with_an_empty_project_root(tmp_path: pathlib.Path) -> None:
     config_dir = _write_codex_memories(tmp_path)
     reader = CodexMemoryReader()
@@ -248,7 +247,6 @@ def test_the_profile_becomes_entries_with_an_empty_project_root(tmp_path: pathli
     assert preference.title == "Always ask before merging"
 
 
-@pytest.mark.acceptance(spec="memory", scenario="the Codex profile becomes global raw entries")
 def test_the_summarys_general_tips_roll_up_is_not_read_as_entries(
     tmp_path: pathlib.Path,
 ) -> None:

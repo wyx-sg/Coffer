@@ -54,7 +54,8 @@ describe("UninstallSection", () => {
       renderSection();
       fireEvent.click(screen.getByRole("button", { name: "Uninstall Coffer…" }));
       const dialog = await screen.findByRole("dialog");
-      expect(dialog).toHaveTextContent(/MCP entry, memory hook/);
+      expect(dialog).toHaveTextContent(/Coffer's MCP entry and model routing from each agent/);
+      expect(dialog).not.toHaveTextContent(/memory hook/);
       expect(dialog).toHaveTextContent(/~\/\.coffer: your vault/);
       expect(screen.getByRole("checkbox", { name: /delete my data/i })).not.toBeChecked();
       fireEvent.click(screen.getByRole("button", { name: "Uninstall" }));

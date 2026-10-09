@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 import i18n from "@/i18n";
 
 import { formatAgo } from "./age";
-import { hookConfigPath, mainConfigPath, mcpConfigPath } from "./paths";
+import { mainConfigPath, mcpConfigPath } from "./paths";
 
 const t = i18n.getFixedT("en");
 const STD = { standard_config_dir: "/Users/me/.claude" };
@@ -19,11 +19,9 @@ describe("paths", () => {
     );
   });
 
-  test("Codex keeps both parts in its directory; the daemon's hook path wins when given", () => {
+  test("Codex keeps its MCP entry in its main config, in its directory", () => {
     const codex = { type: "codex" as const, config_dir: "/Users/me/.codex" };
     expect(mcpConfigPath(codex, STD)).toBe("~/.codex/config.toml");
-    expect(hookConfigPath(codex)).toBe("~/.codex/hooks.json");
-    expect(hookConfigPath(codex, "/Users/me/.codex/other.json")).toBe("~/.codex/other.json");
     expect(mainConfigPath(codex)).toBe("~/.codex/config.toml");
   });
 });

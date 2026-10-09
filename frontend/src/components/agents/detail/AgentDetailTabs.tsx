@@ -4,7 +4,7 @@
 // (Plugins · Memory, the least used) — no counts. The open tab is the path
 // segment (`useDetailTab`); only the open tab is mounted, so a tab reads its
 // data when it is opened. A tab inside More that needs attention (a plugin
-// whose files are gone, Coffer's memory hook out of order) puts a dot on More,
+// whose files are gone) puts a dot on More,
 // and while one of them is open More wears its name and the underline. There is
 // no Model tab: the model is a section of Overview. Leaving Config files with
 // an unsaved draft asks first, through the shell's unsaved-changes guard, like
@@ -32,8 +32,7 @@ import {
 } from "@/lib/agents/routes";
 import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
 import { useDetailTab } from "@/lib/detailTabs";
-import { useAgentHooks, useAgentPlugins } from "@/lib/hooks/useAgents";
-import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
+import { useAgentPlugins } from "@/lib/hooks/useAgents";
 
 interface Props {
   agent: AgentOut;
@@ -55,13 +54,7 @@ const LABEL_KEY: Record<AgentTab, string> = {
 /** Which of the tabs behind More hold something that needs the user. */
 function useMoreAttention(uid: string): Partial<Record<AgentTab, boolean>> {
   const plugins = useAgentPlugins(uid).data?.items;
-  const hook = useAgentHooks(uid).data?.coffer_hook;
-  const memoryOn = useFeatureEnabled("memory") === true;
-  return {
-    plugins: !!plugins?.some((p) => p.cache_present === false),
-    // The memory tab carries Coffer's memory hook, and Repair when it is off.
-    memory: memoryOn && !!hook && hook.health !== "current",
-  };
+  return { plugins: !!plugins?.some((p) => p.cache_present === false) };
 }
 
 export function AgentDetailTabs({ agent, typeRow, rowActions }: Props) {
@@ -97,11 +90,9 @@ export function AgentDetailTabs({ agent, typeRow, rowActions }: Props) {
         {tab === "skills" && <AgentSkillsTab agent={agent} />}
         {tab === "mcp-servers" && <AgentMcpServersTab agent={agent} />}
         {tab === "plugins" && <AgentPluginsTab agent={agent} />}
-        {tab === "hooks" && <AgentHooksTab agent={agent} onRepair={() => open.change("connect")} />}
+        {tab === "hooks" && <AgentHooksTab agent={agent} />}
         {tab === "config" && <AgentConfigFilesTab agent={agent} />}
-        {tab === "memory" && (
-          <AgentMemoryTab agent={agent} onRepair={() => open.change("connect")} />
-        )}
+        {tab === "memory" && <AgentMemoryTab agent={agent} />}
         {tab === "sessions" && <AgentSessionsTab agent={agent} />}
       </TabsContent>
     </Tabs>

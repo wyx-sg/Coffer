@@ -2,19 +2,17 @@
 //
 // Settings → Data (canvas 1.4.11, 1.4.12; spec web-ui "Group the Data tab by
 // what kind of data it is"): what Coffer keeps, where it lives and for how
-// long, in four sections — Vault (the git repository at ~/.coffer/vault: size
+// long, in three sections — Vault (the git repository at ~/.coffer/vault: size
 // with .git, versions, Open folder), Local content (not synced, the user
-// backs it up: chat and channel attachments with their retention row, Open folder),
-// History (the records, their retention, Clear expired now) and Rebuildable
-// cache (the memory tree and transcript summary cache, one confirmed Clear).
-// No "This Mac only" block. Sizes come from GET /api/v1/storage; folders open
+// backs it up: chat and channel attachments with their retention row, Open folder)
+// and History (the records, their retention, Clear expired now). Coffer keeps
+// no rebuildable cache, so there is nothing to clear. No "This Mac only" block. Sizes come from GET /api/v1/storage; folders open
 // through the daemon's /fs routes, and a folder button names its folder in a
 // tooltip rather than in a row of its own. Every edit auto-saves.
 import { useTranslation } from "react-i18next";
 import { FolderOpen } from "lucide-react";
 
 import { LoadError } from "@/components/LoadError";
-import { CacheBlock } from "@/components/settings/storage/CacheBlock";
 import { DataBlock } from "@/components/settings/storage/DataBlock";
 import { HistoryBlock } from "@/components/settings/storage/HistoryBlock";
 import { RetentionPolicySection } from "@/components/settings/storage/RetentionPolicySection";
@@ -121,8 +119,6 @@ export function DataSettings() {
           onReveal={data?.history.path ? () => open(data.history.path, true) : undefined}
           update={update}
         />
-
-        <CacheBlock bytes={storage.error ? 0 : (data?.cache.bytes ?? null)} />
       </div>
     </div>
   );

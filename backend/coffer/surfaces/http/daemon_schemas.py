@@ -354,18 +354,9 @@ class HistoryUsageOut(BaseModel):
     bytes: int
 
 
-class CacheUsageOut(BaseModel):
-    bytes: int
-
-
 class StorageSummaryOut(BaseModel):
     """What Coffer keeps on this machine, by kind (Settings > Data)."""
 
     vault: VaultUsageOut
     local_content: LocalContentUsageOut
     history: HistoryUsageOut
-    cache: CacheUsageOut
-
-
-class CacheClearOut(BaseModel):
-    cleared_bytes: int

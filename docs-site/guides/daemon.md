@@ -223,7 +223,7 @@ Everything Coffer holds is under `~/.coffer`. The parts that cannot be rebuilt a
 | `content/` | Attachments and the chat workspace. |
 | `runs.db` (+ `-wal`, `-shm`) | Conversations, the audit log, invocation logs, sync rounds, usage. |
 
-`derived/`, including the memory tree derived from your agents' own memory files, can be regenerated. To take a consistent copy, stop the daemon first:
+`derived/` can be regenerated. To take a consistent copy, stop the daemon first:
 
 ```sh
 coffer daemon stop

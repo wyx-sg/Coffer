@@ -1,7 +1,7 @@
 """``/api/v1/daemon/port`` and ``/api/v1/storage`` (Settings > Daemon and > Data).
 
-Spec daemon "Bind a fixed, settable port" and "Report what Coffer stores and
-clear the rebuildable cache". Every test runs under a throwaway HOME.
+Spec daemon "Bind a fixed, settable port" and "Report what Coffer stores".
+Every test runs under a throwaway HOME.
 """
 
 from __future__ import annotations
@@ -162,9 +162,9 @@ def _write(path: Path, size: int) -> None:
     path.write_bytes(b"x" * size)
 
 
-@pytest.mark.acceptance(spec="daemon", scenario="the storage summary reports the four kinds")
+@pytest.mark.acceptance(spec="daemon", scenario="the storage summary reports the three kinds")
 @pytest.mark.asyncio
-async def test_the_storage_summary_reports_the_four_kinds(client, home):
+async def test_the_storage_summary_reports_the_three_kinds(client, home):
     coffer = home / ".coffer"
     vault = coffer / "vault"
     env = {
@@ -186,7 +186,6 @@ async def test_the_storage_summary_reports_the_four_kinds(client, home):
     _write(coffer / "runs.db-wal", 24)
     _write(coffer / "logs" / "daemon.log", 76)
     _write(coffer / "skill-data" / "my-skill" / "journal.log", 40)
-    _write(coffer / "derived" / "memory" / "p1" / "MEMORY.md", 70)
     async with client:
         r = await client.get("/api/v1/storage")
     assert r.status_code == 200
@@ -198,10 +197,10 @@ async def test_the_storage_summary_reports_the_four_kinds(client, home):
     assert body["local_content"]["folder"] == str(coffer / "content")
     assert body["local_content"]["locations"] == [str(coffer / "content" / "channel-media")]
     assert body["history"] == {"path": str(coffer / "runs.db"), "bytes": 1140}
-    assert body["cache"] == {"bytes": 70}
+    assert "cache" not in body
 
 
-@pytest.mark.acceptance(spec="daemon", scenario="the storage summary reports the four kinds")
+@pytest.mark.acceptance(spec="daemon", scenario="the storage summary reports the three kinds")
 @pytest.mark.asyncio
 async def test_a_vault_not_yet_created_reports_no_versions(client, home):
     async with client:
@@ -211,52 +210,3 @@ async def test_a_vault_not_yet_created_reports_no_versions(client, home):
         "bytes": 0,
         "versions": None,
     }
-
-
-# web-ui "clearing the cache is confirmed and rebuilt" has its backend half here
-# (only the memory tree goes); DataSettings.test.tsx the page's.
-@pytest.mark.acceptance(spec="web-ui", scenario="clearing the cache is confirmed and rebuilt")
-@pytest.mark.acceptance(spec="daemon", scenario="clearing the cache leaves everything else")
-@pytest.mark.asyncio
-async def test_clearing_the_cache_touches_nothing_else(client, home, audit):
-    coffer = home / ".coffer"
-    memory = coffer / "derived" / "memory"
-    _write(memory / "p1" / "MEMORY.md", 70)
-    _write(memory / "p1" / "notes" / "n.md", 30)
-    _write(memory / ".source_state.json", 10)
-    _write(coffer / "vault" / "knowledge" / "a.md", 5)
-    _write(coffer / "content" / "channel-media" / "m1", 5)
-    _write(coffer / "vault" / "memory-triggers" / "t.md", 5)
-    _write(coffer / "derived" / "sync-conflicts" / "a.md", 5)
-    _write(coffer / "runs.db", 5)
-    async with client:
-        r = await client.post("/api/v1/storage/cache/clear")
-    assert r.status_code == 200
-    assert r.json() == {"cleared_bytes": 110}
-    assert memory.is_dir() and list(memory.iterdir()) == []
-    for kept in (
-        "vault/knowledge/a.md",
-        "content/channel-media/m1",
-        "vault/memory-triggers/t.md",
-        "derived/sync-conflicts/a.md",
-        "runs.db",
-    ):
-        assert (coffer / kept).exists(), kept
-    assert audit.events == [("storage_cache_cleared", {"cleared_bytes": 110})]
-
-
-@pytest.mark.acceptance(spec="daemon", scenario="clearing the cache leaves everything else")
-@pytest.mark.asyncio
-async def test_clearing_is_refused_while_a_memory_pass_runs(client, home):
-    from coffer.application.upkeep_runs import UPKEEP_RUNS
-
-    _write(home / ".coffer" / "derived" / "memory" / "p1" / "MEMORY.md", 70)
-    assert UPKEEP_RUNS.claim("memory", "p1")
-    try:
-        async with client:
-            r = await client.post("/api/v1/storage/cache/clear")
-    finally:
-        UPKEEP_RUNS.release("memory", "p1")
-    assert r.status_code == 409
-    assert r.json()["error"]["code"] == "UPKEEP_ALREADY_RUNNING"
-    assert (home / ".coffer" / "derived" / "memory" / "p1" / "MEMORY.md").exists()

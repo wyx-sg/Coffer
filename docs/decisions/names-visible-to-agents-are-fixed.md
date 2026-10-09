@@ -87,10 +87,10 @@ through `Kind.name_from_config`, so there is no other name it could have.
 None of the three carries a display title: an MCP
 server is its fixed name plus its description, the user's own note; a skill is
 its fixed name plus its `SKILL.md` description, the text agents choose it by;
-an agent is its type. `provider`, `channel`, `knowledge` and
-`memory` keep renamable names, because their names appear only on Coffer's own
-surfaces (or, for knowledge and memory, in a directory Coffer moves itself
-through the kind's `on_rename` hook). No kind carries a title any more: a
+an agent is its type. `provider`, `channel` and `knowledge` keep renamable
+names, because their names appear only on Coffer's own surfaces (or, for
+knowledge, in a directory Coffer moves itself through the kind's `on_rename`
+hook). No kind carries a title any more: a
 provider's and a channel's name is itself free text ([A Provider's and a
 Channel's Name Is Free Text, and Their Files Are Named by uid](provider-and-channel-names-are-free-text.md)),
 and a knowledge collection is shown by its folder name beside a description its
@@ -214,8 +214,7 @@ reads, an identifier it calls — must set `name_fixed` in the same change.
   MCP JSON import preview names the server name that will be fixed and warns
   above 24 characters before submit.
 - Skill's `on_rename` hook and the MCP server's session eviction on rename are
-  gone. `knowledge` and `memory` keep their `on_rename` hook, which moves their
-  directory ([Kind Plug-in Contract](kind-plugin-contract.md)).
+  gone. `knowledge` keeps its `on_rename` hook, which moves its directory ([Kind Plug-in Contract](kind-plugin-contract.md)).
 - `coffer mcp add|edit` and `coffer skill add` take no `--title`, and
   `coffer skill edit` does not exist: nothing on a skill's record is editable,
   and its description is changed by editing `SKILL.md`.

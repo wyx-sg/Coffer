@@ -27,8 +27,8 @@ from pydantic import BaseModel
 from coffer.domain.scope import Scope
 from coffer.domain.vault.layout import StorageClass
 
-#: A name is one safe path segment: three kinds (`skill`, `knowledge`,
-#: `memory`) turn it into a directory, so the rule survives as a label rule.
+#: A name is one safe path segment: two kinds (`skill`, `knowledge`) turn it
+#: into a directory, so the rule survives as a label rule.
 _NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_.\-]+$")
 _NAME_MAX_LEN = 64
 #: The longest free-text name (``Kind.free_name``): what a person types to tell
@@ -152,13 +152,13 @@ class Kind:
     # ResourceService.update_scope rejects any non-null payload for it (422).
     # `mcp_server`, `skill`, `channel` and `provider` set this True; `agent`
     # deliberately does not — it IS the agent, so there is nothing for a
-    # per-agent scope to narrow — and `knowledge`/`memory` have no reach.
+    # per-agent scope to narrow — and `knowledge` has no reach.
     supports_scope: bool = False
     # Whether this kind's rows carry an enabled switch at all. False means
     # every row is served and ``ResourceService.set_enabled`` refuses it with
-    # ``ResourceNotToggleable`` (409), changing nothing. `knowledge` and
-    # `memory` set it False: nobody turns one collection or partition off, and
-    # a disabled partition was still a file any agent could open (spec
+    # ``ResourceNotToggleable`` (409), changing nothing. `knowledge` sets it
+    # False: nobody turns one collection off, and a disabled collection was
+    # still a file any agent could open (spec
     # resource-framework "Address every resource by an immutable uid through
     # one kind-agnostic surface").
     toggleable: bool = True
@@ -172,9 +172,8 @@ class Kind:
     # authored (``vault/resources/<kind>/``, committed, synced when a remote is
     # configured); ``local`` for a kind that is true of this machine only —
     # `agent`, which names a config directory on this disk
-    # (``local/resources/agent/``, never committed); ``derived`` for a kind
-    # rebuilt from other state — `memory`, whose partitions each pass
-    # recomputes (``derived/resources/memory/``). The directory is the policy:
+    # (``local/resources/agent/``, never committed); ``derived`` for a row
+    # rebuilt from other state (see ``storage_row``). The directory is the policy:
     # nothing else decides whether a resource travels.
     storage: StorageClass = StorageClass.VAULT
     # Optional per-ROW refinement of ``storage``, given the row's config at
@@ -259,8 +258,8 @@ class Kind:
     # and checked for collision, and BEFORE the row moves; raising aborts the
     # rename with nothing changed.
     #
-    # It exists because two renamable kinds keep a directory named after the
-    # resource — `knowledge` and `memory` — and the directory has to travel with
+    # It exists because a renamable kind keeps a directory named after the
+    # resource — `knowledge` — and the directory has to travel with
     # the label. `skill` keeps one too, but its name is fixed (``name_fixed``),
     # so it is never renamed and supplies no hook. The config-only kinds supply
     # nothing and rename by writing one column.

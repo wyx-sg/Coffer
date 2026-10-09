@@ -3,17 +3,17 @@
 **Status**: Accepted
 **Date**: 2026-10-09
 **Deciders**: Yuxing Wu
-**Supersedes**: [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md), [Memory Reaches a Session at Two Moments](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md); the memory half of [Tidying Knowledge and Memory Is the Agent's Job](tidying-knowledge-and-memory-is-the-agents-job.md); the memory half of [Sync Withholds Derived Output](sync-withholds-derived-output.md)
-**Related**: [Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale](agent-hook-installation.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md), design principle [Pull, not push](../../docs-site/architecture/design-principles.md#pull-not-push), research note [agent memory](../research/agent-memory.md), OpenSpec change `sync-memory-into-agents`
+**Related**: [Tidying Knowledge Is the Agent's Job](tidying-knowledge-is-the-agents-job.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md), design principle [Pull, not push](../../docs-site/architecture/design-principles.md#pull-not-push), research note [agent memory](../research/agent-memory.md), OpenSpec change `sync-memory-into-agents`
 
 ## Context
 
-Coffer's memory layer today reads Claude Code's and Codex's native memory
-read-only, copies each entry into a note of its own under
-`~/.coffer/derived/memory/<partition>/`, and hands the notes back through
-hooks: the index at session start, up to three notes a prompt names, and the
-same two into a channel turn's system prompt. Duplicates wait for a person to
-press **Tidy**. It is the fifth design of this layer, and it still maintains a
+Before this decision, Coffer's memory layer read Claude Code's and Codex's
+native memory read-only, copied each entry into a note of its own under
+`~/.coffer/derived/memory/<partition>/`, and handed the notes back through
+hooks Coffer installed into each agent: the index at session start, up to
+three notes a prompt named, and the same two into a channel turn's system
+prompt. Duplicates waited for a person to press **Tidy**. It was the fifth
+design of this layer, and it still maintained a
 second memory system — partitions, raw entries, distil, retirement records,
 lexical retrieval, a delivery hook, a session ledger, tidy hand-offs — next to
 two agents that already curate and load their own.
@@ -27,7 +27,7 @@ Since that design was accepted, both agents' memory matured:
 | Curation | **Auto Dream**: merges duplicates, drops contradicted and stale entries, rewrites the index; runs after 24 h and 5 sessions since the last run (rolling out; not yet in the official docs) | phase-2 **consolidation** by a model sub-agent whenever its inputs changed; fresher evidence wins; deleted inputs are forgotten |
 | An outside writer's way in | topic files are documented as plain Markdown "you can edit or delete at any time" | `extensions/<name>/instructions.md` + `extensions/<name>/resources/*.md` are read by consolidation as primary inputs, and a deleted resource is a forgetting signal (`codex-rs/memories/write`, not in the user docs) |
 
-The maintainer's feedback on the current layer: memory attached to channel
+The maintainer's feedback on that layer: memory attached to channel
 messages is not wanted ("memory should be the agent's to search"), and the
 layer should lean on the agents' own curation and delivery rather than
 aggregate and deliver its own.
@@ -66,7 +66,7 @@ The mainstream approach in the survey.
   a fact lives in two places.
 - **Why it lost.** Retrieval nobody calls is not retrieval.
 
-### Option 3 — Keep today's read-only aggregation and hook delivery
+### Option 3 — Read-only aggregation and hook delivery (the design this replaced)
 
 - **Pros.** Built; never writes an agent's memory.
 - **Cons.** The most machinery for the least effect: duplicates wait for a
@@ -112,8 +112,8 @@ into a session itself.**
    stored portable: the repository root becomes `<repo>` and the home
    directory `~`, expanded again for each machine on write. Vault sync carries
    the hub like any other vault content.
-2. **Read.** On each pass a machine reads its agents' native memory, as today,
-   and upserts the hub entry for each memory the agent itself wrote. Only the
+2. **Read.** On each pass a machine reads its agents' native memory, as the
+   earlier layer did, and upserts the hub entry for each memory the agent itself wrote. Only the
    origin machine and agent may change or delete a hub entry: when the source
    is gone, the entry is deleted.
 3. **Write.** Each machine writes every hub entry into every local agent except

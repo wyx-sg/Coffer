@@ -174,7 +174,7 @@ cd frontend && npm install && npm run build && cd ..
 | `~/.coffer/runs.db.pre-<revision>` | 每次 schema 迁移前做的副本。保留最新的三份。 |
 | `~/.coffer/daemon.json` | 运行时发现文件：PID、端口和 API 令牌（权限 `0600`）。启动时写入，退出时删除。 |
 | `~/.coffer/daemon-config.json` | 守护进程启动前读取的设置：固定端口、机器名、各实验功能开关。 |
-| `~/.coffer/content/`、`~/.coffer/derived/` | 媒体文件和聊天工作目录；以及 Coffer 可重建的状态，比如记忆树。 |
+| `~/.coffer/content/`、`~/.coffer/derived/` | 媒体文件和聊天工作目录；以及 Coffer 可重建的状态，比如 MCP 服务器健康状况和它自己的 `coffer-guide` 技能。 |
 | `~/.coffer/logs/daemon.log` | 守护进程日志，由守护进程、它的子进程和桌面应用共用。 |
 
 发布构建的守护进程会自己管理 `~/.coffer/bin`。每次启动时，它都会检查自己的构建是否已经部署在那里。如果没有，就把四个二进制复制到 `~/.coffer/bin/<version>/`，并以一次原子操作把公开符号链接切换过去。源码安装从不这样做。[文件与目录](/zh/reference/filesystem)参考列出了每一个路径。
@@ -242,7 +242,7 @@ coffer uninstall
 
 两种方式都会让 Coffer 撤回它写在 `~/.coffer` 之外的所有内容，然后停止运行：
 
-- 每个智能体配置里 Coffer 的 MCP 条目、记忆钩子和模型路由；
+- 每个智能体配置里 Coffer 的 MCP 条目和模型路由；
 - 它投递到智能体技能目录里的技能链接；
 - 开机自启动；
 - `~/.coffer/bin` 里的命令行工具，以及安装脚本加到 shell 配置文件里的 `PATH` 行；

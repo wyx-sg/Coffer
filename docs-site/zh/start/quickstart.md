@@ -43,7 +43,7 @@ Coffer 从不自行注册智能体；由你在**智能体**页面上选择。每
 
 <Shot name="connect-dialog" alt="Coffer 改动智能体文件之前的确认对话框。" />
 
-连接会在 `~/.claude.json` 的 `mcpServers` 中添加一条条目（同时往 `~/.claude/settings.json` 写入 Coffer 的记忆 Hook，共两条：会话开始和每次提交提示，见[记忆](/zh/guides/memory)）。Coffer 以原子方式写入文件，并把上一个版本复制到 `~/.coffer/config-backups`：
+连接会在 `~/.claude.json` 的 `mcpServers` 中添加一条条目。Coffer 以原子方式写入文件，并把上一个版本复制到 `~/.coffer/config-backups`：
 
 ```json
 {

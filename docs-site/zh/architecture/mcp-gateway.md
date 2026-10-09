@@ -98,7 +98,7 @@ Coffer-MCP 安装（见 [智能体](/zh/guides/agents)）写入的 `coffer` 条�
 身份是自报的，没有经过验证。任何持有令牌的本地进程都能打开 `/mcp` 并声称自己是任意 uid。在 [安全模型](/zh/architecture/security) 所描述的仅限回环、单用户的姿态下，这是可以接受的。
 :::
 
-`initialize` 的回复声明 `tools`、`resources` 和 `prompts`，每项都带 `listChanged: true`，协议版本为 `2025-06-18`。它还带一段上限 800 个字符的 `instructions` 字符串。这段文字说明 Coffer 是什么，点出 Coffer 自己的工具，说明对于 Coffer 没有工具的东西智能体该去哪里读（用它自己的文件工具读取和编辑知识与记忆文件，用 `coffer log` 系列读取器读 Coffer 自己的记录），其他一切都指向 `coffer-guide` 技能。当会话最近一次 `tools/list` 有工具没被列出时，这段文字会加一句话，给出未列出工具的数量，并说明它们每一个都仍然可以调用。
+`initialize` 的回复声明 `tools`、`resources` 和 `prompts`，每项都带 `listChanged: true`，协议版本为 `2025-06-18`。它还带一段上限 800 个字符的 `instructions` 字符串。这段文字说明 Coffer 是什么，点出 Coffer 自己的工具，说明对于 Coffer 没有工具的东西智能体该去哪里读（用它自己的文件工具读取和编辑知识文件，用 `coffer log` 系列读取器读 Coffer 自己的记录），其他一切都指向 `coffer-guide` 技能。当会话最近一次 `tools/list` 有工具没被列出时，这段文字会加一句话，给出未列出工具的数量，并说明它们每一个都仍然可以调用。
 
 ## 发现与命名空间 {#discovery-and-namespacing}
 
@@ -193,7 +193,7 @@ coffer__search_tools(query: string, top_k?: integer = 5, 1..20)
 | `coffer__channel_read_thread` | 消息渠道功能（按轮次限定） |
 | `coffer__ask` | 网关，由对话类型通过一个轮次提问端口作答（按轮次限定） |
 
-`coffer__search_tools` 由网关自己持有，始终存在。`coffer__channel_read_thread` 由消息渠道功能注册为按轮次限定，所以只有处在正在运行的 Coffer 轮次内的会话才能看到或调用它。`coffer__ask` 由网关自己提供，只列给 `X-Coffer-Turn` header 指向一个正在运行的轮次的会话；对话类型通过组合根交给网关的一个端口来作答，所以网关不导入任何对话代码。对任何其他 `coffer__` 名字的调用都会落到上游路由，并像一个未知工具那样失败。知识和记忆没有内置工具：智能体用自己的文件工具修改它们，所以注册表里没有对应任何一个的工具。
+`coffer__search_tools` 由网关自己持有，始终存在。`coffer__channel_read_thread` 由消息渠道功能注册为按轮次限定，所以只有处在正在运行的 Coffer 轮次内的会话才能看到或调用它。`coffer__ask` 由网关自己提供，只列给 `X-Coffer-Turn` header 指向一个正在运行的轮次的会话；对话类型通过组合根交给网关的一个端口来作答，所以网关不导入任何对话代码。对任何其他 `coffer__` 名字的调用都会落到上游路由，并像一个未知工具那样失败。知识和记忆没有内置工具：智能体用自己的文件工具修改知识，把记忆放在自己的原生记忆里，所以注册表里没有对应任何一个的工具。
 
 内置工具的处理函数运行之前，网关会按上面所说设置 `agent`。当工具的 schema 声明了 `cwd` 属性而客户端没填时，它还会填上 `cwd`。处理函数的返回值被包装成一个 MCP 工具结果：`content` 里是 JSON 文本，`structuredContent` 里是同一个对象，`isError: false`。处理函数内部的异常会变成带内的 `isError: true` 结果，而不是 JSON-RPC 错误，这样模型能读到它并自我纠正。文本会显示 Coffer 编写的错误和无效值错误的消息，其他异常只显示异常的类型名。工具的具体行为见 [MCP 工具](/zh/reference/mcp-tools)。
 

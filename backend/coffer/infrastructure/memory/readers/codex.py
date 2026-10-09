@@ -108,7 +108,7 @@ from coffer.domain.agent.codex_memory import (
     section_text,
 )
 from coffer.domain.memory.errors import UnreadableMemory
-from coffer.domain.memory.note import TYPE_PROJECT, TYPE_USER
+from coffer.domain.memory.hub import TYPE_PROJECT, TYPE_USER
 from coffer.domain.memory.reader import RawEntry, SourceFile
 from coffer.infrastructure.memory.writers.codex import VIA_COFFER
 

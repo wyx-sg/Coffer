@@ -155,9 +155,9 @@ const pageRoutes: RouteObject[] = gateRoutes([
     path: "memory",
     element: lazyPage(() => import("./pages/MemoryPage"), "MemoryPage"),
   },
-  // A partition's two tabs: Memories (the bare path) and Delivered.
-  { path: "memory/:uid", element: memoryDetailPage },
-  { path: "memory/:uid/:tab", element: memoryDetailPage },
+  // One project's memories, by its hub folder; the global ones at a fixed address.
+  { path: "memory/global", element: memoryDetailPage },
+  { path: "memory/projects/:folder", element: memoryDetailPage },
   {
     path: "sync",
     element: lazyPage(() => import("./pages/sync/SyncPage"), "SyncPage"),
@@ -167,10 +167,7 @@ const pageRoutes: RouteObject[] = gateRoutes([
   // files (`?mode=join`).
   {
     path: "sync/pending",
-    element: lazyPage(
-      () => import("./pages/sync/SyncPendingReviewPage"),
-      "SyncPendingReviewPage",
-    ),
+    element: lazyPage(() => import("./pages/sync/SyncPendingReviewPage"), "SyncPendingReviewPage"),
   },
   {
     path: "sync/conflicts",

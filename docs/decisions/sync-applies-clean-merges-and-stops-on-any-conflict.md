@@ -349,7 +349,7 @@ Rules a future change must respect:
   included.
 - Nothing on a timer rewrites synced content by meaning, because a clean merge
   would silently duplicate two machines' independent rewrites of the same
-  material ([Tidying Knowledge and Memory Is the Agent's Job](tidying-knowledge-and-memory-is-the-agents-job.md)).
+  material ([Tidying Knowledge Is the Agent's Job](tidying-knowledge-is-the-agents-job.md)).
   A rewriter that did would need one named owner machine.
 - Reach never travels, and derived output never travels
   ([Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md)).

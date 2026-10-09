@@ -151,6 +151,14 @@ describe("AgentDetailPage", () => {
     expect(screen.getByTestId("where")).toHaveTextContent(/^\/agents\/claude_code$/);
   });
 
+  test("the agent's header carries no reach button or on/off switch", () => {
+    mockRoute();
+    renderAt("/agents/claude_code");
+    expect(screen.queryByTestId("scope-control")).toBeNull();
+    expect(screen.queryByRole("switch")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^(enabled|disabled|every agent)$/i })).toBeNull();
+  });
+
   test("an open tab inside More gives More its name; a hidden tab that needs you adds a dot", () => {
     mockRoute();
     renderAt("/agents/claude_code");

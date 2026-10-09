@@ -8,9 +8,9 @@
 //
 // A file's leading YAML frontmatter is shown as METADATA above the body — a
 // key / value grid (mono 11 keys in a 96 column, 12 values; Foundations 0.6.03) — never rendered as body text
-// (spec memory "Show a partition's memories read-only"). Rendered raw,
-// the fences became rules and `origins:` became a bullet list that read as if
-// it were part of the note. Done once here so every Markdown preview gets it.
+// (spec knowledge "Show a collection as one tree of read-only documents in the web UI"). Rendered raw,
+// the fences became rules and `sources:` became a bullet list that read as if
+// it were part of the document. Done once here so every Markdown preview gets it.
 import { useRef } from "react";
 import type { Components } from "react-markdown";
 

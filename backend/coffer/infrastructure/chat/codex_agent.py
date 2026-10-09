@@ -49,7 +49,6 @@ from coffer.infrastructure.chat.document_extract import (
     extract_document_attachments,
     prompt_with_document_text,
 )
-from coffer.infrastructure.chat.prompt_memory import PromptMemory, prompt_with_memory
 from coffer.infrastructure.chat.transcribe import (
     Transcriber,
     prompt_with_transcripts,
@@ -97,7 +96,7 @@ class CodexAppServerAdapter:
     ``thread/resume``'s ``developerInstructions`` field, the app-server
     protocol's equivalent of Claude's ``system_prompt.append`` — additive
     alongside Codex's own base instructions, never replacing them. Composing
-    that string (channel/model/memory context) is the calling provider's job,
+    that string (channel and model context) is the calling provider's job,
     same as for Claude; this adapter only ever forwards it unchanged.
     """
 
@@ -113,7 +112,6 @@ class CodexAppServerAdapter:
         system_context: str | None = None,
         transcriber: Transcriber | None = None,
         document_extractor: DocumentExtractor | None = None,
-        prompt_memory: PromptMemory | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -124,8 +122,6 @@ class CodexAppServerAdapter:
         self._system_context = system_context
         self._transcriber = transcriber
         self._document_extractor = document_extractor
-        # A channel turn's retrieval: the notes its prompt names.
-        self._prompt_memory = prompt_memory
         #: The model the thread ran on, as the app-server reported it; filled in
         #: while the turn streams.
         self.model_id: str | None = None
@@ -271,7 +267,6 @@ class CodexAppServerAdapter:
             attachments, self._document_extractor
         )
         prompt = prompt_with_transcripts(prompt.strip(), transcripts)
-        prompt = await prompt_with_memory(prompt, self._prompt_memory)
         prompt = prompt_with_document_text(prompt, extracts)
         if attachments:
             # Codex is path-native (no inline image blocks over its app-server

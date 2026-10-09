@@ -132,9 +132,8 @@ records, `claude_code` and `codex`. The table is code, not user data.
   `0048` deletes those rows and leaves files Coffer wrote into the removed
   agents' directories alone.
 - The table covers configuration, MCP, skills and plugins — the *values*.
-  Per-agent *mechanisms* (provider projection, memory delivery hooks,
-  transcript and native-memory readers, the chat drivers, the dependency probe
-  and model catalogue) are optional facets of the same record, bound at the
+  Per-agent *mechanisms* (provider projection, the native-memory readers, the
+  chat drivers, the dependency probe and model catalogue) are optional facets of the same record, bound at the
   composition root; see
   [Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md).
 - A machine holds one agent per type, named by the type, with no title; the

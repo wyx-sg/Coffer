@@ -1,12 +1,12 @@
 ---
 title: coffer memory
-description: "Memory partitions (notes are plain files you edit directly)."
+description: "Memory sync into each agent's own memory: state, sync now, preview, undo, curate."
 pageClass: cli-ref
 ---
 
 # coffer memory
 
-Memory partitions (notes are plain files you edit directly).
+Memory sync into each agent's own memory: state, sync now, preview, undo, curate.
 
 ```sh
 coffer memory [OPTIONS] COMMAND [ARGS]...
@@ -18,180 +18,23 @@ This page matches what `coffer memory --help` prints. Add `--help` to any comman
 
 | Command | What it does |
 | --- | --- |
-| [`memory list`](#memory-list) | Every partition. |
-| [`memory show`](#memory-show) | One partition: its config, reach and state. |
-| [`memory update`](#memory-update) | Change a partition. |
-| [`memory delete`](#memory-delete) | Delete a partition. |
-| [`memory partitions`](#memory-partitions) | Every memory partition. |
-| [`memory notes`](#memory-notes) | A partition's notes and their paths (read them with your own tools). |
-| [`memory files`](#memory-files) | A partition's files. |
-| [`memory delivered`](#memory-delivered) | What the partition delivers to agents. |
-| [`memory retired`](#memory-retired) | Notes retired from delivery. |
-| [`memory reading`](#memory-reading) | Which agents' memory Coffer reads, and where. |
-| [`memory sync`](#memory-sync) | Read the agents' memory again now. |
-| [`memory tidy-handoff`](#memory-tidy-handoff) | The prompt that hands tidying memory to an agent. |
+| [`memory state`](#memory-state) | The sync, its pending preview, the hub's projects and each agent's state. |
+| [`memory sync`](#memory-sync) | Sync memory now. |
+| [`memory preview-write`](#memory-preview-write) | Write exactly what the pending preview lists. |
+| [`memory preview-cancel`](#memory-preview-cancel) | Drop the pending preview. |
+| [`memory undo`](#memory-undo) | Remove every unedited copy Coffer wrote on this machine and turn automatic sync off. |
+| [`memory codex-import`](#memory-codex-import) | Say whether Codex imports Claude Code's memories itself. |
+| [`memory entries`](#memory-entries) | A project's memories with their origin and where each was written. |
+| [`memory curate`](#memory-curate) | Ask an agent to consolidate its own memory now. |
 
-## memory list
+## memory state
 
-Every partition.
+The sync, its pending preview, the hub's projects and each agent's state.
 
 <p class="cli-label">Synopsis</p>
 
 ```sh
-coffer memory list [OPTIONS]
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## memory show
-
-One partition: its config, reach and state.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer memory show [OPTIONS] UID
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `UID` <span class="cli-chip">argument</span> | text | required | The memory's name or uid |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## memory update
-
-Change a partition. Body: name, description, config.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer memory update [OPTIONS] UID
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `UID` <span class="cli-chip">argument</span> | text | required | The memory's name or uid |
-| `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
-| `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## memory delete
-
-Delete a partition.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer memory delete [OPTIONS] UID
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `UID` <span class="cli-chip">argument</span> | text | required | The memory's name or uid |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## memory partitions
-
-Every memory partition.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer memory partitions [OPTIONS]
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## memory notes
-
-A partition's notes and their paths (read them with your own tools).
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer memory notes [OPTIONS] UID
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `UID` <span class="cli-chip">argument</span> | text | required | The memory's name or uid |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## memory files
-
-A partition's files.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer memory files [OPTIONS] UID
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `UID` <span class="cli-chip">argument</span> | text | required | The memory's name or uid |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## memory delivered
-
-What the partition delivers to agents.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer memory delivered [OPTIONS] UID
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `UID` <span class="cli-chip">argument</span> | text | required | The memory's name or uid |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## memory retired
-
-Notes retired from delivery.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer memory retired [OPTIONS] UID
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `UID` <span class="cli-chip">argument</span> | text | required | The memory's name or uid |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## memory reading
-
-Which agents' memory Coffer reads, and where.
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer memory reading [OPTIONS]
+coffer memory state [OPTIONS]
 ```
 
 <p class="cli-label">Arguments and options</p>
@@ -202,7 +45,7 @@ coffer memory reading [OPTIONS]
 
 ## memory sync
 
-Read the agents' memory again now.
+Sync memory now.
 
 <p class="cli-label">Synopsis</p>
 
@@ -216,18 +59,103 @@ coffer memory sync [OPTIONS]
 | --- | --- | --- | --- |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
-## memory tidy-handoff
+## memory preview-write
 
-The prompt that hands tidying memory to an agent.
+Write exactly what the pending preview lists.
 
 <p class="cli-label">Synopsis</p>
 
 ```sh
-coffer memory tidy-handoff [OPTIONS]
+coffer memory preview-write [OPTIONS]
 ```
 
 <p class="cli-label">Arguments and options</p>
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
+| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## memory preview-cancel
+
+Drop the pending preview.
+
+<p class="cli-label">Synopsis</p>
+
+```sh
+coffer memory preview-cancel [OPTIONS]
+```
+
+<p class="cli-label">Arguments and options</p>
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## memory undo
+
+Remove every unedited copy Coffer wrote on this machine and turn automatic sync off.
+
+<p class="cli-label">Synopsis</p>
+
+```sh
+coffer memory undo [OPTIONS]
+```
+
+<p class="cli-label">Arguments and options</p>
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## memory codex-import
+
+Say whether Codex imports Claude Code's memories itself. Body: value (true, false, null).
+
+<p class="cli-label">Synopsis</p>
+
+```sh
+coffer memory codex-import [OPTIONS]
+```
+
+<p class="cli-label">Arguments and options</p>
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## memory entries
+
+A project's memories with their origin and where each was written.
+
+<p class="cli-label">Synopsis</p>
+
+```sh
+coffer memory entries [OPTIONS]
+```
+
+<p class="cli-label">Arguments and options</p>
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--project` <span class="cli-chip">option</span> | text |  | The project key, or global |
+| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## memory curate
+
+Ask an agent to consolidate its own memory now. Body: agent_type.
+
+<p class="cli-label">Synopsis</p>
+
+```sh
+coffer memory curate [OPTIONS]
+```
+
+<p class="cli-label">Arguments and options</p>
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

@@ -161,7 +161,6 @@ def test_the_guide_carries_the_manual_and_the_catalogue(home) -> None:  # type: 
     assert "Shopee's account system" in text
     # The manual half.
     assert "coffer__search_tools" in text
-    assert "never writes it" in text
     # The catalogue half, at the root this machine actually reads from — named
     # from the home, so the rendered bytes carry no machine's home directory.
     assert "~/.coffer/vault/knowledge" in text

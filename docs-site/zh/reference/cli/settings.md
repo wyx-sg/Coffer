@@ -42,7 +42,6 @@ coffer settings [OPTIONS] COMMAND [ARGS]...
 | [`settings call-content set`](#settings-call-content-set) | Switch recording a call's content. |
 | [`settings storage`](#settings-storage) | What Coffer stores, and clearing its caches. |
 | [`settings storage show`](#settings-storage-show) | What Coffer stores and how much. |
-| [`settings storage clear-cache`](#settings-storage-clear-cache) | Delete caches Coffer can rebuild. |
 
 ## settings features
 
@@ -403,7 +402,7 @@ What Coffer stores, and clearing its caches.
 coffer settings storage [OPTIONS] COMMAND [ARGS]...
 ```
 
-子命令：`show`, `clear-cache`。
+子命令：`show`。
 
 ## settings storage show
 
@@ -413,22 +412,6 @@ What Coffer stores and how much.
 
 ```sh
 coffer settings storage show [OPTIONS]
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## settings storage clear-cache
-
-Delete caches Coffer can rebuild.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer settings storage clear-cache [OPTIONS]
 ```
 
 <p class="cli-label">参数与选项</p>

@@ -18,18 +18,12 @@ from coffer.application.mcp.gateway_instructions import (
     build_instructions,
 )
 
-#: A realistic absolute memory root, longer than most.
-_ROOT = "/Users/someone.with.a.long.name/.coffer/memory"
-
 
 def test_instructions_fit_the_system_prompt_budget():
     # It lands in every session's system prompt; tool tiering caps it so the context
     # it spends stays far below what tiering saves.
     assert len(build_instructions(hidden_count=0)) <= MAX_INSTRUCTIONS_CHARS
     assert len(build_instructions(hidden_count=999_999)) <= MAX_INSTRUCTIONS_CHARS
-    assert (
-        len(build_instructions(hidden_count=999_999, memory_root=_ROOT)) <= MAX_INSTRUCTIONS_CHARS
-    )
 
 
 def test_instructions_are_never_truncated_to_fit():
@@ -43,9 +37,9 @@ def test_instructions_are_never_truncated_to_fit():
     """
     from coffer.application.mcp.gateway_instructions import _TIERED
 
-    base = build_instructions(hidden_count=0, memory_root=_ROOT)
+    base = build_instructions(hidden_count=0)
     assert len(base) <= MAX_INSTRUCTIONS_CHARS
-    longest = build_instructions(hidden_count=999_999, memory_root=_ROOT)
+    longest = build_instructions(hidden_count=999_999)
     assert longest == base + _TIERED.format(n=999_999), (
         "the tiered text is not the base text plus the tiering sentence: the "
         "builder cut something to fit"
@@ -55,17 +49,6 @@ def test_instructions_are_never_truncated_to_fit():
         "cap: the builder would silently cut the tail off"
     )
     assert longest.endswith("callable.")
-
-
-def test_a_memory_root_too_long_to_fit_is_left_to_the_guide() -> None:
-    """A moved memory root can be any length; the cap is met by pointing at the
-    skill that names it rather than by cutting the tail off."""
-    root = "/" + "very-long-directory/" * 30 + "memory"
-    text = build_instructions(hidden_count=999_999, memory_root=root)
-    assert len(text) <= MAX_INSTRUCTIONS_CHARS
-    assert root not in text
-    assert "coffer-guide" in text
-    assert text.endswith("callable.")
 
 
 def test_instructions_name_the_escape_hatch():
@@ -103,7 +86,7 @@ def test_no_hidden_tools_means_no_misleading_claim():
     """
     from coffer.application.mcp.gateway_instructions import _TIERED
 
-    text = build_instructions(hidden_count=0, memory_root=_ROOT)
+    text = build_instructions(hidden_count=0)
     assert "unlisted" not in text
     assert "budgeted slice" not in text
     # Nothing of the tiering paragraph survives, however it is later worded.
@@ -159,7 +142,7 @@ def test_instructions_only_name_tools_that_exist() -> None:
     )
 
     for hidden in (0, 70):
-        text = build_instructions(hidden_count=hidden, memory_root=_ROOT)
+        text = build_instructions(hidden_count=hidden)
         assert len(text) <= MAX_INSTRUCTIONS_CHARS
         assert "coffer__search_tools" in text
         assert "coffer__write" not in text
@@ -168,32 +151,28 @@ def test_instructions_only_name_tools_that_exist() -> None:
         assert "coffer-guide" in text
         # No catalogue: no collection heading, no document list.
         assert "What is in this developer's knowledge" not in text
-        # One line each for the memory root and Coffer's own logs.
-        assert f"{_ROOT}/*/notes/" in text
+        # One line for Coffer's own logs; memory reaches agents in their own
+        # memory, never through the handshake.
+        assert "memory" not in text
         assert "coffer log" in text
         assert "coffer path logs" in text
 
 
 def test_instructions_name_only_what_the_features_on_provide() -> None:
-    """The memory root is named only while memory is on, and the knowledge line
-    only while knowledge is on (spec experimental-features "Withdraw what a
-    switched-off feature put in front of agents"). No variant names a write
-    tool: there is none."""
-    without_memory = build_instructions(hidden_count=0)
-    assert "coffer__search_tools" in without_memory
-    assert "knowledge" in without_memory
-    assert "memory" not in without_memory
-    assert "coffer__write" not in without_memory
+    """The knowledge line is there only while knowledge is on (spec
+    experimental-features "Withdraw what a switched-off feature put in front of
+    agents"). No variant names a write tool or memory."""
+    with_knowledge = build_instructions(hidden_count=0)
+    assert "coffer__search_tools" in with_knowledge
+    assert "knowledge" in with_knowledge
+    assert "memory" not in with_knowledge
+    assert "coffer__write" not in with_knowledge
 
     neither = build_instructions(hidden_count=0, knowledge=False)
     assert "knowledge" not in neither
     assert "memory" not in neither
     assert "coffer__search_tools" in neither
     assert "coffer log" in neither
-
-    memory_only = build_instructions(hidden_count=0, memory_root=_ROOT, knowledge=False)
-    assert _ROOT in memory_only
-    assert "knowledge" not in memory_only
     assert len(build_instructions(hidden_count=999_999, knowledge=False)) <= MAX_INSTRUCTIONS_CHARS
 
 

@@ -45,7 +45,7 @@ Guide: [Running the daemon](/guides/daemon). Architecture: [Daemon and processes
 
 ## Vault
 
-The vault is `~/.coffer/vault`, a git repository that holds your configuration and authored content as plain files: one JSON file per resource, the skill folders, the knowledge collections and encrypted secrets. Those files are the only copy, and every accepted change is a commit that names who made it, so any file can be compared with and restored to an earlier version. Beside the vault, `~/.coffer` keeps machine-local settings (`local/`), media (`content/`), history such as the audit log and conversations (`runs.db`), and derived state Coffer can rebuild, such as the memory tree (`derived/`). To back up Coffer, copy `~/.coffer` with the daemon stopped.
+The vault is `~/.coffer/vault`, a git repository that holds your configuration and authored content as plain files: one JSON file per resource, the skill folders, the knowledge collections and encrypted secrets. Those files are the only copy, and every accepted change is a commit that names who made it, so any file can be compared with and restored to an earlier version. Beside the vault, `~/.coffer` keeps machine-local settings (`local/`), media (`content/`), history such as the audit log and conversations (`runs.db`), and derived state Coffer can rebuild, such as MCP server health (`derived/`). To back up Coffer, copy `~/.coffer` with the daemon stopped.
 
 Guide: [Editing the vault by hand](/guides/vault-files).
 
@@ -53,7 +53,7 @@ Reference: [Files and directories](/reference/filesystem). Architecture: [Persis
 
 ## Resource and kind
 
-Everything you manage in Coffer is a **resource**, and every resource has a **kind**. There are seven kinds: `mcp_server`, `agent`, `skill`, `knowledge`, `memory`, `channel` and `provider`. Every kind shares one lifecycle: create, update, enable or disable, rename, delete, with each change audited (knowledge collections and memory partitions cannot be disabled). What a resource *does* is up to its kind. Each kind has its own page in the web UI with the same controls (add, edit, remove, turn on or off and set reach, each where the kind supports it), so a skill and a channel are managed the same way.
+Everything you manage in Coffer is a **resource**, and every resource has a **kind**. There are six kinds: `mcp_server`, `agent`, `skill`, `knowledge`, `channel` and `provider`. Every kind shares one lifecycle: create, update, enable or disable, rename, delete, with each change audited (knowledge collections and agents cannot be disabled). What a resource *does* is up to its kind. Each kind has its own page in the web UI with the same controls (add, edit, remove, turn on or off and set reach, each where the kind supports it), so a skill and a channel are managed the same way.
 
 Architecture: [Resource framework](/architecture/resource-framework).
 
@@ -67,10 +67,10 @@ Architecture: [Resource framework](/architecture/resource-framework).
 
 A resource's **reach** decides where it takes effect. Reach has two parts:
 
-- **`enabled`**: the on/off switch. Knowledge collections, memory partitions and agents have none: they are always on.
+- **`enabled`**: the on/off switch. Knowledge collections and agents have none: they are always on.
 - **scope**: an optional allow-list of agents. No scope means every agent; a list means only those agents. A list is never empty: a resource that should reach no agent is switched off.
 
-Scope applies to MCP servers (which agents see the server's tools), skills (which agents receive the skill), providers (which agents' config a switch writes into) and channels (which agents the channel may drive). Knowledge collections and memory partitions have neither: each is served to every agent. Reach is **machine-local**: it is set on the machine it applies to and never syncs, so each of your machines decides reach for itself.
+Scope applies to MCP servers (which agents see the server's tools), skills (which agents receive the skill), providers (which agents' config a switch writes into) and channels (which agents the channel may drive). Knowledge collections have neither: each is served to every agent. Reach is **machine-local**: it is set on the machine it applies to and never syncs, so each of your machines decides reach for itself.
 
 Set scope with `coffer mcp|skill|channel reach <name> --data '{"scope":{"agents":["<agent uid>"]}}'` (`{"scope":null}` for every agent), or `coffer resource reach set <uid>` for any kind; a custom-tool group takes `coffer custom-tool group reach <group> --agent <agent>` (repeatable) or `--all`. The **Reach** control on the resource's page in the web UI does the same. Guide: [MCP servers](/guides/mcp-servers), [Skills](/guides/skills). Architecture: [Resource framework](/architecture/resource-framework).
 
@@ -96,7 +96,7 @@ Besides upstream tools, the gateway always offers Coffer's own tool, prefixed `c
 
 Inside a turn Coffer runs (from the **Conversations** page or a channel), the session also gets two turn-scoped tools: `coffer__ask`, which asks you a question and waits for the answer, and `coffer__channel_read_thread`, which reads a chat thread's earlier messages. An agent started in a terminal never sees them.
 
-There is no knowledge, memory or log tool. Agents read and change knowledge pages and memory notes, which are Markdown files, with their own file tools, and Coffer's records are read with `coffer log audit|mcp|daemon`.
+There is no knowledge, memory or log tool. Agents read and change knowledge pages, which are Markdown files, with their own file tools, reach memory through their own native memory, and Coffer's records are read with `coffer log audit|mcp|daemon`.
 
 The gateway takes the calling agent's identity from the MCP handshake. It is not an argument the agent can set.
 
@@ -114,9 +114,9 @@ A **collection** is a folder under `~/.coffer/vault/knowledge/<collection>/` hol
 
 Guide: [Knowledge](/guides/knowledge). Architecture: [Knowledge](/architecture/knowledge).
 
-## Memory partitions
+## Memory sync {#memory-sync}
 
-Coffer **aggregates** each registered agent's own native memory, read-only. It never writes to an agent's memory files. It turns what it reads into notes of its own, filed into **partitions**: one per repository plus `global`. Each partition lives at `~/.coffer/derived/memory/<partition>/` with a `MEMORY.md` index and a `notes/` directory. You can edit a note in the web UI or on disk, and it stays until newer evidence revises it; rebuilding the derived tree loses such edits. If you install a delivery hook for an agent, Coffer hands that agent the index at session start and the few notes each prompt names. A turn that arrives from a channel carries the index in its system prompt instead.
+Coffer **syncs** what your agents learned into each other's own memory. Each machine reads its registered agents' native memory and publishes every memory an agent wrote itself into the **hub**, `~/.coffer/vault/memory/`, one file per memory, filed by project (the repository's remote) plus `global`; vault sync carries the hub to your other machines. Each machine then writes every hub memory into its other agents, in their own format: `coffer_*.md` files and a marked block in `MEMORY.md` for Claude Code, a memory extension folder for Codex. Coffer touches only its own copies and never edits a memory an agent wrote; merging and forgetting are each agent's own curation. Coffer puts no memory into a session itself: each agent loads its memory as it always does.
 
 Guide: [Memory](/guides/memory). Architecture: [Memory](/architecture/memory).
 

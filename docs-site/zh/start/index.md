@@ -13,7 +13,7 @@ Coffer 是一个面向 AI 编程智能体的本地优先保险库。它是你机
 
 - **MCP 服务器。** Claude Code 从 `~/.claude.json` 读取，Codex 从 `~/.codex/config.toml` 读取。你给一个智能体加了服务器，忘了另一个，两边的列表就慢慢对不上了。
 - **技能。** 每个智能体有自己的 `skills/` 目录。你在一个目录里改进了某个技能，另一个目录里的还是旧的。
-- **记忆。** Claude Code 把关于你项目的笔记写进自己的记忆，Codex 也一样。两者互相读不到，同一件事你得分别教每个智能体一遍。
+- **记忆。** Claude Code 把关于你项目的笔记写进自己的记忆，Codex 也一样。两者互相读不到，也都不会带到你的其他机器上，同一件事你得分别教每个智能体一遍。
 - **密钥和提供商。** 换一个模型网关，就得手动改每个智能体的配置，API 密钥 也要粘贴进好几个文件。
 
 这些都存在各智能体自己的文件里，彼此之间没有任何联系。你用的智能体越多，副本就越多。
@@ -23,14 +23,14 @@ Coffer 是一个面向 AI 编程智能体的本地优先保险库。它是你机
 Coffer 是**一个守护进程加一个保险库**：
 
 - **`coffer-daemon`** 是一个常驻进程，监听 `127.0.0.1`（默认端口 38470）。它持有 Coffer 的全部状态，并提供 MCP 端点、REST API 和 Web 界面。
-- **保险库**是 `~/.coffer/vault`，一个由普通文件组成的 git 仓库：每个资源一个 JSON 文件，外加技能文件夹、知识集和加密后的密钥。它旁边的 `~/.coffer` 里还放着本机专属的设置、一个历史数据库，以及 Coffer 可以重建的状态，比如记忆树。
+- **保险库**是 `~/.coffer/vault`，一个由普通文件组成的 git 仓库：每个资源一个 JSON 文件，外加技能文件夹、知识集和加密后的密钥。它旁边的 `~/.coffer` 里还放着本机专属的设置、一个历史数据库，以及 Coffer 可以重建的状态，比如 MCP 服务器的健康状况。
 - **`coffer-mcp-shim`** 是一个小型 stdio 程序，每个智能体把它当作普通 MCP 服务器启动。它会找到正在运行的守护进程（没有就启动一个），然后把会话转发过去。
 
 在**智能体**页面连接 Claude Code 时，Coffer 会往 Claude Code 的 MCP 配置里写入一条 `coffer` 条目。此后，你在 Coffer 里注册的每个 MCP 服务器，Claude Code 都通过这一条目访问。
 
 ## 它管理什么 {#what-it-manages}
 
-Coffer 管理的一切都是**资源**，共七种**类型**。每个资源都有一个不可变的 id、一个名字、一个开关（知识集和记忆分区没有开关，始终开启）和一份审计记录。
+Coffer 管理的一切都是**资源**，共六种**类型**。每个资源都有一个不可变的 id、一个名字、一个开关（知识集和智能体没有开关，始终开启）和一份审计记录。
 
 | 类型 | 是什么 | 指南 |
 | --- | --- | --- |
@@ -38,11 +38,10 @@ Coffer 管理的一切都是**资源**，共七种**类型**。每个资源都�
 | `agent` | 一个已注册的本地编程智能体：Claude Code 或 Codex | [智能体](/zh/guides/agents) |
 | `skill` | 一个 [AgentSkills](https://agentskills.io) 文件夹，投递到各智能体的 `skills/` 目录 | [技能](/zh/guides/skills) |
 | `knowledge` | 一个知识集：`~/.coffer/vault/knowledge/` 下由保留的来源整理成的 Markdown 页面 wiki | [知识](/zh/guides/knowledge) |
-| `memory` | Coffer 从智能体自身记忆中生成的一个笔记分区，每个仓库一个，另加 `global` | [记忆](/zh/guides/memory) |
 | `channel` | 一个 Telegram 或 SeaTalk 机器人，让你在手机上和智能体聊天 | [消息渠道](/zh/guides/channels) |
 | `provider` | 一份模型提供商配置（协议、base URL、密钥），由 Coffer 写入每个智能体的配置 | [模型提供商](/zh/guides/providers) |
 
-Coffer 还提供一些不属于资源类型的能力：加密的[密钥存储](/zh/guides/secret-store)、一个 Web 版[对话](/zh/guides/chat)页面、[活动与审计](/zh/guides/activity)记录，以及通过你自己的 git 远端进行的[保险库同步](/zh/guides/vault-sync)。
+Coffer 还提供一些不属于资源类型的能力：加密的[密钥存储](/zh/guides/secret-store)、一个 Web 版[对话](/zh/guides/chat)页面、[活动与审计](/zh/guides/activity)记录、智能体之间的[记忆同步](/zh/guides/memory)，以及通过你自己的 git 远端进行的[保险库同步](/zh/guides/vault-sync)。
 
 ## 在哪里使用 {#where-you-use-it}
 

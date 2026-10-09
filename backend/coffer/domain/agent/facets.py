@@ -21,7 +21,7 @@ groups them onto a copy of the table. Consumers receive the resulting
 ``AgentType`` (``scripts/check_agent_type_branches.py``).
 
 Where a port belongs to the kind that consumes it (the memory kind's reader
-and delivery hook, the chat kind's driver, the provider kind's translation),
+, the chat kind's driver, the provider kind's translation),
 the port type is that kind's Protocol, named here under ``TYPE_CHECKING`` only
 — annotation-only imports execute nothing and the cross-kind fence does not
 count them.
@@ -42,7 +42,6 @@ from coffer.domain.agent.types import AgentType
 if TYPE_CHECKING:
     from coffer.application.chat.ports import AgentDriver
     from coffer.domain.agent.descriptor import AgentDescriptor
-    from coffer.domain.memory.delivery import DeliveryAdapter
     from coffer.domain.memory.reader import MemoryReader
     from coffer.domain.provider.agent_projection import ProviderProjection
 
@@ -57,7 +56,6 @@ class AssetType(StrEnum):
     MCP_SERVER = "mcp_server"
     SKILL = "skill"
     PROVIDER = "provider"
-    DELIVERY_HOOK = "delivery_hook"
 
 
 class Landing(StrEnum):
@@ -100,14 +98,12 @@ class AgentProjection:
     - MCP: the entry shape (:class:`McpInjectionSpec`);
     - skills: the directory under the config dir;
     - provider: the translation, which also declares the wire protocols the
-      agent's native config speaks (possibly none);
-    - delivery hook: the hook adapter, which declares its event.
+      agent's native config speaks (possibly none).
     """
 
     mcp: McpInjectionSpec | None = None
     skill_subpath: str | None = None
     provider: ProviderProjection | None = None
-    delivery_hook: DeliveryAdapter | None = None
 
     @property
     def entries(self) -> tuple[ProjectionEntry, ...]:
@@ -119,12 +115,6 @@ class AgentProjection:
             rows.append(ProjectionEntry(AssetType.SKILL, Landing.USER, subpath=self.skill_subpath))
         if self.provider is not None:
             rows.append(ProjectionEntry(AssetType.PROVIDER, Landing.USER, self.provider.config_key))
-        if self.delivery_hook is not None:
-            rows.append(
-                ProjectionEntry(
-                    AssetType.DELIVERY_HOOK, Landing.USER, self.delivery_hook.config_key
-                )
-            )
         return tuple(rows)
 
     def entry(self, asset: AssetType) -> ProjectionEntry | None:
@@ -174,10 +164,6 @@ class AgentCatalog:
         p = self.projection(agent_type)
         return p.provider if p is not None else None
 
-    def delivery_hook(self, agent_type: AgentType) -> DeliveryAdapter | None:
-        p = self.projection(agent_type)
-        return p.delivery_hook if p is not None else None
-
     def driver(self, agent_type: AgentType) -> AgentDriver[Any] | None:
         d = self._descriptors.get(agent_type)
         return d.driver if d is not None else None
@@ -217,7 +203,6 @@ def bind_facets(
     descriptors: dict[AgentType, AgentDescriptor],
     *,
     providers: Iterable[ProviderProjection] = (),
-    delivery_hooks: Iterable[DeliveryAdapter] = (),
     drivers: Iterable[AgentDriver[Any]] = (),
     memory_readers: Iterable[MemoryReader] = (),
     probe_for: Callable[[AgentDescriptor], DependencyProbe | None] | None = None,
@@ -232,7 +217,6 @@ def bind_facets(
     record's program name).
     """
     provider_by = _by_type(providers, lambda p: p.agent_type, "provider projection")
-    hook_by = _by_type(delivery_hooks, lambda h: h.agent_type, "delivery hook")
     driver_by = _by_type(drivers, lambda d: d.agent_key, "driver")
     reader_by = _by_type(memory_readers, lambda r: r.agent_type, "memory reader")
     bound: dict[AgentType, AgentDescriptor] = {}
@@ -241,7 +225,6 @@ def bind_facets(
             mcp=d.mcp,
             skill_subpath=d.skill_subpath,
             provider=provider_by.get(agent_type),
-            delivery_hook=hook_by.get(agent_type),
         )
         bound[agent_type] = dataclasses.replace(
             d,

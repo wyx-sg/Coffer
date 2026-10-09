@@ -835,6 +835,7 @@
       "attention_ignored": "在总览中忽略了一项",
       "attention_unignored": "在总览中不再忽略一项",
       "secret_revealed": "在 Coffer 应用中查看了密钥",
+      "memory_hook_removed": "从智能体中移除了已停用的记忆 Hook",
       "memory_synced": "在各智能体之间同步了记忆",
       "memory_sync_undone": "移除了 Coffer 同步进各智能体的记忆",
       "memory_curation_requested": "请一个智能体整理它自己的记忆"
@@ -1168,7 +1169,7 @@
       },
       "descriptions": {
         "knowledge": "智能体可以查阅的笔记和文档，以可直接编辑的普通文件保存。",
-        "memory": "智能体在多次会话之间记住的内容，以及投递它的钩子。"
+        "memory": "每个智能体记住的东西，同步到你其他智能体自己的记忆中。"
       },
       "source": {
         "pin": "由 COFFER_FEATURES 固定——请在启动守护进程的地方修改",
@@ -1306,14 +1307,14 @@
           "title": "卸载 Coffer？",
           "body": "Coffer 会撤回它写在 ~/.coffer 之外的所有内容，然后停止运行，应用会把自己移到废纸篓。",
           "removes": "移除",
-          "removesValue": "每个智能体里 Coffer 的 MCP 条目、记忆钩子和模型路由；Coffer 投递的技能链接；开机自启动；命令行工具和安装脚本加的 PATH 行；Coffer.app",
+          "removesValue": "每个智能体中 Coffer 的 MCP 条目和模型路由；它交付的技能链接；登录时启动；命令行工具和安装程序添加的 PATH 行；Coffer.app",
           "keeps": "保留",
           "keepsValue": "~/.coffer：你的保险库、密钥、技能、知识和设置。重新安装 Coffer 后它们都还在；需要重新连接智能体。",
           "keepsNothing": "不保留。~/.coffer 和主密钥都会被删除。",
           "deleteData": "同时删除我的数据（~/.coffer）",
           "deleteDataHelp": "会先要求 Touch ID。",
           "dangerTitle": "此操作无法撤销",
-          "danger": "~/.coffer 里的所有密钥、技能、知识集和记忆笔记，以及打开密钥所用的主密钥，都会被永久删除，包括 Coffer 从智能体那里接管的技能。移到别处的保险库会保留在原处。",
+          "danger": "~/.coffer 里的每个密钥、技能、知识集合和记忆，以及打开你密钥的主密钥，都会被永久删除——包括 Coffer 从你的智能体纳入托管的技能。你移到别处的保险库保持原样。",
           "backup": "先备份主密钥",
           "confirm": "卸载",
           "confirmDelete": "卸载并删除数据",
@@ -1563,16 +1564,6 @@
           "notSaved": "未保存"
         }
       },
-      "cache": {
-        "title": "可重建的缓存",
-        "description": "记忆树和对话摘要缓存。Coffer 会自动重建它。",
-        "clear": "清除",
-        "confirmTitle": "清除缓存？",
-        "confirmBody": "{{size}} — 记忆树和对话摘要缓存。下次更新时，记忆会从智能体自己的记忆重建，每条记录原样成为一条笔记；来源已删除的笔记不会恢复。你写的内容和历史记录都不受影响。",
-        "confirm": "清除缓存",
-        "clearing": "正在清除…",
-        "cleared": "已清除 {{size}}。记忆会在下次更新时重建。"
-      },
       "stillKept": "{{name}}仍保留{{window}}。",
       "tryAgain": "重试"
     },
@@ -1703,9 +1694,9 @@
         "back": "返回知识"
       },
       "memory": {
-        "plural": "分区",
-        "notFoundTitle": "这个分区已不存在",
-        "notFoundBody": "没有登记为 <mono>{{id}}</mono> 的记忆分区。它已被删除。",
+        "plural": "项目",
+        "notFoundTitle": "这个项目没有记忆",
+        "notFoundBody": "中心库里没有归档在 <mono>{{id}}</mono> 下的记忆。",
         "back": "返回记忆"
       },
       "secrets": {
@@ -1781,9 +1772,6 @@
     "MCP_ENTRY_SOURCE_AMBIGUOUS": "该 MCP 条目的来源存在歧义，请指定具体来源",
     "MCP_INSTALL_UNSUPPORTED": "该智能体不支持安装 Coffer 的 MCP 条目",
     "MEMORY_DELIVERY_CONFIG_INVALID": "该智能体的设置文件不是 Coffer 可以编辑的格式",
-    "MEMORY_DELIVERY_UNSUPPORTED": "该智能体类型没有记忆投递钩子",
-    "MEMORY_NOTE_NOT_FOUND": "没有找到这条记忆笔记",
-    "MEMORY_RAW_ENTRY_NOT_FOUND": "没有找到这条原始记忆条目",
     "MEMORY_UNREADABLE": "该记忆文件无法读取",
     "MEMORY_UNSAFE_PATH": "该路径在记忆库中不被允许",
     "NAME_IMMUTABLE": "添加后名称不能再改，因为智能体会引用它。要换名称请删除后以新名称重新添加",
@@ -1906,44 +1894,9 @@
   "agents": {
     "hooks": {
       "parseError": "无法读取 {{file}}：{{error}}",
-      "state": {
-        "current": "最新",
-        "stale": "已过期",
-        "missing": "缺失",
-        "neverFired": "从未触发",
-        "untrusted": "未批准",
-        "modified": "批准后已变更",
-        "disabled": "已在 Codex 中关闭"
-      },
-      "coffer": {
-        "title": "Coffer 的记忆钩子",
-        "state": "状态",
-        "command": "命令",
-        "events": "事件",
-        "file": "文件",
-        "fired": "{{time}}触发",
-        "lastFired": "上次触发 {{time}}",
-        "neverFiredSub": "从未触发",
-        "repair": "修复",
-        "checkAgain": "再次检查",
-        "viewActivity": "在活动中查看",
-        "reason": {
-          "current_one": "让每个会话都带上 Coffer 的记忆。一个钩子，挂在 {{count}} 个事件上。",
-          "current_other": "让每个会话都带上 Coffer 的记忆。一个钩子，挂在 {{count}} 个事件上。",
-          "stale": "由旧版 Coffer 写入，命令已失效，会话开始时没有记忆。",
-          "missing": "它已从 {{file}} 中被移除，所以 {{agent}} 开始会话时没有记忆。",
-          "untrusted": "{{agent}} 会跳过你没有批准的钩子。请在 {{agent}} 的 /hooks 中批准它，然后再检查一次。",
-          "modified": "命令在你批准之后变了，所以 {{agent}} 会跳过它。请在 {{agent}} 的 /hooks 中重新批准，然后再检查一次。",
-          "disabled": "该钩子在 {{agent}} 中被关闭，从不运行。请在 {{agent}} 的 /hooks 中打开它，然后再检查一次。",
-          "neverFired": {
-            "codex": "可能原因：这个版本的 {{agent}} 不加载 {{file}}，所以还没有会话运行过它。",
-            "claude_code": "可能原因：安装钩子后 {{agent}} 还没有开始过会话。"
-          }
-        }
-      },
       "own": {
         "title": "{{agent}} 自己的钩子",
-        "help": "这里只读。要改钩子就去它所在的文件改；Coffer 只照看自己的记忆钩子。",
+        "help": "这里只读。要改钩子就去它所在的文件改。",
         "hooks_one": "{{count}} 个钩子",
         "hooks_other": "{{count}} 个钩子",
         "files_one": "{{count}} 个文件",
@@ -2070,7 +2023,7 @@
       "moreActions": "{{name}} 的更多操作",
       "notAdded": {
         "title": "{{name}} 未连接",
-        "body": "Coffer 在 {{dir}} 找到了 {{name}}。连接后，它通过一个入口和一个钩子获得你的 MCP 服务器、技能和记忆——写入前你会先看到确切的改动行。"
+        "body": "Coffer 在 {{dir}} 发现了 {{name}}。连接后，它会通过一个条目获得你的 MCP 服务器和技能——写入前你会先查看具体改动。"
       },
       "notInstalled": {
         "title": "{{name}} 未安装",
@@ -2100,24 +2053,10 @@
       "files_other": "{{count}} 个文件",
       "emptyTitle": "{{agent}} 还没有记忆文件",
       "emptyBody": "{{agent}} 在学习过程中会写入 {{path}}。文件出现后会显示在这里。",
-      "coffer": {
-        "title": "Coffer 的记忆",
-        "open": "打开记忆",
-        "repair": "修复",
-        "description": "Coffer 在每个会话开始时，把你的智能体共享的记忆交给 {{agent}}。",
-        "hook": "记忆钩子",
-        "eventsIn_one": "{{count}} 个事件，位于",
-        "eventsIn_other": "{{count}} 个事件，位于",
-        "oneEventIn": "{{event}}，位于",
-        "lastFired": "上次触发",
-        "never": "从未",
-        "delivers": "交付内容",
-        "deliversBody": "共享记忆索引，让 {{agent}} 能查到你的智能体学到的东西"
-      },
       "own": {
         "title": "{{agent}} 自己的记忆",
-        "descriptionClaude": "每个项目一个记忆库，由 {{agent}} 写入。只读：Coffer 只读取，从不写入。",
-        "descriptionCodex": "由 {{agent}} 写入。只读：Coffer 只读取，从不写入。"
+        "descriptionClaude": "每个项目一个记忆库，由 {{agent}} 写入，另有 Coffer 从你其他智能体同步来的副本。这里只读。",
+        "descriptionCodex": "由 {{agent}} 写入；Coffer 把副本放在 memories/extensions/coffer/ 下。这里只读。"
       },
       "cols": {
         "project": "项目",
@@ -2376,9 +2315,6 @@
       "not_connected": "未连接",
       "checking": "正在检查…"
     },
-    "stateHeader": {
-      "hook_untrusted": "Hook 未获批准"
-    },
     "tabs": {
       "more": "更多",
       "hooks": "钩子",
@@ -2393,37 +2329,26 @@
     "overviewTab": {
       "connection": {
         "heading": "连接",
-        "help": "Coffer 只添加一个 MCP 条目和一个记忆 hook，两者都标记为 Coffer 所有；智能体配置里的其他内容一概不动。",
+        "help": "Coffer 只添加一个 MCP 条目，并标记为 Coffer 所有；智能体配置里的其他内容一概不动。",
         "loadFailed": "读取 Coffer 连接失败，请刷新页面重试。",
         "body": {
-          "connected": "{{name}} 通过一个 MCP 条目连到 Coffer，并通过一个 hook 获取记忆。",
-          "connectedMcpOnly": "{{name}} 通过一个 MCP 条目连到 Coffer。",
-          "notConnected": "连接会在它的配置里添加一个条目和一个 hook。写入之前你会先查看具体改动。",
-          "notConnectedMcpOnly": "连接会在它的配置里添加一个条目。写入之前你会先查看具体改动。",
-          "mcpMissing": "<code>{{mcpFile}}</code> 里缺少 <code>coffer</code> 条目，所以 {{name}} 用不了 Coffer 的工具。",
-          "hookStale": "记忆 hook 运行的命令已不被当前 Coffer 接受，所以会话开始时没有记忆。",
-          "hookMissing": "<code>{{hookFile}}</code> 里缺少记忆 hook，所以会话开始时没有记忆。",
-          "hookUntrusted": "{{name}} 只运行你批准过的 hook。请在 {{name}} 的 /hooks 里批准 Coffer 的 hook，然后重新检查。"
+          "connected": "{{name}} 通过一个 MCP 条目连到 Coffer。",
+          "notConnected": "连接会在它的配置里添加一个条目。写入之前你会先查看具体改动。",
+          "mcpMissing": "<code>{{mcpFile}}</code> 里缺少 <code>coffer</code> 条目，所以 {{name}} 用不了 Coffer 的工具。"
         },
         "action": {
           "connect": "连接",
-          "repair": "修复",
-          "checkAgain": "重新检查"
+          "repair": "修复"
         },
         "part": {
           "mcp": "MCP 条目",
-          "memoryHook": "记忆 hook",
           "mcpIn": "<code>coffer</code>，位于 <path>{{file}}</path>",
-          "notIn": "不在 <path>{{file}}</path> 中",
-          "hookIn_one": "{{count}} 个事件，位于 <path>{{file}}</path>",
-          "hookIn_other": "{{count}} 个事件，位于 <path>{{file}}</path>"
+          "notIn": "不在 <path>{{file}}</path> 中"
         },
         "health": {
           "current": "最新",
-          "stale": "已过期",
           "missing": "缺失",
-          "notSet": "未设置",
-          "untrusted": "未批准"
+          "notSet": "未设置"
         }
       },
       "age": {
@@ -2464,11 +2389,7 @@
         "hooks": {
           "none": "没有 hook",
           "inFile": "在 {{file}} 里",
-          "inPlaces": "分布在 {{places}} 处",
-          "coffer_one": "{{count}} 个属于 Coffer",
-          "coffer_other": "{{count}} 个属于 Coffer",
-          "cofferMissing": "Coffer 的 hook 缺失",
-          "cofferUntrusted": "Coffer 的 hook 未批准"
+          "inPlaces": "分布在 {{places}} 处"
         },
         "memory": {
           "none": "没有原生记忆库",
@@ -2632,8 +2553,6 @@
       "builtinDefaultNamed": "内置默认（{{model}}）",
       "detail": {
         "mcpMissing": "缺少 MCP 条目",
-        "hookStale": "记忆钩子已过期",
-        "hookMissing": "记忆钩子未写入",
         "gone": "{{dir}} 和它的程序都不在了",
         "notOnThisMac": "这台 Mac 上没有",
         "keptNotOnPath": "{{dir}} 已保留 · PATH 上没有 {{program}}"
@@ -2670,16 +2589,14 @@
       },
       "summary": {
         "gets": {
-          "both": "在 {{mcpFile}} 中获得 coffer 条目，在 {{hookFile}} 中获得记忆钩子。",
-          "mcp": "在 {{mcpFile}} 中获得 coffer 条目。",
-          "hook": "在 {{hookFile}} 中获得记忆钩子。"
+          "mcp": "在 {{mcpFile}} 中获得 coffer 条目。"
         },
         "creates": "Coffer 会为它创建 {{dir}}，里面只放这些条目。",
         "keeps": {
           "claude_code": "它自己的服务器和钩子保持不变。",
           "codex": "它自己的服务器、钩子和提供商保持不变。"
         },
-        "loses": "失去 Coffer 的 MCP 服务器、技能和记忆。它自己的服务器、钩子和设置保持不变。"
+        "loses": "失去 Coffer 的 MCP 服务器和技能。它自己的服务器、钩子和设置保持不变。"
       },
       "placeholder": {
         "uid": "<添加时分配>",
@@ -2693,7 +2610,7 @@
       "hint": "Coffer 会从这里重新读取每个文件。",
       "review": "查看改动",
       "reviewSubtitle": "把 {{name}} 与 Coffer 的连接移到 {{dir}}",
-      "reviewSummary": "Coffer 的条目和记忆钩子会从旧目录取出，写入新目录。两个目录里的其余内容保持不变。",
+      "reviewSummary": "Coffer 的条目从旧目录移出，写入新目录。两边的其他内容都保持不变。",
       "foundThere": "在该目录中找到",
       "found": "已找到",
       "notHere": "不在这里",
@@ -3271,119 +3188,196 @@
   },
   "memory": {
     "title": "记忆",
-    "subtitle": "智能体学到的内容：读取它们各自的记忆，按仓库保存为记忆条目。",
-    "update": "更新记忆",
-    "updating": "正在更新…",
-    "syncDone": "读到 {{count}} 条新条目，更新了 {{partitions}} 个分区。",
-    "syncFailures": "{{count}} 个来源解析失败——详见活动页面。",
-    "loadFailed": "加载分区失败",
-    "partitions": {
-      "memories_one": "{{count}} 条记忆条目",
-      "memories_other": "{{count}} 条记忆条目",
-      "search": "搜索分区"
-    },
-    "cols": {
-      "name": "分区",
-      "path": "路径",
-      "global": "所有项目",
-      "memories": "记忆条目",
-      "unresolvable": "仓库已不在",
-      "sources": "来源",
-      "distil": "已提炼"
-    },
-    "delete": {
-      "title": "删除 {{name}}？",
-      "body_one": "Coffer 会删除它提炼出的 {{count}} 条记忆条目并停止投递；该分区会从列表中移除。",
-      "body_other": "Coffer 会删除它提炼出的 {{count}} 条记忆条目并停止投递；该分区会从列表中移除。",
-      "untouched": "智能体自己为该文件夹保存的记忆不受影响。",
-      "confirm": "删除分区"
-    },
-    "welcome": {
-      "title": "还没有提炼出任何东西",
-      "body": "智能体已经记住了你项目里的不少事情。Coffer 读取它们的记忆（绝不写入），并为每个仓库把每条内容保存为记忆条目。",
-      "noAgentsTitle": "没有可读取的智能体记忆",
-      "noAgentsBody": "记忆来自每个已连接智能体自己的记忆。还没有智能体连接到 Coffer，所以没有可提炼的内容。",
-      "connect": "打开智能体 →",
-      "found": "在这台 Mac 上找到",
-      "foundMeta": "Coffer 也会每小时自行读取一次",
-      "foundNone": "暂无记忆",
-      "foundCount_one": "{{projects}}中共 {{count}} 个文件",
-      "foundCount_other": "{{projects}}中共 {{count}} 个文件",
-      "projects_one": "{{count}} 个项目",
-      "projects_other": "{{count}} 个项目"
-    },
-    "detail": {
-      "tabs": {
-        "memories": "记忆条目",
-        "delivered": "投递内容"
-      },
-      "menu": {
-        "label": "{{name}} 的更多操作",
-        "reveal": "在访达中显示分区文件夹",
-        "copyPath": "复制路径",
-        "delete": "删除分区…",
-        "history": "在活动中查看提炼记录"
-      }
-    },
-    "memories": {
-      "listLabel": "记忆条目",
-      "retired": "已退役",
-      "readOnly": "只读",
-      "retiredListLabel": "已退役的记忆",
-      "retiredOn": "退役于 {{date}}",
-      "replacedBy": "已由「{{title}}」取代 →",
-      "learnedBy": "学自 {{agents}} · 更新于 {{date}}",
-      "more": "{{title}} 的更多操作",
-      "deleteMenu": "删除…",
-      "deleteTitle": "删除“{{title}}”？",
-      "deleteBody": "这条记忆会从列表中消失，之后的会话不会再收到它。Coffer 会在「已退役」里留一条记录，下次更新不会再从各智能体自己的记忆里重新学回来。",
-      "deleteConfirm": "删除记忆",
-      "deleted": "已删除“{{title}}”",
-      "updated": "更新于 {{date}}",
-      "select": "选择一条记忆条目查看。",
-      "loadFailed": "加载记忆条目失败。",
-      "emptyTitle": "{{name}} 还没有记忆条目",
-      "emptyBody": "Coffer 还没有为这个分区提炼任何内容。点「更新记忆」，或者等它在几小时内自动完成。",
-      "emptyWaiting_one": "Coffer 已为这个仓库从 {{agents}} 读取了 {{count}} 条，但尚未提炼。点击更新记忆，或者几小时内会自动进行。",
-      "emptyWaiting_other": "Coffer 已为这个仓库从 {{agents}} 读取了 {{count}} 条，但尚未提炼。点击更新记忆，或者几小时内会自动进行。"
-    },
-    "delivered": {
-      "viewLabel": "显示方式",
-      "rendered": "渲染",
-      "raw": "原文",
-      "agentsLabel": "智能体",
-      "intro": "在 {{path}} 中开始的会话会收到的内容 · 只读",
-      "introGlobal": "每个会话开始时收到的内容 · 只读",
-      "copy": "复制",
-      "none": "还没有智能体连接到 Coffer，没有会话会以这个分区的记忆条目开始。",
-      "loadFailed": "加载投递内容失败。",
-      "size": "{{size}} 个字符 · 未截断",
-      "editHint": "编辑来源记忆即可改变投递的内容"
+    "subtitle": "每个智能体记住的东西，同步到你的其他智能体。",
+    "loadFailed": "无法读取记忆同步",
+    "moreActions": "更多记忆操作",
+    "syncNow": "立即同步",
+    "syncing": "正在同步…",
+    "clock": {
+      "last": "上次同步 {{when}}",
+      "never": "这台机器还没有同步过",
+      "running": "正在同步…",
+      "off": "自动同步已关闭"
     },
     "automatic": {
-      "title": "自动读取记忆",
-      "description": "读取每个智能体自己的记忆并提炼。Coffer 从不写入它。",
-      "last": "上次读取 {{when}}",
-      "never": "尚未读取"
+      "title": "自动同步记忆",
+      "description": "把每个智能体学到的东西发布到你的保险库，并写入你其他智能体自己的记忆。",
+      "last": "上次同步 {{when}}",
+      "never": "还没有同步过"
     },
-    "allAgents": "所有智能体",
-    "distil": {
-      "done": "{{when}}提炼",
-      "never": "从未",
-      "running": "正在提炼…"
+    "toast": {
+      "synced": "记忆已同步",
+      "syncedDetail": "发布 {{published}} 条 · 写入 {{written}} 份副本 · 移除 {{removed}} 份",
+      "nothingChanged": "记忆已是最新",
+      "previewWaiting": "请查看下面的副本，然后选择写入"
     },
-    "failure": {
-      "title": "无法读取 {{agent}} 的记忆：",
-      "anAgent": "某个智能体",
-      "kept": "{{agent}} 的记忆保持上次完整读取后的样子。",
-      "keptSince": "{{agent}} 的记忆保持 {{date}} 上次完整读取后的样子。",
-      "retry": "重试",
-      "prompt": "Coffer 无法读取 {{agent}} 的记忆（{{path}}，原因：{{reason}}）。请查明读不了的原因（多半是权限问题），修好读取权限，让 Coffer 能再次读取。不要改动记忆本身的内容。",
-      "noReason": "无法读取"
+    "noAgents": {
+      "title": "没有可同步的智能体",
+      "body": "记忆在 Claude Code 和 Codex 之间同步。请在智能体页面添加其中一个。",
+      "open": "打开智能体"
     },
-    "tidy": {
-      "one": "整理",
-      "all": "整理全部"
+    "problems": {
+      "failed_one": "有 {{count}} 个记忆来源无法读取",
+      "failed_other": "有 {{count}} 个记忆来源无法读取",
+      "failedKept": "这次没有从它发布任何内容；它之前发布的内容仍留在中心库里。",
+      "withheld_one": "有 {{count}} 条记忆看起来含有密钥，未发布",
+      "withheld_other": "有 {{count}} 条记忆看起来含有密钥，未发布"
+    },
+    "preview": {
+      "title_one": "写入前请查看 {{count}} 份副本",
+      "title_other": "写入前请查看 {{count}} 份副本",
+      "description": "首次或大量同步会先等你确认。中心库已经更新；在你选择写入之前，不会写入任何智能体。打开一行可查看其中的记忆。",
+      "write": "写入",
+      "empty": "没有要写入的内容",
+      "cols": {
+        "agent": "写入",
+        "project": "项目",
+        "write": "新写入",
+        "update": "更新",
+        "remove": "移除"
+      }
+    },
+    "projects": {
+      "title": "项目",
+      "description": "你的智能体在任意一台机器上为自己写下的每条记忆，按项目归档。",
+      "global": "全局记忆",
+      "everywhere": "所有项目，所有机器",
+      "notHere": "这台机器上没有检出",
+      "search": "搜索项目",
+      "empty": "还没有记忆。下次同步会发布你的智能体记住的内容。",
+      "cols": {
+        "project": "项目",
+        "here": "在这台机器上",
+        "memories": "记忆",
+        "from": "来自"
+      }
+    },
+    "agents": {
+      "title": "这台机器上的智能体",
+      "description": "每个智能体自己整理并加载自己的记忆。Coffer 只写入你其他智能体所学内容的副本。",
+      "empty": "这台机器上没有可同步记忆的智能体。",
+      "cols": {
+        "agent": "智能体",
+        "copies": "在此写入的副本",
+        "memory": "自身记忆",
+        "curation": "自身整理"
+      },
+      "written_one": "{{count}} 份副本",
+      "written_other": "{{count}} 份副本",
+      "edited_one": "{{count}} 份被智能体修改",
+      "edited_other": "{{count}} 份被智能体修改",
+      "removed_one": "{{count}} 份被智能体移除",
+      "removed_other": "{{count}} 份被智能体移除",
+      "writer": {
+        "off": "未写入：它的记忆已关闭",
+        "blocked": "未写入"
+      },
+      "memory": {
+        "claude_code": {
+          "on": "自动记忆已开启",
+          "off": "自动记忆已关闭",
+          "unknown": "自动记忆状态未知"
+        },
+        "codex": {
+          "on": "记忆已开启",
+          "off": "记忆已关闭",
+          "unknown": "记忆状态未知"
+        },
+        "other": {
+          "on": "已开启",
+          "off": "已关闭",
+          "unknown": "未知"
+        }
+      },
+      "curation": {
+        "claude_code": {
+          "on": "Auto Dream 已开启",
+          "off": "Auto Dream 已关闭",
+          "unknown": "Auto Dream 状态未知"
+        },
+        "codex": {
+          "on": "整合已开启",
+          "off": "整合已关闭",
+          "unknown": "整合状态未知"
+        },
+        "other": {
+          "on": "已开启",
+          "off": "已关闭",
+          "unknown": "未知"
+        }
+      },
+      "hint": {
+        "claude_code": {
+          "memory": "在 Claude Code 的 /memory 中开启自动记忆。",
+          "curation": "在 Claude Code 的 /memory 中查看 Auto Dream。"
+        },
+        "codex": {
+          "memory": "在 Codex 中开启记忆：在 config.toml 的 [features] 下设置 memories = true。",
+          "curation": "只要记忆开启，Codex 就会整合。"
+        },
+        "other": {
+          "memory": "开启该智能体自己的记忆。",
+          "curation": "开启该智能体自己的整理。"
+        }
+      },
+      "curateNow": "立即整理",
+      "curateNowFor": "立即整理：{{agent}}",
+      "curateStarted": "{{agent}} 正在整理它的记忆",
+      "curateNotStarted": "无法启动 {{agent}}"
+    },
+    "codexImport": {
+      "label": "Codex 自己导入 Claude Code 的记忆",
+      "description": "当 Codex 自己从 Claude Code 导入并开启自动更新时打开。这样 Coffer 不再把 Claude Code 的记忆写入 Codex；Codex 的记忆仍会写入 Claude Code。",
+      "on": "由 Codex 自己导入"
+    },
+    "undo": {
+      "menu": "撤销同步…",
+      "menuDescription": "从这台机器的智能体中移除 Coffer 的副本",
+      "title": "撤销这台机器上的记忆同步？",
+      "description": "Coffer 会移除它在这里写入你智能体的内容，并停止自动同步。",
+      "removes": "移除",
+      "copiesIn_one": "{{agent}} 中的 {{count}} 份副本",
+      "copiesIn_other": "{{agent}} 中的 {{count}} 份副本",
+      "noCopies": "没有副本",
+      "files": "每个 MEMORY.md 中 Coffer 的区块、Claude Code 的 rules/coffer-memory.md 和 Codex 的 memories/extensions/coffer/",
+      "turnsOff": "关闭",
+      "automatic": "自动同步",
+      "keeps": "保留",
+      "kept": "保险库中的中心库、智能体自己写下的每条记忆，以及智能体修改过的每份副本",
+      "confirm": "撤销同步",
+      "pending": "正在撤销…",
+      "failed": "无法撤销同步",
+      "done_one": "已移除 {{count}} 份副本。自动同步已关闭。",
+      "done_other": "已移除 {{count}} 份副本。自动同步已关闭。"
+    },
+    "detail": {
+      "global": "写入每台机器上的每个智能体",
+      "notHere": "这台机器上没有检出：它的记忆留在中心库里等待",
+      "memories_one": "{{count}} 条记忆",
+      "memories_other": "{{count}} 条记忆"
+    },
+    "entries": {
+      "search": "搜索记忆",
+      "empty": "这个项目里没有记忆。",
+      "loadFailed": "无法读取记忆",
+      "thisMachine": "这台机器",
+      "cols": {
+        "memory": "记忆",
+        "type": "类型",
+        "origin": "来自",
+        "copyIn": "在 {{agent}} 中",
+        "updated": "更新时间"
+      }
+    },
+    "copy": {
+      "origin": "它自己的",
+      "written": "已写入",
+      "rules": "在规则文件中",
+      "pending": "下次同步",
+      "held_back": "暂缓",
+      "deferred": "由 Codex 导入",
+      "edited": "被智能体修改",
+      "removed": "被智能体移除"
     }
   },
   "conversations": {
@@ -4602,7 +4596,6 @@
       "review": "查看",
       "repair": "修复偏移",
       "open": "打开",
-      "repairHook": "修复钩子",
       "reconnectChannel": "重新连接渠道",
       "reviewHeld": "查看被暂缓的变更",
       "openSecrets": "打开密钥",
@@ -4616,7 +4609,6 @@
       "skill": "技能",
       "channel": "消息渠道",
       "knowledge": "知识",
-      "memory": "记忆",
       "sync": "同步",
       "reconcile": "智能体配置",
       "cli": "命令行工具",
@@ -4711,9 +4703,9 @@
         "ok": "已是最新",
         "warn_one": "{{count}} 个需要关注",
         "warn_other": "{{count}} 个需要关注",
-        "unit_one": "个分区",
-        "unit_other": "个分区",
-        "lastUpdate": "最近更新：{{ago}}"
+        "unit_one": "条记忆",
+        "unit_other": "条记忆",
+        "lastUpdate": "上次同步 {{ago}}"
       },
       "sync": {
         "ok": "已同步",

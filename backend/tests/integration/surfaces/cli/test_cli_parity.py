@@ -88,7 +88,7 @@ def test_every_command_is_recorded_or_has_a_reason() -> None:
     for path, (reason, why) in COMMAND_REASONS.items():
         assert isinstance(reason, Reason) and why.strip(), path
     hidden = {p for p, c in _leaves().items() if c.hidden}
-    assert hidden == {"memory hook", "proxy token"}
+    assert hidden == {"proxy token"}
 
 
 def test_every_group_renders_its_help() -> None:

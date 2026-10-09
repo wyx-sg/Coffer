@@ -25,10 +25,6 @@ Coffer 在界面、CLI、API 和文档中使用的术语，按英文字母顺序
 
 安装在本机并在 Coffer 中注册的编程智能体，比如 Claude Code（`claude_code`）或 Codex（`codex`）。智能体是类型为 `agent` 的[资源](#resource)。每台机器上每种类型最多一个，它的名称就是它的类型（`claude-code`、`codex`）；除了模型绑定，它唯一的设置是配置目录。见[智能体](/zh/guides/agents)。
 
-### 聚合任务（Aggregate pass） {#aggregate-pass}
-
-一种[维护任务](#upkeep-pass)，把每个已注册智能体的[原生记忆](#native-memory)读进 Coffer 的记忆，成为[原始条目](#raw-entry)。Coffer 从不写回智能体自己的记忆。见[记忆](/zh/architecture/memory#the-aggregation-pass)。
-
 ### 审批（Approval） {#approval}
 
 一项会扩大密钥去向的改动，在有人于桌面应用中答复之前一直被挂起：从新的[目的地](#destination)引用某个密钥，或把它发往新的[接收方](#target)；或关闭这项保护。批准需要一次[在场授权](#presence-grant)；拒绝则不需要，在任何界面都能操作。改动需要等待审批的命令会打印 "waiting for approval in the Coffer app" 并以 `9` 退出。见[密钥](/zh/guides/secrets#approvals)。
@@ -89,7 +85,7 @@ Coffer 自带并自行维护的技能。它是 Coffer 给智能体的说明书�
 
 ### 投递（Delivery） {#delivery}
 
-把 Coffer 保存的东西送进智能体：[技能](#skill)通过[绑定](#binding)送达；[记忆](#partition)则通过 Coffer 安装在智能体设置里的 Hook 送达，它在会话开始时交出索引，并交出提示词所提到的笔记。见[记忆](/zh/guides/memory)。
+把 Coffer 保存的东西送进智能体：[技能](#skill)通过[绑定](#binding)送达。记忆不投递进会话：[记忆同步](#memory-sync)把它写进智能体自己的[原生记忆](#native-memory)，由智能体自己加载。见[技能](/zh/guides/skills)。
 
 ### 目的地（Destination） {#destination}
 
@@ -99,15 +95,17 @@ Coffer 发送密钥明文的地方：MCP 服务器的环境变量或 HTTP 请求
 
 每个 Coffer 客户端找到守护进程的方式：读 `daemon.json`，探测端口，没有应答就启动一个守护进程；整个过程加锁，两个客户端永远不会启动两个守护进程。见[守护进程与进程](/zh/architecture/daemon#detect-or-spawn)。
 
-### 提炼任务（Distil pass） {#distil-pass}
-
-一种[维护任务](#upkeep-pass)，把一个[分区](#partition)的每个新[原始条目](#raw-entry)原样变成一条[笔记](#note)，渲染分区的索引 `MEMORY.md`，并删除智能体标了 `retired:` 的笔记（记入 `RETIRED.md`）。它不调用任何模型。见[记忆](/zh/architecture/memory#the-distil-pass)。
-
 ## E {#e}
 
 ### 实验功能（Experimental feature） {#experimental-feature}
 
 默认关闭、可按机器开启的能力。目前有两个：`knowledge`（知识）和 `memory`（记忆）。保险库同步和模型提供商已经转正，始终开启。功能关闭期间，它的路由返回 `404 FEATURE_DISABLED`，它的界面看起来就像不存在；数据会保留。见[实验功能](/zh/guides/experimental-features)和[配置](/zh/reference/configuration#experimental-features)。
+
+## H {#h}
+
+### 中心库（Hub） {#hub}
+
+[保险库](#vault)里的 `memory/` 文件夹，保存你的智能体在任意一台机器上为自己写下的每条记忆：每条记忆一个 Markdown 文件，放在 `global/` 或某个项目（以仓库的远端命名）下。[保险库同步](#vault-sync)在机器之间传送它；只有记忆来源的那台机器会修改它的文件。见[记忆](/zh/guides/memory#the-hub)。
 
 ## I {#i}
 
@@ -129,7 +127,7 @@ Coffer 发送密钥明文的地方：MCP 服务器的环境变量或 HTTP 请求
 
 ### 类型（Kind） {#kind}
 
-[资源](#resource)的类型。Coffer 注册了七种：`mcp_server`、`agent`、`skill`、`channel`、`knowledge`、`memory` 和 `provider`。框架为每种类型提供相同的身份、生命周期、审计和[生效范围](#reach)；每种类型自己决定它的资源做什么。见[资源框架](/zh/architecture/resource-framework#the-seven-kinds)。
+[资源](#resource)的类型。Coffer 注册了六种：`mcp_server`、`agent`、`skill`、`channel`、`knowledge` 和 `provider`。框架为每种类型提供相同的身份、生命周期、审计和[生效范围](#reach)；每种类型自己决定它的资源做什么。见[资源框架](/zh/architecture/resource-framework#the-six-kinds)。
 
 ## M {#m}
 
@@ -157,15 +155,15 @@ Coffer 发送密钥明文的地方：MCP 服务器的环境变量或 HTTP 请求
 
 你在 Coffer 中注册的上游 Model Context Protocol 服务器，通过 stdio 或 HTTP 连接。它是类型为 `mcp_server` 的[资源](#resource)，它的工具以 `<server>__<tool>` 的形式到达智能体。见 [MCP 服务器](/zh/guides/mcp-servers)。
 
+### 记忆同步（Memory sync） {#memory-sync}
+
+一种[维护任务](#upkeep-pass)：读取每个已注册智能体的[原生记忆](#native-memory)，把每个智能体在本机写下的内容发布到[中心库](#hub)，并把其他智能体和其他机器的记忆写进每个智能体自己的记忆，成为智能体自己加载和整理的文件。Coffer 只碰自己的副本。默认开启，每小时一次，也可以用**立即同步**随时运行；首次或大量同步会先作为预览等待确认。见[记忆](/zh/guides/memory)。
+
 ## N {#n}
 
 ### 原生记忆（Native memory） {#native-memory}
 
-智能体保存在自己文件里的记忆，比如 Claude Code 按项目划分的记忆目录。Coffer 在[聚合任务](#aggregate-pass)中读取它，并在智能体页面上以只读方式显示。见[记忆](/zh/guides/memory)。
-
-### 笔记（Note） {#note}
-
-Coffer 记忆中的一个主题，由[提炼任务](#distil-pass)写成[分区](#partition) `notes/` 目录下的一个 Markdown 文件。智能体用自己的文件工具搜索记忆根目录来找笔记，会话开始时的投递内容和 `coffer-guide` 技能都会指明这个根目录。见[记忆](/zh/guides/memory)。
+智能体保存在自己文件里的记忆，比如 Claude Code 按项目划分的记忆目录。[记忆同步](#memory-sync)读取它，把智能体写下的内容发布到[中心库](#hub)，并在旁边写入其他智能体记忆的副本。智能体页面以只读方式显示它。见[记忆](/zh/guides/memory)。
 
 ## O {#o}
 
@@ -178,10 +176,6 @@ Coffer 记忆中的一个主题，由[提炼任务](#distil-pass)写成[分区](
 ### 页面（Page） {#page}
 
 [知识集](#collection) `pages/` 下的 Markdown 文件：wiki 本身，由你和你的智能体根据知识集的[来源](#source)编写并保持更新。见[知识](/zh/guides/knowledge)。
-
-### 分区（Partition） {#partition}
-
-Coffer 记忆的一个单元：`global`，或者某一个仓库。每个分区是 `~/.coffer/derived/memory/` 下的一个目录，保存它的[笔记](#note)、`MEMORY.md` 索引和[原始条目](#raw-entry)。分区是类型为 `memory` 的[资源](#resource)。见[记忆](/zh/guides/memory)。
 
 ### 应用前快照（Pre-apply snapshot） {#pre-apply-snapshot}
 
@@ -197,17 +191,13 @@ Coffer 在一轮[同步](#sync-round)检出任何内容之前打的 git 标签�
 
 ## R {#r}
 
-### 原始条目（Raw entry） {#raw-entry}
-
-[聚合任务](#aggregate-pass)从智能体[原生记忆](#native-memory)中读出的一条事实，保存在分区隐藏的 `.raw/` 目录里，直到[提炼任务](#distil-pass)把它变成[笔记](#note)。见[记忆](/zh/architecture/memory#stable-raw-entries)。
-
 ### 生效范围（Reach） {#reach}
 
-一个资源在本机上的适用范围：它的 `enabled` 标志加上它的[作用范围](#scope)。知识集和记忆分区没有生效范围：它们对每个智能体都提供。生效范围只属于本机、从不同步，所以每台机器自己决定哪些智能体能看到一个已同步的资源。见[资源框架](/zh/architecture/resource-framework#reach)。
+一个资源在本机上的适用范围：它的 `enabled` 标志加上它的[作用范围](#scope)。知识集没有生效范围：它们对每个智能体都提供。生效范围只属于本机、从不同步，所以每台机器自己决定哪些智能体能看到一个已同步的资源。见[资源框架](/zh/architecture/resource-framework#reach)。
 
 ### 资源（Resource） {#resource}
 
-你在 Coffer 中管理的任何东西：MCP 服务器、智能体、技能、消息渠道、知识集、记忆分区或提供商连接。每个资源都有一个[类型](#kind)、一个不可变的 [uid](#uid)、一个在其类型内唯一的名称，以及一个[生效范围](#reach)。见[核心概念](/zh/start/concepts)。
+你在 Coffer 中管理的任何东西：MCP 服务器、智能体、技能、消息渠道、知识集或提供商连接。每个资源都有一个[类型](#kind)、一个不可变的 [uid](#uid)、一个在其类型内唯一的名称，以及一个[生效范围](#reach)。见[核心概念](/zh/start/concepts)。
 
 ### 保留期限（Retention） {#retention}
 
@@ -259,7 +249,7 @@ Coffer 保存的五类状态之一，每类在 `~/.coffer` 下有自己的位置
 
 ### 整理（Tidy） {#tidy}
 
-[知识集](#collection)或记忆[分区](#partition)上的按钮（列表页上还有**整理全部**），它会在你的首选终端里启动默认的交接智能体，并把一条提示作为第一条消息发给它，让它按 `coffer-guide` 技能合并、拆分和纠正其中的内容。没有可用的托管智能体时，它提供可复制的提示。整理由你的智能体来做，Coffer 自己从不主动整理。见[知识](/zh/guides/knowledge)和[记忆](/zh/guides/memory)。
+[知识集](#collection)上的按钮（列表页上还有**整理全部**），它会在你的首选终端里启动默认的交接智能体，并把一条提示作为第一条消息发给它，让它按 `coffer-guide` 技能合并、拆分和纠正其中的内容。没有可用的托管智能体时，它提供可复制的提示。整理由你的智能体来做，Coffer 自己从不主动整理。记忆没有整理按钮：每个智能体整理自己的记忆。见[知识](/zh/guides/knowledge)。
 
 ### 分层（Tiering） {#tiering}
 
@@ -285,13 +275,13 @@ Coffer 保存的五类状态之一，每类在 `~/.coffer` 下有自己的位置
 
 ### 维护任务（Upkeep pass） {#upkeep-pass}
 
-Coffer 按定时器、无需要求就做的机械性工作：记忆的 `aggregate` 和 `distil`，以及知识的扫描（重新渲染指南、收编留在[收件箱](#inbox)的文件、把散落的文档归入 `pages/`、提交磁盘上的编辑）。它们都不调用模型。每项都能在记忆页面的自动读取计划（**更新记忆**的 **▾**）里关闭或调整时间。见[记忆](/zh/architecture/memory#workers-and-scheduling)和[知识](/zh/architecture/knowledge#the-sweep)。
+Coffer 按定时器、无需要求就做的机械性工作：[记忆同步](#memory-sync)，以及知识的扫描（重新渲染指南、收编留在[收件箱](#inbox)的文件、把散落的文档归入 `pages/`、提交磁盘上的编辑）。它们都不调用模型。记忆同步可以在记忆页面**立即同步**的 **▾** 里关闭或调整时间。见[记忆](/zh/architecture/memory#the-sync-pass)和[知识](/zh/architecture/knowledge#the-sweep)。
 
 ## V {#v}
 
 ### 保险库（Vault） {#vault}
 
-位于 `~/.coffer/vault/` 的 git 仓库，保存你的配置和亲手编写的内容：资源文件、状态文档、知识集、技能文件夹、密钥密文和机器描述文件。从第一次使用起它就是一个仓库，每次被接受的改动都是一个注明其[写入者](#writer)的提交。更宽泛地说，也指 Coffer 在 `~/.coffer/` 下以五种[存储类别](#storage-class)保存的一切。见[手动编辑保险库](/zh/guides/vault-files)和[文件与目录](/zh/reference/filesystem)。
+位于 `~/.coffer/vault/` 的 git 仓库，保存你的配置和亲手编写的内容：资源文件、状态文档、知识集、技能文件夹、记忆[中心库](#hub)、密钥密文和机器描述文件。从第一次使用起它就是一个仓库，每次被接受的改动都是一个注明其[写入者](#writer)的提交。更宽泛地说，也指 Coffer 在 `~/.coffer/` 下以五种[存储类别](#storage-class)保存的一切。见[手动编辑保险库](/zh/guides/vault-files)和[文件与目录](/zh/reference/filesystem)。
 
 ### 保险库同步（Vault sync） {#vault-sync}
 

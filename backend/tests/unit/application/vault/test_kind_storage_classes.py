@@ -1,6 +1,6 @@
 """Each kind files its resources in the class its nature asks for (ADR
 storage-is-five-classes-by-nature): an agent names a directory on this disk
-(``local/``), a memory partition and Coffer's own skill are rebuilt
+(``local/``), Coffer's own skill is rebuilt
 (``derived/``), everything a person chose is in the vault."""
 
 from __future__ import annotations
@@ -30,11 +30,3 @@ def test_coffers_own_skill_is_derived_and_every_other_skill_is_in_the_vault() ->
     assert kind.storage_row is not None
     assert kind.storage_row({"source": {"type": BUILTIN_SOURCE_TYPE}}) is StorageClass.DERIVED
     assert kind.storage_row({"source": {"type": "git"}}) is StorageClass.VAULT
-
-
-@pytest.mark.acceptance(spec="memory", scenario="a partition does not travel to the sync remote")
-def test_a_memory_partition_is_derived() -> None:
-    from coffer.application.memory.kind import make_memory_kind
-
-    kind = make_memory_kind(object())  # type: ignore[arg-type]  # hooks only
-    assert kind.storage is StorageClass.DERIVED

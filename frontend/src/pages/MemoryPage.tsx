@@ -1,94 +1,128 @@
-// frontend/src/pages/MemoryPage.tsx — the Memory overview (spec memory "Show a partition's memories read-only").
+// frontend/src/pages/MemoryPage.tsx — the Memory page: the sync between the agents' own memories
+// (spec memory "Manage memory sync in the web UI and on the command line").
 //
-// Coffer reads each agent's own memory and distils it into
-// one memory per subject, in partitions — `global` plus one per repository
-// (ADR aggregate-agent-memory-never-write-it). Nothing here is user-created (a person only edits a memory's body),
-// so the header groups its controls in two: Tidy all (hands every partition to
-// the default managed agent and sends the prompt at once; spec memory "Hand a
-// partition's tidying to the agent") on the left, then, after a divider, the
-// read group — Update memory, the page's one primary button ("Updating…" while
-// it runs), a split button whose ▾ opens
-// the automatic-read schedule (spec memory "Update memory in one action"). When
-// the last read left an agent unread,
-// a banner above the blocks says so. Boards 5.2.01–5.2.04, 5.2.10 and 5.2.11.
-//
-// The body is the partitions table, untitled, or the first-run state while
-// there are none. The audit trail is the Activity page's, not duplicated here.
-import { useQueryClient } from "@tanstack/react-query";
+// Coffer keeps every memory an agent wrote for itself in a hub in the vault and
+// writes each one into the person's other agents, in their own memory format;
+// each agent curates and loads its memory itself. The header carries Sync now
+// (its ▾ holds the automatic sync's switch and interval), when memory last
+// synced and syncs next, and a ⋯ menu with Undo sync…. Below, in order: what
+// the last sync could not read or withheld, a first or large sync waiting for
+// Write or Cancel, the hub's projects, and this machine's agents with their own
+// curation and Curate now. Nothing on the page edits a memory's text: the
+// person edits memory in the agent's own memory directory.
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Brain } from "lucide-react";
+import { Brain, Undo2 } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
-import { AgentHandoff } from "@/components/handoff/AgentHandoff";
-import { MemoryReadFailures } from "@/components/memory/MemoryReadFailures";
-import { MemoryPartitionsTable } from "@/components/memory/MemoryPartitionsTable";
-import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
-import { MemoryWelcomePanel } from "@/components/memory/MemoryWelcomePanel";
-import { ExperimentalTag } from "@/components/ExperimentalTag";
+import { CodexImportSetting } from "@/components/memory/CodexImportSetting";
+import { MemoryAgentsTable } from "@/components/memory/MemoryAgentsTable";
+import { MemoryPreviewPanel } from "@/components/memory/MemoryPreviewPanel";
+import { MemoryProjectsTable } from "@/components/memory/MemoryProjectsTable";
+import { MemorySyncButton } from "@/components/memory/MemorySyncButton";
+import { MemorySyncClock } from "@/components/memory/MemorySyncClock";
+import { MemorySyncProblems } from "@/components/memory/MemorySyncProblems";
+import { UndoSyncDialog } from "@/components/memory/UndoSyncDialog";
 import { PageHeader } from "@/components/PageHeader";
+import { Section } from "@/components/Section";
+import { Button } from "@/components/ui/button";
+import { ActionMenu } from "@/components/ui/menu";
 import { translateApiError } from "@/lib/api/errors";
-import { getTidyHandoff } from "@/lib/api/memory";
-import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
-import { memoryKey } from "@/lib/api/queryKeys";
-import { useMemoryPartitions, useMemoryUpdateRunning } from "@/lib/hooks/useMemory";
-
-/** Tidy all's prompt, asked of the daemon when the button is pressed. */
-const tidyAllPrompt = () => getTidyHandoff().then((handoff) => handoff.prompt);
+import { useMemorySyncState } from "@/lib/hooks/useMemory";
+import { parsePreview, reportFailures, reportWithheld } from "@/lib/memory/syncFacts";
 
 export function MemoryPage() {
   const { t } = useTranslation();
-  const { data: partitions, isPending, error } = useMemoryPartitions();
-  const rows = partitions ?? [];
-  const firstRun = !isPending && !error && rows.length === 0;
-  const updating = useMemoryUpdateRunning();
-  // A distil pass or a read finishing emits a memory change event: refetch
-  // everything read under memoryKey instead of waiting for a window focus.
-  const qc = useQueryClient();
-  useDaemonEvents({
-    onMessage: (m) => {
-      if (m.type === "change" && m.change.kind === "memory") {
-        void qc.invalidateQueries({ queryKey: memoryKey });
-      }
-    },
-  });
+  const { data: state, isPending, error, refetch } = useMemorySyncState();
+  const [undoing, setUndoing] = useState(false);
+  const preview = state ? parsePreview(state.preview) : null;
+  const agents = state?.agents ?? [];
+  const noAgents = Boolean(state) && agents.length === 0;
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-8">
       <PageHeader
         title={t("memory.title")}
-        badges={<ExperimentalTag />}
-        subtitle={t("memory.subtitle")}
-        actions={
-          // On the first run the welcome carries the same button; two of them
-          // would be the page asking twice.
-          firstRun ? null : (
-            <>
-              <AgentHandoff prompt={tidyAllPrompt} label={t("memory.tidy.all")} help={false} />
-              <span aria-hidden className="mx-1 h-5 w-px bg-border" />
-              <MemoryUpdateButton running={updating} schedule />
-            </>
+        experimental
+        subtitle={
+          state ? (
+            <MemorySyncClock lastSyncedAt={state.last_synced_at} running={state.running} />
+          ) : (
+            t("memory.subtitle")
           )
+        }
+        actions={
+          state && !noAgents ? (
+            <>
+              <MemorySyncButton running={state.running} />
+              <ActionMenu
+                label={t("memory.moreActions")}
+                actions={[
+                  {
+                    key: "undo",
+                    label: t("memory.undo.menu"),
+                    description: t("memory.undo.menuDescription"),
+                    icon: Undo2,
+                    destructive: true,
+                    onSelect: () => setUndoing(true),
+                  },
+                ]}
+              />
+            </>
+          ) : null
         }
       />
 
-      {firstRun ? null : <MemoryReadFailures />}
-
-      {firstRun ? (
-        <MemoryWelcomePanel />
+      {error ? (
+        <EmptyState
+          icon={Brain}
+          tone="error"
+          title={t("memory.loadFailed")}
+          description={translateApiError(t, error)}
+          action={<Button onClick={() => void refetch()}>{t("common.retry")}</Button>}
+        />
+      ) : noAgents ? (
+        <EmptyState
+          icon={Brain}
+          title={t("memory.noAgents.title")}
+          description={t("memory.noAgents.body")}
+          action={
+            <Button asChild>
+              <Link to="/agents">{t("memory.noAgents.open")}</Link>
+            </Button>
+          }
+        />
       ) : (
-        <div data-testid="memory-partitions">
-          {error ? (
-            <EmptyState
-              icon={Brain}
-              tone="error"
-              title={t("memory.loadFailed")}
-              description={translateApiError(t, error)}
+        <>
+          {state ? (
+            <MemorySyncProblems
+              failures={reportFailures(state.last_report)}
+              withheld={reportWithheld(state.last_report)}
             />
-          ) : (
-            <MemoryPartitionsTable rows={rows} isLoading={isPending} />
-          )}
-        </div>
+          ) : null}
+          {state && preview ? (
+            <MemoryPreviewPanel preview={preview} projects={state.projects} />
+          ) : null}
+          <Section as="h2" title={t("memory.projects.title")} testId="memory-projects">
+            <p className="text-xs text-text-muted">{t("memory.projects.description")}</p>
+            <MemoryProjectsTable
+              projects={state?.projects ?? []}
+              globalMemories={state?.global_memories ?? 0}
+              isLoading={isPending}
+            />
+          </Section>
+          <Section as="h2" title={t("memory.agents.title")} testId="memory-agents">
+            <p className="text-xs text-text-muted">{t("memory.agents.description")}</p>
+            <MemoryAgentsTable agents={agents} isLoading={isPending} />
+            {agents.some((a) => a.agent_type === "codex") ? (
+              <CodexImportSetting value={state?.codex_imports_claude ?? null} />
+            ) : null}
+          </Section>
+        </>
       )}
+
+      <UndoSyncDialog open={undoing} onOpenChange={setUndoing} agents={agents} />
     </div>
   );
 }

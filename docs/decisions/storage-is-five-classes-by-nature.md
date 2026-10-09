@@ -5,7 +5,7 @@
 **Status**: Accepted
 **Date**: 2026-09-30
 **Deciders**: Yuxing Wu
-**Related**: [History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](history-is-one-sqlite-file-written-only-by-the-daemon.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md), [Channels Are Machine-Local Resources, Like Agents](channels-are-machine-local-resources.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md), [Memory Reaches a Session at Two Moments: an Index at Start and the Notes a Prompt Names](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md), [principles](../../docs-site/architecture/principles.md) (Persistence; Secrets; Single SQLite writer), [Persistence](../../docs-site/architecture/persistence.md), spec vault-sync "Keep machine-local state out of the repository", spec vault-storage "Store state in five classes by nature", spec vault-sync "Carry secrets as ciphertext only", spec daemon "Deploy frozen sibling binaries and back up the history database before migrating", spec memory "Keep the memory tree derived and local"
+**Related**: [History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](history-is-one-sqlite-file-written-only-by-the-daemon.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](secrets-cross-machines-only-as-ciphertext.md), [Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced](reach-is-machine-local-stored-by-uid-never-synced.md), [Channels Are Machine-Local Resources, Like Agents](channels-are-machine-local-resources.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [principles](../../docs-site/architecture/principles.md) (Persistence; Secrets; Single SQLite writer), [Persistence](../../docs-site/architecture/persistence.md), spec vault-sync "Keep machine-local state out of the repository", spec vault-storage "Store state in five classes by nature", spec vault-sync "Carry secrets as ciphertext only", spec daemon "Deploy frozen sibling binaries and back up the history database before migrating"
 
 ## Context
 
@@ -13,7 +13,8 @@ State has to be stored by what it **is**, not by where the code that wrote it
 happened to put it. Coffer's state has five natures:
 
 - **The user's configuration and authored content** — resource definitions,
-  skills, knowledge, state documents, the ciphertext of secrets. It must be
+  skills, knowledge, the memory hub, state documents, the ciphertext of
+  secrets. It must be
   complete on every machine that wants it, editable with the user's own tools,
   versioned, and able to travel.
 - **Facts about this machine only** — which agents a resource reaches here, the
@@ -23,8 +24,8 @@ happened to put it. Coffer's state has five natures:
   syncing yet.
 - **History** — the audit log, conversations, invocations, usage. Append-only,
   time-ordered, pruned, never meaningful on another machine.
-- **Derived state** — health checks, caches, the memory tree, the rendered
-  `coffer-guide` skill. It can be rebuilt from the rest.
+- **Derived state** — health checks, caches, the rendered `coffer-guide`
+  skill. It can be rebuilt from the rest.
 
 One undifferentiated store gives all of them one backup answer, one retention
 answer and one sync answer, and none of those answers is right for every kind.
@@ -54,11 +55,11 @@ of the class, not a rule inside a translator.
 
 | Class | Directory | Holds | Writers | Sync policy | If lost |
 | --- | --- | --- | --- | --- | --- |
-| **vault** | `~/.coffer/vault/` — always a git repository | resource files with their uid (`resources/<kind>/`); skills; knowledge; state documents (an MCP server's switched-off capabilities and Coffer's own settings); machine descriptors; **secret ciphertext** under `secret/`, one file per ref, the file name being the opaque ref | people, sync, the daemon — every write validated ([Every Vault Write Is One Validated, Compare-and-Swap Commit](every-vault-write-is-a-validated-commit-naming-its-writer.md)) | converges with the user's remote when one is configured; `secret/` only when that remote's `include_secret` is on (default off), and never through a three-way merge | the only copy of the user's configuration — not deletable, backed up by the remote when there is one |
-| **local** | `~/.coffer/local/` | reach, per resource uid (`reach.json`); machine-local resources (the agents, and the channels under `resources/channel/`, with their pairings in `channel-peers.json`, keyed by channel uid — see [Channels Are Machine-Local Resources, Like Agents](channels-are-machine-local-resources.md)); the sync remote and a stopped round's choices; retention; the secret boundary's approvals and bindings; machine-local ciphertext; the record of the one-time upgrade | the daemon, through its settings API | never — it is true of this machine only | settings can be set again |
+| **vault** | `~/.coffer/vault/` — always a git repository | resource files with their uid (`resources/<kind>/`); skills; knowledge; the memory hub (`memory/`, one file per memory an agent learned); state documents (an MCP server's switched-off capabilities and Coffer's own settings); machine descriptors; **secret ciphertext** under `secret/`, one file per ref, the file name being the opaque ref | people, sync, the daemon — every write validated ([Every Vault Write Is One Validated, Compare-and-Swap Commit](every-vault-write-is-a-validated-commit-naming-its-writer.md)) | converges with the user's remote when one is configured; `secret/` only when that remote's `include_secret` is on (default off), and never through a three-way merge | the only copy of the user's configuration — not deletable, backed up by the remote when there is one |
+| **local** | `~/.coffer/local/` | reach, per resource uid (`reach.json`); machine-local resources (the agents, and the channels under `resources/channel/`, with their pairings in `channel-peers.json`, keyed by channel uid — see [Channels Are Machine-Local Resources, Like Agents](channels-are-machine-local-resources.md)); the sync remote and a stopped round's choices; retention; the secret boundary's approvals and bindings; machine-local ciphertext; the record of the one-time upgrade; what the memory sync wrote into this machine's agents (`memory-sync.json`) | the daemon, through its settings API and the memory sync | never — it is true of this machine only | settings can be set again |
 | **content** | `~/.coffer/content/` | chat and channel media; the chat workspace; skill folders Coffer set aside (`backup/skills/`) | the service that owns each | not for now; a later decision may converge part of it | unrecoverable — needs a backup |
 | **runs** | `~/.coffer/runs.db`, `~/.coffer/skill-data/<skill-name>/`, and `~/.coffer/config-backups/<file>/` | `audit_log`, `mcp_invocations`, `conversations`, `chat_messages`, channel threads and outbox, `sync_runs`, usage; in `skill-data/`, the logs, operation journals and temp files a skill's scripts write; in `config-backups/`, copies of agent config files made before a rewrite | the daemon, the only writer of `runs.db`; a skill's scripts, of `skill-data/`, and `config-backups/` | never | history; pruned by retention anyway (`skill-data/` by the `skill_data` policy and `config-backups/` by the `config_backups` policy, files by mtime; each config file's newest backup is kept) |
-| **derived** | `~/.coffer/derived/` | `derived.db` (MCP server health, skill delivery bindings, capability first/last seen), the memory tree (`memory/`: partitions' `.raw/`, `notes/`, `MEMORY.md`, `RETIRED.md`) rebuilt from the agents' own memory, the agent transcript cache, the rendered `coffer-guide` skill, derived resource files, editor copies of a stopped round's conflicts, price lists | the daemon | never | rebuilt; deleting the directory is always safe |
+| **derived** | `~/.coffer/derived/` | `derived.db` (MCP server health, skill delivery bindings, capability first/last seen), the rendered `coffer-guide` skill, derived resource files, editor copies of a stopped round's conflicts, price lists | the daemon | never | rebuilt; deleting the directory is always safe |
 
 The **master key** belongs to no class directory: on the shipped platform it
 lives in the macOS Keychain, reached through the platform port
@@ -93,19 +94,15 @@ Rules that come with the classes:
   `derived/` empty rebuilds it (`derived.db` is deleted and created again when
   its schema version differs, never migrated); a writer that would put an only
   copy there is a defect.
-- **Memory is derived, not content.** The canonical copy of what an agent
-  learned is that agent's own native memory, which Coffer only reads
-  ([Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md));
-  the tree under `memory/` is made from it, and spec memory "Keep the
-  memory tree derived and local" requires that deleting it and re-running
-  aggregation and distil gives back an equivalent partition. A lesson whose
-  source the agent itself has since deleted does not come back, which is the
-  agent's retirement, not a loss. A person can edit a note in the web UI or an
-  editor, and an agent tidies notes on request; a distil pass never rewrites an
-  existing note, but the edits live in the derived tree, so deleting that tree
-  and rebuilding loses them, which is what deleting derived data means
-  ([Memory Reaches a Session at Two Moments](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md)).
-  Nothing a person authors about memory is vault.
+- **Memory is vault content, not derived.** What the person's agents learned
+  is kept in the memory hub, `vault/memory/`, one file per memory, and
+  synced like any other vault content. It cannot be rebuilt on one machine:
+  each entry is read from the native memory of an agent on the machine where
+  it was learned, so the hub is the only place another machine finds it. The
+  copies each machine writes into its own agents are made from the hub, and
+  the record of what it wrote, `local/memory-sync.json`, is true of that
+  machine only
+  ([Sync Memory Into Each Agent's Own Memory](sync-memory-into-each-agents-own-memory.md)).
 - **`runs.db` keeps the single-writer rule** of
   [History Is One SQLite File](history-is-one-sqlite-file-written-only-by-the-daemon.md):
   WAL, one Alembic lineage, the daemon the only process that opens it.
@@ -113,7 +110,7 @@ Rules that come with the classes:
 Pros: backup, retention, cleanup and sync each get one answer per class;
 sync stops translating (the vault already *is* files); "machine-local" and
 "rebuildable" become properties a reader can see in the directory listing;
-Settings › Data can clear the rebuildable caches as the safe action it is.
+deleting `derived/` is the safe action it looks like.
 
 Cons: the vault loses the database's
 transactions and foreign keys, so cross-file references by uid are checked by
@@ -223,9 +220,6 @@ Rules a future change must respect:
 - `daemon-config.json` stays directly under `~/.coffer`, not under `local/`: it
   carries the port the daemon binds and is read before any migration can run, so
   it cannot sit in a directory the migration creates.
-- A symlink a user made from an agent's own memory directory into the old
-  `~/.coffer/memory/` would dangle after memory moved to `derived/`; Coffer does
-  not create such links, so the upgrade does not look for them.
 - The Overview's dismissed attention items (`attention_ignores`) stay in
   `runs.db` rather than `local/`.
 - Not built yet: a gate (an AST or path check) that `derived/` is never read as

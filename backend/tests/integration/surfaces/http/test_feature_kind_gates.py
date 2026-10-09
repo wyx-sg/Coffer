@@ -22,7 +22,6 @@ from starlette.testclient import TestClient
 from coffer.application.knowledge.guide_render import GUIDE_SKILL_NAME
 from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.knowledge.paths import knowledge_root
-from coffer.infrastructure.memory.paths import memory_root
 from tests.integration.surfaces.http import test_feature_gates as gates
 from tests.support.features import FAKE_FEATURE
 from tests.support.mcp_wire import INIT_PARAMS
@@ -32,17 +31,6 @@ fake_tool = gates.fake_tool
 _assert_disabled = gates._assert_disabled
 _client = gates._client
 _switch = gates._switch
-
-
-def _names_memory(told: str) -> bool:
-    """Whether a text an agent is handed says where the memory notes are: the
-    guide names the root in its ``~`` form; the handshake names it absolutely,
-    or — when that would break its length cap, as a test HOME's long path does
-    — the command that prints it."""
-    return any(
-        root in told
-        for root in ("~/.coffer/derived/memory", str(memory_root()), "coffer path memory")
-    )
 
 
 def _collection(c: TestClient, name: str) -> str:
@@ -140,7 +128,7 @@ def test_agents_are_told_only_about_the_tools_they_have(home: pathlib.Path, fake
             assert _named_tools(_instructions(c)) <= listed
 
 
-def test_agents_are_told_about_the_tool_and_both_roots(home: pathlib.Path) -> None:
+def test_agents_are_told_about_the_tool_and_the_knowledge_root(home: pathlib.Path) -> None:
     with _client() as c:
         text = _instructions(c)
         guide = _guide(home)
@@ -148,7 +136,8 @@ def test_agents_are_told_about_the_tool_and_both_roots(home: pathlib.Path) -> No
         assert "coffer__search_tools" in told
         for retired in ("coffer__write", "coffer__recall", "coffer__diagnose"):
             assert retired not in told
-        assert _names_memory(told)
+        # Memory reaches an agent through its own native memory, not a path.
+        assert "derived/memory" not in told
         assert "coffer log" in told
         assert "coffer path logs" in told
     assert "<!--" not in guide

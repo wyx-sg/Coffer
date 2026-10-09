@@ -47,43 +47,9 @@ describe("counts", () => {
       marketplaces: 2,
     });
     const hooks = {
-      items: [
-        { coffer: true, path: "/s.json" },
-        { coffer: false, path: "/s.json" },
-        { coffer: false, path: "/l.json" },
-      ],
-    } as AgentHooksOut;
-    expect(hookCounts(hooks)).toEqual({ total: 3, coffer: 1, files: 2, cofferState: null });
-  });
-
-  test("Coffer's memory hook on two events is one hook", () => {
-    const coffer = (event: string) => ({ coffer: true, path: "/s.json", event });
-    const hooks = {
-      items: [
-        coffer("SessionStart"),
-        coffer("UserPromptSubmit"),
-        { coffer: false, path: "/s.json", event: "Stop" },
-      ],
-      coffer_hook: { health: "current", trust: "untrusted" },
+      items: [{ path: "/s.json" }, { path: "/s.json" }, { path: "/l.json" }],
+      parse_errors: [],
     } as unknown as AgentHooksOut;
-    expect(hookCounts(hooks)).toEqual({ total: 2, coffer: 1, files: 1, cofferState: "untrusted" });
-    const missing = {
-      items: [{ coffer: false, path: "/h.json", event: "PreToolUse" }],
-      coffer_hook: { health: "missing", trust: "not_required" },
-    } as unknown as AgentHooksOut;
-    expect(hookCounts(missing)?.cofferState).toBe("missing");
-  });
-
-  test("with memory off a missing or unapproved Coffer hook is nothing to review", () => {
-    const missing = {
-      items: [],
-      coffer_hook: { health: "missing", trust: "not_required" },
-    } as unknown as AgentHooksOut;
-    const untrusted = {
-      items: [],
-      coffer_hook: { health: "current", trust: "untrusted" },
-    } as unknown as AgentHooksOut;
-    expect(hookCounts(missing, false)?.cofferState).toBeNull();
-    expect(hookCounts(untrusted, false)?.cofferState).toBeNull();
+    expect(hookCounts(hooks)).toEqual({ total: 3, files: 2 });
   });
 });

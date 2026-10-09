@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
-from coffer.application.memory.aggregate import AgentSource
+from coffer.application.memory.sources import AgentSource
 from coffer.application.memory.sync_publish import FindSecret, PublishContext, publish
 from coffer.application.memory.sync_report import SyncReport, preview_summary
 from coffer.application.memory.sync_write import (
@@ -38,6 +38,7 @@ from coffer.application.memory.sync_write import (
     targets_for,
     undo_agent,
 )
+from coffer.application.upkeep_runs import UPKEEP_RUNS
 from coffer.domain.audit import AuditEventType
 from coffer.domain.memory.errors import MemorySyncNoPreview, MemorySyncRunning
 from coffer.domain.memory.hub import HubEntry
@@ -49,6 +50,12 @@ from coffer.infrastructure.memory.hub_store import HubStore
 from coffer.infrastructure.memory.sync_ledger import Ledger, LedgerStore, PreviewStore
 
 logger = logging.getLogger(__name__)
+
+
+#: The memory sync's key in the daemon's table of passes in flight, which
+#: ``coffer daemon status`` reads (spec resource-framework "Report the passes in
+#: flight in one cross-kind read").
+SYNC_RUN = ("memory", "sync")
 
 
 class AuditPort(Protocol):
@@ -128,7 +135,8 @@ class MemorySyncService:
             raise MemorySyncRunning()
         async with self._lock:
             agents = list(await self._agents())
-            report = await asyncio.to_thread(self._sync, agents, actor)
+            with UPKEEP_RUNS.guard(*SYNC_RUN):
+                report = await asyncio.to_thread(self._sync, agents, actor)
         await self._record(AuditEventType.MEMORY_SYNCED, actor, report)
         return report
 
@@ -138,7 +146,8 @@ class MemorySyncService:
             raise MemorySyncRunning()
         async with self._lock:
             agents = list(await self._agents())
-            report = await asyncio.to_thread(self._write_preview, agents)
+            with UPKEEP_RUNS.guard(*SYNC_RUN):
+                report = await asyncio.to_thread(self._write_preview, agents)
         await self._record(AuditEventType.MEMORY_SYNCED, actor, report)
         return report
 
@@ -154,7 +163,8 @@ class MemorySyncService:
             raise MemorySyncRunning()
         async with self._lock:
             agents = list(await self._agents())
-            report = await asyncio.to_thread(self._undo, agents)
+            with UPKEEP_RUNS.guard(*SYNC_RUN):
+                report = await asyncio.to_thread(self._undo, agents)
         if self._stop_automatic is not None:
             await self._stop_automatic(actor)
         await self._audit.record(

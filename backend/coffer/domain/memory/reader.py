@@ -51,7 +51,7 @@ class SourceFile:
 class RawEntry:
     """One entry as a reader first sees it, before Coffer writes anything.
 
-    Deliberately thinner than :class:`coffer.domain.memory.note.Note`: it
+    Deliberately thinner than a hub entry: it
     carries no provenance beyond its anchor and no partition, because those
     are the aggregator's job once it knows which repository the entry belongs
     to. A reader only ever answers "what does this one source file say".
@@ -65,7 +65,7 @@ class RawEntry:
     title: str
     #: Longer human description, same provenance rule as ``title``.
     description: str
-    #: One of :data:`coffer.domain.memory.note.NOTE_TYPES`.
+    #: One of :data:`coffer.domain.memory.hub.HUB_TYPES`.
     type: str
     #: The source's own words, verbatim. This is the layer where verbatim
     #: still holds ("Keep raw entries verbatim and hidden"): it is what lands

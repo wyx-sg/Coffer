@@ -57,14 +57,6 @@ EXEMPT: dict[tuple[str, str], tuple[Category, str]] = {
     # Plain file contents an agent reads and edits with its own tools.
     ("GET", "/knowledge/file"): ("file-content", "a knowledge document is a plain file"),
     ("DELETE", "/knowledge/file"): ("file-content", "a knowledge document is a plain file"),
-    ("GET", "/memory/partitions/{uid}/notes/{slug}"): (
-        "file-content",
-        "a memory note is a plain Markdown file",
-    ),
-    ("DELETE", "/memory/partitions/{uid}/notes/{slug}"): (
-        "file-content",
-        "a memory note is a plain Markdown file",
-    ),
     ("GET", "/skills/{uid}/files/content"): ("file-content", "a skill's files are plain files"),
     ("GET", "/skills/orphans/{name}/files/content"): (
         "file-content",

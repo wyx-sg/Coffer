@@ -66,7 +66,7 @@ import yaml
 
 from coffer.domain.agent.native_memory import encode_slug, resolve_project_slug
 from coffer.domain.memory.errors import UnreadableMemory
-from coffer.domain.memory.note import TYPE_FEEDBACK, TYPE_PROJECT, TYPE_USER
+from coffer.domain.memory.hub import TYPE_FEEDBACK, TYPE_PROJECT, TYPE_USER
 from coffer.domain.memory.reader import RawEntry, SourceFile
 from coffer.infrastructure.agent_files.claude_code_transcripts import cwd_from_transcripts
 from coffer.infrastructure.memory.writers.claude_code import is_coffer_copy

@@ -49,7 +49,7 @@ openspec/
 | [`internal-engine`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md) | 语音转文字模型，以及 Coffer 的机械维护任务 |
 | [`knowledge`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md) | 纯文件的知识集及其整理 |
 | [`mcp-gateway`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/mcp-gateway/spec.md) | 聚合在一个端点之后的上游 MCP 服务器 |
-| [`memory`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md) | 把每个智能体的原生记忆聚合成 Coffer 自己的笔记 |
+| [`memory`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/memory/spec.md) | 通过保险库里的中心库，把每个智能体的原生记忆同步进其他智能体自己的记忆 |
 | [`provider-switching`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/provider-switching/spec.md) | 投射到每个智能体配置中的模型提供商连接 |
 | [`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) | 与类型无关的资源模型、scope、审计日志、保留策略、最小 CLI 规则 |
 | [`skill-manager`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/skill-manager/spec.md) | 技能主存储以及向智能体的投递 |
@@ -202,7 +202,7 @@ pytest 标记以 `--strict-markers` 注册，所以标记名拼错会导致收�
 
 一项能力只有在用户真正能操作它时才算交付。这意味着后端持久化，加上暴露它的每一个入口（REST、Web 界面、智能体调用它时经由 `coffer-mcp-shim` 的 MCP，以及 Web 界面或桌面应用提供的每个管理操作对应的 `coffer` 命令），全部连通，并且每个场景都有通过的测试覆盖。只有后端没有入口，或者只有页面没有后端，都不算完成。
 
-有一条规则适用于所有规格：**每个管理操作都有一条命令。** 人在 Web 界面页面或桌面应用里能做的事，智能体都能用一条调用同一 REST 路由的 `coffer` 命令来做，所以无论谁来操作，校验、审计和生命周期都一样。豁免的只有两类：归属规格声明为可直接读取或编辑的普通文件（知识文档、记忆笔记、技能的文件、智能体自己的配置和原生记忆文件），用普通工具读写；以及意义完全在于窗口的操作（原生文件夹选择器、在编辑器、终端或访达中打开文件、界面的语言和主题）。需要本人在场的步骤交给桌面应用自己的在场验证。所有命令共享一份约定：`--json`、`--data '<json>' | @file | -` 加可重复的 `--set key=value`、守护进程错误码原样透传，以及稳定的[退出码](/zh/reference/error-codes#cli-exit-codes)。每条命令都在 CLI 的注册表里登记它代表的界面操作和路由；Web 界面调用的某个路由或桌面外壳的某个命令既没有命令也没有记录豁免时，[`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) 规格的测试就会失败；注册表同时生成 [CLI 覆盖表](/zh/reference/cli-coverage)。因此，新增页面操作的改动要在同一个拉取请求里加上它的命令。这项决策见 [`command-line-parity-with-the-web-ui`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/command-line-parity-with-the-web-ui.md)。
+有一条规则适用于所有规格：**每个管理操作都有一条命令。** 人在 Web 界面页面或桌面应用里能做的事，智能体都能用一条调用同一 REST 路由的 `coffer` 命令来做，所以无论谁来操作，校验、审计和生命周期都一样。豁免的只有两类：归属规格声明为可直接读取或编辑的普通文件（知识文档、技能的文件、智能体自己的配置和原生记忆文件），用普通工具读写；以及意义完全在于窗口的操作（原生文件夹选择器、在编辑器、终端或访达中打开文件、界面的语言和主题）。需要本人在场的步骤交给桌面应用自己的在场验证。所有命令共享一份约定：`--json`、`--data '<json>' | @file | -` 加可重复的 `--set key=value`、守护进程错误码原样透传，以及稳定的[退出码](/zh/reference/error-codes#cli-exit-codes)。每条命令都在 CLI 的注册表里登记它代表的界面操作和路由；Web 界面调用的某个路由或桌面外壳的某个命令既没有命令也没有记录豁免时，[`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) 规格的测试就会失败；注册表同时生成 [CLI 覆盖表](/zh/reference/cli-coverage)。因此，新增页面操作的改动要在同一个拉取请求里加上它的命令。这项决策见 [`command-line-parity-with-the-web-ui`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/command-line-parity-with-the-web-ui.md)。
 
 ## 文档随代码一起改 {#docs-change-with-the-code}
 

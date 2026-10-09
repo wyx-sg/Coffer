@@ -173,7 +173,7 @@ cd frontend && npm install && npm run build && cd ..
 | `~/.coffer/runs.db.pre-<revision>` | A copy taken before each schema migration. The three newest are kept. |
 | `~/.coffer/daemon.json` | Runtime discovery file: PID, port and API token (mode `0600`). Written at start and removed at exit. |
 | `~/.coffer/daemon-config.json` | Settings read before the daemon starts: a fixed port, the machine name, any experimental-feature switches. |
-| `~/.coffer/content/`, `~/.coffer/derived/` | Media and the chat workspace; state Coffer rebuilds, such as the memory tree. |
+| `~/.coffer/content/`, `~/.coffer/derived/` | Media and the chat workspace; state Coffer rebuilds, such as MCP server health and its own `coffer-guide` skill. |
 | `~/.coffer/logs/daemon.log` | The daemon log, shared by the daemon, its child processes and the desktop app. |
 
 A release-built daemon manages `~/.coffer/bin` itself. At every start it checks whether its build is already deployed there. If not, it copies the four binaries into `~/.coffer/bin/<version>/` and switches the public symlinks to them in one atomic step. A source install never does this. The [files and directories](/reference/filesystem) reference lists every path.
@@ -241,7 +241,7 @@ coffer uninstall
 
 Either way Coffer takes back everything it wrote outside `~/.coffer`, then stops:
 
-- Coffer's MCP entry, memory hook and model routing in each agent's config;
+- Coffer's MCP entry and model routing in each agent's config;
 - the skill links it delivered into the agents' skill folders;
 - start at login;
 - the command-line tools in `~/.coffer/bin` and the `PATH` lines the installer added to your shell profile;

@@ -5,11 +5,11 @@ description: The kind-agnostic core every managed entity shares — the resource
 
 # Resource framework
 
-Every entity you manage in Coffer — an MCP server, an agent, a skill, a knowledge collection, a memory partition, a channel, a model provider — is a **Resource** of some **kind**. This page explains the kind-agnostic core that gives all of them one identity, one lifecycle, one audit trail and one notion of reach, and the exact contract a kind implements to plug into it. It is for engineers adding a kind, changing lifecycle behaviour, or trying to understand why a write was refused.
+Every entity you manage in Coffer — an MCP server, an agent, a skill, a knowledge collection, a channel, a model provider — is a **Resource** of some **kind**. This page explains the kind-agnostic core that gives all of them one identity, one lifecycle, one audit trail and one notion of reach, and the exact contract a kind implements to plug into it. It is for engineers adding a kind, changing lifecycle behaviour, or trying to understand why a write was refused.
 
 ## The problem it solves
 
-Seven kinds of thing need the same operations: create, list, show, edit, enable, disable, scope, delete, and a history of all of it. Built seven times, those operations drift — one kind renames through its own route and another through none, one audits its config with the secrets in and another strips them. Built once without care, the shared layer grows a "god" interface that tries to unify things with nothing in common: invoking an MCP tool, delivering a skill and running a Telegram adapter are not the same operation.
+Six kinds of thing need the same operations: create, list, show, edit, enable, disable, scope, delete, and a history of all of it. Built six times, those operations drift — one kind renames through its own route and another through none, one audits its config with the secrets in and another strips them. Built once without care, the shared layer grows a "god" interface that tries to unify things with nothing in common: invoking an MCP tool, delivering a skill and running a Telegram adapter are not the same operation.
 
 The framework takes the first half and refuses the second:
 
@@ -45,7 +45,7 @@ A resource is plain data. Each resource is one JSON file, `resources/<kind>/<nam
 | `created_at`, `updated_at` | Timestamps. `updated_at` is the file's modification time on this machine, not a key in the file. |
 | `scope` | Optional agent allow-list, the other half of reach, also in `local/reach.json`. Unset means every agent. |
 
-Names are still constrained to `^[a-zA-Z0-9_.-]+$` and at most 64 characters, because three kinds — `skill`, `knowledge` and `memory` — turn the name into a directory. A kind may add a stricter rule of its own.
+Names are still constrained to `^[a-zA-Z0-9_.-]+$` and at most 64 characters, because two kinds — `skill` and `knowledge` — turn the name into a directory. A kind may add a stricter rule of its own.
 
 ### Kind
 
@@ -60,8 +60,8 @@ A kind is described by one fixed, immutable descriptor. Everything it declares i
 | Config schema | — | The typed model (Pydantic) the config must validate against. |
 | Generic creation | allowed | Whether `POST /api/v1/resources` (and a generic config update) may touch this kind. |
 | `supports_scope` | no | Whether the kind carries a per-agent scope. A kind without it rejects any non-null scope (`SCOPE_INVALID`, 422). |
-| `toggleable` | yes | Whether the kind has an enabled switch at all. `knowledge`, `memory` and `agent` are not toggleable: every one of their resources reads as enabled and served (including one whose stored reach says off, left from before its kind became non-toggleable), and enabling or disabling one is refused with `RESOURCE_NOT_TOGGLEABLE` (409), changing nothing. |
-| Storage class | `vault` | The storage class the kind's resource files live in: `vault` (synced), `local` (`agent`, `channel`) or `derived` (`memory`). The directory is the sync policy. |
+| `toggleable` | yes | Whether the kind has an enabled switch at all. `knowledge` and `agent` are not toggleable: every one of their resources reads as enabled and served (including one whose stored reach says off, left from before its kind became non-toggleable), and enabling or disabling one is refused with `RESOURCE_NOT_TOGGLEABLE` (409), changing nothing. |
+| Storage class | `vault` | The storage class the kind's resource files live in: `vault` (synced) or `local` (`agent`, `channel`); a single row can be `derived` through per-row storage. The directory is the sync policy. |
 | Per-row storage | none | A refinement of the storage class per row, decided by the config alone. The `skill` kind files the builtin `coffer-guide` as `derived`. |
 | Exclusive flags | none | Config flags at most one resource of the kind may hold. The service keeps each of its writes to one holder, and the vault validator refuses any commit (a hand edit, a sync merge) that would leave two. `provider` declares `transcribe_default`. |
 | Fixed name | no | Whether the name is fixed once registered because it is quoted outside Coffer, or derived from the config. A `PATCH` with a different name is refused with `409 NAME_IMMUTABLE`. |
@@ -76,7 +76,7 @@ A kind is described by one fixed, immutable descriptor. Everything it declares i
 | Name rule | register, rename, every change to its file | Kind-specific name rule on top of the framework's; the vault judges a hand edit or a sync merge by it too. |
 | Registration check | register only | Semantic validation beyond the schema (sync or async). Not run on update, so editing an unrelated field never re-probes the filesystem. |
 | Config-change check | update | Sees the resource as it stands plus the proposed config; may reject. |
-| Rename mover | rename | Moves whatever a renamable kind (`knowledge`, `memory`) keeps under the old name. Runs before the row changes; if a racing writer then takes the name, the service calls it again to move things back. |
+| Rename mover | rename | Moves whatever a renamable kind (`knowledge`) keeps under the old name. Runs before the row changes; if a racing writer then takes the name, the service calls it again to move things back. |
 | Scope check | scope update | Sees the resource as it stands plus the proposed scope; may reject. |
 | Delete guard | delete | Refuses a deletion before anything is torn down. |
 
@@ -105,7 +105,6 @@ Sync has no hook into a kind. A resource file that arrives by sync, like one you
 | `agent` | No generic creation, a name from config and a fixed name (one agent per type, named by it), not toggleable, `local` storage, delete cleanup |
 | `skill` | No generic creation, scope support, a name rule (the `SKILL.md` frontmatter rule), a delete guard (refuses deleting the builtin `coffer-guide`), per-row storage (files `coffer-guide` as derived), a fixed name (the name is the folder an agent loads it from), delete cleanup, a scope reaction, an enabled reaction |
 | `knowledge` | No generic creation, not toggleable, a rename mover (moves the collection directory), delete cleanup |
-| `memory` | No generic creation, not toggleable, `derived` storage, a rename mover, delete cleanup |
 | `channel` | `local` storage, scope support (inverted, see below), secret references, a registration check, a config-change check, a scope check, delete cleanup |
 | `provider` | An exclusive flag (`transcribe_default`), secret references, a registration check, a config-change check (no scope: its addresses decide which agents it serves) |
 
@@ -162,7 +161,7 @@ The generic routes expose the framework over REST. Every route requires the `X-C
 
 A kind that belongs to a switched-off experimental feature is refused on these routes with `404 FEATURE_DISABLED` and left out of lists; its rows are untouched. Kinds also mount their own routers (`/api/v1/skills`, `/api/v1/channels`, …) for behaviour the framework does not own.
 
-Every management operation a person can do on a web UI page or in the desktop app has a `coffer` command that calls the same route, so an agent can do it too and the daemon's validation, audit and lifecycle are the same whoever acts. A command never reimplements a route and never reaches the vault's files, `runs.db` or ciphertext. Exempt are only plain files whose owning spec declares them directly readable or editable (a knowledge document, a memory note, a skill's files, an agent's own config and native-memory files), which are read and edited with ordinary tools, and acts whose whole meaning is the window (a native folder picker, opening a file in an editor, terminal or Finder, the interface's language and theme). Registering, binding, reach, delivery and history restore stay commands even where what they manage is a file. A step that needs a person's presence (approving a secret, revealing a value, writing a key backup) is handed to the desktop app's own presence check through a desktop request.
+Every management operation a person can do on a web UI page or in the desktop app has a `coffer` command that calls the same route, so an agent can do it too and the daemon's validation, audit and lifecycle are the same whoever acts. A command never reimplements a route and never reaches the vault's files, `runs.db` or ciphertext. Exempt are only plain files whose owning spec declares them directly readable or editable (a knowledge document, a skill's files, an agent's own config and native-memory files), which are read and edited with ordinary tools, and acts whose whole meaning is the window (a native folder picker, opening a file in an editor, terminal or Finder, the interface's language and theme). Registering, binding, reach, delivery and history restore stay commands even where what they manage is a file. A step that needs a person's presence (approving a secret, revealing a value, writing a key backup) is handed to the desktop app's own presence check through a desktop request.
 
 Each command is a row in one registry in the CLI package naming the UI operation it stands for and the route(s) it calls; the few commands that stand for no UI operation carry a reason instead (`program`, `offline`, `hand-off` or `no-ui`). Most rows are declarative: path parameters become arguments, query parameters options, and a body comes from `--data`/`--set`; richer commands (custom tools, approvals, secrets, the daemon lifecycle) are hand-written and register their rows in the same registry. The policy test reads every route the web UI calls through its typed client and every desktop shell command, and fails on one with no command and no recorded exemption (`file-content`, `window` or `internal`); it also runs every declared command against a recording transport and asserts the route it sends. The same data renders [CLI coverage](/reference/cli-coverage).
 
@@ -197,7 +196,7 @@ Each kind's config schema is a Pydantic v2 model. The resource service validates
 
 ## Reach
 
-A resource's **reach** is its `enabled` flag together with its `scope`. A kind that is neither `toggleable` nor scoped — `knowledge`, `memory`, `agent` — has no reach to set: it is always on and unscoped, and the web UI shows no reach or status control for it. Both are machine-local: they are set on the machine they apply to and never converge through sync.
+A resource's **reach** is its `enabled` flag together with its `scope`. A kind that is neither `toggleable` nor scoped — `knowledge`, `agent` — has no reach to set: it is always on and unscoped, and the web UI shows no reach or status control for it. Both are machine-local: they are set on the machine they apply to and never converge through sync.
 
 The framework defines the shape of a scope and the one rule every enforcement point applies:
 
@@ -216,7 +215,7 @@ An unidentified session — a shim configured by hand without `--agent-uid` — 
 
 For every other kind, scope names the agents a resource is *delivered to*. A channel is consumed by no agent: it is an inbound surface. So a channel's scope names the agents the channel may **drive**. `/new <agent>` in the chat names and accepts only those agents, and the channel's `default_agent` must stay inside the scope — enforced on both write paths, by the kind's config-change check for the config and by its scope check for the scope. A channel that should drive nothing is switched off, like any other kind, and a switched-off channel does not start its adapter. Its config stays editable, so a wrong token can be fixed without turning it on.
 
-### The seven kinds
+### The six kinds
 
 | Kind | Carries | Scope | Where reach is enforced |
 | --- | --- | --- | --- |
@@ -224,11 +223,10 @@ For every other kind, scope names the agents a resource is *delivered to*. A cha
 | `agent` | Agent type, config directory, Coffer-MCP install state. Everything else is read from the agent's own files. | No — it is the agent | — |
 | `skill` | Its source, the `SKILL.md` description and a version hash of the master folder under `~/.coffer/vault/skills/`. | Yes | Delivery: a skill reaches an agent if and only if it is enabled and its scope admits that agent; anything else is reclaimed. |
 | `knowledge` | One collection, a directory under `~/.coffer/vault/knowledge/`. | No, and not `toggleable` | Nowhere: every collection appears in the delivered catalogue. |
-| `memory` | One partition (a repository, or `global`) under `~/.coffer/derived/memory/`, derived from agents' native memory. Derived, never synced. | No, and not `toggleable` | Nowhere: every partition is served to every agent. |
 | `channel` | Transport config, secret refs, `default_agent`, working directories. Machine-local, like an agent. | Yes, inverted | Agent routing (`/new <agent>` and the default agent) and the channel runtime, which does not start a switched-off channel. |
 | `provider` | Wire protocol, base URL, an optional Anthropic address, one `secret_ref`. | No: its addresses decide | The provider kind's one projection seam: the switch, per-agent key lookup, post-import reconcile and boot self-heal. |
 
-`knowledge` and `memory` carry no scope and no switch because both serve files an agent is handed the path to: a scope or a switch could only ever hide them from a well-behaved lookup, never withhold them.
+`knowledge` carries no scope and no switch because it serves files an agent is handed the path to: a scope or a switch could only ever hide them from a well-behaved lookup, never withhold them. Memory is not a resource kind at all: it is files in the vault's `memory/` hub and in each agent's own memory (see [Memory](/architecture/memory)).
 
 ## Retention registry
 
@@ -238,7 +236,7 @@ The registered policies, their defaults and the worker's cadence are listed in [
 
 ## Passes in flight
 
-A long rewrite — memory's distil pass over a partition — is tracked in an in-process registry keyed by kind and name, so a second pass never starts on the same target: a request is refused with `UPKEEP_ALREADY_RUNNING`, and Update memory and the timers skip a busy target. There is no table and no lease: a daemon restart ends every pass, and a persisted claim that outlived its runner would wedge its target forever. Read it with `GET /api/v1/upkeep/runs` or `coffer daemon status`.
+A long upkeep pass that rewrites one target's files is tracked in an in-process registry keyed by kind and name, so a second pass never starts on the same target: a request is refused with `UPKEEP_ALREADY_RUNNING`, and the timers skip a busy target. There is no table and no lease: a daemon restart ends every pass, and a persisted claim that outlived its runner would wedge its target forever. Read it with `GET /api/v1/upkeep/runs` or `coffer daemon status`.
 
 ## Trade-offs and alternatives
 

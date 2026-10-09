@@ -21,7 +21,7 @@ This page explains the decisions that shape Coffer, for readers deciding whether
 
 ## The agent's own files stay the source of truth
 
-**The decision.** Coffer never copies an agent's configuration, MCP entries, plugins, memory or transcripts into its own store. It reads them from the agent's files each time it needs them. When Coffer writes, it writes only documented, allowlisted entries: its own `coffer` MCP entry, a config file you edit in the UI, a plugin switch. Each write is atomic and first copies the previous version to `~/.coffer/config-backups`, outside the agent's directory. Codex's TOML is edited in a way that keeps your comments and ordering.
+**The decision.** Coffer never copies an agent's configuration, MCP entries, plugins or transcripts into its own store. It reads them from the agent's files each time it needs them. When Coffer writes, it writes only documented, allowlisted entries: its own `coffer` MCP entry, a config file you edit in the UI, a plugin switch, and, with memory sync on, its own copies of your other agents' memories. Each write is atomic and first copies the previous version to `~/.coffer/config-backups`, outside the agent's directory. Codex's TOML is edited in a way that keeps your comments and ordering.
 
 **Why.** A second copy of an agent's settings goes stale the moment you edit the original, and then someone has to decide which copy wins. Reading from the original means there is nothing to reconcile.
 
@@ -29,7 +29,7 @@ This page explains the decisions that shape Coffer, for readers deciding whether
 
 - You can keep editing `~/.claude/settings.json` or `~/.codex/config.toml` by hand, and Coffer shows your changes straight away.
 - Removing Coffer leaves your agents working. Uninstall Coffer's MCP entry and the agents go back to their own configuration.
-- Coffer reads each agent's memory but never writes to it. Memory notes that Coffer produces live in its own directory.
+- Coffer never edits a memory an agent wrote. When memory sync is on, it adds only files of its own beside the agent's memories, and **Undo sync** removes them.
 
 ## One MCP endpoint instead of one config per agent
 
@@ -55,7 +55,7 @@ See [MCP gateway](/architecture/mcp-gateway) for how sessions, namespacing and t
 
 - Your knowledge is plain Markdown you can open, grep, version and edit in any tool.
 - What you upload is kept as a source; agents write pages that cite those sources, and change a page by editing it. The `coffer-guide` skill tells them where a fact belongs. When a collection gets cluttered, press **Tidy** and your default agent folds the waiting sources into pages, then merges, splits and corrects its pages.
-- Memory works the other way round. Coffer's memory notes are pushed, through a hook that you install explicitly for each agent: the index at session start and the notes a prompt names. The [memory guide](/guides/memory) explains how.
+- Memory works the other way round. Coffer writes what one agent learned into your other agents' own memory, on every machine you sync, and each agent loads and curates it like its own. The [memory guide](/guides/memory) explains how.
 
 ## Secrets are encrypted with a key you hold
 

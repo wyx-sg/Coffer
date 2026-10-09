@@ -835,6 +835,7 @@
       "attention_ignored": "Ignored an item on Overview",
       "attention_unignored": "Stopped ignoring an item on Overview",
       "secret_revealed": "Revealed a secret in the Coffer app",
+      "memory_hook_removed": "Removed the retired memory hook from an agent",
       "memory_synced": "Synced memory between the agents",
       "memory_sync_undone": "Removed the memories Coffer synced into the agents",
       "memory_curation_requested": "Asked an agent to tidy its own memory"
@@ -1168,7 +1169,7 @@
       },
       "descriptions": {
         "knowledge": "Notes and documents that agents can look up, kept as plain files you can edit.",
-        "memory": "What agents remember between sessions, and the hook that delivers it."
+        "memory": "What each agent remembers, synced into your other agents' own memory."
       },
       "source": {
         "pin": "Pinned by COFFER_FEATURES — change it where the daemon is started",
@@ -1306,14 +1307,14 @@
           "title": "Uninstall Coffer?",
           "body": "Coffer takes back everything it wrote outside ~/.coffer, stops, and the app moves itself to the Trash.",
           "removes": "Removes",
-          "removesValue": "Coffer's MCP entry, memory hook and model routing from each agent; the skill links it delivered; start at login; the command-line tools and the installer's PATH lines; Coffer.app",
+          "removesValue": "Coffer's MCP entry and model routing from each agent; the skill links it delivered; start at login; the command-line tools and the installer's PATH lines; Coffer.app",
           "keeps": "Keeps",
           "keepsValue": "~/.coffer: your vault, secrets, skills, knowledge and settings. Install Coffer again and they are there; connect your agents again.",
           "keepsNothing": "Nothing. ~/.coffer and the master key are deleted.",
           "deleteData": "Also delete my data (~/.coffer)",
           "deleteDataHelp": "Asks for Touch ID first.",
           "dangerTitle": "This cannot be undone",
-          "danger": "Every secret, skill, knowledge collection and memory note in ~/.coffer, and the master key that opens your secrets, are deleted for good — including skills Coffer adopted from your agents. A vault you moved elsewhere is left in place.",
+          "danger": "Every secret, skill, knowledge collection and memory in ~/.coffer, and the master key that opens your secrets, are deleted for good — including skills Coffer adopted from your agents. A vault you moved elsewhere is left in place.",
           "backup": "Back up the master key first",
           "confirm": "Uninstall",
           "confirmDelete": "Uninstall and delete data",
@@ -1563,16 +1564,6 @@
           "notSaved": "Not saved"
         }
       },
-      "cache": {
-        "title": "Rebuildable cache",
-        "description": "Memory tree and conversation summary cache. Coffer rebuilds it automatically.",
-        "clear": "Clear",
-        "confirmTitle": "Clear the cache?",
-        "confirmBody": "{{size}} — the memory tree and the conversation summary cache. Memory is rebuilt from the agents' own memory on the next update, each entry becoming a note as it stands; notes whose sources are gone won't come back. Nothing you wrote and no history is touched.",
-        "confirm": "Clear cache",
-        "clearing": "Clearing…",
-        "cleared": "Cleared {{size}}. Memory is rebuilt on the next update."
-      },
       "stillKept": "{{name}} are still kept {{window}}.",
       "tryAgain": "Retry"
     },
@@ -1703,9 +1694,9 @@
         "back": "Back to Knowledge"
       },
       "memory": {
-        "plural": "partitions",
-        "notFoundTitle": "This partition no longer exists",
-        "notFoundBody": "No memory partition is registered as <mono>{{id}}</mono>. It was removed.",
+        "plural": "projects",
+        "notFoundTitle": "This project has no memories",
+        "notFoundBody": "No memory in the hub is filed under <mono>{{id}}</mono>.",
         "back": "Back to Memory"
       },
       "secrets": {
@@ -1781,9 +1772,6 @@
     "MCP_ENTRY_SOURCE_AMBIGUOUS": "The MCP entry's source is ambiguous — specify which one",
     "MCP_INSTALL_UNSUPPORTED": "This agent does not support installing Coffer's MCP entry",
     "MEMORY_DELIVERY_CONFIG_INVALID": "That agent's settings file isn't something Coffer can edit",
-    "MEMORY_DELIVERY_UNSUPPORTED": "This agent type has no memory-delivery hook",
-    "MEMORY_NOTE_NOT_FOUND": "That memory note wasn't found",
-    "MEMORY_RAW_ENTRY_NOT_FOUND": "That raw memory entry wasn't found",
     "MEMORY_UNREADABLE": "That memory file could not be read",
     "MEMORY_UNSAFE_PATH": "That path isn't allowed in the memory store",
     "NAME_IMMUTABLE": "This name is fixed once added, because agents quote it. Delete it and add it again under the new name",
@@ -1906,44 +1894,9 @@
   "agents": {
     "hooks": {
       "parseError": "Couldn’t read {{file}}: {{error}}",
-      "state": {
-        "current": "Current",
-        "stale": "Out of date",
-        "missing": "Missing",
-        "neverFired": "Never fired",
-        "untrusted": "Not approved",
-        "modified": "Changed since trusted",
-        "disabled": "Turned off in Codex"
-      },
-      "coffer": {
-        "title": "Coffer’s memory hook",
-        "state": "State",
-        "command": "Command",
-        "events": "Events",
-        "file": "File",
-        "fired": "Fired {{time}}",
-        "lastFired": "Last fired {{time}}",
-        "neverFiredSub": "Never fired",
-        "repair": "Repair",
-        "checkAgain": "Check again",
-        "viewActivity": "View in Activity",
-        "reason": {
-          "current_one": "Gives every session Coffer’s memory. One hook on {{count}} event.",
-          "current_other": "Gives every session Coffer’s memory. One hook on {{count}} events.",
-          "stale": "Written by an older Coffer, so its command no longer works and sessions start without memory.",
-          "missing": "It was taken out of {{file}}, so {{agent}} starts sessions without memory.",
-          "untrusted": "{{agent}} skips hooks you haven’t approved. Approve it in {{agent}}’s /hooks, then check again.",
-          "modified": "The command changed after you approved it, so {{agent}} skips it. Approve it again in {{agent}}’s /hooks, then check again.",
-          "disabled": "The hook is turned off in {{agent}}, so it never runs. Turn it on in {{agent}}’s /hooks, then check again.",
-          "neverFired": {
-            "codex": "Likely cause: this {{agent}} build doesn’t load {{file}}, so no session has run it yet.",
-            "claude_code": "Likely cause: {{agent}} hasn’t started a session since the hook was installed."
-          }
-        }
-      },
       "own": {
         "title": "{{agent}}’s own hooks",
-        "help": "Read-only here. Change a hook in its file; Coffer looks after only its memory hook.",
+        "help": "Read-only here. Change a hook in its file.",
         "hooks_one": "{{count}} hook",
         "hooks_other": "{{count}} hooks",
         "files_one": "{{count}} file",
@@ -2070,7 +2023,7 @@
       "moreActions": "More actions for {{name}}",
       "notAdded": {
         "title": "{{name}} isn’t connected",
-        "body": "Coffer found {{name}} at {{dir}}. Connect it and it gets your MCP servers, skills and memory through one entry and one hook — you review the exact lines first."
+        "body": "Coffer found {{name}} at {{dir}}. Connect it and it gets your MCP servers and skills through one entry — you review the exact lines first."
       },
       "notInstalled": {
         "title": "{{name}} isn’t installed",
@@ -2100,24 +2053,10 @@
       "files_other": "{{count}} files",
       "emptyTitle": "No memory files from {{agent}} yet",
       "emptyBody": "{{agent}} writes {{path}} as it learns. It shows here once it exists.",
-      "coffer": {
-        "title": "Coffer’s memory",
-        "open": "Open Memory",
-        "repair": "Repair",
-        "description": "Coffer hands {{agent}} your agents’ shared memory at the start of every session.",
-        "hook": "Memory hook",
-        "eventsIn_one": "{{count}} event in",
-        "eventsIn_other": "{{count}} events in",
-        "oneEventIn": "{{event}} in",
-        "lastFired": "Last fired",
-        "never": "Never",
-        "delivers": "Delivers",
-        "deliversBody": "The shared memory index, so {{agent}} can look up what your agents learned"
-      },
       "own": {
         "title": "{{agent}}’s own memory",
-        "descriptionClaude": "One store per project, written by {{agent}}. Read-only: Coffer reads them and never writes them.",
-        "descriptionCodex": "Written by {{agent}}. Read-only: Coffer reads it and never writes it."
+        "descriptionClaude": "One store per project, written by {{agent}}, with the copies Coffer syncs in from your other agents. Read-only here.",
+        "descriptionCodex": "Written by {{agent}}; Coffer adds its copies under memories/extensions/coffer/. Read-only here."
       },
       "cols": {
         "project": "Project",
@@ -2376,9 +2315,6 @@
       "not_connected": "Not connected",
       "checking": "Checking…"
     },
-    "stateHeader": {
-      "hook_untrusted": "Hook not approved"
-    },
     "tabs": {
       "more": "More",
       "hooks": "Hooks",
@@ -2393,37 +2329,26 @@
     "overviewTab": {
       "connection": {
         "heading": "Connection",
-        "help": "Coffer adds exactly one MCP entry and one memory hook, both marked as Coffer’s; nothing else in the agent’s config is touched.",
+        "help": "Coffer adds exactly one MCP entry, marked as Coffer’s; nothing else in the agent’s config is touched.",
         "loadFailed": "Couldn’t read the Coffer connection. Reload the page to try again.",
         "body": {
-          "connected": "{{name}} reaches Coffer through one MCP entry and gets memory through one hook.",
-          "connectedMcpOnly": "{{name}} reaches Coffer through one MCP entry.",
-          "notConnected": "Connect adds one entry and one hook to its config. You review the lines first.",
-          "notConnectedMcpOnly": "Connect adds one entry to its config. You review the line first.",
-          "mcpMissing": "The <code>coffer</code> entry is missing from <code>{{mcpFile}}</code>, so {{name}} can’t reach Coffer’s tools.",
-          "hookStale": "The memory hook runs a command this Coffer no longer accepts, so sessions start without memory.",
-          "hookMissing": "The memory hook is missing from <code>{{hookFile}}</code>, so sessions start without memory.",
-          "hookUntrusted": "{{name}} runs only hooks you approve. Approve Coffer’s hook in {{name}}’s /hooks, then check again."
+          "connected": "{{name}} reaches Coffer through one MCP entry.",
+          "notConnected": "Connect adds one entry to its config. You review the line first.",
+          "mcpMissing": "The <code>coffer</code> entry is missing from <code>{{mcpFile}}</code>, so {{name}} can’t reach Coffer’s tools."
         },
         "action": {
           "connect": "Connect",
-          "repair": "Repair",
-          "checkAgain": "Check again"
+          "repair": "Repair"
         },
         "part": {
           "mcp": "MCP entry",
-          "memoryHook": "Memory hook",
           "mcpIn": "<code>coffer</code> in <path>{{file}}</path>",
-          "notIn": "Not in <path>{{file}}</path>",
-          "hookIn_one": "{{count}} event in <path>{{file}}</path>",
-          "hookIn_other": "{{count}} events in <path>{{file}}</path>"
+          "notIn": "Not in <path>{{file}}</path>"
         },
         "health": {
           "current": "Current",
-          "stale": "Out of date",
           "missing": "Missing",
-          "notSet": "Not set",
-          "untrusted": "Not approved"
+          "notSet": "Not set"
         }
       },
       "age": {
@@ -2464,11 +2389,7 @@
         "hooks": {
           "none": "No hooks",
           "inFile": "In {{file}}",
-          "inPlaces": "In {{places}} places",
-          "coffer_one": "{{count}} is Coffer’s",
-          "coffer_other": "{{count}} are Coffer’s",
-          "cofferMissing": "Coffer’s hook is missing",
-          "cofferUntrusted": "Coffer’s hook isn’t approved"
+          "inPlaces": "In {{places}} places"
         },
         "memory": {
           "none": "No native stores",
@@ -2632,8 +2553,6 @@
       "builtinDefaultNamed": "Built-in default ({{model}})",
       "detail": {
         "mcpMissing": "MCP entry missing",
-        "hookStale": "Memory hook is out of date",
-        "hookMissing": "Memory hook not written",
         "gone": "{{dir}} and its program are gone",
         "notOnThisMac": "Not on this Mac",
         "keptNotOnPath": "{{dir}} kept · {{program}} not on PATH"
@@ -2670,16 +2589,14 @@
       },
       "summary": {
         "gets": {
-          "both": "Gets the coffer entry in {{mcpFile}} and the memory hook in {{hookFile}}.",
-          "mcp": "Gets the coffer entry in {{mcpFile}}.",
-          "hook": "Gets the memory hook in {{hookFile}}."
+          "mcp": "Gets the coffer entry in {{mcpFile}}."
         },
         "creates": "Coffer creates {{dir}} for it, holding only these entries.",
         "keeps": {
           "claude_code": "Its own servers and hooks stay as they are.",
           "codex": "Its own servers, hooks and provider stay as they are."
         },
-        "loses": "Loses Coffer’s MCP servers, skills and memory. Its own servers, hooks and settings stay as they are."
+        "loses": "Loses Coffer’s MCP servers and skills. Its own servers, hooks and settings stay as they are."
       },
       "placeholder": {
         "uid": "<assigned on add>",
@@ -2693,7 +2610,7 @@
       "hint": "Coffer re-reads every file from here.",
       "review": "Review changes",
       "reviewSubtitle": "Move {{name}}’s Coffer connection to {{dir}}",
-      "reviewSummary": "Coffer’s entry and memory hook come out of the old directory and go into the new one. Everything else in both stays as it is.",
+      "reviewSummary": "Coffer’s entry comes out of the old directory and goes into the new one. Everything else in both stays as it is.",
       "foundThere": "Found there",
       "found": "Found",
       "notHere": "Not here",
@@ -3271,119 +3188,196 @@
   },
   "memory": {
     "title": "Memory",
-    "subtitle": "What your agents learned, read from their own memory and kept as memories for each repository.",
-    "update": "Update memory",
-    "updating": "Updating…",
-    "syncDone": "Read {{count}} new entries and updated {{partitions}} partitions.",
-    "syncFailures": "{{count}} source(s) failed to parse — see the Activity page.",
-    "loadFailed": "Failed to load partitions",
-    "partitions": {
-      "memories_one": "{{count}} memory",
-      "memories_other": "{{count}} memories",
-      "search": "Search partitions"
-    },
-    "cols": {
-      "name": "Partition",
-      "path": "Path",
-      "global": "Every project",
-      "memories": "Memories",
-      "unresolvable": "Repository missing",
-      "sources": "Sources",
-      "distil": "Distilled"
-    },
-    "delete": {
-      "title": "Delete {{name}}?",
-      "body_one": "Coffer deletes its {{count}} distilled memory and stops delivering it; the partition leaves this list.",
-      "body_other": "Coffer deletes its {{count}} distilled memories and stops delivering them; the partition leaves this list.",
-      "untouched": "The agents' own memory for that folder is not touched.",
-      "confirm": "Delete partition"
-    },
-    "welcome": {
-      "title": "Nothing distilled yet",
-      "body": "Your agents already remember things about your projects. Coffer reads their memory, never writes to it, and keeps each entry as a memory for its repo.",
-      "noAgentsTitle": "No agent memory to read",
-      "noAgentsBody": "Memory is read from each connected agent's own memory. No agent is connected to Coffer yet, so there is nothing to distil.",
-      "connect": "Open Agents →",
-      "found": "Found on this Mac",
-      "foundMeta": "Coffer also reads on its own every hour",
-      "foundNone": "No memory yet",
-      "foundCount_one": "{{count}} file in {{projects}}",
-      "foundCount_other": "{{count}} files in {{projects}}",
-      "projects_one": "{{count}} project",
-      "projects_other": "{{count}} projects"
-    },
-    "detail": {
-      "tabs": {
-        "memories": "Memories",
-        "delivered": "Delivered"
-      },
-      "menu": {
-        "label": "More actions for {{name}}",
-        "reveal": "Reveal partition folder",
-        "copyPath": "Copy path",
-        "delete": "Delete partition…",
-        "history": "Distil history in Activity"
-      }
-    },
-    "memories": {
-      "listLabel": "Memories",
-      "retired": "Retired",
-      "readOnly": "read-only",
-      "retiredListLabel": "Retired memories",
-      "retiredOn": "Retired {{date}}",
-      "replacedBy": "Replaced by {{title}} →",
-      "learnedBy": "Learned by {{agents}} · updated {{date}}",
-      "more": "More actions for {{title}}",
-      "deleteMenu": "Delete…",
-      "deleteTitle": "Delete “{{title}}”?",
-      "deleteBody": "The memory leaves the list and no agent is given it at session start. Coffer keeps a record under Retired so the next update does not learn it again from the agents' own memory.",
-      "deleteConfirm": "Delete memory",
-      "deleted": "Deleted “{{title}}”",
-      "updated": "Updated {{date}}",
-      "select": "Select a memory to read it.",
-      "loadFailed": "Couldn't load the memories.",
-      "emptyTitle": "No memories for {{name}} yet",
-      "emptyBody": "Coffer hasn't distilled anything for this partition yet. Update memory, or it happens on its own within a few hours.",
-      "emptyWaiting_one": "Coffer has read {{count}} entry from {{agents}} for this repo but hasn’t distilled it. Update memory, or it happens on its own within a few hours.",
-      "emptyWaiting_other": "Coffer has read {{count}} entries from {{agents}} for this repo but hasn’t distilled them. Update memory, or it happens on its own within a few hours."
-    },
-    "delivered": {
-      "viewLabel": "View",
-      "rendered": "Rendered",
-      "raw": "Raw",
-      "agentsLabel": "Agent",
-      "intro": "What a session in {{path}} starts with · read-only",
-      "introGlobal": "What every session starts with · read-only",
-      "copy": "Copy",
-      "none": "No agent is connected to Coffer, so no session starts with this partition's memories.",
-      "loadFailed": "Couldn't load what is delivered.",
-      "size": "{{size}} characters · nothing trimmed",
-      "editHint": "Edit a memory to change what is delivered"
+    "subtitle": "What each agent remembers, synced into your other agents.",
+    "loadFailed": "Couldn't load memory sync",
+    "moreActions": "More memory actions",
+    "syncNow": "Sync now",
+    "syncing": "Syncing…",
+    "clock": {
+      "last": "Last synced {{when}}",
+      "never": "Not synced yet on this machine",
+      "running": "Syncing…",
+      "off": "Automatic sync is off"
     },
     "automatic": {
-      "title": "Read memory automatically",
-      "description": "Reads each agent’s own memory and distils it. Coffer never writes to it.",
-      "last": "Last read {{when}}",
-      "never": "Not read yet"
+      "title": "Sync memory automatically",
+      "description": "Publishes what each agent learned to your vault and writes it into your other agents' own memory.",
+      "last": "Last synced {{when}}",
+      "never": "Not synced yet"
     },
-    "allAgents": "All agents",
-    "distil": {
-      "done": "Distilled {{when}}",
-      "never": "Never",
-      "running": "Distilling…"
+    "toast": {
+      "synced": "Memory synced",
+      "syncedDetail": "{{published}} published · {{written}} copies written · {{removed}} removed",
+      "nothingChanged": "Memory is already in sync",
+      "previewWaiting": "Review the copies below, then choose Write"
     },
-    "failure": {
-      "title": "Couldn't read {{agent}}'s memory:",
-      "anAgent": "an agent",
-      "kept": "{{agent}}'s memories stay as its last full read left them.",
-      "keptSince": "{{agent}}'s memories stay as they were after its last full read on {{date}}.",
-      "retry": "Retry",
-      "prompt": "Coffer couldn't read {{agent}}'s memory at {{path}} ({{reason}}). Find out why it can't be read, most likely a permission problem, and fix the read permission so Coffer can read it again. Don't change anything inside the memory itself.",
-      "noReason": "it isn't readable"
+    "noAgents": {
+      "title": "No agent to sync",
+      "body": "Memory is synced between Claude Code and Codex. Add one of them on the Agents page.",
+      "open": "Open Agents"
     },
-    "tidy": {
-      "one": "Tidy",
-      "all": "Tidy all"
+    "problems": {
+      "failed_one": "Couldn't read {{count}} memory source",
+      "failed_other": "Couldn't read {{count}} memory sources",
+      "failedKept": "Nothing was published from it this time; what it published before stays in the hub.",
+      "withheld_one": "{{count}} memory looks like it holds a secret and was not published",
+      "withheld_other": "{{count}} memories look like they hold a secret and were not published"
+    },
+    "preview": {
+      "title_one": "Review {{count}} copy before it is written",
+      "title_other": "Review {{count}} copies before they are written",
+      "description": "A first or large sync waits for you. The hub is already up to date; nothing is written into your agents until you choose Write. Open a row to see its memories.",
+      "write": "Write",
+      "empty": "Nothing to write",
+      "cols": {
+        "agent": "Into",
+        "project": "Project",
+        "write": "Write",
+        "update": "Update",
+        "remove": "Remove"
+      }
+    },
+    "projects": {
+      "title": "Projects",
+      "description": "Every memory your agents wrote for themselves, on any of your machines, filed by project.",
+      "global": "Global memories",
+      "everywhere": "Every project, every machine",
+      "notHere": "Not checked out here",
+      "search": "Search projects",
+      "empty": "No memories yet. The next sync publishes what your agents remember.",
+      "cols": {
+        "project": "Project",
+        "here": "On this machine",
+        "memories": "Memories",
+        "from": "From"
+      }
+    },
+    "agents": {
+      "title": "Agents on this machine",
+      "description": "Each agent curates and loads its own memory. Coffer only writes copies of what your other agents learned.",
+      "empty": "No agent on this machine has memory to sync.",
+      "cols": {
+        "agent": "Agent",
+        "copies": "Copies written here",
+        "memory": "Own memory",
+        "curation": "Own curation"
+      },
+      "written_one": "{{count}} copy",
+      "written_other": "{{count}} copies",
+      "edited_one": "{{count}} edited by the agent",
+      "edited_other": "{{count}} edited by the agent",
+      "removed_one": "{{count}} removed by the agent",
+      "removed_other": "{{count}} removed by the agent",
+      "writer": {
+        "off": "Nothing written: its memory is off",
+        "blocked": "Nothing written"
+      },
+      "memory": {
+        "claude_code": {
+          "on": "Auto memory on",
+          "off": "Auto memory off",
+          "unknown": "Auto memory unknown"
+        },
+        "codex": {
+          "on": "Memories on",
+          "off": "Memories off",
+          "unknown": "Memories unknown"
+        },
+        "other": {
+          "on": "On",
+          "off": "Off",
+          "unknown": "Unknown"
+        }
+      },
+      "curation": {
+        "claude_code": {
+          "on": "Auto Dream on",
+          "off": "Auto Dream off",
+          "unknown": "Auto Dream unknown"
+        },
+        "codex": {
+          "on": "Consolidation on",
+          "off": "Consolidation off",
+          "unknown": "Consolidation unknown"
+        },
+        "other": {
+          "on": "On",
+          "off": "Off",
+          "unknown": "Unknown"
+        }
+      },
+      "hint": {
+        "claude_code": {
+          "memory": "Turn auto memory on in Claude Code’s /memory.",
+          "curation": "Check Auto Dream in Claude Code’s /memory."
+        },
+        "codex": {
+          "memory": "Turn memories on in Codex: memories = true under [features] in config.toml.",
+          "curation": "Codex consolidates whenever its memories are on."
+        },
+        "other": {
+          "memory": "Turn the agent’s own memory on.",
+          "curation": "Turn the agent’s own curation on."
+        }
+      },
+      "curateNow": "Curate now",
+      "curateNowFor": "Curate now: {{agent}}",
+      "curateStarted": "{{agent}} is curating its memory",
+      "curateNotStarted": "Couldn't start {{agent}}"
+    },
+    "codexImport": {
+      "label": "Codex imports Claude Code’s memories itself",
+      "description": "Turn on when Codex’s own import from Claude Code runs with automatic updates. Coffer then writes no Claude Code memory into Codex; Codex’s memories still reach Claude Code.",
+      "on": "Codex imports them itself"
+    },
+    "undo": {
+      "menu": "Undo sync…",
+      "menuDescription": "Remove Coffer’s copies from this machine’s agents",
+      "title": "Undo memory sync on this machine?",
+      "description": "Coffer removes what it wrote into your agents here and stops syncing on its own.",
+      "removes": "Removes",
+      "copiesIn_one": "{{count}} copy in {{agent}}",
+      "copiesIn_other": "{{count}} copies in {{agent}}",
+      "noCopies": "No copies",
+      "files": "Coffer’s block in each MEMORY.md, Claude Code’s rules/coffer-memory.md and Codex’s memories/extensions/coffer/",
+      "turnsOff": "Turns off",
+      "automatic": "Automatic sync",
+      "keeps": "Keeps",
+      "kept": "The hub in your vault, every memory an agent wrote itself, and every copy an agent edited",
+      "confirm": "Undo sync",
+      "pending": "Undoing…",
+      "failed": "Couldn't undo the sync",
+      "done_one": "Removed {{count}} copy. Automatic sync is off.",
+      "done_other": "Removed {{count}} copies. Automatic sync is off."
+    },
+    "detail": {
+      "global": "Written into every agent on every machine",
+      "notHere": "Not checked out on this machine: its memories wait in the hub",
+      "memories_one": "{{count}} memory",
+      "memories_other": "{{count}} memories"
+    },
+    "entries": {
+      "search": "Search memories",
+      "empty": "No memories in this project.",
+      "loadFailed": "Couldn't load the memories",
+      "thisMachine": "This machine",
+      "cols": {
+        "memory": "Memory",
+        "type": "Type",
+        "origin": "From",
+        "copyIn": "In {{agent}}",
+        "updated": "Updated"
+      }
+    },
+    "copy": {
+      "origin": "Its own",
+      "written": "Written",
+      "rules": "In rules file",
+      "pending": "Next sync",
+      "held_back": "Held back",
+      "deferred": "Codex imports it",
+      "edited": "Edited by agent",
+      "removed": "Removed by agent"
     }
   },
   "conversations": {
@@ -4602,7 +4596,6 @@
       "review": "Review",
       "repair": "Repair drift",
       "open": "Open",
-      "repairHook": "Repair hook",
       "reconnectChannel": "Reconnect channel",
       "reviewHeld": "Review held changes",
       "openSecrets": "Open Secrets",
@@ -4616,7 +4609,6 @@
       "skill": "Skill",
       "channel": "Channel",
       "knowledge": "Knowledge",
-      "memory": "Memory",
       "sync": "Sync",
       "reconcile": "Agent config",
       "cli": "CLI",
@@ -4711,9 +4703,9 @@
         "ok": "Up to date",
         "warn_one": "{{count}} needs attention",
         "warn_other": "{{count}} need attention",
-        "unit_one": "partition",
-        "unit_other": "partitions",
-        "lastUpdate": "Last update {{ago}}"
+        "unit_one": "memory",
+        "unit_other": "memories",
+        "lastUpdate": "Last synced {{ago}}"
       },
       "sync": {
         "ok": "In sync",

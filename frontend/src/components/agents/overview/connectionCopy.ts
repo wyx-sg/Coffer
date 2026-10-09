@@ -1,12 +1,11 @@
 // src/components/agents/overview/connectionCopy.ts — what the Connection card says for each state.
 //
 // Pure: the card's title/body keys and its part rows are derived from the
-// agent's row state, the connection's parts and Coffer's hook health, so the
-// sentence always names the part that is actually off.
+// agent's row state and the connection's parts, so the sentence always names
+// the part that is actually off.
 import type { StatusTone } from "@/lib/statusTone";
 import type { AgentRowState } from "@/lib/agents/rowState";
-import type { CofferConnection, CofferHook } from "@/lib/api/agents";
-import { hookNotApproved } from "@/lib/agents/hookRows";
+import type { CofferConnection } from "@/lib/api/agents";
 
 /** The states the Connection card renders (problem states replace the whole tab). */
 export type ConnectionCardState = Extract<
@@ -21,67 +20,29 @@ export function isConnectionCardState(state: AgentRowState): state is Connection
 const K = "agents.overviewTab.connection";
 
 /** The i18n key of the card's sentence. */
-export function connectionBodyKey(
-  state: ConnectionCardState,
-  parts: CofferConnection["parts"],
-  hook: CofferHook | null | undefined,
-): string {
-  const hasHook = parts.some((p) => p.key === "memory_hook");
-  if (hookAwaitsApproval(state, hook)) return `${K}.body.hookUntrusted`;
-  if (state === "connected") return `${K}.body.${hasHook ? "connected" : "connectedMcpOnly"}`;
-  if (state === "not_connected")
-    return `${K}.body.${hasHook ? "notConnected" : "notConnectedMcpOnly"}`;
-  const mcp = parts.find((p) => p.key === "mcp");
-  if (mcp && !mcp.installed) return `${K}.body.mcpMissing`;
-  return `${K}.body.${hook?.health === "stale" ? "hookStale" : "hookMissing"}`;
+export function connectionBodyKey(state: ConnectionCardState): string {
+  if (state === "connected") return `${K}.body.connected`;
+  if (state === "not_connected") return `${K}.body.notConnected`;
+  return `${K}.body.mcpMissing`;
 }
 
-/**
- * Everything Coffer wrote is in place and current, but the agent will not run
- * Coffer's hook until the user approves it (Codex's `/hooks`). Coffer never
- * approves it for the user, so the card says how and offers the command.
- */
-export function hookAwaitsApproval(
-  state: AgentRowState,
-  hook: CofferHook | null | undefined,
-): boolean {
-  return state === "connected" && hookNotApproved(hook);
-}
-
-/** The events Coffer's hook sits on — the listing names them comma-joined. */
-export function hookEventCount(hook: CofferHook): number {
-  return new Set(
-    hook.event
-      .split(",")
-      .map((e) => e.trim())
-      .filter(Boolean),
-  ).size;
-}
-
-type PartHealth = "current" | "stale" | "missing" | "notSet" | "untrusted";
+type PartHealth = "current" | "missing" | "notSet";
 
 const HEALTH_TONE: Record<PartHealth, StatusTone> = {
   current: "ok",
-  stale: "warn",
   missing: "warn",
   notSet: "off",
-  untrusted: "warn",
 };
 
 export function partHealthTone(health: PartHealth): StatusTone {
   return HEALTH_TONE[health];
 }
 
-/** A part's health word: Not set before it was ever connected,
- *  else installed-and-current / out of date / missing. */
+/** A part's health word: Not set before it was ever connected, else in place or missing. */
 export function partHealth(
   part: CofferConnection["parts"][number],
-  hook: CofferHook | null | undefined,
   state: ConnectionCardState,
 ): PartHealth {
   if (!part.installed) return state === "not_connected" ? "notSet" : "missing";
-  if (part.key === "memory_hook" && hook) {
-    return hookNotApproved(hook) ? "untrusted" : hook.health;
-  }
   return "current";
 }

@@ -64,7 +64,6 @@ const PAGES: Record<string, { list: string; detail?: (a: Address) => string | nu
   channel: { list: "/channels", detail: (a) => `/channels/${encode(a.uid)}` },
   provider: { list: "/model-providers", detail: (a) => `/model-providers/${encode(a.uid)}` },
   knowledge: { list: "/knowledge", detail: (a) => `/knowledge/${encode(a.uid)}` },
-  memory: { list: "/memory", detail: (a) => `/memory/${encode(a.uid)}` },
   sync: { list: "/sync" },
   // The approval switch lives in Settings, Security tab.
   secret: { list: "/settings/security" },
@@ -103,33 +102,11 @@ export function itemPage(item: AttentionItem, agentType?: string): string {
   return detailPage(item, agentType) ?? page.list;
 }
 
-/** The reasons the reconciler's memory-hook target reports about Coffer's hook
- *  in an agent's own settings: changed by hand (and not rewritten), missing,
- *  not trusted or switched off in the agent, or a settings file that does not
- *  parse. Each is dealt with on the agent's Hooks tab, whose hook row carries
- *  Repair. */
-const HOOK_REASONS = new Set([
-  "stale_command",
-  "hook_missing",
-  "hook_untrusted",
-  "hook_disabled",
-  "hook_trust_unknown",
-  "unreadable_config",
-]);
-
-/** Whether an item is about Coffer's memory hook in one agent. */
-function isHookItem(item: AttentionItem): boolean {
-  return item.kind === "agent" && HOOK_REASONS.has(item.reason_code);
-}
-
-/** The page an item's one action opens — a missing secret is added on
- *  Secrets, a memory-hook problem is dealt with on the agent's Hooks tab. */
+/** The page an item's one action opens — a missing secret is added on Secrets. */
 export function actionPage(item: AttentionItem, agentType?: string): string {
   if (item.reason_code === "mcp_missing_secret" || item.reason_code === "skill_missing_secret") {
     return "/secrets";
   }
-  const detail = detailPage(item, agentType);
-  if (isHookItem(item) && detail) return `${detail}/hooks`;
   return itemPage(item, agentType);
 }
 
@@ -151,12 +128,10 @@ export function actionLabelKey(verb: string): string {
 }
 
 /** One item's label key. The label names what the button does for that kind
- *  and reason, not the daemon's bare verb: a memory hook's repair reads
- *  "Repair hook" (not "Repair drift"), a channel's check "Reconnect channel",
+ *  and reason, not the daemon's bare verb: a channel's check "Reconnect channel",
  *  sync's review "Review held changes"; every other item goes by its verb. */
 export function itemActionLabelKey(item: AttentionItem): string {
   const verb = item.action.verb;
-  if (isHookItem(item) && verb === "repair") return "overview.actions.repairHook";
   if (item.kind === "channel" && verb === "check") return "overview.actions.reconnectChannel";
   if (item.kind === "sync" && verb === "review") return "overview.actions.reviewHeld";
   if (item.kind === "secret" && item.reason_code === "secret_missing_here")

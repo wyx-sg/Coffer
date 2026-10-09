@@ -19,11 +19,11 @@ change to the lifecycle service, the audit service, the retention machinery or t
 kind-agnostic routes.
 
 What a kind *is* — an MCP server, an agent, a skill, a channel, a knowledge collection,
-a memory partition, a provider connection — belongs to that kind's own spec: transport,
-discovery, delivery, projection and conversation are absorbed here in no part. The seven
+a provider connection — belongs to that kind's own spec: transport,
+discovery, delivery, projection and conversation are absorbed here in no part. The six
 kinds that exist are contributed by mcp-gateway (`mcp_server`), agent-registry
-(`agent`), skill-manager (`skill`), knowledge (`knowledge`), channels (`channel`),
-memory (`memory`) and provider-switching (`provider`); `chat` and `sync` are code
+(`agent`), skill-manager (`skill`), knowledge (`knowledge`), channels (`channel`)
+and provider-switching (`provider`); `chat`, `sync` and `memory` are code
 packages, not registered kinds. With no kind registered every lifecycle route is a
 refusal or an empty list and the audit log is empty, which is what a framework with
 nothing to manage should do. *Enforcing* reach is each kind's own seam at its own choke
@@ -32,10 +32,7 @@ listing, skill-manager at delivery); a second central gate would be unreachable.
 invocation log is mcp-gateway's; it registers here as a prunable table and nothing more.
 Whether the passes this spec reports run on a timer is internal-engine's, and what each
 pass does is memory's. `GET /api/v1/upkeep/runs`, the read of the passes
-in flight, is a live, read-only status the web UI polls so the Memory page's
-run-now button shows a pass the timer or another page started as already running; a terminal
-reads the same list in `coffer daemon status`. The passes' switches and timers are
-changed on the Settings page, not by command.
+in flight, is a live, read-only status; a terminal reads it in `coffer daemon status`.
 
 It is a spec, not a rule in the principles, because it owns state and operable surfaces.
 Resource files (`vault/resources/<kind>/<name>.json`, or `<uid>.json` for a provider; agents and channels under `local/`),
@@ -84,7 +81,7 @@ per-agent reach on every resource"). Creating is not one of them: a kind registe
 seam (see "Keep creation a per-kind seam"). A request a kind does not support MUST be refused rather
 than ignored (see "Keep creation a per-kind seam" and "Carry a per-agent reach on every resource").
 
-A kind MAY declare that its resources cannot be disabled — `knowledge`, `memory` and `agent` do.
+A kind MAY declare that its resources cannot be disabled — `knowledge` and `agent` do.
 Every resource of such a kind MUST read as enabled, whatever its stored reach holds (a resource disabled before its kind became non-toggleable reads enabled from then on), and enabling or disabling one through the
 kind-agnostic surface MUST be refused with `RESOURCE_NOT_TOGGLEABLE` (409), changing
 nothing. The resource read carries the kind's answer as `toggleable`, so a surface can
@@ -106,10 +103,10 @@ unregistered kind MUST be refused rather than bringing one into being.
 - **AND** the first kind's disable changes it through the kind-agnostic route and is audited
 
 #### Scenario: a non-toggleable kind refuses to be disabled
-- **GIVEN** a `knowledge` collection, a `memory` partition and an `agent`
+- **GIVEN** a `knowledge` collection and an `agent`
 - **WHEN** each is disabled through `/api/v1/resources` and read back
-- **THEN** all three requests are refused with 409 `RESOURCE_NOT_TOGGLEABLE`
-- **AND** all three still read back enabled, with `toggleable` false
+- **THEN** both requests are refused with 409 `RESOURCE_NOT_TOGGLEABLE`
+- **AND** both still read back enabled, with `toggleable` false
 - **AND** an agent whose stored reach says off, left from before the kind was non-toggleable, reads back enabled
 
 ### Requirement: Validate every registration and persist nothing on failure
@@ -132,7 +129,7 @@ Creation is a per-kind seam and MUST stay one. The kind-agnostic create route MU
 accept only kinds that declare themselves creatable through it, and MUST refuse a kind
 that owns a creation invariant beyond config validation — a skill's master folder, an
 agent's on-disk detection — so that such a kind is registered through its own surface,
-which can hold that invariant. A kind that is created only by the system, such as a memory partition, MUST offer no creation
+which can hold that invariant. A kind that is created only by the system MUST offer no creation
 at all. A generic create would have to guess a config shape it cannot know, which is why creation stays the kind's own. What this spec owns is everything that
 happens to a resource once a kind has made one.
 
@@ -289,7 +286,7 @@ the name is the resource's type. None of these kinds carries a title: the fixed 
 
 #### Scenario: a kind whose name is a directory moves it with the rename
 - **GIVEN** a resource of a renamable kind that keeps an on-disk artifact named after it —
-  a knowledge collection's directory, a memory partition's directory,
+  a knowledge collection's directory,
 - **WHEN** the user renames it,
 - **THEN** the artifact is at the new name with its contents intact and is
   served from there,
@@ -316,7 +313,7 @@ The system MUST record an audit entry for every lifecycle change to any resource
 capability, including the actor — the originating surface (CLI / API / UI), `system` for the
 daemon's own work, `sync` for a change applied from the sync remote, `human` for an edit a person or an agent made to
 a vault file on disk that Coffer found and committed, a named background worker
-such as `system:memory-aggregate-worker`, or a domain actor a kind names itself, such as `user`,
+such as `system:memory-sync-worker`, or a domain actor a kind names itself, such as `user`,
 `channel`, an agent's name, or `agent` for a knowledge write whose session reported no agent. Every lifecycle change made
 through any surface — REST, CLI, or a kind's own command — MUST appear in the audit log
 with the originating actor, and no surface can mutate a resource without one. Entries
@@ -334,7 +331,7 @@ An entry's `details` MUST say what changed, not only that something did: a value
 changed carries its value before and after (a name, a scope, a switch, a retention period,
 a provider), an action over several things names them or counts them (the agents, files,
 skills or pages it touched), and an action with a cause the caller knows names it. A text
-edit to a vault file Coffer writes or commits — a knowledge page, a memory note, a skill
+edit to a vault file Coffer writes or commits — a knowledge page, a skill
 file — carries a unified diff of the edit, cut at 8 KB (UTF-8) with `diff_truncated: true`
 and its size before the cut (`diff_bytes`). `details` MUST NOT hold a secret value: a
 secret is named by its reference, and a resource's configuration passes its kind's
@@ -471,7 +468,7 @@ are older than `n` days, and deletes nothing.
 
 ### Requirement: Report the passes in flight in one cross-kind read
 The system MUST answer, in one cross-kind read, which long passes this
-daemon is running right now — memory's aggregate and distil passes, each named by its kind, its target and when it started, and, for a run that works through several items one pass at a time, how many of them it has done of how many —
+daemon is running right now — each named by its kind, its target and when it started, and, for a run that works through several items one pass at a time, how many of them it has done of how many —
 so that a surface can tell whether a pass is under way without every kind growing a
 near-identical endpoint of its own. The read MUST start nothing, and the registry MUST
 NOT outlive the process: a restart ends any pass it was running and the list comes back
@@ -482,13 +479,13 @@ of `coffer daemon status`, which prints the same list, says so when nothing is r
 carries the list under `--json`.
 
 #### Scenario: the daemon names the passes in flight
-- **GIVEN** a long pass over one memory partition is running,
+- **GIVEN** a long pass over one knowledge collection is running,
 - **WHEN** any surface reads the in-flight list,
 - **THEN** that pass is named with its kind, its target and when it started,
 - **AND** a target absent from the list has no pass running, and the read starts nothing.
 
 #### Scenario: the command line reads the passes in flight
-- **GIVEN** passes over two memory partitions are running
+- **GIVEN** passes over two knowledge collections are running
 - **WHEN** the operator runs `coffer daemon status --json`, and again once both have ended
 - **THEN** the first lists both passes with their kind, target and start time, oldest first,
 - **AND** the second lists none, and the table form of `coffer daemon status` says that no pass is running.
@@ -644,7 +641,7 @@ target other than those two MUST exit non-zero as an unknown target.
 ### Requirement: Converge what Coffer writes outside its database with one reconciler
 Everything Coffer keeps true outside its own files — its MCP entry in each
 agent's config, the skill links it delivers, a provider connection's projection
-into an agent's settings, the memory delivery hook — MUST be converged by one
+into an agent's settings — MUST be converged by one
 level-triggered reconciler ([ADR](../../../docs/decisions/one-level-triggered-reconciler-compares-parameters.md)).
 Each target MUST state the items it wants with their full parameters, computed
 from Coffer's own state, and read what is there into the same shape; a pass
@@ -663,7 +660,7 @@ overlap, and a multi-step change a service makes (a provider switch, a sync
 round's apply) MUST be able to keep passes out until it is done.
 
 #### Scenario: a changed parameter is drift and is repaired
-- **GIVEN** an agent whose Coffer entry is present but carries a parameter this build no longer writes — a hook command with `--agent` instead of `--agent-uid`, or an MCP entry with a shim path an upgrade moved
+- **GIVEN** an agent whose Coffer entry is present but carries a parameter this build no longer writes — an MCP entry with a shim path an upgrade moved
 - **WHEN** a reconcile pass runs
 - **THEN** the item is reported as a modification naming the changed parameter and rewritten to the current parameters, every entry that is not Coffer's is left as it was, and the next pass finds nothing
 
@@ -734,7 +731,7 @@ drift that a pass could not fix, MCP servers whose last test failed (a server
 whose key the upstream refused reads `mcp_key_rejected` and offers
 `replace_key`, which opens the server's page where the key is replaced),
 whose launcher is missing or whose cited secret is absent, agents whose program is
-missing, whose connection is partial or who are not connected, whose Coffer memory hook the agent has not approved or has never run, a sync stopped on
+missing, whose connection is partial or who are not connected, a sync stopped on
 a conflict or holding deletions, channels reconnecting, disconnected or not
 running, model provider connections that an agent or Coffer's speech to text
 runs on whose endpoint does not answer (`provider_unreachable`, offering
@@ -1007,7 +1004,7 @@ activity, sync and settings. A command MUST call the same REST route the page
 calls, so the daemon's validation, audit and lifecycle are the same whoever
 acts; it MUST NOT reimplement a route or reach the vault's files, `runs.db` or
 ciphertext directly. Exempt are only plain file contents a spec declares
-directly readable or editable — knowledge documents, memory notes, a skill's
+directly readable or editable — knowledge documents, a skill's
 files, an agent's own config and native-memory files — which an agent reads and
 edits with its own tools, and acts whose whole meaning is the window a person
 sits at (a native folder picker, opening a file in an editor, terminal or
@@ -1054,7 +1051,7 @@ approvals exits 9 whether it names them as a list (`pending_approvals`,
 whole answer and exits 7. `coffer --verbose` adds the request behind a daemon's
 refusal (method, path, status; never a header) to the text or the envelope.
 Every management command MUST be reachable from the visible help; only a
-command a program runs (`memory hook`, `proxy token`) is hidden. The rule is policy over every spec
+command a program runs (`proxy token`) is hidden. The rule is policy over every spec
 and is stated as such in [`.agents/openspec.md`](../../../.agents/openspec.md);
 this requirement is where it becomes testable, because the assertion runs over
 the entire command tree across every spec and so has no narrower home.
@@ -1099,7 +1096,7 @@ the entire command tree across every spec and so has no narrower home.
 #### Scenario: management commands are visible in help
 - **GIVEN** the CLI's live command tree
 - **WHEN** each registry command is looked up from the root help
-- **THEN** no management command sits under a hidden group or is hidden itself, and the only hidden leaves are the program-run `memory hook` and `proxy token`
+- **THEN** no management command sits under a hidden group or is hidden itself, and the only hidden leaf is the program-run `proxy token`
 
 #### Scenario: a plain file is read with the reader's own tools
 - **GIVEN** a plain file that its owning spec declares directly readable or editable

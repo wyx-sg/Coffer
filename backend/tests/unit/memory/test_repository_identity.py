@@ -1,24 +1,20 @@
-"""What a repository's identity is, and what a partition is named (see
-"Identify a partition by its repository").
+"""What a repository's identity is.
 
 Pure domain: ``domain/memory/repository.py`` decides which key a repository
-answers to once its root and remote are known, and ``domain/memory/partition.py``
-turns a repository name into a readable slug. Walking a real ``.git`` to find
-those two things is infrastructure's, and is exercised against real
-``git init`` / ``git worktree add`` fixtures in
-``tests/integration/memory/test_partitions_are_repositories.py``.
+answers to once its root and remote are known. Walking a real ``.git`` to find
+them is infrastructure's, and is exercised against real ``git`` fixtures in
+``tests/integration/memory/``.
 
 The property under test is one sentence: **two clones of one upstream are one
 repository**, whatever spelling of the remote each of them was configured
 with. Comparing remotes literally is what would file a worktree, a second
-clone and the main checkout into three partitions.
+clone and the main checkout as three projects.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from coffer.domain.memory.partition import GLOBAL_PARTITION, disambiguate, partition_slug
 from coffer.domain.memory.repository import (
     SCHEME_PATH,
     SCHEME_REMOTE,
@@ -89,31 +85,3 @@ def test_the_name_comes_from_the_remote_so_two_clones_agree_on_it() -> None:
 def test_without_a_remote_the_name_is_the_directorys_own() -> None:
     assert repository_name(remote_url="", root_path="/home/dev/coffer/") == "coffer"
     assert repository_name(remote_url="", root_path="") == ""
-
-
-def test_a_partition_slug_is_the_directory_name_readably() -> None:
-    assert partition_slug("/home/dev/Coffer") == "coffer"
-    assert partition_slug("/home/dev/my@@project") == "my-project"
-
-
-def test_a_partition_slug_never_degrades_to_an_opaque_id() -> None:
-    """The failure that got the previous per-project store removed: nobody
-    could tell which project a ``project-<ULID>`` store belonged to."""
-    assert partition_slug("") == GLOBAL_PARTITION
-    assert partition_slug("/") == GLOBAL_PARTITION
-
-
-def test_two_projects_with_one_name_are_told_apart_by_their_parent() -> None:
-    assert disambiguate("/home/dev/work/api", frozenset({"api"})) == "work-api"
-    assert disambiguate("/home/dev/personal/api", frozenset({"api", "work-api"})) == (
-        "personal-api"
-    )
-
-
-def test_a_numeric_suffix_is_the_last_resort_not_the_first() -> None:
-    taken = frozenset({"api", "work-api", "dev-work-api", "home-dev-work-api"})
-    assert disambiguate("/home/dev/work/api", taken) == "home-dev-work-api-2"
-
-
-def test_a_rootless_path_disambiguates_to_global() -> None:
-    assert disambiguate("", frozenset()) == GLOBAL_PARTITION

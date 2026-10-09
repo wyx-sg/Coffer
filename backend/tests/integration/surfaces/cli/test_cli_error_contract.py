@@ -422,6 +422,6 @@ def test_memory_and_proxy_management_commands_show_in_root_help() -> None:
     assert root.exit_code == 0
     assert "memory" in root.stdout and "proxy" in root.stdout
     memory = _runner.invoke(app, ["memory", "--help"])
-    assert "partitions" in memory.stdout and "hook" not in memory.stdout.split("Commands")[-1]
+    assert "sync" in memory.stdout and "hook" not in memory.stdout.split("Commands")[-1]
     proxy = _runner.invoke(app, ["proxy", "--help"])
     assert "status" in proxy.stdout and " token " not in proxy.stdout

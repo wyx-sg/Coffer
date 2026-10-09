@@ -31,16 +31,6 @@ class HookSource(StrEnum):
     PLUGIN = "plugin"
 
 
-class HookHealth(StrEnum):
-    """Coffer's own delivery hook: ``current`` is exactly the command Coffer
-    would write now; ``stale`` carries Coffer's marker with another command;
-    ``missing`` is not there at all."""
-
-    CURRENT = "current"
-    STALE = "stale"
-    MISSING = "missing"
-
-
 class MalformedHooks(ValueError):  # noqa: N818
     """A hook file that is not the JSON object shape above. Never reaches a
     caller of the hooks listing: it becomes a parse error beside the rows the
@@ -113,4 +103,4 @@ def parse_hooks(text: str) -> list[HookRow]:
     return rows
 
 
-__all__ = ["HookHealth", "HookRow", "HookSource", "MalformedHooks", "parse_hooks"]
+__all__ = ["HookRow", "HookSource", "MalformedHooks", "parse_hooks"]

@@ -9,7 +9,7 @@ Coffer 的后端是一个分层应用：界面层调用应用服务，应用服�
 
 ## 它要解决的问题 {#the-problem-it-solves}
 
-Coffer 有七种资源类型、一个轮次平台、一个同步引擎和四个入口界面（REST、MCP、CLI、shim），而且大部分代码是和 AI 编程智能体一起写的。没有强制边界，这样的代码库会以可以预见的方式腐化：路由直接伸手进 SQLAlchemy；一个类型因为方便就导入另一个类型的服务；某个 SDK 从唯一需要它的适配器泄漏进领域层。每条捷径都很小，加在一起就让每次改动都牵一发而动全身。
+Coffer 有六种资源类型、一个轮次平台、一个同步引擎和四个入口界面（REST、MCP、CLI、shim），而且大部分代码是和 AI 编程智能体一起写的。没有强制边界，这样的代码库会以可以预见的方式腐化：路由直接伸手进 SQLAlchemy；一个类型因为方便就导入另一个类型的服务；某个 SDK 从唯一需要它的适配器泄漏进领域层。每条捷径都很小，加在一起就让每次改动都牵一发而动全身。
 
 Coffer 用两族规则来应对，每次构建都会检查：
 
@@ -65,7 +65,7 @@ flowchart TB
 | 已弃用的引擎处处禁止 | `llama_index`、`mem0`、`chromadb`、`sentence_transformers`、`sqlite_vec`、`fastembed`、`langgraph` 和 `langchain*` 系列包在任何地方都不能导入。Coffer 不做任何 embedding，也不运行自己的对话模型（它唯一的模型调用是一次普通的 HTTP 语音转文字请求），要重新引入就必须有意地修改这条契约。 |
 | Claude Agent SDK 限定 | 领域层、应用层和其他基础设施包不能导入 `claude_agent_sdk`。它的归宿是 `infrastructure/chat`（智能体适配器）和 `infrastructure/agent`（读取已安装智能体的目录）。 |
 
-当两个类型确实需要同一段代码时，它会搬到层根目录下一个与类型无关的包或模块里：`infrastructure/net/`（SSRF 防护）、`infrastructure/agent_files/`（`agent` 和 `memory` 共用的智能体对话记录读取器），以及领域层根目录下一个小的 Hook 信任模块（`memory` 类型上报、`agent` 类型的 Hook 列表显示的 Hook 信任值）。其他所有跨类型的东西，都通过消费方类型声明、组合根满足的端口来传递。比如对话平台声明的模型目录端口，对话平台用它读取智能体类型的模型目录，而无需导入智能体类型。
+当两个类型确实需要同一段代码时，它会搬到层根目录下一个与类型无关的包或模块里：`infrastructure/net/`（SSRF 防护）、`infrastructure/agent_files/`（`agent` 和 `memory` 共用的智能体对话记录读取器）。其他所有跨类型的东西，都通过消费方类型声明、组合根满足的端口来传递。比如对话平台声明的模型目录端口，对话平台用它读取智能体类型的模型目录，而无需导入智能体类型。
 
 ## 组合根 {#the-composition-root}
 
@@ -73,7 +73,7 @@ flowchart TB
 
 ### 按类型显式接线 {#explicit-per-kind-wiring}
 
-没有插件发现，没有全局注册表，也没有导入时的副作用。每种注册的类型在它自己的应用层包里有一个以包名命名的工厂，它接收这个类型需要的服务，返回一个冻结的 [类型](/zh/architecture/resource-framework#kind)。注册表的键可以和包名不同：MCP 类型注册为 `"mcp_server"`。对话和同步不注册类型。`surfaces/http/` 里每种类型有一个接线模块，负责构建这个类型的服务、调用工厂，并把结果存进应用级的类型表。一个接线模块同时注册 `"agent"` 和 `"skill"`；`"provider"`、`"knowledge"`、`"memory"`、`"mcp_server"` 和 `"channel"` 各有自己的接线模块。
+没有插件发现，没有全局注册表，也没有导入时的副作用。每种注册的类型在它自己的应用层包里有一个以包名命名的工厂，它接收这个类型需要的服务，返回一个冻结的 [类型](/zh/architecture/resource-framework#kind)。注册表的键可以和包名不同：MCP 类型注册为 `"mcp_server"`。对话、记忆和同步不注册类型。`surfaces/http/` 里每种类型有一个接线模块，负责构建这个类型的服务、调用工厂，并把结果存进应用级的类型表。一个接线模块同时注册 `"agent"` 和 `"skill"`；`"provider"`、`"knowledge"`、`"mcp_server"` 和 `"channel"` 各有自己的接线模块；记忆同步有它自己的接线模块，由后台任务启动器调用。
 
 资源服务在构建时拿到同一张表的引用，每次分发都读它。
 
@@ -85,14 +85,14 @@ flowchart TB
 flowchart TB
   M["运行迁移"] --> C["密钥存储和主密钥"]
   C --> R["资源服务、审计、保留期"]
-  R --> K["类型：agent 和 skill、provider、knowledge、memory、MCP"]
+  R --> K["类型：agent 和 skill、provider、knowledge、MCP"]
   K --> CH["对话平台"]
   CH --> CN["消息渠道类型和运行时"]
   CN --> H["启动自愈和指南刷新"]
   H --> W["后台 worker"]
 ```
 
-类型接线这一步决定各类型自身的顺序：provider 在 agent 之后，因为它要投射进每个智能体的配置；memory 在 MCP 之前，这样网关的握手能说出记忆根目录；MCP 最后，这样它能拿到其他类型注册的每个内置工具。对话平台在所有类型之后接线，因为它内部的网关会话需要完整的内置工具注册表；消息渠道类型在对话之后，因为它通过对话的句柄驱动轮次。同步不需要任何类型的东西：它搬动的是保险库仓库里的文件，一轮同步改了东西之后，调和器会跑一轮，让每种类型重新投射新到的内容。
+类型接线这一步决定各类型自身的顺序：provider 在 agent 之后，因为它要投射进每个智能体的配置；MCP 最后，这样它能拿到其他类型注册的每个内置工具。对话平台在所有类型之后接线，因为它内部的网关会话需要完整的内置工具注册表；消息渠道类型在对话之后，因为它通过对话的句柄驱动轮次。同步不需要任何类型的东西：它搬动的是保险库仓库里的文件，一轮同步改了东西之后，调和器会跑一轮，让每种类型重新投射新到的内容。
 
 HTTP 路由器由 `surfaces/http/` 里的一张路由器表统一纳入，这张表还会把某个实验功能前缀下的每个路由器放到该功能的请求时闸门后面。Typer 命令组在 CLI 主模块里添加；`surfaces/cli/commands/` 下的管理命令在主模块加载它们时把自己加进这些命令组，并把每条命令对应的路由记进 CLI 的命令注册表。
 
@@ -120,7 +120,7 @@ backend/coffer/
 │   ├── knowledge/          # catalogue and file values
 │   ├── channel/            # channel config, envelopes
 │   ├── chat/               # conversation, message, attachment, turn events
-│   ├── memory/             # note, partition, budget, reader protocol
+│   ├── memory/             # hub entries, project keys, portable paths, sync plan, reader protocol
 │   ├── provider/           # provider config, projection rules, local runtimes
 │   ├── model_proxy/        # the state the daemon pushes the model proxy
 │   ├── usage/              # usage records, stream usage readers, prices, ranges
@@ -146,7 +146,7 @@ backend/coffer/
 │   ├── knowledge/          # intake and upload ingest, wiki layout, change history, tidy hand-off, sweep, guide rendering
 │   ├── channel/            # adapter protocol, pairing, inbound, runtime
 │   ├── chat/               # turn orchestrator, runner, conversation service
-│   ├── memory/             # aggregate, mechanical distil, tidy hand-off, delivery, session-start context
+│   ├── memory/             # memory sync: publish, write, preview, undo, worker, upgrade removal
 │   ├── provider/           # provider service, projection, projection target, proxy tokens and state
 │   ├── usage/              # usage ingest and reports
 │   ├── vault/              # validation rules, problems
@@ -168,7 +168,7 @@ backend/coffer/
 │   ├── knowledge/          # paths, file tree, frontmatter, ripgrep
 │   ├── channel/            # Telegram and SeaTalk transports
 │   ├── chat/               # Claude SDK and Codex adapters, persistence
-│   ├── memory/             # native-memory readers, store
+│   ├── memory/             # native-memory readers and writers, hub store, ledger
 │   ├── provider/           # provider introspector, local-runtime detection
 │   ├── model_proxy/        # the local model proxy process and its supervisor
 │   ├── usage/              # the proxy's usage spool, as the daemon reads it

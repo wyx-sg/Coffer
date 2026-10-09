@@ -261,7 +261,7 @@ running (see "Bind a fixed, settable port").
 - **AND** no daemon is spawned and no `daemon.json` is written.
 
 #### Scenario: status names the passes in flight
-- **GIVEN** a running daemon with a pass over a knowledge collection and a pass over a memory partition under way,
+- **GIVEN** a running daemon with two passes under way, one of them over a knowledge collection,
 - **WHEN** the user runs `coffer daemon status --json`, and again `coffer daemon status` once both passes have ended,
 - **THEN** the JSON reports the daemon as ready and lists both passes with their kind, target and start time, oldest first,
 - **AND** the later table form carries a passes section saying that no pass is running, and neither call starts a pass.
@@ -327,8 +327,8 @@ in the shell and the daemon's own ("Restart itself on request") in a browser —
 new port the daemon records it in `~/.coffer/daemon.json`, so the desktop shell, the CLI and the MCP
 shim find it by the discovery file as they find any daemon, and no agent's configuration needs a
 rewrite: Coffer's MCP entry in an agent's config runs
-the shim, and the memory delivery hook runs `coffer memory hook` (an internal entry point, hidden from help), and both find the daemon through
-`daemon.json` when they run rather than naming a port, so every agent reconnects without a manual
+the shim, which finds the daemon through
+`daemon.json` when it runs rather than naming a port, so every agent reconnects without a manual
 step. This setting is deliberately outside the audit obligation every kind inherits: it is
 neither a resource nor a capability but process configuration read before the database opens, and
 the CLI that owns it must work with no daemon running — so the audit table is unreachable on
@@ -365,7 +365,7 @@ would be less honest than recording none.
 #### Scenario: after a restart on a new port every agent reconnects
 - **GIVEN** a daemon configured for 8123 while answering on 38470, and Claude Code and Codex connected to Coffer
 - **WHEN** the daemon is restarted
-- **THEN** it binds 8123 and records it in `~/.coffer/daemon.json`, each agent's Coffer MCP entry and delivery hook name no port and are left as they are, and the discovery the CLI, an MCP shim and the hook share finds the daemon on 8123
+- **THEN** it binds 8123 and records it in `~/.coffer/daemon.json`, each agent's Coffer MCP entry names no port and is left as it is, and the discovery the CLI and an MCP shim share finds the daemon on 8123
 
 ### Requirement: Run as a login service
 The daemon MUST be installable as a **login service** — on macOS, a per-user launchd agent — so
@@ -934,38 +934,6 @@ needs one").
 - **THEN** the response carries the phase, port, start time, version, executable, channel, pid, commit, data folder and connected-agent count Settings → Daemon and About show,
 - **AND** `coffer daemon status --json` reports the same version, channel and port.
 
-### Requirement: Report what Coffer stores and clear the rebuildable cache
-The daemon MUST report, for Settings › Data, what Coffer keeps on this machine in the four kinds
-of [Storage Is Five Classes by Nature](../../../docs/decisions/storage-is-five-classes-by-nature.md)
-the user acts on, through `GET /api/v1/storage`: the **vault** (the vault repository
-`~/.coffer/vault/`, a git repository whether or not it syncs — its path, its size with its
-history and how many versions it holds; no version count before the repository has been created), the
-**local content** (channel media under `~/.coffer/content/`, which never sync:
-their locations, the one folder to open, and their size), the **history** (the database file
-holding the records, `~/.coffer/runs.db` unless `COFFER_DB_URL` names another, with its WAL, and
-its size together with the log directory's, `~/.coffer/logs/` unless `COFFER_LOG_DIR` names
-another, and with the skills' working files in `~/.coffer/skill-data/` and the config backups in `~/.coffer/config-backups/`) and the **rebuildable cache** (the memory tree under
-`~/.coffer/derived/`, and its size). Every path MUST come from the same place its owner
-resolves it, so an override the owner honours is honoured here.
-
-`POST /api/v1/storage/cache/clear` MUST delete the files of the memory tree, and nothing else: no vault, local content, history or other file
-under `derived/`, and no partition row, so the next memory update rebuilds each partition from the
-agents' own memory. It MUST be refused (`UPKEEP_ALREADY_RUNNING`) while a memory pass is running,
-because that pass is writing into the tree, and MUST record the clear in the audit log with the
-bytes freed.
-
-#### Scenario: the storage summary reports the four kinds
-- **GIVEN** a vault repository of three commits, channel media, a database with its WAL and a memory tree
-- **WHEN** `GET /api/v1/storage` is called
-- **THEN** it reports the vault as `~/.coffer/vault` with 3 versions, the local content with the channel media location under `~/.coffer/content` and its size, the history as `runs.db` with its WAL plus the log directory, `skill-data` and `config-backups`, and the cache as the size of the memory tree
-- **AND** before the vault repository has been created it reports the vault with no version count
-
-#### Scenario: clearing the cache leaves everything else
-- **GIVEN** a memory tree, a knowledge document in the vault, channel media, a sync round's hand-merge copy and the database
-- **WHEN** `POST /api/v1/storage/cache/clear` is called
-- **THEN** the memory tree is empty, everything else is untouched, the answer carries the bytes freed and the audit log records the clear
-- **AND** while a memory pass is running the clear is refused and nothing is deleted
-
 ### Requirement: Supervise every background task the daemon starts
 Work the daemon starts to run beside the call that started it — a channel
 adapter's inbound loop, a channel or chat turn, a periodic worker, a
@@ -1320,7 +1288,7 @@ newest release it MUST say so and change nothing.
 `POST /api/v1/daemon/uninstall` MUST remove what Coffer wrote outside
 `~/.coffer` and then stop the daemon, so uninstalling is one action instead of a
 list of manual steps. In order, it MUST take the model-provider routing out of
-every agent's settings, disconnect every agent (its MCP entry and memory hook),
+every agent's settings, disconnect every agent (its MCP entry),
 remove every skill link Coffer delivered with its delivery records, keep any
 reconcile pass from restoring them, remove the start-at-login job, remove the
 terminal launch files Coffer wrote, remove the installer's `PATH` lines (the
@@ -1347,7 +1315,7 @@ daemon owns: it MUST say that the master key's Keychain items stay.
 #### Scenario: uninstall removes every footprint and keeps the vault
 - **GIVEN** a connected agent with a provider switch, two delivered skills, start at login on and the installer's `PATH` line in `~/.zshrc`
 - **WHEN** `POST /api/v1/daemon/uninstall` is called without `delete_data`
-- **THEN** the agent's MCP entry, memory hook and provider keys are gone, the skill links are gone, the launch agent is gone, the `PATH` line and its marker are gone and `~/.coffer/bin` is gone
+- **THEN** the agent's MCP entry and provider keys are gone, the skill links are gone, the launch agent is gone, the `PATH` line and its marker are gone and `~/.coffer/bin` is gone
 - **AND** the answer lists each step and the daemon stops, while `~/.coffer/vault` is unchanged
 
 #### Scenario: deleting the data needs a presence grant
@@ -1380,6 +1348,26 @@ MCP shim, the login service — MUST NOT kill a daemon.
 - **GIVEN** a `daemon.json` whose pid now belongs to a process that is not a Coffer daemon of this vault,
 - **WHEN** a restart forces the recorded daemon out,
 - **THEN** no signal is sent to that process.
+
+### Requirement: Report what Coffer stores
+The daemon MUST report, for Settings › Data, what Coffer keeps on this machine in the three kinds
+of [Storage Is Five Classes by Nature](../../../docs/decisions/storage-is-five-classes-by-nature.md)
+the user acts on, through `GET /api/v1/storage`: the **vault** (the vault repository
+`~/.coffer/vault/`, a git repository whether or not it syncs — its path, its size with its
+history and how many versions it holds; no version count before the repository has been created), the
+**local content** (channel media under `~/.coffer/content/`, which never sync:
+their locations, the one folder to open, and their size), the **history** (the database file
+holding the records, `~/.coffer/runs.db` unless `COFFER_DB_URL` names another, with its WAL, and
+its size together with the log directory's, `~/.coffer/logs/` unless `COFFER_LOG_DIR` names
+another, and with the skills' working files in `~/.coffer/skill-data/` and the config backups in `~/.coffer/config-backups/`). Coffer keeps no cache the user clears: what is under
+`~/.coffer/derived/` is rebuilt by the daemon on its own and is not reported. Every path MUST come from the same place its owner
+resolves it, so an override the owner honours is honoured here.
+
+#### Scenario: the storage summary reports the three kinds
+- **GIVEN** a vault repository of three commits, channel media, and a database with its WAL
+- **WHEN** `GET /api/v1/storage` is called
+- **THEN** it reports the vault as `~/.coffer/vault` with 3 versions, the local content with the channel media location under `~/.coffer/content` and its size, the history as `runs.db` with its WAL plus the log directory, `skill-data` and `config-backups`, and no cache
+- **AND** before the vault repository has been created it reports the vault with no version count
 
 ### Requirement: Delete what exited one-file binaries unpacked
 Each of Coffer's one-file binaries (`coffer`, `coffer-daemon`, `coffer-seatalk-bridge`) MUST

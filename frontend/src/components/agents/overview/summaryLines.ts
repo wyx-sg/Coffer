@@ -79,19 +79,10 @@ export function hooksLine(
   ctx: Context,
 ): SummaryLine | undefined {
   if (!c) return undefined;
-  const cofferNote =
-    c.cofferState === "missing"
-      ? t(`${K}.hooks.cofferMissing`)
-      : c.cofferState === "untrusted"
-        ? t(`${K}.hooks.cofferUntrusted`)
-        : c.coffer > 0
-          ? t(`${K}.hooks.coffer`, { count: c.coffer })
-          : null;
   if (c.total === 0) {
     return {
       count: 0,
-      line: cofferNote ? `${t(`${K}.hooks.none`)} · ${cofferNote}` : t(`${K}.hooks.none`),
-      toReview: c.cofferState ? 1 : undefined,
+      line: t(`${K}.hooks.none`),
     };
   }
   const where = ctx.hookFile
@@ -99,8 +90,7 @@ export function hooksLine(
     : t(`${K}.hooks.inPlaces`, { count: c.total, places: c.files });
   return {
     count: c.total,
-    line: cofferNote ? `${where} · ${cofferNote}` : where,
-    toReview: c.cofferState ? 1 : undefined,
+    line: where,
   };
 }
 

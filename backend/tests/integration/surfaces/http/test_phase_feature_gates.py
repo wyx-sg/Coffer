@@ -23,10 +23,7 @@ _switch = gates._switch
 _assert_disabled = gates._assert_disabled
 
 
-@pytest.mark.parametrize(
-    ("key", "kind"),
-    [("knowledge", "knowledge"), ("memory", "memory")],
-)
+@pytest.mark.parametrize(("key", "kind"), [("knowledge", "knowledge")])
 def test_a_kind_an_experimental_feature_owns_is_out_of_reach_while_it_is_off(
     home: pathlib.Path, key: str, kind: str
 ) -> None:
@@ -80,16 +77,15 @@ def test_knowledge_off_hides_the_write_tool(home: pathlib.Path) -> None:
 
         _switch(c, "knowledge", False)
         # Memory and conversations carry on.
-        assert c.get("/api/v1/memory/partitions").status_code == 200
+        assert c.get("/api/v1/memory/sync/state").status_code == 200
         assert c.get("/api/v1/agent-sessions").status_code == 200
         tools = {t for t in kind_gates._listed_tools(c) if t.startswith("coffer__")}
         text = kind_gates._instructions(c)
         assert tools == {"coffer__search_tools"}
         # The handshake names exactly the tools the list carries and says nothing
-        # of knowledge; the memory root is still there, memory being on.
+        # of knowledge.
         assert kind_gates._named_tools(text) <= tools
         assert "Its knowledge is markdown" not in text
-        assert kind_gates._names_memory(text)
         # A call to the withdrawn tool answers as an unknown tool.
         assert _unknown_call(c, "coffer__write")
 
@@ -99,27 +95,16 @@ def test_knowledge_off_hides_the_write_tool(home: pathlib.Path) -> None:
 
 @pytest.mark.acceptance(
     spec="experimental-features",
-    scenario="memory off hides the memory root",
-)
-@pytest.mark.acceptance(
-    spec="experimental-features",
     scenario="memory off leaves knowledge and channels working",
 )
-def test_memory_off_hides_the_memory_root(home: pathlib.Path) -> None:
+def test_memory_off_leaves_knowledge_and_channels_working(home: pathlib.Path) -> None:
     with _client() as c:
-        assert kind_gates._names_memory(kind_gates._instructions(c))
-
         _switch(c, "memory", False)
         # Knowledge and conversations carry on.
         assert c.get("/api/v1/knowledge/collections").status_code == 200
         assert c.get("/api/v1/agent-sessions").status_code == 200
-        text = kind_gates._instructions(c)
-        assert not kind_gates._names_memory(text)
         # Knowledge is its own feature and stays in the handshake.
-        assert "Its knowledge is markdown" in text
-
-        _switch(c, "memory", True)
-        assert kind_gates._names_memory(kind_gates._instructions(c))
+        assert "Its knowledge is markdown" in kind_gates._instructions(c)
 
 
 @pytest.mark.acceptance(
@@ -138,28 +123,8 @@ def test_knowledge_off_re_renders_the_guide_without_its_knowledge_sections(
         off = kind_gates._guide(home)
         assert "Tidying a collection" not in off
         assert "Knowledge is a wiki of files" not in off
-        assert kind_gates._names_memory(off)
         assert "coffer__search_tools" in off
         assert "<!--" not in off
 
         _switch(c, "knowledge", True)
-        assert kind_gates._guide(home) == before
-
-
-def test_memory_off_re_renders_the_guide_without_its_memory_sections(
-    home: pathlib.Path,
-) -> None:
-    with _client() as c:
-        before = kind_gates._guide(home)
-        assert kind_gates._names_memory(before)
-        assert "Coffer reads your memory" in before
-
-        _switch(c, "memory", False)
-        off = kind_gates._guide(home)
-        assert not kind_gates._names_memory(off)
-        assert "Coffer reads your memory" not in off
-        assert "Knowledge is a wiki of files" in off
-        assert "<!--" not in off
-
-        _switch(c, "memory", True)
         assert kind_gates._guide(home) == before

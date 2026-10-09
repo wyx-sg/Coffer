@@ -34,12 +34,6 @@ There is at most one per type on a machine, and its name is its type (`claude-co
 `codex`); its one setting besides the model binding is its config directory. See
 [Agents](/guides/agents).
 
-### Aggregate pass
-
-The [upkeep pass](#upkeep-pass) that reads every registered agent's
-[native memory](#native-memory) into Coffer's memory as [raw entries](#raw-entry). Coffer
-never writes back into an agent's own memory. See [Memory](/architecture/memory#the-aggregation-pass).
-
 ### Approval
 
 A change that would widen where a secret goes, held until a person answers it in the desktop
@@ -141,9 +135,9 @@ it on the **Sync** page: **Delete N files** or **Keep the files**. Moves and ren
 
 ### Delivery
 
-Getting something Coffer holds into an agent: a [skill](#skill) by [binding](#binding), and
-[memory](#partition) by a hook Coffer installs in the agent's settings, which hands over the
-index at session start and the notes a prompt names. See [Memory](/guides/memory).
+Getting something Coffer holds into an agent: a [skill](#skill) by [binding](#binding). Memory
+is not delivered into a session: [memory sync](#memory-sync) writes it into the agent's own
+[native memory](#native-memory), which the agent loads itself. See [Skills](/guides/skills).
 
 ### Destination
 
@@ -159,13 +153,6 @@ How every Coffer client finds the daemon: read `daemon.json`, probe the port, an
 daemon if none answers, under a lock so two clients never start two daemons. See
 [Daemon and processes](/architecture/daemon#detect-or-spawn).
 
-### Distil pass
-
-The [upkeep pass](#upkeep-pass) that turns each new [raw entry](#raw-entry) of a
-[partition](#partition) into a [note](#note) as it stands, renders the partition's index,
-`MEMORY.md`, and removes any note an agent has marked `retired:` (recording it in `RETIRED.md`).
-It calls no model. See [Memory](/architecture/memory#the-distil-pass).
-
 ## E
 
 ### Experimental feature
@@ -173,6 +160,15 @@ It calls no model. See [Memory](/architecture/memory#the-distil-pass).
 A capability that ships switched off and can be switched on per machine. Two are: `knowledge`
 (Knowledge) and `memory` (Memory). Vault sync and model providers graduated and are always on. While a feature is off its routes answer `404 FEATURE_DISABLED` and its UI looks absent; its data is kept. See [Experimental features](/guides/experimental-features) and
 [Configuration](/reference/configuration#experimental-features).
+
+## H
+
+### Hub
+
+The folder `memory/` in the [vault](#vault) that holds every memory your agents wrote for
+themselves, on any of your machines: one Markdown file per memory, under `global/` or one
+project (named by its repository's remote). [Vault sync](#vault-sync) carries it between
+machines; only the machine a memory came from changes its file. See [Memory](/guides/memory#the-hub).
 
 ## I
 
@@ -203,10 +199,10 @@ machine it resumes from the commit its descriptor names. Run from the **Sync** p
 
 ### Kind
 
-The type of a [resource](#resource). Coffer registers seven: `mcp_server`, `agent`,
-`skill`, `channel`, `knowledge`, `memory` and `provider`. The framework gives every kind the
+The type of a [resource](#resource). Coffer registers six: `mcp_server`, `agent`,
+`skill`, `channel`, `knowledge` and `provider`. The framework gives every kind the
 same identity, lifecycle, audit and [reach](#reach); each kind decides what its resources do.
-See [Resource framework](/architecture/resource-framework#the-seven-kinds).
+See [Resource framework](/architecture/resource-framework#the-six-kinds).
 
 ## M
 
@@ -246,20 +242,23 @@ An upstream Model Context Protocol server you register with Coffer, over stdio o
 is a [resource](#resource) of kind `mcp_server`, and its tools reach agents as
 `<server>__<tool>`. See [MCP servers](/guides/mcp-servers).
 
+### Memory sync
+
+The [upkeep pass](#upkeep-pass) that reads every registered agent's
+[native memory](#native-memory), publishes what each agent wrote on this machine to the
+[hub](#hub), and writes every other agent's and machine's memories into each agent's own
+memory, as files the agent loads and curates itself. Coffer touches only its own copies. On by
+default, hourly, and on demand with **Sync now**; the first or a large sync waits as a preview.
+See [Memory](/guides/memory).
+
 ## N
 
 ### Native memory
 
 The memory an agent keeps in its own files, such as Claude Code's per-project memory
-directory. Coffer reads it during the [aggregate pass](#aggregate-pass) and shows it read-only
-on the agent's page. See [Memory](/guides/memory).
-
-### Note
-
-One topic in Coffer's memory, written by the [distil pass](#distil-pass) as a Markdown file
-in a [partition's](#partition) `notes/` directory. An agent finds notes by searching the
-memory root, which the session-start delivery and the `coffer-guide` skill name, with its own file tools. See
-[Memory](/guides/memory).
+directory. [Memory sync](#memory-sync) reads it, publishes what the agent wrote to the
+[hub](#hub), and writes copies of other agents' memories beside it. The agent's page shows it
+read-only. See [Memory](/guides/memory).
 
 ## O
 
@@ -277,13 +276,6 @@ with it becomes the channel's owner, and every other sender is ignored silently.
 A Markdown file under a [collection's](#collection) `pages/`: the wiki itself, written and kept
 current by you and your agents from the collection's [sources](#source). See
 [Knowledge](/guides/knowledge).
-
-### Partition
-
-One unit of Coffer's memory: `global`, or one repository. Each partition is a directory
-under `~/.coffer/derived/memory/` holding its [notes](#note), its `MEMORY.md` index and its
-[raw entries](#raw-entry). A partition is a [resource](#resource) of kind `memory`. See
-[Memory](/guides/memory).
 
 ### Pre-apply snapshot
 
@@ -308,24 +300,18 @@ removes it. See [Model providers](/guides/providers).
 
 ## R
 
-### Raw entry
-
-One fact read out of an agent's [native memory](#native-memory) by the
-[aggregate pass](#aggregate-pass), kept in the partition's hidden `.raw/` directory until the
-[distil pass](#distil-pass) turns it into [notes](#note). See [Memory](/architecture/memory#stable-raw-entries).
-
 ### Reach
 
 Where a resource applies on this machine: its `enabled` flag together with its
-[scope](#scope). Knowledge collections and memory partitions have no reach: each is
+[scope](#scope). Knowledge collections have no reach: each is
 served to every agent. Reach is machine-local and never syncs, so each machine decides for itself
 which agents see a synced resource. See
 [Resource framework](/architecture/resource-framework#reach).
 
 ### Resource
 
-Anything you manage in Coffer: an MCP server, agent, skill, channel, knowledge collection,
-memory partition or provider connection. Every resource has a [kind](#kind), an immutable
+Anything you manage in Coffer: an MCP server, agent, skill, channel, knowledge collection
+or provider connection. Every resource has a [kind](#kind), an immutable
 [uid](#uid), a name unique within its kind, and a [reach](#reach). See
 [Core concepts](/start/concepts).
 
@@ -412,12 +398,11 @@ the target asks again. See [Secrets](/guides/secrets#approvals).
 
 ### Tidy
 
-The button on a knowledge [collection](#collection) or a memory [partition](#partition) (and
+The button on a knowledge [collection](#collection) (and
 **Tidy all** on the list page) that starts your default hand-off agent in your preferred terminal,
 with a prompt to merge, split and correct what is there, following the `coffer-guide`
 skill, sent as the session's first message. When no managed agent is available, it offers the prompt to copy. Coffer does the
-tidying through your agent, never on its own. See [Knowledge](/guides/knowledge) and
-[Memory](/guides/memory).
+tidying through your agent, never on its own. Memory has no Tidy: each agent curates its own. See [Knowledge](/guides/knowledge).
 
 ### Tiering
 
@@ -452,18 +437,18 @@ agent's page lists them so you can [adopt](#adopt) or discard them. See [Skills]
 
 ### Upkeep pass
 
-Mechanical work Coffer does on a timer, without being asked: `aggregate` and `distil` for
-memory, and the sweep for knowledge (re-render the guide, adopt files left in the
-[inbox](#inbox), file loose documents into `pages/`, commit edits made on disk). None of them calls a model. Each can be switched
-off or retimed from the automatic-read schedule on the Memory page (the **▾** on **Update memory**).
-See [Memory](/architecture/memory#workers-and-scheduling) and [Knowledge](/architecture/knowledge#the-sweep).
+Mechanical work Coffer does on a timer, without being asked: the [memory sync](#memory-sync),
+and the sweep for knowledge (re-render the guide, adopt files left in the
+[inbox](#inbox), file loose documents into `pages/`, commit edits made on disk). None of them calls a model. The memory sync can be switched
+off or retimed from the **▾** on **Sync now** on the Memory page.
+See [Memory](/architecture/memory#the-sync-pass) and [Knowledge](/architecture/knowledge#the-sweep).
 
 ## V
 
 ### Vault
 
 The git repository at `~/.coffer/vault/` that holds your configuration and authored
-content: resource files, state documents, knowledge collections, skill folders, secret ciphertext and machine descriptors. It is a repository from the first use,
+content: resource files, state documents, knowledge collections, skill folders, the memory [hub](#hub), secret ciphertext and machine descriptors. It is a repository from the first use,
 and every accepted change is a commit naming its [writer](#writer). More loosely, everything
 Coffer keeps under `~/.coffer/`, in its five [storage classes](#storage-class). See
 [Editing the vault by hand](/guides/vault-files) and [Files and directories](/reference/filesystem).

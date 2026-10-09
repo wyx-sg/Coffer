@@ -4,7 +4,6 @@ problem first."""
 from __future__ import annotations
 
 import pathlib
-from datetime import UTC, datetime
 
 import pytest
 
@@ -15,18 +14,16 @@ from coffer.application.agent.connection_service import (
     ConnectionStatus,
     PartStatus,
 )
-from coffer.application.agent.hooks_service import CofferHook
 from coffer.application.attention import AttentionAction, Severity
 from coffer.domain.agent.detection import DetectionState
-from coffer.domain.agent.hooks import HookHealth
 from coffer.domain.agent.types import AgentType
-from coffer.domain.hook_trust import HookTrust
 from coffer.domain.workspace_errors import AgentConfigParseError
 from tests.unit.application._attention_fakes import FakeResources, resource
 
 MCP_ON = PartStatus(key="mcp", installed=True, detail="shim")
 MCP_OFF = PartStatus(key="mcp", installed=False, detail=None)
-HOOK_OFF = PartStatus(key="memory_hook", installed=False, detail=None)
+#: A second part, so a connection can be half installed.
+OTHER_OFF = PartStatus(key="other", installed=False, detail=None)
 
 
 def _agent(uid: str):  # type: ignore[no-untyped-def]
@@ -75,7 +72,7 @@ def _source(rows, detect: FakeDetect, conn: FakeConnection) -> AgentAttentionSou
 
 
 async def test_partial_connection_is_a_warning_naming_the_missing_part() -> None:
-    conn = FakeConnection({"a": _status(ConnectionState.PARTIAL, MCP_ON, HOOK_OFF)})
+    conn = FakeConnection({"a": _status(ConnectionState.PARTIAL, MCP_ON, OTHER_OFF)})
     items = await _source([_agent("a")], FakeDetect({}), conn).items()
     assert len(items) == 1
     item = items[0]
@@ -83,7 +80,7 @@ async def test_partial_connection_is_a_warning_naming_the_missing_part() -> None
     assert (item.kind, item.uid, item.title) == ("agent", "a", "Claude Code")
     assert item.reason_code == "agent_partial"
     assert item.severity is Severity.WARNING
-    assert "memory_hook" in item.reason
+    assert "other" in item.reason
     assert item.since is None
     assert item.action == AttentionAction(
         verb="connect", method="POST", path="/api/v1/agents/a/coffer-connection"
@@ -147,98 +144,3 @@ async def test_a_raising_detection_propagates() -> None:
 def test_source_identity() -> None:
     source = _source([], FakeDetect({}), FakeConnection({}))
     assert (source.name, source.feature) == ("agent", None)
-
-
-class FakeHooks:
-    def __init__(self, hook) -> None:  # type: ignore[no-untyped-def]
-        self.hook = hook
-
-    async def coffer_hook(self, uid: str):  # type: ignore[no-untyped-def]
-        return self.hook
-
-
-def _hook(trust: HookTrust, fired: bool = True) -> CofferHook:
-    return CofferHook(
-        event="SessionStart",
-        path="/agents/a/hooks.json",
-        health=HookHealth.CURRENT,
-        trust=trust,
-        installed_command="coffer memory index",
-        expected_command="coffer memory index",
-        last_fired_at=datetime(2026, 9, 1, tzinfo=UTC) if fired else None,
-    )
-
-
-async def _hook_item(hook):  # type: ignore[no-untyped-def]
-    conn = FakeConnection({"a": _status(ConnectionState.CONNECTED, MCP_ON)})
-    source = AgentAttentionSource(
-        agents=FakeResources([_agent("a")]),
-        detect=FakeDetect({}),
-        connection=conn,
-        hooks=FakeHooks(hook),
-    )
-    [item] = await source.items()
-    assert item.reason_code == "agent_hook_attention"
-    assert item.severity is Severity.WARNING
-    return item
-
-
-@pytest.mark.acceptance(
-    spec="agent-registry", scenario="a hook the agent will not run is left to the reconciler"
-)
-@pytest.mark.parametrize(
-    "trust", [HookTrust.UNTRUSTED, HookTrust.MODIFIED, HookTrust.DISABLED, HookTrust.UNKNOWN]
-)
-@pytest.mark.parametrize("fired", [True, False])
-async def test_a_hook_the_agent_will_not_run_is_not_listed_here(trust, fired) -> None:  # type: ignore[no-untyped-def]
-    conn = FakeConnection({"a": _status(ConnectionState.CONNECTED, MCP_ON)})
-    source = AgentAttentionSource(
-        agents=FakeResources([_agent("a")]),
-        detect=FakeDetect({}),
-        connection=conn,
-        hooks=FakeHooks(_hook(trust, fired=fired)),
-    )
-    assert await source.items() == []
-
-
-@pytest.mark.acceptance(spec="agent-registry", scenario="a hook that never fired is a warning")
-@pytest.mark.parametrize("trust", [HookTrust.NOT_REQUIRED, HookTrust.TRUSTED])
-async def test_a_hook_that_never_fired_is_a_warning(trust) -> None:  # type: ignore[no-untyped-def]
-    item = await _hook_item(_hook(trust, fired=False))
-    assert "never fired" in item.reason
-
-
-@pytest.mark.acceptance(spec="agent-registry", scenario="a healthy hook reports nothing")
-@pytest.mark.parametrize(
-    "hook", [_hook(HookTrust.TRUSTED), _hook(HookTrust.DISABLED, fired=False), None]
-)
-async def test_a_healthy_or_absent_hook_reports_nothing(hook) -> None:  # type: ignore[no-untyped-def]
-    conn = FakeConnection({"a": _status(ConnectionState.CONNECTED, MCP_ON)})
-    source = AgentAttentionSource(
-        agents=FakeResources([_agent("a")]),
-        detect=FakeDetect({}),
-        connection=conn,
-        hooks=FakeHooks(hook),
-    )
-    assert await source.items() == []
-
-
-@pytest.mark.parametrize(
-    "hook",
-    [_hook(HookTrust.NOT_REQUIRED, fired=False), _hook(HookTrust.TRUSTED, fired=False)],
-)
-async def test_with_memory_off_a_missing_or_unfired_hook_reports_nothing(hook) -> None:  # type: ignore[no-untyped-def]
-    conn = FakeConnection({"a": _status(ConnectionState.CONNECTED, MCP_ON)})
-
-    def source(memory_on: bool) -> AgentAttentionSource:
-        return AgentAttentionSource(
-            agents=FakeResources([_agent("a")]),
-            detect=FakeDetect({}),
-            connection=conn,
-            hooks=FakeHooks(hook),
-            memory_on=lambda: memory_on,
-        )
-
-    assert await source(False).items() == []
-    [item] = await source(True).items()
-    assert item.reason_code == "agent_hook_attention"

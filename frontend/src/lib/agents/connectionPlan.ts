@@ -1,8 +1,7 @@
 // src/lib/agents/connectionPlan.ts — what a Coffer connection change writes, as change-preview items.
 //
 // A connection is the parts Coffer writes into an agent's own config: the
-// gateway MCP entry always, the memory delivery hook while the memory feature
-// is on. The daemon has no dry-run diff, so the preview is built here from what
+// gateway MCP entry. The daemon has no dry-run diff, so the preview is built here from what
 // is known for certain — which file each part lives in, which parts are already
 // installed (the connection status of a registered agent) and the command an
 // installed part carries (its `detail`). A value not known yet (the uid before
@@ -12,7 +11,7 @@ import type { ChangeItem, DiffLine } from "@/lib/changePreview/changeCounts";
 import { abbreviateHomePath } from "@/lib/agents/display";
 import type { AgentTypeOut, CofferConnection } from "@/lib/api/agents";
 
-export type ConnectionPartKey = "mcp" | "memory_hook";
+export type ConnectionPartKey = "mcp";
 type Part = CofferConnection["parts"][number];
 
 export interface PlanAgent {
@@ -40,17 +39,12 @@ function join(dir: string, name: string): string {
 
 /** The absolute file each part of an agent's connection is written to. */
 export function connectionFiles(row: PlanAgent["row"]): Record<ConnectionPartKey, string> {
-  if (row.type === "codex") {
-    return {
-      mcp: join(row.config_dir, "config.toml"),
-      memory_hook: join(row.config_dir, "hooks.json"),
-    };
-  }
+  if (row.type === "codex") return { mcp: join(row.config_dir, "config.toml") };
   // Claude Code keeps its MCP entries in ~/.claude.json beside the standard
   // directory, and in <dir>/.claude.json when pointed at another one.
   const mcpDir =
     row.config_dir === row.standard_config_dir ? dirname(row.config_dir) : row.config_dir;
-  return { mcp: join(mcpDir, ".claude.json"), memory_hook: join(row.config_dir, "settings.json") };
+  return { mcp: join(mcpDir, ".claude.json") };
 }
 
 /** The parts a connect would install: every applicable part not yet installed. */
@@ -58,7 +52,7 @@ export function partsToInstall(agent: PlanAgent): ConnectionPartKey[] {
   if (agent.parts) {
     return agent.parts.filter((p) => !p.installed).map((p) => p.key as ConnectionPartKey);
   }
-  return ["mcp", "memory_hook"];
+  return ["mcp"];
 }
 
 /** The parts a disconnect would remove: every installed part. */
@@ -90,23 +84,13 @@ function entryLines(agent: PlanAgent, opts: PlanOptions): { hunk: string; lines:
   };
 }
 
-function hookLines(agent: PlanAgent, opts: PlanOptions): { hunk: string; lines: string[] } {
-  const uid = agent.uid || opts.placeholders.uid;
-  const command = detailOf(agent, "memory_hook") ?? `coffer memory hook --agent-uid ${uid} …`;
-  // Two entries, one command: the index at session start, and the notes a
-  // prompt names.
-  const entry = (event: string) =>
-    `"${event}": [{ "hooks": [{ "type": "command", "command": "${command}" }] }],`;
-  return { hunk: "hooks", lines: [entry("SessionStart"), entry("UserPromptSubmit")] };
-}
-
 function partItem(
   agent: PlanAgent,
   key: ConnectionPartKey,
   kind: "add" | "remove",
   opts: PlanOptions,
 ): ChangeItem {
-  const { hunk, lines } = key === "mcp" ? entryLines(agent, opts) : hookLines(agent, opts);
+  const { hunk, lines } = entryLines(agent, opts);
   const diff: DiffLine[] = [{ kind: "hunk", text: hunk }, ...lines.map((text) => ({ kind, text }))];
   return {
     id: `${agent.row.type}:${key}`,
