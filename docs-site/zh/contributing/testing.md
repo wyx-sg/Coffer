@@ -204,7 +204,7 @@ CI 失败时，`e2e` job 会把 Playwright 报告和 trace，以及隔离守护�
 
 同一台机器上同一时间只跑一份集成测试。`make verify-integration` 会拿一把全机锁（`~/.cache/coffer/verify-integration.lock`）：另一个 worktree 或会话的第二份会排队等第一份跑完，而不是互相拖慢到依赖时间的测试纷纷失败；`COFFER_VERIFY_LOCK=off` 可以跳过这把锁。每个集成测试还有 300 秒的上限（`PYTEST_TIMEOUT`），卡住的测试会按名字报失败，而不是把整轮拖住。
 
-`make verify` 先运行 `lint`，然后依次运行 `docs-build`（本站的 VitePress 构建，有失效链接就失败）、`verify-unit`、`verify-integration`、`verify-contract` 和 `verify-acceptance`。最后，无论成功还是失败，它都会打印每个阶段的耗时，并把列表保存在 `.coffer-verify.timings`。`make verify-all` 额外加上 `verify-e2e`。
+`make verify` 先运行 `lint`，然后依次运行 `docs-build`（本站的 VitePress 构建，有解析不了的 Mermaid 图或失效链接就失败）、`verify-unit`、`verify-integration`、`verify-contract` 和 `verify-acceptance`。最后，无论成功还是失败，它都会打印每个阶段的耗时，并把列表保存在 `.coffer-verify.timings`。`make verify-all` 额外加上 `verify-e2e`。
 
 `make lint` 是完整的静态门禁，不只是一次格式化检查。它按顺序运行以下步骤：
 
@@ -252,7 +252,7 @@ CI 失败时，`e2e` job 会把 Playwright 报告和 trace，以及隔离守护�
 | `pr-title.yml` | pull request 被创建或编辑 | 按 `.commitlintrc.yaml` 检查标题 |
 | `desktop.yml` | `main` 上 `desktop/**` 或 `Makefile` 有改动 | `make desktop-lint` 和 `make desktop-test` |
 | `evals.yml` | `main` 上 `evals/`、MCP 领域代码（`backend/coffer/domain/mcp/`）或锁文件有改动 | `make eval`：确定性评测套件，以相对已提交基线的回归作为门禁 |
-| `pages.yml` | `docs-site/**` 有改动 | 构建本站，并从 `main` 部署 |
+| `pages.yml` | `docs-site/**` 有改动 | 用本站自带的 Mermaid 版本解析每一张 Mermaid 图（`docs-site/scripts/check_mermaid.mjs`，由 `npm run build` 运行），构建本站，并从 `main` 部署 |
 | `release.yml` | 一个 `v*` 标签 | 面向 Apple 芯片 macOS 的冻结二进制、CLI 压缩包和桌面 `.dmg`，然后创建 GitHub Release |
 
 除了金丝雀之外，CI 中的每次后端安装都从 `backend/uv.lock` 冻结安装。金丝雀变红意味着某个上游发布破坏了东西，而不是你的锁文件出现了偏移。

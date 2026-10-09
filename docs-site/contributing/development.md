@@ -160,7 +160,7 @@ Run `make help` for the same list.
 | `make contracts` | Regenerate every capability's wire contract from the backend's models, then the frontend's types from those contracts |
 | `make frontend-codegen` | Regenerate only the frontend's TypeScript API types from the checked-in contracts |
 | `make docs-reference` | Regenerate the CLI reference pages of this site (English and Chinese) |
-| `make docs-build` | Build this site the way the Pages workflow does; fails on a dead internal link. The second stage of `make verify` |
+| `make docs-build` | Build this site the way the Pages workflow does; fails on a Mermaid diagram that does not parse or a dead internal link. The second stage of `make verify` |
 | `make refresh-prices` | Refresh the bundled model price list (needs the network; not in `verify`) |
 | `make refresh-secret-rules` | Refresh the bundled gitleaks detection rules before a release (needs the network; not in `verify`) |
 | `make bundle-binaries` | Freeze `coffer`, `coffer-daemon` and `coffer-mcp-shim` with PyInstaller into `dist/` |

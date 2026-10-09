@@ -63,16 +63,16 @@ sequenceDiagram
     W->>S: run a round
     S->>S: take the vault lock
     S->>V: check: a repository, not inside a cloud-synced folder
-    S->>V: settle your valid edits; L := HEAD
-    S->>O: fetch; R := origin/branch
+    S->>V: settle your valid edits, L := HEAD
+    S->>O: fetch, R := origin/branch
     S->>S: refuse a newer layout, replace an older one
     S->>V: git merge-tree L R, giving tree T (outside the working tree)
     S->>S: any conflict, identity clash or invalid file? stop
     S->>S: deletion breaker, incoming (L to T) and outgoing (base to L)
-    S->>V: snapshot L; M := commit(T; L, R); read-tree -m -u L M
+    S->>V: snapshot L, M := commit of T with parents L and R, read-tree -m -u L M
     S->>V: this machine's descriptor
     S->>O: push
-    S->>S: record the round; reconcile once if anything changed
+    S->>S: record the round, then reconcile once if anything changed
 ```
 
 1. **Check.** The vault is a repository, and not inside a folder another tool synchronises (a Syncthing folder, Dropbox, iCloud Drive or a File Provider root). Two tools syncing one git repository corrupt it, so such a vault pauses with `paused_cloud_folder`.

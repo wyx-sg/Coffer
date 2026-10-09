@@ -204,7 +204,7 @@ Use **Node 20**, the version CI uses, when you run the frontend suite locally.
 
 Only one integration run happens on a machine at a time. `make verify-integration` takes a machine-wide lock (`~/.cache/coffer/verify-integration.lock`), so a second run from another worktree or session waits for the first instead of slowing it down until time-based tests fail; `COFFER_VERIFY_LOCK=off` skips the lock. Each integration test also has a 300-second cap (`PYTEST_TIMEOUT`), so a hung test fails by name instead of stalling the run.
 
-`make verify` runs `lint`, then `docs-build` (this site's VitePress build, which fails on a dead link), `verify-unit`, `verify-integration`, `verify-contract` and `verify-acceptance`, one after another. At the end, pass or fail, it prints how long each stage took and keeps the list in `.coffer-verify.timings`. `make verify-all` adds `verify-e2e`.
+`make verify` runs `lint`, then `docs-build` (this site's VitePress build, which fails on a Mermaid diagram that does not parse or a dead link), `verify-unit`, `verify-integration`, `verify-contract` and `verify-acceptance`, one after another. At the end, pass or fail, it prints how long each stage took and keeps the list in `.coffer-verify.timings`. `make verify-all` adds `verify-e2e`.
 
 `make lint` is the whole static gate, not only a formatter pass. It runs these steps in order:
 
@@ -252,7 +252,7 @@ The pre-commit hooks from `make hooks` add fast checks at commit time: trailing 
 | `pr-title.yml` | Pull request opened or edited | The title against `.commitlintrc.yaml` |
 | `desktop.yml` | Changes to `desktop/**` or the `Makefile`, on `main` | `make desktop-lint` and `make desktop-test` |
 | `evals.yml` | Changes to `evals/`, to the MCP domain code (`backend/coffer/domain/mcp/`) or to the lockfile, on `main` | `make eval`: the deterministic eval suites, gated on regression against the committed baseline |
-| `pages.yml` | Changes to `docs-site/**` | Builds this site, and deploys it from `main` |
+| `pages.yml` | Changes to `docs-site/**` | Parses every Mermaid diagram with the Mermaid version the site ships (`docs-site/scripts/check_mermaid.mjs`, run by `npm run build`), builds this site, and deploys it from `main` |
 | `release.yml` | A `v*` tag | Frozen binaries, the CLI archive and the desktop `.dmg` for macOS on Apple Silicon, then a GitHub Release |
 
 Every backend install in CI is frozen from `backend/uv.lock`, except the canary. A red canary means an upstream release broke something, not that your lockfile drifted.

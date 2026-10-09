@@ -69,7 +69,7 @@ sequenceDiagram
     S->>V: git merge-tree L R，得到树 T（在工作树之外）
     S->>S: 有冲突、身份冲突或无效文件？停止
     S->>S: 删除断路器，入站（L 到 T）与出站（基准到 L）
-    S->>V: 快照 L；M := commit(T; L, R)；read-tree -m -u L M
+    S->>V: 快照 L；M := 以 L、R 为父提交 T；read-tree -m -u L M
     S->>V: 本机的描述文件
     S->>O: push
     S->>S: 记录本轮；若有变化则调和一次
