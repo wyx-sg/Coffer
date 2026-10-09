@@ -24,9 +24,11 @@ from typing import Protocol as _Protocol
 
 from coffer.application.provider.cli_path import default_coffer_cli_resolver
 from coffer.application.provider.projection_request import (
+    WindowOf,
     binding_of,
     projected_models,
     projection_request,
+    recorded_window,
 )
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
@@ -93,6 +95,7 @@ class ProviderProjector:
         agents: AgentCatalog,
         cli_resolver: Callable[[], str] = default_coffer_cli_resolver,
         proxy_root: Callable[[], str] = lambda: proxy_root_at(DEFAULT_PROXY_PORT),
+        window_of: WindowOf = recorded_window,
     ) -> None:
         self._config_store = config_store
         self._catalog = agents
@@ -102,6 +105,11 @@ class ProviderProjector:
         # Where the local model proxy listens — asked at each projection, so a
         # port the user moved in daemon-config.json is what gets written.
         self._proxy_root = proxy_root
+        # A model's window on a connection: you set → endpoint → bundled list
+        # (spec provider-switching "Resolve each provider model's context
+        # window"). The switch and the reconciler must be handed the same one,
+        # or they disagree about the file.
+        self._window_of = window_of
 
     @staticmethod
     def agents_of_type(agents: list[Resource], agent_type: AgentType) -> list[Resource]:
@@ -177,6 +185,7 @@ class ProviderProjector:
             coffer_cli=self._resolve_cli(),
             proxy_root=self._proxy_root(),
             wire=wire,
+            window_of=self._window_of,
         )
 
     def plan_project(

@@ -2,14 +2,15 @@
 //
 // The endpoint is introspected when the provider opens — no fetch button (spec
 // provider-switching "Introspect the endpoint when the Models tab opens"). One
-// row per model: its switch, id, what uses it, its price with where the price
-// came from, and its type (correctable in place). Search and a type filter
+// row per model: its switch, id, what uses it, its price and its context
+// window each with where it came from, and its type (correctable in place). Search and a type filter
 // narrow the rows. A probe that fails says so in the title ("Listing failed ·
 // last listed …", Refresh beside it) and in a box, and leaves the selection
 // alone; an endpoint that lists nothing says what that means.
-// Prices are refetched after every listing: that is when a provider's own API
-// reports them (spec provider-switching "Resolve each model's price from the
-// provider, its API, or the bundled list").
+// Prices and windows are refetched after every listing: that is when a
+// provider's own API reports them (spec provider-switching "Resolve each
+// model's price from the provider, its API, or the bundled list", "Resolve
+// each provider model's context window").
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -17,7 +18,7 @@ import { useTranslation } from "react-i18next";
 import { translateApiError } from "@/lib/api/errors";
 import { MODALITIES, type Modality, type Provider, type ProviderModel } from "@/lib/api/providers";
 import type { EndpointModelsOut } from "@/lib/hooks/useModelIntrospection";
-import { useModelPrices } from "@/lib/hooks/useProviderPrices";
+import { useModelPrices, useModelWindows } from "@/lib/hooks/useProviderPrices";
 import { formatPriceDate } from "@/lib/providers/priceDate";
 import { probeFailed } from "@/lib/providers/probeStatus";
 import type { ProviderUse } from "@/lib/providers/usedBy";
@@ -25,14 +26,15 @@ import { formatRelativeTime } from "@/components/agents/list/relativeTime";
 import { useTableSelection } from "@/components/DataTableSelection";
 import { Section } from "@/components/Section";
 import { providerPriceSource } from "@/lib/providers/priceSource";
+import { ModelEditDialogs } from "./ModelEditDialogs";
 import { ModelPriceCell } from "./ModelPriceCell";
+import { ModelWindowCell } from "./ModelWindowCell";
 import { ModelsRefresh } from "./ModelsRefresh";
 import { ModelsBulkBar } from "./ModelsBulkBar";
 import { ModelsTableHead } from "./ModelsTableHead";
 import { ModelsToolbar } from "./ModelsToolbar";
 import { ProblemBox } from "./ProblemBox";
 import { ProviderModelRow } from "./ProviderModelRow";
-import { SetPriceDialog } from "./SetPriceDialog";
 import { useModelCuration } from "./useModelCuration";
 
 /** Rows shown before "Show N more". */
@@ -55,6 +57,7 @@ export function ProviderModels({ provider, use, endpoint, transcribeModel, focus
   const [type, setType] = useState<Modality | "all">("all");
   const [all, setAll] = useState(false);
   const [pricing, setPricing] = useState<string | null>(null);
+  const [sizing, setSizing] = useState<string | null>(null);
   const local = provider.local_runtime != null;
 
   // Another model to find (Usage's link while this provider is already open).
@@ -66,6 +69,8 @@ export function ProviderModels({ provider, use, endpoint, transcribeModel, focus
   const prices = useModelPrices(provider.uid, ids, endpoint.dataUpdatedAt);
   const priceOf = (id: string) => prices.data?.find((p) => p.model === id);
   const usual = providerPriceSource(prices.data ?? []);
+  const windows = useModelWindows(provider.uid, ids, endpoint.dataUpdatedAt);
+  const windowOf = (id: string) => windows.data?.find((w) => w.model === id);
 
   const failed = probeFailed(endpoint.data, endpoint.error);
   // When the listing last worked, in this session: the title says it beside "Listing failed".
@@ -90,7 +95,6 @@ export function ProviderModels({ provider, use, endpoint, transcribeModel, focus
       .map(({ agent }) => t("providers.models.agentDefault", { agent: agent.display_name })),
     ...(use.transcribe && transcribeModel === id ? [t("providers.usedBy.transcribe")] : []),
   ];
-  const rowOf = (id: string) => cur.rows.find((m) => m.id === id);
 
   // The one line that says where prices come from; a row says only when it differs.
   const sourceLine =
@@ -194,6 +198,14 @@ export function ProviderModels({ provider, use, endpoint, transcribeModel, focus
                             onEdit={local ? undefined : () => setPricing(m.id)}
                           />
                         }
+                        window={
+                          <ModelWindowCell
+                            id={m.id}
+                            window={windowOf(m.id)}
+                            disabled={cur.pending}
+                            onEdit={() => setSizing(m.id)}
+                          />
+                        }
                       />
                     ))}
                   </tbody>
@@ -217,18 +229,13 @@ export function ProviderModels({ provider, use, endpoint, transcribeModel, focus
           </div>
         ) : null}
       </Section>
-      <SetPriceDialog
-        model={pricing}
-        current={pricing ? priceOf(pricing) : undefined}
-        onClose={() => setPricing(null)}
-        onSave={(price) => {
-          const row = pricing ? rowOf(pricing) : undefined;
-          if (row) cur.setPrice(row, price);
-        }}
-        onReset={() => {
-          const row = pricing ? rowOf(pricing) : undefined;
-          if (row) cur.setPrice(row, null);
-        }}
+      <ModelEditDialogs
+        cur={cur}
+        pricing={pricing}
+        sizing={sizing}
+        price={pricing ? priceOf(pricing) : undefined}
+        window={sizing ? windowOf(sizing) : undefined}
+        onClose={() => (setPricing(null), setSizing(null))}
       />
     </>
   );

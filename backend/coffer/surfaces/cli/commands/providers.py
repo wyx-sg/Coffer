@@ -93,6 +93,16 @@ SPECS = [
         body=True,
     ),
     RouteCommand(
+        "provider windows",
+        "POST",
+        "/providers/{uid}/windows",
+        _UI + "model context windows",
+        "Context windows of the given models on this connection, with where each "
+        "came from. Body: models.",
+        names=P,
+        body=True,
+    ),
+    RouteCommand(
         "provider transcribe-default",
         "POST",
         "/providers/{uid}/transcribe-default",

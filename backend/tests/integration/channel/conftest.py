@@ -249,6 +249,7 @@ class FakeModelSuggestions:
     def __init__(self) -> None:
         self._by_agent: dict[str, list[str]] = {}
         self._labels: dict[str, str] = {}
+        self._defaults: dict[str, str] = {}
 
     def add(
         self, agent_key: str, models: list[str], *, labels: dict[str, str] | None = None
@@ -262,6 +263,13 @@ class FakeModelSuggestions:
     async def model_labels(self, agent_key: str) -> dict[str, str]:
         # Unlabelled unless a test names them, so a button shows its bare id.
         return {m: self._labels.get(m, m) for m in self._by_agent.get(agent_key, [])}
+
+    def set_default(self, agent_key: str, model: str) -> None:
+        self._defaults[agent_key] = model
+
+    async def resolved_default(self, agent_key: str) -> str | None:
+        # Unknown unless a test names one, so the default names no model.
+        return self._defaults.get(agent_key)
 
 
 class StubWebSocketController:

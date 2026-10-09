@@ -248,3 +248,49 @@ def test_a_curated_model_drops_the_retired_effort_keys() -> None:
     assert model.id == "m-1"
     assert "effort_levels" not in model.model_dump()
     assert "default_effort" not in model.model_dump()
+
+
+def _deepseek(**over: object) -> ProviderConfig:
+    data: dict[str, object] = {
+        "protocol": "openai",
+        "base_url": "https://api.deepseek.com",
+        "anthropic_base_url": "https://api.deepseek.com/anthropic",
+        "secret_ref": "provider/ds/key",
+    }
+    data.update(over)
+    return ProviderConfig.model_validate(data)
+
+
+def test_an_openai_connection_with_an_anthropic_address_serves_both_wires() -> None:
+    # ADR one-connection-serves-both-wires.
+    c = _deepseek()
+    assert c.served_wires() == {"anthropic", "openai"}
+    assert c.base_url_for(anthropic=True) == "https://api.deepseek.com/anthropic"
+    assert c.base_url_for(anthropic=False) == "https://api.deepseek.com"
+
+
+def test_without_an_anthropic_address_a_connection_serves_its_own_wire_only() -> None:
+    c = _deepseek(anthropic_base_url="  ")
+    assert c.anthropic_base_url is None
+    assert c.served_wires() == {"openai"}
+    assert c.base_url_for(anthropic=True) == "https://api.deepseek.com"
+    assert "anthropic_base_url" not in c.model_dump()
+    anthropic = ProviderConfig(
+        protocol=Protocol.ANTHROPIC, base_url="https://x", secret_ref="provider/a/key"
+    )
+    assert anthropic.served_wires() == {"anthropic"}
+
+
+def test_an_unknown_wire_serves_both_and_the_switch_test_decides() -> None:
+    c = ProviderConfig(protocol=Protocol.UNKNOWN, base_url="https://x", secret_ref="provider/a/key")
+    assert c.served_wires() == {"anthropic", "openai"}
+
+
+def test_only_a_remote_openai_connection_takes_an_anthropic_address() -> None:
+    with pytest.raises(ValidationError, match="Anthropic address"):
+        _deepseek(protocol="anthropic")
+    with pytest.raises(ValidationError, match="Anthropic address"):
+        _deepseek(
+            base_url="http://127.0.0.1:1234/v1",
+            local_runtime={"runtime": "lmstudio"},
+        )

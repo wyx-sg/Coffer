@@ -122,7 +122,7 @@ Guide: [Memory](/guides/memory). Architecture: [Memory](/architecture/memory).
 
 ## Providers
 
-A **provider** is a model-provider profile: a wire protocol, a base URL and one secret ref. **Switching** to a provider writes it into the native config of each agent in its scope, so you change gateways once instead of once per agent. Switching back to an agent's own login is a separate action. One provider can also be marked as the default for speech to text, which transcribes voice messages.
+A **provider** is a model-provider connection: an OpenAI-compatible address (for Codex), an Anthropic-compatible address (for Claude Code), either or both, and one secret ref. Its addresses decide which agents it serves. **Switching** an agent to a provider writes the connection into that agent's native config. Switching back to an agent's own login is a separate action. One provider can also be marked as the default for speech to text, which transcribes voice messages.
 
 Guide: [Model providers](/guides/providers).
 

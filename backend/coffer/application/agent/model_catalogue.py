@@ -227,6 +227,27 @@ class AgentModelCatalogueService:
             return []
         return await self.catalogue(agent_key)
 
+    async def builtin_default(self, agent_key: str) -> AgentModel | None:
+        """The model the agent's OWN login runs when its config names none, when
+        the agent itself says which (Codex's ``model/list`` marks it); ``None``
+        when it does not. Claude Code decides its default from its organisation,
+        its account tier and its entitlements, all read from the server at turn
+        time, so nothing on this machine names it and this answers ``None``
+        rather than guess (spec provider-switching "Name the model a default
+        resolves to")."""
+        return next((m for m in await self.builtin_offered(agent_key) if m.is_default), None)
+
+    async def resolved_default(self, agent_key: str) -> str | None:
+        """The model a turn with no model override runs on, when Coffer can know
+        it: what the agent's config names (on a connection that is the model
+        Coffer projected there), else the built-in default the agent reports.
+        ``None`` when neither says."""
+        native = await self.native_default_model(agent_key)
+        if native:
+            return native
+        builtin = await self.builtin_default(agent_key)
+        return builtin.id if builtin else None
+
     async def suggest(self, agent_key: str) -> list[str]:
         """The plain-id list — satisfies the channel ``ModelSuggestionPort``, so
         a ``/model`` card offers exactly what the web picker does. Nothing sits

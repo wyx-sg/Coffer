@@ -133,6 +133,10 @@ _TIERS = {"opus": "kimi-k3", "sonnet": "kimi-k3", "haiku": "my-own-haiku", "fabl
 @pytest.mark.acceptance(
     spec="provider-switching", scenario="previewing a model change writes nothing"
 )
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a connection with no Anthropic address does not serve Claude Code",
+)
 def test_a_claude_code_preview_writes_nothing_and_refuses_an_unreached_connection(
     tmp_path, monkeypatch
 ):
@@ -163,11 +167,17 @@ def test_a_claude_code_preview_writes_nothing_and_refuses_an_unreached_connectio
         assert sorted(p.name for p in cc_dir.iterdir()) == listing
         assert c.get(f"/api/v1/agents/{uid}").json() == agent_before
 
-        # A connection scoped away from the agent is refused with 409.
-        other = _register_agent(c, agent_type="codex", config_dir=_agent_dir(tmp_path, "cx"))
-        scoped = c.put(f"/api/v1/resources/{anthropic}/scope", json={"scope": {"agents": [other]}})
-        assert scoped.status_code == 200, scoped.text
-        assert c.post(PREVIEW, json=body).status_code == 409
+        # A connection with no Anthropic address does not reach Claude Code: 409.
+        openai = _new(
+            c,
+            {
+                "name": "codex-only",
+                "protocol": "openai",
+                "base_url": "https://gw/v1",
+                "secret_value": "sk-codex",
+            },
+        )
+        assert c.post(PREVIEW, json={**body, "connection_uid": openai}).status_code == 409
 
 
 @pytest.mark.acceptance(

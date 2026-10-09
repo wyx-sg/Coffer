@@ -2834,6 +2834,15 @@ only an MCP session inside a turn Coffer runs.
 - **THEN** only the session inside the turn sees and runs it; outside it is an
   unknown tool
 
+### Requirement: Name the model the default resolves to
+Every place a channel shows its no-override model choice — `Default model` in the `/model` card and its text fallback, the reply to `/model default`, the settings line of `/status` and `/new`, and Provider default in the channel's Overview › Agents — MUST name the model it resolves to when Coffer can know it, as `Default model (<name>)` (`Provider default (<name>)` on the web), and MUST name none otherwise. The model is the agent's resolved default from [provider-switching](../provider-switching/spec.md) "Name the model a default resolves to", shown by the name its `/model` card button carries.
+
+#### Scenario: the default model names the model it resolves to
+- **GIVEN** a channel on an agent whose default resolves to `gpt-5-codex`, labelled `GPT-5 Codex`
+- **WHEN** the owner sends `/model default` and then bare `/model`
+- **THEN** the reply reads `Model: Default model (GPT-5 Codex) — from your next message` and the model text names `Default model (GPT-5 Codex)`
+- **AND** for an agent whose default Coffer cannot know, the same replies read plain `Default model`
+
 ### Requirement: Commit a typed channel setting when its field is finished
 On a channel's Settings tab, a value typed into a field (the title, a SeaTalk app id,
 the two quiet windows, the idle period) MUST be saved when the person finishes the field,

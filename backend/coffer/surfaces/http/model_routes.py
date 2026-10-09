@@ -67,7 +67,10 @@ async def list_provider_models(
     )
     await _keep_health(providers, body, result)
     return ProviderModelsOut(
-        models=[ProviderModel(id=m.id, modality=m.modality) for m in result.models],
+        models=[
+            ProviderModel(id=m.id, modality=m.modality, context_window=m.context_window)
+            for m in result.models
+        ],
         message=result.message,
         reachable=result.reachable,
     )

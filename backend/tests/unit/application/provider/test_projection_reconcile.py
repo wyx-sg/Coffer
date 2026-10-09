@@ -83,11 +83,15 @@ def _connection() -> Resource:
     return _resource(
         "provider",
         "agnes",
-        {"protocol": "openai", "base_url": _BASE_URL, "secret_ref": "agnes-key"},
+        {
+            "protocol": "openai",
+            "base_url": _BASE_URL,
+            "anthropic_base_url": _BASE_URL,
+            "secret_ref": "agnes-key",
+        },
         uid=_CONNECTION_UID,
-        # The shape that surfaced this: an openai endpoint routed to Claude
-        # Code by its per-agent scope, which names the agent by uid.
-        scope=Scope(agents=[_AGENT_UID]),
+        # The shape that surfaced this: an openai endpoint Claude Code runs on
+        # through the Anthropic address it names.
     )
 
 
@@ -198,7 +202,12 @@ async def test_a_contradicted_choice_clears_only_that_agents_record(
     connection = _resource(
         "provider",
         "agnes",
-        {"protocol": "openai", "base_url": _BASE_URL, "secret_ref": "k"},
+        {
+            "protocol": "openai",
+            "base_url": _BASE_URL,
+            "anthropic_base_url": _BASE_URL,
+            "secret_ref": "k",
+        },
         uid=_CONNECTION_UID,
     )
     store = _Store(

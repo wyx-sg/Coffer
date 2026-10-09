@@ -1,28 +1,19 @@
 // src/components/providers/ProviderMark.tsx — a provider's official mark on its neutral tile.
 //
 // The marks are the files as supplied, never recoloured (Foundations "Official
-// marks"). A mark with a light and a dark file — Anthropic's symbol (Slate /
-// Ivory), the OpenAI Blossom (Black / White), OpenRouter's (Ink / Cloud) —
-// swaps by CSS against the root's `data-theme`, so no JS
-// watches the theme. Ollama's mark is monochrome black with no light file:
-// rather than editing it, its TILE turns light (the `knob` role) on the dark
-// theme, so the black mark keeps its contrast. llama.cpp's and vLLM's marks
-// are multi-coloured and read on either tile. Every other provider gets
-// Coffer's neutral provider glyph, drawn with the nav-icon pen in muted ink.
+// marks"; brandMarks.ts holds them). A mark with a light and a dark file swaps
+// by CSS against the root's `data-theme`, so no JS watches the theme; a
+// monochrome one inverts on the dark theme. Ollama's mark is monochrome black
+// with no light file: rather than editing it, its TILE turns light (the `knob`
+// role) on the dark theme, so the black mark keeps its contrast. A gateway or
+// custom endpoint gets Coffer's neutral provider glyph, drawn with the
+// nav-icon pen in muted ink.
 // OpenAI's mark is the Blossom with the word "OpenAI" beside it (`withWord`);
 // a dense list row passes `withWord={false}` and names the vendor in its
 // sub-line. Which mark: see markKind.ts.
-import anthropicIvoryUrl from "@/assets/brand/providers/anthropic-symbol-ivory.svg";
-import anthropicSlateUrl from "@/assets/brand/providers/anthropic-symbol-slate.svg";
-import openrouterCloudUrl from "@/assets/brand/providers/openrouter-cloud.svg";
-import openrouterInkUrl from "@/assets/brand/providers/openrouter-ink.svg";
-import llamaCppUrl from "@/assets/brand/providers/llama-cpp.svg";
-import ollamaUrl from "@/assets/brand/providers/ollama-logo.svg";
-import vllmUrl from "@/assets/brand/providers/vllm-logo.svg";
-import blossomBlackUrl from "@/assets/brand/openai-blossom-black.svg";
-import blossomWhiteUrl from "@/assets/brand/openai-blossom-white.svg";
+import { BRAND_MARKS } from "@/lib/providers/brandMarks";
 import type { Provider } from "@/lib/api/providers";
-import { providerMarkKind, type ProviderMarkKind } from "@/lib/providers/markKind";
+import { providerMarkKind } from "@/lib/providers/markKind";
 import { cn } from "@/lib/utils";
 
 type Size = "sm" | "md" | "lg";
@@ -32,15 +23,6 @@ const SIZE: Record<Size, { tile: string; mark: number; blossom: number }> = {
   sm: { tile: "size-6 rounded-item", mark: 14, blossom: 24 },
   md: { tile: "size-7 rounded-md", mark: 16, blossom: 28 },
   lg: { tile: "size-8 rounded-lg", mark: 18, blossom: 32 },
-};
-
-const FILES: Record<Exclude<ProviderMarkKind, "glyph">, { light: string; dark?: string }> = {
-  anthropic: { light: anthropicSlateUrl, dark: anthropicIvoryUrl },
-  openai: { light: blossomBlackUrl, dark: blossomWhiteUrl },
-  openrouter: { light: openrouterInkUrl, dark: openrouterCloudUrl },
-  ollama: { light: ollamaUrl },
-  vllm: { light: vllmUrl },
-  "llama-cpp": { light: llamaCppUrl },
 };
 
 interface Props {
@@ -104,13 +86,25 @@ export function ProviderMark({ provider, size = "md", withWord = true, className
     >
       {kind === "glyph" ? (
         <Glyph box={box} />
-      ) : FILES[kind].dark ? (
+      ) : BRAND_MARKS[kind].dark ? (
         <>
-          <Img src={FILES[kind].light} box={box} className="block [[data-theme=dark]_&]:hidden" />
-          <Img src={FILES[kind].dark!} box={box} className="hidden [[data-theme=dark]_&]:block" />
+          <Img
+            src={BRAND_MARKS[kind].light}
+            box={box}
+            className="block [[data-theme=dark]_&]:hidden"
+          />
+          <Img
+            src={BRAND_MARKS[kind].dark!}
+            box={box}
+            className="hidden [[data-theme=dark]_&]:block"
+          />
         </>
       ) : (
-        <Img src={FILES[kind].light} box={box} className="block" />
+        <Img
+          src={BRAND_MARKS[kind].light}
+          box={box}
+          className={cn("block", BRAND_MARKS[kind].invert && "[[data-theme=dark]_&]:invert")}
+        />
       )}
     </span>
   );

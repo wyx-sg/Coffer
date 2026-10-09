@@ -67,3 +67,18 @@ def test_the_openai_client_answers_once_without_retrying() -> None:
     client = ProviderIntrospector()._openai_client("https://api.example.com/v1", "k")
     assert client.max_retries == 0
     assert client.timeout == 30.0
+
+
+@pytest.mark.acceptance(spec="provider-switching", scenario="a window the endpoint reports is kept")
+def test_a_models_entry_reports_its_window_in_any_common_spelling() -> None:
+    from coffer.infrastructure.provider.introspector import reported_window
+
+    assert reported_window({"id": "claude-x", "max_input_tokens": 1_000_000}) == 1_000_000
+    assert reported_window({"id": "or/x", "context_length": 163_840}) == 163_840
+    assert reported_window({"id": "or/y", "top_provider": {"context_length": 65_536}}) == 65_536
+    assert reported_window({"id": "vllm", "max_model_len": 32_768}) == 32_768
+    # Nothing said, or nothing plausible: no window, never a guess.
+    assert reported_window({"id": "gpt-x"}) is None
+    assert reported_window({"id": "z", "context_length": "lots"}) is None
+    assert reported_window({"id": "z", "context_length": True}) is None
+    assert reported_window(None) is None

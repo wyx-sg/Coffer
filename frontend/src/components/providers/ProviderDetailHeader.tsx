@@ -1,21 +1,20 @@
-// src/components/providers/ProviderDetailHeader.tsx — the open provider's header: mark, name, health, protocol · host · latency, actions.
+// src/components/providers/ProviderDetailHeader.tsx — the open provider's header: mark, name, health, agents · host · latency, actions.
 //
 // The health pill is read from the endpoint probe that runs when the provider
-// opens: Reachable, Key rejected or Unreachable. The meta line is the protocol,
-// the host and — when the endpoint answered — how long it took; an endpoint
-// that does not answer has no latency to show. The actions keep the detail
-// page's fixed order — reach (the shared ScopeControl), Test, Edit — and the
-// "⋯" menu: Delete provider (Refresh models is the Models section's button).
+// opens: Reachable, Key rejected or Unreachable. The meta line is the agents
+// its addresses serve, the host and — when the endpoint answered — how long it
+// took; an endpoint that does not answer has no latency to show. The actions
+// keep the detail page's fixed order — Test, Edit — and the "⋯" menu: Delete
+// provider (Refresh models is the Models section's button).
 import { useTranslation } from "react-i18next";
 import { Pencil, Zap } from "lucide-react";
 
-import { ScopeControl } from "@/components/ScopeControl";
 import { StatusPill } from "@/components/status/StatusPill";
 import type { StatusTone } from "@/lib/statusTone";
 import { Button } from "@/components/ui/button";
 import { ActionMenu } from "@/components/ui/menu";
 import type { Provider } from "@/lib/api/providers";
-import { PROTOCOL_LABEL_KEY } from "@/lib/providers/presets";
+import { agentTypeLabel } from "@/lib/agents/display";
 import type { ProbeStatus } from "@/lib/providers/probeStatus";
 import { displayName } from "@/lib/resourceTitle";
 import { ProviderMark } from "./ProviderMark";
@@ -57,6 +56,9 @@ export function ProviderDetailHeader({
   const { t } = useTranslation();
   const name = displayName(provider);
   const answered = status === "reachable" || status === "keyRejected";
+  // Which agents can use it follows from its addresses; there is no switch or
+  // scope to set (ADR provider-reach-is-what-its-addresses-serve).
+  const served = (provider.served_agents ?? []).map(agentTypeLabel);
   return (
     <header className="flex min-w-0 items-center gap-3" data-testid="provider-header">
       <ProviderMark provider={provider} size="lg" />
@@ -66,13 +68,14 @@ export function ProviderDetailHeader({
           <StatusPill tone={TONE[status]}>{t(`providers.status.${status}`)}</StatusPill>
         </div>
         <p className="min-w-0 truncate text-sm text-text-subtle">
-          {t(PROTOCOL_LABEL_KEY[provider.protocol])} ·{" "}
-          <span className="font-mono">{hostOf(provider.base_url)}</span>
+          {served.length > 0
+            ? t("providers.served", { agents: served.join(", ") })
+            : t("providers.servedNone")}{" "}
+          · <span className="font-mono">{hostOf(provider.base_url)}</span>
           {answered && latencyMs !== null ? ` · ${t("providers.latency", { ms: latencyMs })}` : ""}
         </p>
       </div>
       <span className="inline-flex shrink-0 items-center gap-2">
-        <ScopeControl kind="provider" uid={provider.uid} enabled={provider.enabled} />
         <Button size="sm" variant="outline" onClick={onTest} disabled={status === "checking"}>
           <Zap aria-hidden /> {t("providers.actions.test")}
         </Button>

@@ -2481,6 +2481,7 @@
         "route": "路径",
         "test": "测试",
         "auto": "内置默认",
+        "autoNamed": "内置默认（{{model}}）",
         "routeProxy": "经由 Coffer 的中转",
         "reachable": "可连通",
         "routeDirect": {
@@ -2571,7 +2572,7 @@
         "label": "提供商",
         "none": "还没有其他兼容的提供商。<link>在「模型提供商」中添加</link>",
         "hint": {
-          "claude_code": "内置登录，或来自「模型提供商」的提供商。",
+          "claude_code": "内置登录，或来自「模型提供商」的提供商。只影响 Claude Code 命令行；Claude 桌面 App 使用它自己的模型设置，不跟随切换。",
           "codex": "内置登录（ChatGPT 账号），或来自「模型提供商」的提供商。"
         }
       },
@@ -2622,6 +2623,7 @@
         "version": "v{{version}}"
       },
       "builtinDefault": "内置默认",
+      "builtinDefaultNamed": "内置默认（{{model}}）",
       "detail": {
         "mcpMissing": "缺少 MCP 条目",
         "hookStale": "记忆钩子已过期",
@@ -3653,6 +3655,7 @@
         "default": "默认智能体",
         "model": "默认模型",
         "modelDefault": "提供商默认",
+        "modelDefaultNamed": "提供商默认（{{model}}）",
         "reach": "可驱动的智能体",
         "help": "每条消息都会成为「对话」里的一个对话，默认由默认智能体处理，除非 /new 指定了别的。",
         "reachHint": "在聊天里用 /new 指定智能体时，只能从这些里选。"
@@ -6057,7 +6060,6 @@
     },
     "fields": {
       "name": "名称",
-      "protocol": "协议",
       "baseUrl": "Base URL",
       "apiKey": "API Key"
     },
@@ -6065,7 +6067,8 @@
       "nameRequired": "请输入名称。",
       "baseUrl": "请输入完整 URL，例如 https://api.openai.com/v1",
       "secretRequired": "请输入 API Key。",
-      "loopback": "本地运行时必须在这台 Mac 上——请用 localhost 或 127.0.0.1。"
+      "loopback": "本地运行时必须在这台 Mac 上——请用 localhost 或 127.0.0.1。",
+      "address": "至少填一个地址。"
     },
     "rejected": {
       "title": "接入地址拒绝了已保存的密钥（{{status}}）",
@@ -6083,7 +6086,6 @@
     },
     "endpoint": {
       "title": "接入地址",
-      "locked": "{{agents}} 正在使用，已锁定",
       "runtime": "运行时",
       "wires": "提供 {{wires}}",
       "route": "路由",
@@ -6136,6 +6138,7 @@
       "cols": {
         "model": "模型",
         "price": "价格",
+        "window": "窗口",
         "type": "类型"
       }
     },
@@ -6167,7 +6170,7 @@
       "stepEndpoint": "接入地址",
       "stepModels": "模型",
       "vendor": "厂商",
-      "vendorHint": "选择厂商会自动填写协议和 Base URL。网关和中转服务请选「自定义」。",
+      "vendorHint": "选择厂商会自动填好地址。网关和中转服务请选「自定义」。",
       "custom": "自定义",
       "keyHint": "选择一个已存的密钥，或粘贴新的 Key：添加服务商时会把它存进密钥库。",
       "keyName": "{{name}} API Key",
@@ -6175,20 +6178,6 @@
       "next": "下一步：模型",
       "back": "上一步",
       "submit": "添加提供商",
-      "protocols": {
-        "openai": {
-          "title": "OpenAI 兼容",
-          "body": "Codex 和对话都能用。"
-        },
-        "anthropic": {
-          "title": "Anthropic 兼容",
-          "body": "Claude Code 和对话都能用。"
-        },
-        "unknown": {
-          "title": "未知",
-          "body": "无法判断协议。"
-        }
-      },
       "local": {
         "title": "在这台 Mac 上找到",
         "looking": "正在查找这台 Mac 上的模型运行时…",
@@ -6213,7 +6202,7 @@
     "edit": {
       "title": "编辑 {{name}}",
       "renameHint": "重命名只改名称——密钥、历史记录和智能体都保持不变。",
-      "locked": "{{agents}} 正在使用，已锁定。",
+      "locked": "{{agents}} 正在使用，换到别的服务商之前不能添加或删除 OpenAI 兼容地址。",
       "keyHint": "密钥只写不读。要更改值，请用「更换密钥」。"
     },
     "replace": {
@@ -6280,7 +6269,42 @@
       "providers": "提供商",
       "usage": "用量"
     },
-    "latency": "{{ms}} 毫秒"
+    "latency": "{{ms}} 毫秒",
+    "window": {
+      "source": {
+        "user": "你设置",
+        "endpoint": "来自接口",
+        "bundled": "内置"
+      },
+      "set": "设置窗口…",
+      "reset": "恢复默认",
+      "noneAria": "{{id}} 的上下文窗口未知",
+      "editAria": "{{id}}：{{tokens}} tokens，修改上下文窗口",
+      "dialogTitle": "{{id}} 的上下文窗口",
+      "dialogBody": "这个服务商为该模型提供的 token 数。Coffer 会把这个窗口告诉 Claude Code 和 Codex，让它们在合适的位置压缩上下文。优先于接口返回的值和 Coffer 内置的列表。",
+      "field": "上下文窗口",
+      "hint": "token 数，例如 128000、128k 或 1m。",
+      "invalid": "请输入 1k 到 100m 之间的 token 数。"
+    },
+    "address": {
+      "openai": {
+        "label": "OpenAI 兼容地址",
+        "help": "Codex 用这个地址。"
+      },
+      "anthropic": {
+        "label": "Anthropic 兼容地址",
+        "help": "Claude Code 用这个地址。"
+      },
+      "bothHint": "网关支持哪种就填哪个。同一个地址两种都支持的话，两个框填一样的。"
+    },
+    "served": "{{agents}} 可用",
+    "servedNone": "没有智能体可用",
+    "region": {
+      "label": "区域",
+      "intl": "国际",
+      "cn": "中国大陆",
+      "hint": "API key 只能在创建它的区域使用。"
+    }
   },
   "skillSources": {
     "add": {

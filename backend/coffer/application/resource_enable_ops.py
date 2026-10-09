@@ -31,7 +31,7 @@ async def set_enabled(service: ResourceService, uid: str, enabled: bool, *, acto
     """
     before = await service.get(uid)
     kind_def = service._require_kind(before.kind)
-    if not kind_def.toggleable:
+    if not kind_def.toggleable or (kind_def.switch_retired and not enabled):
         raise ResourceNotToggleable(before.kind, uid)
     if before.enabled == enabled:
         return before  # idempotent — no audit, no hook
