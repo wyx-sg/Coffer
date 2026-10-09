@@ -65,7 +65,35 @@ function installAgentPrograms(): void {
       mode: 0o755,
     });
   }
+  // Conversations lists Codex's sessions by asking `codex app-server`, so the
+  // stand-in answers that one conversation with a few demo threads.
+  fs.writeFileSync(path.join(bin, "codex"), CODEX_STAND_IN, { mode: 0o755 });
 }
+
+const CODEX_STAND_IN = `#!/usr/bin/env python3
+import json, sys, time
+if sys.argv[1:2] != ["app-server"]:
+    print("codex-cli 0.41.0")
+    sys.exit(0)
+NOW = int(time.time())
+THREADS = [
+    ("t1", "Fix the flaky login test", "/Users/demo/work/web-app", 3600),
+    ("t2", "Draft release notes for 2.4", "/Users/demo/work/api", 86400),
+    ("t3", "Explain the retry logic in the queue worker", "/Users/demo/work/api", 172800),
+]
+for line in sys.stdin:
+    msg = json.loads(line)
+    if "id" not in msg:
+        continue
+    if msg.get("method") == "thread/list":
+        result = {"data": [
+            {"id": i, "name": n, "cwd": c, "createdAt": NOW - a - 600, "updatedAt": NOW - a}
+            for i, n, c, a in THREADS
+        ], "nextCursor": None}
+    else:
+        result = {}
+    print(json.dumps({"id": msg["id"], "result": result}), flush=True)
+`;
 
 // name -> tool:description. Each runs as a program named `<name>-mcp` in the
 // demo HOME's `bin`, so a server's command reads like a real one and no path

@@ -152,6 +152,8 @@ Every connection runs this pragma suite:
 | `cache_size` | `-64000` | About 64 MB of page cache. |
 | `temp_store` | `MEMORY` | Temporary tables and indexes in memory. |
 
+**Space.** Retention deletes old rows, and SQLite keeps the pages they used as free pages inside the file rather than shrinking it. After each retention pass (at daemon start and every six hours) the worker rebuilds the file with `VACUUM` and truncates the WAL once free pages are at least half of the file and at least 8 MB, so `runs.db` stays about the size of the history it holds; below either threshold it is left alone. The rebuild runs off the request path: readers carry on, and a writer waits for it like any other lock ([ADR](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/runs-db-gives-pruned-space-back.md)).
+
 ### Derived
 
 ```text
@@ -204,12 +206,12 @@ flowchart TB
   C -- no --> X["Fail with DB_SCHEMA_TOO_NEW"]
   C -- yes --> D{"At head?"}
   D -- yes --> G["Build services"]
-  D -- no --> E["Copy runs.db to runs.db.pre-revision"]
+  D -- no --> E["Copy runs.db to runs.db.pre-revision (VACUUM INTO)"]
   E --> F["alembic upgrade head"]
   F --> G
 ```
 
-- **Backups.** Before an upgrade the runner copies the database, with its `-wal` and `-shm` companions, to `runs.db.pre-<revision>`. An existing copy is never overwritten, and only the three newest are kept. To undo a bad migration, stop the daemon, move `runs.db` aside, rename the matching copy back, and start the previous build.
+- **Backups.** Before an upgrade the runner writes a copy of the database to `runs.db.pre-<revision>` with `VACUUM INTO`: one file with a consistent snapshot of the live data, including what the WAL still held, and without free pages, so it is as small as the history. An existing copy is never overwritten, only the three newest are kept, and a copy that fails stops the upgrade. To undo a bad migration, stop the daemon, move `runs.db` and its `-wal` and `-shm` aside, rename the matching copy to `runs.db`, and start the previous build.
 - **A schema from a newer build.** A revision this build does not know stops the daemon with `DB_SCHEMA_TOO_NEW` before anything is touched, following the principle of [detecting rather than guessing](/architecture/design-principles#detect-never-refuse).
 
 ## Secrets at rest
@@ -237,7 +239,7 @@ One short-lived directory sits outside the classes too: `~/.coffer/tmp/handoff/`
 | The `vault` package in the domain layer | Layout, documents, format versions, writers and trailers. |
 | The `vault` package in the application layer | Validation rules, problems. |
 | The `vault` package in the infrastructure layer | The class roots under `~/.coffer`, the repository, the writer, the scanner, the resource and state stores, reach, local JSON. |
-| The `persistence` package in the infrastructure layer | The runs.db engine, models and Alembic revisions; `derived.db`; the migration runner (startup migration, backup, too-new guard), called from the daemon's startup. |
+| The `persistence` package in the infrastructure layer | The runs.db engine, models and Alembic revisions; `derived.db`; the migration runner (startup migration, backup, too-new guard), called from the daemon's startup; the space reclaim the retention worker runs after each pass. |
 | The `secret` package in the infrastructure layer | Secret ciphertext as files. |
 | The `daemon` package in the infrastructure layer | `daemon-config.json`. |
 

@@ -241,6 +241,32 @@ write the vault.
 - **Why it loses.** It constrains the writers who already cooperate and none
   of the others.
 
+#### Option B5 — Coalesce one writer's quick consecutive saves of a file into one commit
+
+Considered on 2026-10-09, after one edit of a channel's settings left eleven
+commits in under a minute, including a half-typed `wait_after_text_seconds`
+of 32 on its way to 2. The writer would amend its previous commit instead of
+adding one when the same writer changes the same file within a few seconds and
+the commit has not been pushed yet; the audit log would still get a row per
+change.
+
+- **Pros.** A version list made of meaningful points, and fewer commits for
+  sync to push. Note-taking tools that save on every keystroke work this way:
+  Obsidian Git and Logseq commit on an interval rather than per save.
+- **Cons.** A commit stops being one operation, so a version the History tab
+  showed a moment ago can vanish, and a restore can name a commit that is no
+  longer there. Amend races sync: a round that starts between the save and the
+  amend pushes the commit about to be rewritten, so "not yet pushed" must be
+  checked under the same lock as the write. And the noise comes from the
+  surface, not the writer: products that save through a form rather than per
+  keystroke, such as a GitHub web edit or a git-backed CMS like Decap, make
+  one commit per save.
+- **Why it loses.** The noise was fixed where it arose: a typed setting is
+  saved only when its field is finished, on blur or Enter, and only when it
+  changed (spec channels "Commit a typed channel setting when its field is
+  finished"). What remains is one commit per deliberate save, which is the
+  invariant this ADR wants, so the person chose to keep it.
+
 ## Decision
 
 `~/.coffer/vault/` is always a local git repository; sync only adds a remote.

@@ -96,6 +96,8 @@ A source **waits** while no page lists it in `sources` and it is not marked `ing
 
 Collections are created only on purpose, and only by a person. Reading, writing, an agent's working directory or a Markdown file an agent drops into some other folder never creates one.
 
+<Shot name="knowledge-page" alt="The Knowledge page, with a collection and its documents." />
+
 ```text
 Knowledge → New collection → Name, What belongs in here → Create collection
 ```
