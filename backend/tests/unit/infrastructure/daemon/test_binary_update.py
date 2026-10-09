@@ -93,3 +93,32 @@ def test_an_archive_missing_a_binary_installs_nothing(tmp_path: pathlib.Path) ->
 def test_an_unlisted_archive_is_refused() -> None:
     with pytest.raises(UpdateError, match="not listed"):
         expected_sha256("abc  something-else\n", archive_name(_TRIPLE))
+
+
+def test_the_shims_library_folder_is_installed_beside_it(tmp_path: pathlib.Path) -> None:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        lib = tarfile.TarInfo("coffer-mcp-shim-lib")
+        lib.type, lib.mode = tarfile.DIRTYPE, 0o755
+        tar.addfile(lib)
+        data = b"new libs"
+        info = tarfile.TarInfo("coffer-mcp-shim-lib/base_library.zip")
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
+        for name in BINARIES:
+            body = f"#!/bin/sh\necho {name} 0.4.0\n".encode()
+            info = tarfile.TarInfo(name)
+            info.size, info.mode = len(body), 0o755
+            tar.addfile(info, io.BytesIO(body))
+    archive = buf.getvalue()
+    sums = f"{hashlib.sha256(archive).hexdigest()}  {archive_name(_TRIPLE)}\n"
+    dest = _installed(tmp_path / "bin")
+    (dest / "coffer-mcp-shim-lib").mkdir()
+    (dest / "coffer-mcp-shim-lib" / "stale.so").write_text("old")
+
+    apply_release(_RELEASE, dest, triple=_TRIPLE, fetch=_fetcher(archive, sums))
+
+    lib_dir = dest / "coffer-mcp-shim-lib"
+    assert [p.name for p in lib_dir.iterdir()] == ["base_library.zip"]
+    assert (lib_dir / "base_library.zip").read_bytes() == b"new libs"
+    assert not [p for p in dest.iterdir() if p.name.startswith(".")]

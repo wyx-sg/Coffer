@@ -5,11 +5,12 @@
 #   ./scripts/smoke_test_bundle.sh <path-to-binaries-dir>
 #
 # Point it at a directory holding the plain-named binaries: the `dist/`
-# directory build_binaries.sh writes, or a directory extracted from a
-# released coffer-cli-<triple>.tar.gz.
+# directory build_binaries.sh writes, a directory extracted from a
+# released coffer-cli-<triple>.tar.gz, or a built Coffer.app's Contents/MacOS.
 #
 # What it does:
-#   1. Locate coffer, coffer-mcp-shim AND coffer-daemon inside the bundle.
+#   1. Locate coffer, coffer-mcp-shim AND coffer-daemon inside the bundle, and
+#      check the shim's library folder is there and holds nothing it never uses.
 #   2. Start the bundled coffer-daemon under an isolated HOME, on a free port
 #      of its own, and wait until it has published ~/.coffer/daemon.json and is
 #      answering /daemon/status.
@@ -51,10 +52,12 @@ fi
 # variant is tried too for Windows-style extractions.
 # ---------------------------------------------------------------------------
 
+# A built app's Contents/MacOS may be passed instead: the app keeps the
+# one-folder shim in Contents/Resources, so that is probed after the directory.
 locate_binary() {
     local name="$1"
     local candidate
-    for candidate in "$BUNDLE/$name" "$BUNDLE/$name.exe"; do
+    for candidate in "$BUNDLE/$name" "$BUNDLE/$name.exe" "$BUNDLE/../Resources/$name"; do
         if [ -f "$candidate" ]; then
             printf '%s\n' "$candidate"
             return 0
@@ -95,6 +98,28 @@ if [ -z "$CLI" ]; then
 fi
 
 chmod +x "$SHIM" "$DAEMON" "$CLI" 2>/dev/null || true
+
+# The shim is a one-folder build and must stay small: it starts once per MCP
+# session. Its libraries sit beside it; a package from the daemon's stack (or a
+# test library) in there means the spec started collecting what the shim never
+# imports (ADR distribution-pyinstaller).
+SHIM_LIB="${SHIM%.exe}-lib"
+if [ ! -d "$SHIM_LIB" ]; then
+    echo "FAIL: the shim's library folder is missing: $SHIM_LIB" >&2
+    exit 1
+fi
+for unwanted in PIL numpy hypothesis cryptography keyring jsonschema fastapi sqlalchemy uvicorn; do
+    if [ -e "$SHIM_LIB/$unwanted" ]; then
+        echo "FAIL: the shim carries '$unwanted', which it never imports" >&2
+        exit 1
+    fi
+done
+SHIM_MB=$(du -sm "$SHIM_LIB" | cut -f1)
+if [ "$SHIM_MB" -gt 60 ]; then
+    echo "FAIL: the shim's libraries take ${SHIM_MB} MB; the cap is 60 MB" >&2
+    exit 1
+fi
+echo "==> shim libraries: ${SHIM_MB} MB"
 
 echo "==> smoke-testing shim:   $SHIM"
 echo "==> smoke-testing daemon: $DAEMON"

@@ -54,6 +54,7 @@ def test_override_takes_precedence(tmp_path, monkeypatch):
 
 def test_raises_when_nothing_resolves(tmp_path, monkeypatch):
     monkeypatch.delenv("COFFER_MCP_SHIM_PATH", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setattr(mcp_service.shutil, "which", lambda _name: None)
     # Empty scripts dir + a sys.executable whose dir holds no shim.
     empty = tmp_path / "empty"
@@ -137,3 +138,19 @@ def test_a_shim_outside_the_deploy_is_left_alone(tmp_path, monkeypatch):
     monkeypatch.setattr(mcp_service.shutil, "which", lambda _name: str(venv_shim))
 
     assert default_shim_resolver() == str(venv_shim.resolve())
+
+
+def test_the_app_daemon_names_the_deployed_shim(tmp_path, monkeypatch):
+    """Coffer.app's daemon has no shim beside it in Contents/MacOS (the app keeps
+    the one-folder shim in Contents/Resources); it names the one it deployed."""
+    monkeypatch.delenv("COFFER_MCP_SHIM_PATH", raising=False)
+    home = tmp_path / "home"
+    _versioned, public = _deploy(home, "0.9.9")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(mcp_service.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(mcp_service.sysconfig, "get_path", lambda _name: str(tmp_path / "none"))
+    macos = tmp_path / "Coffer.app" / "Contents" / "MacOS"
+    macos.mkdir(parents=True)
+    monkeypatch.setattr(mcp_service.sys, "executable", str(macos / "coffer-daemon"))
+
+    assert default_shim_resolver() == str(public)

@@ -12,6 +12,7 @@ mtime.
 from __future__ import annotations
 
 import os
+import shutil
 import stat
 import sys
 from pathlib import Path
@@ -323,3 +324,51 @@ def test_retire_removes_a_dangling_link_into_a_pruned_version(tmp_path: Path) ->
 
 def test_retire_on_a_missing_bin_dir_is_a_no_op(tmp_path: Path) -> None:
     assert retire_unshipped_links(tmp_path / "absent") == []
+
+
+# --------------------------------------------------------------------------- #
+# the one-folder shim                                                          #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="the shim's library folder is deployed with it")
+def test_a_one_folder_binary_lands_with_its_library_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bundle = tmp_path / "bundle"
+    _write(bundle / "coffer-daemon", b"d")
+    _write(bundle / "coffer-mcp-shim", b"s")
+    _write(bundle / "coffer-mcp-shim-lib" / "base_library.zip", b"lib-1")
+    home = tmp_path / "home"
+    _frozen_at(monkeypatch, bundle, home)
+    bin_dir = home / ".coffer" / "bin"
+
+    assert deploy_frozen_sidecars(version="1.0.0") == ["coffer-daemon", "coffer-mcp-shim"]
+    # The public name resolves into the version folder, where the libraries sit beside it.
+    shim = (bin_dir / "coffer-mcp-shim").resolve()
+    assert (shim.parent / "coffer-mcp-shim-lib" / "base_library.zip").read_bytes() == b"lib-1"
+    assert deploy_frozen_sidecars(version="1.0.0") == []
+
+    # A deploy that lost its library folder is redone.
+    shutil.rmtree(shim.parent / "coffer-mcp-shim-lib")
+    assert deploy_frozen_sidecars(version="1.0.0") == ["coffer-mcp-shim"]
+    assert (shim.parent / "coffer-mcp-shim-lib" / "base_library.zip").exists()
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="the shim's library folder is deployed with it")
+def test_the_app_bundle_ships_the_shim_in_resources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Coffer.app keeps the one-folder shim in Contents/Resources, since
+    Contents/MacOS may hold only code; the daemon in MacOS still deploys it."""
+    contents = tmp_path / "Coffer.app" / "Contents"
+    _write(contents / "MacOS" / "coffer-daemon", b"d")
+    _write(contents / "Resources" / "coffer-mcp-shim", b"s")
+    _write(contents / "Resources" / "coffer-mcp-shim-lib" / "base_library.zip", b"lib")
+    home = tmp_path / "home"
+    _frozen_at(monkeypatch, contents / "MacOS", home)
+
+    assert deploy_frozen_sidecars(version="1.0.0") == ["coffer-daemon", "coffer-mcp-shim"]
+    version_dir = home / ".coffer" / "bin" / "1.0.0"
+    assert (version_dir / "coffer-mcp-shim").read_bytes() == b"s"
+    assert (version_dir / "coffer-mcp-shim-lib" / "base_library.zip").read_bytes() == b"lib"

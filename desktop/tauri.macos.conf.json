@@ -20,7 +20,9 @@
   "bundle": {
     "macOS": {
       "files": {
-        "MacOS/coffer-seatalk-bridge": "binaries/coffer-seatalk-bridge"
+        "MacOS/coffer-seatalk-bridge": "binaries/coffer-seatalk-bridge",
+        "Resources/coffer-mcp-shim": "binaries/coffer-mcp-shim",
+        "Resources/coffer-mcp-shim-lib": "binaries/coffer-mcp-shim-lib"
       }
     }
   }

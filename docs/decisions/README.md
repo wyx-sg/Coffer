@@ -150,7 +150,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`stdio-shim-bridge`](stdio-shim-bridge.md) | Agents Reach the Gateway Through a stdio Shim, Not a Native HTTP Entry |
 | [`desktop-shell-over-a-shared-frontend`](desktop-shell-over-a-shared-frontend.md) | The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do |
 | [`daemon-proxies-os-file-actions`](daemon-proxies-os-file-actions.md) | The Loopback Daemon Performs OS File Actions for the UI |
-| [`distribution-pyinstaller`](distribution-pyinstaller.md) | Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App |
+| [`distribution-pyinstaller`](distribution-pyinstaller.md) | Distribution — Four PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App |
 | [`project-license-is-agpl-3-0`](project-license-is-agpl-3-0.md) | Coffer Is Licensed Under AGPL-3.0-or-later |
 | [`experimental-features-instead-of-a-release-branch`](experimental-features-instead-of-a-release-branch.md) | Experimental Features Instead of a Release Branch |
 | [`sidebar-grouped-by-what-the-person-comes-to-do`](sidebar-grouped-by-what-the-person-comes-to-do.md) | The Sidebar Is Grouped by What the Person Comes to Do: Agents, Run, Capabilities, Context, System |

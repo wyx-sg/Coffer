@@ -284,7 +284,7 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.0 (/Users/you/.coffe
 | 消息渠道运行时 | 每 2 s | 把运行中的适配器（Telegram 轮询、SeaTalk 连接）和绑定到本机的消息渠道资源进行调和。 |
 | MCP 会话回收器 | 每 60 s | 关闭闲置超过 30 分钟的 `/mcp` 会话，连同它们的每会话监管者和上游子进程。可用 `COFFER_MCP_SESSION_IDLE_S` 和 `COFFER_MCP_SESSION_REAPER_INTERVAL_S` 调整。 |
 | 调用记录写入器 | 持续 | 在请求路径之外，把 MCP 调用日志行批量写入 SQLite。 |
-| 解包保活 | 启动时立即执行，之后每 6 h | 仅限冻结构建。刷新单文件二进制解包到 `$TMPDIR/_MEI*` 里的文件时间戳，让系统临时文件清理（macOS 会删除约 3 天未使用的文件）无法在长时间运行的守护进程底下删掉 CA 证书包和库文件。 |
+| 解包保活 | 启动时立即执行，之后每 6 h | 仅限冻结构建。刷新单文件二进制解包到 `$TMPDIR/_MEI*` 里的文件时间戳，让系统临时文件清理（macOS 会删除约 3 天未使用的文件）无法在长时间运行的守护进程底下删掉 CA 证书包和库文件。它还会删除每个带 `.coffer-pid` 标记（由每个单文件 Coffer 二进制的运行时钩子写入）、且标记里的 pid 已不再运行的 `$TMPDIR/_MEI*` 目录，回收被杀掉的命令行或桥进程留下的东西。没有标记的目录（别的 PyInstaller 程序的）和守护进程自己的目录从不触碰。 |
 | 被取代检查 | 每 30 s，由入口运行 | 当另一个存活的守护进程接管了 `daemon.json` 时，让本守护进程退下（见下文）。 |
 | 保险库扫描器 | 启动时扫一次，然后在文件事件时以及每 60 s | 把保险库里的手工编辑落成提交。 |
 | 调和器 | 每 60 s，收到提示时提前 | 收敛智能体的 MCP 条目、技能链接、提供商投射和投递 Hook，并记录尚未解决的偏移。 |
@@ -336,7 +336,7 @@ stateDiagram-v2
 
 ## 二进制部署 {#binary-deployment}
 
-冻结构建在启动时把它的兄弟二进制（`coffer`、`coffer-daemon`、`coffer-mcp-shim`）部署到 `~/.coffer/bin` 下按版本分的目录里，并把公开名字切换为相对符号链接。这件事由守护进程负责，因为不管来自终端压缩包还是 `.dmg`，它都是每个冻结安装一定会启动的那个进程。把 `coffer-daemon` 部署到那里，也让冻结的 shim 在重启电脑后能找到要拉起的守护进程，并让登录服务有一个能跨升级保持有效的路径。源码安装不做这些，因为 `pip install` 已经把 `coffer` 和 `coffer-mcp-shim` 放到了 `PATH` 上。
+冻结构建在启动时把它的兄弟二进制（`coffer`、`coffer-daemon`、`coffer-mcp-shim` 及其 `coffer-mcp-shim-lib/` 文件夹）部署到 `~/.coffer/bin` 下按版本分的目录里，并把公开名字切换为相对符号链接。这件事由守护进程负责，因为不管来自终端压缩包还是 `.dmg`，它都是每个冻结安装一定会启动的那个进程。把 `coffer-daemon` 部署到那里，也让冻结的 shim 在重启电脑后能找到要拉起的守护进程，并让登录服务有一个能跨升级保持有效的路径。源码安装不做这些，因为 `pip install` 已经把 `coffer` 和 `coffer-mcp-shim` 放到了 `PATH` 上。
 
 复制、哨兵文件、符号链接切换和清理的规则只在一处描述：[分发与发布](/zh/architecture/distribution#versioned-directories-and-the-symlink-flip)。
 

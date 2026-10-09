@@ -54,7 +54,7 @@ A real line looks like this:
 {"event": "mcp.upstream.spawn_failed", "logger": "coffer.application.mcp.supervisor", "level": "warning", "timestamp": "2026-09-24T13:50:15.869933Z", "server": "smart", "attempt": 1, "error": "upstream init failed: ConnectError", "trace_id": "44e10b60da1b4f26"}
 ```
 
-The daemon does not write the HTTP client libraries' INFO request lines (`httpx`, `httpcore`) to `daemon.log`: they carry the full request URL, and a Telegram bot token travels in the URL path.
+The daemon does not write the HTTP client libraries' INFO request lines (`httpx`, `httpcore`, `httpx2` — the MCP SDK's HTTP client — and `mcp.client.streamable_http`) to `daemon.log`: they carry the full request URL, which can hold a credential (a Telegram bot token travels in the URL path), and log each push-stream reconnect. These loggers are set to WARNING.
 
 `structlog` is also configured to route through the same handlers, so future code that logs through structlog's own API produces the same shape rather than printing to stdout.
 

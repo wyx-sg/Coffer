@@ -57,9 +57,9 @@ A few behaviours worth knowing:
 
 One daemon per vault does not mean one process. In Activity Monitor or `ps` you will normally see:
 
-- two `coffer-daemon` processes for the daemon itself: the installed binary is a single file that unpacks itself, so a small launcher process stays as the parent of the real one;
+- two `coffer-daemon` processes for the daemon itself: the installed binary is a single file that unpacks itself, so a small launcher process stays as the parent of the real one (the shim is a one-folder build and runs as one process);
 - another `coffer-daemon` pair running `proxy`, the [local model proxy](/architecture/model-proxy);
-- a `coffer-mcp-shim` pair for every agent session that is connected to Coffer, ending when that session ends;
+- a `coffer-mcp-shim` process for every agent session that is connected to Coffer, ending when that session ends;
 - a `coffer-seatalk-bridge` pair while a SeaTalk channel runs.
 
 `coffer daemon status` names any daemon beyond these. A start that cannot finish gives up after two minutes on its own, and a start that finds the daemon busy leaves without starting a second one.

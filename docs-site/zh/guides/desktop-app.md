@@ -47,7 +47,7 @@ Coffer 桌面应用是一个 macOS 应用，它在原生窗口里承载 Coffer �
 
 ### 应用也会安装 CLI {#the-app-installs-the-cli-too}
 
-首次启动时，守护进程会把这四个二进制文件复制到 `~/.coffer/bin`。把这个目录加进你的 `PATH`，就能在终端里用 `coffer`，MCP 客户端也能解析到 `coffer-mcp-shim`：
+首次启动时，守护进程会把这四个二进制文件和 shim 的库文件夹 `coffer-mcp-shim-lib/` 复制到 `~/.coffer/bin`。把这个目录加进你的 `PATH`，就能在终端里用 `coffer`，MCP 客户端也能解析到 `coffer-mcp-shim`：
 
 ```sh
 export PATH="$HOME/.coffer/bin:$PATH"   # add this to your shell profile
