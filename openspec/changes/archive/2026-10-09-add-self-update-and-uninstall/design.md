@@ -95,8 +95,11 @@ Who may ask for it:
   changes anything; an unverified grant refuses the whole request.
 - **The command line** never sends `delete_data`. `coffer uninstall
   --delete-data` asks at an interactive terminal for the words `delete my data`,
-  runs the uninstall, waits for the daemon to exit, and purges in its own
-  process with the same function. No flag skips the question and a non-TTY run
+  runs the uninstall, waits for the daemon to exit, and deletes `~/.coffer` in
+  its own process (`data_files.purge_files`). It leaves the master key's
+  Keychain items and says so: the CLI never touches the Keychain (import
+  contract "CLI does not access the keychain directly"), whose items the daemon
+  alone owns. No flag skips the question and a non-TTY run
   refuses, so an agent calling the CLI cannot delete the vault (it could `rm -rf`
   it, but Coffer adds no new way to).
 - With the desktop app installed, `coffer uninstall` opens the app's dialog

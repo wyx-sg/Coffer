@@ -250,7 +250,7 @@ Either way Coffer takes back everything it wrote outside `~/.coffer`, then stops
 
 `~/.coffer` stays: your vault, secrets, skills, knowledge and settings are there when you install Coffer again. Connect your agents again after a reinstall. A source checkout and its `.venv` are yours to remove. Shells that are already open keep the old `PATH` until they restart.
 
-To delete your data as well, tick **Also delete my data** in the dialog; Coffer asks for Touch ID before anything is removed. From a terminal, `coffer uninstall --delete-data` asks you to type `delete my data` and does nothing without a terminal to type it in. Either way the master key's Keychain item goes too, once the daemon has stopped. A vault you moved somewhere else is left in place.
+To delete your data as well, tick **Also delete my data** in the dialog; Coffer asks for Touch ID before anything is removed. The app also deletes the master key's Keychain items once the daemon has stopped. From a terminal, `coffer uninstall --delete-data` asks you to type `delete my data`, does nothing without a terminal to type it in, and deletes `~/.coffer` but not the Keychain, which only Coffer's daemon touches: delete the `coffer` items in Keychain Access yourself. A vault you moved somewhere else is left in place.
 
 ::: danger Deleting ~/.coffer is permanent
 `~/.coffer` holds your database, knowledge collections, skill library and secret master key. Deleting it destroys every stored secret and every document that exists only there, including skills Coffer adopted from your agents. [Back up the master key](/guides/secrets#the-master-key-and-its-backup) first if you might want them back.

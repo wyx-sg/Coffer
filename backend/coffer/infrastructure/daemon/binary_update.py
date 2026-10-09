@@ -29,6 +29,7 @@ from pathlib import Path
 import httpx
 
 from coffer.infrastructure.daemon.release_check import Release, asset_url
+from coffer.infrastructure.platform.host import HostOs, host_os, os_label
 
 #: What the installer puts in ``~/.coffer/bin``, in the order it does.
 BINARIES = ("coffer", "coffer-daemon", "coffer-mcp-shim", "coffer-seatalk-bridge")
@@ -44,10 +45,10 @@ class UpdateError(Exception):
 
 def host_triple() -> str:
     """The release triple for this machine; only Apple Silicon is published."""
-    if platform.system() == "Darwin" and platform.machine() in ("arm64", "aarch64"):
+    if host_os() is HostOs.MACOS and platform.machine() in ("arm64", "aarch64"):
         return "aarch64-apple-darwin"
     raise UpdateError(
-        f"no release is published for {platform.system()} {platform.machine()}; "
+        f"no release is published for {os_label()} {platform.machine()}; "
         "only macOS on Apple Silicon is"
     )
 

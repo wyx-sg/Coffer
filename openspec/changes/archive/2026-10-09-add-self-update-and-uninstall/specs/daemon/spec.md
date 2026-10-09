@@ -76,8 +76,9 @@ items and `~/.coffer`.
 open the app's uninstall dialog instead, where the person confirms. Otherwise it
 MUST ask before uninstalling, unless `--yes` is given; `--delete-data` MUST ask
 for the words `delete my data` at an interactive terminal — no flag skips that,
-and without a terminal it MUST refuse — and deletes the master key's Keychain
-items and `~/.coffer` only after the daemon has exited.
+and without a terminal it MUST refuse — and deletes `~/.coffer` only after the
+daemon has exited. The command line MUST NOT touch the Keychain, which only the
+daemon owns: it MUST say that the master key's Keychain items stay.
 
 #### Scenario: uninstall removes every footprint and keeps the vault
 - **GIVEN** a connected agent with a provider switch, two delivered skills, start at login on and the installer's `PATH` line in `~/.zshrc`

@@ -21,7 +21,7 @@ import typer
 import coffer
 from coffer.infrastructure.daemon import bootstrap
 from coffer.infrastructure.daemon.binary_update import UpdateError, apply_release
-from coffer.infrastructure.daemon.data_purge import purge_data
+from coffer.infrastructure.daemon.data_files import purge_files
 from coffer.infrastructure.daemon.release_check import Release, fetch_latest_sync, is_newer
 from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
 from coffer.infrastructure.platform.process import executable_name
@@ -199,7 +199,7 @@ def uninstall(
     delete_data: bool = typer.Option(
         False,
         "--delete-data",
-        help=f"Also delete ~/.coffer and the master key; asks for '{DELETE_PHRASE}' "
+        help=f"Also delete ~/.coffer (not the Keychain); asks for '{DELETE_PHRASE}' "
         "at a terminal, whatever else is given",
     ),
     as_json: bool = _io.json_option(),
@@ -230,8 +230,8 @@ def uninstall(
     home = coffer_home()
     if delete_data:
         if not _confirm_at_terminal(
-            f"This deletes {home} — every secret, skill, knowledge collection and the master "
-            f"key — for good.\nType '{DELETE_PHRASE}' to uninstall and delete it: ",
+            f"This deletes {home} — every secret, skill, knowledge collection and memory note "
+            f"— for good.\nType '{DELETE_PHRASE}' to uninstall and delete it: ",
             DELETE_PHRASE,
         ):
             _io.fail(
@@ -262,7 +262,7 @@ def uninstall(
                 ExitCode.GENERIC,
                 as_json=as_json,
             )
-        result = purge_data()
+        result = purge_files()
         purge = {"removed": result.removed, "kept": result.kept, "errors": result.errors}
     out = {**answer, "daemon_stopped": stopped, "purge": purge, "install_method": method}
 
@@ -277,6 +277,10 @@ def uninstall(
                 typer.echo(f"· your moved vault at {kept} was left in place")
             for error in purge["errors"]:
                 typer.echo(f"✗ {error}")
+            typer.echo(
+                "· the master key's Keychain items stay: only Coffer's daemon touches the "
+                "Keychain. Delete the 'coffer' items in Keychain Access if you no longer need them"
+            )
         if method == "source":
             typer.echo("this was a source install: remove the checkout and its .venv yourself")
         typer.echo("Coffer is uninstalled. Open shells keep the old PATH until they restart.")

@@ -1,42 +1,31 @@
 """Delete Coffer's data from this machine (spec daemon "Uninstall Coffer from
 this machine"; design D4 of ``add-self-update-and-uninstall``).
 
-Run only once the daemon has stopped serving — by the daemon's own exit path
-after it has released its lock, or by ``coffer uninstall --delete-data`` after
-the daemon has exited — because ``~/.coffer`` holds the open history database
-and the logs. In order:
+Run by the daemon's own exit path once it has stopped serving and released its
+lock, because ``~/.coffer`` holds the open history database and the logs. In
+order:
 
 1. the master key's Keychain items: in a signed release every item of Coffer's
    in its access group (the key and each ``master-key.bak-*``); in a
    development build the login-keychain item, when one was ever written;
-2. ``~/.coffer`` itself. A vault moved elsewhere (``~/.coffer/vault`` is then a
-   symlink) is not followed: the folder it points at may be shared or synced,
-   so it is left in place and named in the result.
+2. ``~/.coffer`` itself (``data_files.py``, which ``coffer uninstall
+   --delete-data`` runs on its own: the command line never touches the
+   Keychain).
 """
 
 from __future__ import annotations
 
 import contextlib
 import logging
-import shutil
-from dataclasses import dataclass, field
 from pathlib import Path
 
+from coffer.infrastructure.daemon.data_files import PurgeResult, purge_files
 from coffer.infrastructure.secret.build_identity import keychain_access_group
-from coffer.infrastructure.vault.home import coffer_home, vault_root
 
 _logger = logging.getLogger(__name__)
 
 #: The login-keychain ref a development build keeps the key under, when moved there.
 _DEV_KEYRING_REF = "master-key"
-
-
-@dataclass
-class PurgeResult:
-    removed: list[str] = field(default_factory=list)
-    #: A moved vault's folder, left in place.
-    kept: list[str] = field(default_factory=list)
-    errors: list[str] = field(default_factory=list)
 
 
 def _delete_keychain_items() -> str:
@@ -62,18 +51,7 @@ def purge_data(home: Path | None = None, *, keychain: bool = True) -> PurgeResul
             result.removed.append(_delete_keychain_items())
         except Exception as exc:
             result.errors.append(f"Keychain: {exc}")
-    root = coffer_home(home)
-    vault = vault_root(home)
-    if vault.is_symlink():
-        with contextlib.suppress(OSError):
-            result.kept.append(str(vault.resolve()))
-    if root.exists():
-        errors: list[str] = []
-        shutil.rmtree(root, onexc=lambda _fn, path, exc: errors.append(f"{path}: {exc}"))
-        result.errors.extend(errors)
-        if not root.exists():
-            result.removed.append(str(root))
-    return result
+    return purge_files(home, result)
 
 
 # --- the daemon's purge at exit ----------------------------------------------------

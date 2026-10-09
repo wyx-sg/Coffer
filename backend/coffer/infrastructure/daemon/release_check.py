@@ -115,7 +115,7 @@ def asset_url(tag: str, name: str) -> str:
 async def fetch_latest(url: str = LATEST_URL) -> Release:
     """GET the latest release: bounded in time and size, nothing about the user."""
     async with (
-        httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True) as client,
+        httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=False) as client,
         client.stream("GET", url, headers=_HEADERS) as r,
     ):
         r.raise_for_status()
@@ -130,7 +130,7 @@ async def fetch_latest(url: str = LATEST_URL) -> Release:
 def fetch_latest_sync(url: str = LATEST_URL) -> Release:
     """:func:`fetch_latest` for the command line, which has no event loop."""
     with (
-        httpx.Client(timeout=TIMEOUT, follow_redirects=True) as client,
+        httpx.Client(timeout=TIMEOUT, follow_redirects=False) as client,
         client.stream("GET", url, headers=_HEADERS) as r,
     ):
         r.raise_for_status()

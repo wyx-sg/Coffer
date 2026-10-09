@@ -19,5 +19,5 @@ With the desktop app, this opens its uninstall dialog, where you confirm.
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `--yes, -y` <span class="cli-chip">选项</span> | 开关 |  | Do not ask before uninstalling |
-| `--delete-data` <span class="cli-chip">选项</span> | 开关 |  | Also delete ~/.coffer and the master key; asks for 'delete my data' at a terminal, whatever else is given |
+| `--delete-data` <span class="cli-chip">选项</span> | 开关 |  | Also delete ~/.coffer (not the Keychain); asks for 'delete my data' at a terminal, whatever else is given |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

@@ -9,7 +9,7 @@
 import { isTauri, shellInvoke } from "./tauri";
 
 /** One step of the daemon's uninstall (`UninstallStepOut`). */
-export interface UninstallStep {
+interface UninstallStep {
   key: string;
   outcome: "done" | "nothing" | "failed";
   detail: string;

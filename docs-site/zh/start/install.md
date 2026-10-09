@@ -251,7 +251,7 @@ coffer uninstall
 
 `~/.coffer` 会保留：重新安装 Coffer 后，你的保险库、密钥、技能、知识和设置都还在。重新安装后需要重新连接智能体。源码检出和它的 `.venv` 需要你自己删除。已经打开的 shell 在重启之前仍使用旧的 `PATH`。
 
-如果也要删除数据，在对话框里勾选**同时删除我的数据**；Coffer 会在删除任何东西之前要求 Touch ID。在终端里，`coffer uninstall --delete-data` 会要求你输入 `delete my data`，没有可输入的终端时什么也不做。两种方式都会在守护进程停止后一并删除主密钥的钥匙串条目。移到别处的保险库会保留在原处。
+如果也要删除数据，在对话框里勾选**同时删除我的数据**；Coffer 会在删除任何东西之前要求 Touch ID。应用还会在守护进程停止后删除主密钥的钥匙串条目。在终端里，`coffer uninstall --delete-data` 会要求你输入 `delete my data`，没有可输入的终端时什么也不做；它会删除 `~/.coffer`，但不碰钥匙串（只有 Coffer 的守护进程会访问钥匙串），请自己在“钥匙串访问”里删除 `coffer` 条目。移到别处的保险库会保留在原处。
 
 ::: danger 删除 ~/.coffer 不可恢复
 `~/.coffer` 里有你的数据库、知识集、技能库和密钥的主密钥。删除它会销毁所有已保存的密钥，以及只存在于那里的所有文档，包括 Coffer 从智能体那里接管的技能。如果以后可能还要用，先[备份主密钥](/zh/guides/secrets#the-master-key-and-its-backup)。
