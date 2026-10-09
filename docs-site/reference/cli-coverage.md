@@ -418,13 +418,13 @@ Every management operation a person does on a Coffer page or in the desktop app 
 
 | UI operation | Route | Command | Acceptance |
 | --- | --- | --- | --- |
-| Settings · About · Uninstall Coffer (desktop app) | `POST /daemon/uninstall` | `coffer uninstall` | `test_cli_parity.py` |
+| Settings · About · Uninstall Coffer (desktop app) | `POST /daemon/uninstall` | `coffer uninstall` | `test_lifecycle_cli.py` |
 
 ## `coffer update` {#update}
 
 | UI operation | Route | Command | Acceptance |
 | --- | --- | --- | --- |
-| Settings · About · Check for updates (installer binaries) | `GET /daemon/upgrade` | `coffer update` | `test_cli_parity.py` |
+| Settings · About · Check for updates (installer binaries) | `GET /daemon/upgrade` | `coffer update` | `test_lifecycle_cli.py` |
 
 ## `coffer usage` {#usage}
 

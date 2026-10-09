@@ -213,7 +213,7 @@ lint:
 # `npx --yes knip@<pinned>`: the same on-demand pattern `make desktop` uses for
 # the Tauri CLI, so it needs no entry in the lockfile.
 # A missing node_modules fails (it does not skip): a skipped frontend leg would
-# still let `make verify` record a fresh stamp for a tree whose frontend was
+# let `make verify` pass a tree whose frontend was
 # never checked.
 	@if [ ! -d $(FRONTEND)/node_modules ]; then \
 		echo "lint: $(FRONTEND)/node_modules missing — run 'make install' first"; exit 1; \

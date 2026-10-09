@@ -113,11 +113,11 @@ The [configuration reference](/reference/configuration) lists every variable the
 | --- | --- |
 | [`backend/coffer/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer) | The Python package, in four layers: `domain/`, `application/`, `infrastructure/`, `surfaces/`. See [Layering and code layout](/architecture/layering) |
 | `backend/tests/` | `unit/`, `integration/` and `contract/` test tiers |
-| `backend/*.spec` | PyInstaller specs for `coffer`, `coffer-daemon` and `coffer-mcp-shim` |
+| `backend/*.spec` | PyInstaller specs for `coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge` |
 | `backend/pyproject.toml`, `backend/uv.lock` | Dependencies, ruff, mypy, pytest and import-linter configuration |
 | [`frontend/`](https://github.com/wyx-sg/Coffer/tree/main/frontend) | The React web UI. See [Frontend](/contributing/frontend) |
 | [`desktop/`](https://github.com/wyx-sg/Coffer/tree/main/desktop) | The Tauri 2 desktop shell (Rust) that hosts the same `frontend/dist` |
-| [`e2e/`](https://github.com/wyx-sg/Coffer/tree/main/e2e) | Playwright suites: `web/` (browser), `mcp/` (MCP client to shim to daemon) and `visual/` (screenshot baselines, `make verify-visual`) |
+| [`e2e/`](https://github.com/wyx-sg/Coffer/tree/main/e2e) | Playwright suites: `web/` (browser), `mcp/` (MCP client to shim to daemon), `visual/` (screenshot baselines, `make verify-visual`), `docs/` (this site's app pictures, `make docs-shots`) and `installed/` (checks against an installed Coffer, `make verify-installed-*`) |
 | [`evals/`](https://github.com/wyx-sg/Coffer/tree/main/evals) | Eval harness for tool search and tool routing, with datasets and baselines |
 | [`openspec/`](https://github.com/wyx-sg/Coffer/tree/main/openspec) | The product contract: `specs/` (current), `changes/` (in flight and archived) |
 | [`docs/`](https://github.com/wyx-sg/Coffer/tree/main/docs) | `decisions/` (ADRs) and `research/`. Principles and architecture live in this site, under [Architecture](/architecture/) |
@@ -137,7 +137,7 @@ Run `make help` for the same list.
 | `make install-e2e-browsers` | Download Playwright's Chromium build |
 | `make hooks` | Install the pre-commit and commit-msg git hooks (trailing whitespace, YAML/TOML/JSON checks, ruff, prettier, commitlint) |
 | `make dev` | Run the daemon and Vite together (see above) |
-| `make verify` | `lint`, `docs-build`, `verify-unit`, `verify-integration`, `verify-contract` and `verify-acceptance` in order, printing each stage's time, then record a freshness stamp. The pre-PR gate |
+| `make verify` | `lint`, `docs-build`, `verify-unit`, `verify-integration`, `verify-contract` and `verify-acceptance` in order, printing each stage's time. The pre-PR gate |
 | `make verify-all` | `verify` plus `verify-e2e` |
 | `make verify-unit` | The unit-purity check, backend unit tests, then the frontend Vitest suite |
 | `make verify-integration` | Backend integration tests |
@@ -151,6 +151,9 @@ Run `make help` for the same list.
 | `make format` | `ruff format` and `ruff check --fix` over `backend`, `evals` and `e2e/installed`. The frontend is formatted by its own prettier setup, not by this target |
 | `make verify-visual` | Screenshot baseline: every route, light and dark. Not part of `verify` or `verify-all` |
 | `make visual-update` | Re-record this platform's screenshot baseline |
+| `make docs-shots` | Regenerate this site's app pictures (`docs-site/public/shots/`) from a seeded daemon |
+| `make verify-installed-mcp OUT=<dir>` | Opt-in MCP acceptance against an installed Coffer (`DAEMON_JSON=`, `SHIM=` to point at it). `OUT` must be outside the repository. Not part of `verify` or `verify-all` |
+| `make verify-installed-cli OUT=<dir>` | Opt-in smoke test of the installed frozen `coffer` binary (`COFFER=` to point at it); starts no daemon and touches nothing of yours. Not part of `verify` or `verify-all` |
 | `make test-durations` | Re-measure test durations for the integration shard balance (serial, about 15 minutes) |
 | `make coverage` | pytest and Vitest coverage reports, with no thresholds |
 | `make eval` | The deterministic eval suites and the baseline gate |
@@ -163,7 +166,7 @@ Run `make help` for the same list.
 | `make docs-build` | Build this site the way the Pages workflow does; fails on a Mermaid diagram that does not parse or a dead internal link. The second stage of `make verify` |
 | `make refresh-prices` | Refresh the bundled model price list (needs the network; not in `verify`) |
 | `make refresh-secret-rules` | Refresh the bundled gitleaks detection rules before a release (needs the network; not in `verify`) |
-| `make bundle-binaries` | Freeze `coffer`, `coffer-daemon` and `coffer-mcp-shim` with PyInstaller into `dist/` |
+| `make bundle-binaries` | Freeze `coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge` with PyInstaller into `dist/` |
 | `make desktop` | Build the unsigned `Coffer.app` and `.dmg` (slow: see below) |
 | `make desktop-lint` | `cargo check` and `cargo clippy -D warnings` on the desktop crate |
 | `make desktop-test` | `cargo test` on the desktop crate |
@@ -185,13 +188,13 @@ The contracts are cut from the daemon's own OpenAPI document, built without star
 
 ```sh
 npm run build --prefix frontend   # first: the daemon binary embeds frontend/dist
-make bundle-binaries              # dist/coffer, dist/coffer-daemon, dist/coffer-mcp-shim
+make bundle-binaries              # dist/coffer, dist/coffer-daemon, dist/coffer-mcp-shim, dist/coffer-seatalk-bridge
 bash scripts/smoke_test_bundle.sh dist
 ```
 
 `coffer-daemon.spec` bundles `frontend/dist` only if `frontend/dist/index.html` exists. If you skip the frontend build, you get a daemon that runs but serves no UI. The smoke test starts the bundled daemon under an isolated `HOME`, checks that it serves the web UI, and completes one MCP `initialize` round trip through the bundled shim.
 
-`scripts/check_pyinstaller_specs.py` (part of `make lint`) keeps the three `.spec` files level with the tree, because no CI job on a pull request runs PyInstaller.
+`scripts/check_pyinstaller_specs.py` (part of `make lint`) keeps the four `.spec` files level with the tree, because no CI job on a pull request runs PyInstaller.
 
 ## Build the desktop app
 

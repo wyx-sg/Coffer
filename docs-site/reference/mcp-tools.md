@@ -87,6 +87,9 @@ Always present. Background: [MCP gateway](/architecture/mcp-gateway).
 }
 ```
 
+An entry also carries `outputSchema` when the upstream tool declares one, and
+`group_description`, the group's description, for a [custom tool](/guides/custom-tools).
+
 ### Example call
 
 ```json
@@ -192,7 +195,7 @@ platform that can read threads tells the agent about it.
       "sent_at": "2026-10-01T08:05:00+00:00",
       "from_bot": false,
       "text": "the deploy is red again",
-      "files": [{ "path": "/Users/you/.coffer/tmp/seatalk-media/3f…a1.png", "mime": "image/png", "filename": "chart.png" }]
+      "files": [{ "path": "/Users/you/.coffer/content/channel-media/3f…a1.png", "mime": "image/png", "filename": "chart.png" }]
     }
   ],
   "has_more": true,
@@ -295,10 +298,10 @@ Your tool list is a budgeted slice: 88 more upstream tools are unlisted, all cal
 ## Knowledge, memory and logs without a tool {#memory-and-logs-without-a-tool}
 
 Coffer has no tool for knowledge, memory notes or its own records, because an agent can
-already do all of them with what it has. To add knowledge, write a Markdown document straight
-into a collection, as the `coffer-guide` skill describes; a file left in a collection's `.inbox/`
-folder is adopted by Coffer's sweep, which fills in any missing frontmatter and promotes it to a
-document. To change a document or a memory note, edit the file in place.
+already do all of them with what it has. To add knowledge, write a Markdown page into a
+collection's `pages/`, as the `coffer-guide` skill describes; a file left in a collection's
+`.inbox/` folder is adopted by Coffer's sweep and kept as a source under `sources/`, and a
+document written outside `pages/` and `sources/` is moved into `pages/`. To change a document or a memory note, edit the file in place.
 
 | To find | Do this |
 | --- | --- |
