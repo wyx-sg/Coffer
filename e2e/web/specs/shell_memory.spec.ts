@@ -1,17 +1,17 @@
 // e2e/web/specs/shell_memory.spec.ts
 //
-// The /memory overview against a live daemon: the partitions area renders from
-// the real REST answer.
+// The /memory sync page against a live daemon: it renders from the real
+// GET /memory/sync/state answer.
 //
-// The e2e daemon runs on an isolated HOME, so it normally has no partitions
-// and the page shows its first-run welcome in place of the table; a daemon
-// whose background read has already produced one shows the table instead. The walk asserts whichever the daemon's
-// own partition list says, so it holds either way.
+// The e2e daemon runs on an isolated HOME, so it normally has no agent with
+// memory to sync and the page shows its "No agent to sync" state; a daemon
+// with an agent registered shows the projects and agents sections with one
+// Sync now. The walk asserts whichever the daemon's own sync state says, so it
+// holds either way.
 //
 // No acceptance marker: the memory scenarios are pinned by the component
 // tests, which can assert the page's contents far more precisely. What this
-// adds is that the page and the partitions route agree
-// against a live daemon.
+// adds is that the page and the sync-state route agree against a live daemon.
 
 import { expect, test } from "@playwright/test";
 import { beforeEachInjectToken, readDaemonToken } from "./_helpers";
@@ -26,36 +26,28 @@ function api() {
   };
 }
 
-test("the Memory page shows the partitions area", async ({ page }) => {
+test("the Memory page shows the sync state", async ({ page }) => {
   const { base, headers } = api();
-  const res = await page.request.get(`${base}/memory/partitions`, { headers });
+  const res = await page.request.get(`${base}/memory/sync/state`, { headers });
   expect(res.ok()).toBe(true);
-  const { partitions } = (await res.json()) as { partitions: unknown[] };
+  const { agents } = (await res.json()) as { agents: unknown[] };
 
   await page.goto("/memory");
   await expect(
     page.getByRole("heading", { name: "Memory", level: 1 }),
   ).toBeVisible();
+  // Nothing on the page edits a memory's text.
+  await expect(page.getByRole("textbox", { name: /memory/i })).toHaveCount(0);
 
-  if (partitions.length === 0) {
-    // First run (canvas 5.2.08 / 5.2.09): the welcome stands in for the
-    // table, with the one Update memory action in it, not in the header too.
-    await expect(
-      page.getByText(/Nothing distilled yet|No agent memory to read/),
-    ).toBeVisible();
-    await expect(page.getByTestId("memory-partitions")).toHaveCount(0);
-    await expect(page.getByRole("table")).toHaveCount(0);
+  if (agents.length === 0) {
+    await expect(page.getByText("No agent to sync")).toBeVisible();
+    await expect(page.getByTestId("memory-projects")).toHaveCount(0);
     return;
   }
 
-  const area = page.getByTestId("memory-partitions");
-  await expect(area).toBeVisible();
-  await expect(area.getByRole("table")).toBeVisible();
+  await expect(page.getByTestId("memory-projects")).toBeVisible();
+  await expect(page.getByTestId("memory-agents")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /update memory/i }),
+    page.getByRole("button", { name: /^(Sync now|Syncing…)$/ }),
   ).toHaveCount(1);
-  // Tidy all hands every partition to the agent (Copy prompt with no managed agent).
-  await expect(
-    page.getByRole("button", { name: /^(Tidy all|Copy prompt)$/ }).first(),
-  ).toBeVisible();
 });

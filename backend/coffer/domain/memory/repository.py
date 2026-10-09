@@ -1,21 +1,20 @@
-"""Repository identity — what a partition is actually keyed on.
+"""Repository identity — what a project is actually keyed on.
 
-Spec memory "Identify a partition by its repository" and "Create no partition
-for a non-repository directory".
+Spec memory "Identify a project by a key that does not depend on the machine".
 
-A partition used to be keyed on the working directory a fact was learned in.
+A project used to be keyed on the working directory a fact was learned in.
 Measured on the maintainer's live vault, that produced three distinct
 failures at once, and all three are one mistake:
 
 * **Split.** A worktree of a repository is a different path, so what an agent
   learned in ``repo/.claude/worktrees/x`` filed away from what it learned in
   ``repo``. The same goes for a second clone.
-* **Orphan.** ``blackcat-entry-task`` survived as a partition whose directory
+* **Orphan.** ``blackcat-entry-task`` survived as a project whose directory
   no longer existed, so nothing could ever resolve to it and its notes were
   delivered to nobody.
-* **Impostor.** Six of sixteen partitions were dated scratch folders under
+* **Impostor.** Six of sixteen projects were dated scratch folders under
   ``~/Documents/Codex/<date>/<topic>`` — one-off session directories that
-  Codex happened to run in. Each got a permanent partition, and what was
+  Codex happened to run in. Each got a permanent project, and what was
   learned there could never reach the repository it was actually about.
 
 A path is not an identity; a **repository** is. This module holds the pure
@@ -78,11 +77,11 @@ def repository_key(*, remote_url: str, root_path: str) -> str:
     """The identity a repository answers to.
 
     ``remote_url`` wins when it normalises, so a second clone and a worktree
-    land in one partition. A repository with no usable remote falls back to
+    land in one project. A repository with no usable remote falls back to
     its own root path, which is the only thing that can distinguish it.
     Returns ``""`` when neither is usable — the caller is not looking at a
-    repository, and "Create no partition for a non-repository directory" says
-    that gets no partition.
+    repository, and spec memory "Identify a project by a key that does not
+    depend on the machine" says that gets no project.
     """
     remote = normalise_remote(remote_url)
     if remote:
@@ -94,11 +93,11 @@ def repository_key(*, remote_url: str, root_path: str) -> str:
 
 
 def repository_name(*, remote_url: str, root_path: str) -> str:
-    """The readable name a partition derived from this repository should use.
+    """The readable name a project derived from this repository should use.
 
     The repository's own last path segment — what the developer calls it —
     preferring the remote's, so two clones under different local directory
-    names still agree on one name rather than racing to create two partitions
+    names still agree on one name rather than racing to create two projects
     that :func:`repository_key` would then insist are one.
     """
     remote = normalise_remote(remote_url)

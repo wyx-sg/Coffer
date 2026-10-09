@@ -259,16 +259,14 @@ def test_a_restart_on_a_new_port_is_found_with_no_agent_config_rewritten(
 ) -> None:
     """The daemon answering on one port and configured for another binds the new
     one on restart, publishes it, and every Coffer entry in an agent's config —
-    which names no port — reaches it through the one discovery the CLI, the MCP
-    shim and the memory hook share."""
+    which names no port — reaches it through the one discovery the CLI and the
+    MCP shim share."""
     from coffer.domain.agent.config_files import ConfigFileFormat
     from coffer.domain.agent.mcp_install import apply_install
-    from coffer.domain.memory.delivery import entry_command
     from coffer.surfaces.cli._client import discover
 
     shim = "/Users/u/.coffer/bin/coffer-mcp-shim"
     mcp_entry = apply_install(ConfigFileFormat.JSON, "{}", shim, agent_uid="a-1")
-    hook = entry_command("a-1", cli="/Users/u/.coffer/bin/coffer")
 
     monkeypatch.setattr(daemon_config, "DEFAULT_PORT", _STAND_IN_DEFAULT)
     info, sock = bootstrap.acquire()  # the old start, on the (stand-in) default
@@ -289,6 +287,6 @@ def test_a_restart_on_a_new_port_is_found_with_no_agent_config_rewritten(
         sock.close()
 
     # Nothing an agent carries names a port, so nothing needs a rewrite.
-    for text in (json.dumps(json.loads(mcp_entry)["mcpServers"]["coffer"]), hook):
+    for text in (json.dumps(json.loads(mcp_entry)["mcpServers"]["coffer"]),):
         for port in (str(old_port), str(_FIXED_PORT), "127.0.0.1", "localhost", "--port"):
             assert port not in text

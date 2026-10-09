@@ -17,7 +17,7 @@ The state has five different natures, and each wants different treatment:
 - **Facts about this machine** (which agents are enabled here, the sync remote, retention) must never travel, and can be set again if lost.
 - **Media and the chat workspace** are your only copy, but large and not worth syncing.
 - **History** (audit, invocations, conversations) is append-only and pruned.
-- **Derived state** (health checks, caches, the memory tree) can be rebuilt from the rest.
+- **Derived state** (health checks, caches, the rendered guide skill) can be rebuilt from the rest.
 
 So the class decides the directory, and the directory decides whether something can travel. "Reach never syncs" stops being a rule a translator has to remember and becomes a fact about where reach is stored.
 
@@ -43,20 +43,20 @@ flowchart LR
     L["local/ — JSON<br/>this machine only"]
     C["content/ — media, workspace<br/>your only copy"]
     R[("runs.db — history")]
-    D["derived/ — rebuilt<br/>derived.db, memory, caches"]
+    D["derived/ — rebuilt<br/>derived.db, caches"]
   end
   V -- "sync (optional)" --> Remote["your git remote"]
 ```
 
 | Class | Where | What it holds | Syncs | History | Safe to delete |
 | --- | --- | --- | --- | --- | --- |
-| **vault** | `vault/` | Resource definitions, state documents, knowledge, skills, secret ciphertext, machine descriptors. | Yes, when a remote is set | Git | No: it is the only copy |
+| **vault** | `vault/` | Resource definitions, state documents, knowledge, skills, the memory hub, secret ciphertext, machine descriptors. | Yes, when a remote is set | Git | No: it is the only copy |
 | **local** | `local/` | Machine-local resources (agents, channels), reach, channel pairings, the sync remote, retention, the secret boundary's approvals, machine-local ciphertext. | Never | No | You lose settings you would set again |
 | **content** | `content/` | Chat and channel attachments, the chat workspace. | Not yet | No | No: it is your only copy |
 | **runs** | `runs.db` (and `skill-data/`, `config-backups/`) | Audit log, MCP invocations, conversations, channel threads and outbox, sync rounds and usage; in `skill-data/`, the logs, journals and temp files skill scripts write; in `config-backups/`, the copies of agent config files made before each rewrite. | Never | It *is* history | You lose history |
-| **derived** | `derived/` | `derived.db`, the memory tree, Coffer's own guide skill, editor copies of sync conflicts, channel owners' pictures. | Never | No | Yes: it is rebuilt |
+| **derived** | `derived/` | `derived.db`, Coffer's own guide skill, editor copies of sync conflicts, channel owners' pictures. | Never | No | Yes: it is rebuilt |
 
-Which class a resource belongs to is declared by its kind, with a per-row refinement: most kinds live in the vault, `agent` and `channel` are local (an agent's config directory and a bot connection are facts about this machine), `memory` partitions are derived, and the builtin `coffer-guide` skill is derived because every machine renders its own.
+Which class a resource belongs to is declared by its kind, with a per-row refinement: most kinds live in the vault, `agent` and `channel` are local (an agent's config directory and a bot connection are facts about this machine), and the builtin `coffer-guide` skill is derived because every machine renders its own.
 
 ### The vault
 
@@ -70,6 +70,7 @@ Which class a resource belongs to is declared by its kind, with a per-row refine
 ├── state/cli-tools/tools.json          the command-line tools you added by hand, and your edits to required ones
 ├── knowledge/<collection>/…            Markdown documents, hidden .inbox/ for new material
 ├── skills/<name>/…                     skill master folders
+├── memory/global/, memory/projects/<project>/  the memory hub: one Markdown file per memory
 ├── secret/<ref>.enc                    Fernet ciphertext, one file per secret
 └── machines/<machine id>.json          one descriptor per machine that syncs
 ```
@@ -113,6 +114,7 @@ What Coffer ignores in the repository is written into `.git/info/exclude`, never
 ├── engine.json                   when this machine last changed engine settings
 ├── retention.json                retention policy per prunable table
 ├── skill-source-status.json      what this machine last found at a Git-imported skill's source
+├── memory-sync.json              what the memory sync wrote into this machine's agents (and memory-sync-preview.json)
 ├── secret/                       machine-local ciphertext (proxy tokens), the not-a-secret list (plaintext-ignored.json)
 ├── secret-boundary/              bindings, approvals, switches, first-stored times
 ├── sync/remote.json              the one sync remote
@@ -169,13 +171,12 @@ Every connection runs this pragma suite:
 ├── genai-prices.json            the refreshed model price list
 ├── reported-prices.json         prices a provider reported for its own models
 ├── secret-citations.json        which resources cite which secret, rebuilt on change
-├── memory/<partition>/          the memory tree (MEMORY.md, notes/, RETIRED.md, .raw/)
-├── resources/                   derived resource files (memory partitions, coffer-guide)
+├── resources/                   derived resource files (coffer-guide)
 ├── skills/coffer-guide/         Coffer's own guide skill, rendered from the build
 └── sync-conflicts/              editor copies of a stopped round's conflicting files
 ```
 
-`derived.db` has no Alembic lineage. Its tables are created at open, and its `PRAGMA user_version` is compared with the build's: a file at any other version is deleted and created again. Deleting all of `derived/` with the daemon stopped is always safe; **Settings → Data** clears the caches for you.
+`derived.db` has no Alembic lineage. Its tables are created at open, and its `PRAGMA user_version` is compared with the build's: a file at any other version is deleted and created again. Deleting all of `derived/` with the daemon stopped is always safe.
 
 ## The one write path into the vault
 

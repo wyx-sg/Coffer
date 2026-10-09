@@ -18,14 +18,12 @@ from typing import Any
 from coffer.application.chat import questions
 from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.service import ConversationRepo
-from coffer.domain.channel_turn import channel_turn_env
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.infrastructure.chat.adapter_support import (
     ChannelNoteResolver,
     HomeEnvResolver,
     ManagedCheck,
-    MemoryContextComposer,
     ModelLister,
     compose_system_context,
     require_managed,
@@ -37,7 +35,6 @@ from coffer.infrastructure.chat.codex_app_server import (
 )
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
 from coffer.infrastructure.chat.document_extract import default_document_extractor
-from coffer.infrastructure.chat.prompt_memory import MemoryRetriever, bind_prompt_memory
 from coffer.infrastructure.chat.transcribe import Transcriber
 from coffer.infrastructure.platform.user_path import which_on_user_path
 
@@ -66,11 +63,9 @@ class CodexAppServerProvider:
         which: Any = which_on_user_path,
         transcriber_factory: TranscriberFactory | None = None,
         list_models: ModelLister | None = None,
-        compose_memory_context: MemoryContextComposer | None = None,
         resolve_channel: ChannelNoteResolver | None = None,
         resolve_home_env: HomeEnvResolver | None = None,
         is_managed: ManagedCheck | None = None,
-        retrieve_memory: MemoryRetriever | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: AppServerSessionFactory = (
@@ -80,12 +75,11 @@ class CodexAppServerProvider:
         # None ⇒ voice is never transcribed and the audio file reaches the agent
         # as-is. That is the default: nothing leaves the machine unasked.
         self._transcriber_factory = transcriber_factory
-        # The same two notes the SDK provider has always sent, plus the memory
-        # digest. Codex sent none of them until the app-server's
+        # The same two notes the SDK provider has always sent. Codex sent
+        # neither of them until the app-server's
         # ``developerInstructions`` field made it possible — so a Codex agent
         # answering a phone had no idea it was on one.
         self._list_models = list_models
-        self._compose_memory_context = compose_memory_context
         # Turns the conversation's stored channel uid into the name the system
         # prompt reads. ``None`` ⇒ a channel turn still gets its channel append,
         # just without naming the channel — the uid is what decides that it IS a
@@ -97,9 +91,6 @@ class CodexAppServerProvider:
         # Whether an enabled agent of this type is managed by Coffer; chat offers
         # and runs managed agents only. ``None`` ⇒ not asked.
         self._is_managed = is_managed
-        # A channel turn's per-prompt notes (spec memory "Retrieve the notes a
-        # prompt names for a channel turn"). ``None`` ⇒ none.
-        self._retrieve_memory = retrieve_memory
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -142,16 +133,12 @@ class CodexAppServerProvider:
         # reached through Coffer's model proxy, which injects the real key
         # upstream, and Codex authenticates to the proxy with its own ``auth``
         # command. The overrides are CODEX_HOME, when the agent has its own
-        # config dir, and the channel-turn mark — MERGED with os.environ,
+        # config dir, and the turn's token — MERGED with os.environ,
         # because create_subprocess_exec REPLACES the environment; with none
         # the env stays None (inherit).
         overrides: dict[str, str] = (
             dict(await self._resolve_home_env()) if self._resolve_home_env else {}
         )
-        # A channel turn's process is marked, so the memory hook Codex runs
-        # inside it leaves to this turn the index and notes it already carries
-        # (spec memory "Deliver to channel turns through the system prompt").
-        overrides.update(channel_turn_env(conv.channel_uid or ""))
         # The turn's token, for ``coffer__ask`` (the ``coffer`` entry in Codex's
         # config passes ``COFFER_TURN_TOKEN`` through to the shim).
         overrides.update(questions.turn_env(conversation_id))
@@ -159,10 +146,8 @@ class CodexAppServerProvider:
         system_context = await compose_system_context(
             agent_key=self.agent_key,
             channel_uid=conv.channel_uid or "",
-            cwd=config.cwd,
             model=config.model,
             list_models=self._list_models,
-            compose_memory=self._compose_memory_context,
             resolve_channel=self._resolve_channel,
             conversation_id=conversation_id,
         )
@@ -184,13 +169,6 @@ class CodexAppServerProvider:
             # text-extracted so it reaches the agent as text (spec chat "Extract
             # document attachments to text").
             document_extractor=default_document_extractor(),
-            prompt_memory=bind_prompt_memory(
-                self._retrieve_memory,
-                channel_uid=conv.channel_uid or "",
-                agent_key=self.agent_key,
-                cwd=config.cwd,
-                conversation_id=conversation_id,
-            ),
         )
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:

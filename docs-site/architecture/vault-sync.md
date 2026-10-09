@@ -38,8 +38,8 @@ Everything committed in the vault repository, and nothing else:
 | Travels (in `~/.coffer/vault`) | Stays on each machine |
 | --- | --- |
 | Resource files of `mcp_server`, `skill`, `provider` and `knowledge` | Agents (`local/resources/agent/`) and channels (`local/resources/channel/`): an agent's config directory and a bot connection are facts about this machine |
-| Knowledge documents and `.inbox/` material, skill master folders | Reach (`local/reach.json`), custom tools' reach, channel pairings (`local/channel-peers.json`), retention, the sync remote itself |
-| MCP capability switches, Coffer's settings (`state/`: upkeep, the speech-to-text model), secret names and descriptions, hand-added CLIs | The derived tree: memory, caches, `derived.db`, the rendered `coffer-guide` skill |
+| Knowledge documents and `.inbox/` material, skill master folders, the memory hub (`memory/`) | Reach (`local/reach.json`), custom tools' reach, channel pairings (`local/channel-peers.json`), retention, the sync remote itself |
+| MCP capability switches, Coffer's settings (`state/`: upkeep, the speech-to-text model), secret names and descriptions, hand-added CLIs | The derived tree: caches, `derived.db`, the rendered `coffer-guide` skill; the memory-sync ledger (`local/memory-sync.json`) |
 | Secret ciphertext (`secret/`), only with `include_secret` | Machine-local ciphertext and the not-a-secret list (`local/secret/`), the secret boundary, the master key |
 | One descriptor per machine (`machines/<id>.json`) | `runs.db` (conversations, audit, invocations, rounds), `content/`, logs, `daemon-config.json` |
 

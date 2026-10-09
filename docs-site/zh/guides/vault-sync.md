@@ -101,9 +101,9 @@ Bitbucket 的 App password 需要你自己的账号名，因此不受支持；�
 | 会传输 | 留在每台机器上 |
 | --- | --- |
 | MCP 服务器、技能、知识集和提供商的定义（`vault/resources/`） | 智能体（`local/resources/agent/`）和消息渠道（`local/resources/channel/`）：每台机器注册自己的 |
-| 知识文档（`vault/knowledge/`）、技能文件夹（`vault/skills/`） | **生效范围**：每个资源的启用开关和智能体范围（`local/reach.json`） |
+| 知识文档（`vault/knowledge/`）、技能文件夹（`vault/skills/`）、记忆中心库（`vault/memory/`） | **生效范围**：每个资源的启用开关和智能体范围（`local/reach.json`） |
 | MCP 能力开关、语音转文字模型和定期维护设置（`vault/state/`） | 消息渠道配对（`local/channel-peers.json`）、同步远端、保留策略、密钥边界的批准（`local/`） |
-| 密钥密文（`vault/secret/`），需要**包含加密的密钥** | 记忆、缓存和 `coffer-guide` 技能（`derived/`），每台机器各自重建 |
+| 密钥密文（`vault/secret/`），需要**包含加密的密钥** | 缓存和 `coffer-guide` 技能（`derived/`），每台机器各自重建；记忆同步写进本机智能体的记录（`local/memory-sync.json`） |
 | 每台机器一个描述文件（`vault/machines/`） | 对话、审计和调用日志（`runs.db`）、附件（`content/`）、日志、主密钥 |
 
 需要知道的几个后果：

@@ -1,7 +1,7 @@
-"""What Coffer keeps on this machine, measured, and the one part that is safe to clear.
+"""What Coffer keeps on this machine, measured.
 
-Settings > Data (spec daemon "Report what Coffer stores and clear the
-rebuildable cache") shows four kinds of data, each one of the class
+Settings > Data (spec daemon "Report what Coffer stores") shows three kinds
+of data, each one of the class
 directories of ADR storage-is-five-classes-by-nature, resolved from ``HOME``
 through ``infrastructure.vault.home`` like every other reader of them:
 
@@ -17,13 +17,7 @@ through ``infrastructure.vault.home`` like every other reader of them:
   the skills' working files in ``skill-data/`` (logs, journals and temp files
   their scripts write; the ``skill_data`` retention policy) and the copies of
   agents' config files Coffer kept before rewriting them (``config-backups/``;
-  the ``config_backups`` retention policy);
-- **rebuildable cache** — the memory tree (fully derived from the agents' own
-  memory; spec memory "Keep the memory tree derived and local") under
-  ``derived/``. Clearing it deletes the
-  files and leaves every partition's record, so the next memory update refills
-  the folders. The rest of ``derived/`` (the uid index, ``derived.db``, a
-  stopped sync round's hand-merge copies) is not the cache this clears.
+  the ``config_backups`` retention policy).
 
 Everything here blocks on the filesystem; callers run it in a thread.
 """
@@ -32,13 +26,11 @@ from __future__ import annotations
 
 import os
 import pathlib
-import shutil
 import subprocess
 from dataclasses import dataclass
 
 from coffer.infrastructure.channel.media_root import default_media_dir
 from coffer.infrastructure.logging.files import log_dir
-from coffer.infrastructure.memory.paths import memory_root
 from coffer.infrastructure.vault.home import (
     config_backups_dir,
     content_root,
@@ -123,15 +115,10 @@ class StorageUsage:
     vault: VaultUsage
     local_content: LocalContentUsage
     history: Measured
-    cache_bytes: int
-
-
-def cache_roots() -> list[pathlib.Path]:
-    return [memory_root()]
 
 
 def measure() -> StorageUsage:
-    """Measure the four kinds."""
+    """Measure the three kinds."""
     vault_dir = vault_root()
     vault = VaultUsage(
         path=str(vault_dir),
@@ -162,23 +149,7 @@ def measure() -> StorageUsage:
         vault=vault,
         local_content=local,
         history=history,
-        cache_bytes=sum(tree_bytes(p) for p in cache_roots()),
     )
-
-
-def clear_cache() -> int:
-    """Empty every cache root (the roots themselves stay); return the bytes freed."""
-    freed = 0
-    for root in cache_roots():
-        if root.is_symlink() or not root.is_dir():
-            continue
-        for child in root.iterdir():
-            freed += tree_bytes(child)
-            if child.is_dir() and not child.is_symlink():
-                shutil.rmtree(child, ignore_errors=True)
-            else:
-                child.unlink(missing_ok=True)
-    return freed
 
 
 __all__ = [
@@ -186,8 +157,6 @@ __all__ = [
     "Measured",
     "StorageUsage",
     "VaultUsage",
-    "cache_roots",
-    "clear_cache",
     "database_path",
     "git_version_count",
     "measure",

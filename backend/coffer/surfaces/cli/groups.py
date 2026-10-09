@@ -38,7 +38,7 @@ GROUP_HELP: dict[str, str] = {
     "knowledge": "Knowledge collections (documents are plain files you edit directly).",
     "log": "Read Coffer's audit, MCP and daemon logs.",
     "mcp": "MCP servers: register, change, test, their tools and logs.",
-    "memory": "Memory partitions (notes are plain files you edit directly).",
+    "memory": "Memory sync into each agent's own memory: state, sync now, preview, undo, curate.",
     "model": "Ask a model endpoint which models it serves, or test it.",
     "path": "Where Coffer keeps files you read directly.",
     "provider": "Model providers: connections, prices, switching agents' models.",

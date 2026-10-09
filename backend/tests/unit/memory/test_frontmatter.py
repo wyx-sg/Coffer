@@ -1,21 +1,18 @@
 """The fence every memory file goes through, and the two exactness rules that
-are load-bearing rather than cosmetic (spec memory "Keep raw entries verbatim
-and hidden", "Record retirements so they stick").
+are load-bearing rather than cosmetic (spec memory "Keep every agent's memories
+in a hub in the vault").
 
 ``render_frontmatter``/``split_frontmatter`` are the only reader and writer of
-the ``---``-fenced block under ``~/.coffer/memory/``, and two of their
-properties decide whether the layer works at all:
+the ``---``-fenced block of a hub entry or a Claude Code copy, and two of their
+properties matter:
 
-* **A body comes back byte for byte**, whitespace and line endings included.
-  A raw entry is an agent's own words carried verbatim, and "re-run the
-  distillation without re-reading the agents" quietly stops meaning what it
-  says the moment a round-trip rewrites one character.
+* **A body comes back byte for byte**, whitespace and line endings included,
+  so a memory re-read unchanged is never published as an edit.
 * **The closing fence is recognised at column 0 only.** PyYAML writes a
-  multi-line string as an *indented* continuation, so a retirement reason
-  containing a horizontal rule puts ``    ---`` inside the block. A parser
-  that stripped each line before comparing would end the frontmatter there,
-  hand back an empty record, and — because ``RETIRED.md`` is the next pass's
-  exclusion list — re-open every note retired for that reason, forever.
+  multi-line string as an *indented* continuation, so a description containing
+  a horizontal rule puts ``    ---`` inside the block. A parser that stripped
+  each line before comparing would end the frontmatter there and hand back an
+  empty record.
 """
 
 from __future__ import annotations

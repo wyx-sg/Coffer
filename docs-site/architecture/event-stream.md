@@ -19,7 +19,7 @@ The same property makes lost events harmless in the worst case. A client that mi
 
 Every write to a resource — whether it came from the web UI, an agent's MCP call or a sync import — passes through the resource framework, which already announces it to the [reconciler](/architecture/reconciler) so the next pass can come sooner. The event stream listens at the same place. No kind has to remember to announce its own writes, so no kind can forget to.
 
-A few things change without touching a resource row, so their owners announce them directly as a change of their kind: a knowledge collection's inbox and documents, a memory partition's notes, and a model provider's health verdict. Each is still only an invalidation.
+A few things change without touching a resource row, so their owners announce them directly as a change of their kind: a knowledge collection's inbox and files, and a model provider's health verdict. Each is still only an invalidation.
 
 The other thing that is not a resource write is the "needs you" list on the Overview page. It is computed on demand from each kind's own signals — a server whose test failed, an agent that is not connected, a sync stopped on a conflict — and nothing records the moment it changes. So the daemon watches it: after resource writes, after each reconcile pass and on a slow timer it recomputes a fingerprint of the list, and announces an `attention` change only when the fingerprint moves. The fingerprint covers which items there are and how severe, not their wording, so rewording a message does not wake every page.
 

@@ -332,8 +332,26 @@ function install(setup: Setup = {}) {
             },
           ],
         };
-      case "/memory/partitions":
-        return { partitions: [{ uid: "mp1", name: "coffer", note_count: 9 }] };
+      case "/memory/sync/state":
+        return {
+          projects: [
+            {
+              key: "github.com/me/coffer",
+              folder: "c",
+              checked_out: null,
+              memories: 7,
+              agents: {},
+            },
+          ],
+          global_memories: 2,
+          last_synced_at: "",
+          agents: [],
+          preview: null,
+          running: false,
+          last_report: {},
+          machine: "m",
+          codex_imports_claude: null,
+        };
       case "/sync/status":
         return {
           configured: true,
@@ -571,8 +589,6 @@ describe("each health tile carries the numbers and lines the board shows", () =>
         ...EMPTY_ATTENTION,
         items: [
           attention("agent", "a-codex", "Codex", "agent_not_connected"),
-          // A hook edited by hand is no missing connection.
-          attention("agent", "a-claude", "Claude Code", "stale_command"),
           attention("channel", "c1", "SeaTalk", "channel_reconnecting", minutes(30)),
           attention("cli", "gh", "gh", "cli_logged_out"),
         ],
@@ -584,9 +600,25 @@ describe("each health tile carries the numbers and lines the board shows", () =>
           collections: [{ uid: "k1", name: "shopee", page_count: 142, updated_at: minutes(1) }],
         };
       }
-      if (path === "/memory/partitions") {
+      if (path === "/memory/sync/state") {
         return {
-          partitions: [{ uid: "mp1", name: "coffer", note_count: 9, updated_at: minutes(14) }],
+          projects: [
+            {
+              key: "github.com/me/coffer",
+              folder: "c",
+              checked_out: null,
+              memories: 7,
+              agents: {},
+            },
+          ],
+          global_memories: 2,
+          last_synced_at: minutes(14),
+          agents: [],
+          preview: null,
+          running: false,
+          last_report: {},
+          machine: "m",
+          codex_imports_claude: null,
         };
       }
       if (path === "/sync/status") {
@@ -623,7 +655,7 @@ describe("each health tile carries the numbers and lines the board shows", () =>
       expect(await tile("Knowledge")).toHaveTextContent(/1 collection · edited (today )?\d/),
     );
     await waitFor(async () =>
-      expect(await tile("Memory")).toHaveTextContent("Last update 14 min ago"),
+      expect(await tile("Memory")).toHaveTextContent(/9memories.*Last synced 14 min ago/),
     );
     const sync = await tile("Sync");
     await waitFor(() => expect(sync).toHaveTextContent("4 min ago"));
@@ -783,48 +815,6 @@ describe("a resolved problem leaves overview on its own", () => {
     expect(within(needsYou()).queryByText("github")).toBeNull();
   });
 });
-
-const HOOK_ITEM = {
-  kind: "agent",
-  uid: "a-claude",
-  title: "Claude Code",
-  reason_code: "stale_command",
-  reason:
-    "Coffer's memory hook in this agent's settings no longer matches what Coffer installs (its command changed).",
-  severity: "warning",
-  since: ago(HOUR),
-  action: {
-    verb: "repair",
-    method: "POST",
-    path: "/api/v1/reconcile/apply",
-    body: { ids: ["delivery_hook:a-claude"] },
-  },
-};
-
-acceptance(
-  "web-ui",
-  "a memory hook changed by hand opens the agent's hooks tab from overview",
-  async () => {
-    install({ attention: { ...EMPTY_ATTENTION, items: [HOOK_ITEM] } });
-    renderPage();
-    const name = await within(needsYou()).findByText("Claude Code");
-    const row = name.closest("li") as HTMLElement;
-    expect(within(row).getByText(/no longer matches what Coffer installs/)).toBeInTheDocument();
-    expect(within(row).getByText(/Since/)).toBeInTheDocument();
-    // One action, on the agent's Hooks tab; the name still opens the agent.
-    expect(within(row).getAllByRole("link")).toHaveLength(2);
-    expect(within(row).getByRole("link", { name: /^Repair hook/ })).toHaveAttribute(
-      "href",
-      "/agents/claude_code/hooks",
-    );
-    expect(within(row).getByRole("link", { name: /^Claude Code/ })).toHaveAttribute(
-      "href",
-      "/agents/claude_code",
-    );
-    // Every row has the ⋯ menu.
-    expect(within(row).getByRole("button", { name: "More for Claude Code" })).toBeInTheDocument();
-  },
-);
 
 acceptance("web-ui", "an ignored item leaves needs you whatever its severity", async () => {
   install({ attention: { ...EMPTY_ATTENTION, items: [ITEMS[0], ITEMS[1]] } });

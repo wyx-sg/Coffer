@@ -3,7 +3,7 @@
 
 A resource is a JSON document at ``resources/<kind>/<name>.json`` under the
 directory of its class: ``vault/`` (committed), ``local/`` (agents: this
-machine only) or ``derived/`` (memory partitions and Coffer's own skill:
+machine only) or ``derived/`` (Coffer's own skill:
 rebuilt). Nothing keys on the path — the uid inside the file is the identity —
 so this module indexes whatever it finds by uid.
 

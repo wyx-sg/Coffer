@@ -1,19 +1,19 @@
 """Coffer's own operating settings: the work it does unattended and which model
 transcribes speech (spec
-internal-engine "Carry a switch and interval for each of the two unattended passes")."""
+internal-engine "Carry a switch and interval for each unattended pass")."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
 
-#: The passes Coffer runs on its own behalf, and where each one's built-in
-#: interval lives. Named here rather than in the workers so a surface can offer
-#: exactly these two without importing two application modules.
-AGGREGATE = "aggregate"
-DISTIL = "distil"
-#: The memory sync (spec memory "Sync on an interval and on demand").
+#: The pass Coffer runs on its own behalf: the memory sync (spec memory "Sync
+#: on an interval and on demand"). Named here rather than in the worker so a
+#: surface can offer it without importing an application module.
 MEMORY_SYNC = "memory_sync"
+#: The retired layer's aggregation pass. A settings document an older build
+#: wrote may still carry it; its switch and interval become the memory sync's.
+RETIRED_AGGREGATE = "aggregate"
 
 
 @dataclass(frozen=True)
@@ -36,21 +36,10 @@ class GlobalInternalEngineConfig:
     unattended and the speech-to-text model."""
 
     updated_at: datetime
-    #: Aggregation (spec memory "Aggregate on an interval and on demand"): reads
-    #: the agents' own memory files and
-    #: writes only the derived tree, so it defaults ON — there is no unattended
-    #: REWRITE here for an operator to consent to.
-    auto_aggregate_enabled: bool = True
-    aggregate_interval_s: int | None = None
-    #: The distil pass (spec memory "Distil each raw entry into a note mechanically"): it
-    #: rewrites the derived digest, which "Keep the memory tree derived
-    #: and local" makes reproducible by deleting and re-running, so
-    #: this defaults ON for the same reason.
-    auto_distil_enabled: bool = True
-    distil_interval_s: int | None = None
-    #: The memory sync: it writes into the agents' own memory, so it stays
-    #: OFF until the person turns it on.
-    memory_sync_enabled: bool = False
+    #: The memory sync. On by default: the first sync on a machine, and any
+    #: large one, waits for the person to confirm a preview before it writes
+    #: into an agent (spec memory "Preview a first or large sync").
+    memory_sync_enabled: bool = True
     memory_sync_interval_s: int | None = None
     #: The speech-to-text model, on the connection marked ``transcribe_default``
     #: (spec internal-engine "Transcribe speech on its own connection and
@@ -61,14 +50,10 @@ class GlobalInternalEngineConfig:
     def upkeep(self, pass_name: str) -> UpkeepSetting:
         """One pass's switch and timer, by the names above.
 
-        A surface asks for a pass by name rather than reaching for one of four
+        A surface asks for a pass by name rather than reaching for its
         fields, so adding a pass adds one entry here instead of a branch in
         every reader.
         """
-        if pass_name == AGGREGATE:
-            return UpkeepSetting(self.auto_aggregate_enabled, self.aggregate_interval_s)
-        if pass_name == DISTIL:
-            return UpkeepSetting(self.auto_distil_enabled, self.distil_interval_s)
         if pass_name == MEMORY_SYNC:
             return UpkeepSetting(self.memory_sync_enabled, self.memory_sync_interval_s)
         raise ValueError(f"unknown upkeep pass: {pass_name}")

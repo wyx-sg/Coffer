@@ -107,7 +107,7 @@ owned by no feature and is always there:
   CLIs             /clis              — the command-line tools skills require
  CONTEXT
   Knowledge        /knowledge         — the collections under ~/.coffer/vault/knowledge/
-  Memory           /memory            — the partitions aggregated from the agents' own stores
+  Memory           /memory            — what the agents learned, synced between them and between machines
  SYSTEM
   Secrets          /secrets           — every stored secret and what uses it
   Activity         /activity          — what changed, what was called, what broke
@@ -204,7 +204,7 @@ field. A browser tab has no strip and no arrows; its sidebar toggle sits beside 
 - **AND** ⌘[ and ⌘] go back and forward the same way, except in a text field
 
 ### Requirement: Use one shared table for every list surface
-Every list surface that is a table — agents, memory partitions, the rounds
+Every list surface that is a table — agents, the rounds
 on Sync's Status tab — MUST use one shared table. It is searchable, filterable
 and paginated where its list needs that, and it behaves the same everywhere:
 
@@ -281,7 +281,7 @@ skills (`/skills/<name>`), MCP servers (`/mcp-servers/<name>`) and custom tool
 groups (`/custom-tools/<group>`), which are `mcp_server` resources — the agent's
 type for agents (`/agents/<type>`), and the command for CLIs (`/clis/<command>`).
 A kind whose name can be renamed — model providers, channels, knowledge
-collections, memory partitions — MUST keep its immutable `uid` as the `<id>`
+collections — MUST keep its immutable `uid` as the `<id>`
 (`/model-providers/<uid>`), because a renamed name would break every
 address to it. A page opened from a tab (a plugin, a direct MCP entry, an
 unmanaged skill) nests under that tab's path.
@@ -315,7 +315,7 @@ providers and Channels lists show none. A row of an object that is off leaves it
 Reach cell empty. Every detail page of a scoped kind MUST carry the same button
 in its header — a channel's sits in its Overview tab's agents section instead,
 beside the agent the channel answers with. A kind that declares no scope — an
-agent, a knowledge collection, a memory partition — MUST carry neither the
+agent, a knowledge collection — MUST carry neither the
 column, the button, nor a bulk reach action; see "Offer reach as one choice in a
 panel". No list offers a filter by reach.
 
@@ -326,9 +326,9 @@ panel". No list offers a filter by reach.
 - **AND** each is one button rather than a row of segments
 
 #### Scenario: a kind that cannot be disabled shows no status control
-- **GIVEN** the knowledge and memory list pages and one collection's and one partition's page
+- **GIVEN** the Agents page and one agent's page, and the Knowledge page and one collection's page
 - **WHEN** each renders
-- **THEN** no list has a Status or Reach column and no header carries a reach or status button
+- **THEN** the Agents list has no Status or Reach column, the collection tree carries no reach mark, and neither the agent's header nor the collection's carries a reach button or an on/off switch
 
 ### Requirement: Offer reach as one choice in a panel
 The button MUST open a popover where "who does this reach?" is a single choice
@@ -1027,8 +1027,8 @@ rather than by how Coffer is built, and MUST open on General:
   token on Settings › Security"); and whether a secret waits for approval
   before it goes somewhere new. It lists and edits no stored secret; those are
   on the Secrets page (see "Manage stored secrets on the Secrets page").
-- **Data** (`/settings/data`) — what Coffer stores, by kind: Vault, Local content, History
-  and Rebuildable cache (see "Group the Data tab by what kind of data it is").
+- **Data** (`/settings/data`) — what Coffer stores, by kind: Vault, Local content and
+  History (see "Group the Data tab by what kind of data it is").
 - **Daemon** (`/settings/daemon`) — the daemon's state and the controls a user
   needs for it (see "Show and manage the daemon on Settings → Daemon").
 - **Features** (`/settings/features`) — the two experimental features, each
@@ -1087,99 +1087,6 @@ transiently as the target when opening a file.
 - **WHEN** they set a preferred external editor (by picking a detected editor or entering a custom launch command)
 - **THEN** reloading the page shows the same preferred-editor value
 - **AND** clearing the override restores the operating-system default
-
-### Requirement: Group the Data tab by what kind of data it is
-The Data tab MUST show what Coffer stores in four blocks, one per kind of data
-([Storage Is Five Classes by Nature](../../../docs/decisions/storage-is-five-classes-by-nature.md)),
-and no other — in particular no "This Mac only" block, since what is true of this
-machine only is a setting shown on the tab it belongs to:
-
-- **Vault** — the git repository at `~/.coffer/vault/` holding the user's
-  configuration, skills, knowledge and encrypted secrets, a repository whether
-  or not it syncs ([vault-storage](../vault-storage/spec.md) "Keep the vault a
-  git repository whether or not it syncs"): its size (with its history), how
-  many versions it holds, when and by whom it last changed, whether it syncs to
-  a remote or is this machine's only copy, and **Open folder**, whose tooltip
-  names the folder (no separate location row).
-- **Local content** — what is not synced and the user must back up themselves:
-  channel attachments and media only, with their size and **Open
-  folder**, and one short line saying how they are kept: "Include this folder in
-  your own backups." under keep forever, or that attachments are deleted
-  automatically after N days. Its **Attachments** row is the retention of those
-  files, a Keep forever switch and a number of days (30 by default) that auto-saves like
-  every History row, and shortening it asks first, counting the files the shorter
-  window deletes.
-- **History** — the retention of each record kind — changes, tool calls,
-  **Skill working files** (the logs, journals and temporary files skill scripts write under `~/.coffer/skill-data`, 30 days by default, a row whose confirmation counts files) and **Config backups** (the copies Coffer keeps of an agent's config file before it rewrites it, under `~/.coffer/config-backups`, 30 days by default, with the newest copy of each file always kept; a row whose confirmation counts files) — Keep forever or a number of days, cleaned up by the retention
-  worker's schedule (at daemon start and every six hours), and, under the tool
-  calls row, a **Record tool call content** switch (on by default; [mcp-gateway](../mcp-gateway/spec.md)
-  "Switch call content recording per machine") whose help says that arguments and
-  results are kept with secrets masked and that turning it off keeps metadata only, with a
-  **Clear expired now** action behind a confirmation, which reports what it
-  removed; the last cleanup reads "Last cleared today at 12:00 — 1,284 rows" ("30 Sep at 12:00" for another day); a saved value survives a reload. Shortening a
-  window (or turning Keep forever off) MUST ask first, and the confirmation
-  MUST say how many records the shorter window deletes at the next cleanup and
-  how many the table holds now and would hold after, counted by the daemon
-  without deleting anything. **Clear expired now** also removes attachments past their window and reports them, and skill working files and config backups past theirs, as files. A refused save MUST say so above the blocks with
-  **Try again**, name the window still in place, and mark the row "Not saved".
-- **Rebuildable cache** — Coffer's memory tree under `~/.coffer/derived/`,
-  which Coffer rebuilds on its own: one **Clear** action,
-  behind a confirmation saying that memory is rebuilt from the agents' own
-  memory on the next update, each entry becoming a note as it stands, and that
-  notes whose sources are gone do not come back.
-
-Edits auto-save, like every settings surface: there is no Save button.
-
-#### Scenario: retention period persists across reload
-- **GIVEN** the user opens the Data settings tab
-- **WHEN** they turn off "Keep forever" for a record kind in History, set a specific number of retention days, and commit the field (blur or Enter), which auto-saves
-- **THEN** reloading the page shows the same retention-days value that was saved
-
-#### Scenario: the data tab shows four blocks and no this-mac block
-- **GIVEN** a vault with versions, channel media on disk, and memory partitions
-- **WHEN** the user opens `/settings/data`
-- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced, and the Attachments retention row), History (retention for changes, tool calls, skill working files and config backups, the Record tool call content switch, and Clear expired now) and Rebuildable cache (memory tree with Clear), and no This Mac only block
-
-#### Scenario: the attachments retention is set where the attachments are listed
-- **GIVEN** attachments kept for 30 days
-- **WHEN** the user opens `/settings/data`
-- **THEN** Local content has an Attachments row at 30 days and says attachments are deleted automatically after 30 days, and History has no Attachments row
-- **AND** after the user turns Keep forever on, the line reads "Include this folder in your own backups." and the choice is saved
-
-#### Scenario: skill working files are kept for a chosen window
-- **GIVEN** the `skill_data` policy at 30 days
-- **WHEN** the user opens `/settings/data`
-- **THEN** History has a Skill working files row at 30 days, after Tool calls
-- **AND** shortening it asks first and the confirmation counts files, not records
-
-#### Scenario: shortening a retention window counts what it deletes
-- **GIVEN** Tool calls kept for 30 days, some of them older than 7 days
-- **WHEN** the user sets the tool calls window to 7 days
-- **THEN** a confirmation asks "Keep tool calls for 7 days?", says how many calls older than 7 days the next cleanup deletes, and shows the count now and after
-- **AND** nothing is deleted or saved until the user confirms
-
-#### Scenario: clear expired now removes what retention has passed
-- **GIVEN** changes kept for 7 days and changes older than that
-- **WHEN** the user chooses Clear expired now and confirms
-- **THEN** the older changes are removed and the rest remain, as the scheduled cleanup would have done
-- **AND** the page reports how many records it removed, by record kind
-
-#### Scenario: clearing the cache is confirmed and rebuilt
-- **GIVEN** memory partitions with notes
-- **WHEN** the user chooses Clear in Rebuildable cache
-- **THEN** a confirmation says the next memory update rebuilds memory from the agents' own memory and that notes whose sources are gone do not come back, and nothing is cleared until the user confirms
-- **AND** once confirmed only the memory tree is cleared, with no vault or local content touched
-
-#### Scenario: config backups are kept for a chosen window
-- **GIVEN** the `config_backups` policy at 30 days
-- **WHEN** the user opens `/settings/data`
-- **THEN** History has a Config backups row at 30 days, after Skill working files, whose help text says the newest backup of each file is always kept
-- **AND** shortening it asks first and the confirmation counts files, not records
-
-#### Scenario: tool call content recording is switched on the Data tab
-- **GIVEN** recording on, its default
-- **WHEN** the user turns Record tool call content off on `/settings/data` and reloads
-- **THEN** the switch reads off, and calls made from then on open with "Content was not recorded for this call"
 
 ### Requirement: Switch language from the sidebar
 The English / 简体中文 switch MUST be reachable from every screen in Settings ›
@@ -1504,26 +1411,6 @@ feature look absent in the UI").
 - **WHEN** the user opens `/knowledge`
 - **THEN** the not-found page shows, with no mention of the feature being switched off and no switch-on button
 
-### Requirement: Send a memory-hook problem on Overview to the agent's Hooks tab
-When Coffer's memory hook in an agent's own settings no longer matches what Coffer installs —
-its command or events were changed by hand — and a reconciler pass tried to rewrite it and could
-not, Overview's Needs you MUST list it as a row on that agent: the reason in a sentence, since when
-the pass first saw it, and one action, **Repair hook**, opening the agent's Hooks tab, where the
-hook's row carries Repair. A hand-edited hook that no pass has visited yet MUST NOT be listed: the
-next pass rewrites it on its own. The hook's other problems the reconciler reports on the agent —
-missing, not trusted or switched off in the agent, a settings file that does not parse — MUST open
-the same tab.
-
-#### Scenario: a memory hook changed by hand that coffer could not rewrite needs the user
-- **GIVEN** Claude Code connected to Coffer, with the command of Coffer's memory hook changed by hand in its settings
-- **WHEN** no reconciler pass has run yet, and then a pass tries to rewrite the hook and fails
-- **THEN** before the pass the attention list holds no item for it, and after it the list holds one warning on Claude Code whose reason says the hook no longer matches what Coffer installs, with since set and the repair action for that change
-
-#### Scenario: a memory hook changed by hand opens the agent's hooks tab from overview
-- **GIVEN** the attention list holds the hand-edited memory hook of Claude Code
-- **WHEN** the user opens Overview
-- **THEN** Needs you shows a row on Claude Code with the reason and since when, its one action reads Repair hook and opens Claude Code's Hooks tab, its name opens Claude Code's page, and the row has the ⋯ menu
-
 ### Requirement: Let the user ignore any item on Overview
 Every row of Needs you — whatever its severity — MUST carry a ⋯ menu whose last entry is
 **Ignore**. The daemon MUST remember an ignored item on this machine, by the item's stable key
@@ -1715,8 +1602,8 @@ nothing. The decision and the options it was weighed against are in
 - **THEN** the sidebar shows no heading for that group, and the other headings and their entries are unchanged
 
 ### Requirement: Give each listed resource kind one sidebar entry
-Every resource kind with a list UI MUST have exactly one sidebar entry — today six
-kinds (`mcp_server`, `skill`, `knowledge`, `memory`, `provider`, `channel`), six
+Every resource kind with a list UI MUST have exactly one sidebar entry — today five
+kinds (`mcp_server`, `skill`, `knowledge`, `provider`, `channel`), five
 entries — filed by what the user comes to do with it rather than under one
 Resources heading, because "resource" is the framework's storage word, not a
 word a user navigates by:
@@ -1733,8 +1620,10 @@ word a user navigates by:
   page with its badge (spec [chat](../chat/spec.md) "Show every agent's sessions on the
   Conversations page"), reached from the channel's Overview by one link; the Channels page
   holds setup, status and settings only.
-- **MCP servers** and **Skills** are filed under Capabilities; **Knowledge** and
-  **Memory** under Context.
+- **MCP servers** and **Skills** are filed under Capabilities; **Knowledge** under
+  Context.
+- **Memory** is not a resource kind: its entry is the memory sync's page
+  ([memory](../memory/spec.md) "Manage memory sync in the web UI and on the command line"), filed under Context beside Knowledge.
 - **Custom tools** are `mcp_server` resources of the HTTP API transport, one per
   group of tools. They share the gateway's machinery with every
   other server but get their own entry under Capabilities, so a user looking for
@@ -1754,7 +1643,7 @@ stored secrets on the Secrets page").
 
 #### Scenario: each listed resource kind has one sidebar entry
 - **GIVEN** the app shell is rendered with every experimental feature switched on
-- **WHEN** the entries for resource kinds are read
+- **WHEN** the entries for resource kinds, and Memory's, are read
 - **THEN** MCP servers, Custom tools, Skills, Knowledge, Memory, Model providers and Channels each appear exactly once, under Capabilities, Capabilities, Capabilities, Context, Context, Agents and Run respectively
 - **AND** the MCP servers and Custom tools entries open `/mcp-servers` and `/custom-tools`, and a custom-tool group is not listed on the MCP servers page
 - **AND** no heading reads "Resources"
@@ -2413,46 +2302,6 @@ and a remembered width that no longer fits the window is clamped to the bounds.
 - **WHEN** a split view opens and the user drags its divider
 - **THEN** the split opens at its default width, the drag still resizes it, and no error is shown
 
-### Requirement: Show memory delivery on the Memory page
-The Memory page MUST show what each partition delivers, and the agent detail page MUST show only
-the delivery hook's state:
-
-- The **Memory page** MUST show no per-agent delivery statistics: it lists the partitions in a table with no section title and a search box that filters the rows by partition name and path, each row carrying the partition's path, its memory count, its sources and its Distilled state (memory "Show a partition's memories read-only").
-- A **partition's page** has a **Delivered** tab (see memory "Show a partition's memories read-only")
-  showing, read-only, the exact session-start text each agent receives in that partition's project
-  (spec [memory](../memory/spec.md) "Deliver the index and the notes path at session start"), with a
-  switch between agents. The text is shown as formatted Markdown by default, with a **Rendered** /
-  **Raw** toggle: Raw is the exact text, and **Copy** copies the raw text in either mode. In Rendered
-  mode each entry's title and file name link to that memory on its partition's page
-  (`/memory/<uid>?memory=<slug>`; entries under "Known about you" go to the `global` partition), an
-  entry whose partition is unknown stays plain text, and a hint says that editing a memory changes
-  what is delivered.
-- The delivery hook's state — installed and current, stale, missing, never fired, and Repair — MUST
-  appear only on the agent detail page — on its Hooks tab, in the Overview's Coffer connection
-  block ([agent-registry](../agent-registry/spec.md) "Show the Coffer connection on the agent pages") and, while the `memory` feature is on, in the **Coffer's memory** section that opens the agent's Memory tab, which links back to this page. Below that section the Memory tab lists the agent's own native memory stores.
-
-#### Scenario: the Memory page shows the partitions with a search and no delivery block
-- **GIVEN** two partitions, `coffer` and `global`
-- **WHEN** the user opens the Memory page and types `coff` in the search box
-- **THEN** the page shows no delivery statistics and no section title above the table, and the table lists only the `coffer` row, with its path, memory count, sources and Distilled state and no sample memory column
-
-#### Scenario: a partition's delivered tab shows each agent's session-start text
-- **GIVEN** a partition for the `coffer` repository and both agents connected
-- **WHEN** the user opens the partition's Delivered tab and switches from Claude Code to Codex
-- **THEN** the tab shows, read-only, the exact session-start text each agent receives in that project
-- **AND** the Raw view shows that text exactly, and Copy copies it unchanged
-
-#### Scenario: a delivered entry links to the memory it came from on its partition's page
-- **GIVEN** a partition's Delivered tab showing an agent's session-start text in Rendered mode, with entries under "Known about you" and under a repository partition heading
-- **WHEN** the user clicks an entry's title or file name
-- **THEN** the app opens that memory on its partition's page, global for "Known about you" entries, an entry whose partition is unknown stays plain text, and a hint says that editing a memory changes what is delivered
-
-#### Scenario: hook state appears only on the agent page
-- **GIVEN** Claude Code's delivery hook stale
-- **WHEN** the user opens the Memory page and then Claude Code's Memory tab
-- **THEN** the Memory page shows no hook state or Repair action
-- **AND** the Memory tab's Coffer's memory section shows the hook's state with Repair, above Claude Code's own native memory stores
-
 ### Requirement: Stream new Activity records while the list is at the top
 The visible Activity tab MUST show new records as they are written, newest first, with no Pause /
 Resume control. While the user is at the top of the list and has no record open, a new record MUST
@@ -2482,7 +2331,7 @@ oldest, each with its resource and kind, the reason in a sentence, since when
 where that is known, and exactly one action that opens the page — or the tab —
 where the item is dealt with. The action reads what it does for that kind and
 reason, not the bare verb — a channel's check is **Reconnect channel**, sync's
-review **Review held changes**, a memory hook's repair **Repair hook** — behind a
+review **Review held changes** — behind a
 small icon for its verb (a key for a secret, an eye for a review, a plug for connecting,
 a wrench for repairing, a refresh for checking or testing again), and the reason
 may wrap to two lines before it is cut, its whole text on hover. An action that is a non-GET call into Coffer's
@@ -2511,10 +2360,9 @@ a warning, one nothing uses is plain subtle text with no dot; Usage shows its
 period, "Last 24 h", and no health), a count from its own list and a one-line
 summary, opening the area's page — Usage, which is a tab of Model providers, opening that tab; an area with no backend has no tile. Agents
 and Channels count "1 of 2" with the unit "connected" — for Agents only the
-items about connecting count, so a hook edited by hand or one the agent has not approved does not make an agent
-"not connected" — and Channels names the reconnecting one ("SeaTalk
+items about connecting count — and Channels names the reconnecting one ("SeaTalk
 reconnecting since 13:41"), otherwise the names joined with " · ". Knowledge's
-line reads "4 collections · edited today 13:30", Memory's "Last update 14 min
+line reads "4 collections · edited today 13:30", Memory's count of memories in the hub over "Last synced 14 min
 ago", Sync's number is when its last round ended ("4 min ago", "last round")
 over "1 behind · 0 ahead", and Usage counts the tokens of the last 24 hours in
 one decimal ("2.1M"). A CLI tile words its problem by reason when every item
@@ -2542,9 +2390,9 @@ for what agents share follows.
 - **THEN** Needs you lists the older failing server first, then the other, then the skill, then the agent, each with its reason, since when where that is known, and one action opening the page or tab where it is dealt with
 
 #### Scenario: health tiles carry the numbers and lines of Overview's board
-- **GIVEN** two agents where one is not connected and the other's hook was edited by hand, a reconnecting channel, a knowledge collection edited a minute ago, a memory partition updated 14 minutes ago, a sync round that ended 4 minutes ago with one commit behind, a command that is not logged in, and a secret nothing uses
+- **GIVEN** two agents where one is not connected, a reconnecting channel, a knowledge collection edited a minute ago, nine memories in the hub last synced 14 minutes ago, a sync round that ended 4 minutes ago with one commit behind, a command that is not logged in, and a secret nothing uses
 - **WHEN** the user opens Overview
-- **THEN** Agents reads "1 of 2 connected" and "1 to connect", Channels "0 of 1" with "SeaTalk reconnecting since" a time, Knowledge "1 collection · edited" a time, Memory "Last update 14 min ago", Sync "4 min ago", "last round" and "1 behind · 0 ahead", CLIs "1 not logged in", Secrets "1 unused", and Usage "2.1M" with "Last 24 h"
+- **THEN** Agents reads "1 of 2 connected" and "1 to connect", Channels "0 of 1" with "SeaTalk reconnecting since" a time, Knowledge "1 collection · edited" a time, Memory "9 memories" and "Last synced 14 min ago", Sync "4 min ago", "last round" and "1 behind · 0 ahead", CLIs "1 not logged in", Secrets "1 unused", and Usage "2.1M" with "Last 24 h"
 
 #### Scenario: a row's action that runs in place shows it is in progress
 - **GIVEN** a failing MCP server in Needs you whose action is to test it again, and an agent row whose action is to connect it
@@ -3315,3 +3163,86 @@ copy button.
 - **GIVEN** the web UI opened in a browser
 - **WHEN** the user opens `/settings/about`
 - **THEN** the Uninstall section shows `coffer uninstall` with a copy button and no Uninstall Coffer… control
+
+### Requirement: Group the Data tab by what kind of data it is
+The Data tab MUST show what Coffer stores in three blocks, one per kind of data
+([Storage Is Five Classes by Nature](../../../docs/decisions/storage-is-five-classes-by-nature.md)),
+and no other — in particular no "This Mac only" block, since what is true of this
+machine only is a setting shown on the tab it belongs to:
+
+- **Vault** — the git repository at `~/.coffer/vault/` holding the user's
+  configuration, skills, knowledge, the memory hub and encrypted secrets, a repository whether
+  or not it syncs ([vault-storage](../vault-storage/spec.md) "Keep the vault a
+  git repository whether or not it syncs"): its size (with its history), how
+  many versions it holds, when and by whom it last changed, whether it syncs to
+  a remote or is this machine's only copy, and **Open folder**, whose tooltip
+  names the folder (no separate location row).
+- **Local content** — what is not synced and the user must back up themselves:
+  channel attachments and media only, with their size and **Open
+  folder**, and one short line saying how they are kept: "Include this folder in
+  your own backups." under keep forever, or that attachments are deleted
+  automatically after N days. Its **Attachments** row is the retention of those
+  files, a Keep forever switch and a number of days (30 by default) that auto-saves like
+  every History row, and shortening it asks first, counting the files the shorter
+  window deletes.
+- **History** — the retention of each record kind — changes, tool calls,
+  **Skill working files** (the logs, journals and temporary files skill scripts write under `~/.coffer/skill-data`, 30 days by default, a row whose confirmation counts files) and **Config backups** (the copies Coffer keeps of an agent's config file before it rewrites it, under `~/.coffer/config-backups`, 30 days by default, with the newest copy of each file always kept; a row whose confirmation counts files) — Keep forever or a number of days, cleaned up by the retention
+  worker's schedule (at daemon start and every six hours), and, under the tool
+  calls row, a **Record tool call content** switch (on by default; [mcp-gateway](../mcp-gateway/spec.md)
+  "Switch call content recording per machine") whose help says that arguments and
+  results are kept with secrets masked and that turning it off keeps metadata only, with a
+  **Clear expired now** action behind a confirmation, which reports what it
+  removed; the last cleanup reads "Last cleared today at 12:00 — 1,284 rows" ("30 Sep at 12:00" for another day); a saved value survives a reload. Shortening a
+  window (or turning Keep forever off) MUST ask first, and the confirmation
+  MUST say how many records the shorter window deletes at the next cleanup and
+  how many the table holds now and would hold after, counted by the daemon
+  without deleting anything. **Clear expired now** also removes attachments past their window and reports them, and skill working files and config backups past theirs, as files. A refused save MUST say so above the blocks with
+  **Try again**, name the window still in place, and mark the row "Not saved".
+There is no cache block and no action that clears a cache: what Coffer rebuilds on its own
+under `~/.coffer/derived/` is not shown. Edits auto-save, like every settings surface: there is no Save button.
+
+#### Scenario: retention period persists across reload
+- **GIVEN** the user opens the Data settings tab
+- **WHEN** they turn off "Keep forever" for a record kind in History, set a specific number of retention days, and commit the field (blur or Enter), which auto-saves
+- **THEN** reloading the page shows the same retention-days value that was saved
+
+#### Scenario: the data tab shows three blocks and no this-mac block
+- **GIVEN** a vault with versions and channel media on disk
+- **WHEN** the user opens `/settings/data`
+- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced, and the Attachments retention row) and History (retention for changes, tool calls, skill working files and config backups, the Record tool call content switch, and Clear expired now)
+- **AND** it shows no Rebuildable cache block, no Clear cache action and no This Mac only block
+
+#### Scenario: the attachments retention is set where the attachments are listed
+- **GIVEN** attachments kept for 30 days
+- **WHEN** the user opens `/settings/data`
+- **THEN** Local content has an Attachments row at 30 days and says attachments are deleted automatically after 30 days, and History has no Attachments row
+- **AND** after the user turns Keep forever on, the line reads "Include this folder in your own backups." and the choice is saved
+
+#### Scenario: skill working files are kept for a chosen window
+- **GIVEN** the `skill_data` policy at 30 days
+- **WHEN** the user opens `/settings/data`
+- **THEN** History has a Skill working files row at 30 days, after Tool calls
+- **AND** shortening it asks first and the confirmation counts files, not records
+
+#### Scenario: shortening a retention window counts what it deletes
+- **GIVEN** Tool calls kept for 30 days, some of them older than 7 days
+- **WHEN** the user sets the tool calls window to 7 days
+- **THEN** a confirmation asks "Keep tool calls for 7 days?", says how many calls older than 7 days the next cleanup deletes, and shows the count now and after
+- **AND** nothing is deleted or saved until the user confirms
+
+#### Scenario: clear expired now removes what retention has passed
+- **GIVEN** changes kept for 7 days and changes older than that
+- **WHEN** the user chooses Clear expired now and confirms
+- **THEN** the older changes are removed and the rest remain, as the scheduled cleanup would have done
+- **AND** the page reports how many records it removed, by record kind
+
+#### Scenario: config backups are kept for a chosen window
+- **GIVEN** the `config_backups` policy at 30 days
+- **WHEN** the user opens `/settings/data`
+- **THEN** History has a Config backups row at 30 days, after Skill working files, whose help text says the newest backup of each file is always kept
+- **AND** shortening it asks first and the confirmation counts files, not records
+
+#### Scenario: tool call content recording is switched on the Data tab
+- **GIVEN** recording on, its default
+- **WHEN** the user turns Record tool call content off on `/settings/data` and reloads
+- **THEN** the switch reads off, and calls made from then on open with "Content was not recorded for this call"

@@ -96,6 +96,14 @@ describe("the collection tree and the document pane", () => {
     ]);
   });
 
+  test("the collection tree and its header carry no reach mark, button or switch", async () => {
+    renderKnowledge(`/knowledge/${UID}`);
+    await within(tree()).findByRole("button", { name: "Pages" });
+    expect(screen.queryByTestId("scope-control")).toBeNull();
+    expect(screen.queryByRole("switch")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^(enabled|disabled|every agent)$/i })).toBeNull();
+  });
+
   test("a collection opened from the list stays open when a document in it is opened", async () => {
     renderKnowledge("/knowledge");
     fireEvent.click(await within(tree()).findByRole("button", { name: `Expand ${NAME}` }));

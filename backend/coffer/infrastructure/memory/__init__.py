@@ -1,41 +1,32 @@
-"""Memory infrastructure: the agents' files read, and Coffer's own files written.
+"""Memory infrastructure: the agents' memory files read, the hub kept, and
+Coffer's own copies written into each agent (spec memory "Leave every memory an
+agent wrote untouched").
 
-Two halves, and the boundary between them is the layer's whole prohibition (spec
-memory "Never write an agent's native memory"). The **readers** only read: they
-list and parse what Claude Code and Codex already keep in their own memory
-directories and write nothing there, ever. Everything else here writes only
-Coffer's own derived tree under ``~/.coffer/derived/memory/``, which may be deleted and
-rebuilt at any time (see "Keep the memory tree derived and local").
+The **readers** only read what Claude Code and Codex keep in their own memory
+directories. The **writers** write only Coffer's own copies there (``coffer_``
+files, the marked block, the rules file, Codex's ``extensions/coffer/``) and
+never a file the agent wrote.
 
-The modules, and which pass owns which:
-
-``paths``
-    The sole owner of path construction, and the traversal guard (see "Confine
-    reads to registered agents' memory paths").
-``repository``
-    Which repository a directory belongs to — walking up to ``.git``, following
-    a worktree's pointer to the main checkout, reading ``origin`` out of the
-    config. This is what collapses a worktree, a second clone and the main
-    checkout into one partition (see "Identify a partition by its repository"),
-    and what answers ``None`` for a directory that is in no repository at all
-    (see "Create no partition for a non-repository directory").
-``frontmatter``
-    The YAML fence and the atomic write every file here goes through.
-``store``
-    A partition's ``MEMORY.md``, ``notes/``, ``RETIRED.md`` and ``.raw/``, with
-    one writer each — aggregation writes ``.raw/`` and nothing else touches it
-    (see "Leave the raw directory to aggregation").
-``source_state``
-    The per-source digest cache that lets an unchanged source be skipped without
-    re-parsing (see "Skip unchanged sources").
-``files``
-    The read-only file tree the REST file routes read (see
-    "Manage memory in the web UI").
 ``readers``
     The two native-memory adapters, satisfying ``domain.memory.reader``.
-``delivery``
-    Per-agent session-start hook installation — which event, which settings
-    file, which marker (see "Install delivery hooks explicitly and removably").
-    An agent's *settings* are not its memory, and that distinction is the only
-    reason writing there is allowed at all.
+``writers``
+    The two copy writers, satisfying ``domain.memory.native_writer``.
+``hub_store``
+    ``vault/memory/``, read from disk and written through the vault (see "Keep
+    every agent's memories in a hub in the vault").
+``sync_ledger``
+    ``local/memory-sync.json`` and the pending preview (see "Preview a first or
+    large sync").
+``repository`` and ``checkouts``
+    Which repository a directory belongs to, and where each project is checked
+    out on this machine (see "Identify a project by a key that does not depend
+    on the machine", "Write a project's memories only where it is checked out").
+``frontmatter``, ``native_files``
+    The YAML fence and the atomic, backed-up writes the files here go through.
+``curation``
+    Each agent's own curation state, and Curate now (see "Show each agent's own
+    curation and ask it to curate now").
+``retired_tree``
+    The upgrade's removal of the retired derived tree (see "Remove the memory
+    delivery hook on upgrade").
 """

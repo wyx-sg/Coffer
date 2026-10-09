@@ -150,7 +150,7 @@ The identity is self-reported, not cryptographically verified. Any local process
 
 ## Verify the connection
 
-1. **Check the entry.** Open **Agents → (agent)**: the **Connection** section says the agent reaches Coffer through one MCP entry and one hook, and names the shim's path.
+1. **Check the entry.** Open **Agents → (agent)**: the **Connection** section says the agent reaches Coffer through one MCP entry, and names the shim's path.
 
 2. **Check the daemon.**
 

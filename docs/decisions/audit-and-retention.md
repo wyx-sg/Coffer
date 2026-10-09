@@ -26,7 +26,8 @@ PRs #14, #328, #406
 Coffer changes things the user cares about on their behalf: it writes into
 agents' native config files, delivers and reclaims skills, switches model
 providers, resolves secrets for a child process, applies changes arriving from
-another machine, and runs background workers that rewrite knowledge and memory.
+another machine, and runs background workers that rewrite knowledge and sync memory into the
+agents.
 Changes arrive from four surfaces — the web UI, the CLI, raw REST, and the
 daemon itself — plus sync and the workers. When something is wrong the user
 needs to answer *what changed, when, and who did it*, across every kind, in one
@@ -57,7 +58,7 @@ method takes `actor` as a required keyword; the HTTP surface derives it from
 `X-Coffer-Actor` (the UI sends `ui`, the CLI `cli`, a bare REST call gets
 `api`; values are bounded to a short lowercase identifier or refused with 400),
 and the daemon's own work records `system`, `sync` or a named worker such as
-`system:memory-aggregate-worker`. A row stores the resource's
+`system:memory-sync-worker`. A row stores the resource's
 `resource_uid` *and* the kind and name it had at that moment, so one resource's
 trail is queried by uid and survives a rename while each row still says what the
 resource was called then. A kind's `audit_redactor` strips secret-bearing

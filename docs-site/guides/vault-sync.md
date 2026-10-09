@@ -101,9 +101,9 @@ Carry the file over a channel you trust (a password manager, `scp`, a USB stick)
 | Travels | Stays on each machine |
 | --- | --- |
 | Definitions of MCP servers, skills, knowledge collections and providers (`vault/resources/`) | Agents (`local/resources/agent/`) and channels (`local/resources/channel/`): each machine registers its own |
-| Knowledge documents (`vault/knowledge/`), skill folders (`vault/skills/`) | **Reach**: each resource's enabled switch and agent scope (`local/reach.json`) |
+| Knowledge documents (`vault/knowledge/`), skill folders (`vault/skills/`), the memory hub (`vault/memory/`) | **Reach**: each resource's enabled switch and agent scope (`local/reach.json`) |
 | MCP capability switches, the speech-to-text model and upkeep settings (`vault/state/`) | Channel pairings (`local/channel-peers.json`), the sync remote, retention, the secret boundary's approvals (`local/`) |
-| Secret ciphertext (`vault/secret/`), with **Include encrypted secrets** | Memory, caches and the `coffer-guide` skill (`derived/`), which each machine rebuilds |
+| Secret ciphertext (`vault/secret/`), with **Include encrypted secrets** | Caches and the `coffer-guide` skill (`derived/`), which each machine rebuilds; the record of what memory sync wrote into this machine's agents (`local/memory-sync.json`) |
 | One descriptor per machine (`vault/machines/`) | Conversations, audit and invocation logs (`runs.db`), attachments (`content/`), logs, the master key |
 
 Some consequences to know:

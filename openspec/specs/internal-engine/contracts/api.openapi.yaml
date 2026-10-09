@@ -285,10 +285,7 @@ components:
           - type: 'null'
           title: Interval S
         pass:
-          enum:
-          - aggregate
-          - distil
-          - memory_sync
+          const: memory_sync
           title: Pass
           type: string
         use_default_interval:

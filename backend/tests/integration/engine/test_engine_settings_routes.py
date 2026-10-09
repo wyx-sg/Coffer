@@ -22,9 +22,8 @@ from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
 _TOKEN = "test-token-internal-engine"
-_PASSES = ("aggregate", "distil")
+_PASSES = ("memory_sync",)
 # The memory sync pass ships switched off until its page lands.
-_ALL_PASSES = (*_PASSES, "memory_sync")
 
 
 @pytest.fixture
@@ -91,7 +90,9 @@ async def test_every_write_is_audited_with_its_actor_and_the_value_after_it(
     api: AsyncClient,
 ) -> None:
     assert (
-        await api.put("/internal-engine-config/upkeep", json={"pass": "distil", "enabled": False})
+        await api.put(
+            "/internal-engine-config/upkeep", json={"pass": "memory_sync", "enabled": False}
+        )
     ).status_code == 200
     assert (
         await api.put("/internal-engine-config/transcribe-model", json={"model": "hears"})
@@ -104,7 +105,7 @@ async def test_every_write_is_audited_with_its_actor_and_the_value_after_it(
     assert {e["actor"] for e in entries} == {"tester"}
     details = [e["details"] for e in entries]
     # The value AFTER the write: the switch off, the model stored.
-    assert any(d.get("auto_distil_enabled") is False for d in details)
+    assert any(d.get("memory_sync_enabled") is False for d in details)
     assert any(d.get("transcribe_model") == "hears" for d in details)
 
 
@@ -117,7 +118,7 @@ async def test_the_settings_read_reports_the_stored_values_beside_the_defaults(
     ).status_code == 200
     assert (
         await api.put(
-            "/internal-engine-config/upkeep", json={"pass": "aggregate", "enabled": False}
+            "/internal-engine-config/upkeep", json={"pass": "memory_sync", "enabled": False}
         )
     ).status_code == 200
 
@@ -125,21 +126,20 @@ async def test_the_settings_read_reports_the_stored_values_beside_the_defaults(
 
     assert body["transcribe_model"] == "hears"
     assert body["updated_at"]
-    assert set(body["upkeep"]) == set(_ALL_PASSES)
-    assert body["upkeep"]["aggregate"]["enabled"] is False
-    assert body["upkeep"]["distil"]["enabled"] is True
+    assert set(body["upkeep"]) == set(_PASSES)
+    assert body["upkeep"]["memory_sync"]["enabled"] is False
     assert "model" not in body and "curate_owner_machine_id" not in body
     assert "model_timeout_s" not in body and "default_model_timeout_s" not in body
 
 
 @pytest.mark.acceptance(
     spec="internal-engine",
-    scenario="report a switch and interval for each of the two unattended passes",
+    scenario="report the memory sync's switch and interval",
 )
-async def test_the_upkeep_block_names_exactly_the_two_timed_passes(api: AsyncClient) -> None:
+async def test_the_upkeep_block_names_exactly_the_memory_sync(api: AsyncClient) -> None:
     upkeep = (await _config(api))["upkeep"]
-    assert set(upkeep) == set(_ALL_PASSES)
-    for name in _ALL_PASSES:
+    assert set(upkeep) == set(_PASSES)
+    for name in _PASSES:
         assert set(upkeep[name]) == {
             "enabled",
             "interval_s",
@@ -150,12 +150,12 @@ async def test_the_upkeep_block_names_exactly_the_two_timed_passes(api: AsyncCli
 
     r = await api.put(
         "/internal-engine-config/upkeep",
-        json={"pass": "distil", "enabled": False, "interval_s": 1800},
+        json={"pass": "memory_sync", "enabled": False, "interval_s": 1800},
     )
     assert r.status_code == 200, r.text
-    distil = (await _config(api))["upkeep"]["distil"]
-    assert distil["enabled"] is False
-    assert distil["interval_s"] == 1800
+    sync = (await _config(api))["upkeep"]["memory_sync"]
+    assert sync["enabled"] is False
+    assert sync["interval_s"] == 1800
 
 
 @pytest.mark.acceptance(
@@ -165,12 +165,12 @@ async def test_the_upkeep_block_names_exactly_the_two_timed_passes(api: AsyncCli
 async def test_an_unchosen_interval_is_reported_beside_its_default(
     api: AsyncClient, tmp_path: pathlib.Path
 ) -> None:
-    await api.put("/internal-engine-config/upkeep", json={"pass": "aggregate", "interval_s": 900})
-    assert (await _config(api))["upkeep"]["aggregate"]["interval_s"] == 900
+    await api.put("/internal-engine-config/upkeep", json={"pass": "memory_sync", "interval_s": 900})
+    assert (await _config(api))["upkeep"]["memory_sync"]["interval_s"] == 900
 
     r = await api.put(
         "/internal-engine-config/upkeep",
-        json={"pass": "aggregate", "use_default_interval": True},
+        json={"pass": "memory_sync", "use_default_interval": True},
     )
     assert r.status_code == 200, r.text
     upkeep = (await _config(api))["upkeep"]
@@ -191,11 +191,15 @@ async def test_an_unchosen_interval_is_reported_beside_its_default(
 async def test_a_floor_breaking_interval_and_an_unknown_pass_are_refused(
     api: AsyncClient,
 ) -> None:
-    await api.put("/internal-engine-config/upkeep", json={"pass": "aggregate", "enabled": False})
-    await api.put("/internal-engine-config/upkeep", json={"pass": "distil", "interval_s": 3600})
+    await api.put(
+        "/internal-engine-config/upkeep",
+        json={"pass": "memory_sync", "enabled": False, "interval_s": 3600},
+    )
     before = (await _config(api))["upkeep"]
 
-    r = await api.put("/internal-engine-config/upkeep", json={"pass": "distil", "interval_s": 59})
+    r = await api.put(
+        "/internal-engine-config/upkeep", json={"pass": "memory_sync", "interval_s": 59}
+    )
     assert r.status_code == 422, r.text
     r = await api.put("/internal-engine-config/upkeep", json={"pass": "vacuum", "enabled": True})
     assert r.status_code == 422, r.text
@@ -211,17 +215,17 @@ async def test_a_fresh_vault_ships_every_pass_switched_on(
     api: AsyncClient, tmp_path: pathlib.Path
 ) -> None:
     upkeep = (await _config(api))["upkeep"]
-    assert [upkeep[name]["enabled"] for name in _PASSES] == [True, True]
+    assert [upkeep[name]["enabled"] for name in _PASSES] == [True]
 
-    # The first write carries only one value; the document it creates still runs both.
+    # The first write carries only the model; the document it creates still runs the sync.
     assert (
         await api.put("/internal-engine-config/transcribe-model", json={"model": "hears"})
     ).status_code == 200
     upkeep = (await _config(api))["upkeep"]
-    assert [upkeep[name]["enabled"] for name in _PASSES] == [True, True]
+    assert [upkeep[name]["enabled"] for name in _PASSES] == [True]
     doc = _doc()
     assert doc["transcribe_model"] == "hears"
-    assert [_upkeep(doc, name).get("enabled", True) for name in _PASSES] == [True, True]
+    assert [_upkeep(doc, name).get("enabled", True) for name in _PASSES] == [True]
 
 
 @pytest.mark.acceptance(
@@ -259,7 +263,7 @@ async def test_moving_the_transcribe_flag_drops_an_uncurated_model_only(
 async def test_the_transcribe_model_leaves_the_rest_of_the_row_alone(
     api: AsyncClient,
 ) -> None:
-    await api.put("/internal-engine-config/upkeep", json={"pass": "distil", "enabled": False})
+    await api.put("/internal-engine-config/upkeep", json={"pass": "memory_sync", "enabled": False})
     audit_before = len(
         (
             await api.get("/audit", params={"event_type": "internal_engine_model_set", "limit": 50})
@@ -270,7 +274,7 @@ async def test_the_transcribe_model_leaves_the_rest_of_the_row_alone(
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["transcribe_model"] == "hears"
-    assert body["upkeep"]["distil"]["enabled"] is False
+    assert body["upkeep"]["memory_sync"]["enabled"] is False
 
     audit_after = len(
         (
@@ -292,10 +296,13 @@ async def test_the_retired_routes_and_keys_are_gone(api: AsyncClient) -> None:
     assert (
         await api.put("/internal-engine-config/curation-owner", json={"machine_id": "m"})
     ).status_code == 404
-    assert (
-        await api.put("/internal-engine-config/upkeep", json={"pass": "curate", "enabled": False})
-    ).status_code == 422
+    for retired in ("curate", "aggregate", "distil"):
+        assert (
+            await api.put(
+                "/internal-engine-config/upkeep", json={"pass": retired, "enabled": False}
+            )
+        ).status_code == 422
     body = await _config(api)
     assert "model" not in body
     assert "curate_owner_machine_id" not in body
-    assert set(body["upkeep"]) == set(_ALL_PASSES)
+    assert set(body["upkeep"]) == set(_PASSES)

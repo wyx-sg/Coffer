@@ -2,8 +2,8 @@
 
 Coffer is this machine's local vault. It stands between you and the MCP servers
 this developer registered, it holds what they have written down about their
-working environment, and it holds a note for everything every agent on this
-machine has learned. This is the manual: what Coffer will do for you, and
+working environment, and it copies what each of their agents has learned into
+the others' own memory. This is the manual: what Coffer will do for you, and
 what it will not.
 
 ## Coffer's own tools
@@ -165,64 +165,6 @@ report:
 The developer decides what to fix, and may then ask you to tidy.
 
 <!-- end:knowledge -->
-<!-- when:memory -->
-## Coffer reads your memory. It never writes it.
-
-Coffer reads the native memory of every registered agent — your own memory
-files, in your own format — and modifies nothing there: not a file, not a
-format, not your memory setting. Each memory it reads becomes one note of its
-own under `<MEMORY_ROOT>`, copied as it stands; merging what several agents
-learned about the same subject is the tidying below.
-
-<!-- when:knowledge -->
-The practical consequence: **you cannot ask Coffer to write a memory for you.**
-Knowledge is a different store with a different purpose. If you want something
-in your own memory, write it there yourself, the way you normally would.
-
-<!-- end:knowledge -->
-### Finding a note
-
-Coffer's notes are Markdown files under `<MEMORY_ROOT>/<partition>/notes/`, one
-partition per repository plus `global`. Your session opened with the index of
-this repository's partition and of `global`. For a note from another project,
-search `<MEMORY_ROOT>` with your own tools — grep for a distinctive word or
-phrase — and read the file you find. There is no Coffer tool for this.
-
-### Tidying memory
-
-Two agents rarely phrase the same lesson the same way, so a partition collects
-near-duplicates: one note per memory each agent wrote. When the developer asks
-you to tidy, merge or clean up memory (整理记忆), work through one partition at
-a time under `<MEMORY_ROOT>/<partition>/notes/`:
-
-1. Read the partition's `MEMORY.md`, then the notes in full before you change
-   them.
-2. **Merge** notes about the same subject into one. Rewrite the surviving
-   note's body in your own words so it holds every fact of both, and **append
-   every entry of the merged note's `origins:` list to the survivor's
-   `origins:`**, unchanged. Then delete the merged note's file. The `origins`
-   are how Coffer knows a memory is already accounted for: drop one and the
-   next update brings the merged note back.
-3. **Retire** a note that is no longer true — a newer note contradicts it, or
-   it describes something that has since been removed. Do not delete its file:
-   the memory it came from still lives in an agent's own memory, so a deleted
-   note comes back on the next update. Instead add `retired:` with the reason
-   to its frontmatter, and `replaced_by:` with the surviving note's file name
-   when there is one. Coffer records the retirement and removes the file on
-   its next update, and never recreates it.
-4. Where two notes disagree, the newer statement wins unless the older one is
-   shown to be right by a source, a date, a command's output or the code —
-   whoever wrote either.
-5. Keep one topic per note, and a `description` that says what the note is
-   about in one line: the index a session receives is built from it.
-6. Report what you merged and retired.
-
-Leave everything else in the partition alone: `.raw/` is Coffer's verbatim
-copy of what the agents wrote, and `MEMORY.md` and `RETIRED.md` are rewritten
-by Coffer on every update. Never edit an agent's own memory files to tidy
-Coffer's notes.
-
-<!-- end:memory -->
 ## Nothing here waits on a human
 
 Every tool Coffer exposes runs immediately. There is no approval prompt, no

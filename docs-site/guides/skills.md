@@ -401,7 +401,6 @@ Coffer ships one skill of its own, `coffer-guide`. It is the manual an agent rea
 - Coffer's own MCP tools and when to reach for each.
 - That tools hidden from the agent's tool list are still callable through `coffer__search_tools`.
 - [Knowledge](/guides/knowledge): where the knowledge root is, how to read it with the agent's own file tools, how to write into it and tidy it, and a catalogue of every document in every collection, with its path, title and description.
-- [Memory](/guides/memory): that Coffer reads the agent's memory and never writes it, and that Coffer's notes are Markdown under the memory root, which the agent greps with its own file tools.
 - [CLIs](/guides/clis#what-your-agents-see): that `coffer cli list` prints the command-line tools Coffer manages — what each is for, who needs it and whether it is ready here.
 - That no Coffer tool waits on a human approval.
 

@@ -2,12 +2,13 @@
 //
 // Each reads its own list, like the area tiles beside it (areaTiles.tsx), and
 // shows when it last changed (Overview board 1.2.09): "4 collections · edited
-// today 13:30", "Last update 14 min ago", "4 min ago · last round".
+// today 13:30", "Last synced 14 min ago", "4 min ago · last round".
 import { useTranslation } from "react-i18next";
 
 import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
-import { useMemoryPartitions } from "@/lib/hooks/useMemory";
+import { useMemorySyncState } from "@/lib/hooks/useMemory";
 import { useSyncStatus } from "@/lib/hooks/useSync";
+import { totalMemories } from "@/lib/memory/syncFacts";
 import { tileStatus } from "@/lib/overview/health";
 import { agoText, editedText, latest } from "@/lib/overview/tileText";
 import type { AreaProps } from "./areaTiles";
@@ -42,14 +43,15 @@ export function MemoryTile({ area, items }: AreaProps) {
   return (
     <QueryTile
       area={area}
-      query={useMemoryPartitions()}
-      content={(partitions) => {
-        const updated = agoText(t, latest(partitions.map((p) => p.updated_at)));
+      query={useMemorySyncState()}
+      content={(state) => {
+        const count = totalMemories(state);
+        const synced = agoText(t, state.last_synced_at || null);
         return {
-          status: tileStatus(t, area, items, partitions.length > 0),
-          value: partitions.length,
-          unit: t("overview.health.memory.unit", { count: partitions.length }),
-          summary: updated ? t("overview.health.memory.lastUpdate", { ago: updated }) : null,
+          status: tileStatus(t, area, items, count > 0),
+          value: count,
+          unit: t("overview.health.memory.unit", { count }),
+          summary: synced ? t("overview.health.memory.lastUpdate", { ago: synced }) : null,
         };
       }}
     />

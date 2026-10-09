@@ -43,7 +43,7 @@ Open **Agents → claude-code** and click **Connect**. The agent's **Coffer** st
 
 <Shot name="connect-dialog" alt="The review dialog before Coffer changes the agent's files." />
 
-Connecting adds one entry to `mcpServers` in `~/.claude.json` (and Coffer's memory hook — two entries, session start and each prompt — to `~/.claude/settings.json` — see [Memory](/guides/memory)). Coffer writes the file atomically and keeps a copy of the previous version in `~/.coffer/config-backups`:
+Connecting adds one entry to `mcpServers` in `~/.claude.json`. Coffer writes the file atomically and keeps a copy of the previous version in `~/.coffer/config-backups`:
 
 ```json
 {

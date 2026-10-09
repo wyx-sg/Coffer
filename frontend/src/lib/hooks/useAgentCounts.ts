@@ -22,7 +22,6 @@ import {
   useAgentPlugins,
   useUnmanagedSkills,
 } from "@/lib/hooks/useAgents";
-import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { useResources } from "@/lib/hooks/useResources";
 import { useSkills } from "@/lib/hooks/useSkills";
 
@@ -36,7 +35,6 @@ export function useAgentCounts(uid: string): AgentCounts {
   const hooks = useAgentHooks(uid);
   const memory = useAgentNativeMemory(uid);
   const configFiles = useAgentConfigFiles(uid);
-  const memoryOn = useFeatureEnabled("memory") === true;
 
   return useMemo<AgentCounts>(() => {
     if (!uid) return {};
@@ -50,7 +48,7 @@ export function useAgentCounts(uid: string): AgentCounts {
       skills: skills.data ? skillCounts(delivered, unmanaged.data?.items) : undefined,
       mcp: servers.data ? mcpCounts(cofferServers, entries.data?.items) : undefined,
       plugins: pluginCounts(plugins.data?.items),
-      hooks: hookCounts(hooks.data, memoryOn),
+      hooks: hookCounts(hooks.data),
       memoryStores: memory.data?.items.length,
       configFiles: configFiles.data?.filter((f) => f.exists).length,
     };
@@ -64,6 +62,5 @@ export function useAgentCounts(uid: string): AgentCounts {
     hooks.data,
     memory.data,
     configFiles.data,
-    memoryOn,
   ]);
 }

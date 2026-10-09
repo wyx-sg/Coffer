@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-15
 **Deciders**: Yuxing Wu
-**Related**: [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [Agent Hook Installation](agent-hook-installation.md), [Aggregate Agent Memory, Never Write It](aggregate-agent-memory-never-write-it.md), [Audit and Retention](audit-and-retention.md), spec agent-registry "List an agent's config files with their locations", spec agent-registry "Back up and compare-and-swap every write Coffer makes to an agent's config", spec agent-registry "Back up and compare-and-swap every write Coffer makes to an agent's config", spec agent-registry "Back up and compare-and-swap every write Coffer makes to an agent's config", spec agent-registry "Degrade a facet to a parse-error state when its config file is unparseable", spec agent-registry "Uninstall a plugin by the type's own strategy", spec agent-registry/codex "Install Coffer's MCP entry into config.toml preserving its layout", spec agent-registry/codex "Never expose Codex's credential file", spec agent-registry/claude-code "Delegate Claude Code plugin uninstall to its CLI", PR #60, PR #337, PR #386
+**Related**: [Per-Agent Behaviour Lives in One Descriptor Record per Agent](agent-descriptor-manifest.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [Audit and Retention](audit-and-retention.md), spec agent-registry "List an agent's config files with their locations", spec agent-registry "Back up and compare-and-swap every write Coffer makes to an agent's config", spec agent-registry "Back up and compare-and-swap every write Coffer makes to an agent's config", spec agent-registry "Back up and compare-and-swap every write Coffer makes to an agent's config", spec agent-registry "Degrade a facet to a parse-error state when its config file is unparseable", spec agent-registry "Uninstall a plugin by the type's own strategy", spec agent-registry/codex "Install Coffer's MCP entry into config.toml preserving its layout", spec agent-registry/codex "Never expose Codex's credential file", spec agent-registry/claude-code "Delegate Claude Code plugin uninstall to its CLI", PR #60, PR #337, PR #386
 
 **Partly superseded** (2026-10-05): the in-app and CLI config editor and its user-edit stale check no longer exist; the web UI lists an agent's config files and opens them in the person's editor, and only Coffer's own writes (connect, repair, plugin toggle, MCP install, provider projection) keep the backup and the fingerprint compare-and-swap, see the OpenSpec change `hand-files-to-external-tools`.
 
@@ -11,10 +11,14 @@
 
 Coffer writes into files that belong to someone else: Claude Code's
 `settings.json`, `settings.local.json`, `.claude.json`, `CLAUDE.md` and
-`agents/*.md`, and Codex's `config.toml`, `AGENTS.md` and `hooks.json`. The
-writers are the in-app and CLI config editor, the Coffer MCP install and
-uninstall, adoption and removal of the agent's own MCP entries, plugin toggle
-and uninstall, provider projection, and memory-delivery hook install.
+`agents/*.md`, and Codex's `config.toml` and `AGENTS.md`. The writers are the
+in-app and CLI config editor, the Coffer MCP install and uninstall, adoption
+and removal of the agent's own MCP entries, plugin toggle and uninstall, and
+provider projection. Coffer installs no hooks into an agent. What the memory
+sync writes into an agent's own memory, rather than its config, keeps to the
+guard rails of
+[Sync Memory Into Each Agent's Own Memory](sync-memory-into-each-agents-own-memory.md),
+which reuse the backups below.
 
 Three other parties touch the same files: the user in their own editor, the
 agent itself (Claude Code rewrites `.claude.json` constantly), and other tools
@@ -79,7 +83,7 @@ composition root injects into every writer:
    A copy rather than a move, so the original stays in place until the replace
    succeeds.
 6. **Audit.** Every editor write, MCP install and uninstall, plugin change and
-   hook install records an audit entry with its actor.
+   provider projection records an audit entry with its actor.
 7. **Delegate what Coffer must not write.** Where the product keeps state in a
    file it treats as internal, Coffer hands the change to the product's own
    tool: Claude Code plugin uninstall runs `claude plugin uninstall`, because
@@ -120,10 +124,8 @@ update is likely, not everywhere:
   person's click.
 - **Every other structural writer** — Coffer MCP install and uninstall
   (`application/agent/mcp_service.py`), direct MCP entry removal and adoption
-  (`application/agent/mcp_entry_service.py`), plugin toggle and Codex plugin
-  uninstall, and memory-delivery hook install
-  (`application/memory/delivery.py`) — reads, transforms and writes with no
-  fingerprint.
+  (`application/agent/mcp_entry_service.py`), and plugin toggle and Codex
+  plugin uninstall — reads, transforms and writes with no fingerprint.
 
 Pros of applying it everywhere: no Coffer write could discard a concurrent
 edit. Cons: a check is a read-compare-replace without a lock, so it narrows the
@@ -163,7 +165,7 @@ raw REST editor writes, and absent from the other structural writers.
 - A bad Coffer write is recoverable from the newest backup under
   `~/.coffer/config-backups/`, and a run of them from the older ones until the
   retention window passes; the newest backup of each file is never deleted.
-- An MCP install, MCP entry change, plugin change or hook install that lands
+- An MCP install, MCP entry change or plugin change that lands
   between the user's save and the agent's next read can overwrite that save;
   the prior content survives only in its backup. Extending the fingerprint to those
   writers means passing the fingerprint of the text each one already reads to

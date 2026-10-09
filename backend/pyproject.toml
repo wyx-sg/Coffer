@@ -197,14 +197,13 @@ forbidden_modules = ["coffer.surfaces"]
 # a port would be ceremony. So the application MAY import these substrate
 # modules, but no other infrastructure.
 #
-# Second exception: ``coffer.application.memory`` (``service.py``,
-# ``aggregate.py``) composes ``coffer.infrastructure.memory`` — the fact-file
-# store, its path layout, its source-digest cache, and the two reader
-# adapters — directly, the same substrate reasoning as knowledge above: there
-# is no engine behind a port, only file I/O and two format parsers, and this
-# is the whole layer's one consumer of them. The memory layer holds no table
-# at all now that the developer's overrides are gone, so there is no
-# persistence exception beside it.
+# Second exception: ``coffer.application.memory`` (the sync) composes
+# ``coffer.infrastructure.memory`` — the hub store, the ledger, the two
+# readers and the two writers — directly, the same substrate reasoning as
+# knowledge above: there is no engine behind a port, only file I/O and format
+# parsers and renderers, and this is the whole layer's one consumer of them.
+# The memory layer holds no table, so there is no persistence exception
+# beside it.
 #
 # Third exception: ``coffer.application.binary_deploy`` asks
 # ``coffer.infrastructure.vault.home`` — the one module that names every path
@@ -303,8 +302,8 @@ forbidden_modules = ["coffer.infrastructure.secret"]
 #   another kind's class without executing any of its code.
 #
 # Everything else crosses through a port the consuming kind declares
-# (``application.chat.ports.ModelCatalogPort``, ``application.memory.delivery
-# .AgentConfigWriter``) and the composition root satisfies.
+# (``application.chat.ports.ModelCatalogPort``, ``application.memory
+# .legacy_removal.HooksFileStore``) and the composition root satisfies.
 
 # MCP servers: the gateway, the supervisors, the capability catalogue.
 [[tool.importlinter.contracts]]
@@ -367,8 +366,6 @@ forbidden_modules = [
     "coffer.application.memory",
     "coffer.infrastructure.memory",
     "coffer.surfaces.http.memory",
-    "coffer.surfaces.cli.memory_cmd",
-    "coffer.surfaces.cli.memory_hook_cmd",
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",
@@ -442,8 +439,6 @@ forbidden_modules = [
     "coffer.application.memory",
     "coffer.infrastructure.memory",
     "coffer.surfaces.http.memory",
-    "coffer.surfaces.cli.memory_cmd",
-    "coffer.surfaces.cli.memory_hook_cmd",
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",
@@ -517,8 +512,6 @@ forbidden_modules = [
     "coffer.application.memory",
     "coffer.infrastructure.memory",
     "coffer.surfaces.http.memory",
-    "coffer.surfaces.cli.memory_cmd",
-    "coffer.surfaces.cli.memory_hook_cmd",
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",
@@ -596,8 +589,6 @@ forbidden_modules = [
     "coffer.application.memory",
     "coffer.infrastructure.memory",
     "coffer.surfaces.http.memory",
-    "coffer.surfaces.cli.memory_cmd",
-    "coffer.surfaces.cli.memory_hook_cmd",
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",
@@ -671,8 +662,6 @@ forbidden_modules = [
     "coffer.application.memory",
     "coffer.infrastructure.memory",
     "coffer.surfaces.http.memory",
-    "coffer.surfaces.cli.memory_cmd",
-    "coffer.surfaces.cli.memory_hook_cmd",
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",
@@ -752,8 +741,6 @@ forbidden_modules = [
     "coffer.application.memory",
     "coffer.infrastructure.memory",
     "coffer.surfaces.http.memory",
-    "coffer.surfaces.cli.memory_cmd",
-    "coffer.surfaces.cli.memory_hook_cmd",
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",
@@ -827,8 +814,6 @@ forbidden_modules = [
     "coffer.application.memory",
     "coffer.infrastructure.memory",
     "coffer.surfaces.http.memory",
-    "coffer.surfaces.cli.memory_cmd",
-    "coffer.surfaces.cli.memory_hook_cmd",
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",
@@ -856,8 +841,6 @@ source_modules = [
     "coffer.application.memory",
     "coffer.infrastructure.memory",
     "coffer.surfaces.http.memory",
-    "coffer.surfaces.cli.memory_cmd",
-    "coffer.surfaces.cli.memory_hook_cmd",
 ]
 forbidden_modules = [
     "coffer.domain.mcp",
@@ -999,8 +982,6 @@ forbidden_modules = [
     "coffer.application.memory",
     "coffer.infrastructure.memory",
     "coffer.surfaces.http.memory",
-    "coffer.surfaces.cli.memory_cmd",
-    "coffer.surfaces.cli.memory_hook_cmd",
 ]
 
 # Contract 6: kind-agnostic core does not import kind-specific modules. The
@@ -1121,8 +1102,6 @@ forbidden_modules = [
     "coffer.application.memory",
     "coffer.infrastructure.memory",
     "coffer.surfaces.http.memory",
-    "coffer.surfaces.cli.memory_cmd",
-    "coffer.surfaces.cli.memory_hook_cmd",
     "coffer.domain.sync",
     "coffer.application.sync",
     "coffer.infrastructure.sync",

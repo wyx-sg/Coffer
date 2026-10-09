@@ -88,7 +88,7 @@ def test_a_switched_off_features_routes_answer_feature_disabled(home: pathlib.Pa
     with _client() as c:
         _assert_disabled(c.get("/api/v1/knowledge/collections"), "knowledge")
         # Only the feature's own prefix: everything else still answers.
-        assert c.get("/api/v1/memory/partitions").status_code == 200
+        assert c.get("/api/v1/memory/sync/state").status_code == 200
         assert c.get("/api/v1/sync/status").status_code == 200
         assert c.get("/api/v1/agents").status_code == 200
 
@@ -96,7 +96,7 @@ def test_a_switched_off_features_routes_answer_feature_disabled(home: pathlib.Pa
 #: One real route per feature, and the key that closes it.
 _ROUTE_OF = {
     "knowledge": "/api/v1/knowledge/collections",
-    "memory": "/api/v1/memory/partitions",
+    "memory": "/api/v1/memory/sync/state",
 }
 
 

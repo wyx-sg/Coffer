@@ -54,7 +54,7 @@ Deliberately out of scope:
   chatter private in a group"; the per-platform mechanics are in
   [`channels/telegram`](telegram/spec.md).
 
-Channels are always on: no experimental feature gates their routes or adapters. While `memory` is off, a channel turn carries no memory index or retrieval; channels have no knowledge command — a person asks the agent in the chat to put a file or the conversation into knowledge, and the agent writes it (spec [experimental-features](../experimental-features/spec.md) "Close the memory feature's surfaces", "Close the knowledge feature's surfaces").
+Channels are always on: no experimental feature gates their routes or adapters. A channel turn carries no memory from Coffer: the agent reads its own memory, into which the memory sync writes; channels have no knowledge command — a person asks the agent in the chat to put a file or the conversation into knowledge, and the agent writes it (spec [experimental-features](../experimental-features/spec.md) "Close the memory feature's surfaces", "Close the knowledge feature's surfaces").
 
 ## Requirements
 

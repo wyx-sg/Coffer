@@ -95,10 +95,7 @@ describe("AgentConfigDirDialog", () => {
           connections: {
             agt_c: {
               state: "connected",
-              parts: [
-                { key: "mcp", installed: true, detail: "/bin/coffer" },
-                { key: "memory_hook", installed: true, detail: "coffer memory hook" },
-              ],
+              parts: [{ key: "mcp", installed: true, detail: "/bin/coffer" }],
             },
           },
         }),
@@ -114,12 +111,12 @@ describe("AgentConfigDirDialog", () => {
       await waitFor(() => expect(review).toBeEnabled());
       fireEvent.click(review);
       const dialog = await screen.findByRole("dialog");
-      // Both files come out of the old directory and go into the new one.
+      // The MCP entry comes out of the old directory and goes into the new one.
       expect(within(dialog).getAllByText("~/.codex/config.toml").length).toBeGreaterThan(0);
       expect(within(dialog).getAllByText("~/codex-2/config.toml").length).toBeGreaterThan(0);
       expect(d.calls.filter((c) => c.method !== "GET")).toEqual([]);
 
-      fireEvent.click(within(dialog).getByRole("button", { name: "Apply 4 changes" }));
+      fireEvent.click(within(dialog).getByRole("button", { name: "Apply 2 changes" }));
       await waitFor(() => expect(within(dialog).getByText("Changes applied")).toBeInTheDocument());
       expect(d.calls.filter((c) => c.method !== "GET").map((c) => `${c.method} ${c.path}`)).toEqual(
         [

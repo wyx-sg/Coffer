@@ -14,7 +14,6 @@ import { useCustomToolGroups } from "@/lib/hooks/useCustomTools";
 import { useClis } from "@/lib/hooks/useClis";
 import { isFeatureOn } from "@/lib/hooks/useFeatures";
 import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
-import { useMemoryPartitions } from "@/lib/hooks/useMemory";
 import { useProviders } from "@/lib/hooks/useProviders";
 import { useResources } from "@/lib/hooks/useResources";
 import { useSecrets } from "@/lib/hooks/useSecrets";
@@ -98,7 +97,6 @@ const useSkillObjects = (): KindState => {
 const useProviderObjects = () => useMapped(useProviders(), offWhenDisabled);
 const useChannelObjects = () => useMapped(useChannels(), offWhenDisabled);
 const useKnowledgeObjects = () => kindState(useKnowledgeCollections());
-const useMemoryObjects = () => kindState(useMemoryPartitions());
 // A command has no uid: it is its own identity, so it stands in as both.
 const useCliObjects = (): KindState => {
   const q = useClis();
@@ -148,7 +146,6 @@ export const KIND_LIST_HOOKS: Record<ObjectKind, (text: string) => KindState> = 
   skill: useSkillObjects,
   cli: useCliObjects,
   knowledge: useKnowledgeObjects,
-  memory: useMemoryObjects,
   secret: useSecretObjects,
 };
 

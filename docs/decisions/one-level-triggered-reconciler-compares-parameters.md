@@ -3,14 +3,13 @@
 **Status**: Accepted
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale](agent-hook-installation.md), [Skills Reach an Agent as a Directory Link to One Master Folder](cross-platform-skill-delivery.md), [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [A Kind Plugs In as One Frozen Record of Optional Hooks](kind-plugin-contract.md), [Audit Every Change With Its Actor](audit-and-retention.md), [Channels Are Thin Transport Adapters Over One Shared Core](channel-adapter-framework.md), [Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [Platform Differences Live Behind One Platform Port](platform-differences-live-behind-one-platform-port.md), spec memory "Repair stale delivery hooks", spec skill-manager "Reconcile deliveries from state on every pass", spec skill-manager "Heal safely repairable drift on every pass", spec provider-switching "Clear an agent's connection its config contradicts", spec agent-registry "Install Coffer's MCP server into an agent in one action", spec vault-sync "Re-run post-import hooks after applying", PR #413
+**Related**: [Skills Reach an Agent as a Directory Link to One Master Folder](cross-platform-skill-delivery.md), [LLM Connections Are Projected Into Each Agent's Own Config File](provider-connections-projected-into-agent-config.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [A Kind Plugs In as One Frozen Record of Optional Hooks](kind-plugin-contract.md), [Audit Every Change With Its Actor](audit-and-retention.md), [Channels Are Thin Transport Adapters Over One Shared Core](channel-adapter-framework.md), [Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md), [Platform Differences Live Behind One Platform Port](platform-differences-live-behind-one-platform-port.md), spec skill-manager "Reconcile deliveries from state on every pass", spec skill-manager "Heal safely repairable drift on every pass", spec provider-switching "Clear an agent's connection its config contradicts", spec agent-registry "Install Coffer's MCP server into an agent in one action", spec vault-sync "Re-run post-import hooks after applying", PR #413
 
 ## Context
 
 Most of what Coffer promises is a state of files it does not own: a
-`coffer` entry in `~/.claude.json` and Codex's `config.toml`, a
-`SessionStart` / `UserPromptSubmit` hook, a directory link per delivered
-skill, a provider's keys in `settings.json`, a running channel adapter. Those
+`coffer` entry in `~/.claude.json` and Codex's `config.toml`, a directory
+link per delivered skill, a provider's keys in `settings.json`, a running channel adapter. Those
 files are rewritten by their own CLIs, by other tools, by backups and by the
 user, often while the daemon is not running. The database row says what should
 be true; only the file says what is.
@@ -29,7 +28,8 @@ code, its own trigger and its own idea of equality:
 
 Two facts in that table decide this ADR.
 
-- **Presence is not correctness.** PR #413 is the incident: when
+- **Presence is not correctness.** PR #413 is the incident: Coffer then
+  installed a memory delivery hook into each agent, and when
   `coffer memory context` moved from `--agent` to `--agent-uid`, every hook on
   disk kept the old option, the agent printed a usage error at the start of
   every session, and the status page said `installed: True` — for months —
@@ -97,17 +97,18 @@ difference the policy will not repair is reported, not written.
   shows the model already works in this codebase.
 - **Cons.** A periodic pass reads files on a timer; its cost must be measured
   and bounded (a full pass over two agents, twenty skills, a provider and both
-  hooks measured about 27 ms, `backend/tests/integration/perf/test_reconcile_pass_cost.py`). Every target must make `observe` return parameters, not just
+  memory hooks measured about 27 ms, `backend/tests/integration/perf/test_reconcile_pass_cost.py`). Every target must make `observe` return parameters, not just
   presence, which is real work for the provider and MCP targets. Direction
   policies become explicit per target and must be reviewed as such.
 - **Why it wins.** It is the only option under which "Coffer says it is
   installed" and "it works" cannot quietly diverge, and it generalises two
-  mechanisms (the whole-command hook comparison, the channel tick) the code already trusts.
+  mechanisms (PR #413's whole-command comparison, the channel tick) the code
+  already trusted.
 
 ### Option B — Keep a reconcile per kind, and add parameter comparison to each
 
-Leave the table above as it was and bring each heal up to the hook heal's
-standard, kind by kind.
+Leave the table above as it was and bring each heal up to the standard
+PR #413 set for the hook, kind by kind.
 
 - **Pros.** No new framework; each kind keeps full control; the smallest
   diff per step.
@@ -185,9 +186,8 @@ Rules a future change must respect:
 
 ## Consequences
 
-- The memory delivery hook, skill links, the provider projection and Coffer's
-  MCP entry are targets (`application/memory/delivery_reconcile.py`,
-  `application/skill/link_reconcile.py`,
+- Skill links, the provider projection and Coffer's MCP entry are targets
+  (`application/skill/link_reconcile.py`,
   `application/provider/projection_reconcile.py`,
   `application/agent/mcp_reconcile.py`); the per-kind boot heals, the
   post-import reconciles and the one-off MCP home migration the design

@@ -798,8 +798,8 @@ paths:
   /api/v1/agents/{uid}/hooks:
     get:
       description: |-
-        Every hook the agent's own files and enabled plugins declare, with
-        Coffer's own marked and its health. Writes nothing.
+        Every hook the agent's own files and enabled plugins declare. Writes
+        nothing.
       operationId: list_agent_hooks_api_v1_agents__uid__hooks_get
       parameters:
       - in: path
@@ -1923,10 +1923,6 @@ components:
       type: object
     AgentHooksOut:
       properties:
-        coffer_hook:
-          anyOf:
-          - $ref: '#/components/schemas/CofferHookOut'
-          - type: 'null'
         items:
           items:
             $ref: '#/components/schemas/NativeHookOut'
@@ -1939,7 +1935,6 @@ components:
           type: array
       required:
       - items
-      - coffer_hook
       - parse_errors
       title: AgentHooksOut
       type: object
@@ -2393,42 +2388,6 @@ components:
       - detail
       title: CofferConnectionPartOut
       type: object
-    CofferHookOut:
-      properties:
-        event:
-          title: Event
-          type: string
-        expected_command:
-          title: Expected Command
-          type: string
-        health:
-          $ref: '#/components/schemas/HookHealth'
-        installed_command:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Installed Command
-        last_fired_at:
-          anyOf:
-          - format: date-time
-            type: string
-          - type: 'null'
-          title: Last Fired At
-        path:
-          title: Path
-          type: string
-        trust:
-          $ref: '#/components/schemas/HookTrust'
-      required:
-      - event
-      - path
-      - health
-      - trust
-      - installed_command
-      - expected_command
-      - last_fired_at
-      title: CofferHookOut
-      type: object
     ConfigFileContentOut:
       description: 'One config file''s read-only preview. No fingerprint: there is no write.'
       properties:
@@ -2679,17 +2638,6 @@ components:
       - prompt
       title: HandoffOut
       type: object
-    HookHealth:
-      description: |-
-        Coffer's own delivery hook: ``current`` is exactly the command Coffer
-        would write now; ``stale`` carries Coffer's marker with another command;
-        ``missing`` is not there at all.
-      enum:
-      - current
-      - stale
-      - missing
-      title: HookHealth
-      type: string
     HookSource:
       description: |-
         Where a hook was found. ``user`` is a file in the agent's config
@@ -2700,24 +2648,6 @@ components:
       - user
       - plugin
       title: HookSource
-      type: string
-    HookTrust:
-      description: |-
-        Whether the agent will actually run Coffer's installed hook.
-
-        Codex runs a hook only after the user has reviewed it: it records trust
-        against a hash of the hook's definition, so a new or changed hook is
-        skipped — silently — until the user trusts it with ``/hooks``. Coffer never
-        writes that trust itself (spec agent-registry/codex "Leave Codex's
-        internal-state tables untouched"); it reads it and says so.
-      enum:
-      - not_required
-      - trusted
-      - untrusted
-      - modified
-      - disabled
-      - unknown
-      title: HookTrust
       type: string
     MarketplaceOut:
       properties:
@@ -3431,9 +3361,6 @@ components:
       type: object
     NativeHookOut:
       properties:
-        coffer:
-          title: Coffer
-          type: boolean
         command:
           title: Command
           type: string
@@ -3480,7 +3407,6 @@ components:
       - source
       - path
       - plugin
-      - coffer
       title: NativeHookOut
       type: object
     NativeMemoryListOut:

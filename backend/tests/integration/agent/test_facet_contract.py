@@ -4,16 +4,13 @@ agent (ADR agent-mechanisms-are-optional-facets-on-the-descriptor).
 Whatever an agent's facets are, they must honour the same promises: every
 projection entry lands inside the agent's own directory through the
 config-file allowlist; a provider projection round-trips (apply, detect,
-remove) and leaves the user's own keys alone; the delivery hook installs,
-finds and removes only Coffer's marked entry, and what it writes is what the
-hooks reader reports as Coffer's own; the memory reader reads an empty
+remove) and leaves the user's own keys alone; the memory reader reads an empty
 directory without failing; the driver and the probe name the agent they serve.
 A new agent passes this file before it ships.
 """
 
 from __future__ import annotations
 
-import json
 import pathlib
 
 import pytest
@@ -21,9 +18,7 @@ import pytest
 from coffer.domain.agent.config_files import spec_for
 from coffer.domain.agent.detection import DetectionState, ProgramInfo, classify
 from coffer.domain.agent.facets import AgentCatalog, AssetType
-from coffer.domain.agent.hooks import parse_hooks
 from coffer.domain.agent.types import AgentType
-from coffer.domain.memory.delivery import DELIVERY_EVENTS, events_label
 from coffer.domain.provider.agent_projection import ProviderProjectionRequest
 from coffer.domain.provider.api_key_helper import proxy_token_args, proxy_token_helper
 from coffer.domain.provider.codex_projection import CodexAuthCommand
@@ -90,32 +85,6 @@ def test_the_provider_projection_round_trips_and_keeps_user_keys(
     removed = facet.remove(plan.text, path)
     assert not facet.is_present(removed.text)
     assert not facet.is_present(original)
-
-
-def test_the_delivery_hook_is_marked_and_read_back_as_coffers_own(
-    agent: FakeAgentDir, catalog: AgentCatalog
-) -> None:
-    hook = catalog.delivery_hook(agent.agent_type)
-    assert hook is not None
-    assert agent.agent_type in (AgentType(hook.agent_type),)
-    assert hook.event == events_label(DELIVERY_EVENTS)
-    foreign = {"hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "other"}]}]}}
-    path = agent.write(hook.config_key, json.dumps(foreign))
-    installed = hook.install(path.read_text(encoding="utf-8"), _UID)
-    assert hook.find_command(installed) == hook.command_for(_UID)
-    assert events_label([h.event for h in hook.find_all(installed)]) == hook.event
-    rows = parse_hooks(installed)
-    # One entry per event, every one running the same command.
-    assert [r.command for r in rows if hook.is_coffer_command(r.command)] == [
-        hook.command_for(_UID)
-    ] * len(DELIVERY_EVENTS)
-    assert "other" in [r.command for r in rows]
-    assert hook.config_key in agent.descriptor.hook_source_keys, (
-        "the file Coffer writes its hook into is one the hooks reader reads"
-    )
-    removed = hook.remove(installed)
-    assert hook.find_command(removed) is None
-    assert [r.command for r in parse_hooks(removed)] == ["other"]
 
 
 def test_the_memory_reader_reads_an_empty_directory(

@@ -11,7 +11,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 import { AgentOverviewTab, type OverviewActions } from "./AgentOverviewTab";
-import type { AgentOut, AgentTypeOut, CofferConnection, CofferHook } from "@/lib/api/agents";
+import type { AgentOut, AgentTypeOut, CofferConnection } from "@/lib/api/agents";
 import { acceptance } from "@/test/acceptance";
 import { fakeApi } from "@/test/fakeApi";
 
@@ -54,32 +54,21 @@ const TYPE_ROW: AgentTypeOut = {
   install_url: "",
   uid: "u-cc",
 };
-const HOOK: CofferHook = {
-  event: "SessionStart",
-  path: `${HOME}/.claude/settings.json`,
-  health: "current",
-  trust: "not_required",
-  installed_command: 'coffer memory hook --agent-uid u-cc --cwd "$PWD"',
-  expected_command: 'coffer memory hook --agent-uid u-cc --cwd "$PWD"',
-  last_fired_at: new Date(Date.now() - 2 * 3600_000).toISOString(),
-};
 const CONNECTED: CofferConnection = {
   state: "connected",
-  parts: [
-    { key: "mcp", installed: true, detail: "coffer shim" },
-    {
-      key: "memory_hook",
-      installed: true,
-      detail: 'coffer memory hook --agent-uid u-cc --cwd "$PWD"',
-    },
-  ],
+  parts: [{ key: "mcp", installed: true, detail: "coffer shim" }],
+};
+const SETTINGS = `${HOME}/.claude/settings.json`;
+/** The connection with its MCP entry gone: needs repair. */
+const PARTIAL: CofferConnection = {
+  state: "partial",
+  parts: [{ key: "mcp", installed: false, detail: null }],
 };
 
 interface World {
   connection: CofferConnection;
   /** The model the agent's own config names (the models catalogue's default). */
   nativeModel: string | null;
-  hook: CofferHook | null;
   transcripts: { title: string; source_path: string }[];
 }
 let world: World;
@@ -89,10 +78,9 @@ function route(path: string): unknown {
   if (p.endsWith("/coffer-connection")) return world.connection;
   if (p.endsWith("/hooks"))
     return {
-      coffer_hook: world.hook,
       items: [
-        { event: "SessionStart", path: HOOK.path, coffer: true },
-        { event: "PreToolUse", path: HOOK.path, coffer: false },
+        { event: "SessionStart", path: SETTINGS },
+        { event: "PreToolUse", path: SETTINGS },
       ],
       parse_errors: [],
     };
@@ -133,7 +121,7 @@ function route(path: string): unknown {
         {
           key: "settings",
           display_name: "settings.json",
-          path: HOOK.path,
+          path: SETTINGS,
           exists: true,
           kind: "file",
         },
@@ -159,7 +147,6 @@ beforeEach(() => {
   world = {
     connection: CONNECTED,
     nativeModel: "claude-opus-5-5",
-    hook: HOOK,
     transcripts: [{ title: "Fix SeaTalk reconnect", source_path: "/s/1.jsonl" }],
   };
   callMock.mockImplementation(async (path: string) => route(path));
@@ -193,14 +180,13 @@ function renderTab(over: { agent?: Partial<AgentOut>; typeRow?: Partial<AgentTyp
 }
 
 describe("AgentOverviewTab — connection card", () => {
-  test("connected: lists both parts with their files and offers no fix button", async () => {
+  test("connected: lists the MCP entry with its file and offers no fix button", async () => {
     renderTab();
     expect(await screen.findByText(/reaches Coffer through one MCP entry/)).toBeInTheDocument();
     expect(screen.getByText("MCP entry")).toBeInTheDocument();
     expect(screen.getByText("~/.claude.json")).toBeInTheDocument();
-    expect(screen.getByText("Memory hook")).toBeInTheDocument();
-    expect(screen.queryByText(/fired/)).toBeNull();
-    expect(screen.getAllByText("Current")).toHaveLength(2);
+    expect(screen.queryByText(/memory hook/i)).toBeNull();
+    expect(screen.getAllByText("Current")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /Connect|Repair|Disconnect/ })).toBeNull();
   });
 
@@ -210,20 +196,17 @@ describe("AgentOverviewTab — connection card", () => {
       parts: CONNECTED.parts.map((p) => ({ ...p, installed: false, detail: null })),
     };
     const acts = renderTab();
-    expect(await screen.findByText(/You review the lines first/)).toBeInTheDocument();
-    expect(screen.getAllByText("Not set")).toHaveLength(2);
+    expect(await screen.findByText(/You review the line first/)).toBeInTheDocument();
+    expect(screen.getAllByText("Not set")).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
     expect(acts.onConnection).toHaveBeenCalledWith("connect");
   });
 
-  test("needs repair: names the out-of-date hook and offers Repair (a connect)", async () => {
-    world.connection = { ...CONNECTED, state: "partial" };
-    world.hook = { ...HOOK, health: "stale" };
+  test("needs repair: names the missing MCP entry and offers Repair (a connect)", async () => {
+    world.connection = PARTIAL;
     const acts = renderTab();
-    expect(
-      await screen.findByText(/runs a command this Coffer no longer accepts/),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Out of date")).toBeInTheDocument();
+    expect(await screen.findByText(/can’t reach Coffer’s tools/)).toBeInTheDocument();
+    expect(screen.getByText("Missing")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Repair" }));
     expect(acts.onConnection).toHaveBeenCalledWith("connect");
   });
@@ -246,17 +229,9 @@ describe("AgentOverviewTab — connection card", () => {
     expect(button("Repair")).toBeNull();
     cleanup();
     // Partial: Repair.
-    world.connection = { ...CONNECTED, state: "partial" };
-    world.hook = { ...HOOK, health: "stale" };
+    world.connection = PARTIAL;
     renderTab();
     expect(await screen.findByRole("button", { name: "Repair" })).toBeInTheDocument();
-  });
-
-  test("the memory hook row appears only when the connection lists that part", async () => {
-    world.connection = { state: "connected", parts: [CONNECTED.parts[0]] };
-    renderTab();
-    expect(await screen.findByText("MCP entry")).toBeInTheDocument();
-    expect(screen.queryByText("Memory hook")).not.toBeInTheDocument();
   });
 });
 
@@ -283,9 +258,7 @@ describe("AgentOverviewTab — tiles, model, details", () => {
       );
       const hooks = screen.getByRole("link", { name: /^Hooks/ });
       expect(hooks).toHaveAttribute("href", "/agents/claude_code/hooks");
-      expect(
-        await within(hooks).findByText("In settings.json · 1 is Coffer’s"),
-      ).toBeInTheDocument();
+      expect(await within(hooks).findByText("In settings.json")).toBeInTheDocument();
       expect(screen.queryByText(/^(Title|Name)$/)).not.toBeInTheDocument();
     },
   );

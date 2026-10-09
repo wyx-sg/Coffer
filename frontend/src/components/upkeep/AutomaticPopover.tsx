@@ -1,6 +1,6 @@
 // frontend/src/components/upkeep/AutomaticPopover.tsx
 //
-// The popover behind the ▾ half of Memory's Update memory split button,
+// The popover behind the ▾ half of Memory's Sync now split button,
 // anchored under it and right-aligned (board 5.2.04). The caller passes the ▾
 // button as `trigger`. Automatic upkeep lives on the page it upkeeps, not in Settings: a
 // switch with its one-line explanation, an interval, and a footer with when the
@@ -52,7 +52,7 @@ export function clockLine(
 }
 
 interface Props {
-  /** Accessible name and heading of the popover, e.g. "Read memory automatically". */
+  /** Accessible name and heading of the popover, e.g. "Sync memory automatically". */
   title: string;
   /** One line under the heading saying what the pass does. */
   description: string;

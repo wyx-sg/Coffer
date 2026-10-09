@@ -177,7 +177,7 @@ directory the layout of "Scan Claude Code's per-project memory stores" would hav
 - **THEN** `rename_session` and `delete_session` are called with the session id, and no session file is edited by Coffer
 
 ### Requirement: Read Claude Code's hooks from its settings files and plugins
-The hooks of [agent-registry](../spec.md) "List every hook in the agent's native config" MUST be read, for `claude_code`, from the config directory's `settings.json` and `settings.local.json` (source `user`) and from the `hooks/hooks.json` of each enabled installed plugin (source `plugin`). Coffer's own memory hook sits in `settings.json` as two entries: on `SessionStart` and `UserPromptSubmit`.
+The hooks of [agent-registry](../spec.md) "List every hook in the agent's native config" MUST be read, for `claude_code`, from the config directory's `settings.json` and `settings.local.json` (source `user`) and from the `hooks/hooks.json` of each enabled installed plugin (source `plugin`).
 
 #### Scenario: read Claude Code hooks from both settings files and an enabled plugin
 - **GIVEN** a Claude Code agent with hooks in `settings.json`, in `settings.local.json`, and in an enabled plugin's `hooks/hooks.json`

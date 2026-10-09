@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.store_ports import ChannelPeer
 from coffer.application.resource_service import ResourceService
-from coffer.domain.internal_engine_config import DISTIL, UpkeepSetting
+from coffer.domain.internal_engine_config import MEMORY_SYNC, UpkeepSetting
 from coffer.domain.resource import Kind
 from coffer.domain.vault.layout import StorageClass
 from coffer.infrastructure.channel.persistence import ChannelPeerRepo
@@ -133,11 +133,11 @@ async def test_a_channel_and_its_pairings_stay_under_local() -> None:
 async def test_engine_settings_are_one_vault_document_and_absent_means_defaults() -> None:
     repo = VaultInternalEngineConfigRepo()
     assert await repo.get() is None
-    await repo.set(upkeep={DISTIL: UpkeepSetting(enabled=False, interval_s=60)})
+    await repo.set(upkeep={MEMORY_SYNC: UpkeepSetting(enabled=False, interval_s=60)})
     await repo.set_transcribe_model("hears")
     got = await repo.get()
     assert got is not None and got.transcribe_model == "hears"
-    assert got.auto_distil_enabled is False and got.distil_interval_s == 60
+    assert got.memory_sync_enabled is False and got.memory_sync_interval_s == 60
     doc = json.loads((vault_root() / "state/settings/internal-engine.json").read_text())
     assert doc["transcribe_model"] == "hears" and "updated_at" not in doc
     assert "updated_at" in json.loads((local_root() / "engine.json").read_text())

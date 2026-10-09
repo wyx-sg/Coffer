@@ -26,7 +26,6 @@ class Reason(Enum):
 
 #: Space-separated command path -> (reason, why).
 COMMAND_REASONS: dict[str, tuple[Reason, str]] = {
-    "memory hook": (Reason.PROGRAM, "the installed memory hook runs it"),
     "proxy token": (Reason.PROGRAM, "an agent's key helper runs it"),
     "daemon start": (
         Reason.OFFLINE,

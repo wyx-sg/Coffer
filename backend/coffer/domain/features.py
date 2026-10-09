@@ -71,7 +71,6 @@ EXPERIMENTAL_FEATURES: tuple[ExperimentalFeature, ...] = (
     ExperimentalFeature(
         key=MEMORY,
         route_prefixes=("/api/v1/memory",),
-        kinds=("memory",),
     ),
 )
 

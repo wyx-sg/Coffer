@@ -19,7 +19,6 @@ from coffer.application.knowledge.guide_render import (
     GUIDE_SKILL_NAME,
     MAX_CATALOGUE_CHARS,
     MAX_DESCRIPTION_CHARS,
-    display_memory_root,
     display_root,
     render,
     render_catalogue,
@@ -56,12 +55,6 @@ def test_the_default_root_is_rendered_home_relative() -> None:
     machines whose home directories differ."""
     home = pathlib.Path("/Users/someone")
     assert display_root(home / ".coffer" / "knowledge", home=home) == "~/.coffer/knowledge"
-
-
-def test_the_memory_root_follows_the_same_rule() -> None:
-    home = pathlib.Path("/Users/someone")
-    assert display_memory_root(home / ".coffer" / "memory", home=home) == "~/.coffer/memory"
-    assert display_memory_root(pathlib.Path("/mnt/memory"), home=home) == "/mnt/memory"
 
 
 def test_a_moved_root_is_rendered_absolute() -> None:
@@ -123,9 +116,6 @@ def test_an_empty_corpus_still_renders_a_usable_manual() -> None:
     assert "No collections have been created yet" in text
 
 
-_MEMORY = "~/.coffer/memory"
-
-
 @pytest.mark.acceptance(
     spec="knowledge", scenario="one skill carries both Coffer's manual and the catalogue"
 )
@@ -135,7 +125,6 @@ def test_the_body_carries_both_halves() -> None:
     text = render(
         "~/.coffer/knowledge",
         [_collection("shopee", "Shopee's account system.")],
-        memory_root=_MEMORY,
     )
     _, frontmatter, body = text.split("---", 2)
     description = yaml.safe_load(frontmatter)["description"]
@@ -152,19 +141,18 @@ def test_the_body_carries_both_halves() -> None:
     assert "### Writing a page" in manual  # how an agent adds knowledge
     assert "### Tidying a collection" in manual
     assert "Everything left out is\nstill callable" in manual  # the tiering contract
-    assert "never writes it" in manual
     assert "Nothing here waits on a human" in manual
     assert "`pages/doc0.md` — **Doc 0**" in catalogue
     assert "~/.coffer/knowledge/shopee/" in catalogue
 
 
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="name one tool, both roots and the log reader in the manual"
+    spec="knowledge", scenario="name one tool, the knowledge root and the log reader in the manual"
 )
-def test_the_manual_names_one_tool_the_memory_root_and_the_log_reader() -> None:
+def test_the_manual_names_one_tool_and_the_log_reader() -> None:
     import re
 
-    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY)
+    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")])
     named = set(re.findall(r"coffer__[a-z_]+", text))
     assert named == {"coffer__search_tools"}
     assert "coffer__write" not in text
@@ -179,9 +167,9 @@ def test_the_manual_names_one_tool_the_memory_root_and_the_log_reader() -> None:
     assert "coffer path knowledge" not in text
     assert "coffer path memory" not in text
     assert "trigger" not in text
-    # The memory root, with the instruction to search it with the agent's own tools.
-    assert f"`{_MEMORY}/<partition>/notes/`" in text
-    assert f"search `{_MEMORY}` with your own tools" in text
+    # Memory reaches an agent through its own native memory: no root is named.
+    assert "derived/memory" not in text
+    assert "<MEMORY_ROOT>" not in text
     # Coffer's own logs are read with ``coffer log`` and located with ``coffer path logs``.
     assert "`coffer log audit`" in text
     assert "`coffer log daemon`" in text
@@ -269,7 +257,7 @@ def test_with_knowledge_switched_off_the_guide_carries_no_catalogue() -> None:
 def test_with_knowledge_switched_off_the_manual_documents_no_knowledge_tool_or_root() -> None:
     """The whole guide, not only its description: the writing and tidying
     instructions and the knowledge root leave with the feature."""
-    text = render("~/.coffer/knowledge", None, memory_root=_MEMORY)
+    text = render("~/.coffer/knowledge", None)
     for heading in (
         "Writing a page",
         "Integrating sources",
@@ -278,28 +266,8 @@ def test_with_knowledge_switched_off_the_manual_documents_no_knowledge_tool_or_r
     ):
         assert f"### {heading}" not in text, heading
     assert "~/.coffer/knowledge" not in text
-    assert _MEMORY in text
     assert "adds one tool of its own" in text
     assert "<!--" not in text
-
-
-def test_with_memory_switched_off_the_guide_names_no_memory_root() -> None:
-    catalogue = [_collection("ops", "Runbooks.")]
-    text = render("~/.coffer/knowledge", catalogue)
-    assert "<MEMORY_ROOT>" not in text
-    assert "~/.coffer/memory" not in text
-    assert "## Coffer reads your memory" not in text
-    assert "### Writing a page" in text
-    assert "### ops" in text
-    assert "adds one tool of its own" in text
-    assert "memory notes" not in text.split("---")[1]
-
-    both_off = render("~/.coffer/knowledge", None)
-    assert "~/.coffer/memory" not in both_off
-    assert "### Writing a page" not in both_off
-    assert "adds one tool of its own" in both_off
-    assert "`coffer path logs`" in both_off  # the log readers are always there
-    assert "<!--" not in both_off
 
 
 @pytest.mark.acceptance(
@@ -307,7 +275,7 @@ def test_with_memory_switched_off_the_guide_names_no_memory_root() -> None:
 )
 def test_the_manual_says_where_a_skills_scripts_keep_their_files() -> None:
     for text in (
-        render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY),
+        render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")]),
         render("~/.coffer/knowledge", None),
     ):
         assert "`~/.coffer/skill-data/<skill-name>/`" in text
@@ -319,11 +287,10 @@ def test_the_manual_says_where_a_skills_scripts_keep_their_files() -> None:
 
 
 def test_with_every_feature_on_no_span_marker_reaches_an_agent() -> None:
-    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY)
+    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")])
     assert "<!--" not in text
     assert "<MEMORY_ROOT>" not in text
     assert "adds one tool of its own" in text
-    assert "memory notes" in text.split("---")[1]
 
 
 def _section(text: str, heading: str) -> str:
@@ -338,7 +305,7 @@ def _section(text: str, heading: str) -> str:
     spec="knowledge", scenario="the rendered guide carries the writing and tidying sections"
 )
 def test_the_guide_carries_the_writing_and_tidying_sections() -> None:
-    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY)
+    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")])
     for heading in (
         "Writing a page",
         "Integrating sources",
@@ -352,7 +319,7 @@ def test_the_guide_carries_the_writing_and_tidying_sections() -> None:
 
 @pytest.mark.acceptance(spec="knowledge", scenario="the writing section states the six rules")
 def test_the_writing_section_states_the_six_rules() -> None:
-    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY)
+    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")])
     flat = " ".join(_section(text, "Writing a page").split())
     assert "fold the fact into the" in flat  # 1. the page that owns the subject
     assert "Lose nothing" in flat
@@ -364,29 +331,6 @@ def test_the_writing_section_states_the_six_rules() -> None:
     for key in ("a `title`", "a `type`", "`description`", "`sources`", "`aliases`"):
         assert key in flat
     assert "`actor: agent`" in flat
-
-
-@pytest.mark.acceptance(
-    spec="memory",
-    scenario="the memory section teaches merging by origins and retiring by frontmatter",
-)
-def test_the_memory_section_teaches_merging_by_origins_and_retiring_by_frontmatter() -> None:
-    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY)
-    flat = " ".join(_section(text, "Tidying memory").split())
-    assert "append every entry of the merged note's `origins:` list" in flat
-    assert "add `retired:` with the reason" in flat and "`replaced_by:`" in flat
-    assert "the newer statement wins unless the older one is shown to be right" in flat
-    for name in (".raw/", "MEMORY.md", "RETIRED.md"):
-        assert f"`{name}`" in flat.split("Leave everything else")[1]
-
-
-@pytest.mark.acceptance(
-    spec="memory", scenario="the memory section is absent with the memory feature off"
-)
-def test_the_memory_tidying_section_is_absent_with_memory_off() -> None:
-    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")])
-    assert "Tidying memory" not in text
-    assert "retired:" not in text
 
 
 def _file(path: str, title: str, *, kind: str, page_type: str = "", waiting: bool = False):  # type: ignore[no-untyped-def]

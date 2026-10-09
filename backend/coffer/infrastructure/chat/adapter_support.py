@@ -13,8 +13,8 @@ app-server-backed (:mod:`codex_agent`) adapters both need:
   is on a phone chat rather than at a terminal.
 - :func:`model_system_context` — the append naming the model Coffer put the
   session on, and what else it could be switched to.
-- :func:`compose_system_context` — the three appends a provider owes its agent
-  (channel, model, memory digest), joined into the one string it passes on.
+- :func:`compose_system_context` — the two appends a provider owes its agent
+  (channel, model), joined into the one string it passes on.
 """
 
 from __future__ import annotations
@@ -168,9 +168,6 @@ __all__ = [
 
 #: Resolves the models an agent could be switched to, for the per-turn note.
 ModelLister = Callable[[str], Awaitable[Sequence[str]]]
-#: (agent_key, cwd, conversation_id) -> the memory digest for this turn, or
-#: None (spec memory "Deliver to channel turns through the system prompt").
-MemoryContextComposer = Callable[[str, str, str], Awaitable[str | None]]
 #: (channel uid, conversation id) -> the facts the channel note is written from,
 #: or None when no channel carries that uid any more. A conversation stores the
 #: uid of the channel it is bridged to (ADR identity-is-the-uid-inside-the-file);
@@ -206,27 +203,17 @@ async def compose_system_context(
     *,
     agent_key: str,
     channel_uid: str,
-    cwd: str,
     model: str | None,
     list_models: ModelLister | None,
-    compose_memory: MemoryContextComposer | None,
     resolve_channel: ChannelNoteResolver | None = None,
     conversation_id: str = "",
 ) -> str:
     """The appends every provider owes its agent, joined into one.
 
-    Three of them, and the order is the order they matter in:
+    Two of them, and the order is the order they matter in:
 
     * a channel-originated conversation drives the agent from a phone chat, so
       tell it so — concise replies, no clickable dialogs;
-    * a channel-driven turn also carries the memory digest (spec memory "Deliver to
-      channel turns through the system prompt"): Coffer composes this turn's
-      context itself, so memory reaches the agent with no session-start hook and
-      no install, and the provider marks the turn's process so an installed
-      hook leaves that moment to the turn (``coffer.domain.channel_turn``).
-      **Only** a channel turn gets it — an agent the developer
-      drives themselves receives memory through its own hook (spec memory
-      "Install delivery hooks explicitly and removably"), never both;
     * every conversation gets the model note, because the agent cannot see
       which model Coffer put it on and otherwise invents an answer.
 
@@ -244,8 +231,8 @@ async def compose_system_context(
     # Whether this is a channel turn is decided by the stored uid, never by
     # whether its label could be resolved. A deleted channel would otherwise
     # silently downgrade a phone-chat turn to a terminal one — dropping the
-    # "keep it short, you cannot click dialogs" contract and the memory digest
-    # with it — for the one reason least related to where the user is sitting.
+    # "keep it short, you cannot click dialogs" contract — for the one reason
+    # least related to where the user is sitting.
     if channel_uid:
         note = (
             await resolve_channel(channel_uid, conversation_id)
@@ -253,10 +240,6 @@ async def compose_system_context(
             else None
         )
         parts.append(channel_system_context(note))
-        if compose_memory is not None:
-            memory = await compose_memory(agent_key, cwd, conversation_id)
-            if memory:
-                parts.append(memory)
     available = await list_models(agent_key) if list_models else []
     parts.append(model_system_context(model, available))
     return "\n\n".join(parts)

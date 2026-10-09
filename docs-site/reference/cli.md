@@ -47,7 +47,6 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer mcp`](/reference/cli/mcp) | MCP servers: register, change, test, their tools and logs. |
 | [`coffer secret`](/reference/cli/secret) | Secrets: list, store, delete, reveal in the app, import, approvals. |
 | [`coffer cli`](/reference/cli/cli) | Command-line tools Coffer manages for skills. |
-| [`coffer memory`](/reference/cli/memory) | Memory partitions (notes are plain files you edit directly). |
 | [`coffer proxy`](/reference/cli/proxy) | The local model proxy. |
 | [`coffer vault`](/reference/cli/vault) | The vault's history and the hand edits it refused. |
 | [`coffer custom-tool`](/reference/cli/custom-tool) | Custom tools: groups of HTTP API requests served as MCP tools. |
@@ -61,6 +60,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer provider`](/reference/cli/provider) | Model providers: connections, prices, switching agents' models. |
 | [`coffer model`](/reference/cli/model) | Ask a model endpoint which models it serves, or test it. |
 | [`coffer conversation`](/reference/cli/conversation) | Conversations: rename, stop a turn, delete (list: agent session all). |
+| [`coffer memory`](/reference/cli/memory) | Memory sync into each agent's own memory: state, sync now, preview, undo, curate. |
 | [`coffer settings`](/reference/cli/settings) | Settings: approvals, secret storage, features, data, upkeep. |
 | [`coffer attention`](/reference/cli/attention) | What needs you (the Overview list): list, ignore, un-ignore. |
 | [`coffer usage`](/reference/cli/usage) | Model usage and cost. |

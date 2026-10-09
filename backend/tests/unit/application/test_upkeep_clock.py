@@ -14,11 +14,10 @@ from typing import Any
 
 import pytest
 
-from coffer.application.memory.aggregate_worker import AggregateWorker
-from coffer.application.memory.distil_worker import DistilWorker
+from coffer.application.memory.sync_worker import MemorySyncWorker
 from coffer.application.upkeep_clock import PassClock
 from coffer.domain.audit import AuditEntry
-from coffer.domain.internal_engine_config import GlobalInternalEngineConfig
+from coffer.domain.internal_engine_config import MEMORY_SYNC, GlobalInternalEngineConfig
 from coffer.surfaces.http import internal_engine_routes
 from tests.support.waiting import wait_until
 
@@ -39,16 +38,16 @@ class _Audit:
 
 def test_next_is_the_wait_start_plus_the_interval_as_it_stands_now() -> None:
     clock = PassClock()
-    clock.waiting("aggregate", now=_T0)
-    assert clock.next_due("aggregate", 3600) == _T0 + timedelta(hours=1)
+    clock.waiting(MEMORY_SYNC, now=_T0)
+    assert clock.next_due(MEMORY_SYNC, 3600) == _T0 + timedelta(hours=1)
     # Shortened mid-wait: next moves earlier at once, as the wait itself does.
-    assert clock.next_due("aggregate", 900) == _T0 + timedelta(minutes=15)
+    assert clock.next_due(MEMORY_SYNC, 900) == _T0 + timedelta(minutes=15)
 
-    clock.waiting("distil", due_in_s=60, now=_T0)
-    assert clock.next_due("distil", 6 * 3600) == _T0 + timedelta(seconds=60)
+    clock.waiting(MEMORY_SYNC, due_in_s=60, now=_T0)
+    assert clock.next_due(MEMORY_SYNC, 6 * 3600) == _T0 + timedelta(seconds=60)
 
-    clock.running("aggregate")
-    assert clock.next_due("aggregate", 3600) is None
+    clock.running(MEMORY_SYNC)
+    assert clock.next_due(MEMORY_SYNC, 3600) is None
 
 
 @pytest.mark.acceptance(
@@ -60,53 +59,40 @@ async def test_each_pass_reports_when_it_last_ran_and_when_it_runs_next(
 ) -> None:
     clock = PassClock()
     monkeypatch.setattr(internal_engine_routes, "PASS_CLOCK", clock)
-    clock.waiting("aggregate", now=_T0)
-    clock.waiting("distil", now=_T0)
-    audit = _Audit({"memory_aggregated": _T0.replace(tzinfo=None) - timedelta(minutes=14)})
-    cfg = GlobalInternalEngineConfig(
-        updated_at=_T0, auto_distil_enabled=False, aggregate_interval_s=1800
-    )
+    clock.waiting(MEMORY_SYNC, now=_T0)
+    audit = _Audit({"memory_synced": _T0.replace(tzinfo=None) - timedelta(minutes=14)})
+    cfg = GlobalInternalEngineConfig(updated_at=_T0, memory_sync_interval_s=1800)
 
     out = (await internal_engine_routes._to_out(cfg, audit)).upkeep  # type: ignore[arg-type]
+    assert out[MEMORY_SYNC].last_pass_at == _T0 - timedelta(minutes=14)
+    assert out[MEMORY_SYNC].next_pass_at == _T0 + timedelta(minutes=30)
 
-    assert out["aggregate"].last_pass_at == _T0 - timedelta(minutes=14)
-    assert out["aggregate"].next_pass_at == _T0 + timedelta(minutes=30)
     # Never ran: no "last" is invented. Switched off: its timer is waiting,
     # but no pass is coming.
-    assert out["distil"].last_pass_at is None
-    assert out["distil"].next_pass_at is None
+    off = GlobalInternalEngineConfig(updated_at=_T0, memory_sync_enabled=False)
+    out = (await internal_engine_routes._to_out(off, _Audit({}))).upkeep  # type: ignore[arg-type]
+    assert out[MEMORY_SYNC].last_pass_at is None
+    assert out[MEMORY_SYNC].next_pass_at is None
 
 
-async def test_the_workers_record_their_wait_and_clear_it_while_a_pass_runs() -> None:
+async def test_the_worker_records_its_wait_and_clears_it_while_a_pass_runs() -> None:
     clock = PassClock()
     seen: list[datetime | None] = []
 
-    async def _aggregate(**_: Any) -> None:
-        seen.append(clock.next_due("aggregate", 3600))
+    async def _sync(actor: str) -> None:
+        seen.append(clock.next_due(MEMORY_SYNC, 3600))
 
-    worker = AggregateWorker(aggregate=_aggregate, interval_s=3600, clock=clock)
+    async def _on() -> bool:
+        return True
+
+    async def _interval() -> int | None:
+        return 3600
+
+    worker = MemorySyncWorker(sync=_sync, is_enabled=_on, read_interval=_interval, clock=clock)
     task = asyncio.create_task(worker.run_forever())
-    await wait_until(lambda: seen and clock.next_due("aggregate", 3600) is not None)
+    await wait_until(lambda: seen and clock.next_due(MEMORY_SYNC, 3600) is not None)
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
     assert seen == [None]
-    assert clock.next_due("aggregate", 3600) is not None
-
-    async def _partitions() -> list[str]:
-        return []
-
-    async def _distil(uid: str, **_: Any) -> None:
-        return None
-
-    distil = DistilWorker(
-        distil=_distil, list_partitions=_partitions, start_delay_s=30, clock=clock
-    )
-    task = asyncio.create_task(distil.run_forever())
-    await wait_until(lambda: clock.next_due("distil", 6 * 3600) is not None)
-    due = clock.next_due("distil", 6 * 3600)
-    task.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await task
-    assert due is not None
-    assert due - datetime.now(UTC) <= timedelta(seconds=30)
+    assert clock.next_due(MEMORY_SYNC, 3600) is not None

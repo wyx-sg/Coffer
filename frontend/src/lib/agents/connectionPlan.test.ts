@@ -20,10 +20,7 @@ const codex: PlanAgent["row"] = {
 
 describe("connectionFiles", () => {
   test("Claude Code's entry sits in ~/.claude.json for the standard directory", () => {
-    expect(connectionFiles(claude)).toEqual({
-      mcp: "/Users/me/.claude.json",
-      memory_hook: "/Users/me/.claude/settings.json",
-    });
+    expect(connectionFiles(claude)).toEqual({ mcp: "/Users/me/.claude.json" });
   });
 
   test("Claude Code's entry sits inside a custom directory", () => {
@@ -31,60 +28,43 @@ describe("connectionFiles", () => {
     expect(connectionFiles(custom).mcp).toBe("/Users/me/work/claude-home/.claude.json");
   });
 
-  test("Codex writes config.toml and hooks.json in its directory", () => {
-    expect(connectionFiles(codex)).toEqual({
-      mcp: "/Users/me/.codex/config.toml",
-      memory_hook: "/Users/me/.codex/hooks.json",
-    });
+  test("Codex writes config.toml in its directory", () => {
+    expect(connectionFiles(codex)).toEqual({ mcp: "/Users/me/.codex/config.toml" });
   });
 });
 
 describe("planConnect", () => {
-  test("an unregistered agent gets both parts, with placeholders for what is not known", () => {
+  test("an unregistered agent gets its MCP entry, with placeholders for what is not known", () => {
     const items = planConnect([{ row: claude }, { row: codex }], OPTS);
     expect(items.map((i) => [i.id, i.path, i.op])).toEqual([
       ["claude_code:mcp", "~/.claude.json", "modify"],
-      ["claude_code:memory_hook", "~/.claude/settings.json", "modify"],
       ["codex:mcp", "~/.codex/config.toml", "modify"],
-      ["codex:memory_hook", "~/.codex/hooks.json", "modify"],
     ]);
     const entry = items[0].diff!.map((l) => l.text).join("\n");
     expect(entry).toContain('"command": "<shim>"');
     expect(entry).toContain('"--agent-uid", "<uid>"');
     expect(items[0].diff![0]).toEqual({ kind: "hunk", text: "mcpServers" });
     expect(items[0].added).toBe(4);
-    expect(items[2].diff!.map((l) => l.text)).toContain("[mcp_servers.coffer]");
+    expect(items[1].diff!.map((l) => l.text)).toContain("[mcp_servers.coffer]");
   });
 
   test("a never-run agent also gets its directory created", () => {
     const items = planConnect([{ row: { ...codex, state: "installed_never_run" } }], OPTS);
     expect(items[0]).toMatchObject({ id: "codex:dir", path: "~/.codex/", op: "add" });
-    expect(items).toHaveLength(3);
+    expect(items).toHaveLength(2);
   });
 
-  test("a partial connection previews only the missing parts", () => {
+  test("a registered agent's missing entry carries its uid", () => {
     const items = planConnect(
-      [
-        {
-          row: claude,
-          uid: "agt_1",
-          parts: [
-            { key: "mcp", installed: true, detail: "/Users/me/.coffer/bin/coffer" },
-            { key: "memory_hook", installed: false, detail: null },
-          ],
-        },
-      ],
+      [{ row: claude, uid: "agt_1", parts: [{ key: "mcp", installed: false, detail: null }] }],
       OPTS,
     );
-    expect(items.map((i) => i.id)).toEqual(["claude_code:memory_hook"]);
-    expect(items[0].diff!.map((l) => l.text).join("\n")).toContain("--agent-uid agt_1");
+    expect(items.map((i) => i.id)).toEqual(["claude_code:mcp"]);
+    expect(items[0].diff!.map((l) => l.text).join("\n")).toContain('"--agent-uid", "agt_1"');
   });
 
   test("a full connection plans nothing", () => {
-    const parts = [
-      { key: "mcp", installed: true, detail: "x" },
-      { key: "memory_hook", installed: true, detail: "y" },
-    ];
+    const parts = [{ key: "mcp", installed: true, detail: "x" }];
     expect(planConnect([{ row: claude, uid: "agt_1", parts }], OPTS)).toEqual([]);
   });
 });
@@ -96,10 +76,7 @@ describe("planDisconnect", () => {
         {
           row: claude,
           uid: "agt_1",
-          parts: [
-            { key: "mcp", installed: true, detail: "/Users/me/.coffer/bin/coffer" },
-            { key: "memory_hook", installed: false, detail: null },
-          ],
+          parts: [{ key: "mcp", installed: true, detail: "/Users/me/.coffer/bin/coffer" }],
         },
       ],
       OPTS,

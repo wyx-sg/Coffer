@@ -5,11 +5,11 @@ The agent registry decides which locally-installed AI coding agents Coffer knows
 
 This spec holds what the two types share. Everything that differs by type — where the config directory is, which files are allowlisted, the MCP entry shape, the plugin inventory, the model catalogue's sources, the native-memory layout, the transcript location — lives in a child spec: [`agent-registry/claude-code`](claude-code/spec.md) and [`agent-registry/codex`](codex/spec.md), each the reading of one `AGENT_DESCRIPTORS` record, the single per-type table in the code. Adding a product is one enum value, one descriptor record and one child spec.
 
-Beyond registering agents, the user lists and previews each agent's known config files read-only and opens them in their own editor to change them, installs Coffer's own MCP server into an agent with one click, and sees which models that agent can be put on. The registry also reaches into the agent's real on-disk workspace — the MCP servers configured in its own files, its installed plugins, directory-type config entries, its own native memory and its session transcripts — following **ingest → hub → deliver**: anything shareable found in an agent's workspace can be adopted into Coffer's hub (the MCP gateway; the master skill store of skill-manager) and delivered back to any agent, instead of living as per-agent one-off config. All writes go through each agent's documented configuration paths only; the agents' internal state files are read as inputs where needed and never written. Config files are shown as raw text, read-only; a person edits them in their own editor, Coffer's own writes into them keep an atomic write and a backup, and recurring structured needs graduate into facets.
+Beyond registering agents, the user lists and previews each agent's known config files read-only and opens them in their own editor to change them, installs Coffer's own MCP server into an agent with one click, and sees which models that agent can be put on. The registry also reaches into the agent's real on-disk workspace — the MCP servers configured in its own files, its installed plugins, directory-type config entries, its native memory and its session transcripts — following **ingest → hub → deliver**: anything shareable found in an agent's workspace can be adopted into Coffer's hub (the MCP gateway; the master skill store of skill-manager) and delivered back to any agent, instead of living as per-agent one-off config. All writes go through each agent's documented configuration paths only; the agents' internal state files are read as inputs where needed and never written. Config files are shown as raw text, read-only; a person edits them in their own editor, Coffer's own writes into them keep an atomic write and a backup, and recurring structured needs graduate into facets.
 
-The user runs Coffer on their own machine; there is no multi-tenant or remote-access requirement. The registry relies on the Resource framework, audit log and immutable-`uid` identity of resource-framework, and renders inside the web-ui application shell. A `coffer-hook` binary with a session-context rules route and a `disable_native_memory` switch once lived here and was removed because it was never installed; session-start delivery is now memory's own, marker-scoped install, which this registry only supports by supplying the agent record, its config directory, its allowlisted settings file and the atomic-write machinery.
+The user runs Coffer on their own machine; there is no multi-tenant or remote-access requirement. The registry relies on the Resource framework, audit log and immutable-`uid` identity of resource-framework, and renders inside the web-ui application shell. A `coffer-hook` binary with a session-context rules route and a `disable_native_memory` switch once lived here and was removed because it was never installed; Coffer installs no hook into an agent; the memory sync writes into each agent's own memory files ([memory](../memory/spec.md)), using the agent record and its config directory from this registry.
 
-An agent's connection status carries no `memory_hook` part while the `memory` feature is switched off (spec [experimental-features](../experimental-features/spec.md) "Close the memory feature's surfaces").
+An agent's connection has one part, the `mcp` gateway entry; it carries no memory part whatever the features say.
 
 ## Requirements
 
@@ -56,7 +56,7 @@ A removed agent MUST re-appear as a discovery candidate on subsequent scans whil
 ### Requirement: Manage the agent lifecycle
 Users MUST be able to register, list, view, update (its config directory and the model binding of "Carry the model binding on the agent record") and remove agents. An agent cannot be switched off: its kind is non-toggleable, so the generic `POST /api/v1/resources/{uid}/enable|disable` routes refuse it with `RESOURCE_NOT_TOGGLEABLE` and its resource always reads enabled. Registration takes the type and, optionally, a config directory — the type's standard one when omitted — and the name is the type's ("Keep one agent per type, named by it"); there is no name, title or description to supply or edit. Skill bindings between an agent and a skill belong to skill-manager; this registry defines no skill operations beyond exposing an `on_delete` hook for cascade cleanup.
 
-Over REST the lifecycle is `POST /api/v1/agents` (the type and, optionally, `config_dir`), `GET /api/v1/agents` and `GET /api/v1/agents/{uid}`, `PATCH /api/v1/agents/{uid}` (with `config_dir` and the model fields of "Carry the model binding on the agent record") and `DELETE /api/v1/agents/{uid}`, where `{uid}` is the agent's uid or the type it is named by ("Keep one agent per type, named by it"); the Agents page reaches the same operations through each row's Connect and ⋯ menu. The `agent` kind has no scope, because it declares none. The agent's Coffer connection, part by part ("Report an agent's Coffer connection part by part"), is read from `GET /api/v1/agents/{uid}/coffer-connection`: its state and, for each applicable part (the gateway MCP entry, and the memory delivery hook while memory is on), whether it is installed.
+Over REST the lifecycle is `POST /api/v1/agents` (the type and, optionally, `config_dir`), `GET /api/v1/agents` and `GET /api/v1/agents/{uid}`, `PATCH /api/v1/agents/{uid}` (with `config_dir` and the model fields of "Carry the model binding on the agent record") and `DELETE /api/v1/agents/{uid}`, where `{uid}` is the agent's uid or the type it is named by ("Keep one agent per type, named by it"); the Agents page reaches the same operations through each row's Connect and ⋯ menu. The `agent` kind has no scope, because it declares none. The agent's Coffer connection, part by part ("Report an agent's Coffer connection part by part"), is read from `GET /api/v1/agents/{uid}/coffer-connection`: its state and, for its one part (the gateway MCP entry), whether it is installed.
 
 #### Scenario: register an agent without an explicit name
 - **GIVEN** the daemon is running and no `claude_code` agent is registered
@@ -435,7 +435,7 @@ The agent's **Config files** tab MUST be one split view, resizable by its divide
 - **AND** the pane offers Open in editor and Reveal in Finder and no Edit or Save
 
 ### Requirement: Audit every agent lifecycle event
-The system MUST record an audit entry, carrying timestamp, actor and the affected agent reference, for every lifecycle event: agent created, updated, removed (via the kind-agnostic `resource_created` / `resource_updated` / `resource_deleted` events); Coffer MCP installed/uninstalled; MCP entry removed/adopted (`agent_mcp_entry_removed` / `agent_mcp_entry_adopted`); plugin toggled/uninstalled (`agent_plugin_toggled` / `agent_plugin_uninstalled`). Discovery and all workspace listings — MCP entries, plugins, config files, native memory stores, native sessions, the model catalogue, the Coffer connection status — are read-only and emit no audit event. Reading ONE of the listed items — a single store's files — is the same act at a smaller scale and audits nothing either, and renaming or deleting a native session is the agent's own act on its own record ("Rename and delete a native session through the agent") and is not audited here. A connect or disconnect records the events of the parts it installs or removes and none of its own; the memory delivery hook's events are memory's, not this spec's. The `agent_config_file_written` and `agent_config_file_deleted` events are no longer recorded; rows an earlier version recorded keep their wording in Activity.
+The system MUST record an audit entry, carrying timestamp, actor and the affected agent reference, for every lifecycle event: agent created, updated, removed (via the kind-agnostic `resource_created` / `resource_updated` / `resource_deleted` events); Coffer MCP installed/uninstalled; MCP entry removed/adopted (`agent_mcp_entry_removed` / `agent_mcp_entry_adopted`); plugin toggled/uninstalled (`agent_plugin_toggled` / `agent_plugin_uninstalled`). Discovery and all workspace listings — MCP entries, plugins, config files, native memory stores, native sessions, the model catalogue, the Coffer connection status — are read-only and emit no audit event. Reading ONE of the listed items — a single store's files — is the same act at a smaller scale and audits nothing either, and renaming or deleting a native session is the agent's own act on its own record ("Rename and delete a native session through the agent") and is not audited here. A connect or disconnect records the events of the parts it installs or removes and none of its own. The `agent_config_file_written` and `agent_config_file_deleted` events are no longer recorded; rows an earlier version recorded keep their wording in Activity.
 
 #### Scenario: audit lifecycle events
 - **GIVEN** the user has registered, edited, or removed agents
@@ -480,15 +480,14 @@ The system MUST return one installed plugin's detail, addressed by the `<name>@<
 - **THEN** Coffer answers 404 with `PLUGIN_NOT_FOUND`
 
 ### Requirement: Show the Coffer connection on the agent pages
-An agent has one unconnected state, **Not connected**, and one word per other state: **Connected**, **Needs repair** (the `partial` state), **Hook not approved** (on the agent's own page: Codex has not approved, or approved an earlier command of, Coffer's memory hook), **Config left behind** and, for an added agent whose program and directory are both gone, **Not found**. A newly found agent that was never added and an agent that was disconnected are the same state, so both read Not connected and both offer **Connect**; the list has no "Not added" or "Detected" word and no Add action. Each row of the Agents list MUST show the agent's state and the one action that state calls for: **Connect** for one not connected — which, for a newly found agent, registers it under its default config directory first — **Repair** for one that needs repair, and none for one that is connected, whose ⋯ menu carries **Disconnect**. An agent whose program is not on this machine has no fix Coffer can make: its row offers the daemon's install prompt as the hand-off split button **Ask an agent ▾** before its ⋯ menu (web-ui "Hand a machine-dependent problem to an agent with one split button"), and its own page offers it in the Overview. The same states offer the same actions on the agent's own page, in the Overview's Connection section (**Connect** and **Repair** as solid buttons, **Check again** as an outline one while Codex has not approved Coffer's hook), never in the page header. The ⋯ menu, on the row and on the page, holds **Use a different config directory…**, **Reveal config directory**, **Copy uid**, and **Disconnect** while a part is installed, in that order, and never repeats a visible action — the install prompt included.
+An agent has one unconnected state, **Not connected**, and one word per other state: **Connected**, **Needs repair** (the `partial` state), **Config left behind** and, for an added agent whose program and directory are both gone, **Not found**. A newly found agent that was never added and an agent that was disconnected are the same state, so both read Not connected and both offer **Connect**; the list has no "Not added" or "Detected" word and no Add action. Each row of the Agents list MUST show the agent's state and the one action that state calls for: **Connect** for one not connected — which, for a newly found agent, registers it under its default config directory first — **Repair** for one that needs repair, and none for one that is connected, whose ⋯ menu carries **Disconnect**. An agent whose program is not on this machine has no fix Coffer can make: its row offers the daemon's install prompt as the hand-off split button **Ask an agent ▾** before its ⋯ menu (web-ui "Hand a machine-dependent problem to an agent with one split button"), and its own page offers it in the Overview. The same states offer the same actions on the agent's own page, in the Overview's Connection section (**Connect** and **Repair** as solid buttons), never in the page header. The ⋯ menu, on the row and on the page, holds **Use a different config directory…**, **Reveal config directory**, **Copy uid**, and **Disconnect** while a part is installed, in that order, and never repeats a visible action — the install prompt included.
 
-Connect, Repair and Disconnect MUST each open **Review changes** first — every file it will write and the lines it adds or removes, the connection test as the daemon reports it — and write nothing until the user applies it; **Use a different config directory…** on a connected agent moves Coffer's entry and hook to the new directory through the same review, and on an agent not yet added it registers the directory without connecting. The list has two rows, so it carries no row selection and no bulk bar. Which parts a connection installs MUST be explained behind a help affordance beside the action rather than as inline text. The Memory tab MUST NOT carry a separate install or remove action for the memory delivery hook beyond the Repair of "Show what Coffer manages for an agent in one row".
+Connect, Repair and Disconnect MUST each open **Review changes** first — every file it will write and the lines it adds or removes, the connection test as the daemon reports it — and write nothing until the user applies it; **Use a different config directory…** on a connected agent moves Coffer's entry to the new directory through the same review, and on an agent not yet added it registers the directory without connecting. The list has two rows, so it carries no row selection and no bulk bar. Which parts a connection installs MUST be explained behind a help affordance beside the action rather than as inline text.
 
 #### Scenario: the Overview offers the action the state calls for
 - **GIVEN** an agent's page for an agent that is not connected, one that is connected, and one whose connection is partial
 - **WHEN** each Overview's Connection section renders
 - **THEN** the unconnected agent offers Connect, the connected one offers no button and has Disconnect in its ⋯ menu, and the partial one reads Needs repair and offers Repair
-- **AND** the agent's Memory tab offers no action on the delivery hook while it is healthy
 
 #### Scenario: connecting an agent previews the change first
 - **GIVEN** the Codex row reading Not connected, never added
@@ -537,44 +536,6 @@ The system MUST detect an agent from two signals: its program on the agent's rea
 - **WHEN** the agent is read
 - **THEN** it carries state `installed_active` and the program's version
 - **AND** an agent whose program and directory are both gone reads `missing`
-
-### Requirement: List every hook in the agent's native config
-The system MUST list, read only, every command hook the agent will run. That covers the hooks in the agent's own hook-carrying files (the type's child spec names them) and those in each enabled plugin's hook file. Each is listed with its event, matcher, command, timeout, source (`user` or `plugin`, with the plugin's id) and the file that declares it. Project-level settings are not read, because Coffer does not know which repositories the agent is used in.
-
-Coffer's own memory hook — its two entries, on `SessionStart` and `UserPromptSubmit` ([memory](../memory/spec.md) "Install delivery hooks explicitly and removably") — MUST be marked, each entry as Coffer's, and reported as one hook with the set of events its entries sit on. Its health MUST be reported by the same marker-and-command comparison the boot repair uses:
-- `current` when the entries sit on exactly the events Coffer would install on and each carries exactly the command Coffer would write now;
-- `stale` when Coffer's marker carries another command or sits on another set of events;
-- `missing` when it is absent.
-
-The report MUST also say whether the agent will run the hook, as its **trust**: `trusted`, `untrusted`, `modified` (approved for an earlier command), `disabled`, `unknown` (the agent's approval record does not parse), or `not_required` for an agent that runs every hook it finds. It MUST also give the last recorded fire from the audit log.
-
-The listing MUST be served by `GET /api/v1/agents/{uid}/hooks`, and MUST write nothing and record no audit event. When the agent will not run a current hook, the trust reports why, and the Hooks tab and the attention list say what the user does about it. A file that does not parse MUST be reported as a parse error beside the hooks the other files yield.
-
-Each listed hook MUST also carry where it sits in its file — `group_index` and `hook_index`, the positions in `hooks.<event>[group_index].hooks[hook_index]` — so a person can find the entry, and the REST listing reports them.
-
-On the agent's Hooks tab the listing is two parts, Coffer's first. **Coffer's memory hook** is one block of properties, never one row per entry: its state (and how long ago it fired), its command, the events it sits on and the file that declares it, with its one fix at the block's title — **Repair** when it is stale or missing, **Check again** while the agent has not approved it — and, when it has never fired, the likely cause and a link to Activity. The reason a state is a problem is written in the block's own line. **The agent's own hooks** — Coffer's excluded — are one table of Event, Command, Matcher and File, with a search over the command and an **Event** filter that lists each event with its count; the table says how many of how many are shown once either narrows it. A row opens a read-only details dialog with the command in full, the event and when it runs, the matcher, the type, the timeout, the file and the entry's position in it (`hooks.<event>[group].hooks[hook]`), with **Copy command** and **Open in editor**; nothing in the dialog writes, because a hook is changed in its own file, in the person's own editor. A file name opens that file in the preferred editor (see "Open config files in an external editor or reveal them").
-
-#### Scenario: list an agent's hooks with Coffer's own marked
-- **GIVEN** a registered Claude Code agent whose `settings.json` carries a foreign `PreToolUse` hook and Coffer's memory hook, whose `settings.local.json` carries a `Stop` hook, and which has one enabled and one disabled plugin with a hook file each
-- **WHEN** the user lists the agent's hooks
-- **THEN** the foreign hooks, the `Stop` hook and the enabled plugin's hook are listed with their sources and files, the disabled plugin's hook is not, and only Coffer's two entries are marked as Coffer's
-- **AND** Coffer's hook reads `current` on both events with trust `not_required` and no recorded fire, and nothing is written or audited
-
-#### Scenario: report a stale Coffer hook
-- **GIVEN** a registered Codex agent whose `hooks.json` carries Coffer's marked hook on `UserPromptSubmit` alone, with a command other than the one Coffer would write now, and one recorded fire
-- **WHEN** the user lists the agent's hooks
-- **THEN** Coffer's hook reads `stale` on `UserPromptSubmit`, the installed and expected commands differ, and the last fire is reported
-
-#### Scenario: list the hooks with their position in the file
-- **GIVEN** a Claude Code `settings.json` whose `PreToolUse` event holds two groups, the second with two hooks
-- **WHEN** the user lists the agent's hooks
-- **THEN** the second hook of the second group reports `group_index` 1 and `hook_index` 1, and the first group's hook reports 0 and 0
-
-#### Scenario: coffer's memory hook leads the Hooks tab and the agent's own follow
-- **GIVEN** a Claude Code agent whose `settings.json` carries Coffer's two memory-hook entries beside three hooks of its own
-- **WHEN** the user opens the agent's Hooks tab
-- **THEN** Coffer's hook is one block with its state, command, the two events and its file, and the agent's own hooks are one table of three rows that does not repeat Coffer's
-- **AND** choosing a row opens a read-only dialog with the command, event, matcher, type, timeout, file and position, and searching or filtering by event narrows the table and says how many of how many show
 
 ### Requirement: Discover agents on this machine as candidates without registering them
 The system MUST provide a read-only discovery operation that looks, for each supported type, at its standard config directory — named in that type's child spec — and at the directory that type's own environment variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) names in the daemon's environment when set, and reports each type with no agent registered and with either detection signal of "Detect an agent by its program and its config directory" as one **candidate**, carrying the fields of "Report every supported type's detection state". Nothing else is scanned. Candidates are derived at scan time and never stored. Discovery MUST NOT register anything automatically — the user reviews candidates and confirms which to add, and an `installed_active` or `installed_never_run` candidate can be added — the second's registration creates its standard config directory with only the entries Coffer needs — while a `config_only` candidate cannot, because a directory whose program is gone belongs to no working agent. The daemon MUST NOT auto-register agents on startup.
@@ -647,35 +608,25 @@ The system MUST serve `GET /api/v1/agents/types`, one row per supported type in 
 - **AND** the same request for an unknown agent key answers 404
 
 ### Requirement: Connect an agent to Coffer in one action
-Users MUST be able to connect an agent to Coffer in one action, from the REST API (`POST /api/v1/agents/{uid}/coffer-connection`) and the web UI. Connecting MUST install every **part** Coffer writes into the agent's own configuration for that agent's type:
+Users MUST be able to connect an agent to Coffer in one action, from the REST API (`POST /api/v1/agents/{uid}/coffer-connection`) and the web UI. Connecting MUST install every **part** Coffer writes into the agent's own configuration for that agent's type. Today every type has one part:
 
-- `mcp` — the gateway MCP entry of "Install Coffer's MCP server into an agent in one action", for every agent type;
-- `memory_hook` — the memory delivery hook of [memory](../memory/spec.md) "Install delivery hooks explicitly and removably", for every agent type with a hook adapter.
+- `mcp` — the gateway MCP entry of "Install Coffer's MCP server into an agent in one action".
 
-The gateway entry MUST be installed first, so that a connect refused for want of a shim writes nothing. Every part MUST be installed through its own atomic write with a backup and record its own audit event, as it does when installed alone. Connecting MUST be idempotent: connecting a connected agent rewrites each entry in place and never duplicates one.
+Coffer writes no hook into an agent. A connect refused for want of a shim writes nothing. Every part MUST be installed through its own atomic write with a backup and record its own audit event, as it does when installed alone. Connecting MUST be idempotent: connecting a connected agent rewrites each entry in place and never duplicates one.
 
 #### Scenario: connect installs every part that applies
-- **GIVEN** a registered Claude Code agent with neither the gateway entry nor the memory hook
+- **GIVEN** a registered Claude Code agent without the gateway entry
 - **WHEN** the user connects it to Coffer
-- **THEN** the agent's `.claude.json` carries the `coffer` MCP entry and its `settings.json` carries Coffer's marked hook entry
-- **AND** one `agent_mcp_installed` and one `memory_delivery_installed` audit entry name the user as actor, and the connection reports `connected` with both parts installed
-
-### Requirement: Report an agent's Coffer connection part by part
-The system MUST report an agent's Coffer connection (`GET /api/v1/agents/{uid}/coffer-connection`) as the list of parts its type has — each with its key, whether it is installed, and the installed command when it is — and a state: `connected` when every listed part is installed, `disconnected` when none is, and `partial` otherwise. The report MUST be read from the agent's own configuration files on demand, never stored, and MUST write nothing and record no audit event.
-
-#### Scenario: report a partly installed connection
-- **GIVEN** a registered agent carrying the gateway entry but not the memory hook
-- **WHEN** the user reads its Coffer connection
-- **THEN** the state is `partial`, the `mcp` part is installed with its shim command and the `memory_hook` part is not installed
-- **AND** connecting again installs the missing hook and the state becomes `connected`
+- **THEN** the agent's `.claude.json` carries the `coffer` MCP entry, naming the agent by its uid
+- **AND** one `agent_mcp_installed` audit entry names the user as actor, and the connection reports `connected` with its `mcp` part installed
 
 ### Requirement: Disconnect an agent from Coffer
 Users MUST be able to disconnect an agent from Coffer in one action (`DELETE /api/v1/agents/{uid}/coffer-connection`, the web UI). Disconnecting MUST remove every part the agent type has, taking out only Coffer's own marked entries and leaving every other entry, key and hook in those files as it was. A part that is absent MUST be a no-op that writes no file and records no audit event.
 
 #### Scenario: disconnect removes only Coffer's entries
-- **GIVEN** a connected Claude Code agent whose `.claude.json` also carries another MCP server and whose `settings.json` also carries a foreign hook on the same event
+- **GIVEN** a connected Claude Code agent whose `.claude.json` also carries another MCP server and whose `settings.json` carries a hook and settings of its own
 - **WHEN** the user disconnects it from Coffer
-- **THEN** the `coffer` MCP entry and Coffer's hook entry are gone, the other MCP server and the foreign hook are untouched, and the connection reports `disconnected`
+- **THEN** the `coffer` MCP entry is gone, the other MCP server and the agent's own hook and settings are untouched, and the connection reports `disconnected`
 - **AND** disconnecting again writes no file and records no audit entry
 
 ### Requirement: Plan an import of agents' direct MCP entries
@@ -736,7 +687,7 @@ While an agent type's program is not found on the agent's real `PATH` — detect
 ### Requirement: List the supported agents as fixed rows on the Agents page
 The Agents page MUST list exactly one row per supported agent type — today two, Claude Code and Codex — whether or not each is installed or added, in that order, so the page reads the same on every machine and a first-time user sees at once what Coffer can manage. Each row is found automatically from the detection state of "Detect an agent by its program and its config directory": an `installed_active` type's row reads as its Coffer state ("Show the Coffer connection on the agent pages") with its config directory and version; an `installed_never_run` type reads Not connected too, with its config directory marked as not created, and offers Connect, whose review names the directory it creates and the only entries Coffer needs in it; a `config_only` type reads as config left behind — program not found — and a `missing` type as not installed, each with no Connect and the daemon's prompt that hands reinstalling or installing it to an agent (see "Hand installing an agent's program to an agent") as the split button **Ask an agent ▾** beside its ⋯ menu — Copy prompt behind the chevron, and Copy prompt alone while no other agent can run it. A row whose program is missing shows no version, and its second line says "Not on this Mac" or what is left in the directory. The page MUST NOT show an install command, and carries no Remove action. On first run, with neither agent connected and both connectable, the page MUST offer **Connect both**, which reviews and connects every connectable agent in one confirmation. An agent is named by its type everywhere in the web UI; the page offers no field to name or title one.
 
-Overview's Needs you lists only agents that need the person: an agent that needs repair, one whose config directory is left behind, one whose Coffer memory hook the agent will not run (reported once, by the reconciler's memory-hook target), and one whose hook it runs but has never fired ("Report an agent whose Coffer hook never fires"). Not installed, Not connected and a first run raise none.
+Overview's Needs you lists only agents that need the person: an agent that needs repair and one whose config directory is left behind. Not installed, Not connected and a first run raise none.
 
 #### Scenario: the agents page shows both supported agents on first run
 - **GIVEN** a fresh Coffer with Claude Code and Codex both installed and neither connected
@@ -768,14 +719,14 @@ Overview's Needs you lists only agents that need the person: an agent that needs
 - **THEN** it offers Use a different config directory…, and the page carries no Add agent dialog, no Remove action and no name or title field
 
 ### Requirement: Show what Coffer manages for an agent in one row
-The agent's Skills, MCP servers, Hooks and Memory tabs MUST each hold two parts in the same order: what Coffer manages for the agent first, then what the agent has of its own. There is no owner column, no owner mark on a row, and no filter that switches between the two.
+The agent's Skills and MCP servers tabs MUST each hold two parts in the same order: what Coffer manages for the agent first, then what the agent has of its own. There is no owner column, no owner mark on a row, and no filter that switches between the two.
 
 On **Skills** and **MCP servers**, Coffer's part MUST be one **From Coffer** row — how many skills, or servers, Coffer delivers to or serves this agent, their first names, and a link (**Open Skills ›**, **Open MCP servers ›**) to that kind's own page narrowed to this agent (`/skills?agent=<uid>`, `/mcp-servers?agent=<uid>`) — and Coffer's items MUST NOT be listed one by one on the agent's tab. The MCP servers tab carries a second **From Coffer** row for custom-tool groups, which the MCP servers row does not count, linking to `/custom-tools?agent=<uid>` (**Open Custom tools ›**). Those global lists MUST accept the `agent` query parameter and show only what reaches that agent. The agent's own part is a section titled "<Agent>'s own skills" or "<Agent>'s own MCP servers" with a one-line explanation and a search; its items are listed with one state word each — Unmanaged, Invalid SKILL.md, Foreign link, Duplicate, Bypasses Coffer — and at most one button, the fix for that row, with the rest in its ⋯ menu:
 
 - **Skills** — **Adopt** an agent's own skill ([skill-manager](../skill-manager/spec.md) "Adopt an unmanaged skill into the master store"), which opens a form asking for the skill's **name in Coffer** and its **reach** (every agent by default, only chosen agents with at least one ticked, or off), and **Delete duplicate** on a skill folder that has the same name as a skill Coffer delivers to that agent, which deletes the agent's copy behind a confirmation. A row opens the unmanaged skill's own page, with its properties and its files in the shared file tree and viewer.
 - **MCP servers** — **Adopt** a direct entry ("Adopt a direct MCP entry into Coffer"), and **Remove duplicate** on a direct entry that `matches_resource` a registered MCP server, which removes it from its source file ("Remove a direct MCP entry from its source file") because Coffer's gateway already serves it; any entry can be taken out of its file from its ⋯ menu. A config file that does not parse is named above the list, and its entries stay read-only.
 
-On **Hooks**, Coffer's part is Coffer's memory hook and the agent's own is its other hooks ("List every hook in the agent's native config"). On **Memory**, Coffer's part is Coffer's memory for this agent, shown only while the `memory` feature is on, and the agent's own are its native memory stores. The **Plugins** tab has only the agent's own part, since Coffer installs no plugin.
+The **Hooks**, **Memory** and **Plugins** tabs have only the agent's own part: Coffer installs no hook and no plugin, and what memory sync writes into the agent is shown on the Memory page ([memory](../memory/spec.md) "Manage memory sync in the web UI and on the command line"), while the Memory tab lists the agent's native memory stores as they are.
 
 #### Scenario: Coffer's part is one row and the agent's own items follow
 - **GIVEN** an agent with one Coffer-managed skill and two of its own skill folders
@@ -803,24 +754,6 @@ On **Hooks**, Coffer's part is Coffer's memory hook and the agent's own is its o
 - **GIVEN** an agent reached by one registered MCP server and one custom-tool group
 - **WHEN** the user opens its MCP servers tab
 - **THEN** the MCP servers row reads one server and links to `/mcp-servers?agent=<uid>`, and a second row reads one custom-tool group and links to `/custom-tools?agent=<uid>`
-
-### Requirement: Report an agent whose Coffer hook never fires
-The attention list ([resource-framework](../resource-framework/spec.md) "Report what needs a person across every kind") MUST carry an `agent_hook_attention` item, at warning severity with the action of checking the agent, for a connected agent whose connection is otherwise complete when Coffer's memory hook is current and the agent runs it — it has no review step (trust `not_required`) or approved this definition (trust `trusted`) — yet the hook has never fired. A hook the agent will not run — trust `untrusted`, `modified`, `disabled` or `unknown` — produces no such item: the reconciler's memory-hook target reports it (`hook_untrusted`, `hook_disabled`, `hook_trust_unknown`), so one problem is listed once. A hook that has fired, or an agent that carries no memory hook, produces no such item either. The item is read from Coffer's own hook alone, without reading every hook file or plugin of the agent. It never replaces the more basic items: a partial connection or a missing program is reported first, one item per agent.
-
-#### Scenario: a hook that never fired is a warning
-- **GIVEN** a connected agent that runs every hook it finds and whose Coffer hook has never fired
-- **WHEN** the attention list is read
-- **THEN** it carries an `agent_hook_attention` item saying the hook has never fired
-
-#### Scenario: a hook the agent will not run is left to the reconciler
-- **GIVEN** a connected Codex agent whose Coffer memory hook is current but unapproved, approved for an earlier command, switched off, or whose trust record does not parse
-- **WHEN** the attention list is read
-- **THEN** it carries no `agent_hook_attention` item for the agent, and the reconciler's single item for that hook is the one on the list
-
-#### Scenario: a healthy hook reports nothing
-- **GIVEN** a connected agent whose Coffer hook is trusted and has fired, and one with no memory hook
-- **WHEN** the attention list is read
-- **THEN** neither of them carries an `agent_hook_attention` item
 
 ### Requirement: Act on several of an agent's own items at once
 On the agent's Skills, MCP servers and Plugins tabs, the agent's own part MUST let the person tick several items and act on them together; Coffer's part (the From Coffer row) MUST NOT. Each row carries a checkbox and a select-all box heads the list; select-all reaches only the rows the search shows, and a row that cannot be acted on in bulk (an MCP entry of a config file that does not parse) takes no checkbox. While any row is ticked, a selection bar reading "N of M selected" replaces the search row, with the actions — safe ones first, destructive last — and Clear; Escape clears the selection unless a dialog is open.
@@ -870,9 +803,8 @@ tie-break, alongside the matched `total` ([resource-framework](../resource-frame
 because an agent accumulates thousands of sessions and the surface cannot load them all.
 
 The listing carries no session text, Coffer stores none, and nothing is written:
-it emits no audit event. Coffer does not distil sessions into memory: the agent's own
-memory is memory's domain, and [memory](../memory/spec.md) "Reintroduce no retired mechanism" forbids reintroducing a
-path that writes back into it.
+it emits no audit event. Coffer does not distil sessions into memory:
+[memory](../memory/spec.md) "Reintroduce no retired memory mechanism" forbids transcript distillation.
 
 #### Scenario: browse an agent's native sessions with title and search
 - **GIVEN** a registered agent with several native sessions across more than one project
@@ -902,13 +834,13 @@ The listing of an agent's config files, one config file's preview and the reads 
 The Agents page in the web UI MUST expose all of these. It renders within the web-ui shell at `/agents` as the first entry of the sidebar's Agents group ([web-ui](../web-ui/spec.md) "Group the sidebar by what the user comes to do"), never among the Capabilities or Context entries, because agents are consumers of vault assets, not assets themselves; agent resources do not appear in the kind-agnostic resources browser.
 
 - A config file is shown read-only and never edited in the page: selecting it in the tree previews it beside the tree, and the preview's toolbar opens it in the person's editor or reveals it ("Open config files in an external editor or reveal them"). Every place the page shows a file the agent holds read-only — a native memory store, an unmanaged skill's folder — uses the same file tree and the same viewer toolbar, so a file reads the same wherever it is opened.
-- The agent detail page's **header** carries the agent's mark, its name, one status pill and a **⋯** menu, and nothing under the name: the version and the config directory are on the Overview. The pill reads Connected, Not connected, Needs repair, Hook not approved or Config left behind. The header never turns into a fix button — Connect, Repair and Check again sit on the Overview's Connection section. **Rotate proxy token** is in ⋯ only while the agent routes through Coffer's proxy ([provider-switching](../provider-switching/spec.md) "Authenticate each agent to the proxy with its own local token").
+- The agent detail page's **header** carries the agent's mark, its name, one status pill and a **⋯** menu, and nothing under the name: the version and the config directory are on the Overview. The pill reads Connected, Not connected, Needs repair or Config left behind. The header never turns into a fix button — Connect and Repair sit on the Overview's Connection section. **Rotate proxy token** is in ⋯ only while the agent routes through Coffer's proxy ([provider-switching](../provider-switching/spec.md) "Authenticate each agent to the proxy with its own local token").
 - The detail page has eight tabs, none carrying a count: six in the strip — **Overview**, **Skills**, **MCP servers**, **Hooks**, **Config files** and **Sessions** — and, behind a **More** menu, **Plugins** and **Memory**, the least used. Each is addressable by its own path (`/agents/<type>` for Overview, then `/agents/<type>/skills`, `/mcp-servers`, `/hooks`, `/config`, `/sessions`, `/plugins` and `/memory`), so a page opened from a tab returns to it. While the open tab is one of the two in More, the More trigger reads that tab's name and carries the underline; a tab in More that needs attention puts a warning dot on More. There is **no Model tab**: an agent's model is a section of the Overview, and `/agents/<type>/model` is not a page.
-  - **Overview** stacks, top to bottom, **Connection**, **What this agent can use**, **Model** and **Details**. Connection says what the connection is in one line, lists the `coffer` MCP entry and the memory delivery hook with where each lives and its health, and carries the one fix the state calls for at its title's right — **Connect** or **Repair** as a solid button, **Check again** as an outline one — and none while the agent is healthy. What this agent can use is six tiles, three by two — MCP servers, Skills, Config files, Plugins, Hooks and Memory — each with its count, one fact and, when something of the agent's own waits for a look, a warning "N to review"; a tile opens its tab. Model reads **Provider**, **Model** and **Route** (through Coffer's proxy, with **Test**, or direct) and carries **Change…**, which opens the Change model dialog of [provider-switching](../provider-switching/spec.md) "Review a model change before writing it"; opening the page with `?change-model=1` opens that dialog on arrival. Details reads **Version**, **Config directory**, **UID** and **Registered**, with no Title, Name or Type, because an agent's name is fixed to its type.
+  - **Overview** stacks, top to bottom, **Connection**, **What this agent can use**, **Model** and **Details**. Connection says what the connection is in one line, lists the `coffer` MCP entry with where it lives and its health, and carries the one fix the state calls for at its title's right — **Connect** or **Repair** as a solid button — and none while the agent is healthy. What this agent can use is six tiles, three by two — MCP servers, Skills, Config files, Plugins, Hooks and Memory — each with its count, one fact and, when something of the agent's own waits for a look, a warning "N to review"; a tile opens its tab. Model reads **Provider**, **Model** and **Route** (through Coffer's proxy, with **Test**, or direct) and carries **Change…**, which opens the Change model dialog of [provider-switching](../provider-switching/spec.md) "Review a model change before writing it"; opening the page with `?change-model=1` opens that dialog on arrival. Details reads **Version**, **Config directory**, **UID** and **Registered**, with no Title, Name or Type, because an agent's name is fixed to its type.
   - **Skills** and **MCP servers** open with Coffer's part and then the agent's own, per "Show what Coffer manages for an agent in one row". **Plugins** lists the agent's installed plugins — all its own, since Coffer installs none — with a search, an enabled switch and a ⋯ menu whose only item is Uninstall…, and a plugin's name opens an information dialog.
-  - **Hooks** opens with **Coffer's memory hook**, then **the agent's own hooks**, per "List every hook in the agent's native config". The tab is read only apart from Repair and Check again on Coffer's hook.
+  - **Hooks** lists the agent's own hooks, per "List every hook in the agent's native config". The tab is read only.
   - **Config files** lists every allowlisted config file of "Define a curated config-file allowlist per type" as a file tree beside a read-only preview — the settings files and the human-authored instructions files (`CLAUDE.md`, `AGENTS.md`) alike, because an instructions file is configuration the person wrote, not something installed — each previewed on the right, opened in the editor or revealed ("Open config files in an external editor or reveal them").
-  - **Memory** leads with **Coffer's memory** — Coffer's memory hook for this agent, when it last fired and what it delivers, with a link to the Memory page and a Repair when the hook is out of date or missing — only while the `memory` feature is on, and then lists **the agent's own memory stores**, read-only ([web-ui](../web-ui/spec.md) "Show memory delivery on the Memory page"). **Sessions** — the agent's own session history, asked of the agent itself — is one list whose rows open in the terminal ("Open an agent's sessions from its Sessions tab").
+  - **Memory** lists **the agent's own memory stores**, read-only; what memory sync writes into the agent is shown on the Memory page ([memory](../memory/spec.md) "Manage memory sync in the web UI and on the command line"). **Sessions** — the agent's own session history, asked of the agent itself — is one list whose rows open in the terminal ("Open an agent's sessions from its Sessions tab").
 - A direct server's name on the MCP servers tab opens that entry's read-only JSON in a dialog ("Show one direct MCP entry's full configuration without its secrets"), whose footer carries the row's two writes — remove it from its file (Remove, or Remove duplicate when Coffer already serves it) and adopt it into Coffer — around Close.
 - The Memory list carries no per-row actions: a row OPENS its subject, and the open / reveal affordances live on the page it opens, beside the thing they act on. A Memory row opens that store's directory as a file tree with a read-only preview, because a store is a directory.
 
@@ -958,7 +890,7 @@ The Agents page in the web UI MUST expose all of these. It renders within the we
 - **GIVEN** an agent that is not connected, one that is connected and one that needs repair
 - **WHEN** each agent's page renders
 - **THEN** the header shows the agent's name with one pill reading Not connected, Connected or Needs repair, and the ⋯ menu
-- **AND** no header carries a Connect, Repair or Check again button, because those sit on the Overview's Connection section
+- **AND** no header carries a Connect or Repair button, because those sit on the Overview's Connection section
 
 #### Scenario: the Sessions tab calls the session routes
 - **GIVEN** a registered agent with a native session
@@ -1132,3 +1064,38 @@ elsewhere appears within one refresh.
 - **WHEN** it is read again, and then its next page is read
 - **THEN** both are answered from the kept answers and the agents are not asked again
 - **AND** after a session is renamed through its agent, the next read asks that agent again
+
+### Requirement: List every hook in the agent's native config
+The system MUST list, read only, every command hook the agent will run. That covers the hooks in the agent's own hook-carrying files (the type's child spec names them) and those in each enabled plugin's hook file. Each is listed with its event, matcher, command, timeout, source (`user` or `plugin`, with the plugin's id) and the file that declares it. Project-level settings are not read, because Coffer does not know which repositories the agent is used in.
+
+The listing MUST be served by `GET /api/v1/agents/{uid}/hooks` as the hooks (`items`) and the files that did not parse (`parse_errors`), and MUST write nothing and record no audit event. A file that does not parse MUST be reported as a parse error beside the hooks the other files yield. Coffer installs no hook into an agent, so no hook is marked as Coffer's and the listing carries no health, trust or last fire.
+
+Each listed hook MUST also carry where it sits in its file — `group_index` and `hook_index`, the positions in `hooks.<event>[group_index].hooks[hook_index]` — so a person can find the entry, and the REST listing reports them.
+
+On the agent's Hooks tab the agent's hooks are one table of Event, Command, Matcher and File, with a search over the command and an **Event** filter that lists each event with its count; the table says how many of how many are shown once either narrows it. A file that does not parse is named above the table. A row opens a read-only details dialog with the command in full, the event and when it runs, the matcher, the type, the timeout, the file and the entry's position in it (`hooks.<event>[group].hooks[hook]`), with **Copy command** and **Open in editor**; nothing in the dialog writes, because a hook is changed in its own file, in the person's own editor. A file name opens that file in the preferred editor (see "Open config files in an external editor or reveal them").
+
+#### Scenario: list an agent's hooks
+- **GIVEN** a registered Claude Code agent whose `settings.json` carries a `PreToolUse` hook, whose `settings.local.json` carries a `Stop` hook, and which has one enabled and one disabled plugin with a hook file each
+- **WHEN** the user lists the agent's hooks
+- **THEN** the `PreToolUse` hook, the `Stop` hook and the enabled plugin's hook are listed with their sources and files, and the disabled plugin's hook is not
+- **AND** nothing is written or audited
+
+#### Scenario: list the hooks with their position in the file
+- **GIVEN** a Claude Code `settings.json` whose `PreToolUse` event holds two groups, the second with two hooks
+- **WHEN** the user lists the agent's hooks
+- **THEN** the second hook of the second group reports `group_index` 1 and `hook_index` 1, and the first group's hook reports 0 and 0
+
+#### Scenario: the Hooks tab lists the agent's own hooks
+- **GIVEN** a Claude Code agent whose settings files and an enabled plugin carry hooks of its own
+- **WHEN** the user opens the agent's Hooks tab
+- **THEN** the tab is one table with a row per hook, with no block for a hook of Coffer's
+- **AND** choosing a row opens a read-only dialog with the command, event, matcher, type, timeout, file and position, and searching or filtering by event narrows the table and says how many of how many show
+
+### Requirement: Report an agent's Coffer connection part by part
+The system MUST report an agent's Coffer connection (`GET /api/v1/agents/{uid}/coffer-connection`) as the list of parts its type has — today the one `mcp` part — each with its key, whether it is installed, and the installed command when it is — and a state: `connected` when every listed part is installed, `disconnected` when none is, and `partial` otherwise, which a type with one part never reports. The report MUST be read from the agent's own configuration files on demand, never stored, and MUST write nothing and record no audit event.
+
+#### Scenario: read an agent's connection without writing anything
+- **GIVEN** a registered agent without the gateway entry
+- **WHEN** the user reads its Coffer connection, connects it, and reads it again
+- **THEN** the first read reports `disconnected` with the `mcp` part not installed, and the second `connected` with the `mcp` part installed and its shim command
+- **AND** neither read writes a file or records an audit event

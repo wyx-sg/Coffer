@@ -23,9 +23,8 @@ about some of those operations:
   it must release live upstream connections.
 - A provider starts scoped to the agents its protocol can serve, not to every
   agent.
-- Memory partitions are derived per machine and must not sync, and an agent is
-  true of one machine only; one skill (`coffer-guide`) is derived output and
-  must not sync either. Where a resource file lives is what decides whether it
+- An agent is true of one machine only and must not sync; one skill
+  (`coffer-guide`) is derived output and must not sync either. Where a resource file lives is what decides whether it
   travels.
 
 The core needs a way to consult a kind at the right moment of each operation
@@ -52,10 +51,10 @@ calls it:
 | Field | Meaning | Set by |
 | --- | --- | --- |
 | `name`, `display_name`, `config_schema` | Kind key, label, Pydantic model every config is validated against on write | every kind |
-| `generic_create_allowed` | `False` refuses creation (and config update) through the generic `POST`/`PATCH`; the kind's own service passes `allow_lifecycle_kind=True` | `False` for `agent`, `skill`, `knowledge`, `memory` |
+| `generic_create_allowed` | `False` refuses creation (and config update) through the generic `POST`/`PATCH`; the kind's own service passes `allow_lifecycle_kind=True` | `False` for `agent`, `skill`, `knowledge` |
 | `supports_scope` | Whether a non-null per-agent scope may be set | `True` for `mcp_server`, `skill`, `channel`, `provider` |
-| `toggleable` | Whether the kind has an enabled switch at all; `False` refuses enable and disable with `RESOURCE_NOT_TOGGLEABLE` | `False` for `knowledge`, `memory` |
-| `storage` | The storage class the kind's resource files live in (`vault`, `local`, `derived`), which is also the sync policy | `local` for `agent`, `derived` for `memory`, `vault` otherwise |
+| `toggleable` | Whether the kind has an enabled switch at all; `False` refuses enable and disable with `RESOURCE_NOT_TOGGLEABLE` | `False` for `knowledge` |
+| `storage` | The storage class the kind's resource files live in (`vault`, `local`, `derived`), which is also the sync policy | `local` for `agent`, `vault` otherwise |
 | `storage_row(config)` | Per-row refinement of `storage`, decided by the config alone | `skill` (files `coffer-guide` as derived) |
 | `exclusive_flags` | Config flags at most one resource of the kind may hold; the vault validator refuses a commit that leaves two | `provider` (`transcribe_default`) |
 | `name_fixed`, `name_fixed_resets` | The name cannot change once registered, because it is quoted outside Coffer; a rename is refused with `NAME_IMMUTABLE` before any hook runs | `mcp_server`, `skill`, `agent` |
@@ -78,7 +77,7 @@ operation with nothing changed:
 | `validate_name(name)` | register, rename and every change to the resource's file | `mcp_server` (reserves `__`, caps the name at 24 characters), `skill` (frontmatter name rule) |
 | `validate_config(config)` | register only, so an unrelated edit never re-probes the filesystem | `channel`, `provider` |
 | `on_update_config(resource, config)` | update config | `channel`, `provider`, `mcp_server` (evicts live connections built from the old config) |
-| `on_rename(resource, new_name)` | rename — moves whatever is keyed by the name; a failure aborts, and on a lost race the service calls it again to move back | `knowledge`, `memory` (`skill`, `mcp_server` and `agent` declare `name_fixed`, so a rename of any of them is refused before any hook runs) |
+| `on_rename(resource, new_name)` | rename — moves whatever is keyed by the name; a failure aborts, and on a lost race the service calls it again to move back | `knowledge` (`skill`, `mcp_server` and `agent` declare `name_fixed`, so a rename of any of them is refused before any hook runs) |
 | `validate_scope_for(resource, scope)` | update scope | `channel` |
 | `validate_delete(resource)` | delete, before any cleanup | `skill` (refuses builtin skills with `RESOURCE_PROTECTED`) |
 
@@ -89,7 +88,7 @@ a change that already happened and have no way to undo it:
 | --- | --- | --- |
 | `on_enabled_changed(resource)` | enable/disable, only on a real transition | `skill`, `mcp_server` |
 | `on_scope_changed(resource)` | update scope | `skill` |
-| `on_delete(resource)` | delete — the one reaction that runs *before* the row is removed, so cleanup can still read it, but after `validate_delete` has let the delete through | `agent`, `skill`, `knowledge`, `memory`, `mcp_server`, `channel` |
+| `on_delete(resource)` | delete — the one reaction that runs *before* the row is removed, so cleanup can still read it, but after `validate_delete` has let the delete through | `agent`, `skill`, `knowledge`, `mcp_server`, `channel` |
 
 - **Pros.** The asymmetry between validators and reactions is structural: the
   service calls one group before `repo.*` and the other after `audit.record`,

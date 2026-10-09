@@ -15,7 +15,7 @@ import { abbreviateHomePath, agentProgramName, agentTypeLabel } from "@/lib/agen
 import { agentTabPath, type AgentTab } from "@/lib/agents/routes";
 import { agentRowStateKey, agentRowTone, type AgentRowState } from "@/lib/agents/rowState";
 import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
-import { useAgent, useAgentConnection, useAgentHooks } from "@/lib/hooks/useAgents";
+import { useAgent, useAgentConnection } from "@/lib/hooks/useAgents";
 import { useAgentCounts } from "@/lib/hooks/useAgentCounts";
 import { useAgentBuiltinDefault, useAgentDefaultModel } from "@/lib/hooks/useAgentModels";
 import { useAgentPending } from "@/lib/hooks/useAgentPending";
@@ -144,23 +144,14 @@ function CofferDetail({ row, state }: { row: AgentTypeOut; state: AgentRowState 
   const { t } = useTranslation();
   const uid = row.uid ?? "";
   const parts = useAgentConnection(uid).data?.parts;
-  const hook = useAgentHooks(uid).data?.coffer_hook;
   const dir = abbreviateHomePath(row.config_dir);
   switch (state) {
-    // The word says it all; when the hook last fired is on the agent's Hooks tab.
+    // The word says it all.
     case "connected":
       return null;
     case "needs_repair": {
-      const missing = (parts ?? []).filter((p) => !p.installed).map((p) => p.key);
-      return missing
-        .map((key) =>
-          key === "mcp"
-            ? t("agents.list.detail.mcpMissing")
-            : hook?.health === "stale"
-              ? t("agents.list.detail.hookStale")
-              : t("agents.list.detail.hookMissing"),
-        )
-        .join(" · ");
+      const missing = (parts ?? []).some((p) => !p.installed);
+      return missing ? t("agents.list.detail.mcpMissing") : null;
     }
     // One off state: the word says it all, and the Connect button is the next step.
     case "not_connected":

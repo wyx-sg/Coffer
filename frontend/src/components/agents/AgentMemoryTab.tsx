@@ -1,20 +1,16 @@
 // frontend/src/components/agents/AgentMemoryTab.tsx — spec agent-registry
 // "Read one native memory store's files read-only".
-// The agent detail page's Memory tab (boards 2.1.49–50). Two sections:
-//
-// 1. Coffer's memory (Experimental; only with the memory feature on):
-//    CofferMemorySection.
-// 2. The agent's own memory: its native stores (Claude Code's
-//    ~/.claude/projects/<project>/memory/, Codex's ~/.codex/memories/MEMORY.md
-//    sliced by project), read-only, one bordered table (Project · Memory folder
-//    · Files). A store is a directory, so a row opens its own page (a file tree and a read-only preview). Coffer
-//    reads them to build shared memory and never writes them.
+// The agent detail page's Memory tab (boards 2.1.49–50): the agent's own
+// memory, its native stores (Claude Code's ~/.claude/projects/<project>/memory/,
+// Codex's ~/.codex/memories/MEMORY.md sliced by project), read-only, one
+// bordered table (Project · Memory folder · Files). A store is a directory, so
+// a row opens its own page (a file tree and a read-only preview). What Coffer
+// syncs between the agents is on the Memory page.
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 
-import { CofferMemorySection } from "./CofferMemorySection";
 import { TabEmpty } from "./tabs/TabEmpty";
 import { LoadError } from "@/components/LoadError";
 import { SearchInput } from "@/components/SearchInput";
@@ -26,7 +22,6 @@ import { agentMemoryStorePath } from "@/lib/agents/routes";
 import type { AgentOut } from "@/lib/api/agents";
 import type { NativeMemoryStore } from "@/lib/api/agentNativeMemory";
 import { useAgentNativeMemory } from "@/lib/hooks/useAgentNativeMemory";
-import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { useProgressiveRows } from "@/components/ui/useProgressiveRows";
 
 /** More stores than this and a project search appears. */
@@ -34,8 +29,6 @@ const SEARCH_FROM = 8;
 
 interface Props {
   agent: AgentOut;
-  /** Opens the Review changes flow that reinstalls Coffer's hook. Repair shows only when given. */
-  onRepair?: () => void;
 }
 
 /** Where the agent writes its memory, for the empty state. */
@@ -49,10 +42,9 @@ function projectLabel(store: NativeMemoryStore): string {
   return store.path ? abbreviateHomePath(store.path) : store.project;
 }
 
-export function AgentMemoryTab({ agent, onRepair }: Props) {
+export function AgentMemoryTab({ agent }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const memoryOn = useFeatureEnabled("memory") === true;
   const native = useAgentNativeMemory(agent.uid);
   const agentName = agentTypeLabel(agent.type);
   const [query, setQuery] = useState("");
@@ -169,7 +161,6 @@ export function AgentMemoryTab({ agent, onRepair }: Props) {
 
   return (
     <div className="flex max-w-[1000px] flex-col gap-8">
-      {memoryOn ? <CofferMemorySection agent={agent} onRepair={onRepair} /> : null}
       <Section
         as="h2"
         title={t("agents.memoryTab.own.title", { agent: agentName })}

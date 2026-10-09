@@ -53,8 +53,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `NAME_IMMUTABLE` | 409 | 该资源的类型在注册后就固定了名字，因为智能体会引用它：MCP 服务器的名字是它工具名的前缀，技能的名字就是它的文件夹。智能体的名字就是它的类型，完全不能改。消息会说明重新注册会重置哪些东西。 | 删除该 MCP 服务器或技能，再用新名字重新注册。 |
 | `SCOPE_INVALID` | 422 | 生效范围（激活范围）的内容无效，或该类型没有生效范围。 | 发送智能体允许列表，或在支持的类型的页面上设置生效范围。见[生效范围](/zh/architecture/resource-framework#reach)。 |
 | `RESOURCE_PROTECTED` | 409 | 该资源由 Coffer 自己管理（例如 Coffer 生成的技能），不能被接管或删除。 | 不用管它；Coffer 会维护它。 |
-| `RESOURCE_NOT_TOGGLEABLE` | 409 | 该资源的类型不能启用或禁用：每个知识集和记忆分区都始终提供。 | 如果不再需要提供，就删除该资源。 |
-| `UPKEEP_ALREADY_RUNNING` | 409 | 该记忆分区已有一个维护任务（aggregate 或 distil）正在运行；此时清除派生缓存也会得到它。 | 等正在运行的任务完成；`coffer daemon status` 和界面都会显示它。 |
+| `RESOURCE_NOT_TOGGLEABLE` | 409 | 该资源的类型不能启用或禁用：每个知识集都始终提供。 | 如果不再需要提供，就删除该资源。 |
+| `UPKEEP_ALREADY_RUNNING` | 409 | 此守护进程中已有一个针对同一目标的长任务正在运行。 | 等正在运行的任务完成；`coffer daemon status` 和界面都会显示它。 |
 | `UNKNOWN_PRUNABLE_TABLE` | 404 | 保留请求指定的表没有保留策略。 | 使用**设置 → 数据**里列出的表。 |
 | `ATTENTION_NOT_IGNORABLE` | 409 | 该键下没有可以忽略的提醒项：要么什么都没列出，要么列出的是故障而不是提示。 | 刷新提醒列表；故障要修好，而不是忽略。 |
 
@@ -186,14 +186,11 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
-| `MEMORY_NOTE_NOT_FOUND` | 404 | 该分区中没有这个 slug 的笔记。 | 在分区页面上列出笔记。 |
-| `MEMORY_RAW_ENTRY_NOT_FOUND` | 404 | 该分区中没有这个 id 的原始条目。 | 刷新；该条目可能已变成笔记并被移除。 |
-| `MEMORY_UNSAFE_PATH` | 400 | 某段路径是隐藏的、全是点，或因其他原因不安全。 | 使用分区内的路径。 |
+| `MEMORY_UNSAFE_PATH` | 400 | 由智能体记忆构造的某段路径是隐藏的、全是点，或因其他原因不安全。 | 在智能体自己的记忆目录里给消息指出的那条记忆改名。 |
 | `MEMORY_UNREADABLE` | 422 | 某个智能体的原生记忆文件无法解析。 | 修复消息中指出的文件。 |
 | `MEMORY_SYNC_RUNNING` | 409 | 已有一次记忆同步在运行。 | 等它结束后再同步。 |
 | `MEMORY_SYNC_NO_PREVIEW` | 409 | 没有等待写入或取消的记忆同步预览。 | 刷新记忆页面。 |
-| `MEMORY_DELIVERY_UNSUPPORTED` | 422 | 这个类型的智能体没有 Coffer 可以安装的记忆 Hook。 | 无；该智能体用自己的文件工具从 `coffer-guide` 技能指明的记忆根目录读取记忆笔记。 |
-| `MEMORY_DELIVERY_CONFIG_INVALID` | 422 | 智能体的设置或 Hook 文件不是 Coffer 能编辑的 JSON 对象。 | 修复该文件，然后重新安装投递。 |
+| `MEMORY_DELIVERY_CONFIG_INVALID` | 422 | 智能体的设置或 Hook 文件不是 JSON 对象，因此无法从中移除已停用的记忆 Hook。 | 修复该文件；下次启动时会移除该 Hook。 |
 
 ## 聊天与消息渠道 {#chat-and-channels}
 

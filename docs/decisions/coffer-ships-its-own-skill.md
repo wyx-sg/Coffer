@@ -10,9 +10,8 @@
 An agent meets Coffer through a tool list and one paragraph. Everything else it
 needs to work with Coffer well — that an upstream tool missing from the list is
 still callable through `coffer__search_tools`, that knowledge is files it reads
-with its own tools, which knowledge exists and where, that Coffer reads its
-memory and never writes it, that no Coffer tool waits on a human approval — had
-nowhere to live.
+with its own tools, which knowledge exists and where, that no Coffer tool
+waits on a human approval — had nowhere to live.
 
 Two channels into a model's context have opposite cost structures:
 
@@ -64,7 +63,7 @@ predicate and links as every imported skill.
   reads, and reclaiming one agent's link is the skill kind's own per-agent
   reconciliation.
 
-### Option B — Several skills (tools, knowledge, memory)
+### Option B — Several skills (tools, knowledge)
 
 - **Pros.** Each body is smaller and more focused.
 - **Cons.** Every description is resident in every session, so a set pays the
@@ -129,8 +128,8 @@ and the knowledge catalogue is one section of it.**
   cover, within the tightest importer ceiling (1024 characters), dropping whole
   subjects from the tail rather than cutting a sentence. The body is the manual
   — the tools and when to reach for each, the tiering contract, that knowledge
-  is files read with the agent's own tools, that Coffer never writes an agent's
-  memory, that nothing waits on an approval — followed by the catalogue.
+  is files read with the agent's own tools, that nothing waits on an approval —
+  followed by the catalogue.
 - **The tool count is what the session lists.** `coffer__search_tools` is
   the only built-in tool and is always present, and the handshake and the skill
   body name only the tools actually listed, never one the gateway would answer

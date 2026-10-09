@@ -15,7 +15,7 @@ import pathlib
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from coffer.application.memory.aggregate import AgentSource
+from coffer.application.memory.sources import AgentSource
 from coffer.application.memory.sync_service import MemorySyncService
 from coffer.application.memory.sync_view import MemorySyncView
 from coffer.infrastructure.memory.readers import MEMORY_READERS

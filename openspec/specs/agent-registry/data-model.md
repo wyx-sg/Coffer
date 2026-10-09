@@ -20,8 +20,8 @@ All _per-type behaviour_ lives in the **capability manifest**
 AgentDescriptor]`, one record per agent. `types.py` methods, `config_files_for`,
 the MCP services, and auto-detect read this table (the enum's methods delegate
 via a lazy import to keep the graph acyclic). **Adding an agent = adding one
-enum value + one descriptor record** (plus a novel MCP entry renderer or memory
-adapter only when the agent introduces a genuinely new shape).
+enum value + one descriptor record** (plus a novel MCP entry renderer or native-memory
+reader only when the agent introduces a genuinely new shape).
 
 | Value         | Display name | Default `config_dir` | MCP file / container / shape               |
 | ------------- | ------------ | -------------------- | ------------------------------------------ |
@@ -43,7 +43,7 @@ facets — `projection`, `driver`, `memory_reader`, `dependency_probe` — which
 root into an `AgentCatalog` (`domain/agent/facets.py`; ADR
 agent-mechanisms-are-optional-facets-on-the-descriptor). The projection facet
 is a registry of `ProjectionEntry(asset, landing, config_key | subpath)` rows —
-assets `mcp_server`, `skill`, `provider`, `delivery_hook`; landings `user`,
+assets `mcp_server`, `skill`, `provider`; landings `user`,
 `project`, `shared` — and every entry of the two shipped agents lands at `user`.
 There is no per-type `enabled` flag: discovery looks at every `AgentType`, and
 withdrawing a type means removing it from the enum and the manifest. Each enum
@@ -65,8 +65,9 @@ stored: candidates and the agent read model compute them per request.
 
 `HookRow {event, matcher, command, type, timeout, group_index, hook_index}` — the last two are where the hook sits in its file, `hooks.<event>[group_index].hooks[hook_index]` — parsed from the
 `{"hooks": {event: [{matcher, hooks: [{type, command, timeout}]}]}}` shape both
-agents use; `HookSource` is `user` | `plugin`; `HookHealth` is `current` |
-`stale` | `missing`. Read only; nothing stored.
+agents use; `HookSource` is `user` | `plugin`.
+Read only; nothing stored. The module judges nothing: Coffer installs no hook into an
+agent, so no row is Coffer's own and nothing carries a health.
 
 The config-file allowlist and the skills-delivery target (`<config_dir>/skills`) both resolve against the agent's resolved `config_dir`.
 
@@ -286,7 +287,8 @@ the program installed — `installed_never_run` included, `config_only` not) and
 
 | Method | Purpose |
 | --- | --- |
-| `list_hooks(uid) -> AgentHooks` | Every hook in the agent's hook-carrying files and its enabled plugins' `hooks/hooks.json`, Coffer's own marked, plus Coffer's hook health (`current` / `stale` / `missing`, by the delivery hook's marker-and-command comparison) and its last `memory_delivery_fired`. Writes nothing. |
+| `list_hooks(uid) -> AgentHooks` | Every hook in the agent's hook-carrying files and its enabled plugins' `hooks/hooks.json`, each a `NativeHook` (the `HookRow` fields plus `source`, the declaring file's `path` and, for a plugin hook, its `plugin` id), and `parse_errors` for the files that did not parse. Coffer installs no hook, so none is marked as Coffer's and there is no health or last fire. Writes nothing, records no audit event. |
+
 A removed agent re-appears as a candidate on the next scan — there is no
 suppression list.
 
@@ -343,17 +345,20 @@ writes nothing itself and records no audit event of its own.
 | Part          | Owner                                         | Applies when                          | Audit events                                            |
 | ------------- | --------------------------------------------- | ------------------------------------- | ------------------------------------------------------- |
 | `mcp`         | `AgentMcpService` (via `McpConnectionPart`)   | always (every type declares one)      | `agent_mcp_installed` / `agent_mcp_uninstalled`         |
-| `memory_hook` | memory's `DeliveryService`, adapted in `surfaces/http/agent_connection_wiring.py` | the type has a hook adapter | `memory_delivery_installed` / `memory_delivery_removed` |
 
 | Method                                   | Purpose |
 | ---------------------------------------- | ------- |
 | `status(uid) -> ConnectionStatus`        | Each applicable part's `PartStatus(key, installed, detail)`, and a `state`: `connected` (all installed), `partial`, or `disconnected` (none). Read on demand, never stored. |
 | `connect(uid, *, actor)`                 | (Re)install every applicable part, the `mcp` part first so a missing shim refuses before anything is written. |
 | `disconnect(uid, *, actor)`              | Remove every part the type supports. |
-| `connected_agents() -> list[str]`        | The uids of agents carrying the `mcp` entry — the ones the hook's reconcile pass treats as connected. |
+| `connected_agents() -> list[str]`        | The uids of agents carrying the `mcp` entry — the ones Coffer treats as connected. Best-effort: an agent whose config file cannot be read is left out. |
 
-The memory kind's part is adapted at the composition root because the agent
-kind may not import the memory kind; the HTTP shape is `CofferConnectionOut`
+Today the connection has one part, `mcp`: Coffer installs no hook into an
+agent, and the memory sync writes into each agent's own memory files rather
+than through a connection part (spec memory). The service still takes a list
+of parts — the `mcp` part first, which the constructor enforces — and
+`surfaces/http/agent_connection_wiring.py` (`wire_agent_connection`) builds it
+over that one part. The HTTP shape is `CofferConnectionOut`
 (`state`, `parts[]` of `CofferConnectionPartOut(key, installed, detail)`).
 
 ## Workspace amendment — derived entities (never stored)
@@ -546,7 +551,8 @@ the routers are mounted in `surfaces/http/routing.py`. Together they:
 4. Register it in the per-kind registry the kind-agnostic resource routes read.
 5. Mount `agent_routes` (registry + candidates), `agent_config_routes` (config
    files), `agent_connection_routes` (the Coffer connection, whose service
-   `agent_connection_wiring` builds once the memory kind is wired too),
+   `agent_connection_wiring` builds over the agent and MCP services once the
+   kinds are wired),
    `agent_workspace_routes` (MCP entries + plugins),
    `agent_native_memory_routes`, `agent_session_routes`,
    and `agent_unmanaged_skill_routes`. The `/fs/*` routes the picker and the

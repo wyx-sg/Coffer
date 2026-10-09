@@ -3,15 +3,15 @@
 **Status**: Accepted
 **Date**: 2026-10-04
 **Deciders**: Yuxing Wu
-**Related**: [Tidying Knowledge and Memory Is the Agent's Job](tidying-knowledge-and-memory-is-the-agents-job.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [Sync Withholds Derived Output](sync-withholds-derived-output.md), [Kind Plugin Contract](kind-plugin-contract.md), spec internal-engine "Keep the engine's settings in one vault document", spec internal-engine "Transcribe speech on its own connection and model", spec internal-engine "Drop the speech-to-text model when its connection moves", spec internal-engine "Publish no document while the defaults hold", spec provider-switching "Keep an independent speech-to-text default"
+**Related**: [Tidying Knowledge Is the Agent's Job](tidying-knowledge-is-the-agents-job.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [Sync Withholds Derived Output](sync-withholds-derived-output.md), [Kind Plugin Contract](kind-plugin-contract.md), spec internal-engine "Keep the engine's settings in one vault document", spec internal-engine "Transcribe speech on its own connection and model", spec internal-engine "Drop the speech-to-text model when its connection moves", spec internal-engine "Publish no document while the defaults hold", spec provider-switching "Keep an independent speech-to-text default"
 
 ## Context
 
 Transcribing a voice message is the one model call Coffer makes on its own
-behalf ([Tidying Knowledge and Memory Is the Agent's Job](tidying-knowledge-and-memory-is-the-agents-job.md)
+behalf ([Tidying Knowledge Is the Agent's Job](tidying-knowledge-is-the-agents-job.md)
 puts every other judgement in the person's agent). The call needs two
-things: an endpoint with a key and a model id. Coffer also runs two mechanical passes on timers (aggregate and
-distil), each with a switch and an interval.
+things: an endpoint with a key and a model id. Coffer also runs one mechanical pass on a timer, the memory sync
+([Sync Memory Into Each Agent's Own Memory](sync-memory-into-each-agents-own-memory.md)), with a switch and an interval.
 
 The endpoints and keys already exist. They are the user's LLM connections
 (`kind='provider'`, [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md)),
@@ -49,8 +49,8 @@ Forces on the shape:
 The settings are one vault state document, `state/settings/internal-engine.json`
 (read and written by `infrastructure/persistence/internal_engine_repo.py`, typed
 by `domain/internal_engine_config.py`), holding the speech-to-text
-`transcribe_model`, each mechanical pass's switch and interval (`aggregate`,
-`distil`). A key the
+`transcribe_model`, and each mechanical pass's switch and interval (today one
+pass, `memory_sync`, on by default). A key the
 document does not carry reads as that key's default, and the time of the last
 write is not in it (two machines stamping it would conflict on every edit): it
 is this machine's own record, `local/engine.json`. The endpoint and key come
@@ -153,7 +153,7 @@ speech-to-text model, each mechanical pass's switch and interval. The endpoint a
   same `None`, so no consumer has to know which half was missing.
 - **A moved flag drops a model the new connection does not curate.** Nothing is
   probed to decide.
-- **Switches are per pass, not per collection or partition.** The question is
+- **Switches are per pass, not per collection or project.** The question is
   what Coffer may do on a timer. A per-target setting would multiply rows,
   surfaces and defaults.
 - **One value per write.** `PUT /api/v1/internal-engine-config/upkeep`
@@ -187,7 +187,7 @@ behaviour.
 
 - Surfaces: `/api/v1/internal-engine-config` (plus `/upkeep` and
   `/transcribe-model`) and Settings › General → Speech-to-text. The Memory page
-  carries the aggregate and distil switches. The connection flag is set on the
+  carries the memory sync's switch and interval. The connection flag is set on the
   provider kind's own route.
 - Every write to the settings records `internal_engine_model_set` with the values
   after the write (spec internal-engine "Audit every write to the engine

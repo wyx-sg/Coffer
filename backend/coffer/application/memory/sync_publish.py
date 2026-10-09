@@ -29,7 +29,7 @@ import pathlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
-from coffer.application.memory.aggregate import AgentSource, SourceFailure
+from coffer.application.memory.sources import AgentSource, SourceFailure
 from coffer.domain.memory import absorption
 from coffer.domain.memory.errors import UnreadableMemory
 from coffer.domain.memory.hub import (

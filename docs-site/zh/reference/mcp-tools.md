@@ -18,8 +18,8 @@ schema 和返回结果，Coffer 聚合的上游工具、资源和提示词的命
 | [`coffer__ask`](#coffer-ask) | 向所有者提问并等待回答。 | 仅在 Coffer 运行的对话轮次内。 |
 | [`coffer__channel_read_thread`](#coffer-channel-read-thread) | 一页一页地读取聊天会话串里较早的消息。 | 仅在 Coffer 运行的对话轮次内。 |
 
-完整列表就这三个。Coffer 的知识、记忆笔记和它自己的记录都没有对应工具：
-智能体用自己的文件工具修改和读取知识与记忆，用 `coffer` 命令行读记录。见
+完整列表就这三个。Coffer 的知识、记忆和它自己的记录都没有对应工具：
+智能体用自己的文件工具修改和读取知识，通过自己的原生记忆获得记忆，用 `coffer` 命令行读记录。见
 [不用工具处理知识、记忆和日志](#memory-and-logs-without-a-tool)。
 
 ::: tip 智能体里的名称
@@ -233,21 +233,19 @@ Coffer 不回答的方法是 `-32601`。方法用不了的 params，或没有任
 
 Coffer 的 `initialize` 结果声明协议版本 `2025-06-18`、服务器名称 `coffer`，以及能力
 `tools`、`resources` 和 `prompts`，每项都带 `listChanged: true`（resources 不带 `subscribe`）。
-其中的 `instructions` 字段会被客户端放进智能体的系统提示词，最多 800 个字符。内容如下（记忆根目录是 `~/.coffer/derived/memory`，在保险库之外，这里是 `/Users/you/.coffer/derived/memory`）：
+其中的 `instructions` 字段会被客户端放进智能体的系统提示词，最多 800 个字符。内容如下：
 
 ```text
 Coffer is this machine's local vault: it aggregates the user's MCP servers behind one
 endpoint, holds what this developer wrote down, and adds its own tool:
 coffer__search_tools (describe an upstream tool you need; results are callable by name).
-Its knowledge is markdown you read with your own file tools. Its
-memory notes are Markdown under /Users/you/.coffer/derived/memory/*/notes/; grep them with your
-own tools. Its own logs: coffer log audit|mcp|daemon (files: coffer path logs). The
-coffer-guide skill is the manual: load it for the catalogue, with paths, before asking
-the developer something they may have written down.
+Its knowledge is markdown you read with your own file tools. Its own logs: coffer log
+audit|mcp|daemon (files: coffer path logs). The coffer-guide skill is the manual: load it
+for the catalogue, with paths, before asking the developer something they may have
+written down.
 ```
 
-（这里的换行是为了排版，实际文本是一段。）如果记忆根目录太长、放不进 800 个字符的上限，
-那句话会缩短到放得下为止。如果本会话上一次 `tools/list`
+（这里的换行是为了排版，实际文本是一段。）知识功能关闭时，关于知识的句子会被省略。如果本会话上一次 `tools/list`
 因分层隐藏了工具，还会追加一句：
 
 ```text
@@ -256,14 +254,13 @@ Your tool list is a budgeted slice: 88 more upstream tools are unlisted, all cal
 
 ## 不用工具处理知识、记忆和日志 {#memory-and-logs-without-a-tool}
 
-Coffer 没有用于知识、记忆笔记或自身记录的工具，因为智能体用已有的能力就都能做到。
+Coffer 没有用于知识、记忆或自身记录的工具，因为智能体用已有的能力就都能做到。
 要新增知识，就按 `coffer-guide` 技能的说明，往某个知识集的 `pages/` 里写一个 Markdown 页面；留在知识集 `.inbox/` 文件夹里的文件，会被 Coffer 的扫描收编，作为来源保留在 `sources/` 下；写在 `pages/` 和 `sources/` 之外的文档会被移进 `pages/`。
-要修改文档或记忆笔记，直接就地编辑文件。
+要修改文档，直接就地编辑文件。记忆根本不需要工具：智能体照常写自己的记忆，[记忆同步](/zh/guides/memory)把你其他智能体学到的东西写进同一份记忆，由智能体自己加载。
 
 | 要找 | 做法 |
 | --- | --- |
 | 一篇知识文档 | 读 `coffer-guide` 技能列出的知识集文件夹下的文件。 |
-| 一条记忆笔记 | 在握手说明、会话开始时的投递内容和 `coffer-guide` 技能所指明的记忆根目录里 grep（每个分区的笔记都在 `<root>/<partition>/notes/*.md`），再读文件。 |
 | Coffer 里改了什么（注册、删除、密钥读取、配置写入） | `coffer log audit --since 1h` |
 | 哪些 MCP 调用失败了 | `coffer log mcp --status error --since 1h`，或用 `--server <name>` 只看一个服务器 |
 | 守护进程记录了什么，包括 traceback | `coffer log daemon --errors --since 1h`，或 grep `coffer path logs` 指明的文件 |

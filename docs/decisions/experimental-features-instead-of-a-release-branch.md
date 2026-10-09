@@ -63,8 +63,8 @@ Gates act at request time, on every surface:
 - **MCP**: each builtin tool records its owning feature
   (`application/builtin_tools.py`). While it is off the tool is absent from
   `tools/list`, and a call to it answers exactly as a call to an unknown tool.
-- **Workers**: sync convergence, the knowledge sweep, memory aggregation and
-  distil read the switch at the top of each round and skip it.
+- **Workers**: sync convergence, the knowledge sweep and the memory sync read
+  the switch at the top of each round and skip it.
 - **CLI**: groups stay registered; a `FEATURE_DISABLED` answer becomes one line
   naming `coffer config set feature.<key> on`.
 - **Web**: `/api/v1/daemon/status` carries `features`; a switched-off feature
@@ -76,10 +76,12 @@ Gates act at request time, on every surface:
 - **Agent-facing side effects** follow the switch through subscribers: a
   feature that put something in front of agents withdraws it when switched off
   and puts it back when switched on (spec experimental-features "Withdraw what a
-  switched-off feature put in front of agents"): `memory` withdraws the memory
-  delivery hook and the memory section of `coffer-guide`; `knowledge` withdraws
+  switched-off feature put in front of agents"): `knowledge` withdraws
   the knowledge sections of `coffer-guide` and the channel `/kb`; `models` withdraws the provider projection from agents' own
-  configuration and empties the model proxy.
+  configuration and empties the model proxy. `memory` withdraws nothing: the
+  copies it wrote are memory the agents already hold, so switching it off
+  only stops the sync, and **Undo sync** is the explicit removal
+  ([Sync Memory Into Each Agent's Own Memory](sync-memory-into-each-agents-own-memory.md)).
 
 One security detail survives from the earlier channel design and is not a
 feature default: a build made from a tag carries a stamp

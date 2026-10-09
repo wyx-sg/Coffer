@@ -8,8 +8,7 @@
 ## Context
 
 Coffer manages several kinds of user-owned things: MCP servers, coding agents,
-skills, knowledge collections, memory partitions, model providers and messaging
-channels. When the first spec (mcp-gateway) was written, only `mcp_server` was
+skills, knowledge collections, model providers and messaging channels. When the first spec (mcp-gateway) was written, only `mcp_server` was
 concrete, but the next kinds were already named with confidence by the owner.
 
 The principles bias hard towards late abstraction:
@@ -55,8 +54,8 @@ common beyond the row they start from.
 - **Cons.** The first spec carried the abstraction with one kind to justify it.
   The boundary has to be defended: the temptation to unify behaviour (a "god
   `invoke()`") is a standing risk.
-- **Why it wins.** Seven kinds now run on it. Two of them (`knowledge`, `memory`)
-  own no table at all — a resource file plus the content on disk — and the
+- **Why it wins.** Six kinds now run on it. One of them (`knowledge`) owns no
+  table at all — a resource file plus the content on disk — and the
   knowledge layer was rebuilt from an indexed store into plain files (PR #368)
   without touching the framework. The move of the whole configuration from a
   database into vault files, and the change of identity from name to a `uid`
@@ -161,7 +160,7 @@ Rules a future change must respect:
   `channel_thread_history` and `channel_outbox`), and state Coffer can rebuild
   goes in `derived.db` (`mcp_server` owns `mcp_server_health` and
   `mcp_capability_seen`; `skill` owns `skill_agent_bindings`). `agent`,
-  `provider`, `knowledge` and `memory` need none.
+  `provider` and `knowledge` need none.
 - Cross-kind readers get one source: the audit log, the vault scanner and sync,
   the reach picker and the diagnostics tool all read resource files without
   knowing which kinds exist.

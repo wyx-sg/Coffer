@@ -11,12 +11,7 @@ removal, audit event and status, owned by the kind that knows how to write it:
 - ``mcp`` — the gateway entry (``coffer`` in the agent's MCP config),
   written by :class:`~coffer.application.agent.mcp_service.AgentMcpService`.
   It applies to every agent type, and it is the *anchor*: an agent carrying it
-  is the one Coffer treats as connected when something later has to decide
-  where a newly applicable part goes (the ``memory`` switch turned on).
-- ``memory_hook`` — the memory delivery hook, which the memory kind owns. The
-  agent kind cannot import the memory kind, so the composition root adapts it
-  to :class:`ConnectionPart` and hands it in; it applies only while the
-  ``memory`` experimental feature is on.
+  is the one Coffer treats as connected.
 
 This service owns no write of its own: each part keeps its own atomic write,
 backup and audit event, so a connect is recorded as the part installs it

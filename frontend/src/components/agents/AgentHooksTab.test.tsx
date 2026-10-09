@@ -1,10 +1,9 @@
-// src/components/agents/AgentHooksTab.test.tsx — the agent's Hooks tab: Coffer's memory hook, then the agent's own.
+// src/components/agents/AgentHooksTab.test.tsx — the agent's Hooks tab: the agent's own hooks.
 //
-// Spec agent-registry "List every hook in the agent's native config": Coffer's
-// hook is one block (state, command, event tags, file) whose fix sits at the
-// title's right; the agent's own hooks are one table with search and an Event
-// filter, and a row opens a read-only details dialog. Only the network boundary
-// (`agentsApi`) is mocked.
+// Spec agent-registry "List every hook in the agent's native config": the
+// agent's own hooks are one table with search and an Event filter, and a row
+// opens a read-only details dialog. Coffer installs no hook of its own, so the
+// tab has no Coffer block. Only the network boundary (`agentsApi`) is mocked.
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -12,9 +11,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { AgentHooksTab } from "./AgentHooksTab";
-import { fsApi } from "@/lib/api/fs";
-import type { AgentHooksOut, AgentOut, CofferHook, NativeHook } from "@/lib/api/agents";
 import { acceptance } from "@/test/acceptance";
+import { fsApi } from "@/lib/api/fs";
+import type { AgentHooksOut, AgentOut, NativeHook } from "@/lib/api/agents";
 
 vi.mock("@/lib/api/agents", () => ({ agentsApi: { hooks: vi.fn() } }));
 vi.mock("@/lib/api/fs", () => ({ fsApi: { open: vi.fn(), reveal: vi.fn() } }));
@@ -42,7 +41,6 @@ function agent(type: AgentOut["type"]): AgentOut {
 const SETTINGS = "/home/u/.claude/settings.json";
 const LOCAL = "/home/u/.claude/settings.local.json";
 const PLUGIN_HOOKS = "/home/u/.claude/plugins/cache/superpowers/hooks/hooks.json";
-const COFFER_CMD = "coffer memory hook --agent-uid u-claude_code";
 
 function hook(over: Partial<NativeHook>): NativeHook {
   return {
@@ -56,23 +54,10 @@ function hook(over: Partial<NativeHook>): NativeHook {
     source: "user",
     path: SETTINGS,
     plugin: null,
-    coffer: false,
     ...over,
   };
 }
 
-const COFFER: CofferHook = {
-  event: "SessionStart,UserPromptSubmit",
-  path: SETTINGS,
-  health: "current",
-  trust: "not_required",
-  installed_command: COFFER_CMD,
-  expected_command: COFFER_CMD,
-  last_fired_at: new Date(Date.now() - 2 * 3_600_000).toISOString(),
-};
-const COFFER_ROWS = ["SessionStart", "UserPromptSubmit"].map((event, i) =>
-  hook({ event, command: COFFER_CMD, coffer: true, group_index: i }),
-);
 const OWN_ROWS = [
   hook({ event: "UserPromptSubmit", command: "~/.claude/hooks/ticket-context.sh", path: LOCAL }),
   hook({
@@ -97,10 +82,7 @@ function Where() {
   return <div data-testid="where">{pathname + search}</div>;
 }
 
-function renderTab(
-  data: AgentHooksOut,
-  opts: { type?: AgentOut["type"]; onRepair?: () => void } = {},
-) {
+function renderTab(data: AgentHooksOut, opts: { type?: AgentOut["type"] } = {}) {
   api.hooks.mockResolvedValue(data);
   vi.mocked(fsApi.open).mockResolvedValue(undefined);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -122,43 +104,19 @@ function renderTab(
       </MemoryRouter>
     </QueryClientProvider>
   );
-  return render(
-    <AgentHooksTab agent={agent(opts.type ?? "claude_code")} onRepair={opts.onRepair} />,
-    { wrapper: Wrapper },
-  );
+  return render(<AgentHooksTab agent={agent(opts.type ?? "claude_code")} />, { wrapper: Wrapper });
 }
 
-const full = (over: Partial<CofferHook> = {}): AgentHooksOut => ({
-  items: [...COFFER_ROWS, ...OWN_ROWS],
-  coffer_hook: { ...COFFER, ...over },
-  parse_errors: [],
-});
-const cofferBlock = async () => within(await screen.findByTestId("coffer-hook-section"));
+const full = (): AgentHooksOut => ({ items: OWN_ROWS, parse_errors: [] });
 const ownBlock = async () => within(await screen.findByTestId("own-hooks-section"));
 
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentHooksTab", () => {
-  acceptance("agent-registry", "list an agent's hooks with Coffer's own marked", async () => {
+  acceptance("agent-registry", "the Hooks tab lists the agent's own hooks", async () => {
     renderTab(full());
 
-    // Coffer's hook: one block, events as tags, the file as a link, no fix when current.
-    const coffer = await cofferBlock();
-    expect(
-      coffer.getByText("Gives every session Coffer’s memory. One hook on 2 events."),
-    ).toBeInTheDocument();
-    expect(coffer.getByText("Current")).toBeInTheDocument();
-    expect(coffer.getByText(/^Fired /)).toBeInTheDocument();
-    expect(coffer.getByText(COFFER_CMD)).toBeInTheDocument();
-    for (const e of ["SessionStart", "UserPromptSubmit"]) {
-      expect(coffer.getByText(e)).toBeInTheDocument();
-    }
-    // The file opens in the person's editor; there is no fix while it is current.
-    fireEvent.click(coffer.getByRole("button", { name: "~/.claude/settings.json" }));
-    await waitFor(() => expect(fsApi.open).toHaveBeenCalledWith(SETTINGS, undefined));
-    expect(coffer.getAllByRole("button")).toHaveLength(1);
-
-    // The agent's own hooks: one table, Coffer's hook is not repeated in it.
+    // The agent's own hooks: one table, with no Coffer block above it.
     const own = await ownBlock();
     expect(
       own.getByText(
@@ -166,106 +124,17 @@ describe("AgentHooksTab", () => {
       ),
     ).toBeInTheDocument();
     expect(own.getAllByRole("row")).toHaveLength(1 + OWN_ROWS.length);
-    expect(own.queryByText(COFFER_CMD)).not.toBeInTheDocument();
     expect(own.getByText("~/.claude/hooks/block-destructive.sh")).toBeInTheDocument();
     expect(own.getByText("superpowers · hooks.json")).toBeInTheDocument();
     expect(own.getAllByText("Any")).toHaveLength(2);
   });
 
-  acceptance(
-    "agent-registry",
-    "coffer's memory hook leads the Hooks tab and the agent's own follow",
-    async () => {
-      renderTab(full());
-      const coffer = await cofferBlock();
-      const own = await ownBlock();
-      const first = screen.getByTestId("coffer-hook-section");
-      const second = screen.getByTestId("own-hooks-section");
-      expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      expect(coffer.getByText(COFFER_CMD)).toBeInTheDocument();
-      expect(own.queryByText(COFFER_CMD)).not.toBeInTheDocument();
-      expect(own.getAllByRole("row")).toHaveLength(1 + OWN_ROWS.length);
-      // A row opens a read-only dialog; searching narrows and says how many of how many.
-      fireEvent.click(await own.findByText("~/.claude/hooks/block-destructive.sh"));
-      const dialog = within(await screen.findByRole("dialog"));
-      expect(dialog.getByText("hooks.PreToolUse[0].hooks[1]")).toBeInTheDocument();
-      fireEvent.click(dialog.getAllByRole("button", { name: "Close" })[0]);
-      fireEvent.change(own.getByLabelText("Search command or file"), {
-        target: { value: "afplay" },
-      });
-      expect(own.getByText("Showing 1 of 4")).toBeInTheDocument();
-    },
-  );
-
-  test("a stale Coffer hook says why and Repair opens the review flow", async () => {
-    const onRepair = vi.fn();
-    renderTab(full({ health: "stale", installed_command: "coffer memory hook --agent old" }), {
-      onRepair,
-    });
-    const coffer = await cofferBlock();
-    expect(
-      coffer.getByText(
-        "Written by an older Coffer, so its command no longer works and sessions start without memory.",
-      ),
-    ).toBeInTheDocument();
-    expect(coffer.getByText("Out of date")).toBeInTheDocument();
-    fireEvent.click(coffer.getByRole("button", { name: "Repair" }));
-    expect(onRepair).toHaveBeenCalledTimes(1);
-  });
-
-  test("a missing Coffer hook offers Repair, shows no command and still names its events", async () => {
-    const onRepair = vi.fn();
-    renderTab(
-      {
-        items: [hook({ path: "/home/u/.codex/hooks.json", matcher: "shell" })],
-        coffer_hook: { ...COFFER, path: "/home/u/.codex/hooks.json", health: "missing" },
-        parse_errors: [],
-      },
-      { type: "codex", onRepair },
-    );
-    const coffer = await cofferBlock();
-    expect(coffer.getByText("Missing")).toBeInTheDocument();
-    expect(
-      coffer.getByText(/taken out of .*hooks\.json, so Codex starts sessions without memory/),
-    ).toBeInTheDocument();
-    expect(coffer.getByText("—")).toBeInTheDocument();
-    expect(coffer.getByText("UserPromptSubmit")).toBeInTheDocument();
-    fireEvent.click(coffer.getByRole("button", { name: "Repair" }));
-    expect(onRepair).toHaveBeenCalled();
-  });
-
-  test("Repair is not offered when the page gives the tab no way to run it", async () => {
-    renderTab(full({ health: "missing" }));
-    const coffer = await cofferBlock();
-    expect(coffer.queryByRole("button", { name: "Repair" })).not.toBeInTheDocument();
-  });
-
-  test("a hook Codex has not approved reads Not approved and offers Check again", async () => {
-    renderTab(full({ trust: "untrusted", last_fired_at: null }), { type: "codex" });
-    const coffer = await cofferBlock();
-    expect(coffer.getByText("Not approved")).toBeInTheDocument();
-    expect(coffer.getByText("Never fired")).toBeInTheDocument();
-    expect(coffer.getByText(/Codex skips hooks you haven’t approved/)).toBeInTheDocument();
-    expect(coffer.queryByRole("button", { name: "Repair" })).not.toBeInTheDocument();
-    fireEvent.click(coffer.getByRole("button", { name: "Check again" }));
-    await waitFor(() => expect(api.hooks).toHaveBeenCalledTimes(2));
-  });
-
-  test("a hook whose command changed after approval reads Changed since trusted", async () => {
-    renderTab(full({ trust: "modified" }), { type: "codex" });
-    const coffer = await cofferBlock();
-    expect(coffer.getByText("Changed since trusted")).toBeInTheDocument();
-    expect(coffer.getByRole("button", { name: "Check again" })).toBeInTheDocument();
-  });
-
-  test("a hook that never fired gives the likely cause, Check again and a way to Activity", async () => {
-    renderTab(full({ last_fired_at: null }), { type: "codex" });
-    const coffer = await cofferBlock();
-    expect(coffer.getByText("Never fired")).toBeInTheDocument();
-    expect(coffer.getByText(/Likely cause: this Codex build doesn’t load/)).toBeInTheDocument();
-    expect(coffer.getByRole("button", { name: "Check again" })).toBeInTheDocument();
-    fireEvent.click(coffer.getByRole("link", { name: "View in Activity" }));
-    expect(await screen.findByText("/activity")).toBeInTheDocument();
+  test("the tab has no Coffer hook block and no Repair", async () => {
+    renderTab(full());
+    await ownBlock();
+    expect(screen.queryByTestId("coffer-hook-section")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Repair" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/memory hook/i)).not.toBeInTheDocument();
   });
 
   test("search narrows by command or file and says how many of how many show", async () => {
@@ -328,18 +197,16 @@ describe("AgentHooksTab", () => {
   test("a file that does not parse is a warning naming it, beside the other hooks", async () => {
     renderTab({
       items: [OWN_ROWS[1]],
-      coffer_hook: null,
       parse_errors: [{ source: "settings.local.json", path: LOCAL, error: "bad json" }],
     });
     expect(
       await screen.findByText("Couldn’t read ~/.claude/settings.local.json: bad json"),
     ).toBeInTheDocument();
     expect(screen.getByText("~/.claude/hooks/block-destructive.sh")).toBeInTheDocument();
-    expect(screen.queryByTestId("coffer-hook-section")).not.toBeInTheDocument();
   });
 
   test("an agent with no hooks of its own says so inside its section", async () => {
-    renderTab({ items: [], coffer_hook: null, parse_errors: [] }, { type: "codex" });
+    renderTab({ items: [], parse_errors: [] }, { type: "codex" });
     expect(await screen.findByText("Codex has no hooks of its own")).toBeInTheDocument();
   });
 });

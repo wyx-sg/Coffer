@@ -20,7 +20,7 @@ in this order:
 | Key | What it closes | REST prefixes | Kinds |
 | --- | --- | --- | --- |
 | `knowledge` | Knowledge | `/api/v1/knowledge` | `knowledge` |
-| `memory` | Memory | `/api/v1/memory` | `memory` |
+| `memory` | Memory | `/api/v1/memory` | — |
 
 Everything else is always on: the shell, the Overview, Agents, the MCP gateway
 and its custom tools, Skills, Secrets, Activity, Settings, Conversations,
@@ -252,48 +252,6 @@ skip its rounds.
 - **WHEN** the knowledge sweep comes due
 - **THEN** it skips its round
 
-### Requirement: Close the memory feature's surfaces
-While `memory` is off, `/api/v1/memory` MUST answer 404 `FEATURE_DISABLED` and
-the `memory` kind MUST be out of reach of the resource routes. The memory root
-directory MUST be tagged `memory`, so the handshake does not name it, and the
-`coffer-guide` skill MUST be rendered without its memory root section. The
-memory delivery hook MUST be withdrawn from agents, and the agent connection
-status MUST carry no `memory_hook` part. Switching `memory` on MUST install the
-hook again into the connected agents and restore the section. The aggregate and
-distil passes MUST skip their rounds, and a note's retirement marker is not acted on while they are skipped. A channel turn MUST carry no memory
-index or retrieval.
-
-#### Scenario: memory off closes the memory routes
-- **GIVEN** `memory` off
-- **WHEN** a route under `/api/v1/memory` is requested
-- **THEN** it answers 404 `FEATURE_DISABLED` naming `memory`
-
-#### Scenario: memory off hides the memory root
-- **GIVEN** `memory` off
-- **WHEN** an agent opens a gateway session
-- **THEN** the handshake instructions do not name the memory root, and the `coffer-guide` skill carries no memory root section
-
-#### Scenario: memory off withdraws the memory delivery hook
-- **GIVEN** `memory` on and a connected agent with the memory delivery hook installed
-- **WHEN** `memory` is switched off
-- **THEN** the hook is removed from the agent and its connection status carries no `memory_hook` part
-- **AND** connecting an agent while `memory` is off leaves the hook out
-
-#### Scenario: switching memory on installs the memory hook again
-- **GIVEN** `memory` off and a connected agent without the hook
-- **WHEN** `memory` is switched on
-- **THEN** the hook is installed into the agent again, with no daemon restart
-
-#### Scenario: memory off skips the distil and aggregate passes
-- **GIVEN** `memory` off
-- **WHEN** the aggregate and distil passes come due
-- **THEN** each skips its round
-
-#### Scenario: memory off leaves channel turns without memory
-- **GIVEN** `memory` off and a channel conversation
-- **WHEN** a turn runs
-- **THEN** the turn carries no memory index or retrieval
-
 ### Requirement: Keep dependencies between features soft
 No feature MUST hard-depend on another. Every link from one feature to another
 MUST degrade when the other is off and MUST NOT fail: a surface that would
@@ -349,3 +307,26 @@ by a feature are Knowledge (`knowledge`) and Memory (`memory`).
 - **WHEN** the sidebar renders expanded, and again collapsed with the entry's tooltip open
 - **THEN** the expanded row carries no experimental tag, and the collapsed row's tooltip names the entry followed by "Experimental"
 - **AND** an entry no feature owns never says it
+
+### Requirement: Close the memory feature's surfaces
+While `memory` is off, `/api/v1/memory` MUST answer 404 `FEATURE_DISABLED`,
+and the memory sync worker MUST skip its rounds, so nothing is read from an
+agent, published to the hub or written into an agent. Switching `memory` off
+MUST leave the hub and every copy already written into an agent where they are;
+switching it on again MUST resume syncing at the next round, with no daemon
+restart. The feature owns no resource kind and puts nothing in front of agents
+of its own: there is no memory tool, no memory directory named in the gateway's
+instructions or the `coffer-guide` skill, no hook, and no memory in a channel
+turn, whether the feature is on or off
+([memory](../memory/spec.md) "Deliver no memory into a session").
+
+#### Scenario: memory off closes the memory routes
+- **GIVEN** `memory` off
+- **WHEN** a route under `/api/v1/memory` is requested
+- **THEN** it answers 404 `FEATURE_DISABLED` naming `memory`
+
+#### Scenario: memory off skips the memory sync
+- **GIVEN** `memory` off
+- **WHEN** the memory sync worker's round comes due
+- **THEN** it skips the round and syncs nothing
+- **AND** once `memory` is switched on, the next round runs

@@ -1,101 +1,55 @@
 // frontend/src/lib/api/memory.ts
 //
-// Request helpers for the `memory` kind's REST family (`/api/v1/memory/*`,
-// spec memory "Manage memory in the web UI and on the command line"). Partition
-// deletion is deliberately absent: a partition is one `memory` Resource, so it
-// goes through the kind-agnostic `DELETE /api/v1/resources/{uid}`.
-//
-// A partition is addressed by its uid. The delivery hook is not managed here:
-// it is one part of an agent's Coffer connection (`agentsApi.connect`).
+// Request helpers for the memory sync (`/api/v1/memory/sync/*`, spec memory
+// "Manage memory sync in the web UI and on the command line"): its state, Sync now, the pending
+// preview's Write and Cancel, Undo sync…, the person's answer to "Codex
+// imports Claude Code's memories itself", one project's memories and Curate
+// now. The sync's switch and interval are the internal engine's `memory_sync`
+// pass (`internalEngineApi.setUpkeep`), not a route here.
 //
 // Transport via the typed client (.agents/frontend.md §4); wire types in
 // `memoryTypes.ts`, aliases of the generated contract.
-
 import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
-import type {
-  AggregationResultOut,
-  DeliveredOut,
-  HandoffOut,
-  MemoryFileTreeOut,
-  NoteListOut,
-  NoteOut,
-  PartitionListOut,
-  ReadingOut,
-  RetiredListOut,
-} from "./memoryTypes";
+import type { CurateResult, HubEntryList, MemorySyncReport, MemorySyncState } from "./memoryTypes";
 
 export * from "./memoryTypes";
 
-const partition = (uid: string) => ({ params: { path: { uid } } });
-
-// --- partitions -------------------------------------------------------------
-
-export function listPartitions(): Promise<PartitionListOut> {
-  return unwrap(getApiClient().GET("/memory/partitions"));
+export function getSyncState(): Promise<MemorySyncState> {
+  return unwrap(getApiClient().GET("/memory/sync/state"));
 }
 
-// --- update (aggregation, then distil) ---------------------------------------
-
-/** Update memory now (spec memory "Update memory in one action"): read every
- * registered agent's native memory, then distil every partition that gained
- * raw entries. */
-export function sync(): Promise<AggregationResultOut> {
-  return unwrap(getApiClient().POST("/memory/sync"));
+/** Sync now: 409 `MEMORY_SYNC_RUNNING` while a sync runs. */
+export function runSync(): Promise<MemorySyncReport> {
+  return unwrap(getApiClient().POST("/memory/sync/run"));
 }
 
-// --- tidy ---------------------------------------------------------------------
-
-/** The prompt that hands tidying every partition to the person's agent: the
- *  Memory page's Tidy all (see "Hand a partition's tidying to the agent"). One
- *  partition's prompt is the `tidy_handoff` on its read. */
-export function getTidyHandoff(): Promise<HandoffOut> {
-  return unwrap(getApiClient().GET("/memory/tidy-handoff"));
+/** Write exactly what the pending preview listed. */
+export function writePreview(): Promise<MemorySyncReport> {
+  return unwrap(getApiClient().POST("/memory/sync/preview/write"));
 }
 
-// --- one partition's memories ("Show a partition's memories read-only") -------
-
-export function listNotes(uid: string): Promise<NoteListOut> {
-  return unwrap(getApiClient().GET("/memory/partitions/{uid}/notes", partition(uid)));
+/** Drop the pending preview; nothing is written into the agents. */
+export function cancelPreview(): Promise<void> {
+  return unwrapVoid(getApiClient().POST("/memory/sync/preview/cancel"));
 }
 
-export function getNote(uid: string, slug: string): Promise<NoteOut> {
-  return unwrap(
-    getApiClient().GET("/memory/partitions/{uid}/notes/{slug}", {
-      params: { path: { uid, slug } },
-    }),
-  );
+/** Undo sync…: remove every copy Coffer wrote on this machine that the agent
+ *  has not changed, and turn automatic sync off. */
+export function undoSync(): Promise<MemorySyncReport> {
+  return unwrap(getApiClient().POST("/memory/sync/undo"));
 }
 
-/** Delete a memory by hand: the file leaves `notes/` and a "Deleted by hand"
- *  record goes into RETIRED.md carrying its entry ids, so the next update does
- *  not bring it back. 404 for an unknown slug. */
-export function deleteNote(uid: string, slug: string): Promise<void> {
-  return unwrapVoid(
-    getApiClient().DELETE("/memory/partitions/{uid}/notes/{slug}", {
-      params: { path: { uid, slug } },
-    }),
-  );
+/** `true` when Codex imports Claude Code's memories itself, `null` to forget the answer. */
+export function setCodexImport(value: boolean | null): Promise<void> {
+  return unwrapVoid(getApiClient().PUT("/memory/sync/codex-import", { body: { value } }));
 }
 
-export function listRetired(uid: string): Promise<RetiredListOut> {
-  return unwrap(getApiClient().GET("/memory/partitions/{uid}/retired", partition(uid)));
+/** One project's memories (`""` for global ones), each with its copy state here. */
+export function listEntries(project: string): Promise<HubEntryList> {
+  return unwrap(getApiClient().GET("/memory/sync/entries", { params: { query: { project } } }));
 }
 
-/** The partition directory — read only for the absolute paths that open-in-
- *  editor and reveal need. */
-export function listPartitionFiles(uid: string): Promise<MemoryFileTreeOut> {
-  return unwrap(getApiClient().GET("/memory/partitions/{uid}/files", partition(uid)));
-}
-
-// --- delivery (web-ui "Show memory delivery on the Memory page") -------------
-
-/** The exact session-start text each connected agent receives in the
- *  partition's project. */
-export function getDelivered(uid: string): Promise<DeliveredOut> {
-  return unwrap(getApiClient().GET("/memory/partitions/{uid}/delivered", partition(uid)));
-}
-
-/** When the agents' memory was last read, and which agents failed. */
-export function getReading(): Promise<ReadingOut> {
-  return unwrap(getApiClient().GET("/memory/reading"));
+/** Curate now: start the agent without a terminal, asking it to consolidate its own memory. */
+export function curate(agentType: string): Promise<CurateResult> {
+  return unwrap(getApiClient().POST("/memory/sync/curate", { body: { agent_type: agentType } }));
 }

@@ -35,7 +35,6 @@ from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.knowledge_sweep_wiring import stop_knowledge_sweep
 from coffer.surfaces.http.mcp.protocol_routes import shutdown_all_sessions
 from coffer.surfaces.http.memory_sync_wiring import stop_memory_sync_worker
-from coffer.surfaces.http.memory_wiring import stop_aggregate_worker, stop_distil_worker
 from coffer.surfaces.http.sync_wiring import stop_sync_worker
 
 _logger = logging.getLogger(__name__)
@@ -116,8 +115,6 @@ async def shutdown(running: Running) -> None:
     running.workers.retention_worker.stop()
     await stop_sync_worker(running.workers.sync_worker)
     await stop_knowledge_sweep(running.workers.knowledge_sweep_task)
-    await stop_distil_worker(running.workers.distil_task)
-    await stop_aggregate_worker(running.workers.aggregate_task)
     await stop_memory_sync_worker(running.workers.memory_sync_task)
     # The skill update check fetches over the network; stop it and remove
     # every staged source (spec skill-manager "Add skills from an archive").

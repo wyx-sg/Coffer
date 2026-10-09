@@ -219,33 +219,19 @@ acceptance(
 // Settings > Data and > Daemon in a real browser; the component tests
 // (DataSettings.test.tsx, DaemonSettings.test.tsx) carry the scenarios'
 // acceptance markers. The e2e daemon runs under its own throwaway HOME, so
-// clearing its cache or pinning its port touches nothing of the user's.
+// pinning its port touches nothing of the user's.
 
-test("the data tab shows four blocks and clears the rebuildable cache after a confirmation", async ({
+test("the data tab shows the vault, local content and history blocks, and no cache", async ({
   page,
 }) => {
   await page.goto("/settings/data");
   const modal = page.getByTestId("settings-modal");
-  for (const block of ["vault", "local", "history", "cache"]) {
+  for (const block of ["vault", "local", "history"]) {
     await expect(modal.getByTestId(`settings-data-${block}`)).toBeVisible();
   }
   await expect(modal.getByText(/this mac only/i)).toHaveCount(0);
   await expect(modal.locator("#forever-mcp_invocations")).toBeVisible();
-
-  await modal
-    .getByTestId("settings-data-cache")
-    .getByRole("button", { name: /^clear$/i })
-    .click();
-  const dialog = page.getByRole("dialog", { name: /clear the cache/i });
-  await expect(dialog).toBeVisible();
-  const cleared = page.waitForResponse(
-    (r) =>
-      r.url().includes("/storage/cache/clear") &&
-      r.request().method() === "POST",
-  );
-  await dialog.getByRole("button", { name: /clear cache/i }).click();
-  expect((await cleared).ok()).toBe(true);
-  await expect(dialog).toHaveCount(0);
+  await expect(modal.getByTestId("settings-data-cache")).toHaveCount(0);
 });
 
 test("the daemon tab refuses a port out of range and leaves a saved one pending until restart", async ({

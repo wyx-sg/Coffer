@@ -183,7 +183,6 @@ class MCPGatewaySession:
         result = build_initialize_result(
             hidden_count=self.last_hidden_count,
             tools=[tool.name for tool in self._registry.list()],
-            memory_root=self._registry.directory("memory"),
             knowledge=self._registry.directory("knowledge") is not None,
         )
         self.protocol_version = result["protocolVersion"]

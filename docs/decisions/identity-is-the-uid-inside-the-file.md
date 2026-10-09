@@ -111,8 +111,8 @@ unique index used to enforce have to be stated.
 - **A name is a mutable label** except where it is visible outside Coffer: a
   kind declares it fixed and refuses a changed name
   ([Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md)).
-  Its rule (`^[a-zA-Z0-9_.-]+$`, at most 64 characters) stays because `skill`,
-  `knowledge` and `memory` turn a name into a directory, not because it is an
+  Its rule (`^[a-zA-Z0-9_.-]+$`, at most 64 characters) stays because `skill`
+  and `knowledge` turn a name into a directory, not because it is an
   identity constraint.
 - **Reserved for more than one root.** When Coffer later reads a second root (a
   team repository, a marketplace), three rules are meant to hold:

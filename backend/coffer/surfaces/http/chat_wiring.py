@@ -40,7 +40,6 @@ from coffer.infrastructure.agent.model_discovery import (
 )
 from coffer.infrastructure.chat.codex_app_server import default_app_server_session
 from coffer.infrastructure.chat.persistence import ConversationRepo
-from coffer.infrastructure.chat.prompt_memory import MemoryRetriever
 from coffer.infrastructure.chat.session_in_use import ProcessSessionInUse
 from coffer.infrastructure.provider.introspector import PROTOCOL_BASE_URLS, ProviderIntrospector
 from coffer.infrastructure.provider.reported_prices import shared_store as reported_price_store
@@ -61,8 +60,6 @@ from coffer.surfaces.http.provider_dependencies import (
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-    from coffer.infrastructure.chat.adapter_support import MemoryContextComposer
 
 
 _log = logging.getLogger(__name__)
@@ -161,17 +158,8 @@ def wire_chat(
     agent_service: AgentService,
     resource_service: ResourceService,
     agent_catalog: AgentCatalog,
-    compose_memory_context: MemoryContextComposer | None = None,
-    retrieve_memory: MemoryRetriever | None = None,
 ) -> ChatWiring:
     """Wire the agent-chat feature (spec chat) into the running app.
-
-    ``compose_memory_context`` is the memory kind's closure
-    (``memory_turn_wiring.memory_context_composer``) every provider appends to a
-    channel turn's system prompt (spec memory "Deliver to channel turns through
-    the system prompt"); ``None`` wires no memory append. ``retrieve_memory``
-    ranks each channel turn's prompt against the notes (spec memory "Retrieve
-    the notes a prompt names for a channel turn"); ``None`` wires none.
 
     Chat talks only to Coffer-managed agents (``claude_code`` / ``codex``); the
     former ``builtin`` chat persona is retired (ADR chat-single-owner-live-mirror).
@@ -215,9 +203,7 @@ def wire_chat(
         conv_repo,
         agent_catalog,
         _secret_resolver,
-        compose_memory_context=compose_memory_context,
         resolve_channel=_channel_note,
-        retrieve_memory=retrieve_memory,
     )
 
     # 4. Application services + the agent-agnostic turn orchestrator.

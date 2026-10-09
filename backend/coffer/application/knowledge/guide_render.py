@@ -9,9 +9,8 @@ describe things most sessions never touch.
 So there is one description, carrying what a model can actually match on, and
 one body carrying everything else: Coffer's one tool, the tiering contract that
 means the tool list is not the whole catalogue, the read-it-yourself shape of
-the knowledge layer, the memory root an agent searches for a note, the
-``coffer log`` readers of Coffer's own records, the fact that Coffer never
-writes an agent's memory, and the full knowledge catalogue.
+the knowledge layer, the ``coffer log`` readers of Coffer's own records, and
+the full knowledge catalogue.
 
 Pure: text in, text out. No filesystem beyond reading this package's own asset,
 and no ports. The writing of it is ``application.skill.builtin_seed``, reached
@@ -32,7 +31,7 @@ lets the seed skip the write, so a boot or a sweep tick that changed nothing
 registers nothing, audits nothing and re-delivers nothing, and the row's
 ``version_hash`` means "the content moved" rather than "time passed".
 
-That is still why the knowledge and memory roots are rendered in their
+That is still why the knowledge root is rendered in its
 ``~``-relative form whenever they sit under the home — though the reason there has always
 been partly that a path an agent reads should be one a person can retype.
 """
@@ -61,9 +60,6 @@ MAX_DESCRIPTION_CHARS = 1024
 
 #: Replaced in the asset with the knowledge root as ``display_root`` gives it.
 _ROOT_PLACEHOLDER = "<KNOWLEDGE_ROOT>"
-
-#: Replaced in the asset with the memory root as ``display_memory_root`` gives it.
-_MEMORY_ROOT_PLACEHOLDER = "<MEMORY_ROOT>"
 
 #: A line ``<!-- when:<feature> -->`` opens a span of the asset that belongs to
 #: one experimental feature, ``<!-- end:<feature> -->`` closes it; spans nest.
@@ -119,12 +115,6 @@ def display_root(root: pathlib.Path, *, home: pathlib.Path | None = None) -> str
     return _display(root, home=home)
 
 
-def display_memory_root(root: pathlib.Path, *, home: pathlib.Path | None = None) -> str:
-    """The memory root as the skill names it, on the rule :func:`display_root`
-    states (``~/.coffer/derived/memory``)."""
-    return _display(root, home=home)
-
-
 def _subject(entry: CollectionEntry) -> str:
     """One collection reduced to the phrase a model might match on.
 
@@ -139,12 +129,10 @@ def _subject(entry: CollectionEntry) -> str:
     return f"{entry.name} ({first})"
 
 
-def _lead(*, knowledge: bool, memory: bool) -> str:
+def _lead(*, knowledge: bool) -> str:
     """The description's first sentence: what Coffer is and which tools it has."""
     head = _LEAD_WITH_KNOWLEDGE if knowledge else _LEAD_WITHOUT_KNOWLEDGE
     covers = f"Covers its own tool ({_SEARCH_TOOLS_GLOSS})"
-    if memory:
-        covers += ", where its memory notes live and how to tidy them"
     if knowledge:
         return (
             f"{head}. {covers}, how to write, tidy and check knowledge (整理知识), "
@@ -153,17 +141,16 @@ def _lead(*, knowledge: bool, memory: bool) -> str:
     return f"{head}. {covers}"
 
 
-def render_description(catalogue: Catalogue | None, *, memory: bool = False) -> str:
+def render_description(catalogue: Catalogue | None) -> str:
     """The frontmatter description: the one part always in a model's context.
 
     ``None`` is the knowledge feature switched off: no subjects, and a lead
-    that does not promise any knowledge. ``memory`` is the memory feature:
-    while it is off the lead does not mention memory notes.
+    that does not promise any knowledge.
     """
     if catalogue is None:
-        lead = _lead(knowledge=False, memory=memory)
+        lead = _lead(knowledge=False)
         return f"{lead}. {_TAIL}"[:MAX_DESCRIPTION_CHARS]
-    lead = _lead(knowledge=True, memory=memory)
+    lead = _lead(knowledge=True)
     subjects = [_subject(entry) for entry, _ in catalogue if entry.page_count or entry.source_count]
     while subjects:
         joined = "; ".join(subjects)
@@ -202,15 +189,10 @@ def _select_spans(text: str, enabled: set[str]) -> str:
     return "".join(out)
 
 
-def _manual(root: str, *, knowledge: bool, memory_root: str | None) -> str:
+def _manual(root: str, *, knowledge: bool) -> str:
     """The static half with the switched-off features' spans taken out."""
-    memory = memory_root is not None
-    enabled = {key for key, on in (("knowledge", knowledge), ("memory", memory)) if on}
-    return (
-        _select_spans(_static_body(), enabled)
-        .replace(_ROOT_PLACEHOLDER, root)
-        .replace(_MEMORY_ROOT_PLACEHOLDER, memory_root or "")
-    )
+    enabled = {"knowledge"} if knowledge else set()
+    return _select_spans(_static_body(), enabled).replace(_ROOT_PLACEHOLDER, root)
 
 
 #: The catalogue's budget in characters. Past it the catalogue drops every
@@ -307,18 +289,17 @@ def render_catalogue(root: str, catalogue: Catalogue) -> str:
     return _render_catalogue_at(root, catalogue, _COUNTS)
 
 
-def render_body(root: str, catalogue: Catalogue | None, *, memory_root: str | None = None) -> str:
+def render_body(root: str, catalogue: Catalogue | None) -> str:
     """The skill body: the manual, then the catalogue — or the manual alone,
     without its knowledge sections, while the knowledge feature is switched off
-    (``None``). ``memory_root`` is ``None`` while the memory feature is off,
-    which takes the memory sections out likewise."""
-    static = _manual(root, knowledge=catalogue is not None, memory_root=memory_root).rstrip()
+    (``None``)."""
+    static = _manual(root, knowledge=catalogue is not None).rstrip()
     if catalogue is None:
         return f"{static}\n"
     return f"{static}\n\n{render_catalogue(root, catalogue)}\n"
 
 
-def render_frontmatter(catalogue: Catalogue | None, *, memory: bool = False) -> str:
+def render_frontmatter(catalogue: Catalogue | None) -> str:
     """The `---`-delimited YAML block, with the description safely quoted.
 
     Emitted through a YAML dumper rather than an f-string, because the
@@ -335,7 +316,7 @@ def render_frontmatter(catalogue: Catalogue | None, *, memory: bool = False) -> 
     on where the line breaks fall, and these bytes have to be reproducible.
     """
     return yaml.safe_dump(
-        {"name": GUIDE_SKILL_NAME, "description": render_description(catalogue, memory=memory)},
+        {"name": GUIDE_SKILL_NAME, "description": render_description(catalogue)},
         allow_unicode=True,
         sort_keys=False,
         default_flow_style=False,
@@ -343,18 +324,15 @@ def render_frontmatter(catalogue: Catalogue | None, *, memory: bool = False) -> 
     )
 
 
-def render(root: str, catalogue: Catalogue | None, *, memory_root: str | None = None) -> str:
+def render(root: str, catalogue: Catalogue | None) -> str:
     """The complete `SKILL.md`, as every agent receives it.
 
     ``catalogue`` is ``None`` while the knowledge feature is switched off: the
     skill is then rendered without its knowledge catalogue or the sections
-    that document writing and tidying knowledge. ``memory_root`` is
-    the memory root as :func:`display_memory_root` gives it, or ``None`` while
-    the memory feature is off: the sections naming it are then left out (spec
-    experimental-features "Withdraw what a switched-off feature put in front of
-    agents")."""
-    frontmatter = render_frontmatter(catalogue, memory=memory_root is not None)
-    body = render_body(root, catalogue, memory_root=memory_root)
+    that document writing and tidying knowledge (spec experimental-features
+    "Withdraw what a switched-off feature put in front of agents")."""
+    frontmatter = render_frontmatter(catalogue)
+    body = render_body(root, catalogue)
     return f"---\n{frontmatter}---\n\n{body}"
 
 
@@ -362,7 +340,6 @@ __all__ = [
     "GUIDE_SKILL_NAME",
     "MAX_CATALOGUE_CHARS",
     "MAX_DESCRIPTION_CHARS",
-    "display_memory_root",
     "display_root",
     "render",
     "render_body",

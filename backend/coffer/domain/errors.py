@@ -313,9 +313,8 @@ def _describe_skill_details(details: dict[str, object]) -> str:
 class UpkeepAlreadyRunning(CofferError):  # noqa: N818
     """A long upkeep pass over this target is already in flight.
 
-    Memory's organise and knowledge's tidy both rewrite a whole directory with
-    a model in the loop; two of them over the same target at once are two
-    writers racing, not one faster pass. Surfaces map this to 409 — the
+    Two passes over the same target at once are two writers racing, not one
+    faster pass. Surfaces map this to 409 — the
     request is refused, and the caller's own display should already have been
     saying "running" (``application.upkeep_runs``).
     """

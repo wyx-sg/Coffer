@@ -21,15 +21,13 @@ import pathlib
 from datetime import UTC, datetime
 from typing import Any
 
-import pytest
-
 from coffer.application.provider.projector import projection_request
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
 from coffer.domain.agent.descriptor import descriptor_for
 from coffer.domain.agent.mcp_install import apply_install
 from coffer.domain.agent.types import AgentType
-from coffer.domain.memory.delivery import DeliveryAdapter
+from coffer.domain.memory.legacy_hook import remove_entries
 from coffer.domain.model_proxy.state import DEFAULT_PROXY_PORT, proxy_root
 from coffer.domain.provider.agent_projection import (
     ClaudeCodeProviderProjection,
@@ -38,8 +36,6 @@ from coffer.domain.provider.agent_projection import (
 from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.resource import Resource
 from coffer.domain.usage.records import Wire
-from coffer.infrastructure.memory.delivery.claude_code import ClaudeCodeDelivery
-from coffer.infrastructure.memory.delivery.codex import CodexDelivery
 
 _NOW = datetime(2026, 9, 30, tzinfo=UTC)
 _CLI = "/Users/me/.coffer/bin/coffer"
@@ -52,7 +48,8 @@ _CONNECTION = {
     "secret_ref": "gw-key",
 }
 
-#: The one command every memory hook entry runs, marker first.
+#: The one command every memory hook entry ran, marker first. The hook is
+#: retired; the upgrade step removes these entries.
 _HOOK_COMMAND = f': coffer-memory; {_CLI} memory hook --agent-uid {_AGENT_UID} --cwd "$PWD"'
 
 
@@ -162,7 +159,7 @@ def _entry(matcher: str | None, timeout: int) -> dict[str, Any]:
     return {"matcher": matcher, "hooks": [leaf]} if matcher else {"hooks": [leaf]}
 
 
-#: Both agents carry the same two entries, in this order.
+#: What both agents carried: the same two entries, in this order.
 _FROZEN_HOOKS = {
     "hooks": {
         "SessionStart": [_entry("startup|resume|clear|compact", 10)],
@@ -171,14 +168,11 @@ _FROZEN_HOOKS = {
 }
 
 
-@pytest.mark.parametrize(
-    "adapter",
-    [ClaudeCodeDelivery(cli=_CLI), CodexDelivery(cli=_CLI)],
-    ids=lambda a: a.agent_type,
-)
-def test_memory_hook_entries_are_frozen(adapter: DeliveryAdapter) -> None:
-    text = adapter.install("", _AGENT_UID)
-    assert adapter.command_for(_AGENT_UID) == _HOOK_COMMAND
-    doc = json.loads(text)
-    assert doc == _FROZEN_HOOKS
-    assert list(doc["hooks"]) == list(_FROZEN_HOOKS["hooks"])
+def test_the_upgrade_removes_the_frozen_memory_hook_entries() -> None:
+    """The memory hook is retired, but the 1.0 entries are still on users'
+    disks: the upgrade step must recognise exactly this text and take it out,
+    leaving the user's own hooks."""
+    foreign = {"hooks": [{"type": "command", "command": "echo mine"}]}
+    doc = {**_FROZEN_HOOKS, "hooks": {**_FROZEN_HOOKS["hooks"], "Stop": [foreign]}}
+    assert json.loads(remove_entries(json.dumps(doc)) or "") == {"hooks": {"Stop": [foreign]}}
+    assert json.loads(remove_entries(json.dumps(_FROZEN_HOOKS)) or "") == {}

@@ -27,7 +27,6 @@ from tests.support.features import FAKE_FEATURE, replace_registry
 def test_the_registry_names_the_two_experimental_features() -> None:
     assert feature_keys() == ("knowledge", "memory")
     assert feature_for_kind("knowledge") == "knowledge"
-    assert feature_for_kind("memory") == "memory"
     # Everything else is always there: channels, conversations, and the
     # graduated sync and models features (the ``provider`` kind) included.
     for kind in ("agent", "skill", "mcp_server", "secret", "channel", "provider"):

@@ -1,7 +1,7 @@
 // frontend/src/components/filePane.ts
 //
 // One rule for every pane that browses files: the file trees (skill,
-// knowledge, memory partition, an agent's memory store, an agent's config
+// knowledge, an agent's memory store, an agent's config
 // files, a transcript's outline) and the previews beside them END AT THE
 // BOTTOM OF THE WINDOW and scroll inside, whatever the window's size.
 //
@@ -23,17 +23,11 @@
 // floor of `FILE_PANE_MIN_HEIGHT` keeps a very short window usable: there the
 // page scrolls to the pane rather than the pane shrinking to nothing.
 //
-// Inside the grid, each column is a flex column (`FILE_PANE_COLUMN`): its fixed
-// rows (a label, a path, an action bar) keep their size and the one scrolling
-// region takes the rest (`FILE_PANE_SCROLL`). Below `md` the columns stack, and
+// Inside the grid, each column is a flex column: its fixed rows (a label, a
+// path, an action bar) keep their size and the one scrolling region takes the
+// rest. Below `md` the columns stack, and
 // the grid's two rows split the same height between tree and preview.
 import { useCallback, useLayoutEffect, useState, type CSSProperties } from "react";
-
-/** One column of that grid: fixed rows on top, one scrolling region below. */
-export const FILE_PANE_COLUMN = "flex min-h-0 min-w-0 flex-col gap-2";
-
-/** The part of a column that scrolls — it takes whatever height is left. */
-export const FILE_PANE_SCROLL = "min-h-0 flex-1 overflow-auto";
 
 /** Below this the pane stops shrinking (px; 20rem). */
 const FILE_PANE_MIN_HEIGHT = 320;

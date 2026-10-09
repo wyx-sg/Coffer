@@ -18,7 +18,6 @@ from typing import Any
 
 import pytest
 
-from coffer.domain.channel_turn import CHANNEL_TURN_ENV
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.channel_note import ChannelNote
 from coffer.domain.chat.conversation import Conversation
@@ -309,16 +308,12 @@ async def test_build_adapter_puts_no_provider_key_in_codex_env(tmp_path: Any) ->
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="memory", scenario="a channel turn's own hook leaves the index and the notes to the turn"
-)
-async def test_a_channel_turn_marks_the_app_server_it_spawns(tmp_path: Any) -> None:
-    """``codex app-server`` loads the agent's own ``hooks.json``, so Coffer's
-    memory hook fires inside a channel turn too, and hands every hook its
-    environment. The mark in that environment is what tells the hook the turn
-    already carries the index and the notes, so they arrive once."""
+@pytest.mark.acceptance(spec="memory", scenario="a channel turn carries no memory from Coffer")
+async def test_a_channel_turn_spawns_the_app_server_as_any_other_turn(tmp_path: Any) -> None:
+    """Coffer puts no memory into a turn: a channel turn's ``codex app-server``
+    starts with the same environment as one the developer drives, and its
+    memory is whatever Codex reads from its own memory directory."""
     import asyncio
-    import os
 
     repo, engine = await _repo(tmp_path)
     channel = await repo.create(_conv(channel_uid=_SEATALK_UID))
@@ -332,11 +327,7 @@ async def test_a_channel_turn_marks_the_app_server_it_spawns(tmp_path: Any) -> N
         await asyncio.wait_for(_collect(adapter, _user_turn("hi", conv.id)), timeout=5)
         envs[conv.id] = factory.last_env
 
-    channel_env = envs[channel.id]
-    assert channel_env is not None and channel_env[CHANNEL_TURN_ENV] == "1"
-    # Merged over the daemon's environment, never in place of it.
-    assert channel_env.get("PATH") == os.environ.get("PATH")
-    # A turn the developer drives is not marked: its hook is its memory.
+    assert envs[channel.id] is None
     assert envs[web.id] is None
 
     await engine.dispose()
@@ -377,110 +368,6 @@ async def test_on_conversation_deleted_is_noop(tmp_path: Any) -> None:
 # ---------------------------------------------------------------------------
 # system-prompt appends — the notes Codex went without until now
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(spec="chat", scenario="a channel-driven turn carries the memory digest")
-async def test_channel_turn_carries_the_notes_codex_used_to_miss(tmp_path: Any) -> None:
-    """Codex built no system-prompt append at all until the app-server's
-    ``developerInstructions`` made one possible, so a Codex agent answering a
-    phone had no idea it was on one and could not see which model Coffer had
-    put it on. It now composes the same three appends the SDK provider does —
-    channel note, memory digest (spec memory "Deliver to channel turns through the
-    system prompt"), model note — through the
-    shared composer, so the two providers cannot drift apart again.
-    """
-    repo, engine = await _repo(tmp_path)
-    conv = await repo.create(_conv(channel_uid=_SEATALK_UID))
-    factory, server = _make_factory()
-
-    calls: list[tuple[str, str, str]] = []
-
-    async def _memory(agent_key: str, cwd: str, conversation_id: str) -> str | None:
-        calls.append((agent_key, cwd, conversation_id))
-        return "## Coffer memory\n- Always develops in a worktree."
-
-    async def _models(_agent_key: str) -> list[str]:
-        return ["gpt-5.4"]
-
-    provider = CodexAppServerProvider(
-        conversations=repo,
-        session_factory=factory,
-        list_models=_models,
-        compose_memory_context=_memory,
-        resolve_channel=_seatalk_name,
-    )
-    await provider.init_conversation(conv.id, {"cwd": str(tmp_path), "model": "gpt-5.4"})
-    adapter = await provider.build_adapter(conv.id)
-    await _collect(adapter, _user_turn("hi", conv.id))
-
-    start_params = next(p for m, p in server.requests if m == "thread/start")
-    instructions = start_params["developerInstructions"]
-    assert "SeaTalk" in instructions
-    assert "## Coffer memory" in instructions
-    assert "gpt-5.4" in instructions
-    # Resolved per turn, keyed by this agent and the conversation's cwd.
-    assert calls == [("codex", str(tmp_path), conv.id)]
-
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(spec="chat", scenario="a channel-driven turn carries the memory digest")
-async def test_a_turn_with_no_channel_gets_no_memory_digest(tmp_path: Any) -> None:
-    """Memory rides a channel turn only. An agent the developer drives
-    themselves receives it through its own session-start hook (spec memory "Deliver
-    the index and the notes path at session start") — never
-    both, or the same facts arrive twice."""
-    repo, engine = await _repo(tmp_path)
-    conv = await repo.create(_conv())
-    factory, server = _make_factory()
-
-    async def _memory(  # pragma: no cover - must not run
-        _agent_key: str, _cwd: str, _conversation_id: str
-    ) -> str | None:
-        raise AssertionError("memory must not be composed for a non-channel turn")
-
-    provider = CodexAppServerProvider(
-        conversations=repo, session_factory=factory, compose_memory_context=_memory
-    )
-    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
-    adapter = await provider.build_adapter(conv.id)
-    await _collect(adapter, _user_turn("hi", conv.id))
-
-    start_params = next(p for m, p in server.requests if m == "thread/start")
-    assert "## Coffer memory" not in start_params["developerInstructions"]
-
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="memory", scenario="a channel turn's prompt brings in the notes it names"
-)
-async def test_a_channel_turn_sends_codex_the_notes_its_prompt_names(tmp_path: Any) -> None:
-    """Codex's turn input carries the notes after the user's text, for a
-    channel turn only."""
-    repo, engine = await _repo(tmp_path)
-    conv = await repo.create(_conv(channel_uid=_SEATALK_UID))
-    factory, server = _make_factory()
-    notes = "## Coffer memory — notes this prompt names\n- a fact they recorded: x"
-
-    async def _retrieve(agent_key: str, cwd: str, prompt: str, conversation_id: str) -> str | None:
-        assert (agent_key, cwd, conversation_id) == ("codex", str(tmp_path), conv.id)
-        return notes
-
-    provider = CodexAppServerProvider(
-        conversations=repo, session_factory=factory, retrieve_memory=_retrieve
-    )
-    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
-    adapter = await provider.build_adapter(conv.id)
-    await _collect(adapter, _user_turn("why does make verify fail", conv.id))
-
-    turn = next(p for m, p in server.requests if m == "turn/start")
-    assert turn["input"][0]["text"] == f"why does make verify fail\n\n{notes}"
-
-    await engine.dispose()
 
 
 @pytest.mark.acceptance(

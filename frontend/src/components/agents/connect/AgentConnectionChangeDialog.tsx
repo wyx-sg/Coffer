@@ -42,13 +42,13 @@ interface Props {
 interface Snapshot {
   items: ChangeItem[];
   summaries: { agentType: string; text: string }[];
-  /** Repair (some parts already in place) rather than Connect. */
+  /** Repair (a partial connection, or some parts already in place) rather than Connect. */
   repairing: boolean;
 }
 
 const FILE_NAME: Record<string, Record<ConnectionPartKey, string>> = {
-  claude_code: { mcp: ".claude.json", memory_hook: "settings.json" },
-  codex: { mcp: "config.toml", memory_hook: "hooks.json" },
+  claude_code: { mcp: ".claude.json" },
+  codex: { mcp: "config.toml" },
 };
 
 export function AgentConnectionChangeDialog({ request, onClose }: Props) {
@@ -92,11 +92,10 @@ export function AgentConnectionChangeDialog({ request, onClose }: Props) {
       if (request.kind === "disconnect") {
         return { agentType: type, text: t("agents.change.summary.loses") };
       }
-      const parts = partsToInstall(agent);
-      const files = { mcpFile: FILE_NAME[type].mcp, hookFile: FILE_NAME[type].memory_hook };
-      const gets =
-        parts.length > 1 ? "both" : parts[0] === "memory_hook" ? "hook" : ("mcp" as const);
-      const sentences = [t(`agents.change.summary.gets.${gets}`, files)];
+      const sentences =
+        partsToInstall(agent).length > 0
+          ? [t("agents.change.summary.gets.mcp", { mcpFile: FILE_NAME[type].mcp })]
+          : [];
       if (createsConfigDir(agent)) {
         sentences.push(
           t("agents.change.summary.creates", { dir: abbreviateHomePath(agent.row.config_dir) }),
@@ -105,7 +104,10 @@ export function AgentConnectionChangeDialog({ request, onClose }: Props) {
       sentences.push(t(`agents.change.summary.keeps.${type}`));
       return { agentType: type, text: sentences.join(" ") };
     });
-    const repairing = !!connection.data?.parts.some((p) => p.installed);
+    // A connection the daemon reads as partial is repaired, even with its one
+    // part (the MCP entry) gone; one with something in place is too.
+    const repairing =
+      connection.data?.state === "partial" || !!connection.data?.parts.some((p) => p.installed);
     return { items, summaries, repairing };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `agents` derives from request + connection
   }, [request, computing, connection.data, t]);

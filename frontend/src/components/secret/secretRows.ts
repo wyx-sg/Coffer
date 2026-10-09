@@ -76,8 +76,6 @@ function citerHref(kind: string, name: string, uid: string): string | null {
       return `/channels/${enc(uid)}`;
     case "knowledge":
       return `/knowledge/${enc(uid)}`;
-    case "memory":
-      return `/memory/${enc(uid)}`;
     case "sync_remote":
       return "/sync";
     case "agent":

@@ -1050,74 +1050,8 @@ paths:
       summary: Storage Summary
       tags:
       - daemon
-  /api/v1/storage/cache/clear:
-    post:
-      description: |-
-        Delete the memory tree's files and the transcript summary cache.
-
-        Partitions keep their rows; the next memory update rebuilds their folders
-        from the agents' own memory. Refused (409) while a memory pass is running,
-        because that pass is writing into the tree being cleared.
-      operationId: clear_cache_api_v1_storage_cache_clear_post
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      - in: header
-        name: x-coffer-actor
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Actor
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CacheClearOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Clear Cache
-      tags:
-      - daemon
 components:
   schemas:
-    CacheClearOut:
-      properties:
-        cleared_bytes:
-          title: Cleared Bytes
-          type: integer
-      required:
-      - cleared_bytes
-      title: CacheClearOut
-      type: object
-    CacheUsageOut:
-      properties:
-        bytes:
-          title: Bytes
-          type: integer
-      required:
-      - bytes
-      title: CacheUsageOut
-      type: object
     DaemonLogListOut:
       properties:
         next_cursor:
@@ -1795,8 +1729,6 @@ components:
     StorageSummaryOut:
       description: What Coffer keeps on this machine, by kind (Settings > Data).
       properties:
-        cache:
-          $ref: '#/components/schemas/CacheUsageOut'
         history:
           $ref: '#/components/schemas/HistoryUsageOut'
         local_content:
@@ -1807,7 +1739,6 @@ components:
       - vault
       - local_content
       - history
-      - cache
       title: StorageSummaryOut
       type: object
     TaskCrashOut:

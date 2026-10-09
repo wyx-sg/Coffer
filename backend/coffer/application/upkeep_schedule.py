@@ -1,8 +1,8 @@
 """Waiting for the next unattended pass, in a way a settings change can reach.
 
-Coffer runs two timed passes on its own behalf — aggregation and distil — and
-each one waits on an interval the operator chooses (spec memory "Aggregate on
-an interval and on demand"). A single ``asyncio.sleep(interval)`` over a
+Coffer runs a timed pass on its own behalf — the memory sync — and it waits
+on an interval the operator chooses (spec memory "Sync on an interval and on
+demand"). A single ``asyncio.sleep(interval)`` over a
 constant would go unnoticed when the choice changes, and a long sleep is exactly how a
 choice goes unnoticed: a worker that went to sleep for six hours does not learn
 that the interval is now fifteen minutes until the six hours are up, so the
@@ -26,7 +26,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 
-from coffer.domain.internal_engine_config import AGGREGATE, DISTIL, MEMORY_SYNC
+from coffer.domain.internal_engine_config import MEMORY_SYNC
 
 #: How often the wait looks up again. Short enough that changing an interval in
 #: Settings visibly takes effect, long enough to be free.
@@ -39,12 +39,8 @@ SLICE_S = 30.0
 #: kind-specific modules — a kind-agnostic module must not, and a settings page
 #: showing a blank where the default belongs is the alternative.
 DEFAULT_INTERVALS: dict[str, float] = {
-    # Frequent enough that a fact an agent learned this morning is here by the
-    # afternoon; rare enough that an idle machine's passes cost a stat per source.
-    AGGREGATE: 60 * 60.0,
-    # Distil rewrites more, so it sweeps four times a day rather than hourly.
-    DISTIL: 6 * 60 * 60.0,
-    # The memory sync reads an unchanged source for the price of a hash.
+    # Frequent enough that a fact an agent learned this morning reaches the
+    # other agents by the afternoon; an unchanged source costs a hash.
     MEMORY_SYNC: 60 * 60.0,
 }
 

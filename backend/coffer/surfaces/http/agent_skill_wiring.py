@@ -266,13 +266,11 @@ def wire_agent_and_skill_kinds(
         cli_runner=ClaudePluginCli(user_path=UserPath()),
     )
 
-    # Read-only listing of every hook in the agent's native config, Coffer's
-    # own marked with its health (the delivery hook of the projection facet).
+    # Read-only listing of every hook in the agent's native config.
     agent_hooks_svc = AgentHooksService(
         agent_service=agent_svc,
         store=config_file_store,
         plugins=agent_plugin_svc,
-        audit=audit,
         catalog=agent_catalog,
     )
 

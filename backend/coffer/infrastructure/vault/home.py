@@ -4,7 +4,7 @@ The five class directories (ADR storage-is-five-classes-by-nature) and the
 runtime files beside them are all named here and nowhere else;
 ``scripts/check_coffer_paths.py`` (in ``make lint``) fails on a ``".coffer"``
 built anywhere else in ``backend/coffer/``. What lives *inside* a class
-directory is its owner's business (``knowledge/paths.py``, ``memory/paths.py``
+directory is its owner's business (``knowledge/paths.py``,
 …), reached from the root this module returns.
 
 Every path is resolved from ``HOME`` at the moment it is asked for, never

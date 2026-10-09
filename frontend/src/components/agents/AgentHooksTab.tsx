@@ -1,14 +1,11 @@
-// src/components/agents/AgentHooksTab.tsx — the agent's Hooks tab: Coffer's memory hook, then the agent's own.
+// src/components/agents/AgentHooksTab.tsx — the agent's Hooks tab: the agent's own hooks.
 //
 // Spec agent-registry "List every hook in the agent's native config". Read
-// only. Coffer's memory hook comes first, as one block of properties with its
-// fix at the title's right (Repair → the Review changes flow, `onRepair`, wired
-// by the detail page; Check again). Below it, the agent's own hooks as one
-// searchable table that opens a read-only details dialog. A file that does not
-// parse is a warning above both, not a failure of the tab.
+// only: the agent's own hooks as one searchable table that opens a read-only
+// details dialog. Coffer installs no hook of its own. A file that does not
+// parse is a warning above the table, not a failure of the tab.
 import { useTranslation } from "react-i18next";
 
-import { CofferHookSection } from "@/components/agents/hooks/CofferHookSection";
 import { OwnHooksSection } from "@/components/agents/hooks/OwnHooksSection";
 import { LoadError } from "@/components/LoadError";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,16 +17,13 @@ import { useAgentHooks } from "@/lib/hooks/useAgents";
 
 interface Props {
   agent: AgentOut;
-  /** Opens the Review changes flow that reinstalls Coffer's hook. Repair shows only when given. */
-  onRepair?: () => void;
 }
 
-export function AgentHooksTab({ agent, onRepair }: Props) {
+export function AgentHooksTab({ agent }: Props) {
   const { t } = useTranslation();
   const hooks = useAgentHooks(agent.uid);
   const own = ownHooks(hooks.data);
   const parseErrors = hooks.data?.parse_errors ?? [];
-  const coffer = hooks.data?.coffer_hook ?? null;
 
   if (hooks.error) {
     return <LoadError error={hooks.error} onRetry={() => void hooks.refetch()} />;
@@ -37,8 +31,6 @@ export function AgentHooksTab({ agent, onRepair }: Props) {
   if (hooks.isPending) {
     return (
       <div className="flex flex-col gap-3" aria-busy>
-        <Skeleton className="h-6 w-48" />
-        <Skeleton className="h-32 w-full" />
         <Skeleton className="h-6 w-48" />
         <Skeleton className="h-40 w-full" />
       </div>
@@ -61,15 +53,6 @@ export function AgentHooksTab({ agent, onRepair }: Props) {
             </ul>
           </AlertDescription>
         </Alert>
-      ) : null}
-      {coffer ? (
-        <CofferHookSection
-          hook={coffer}
-          agentType={agent.type}
-          onRepair={onRepair}
-          onCheckAgain={() => void hooks.refetch()}
-          checking={hooks.isFetching}
-        />
       ) : null}
       <OwnHooksSection hooks={own} agentType={agent.type} />
     </div>

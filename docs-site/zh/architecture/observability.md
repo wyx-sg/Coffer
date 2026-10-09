@@ -181,7 +181,7 @@ sequenceDiagram
 | 技能 | `skill_imported`、`skill_updated`、`skill_update_merged`、`skill_bound`、`skill_unbound`、`skill_relinked`、`skill_drift_remediated`、`skill_adopted`、`skill_unmanaged_deleted` |
 | 命令行工具 | `cli_tool_added`、`cli_tool_edited`、`cli_tool_removed` |
 | 知识 | `knowledge_written`、`knowledge_edited`、`knowledge_deleted` |
-| 记忆 | `memory_aggregated`、`memory_distilled`、`memory_delivery_installed`、`memory_delivery_removed`、`memory_delivery_fired`、`memory_trigger_added`、`memory_trigger_proposed`、`memory_trigger_armed`、`memory_trigger_disarmed`、`memory_trigger_deleted` |
+| 记忆 | `memory_synced`、`memory_sync_undone`、`memory_curation_requested`、`memory_hook_removed` |
 | 消息渠道 | `channel_pairing_issued`、`channel_paired`、`channel_person_removed`、`channel_reply_withdrawn` |
 | 保险库文件 | `vault_file_edited`（人手动编辑、以 `disk` 提交）、`vault_file_restored` |
 | 保险库同步 | `sync_run`、`sync_confirmed`、`sync_rejected`、`sync_rolled_back`、`sync_machine_removed`、`sync_plaintext_pushed`、`master_key_exported`、`master_key_imported` |
@@ -189,7 +189,7 @@ sequenceDiagram
 
 没有任何密钥事件携带密钥值；每条只记录 ref、独立密钥的名字或目的地。
 
-有五个事件不再被记录：`agent_config_file_written`、`agent_config_file_deleted` 和 `memory_note_edited`，因为 Web 界面不编辑智能体的配置文件或记忆笔记；以及 `knowledge_curated` 和 `provider_internal_default_set`。日志里已有的行在活动页面里仍保留它们的标签，所以依然能用平实的话读出来。`vault_file_restored` 会被记录：从历史标签或抽屉恢复一个版本是 Coffer 自己的写入。在磁盘上做的编辑，或智能体自己提交的恢复，是写明 `Coffer-Writer: disk` 或 `agent` 的保险库提交；保险库的 git 历史能回答是谁改了这个文件。
+有些事件不再被记录：`agent_config_file_written` 和 `agent_config_file_deleted`，因为 Web 界面不再编辑智能体的配置文件；`knowledge_curated` 和 `provider_internal_default_set`；以及早先记忆层的 `memory_aggregated`、`memory_distilled`、`memory_delivery_installed`、`memory_delivery_removed`、`memory_delivery_fired`、`memory_note_edited` 和 `memory_note_deleted`。日志里已有的行在活动页面里仍保留它们的标签，所以依然能用平实的话读出来。`vault_file_restored` 会被记录：从历史标签或抽屉恢复一个版本是 Coffer 自己的写入。在磁盘上做的编辑，或智能体自己提交的恢复，是写明 `Coffer-Writer: disk` 或 `agent` 的保险库提交；保险库的 git 历史能回答是谁改了这个文件。
 
 - `secret_revealed`——有人在桌面应用里经过在场验证后显示或复制了一个值。这是值被展示的唯一途径，因为没有任何路由、命令或工具会返回它。
 - `secret_resolved`——`coffer run` 把一个独立密钥解析进一个子进程。记录写明密钥、程序和工作目录，从不记录值或命令行的其余部分。

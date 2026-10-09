@@ -80,7 +80,7 @@ seam where it already knows the asking agent.
 | `channel` | yes, **inverted** | A channel is consumed by no agent, so its scope names the agents it may *drive*; `/new <agent>`, the default agent and adapter start all read it. See [Channel Owner Gate](channel-owner-gate.md). |
 | `provider` | yes | Projection: a connection is written into the config of the agents its scope reaches (`application/provider/targets.py`); `compatible_agents` became this scope plus a connection that starts unscoped on every wire. See [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md). |
 | `agent` | no | It *is* the agent; there is nothing for an agent scope to narrow. |
-| `knowledge`, `memory` | no | Withdrawn 2026-09-18 (Option F). |
+| `knowledge` | no | Withdrawn 2026-09-18 (Option F). |
 
 Pros: one shape and one predicate for every kind that has the question, so a
 user who learns the control on MCP servers can use it on skills, channels and
@@ -190,7 +190,7 @@ A resource's per-agent scope is one framework-owned, nullable allow-list of
 agent **uids** on `Resource`: `None` is every agent, a list is never empty (`[]` is refused), and
 `is_active(scope, agent_uid)` is the only predicate. Each kind declares
 `supports_scope`; `mcp_server`, `skill`, `channel` and `provider` do, and
-`agent`, `knowledge` and `memory` do not. The framework owns the value, its
+`agent` and `knowledge` do not. The framework owns the value, its
 validation and its audited write path; each kind enforces it at its own choke
 point where the asking agent is known. The gateway learns the asking agent from
 the shim's self-reported `coffer/agent-uid` handshake key, and an unidentified

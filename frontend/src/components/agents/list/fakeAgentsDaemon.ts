@@ -76,7 +76,7 @@ export function fakeDaemon(init: Partial<FakeDaemon> = {}): FakeDaemon {
 }
 
 function parts(installed: boolean) {
-  return ["mcp", "memory_hook"].map((key) => ({
+  return ["mcp"].map((key) => ({
     key,
     installed,
     detail: installed ? `/bin/${key}` : null,
@@ -155,7 +155,7 @@ export function fakeCallFor(d: FakeDaemon) {
           }
         : undefined;
     }
-    if (path.endsWith("/hooks")) return { coffer_hook: null, items: [], parse_errors: [] };
+    if (path.endsWith("/hooks")) return { items: [], parse_errors: [] };
     // Every list a count reads: nothing in it.
     return { items: [], total: 0, candidates: [], resources: [] };
   };

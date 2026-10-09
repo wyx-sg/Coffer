@@ -108,8 +108,8 @@ def test_the_plan_lists_drift_and_writes_nothing(
         "mcp_entry",
         "skill_link",
         "provider_projection",
-        "delivery_hook",
     }
+    assert "delivery_hook" not in {t["name"] for t in plan["targets"]}
     assert all(t["error"] is None for t in plan["targets"])
 
     # Nothing was written by the read.

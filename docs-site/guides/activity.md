@@ -78,7 +78,7 @@ The **actor** is one of:
 | `sync` | Sync | A sync round applying what another machine changed. |
 | `channel` | Channel | An action taken from a chat channel. |
 | `human` | human | A change to a vault file that no Coffer operation made — your editor, a shell, an agent's own file tools, a `git commit` of your own. It is audited as `vault_file_edited`, one entry per file, once the vault has committed it (see [Editing the vault by hand](/guides/vault-files)). |
-| an agent's name | the name | An agent's own action, such as its memory hook delivering a note (`memory_delivery_fired`, whose details name the moment, the session and the notes). |
+| an agent's name | the name | An agent's own action, such as a change it made through one of Coffer's built-in MCP tools. |
 
 Not every event is audited. The log keeps changes that land outside Coffer (a file written into an agent's configuration), that are irreversible or security-sensitive (a deletion, a secret revealed in the desktop app or resolved by `coffer run`, an approval, a master-key backup), or that current state cannot reveal later (a retention window). Every change to the vault is also a commit that names its writer, so the vault's git history (`git log -- <path>` in the vault folder) answers who changed a file even for what the audit log leaves out. Routine runtime events are log lines, not audit rows. Every audited event is also written to the daemon log under the same event name, so you can search either one for it.
 
@@ -88,7 +88,7 @@ Not every event is audited. The log keeps changes that land outside Coffer (a fi
 coffer log audit                                   # newest 50
 coffer log audit --kind mcp_server --name filesystem
 coffer log audit --event-type secret_resolved --since 2026-09-01T00:00:00Z
-coffer log audit --event-type memory_delivery_fired --limit 20
+coffer log audit --event-type memory_synced --limit 20
 coffer log audit --trace 44e10b60da1b4f26         # one request's or turn's rows
 coffer log audit --json
 ```

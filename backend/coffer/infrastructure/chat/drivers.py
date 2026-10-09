@@ -17,7 +17,6 @@ from coffer.infrastructure.chat.adapter_support import (
     ChannelNoteResolver,
     HomeEnvResolver,
     ManagedCheck,
-    MemoryContextComposer,
     ModelLister,
 )
 from coffer.infrastructure.chat.claude_sdk_provider import (
@@ -25,7 +24,6 @@ from coffer.infrastructure.chat.claude_sdk_provider import (
     TranscriberFactory,
 )
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
-from coffer.infrastructure.chat.prompt_memory import MemoryRetriever
 
 if TYPE_CHECKING:
     from coffer.application.chat.ports import AgentProvider
@@ -41,13 +39,10 @@ class DriverDeps:
     conversations: ConversationRepo
     list_models: ModelLister | None
     transcriber_factory: TranscriberFactory | None
-    compose_memory_context: MemoryContextComposer | None
     resolve_channel: ChannelNoteResolver | None
     resolve_home_env: Callable[[str], HomeEnvResolver]
     #: Per-agent "is an enabled agent of this type managed" check (``None`` ⇒ not asked).
     is_managed: Callable[[str], ManagedCheck] | None = None
-    #: A channel turn's per-prompt memory retrieval (``None`` ⇒ none).
-    retrieve_memory: MemoryRetriever | None = None
 
 
 class ClaudeSdkDriver:
@@ -61,8 +56,6 @@ class ClaudeSdkDriver:
             conversations=deps.conversations,
             list_models=deps.list_models,
             transcriber_factory=deps.transcriber_factory,
-            compose_memory_context=deps.compose_memory_context,
-            retrieve_memory=deps.retrieve_memory,
             resolve_channel=deps.resolve_channel,
             resolve_home_env=deps.resolve_home_env(self.agent_key),
             is_managed=deps.is_managed(self.agent_key) if deps.is_managed else None,
@@ -80,8 +73,6 @@ class CodexAppServerDriver:
             conversations=deps.conversations,
             transcriber_factory=deps.transcriber_factory,
             list_models=deps.list_models,
-            compose_memory_context=deps.compose_memory_context,
-            retrieve_memory=deps.retrieve_memory,
             resolve_channel=deps.resolve_channel,
             resolve_home_env=deps.resolve_home_env(self.agent_key),
             is_managed=deps.is_managed(self.agent_key) if deps.is_managed else None,

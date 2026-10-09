@@ -142,7 +142,6 @@ ALLOWED: tuple[tuple[str, str, str], ...] = (
     ("openspec/specs/knowledge/spec.md", "coffer__diagnose", _ABSENT),
     ("openspec/specs/mcp-gateway/spec.md", "coffer__recall", _ABSENT),
     ("openspec/specs/mcp-gateway/spec.md", "coffer__diagnose", _ABSENT),
-    ("openspec/specs/memory/spec.md", "coffer__recall", _ABSENT),
     ("openspec/specs/daemon/spec.md", "coffer daemon service", _ABSENT),
 )
 

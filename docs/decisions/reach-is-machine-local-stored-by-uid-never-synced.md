@@ -184,8 +184,8 @@ A channel is not a counter-example: it is a machine-local resource in its
 entirety ([Channels Are Machine-Local Resources, Like Agents](channels-are-machine-local-resources.md)),
 so its scope and everything else about it stay on the machine that runs it.
 
-Rows a kind *derives* on each machine — the whole `memory` kind, and Coffer's
-own generated `coffer-guide` skill — are withheld from sync for a different
+Rows a kind *derives* on each machine — Coffer's own generated `coffer-guide`
+skill — are withheld from sync for a different
 reason, covered in [Sync Withholds Derived Output](sync-withholds-derived-output.md).
 
 ## Consequences

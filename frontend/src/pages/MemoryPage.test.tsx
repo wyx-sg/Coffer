@@ -1,271 +1,346 @@
-// frontend/src/pages/MemoryPage.test.tsx
+// frontend/src/pages/MemoryPage.test.tsx — the Memory sync page in each state it renders.
 //
-// The Memory overview (spec memory "Show a partition's memories read-only"): the
-// partitions table, untitled and searchable, or the first-run state while there
-// are none. Only the api module is mocked;
-// the real hooks run over a real QueryClient.
+// Spec memory "Manage memory sync in the web UI and on the command line": the header's last-synced
+// clock and Sync now, a first or large sync's preview with Write and Cancel,
+// the hub's projects, this machine's agents with their own curation and Curate
+// now, and Undo sync… behind a confirmation naming what it removes. Nothing on
+// the page edits a memory's text. The request helpers (`@/lib/api/memory`)
+// are mocked; the query hooks, the query cache and the toasts are real.
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
+import { ToastProvider } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { COFFER, GLOBAL, GONE } from "@/components/memory/memoryTestData";
-import type { PartitionOut } from "@/lib/api/memoryTypes";
+import type { MemorySyncState, SyncAgent } from "@/lib/api/memoryTypes";
 import { acceptance } from "@/test/acceptance";
-import { pathText } from "@/test/truncatedPath";
+
 import { MemoryPage } from "./MemoryPage";
 
 vi.mock("@/lib/api/memory", () => ({
-  listPartitions: vi.fn(),
-  getReading: vi.fn(),
-  sync: vi.fn(),
-  getTidyHandoff: vi.fn(),
+  getSyncState: vi.fn(),
+  runSync: vi.fn(),
+  writePreview: vi.fn(),
+  cancelPreview: vi.fn(),
+  undoSync: vi.fn(),
+  setCodexImport: vi.fn(),
+  listEntries: vi.fn(),
+  curate: vi.fn(),
 }));
-vi.mock("@/lib/api/agentProviders", () => ({ agentProvidersApi: { list: vi.fn() } }));
-vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => ({ live: false }) }));
-vi.mock("@/lib/api/upkeep", () => ({ listUpkeepRuns: vi.fn() }));
-vi.mock("@/lib/api/internalEngine", () => ({ internalEngineApi: { get: vi.fn() } }));
-vi.mock("@/lib/api/agents", () => ({ agentsApi: { list: vi.fn() } }));
-vi.mock("@/lib/api/agentNativeMemory", () => ({ agentNativeMemoryApi: { list: vi.fn() } }));
 const api = await import("@/lib/api/memory");
-const { listUpkeepRuns } = await import("@/lib/api/upkeep");
-const { internalEngineApi } = await import("@/lib/api/internalEngine");
-const { agentsApi } = await import("@/lib/api/agents");
-const { agentProvidersApi } = await import("@/lib/api/agentProviders");
-const { agentNativeMemoryApi } = await import("@/lib/api/agentNativeMemory");
 
-const MINUTE = 60_000;
-const ago = (minutes: number) => new Date(Date.now() - minutes * MINUTE).toISOString();
+vi.mock("@/lib/hooks/useInternalEngine", () => ({
+  useInternalEngineConfig: () => ({ data: undefined }),
+  useSetUpkeep: () => ({ isPending: false, mutate: vi.fn() }),
+}));
 
-function stub(partitions: PartitionOut[]) {
-  vi.mocked(api.listPartitions).mockResolvedValue({ partitions });
+const HOUR = 3600_000;
+
+function agent(type: string, over: Partial<SyncAgent> = {}): SyncAgent {
+  return {
+    agent: type === "codex" ? "codex" : "claude-code",
+    agent_type: type,
+    copies: { written: 0 },
+    curation: { memory: "on", curation: "on" },
+    writer: { state: "ok", reason: "", path: "" },
+    ...over,
+  };
+}
+
+const PROJECT = {
+  key: "github.com/me/app",
+  folder: "github.com--me--app",
+  checked_out: "/Users/me/src/app",
+  memories: 4,
+  agents: { claude_code: 3, codex: 1 },
+};
+
+function state(over: Partial<MemorySyncState> = {}): MemorySyncState {
+  return {
+    agents: [
+      agent("claude_code", {
+        copies: { written: 2, edited: 1 },
+        curation: { memory: "on", curation: "off" },
+      }),
+      agent("codex", { copies: { written: 1 } }),
+    ],
+    codex_imports_claude: null,
+    global_memories: 2,
+    last_report: {},
+    last_synced_at: new Date(Date.now() - 2 * HOUR).toISOString(),
+    machine: "mac-mini",
+    preview: null,
+    projects: [
+      PROJECT,
+      {
+        key: "github.com/me/elsewhere",
+        folder: "github.com--me--elsewhere",
+        checked_out: null,
+        memories: 1,
+        agents: { codex: 1 },
+      },
+    ],
+    running: false,
+    ...over,
+  };
+}
+
+function Where() {
+  return <span data-testid="where">{useLocation().pathname}</span>;
 }
 
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const ui: ReactNode = (
     <QueryClientProvider client={qc}>
       <TooltipProvider>
-        <MemoryRouter>
-          <MemoryPage />
-        </MemoryRouter>
+        <ToastProvider>
+          <MemoryRouter initialEntries={["/memory"]}>
+            <Routes>
+              <Route path="/memory" element={<MemoryPage />} />
+              <Route path="*" element={<Where />} />
+            </Routes>
+          </MemoryRouter>
+        </ToastProvider>
       </TooltipProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  return render(ui);
 }
 
-describe("MemoryPage", () => {
-  beforeEach(() => {
-    vi.mocked(api.listPartitions).mockReset();
-    vi.mocked(api.getReading).mockResolvedValue({ read_at: ago(14), failures: [] });
-    vi.mocked(listUpkeepRuns).mockResolvedValue({ runs: [] });
-    vi.mocked(internalEngineApi.get).mockResolvedValue({
-      upkeep: {
-        aggregate: {
-          enabled: true,
-          interval_s: null,
-          default_interval_s: 3600,
-          last_pass_at: ago(14),
-          next_pass_at: new Date(Date.now() + 46 * MINUTE).toISOString(),
-        },
-        distil: {
-          enabled: true,
-          interval_s: null,
-          default_interval_s: 21600,
-          last_pass_at: null,
-          next_pass_at: null,
-        },
-      },
-    } as unknown as Awaited<ReturnType<typeof internalEngineApi.get>>);
-    vi.mocked(agentsApi.list).mockResolvedValue({ items: [] } as unknown as Awaited<
-      ReturnType<typeof agentsApi.list>
-    >);
-    vi.mocked(agentProvidersApi.list).mockResolvedValue({ agents: [] });
-    vi.mocked(api.getTidyHandoff).mockResolvedValue({ prompt: "Tidy every partition." });
-  });
+const rowOf = (scope: HTMLElement, text: string) =>
+  within(scope)
+    .getAllByRole("row")
+    .find((r) => r.textContent?.includes(text)) as HTMLElement;
 
-  test("says what memory is, with one Update memory button", async () => {
-    stub([GLOBAL, COFFER]);
+/** The agents table once the state has been read (its section renders while loading). */
+async function agentsTable(): Promise<HTMLElement> {
+  const agents = await screen.findByTestId("memory-agents");
+  await within(agents).findAllByRole("button", { name: /^Curate now: / });
+  return agents;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(api.getSyncState).mockResolvedValue(state());
+});
+
+describe("MemoryPage — state", () => {
+  test("header, projects and agents render from the sync state; no memory text is editable", async () => {
     renderPage();
-    await screen.findByRole("table");
-    expect(screen.getByText(/kept as memories for each repository\./i)).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /update memory/i })).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: /^sync$/i })).toBeNull();
+    expect(await screen.findByTestId("memory-sync-clock")).toHaveTextContent(/^Last synced 2h ago/);
+    expect(screen.getByRole("heading", { name: "Memory", level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sync now" })).toBeEnabled();
+
+    const projects = screen.getByTestId("memory-projects");
+    // Global memories lead, then each project with where it lives here.
+    expect(within(projects).getAllByRole("row")[1]).toHaveTextContent("Global memories");
+    expect(rowOf(projects, "github.com/me/app")).toHaveTextContent("~/src/app");
+    expect(rowOf(projects, "github.com/me/elsewhere")).toHaveTextContent("Not checked out here");
+
+    const agents = await agentsTable();
+    expect(rowOf(agents, "Claude Code")).toHaveTextContent("2 copies");
+    expect(rowOf(agents, "Claude Code")).toHaveTextContent("1 edited by the agent");
+    expect(rowOf(agents, "Codex")).toHaveTextContent("1 copy");
+    // Codex is here, so its import question is asked.
+    expect(
+      screen.getByRole("switch", { name: /Codex imports Claude Code’s memories itself/ }),
+    ).toBeInTheDocument();
+
+    expect(screen.queryByTestId("memory-preview")).toBeNull();
+    expect(screen.queryByRole("textbox", { name: /memory/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Edit/ })).toBeNull();
   });
 
-  test("the header carries the Experimental tag and Update memory as the one primary button", async () => {
-    stub([GLOBAL, COFFER]);
+  test("a running sync reads Syncing… and a project row opens its memories", async () => {
+    vi.mocked(api.getSyncState).mockResolvedValue(state({ running: true }));
     renderPage();
-    await screen.findByRole("table");
-    expect(screen.getByText("Experimental")).toBeInTheDocument();
-    // The primary kind is the filled accent button; the outline kind is not.
-    expect(screen.getByRole("button", { name: /update memory/i }).className).toMatch(/bg-accent/);
+    expect(await screen.findByRole("button", { name: "Syncing…" })).toBeDisabled();
+    expect(screen.getByTestId("memory-sync-clock")).toHaveTextContent("Syncing…");
+    fireEvent.click(rowOf(screen.getByTestId("memory-projects"), "github.com/me/app"));
+    expect(await screen.findByTestId("where")).toHaveTextContent(
+      "/memory/projects/github.com--me--app",
+    );
   });
 
-  test("the header has no status line, with the schedule behind Update memory's arrow", async () => {
-    stub([COFFER]);
+  test("a writer that cannot write says so in place of the copies", async () => {
+    vi.mocked(api.getSyncState).mockResolvedValue(
+      state({
+        agents: [
+          agent("codex", {
+            curation: { memory: "off", curation: "off" },
+            writer: { state: "off", reason: "memories are off", path: "" },
+          }),
+        ],
+      }),
+    );
     renderPage();
-    const arrow = await screen.findByTestId("memory-automatic");
-    expect(arrow).toHaveAccessibleName("Read memory automatically");
-    expect(screen.queryByText(/Reads automatically/)).toBeNull();
+    const row = rowOf(await agentsTable(), "Codex");
+    expect(row).toHaveTextContent("Nothing written: its memory is off");
+    expect(row).toHaveTextContent("memories are off");
+    expect(row).toHaveTextContent(/memories = true under \[features\]/);
+    // Its own memory is off: there is nothing to curate.
+    expect(within(row).getByRole("button", { name: "Curate now: Codex" })).toBeDisabled();
   });
 
-  test("a read that left an agent unread says so in a banner", async () => {
-    stub([COFFER]);
-    vi.mocked(api.getReading).mockResolvedValue({
-      read_at: ago(2),
-      failures: [
-        {
-          agent: "codex",
-          path: "/Users/dev/.codex/memories",
-          reason: "not readable",
-          last_read_at: "2026-09-27T10:00:00Z",
+  test("no agent to sync: the page points to Agents and offers no Sync now", async () => {
+    vi.mocked(api.getSyncState).mockResolvedValue(state({ agents: [] }));
+    renderPage();
+    expect(await screen.findByText("No agent to sync")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Agents" })).toHaveAttribute("href", "/agents");
+    expect(screen.queryByRole("button", { name: "Sync now" })).toBeNull();
+    expect(screen.queryByTestId("memory-projects")).toBeNull();
+  });
+
+  test("a failed read says so and retries", async () => {
+    vi.mocked(api.getSyncState).mockRejectedValueOnce(new Error("boom"));
+    renderPage();
+    expect(await screen.findByText("Couldn't load memory sync")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByTestId("memory-projects")).toBeInTheDocument();
+  });
+
+  test("sources the last sync could not read, and withheld memories, are named", async () => {
+    vi.mocked(api.getSyncState).mockResolvedValue(
+      state({
+        last_report: {
+          failures: [{ agent: "codex", path: "/Users/me/.codex/memories", reason: "unreadable" }],
+          withheld: [{ agent: "claude_code", path: "/m/token.md", reason: "secret" }],
         },
-      ],
+      }),
+    );
+    renderPage();
+    const problems = await screen.findByTestId("memory-sync-problems");
+    expect(problems).toHaveTextContent("Couldn't read 1 memory source");
+    expect(problems).toHaveTextContent(
+      "1 memory looks like it holds a secret and was not published",
+    );
+  });
+});
+
+describe("MemoryPage — preview", () => {
+  const PREVIEW = {
+    created_at: new Date().toISOString(),
+    copies: 3,
+    rows: [
+      { agent: "codex", project: "github.com/me/app", write: 2, update: 1, remove: 0 },
+      { agent: "claude_code", project: "", write: 0, update: 0, remove: 1 },
+    ],
+  };
+
+  acceptance("memory", "the first sync waits for the person", async () => {
+    vi.mocked(api.getSyncState).mockResolvedValue(state({ preview: PREVIEW }));
+    vi.mocked(api.writePreview).mockResolvedValue({
+      summary: { published: 0, written: 2, updated: 1, removed: 0 },
+      details: {},
     });
     renderPage();
-    const banner = await screen.findByTestId("memory-read-failures");
-    expect(banner).toHaveTextContent(/Couldn't read Codex's memory:/);
-    expect(banner).toHaveTextContent("~/.codex/memories");
-    expect(within(banner).getByRole("button", { name: "Retry" })).toBeInTheDocument();
-    // Hand off to <Agent> hands the fix to an agent; Open Activity is gone.
-    expect(
-      within(banner).getByRole("button", { name: /copy prompt|ask an agent/i }),
-    ).toBeInTheDocument();
-    expect(within(banner).queryByRole("button", { name: "Open Activity" })).toBeNull();
+    const panel = await screen.findByTestId("memory-preview");
+    expect(panel).toHaveTextContent("Review 3 copies before they are written");
+    expect(rowOf(panel, "github.com/me/app")).toHaveTextContent(/Codex.*github\.com\/me\/app21–/);
+    expect(rowOf(panel, "Global memories")).toHaveTextContent("Claude Code");
+    expect(api.writePreview).not.toHaveBeenCalled();
+
+    vi.mocked(api.getSyncState).mockResolvedValue(state());
+    fireEvent.click(within(panel).getByRole("button", { name: "Write" }));
+    await waitFor(() => expect(api.writePreview).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Memory synced")).toBeInTheDocument();
+    expect(api.cancelPreview).not.toHaveBeenCalled();
+    // The page re-reads the state: the preview is gone.
+    await waitFor(() => expect(screen.queryByTestId("memory-preview")).toBeNull());
   });
 
-  test("while update memory runs only its button says so", async () => {
-    stub([GLOBAL, COFFER]);
-    vi.mocked(listUpkeepRuns).mockResolvedValue({
-      runs: [
-        { kind: "memory", name: "update", started_at: ago(1), done: 1, total: 5 },
-        { kind: "memory", name: COFFER.uid, started_at: ago(0), done: null, total: null },
-      ],
-    });
+  test("Cancel drops the preview and writes nothing", async () => {
+    vi.mocked(api.getSyncState).mockResolvedValue(state({ preview: PREVIEW }));
+    vi.mocked(api.cancelPreview).mockResolvedValue(undefined);
     renderPage();
-    expect(await screen.findByRole("button", { name: /updating…/i })).toBeDisabled();
-    expect(await screen.findByText("Distilling…")).toBeInTheDocument();
-    expect(screen.queryByText(/of 5 partitions|Reading agents/)).toBeNull();
+    const panel = await screen.findByTestId("memory-preview");
+    vi.mocked(api.getSyncState).mockResolvedValue(state());
+    fireEvent.click(within(panel).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(api.cancelPreview).toHaveBeenCalledTimes(1));
+    expect(api.writePreview).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByTestId("memory-preview")).toBeNull());
   });
 
-  test("partitions are an untitled table with path, sources and distil, and no count", async () => {
-    stub([GLOBAL, COFFER, GONE]);
+  test("a preview row opens that project's memories", async () => {
+    vi.mocked(api.getSyncState).mockResolvedValue(state({ preview: PREVIEW }));
     renderPage();
-    const section = await screen.findByTestId("memory-partitions");
-    await within(section).findByRole("table");
-    expect(within(section).queryByText("3 partitions · 20 memories")).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Partitions" })).toBeNull();
-    expect(within(section).getByText("Every project")).toBeInTheDocument();
-    expect(within(section).getByText(pathText("~/work/coffer"))).toBeInTheDocument();
-    for (const header of ["Partition", "Path", "Memories", "Sources", "Distilled"]) {
-      expect(within(section).getByRole("columnheader", { name: header })).toBeInTheDocument();
-    }
-    expect(within(section).queryByRole("columnheader", { name: "Sample memory" })).toBeNull();
-    expect(within(section).getAllByText("All agents")).toHaveLength(2);
-    expect(within(section).getByText("Repository missing")).toBeInTheDocument();
-    // Healthy states are a grey dot; only the missing repository is coloured.
-    const dotOf = (word: RegExp) =>
-      within(section).getAllByText(word)[0].querySelector("[data-tone]")?.getAttribute("data-tone");
-    expect(dotOf(/^Distilled /)).toBe("off");
-    expect(dotOf(/^Repository missing$/)).toBe("warn");
-    // Only the partition whose repository is gone can be deleted.
-    expect(within(section).getAllByRole("button", { name: /^delete: /i })).toHaveLength(1);
-    expect(
-      within(section).getByRole("button", { name: /delete: old-prototype/i }),
-    ).toBeInTheDocument();
+    const panel = await screen.findByTestId("memory-preview");
+    fireEvent.click(rowOf(panel, "Global memories"));
+    expect(await screen.findByTestId("where")).toHaveTextContent("/memory/global");
+  });
+});
+
+describe("MemoryPage — undo", () => {
+  acceptance("memory", "undo removes Coffer's copies and nothing else", async () => {
+    vi.mocked(api.undoSync).mockResolvedValue({ summary: { removed: 3 }, details: {} });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "More memory actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Undo sync…/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Undo memory sync on this machine?" });
+    // The confirmation names what it removes, what it turns off and what it keeps.
+    expect(dialog).toHaveTextContent("2 copies in Claude Code · 1 copy in Codex");
+    expect(dialog).toHaveTextContent("Coffer’s block in each MEMORY.md");
+    expect(dialog).toHaveTextContent("Automatic sync");
+    expect(dialog).toHaveTextContent("every copy an agent edited");
+    expect(api.undoSync).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Undo sync" }));
+    await waitFor(() => expect(api.undoSync).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Removed 3 copies. Automatic sync is off.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
-  acceptance(
-    "memory",
-    "the partitions table names each partition's sources and distil state",
-    async () => {
-      const pending: PartitionOut = {
-        ...COFFER,
-        uid: "mp-new",
-        name: "new-repo",
-        repository_path: "/Users/dev/work/new-repo",
-        repository_key: "path:/Users/dev/work/new-repo",
-        note_count: 0,
-        distilled_at: null,
-        sources: [],
-        waiting_entries: 4,
-        waiting_agents: ["codex"],
-      };
-      stub([GLOBAL, pending, GONE]);
-      renderPage();
-      const section = await screen.findByTestId("memory-partitions");
-      const [, first, second, third] = within(
-        await within(section).findByRole("table"),
-      ).getAllByRole("row");
-      expect(first).toHaveTextContent("All agents");
-      expect(first).toHaveTextContent(/Distilled /);
-      expect(second).toHaveTextContent("new-repo");
-      expect(second).toHaveTextContent("Never");
-      expect(third).toHaveTextContent("Repository missing");
-      expect(within(third).getByRole("button", { name: /^delete: /i })).toBeInTheDocument();
-    },
-  );
-
-  acceptance(
-    "web-ui",
-    "the Memory page shows the partitions with a search and no delivery block",
-    async () => {
-      stub([GLOBAL, COFFER, GONE]);
-      renderPage();
-      const section = await screen.findByTestId("memory-partitions");
-      const table = await within(section).findByRole("table");
-      const search = within(section).getByPlaceholderText("Search partitions");
-      fireEvent.change(search, { target: { value: "work/coffer" } });
-      const rows = within(table).getAllByRole("row").slice(1);
-      expect(rows).toHaveLength(1);
-      expect(rows[0]).toHaveTextContent("coffer");
-      expect(screen.queryByTestId("memory-deliveries")).toBeNull();
-      expect(screen.queryByRole("heading", { name: "Partitions" })).toBeNull();
-    },
-  );
-
-  test("with no partitions the first run lists what it found and carries one Update memory", async () => {
-    stub([]);
-    vi.mocked(agentsApi.list).mockResolvedValue({
-      items: [
-        {
-          uid: "ag-cc",
-          type: "claude_code",
-          name: "claude-code",
-          display_name: "Claude Code",
-          config_dir: "/Users/dev/.claude",
-        },
-      ],
-    } as unknown as Awaited<ReturnType<typeof agentsApi.list>>);
-    vi.mocked(agentNativeMemoryApi.list).mockResolvedValue({
-      items: [
-        { project: "a", path: null, memory_dir: "/x/a", item_count: 30 },
-        { project: "b", path: null, memory_dir: "/x/b", item_count: 12 },
-      ],
-    } as unknown as Awaited<ReturnType<typeof agentNativeMemoryApi.list>>);
+  test("a failed undo stays in the dialog with its error", async () => {
+    vi.mocked(api.undoSync).mockRejectedValue(new Error("disk full"));
     renderPage();
-    expect(await screen.findByText("Nothing distilled yet")).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /update memory/i })).toHaveLength(1);
-    const found = await screen.findByTestId("memory-found");
-    expect(await within(found).findByText("42 files in 2 projects")).toBeInTheDocument();
-    expect(found).toHaveTextContent("~/.claude");
+    fireEvent.click(await screen.findByRole("button", { name: "More memory actions" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Undo sync…/ }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Undo sync" }));
+    expect(await within(dialog).findByText("Couldn't undo the sync")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+});
+
+describe("MemoryPage — agents' own curation", () => {
+  acceptance("memory", "an agent's curation state is shown", async () => {
+    renderPage();
+    const agents = await agentsTable();
+    const claude = rowOf(agents, "Claude Code");
+    expect(claude).toHaveTextContent("Auto memory on");
+    expect(claude).toHaveTextContent("Auto Dream off");
+    expect(claude).toHaveTextContent("Check Auto Dream in Claude Code’s /memory.");
+    const codex = rowOf(agents, "Codex");
+    expect(codex).toHaveTextContent("Memories on");
+    expect(codex).not.toHaveTextContent("Turn memories on");
   });
 
-  test("with no agent connected the first run offers to connect one", async () => {
-    stub([]);
+  test("Curate now starts that agent and says so", async () => {
+    vi.mocked(api.curate).mockResolvedValue({ started: true });
     renderPage();
-    expect(await screen.findByText("No agent memory to read")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open Agents →" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /update memory/i })).toBeNull();
+    const agents = await agentsTable();
+    fireEvent.click(within(agents).getByRole("button", { name: "Curate now: Claude Code" }));
+    await waitFor(() => expect(api.curate).toHaveBeenCalledWith("claude_code"));
+    expect(await screen.findByText("Claude Code is curating its memory")).toBeInTheDocument();
   });
 
-  test("no audit-log section — the Activity page holds the vault's whole trail", async () => {
-    stub([COFFER]);
+  test("an agent that could not start is said to have failed", async () => {
+    vi.mocked(api.curate).mockResolvedValue({ started: false });
     renderPage();
-    await screen.findByRole("table");
-    expect(screen.queryByText(/audit log/i)).toBeNull();
+    const agents = await agentsTable();
+    fireEvent.click(within(agents).getByRole("button", { name: "Curate now: Codex" }));
+    expect(await screen.findByText("Couldn't start Codex")).toBeInTheDocument();
+  });
+
+  test("Codex's own import is a switch saved as it changes", async () => {
+    vi.mocked(api.setCodexImport).mockResolvedValue(undefined);
+    renderPage();
+    fireEvent.click(
+      await screen.findByRole("switch", { name: /Codex imports Claude Code’s memories itself/ }),
+    );
+    await waitFor(() => expect(api.setCodexImport).toHaveBeenCalledWith(true));
   });
 });

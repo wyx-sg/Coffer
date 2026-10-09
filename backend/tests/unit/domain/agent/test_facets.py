@@ -73,7 +73,6 @@ def test_a_missing_facet_is_none_and_consumers_can_ask() -> None:
     for d in catalog:
         assert catalog.driver(d.type) is None
         assert catalog.provider_projection(d.type) is None
-        assert catalog.delivery_hook(d.type) is None
         assert catalog.dependency_probe(d.type) is None
 
 
@@ -95,7 +94,6 @@ def test_the_registry_lists_every_asset_the_shipped_agent_receives(agent_type: A
         AssetType.MCP_SERVER,
         AssetType.SKILL,
         AssetType.PROVIDER,
-        AssetType.DELIVERY_HOOK,
     ]
     # Every entry the shipped agents have lands in the agent's own directory,
     # in exactly one of a file or a directory.
@@ -115,14 +113,8 @@ def test_registry_entries_name_the_file_each_asset_lands_in() -> None:
     assert claude.entry(AssetType.PROVIDER) == ProjectionEntry(
         AssetType.PROVIDER, Landing.USER, "settings"
     )
-    assert claude.entry(AssetType.DELIVERY_HOOK) == ProjectionEntry(
-        AssetType.DELIVERY_HOOK, Landing.USER, "settings"
-    )
     assert codex.entry(AssetType.PROVIDER) == ProjectionEntry(
         AssetType.PROVIDER, Landing.USER, "config"
-    )
-    assert codex.entry(AssetType.DELIVERY_HOOK) == ProjectionEntry(
-        AssetType.DELIVERY_HOOK, Landing.USER, "hooks"
     )
     assert codex.entry(AssetType.SKILL) == ProjectionEntry(
         AssetType.SKILL, Landing.USER, subpath="skills"
