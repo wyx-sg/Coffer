@@ -3,9 +3,10 @@
 Extracted from ``persistence.py`` (which re-exports the public names) for the
 400-line guideline. Committing once per ``insert`` let a tool-call-heavy
 session's fsyncs dominate request latency, so the repo here buffers rows
-in an in-memory queue drained by a small writer task that flushes either
-every ``flush_interval_seconds`` or once ``flush_batch_size`` rows
-accumulate — whichever fires first. The writer is owned by the composition
+in an in-memory queue drained by a small writer task. The writer sleeps on the
+queue until a row arrives, then commits it together with whatever else is
+already waiting (up to ``flush_batch_size`` rows): a burst becomes one
+transaction, and an idle daemon's writer never wakes. The writer is owned by the composition
 root (``app.py``) which calls ``start()`` on startup and ``stop()`` on
 shutdown to drain the queue cleanly.
 
@@ -51,7 +52,6 @@ class MCPInvocationRepo:
 
     DEFAULT_QUEUE_MAX = 5000
     DEFAULT_BATCH_SIZE = 50
-    DEFAULT_FLUSH_INTERVAL_S = 0.05
     #: How long a read waits for rows enqueued before it to commit. Bounded so a
     #: stuck database slows a read rather than hanging it.
     SETTLE_TIMEOUT_S = 2.0
@@ -62,7 +62,6 @@ class MCPInvocationRepo:
         *,
         queue_max: int = DEFAULT_QUEUE_MAX,
         flush_batch_size: int = DEFAULT_BATCH_SIZE,
-        flush_interval_seconds: float = DEFAULT_FLUSH_INTERVAL_S,
         name_of: Callable[[str], str | None] = lambda _uid: None,
     ) -> None:
         self._sm = sm
@@ -71,8 +70,7 @@ class MCPInvocationRepo:
         self._name_of = name_of
         self._queue_max = queue_max
         self._flush_batch_size = flush_batch_size
-        self._flush_interval = flush_interval_seconds
-        self._queue: asyncio.Queue[MCPInvocation] | None = None
+        self._queue: asyncio.Queue[MCPInvocation | _Stop] | None = None
         self._writer_task: asyncio.Task[None] | None = None
         self._stopping = False
         # Rows enqueued / rows the writer is done with (committed or dropped),
@@ -98,9 +96,13 @@ class MCPInvocationRepo:
         if self._writer_task is None:
             return
         self._stopping = True
-        # The writer loop wakes up on its own interval; cancelling would lose
-        # buffered rows. Wait for the task to drain naturally on next tick.
+        # Cancelling would lose buffered rows: wake the writer with a stop
+        # marker behind them instead, so it drains them and returns. A full
+        # queue means the writer is busy, and it returns once it empties it.
         # We bound the wait so shutdown can't hang on a stuck DB.
+        assert self._queue is not None
+        with suppress(asyncio.QueueFull):
+            self._queue.put_nowait(_STOP)
         try:
             await asyncio.wait_for(self._writer_task, timeout=5.0)
         except TimeoutError:
@@ -346,24 +348,32 @@ class MCPInvocationRepo:
         queue = self._queue
         while True:
             batch: list[MCPInvocation] = []
+            stop = False
             try:
-                first = await asyncio.wait_for(queue.get(), timeout=self._flush_interval)
-                batch.append(first)
-            except TimeoutError:
-                if self._stopping and queue.empty():
-                    return
-                continue
+                first = await queue.get()
             except asyncio.CancelledError:
                 # Best-effort drain on cancel.
                 while not queue.empty():
-                    batch.append(queue.get_nowait())
+                    left = queue.get_nowait()
+                    if not isinstance(left, _Stop):
+                        batch.append(left)
                 with suppress(Exception):
                     await self._commit_batch(batch)
                 self._done += len(batch)
                 raise
             # Greedily pull up to batch_size-1 more without waiting.
-            while len(batch) < self._flush_batch_size and not queue.empty():
-                batch.append(queue.get_nowait())
+            item: MCPInvocation | _Stop | None = first
+            while item is not None:
+                if isinstance(item, _Stop):
+                    stop = True
+                else:
+                    batch.append(item)
+                full = len(batch) >= self._flush_batch_size
+                item = None if full or queue.empty() else queue.get_nowait()
+            if not batch:
+                if stop or (self._stopping and queue.empty()):
+                    return
+                continue
             try:
                 await self._commit_batch(batch)
             except Exception:
@@ -374,8 +384,15 @@ class MCPInvocationRepo:
                     "mcp.invocation_writer.commit_failed", extra={"batch_size": len(batch)}
                 )
             await self._finished(len(batch))
-            if self._stopping and queue.empty():
+            if (stop or self._stopping) and queue.empty():
                 return
+
+
+class _Stop:
+    """The marker :meth:`MCPInvocationRepo.stop` queues behind the last row."""
+
+
+_STOP = _Stop()
 
 
 def _scrub(batch: list[MCPInvocation]) -> None:

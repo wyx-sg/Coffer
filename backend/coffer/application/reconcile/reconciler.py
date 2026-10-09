@@ -99,6 +99,8 @@ class Reconciler:
         #: When each still-open difference was first seen by a writing pass —
         #: the "since" the attention list shows.
         self._first_seen: dict[str, datetime] = {}
+        #: The targets the last writing pass failed to plan (see _idle_period).
+        self._last_period_failures: frozenset[str] = frozenset()
         self._last: PassReport | None = None
         self._holder: asyncio.Task[object] | None = None
         self._listeners: list[PassListener] = []
@@ -140,8 +142,10 @@ class Reconciler:
         return tuple(n for n, t in self._targets.items() if kind in t.kinds)
 
     def add_pass_listener(self, listener: PassListener) -> None:
-        """Call ``listener`` after every writing pass (never a dry-run). One
-        that raises is logged; it never fails the pass."""
+        """Call ``listener`` after every writing pass (never a dry-run) that
+        could have changed what a listener derives: any pass but a periodic one
+        that wrote nothing, failed nothing new and left the same differences
+        open. One that raises is logged; it never fails the pass."""
         self._listeners.append(listener)
 
     # --- hints ---------------------------------------------------------------
@@ -316,10 +320,29 @@ class Reconciler:
         if elapsed > PASS_BUDGET_SECONDS:
             _log.warning("reconcile.pass_over_budget", extra={"seconds": round(elapsed, 3)})
         if not dry_run:
+            open_before = set(self._first_seen)
             self._remember(report, names, only is None)
             log_report(report)
-            self._tell_listeners(report)
+            if not self._idle_period(report, open_before):
+                self._tell_listeners(report)
         return report
+
+    def _idle_period(self, report: PassReport, open_before: set[str]) -> bool:
+        """A periodic pass that changed nothing anyone derives from.
+
+        The period exists to catch drift nothing hinted; when it finds none,
+        the proxy state and the attention list built after the previous pass
+        still hold, and rebuilding them every minute is the idle daemon's
+        cost, not the user's benefit.
+        """
+        failed = frozenset(f.target for f in report.failures)
+        last_failed, self._last_period_failures = self._last_period_failures, failed
+        return (
+            report.trigger is Trigger.PERIOD
+            and all(r.outcome is Outcome.PLANNED for r in report.results)
+            and failed == last_failed
+            and set(self._first_seen) == open_before
+        )
 
     def _tell_listeners(self, report: PassReport) -> None:
         for listener in self._listeners:

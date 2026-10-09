@@ -86,3 +86,26 @@ def test_a_version_written_back_as_a_restore_is_a_new_commit(
     assert newest.meta.restored_from == first and newest.meta.operation == OP_RESTORE
     # baseline + two saves + the restore: no earlier commit was rewritten.
     assert [c.version for c in repo.log()][1:] == before
+
+
+async def test_a_file_event_wakes_the_scanner_and_a_cancel_stops_the_watch(
+    repo: VaultRepository, writer: VaultWriter
+) -> None:
+    """The native watch pokes the scanner when a vault file changes (not on a
+    ``.git`` write), and cancelling the watch returns within its step."""
+    import asyncio
+    import time
+
+    scanner = VaultScanner(writer, interval=3600.0)
+    watch = asyncio.create_task(scanner._watch_files())
+    try:
+        await asyncio.sleep(0.5)  # let the native watch start
+        assert not scanner._wake.is_set()
+        (repo.root / "knowledge").mkdir()
+        (repo.root / "knowledge" / "a.md").write_bytes(b"typed by hand\n")
+        await asyncio.wait_for(scanner._wake.wait(), timeout=5.0)
+    finally:
+        started = time.monotonic()
+        watch.cancel()
+        await asyncio.gather(watch, return_exceptions=True)
+        assert time.monotonic() - started < 2.0
