@@ -271,10 +271,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # (cheap when nothing moved; heals an edited master; upgrades old renders).
     await run_builtin_guide_refresh(kinds.guide)
 
-    # Start the batched invocation writer alongside the retention
-    # worker. The repo's start() is a no-op if already started.
+    # Start the batched invocation writer (its start() is a no-op if started).
     await kinds.mcp.invocation_repo.start()
-
     publish_daemon_identity()
 
     # Frozen builds only; no-op from source (spec daemon "Deploy frozen sibling
