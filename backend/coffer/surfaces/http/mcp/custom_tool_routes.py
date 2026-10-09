@@ -97,6 +97,7 @@ async def create_group(
         agents=body.agents,
         tools=[_tool_dict(t) for t in body.tools],
         source=source,
+        response=body.response.model_dump(mode="json"),
         actor=actor,
     )
     return group_out(view)
@@ -134,6 +135,7 @@ async def test_unsaved(
         raw_tool=_tool_dict(body.tool),
         arguments=body.arguments,
         variables=body.variables,
+        response=body.response.model_dump(mode="json"),
     )
     return test_out(o, group=None, method=body.tool.method, seconds=body.timeout_seconds)
 
@@ -152,12 +154,12 @@ async def update_group(
 ) -> CustomToolGroupOut:
     sent = body.model_fields_set
     kwargs: dict[str, object] = {}
-    for field in ("description", "base_url", "timeout_seconds"):
+    for field in ("description", "base_url", "timeout_seconds", "response"):
         if field in sent:
             value = getattr(body, field)
             if value is None and field != "description":
                 raise ConfigValidationError(f"{field} cannot be cleared")
-            kwargs[field] = value
+            kwargs[field] = value.model_dump(mode="json") if field == "response" else value
     if "headers" in sent:
         if body.headers is None:
             raise ConfigValidationError("headers cannot be cleared")

@@ -138,7 +138,7 @@ retiring another machine deletes that machine's descriptor in a commit.
 | `os`, `hostname`, `coffer_version` | descriptive, for the machines table |
 | `last_round_at` | when this machine last finished a round that moved anything; also its "last seen" |
 | `last_converged_commit` | the commit that round converged at — the base a **returning** machine joins from |
-| `key_fingerprint` | the same short hash `GET /sync/key/fingerprint` returns, so another machine can say "your secrets will not decrypt here". Never the key |
+| `key_fingerprint` | the same short hash `GET /api/v1/secrets/key/fingerprint` returns, so another machine can say "your secrets will not decrypt here". Never the key |
 | `agents` | each agent on the machine, `{type, name, plugins[]}`; a plugin is `{id, name, marketplace, enabled, version}`. An **inventory, not a replicator**: nothing is written into any agent's configuration from another machine's list |
 
 A descriptor from a newer build is read tolerantly: unknown fields are ignored

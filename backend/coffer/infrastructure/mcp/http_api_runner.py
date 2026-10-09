@@ -22,7 +22,12 @@ from coffer.domain.errors import UpstreamTimeout
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
 from coffer.domain.mcp.http_api_environment import HttpApiEnvironment
 from coffer.domain.mcp.http_api_render import RenderError
-from coffer.infrastructure.mcp.http_api_client import build_request, mask_secrets, send_request
+from coffer.infrastructure.mcp.http_api_client import (
+    build_request,
+    mask_secrets,
+    response_check,
+    send_request,
+)
 from coffer.infrastructure.net.ssrf_guard import check_url
 
 
@@ -45,7 +50,10 @@ class HttpApiToolRunner:
             )
         try:
             outcome = await send_request(
-                request, timeout_seconds=transport.timeout_for(env), secrets=secrets
+                request,
+                timeout_seconds=transport.timeout_for(env),
+                secrets=secrets,
+                check=response_check(transport, tool),
             )
         except UpstreamTimeout as e:
             return ToolTestOutcome(
@@ -72,6 +80,9 @@ class HttpApiToolRunner:
             body=outcome.body,
             truncated=outcome.truncated,
             content_type=outcome.content_type,
+            response_headers=outcome.headers,
+            body_bytes=outcome.body_bytes,
+            rule_failure=outcome.rule_failure,
         )
 
     async def run_unsaved(

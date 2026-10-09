@@ -14,9 +14,7 @@ from coffer.application.channel.question_card import (
     closed_body,
     closed_line,
     parse_callback,
-    question_ping,
 )
-from coffer.application.channel.turn_status import format_elapsed
 from coffer.domain.chat.question import QuestionAnswer, QuestionBlock, parse_ask_input
 
 _ASK = {
@@ -116,8 +114,3 @@ def test_a_closed_card_keeps_what_it_asked_and_drops_the_buttons_and_footer() ->
     assert body == (
         "```diff\n- a: 2\n+ a: 3\n```\n\nApply this change to staging?\n\n✓ Answered: Yes · 11:42"
     )
-
-
-def test_the_ping_reads_needs_you_with_the_elapsed_time() -> None:
-    assert question_ping(format_elapsed(48), "Apply?") == "❓ Needs you · 48s — Apply?"
-    assert question_ping(format_elapsed(65), "Apply?") == "❓ Needs you · 1m 05s — Apply?"

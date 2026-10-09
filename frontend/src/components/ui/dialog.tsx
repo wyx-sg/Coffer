@@ -31,7 +31,10 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 // Layout: the panel pads 20 all round and stacks its children 14 apart, so
 // whatever a caller puts between header and footer is the body. The header
 // adds 4 below it (18 to the body) and the footer bleeds to the panel edges
-// as the sunken band.
+// as the sunken band. The one column is minmax(0,1fr), not the implicit
+// auto track: an auto track grows to its widest child's min-content, so a
+// footer whose buttons don't fit on one line pushed the whole column (and
+// the band) past the panel's right edge instead of wrapping.
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
@@ -47,7 +50,7 @@ const DialogContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed left-[50%] top-[50%] z-dialog grid w-[calc(100%-2rem)] max-w-[480px] translate-x-[-50%] translate-y-[-50%] gap-3.5 rounded-2xl bg-surface-raised p-5 text-sm text-text shadow-overlay outline-none",
+          "fixed left-[50%] top-[50%] z-dialog grid w-[calc(100%-2rem)] grid-cols-[minmax(0,1fr)] max-w-[480px] translate-x-[-50%] translate-y-[-50%] gap-3.5 rounded-2xl bg-surface-raised p-5 text-sm text-text shadow-overlay outline-none",
           "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-[.98] data-[state=open]:duration-slow data-[state=open]:ease-out",
           "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-fast data-[state=closed]:ease-in",
           className,
@@ -76,7 +79,7 @@ function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   return (
     <div
       className={cn(
-        "-mx-5 -mb-5 mt-1 flex flex-col-reverse gap-2 rounded-b-2xl border-t border-border-subtle bg-surface-footer px-5 py-3.5 sm:flex-row sm:justify-end",
+        "-mx-5 -mb-5 mt-1 flex flex-col-reverse gap-2 rounded-b-2xl border-t border-border-subtle bg-surface-footer px-5 py-3.5 sm:flex-row sm:flex-wrap sm:justify-end",
         className,
       )}
       {...props}

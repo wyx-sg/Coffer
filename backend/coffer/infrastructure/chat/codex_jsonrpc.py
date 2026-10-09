@@ -66,6 +66,32 @@ class _Writer(Protocol):
     async def drain(self) -> None: ...
 
 
+class NdjsonLineReader:
+    """``readline()`` over an ``asyncio.StreamReader`` with no line-length cap.
+
+    ``StreamReader.readline`` refuses a line longer than the reader's limit
+    (64 KiB by default) and drops it. One app-server frame can be far longer:
+    the ``thread/resume`` result carries the thread's whole history and
+    ``thread/list`` every thread's preview. Read in limit-sized pieces instead,
+    so a long conversation resumes rather than ending the stream.
+    """
+
+    def __init__(self, stream: asyncio.StreamReader) -> None:
+        self._stream = stream
+
+    async def readline(self) -> bytes:
+        parts: list[bytes] = []
+        while True:
+            try:
+                parts.append(await self._stream.readuntil(b"\n"))
+            except asyncio.LimitOverrunError as exc:
+                parts.append(await self._stream.readexactly(exc.consumed))
+                continue
+            except asyncio.IncompleteReadError as exc:
+                parts.append(exc.partial)  # EOF: the last, unterminated line
+            return b"".join(parts)
+
+
 class CodexRpcClient:
     """A bidirectional JSON-RPC peer over an injected NDJSON reader/writer.
 
@@ -264,4 +290,4 @@ class CodexRpcClient:
         self._pending.clear()
 
 
-__all__ = ["CodexRpcClient", "CodexRpcError", "RequestHandler"]
+__all__ = ["CodexRpcClient", "CodexRpcError", "NdjsonLineReader", "RequestHandler"]

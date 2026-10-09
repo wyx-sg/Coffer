@@ -26,6 +26,7 @@ from coffer.domain.channel.envelopes import (
     InboundMessage,
     SentMessage,
 )
+from coffer.domain.channel.thread_messages import ThreadMessage, ThreadRead
 from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.telegram_album import AlbumBuffer
 from coffer.infrastructure.channel.telegram_avatar import fetch_avatar
@@ -316,7 +317,7 @@ class TelegramAdapter:
     async def open_live_text(
         self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
     ) -> TelegramLiveText | TelegramDraftLiveText:
-        """A surface the reply grows on ("Grow a reply in place on one live surface").
+        """A surface the turn's progress shows on ("Show a turn's progress on one live surface").
 
         A message draft is the platform's own answer to this and is preferred
         where it exists: nothing is delivered, so nothing has to be deleted
@@ -379,9 +380,12 @@ class TelegramAdapter:
     # -- context fetch (ContextFetchPort) -------------------------------------
 
     async def fetch_thread(
-        self, chat_id: str, thread_id: str, *, limit: int = 100, chat_kind: str = "group"
-    ) -> FetchedContext:
-        return [], ()  # the Bot API has no history-fetch method
+        self, chat_id: str, thread_id: str, *, chat_kind: str = "group"
+    ) -> ThreadRead:
+        return ThreadRead()  # the Bot API has no history-fetch method
+
+    async def fetch_message_media(self, message: ThreadMessage) -> tuple[InboundAttachment, ...]:
+        return ()
 
     async def fetch_quoted(self, message_id: str) -> FetchedContext:
         return [], ()  # a quote already rides inline, as ``reply_to_message``

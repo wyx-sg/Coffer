@@ -4,8 +4,13 @@ A real socket, so the gateway's own HTTP client makes a real request: the
 tests can see exactly which method, path, query, headers and body arrived.
 Routes answer by path:
 
+* any path in :attr:`FakeHttpApi.answers` — that ``Answer`` (status, headers, body)
+
 * ``/big``       — 2 MiB of text that embeds :attr:`FakeHttpApi.echo_secret`
 * ``/missing``   — 404
+* ``/forbidden`` — 403 HTML with diagnostic headers, a cookie, an auth
+  challenge, an unknown header and :attr:`FakeHttpApi.echo_secret` in a trace id
+* ``/slow``      — sleeps 3 s, then answers like any other path
 * ``/redirect``  — 302 to :attr:`FakeHttpApi.redirect_to`
 * ``/openapi.json`` — :attr:`FakeHttpApi.openapi` as JSON
 * anything else  — 200 JSON ``{"ok": true, "path": …}``
@@ -15,6 +20,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -31,12 +37,23 @@ class Seen:
 
 
 @dataclass
+class Answer:
+    """A scripted answer: any status, any headers, any body (empty included)."""
+
+    status: int = 200
+    headers: dict[str, str] = field(default_factory=dict)
+    body: bytes = b""
+
+
+@dataclass
 class FakeHttpApi:
     port: int = 0
     seen: list[Seen] = field(default_factory=list)
     echo_secret: str = ""
     redirect_to: str = "http://127.0.0.1:9/elsewhere"
     openapi: dict[str, Any] = field(default_factory=dict)
+    #: ``{path: Answer}`` (the path without its query), checked first.
+    answers: dict[str, Answer] = field(default_factory=dict)
 
     @property
     def base_url(self) -> str:
@@ -55,12 +72,46 @@ def _handler(api: FakeHttpApi) -> type[BaseHTTPRequestHandler]:
                 Seen(self.command, self.path, {k.lower(): v for k, v in self.headers.items()}, body)
             )
             path = self.path.split("?", 1)[0]
-            if path.endswith("/big"):
+            if path in api.answers:
+                scripted = api.answers[path]
+                self.send_response(scripted.status)
+                for name, value in scripted.headers.items():
+                    self.send_header(name, value)
+                self.send_header("Content-Length", str(len(scripted.body)))
+                self.end_headers()
+                self.wfile.write(scripted.body)
+            elif path.endswith("/big"):
                 chunk = ("x" * 1000 + api.echo_secret + "\n").encode()
                 payload = chunk * (2 * 1024 * 1024 // len(chunk) + 1)
                 self._send(200, payload, "text/plain")
             elif path.endswith("/missing"):
                 self._send(404, b'{"error": "not found"}', "application/json")
+            elif path.endswith("/forbidden"):
+                payload = b"<html><body><h1>403 Forbidden</h1></body></html>"
+                self.send_response(403)
+                self.send_header("Content-Type", "text/html")
+                self.send_header("X-Request-Id", "req-123")
+                self.send_header("X-Trace-Id", "trace-" + api.echo_secret)
+                self.send_header("Set-Cookie", "session=s3cr3t-cookie; HttpOnly")
+                self.send_header("WWW-Authenticate", 'Bearer realm="api"')
+                self.send_header("X-Internal-Node", "node-7")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+            elif path.endswith("/sp-error"):
+                payload = b'{"error": "denied"}'
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("X-Sp-Error", "101")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+            elif path.endswith("/token"):
+                token = "ghp_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"
+                self._send(200, f"minted {token} for you".encode(), "text/plain")
+            elif path.endswith("/slow"):
+                time.sleep(3)
+                self._send(200, b'{"ok": true, "slow": true}', "application/json")
             elif path.endswith("/redirect"):
                 self.send_response(302)
                 self.send_header("Location", api.redirect_to)

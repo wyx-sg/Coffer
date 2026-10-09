@@ -5,12 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vitepress dev",
-    "build": "vitepress build",
+    "check:mermaid": "node scripts/check_mermaid.mjs",
+    "build": "npm run check:mermaid && vitepress build",
     "preview": "vitepress preview"
   },
   "devDependencies": {
+    "jsdom": "^29.1.1",
+    "mermaid": "^11.4.1",
     "vitepress": "^1.6.3",
-    "vitepress-plugin-mermaid": "^2.0.17",
-    "mermaid": "^11.4.1"
+    "vitepress-plugin-mermaid": "^2.0.17"
   }
 }

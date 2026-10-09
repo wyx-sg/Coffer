@@ -127,8 +127,8 @@ test("a SeaTalk channel is added, configured, reloaded and deleted from the Chan
     await page.reload();
     await page.getByRole("tab", { name: "Settings" }).click();
     await expect(page).toHaveURL(new RegExp(`/channels/${uid}/settings$`));
-    await page.getByLabel("Long-task ping after").fill("300");
-    await page.getByLabel("Long-task ping after").blur();
+    await page.getByLabel("Start a new conversation after").fill("6");
+    await page.getByLabel("Start a new conversation after").blur();
     await page
       .getByRole("button", { name: `Set ${dir} as the default` })
       .click();
@@ -138,12 +138,12 @@ test("a SeaTalk channel is added, configured, reloaded and deleted from the Chan
         const body = (await r.json()) as { config: Record<string, unknown> };
         const agentConfig = body.config.default_agent_config as
           Record<string, unknown> | null | undefined;
-        return [body.config.notify_after_seconds, agentConfig?.cwd];
+        return [body.config.new_conversation_after_idle_hours, agentConfig?.cwd];
       })
-      .toEqual([300, dir]);
+      .toEqual([6, dir]);
 
     await page.reload();
-    await expect(page.getByLabel("Long-task ping after")).toHaveValue("300");
+    await expect(page.getByLabel("Start a new conversation after")).toHaveValue("6");
     const directories = page.getByRole("list", { name: "Directories" });
     await expect(directories).toContainText(dir);
     await expect(

@@ -272,6 +272,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/approvals/{approval_id}/ask-again": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask Again
+         * @description Ask again for a refused binding: the refusal is retired and a new
+         *     request for the same target waits (answered: the approvals now waiting,
+         *     none when the binding needs no approval). Needs no presence: asking grants
+         *     nothing, the person still approves in the desktop app.
+         */
+        post: operations["ask_again_api_v1_secrets_approvals__approval_id__ask_again_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/approvals/{approval_id}/reject": {
         parameters: {
             query?: never;
@@ -306,6 +329,67 @@ export interface paths {
          * @description Move plaintext findings into the store, replacing each with its reference.
          */
         post: operations["import_plaintext_api_v1_secrets_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/key/fingerprint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Key Fingerprint */
+        get: operations["key_fingerprint_api_v1_secrets_key_fingerprint_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/key/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Key
+         * @description Install a master key — only with a grant the desktop app signed for this
+         *     exact key. Redeemed before anything changes.
+         */
+        post: operations["import_key_api_v1_secrets_key_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/key/import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Key Import
+         * @description Whose key a file holds and whether it is this machine's, changing nothing.
+         *
+         *     A passphrase-protected backup is not opened here: its fingerprint is read
+         *     from the file and checked against the key when it is imported.
+         */
+        post: operations["preview_key_import_api_v1_secrets_key_import_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -812,7 +896,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "approve" | "reveal" | "export_master_key" | "import_master_key" | "update_status" | "update_check" | "update_install" | "update_auto_check";
+            op: "approve" | "reveal" | "export_master_key" | "import_master_key" | "update_status" | "update_check" | "update_install" | "update_auto_check" | "uninstall";
             /** Ref */
             ref?: string | null;
         };
@@ -832,7 +916,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "approve" | "reveal" | "export_master_key" | "import_master_key" | "update_status" | "update_check" | "update_install" | "update_auto_check";
+            op: "approve" | "reveal" | "export_master_key" | "import_master_key" | "update_status" | "update_check" | "update_install" | "update_auto_check" | "uninstall";
             /** Ref */
             ref: string | null;
             /** Result */
@@ -872,6 +956,52 @@ export interface components {
         /** ErrorResponse */
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
+        };
+        /** KeyFingerprintOut */
+        KeyFingerprintOut: {
+            /** Fingerprint */
+            fingerprint: string | null;
+        };
+        /** KeyImportIn */
+        KeyImportIn: {
+            /** Material */
+            material: string;
+            /** Nonce */
+            nonce: string;
+            /** Passphrase */
+            passphrase?: string | null;
+            /** Signature */
+            signature: string;
+        };
+        /** KeyImportOut */
+        KeyImportOut: {
+            /** Fingerprint */
+            fingerprint: string;
+            /** Locked Refs */
+            locked_refs: string[];
+            /** Readable */
+            readable: number;
+            /** Replaced */
+            replaced: boolean;
+        };
+        /** KeyMaterialIn */
+        KeyMaterialIn: {
+            /** Material */
+            material: string;
+        };
+        /**
+         * KeyPreviewOut
+         * @description A key file beside this machine's key, before anything is replaced.
+         */
+        KeyPreviewOut: {
+            /** Current Fingerprint */
+            current_fingerprint: string | null;
+            /** Fingerprint */
+            fingerprint: string;
+            /** Protected */
+            protected: boolean;
+            /** Same */
+            same: boolean;
         };
         /**
          * LocalAccessIn
@@ -924,7 +1054,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "reveal" | "approve" | "approve_batch" | "export_master_key" | "import_master_key";
+            op: "reveal" | "approve" | "approve_batch" | "export_master_key" | "import_master_key" | "uninstall";
             /** Target */
             target: string;
         };
@@ -938,7 +1068,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "reveal" | "approve" | "approve_batch" | "export_master_key" | "import_master_key";
+            op: "reveal" | "approve" | "approve_batch" | "export_master_key" | "import_master_key" | "uninstall";
             /** Target */
             target: string;
         };
@@ -1916,6 +2046,49 @@ export interface operations {
             };
         };
     };
+    ask_again_api_v1_secrets_approvals__approval_id__ask_again_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                approval_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     reject_api_v1_secrets_approvals__approval_id__reject_post: {
         parameters: {
             query?: never;
@@ -1982,6 +2155,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretImportOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    key_fingerprint_api_v1_secrets_key_fingerprint_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyFingerprintOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    import_key_api_v1_secrets_key_import_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeyImportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyImportOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_key_import_api_v1_secrets_key_import_preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeyMaterialIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyPreviewOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

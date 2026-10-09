@@ -100,6 +100,9 @@ async def test_the_builtin_coffer_server_is_described_read_only(
         ("write", "coffer__write"),
     ]
     assert body["tool_count"] == 2
+    # Each carries its input schema, for the row's details.
+    assert body["tools"][1]["input_schema"] == {"type": "object", "properties": {}}
+    assert "properties" in body["tools"][0]["input_schema"]
     summary = body["summary"]
     assert (summary["calls"], summary["errors"]) == (1, 0)
     assert summary["by_agent"][0]["agent_uid"] == "agent-1"

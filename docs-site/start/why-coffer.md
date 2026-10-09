@@ -35,7 +35,7 @@ This page explains the decisions that shape Coffer, for readers deciding whether
 
 **The decision.** Each agent's MCP config holds one entry, `coffer`, which runs `coffer-mcp-shim`. Coffer runs every upstream server you register and lists their tools under a `<server>__<tool>` prefix, so two servers can both have a `search` tool without clashing. You decide which tools a server exposes, and which agents can see it, in Coffer rather than in each agent.
 
-**Why.** With N agents and M servers you would otherwise maintain N×M entries by hand. One endpoint turns that into M registrations. It also gives Coffer a single point where it can apply per-agent scope and record every call (which tool, when, how long, and the outcome, but never the arguments or results).
+**Why.** With N agents and M servers you would otherwise maintain N×M entries by hand. One endpoint turns that into M registrations. It also gives Coffer a single point where it can apply per-agent scope and record every call (which tool, when, how long, the outcome, and its arguments and result with secrets masked).
 
 **What it means for you.**
 
@@ -59,7 +59,7 @@ See [MCP gateway](/architecture/mcp-gateway) for how sessions, namespacing and t
 
 ## Secrets are encrypted with a key you hold
 
-**The decision.** Secrets are stored only as Fernet ciphertext, one file per secret under `~/.coffer/vault/secret/`. Configuration never holds a secret; it holds a *secret ref*, a name such as `github.token`. The daemon decrypts the secret only at the moment it starts an upstream server or sends a request header. By default the master key is a `0600` file, `~/.coffer/master.key`, and it never enters the vault. You can move it into the macOS keychain instead.
+**The decision.** Secrets are stored only as Fernet ciphertext, one file per secret under `~/.coffer/vault/secret/`. Configuration never holds a secret; it holds a *secret ref*, a name such as `github.token`. The daemon decrypts the secret only at the moment it starts an upstream server or sends a request header. The master key is one item in the macOS Keychain that only Coffer's signed binaries can read, and it never enters the vault.
 
 **Why.** MCP server configs and provider profiles need API keys. If keys were stored as plain text, every export, log line and sync commit would put them at risk. With refs, the rest of the system never handles the plaintext.
 
@@ -67,7 +67,7 @@ See [MCP gateway](/architecture/mcp-gateway) for how sessions, namespacing and t
 
 - Store a secret with `coffer secret set <ref>`, which prompts for the value without echoing it or reads it from stdin, and refer to it by name everywhere else.
 - Plaintext never reaches the vault, the logs or the audit log.
-- If you lose the master key, you lose every stored secret. Treat `~/.coffer/master.key` the way you would treat an SSH private key.
+- If you lose the master key, you lose every stored secret. The Keychain is the key's only home, so back it up in the desktop app and keep the backup the way you would keep an SSH private key.
 
 See [Security model](/architecture/security) for the full threat model.
 

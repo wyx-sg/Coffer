@@ -866,3 +866,18 @@ def test_bump_version_leaves_all_files_untouched_when_one_anchor_is_missing(
     assert result.returncode != 0
     assert "Cargo.lock" in result.stderr
     assert {rel: (tmp_path / rel).read_text(encoding="utf-8") for rel in _BUMP_TARGETS} == before
+
+
+def test_the_cli_spec_freezes_every_module_shell_completion_imports_by_name() -> None:
+    """`coffer --show-completion` asks shellingham for the shell, and shellingham
+    imports `shellingham.posix` / `shellingham.nt` by name at run time — a
+    module PyInstaller cannot see, so the frozen CLI crashed with
+    `Shell detection not implemented for 'posix'` (CLI-001) until the spec
+    collected it."""
+    tree = _parse_spec(_REPO / "backend" / "coffer.spec")
+    collected = {
+        call.args[0].value
+        for call in _find_calls(tree, "collect_submodules")
+        if call.args and isinstance(call.args[0], ast.Constant)
+    }
+    assert {"typer", "click", "shellingham"} <= collected

@@ -1,6 +1,6 @@
 # Aggregate the Agents' Memory; Never Write It
 
-**Status**: Accepted
+**Status**: Superseded by [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md)
 **Date**: 2026-09-17
 **Deciders**: Yuxing Wu
 **Related**: [Tidying Knowledge and Memory Is the Agent's Job](tidying-knowledge-and-memory-is-the-agents-job.md); [Memory Reaches a Session at Two Moments: an Index at Start and the Notes a Prompt Names](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md); spec memory; spec knowledge; [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md); [Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale](agent-hook-installation.md); [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md); [Sync Withholds Derived Output](sync-withholds-derived-output.md); research note [agent memory](../research/agent-memory.md)

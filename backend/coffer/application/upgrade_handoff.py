@@ -50,7 +50,8 @@ def _method_fact(install: InstallFacts) -> str:
         return f"It runs from {where}, with the interpreter {install.executable}."
     return (
         f"It was installed from the frozen binaries; the daemon runs from {install.executable} "
-        "(the installer keeps them under ~/.coffer/bin)."
+        "(the installer keeps them under ~/.coffer/bin). `coffer update` downloads the newest "
+        "release, verifies it and restarts the daemon on it."
     )
 
 

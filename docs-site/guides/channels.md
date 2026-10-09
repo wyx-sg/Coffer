@@ -61,7 +61,8 @@ A direct chat paired by an older Coffer, before pairings recorded who the owner 
 Send the bot a message. The first message opens a conversation on the channel's default agent, in the Coffer-managed workspace `~/.coffer/content/workspace`, and every later message continues it. You can move a chat to another agent, model or directory with [commands](#commands).
 
 - A reaction (Telegram) or a typing indicator (SeaTalk) says the message was received.
-- While the agent works, one status line sits at the top of the live reply, and its clock keeps moving even during a long silent tool:
+- On SeaTalk the typing indicator is all you see while the agent works; the answer then arrives as one new message. See [SeaTalk → How replies look](/guides/channels-seatalk#how-replies-look).
+- On Telegram, one status line sits at the top of a live preview while the agent works, and its clock keeps moving even during a long silent tool:
 
   ```
   ⏳ Working · 2m 14s · 7 steps
@@ -74,18 +75,36 @@ Send the bot a message. The first message opens a conversation on the channel's 
   The failure is the 3DS step: the sandbox answered after 30 s and…
   ```
 
-  The `💬` line is what the agent last said before a tool call; the answer grows under the rule. The final reply keeps everything the agent wrote, one paragraph per stretch of text.
+  The `💬` line is what the agent last said before a tool call; the text it is writing now shows under the rule. The preview goes away when the turn ends and the reply is sent as a new message.
 
   A step line in a direct chat adds the agent's own one-line description or the file name, never the raw command. In a group it names only the tool (`⏳ Bash`), because everyone there reads it.
+
+  **Show step lines**, on the channel's **Settings** tab under **Replies**, turns the step list off and keeps only the status header and the 💬 line, which is useful in a busy group. Only Telegram channels have it, because a SeaTalk chat shows no steps.
+- The reply is only what the agent wrote after its last tool call, on every platform; what it said between steps is not sent. A turn that ends on a tool call replies with the last thing the agent wrote.
 - A turn that fails or is stopped ends with a one-line summary: the outcome, tool count, duration and tokens. A turn that succeeds sends no summary; the reply is the signal.
 
 ### What the reply looks like
 
-Coffer tells the agent which platform and kind of chat it is in and what renders there, and asks it for a reply shaped for a phone: the outcome in the first sentence (it is what the notification shows), no step-by-step narration, anything long under a `## Details` heading, and diagrams as images. Coffer then fits the reply to the chat:
+Coffer tells the agent which platform and kind of chat it is in and what renders there, and asks it for a reply shaped for a phone: the outcome in the first sentence (it is what the notification shows), no step-by-step narration, the whole answer after its last tool call, and diagrams as images. Where the chat can collapse text, it is also asked to put anything long under a `## Details` heading. Coffer then fits the reply to the chat:
 
-- **Details** — on Telegram, a `## Details` section arrives collapsed. On SeaTalk, the reply carries the part before it and a card follows with the outcome as its title and **Details** and **As file** buttons: **Details** posts the section as a reply in the card's thread, **As file** sends it as a `.md` file.
+- **Details** — on Telegram, a `## Details` section arrives collapsed. SeaTalk cannot collapse text, so there the reply arrives whole.
 - **Tables and logs** — SeaTalk cannot show a table, so each row becomes a bullet (`- **checkout** · failed · 3DS timeout`); a table bigger than 12 rows or 4 columns keeps its first five rows and arrives whole as a `.csv` file. A code block longer than 30 lines keeps its first three lines and arrives whole as a file.
 - **Long replies** — are never cut inside a code block, and every message after the first starts with its place, `(2/3)`. On Telegram those continuations arrive silently; only the first one notifies.
+
+### Your own system prompts {#your-own-system-prompts}
+
+A channel can carry standing instructions of your own, such as the language to answer in or what every answer must name. It has two, because a group usually wants different manners from a private chat:
+
+| Setting | Applies to |
+| --- | --- |
+| **Direct chats** (`direct_system_prompt`) | Your direct chat with the bot, and the threads you open in it. |
+| **Group chats** (`group_system_prompt`) | A group's main chat and its threads. |
+
+Each is plain text of up to 4,000 characters, empty by default. On every turn Coffer adds the one for that chat after its own note about the chat, under the line `Instructions from the channel's owner:`. Your text never replaces Coffer's note, and an empty prompt adds nothing.
+
+A change applies from the next message, in every conversation of that kind, with no restart. That includes a conversation that resumes an earlier agent session: Coffer sends its system context with every turn, as Claude Code's appended system prompt and as Codex's developer instructions on `thread/resume`.
+
+**Web UI:** on the channel's **Settings** tab, under **System prompts**, choose **Edit**. The dialog has a text area for **Direct chats** and one for **Group chats**, each with a character count; **Save** writes both, **Cancel** discards the draft. **REST and CLI:** they are fields of the channel's config, changed with `PATCH /api/v1/resources/{uid}` or `coffer channel update` (send the whole config); a longer prompt is refused with `422`.
 
 ### Questions for you
 
@@ -95,14 +114,7 @@ A question that allows several options shows them as toggles: each tap puts a `�
 
 Questions are answered here, in the chat; the Conversations page has no answer card. Once the question is answered, or the turn is stopped, its card is rewritten in place to `✓ Answered: Yes · 11:42` (`⏹ Stopped` after a stop) and its buttons go away; where the platform cannot rewrite the message, that line is sent as a reply instead.
 
-### When a long turn finishes
-
-A turn that ran longer than the channel's threshold (90 seconds by default) ends with one short line where its answer would not notify you by itself: `✅ Done · 4m 12s — <the answer's first line>`, or `⚠️ Failed · …`, `⏹ Stopped · …`. A turn that is waiting on a question pings `❓ Needs you · 4m 05s — <the question>` before its card. On SeaTalk the answer is the message that opened when the turn began, so finishing it rings nobody — the done line does, in the same thread, @mentioning you in a group. On Telegram the answer is always a new message, so it needs no extra line.
-
-Two per-channel settings shape this, on the channel's **Settings** tab under **Replies**:
-
-- **Show step lines** — turn it off to keep only the status header and the 💬 line, without the step list. Useful in a busy group.
-- **Long-task ping after** — the long-turn threshold in seconds, 0 to 3600; 0 turns the done line off.
+### Grouping messages
 
 Messages sent in quick succession are one question. The channel waits for a short pause after each message before it starts the turn: 1.5 seconds after text, 5 seconds after a forwarded chat record or files with no text. Anything you send inside that pause joins the same turn. So you can forward a record and then type "look into this", and the agent answers once, having seen both. Each message is still acknowledged the moment it arrives.
 
@@ -124,7 +136,7 @@ A direct chat is one conversation. To run a second task beside it without mixing
 
 How the thread appears depends on the platform. On SeaTalk it is the thread of your own `/thread` message: the bot answers inside it, and you reply there. On Telegram it is a private-chat topic, which needs the bot's Threaded Mode turned on in BotFather. In a group, every thread is already its own conversation, so `/thread` is not needed there.
 
-Each turn tells the agent it is on a chat channel: keep replies concise but quote the key log lines, errors and IDs behind a finding verbatim, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. The turn's system prompt also carries the [memory](/guides/memory#in-channel-turns) index, and the notes your message names are added after it: Coffer delivers both itself, and on a connected agent Coffer's hook stands aside for them inside the turn, while its triggers still guard the turn's commands.
+Each turn tells the agent it is on a chat channel: keep replies concise but quote the key log lines, errors and IDs behind a finding verbatim, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the channel, the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. The turn's system prompt also carries the [memory](/guides/memory#in-channel-turns) index, and the notes your message names are added after it: Coffer delivers both itself, and on a connected agent Coffer's hook stands aside for them inside the turn, while its triggers still guard the turn's commands.
 
 ## Commands
 
@@ -192,6 +204,7 @@ Add the bot to a group to use it there.
 - Each thread is its own conversation with its own agent, history and queue, so threads run concurrently.
 - A group answer is attached to the message that asked: on Telegram it is sent as a reply to that message; on SeaTalk the thread rooted at that message is the attachment, and the answer @mentions you.
 - When you quote a message, the quoted sender and text are folded into the turn as `> sender: …` lines above your text.
+- On a platform that can read a thread's history (SeaTalk), a turn in a thread carries part of the thread. A conversation's first turn there gets the thread's 20 most recent messages with their images and files; each later turn of that conversation gets only the messages others posted since its previous turn there, or nothing. Where older messages were left out, a note says so, and the agent reads them on demand with `coffer__channel_read_thread`, only in chats you have paired and never a group's main chat. Telegram has no history API, so the tool says so there.
 - A forwarded chat record is flattened into a `[Forwarded chat record]` block.
 
 Two channel settings tune when the bot answers in a group. They change when the bot answers, never who may drive it.
@@ -211,7 +224,7 @@ A reply the bot has sent can be taken back, by the owner only. Anyone else's tap
 - **`/del`.** Quote one of the bot's messages and send `/del` to withdraw that whole reply, with every part a long reply was split into. Without a quote it withdraws the bot's most recent reply in that chat, or in that thread. It works in direct chats and groups. The `/del` message is itself deleted where the platform allows it (Telegram, if the bot has the right); otherwise it stays.
 - **The 🗑 button.** Under every bot reply in a group there is a 🗑 button. Only the owner's tap counts.
 
-How a reply is withdrawn depends on the platform. **Telegram** deletes the message; the platform allows this for 48 hours, and past that the owner is told privately that it can no longer be deleted. **SeaTalk** has no delete API, so group replies are sent as interactive cards, and withdrawing rewrites each card into a neutral “🗑 Withdrawn” card with no buttons; SeaTalk allows rewriting for 7 days, and past that the owner is told privately.
+How a reply is withdrawn depends on the platform. **Telegram** deletes the message; the platform allows this for 48 hours, and past that the owner is told privately that it can no longer be deleted. **SeaTalk** has no delete API, so group replies are sent as interactive cards, and withdrawing rewrites each card into a neutral “🗑 Withdrawn” card with no buttons; SeaTalk allows rewriting for 7 days, and past that the owner is told privately. A SeaTalk direct-chat reply is an ordinary message and cannot be withdrawn.
 
 Coffer remembers which platform messages make up each reply, only as long as that window and across daemon restarts, and writes one audit entry per withdrawal: the owner, the channel and the number of messages, never the content.
 
@@ -263,7 +276,7 @@ The header names the channel, its status and where it runs (`SeaTalk app 8231 ·
 - **Agents** — **Default agent** and **Default model** (each saved as soon as you pick it) and **Agents it may drive**, the channel's scope (see [Default agent and scope](#default-agent-and-scope)).
 - **Conversations from this channel →** — one link to the Conversations page filtered to this channel. The commands the bot answers are not listed here; see [Channel commands](/reference/channel-commands).
 
-**Settings** is one column of sections — **Connection**, **Receiving messages**, **Replies and conversations** and **Working directories** — each setting with its own one-line explanation beneath it, and a **Delete channel** row at the bottom. It saves each change as you make it — a number or a path once you stop typing and it is valid, a switch at once — with no saved line; a save that fails says so in a toast. It holds the channel's title, **In group chats**, **Message batching**, **Replies**, **Conversations**, **Directories** (the folders `/dir` may switch to — each row has **Set as default** and a remove ✕; the default's row reads *default* and has **Unset default**; with no default, new conversations start in Coffer's workspace, shown at the top of the list as *default · Coffer workspace*; a long list scrolls in its box), **Secrets** (the SeaTalk App ID, and the secret or token by its name, linking to its page on the Secrets page, with **Replace key…**), **Runs on** and **Delete…**. Every field starts from the settings the daemon reports for the channel, defaults included. A replaced secret is written under the reference the channel already uses and the daemon notices the new value and restarts the adapter on it by itself — also when you replace it with `coffer secret set` — so rotating a secret changes neither pairing nor binding. Deleting a channel stops the bot and removes its pairing; its conversations stay on the Conversations page.
+**Settings** is one column of sections — **Connection**, **Receiving messages**, **Replies and conversations**, **System prompts** and **Working directories** — each setting with its own one-line explanation beneath it, and a **Delete channel** row at the bottom. It saves each change as you make it — a number or a path once you stop typing and it is valid, a switch at once — with no saved line; a save that fails says so in a toast. The exception is **System prompts**, which shows the **Direct chats** and **Group chats** prompts as written (blank when empty) and edits them through its **Edit** button and dialog (see [Your own system prompts](#your-own-system-prompts)). It holds the channel's title, **In group chats**, **Message batching**, **Replies**, **Conversations**, **System prompts**, **Directories** (the folders `/dir` may switch to — each row has **Set as default** and a remove ✕; the default's row reads *default* and has **Unset default**; with no default, new conversations start in Coffer's workspace, shown at the top of the list as *default · Coffer workspace*; a long list scrolls in its box), **Secrets** (the SeaTalk App ID, and the secret or token by its name, linking to its page on the Secrets page, with **Replace key…**), **Runs on** and **Delete…**. Every field starts from the settings the daemon reports for the channel, defaults included. A replaced secret is written under the reference the channel already uses and the daemon notices the new value and restarts the adapter on it by itself — also when you replace it with `coffer secret set` — so rotating a secret changes neither pairing nor binding. Deleting a channel stops the bot and removes its pairing; its conversations stay on the Conversations page.
 
 The channel's page also warns about a setting on the platform that defeats the channel's configuration, such as Telegram privacy mode. To rotate a secret, use **Replace key…** under **Secrets** on the **Settings** tab: **Enter a new value** overwrites the secret the channel already uses, **Use another secret** points the channel at another stored secret (the adapter restarts on it as well).
 

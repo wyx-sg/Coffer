@@ -37,7 +37,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `CURSOR_INVALID` | 400 | 发给分页列表（审计日志、MCP 调用日志、智能体的原生会话、聊天对话）的 `cursor` 无法解码，或者是为另一个列表或另一组筛选条件签发的。 | 去掉 `cursor` 重新读第一页，或发送同一列表、同样筛选条件返回的 `next_cursor`。 |
 | `NOT_FOUND` | 404 | 没有这个路由或对象，由路由抛出而非领域错误。 | 检查路径；守护进程在 `/api/v1/openapi.json` 向带令牌的调用方提供实时的路由列表。 |
 | `FORBIDDEN` | 403 | 路由拒绝了该操作。 | 阅读 `message`。 |
-| `CONFIG_INVALID` | 422 | 请求体或查询参数未通过校验，或资源的配置无效。提交的值不会被回显。 | 对照 `/api/v1/openapi.json`（需带令牌）中该路由的 schema 检查请求体。 |
+| `CONFIG_INVALID` | 422 | 请求体或查询参数未通过校验，或资源的配置无效。提交的值不会被回显。已存密钥被用于没有保存连接持有它的接入地址时，`details.reason` 为 `stored_key_destination`，且不会发出任何请求。 | 对照 `/api/v1/openapi.json`（需带令牌）中该路由的 schema 检查请求体。 |
 | `INTERNAL_ERROR` | 500 | 意外的失败。完整的 traceback 在守护进程日志中，对应响应的 trace id。 | 运行 `grep <trace-id> ~/.coffer/logs/daemon.log`，或 `coffer log daemon --errors`。 |
 | `HTTP_<status>` | 同名状态 | 一个没有具名错误码的普通 HTTP 错误。 | 阅读 `message`。 |
 
@@ -46,6 +46,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
 | `RESOURCE_NOT_FOUND` | 404 | 你给的 uid 或名字没有对应的资源。 | 在该类型的页面上核对名字；名字只在同一类型内唯一。 |
+| `INVOCATION_NOT_FOUND` | 404 | 日志里没有这个 id 的工具调用：从未存在，或已被保留期清理。 | 从 `coffer log mcp` 或活动页取 id。 |
 | `RESOURCE_ALREADY_EXISTS` | 409 | 该类型已有同名资源。 | 换个名字，或编辑已有的资源。 |
 | `UNKNOWN_KIND` | 400 | 该类型不是本守护进程注册的类型。 | 使用已注册的类型，例如 `mcp_server`、`skill` 或 `agent`。 |
 | `GENERIC_CREATE_NOT_ALLOWED` | 409 | 这个类型不能通过通用的 `/resources` 端点创建或更新。 | 使用该类型自己的端点，或它在 Web 界面里的页面。 |
@@ -63,10 +64,10 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | --- | --- | --- | --- |
 | `SECRET_MISSING` | 400 | 所引用的密钥 ref 下没有存储任何密钥。 | 存入它：`coffer secret set <ref>`，或在资源表单中重新填写。 |
 | `SECRET_IN_USE` | 409 | 仍有资源引用该密钥，不能删除。消息会列出这些资源。 | 先解除关联或删除那些资源。 |
-| `SECRET_LOCKED` | 503 | 系统钥匙串已锁定或不可用，或者一次钥匙串写入无法验证。 | 解锁钥匙串（登录桌面会话）后重试。 |
+| `SECRET_LOCKED` | 503 | macOS 钥匙串已锁定或不可用、拒绝把主密钥交给守护进程，或者一次钥匙串写入无法验证。 | 解锁钥匙串（登录桌面会话）后重试。 |
 | `SECRET_UNREADABLE` | 500 | 某个已存的密钥无法用当前主密钥解密。 | 恢复与之匹配的主密钥，或重新填写该密钥。见[密钥存储](/zh/guides/secret-store)。 |
-| `MASTER_KEY_MISSING` | 503 | 存在加密的密钥，但主密钥既不在密钥文件中也不在钥匙串中。在守护进程启动时抛出。 | 恢复 `~/.coffer/master.key`，或者重新填写你的密钥。 |
-| `MASTER_KEY_FILE_INVALID` | 422 | 要导入的主密钥文件不存在或不是有效的主密钥，或者 `.cfk` 备份的指纹与其主密钥不符。 | 导入桌面应用写出的主密钥备份。 |
+| `MASTER_KEY_MISSING` | 503 | 存在加密的密钥，但钥匙串中没有主密钥。在守护进程启动时抛出。 | 在桌面应用中导入你的主密钥备份（**设置 › 安全 › 导入主密钥**），或者重新填写你的密钥。 |
+| `MASTER_KEY_FILE_INVALID` | 422 | 要导入的主密钥备份（`.cfk`）不存在或不是有效的备份，或者它的指纹与其主密钥不符。 | 导入桌面应用写出的主密钥备份。 |
 | `MASTER_KEY_PASSPHRASE_WRONG` | 422 | 导入受口令保护的主密钥备份（`.cfk`）时口令错误或没给口令。 | 输入在另一台 Mac 上导出主密钥时设置的口令。 |
 | `MASTER_KEY_PASSPHRASE_TOO_SHORT` | 422 | 请求主密钥备份时给的口令不足八个字符。什么都没写入。 | 选一个更长的口令。 |
 | `SECRET_BINDING_PENDING` | 409 | 某个密钥将发往一个没有人批准过的去处或目标。什么都没发送。`details.approval_ids` 列出等待中的审批。 | 运行 `coffer approval approve <id>` 并在 Coffer 桌面应用中确认（或直接在应用里批准），或用 `coffer approval reject <id>` 或在**设置 › 安全**（**审阅**）里拒绝。自定义工具的调用会以带内方式返回它，写明审批 id 和同一条命令，而且只影响在等待的那个环境。`coffer run` 遇到无人允许它使用的独立密钥时也会返回它，见[密钥 → 允许 `coffer run` 使用它](/zh/guides/secrets#allow-coffer-run-to-use-it)。 |
@@ -75,7 +76,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `APPROVAL_NOT_PENDING` | 409 | 该审批已被批准、拒绝或取代。 | 无需操作；新的改动会产生新的审批。 |
 | `PRESENCE_GRANT_INVALID` | 403 | 一次查看、主密钥备份、主密钥导入或审批没有带有效的在场授权：缺失、过期、已用过、属于别的操作或目标，或者不是桌面应用签发的。 | 在 Coffer 桌面应用中操作，它会执行在场检查并签发授权。 |
 | `APPROVAL_TARGET_CHANGED` | 409 | 这条审批现在所指的目标已不是展示给本人的那个：在在场提示和批准请求之间，它的去处变了。什么都没批准；授权绑定的是旧目标。 | 重新查看这条审批（`coffer approval show <id>`），认得新目标的话再重新批准。 |
-| `DESKTOP_REQUEST_NOT_FOUND` | 404 | 没有这个 id 的桌面请求：命令行发给桌面应用的请求（批准、显示、主密钥备份、更新）从未存在或已过期（请求的有效期为两分钟）。 | 再运行一次命令；等待期间保持桌面应用打开。 |
+| `DESKTOP_REQUEST_NOT_FOUND` | 404 | 没有这个 id 的桌面请求：命令行发给桌面应用的请求（批准、显示、主密钥备份、更新）从未存在或已过期（请求的有效期为两分钟，主密钥备份的为十分钟）。 | 再运行一次命令；等待期间保持桌面应用打开。 |
 | `SECRET_NAME_INVALID` | 422 | 新建独立密钥的 ref 不是 `secret/<32 位十六进制>`，或它的标签超过 64 个字符、描述超过 200 个字符。 | 用 `coffer secret set --name "Orders DB"` 创建密钥，让 Coffer 来生成 id；缩短标签或描述。 |
 | `SECRET_NOT_FOUND` | 404 | `coffer run` 指定的独立密钥不在存储中。只有 `secret/<id>` 的值能这样解析；资源的密钥永远不能。 | 用 `coffer secret list` 核对 id，或用 `coffer secret set --name "<名称>"` 创建该密钥。 |
 
@@ -103,6 +104,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `CUSTOM_TOOL_ENVIRONMENT_REQUIRED` | 422 | 该工具组开启了不止一个环境，而调用没有指定。`details.environments` 列出已开启的环境。什么都没发送。 | 传入 `coffer_environment`（命令行上是 `--env`）。见[自定义工具 → 选择一次调用的环境](/zh/guides/custom-tools#choosing-the-environment-of-a-call)。 |
 | `CUSTOM_TOOL_ENVIRONMENT_UNKNOWN` | 422 | 调用指定了该工具组没有的环境。`details.environments` 列出已开启的环境。什么都没发送。 | 使用列出的名字之一，与 `coffer custom-tool env list` 打印的完全一致。 |
 | `CUSTOM_TOOL_ENVIRONMENT_DISABLED` | 422 | 调用指定的环境已关闭。什么都没发送。 | 打开它（`coffer custom-tool env enable`，或**环境**下它的开关），或调用另一个环境。 |
+| `CUSTOM_TOOL_REQUEST_INVALID` | 422 | 预览（`--dry-run`）在所选环境中无法构建工具的请求：工具用了该环境没有定义的 `{env:NAME}`，或请求体模板产出的不是 JSON。`details` 写明分组和环境。什么都没发送。 | 在该环境中定义这个变量（`coffer custom-tool env set-var`），或修正工具的模板。 |
 | `CUSTOM_TOOL_ENVIRONMENT_NOT_FOUND` | 404 | 管理请求指定了该工具组没有的环境。 | 用 `coffer custom-tool env list` 或在工具组页面列出它们。 |
 | `CUSTOM_TOOL_ENVIRONMENT_EXISTS` | 409 | 该工具组已有同名环境。 | 换个名字，或修改已有的环境。 |
 | `CUSTOM_TOOL_LAST_ENVIRONMENT` | 409 | 删除这个环境会让工具组一个环境都不剩。 | 先添加另一个环境，或删除整个工具组。 |
@@ -113,7 +115,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | --- | --- | --- | --- |
 | `CLI_NOT_KNOWN` | 404 | 没有托管技能需要该命令，也没有以该名字添加的命令行工具。 | 在**命令行工具**页面列出已知的命令。 |
 | `CLI_TOOL_EXISTS` | 409 | 已经添加过同名的命令行工具。 | 在**命令行工具**页面修改它，或先移除。 |
-| `CLI_TOOL_INVALID` | 400 | 命令名、最低版本或登录检查不合法。 | 使用普通的命令名或绝对路径；字段见 `message`。 |
+| `CLI_TOOL_INVALID` | 400 | 命令名、最低版本或登录检查不合法。登录检查不以命令名开头时，`details.reason` 为 `login_check_command`，`details.field` 为 `login_check`，`details.command` 是它必须开头的名字（路径命令取文件名）。 | 使用普通的命令名或绝对路径；登录检查以命令名开头；字段见 `message`。 |
 | `CLI_TOOL_NOT_DECLARED` | 404 | 该命令行工具不是手动添加的，因此不能在这里编辑或移除。 | 技能需要的命令要在技能里修改，不在这里。 |
 
 ## 智能体与智能体工作目录 {#agents-and-agent-workspaces}
@@ -188,6 +190,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `MEMORY_RAW_ENTRY_NOT_FOUND` | 404 | 该分区中没有这个 id 的原始条目。 | 刷新；该条目可能已变成笔记并被移除。 |
 | `MEMORY_UNSAFE_PATH` | 400 | 某段路径是隐藏的、全是点，或因其他原因不安全。 | 使用分区内的路径。 |
 | `MEMORY_UNREADABLE` | 422 | 某个智能体的原生记忆文件无法解析。 | 修复消息中指出的文件。 |
+| `MEMORY_SYNC_RUNNING` | 409 | 已有一次记忆同步在运行。 | 等它结束后再同步。 |
+| `MEMORY_SYNC_NO_PREVIEW` | 409 | 没有等待写入或取消的记忆同步预览。 | 刷新记忆页面。 |
 | `MEMORY_DELIVERY_UNSUPPORTED` | 422 | 这个类型的智能体没有 Coffer 可以安装的记忆 Hook。 | 无；该智能体用自己的文件工具从 `coffer-guide` 技能指明的记忆根目录读取记忆笔记。 |
 | `MEMORY_DELIVERY_CONFIG_INVALID` | 422 | 智能体的设置或 Hook 文件不是 Coffer 能编辑的 JSON 对象。 | 修复该文件，然后重新安装投递。 |
 
@@ -264,7 +268,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | 错误码 | HTTP | 含义 | 常见修复 |
 | --- | --- | --- | --- |
 | `FEATURE_DISABLED` | 404 | 该路由或资源属于一个在本机上已关闭的实验功能。`details.feature` 给出功能名。 | 在**设置 → 功能**里开启它。见[实验功能](/zh/guides/experimental-features)。 |
-| `FEATURE_UNKNOWN` | 404 | 该键不是实验功能。键只有 `knowledge`、`memory`、`sync` 和 `models`。 | 使用这四个键之一。 |
+| `FEATURE_UNKNOWN` | 404 | 该键不是实验功能。键只有 `knowledge` 和 `memory`；`sync` 和 `models` 已经转正，不再是功能。 | 使用这两个键之一。 |
 | `FEATURE_PINNED` | 409 | `COFFER_FEATURES` 在守护进程的生命周期内固定了该功能。 | 修改 `COFFER_FEATURES` 并重启守护进程。 |
 
 ## 启动错误 {#startup-errors}
@@ -324,7 +328,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `10` | Waiting for git | 守护进程在运行，但在等 git：没有找到，或版本低于 2.40。命令在发送任何请求之前打印了原因和一段给智能体的提示词。见 [Coffer 需要 git](/zh/guides/troubleshooting#coffer-needs-git)。 |
 | `11` | Presence not confirmed | 交给桌面应用在场验证的步骤（`coffer approval approve`、`coffer secret reveal`、`coffer secret backup-key`）被取消、失败或超时，或者守护进程拒绝了授权（`PRESENCE_GRANT_INVALID`）。每条审批都继续等待。 |
 | `12` | Desktop app unavailable | 这一步需要桌面应用，而它没在运行且在这里无法启动（没有应用、不是 Mac，或用了 `--no-launch`）：`CLI_APP_UNAVAILABLE`。什么都没批准。打开应用后再运行一次命令。 |
-| `13` | Wait timed out | 用 `--wait` 发起的操作在 `--timeout` 之前没有完成（`CLI_WAIT_TIMEOUT`）。它可能仍在运行；用它的状态命令查看。 |
+| `13` | Wait timed out | 等待在操作完成之前就结束了：`coffer sync wait` 超过了它的 `--timeout`（`CLI_WAIT_TIMEOUT`）。这一轮可能仍在运行；用 `coffer sync status` 查看。 |
 
 ### 命令行自己设定的错误码 {#codes-the-command-line-sets}
 
@@ -334,10 +338,10 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | --- | --- | --- |
 | `CLI_INVALID_INPUT` | `6` | 命令自己的输入无效：`--data` 或 `--args` 不是 JSON、`@file` 读不了、`--set` 不是 `key=value`，或某个参数的值格式不对。什么都没发送。 |
 | `CLI_APP_UNAVAILABLE` | `12` | 桌面应用没在运行，也无法启动。 |
-| `CLI_WAIT_TIMEOUT` | `13` | 操作完成之前 `--wait` 就用完了。 |
+| `CLI_WAIT_TIMEOUT` | `13` | 操作完成之前 `coffer sync wait` 就超过了 `--timeout`。 |
 | `CLI_DESKTOP_REQUEST_FAILED` | `1` | 桌面应用无法执行一次更新请求（`coffer app update …`）。 |
 
-出错时传 `--verbose`（`coffer -v …`）可以打印完整的 traceback 和 HTTP 上下文。
+传 `--verbose`（`coffer -v …`）会在被拒绝时补上背后的请求——方法、路径和状态码，从不包含请求头——文本模式下是标准错误上的一行，`--json` 时是 `error` 旁边的一个 `request` 对象；意外错误还会打印 traceback。
 
 ## MCP shim 退出码 {#mcp-shim-exit-codes}
 

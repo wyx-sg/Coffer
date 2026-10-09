@@ -33,6 +33,7 @@ from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.surfaces.http.guide_wiring import BuiltinGuide
 from coffer.surfaces.http.knowledge_sweep_wiring import start_knowledge_sweep
 from coffer.surfaces.http.memory.distil_state import DistilRunner
+from coffer.surfaces.http.memory_sync_wiring import start_memory_sync_worker, wire_memory_sync
 from coffer.surfaces.http.memory_wiring import start_aggregate_worker, start_distil_worker
 from coffer.surfaces.http.sync_wiring import SyncWiring, start_sync, start_sync_worker
 
@@ -48,6 +49,7 @@ class BackgroundWorkers:
     knowledge_sweep_task: asyncio.Task[None]
     distil_task: asyncio.Task[None]
     aggregate_task: asyncio.Task[None]
+    memory_sync_task: asyncio.Task[None]
 
 
 def start_background_workers(
@@ -79,10 +81,10 @@ def start_background_workers(
         secret_store=secret_store,
         platform=platform,
     )
+    sync_worker = start_sync_worker(sync)
+
     # Every experimental feature's pass reads its switch at the top of each
     # round and skips it while off (spec experimental-features).
-    sync_worker = start_sync_worker(sync, features)
-
     # The knowledge sweep: refresh the guide, promote what landed in a
     # collection's inbox, and commit edits found on disk.
     knowledge_sweep_task = start_knowledge_sweep(knowledge_service, guide, resource_svc, features)
@@ -92,6 +94,10 @@ def start_background_workers(
     # only reads the agents' own memory and only writes the derived tree, so
     # nothing here has to wait on the vault rewriters above.
     aggregate_task = start_aggregate_worker(memory_service, engine_config, features)
+    # The memory sync into each agent's own memory (spec memory "Sync on an
+    # interval and on demand"): off until the person turns it on.
+    memory_sync = wire_memory_sync(resource_svc, audit, engine_config)
+    memory_sync_task = start_memory_sync_worker(memory_sync, engine_config, features)
 
     return BackgroundWorkers(
         retention_worker=retention_worker,
@@ -101,4 +107,5 @@ def start_background_workers(
         knowledge_sweep_task=knowledge_sweep_task,
         distil_task=distil_task,
         aggregate_task=aggregate_task,
+        memory_sync_task=memory_sync_task,
     )

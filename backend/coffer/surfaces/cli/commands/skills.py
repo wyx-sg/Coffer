@@ -230,7 +230,7 @@ skills = group("skill")
 @skills.command("stage-archive")
 @maps("skill stage-archive", ("POST", "/skills/stage/archive"), ui=_UI + "Import · an archive")
 def stage_archive(
-    archive: Path = typer.Argument(..., help="A .zip or .tar.gz of one or more skills"),
+    archive: Path = typer.Argument(..., help="A .zip or .skill archive of one or more skills"),
     as_json: bool = _io.json_option(),
 ) -> None:
     """Stage skills from an archive file; confirm with ``skill stage-confirm``."""

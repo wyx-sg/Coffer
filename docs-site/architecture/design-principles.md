@@ -131,13 +131,13 @@ Sync is bidirectional but only under the sync spec's safety rules: git computes 
 
 ## Secrets are never plaintext at rest
 
-**Statement.** Secrets live only as Fernet ciphertext, one file per secret under `~/.coffer/vault/secret/`. Plaintext exists in memory solely between decrypt and the spawn or header injection that consumes it, and never reaches a file, logs, audit or any structured event. All other code holds secret **refs**. The master key is managed only by the secret module in the infrastructure layer — a `0600` file, `~/.coffer/master.key`, by default, the OS keychain when you opt in — and that module is the only importer of `keyring`.
+**Statement.** Secrets live only as Fernet ciphertext, one file per secret under `~/.coffer/vault/secret/`. Plaintext exists in memory solely between decrypt and the spawn or header injection that consumes it, and never reaches a file, logs, audit or any structured event. All other code holds secret **refs**. The master key is managed only by the secret module in the infrastructure layer — one item in the macOS Keychain, in an access group only Coffer's signed binaries can read — and that module is the only importer of `keyring`.
 
-**Rationale.** Envelope encryption gives zero keychain prompts under an unsigned, frequently rebuilt binary, while the keychain opt-in still defends against offline copying of `~/.coffer/`. Refs make every config document safe to audit, sync and display.
+**Rationale.** Envelope encryption puts one key in the Keychain for any number of secrets, so vault sync can still carry ciphertext, while a copy of `~/.coffer/` holds only ciphertext without its key. Refs make every config document safe to audit, sync and display.
 
 **In the code.** An import contract confines `keyring`; another stops the CLI from importing the secret store at all, so the daemon is the single reader of the key. The MCP server schema rejects static `env` and header values that look like tokens. Kinds supply an audit redactor so config written to the audit log carries no secret-bearing maps. See [Security model](/architecture/security).
 
-**Rules out.** Secrets in resource config; the CLI decrypting in-process; the master key inside anything the vault publishes; re-encrypting data to switch key storage (the key moves, the ciphertext does not).
+**Rules out.** Secrets in resource config; the CLI decrypting in-process; the master key inside anything the vault publishes; a setting that moves the master key out of the Keychain.
 
 ## Detect, never refuse
 
@@ -157,7 +157,7 @@ The same stance governs other mismatches Coffer can detect but not safely resolv
 
 **Rationale.** A second release branch drifts and collides on every rebase. A runtime switch lets the owner keep testing everything while releasing only what is ready — and a switch that destroyed data would make trying a feature a one-way door.
 
-**In the code.** A registry in the domain layer records each experimental feature with the route prefixes and resource kinds it owns; it holds four entries today, `knowledge`, `memory`, `sync` and `models`. A feature never hard-depends on another: a surface that would show two features simply leaves out the part of the one that is off. A switched-off feature looks absent in the UI, with no notice in its place. Gates run at request time: gated routes answer `404 FEATURE_DISABLED`, the generic resource routes refuse and hide the feature's kinds, builtin tools leave `tools/list`, and workers skip their round. Kinds stay registered and migrations always run. Every feature is off by default in every build, and the switch is per machine, in `~/.coffer/daemon-config.json`. See [Experimental features](/guides/experimental-features).
+**In the code.** A registry in the domain layer records each experimental feature with the route prefixes and resource kinds it owns; it holds two entries today, `knowledge` and `memory`. Vault sync and model providers began there as `sync` and `models` and have graduated: they are always on, with no switch. A feature never hard-depends on another: a surface that would show two features simply leaves out the part of the one that is off. A switched-off feature looks absent in the UI, with no notice in its place. Gates run at request time: gated routes answer `404 FEATURE_DISABLED`, the generic resource routes refuse and hide the feature's kinds, builtin tools leave `tools/list`, and workers skip their round. Kinds stay registered and migrations always run. Every feature is off by default in every build, and the switch is per machine, in `~/.coffer/daemon-config.json`. See [Experimental features](/guides/experimental-features).
 
 **Rules out.** Wiring-time gates that need a restart; a switch stored in the synced vault; deleting a feature's data when it is switched off.
 

@@ -284,6 +284,9 @@ class ListModelsIn(BaseModel):
     secret_ref: str | None = None
     secret_value: str | None = None  # inline secret to fetch before saving
     base_url: str | None = None
+    #: The saved connection being listed (its detail page); its health verdict
+    #: is kept from the answer when the call is that connection's own.
+    connection_uid: str | None = None
 
 
 class TestResultOut(BaseModel):

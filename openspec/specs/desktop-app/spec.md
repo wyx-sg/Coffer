@@ -6,7 +6,7 @@ The macOS desktop shell: its window and menu bar item, the handshake that creden
 
 A previous shell was retired over the operating cost of every update (a rebuild plus a reinstall, and built artifacts that drifted from source) and then restored, because that judgement priced the update cost and not the access cost ([The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do](../../../docs/decisions/desktop-shell-over-a-shared-frontend.md)). The restored shell is smaller: deploying the sibling binaries stays the daemon's frozen-start job, and native file actions stay daemon HTTP routes. The retirement's failure mode is bounded rather than gone — a stale `.app` can still carry a stale `frontend/dist` — and the daemon half of it is made visible by the version-skew check. It owns no persistent state; the handshake is ephemeral and re-made on every launch.
 
-The shell exposes no HTTP surface of its own, so it has no `contracts/`: it is a client of the daemon's `/api/v1/daemon/status` and `/api/v1/daemon/shutdown` routes, of the token-gated `/api/v1/attention` it polls for the menu bar's "needs you" entry, of `/api/v1/sync/status` it polls to raise the notification of [vault-sync](../vault-sync/spec.md) "Say a vault needs a human where the user already is", and of `~/.coffer/daemon.json`; outside the machine it reads only the release manifest on GitHub Releases. Its internal interface is in-process Tauri IPC commands — restart the daemon, hand the page its daemon connection, compare the daemon's version with the app's, take the interface language the page reports so the menu bar can be labelled in it, open the daemon log file in the system viewer for the offline screen (it needs no daemon), the presence-gated reveal, key backup and approval, and the update status, check, install and Check automatically switch. The offline banner is rendered by the web UI; the Restart control, the Open daemon log control and the version-skew warning inside it are this capability's. The shell's `cargo test` suite is gated by `.github/workflows/desktop.yml` (`make desktop-lint`, `make desktop-test`), not by `make verify`; nothing in CI proves the `.app` assembles or the `.dmg` opens — that is the release workflow's job — and hiding the window on close, the tray's own items and the IPC commands' `AppHandle`-bound halves need a live Tauri runtime and are exercised by launching the app. The release version is written in six files (`scripts/bump_version.py` lists them), including the shell's bundle configuration; keeping them in step is release procedure, and a mismatch shows up as a version-skew warning. Signing, notarisation and the updater feed run in the release workflow only when their secrets are present; `RELEASING.md` lists what the owner provides.
+The shell exposes no HTTP surface of its own, so it has no `contracts/`: it is a client of the daemon's `/api/v1/daemon/status` and `/api/v1/daemon/shutdown` routes, of the token-gated `/api/v1/attention` it polls for the menu bar's "needs you" entry, of `/api/v1/sync/status` it polls to raise the notification of [vault-sync](../vault-sync/spec.md) "Say a vault needs a human where the user already is", and of `~/.coffer/daemon.json`; outside the machine it reads only the release manifest on GitHub Releases. Its internal interface is in-process Tauri IPC commands — restart the daemon, hand the page its daemon connection, compare the daemon's version with the app's, take the interface language the page reports so the menu bar can be labelled in it, open the daemon log file in the system viewer for the offline screen (it needs no daemon), the presence-gated reveal, key backup and approval, the backup dialog's report that it closed (which ends a waiting `coffer secret backup-key`), and the update status, check, install and Check automatically switch. The offline banner is rendered by the web UI; the Restart control, the Open daemon log control and the version-skew warning inside it are this capability's. The shell's `cargo test` suite is gated by `.github/workflows/desktop.yml` (`make desktop-lint`, `make desktop-test`), not by `make verify`; nothing in CI proves the `.app` assembles or the `.dmg` opens — that is the release workflow's job — and hiding the window on close, the tray's own items and the IPC commands' `AppHandle`-bound halves need a live Tauri runtime and are exercised by launching the app. The release version is written in six files (`scripts/bump_version.py` lists them), including the shell's bundle configuration; keeping them in step is release procedure, and a mismatch shows up as a version-skew warning. Signing, notarisation and the updater feed run in the release workflow only when their secrets are present; `RELEASING.md` lists what the owner provides.
 
 Out of scope: any platform but macOS arm64 (no Windows or Linux shell, no Intel build — those legs were never validated end to end) and supervising anything but the daemon (upstream MCP processes are the daemon's job).
 
@@ -33,6 +33,7 @@ The menu bar item's labels, its tooltip and the sync notification MUST be in the
 - **WHEN** the user closes the window,
 - **THEN** the process stays alive with its tray entry intact instead of exiting,
 - **AND** re-activating from the Dock restores the window.
+- **AND** a window closed in full screen first leaves full screen and is hidden once it has, so no empty black screen is left in its place.
 
 #### Scenario: the tray speaks the interface language
 - **GIVEN** the user has chosen Chinese as the interface language,
@@ -100,7 +101,7 @@ A daemon it starts MUST be given a readiness budget that is a ceiling rather tha
 - **AND** no second daemon process is started.
 
 ### Requirement: Restart by stopping the running daemon first
-Restart MUST be a true restart: when a daemon is responsive it MUST be asked to shut down over its token-gated shutdown route and the port MUST be observed free before a replacement is spawned. A restart that silently became a no-op would do nothing at exactly the moment a user reaches for it — a wedged-but-listening daemon, whose old process still holds the port — and a failure to free the port MUST be reported rather than followed by a spawn that cannot bind. The same restart MUST run whichever place it was chosen from: the tray, the offline banner or the web UI's Settings → Daemon tab.
+Restart MUST be a true restart: when a daemon is responsive it MUST be asked to shut down over its token-gated shutdown route and the port MUST be observed free before a replacement is spawned. A restart that silently became a no-op would do nothing at exactly the moment a user reaches for it — a wedged-but-listening daemon, whose old process still holds the port — and a failure to free the port MUST be reported rather than followed by a spawn that cannot bind. A daemon that does not answer, or answers the shutdown request but keeps its port, is wedged: the restart MUST force it out — signal the pid `~/.coffer/daemon.json` records once its command line shows a Coffer daemon, and kill it when it does not exit — before spawning (spec [daemon](../daemon/spec.md) "Force out a wedged daemon on an explicit restart"), rather than spawn a replacement beside it. The same restart MUST run whichever place it was chosen from: the tray, the offline banner or the web UI's Settings → Daemon tab.
 
 A restart MUST wait for its replacement to answer and return that daemon's connection with the result — read from the daemon's discovery file while waiting, never carried over from the daemon it stopped, so a restart that moves the daemon to a port saved in Settings → Daemon (spec [daemon](../daemon/spec.md) "Bind a fixed, settable port") reconnects the shell on that port — and the page MUST install what it is handed rather than run a handshake of its own — a page that asked again the instant the restart returned asked before the new daemon had bound anything, and the handshake's cold-start branch answered by spawning a rival for it.
 
@@ -121,6 +122,12 @@ A restart MUST wait for its replacement to answer and return that daemon's conne
 - **WHEN** the replacement starts answering,
 - **THEN** the shell returns its base URL and token alongside the new PID,
 - **AND** the page installs those rather than running a second handshake, so the restart starts exactly one daemon.
+
+#### Scenario: a restart forces out a daemon that will not stop
+- **GIVEN** a daemon that does not answer its status call, or that answers the shutdown request but keeps its port,
+- **WHEN** the user chooses restart from the tray, the offline banner or Settings → Daemon,
+- **THEN** the shell ends the daemon process `~/.coffer/daemon.json` records and waits for the port to free before spawning a replacement,
+- **AND** a discovery file that names no live Coffer daemon is not acted on, and the restart goes straight to spawning.
 
 ### Requirement: Rate-limit restarts from the last success
 Restarts MUST be serialised and rate-limited to at most one every five seconds, measured from the last **successful** restart. A failed spawn MUST NOT consume the window, so the user can retry immediately rather than waiting out a cooldown a failure earned.
@@ -343,9 +350,14 @@ request it MUST read each approval from the daemon, refuse one whose target fing
 one the request was pinned to, show the operating system's prompt and sign the grant pinned to that
 target ("Release plaintext and approvals only after a presence check in the shell"); for a reveal it
 MUST run the reveal flow and show the value in the window, sending it nowhere else; for a key backup
-it MUST open the page's own backup dialog, where the person types the passphrase; and for the update
-commands it MUST run the updater and report its state. It then tells the daemon how the request
-ended — done, cancelled or failed with its reason — which approves nothing by itself. The shell
+it MUST open the page's own backup dialog, where the person types the passphrase, and keep the
+request open while that dialog is: it ends the request done only once its own export has written
+the file, with the path and key fingerprint the daemon answered (never a path the page reports),
+and cancelled when the dialog closes without one; for the update commands it MUST run the
+updater and report its state; and for an uninstall it MUST open the page's own uninstall dialog
+(with Also delete my data ticked when the command asked for it) and report that it opened it — the
+person confirms there. It then tells the daemon how the request ended — done, cancelled or
+failed with its reason — which approves nothing by itself. The shell
 never acts on a request by clicking or scripting its own window.
 
 #### Scenario: the shell serves a command line approval
@@ -353,3 +365,31 @@ never acts on a request by clicking or scripting its own window.
 - **WHEN** the shell claims it
 - **THEN** it reads both approvals from the daemon, shows one prompt naming them, signs over exactly those approvals and targets, and reports the request done
 - **AND** a request whose approval's target moved is reported failed, with nothing signed
+
+#### Scenario: the shell opens the uninstall dialog for the command line
+- **GIVEN** a desktop request `uninstall` asking to delete the data
+- **WHEN** the shell claims it
+- **THEN** it opens Settings › About's uninstall dialog with Also delete my data ticked and reports the request done, uninstalling nothing itself
+
+### Requirement: Uninstall Coffer from the app
+The shell MUST offer uninstalling Coffer to the page as one command that takes
+whether to delete the data. With the data, it MUST first run the presence check
+(Touch ID or the login password) with a prompt that says the data will be
+deleted, and send the daemon's uninstall a grant for `uninstall` over
+`delete-data`; a cancelled check sends nothing. Before it calls the daemon it
+MUST stop starting daemons — no handshake, menu bar restart or update relaunch
+starts one again in this run. It then calls the daemon's uninstall (spec
+[daemon](../daemon/spec.md) "Uninstall Coffer from this machine"), waits for the
+daemon to exit, returns the daemon's step list to the page, moves its own `.app`
+to the Trash and quits. A failed call MUST leave the app running, report the
+reason to the page, and start daemons again.
+
+#### Scenario: uninstalling from the app removes Coffer and the app
+- **GIVEN** the app running with its daemon
+- **WHEN** the page asks the shell to uninstall without deleting the data
+- **THEN** the shell calls the daemon's uninstall, waits for the daemon to exit, returns its steps, moves the `.app` to the Trash and quits
+
+#### Scenario: deleting the data waits for the person's presence
+- **GIVEN** the page asking the shell to uninstall and delete the data
+- **WHEN** the person cancels the Touch ID prompt
+- **THEN** nothing is sent to the daemon and the app keeps running

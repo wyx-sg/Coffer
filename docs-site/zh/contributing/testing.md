@@ -96,7 +96,7 @@ Coffer 存在磁盘上的几乎所有东西都在你的 home 目录下：保险�
 - **单台机器。** 一个测试进程已经在使用的全新 home。Coffer 从它推导出自己的每一个目录，和已安装的副本完全一样。同一个 home 可以交给测试启动的程序，让该程序以这台机器的身份运行。
 - **共享一个远端的两台机器。** 两个相互独立的 home，除了一个它们都能访问的真实 git 仓库之外什么都不共享。保险库同步的场景就在它们之间通过真实的同步代码和真实的 git 上演，没有任何伪造。
 - **伪造的智能体配置。** 一个智能体的配置目录（比如 Claude Code 或 Codex 的），依照 Coffer 自身使用的同一份智能体描述，布置在一个隔离 home 里。因此测试写入的文件恰好落在 Coffer 会去找的地方。默认位置和自定义位置都支持。
-- **伪造的聊天渠道。** 一个即时通讯平台的替身。它记录 Coffer 发送的一切（消息、卡片、编辑、正在输入指示、表情回应、文件），并允许测试投递收到的消息和按钮点击。它的各项能力可以单独开关，所以同一个替身既能扮演原地编辑消息的平台，也能扮演流式回复的平台。
+- **伪造的聊天渠道。** 一个即时通讯平台的替身。它记录 Coffer 发送的一切（消息、卡片、编辑、正在输入指示、表情回应、文件），并允许测试投递收到的消息和按钮点击。它的各项能力可以单独开关，所以同一个替身既能扮演显示实时预览的平台，也能扮演只显示正在输入指示的平台。
 
 当一个测试需要一种新的隔离环境时，把它加在这些旁边，而不是在某个测试文件里临时搭一个。
 
@@ -194,6 +194,28 @@ Playwright 会启动两个 Web 服务器：
 
 CI 失败时，`e2e` job 会把 Playwright 报告和 trace，以及隔离守护进程的日志目录和 `daemon.json`，作为 workflow 产物上传。
 
+## 测试已安装的版本 {#testing-an-installed-build}
+
+上面每个层级测的都是本检出目录里的源码。发布前，或者装好一个修复之后，`make verify-installed-mcp` 检查的是你真正装上的那个版本：它通过真实 HTTP 驱动正在运行的守护进程的 `/mcp`、已安装的 `coffer-mcp-shim` 和官方 MCP SDK，上游是会记下每次调用的合成服务器：
+
+```sh
+make verify-installed-mcp OUT=/tmp/coffer-acceptance/mcp-1     # the installed app (~/.coffer/daemon.json)
+make verify-installed-mcp OUT=<dir> DAEMON_JSON=<home>/.coffer/daemon.json SHIM=<path>
+```
+
+它只检查装好的版本才能看出来的东西，协议、权限、密钥和工具目录的规则都交给上面的层级去测。具体是：已安装的 shim 能连上冻结打包的守护进程，并把一次调用送到上游；官方 SDK 的会话在 HTTP、通知流和 shim 上都能工作，包括上游发来的 sampling 和 roots 请求送到正确的客户端；守护进程、它的握手和 shim 是同一个构建，冻结版本里延迟导入的路径（stderr 遮盖、自定义工具的 HTTP 客户端）能加载；以及只读地看一眼：它测的那个 shim 是不是你的 agent 配置里指向的那个。源码层级能测的行为应该放在那里，不放在这里。
+
+它需要手动运行，`make verify` 和 CI 都不会跑它。因为默认目标就是你自己正在用的应用，它只创建名字以 `qa-` 开头的对象，这些名字里有任何一个已经存在就拒绝开始，结束时删掉自己创建的一切。你的 vault 同步到远端时它也拒绝写入；它从不重启守护进程，也从不批准任何密钥。`OUT` 必须是仓库之外一个新建或为空的目录。结果写到 `OUT/summary.md` 和 `OUT/cases.json`，守护进程 token 和测试用密钥都已遮盖。每个用例是 PASS、FAIL、BLOCKED（附上在那里跑不了的原因，比如找不到已安装的 shim 或需要 Touch ID 批准）或 N/A（这次运行不适用的检查）。只有出现 FAIL 才算失败。完整规则见 [`.agents/testing.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/testing.md) 的 "Installed-build Acceptance" 一节。
+
+`make verify-installed-cli` 用同样的思路检查已安装的 `coffer` 命令，但它不需要守护进程，也不碰你的任何东西。它运行二进制的一份拷贝，`HOME` 指向一个空目录，只跑那些在连守护进程之前就会结束的命令。它只检查冻结打包才会出错的地方：每个命令组的帮助都能显示（打包漏掉的模块会在这里失败），zsh 和 bash 的命令补全可用，读不了的输入和源码一样以退出码 6 报错，而不是崩溃：
+
+```sh
+make verify-installed-cli OUT=/tmp/coffer-acceptance/cli-1      # ~/.coffer/bin/coffer
+make verify-installed-cli OUT=<dir> COFFER=<path>/coffer
+```
+
+这两套测试只测已安装版本才会出错的地方，源码测试能覆盖的行为就放在源码测试里。请在和已安装版本对应的检出目录里运行：比它新的检出会把新增的命令报成失败。
+
 ## 前端测试 {#frontend-tests}
 
 前端测试在 jsdom 环境中使用 Vitest 和 Testing Library。每个测试都放在它所覆盖的模块旁边（`*.test.ts`、`*.test.tsx`），`make verify-unit` 用 `npx vitest run src` 把它们全部运行。`src/test/setup.ts` 加载真实的 i18n 文案目录，所以组件渲染的是真实文案。用真实的 `QueryClientProvider` 渲染，只 mock 网络边界：`src/lib/api/*` 模块，或者聊天用的 `streamClient`。约定见[前端](/zh/contributing/frontend#testing)。
@@ -204,7 +226,7 @@ CI 失败时，`e2e` job 会把 Playwright 报告和 trace，以及隔离守护�
 
 同一台机器上同一时间只跑一份集成测试。`make verify-integration` 会拿一把全机锁（`~/.cache/coffer/verify-integration.lock`）：另一个 worktree 或会话的第二份会排队等第一份跑完，而不是互相拖慢到依赖时间的测试纷纷失败；`COFFER_VERIFY_LOCK=off` 可以跳过这把锁。每个集成测试还有 300 秒的上限（`PYTEST_TIMEOUT`），卡住的测试会按名字报失败，而不是把整轮拖住。
 
-`make verify` 先运行 `lint`，然后依次运行 `docs-build`（本站的 VitePress 构建，有失效链接就失败）、`verify-unit`、`verify-integration`、`verify-contract` 和 `verify-acceptance`。最后，无论成功还是失败，它都会打印每个阶段的耗时，并把列表保存在 `.coffer-verify.timings`。`make verify-all` 额外加上 `verify-e2e`。
+`make verify` 先运行 `lint`，然后依次运行 `docs-build`（本站的 VitePress 构建，有解析不了的 Mermaid 图或失效链接就失败）、`verify-unit`、`verify-integration`、`verify-contract` 和 `verify-acceptance`。最后，无论成功还是失败，它都会打印每个阶段的耗时，并把列表保存在 `.coffer-verify.timings`。`make verify-all` 额外加上 `verify-e2e`。
 
 `make lint` 是完整的静态门禁，不只是一次格式化检查。它按顺序运行以下步骤：
 
@@ -227,7 +249,7 @@ CI 失败时，`e2e` job 会把 Playwright 报告和 trace，以及隔离守护�
 | `scripts/check_frontend_colors.py` | 前端在 `src/index.css` 之外没有颜色字面量；每种颜色都是主题 token |
 | `scripts/check_ignored_sources.py` | 没有 `.gitignore` 规则隐藏源码树中的文件，也没有未锚定的模式命中 `lib/` 或 `env/` 这类常见源码文件夹名（那样会在任意深度隐藏该文件夹） |
 | `scripts/check_bare_tasks.py` | `backend/coffer/` 下的模块启动的裸 `asyncio.create_task` / `ensure_future` 不得超出脚本中列出的额度。后台工作一律走 supervisor（它给任务命名、记录崩溃并在关停时取消）；在原地被 await 的任务连同理由登记在脚本里 |
-| `ruff check`、`ruff format --check` | 按 `backend/pyproject.toml` 中的规则，对 `backend/` 和 `evals/` 做 lint 和格式检查 |
+| `ruff check`、`ruff format --check` | 按 `backend/pyproject.toml` 中的规则，对 `backend/`、`evals/` 和 `e2e/installed/` 做 lint 和格式检查 |
 | `mypy` | 在设置了 `strict = true` 的 `backend/pyproject.toml` 下，对整个 `coffer` 包做类型检查 |
 | `lint-imports` | import-linter 契约：分层方向（`surfaces` → `application` → `domain`）、纯净的 `domain`、`keyring` 只限于密钥代码、类型之间不跨类型导入，以及特定库只限于各自的适配器 |
 | `scripts/dump_i18n_backend_keys.py --check` | 每个后端错误码和审计事件类型在前端 locale 覆盖测试读取的 fixture 中都有条目，所以不会有未翻译的上线 |
@@ -252,7 +274,7 @@ CI 失败时，`e2e` job 会把 Playwright 报告和 trace，以及隔离守护�
 | `pr-title.yml` | pull request 被创建或编辑 | 按 `.commitlintrc.yaml` 检查标题 |
 | `desktop.yml` | `main` 上 `desktop/**` 或 `Makefile` 有改动 | `make desktop-lint` 和 `make desktop-test` |
 | `evals.yml` | `main` 上 `evals/`、MCP 领域代码（`backend/coffer/domain/mcp/`）或锁文件有改动 | `make eval`：确定性评测套件，以相对已提交基线的回归作为门禁 |
-| `pages.yml` | `docs-site/**` 有改动 | 构建本站，并从 `main` 部署 |
+| `pages.yml` | `docs-site/**` 有改动 | 用本站自带的 Mermaid 版本解析每一张 Mermaid 图（`docs-site/scripts/check_mermaid.mjs`，由 `npm run build` 运行），构建本站，并从 `main` 部署 |
 | `release.yml` | 一个 `v*` 标签 | 面向 Apple 芯片 macOS 的冻结二进制、CLI 压缩包和桌面 `.dmg`，然后创建 GitHub Release |
 
 除了金丝雀之外，CI 中的每次后端安装都从 `backend/uv.lock` 冻结安装。金丝雀变红意味着某个上游发布破坏了东西，而不是你的锁文件出现了偏移。

@@ -220,6 +220,7 @@ forbidden_modules = ["coffer.infrastructure"]
 ignore_imports = [
     "coffer.application.knowledge.* -> coffer.infrastructure.knowledge.*",
     "coffer.application.memory.* -> coffer.infrastructure.memory.*",
+    "coffer.application.memory.* -> coffer.infrastructure.memory.writers.*",
     "coffer.application.binary_deploy -> coffer.infrastructure.vault.home",
 ]
 
@@ -923,6 +924,8 @@ forbidden_modules = [
 ignore_imports = [
     "coffer.application.memory.* -> coffer.domain.agent.*",
     "coffer.infrastructure.memory.readers.* -> coffer.domain.agent.*",
+    "coffer.infrastructure.memory.writers.* -> coffer.domain.agent.*",
+    "coffer.infrastructure.memory.checkouts -> coffer.domain.agent.*",
 ]
 
 # Vault convergence with a git remote.

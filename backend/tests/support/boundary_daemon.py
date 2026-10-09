@@ -202,4 +202,4 @@ class CliTransport:
 
 def point_cli_at(daemon: BoundaryDaemon, monkeypatch: pytest.MonkeyPatch) -> None:
     transport = CliTransport(daemon.client)
-    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (transport, object()))
+    monkeypatch.setattr(_cli_client, "client_or_exit", lambda **_kw: (transport, object()))

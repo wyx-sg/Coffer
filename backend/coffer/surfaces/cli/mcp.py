@@ -16,6 +16,7 @@ import httpx
 import typer
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli import _io
 from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(help="Check an MCP server")
@@ -26,6 +27,17 @@ def _error_message(r: httpx.Response) -> str:
         return str(r.json()["error"]["message"])
     except Exception:
         return f"HTTP {r.status_code}"
+
+
+def _capabilities(r: httpx.Response) -> dict[str, object]:
+    """What the refresh found, as counts — or why it found nothing."""
+    if r.status_code != 200:
+        return {"error": _error_message(r)}
+    data = r.json()
+    counts: dict[str, object] = {
+        plural: len(data.get(plural) or []) for plural in ("tools", "prompts", "resources")
+    }
+    return {**counts, "from_cache": bool(data.get("from_cache"))}
 
 
 def _capabilities_line(r: httpx.Response) -> str:
@@ -47,12 +59,16 @@ def test_cmd(
     prompt: bool = typer.Option(
         False, "--prompt", help="On a failure, also print the prompt to give your agent"
     ),
+    as_json: bool = _io.json_option(),
 ) -> None:
     """Re-query a server's capabilities, then report whether it answers.
 
     Exits 7 when the server does not answer. With ``--prompt``, a failure also
     prints the hand-off prompt the server's page offers for it: installing a
     launcher that is not found here, or finding why the server fails.
+    ``--json`` prints the test's answer (``ok``, ``latency_ms``,
+    ``error_message``, ``handoff``) with the refresh's counts under
+    ``capabilities``; a failed test still exits 7.
 
     \f
     Routes: ``POST /resources/mcp_server/{uid}/refresh`` then ``.../test``
@@ -61,16 +77,20 @@ def test_cmd(
     health test that follows is there to name.
     """
     verbose = bool((ctx.obj or {}).get("verbose", False))
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        uid = resolve_uid(c, "mcp_server", name, verbose=verbose)
+    with _io.client(as_json=as_json) as c:
+        uid = resolve_uid(c, "mcp_server", name, verbose=verbose, as_json=as_json)
         refreshed = c.post(f"/resources/mcp_server/{uid}/refresh")
         if refreshed.status_code == 404:
-            _cli_client.check(refreshed, verbose=verbose)
+            _cli_client.check(refreshed, verbose=verbose, as_json=as_json)
         r = c.post(f"/resources/mcp_server/{uid}/test")
-        _cli_client.check(r, verbose=verbose)
-    typer.echo(_capabilities_line(refreshed))
+        _cli_client.check(r, verbose=verbose, as_json=as_json)
     data = r.json()
+    if as_json:
+        _io.emit({**data, "capabilities": _capabilities(refreshed)}, as_json=True)
+        if not data["ok"]:
+            raise typer.Exit(7)
+        return
+    typer.echo(_capabilities_line(refreshed))
     if data["ok"]:
         typer.echo(f"OK  ({data['latency_ms']} ms)")
     else:

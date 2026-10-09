@@ -44,7 +44,7 @@ give the status each code is actually sent with.
 | `CURSOR_INVALID` | 400 | A `cursor` sent to a paged list (the audit log, the MCP invocation log, an agent's native sessions, the chat conversations) does not decode, or was issued for another list or with other filters. | Drop `cursor` to read the first page again, or send the `next_cursor` the same list and filters returned. |
 | `NOT_FOUND` | 404 | No such route or object, raised by a route rather than a domain error. | Check the path; the daemon serves its live route list at `/api/v1/openapi.json` to a caller with the token. |
 | `FORBIDDEN` | 403 | The route refuses the operation. | Read `message`. |
-| `CONFIG_INVALID` | 422 | The request body or query failed validation, or a resource's config is invalid. The submitted values are not echoed back. | Compare the body with the route's schema at `/api/v1/openapi.json` (send the token). |
+| `CONFIG_INVALID` | 422 | The request body or query failed validation, or a resource's config is invalid. The submitted values are not echoed back. A stored key offered to an endpoint no saved connection holds it for has `details.reason` `stored_key_destination`; nothing was sent. | Compare the body with the route's schema at `/api/v1/openapi.json` (send the token). |
 | `INTERNAL_ERROR` | 500 | An unexpected failure. The full traceback is in the daemon log under the response's trace id. | Run `grep <trace-id> ~/.coffer/logs/daemon.log`, or run `coffer log daemon --errors`. |
 | `HTTP_<status>` | as named | A bare HTTP error with a status that has no named code. | Read `message`. |
 
@@ -53,6 +53,7 @@ give the status each code is actually sent with.
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `RESOURCE_NOT_FOUND` | 404 | Nothing answers to the uid or name you gave. | Check the name on the kind's page; names are unique only within a kind. |
+| `INVOCATION_NOT_FOUND` | 404 | No tool call in the log has that id — it never existed, or retention removed it. | Take the id from `coffer log mcp` or the Activity page. |
 | `RESOURCE_ALREADY_EXISTS` | 409 | A resource of that kind already has that name. | Pick another name, or edit the existing resource. |
 | `UNKNOWN_KIND` | 400 | The kind is not one this daemon registers. | Use a registered kind, such as `mcp_server`, `skill` or `agent`. |
 | `GENERIC_CREATE_NOT_ALLOWED` | 409 | This kind cannot be created or updated through the generic `/resources` endpoints. | Use the kind's own endpoint or its page in the web UI. |
@@ -70,10 +71,10 @@ give the status each code is actually sent with.
 | --- | --- | --- | --- |
 | `SECRET_MISSING` | 400 | No secret is stored under the referenced secret ref. | Store it: `coffer secret set <ref>`, or re-enter it in the resource's form. |
 | `SECRET_IN_USE` | 409 | The secret cannot be deleted while a resource still references it. The message names the resources. | Detach or delete those resources first. |
-| `SECRET_LOCKED` | 503 | The OS keychain is locked or unavailable, or a keychain write could not be verified. | Unlock the keychain (log in to the desktop session) and retry. |
+| `SECRET_LOCKED` | 503 | The macOS Keychain is locked or unavailable, refused to give the daemon the master key, or a keychain write could not be verified. | Unlock the keychain (log in to the desktop session) and retry. |
 | `SECRET_UNREADABLE` | 500 | A stored secret cannot be decrypted with the current master key. | Restore the matching master key, or re-enter the secret. See [Secret store](/guides/secret-store). |
-| `MASTER_KEY_MISSING` | 503 | Encrypted secrets exist but the master key is in neither the key file nor the keychain. Raised while the daemon starts. | Restore `~/.coffer/master.key`, or re-enter your secrets. |
-| `MASTER_KEY_FILE_INVALID` | 422 | A master-key file to import is missing or is not a valid key, or a `.cfk` backup's fingerprint is not its key's. | Point the import at the key backup the desktop app wrote. |
+| `MASTER_KEY_MISSING` | 503 | Encrypted secrets exist but the master key is not in the Keychain. Raised while the daemon starts. | Import your key backup in the desktop app (**Settings › Security › Import a master key**), or re-enter your secrets. |
+| `MASTER_KEY_FILE_INVALID` | 422 | The key backup (`.cfk`) to import is missing or is not a valid backup, or its fingerprint is not its key's. | Point the import at the key backup the desktop app wrote. |
 | `MASTER_KEY_PASSPHRASE_WRONG` | 422 | A passphrase-protected key backup (`.cfk`) was imported with a wrong passphrase, or none. | Type the passphrase set when the key was exported on the other Mac. |
 | `MASTER_KEY_PASSPHRASE_TOO_SHORT` | 422 | A key backup was asked for with a passphrase under eight characters. Nothing was written. | Choose a longer passphrase. |
 | `SECRET_BINDING_PENDING` | 409 | A secret would go to a destination, or a target, no person has approved. Nothing was sent. `details.approval_ids` names the waiting approvals. | Run `coffer approval approve <id>` and confirm in the Coffer desktop app (or approve it there directly), or reject it with `coffer approval reject <id>` or in **Settings › Security** (**Review**). A custom tool's call answers it in band, naming the approval ids and the same command, for the environment that waits only. Also returned by `coffer run` for a standalone secret nobody has allowed it to use; see [Secrets → Allow `coffer run` to use it](/guides/secrets#allow-coffer-run-to-use-it). |
@@ -82,7 +83,7 @@ give the status each code is actually sent with.
 | `APPROVAL_NOT_PENDING` | 409 | The approval was already approved, rejected or superseded. | Nothing to do; a new change raises a new approval. |
 | `PRESENCE_GRANT_INVALID` | 403 | A reveal, key backup, key import or approval came without a valid presence grant: missing, expired, already used, for another operation or target, or not signed by the desktop app. | Do it in the Coffer desktop app, which runs the presence check and signs the grant. |
 | `APPROVAL_TARGET_CHANGED` | 409 | The approval now names another target than the one the person was shown: its destination moved between the presence prompt and the approve request. Nothing was approved; the grant was pinned to the old target. | Review the approval again (`coffer approval show <id>`) and approve it afresh if you recognise the new target. |
-| `DESKTOP_REQUEST_NOT_FOUND` | 404 | No desktop request has that id: a command line request to the desktop app (approve, reveal, key backup, update) that never existed or has expired (requests last two minutes). | Run the command again; keep the desktop app open while it waits. |
+| `DESKTOP_REQUEST_NOT_FOUND` | 404 | No desktop request has that id: a command line request to the desktop app (approve, reveal, key backup, update) that never existed or has expired (requests last two minutes; a key backup's, ten). | Run the command again; keep the desktop app open while it waits. |
 | `SECRET_NAME_INVALID` | 422 | A new standalone secret's ref is not `secret/<32 hex>`, or its label is over 64 characters or its description over 200. | Mint the secret with `coffer secret set --name "Orders DB"` and let Coffer choose the id; shorten the label or description. |
 | `SECRET_NOT_FOUND` | 404 | `coffer run` named a standalone secret the store does not hold. Only `secret/<id>` values can be resolved this way; a resource's secret never can. | Check the id with `coffer secret list`, or mint the secret with `coffer secret set --name "<name>"`. |
 
@@ -110,6 +111,7 @@ give the status each code is actually sent with.
 | `CUSTOM_TOOL_ENVIRONMENT_REQUIRED` | 422 | The group has more than one enabled environment and the call named none. `details.environments` lists the enabled ones. Nothing was sent. | Pass `coffer_environment` (on the command line, `--env`). See [Custom tools → Choosing the environment of a call](/guides/custom-tools#choosing-the-environment-of-a-call). |
 | `CUSTOM_TOOL_ENVIRONMENT_UNKNOWN` | 422 | The call named an environment the group does not have. `details.environments` lists the enabled ones. Nothing was sent. | Use one of the names listed, exactly as `coffer custom-tool env list` prints it. |
 | `CUSTOM_TOOL_ENVIRONMENT_DISABLED` | 422 | The call named an environment that is switched off. Nothing was sent. | Switch it on (`coffer custom-tool env enable`, or its switch under **Environments**), or call another. |
+| `CUSTOM_TOOL_REQUEST_INVALID` | 422 | A preview (`--dry-run`) could not build the tool's request in the chosen environment: the tool uses an `{env:NAME}` that environment does not define, or its body template does not produce JSON. `details` names the group and environment. Nothing was sent. | Define the variable in that environment (`coffer custom-tool env set-var`), or fix the tool's template. |
 | `CUSTOM_TOOL_ENVIRONMENT_NOT_FOUND` | 404 | A management request named an environment the group does not have. | List them with `coffer custom-tool env list` or on the group's page. |
 | `CUSTOM_TOOL_ENVIRONMENT_EXISTS` | 409 | The group already has an environment of that name. | Pick another name, or change the existing environment. |
 | `CUSTOM_TOOL_LAST_ENVIRONMENT` | 409 | Deleting the environment would leave the group with none. | Add another environment first, or delete the group. |
@@ -120,7 +122,7 @@ give the status each code is actually sent with.
 | --- | --- | --- | --- |
 | `CLI_NOT_KNOWN` | 404 | No managed skill requires that command and no command-line tool was added under that name. | List the known commands on the **CLIs** page. |
 | `CLI_TOOL_EXISTS` | 409 | A command-line tool with that name was already added. | Edit it on the **CLIs** page, or remove it first. |
-| `CLI_TOOL_INVALID` | 400 | The command name, minimum version or login check is not valid. | Use a plain command name or an absolute path; read `message` for the field. |
+| `CLI_TOOL_INVALID` | 400 | The command name, minimum version or login check is not valid. A login check that does not start with the command name has `details.reason` `login_check_command`, `details.field` `login_check` and `details.command`, the name it must start with (a path command's file name). | Use a plain command name or an absolute path; start the login check with the command name; read `message` for the field. |
 | `CLI_TOOL_NOT_DECLARED` | 404 | That command-line tool was not added by hand, so it cannot be edited or removed. | A command a skill requires is changed in the skill, not here. |
 
 ## Agents and agent workspaces
@@ -195,6 +197,8 @@ give the status each code is actually sent with.
 | `MEMORY_RAW_ENTRY_NOT_FOUND` | 404 | No raw entry with that id in the partition. | Refresh; the entry may have become a note and been removed. |
 | `MEMORY_UNSAFE_PATH` | 400 | A path segment is hidden, all dots, or otherwise unsafe. | Use a path inside the partition. |
 | `MEMORY_UNREADABLE` | 422 | An agent's native memory file cannot be parsed. | Repair the file the message names. |
+| `MEMORY_SYNC_RUNNING` | 409 | A memory sync is already running. | Wait for it to finish, then sync again. |
+| `MEMORY_SYNC_NO_PREVIEW` | 409 | No memory sync preview is waiting to be written or cancelled. | Refresh the Memory page. |
 | `MEMORY_DELIVERY_UNSUPPORTED` | 422 | This agent type has no memory hook Coffer can install. | None; that agent reads memory notes from the memory root the `coffer-guide` skill names, with its own file tools. |
 | `MEMORY_DELIVERY_CONFIG_INVALID` | 422 | The agent's settings or hooks file is not a JSON object Coffer can edit. | Repair the file, then install delivery again. |
 
@@ -271,7 +275,7 @@ give the status each code is actually sent with.
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `FEATURE_DISABLED` | 404 | The route or resource belongs to an experimental feature that is switched off on this machine. `details.feature` names it. | Switch it on in **Settings → Features**. See [Experimental features](/guides/experimental-features). |
-| `FEATURE_UNKNOWN` | 404 | The key is not an experimental feature. The keys are `knowledge`, `memory`, `sync` and `models`. | Use one of those four keys. |
+| `FEATURE_UNKNOWN` | 404 | The key is not an experimental feature. The keys are `knowledge` and `memory`; `sync` and `models` graduated and are no longer features. | Use one of those two keys. |
 | `FEATURE_PINNED` | 409 | `COFFER_FEATURES` pins this feature for the daemon's lifetime. | Change `COFFER_FEATURES` and restart the daemon. |
 
 ## Startup errors
@@ -340,7 +344,7 @@ is printed on standard error as `{"error": {"code", "message", "details"}, "exit
 | `10` | Waiting for git | The daemon is running but waits for git: none was found, or it is older than 2.40. The command printed why and a prompt for your agent before sending anything. See [Coffer needs git](/guides/troubleshooting#coffer-needs-git). |
 | `11` | Presence not confirmed | A step handed to the desktop app's presence check (`coffer approval approve`, `coffer secret reveal`, `coffer secret backup-key`) was cancelled, failed or timed out, or the daemon refused the grant (`PRESENCE_GRANT_INVALID`). Every approval stays pending. |
 | `12` | Desktop app unavailable | The step needs the desktop app, which is not running and could not be started here (no app, not a Mac, or `--no-launch`): `CLI_APP_UNAVAILABLE`. Nothing was approved. Open the app and run the command again. |
-| `13` | Wait timed out | An operation started with `--wait` had not finished by `--timeout` (`CLI_WAIT_TIMEOUT`). It may still be running; check its status command. |
+| `13` | Wait timed out | A wait ended before the operation finished: `coffer sync wait` ran past its `--timeout` (`CLI_WAIT_TIMEOUT`). The round may still be running; check `coffer sync status`. |
 
 ### Codes the command line sets
 
@@ -350,10 +354,10 @@ Besides the daemon's codes, which pass through unchanged, a command names these 
 | --- | --- | --- |
 | `CLI_INVALID_INPUT` | `6` | The command's own input is not valid: `--data` or `--args` is not JSON, `@file` cannot be read, `--set` is not `key=value`, or a flag's value is malformed. Nothing was sent. |
 | `CLI_APP_UNAVAILABLE` | `12` | The desktop app is not running and could not be started. |
-| `CLI_WAIT_TIMEOUT` | `13` | `--wait` ran out before the operation finished. |
+| `CLI_WAIT_TIMEOUT` | `13` | `coffer sync wait` ran past its `--timeout` before the operation finished. |
 | `CLI_DESKTOP_REQUEST_FAILED` | `1` | The desktop app could not carry out an update request (`coffer app update …`). |
 
-Pass `--verbose` (`coffer -v …`) to print the full traceback and HTTP context on error.
+Pass `--verbose` (`coffer -v …`) to add the request behind a refusal — method, path and status, never a header — as a line on standard error, or as a `request` object beside `error` with `--json`; an unexpected error also prints its traceback.
 
 ## MCP shim exit codes
 

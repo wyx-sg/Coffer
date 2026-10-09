@@ -158,8 +158,6 @@ def test_the_routes_cover_every_sync_operation() -> None:
         ("GET", "/machines"),
         ("PATCH", "/machines/self"),
         ("DELETE", "/machines/{machine_id}"),
-        ("GET", "/key/fingerprint"),
-        ("POST", "/key/import"),
     }
     assert wanted <= served, sorted(wanted - served)
     assert not any("key/export" in path for _m, path in served)

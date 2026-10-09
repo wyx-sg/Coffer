@@ -1,6 +1,5 @@
-// src/components/custom-tools/EditGroupDialog.test.tsx — Edit group (640): the group's headers are the shared rows —
-// a secret row sends {name, secret} (the whole value, no prefix), a plain row {name, value}; a typed-in new secret
-// is written to Secrets before the group names it; there is no reach field.
+// src/components/custom-tools/EditGroupDialog.test.tsx — Edit group (640): the description and timeout only — base
+// URLs, headers and secrets are the environments' — and no reach field.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -8,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 
 import { customToolsApi } from "@/lib/api/customTools";
 import { secretsApi } from "@/lib/api/secret";
+import { acceptance } from "@/test/acceptance";
 import { EditGroupDialog } from "./EditGroupDialog";
 import { makeGroup } from "./testFixtures";
 
@@ -68,68 +68,94 @@ beforeEach(() => {
 });
 
 describe("EditGroupDialog", () => {
-  test("is 640 wide, Cancel is ghost, and there is no Available to field", async () => {
+  test("is 640 wide, Cancel is ghost, and there is no Available to field", () => {
     const dialog = open();
     expect(dialog.className).toContain("max-w-[640px]");
     expect(within(dialog).queryByText("Available to")).not.toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Cancel" }).className).toContain(
       "bg-transparent",
     );
-    expect(
-      await within(dialog).findByRole("button", { name: /Choose a secret|billing-token/ }),
-    ).toBeTruthy();
   });
 
-  test("saves secret rows by name and plain rows by value, sending the whole headers list", async () => {
-    const onOpenChange = vi.fn();
-    const dialog = open(onOpenChange);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add header" }));
-    fireEvent.change(within(dialog).getAllByLabelText("Headers name")[1], {
-      target: { value: "X-Team" },
-    });
-    fireEvent.change(within(dialog).getByLabelText("Value of X-Team"), {
-      target: { value: "core" },
-    });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() =>
-      expect(update).toHaveBeenCalledWith(
-        "billing",
-        expect.objectContaining({
-          headers: [
-            { name: "Authorization", secret: TOKEN_ID, scheme: "Bearer" },
-            { name: "X-Team", value: "core" },
-          ],
-          timeout_seconds: 30,
+  acceptance(
+    "web-ui",
+    "Edit group edits the description, timeout and response settings",
+    async () => {
+      const onOpenChange = vi.fn();
+      const dialog = open(onOpenChange);
+      expect(within(dialog).queryByLabelText(/Base URL/)).toBeNull();
+      expect(within(dialog).queryByRole("button", { name: "Add header" })).toBeNull();
+      expect(within(dialog).getByText(/belong to the environments/)).toBeInTheDocument();
+      fireEvent.change(within(dialog).getByLabelText("Timeout"), { target: { value: "45" } });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith("billing", {
+          description: group.description,
+          timeout_seconds: 45,
+          response: { diagnostic_headers: [], rules: [] },
         }),
-      ),
-    );
-    expect(secretsApi.set).not.toHaveBeenCalled();
-    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
-  });
+      );
+      expect(secretsApi.set).not.toHaveBeenCalled();
+      await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    },
+  );
 
-  test("a pasted secret is written to Secrets before the group is saved", async () => {
+  acceptance(
+    "web-ui",
+    "a response rule is added to a group and a refused header keeps Save off",
+    async () => {
+      const dialog = open();
+      fireEvent.change(within(dialog).getByLabelText("Diagnostic headers"), {
+        target: { value: "X-Trace-Id, X-Error-Code" },
+      });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
+      fireEvent.change(within(dialog).getByLabelText("Header or field"), {
+        target: { value: "X-Result-Code" },
+      });
+      fireEvent.change(within(dialog).getByLabelText("Success values"), {
+        target: { value: "OK, 0," },
+      });
+      // A second rule on a cookie header is named and keeps Save off until it goes.
+      fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
+      fireEvent.change(within(dialog).getAllByLabelText("Header or field")[1], {
+        target: { value: "Set-Cookie" },
+      });
+      fireEvent.change(within(dialog).getAllByLabelText("Success values")[1], {
+        target: { value: "x" },
+      });
+      expect(within(dialog).getByText(/carries credentials or cookies/)).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+      fireEvent.click(within(dialog).getAllByRole("button", { name: "Remove rule" })[1]);
+      fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith("billing", {
+          description: group.description,
+          timeout_seconds: 30,
+          response: {
+            diagnostic_headers: ["X-Trace-Id", "X-Error-Code"],
+            rules: [
+              {
+                source: "header",
+                name: "X-Result-Code",
+                ok_values: ["OK", "0"],
+                missing: "ok",
+                message: null,
+              },
+            ],
+          },
+        }),
+      );
+    },
+  );
+
+  test("a rule that the server would refuse blocks Save and says why", () => {
     const dialog = open();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add header" }));
-    fireEvent.change(within(dialog).getAllByLabelText("Headers name")[1], {
-      target: { value: "X-Api-Key" },
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
+    fireEvent.change(within(dialog).getByLabelText("Header or field"), {
+      target: { value: "Set-Cookie" },
     });
-    // Choosing "new" happens through the row's own "Store it in Coffer?" hint on a secret-looking value.
-    fireEvent.change(within(dialog).getByLabelText("Value of X-Api-Key"), {
-      target: { value: "k-9f8e7d6c5b4a3210" },
-    });
-    fireEvent.click(await within(dialog).findByRole("button", { name: /Store it in Coffer/ }));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(update).toHaveBeenCalled());
-    // Stored under a minted id, labelled after the group and header; the header cites the id.
-    const [ref, value] = vi.mocked(secretsApi.set).mock.calls[0];
-    expect(ref).toMatch(/^secret\/[0-9a-f]{32}$/);
-    expect(value).toBe("k-9f8e7d6c5b4a3210");
-    expect(secretsApi.setNotes).toHaveBeenCalledWith(ref, { label: "billing-X-Api-Key" });
-    const body = update.mock.calls[0][1] as { headers: unknown[] };
-    expect(body.headers).toContainEqual({
-      name: "X-Api-Key",
-      secret: ref.slice("secret/".length),
-      scheme: null,
-    });
+    fireEvent.change(within(dialog).getByLabelText("Success values"), { target: { value: "x" } });
+    expect(within(dialog).getByText(/carries credentials or cookies/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
   });
 });

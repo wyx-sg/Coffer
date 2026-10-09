@@ -171,7 +171,11 @@ export function AddCustomToolDialog({ open, onOpenChange, groups, start }: Props
       <DialogContent
         className={cn(
           "max-h-[90vh] overflow-y-auto",
-          step === "importReview" ? "max-w-[1060px]" : "max-w-[640px]",
+          step === "importReview"
+            ? "max-w-[1060px]"
+            : step === "request"
+              ? "max-w-[1040px]"
+              : "max-w-[640px]",
         )}
       >
         <DialogHeader>

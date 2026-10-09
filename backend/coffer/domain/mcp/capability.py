@@ -31,6 +31,10 @@ class MCPTool(BaseModel):
     #: ``destructiveHint``, …), in their wire spelling; passed to the agent as
     #: they are (spec mcp-gateway "Annotate every tool with whether it changes data").
     annotations: dict[str, Any] | None = None
+    #: The JSON Schema the upstream declared for the tool's ``structuredContent``
+    #: (MCP ``outputSchema``), as declared; None when it declared none (spec
+    #: mcp-gateway "Forward tools, resources and prompts").
+    output_schema: dict[str, Any] | None = None
 
 
 class MCPResource(BaseModel):
@@ -67,7 +71,9 @@ class MCPCapabilityPreference:
 
 @dataclass
 class MCPInvocation:
-    """One row in mcp_invocations. NEVER carries args or result content."""
+    """One row in mcp_invocations, with its redacted, bounded content when
+    recording was on (spec mcp-gateway "Record invocations with redacted,
+    bounded content")."""
 
     id: int | None
     timestamp: datetime
@@ -93,5 +99,10 @@ class MCPInvocation:
     #: call to the audit rows and daemon log lines it caused.
     trace_id: str | None = None
     #: The environment a custom-tool call was made in; ``None`` for every other
-    #: call (spec mcp-gateway "Record invocations without content").
+    #: call.
     environment: str | None = None
+    #: The call's parts (``arguments``, ``result``, ``error``, ``request``,
+    #: ``response``), each ``{"text", "truncated", "bytes"}`` and already
+    #: redacted (``domain.activity_content``); ``None`` when recording was off,
+    #: and on a row read from a list, which never loads it.
+    content: dict[str, Any] | None = None

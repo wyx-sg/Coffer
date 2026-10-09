@@ -5,6 +5,10 @@ from __future__ import annotations
 from coffer.application.mcp.custom_tool_handoff import request_test_handoff
 from coffer.application.mcp.custom_tool_ports import ToolTestOutcome
 from coffer.surfaces.http.handoff_schemas import HandoffOut
+from coffer.surfaces.http.mcp.custom_tool_response_schemas import (
+    CustomToolResponseRule,
+    CustomToolRuleFailureOut,
+)
 from coffer.surfaces.http.mcp.custom_tool_schemas import CustomToolTestOut
 from coffer.surfaces.http.mcp.handoff_views import host_machine
 
@@ -40,6 +44,18 @@ def test_out(
         failure=o.failure,  # type: ignore[arg-type]
         handoff=handoff,
         environment=o.environment,
+        response_headers=o.response_headers,
+        body_bytes=o.body_bytes,
+        rule_failure=(
+            CustomToolRuleFailureOut(
+                rule=CustomToolResponseRule.model_validate(o.rule_failure.rule.model_dump()),
+                value=o.rule_failure.value,
+                message=o.rule_failure.message,
+                summary=o.rule_failure.describe(),
+            )
+            if o.rule_failure is not None
+            else None
+        ),
     )
 
 

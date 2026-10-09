@@ -69,18 +69,12 @@ function DetailProbe() {
   return <div data-testid="detail-page">{name}</div>;
 }
 
-function Harness({ start = true }: { start?: boolean }) {
-  const [open, setOpen] = useState(start);
-  const [mode, setMode] = useState<"paste" | "importAgents">("paste");
-  return (
-    <>
-      <button onClick={() => (setMode("importAgents"), setOpen(true))}>open on import</button>
-      <AddMcpServerDialog open={open} onOpenChange={setOpen} initialMode={mode} />
-    </>
-  );
+function Harness() {
+  const [open, setOpen] = useState(true);
+  return <AddMcpServerDialog open={open} onOpenChange={setOpen} />;
 }
 
-function renderDialog(start = true) {
+function renderDialog() {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -88,7 +82,7 @@ function renderDialog(start = true) {
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={["/mcp-servers"]}>
         <Routes>
-          <Route path="/mcp-servers" element={<Harness start={start} />} />
+          <Route path="/mcp-servers" element={<Harness />} />
           <Route path="/mcp-servers/:name" element={<DetailProbe />} />
         </Routes>
       </MemoryRouter>
@@ -249,17 +243,7 @@ describe("AddMcpServerDialog — paste box", () => {
 
   // The page half (one Add server action, no paste-JSON action) is
   // ResourcesPage.test.tsx.
-  acceptance("web-ui", "the add dialog links to importing from agents", async () => {
-    renderDialog();
-    expect(
-      await screen.findByRole("button", { name: /^import from your agents/i }),
-    ).toBeInTheDocument();
-    // MCP servers only: no custom tool, neither an OpenAPI import nor a
-    // hand-made HTTP request.
-    expect(document.body.textContent).not.toMatch(/custom tool|OpenAPI|HTTP request/i);
-  });
-
-  acceptance("web-ui", "the import review shows each file's diff before it imports", async () => {
+  acceptance("web-ui", "the add dialog offers no import from agents", async () => {
     vi.mocked(agentsApi.mcpEntries).mockResolvedValue({
       items: [
         {
@@ -268,8 +252,8 @@ describe("AddMcpServerDialog — paste box", () => {
           transport: "stdio",
           command: "npx",
           args: ["-y", "mcp-atlassian"],
-          env_keys: ["JIRA_TOKEN"],
-          secret_keys: ["JIRA_TOKEN"],
+          env_keys: [],
+          secret_keys: [],
           header_keys: [],
           url: null,
           enabled: null,
@@ -279,82 +263,14 @@ describe("AddMcpServerDialog — paste box", () => {
       ],
       parse_errors: [],
     } as never);
-    const entry = { agent_uid: "a-claude", name: "jira", source: "claude_json" };
-    const plan = {
-      servers: [
-        {
-          op: "add",
-          name: "jira",
-          original_name: null,
-          name_usable: true,
-          resource_uid: null,
-          transport: "stdio",
-          reach_agent_uids: ["a-claude"],
-          reaches_all: false,
-          merged: false,
-          settings_differ: false,
-          entries: [{ ...entry, agent_name: "claude-code", role: "source" }],
-        },
-      ],
-      files: [
-        {
-          agent_uid: "a-claude",
-          agent_type: "claude_code",
-          source: "claude_json",
-          op: "modify",
-          path: "/h/.claude.json",
-          display_path: "~/.claude.json",
-          entries_removed: ["jira"],
-          added_lines: 0,
-          removed_lines: 1,
-          hunks: [
-            {
-              header: "@@ -1,3 +1,2 @@ mcpServers",
-              lines: [{ kind: "remove", old_line: 2, new_line: null, text: '"jira": {…}' }],
-            },
-          ],
-        },
-      ],
-      agents: [
-        {
-          uid: "a-claude",
-          name: "claude-code",
-          display_name: "Claude Code",
-          type: "claude_code",
-          connected: true,
-          entries_removed: ["jira"],
-        },
-      ],
-      unavailable: [],
-      changes: [],
-      coffer_entry_changes: [],
-    };
-    postOverride = (path) => {
-      if (path === "/agents/mcp-import/plan") return { data: plan, error: undefined };
-      if (path === "/agents/mcp-import/apply")
-        return {
-          data: {
-            entries: [{ ...entry, outcome: "added", server_name: "jira", resource_uid: "u-jira" }],
-            servers_added: [{ name: "jira", uid: "u-jira" }],
-            coffer_entry_results: [],
-          },
-          error: undefined,
-        };
-      return undefined;
-    };
     renderDialog();
-    const link = await screen.findByRole("button", { name: "Import from your agents · 1 found" });
+    await screen.findByLabelText("Paste a config, a command or a URL");
+    // Importing the agents' own entries is done on each agent's MCP servers tab.
+    expect(screen.queryByRole("button", { name: /import from your agents/i })).toBeNull();
+    expect(document.body.textContent).not.toMatch(/import from your agents|elsewhere/i);
+    // MCP servers only: no custom tool, neither an OpenAPI import nor a
+    // hand-made HTTP request.
     expect(document.body.textContent).not.toMatch(/custom tool|OpenAPI|HTTP request/i);
-
-    fireEvent.click(link);
-    expect(screen.getByText("Review import")).toBeInTheDocument();
-    // The plan is read before anything is written: the file's diff is shown.
-    expect((await screen.findAllByText("~/.claude.json")).length).toBeGreaterThan(0);
-    fireEvent.click(await screen.findByRole("button", { name: "Import 1 server" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    const applied = calls.find(([path]) => path === "/agents/mcp-import/apply");
-    expect(applied?.[1]?.body).toEqual({ entries: [entry] });
-    expect(agentsApi.adoptMcpEntry).not.toHaveBeenCalled();
   });
 });
 
@@ -521,13 +437,6 @@ acceptance("web-ui", "the import review shows each server's fixed name", async (
     "github-tools",
     "long-server",
   ]);
-});
-
-test("opened by the page on Import from your agents, it starts on that view", async () => {
-  renderDialog(false);
-  expect(screen.queryByRole("dialog")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "open on import" }));
-  expect(await screen.findByText("Review import")).toBeInTheDocument();
 });
 
 acceptance("web-ui", "the add form tests the unsaved server before Add server", async () => {

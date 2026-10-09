@@ -26,12 +26,14 @@ vi.mock("@/lib/hooks/useAgents", () => ({
     ],
   }),
 }));
+// The agents' own MCP entries Coffer does not serve; none unless a test sets them.
+const direct: { groups: unknown[]; count: number } = { groups: [], count: 0 };
 vi.mock("@/lib/hooks/useAgentDirectMcpEntries", () => ({
-  useAgentDirectMcpEntries: () => ({ groups: [], count: 0, isLoading: false }),
+  useAgentDirectMcpEntries: () => ({ ...direct, isLoading: false }),
 }));
 vi.mock("@/components/mcp/AddMcpServerDialog", () => ({
-  AddMcpServerDialog: ({ open, initialMode }: { open: boolean; initialMode?: string }) =>
-    open ? <div role="dialog">{`add dialog: ${initialMode}`}</div> : null,
+  AddMcpServerDialog: ({ open }: { open: boolean }) =>
+    open ? <div role="dialog">add dialog</div> : null,
 }));
 vi.mock("@/components/mcp/server/McpServerPane", () => ({
   McpServerPane: ({ resource }: { resource: ResourceOut }) => (
@@ -241,14 +243,39 @@ describe("ResourcesPage", () => {
     // The welcome repeats no Add; the page header's button opens the dialog.
     expect(within(welcome).queryByRole("button", { name: /add server/i })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /add server/i }));
-    expect(screen.getByRole("dialog")).toHaveTextContent("add dialog: paste");
+    expect(screen.getByRole("dialog")).toHaveTextContent("add dialog");
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByRole("listitem")).toBeNull();
   });
 
-  // The dialog half (the Import from agents link, no custom tool) is
+  test("the welcome sends each agent's own servers to that agent's MCP servers tab", () => {
+    direct.groups = [
+      {
+        agent: { uid: "a-cc", type: "claude_code", display_name: "Claude Code" },
+        entries: [{ name: "jira" }],
+        duplicates: [],
+      },
+    ];
+    direct.count = 1;
+    try {
+      stubQuery({ data: [] });
+      renderAt();
+      const found = screen.getByTestId("mcp-welcome-found");
+      expect(within(found).getByRole("link", { name: /claude code/i })).toHaveAttribute(
+        "href",
+        "/agents/claude_code/mcp-servers",
+      );
+      // Importing is done on the agent's page; the welcome offers no import of its own.
+      expect(within(found).queryByRole("button")).toBeNull();
+    } finally {
+      direct.groups = [];
+      direct.count = 0;
+    }
+  });
+
+  // The dialog half (no Import from agents link, no custom tool) is
   // AddMcpServerDialog.test.tsx.
-  acceptance("web-ui", "the add dialog links to importing from agents", () => {
+  acceptance("web-ui", "the add dialog offers no import from agents", () => {
     stubQuery({ data: [server("u1", "github")] });
     renderAt();
     // Only the page header holds Add; the Nothing selected pane has none.

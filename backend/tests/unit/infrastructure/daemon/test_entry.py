@@ -67,7 +67,7 @@ def test_main_serves_prebound_socket_and_releases_lock_via_on_started(
 
     captured: dict[str, object] = {}
 
-    def _fake_run_server(s: object, on_started: object) -> None:
+    def _fake_run_server(s: object, on_started: object, **_kw: object) -> None:
         captured["sock"] = s
         captured["released_before_run_server"] = list(released)
         # The server reaches "serving" → entry releases the spawn lock here.
@@ -274,7 +274,7 @@ def test_main_raises_fd_soft_limit_before_serving(
     sock = _FakeSock(5)
     monkeypatch.setattr(bootstrap, "acquire_or_existing", lambda: (object(), sock, lambda: None))
 
-    def _fake_run_server(_s: object, on_started: object) -> None:
+    def _fake_run_server(_s: object, on_started: object, **_kw: object) -> None:
         order.append("serve")
         on_started()  # type: ignore[operator]
 
@@ -367,3 +367,91 @@ async def test_shutdown_reports_draining_before_the_listener_closes(
         assert seen == ["listener-closing phase=draining"]
     finally:
         phase.set_daemon_phase("ready")
+
+
+def _refuse_with(monkeypatch: pytest.MonkeyPatch, exc: BaseException) -> list[bool]:
+    from coffer.infrastructure.daemon import bootstrap
+
+    def _raise() -> None:
+        raise exc
+
+    monkeypatch.setattr(bootstrap, "acquire_or_existing", _raise)
+    ran: list[bool] = []
+    monkeypatch.setattr(entry, "_run_server", lambda *a, **k: ran.append(True))
+    monkeypatch.setattr(entry, "_install_signal_handlers", lambda: None)
+    return ran
+
+
+@pytest.mark.acceptance(
+    spec="daemon", scenario="a start stuck behind a boot that never finishes gives up"
+)
+def test_main_leaves_cleanly_when_the_spawn_lock_wait_runs_out(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from coffer.infrastructure.daemon import bootstrap
+
+    _setup_home(tmp_path, monkeypatch)
+    ran = _refuse_with(monkeypatch, bootstrap.SpawnLockBusy(31337, 120.0))
+
+    with caplog.at_level("WARNING"):
+        entry.main()  # returns: exit code 0, which a login service leaves down
+
+    assert ran == []
+    assert "31337" in caplog.text
+
+
+@pytest.mark.acceptance(
+    spec="daemon", scenario="a start that meets its own vault's busy daemon leaves as a duplicate"
+)
+def test_main_leaves_cleanly_when_its_own_vaults_daemon_holds_the_port(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from coffer.infrastructure.daemon.port_alloc import PortHolder, PortInUse
+
+    _setup_home(tmp_path, monkeypatch)
+    ran = _refuse_with(monkeypatch, PortInUse(38470, PortHolder(pid=4242, command="coffer-daemon")))
+    monkeypatch.setattr(entry, "serves_our_vault", lambda pid: pid == 4242)
+
+    with caplog.at_level("WARNING"):
+        entry.main()
+
+    assert ran == []
+    assert "already running but busy" in caplog.text
+
+
+def test_main_still_refuses_when_something_else_holds_the_port(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from coffer.infrastructure.daemon.port_alloc import PortHolder, PortInUse
+
+    _setup_home(tmp_path, monkeypatch)
+    _refuse_with(monkeypatch, PortInUse(38470, PortHolder(pid=4242, command="node vite")))
+    monkeypatch.setattr(entry, "serves_our_vault", lambda _pid: False)
+
+    with pytest.raises(SystemExit) as exited:
+        entry.main()
+    assert exited.value.code == 2
+
+
+def test_the_exit_with_pid_is_read_once_and_not_passed_on() -> None:
+    environ = {entry.EXIT_WITH_PID_ENV: "77", "PATH": "/bin"}
+    assert entry._exit_with_pid(environ) == 77
+    assert entry.EXIT_WITH_PID_ENV not in environ
+    assert entry._exit_with_pid({entry.EXIT_WITH_PID_ENV: "nope"}) is None
+    assert entry._exit_with_pid({}) is None
+
+
+def test_the_daemon_shuts_down_once_its_test_runner_is_gone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+
+    class _Server:
+        should_exit = False
+
+    alive = [True, True, False]
+    monkeypatch.setattr(entry.self_restart, "process_is_gone", lambda _pid: not alive.pop(0))
+    server = _Server()
+    asyncio.run(entry._exit_with(server, 77, interval=0))  # type: ignore[arg-type]
+    assert server.should_exit is True
+    assert alive == []

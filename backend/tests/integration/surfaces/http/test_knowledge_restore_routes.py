@@ -66,7 +66,10 @@ def test_a_deleted_collection_comes_back_with_its_documents_and_readme(  # type:
     assert (row["description"], row["document_count"]) == ("Shopee services.", 1)
     body = client.get("/api/v1/knowledge/file", params={"path": doc}).json()["body"]
     assert body.strip() == "kept text"
-    assert any(e["details"].get("restored_from") == removal["version"] for e in _edited(client))
+    (edit,) = [e for e in _edited(client) if e["details"].get("restored_from")]
+    assert edit["details"]["restored_from"] == removal["version"]
+    assert edit["details"]["collection_restored"] is True
+    assert edit["details"]["count"] == len(edit["details"]["paths"])
 
     # A collection of that name is back: a second restore is refused, and writes nothing.
     again = client.post(f"/api/v1/knowledge/changes/{removal['version']}/restore")
@@ -176,7 +179,12 @@ def test_describing_a_collection_rewrites_only_the_readme_opening_paragraph(  # 
     )
     listed = client.get("/api/v1/knowledge/collections").json()["collections"]
     assert listed[0]["description"] == "Shopee's services and who owns them."
-    assert _edited(client)[-1]["details"]["path"] == "shopee/README.md"
+    details = _edited(client)[-1]["details"]
+    assert details["path"] == "shopee/README.md"
+    assert (details["from"], details["to"]) == ("Old.", "Shopee's services and who owns them.")
+    # The README's own diff: the paragraph replaced, the rest as context.
+    assert "-Old.\n+Shopee's services and who owns them.\n" in details["diff"]
+    assert " ## Conventions\n" in details["diff"]
     assert _change(client, "save")["collections"] == ["shopee"]
 
     empty = client.put(

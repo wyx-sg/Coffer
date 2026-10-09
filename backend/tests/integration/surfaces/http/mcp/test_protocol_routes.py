@@ -48,6 +48,7 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     router as mcp_router,
 )
 from tests.fixtures.keyring import install_in_memory_keyring
+from tests.support.mcp_wire import INIT_PARAMS
 from tests.support.vault_stores import derived_sm, make_resource_repo
 
 _FAKE = Path(__file__).resolve().parents[4] / "fixtures" / "fake_mcp_server.py"
@@ -157,7 +158,7 @@ async def test_post_initialize_returns_capabilities(
 ) -> None:
     r = await http_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
     )
     assert r.status_code == 200
     body = r.json()
@@ -173,7 +174,7 @@ async def test_post_initialize_then_tools_list_in_same_session(
 ) -> None:
     init = await http_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
     )
     session_id = init.headers["mcp-session-id"]
 
@@ -193,7 +194,7 @@ async def test_post_without_token_returns_401(
 ) -> None:
     r = await http_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
         headers={"X-Coffer-Token": "wrong"},
     )
     assert r.status_code == 401
@@ -203,18 +204,19 @@ async def test_post_without_token_returns_401(
 async def test_post_unknown_method_returns_json_rpc_error(
     http_client: AsyncClient,
 ) -> None:
+    init = await http_client.post(
+        "/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS}
+    )
     r = await http_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "nonexistent/method"},
+        json={"jsonrpc": "2.0", "id": 2, "method": "nonexistent/method"},
+        headers={"Mcp-Session-Id": init.headers["mcp-session-id"]},
     )
     assert r.status_code == 200
-    body = r.json()
-    assert "error" in body
-    # The gateway raises ``UpstreamUnavailable`` (a ``CofferError`` whose code is
-    # not ``TOOL_DISABLED``) for a method it does not dispatch, so the route's
-    # ``CofferError`` branch can only ever emit -32603. Asserting the exact code
-    # keeps the test from passing on a value the route cannot produce.
-    assert body["error"]["code"] == _JSON_RPC_INTERNAL_ERROR
+    # A method the gateway does not answer is "method not found", not an
+    # internal error (spec mcp-gateway "Answer every MCP message by the
+    # JSON-RPC rules").
+    assert r.json()["error"]["code"] == -32601
 
 
 @pytest.mark.asyncio
@@ -240,7 +242,7 @@ async def test_post_unexpected_exception_does_not_leak_message_to_wire(
 
     init = await http_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
     )
     session_id = init.headers["mcp-session-id"]
     r = await http_client.post(
@@ -262,7 +264,7 @@ async def test_post_tools_call_routes_through_gateway(
 ) -> None:
     init = await http_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
     )
     session_id = init.headers["mcp-session-id"]
     # Discovery first so preferences populate
@@ -300,7 +302,7 @@ async def test_post_tools_call_with_payload_over_64kib_round_trips(
     """
     init = await http_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
     )
     session_id = init.headers["mcp-session-id"]
     await http_client.post(
@@ -353,7 +355,7 @@ async def test_post_top_level_json_array_returns_invalid_request(
     """
     r = await http_client.post(
         "/mcp",
-        json=[{"jsonrpc": "2.0", "id": 1, "method": "initialize"}],
+        json=[{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS}],
     )
     assert r.status_code == 200, r.text
     body = r.json()
@@ -390,7 +392,7 @@ async def test_get_with_session_id_accepted(
     # Valid POST initialize → session registered
     init = await http_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
     )
     assert init.status_code == 200
     session_id = init.headers["mcp-session-id"]
@@ -419,7 +421,7 @@ async def test_an_unknown_session_id_is_404_so_the_client_handshakes_again(
     silently would lose the identity ``initialize`` carried: anything but
     ``initialize`` on an unknown id is 404, and ``initialize`` opens a session."""
     init = await http_client.post(
-        "/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
+        "/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS}
     )
     session_id = init.headers["mcp-session-id"]
     await reap_idle_sessions(max_idle_seconds=-1)
@@ -434,7 +436,7 @@ async def test_an_unknown_session_id_is_404_so_the_client_handshakes_again(
     assert session_id not in _ACTIVE_SESSIONS  # nothing was rebuilt
     again = await http_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 3, "method": "initialize", "params": {}},
+        json={"jsonrpc": "2.0", "id": 3, "method": "initialize", "params": INIT_PARAMS},
         headers={"Mcp-Session-Id": session_id},
     )
     assert again.status_code == 200 and session_id in _ACTIVE_SESSIONS
@@ -451,7 +453,7 @@ async def test_a_client_cannot_name_a_session_after_the_daemons_own_registry_key
 ) -> None:
     r = await http_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
         headers={"Mcp-Session-Id": "__process__"},
     )
     assert r.status_code == 200
@@ -468,7 +470,7 @@ async def test_sse_queue_is_bounded_and_drops_oldest(
     oldest message when full so the latest server view is always retained."""
     init = await http_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
     )
     session_id = init.headers["mcp-session-id"]
     session = _ACTIVE_SESSIONS[session_id]
@@ -504,11 +506,11 @@ async def test_reap_idle_sessions_drops_stale_only(
     threshold, and leave fresh ones alone."""
     # Create two sessions
     init_a = await http_client.post(
-        "/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize"}
+        "/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS}
     )
     session_a = init_a.headers["mcp-session-id"]
     init_b = await http_client.post(
-        "/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize"}
+        "/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS}
     )
     session_b = init_b.headers["mcp-session-id"]
 
@@ -541,7 +543,7 @@ async def test_sse_client_disconnect_does_not_dispose_session(
 
     init = await http_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
     )
     session_id = init.headers["mcp-session-id"]
     assert session_id in _ACTIVE_SESSIONS
@@ -605,7 +607,7 @@ async def test_sse_client_disconnect_leaves_no_pending_queue_getter(
 
     init = await http_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
     )
     session_id = init.headers["mcp-session-id"]
     resp = await handle_get(mcp_session_id=session_id, factory=get_mcp_session_factory())
@@ -639,7 +641,7 @@ async def test_downstream_initialized_notification_is_accepted(
     """POST notifications/initialized (no id) must return 200 with empty body."""
     init = await http_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
     )
     session_id = init.headers["mcp-session-id"]
 
@@ -659,7 +661,7 @@ async def test_downstream_ping_returns_empty_result(
     """POST ping must return JSON-RPC result: {} (empty object)."""
     init = await http_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
     )
     session_id = init.headers["mcp-session-id"]
 
@@ -686,7 +688,7 @@ async def test_downstream_ping_notification_no_id_returns_202(
     """
     init = await http_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
     )
     session_id = init.headers["mcp-session-id"]
 
@@ -723,7 +725,7 @@ async def test_downstream_response_routes_to_pending_server_request(
     # Establish a session
     init = await http_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
     )
     session_id = init.headers["mcp-session-id"]
     session = _ACTIVE_SESSIONS[session_id]

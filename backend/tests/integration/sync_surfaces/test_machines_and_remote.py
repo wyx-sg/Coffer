@@ -251,19 +251,19 @@ def test_attention_names_a_stop_and_a_join_choice(tmp_path: Path) -> None:
 def test_a_key_import_is_checked_and_answers_the_refs_still_locked(tmp_path: Path) -> None:
     (mac,) = joined(tmp_path, "Mac")
     with pytest.raises(MasterKeyFileInvalid):
-        mac.run(mac.service.import_key("   "))
+        mac.run(mac.keys.import_key("   "))
     with pytest.raises(MasterKeyFileInvalid):
-        mac.run(mac.service.import_key("not-a-key"))
+        mac.run(mac.keys.import_key("not-a-key"))
     with pytest.raises(MasterKeyPassphraseWrong):
-        mac.run(mac.service.import_key('{"protected": true}', "wrong"))
+        mac.run(mac.keys.import_key('{"protected": true}', "wrong"))
     assert mac.key.installed is None, "a refused import replaces nothing"
     mac.secrets.locked = ["channel/seatalk/app-secret"]
-    done = mac.run(mac.service.import_key("ok-key"))
+    done = mac.run(mac.keys.import_key("ok-key"))
     assert done.locked_refs == ["channel/seatalk/app-secret"]
     assert done.fingerprint == "abc123abc123" and done.replaced is False
-    assert mac.service.key_fingerprint() == "abc123abc123"
+    assert mac.keys.key_fingerprint() == "abc123abc123"
     assert mac.audit.events[-1][0] == "master_key_imported"
-    preview = mac.service.preview_key('{"protected": true}')
+    preview = mac.keys.preview_key('{"protected": true}')
     assert (preview.fingerprint, preview.current, preview.protected) == (
         "f11e" * 3,
         "abc123abc123",

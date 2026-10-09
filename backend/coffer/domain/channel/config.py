@@ -19,6 +19,7 @@ from pydantic import (
     Field,
     RootModel,
     field_validator,
+    model_validator,
 )
 
 # A secret ref is a vault ADDRESS, not a secret: Coffer mints
@@ -42,6 +43,17 @@ def _reject_raw_secret(field: str, value: str) -> str:
                 f"Secrets page (or `coffer secret set <ref>`) and put the ref here instead"
             )
     return value
+
+
+#: Keys a channel config used to carry and no longer does. A stored document
+#: may still hold them; they are dropped on read rather than refused, so an
+#: upgrade never stops a channel from starting.
+_RETIRED_KEYS = frozenset({"notify_after_seconds"})
+
+#: The longest system prompt a channel keeps per chat kind (spec channels "Append
+#: the owner's system prompt to a channel turn"). It rides on every turn, so it is
+#: capped well below anything that would crowd the agent's own context.
+SYSTEM_PROMPT_MAX_LENGTH = 4000
 
 
 class _CommonChannelFields(BaseModel):
@@ -84,10 +96,6 @@ class _CommonChannelFields(BaseModel):
     # lists the turn's step lines under its header. Off keeps the header (time,
     # step count) and the narration line and hides the steps — e.g. in a group.
     show_steps: bool = True
-    # "Ping the asker when a long turn ends": a turn that ran at least this many
-    # seconds ends with one short completion line where its answer would not
-    # notify on its own. 0 turns the ping off.
-    notify_after_seconds: float = Field(default=90.0, ge=0, le=3600)
     # "Open a new conversation after an idle period": a chat whose active
     # conversation has been idle longer than this many hours opens a NEW
     # conversation on the owner's next message (the old one stays in the list).
@@ -99,6 +107,12 @@ class _CommonChannelFields(BaseModel):
     # default directory is the only one — a chat cannot point an agent at an
     # arbitrary folder on this machine.
     directories: list[str] = Field(default_factory=list, max_length=32)
+    # The owner's own system prompts (spec channels "Append the owner's system
+    # prompt to a channel turn"): appended after Coffer's channel note on every
+    # turn of a direct chat (and its threads), or of a group's main chat and its
+    # threads. Empty appends nothing; they never replace Coffer's note.
+    direct_system_prompt: str = Field(default="", max_length=SYSTEM_PROMPT_MAX_LENGTH)
+    group_system_prompt: str = Field(default="", max_length=SYSTEM_PROMPT_MAX_LENGTH)
     # NOTE: a channel curates no MODELS. A new conversation opens on the bound
     # agent's own CLI default and ``/model`` offers that agent's whole
     # catalogue, refusing nothing — picking a model is the agent's business,
@@ -129,6 +143,16 @@ class _CommonChannelFields(BaseModel):
     # surfaces show an unbound channel as unbound and bind it in one click.
     runs_on: str | None = Field(default=None, max_length=64)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired_keys(cls, data: Any) -> Any:
+        """Migration for the removal of the long-turn ping: a stored config may
+        still carry ``notify_after_seconds``; drop it (the file loses the key
+        on its next write)."""
+        if isinstance(data, dict) and any(k in data for k in _RETIRED_KEYS):
+            return {k: v for k, v in data.items() if k not in _RETIRED_KEYS}
+        return data
+
     @field_validator("default_agent_config")
     @classmethod
     def _absolute_default_directory(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -138,6 +162,13 @@ class _CommonChannelFields(BaseModel):
         if cwd is not None and (not isinstance(cwd, str) or not cwd.startswith("/")):
             raise ValueError(f"the default directory must be an absolute path; got {cwd!r}")
         return v
+
+    @field_validator("direct_system_prompt", "group_system_prompt")
+    @classmethod
+    def _trim_system_prompt(cls, v: str) -> str:
+        # Surrounding blank lines and spaces carry nothing; a prompt of only
+        # whitespace is no prompt. The text inside is kept as written.
+        return v.strip()
 
     @field_validator("directories")
     @classmethod

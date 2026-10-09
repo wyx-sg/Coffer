@@ -126,6 +126,7 @@ coffer custom-tool group create [OPTIONS] NAME
 | `--agent` <span class="cli-chip">option</span> | text (repeatable) |  | Reach only this agent (name or uid); repeat. Default: every agent |
 | `--from-openapi` <span class="cli-chip">option</span> | text |  | An OpenAPI file or URL to draft the tools from |
 | `--operation` <span class="cli-chip">option</span> | text (repeatable) |  | With --from-openapi: an operation key to import; repeat |
+| `--response` <span class="cli-chip">option</span> | text |  | Response settings as JSON {"diagnostic_headers": [...], "rules": [...]}: text, @file or - |
 | `--data, -d` <span class="cli-chip">option</span> | text |  | The whole group as JSON (text, @file or -) |
 | `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
@@ -147,6 +148,7 @@ coffer custom-tool group update [OPTIONS] NAME
 | `NAME` <span class="cli-chip">argument</span> | text | required | The group's name |
 | `--description` <span class="cli-chip">option</span> | text |  |  |
 | `--timeout` <span class="cli-chip">option</span> | integer |  | The group's seconds per request |
+| `--response` <span class="cli-chip">option</span> | text |  | Response settings as JSON {"diagnostic_headers": [...], "rules": [...]}: text, @file or - |
 | `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
 | `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
@@ -370,6 +372,7 @@ coffer custom-tool tool add [OPTIONS] NAME
 | `--body-template` <span class="cli-chip">option</span> | text |  | JSON body with {argument} holes: text, @file or - |
 | `--schema` <span class="cli-chip">option</span> | text |  | The arguments' JSON Schema: text, @file or - |
 | `--changes-data / --read-only` <span class="cli-chip">option</span> | boolean |  | Whether the tool changes data (default: on for every method but GET) |
+| `--response-rules` <span class="cli-chip">option</span> | text |  | Own response rules, a JSON array (text, @file or -); 'group' follows the group's |
 | `--data, -d` <span class="cli-chip">option</span> | text |  | The tool as JSON (text, @file or -) |
 | `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
@@ -398,6 +401,7 @@ coffer custom-tool tool update [OPTIONS] NAME TOOL
 | `--body-template` <span class="cli-chip">option</span> | text |  | JSON body with {argument} holes: text, @file or - |
 | `--schema` <span class="cli-chip">option</span> | text |  | The arguments' JSON Schema: text, @file or - |
 | `--changes-data / --read-only` <span class="cli-chip">option</span> | boolean |  | Whether the tool changes data (default: on for every method but GET) |
+| `--response-rules` <span class="cli-chip">option</span> | text |  | Own response rules, a JSON array (text, @file or -); 'group' follows the group's |
 | `--data, -d` <span class="cli-chip">option</span> | text |  | Fields to change, as JSON (text, @file or -) |
 | `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
@@ -460,7 +464,7 @@ coffer custom-tool tool delete [OPTIONS] NAME TOOL
 
 Run a saved tool once in one environment; saves and logs nothing.
 
-Invalid arguments are refused before any request (exit 6, one error per field); a request the API answers with an error status exits 7.
+Invalid arguments are refused before any request (exit 6, one error per field); a request the API answers with an error status exits 7. ``--dry-run`` prints the request instead of sending it.
 
 <p class="cli-label">Synopsis</p>
 
@@ -476,11 +480,14 @@ coffer custom-tool tool test [OPTIONS] NAME TOOL
 | `TOOL` <span class="cli-chip">argument</span> | text | required |  |
 | `--env` <span class="cli-chip">option</span> | text |  | The environment to run it in (needed when several are on) |
 | `--args` <span class="cli-chip">option</span> | text |  | The arguments as a JSON object: text, @file or - |
+| `--dry-run` <span class="cli-chip">option</span> | flag |  | Print the request a call would send — URL, headers, body, timeout — and send nothing; secret headers show their secret's name, not its value |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## custom-tool tool test-draft
 
 Run a tool that is not saved, in one of the group's environments.
+
+``--dry-run`` prints the request instead of sending it.
 
 <p class="cli-label">Synopsis</p>
 
@@ -495,6 +502,8 @@ coffer custom-tool tool test-draft [OPTIONS] NAME
 | `NAME` <span class="cli-chip">argument</span> | text | required | The group |
 | `--env` <span class="cli-chip">option</span> | text |  | The environment to run it in (needed when several are on) |
 | `--args` <span class="cli-chip">option</span> | text |  | The arguments as a JSON object: text, @file or - |
+| `--dry-run` <span class="cli-chip">option</span> | flag |  | Print the request a call would send — URL, headers, body, timeout — and send nothing; secret headers show their secret's name, not its value |
+| `--response-rules` <span class="cli-chip">option</span> | text |  | Own response rules, a JSON array (text, @file or -); 'group' follows the group's |
 | `--data, -d` <span class="cli-chip">option</span> | text |  | The draft tool as JSON (text, @file or -) |
 | `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
@@ -517,6 +526,7 @@ coffer custom-tool tool test-unsaved [OPTIONS]
 | `--header` <span class="cli-chip">option</span> | text (repeatable) |  | Name=value; repeat (no secrets are sent) |
 | `--var` <span class="cli-chip">option</span> | text (repeatable) |  | NAME=value for {env:NAME}; repeat |
 | `--timeout` <span class="cli-chip">option</span> | integer | `30` |  |
+| `--response` <span class="cli-chip">option</span> | text |  | The draft group's response settings as JSON: text, @file or - |
 | `--args` <span class="cli-chip">option</span> | text |  | The arguments as a JSON object: text, @file or - |
 | `--data, -d` <span class="cli-chip">option</span> | text |  | The draft tool as JSON (text, @file or -) |
 | `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |

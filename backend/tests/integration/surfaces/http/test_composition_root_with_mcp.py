@@ -34,6 +34,7 @@ from starlette.testclient import TestClient
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 from tests.fixtures.keyring import install_in_memory_keyring
+from tests.support.mcp_wire import INIT_PARAMS
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
 _HEADERS = {"X-Coffer-Token": "test-token"}
@@ -156,7 +157,7 @@ def test_mcp_protocol_endpoint_mounted(tmp_path: Path, monkeypatch: pytest.Monke
         set_active_token("test-token")
         r = c.post(
             "/mcp",
-            json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+            json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
             headers=_HEADERS,
         )
         assert r.status_code == 200

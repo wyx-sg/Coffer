@@ -1,4 +1,4 @@
-# Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table
+# Audit Every Change With Its Actor, Log Every Invocation, Prune Per Table
 
 > **Superseded in part (2026-10-04).** The change `move-agent-sessions-to-terminal` removed the web chat and Coffer's copy of conversation text. The conversation retention entries and the `content/chat-media/` sweep are gone; the retention registry, the `local/retention.json` policy file and the `channel-media` attachments sweep stand.
 
@@ -13,7 +13,8 @@
 [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md),
 spec resource-framework "Audit every lifecycle change",
 spec resource-framework "Prune each registered log table on its own retention period",
-spec mcp-gateway "Record invocations without content",
+spec mcp-gateway "Record invocations with redacted, bounded content",
+[Record Tool Call Content, Masked Where the Secrets Are Known and Cut at 16 KB](record-tool-call-content-redacted-and-bounded.md),
 spec vault-storage "Store state in five classes by nature",
 architecture [observability](../../docs-site/architecture/observability.md),
 research note [activity and audit](../research/activity-and-audit.md),
@@ -60,15 +61,20 @@ and the daemon's own work records `system`, `sync` or a named worker such as
 trail is queried by uid and survives a rename while each row still says what the
 resource was called then. A kind's `audit_redactor` strips secret-bearing
 config (e.g. `mcp_server` drops `transport.env` and `transport.headers`) before
-`details` is stored. Every audited event is also mirrored as one structured
-line in the daemon log, without `details`; the audit row, the invocation rows
+`details` is stored. `details` says what changed: the old and new title of a
+rename, the `from` and `to` of a switch, and for a hand edit of a text file
+under `knowledge/` or `skills/` a unified diff cut at 8 KB. Every audited event
+is also mirrored as one structured line in the daemon log, carrying the same
+redacted `details` cut at 2 KB; the audit row, the invocation rows
 and the log lines of one request or turn share a trace id.
 
 **Invocation log.** `mcp_invocations` records, per tool call, resource read or
 prompt fetch: timestamp, the server's uid, capability type and key, duration,
-session id, the calling agent's uid, the trace id and status (`ok`, `error`, `timeout`, `denied`). It never records
-arguments or results (`MCPInvocation` in `domain/mcp/capability.py`). The error
-text is Coffer-authored only: a `CofferError`'s message is kept, anything else
+session id, the calling agent's uid, the trace id and status (`ok`, `error`, `timeout`, `denied`). What the call
+carried — arguments, result or error, a custom tool's request and response — is
+stored masked and cut, as decided in
+[Record Tool Call Content](record-tool-call-content-redacted-and-bounded.md).
+The `error_message` column is Coffer-authored only: a `CofferError`'s message is kept, anything else
 is reduced to its class name, and an in-band `isError: true` tool result is
 recorded as `error` with a fixed marker rather than its content
 (`application/mcp/gateway_handlers.py`). Coffer's own built-in tools are
@@ -96,22 +102,20 @@ the shim and upstream log files and the two attachment media directories
 
 Pros: one queryable answer to "what happened" across every kind; the actor
 makes UI, CLI, sync and worker changes distinguishable; the invocation log is
-useful for usage and failure analysis without ever becoming a store of the
-user's code or secrets; a new log table gets retention by registering, with no
-new SQL. Cons: the invocation log cannot replay or debug a specific call's
-payload; `details` is only as safe as each kind's redactor; the event
+useful for usage and failure analysis; a new log table gets retention by registering, with no
+new SQL. Cons: `details` is only as safe as each kind's redactor; the event
 vocabulary is one enum every kind edits.
 
-### Option B — log invocation arguments and results
+### Option B — log invocation arguments and results unmasked
 
-Pros: full replay and debugging; enables eval capture from real traffic without
-a separate path. Cons: every tool call's payload — file contents, query
-results, tokens an upstream echoes back in an error — would land in a
-plaintext SQLite file that outlives the session. That contradicts the rule that
-plaintext secrets exist only in memory at the moment of use
+Pros: full replay and debugging. Cons: every tool call's payload — file
+contents, query results, tokens an upstream echoes back in an error — would land
+in a plaintext SQLite file that outlives the session, contradicting the rule
+that plaintext secrets exist only in memory at the moment of use
 ([The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md)).
-Lost; the one place payloads are deliberately captured is opt-in eval capture,
-not the always-on log.
+Lost. Payloads are kept only masked and cut, which
+[Record Tool Call Content](record-tool-call-content-redacted-and-bounded.md)
+argues on its own.
 
 ### Option C — export audit and invocation events over OpenTelemetry
 
@@ -147,8 +151,8 @@ archive-then-delete. Lost: per-table periods, each with its own default.
 Every lifecycle change to any resource or capability is written to one
 `audit_log` with a required actor, one shared event vocabulary, the resource's
 local id plus the label it had then, and kind-redacted details. Every MCP call
-through the gateway is written to `mcp_invocations` as metadata only — never
-arguments, never results, never upstream-authored error text. Every log-style
+through the gateway is written to `mcp_invocations`, with a Coffer-authored
+error summary and, while recording is on, its masked and cut content. Every log-style
 table is pruned on its own retention period from a registry of prunable tables;
 only a registered table and column can be pruned, and policy changes are
 audited. The audit and invocation logs are machine-local and never sync.
@@ -162,8 +166,7 @@ audited. The audit and invocation logs are machine-local and never sync.
   root; the allowlist follows automatically.
 - A policy for a table that stops existing prunes nothing rather than
   erroring, because policies are seeded and never deleted.
-- Debugging a misbehaving upstream call needs the upstream's own logs or a
-  reproduction; Coffer's record says only that it happened, how long it took
-  and how it ended.
+- Audit `details` reach `daemon.log`, so a kind's redactor is the one guard for
+  both the row and the log line.
 - The Activity page reads these two records and the daemon log from their
   owners' routes; each machine's history is its own.

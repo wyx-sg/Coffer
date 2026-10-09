@@ -12,9 +12,16 @@
 //! command reads the approvals' state from the daemon afterwards.
 //!
 //! A revealed value is shown in the window and goes nowhere else; a key backup
-//! opens the page's own dialog, where the person types the passphrase.
+//! opens the page's own dialog, where the person types the passphrase. A
+//! backup request stays open while that dialog is: it ends `done` only when the
+//! shell's own export has written the file — with the path and fingerprint the
+//! daemon answered, never anything the page says — and `cancelled` when the
+//! dialog closes without one (`master_key_backup_closed`), so the command
+//! reports what really happened (spec secret "Approve from the command line
+//! with the person's own presence check").
 
 use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use serde_json::{json, Value};
@@ -36,6 +43,20 @@ pub const REVEALED_EVENT: &str = "coffer://revealed";
 const BACKUP_PAGE: &str = "/settings/security?backup=1";
 /// The page that holds the master key import dialog.
 const IMPORT_PAGE: &str = "/settings/security?import=1";
+
+/// Where `coffer uninstall` opens the confirmation; with `--delete-data` the
+/// box starts ticked. The person confirms there, never the command line.
+fn uninstall_page(delete_data: bool) -> &'static str {
+    if delete_data {
+        "/settings/about?uninstall=1&delete=1"
+    } else {
+        "/settings/about?uninstall=1"
+    }
+}
+
+/// The backup request waiting on the dialog, if one is: its id. One at a time,
+/// because the daemon hands out nothing new while a request is claimed.
+static WAITING_BACKUP: Mutex<Option<String>> = Mutex::new(None);
 
 /// How a request ended, as the daemon is told.
 #[derive(Debug, PartialEq, Eq)]
@@ -80,9 +101,12 @@ pub fn start(app: AppHandle) {
                 // of this user (spec desktop-app, see `daemon_attest`).
                 let ending = match daemon_attest::verify_daemon(port, &token) {
                     Ok(()) => handle(&app, &request),
-                    Err(e) => ending_of(&e),
+                    Err(e) => Some(ending_of(&e)),
                 };
-                finish(port, &token, &request, &ending);
+                // `None`: the request stays open until the dialog it opened ends it.
+                if let Some(ending) = ending {
+                    finish(port, &token, &request, &ending);
+                }
             }
         }
         std::thread::sleep(TICK);
@@ -108,6 +132,10 @@ fn finish(port: u16, token: &str, request: &Value, ending: &Ending) {
     let Some(id) = request.get("id").and_then(Value::as_str) else {
         return;
     };
+    finish_id(port, token, id, ending);
+}
+
+fn finish_id(port: u16, token: &str, id: &str, ending: &Ending) {
     log::info!("desktop.request id={id} ended {}", ending.status);
     let _ = daemon_http::post_json(
         port,
@@ -136,12 +164,77 @@ pub fn pins_of(request: &Value) -> Vec<(String, String)> {
         .unwrap_or_default()
 }
 
-fn handle(app: &AppHandle, request: &Value) -> Ending {
+/// Hold a backup request open until the dialog it opens ends it. A request
+/// still held from before (none should be) is ended first, as cancelled.
+fn hold_backup(id: Option<&str>) {
+    let previous = {
+        let mut waiting = WAITING_BACKUP.lock().unwrap_or_else(|e| e.into_inner());
+        std::mem::replace(&mut *waiting, id.map(str::to_owned))
+    };
+    if let Some(previous) = previous {
+        end_backup_request(&previous, &backup_closed());
+    }
+}
+
+/// The held backup request, released: the caller ends it.
+fn take_backup() -> Option<String> {
+    WAITING_BACKUP
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+}
+
+fn end_backup_request(id: &str, ending: &Ending) {
+    if let Some((port, token)) = read_daemon_info() {
+        finish_id(port, &token, id, ending);
+    }
+}
+
+/// How a backup request ends when the shell's export wrote the file: the path
+/// and fingerprint come from the daemon's answer to the export, not the page.
+pub fn backup_written(path: &str, fingerprint: &str) -> Ending {
+    Ending::done(
+        Some(format!("the backup was written to {path}")),
+        Some(json!({"path": path, "fingerprint": fingerprint})),
+    )
+}
+
+/// How a backup request ends when its dialog closes with no file written.
+pub fn backup_closed() -> Ending {
+    Ending {
+        status: "cancelled",
+        message: Some("the backup dialog was closed without writing a backup".into()),
+        result: None,
+    }
+}
+
+/// The shell's export wrote a backup: end the request waiting on it, if any.
+pub fn report_backup_written(path: &str, fingerprint: &str) {
+    if let Some(id) = take_backup() {
+        end_backup_request(&id, &backup_written(path, fingerprint));
+    }
+}
+
+/// The page's backup dialog closed. A request still waiting on it gets no
+/// backup: it ends cancelled. After a written backup there is none left.
+#[tauri::command]
+pub fn master_key_backup_closed() {
+    if let Some(id) = take_backup() {
+        end_backup_request(&id, &backup_closed());
+    }
+}
+
+fn handle(app: &AppHandle, request: &Value) -> Option<Ending> {
     let op = request
         .get("op")
         .and_then(Value::as_str)
         .unwrap_or_default();
-    match op {
+    if op == "export_master_key" {
+        hold_backup(request.get("id").and_then(Value::as_str));
+        tray_nav::open_page(app, BACKUP_PAGE);
+        return None;
+    }
+    Some(match op {
         "approve" => approve(app, &pins_of(request)),
         "reveal" => reveal(
             app,
@@ -150,17 +243,21 @@ fn handle(app: &AppHandle, request: &Value) -> Ending {
                 .and_then(Value::as_str)
                 .unwrap_or_default(),
         ),
-        "export_master_key" => {
-            tray_nav::open_page(app, BACKUP_PAGE);
-            Ending::done(
-                Some("opened the master key backup in the Coffer app".into()),
-                None,
-            )
-        }
         "import_master_key" => {
             tray_nav::open_page(app, IMPORT_PAGE);
             Ending::done(
                 Some("opened the master key import in the Coffer app".into()),
+                None,
+            )
+        }
+        "uninstall" => {
+            let delete_data = request
+                .get("enabled")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            tray_nav::open_page(app, uninstall_page(delete_data));
+            Ending::done(
+                Some("opened Uninstall Coffer in the Coffer app".into()),
                 None,
             )
         }
@@ -182,7 +279,7 @@ fn handle(app: &AppHandle, request: &Value) -> Ending {
             Ending::done(None, serde_json::to_value(status).ok())
         }
         other => ending_of(&format!("this app does not know the request {other:?}")),
-    }
+    })
 }
 
 fn approve(app: &AppHandle, pins: &[(String, String)]) -> Ending {
@@ -251,6 +348,35 @@ mod tests {
             vec![("a1".into(), "fp1".into()), ("a2".into(), "fp2".into())]
         );
         assert!(pins_of(&json!({"op": "approve"})).is_empty());
+    }
+
+    // acceptance(spec = "secret", scenario = "a key backup started from the command line reports what was written")
+    #[test]
+    fn a_backup_request_ends_with_the_written_file_or_as_cancelled() {
+        let written = backup_written("/tmp/qa-cli/coffer-master-key.cfk", "ab12");
+        assert_eq!(written.status, "done");
+        assert_eq!(
+            written.result,
+            Some(json!({"path": "/tmp/qa-cli/coffer-master-key.cfk", "fingerprint": "ab12"}))
+        );
+        let closed = backup_closed();
+        assert_eq!(closed.status, "cancelled");
+        assert!(closed.result.is_none());
+    }
+
+    #[test]
+    fn a_held_backup_request_is_taken_once() {
+        // No daemon.json in a test: ending a request is a no-op, holding is not.
+        *WAITING_BACKUP.lock().unwrap() = Some("r1".into());
+        assert_eq!(take_backup().as_deref(), Some("r1"));
+        assert_eq!(take_backup(), None);
+    }
+
+    // acceptance(spec = "desktop-app", scenario = "the shell opens the uninstall dialog for the command line")
+    #[test]
+    fn coffer_uninstall_opens_the_dialog_and_removes_nothing() {
+        assert_eq!(uninstall_page(false), "/settings/about?uninstall=1");
+        assert_eq!(uninstall_page(true), "/settings/about?uninstall=1&delete=1");
     }
 
     #[test]

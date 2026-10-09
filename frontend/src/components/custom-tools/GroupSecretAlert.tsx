@@ -1,6 +1,7 @@
 // src/components/custom-tools/GroupSecretAlert.tsx — the banner a group shows while a header's secret is missing
-// (4.2.01: Add secret · Choose another) or waits for approval (4.2.23: Open approvals, no hand-off — only a
-// person can add or approve a secret).
+// (4.2.01: Add secret · Choose another), waits for approval (4.2.23: Open approvals) or was refused (4.2.29:
+// Ask again, which in the desktop app asks for Touch ID at once) — no hand-off: only a person can add or
+// approve a secret.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KeyRound, Plus } from "lucide-react";
@@ -14,7 +15,7 @@ import type { SecretRef } from "@/lib/api/secret";
 import { toolsOn } from "@/lib/customTools/groups";
 import { secretInState } from "./headerRows";
 import { openApprovalsSheet } from "@/lib/hooks/useApprovals";
-import { useRefreshCustomTools } from "@/lib/hooks/useCustomTools";
+import { useAskAgainForGroup, useRefreshCustomTools } from "@/lib/hooks/useCustomTools";
 import { GroupBanner } from "./GroupBanner";
 
 interface Props {
@@ -27,6 +28,30 @@ export function GroupSecretAlert({ group, onChooseAnother }: Props) {
   const refresh = useRefreshCustomTools(group.name);
   const { rowOf, displayOf } = useSecretChoices();
   const [adding, setAdding] = useState(false);
+  const askAgain = useAskAgainForGroup(group);
+  if (group.secret_state === "rejected") {
+    const secret = secretInState(group, "rejected");
+    return (
+      <GroupBanner
+        tint="warn"
+        icon={KeyRound}
+        testId="group-banner-refused"
+        title={t("customTools.alert.rejectedTitle", { secret: displayOf(secret) })}
+        actions={
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={askAgain.isPending}
+            onClick={() => askAgain.mutate()}
+          >
+            {t("customTools.alert.askAgain")}
+          </Button>
+        }
+      >
+        {t("customTools.alert.rejectedBody")}
+      </GroupBanner>
+    );
+  }
   if (group.secret_state === "pending_approval") {
     const secret = secretInState(group, "pending_approval");
     return (

@@ -71,7 +71,13 @@ def test_a_memory_deleted_by_hand_is_retired_and_not_recreated(client, partition
         if e["event_type"] == "memory_note_deleted"
     ]
     assert event["actor"] == "user"
-    assert event["details"] == {"partition": "coffer", "note": _SLUG}
+    assert event["details"] == {
+        "partition": "coffer",
+        "note": _SLUG,
+        "title": record.title,
+        "entries": len(record.entry_ids),
+        "reason": "Deleted by hand",
+    }
 
     # The agent's own memory still holds the entries: the next update must not
     # bring the note back.

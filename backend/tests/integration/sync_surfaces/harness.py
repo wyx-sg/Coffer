@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from coffer.application.secret.master_key_import import MasterKeyService
 from coffer.application.secret.plaintext_ignore import fingerprinter
 from coffer.application.sync.round_deps import RoundDeps
 from coffer.application.sync.round_engine import RoundEngine
@@ -201,12 +202,17 @@ class Box:
             history=self.history,
             token=self.token,
             machine=self.host,
-            master_key=self.key,
             secrets=self.secrets,
             probe=self.git,
             audit=self.audit,  # type: ignore[arg-type]
             set_machine_name=lambda n: self.names.__setitem__("name", n),
             vault_path=lambda: self.repo.root,
+        )
+        # The master key's service is the secret store's, over the same key.
+        self.keys = MasterKeyService(
+            master_key=self.key,
+            secrets=self.secrets,
+            audit=self.audit,  # type: ignore[arg-type]
         )
         self.remotes.put(SyncRemote(url=self.url))
 

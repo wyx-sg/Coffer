@@ -22,8 +22,8 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Agents · MCP tab | `GET /agents/{uid}/mcp-entries` | `coffer agent mcp-entry list` | `test_cli_parity.py` |
 | Agents · MCP tab · remove | `DELETE /agents/{uid}/mcp-entries/{entry}` | `coffer agent mcp-entry remove` | `test_cli_parity.py` |
 | Agents · MCP tab · open an entry | `GET /agents/{uid}/mcp-entries/{entry}` | `coffer agent mcp-entry show` | `test_cli_parity.py` |
-| MCP servers · Import from agents · Import | `POST /agents/mcp-import/apply` | `coffer agent mcp-import apply` | `test_cli_parity.py` |
-| MCP servers · Import from agents · review | `POST /agents/mcp-import/plan` | `coffer agent mcp-import plan` | `test_cli_parity.py` |
+| Command line only · import several agents' entries at once | `POST /agents/mcp-import/apply` | `coffer agent mcp-import apply` | `test_cli_parity.py` |
+| MCP servers · first-run · the agents' own servers | `POST /agents/mcp-import/plan` | `coffer agent mcp-import plan` | `test_cli_parity.py` |
 | Agents · model picker | `GET /agent-providers/{agent_key}/models` | `coffer agent models` | `test_cli_parity.py` |
 | Agents · Memory tab · files | `GET /agents/{uid}/native-memory/files` | `coffer agent native-memory files` | `test_cli_parity.py` |
 | Agents · Memory tab | `GET /agents/{uid}/native-memory` | `coffer agent native-memory list` | `test_cli_parity.py` |
@@ -62,6 +62,7 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Secrets · approvals · Approve (desktop app, after Touch ID or the login password) | `GET /desktop/requests/{request_id}` | `coffer approval approve` | `test_approval_cli.py` |
 | Secrets · approvals · Approve (desktop app, after Touch ID or the login password) | `POST /secrets/approvals/approve` | `coffer approval approve` | `test_approval_cli.py` |
 | Secrets · approvals · Approve (desktop app, after Touch ID or the login password) | `POST /secrets/approvals/{approval_id}/approve` | `coffer approval approve` | `test_approval_cli.py` |
+| Secrets · approvals · Ask again | `POST /secrets/approvals/{approval_id}/ask-again` | `coffer approval ask-again` | `test_approval_cli.py` |
 | Secrets · approvals · list (Secrets page, Overview) | `GET /secrets/approvals` | `coffer approval list` | `test_approval_cli.py` |
 | Secrets · approvals · Reject | `POST /secrets/approvals/reject` | `coffer approval reject` | `test_approval_cli.py` |
 | Secrets · approvals · Reject | `POST /secrets/approvals/{approval_id}/reject` | `coffer approval reject` | `test_approval_cli.py` |
@@ -148,7 +149,9 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Custom tools · switch a tool on | `PATCH /custom-tools/{name}/tools/{tool}` | `coffer custom-tool tool enable` | `test_custom_tool_cli.py` |
 | Custom tools · a group's Tools tab | `GET /custom-tools/{name}` | `coffer custom-tool tool list` | `test_custom_tool_cli.py` |
 | Custom tools · open a tool | `GET /custom-tools/{name}` | `coffer custom-tool tool show` | `test_custom_tool_cli.py` |
+| Custom tools · test a saved tool | `POST /custom-tools/{name}/tools/{tool}/preview` | `coffer custom-tool tool test` | `test_custom_tool_cli.py` |
 | Custom tools · test a saved tool | `POST /custom-tools/{name}/tools/{tool}/test` | `coffer custom-tool tool test` | `test_custom_tool_cli.py` |
+| Custom tools · test a tool being edited | `POST /custom-tools/{name}/preview` | `coffer custom-tool tool test-draft` | `test_custom_tool_cli.py` |
 | Custom tools · test a tool being edited | `POST /custom-tools/{name}/test` | `coffer custom-tool tool test-draft` | `test_custom_tool_cli.py` |
 | Custom tools · test a request before its group is saved | `POST /custom-tools/test` | `coffer custom-tool tool test-unsaved` | `test_custom_tool_cli.py` |
 | Custom tools · edit a tool | `PATCH /custom-tools/{name}/tools/{tool}` | `coffer custom-tool tool update` | `test_custom_tool_cli.py` |
@@ -167,6 +170,8 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Settings · Daemon · status | `GET /daemon/status` | `coffer daemon status` | `test_daemon_status_cmd.py` |
 | Settings · Daemon · passes in flight | `GET /upkeep/runs` | `coffer daemon status` | `test_daemon_status_cmd.py` |
 | Settings · Daemon · upgrade | `GET /daemon/upgrade` | `coffer daemon upgrade` | `test_cli_parity.py` |
+| Settings · About · Check automatically (installer binaries) | `PUT /daemon/upgrade/auto-check` | `coffer daemon upgrade-auto-check` | `test_cli_parity.py` |
+| Settings · About · Check for updates (installer binaries) | `POST /daemon/upgrade/check` | `coffer daemon upgrade-check` | `test_cli_parity.py` |
 | Settings · Daemon · passes in flight | `GET /upkeep/runs` | `coffer daemon upkeep` | `test_cli_parity.py` |
 
 ## `coffer knowledge` {#knowledge}
@@ -191,6 +196,7 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | UI operation | Route | Command | Acceptance |
 | --- | --- | --- | --- |
 | Activity · Audit | `GET /audit` | `coffer log audit` | `test_log_cmd.py` |
+| Activity · tool call drawer | `GET /mcp/invocations/{invocation_id}` | `coffer log call` | `test_log_cmd.py` |
 | Activity · Daemon log | `GET /daemon/logs` | `coffer log daemon` | `test_log_cmd.py` |
 | Activity · MCP calls | `GET /mcp/invocations` | `coffer log mcp` | `test_log_cmd.py` |
 | MCP servers · Calls tab | `GET /resources/mcp_server/{uid}/invocations` | `coffer log mcp` | `test_log_cmd.py` |
@@ -208,7 +214,9 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | MCP servers · Tools tab · how a tool is exposed | `PATCH /resources/mcp_server/{uid}/tools/{tool}/exposure` | `coffer mcp exposure` | `test_cli_parity.py` |
 | MCP servers · Tools tab · expose several | `PATCH /resources/mcp_server/{uid}/tools/exposure` | `coffer mcp exposure-all` | `test_cli_parity.py` |
 | MCP servers · list | `GET /resources` | `coffer mcp list` | `test_cli_parity.py` |
+| MCP servers · Prompts tab · Get prompt | `POST /resources/mcp_server/{uid}/prompts/get` | `coffer mcp prompt get` | `test_cli_parity.py` |
 | MCP servers · Reach | `PUT /resources/{uid}/scope` | `coffer mcp reach` | `test_cli_parity.py` |
+| MCP servers · Resources tab · Read content | `POST /resources/mcp_server/{uid}/resources/read` | `coffer mcp resource read` | `test_cli_parity.py` |
 | MCP servers · Log tab | `GET /resources/mcp_server/{uid}/log` | `coffer mcp server-log` | `test_cli_parity.py` |
 | MCP servers · open a server | `GET /resources/{uid}` | `coffer mcp show` | `test_cli_parity.py` |
 | MCP servers · a server's state | `GET /resources/mcp_server/{uid}/status` | `coffer mcp status` | `test_cli_parity.py` |
@@ -250,9 +258,11 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | UI operation | Route | Command | Acceptance |
 | --- | --- | --- | --- |
 | Model providers · Add connection | `POST /providers` | `coffer provider add` | `test_cli_parity.py` |
+| Overview · Needs you · Check | `POST /providers/{uid}/check` | `coffer provider check` | `test_cli_parity.py` |
 | Model providers · Delete | `DELETE /providers/{uid}` | `coffer provider delete` | `test_cli_parity.py` |
 | Model providers · Delete… (what it affects) | `GET /providers/{uid}/delete-preview` | `coffer provider delete-preview` | `test_cli_parity.py` |
 | Model providers · Add · detect a local runtime | `POST /providers/detect-local` | `coffer provider detect-local` | `test_cli_parity.py` |
+| Model providers · the list's health marks | `GET /providers/health` | `coffer provider health` | `test_cli_parity.py` |
 | Model providers · list | `GET /providers` | `coffer provider list` | `test_cli_parity.py` |
 | Settings · Usage · Refresh prices | `PUT /providers/price-list` | `coffer provider price-list refresh` | `test_cli_parity.py` |
 | Settings · Usage · price list | `GET /providers/price-list` | `coffer provider price-list show` | `test_cli_parity.py` |
@@ -295,6 +305,9 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Secrets · Not a secret | `POST /secrets/scan/ignore` | `coffer secret ignore` | `test_cli_parity.py` |
 | Secrets · Move into the store | `POST /secrets/import` | `coffer secret import` | `test_cli_parity.py` |
 | Settings · Security · Import a master key (desktop app, Touch ID) | `POST /desktop/requests` | `coffer secret import-key` | `test_cli_parity.py` |
+| Settings · Security · master key · fingerprint | `GET /secrets/key/fingerprint` | `coffer secret key-fingerprint` | `test_cli_parity.py` |
+| Settings · Security · master key · import (the app's request) | `POST /secrets/key/import` | `coffer secret key-install` | `test_cli_parity.py` |
+| Settings · Security · master key · import (review) | `POST /secrets/key/import/preview` | `coffer secret key-preview` | `test_cli_parity.py` |
 | Secrets · list | `GET /secrets` | `coffer secret list` | `test_secret_cmd.py` |
 | Secrets · Allow local programs (coffer run) | `POST /secrets/local-access/request` | `coffer secret local-access request` | `test_cli_parity.py` |
 | Secrets · Stop allowing local programs | `POST /secrets/local-access/revoke` | `coffer secret local-access revoke` | `test_cli_parity.py` |
@@ -309,6 +322,8 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | --- | --- | --- | --- |
 | Settings · Secrets · approvals | `PUT /settings/secret-boundary` | `coffer settings approvals set` | `test_cli_parity.py` |
 | Settings · Secrets · approvals | `GET /settings/secret-boundary` | `coffer settings approvals show` | `test_cli_parity.py` |
+| Settings · Data · History · Record tool call content | `PUT /settings/call-content` | `coffer settings call-content set` | `test_cli_parity.py` |
+| Settings · Data · History · Record tool call content | `GET /settings/call-content` | `coffer settings call-content show` | `test_cli_parity.py` |
 | Settings · Engine | `GET /internal-engine-config` | `coffer settings engine show` | `test_cli_parity.py` |
 | Settings · Engine · transcription | `PUT /internal-engine-config/transcribe-model` | `coffer settings engine transcribe-model` | `test_cli_parity.py` |
 | Settings · Engine · upkeep | `PUT /internal-engine-config/upkeep` | `coffer settings engine upkeep` | `test_cli_parity.py` |
@@ -376,9 +391,6 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Sync · Join · discard this machine's file | `POST /sync/join-choices/discard` | `coffer sync join-discard` | `test_cli_parity.py` |
 | Sync · Join · Ask an agent | `POST /sync/join-choices/handoff` | `coffer sync join-handoff` | `test_cli_parity.py` |
 | Sync · Join · review | `GET /sync/join/preview` | `coffer sync join-preview` | `test_cli_parity.py` |
-| Sync · Key · fingerprint | `GET /sync/key/fingerprint` | `coffer sync key fingerprint` | `test_cli_parity.py` |
-| Sync · Key · import | `POST /sync/key/import` | `coffer sync key import` | `test_cli_parity.py` |
-| Sync · Key · import (review) | `POST /sync/key/import/preview` | `coffer sync key import-preview` | `test_cli_parity.py` |
 | Sync · Machines · rename | `PATCH /sync/machines/self` | `coffer sync machine rename` | `test_cli_parity.py` |
 | Sync · Machines · Restore | `POST /sync/machines/{machine_id}/restore` | `coffer sync machine restore` | `test_cli_parity.py` |
 | Sync · Machines · Retire | `DELETE /sync/machines/{machine_id}` | `coffer sync machine retire` | `test_cli_parity.py` |
@@ -400,6 +412,18 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Sync · Ask an agent to resolve | `POST /sync/stop/handoff` | `coffer sync stop-handoff` | `test_cli_parity.py` |
 | Sync · Move the vault | `POST /sync/vault/move` | `coffer sync vault-move` | `test_cli_parity.py` |
 | Sync · a round in progress | `GET /sync/status` | `coffer sync wait` | `test_cli_parity.py` |
+
+## `coffer uninstall` {#uninstall}
+
+| UI operation | Route | Command | Acceptance |
+| --- | --- | --- | --- |
+| Settings · About · Uninstall Coffer (desktop app) | `POST /daemon/uninstall` | `coffer uninstall` | `test_cli_parity.py` |
+
+## `coffer update` {#update}
+
+| UI operation | Route | Command | Acceptance |
+| --- | --- | --- | --- |
+| Settings · About · Check for updates (installer binaries) | `GET /daemon/upgrade` | `coffer update` | `test_cli_parity.py` |
 
 ## `coffer usage` {#usage}
 
@@ -454,10 +478,12 @@ Plain files are read and edited with your own tools, and a few acts only make se
 | `get_daemon_info` | the page's plumbing: the page's handshake with the shell |
 | `import_master_key` | `coffer secret import-key` |
 | `install_update` | `coffer app update install` |
+| `master_key_backup_closed` | the page's plumbing: the backup dialog closing ends the command's waiting request |
 | `restart_daemon` | `coffer daemon restart` |
 | `reveal_secret` | `coffer secret reveal` |
 | `set_attention_count` | the page's plumbing: the menu bar's count, set by the page |
 | `set_ui_language` | the window: the window's interface language |
 | `set_update_auto_check` | `coffer app update auto-check` |
-| `show_daemon_log` | `coffer log daemon` |
+| `show_daemon_log` | `coffer path logs` |
+| `uninstall_coffer` | `coffer uninstall` |
 | `update_status` | `coffer app update status` |

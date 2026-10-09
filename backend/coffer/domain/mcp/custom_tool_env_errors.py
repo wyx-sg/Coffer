@@ -67,6 +67,18 @@ class CustomToolLastEnvironment(CofferError):  # noqa: N818
         super().__init__(f"custom-tool group {group!r} needs at least one environment")
 
 
+class CustomToolRequestInvalid(CofferError):  # noqa: N818
+    """The tool's request cannot be built in the chosen environment: a
+    ``{env:NAME}`` the environment does not define, or a body template that
+    does not produce JSON. Nothing was sent."""
+
+    code = "CUSTOM_TOOL_REQUEST_INVALID"
+
+    def __init__(self, group: str, environment: str, reason: str) -> None:
+        super().__init__(f"{reason} (custom-tool group {group!r}, environment {environment!r})")
+        self.error_details: dict[str, object] = {"group": group, "environment": environment}
+
+
 __all__ = [
     "CustomToolEnvironmentDisabled",
     "CustomToolEnvironmentExists",
@@ -74,4 +86,5 @@ __all__ = [
     "CustomToolEnvironmentRequired",
     "CustomToolEnvironmentUnknown",
     "CustomToolLastEnvironment",
+    "CustomToolRequestInvalid",
 ]

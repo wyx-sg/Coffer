@@ -225,6 +225,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/daemon/uninstall": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Uninstall */
+        post: operations["uninstall_api_v1_daemon_uninstall_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/daemon/upgrade": {
         parameters: {
             query?: never;
@@ -236,6 +253,46 @@ export interface paths {
         get: operations["get_upgrade_api_v1_daemon_upgrade_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/daemon/upgrade/auto-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Upgrade Auto Check
+         * @description Switch the daily check on or off; the loop reads it on its next tick.
+         */
+        put: operations["set_upgrade_auto_check_api_v1_daemon_upgrade_auto_check_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/daemon/upgrade/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Upgrade
+         * @description Check for a newer release now (a daemon that does not check answers as is).
+         */
+        post: operations["check_upgrade_api_v1_daemon_upgrade_check_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -603,15 +660,31 @@ export interface components {
         };
         /**
          * DaemonUpgradeOut
-         * @description How to upgrade this Coffer (spec daemon "Hand an upgrade of Coffer to an agent").
+         * @description How to upgrade this Coffer (spec daemon "Hand an upgrade of Coffer to an
+         *     agent" and "Check the installed binaries for a new release").
          */
         DaemonUpgradeOut: {
+            /**
+             * Auto Check
+             * @default true
+             */
+            auto_check: boolean;
+            available: components["schemas"]["ReleaseOut"] | null;
+            /** Checked At */
+            checked_at: string | null;
+            /**
+             * Checks
+             * @default false
+             */
+            checks: boolean;
             handoff: components["schemas"]["HandoffOut"];
             /**
              * Install Method
              * @enum {string}
              */
             install_method: "binaries" | "app" | "source";
+            /** Last Error */
+            last_error: string | null;
         };
         /** EditorOptionOut */
         EditorOptionOut: {
@@ -755,6 +828,20 @@ export interface components {
             locations: string[];
         };
         /**
+         * ReleaseOut
+         * @description A published release of Coffer.
+         */
+        ReleaseOut: {
+            /** Notes */
+            notes: string;
+            /** Published At */
+            published_at: string | null;
+            /** Url */
+            url: string;
+            /** Version */
+            version: string;
+        };
+        /**
          * RuntimeHealthOut
          * @description The event loop's health and the background tasks' crash count.
          *
@@ -818,6 +905,54 @@ export interface components {
              * @description New token; clients must re-read daemon.json
              */
             token: string;
+        };
+        /**
+         * UninstallIn
+         * @description An uninstall (spec daemon "Uninstall Coffer from this machine"); deleting
+         *     the data needs the app's presence grant for ``uninstall`` over ``delete-data``.
+         */
+        UninstallIn: {
+            /**
+             * Delete Data
+             * @default false
+             */
+            delete_data?: boolean;
+            /** Nonce */
+            nonce?: string | null;
+            /** Signature */
+            signature?: string | null;
+        };
+        /**
+         * UninstallOut
+         * @description What an uninstall did, step by step; the daemon stops right after.
+         */
+        UninstallOut: {
+            /** Deletes Data */
+            deletes_data: boolean;
+            /** Ok */
+            ok: boolean;
+            /** Steps */
+            steps: components["schemas"]["UninstallStepOut"][];
+        };
+        /**
+         * UninstallStepOut
+         * @description One step of an uninstall: done, nothing to do, or failed with the reason.
+         */
+        UninstallStepOut: {
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /** Key */
+            key: string;
+            /** Outcome */
+            outcome: string;
+        };
+        /** UpgradeAutoCheckIn */
+        UpgradeAutoCheckIn: {
+            /** Enabled */
+            enabled: boolean;
         };
         /** UpstreamSummary */
         UpstreamSummary: {
@@ -1387,7 +1522,136 @@ export interface operations {
             };
         };
     };
+    uninstall_api_v1_daemon_uninstall_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UninstallIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UninstallOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get_upgrade_api_v1_daemon_upgrade_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonUpgradeOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_upgrade_auto_check_api_v1_daemon_upgrade_auto_check_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpgradeAutoCheckIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonUpgradeOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    check_upgrade_api_v1_daemon_upgrade_check_post: {
         parameters: {
             query?: never;
             header?: {

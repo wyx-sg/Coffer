@@ -1,12 +1,11 @@
 // frontend/src/components/mcp/AddMcpServerDialog.tsx
-// The Add server dialog (design 4.1; spec web-ui "Add MCP servers from one
-// paste box"). Controlled: the page renders the Add server button and mounts
+// The Add server dialog (design 4.1; spec web-ui "Add MCP servers by pasting
+// them into one box"). Controlled: the page renders the Add server button and mounts
 // this. Steps: the paste box → the prefilled form (one server) or the review
-// (several), plus Import from your agents. It adds MCP servers only.
+// (several). It adds MCP servers only; importing the agents' own entries is done
+// on each agent's MCP servers tab, not here.
 //
-// The one-server form tests the unsaved config before Add server. Import from
-// your agents opens the change preview of the daemon's import plan instead of
-// this dialog. Adding registers each server, then writes its secrets, then its
+// The one-server form tests the unsaved config before Add server. Adding registers each server, then writes its secrets, then its
 // reach (importMcpServers.ts). One server added → its page, where it is tested once;
 // several → stay open, test each in the background, and a batch that only partly
 // went in stays on the review (board 4.1.26). A secret that goes to a new
@@ -23,7 +22,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
-import { useAgentDirectMcpEntries } from "@/lib/hooks/useAgentDirectMcpEntries";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useImportMcpServers, useTestAddedServers } from "@/lib/hooks/useMcpServerMutations";
 import { useResources } from "@/lib/hooks/useResources";
@@ -31,7 +29,6 @@ import type { ParsedServer } from "@/lib/mcp/pasteParse";
 import { ApprovalStep, type AddedServer } from "./add/ApprovalStep";
 import { addedList, reachPhrase } from "./add/addedSummary";
 import { headingOf } from "./add/addHeading";
-import { ImportFromAgents, toastImport } from "./add/ImportFromAgents";
 import { PasteStep } from "./add/PasteStep";
 import { ReviewStep } from "./add/ReviewStep";
 import { ServerForm } from "./add/ServerForm";
@@ -40,15 +37,12 @@ import type { FailedServer, NewServer, ReachIntent } from "@/lib/mcp/importMcpSe
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Which view the dialog opens on; the paste box by default. */
-  initialMode?: "paste" | "importAgents";
 }
 
 type Step =
   | { kind: "paste" }
   | { kind: "form"; server: ParsedServer; seq: number }
   | { kind: "review"; servers: ParsedServer[]; seq: number }
-  | { kind: "importAgents" }
   | { kind: "approval"; added: AddedServer[]; then: { added: Added; reach: ReachIntent } | null };
 
 interface Added {
@@ -65,11 +59,11 @@ const emptyServer = (transportType: "stdio" | "http"): ParsedServer => ({
   env: [],
 });
 
-export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }: Props) {
+export function AddMcpServerDialog({ open, onOpenChange }: Props) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [step, setStep] = useState<Step>({ kind: initialMode });
+  const [step, setStep] = useState<Step>({ kind: "paste" });
   const [text, setText] = useState("");
   const [failures, setFailures] = useState<FailedServer[]>([]);
   // What this dialog session already registered (name → uid), so a retry after
@@ -80,19 +74,17 @@ export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }
   const testAdded = useTestAddedServers();
   const { data: servers } = useResources("mcp_server");
   const { data: agents } = useAgents();
-  const { count: agentEntryCount } = useAgentDirectMcpEntries();
   const taken = new Set((servers ?? []).map((s) => s.name));
 
   // The page opens the dialog by its `open` prop (Radix reports only closes),
-  // so a fresh session starts whenever it becomes open — on the view it was
-  // asked for, the paste box or Import from your agents.
+  // so a fresh session starts on the paste box whenever it becomes open.
   useEffect(() => {
     if (!open) return;
-    setStep({ kind: initialMode });
+    setStep({ kind: "paste" });
     setText("");
     setFailures([]);
     createdRef.current = new Map();
-  }, [open, initialMode]);
+  }, [open]);
   const setOpen = (next: boolean) => onOpenChange(next);
 
   /** One server added: close, open its page, test it once and toast the result. */
@@ -163,24 +155,9 @@ export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }
 
   const heading = headingOf(t, i18n.language, step, createdRef.current, failures);
 
-  if (step.kind === "importAgents") {
-    return (
-      <ImportFromAgents
-        open={open}
-        onOpenChange={setOpen}
-        onDone={(result) => {
-          toastImport(toast, t, result);
-          onOpenChange(false);
-        }}
-      />
-    );
-  }
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent
-        className="max-h-[90vh] max-w-[640px] overflow-y-auto"
-      >
+      <DialogContent className="max-h-[90vh] max-w-[640px] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{heading.title}</DialogTitle>
           <DialogDescription>{heading.sub}</DialogDescription>
@@ -189,10 +166,8 @@ export function AddMcpServerDialog({ open, onOpenChange, initialMode = "paste" }
           <PasteStep
             text={text}
             onTextChange={setText}
-            agentEntryCount={agentEntryCount}
             onServers={openServers}
             onChooseType={(type) => openServers([emptyServer(type)])}
-            onImportAgents={() => setStep({ kind: "importAgents" })}
             onCancel={() => onOpenChange(false)}
           />
         ) : null}

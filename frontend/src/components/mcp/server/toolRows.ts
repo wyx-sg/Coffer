@@ -41,7 +41,7 @@ export interface ToolRow {
   tooLong: boolean;
 }
 
-function paramsOf(schema: unknown): { name: string; type: string }[] {
+export function paramsOf(schema: unknown): { name: string; type: string }[] {
   const props = (schema as { properties?: Record<string, unknown> } | null)?.properties;
   if (!props || typeof props !== "object") return [];
   return Object.entries(props).map(([name, p]) => {

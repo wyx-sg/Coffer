@@ -129,7 +129,7 @@ Each file is one JSON object, read whole, changed under a per-file lock and writ
 | Table | Purpose |
 | --- | --- |
 | `audit_log` | Every lifecycle change: time, event type, actor, the resource's uid and its kind and name at the time, redacted details. |
-| `mcp_invocations` | One row per tool call through the gateway, written by a batched writer. Pruned after 30 days by default. |
+| `mcp_invocations` | One row per tool call through the gateway, with its masked and cut content, written by a batched writer. Pruned after 30 days by default. |
 | `conversations` | The conversation index: title, agent, directory, the agent's session id and the channel thread that owns it. No conversation text: that stays in the agent's own session. Deleted with the conversation (or its session); there is no retention policy. |
 | `channel_thread_conversations`, `channel_thread_history` | Which conversation an IM thread maps to, and every conversation a thread has opened. |
 | `channel_outbox` | Replies Coffer owes a chat and has not delivered yet. |
@@ -157,7 +157,7 @@ Every connection runs this pragma suite:
 ```text
 ~/.coffer/derived/
 ├── channel-avatars/            paired people's pictures, as each channel's adapter fetched them
-├── derived.db                   MCP server health, skill deliveries, capability first/last seen
+├── derived.db                   MCP server and model provider health, skill deliveries, capability first/last seen
 ├── memory/<partition>/          the memory tree (MEMORY.md, notes/, RETIRED.md, .raw/)
 ├── resources/                   derived resource files (memory partitions, coffer-guide)
 ├── skills/coffer-guide/         Coffer's own guide skill, rendered from the build
@@ -214,7 +214,7 @@ flowchart TB
 
 ## Secrets at rest
 
-A secret's ciphertext is a file, `vault/secret/<ref>.enc`: the Fernet token and a trailing newline, mode `0600` in a `0700` directory. Machine-local refs such as the model proxy's tokens live in `local/secret/` instead and never enter the vault. Ciphertext is safe in the vault because the key is not: the master key stays in the OS secret store or the `0600` file `~/.coffer/master.key`. Whether `vault/secret/` is committed is decided by your sync remote's `include_secret` setting; until then it is excluded from the repository. The secret boundary's bindings, approvals and switches are in `local/secret-boundary/`. See [Security model](/architecture/security).
+A secret's ciphertext is a file, `vault/secret/<ref>.enc`: the Fernet token and a trailing newline, mode `0600` in a `0700` directory. Machine-local refs such as the model proxy's tokens live in `local/secret/` instead and never enter the vault. Ciphertext is safe in the vault because the key is not: the master key stays in the macOS Keychain. Whether `vault/secret/` is committed is decided by your sync remote's `include_secret` setting; until then it is excluded from the repository. The secret boundary's bindings, approvals and switches are in `local/secret-boundary/`. See [Security model](/architecture/security).
 
 ## Settings that live outside every class
 

@@ -26,6 +26,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
+from coffer.application.mcp.call_content import CallContentRecording
+from coffer.application.mcp.call_content import configure as configure_call_content
 from coffer.application.mcp.custom_tool_import import CustomToolImporter
 from coffer.application.mcp.custom_tool_views import GroupViewer
 from coffer.application.mcp.custom_tools import CustomToolService
@@ -48,6 +50,7 @@ from coffer.domain.mcp.secret_target import mcp_destinations
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Resource
 from coffer.domain.secrets import SecretDestination
+from coffer.infrastructure.daemon.call_content_setting import DaemonConfigCallContent
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.http_api_runner import HttpApiToolRunner
 from coffer.infrastructure.mcp.openapi_fetch import OpenApiDocumentSource
@@ -121,6 +124,9 @@ def wire_mcp_kind(
     vault.resources.add_follower(prefs_repo.documents.follow)
     prefs_repo.documents.add_owner_listener(vault.resources.announce)
     inv_repo = MCPInvocationRepo(sm, name_of=names)
+    # The machine's content-recording switch, read once and shared by every
+    # session (spec mcp-gateway "Switch call content recording per machine").
+    configure_call_content(CallContentRecording(DaemonConfigCallContent()))
     health_repo = MCPServerHealthRepo(vault.derived_sm)
     auth_monitor = UpstreamAuthMonitor(health_repo)
 

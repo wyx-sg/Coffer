@@ -5,9 +5,12 @@ command-line record readers"): the audit log (``GET /audit``), the MCP
 invocation log (``GET /mcp/invocations``, or one server's), and the daemon log
 tail (``GET /daemon/logs``), so a terminal sees what the page shows.
 
-The audit and MCP readers page by the route's cursor: a page with more after
-it ends with the ``--cursor`` value that reads the next one, and ``--json``
-prints the route's answer, ``next_cursor`` included.
+Each reader pages by the route's cursor: a page with more after it ends with
+the ``--cursor`` value that reads the next one, and ``--json`` prints the
+route's answer, ``next_cursor`` included. Every filter the Activity page sends
+has its option here — ``--q`` (and the audit log's ``--q-type``), ``--agent-uid``
+and ``--uid`` on the MCP calls, ``--level`` and ``--with-total`` on the daemon
+log — so the command asks the route exactly what the page asks.
 
 ``--since`` takes an ISO 8601 instant or an age such as ``90s``, ``30m``,
 ``1h`` or ``2d``, turned into an instant here so every route receives the one
@@ -16,6 +19,7 @@ form it accepts.
 
 from __future__ import annotations
 
+import contextlib
 import json as _json
 import re
 from datetime import UTC, datetime, timedelta
@@ -26,6 +30,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli import _io
 from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(help="Read Coffer's records: the audit log, MCP calls and the daemon log")
@@ -36,6 +41,7 @@ _UNIT = {"s": "seconds", "m": "minutes", "h": "hours", "d": "days"}
 
 _SINCE_HELP = "ISO 8601 instant, or an age such as 30m, 1h, 2d"
 _CURSOR_HELP = "Read the page after this one: the next_cursor a previous read printed"
+_Q_HELP = "Only the records holding this text, in any case (the page's search box)"
 _TRACE_HELP = (
     "Only records of one request or turn: the trace id an audit row, an MCP call, "
     "a log line or an X-Coffer-Trace header carries"
@@ -72,6 +78,15 @@ def audit(
     limit: int = typer.Option(50, "--limit", min=1, max=500, help="Most entries to print"),
     cursor: str | None = typer.Option(None, "--cursor", help=_CURSOR_HELP),
     trace: str | None = typer.Option(None, "--trace", help=_TRACE_HELP),
+    q: str | None = typer.Option(
+        None, "--q", help=_Q_HELP + ": event code, resource name, actor and details"
+    ),
+    q_type: list[str] | None = typer.Option(
+        None,
+        "--q-type",
+        help="With --q: an event type that also matches, as the page adds the events whose "
+        "translated wording holds the text (repeatable)",
+    ),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
     """Read the audit log, newest first, one page at a time."""
@@ -90,14 +105,22 @@ def audit(
         params["cursor"] = cursor
     if trace is not None:
         params["trace_id"] = trace
-    c, _info = _cli_client.client_or_exit()
-    with c:
+    if q_type and not q:
+        typer.echo("--q-type widens a --q search; give --q too", err=True)
+        raise typer.Exit(2)
+    if q is not None:
+        params["q"] = q
+    if q_type:
+        params["q_type"] = q_type
+    with _io.client(as_json=output_json) as c:
         if name is not None and kind is not None:
             # The route filters on identity, so a renamed resource's whole
             # trail comes back, rows written under its old name included.
-            params["resource_uid"] = resolve_uid(c, kind, name, verbose=verbose)
+            params["resource_uid"] = resolve_uid(
+                c, kind, name, verbose=verbose, as_json=output_json
+            )
         r = c.get("/audit", params=params)
-        _cli_client.check(r, verbose=verbose)
+        _cli_client.check(r, verbose=verbose, as_json=output_json)
     body = r.json()
     if output_json:
         # The route's answer as it is: its entries and its next_cursor.
@@ -122,11 +145,27 @@ def audit(
 def mcp(
     ctx: typer.Context,
     server: str | None = typer.Option(None, "--server", help="One server; omit for every server"),
-    status_filter: str | None = typer.Option(None, "--status", help="ok | error"),
+    status_filter: str | None = typer.Option(
+        None,
+        "--status",
+        help="ok | error | timeout | denied, or failed for every outcome but ok",
+    ),
     since: str | None = typer.Option(None, "--since", help=_SINCE_HELP),
     limit: int = typer.Option(20, "--limit", min=1, max=500, help="Most calls to print"),
     cursor: str | None = typer.Option(None, "--cursor", help=_CURSOR_HELP),
     trace: str | None = typer.Option(None, "--trace", help=_TRACE_HELP),
+    q: str | None = typer.Option(
+        None, "--q", help=_Q_HELP + ": tool, error, session, outcome and server name"
+    ),
+    agent_uid: str | None = typer.Option(
+        None, "--agent-uid", help="Only the calls made by this agent's sessions (its uid)"
+    ),
+    uid: str | None = typer.Option(
+        None,
+        "--uid",
+        help="Only the calls written under this server uid — the reserved coffer, or a "
+        "server since deleted, which --server cannot name",
+    ),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
     """Read the MCP invocation log, newest first.
@@ -145,14 +184,22 @@ def mcp(
         params["cursor"] = cursor
     if trace is not None:
         params["trace_id"] = trace
-    c, _info = _cli_client.client_or_exit()
-    with c:
+    if agent_uid is not None:
+        params["agent_uid"] = agent_uid
+    if server is not None and (uid is not None or q is not None):
+        typer.echo("--uid and --q read every server's log; drop --server", err=True)
+        raise typer.Exit(2)
+    if uid is not None:
+        params["uid"] = uid
+    if q is not None:
+        params["q"] = q
+    with _io.client(as_json=output_json) as c:
         if server is None:
             r = c.get("/mcp/invocations", params=params)
         else:
-            uid = resolve_uid(c, "mcp_server", server, verbose=verbose)
-            r = c.get(f"/resources/mcp_server/{uid}/invocations", params=params)
-        _cli_client.check(r, verbose=verbose)
+            server_uid = resolve_uid(c, "mcp_server", server, verbose=verbose, as_json=output_json)
+            r = c.get(f"/resources/mcp_server/{server_uid}/invocations", params=params)
+        _cli_client.check(r, verbose=verbose, as_json=output_json)
     body = r.json()
     if output_json:
         # The route's answer as it is: its invocations and its next_cursor.
@@ -163,7 +210,7 @@ def mcp(
     table.add_column("Time")
     if server is None:
         table.add_column("Server")
-    for col in ("Type", "Key", "Duration (ms)", "Status", "Trace"):
+    for col in ("Type", "Key", "Duration (ms)", "Status", "Trace", "ID"):
         table.add_column(col)
     for inv in rows:
         named = [inv.get("resource_name") or inv["resource_uid"]] if server is None else []
@@ -175,9 +222,49 @@ def mcp(
             str(inv["duration_ms"]),
             inv["status"],
             inv.get("trace_id") or "",
+            str(inv["id"]),
         )
     _console.print(table)
     _next_page_hint(body.get("next_cursor"))
+
+
+@app.command("call")
+def call(
+    ctx: typer.Context,
+    invocation_id: int = typer.Argument(..., help="The call's id, as `coffer log mcp` prints it"),
+    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
+) -> None:
+    """Read one tool call with its arguments and result, secrets masked."""
+    verbose = _verbose(ctx)
+    with _io.client(as_json=output_json) as c:
+        r = c.get(f"/mcp/invocations/{invocation_id}")
+        _cli_client.check(r, verbose=verbose, as_json=output_json)
+    body = r.json()
+    if output_json:
+        typer.echo(_json.dumps(body, indent=2))
+        return
+    server = body.get("resource_name") or body["resource_uid"]
+    typer.echo(f"{body['timestamp']}  {server}.{body['capability_key']}  {body['status']}")
+    typer.echo(f"took {body['duration_ms']} ms · id {body['id']}")
+    if body.get("error_message"):
+        typer.echo(f"error: {body['error_message']}")
+    content = body.get("content")
+    if content is None:
+        typer.echo("\nContent was not recorded for this call.")
+        return
+    for part in ("arguments", "result", "error", "request", "response"):
+        if content.get(part):
+            typer.echo(f"\n{part.capitalize()}:\n{_content_text(content[part])}")
+
+
+def _content_text(part: dict[str, Any]) -> str:
+    """A recorded part laid out as JSON when whole, as text when cut."""
+    text: str = part["text"]
+    if not part["truncated"]:
+        with contextlib.suppress(ValueError):
+            return _json.dumps(_json.loads(text), indent=2, ensure_ascii=False)
+        return text
+    return f"{text}\n[cut at 16 KB — the call carried {part['bytes'] // 1024} KB]"
 
 
 def _next_page_hint(next_cursor: str | None) -> None:
@@ -193,26 +280,50 @@ def daemon(
     errors: bool = typer.Option(False, "--errors", help="Only errors"),
     limit: int = typer.Option(100, "--limit", min=1, max=500, help="Most records to print"),
     trace: str | None = typer.Option(None, "--trace", help=_TRACE_HELP),
+    level: str | None = typer.Option(
+        None,
+        "--level",
+        help="Only records at or above this severity: debug, info, warning, error, critical",
+    ),
+    q: str | None = typer.Option(
+        None, "--q", help=_Q_HELP + ": message, logger, level and folded lines"
+    ),
+    cursor: str | None = typer.Option(None, "--cursor", help=_CURSOR_HELP),
+    with_total: bool = typer.Option(
+        False, "--with-total", help="Also count the matching records in the log's recent tail"
+    ),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
     """Read the tail of the daemon log, newest first, normalised as the Activity page shows it.
 
     ``--trace`` keeps the lines of one request or turn, the same id ``coffer log
-    audit --trace`` and ``coffer log mcp --trace`` filter on.
+    audit --trace`` and ``coffer log mcp --trace`` filter on. This reads through
+    the daemon, starting it if it is not running; to read the file with no
+    daemon, open the one ``coffer path logs`` names.
     """
     params: dict[str, Any] = {"limit": limit, "errors_only": errors}
     if since is not None:
         params["since"] = since_instant(since)
     if trace is not None:
         params["trace_id"] = trace
-    c, _info = _cli_client.client_or_exit()
-    with c:
+    if level is not None:
+        params["level"] = level
+    if q is not None:
+        params["q"] = q
+    if cursor is not None:
+        params["cursor"] = cursor
+    if with_total:
+        params["with_total"] = True
+    with _io.client(as_json=output_json) as c:
         r = c.get("/daemon/logs", params=params)
-        _cli_client.check(r, verbose=_verbose(ctx))
+        _cli_client.check(r, verbose=_verbose(ctx), as_json=output_json)
     body = r.json()
     if output_json:
         typer.echo(_json.dumps(body, indent=2))
         return
+    if with_total and body.get("total") is not None:
+        floor = "at least " if body.get("total_is_floor") else ""
+        typer.echo(f"{floor}{body['total']} matching records in the recent tail")
     for rec in body["records"]:
         raw = rec.get("record") or {}
         if "raw" in raw and rec.get("level") is None:
@@ -231,6 +342,7 @@ def daemon(
         typer.echo(head)
         for line in _continuation(raw):
             typer.echo(f"    {line}")
+    _next_page_hint(body.get("next_cursor"))
 
 
 def _continuation(record: dict[str, Any]) -> list[str]:

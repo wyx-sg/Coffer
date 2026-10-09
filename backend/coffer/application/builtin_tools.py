@@ -23,6 +23,7 @@ this registry by the composition root.
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -48,6 +49,10 @@ class BuiltinTool:
     #: (spec experimental-features "Close every surface of a switched-off
     #: feature").
     feature: str | None = None
+    #: Offered only inside a turn Coffer runs — to a session whose requests carry
+    #: a live ``X-Coffer-Turn`` token — like ``coffer__ask``. Elsewhere the tool is
+    #: neither listed nor found, so a terminal session never sees it.
+    turn_scoped: bool = False
 
 
 @dataclass(frozen=True)
@@ -82,8 +87,20 @@ class BuiltinToolRegistry:
         self._tools: dict[str, BuiltinTool] = {}
         self._directories: dict[str, AgentDirectory] = {}
         self._feature_enabled = feature_enabled
+        self._in_turn = False
+
+    def view(self, *, in_turn: bool) -> BuiltinToolRegistry:
+        """The registry as one MCP session sees it: inside a live Coffer turn the
+        turn-scoped tools are there too. The view shares this registry's tools."""
+        if not in_turn:
+            return self
+        seen = copy.copy(self)
+        seen._in_turn = True
+        return seen
 
     def _present(self, item: BuiltinTool | AgentDirectory) -> bool:
+        if isinstance(item, BuiltinTool) and item.turn_scoped and not self._in_turn:
+            return False
         if item.feature is None or self._feature_enabled is None:
             return True
         return self._feature_enabled(item.feature)

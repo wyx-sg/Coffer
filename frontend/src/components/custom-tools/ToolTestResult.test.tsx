@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 
 import type { CustomToolTestOut } from "@/lib/api/customTools";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { acceptance } from "@/test/acceptance";
 import { ToolTestResult } from "./ToolTestResult";
 
 vi.mock("@/lib/api/secret", () => ({
@@ -15,6 +16,7 @@ vi.mock("@/lib/api/secret", () => ({
       refs: [
         {
           ref: "secret/deploy-token",
+          label: "deploy-token",
           present: true,
           locked: false,
           cited_by: [],
@@ -36,8 +38,11 @@ function result(patch: Partial<CustomToolTestOut>): CustomToolTestOut {
     status: 200,
     status_line: "HTTP 200 OK",
     body: '{"healthy":true}',
+    body_bytes: 16,
+    rule_failure: null,
     truncated: false,
     content_type: "application/json",
+    response_headers: {},
     environment: null,
     error: null,
     failure: null,
@@ -101,7 +106,7 @@ describe("ToolTestResult", () => {
 
   test("a rejected secret keeps the hint and opens the secret's Change value, with no hand-off", async () => {
     show(result({ ok: false, status: 401, status_line: "HTTP 401 Unauthorized", body: "" }));
-    expect(screen.getByText(/The API rejected deploy-token/)).toBeInTheDocument();
+    expect(await screen.findByText(/The API rejected deploy-token/)).toBeInTheDocument();
     expect(screen.getByText(/every tool in deploy-api uses the same secret/)).toBeInTheDocument();
     expect(handoff()).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Change value" }));
@@ -155,5 +160,35 @@ describe("ToolTestResult", () => {
     const note = screen.getByText("Cut short at 1 MB.");
     expect(viewer()?.contains(note)).toBe(true);
     expect(screen.getByText(/Agents get the same first 1 MB/)).toBeInTheDocument();
+  });
+
+  acceptance("web-ui", "Try it names the response rule an answer broke", () => {
+    show(
+      result({
+        rule_failure: {
+          rule: { source: "header", name: "x-result-code", ok_values: ["OK"], missing: "ok" },
+          value: "E42",
+          message: "quota exceeded",
+          summary: 'header x-result-code = "E42" (success: "OK"): quota exceeded',
+        },
+        body: "",
+        body_bytes: 0,
+      }),
+    );
+    expect(block()).toHaveClass("bg-danger-soft");
+    expect(screen.getByText("Response rule failed")).toBeInTheDocument();
+    expect(screen.getByText(/= "E42" \(success: "OK"\): quota exceeded/)).toBeInTheDocument();
+    expect(screen.getByText(/broke one of the response rules/)).toBeInTheDocument();
+    expect(screen.getByText(/0 bytes · empty body/)).toBeInTheDocument();
+  });
+
+  test("an empty body is said so", () => {
+    show(result({ body: "", body_bytes: 0 }));
+    expect(screen.getByText(/0 bytes · empty body/)).toBeInTheDocument();
+  });
+
+  test("the body size comes from the daemon, not the cut text", () => {
+    show(result({ body_bytes: 3 * 1024 * 1024, truncated: true }));
+    expect(screen.getByText(/3 MB/)).toBeInTheDocument();
   });
 });

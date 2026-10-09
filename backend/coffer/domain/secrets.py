@@ -47,6 +47,8 @@ GRANT_OPS: tuple[str, ...] = (
     "approve_batch",
     "export_master_key",
     "import_master_key",
+    # Deleting Coffer's data on uninstall (spec daemon "Uninstall Coffer from this machine").
+    "uninstall",
 )
 
 
@@ -224,6 +226,15 @@ class SecretApproval:
                 f"{self.destination_label!r} ({self.slot}) at {self.target}"
             )
         return "turn off approval for new secret destinations"
+
+    def destination(self) -> SecretDestination:
+        """Where a ``bind`` approval sends its secret, as the boundary checks it."""
+        return SecretDestination(
+            self.destination_kind or "",
+            self.destination_uid or "",
+            self.target or "",
+            self.destination_label or "",
+        )
 
 
 def batch_target(items: Iterable[tuple[str, str]]) -> str:

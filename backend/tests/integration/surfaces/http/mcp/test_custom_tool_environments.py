@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import time
 from collections.abc import Iterator
 from typing import Any
 
@@ -37,8 +38,10 @@ def api() -> Iterator[FakeHttpApi]:
         yield a
 
 
-def _env(name: str, url: str, *, secret: str | None = None, **extra: Any) -> dict[str, Any]:
-    headers = [{"name": "Authorization", "secret": secret, "scheme": "Bearer"}] if secret else []
+def _env(
+    name: str, url: str, *, secret: str | None = None, scheme: str = "Bearer", **extra: Any
+) -> dict[str, Any]:
+    headers = [{"name": "Authorization", "secret": secret, "scheme": scheme}] if secret else []
     return {"name": name, "base_url": url, "headers": headers, **extra}
 
 
@@ -442,3 +445,116 @@ def test_reimport_keeps_every_environment(daemon: BoundaryDaemon, api: FakeHttpA
     after = r.json()["environments"]
     assert after == before
     assert r.json()["pending_approvals"] == []
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway",
+    scenario="invalid arguments are refused field by field with no upstream request",
+)
+def test_a_wrong_argument_type_through_the_gateway_is_refused_in_band(
+    daemon: BoundaryDaemon, api: FakeHttpApi
+) -> None:
+    _group(daemon, [_env("test", api.base_url)], [_PAY])
+    agent = Agent(daemon, CLAUDE)
+    for bad in ({"amount": "ten", "card": "1"}, {"amount": 5.5, "card": "1"}, {"amount": [5]}):
+        answer = agent.call("billing__pay", bad)
+        assert "error" not in answer and answer["result"]["isError"] is True, answer
+        assert "CUSTOM_TOOL_ARGUMENTS_INVALID" in text_of(answer)
+        assert "/amount (type)" in text_of(answer)
+    assert api.seen == []
+
+
+_HEADER_TOOL = {
+    "name": "header",
+    "method": "GET",
+    "path": "/h",
+    "headers": {"X-Arg": "{value}"},
+    "input_schema": {"type": "object", "properties": {"value": {"type": "string"}}},
+}
+
+
+def test_a_header_value_with_a_line_break_is_refused_before_any_request(
+    daemon: BoundaryDaemon, api: FakeHttpApi
+) -> None:
+    _group(daemon, [_env("test", api.base_url)], [_HEADER_TOOL])
+    agent = Agent(daemon, CLAUDE)
+    for bad in ("x\r\nX-Fake: y", "x\nX-Fake: y", "x\rX-Fake: y"):
+        answer = agent.call("billing__header", {"value": bad, "coffer_environment": "test"})
+        assert refusal(answer)
+    assert api.seen == []
+    # The same tool with a clean value does reach the API, carrying the header.
+    agent.call("billing__header", {"value": "clean", "coffer_environment": "test"})
+    assert [s.headers.get("x-arg") for s in api.seen] == ["clean"]
+
+
+def test_a_header_line_break_is_refused_before_the_secret_is_sent(
+    daemon: BoundaryDaemon, api: FakeHttpApi
+) -> None:
+    daemon.store("secret/test-key", TEST_TOKEN)
+    group = _group(daemon, [_env("test", api.base_url, secret="test-key")], [_HEADER_TOOL])
+    _approve_all(daemon, group)
+    agent = Agent(daemon, CLAUDE)
+    answer = agent.call(
+        "billing__header", {"value": "x\r\nX-Fake: y", "coffer_environment": "test"}
+    )
+    refusal(answer)
+    assert api.seen == []
+    assert TEST_TOKEN not in json.dumps(answer)
+
+
+def test_a_call_past_its_environments_timeout_is_an_error(
+    daemon: BoundaryDaemon, api: FakeHttpApi
+) -> None:
+    _group(
+        daemon,
+        [_env("uat", api.base_url, timeout_seconds=1)],
+        [{"name": "slow", "method": "GET", "path": "/slow"}],
+    )
+    started = time.monotonic()
+    answer = Agent(daemon, CLAUDE).call("billing__slow", {"coffer_environment": "uat"})
+    elapsed = time.monotonic() - started
+    assert refusal(answer)
+    assert elapsed < 2.9, elapsed
+
+
+def test_one_group_sends_each_environments_secret_behind_its_own_scheme(
+    daemon: BoundaryDaemon, api: FakeHttpApi
+) -> None:
+    daemon.store("secret/bearer-key", TEST_TOKEN)
+    daemon.store("secret/token-key", LIVE_TOKEN)
+    group = _group(
+        daemon,
+        [
+            _env("test", api.base_url + "/t", secret="bearer-key", scheme="Bearer"),
+            _env("uat", api.base_url + "/u", secret="token-key", scheme="Token"),
+        ],
+        [{"name": "ping", "method": "GET", "path": "/ping"}],
+    )
+    _approve_all(daemon, group)
+    agent = Agent(daemon, CLAUDE)
+    for env in ("test", "uat"):
+        assert text_of(agent.call("billing__ping", {"coffer_environment": env})).startswith(
+            "HTTP 200"
+        )
+    assert [s.headers["authorization"] for s in api.seen] == [
+        f"Bearer {TEST_TOKEN}",
+        f"Token {LIVE_TOKEN}",
+    ]
+
+
+def test_a_basic_scheme_secret_header_is_refused_when_saved(
+    daemon: BoundaryDaemon, api: FakeHttpApi
+) -> None:
+    daemon.store("secret/basic-key", TEST_TOKEN)
+    r = daemon.client.post(
+        "/api/v1/custom-tools",
+        json={
+            "name": "billing",
+            "base_url": api.base_url,
+            "headers": [{"name": "Authorization", "secret": "basic-key", "scheme": "Basic"}],
+            "tools": [{"name": "echo", "method": "GET", "path": "/echo"}],
+        },
+    )
+    assert r.status_code == 422, r.text
+    assert TEST_TOKEN not in r.text
+    assert daemon.client.get("/api/v1/custom-tools/billing").status_code == 404

@@ -7,13 +7,14 @@ it is the group's reach (spec mcp-gateway "Switch off one custom tool").
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol
 
 from coffer.domain.mcp.capability import MCPInvocation
 from coffer.domain.mcp.http_api import HttpApiTool, HttpApiTransport
 from coffer.domain.mcp.http_api_environment import HttpApiEnvironment
+from coffer.domain.mcp.http_api_response import RuleFailure
 from coffer.domain.mcp.openapi_import import OperationSource
 from coffer.domain.secrets import SecretApproval, SecretDestination
 
@@ -74,6 +75,13 @@ class ToolTestOutcome:
     failure: str | None = None
     #: The environment the request was made in.
     environment: str | None = None
+    #: The reported response headers (request ids, server, date, and the
+    #: ones the group names or its rules read), masked.
+    response_headers: dict[str, str] = field(default_factory=dict)
+    #: The bytes of body read (at most 1 MiB).
+    body_bytes: int = 0
+    #: The first response rule the answer broke; ``None`` when all held.
+    rule_failure: RuleFailure | None = None
 
 
 class CustomToolRunnerPort(Protocol):

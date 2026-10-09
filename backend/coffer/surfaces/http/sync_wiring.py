@@ -8,8 +8,13 @@ service the surfaces call::
         → VaultSyncGit, JsonRoundState, ConflictScratch, HostMachine
         → RoundDeps → RoundEngine
         → SyncService (remote file, runs.db history, push token through the
-          secret boundary, master key, plugin inventory)
+          secret boundary, plugin inventory)
         → SyncWorker
+
+It also publishes the master key's service (spec secret "Import a master key
+after showing whose key it is") over the same resolved key the descriptor's
+fingerprint reads, so an import is seen by both; that service is the secret
+store's and answers whether or not the ``sync`` feature is on.
 """
 
 from __future__ import annotations
@@ -25,9 +30,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 import coffer
 from coffer.application.audit_service import AuditService
-from coffer.application.features import FeatureService
 from coffer.application.platform_port import PlatformPort
 from coffer.application.resource_service import ResourceService
+from coffer.application.secret.master_key_import import MasterKeyService
 from coffer.application.secret.plaintext_ignore import fingerprinter
 from coffer.application.sync.inventory import AgentPluginInventory
 from coffer.application.sync.round_deps import RoundDeps
@@ -35,7 +40,6 @@ from coffer.application.sync.round_engine import RoundEngine
 from coffer.application.sync.service import SyncService
 from coffer.application.sync.token import BoundaryToken
 from coffer.application.sync.worker import SyncWorker
-from coffer.domain.features import SYNC
 from coffer.domain.secrets import SecretDestination, sync_remote_destination
 from coffer.domain.vault.writes import Change, TreeReader, Validator, Verdict
 from coffer.infrastructure.daemon.config import write_machine_name
@@ -57,15 +61,18 @@ from coffer.infrastructure.vault.home import vault_root
 from coffer.infrastructure.vault.instance import vault_writer
 from coffer.infrastructure.vault.writer import VaultWriter
 from coffer.surfaces.http.secret_boundary_wiring import boundary_resolver
+from coffer.surfaces.http.secret_key_routes import set_master_key_service
 from coffer.surfaces.http.sync_dependencies import set_sync_service
 
 _log = logging.getLogger(__name__)
 
 
 class SyncWiring(NamedTuple):
-    """The service the surfaces call."""
+    """The services the surfaces call."""
 
     service: SyncService
+    #: The master key's fingerprint, preview and import (the secret store's).
+    keys: MasterKeyService
 
 
 def _validator_of(writer: VaultWriter) -> Validator:
@@ -152,7 +159,6 @@ def wire_sync(
         history=SyncRunRepo(sm),
         token=BoundaryToken(boundary_resolver(secret_store)),
         machine=machine,
-        master_key=key,
         secrets=SecretFiles(key),
         probe=git,
         audit=audit,
@@ -165,7 +171,8 @@ def wire_sync(
         git_available=git_available,
         host_label=machine_label,
     )
-    return SyncWiring(service=service)
+    keys = MasterKeyService(master_key=key, secrets=SecretFiles(key), audit=audit)
+    return SyncWiring(service=service, keys=keys)
 
 
 def start_sync(
@@ -177,7 +184,7 @@ def start_sync(
     secret_store: EncryptedSecretStore,
     platform: PlatformPort,
 ) -> SyncWiring:
-    """Wire sync and publish the routes' service."""
+    """Wire sync and publish the routes' services."""
     wiring = wire_sync(
         resources=resources,
         audit=audit,
@@ -187,13 +194,13 @@ def start_sync(
         platform=platform,
     )
     set_sync_service(wiring.service)
+    set_master_key_service(wiring.keys)
     return wiring
 
 
-def start_sync_worker(wiring: SyncWiring, features: FeatureService) -> SyncWorker:
-    """Rounds on the remote's interval; the first 30 s after start. Nothing
-    runs while the ``sync`` feature is off."""
-    worker = SyncWorker(wiring.service, is_enabled=lambda: features.is_enabled(SYNC))
+def start_sync_worker(wiring: SyncWiring) -> SyncWorker:
+    """Rounds on the remote's interval; the first 30 s after start."""
+    worker = SyncWorker(wiring.service)
     worker.start()
     return worker
 

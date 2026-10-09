@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -9,11 +10,27 @@ from typing import Any
 
 from coffer.application.repos import AuditRepo
 from coffer.application.runtime import correlation
+from coffer.domain.activity_content import cut
 from coffer.domain.audit import AuditEntry
 from coffer.domain.pagination import Page, decode_cursor, paginate, position_of, time_and_id
 from coffer.domain.resource import Resource
 
 _logger = logging.getLogger(__name__)
+
+
+#: The most of an event's details its daemon.log line carries, in UTF-8 bytes.
+LOG_DETAILS_LIMIT = 2048
+
+
+def _log_details(details: dict[str, Any] | None) -> dict[str, Any]:
+    """``details`` for the log line: whole when small, else its cut JSON."""
+    if not details:
+        return {}
+    text = json.dumps(details, ensure_ascii=False, default=str)
+    if len(text.encode()) <= LOG_DETAILS_LIMIT:
+        return {"details": details}
+    part = cut(text, LOG_DETAILS_LIMIT)
+    return {"details": part.text, "details_truncated": True}
 
 
 class AuditService:
@@ -88,9 +105,10 @@ class AuditService:
         # recording; this makes that same decision legible to whoever is
         # tailing a log rather than querying SQLite.
         #
-        # `details` is NOT logged. The audit table applies each kind's redactor
-        # before storing it, and re-deriving that here would duplicate the one
-        # place that knows which fields carry secrets.
+        # The line carries the row's `details` — already redacted by the
+        # caller (a kind's redactor, refs not values), so the log holds nothing
+        # the table does not — cut so one large diff cannot flood the file
+        # (spec resource-framework "Audit every lifecycle change").
         _logger.info(
             "coffer.%s",
             event_type,
@@ -100,6 +118,7 @@ class AuditService:
                 "resource_kind": resource.kind if resource else None,
                 "resource_uid": resource.uid if resource else None,
                 "actor": actor,
+                **_log_details(details),
             },
         )
 

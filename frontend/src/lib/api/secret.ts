@@ -82,6 +82,14 @@ export const secretsApi = {
   /** Withdraw that grant. Needs no presence: revoking only narrows. */
   revokeLocalAccess: (name: string) =>
     unwrap(getApiClient().POST("/secrets/local-access/revoke", { body: { name } })),
+  /** Ask again for a refused binding: answers the approvals now waiting. Needs no presence:
+   *  asking grants nothing. */
+  askAgain: (id: string) =>
+    unwrap(
+      getApiClient().POST("/secrets/approvals/{approval_id}/ask-again", {
+        params: { path: { approval_id: id } },
+      }),
+    ),
   /** Refuse one. Needs no presence: refusing only narrows what is sent. */
   rejectApproval: (id: string) =>
     unwrap(

@@ -63,7 +63,15 @@ export PATH="$HOME/.coffer/bin:$PATH"   # add this to your shell profile
 - 关于页上的**自动检查**可以关掉启动时和每六小时的检查；手动检查仍然可用。
 - 检查失败时（没网、清单无法访问），关于页会说明原因，保留上次成功检查的时间，不改变任何东西。失败也会写进 `~/.coffer/logs/daemon.log`。
 - 没有更新密钥的构建（所有从源码构建的版本，以及项目有更新密钥之前发布的版本）会说明它不检查更新。更新方式是把新的 `.dmg` 装在它上面，再选**重启守护进程**。
-- 在浏览器里，关于页只会说明更新由桌面应用安装。
+- 在浏览器里，关于页会说明更新由桌面应用安装。如果守护进程运行的是安装脚本装的二进制，那里会改为显示它自己的新版本检查，并给出可复制的 `coffer update`，见[安装 → 升级](/zh/start/install#upgrade)。
+
+### 卸载 {#uninstall}
+
+**设置 › 关于 › 卸载 Coffer…** 会把 Coffer 从这台 Mac 上移除。对话框会列出要移除的内容（每个智能体里 Coffer 的 MCP 条目、记忆钩子和模型路由，Coffer 投递的技能链接，开机自启动，命令行工具和安装脚本加的 `PATH` 行，以及应用本身）和要保留的内容：`~/.coffer`，重新安装后可以直接用。确认后，应用会按守护进程的报告逐项显示每一步，然后把自己移到废纸篓并退出。
+
+**同时删除我的数据**默认不勾选。勾选后会说明哪些内容会永久丢失，提供**先备份主密钥**，并把按钮改为**卸载并删除数据**；确认时会要求 Touch ID，通过之后才会删除任何东西。`~/.coffer` 和主密钥的钥匙串条目会在守护进程停止之后删除。
+
+当守护进程属于应用时，`coffer uninstall`（以及会预先勾选该选项的 `coffer uninstall --delete-data`）会打开这个对话框，所以决定总是在应用里做。
 
 ## 在场校验和批准 {#presence-checks-and-approvals}
 
@@ -84,7 +92,7 @@ Coffer 的[密钥边界](/zh/guides/secrets)把密钥的值、以及把它发往
 **批准会主动找你。** 不管窗口是否打开，应用每 15 秒检查一次守护进程。每出现一个新的待批准请求，它就发一条通知 **Coffer 需要你批准**，正文写明是什么改动，窗口会打开批准面板。在那里你可以批准（需要上面的校验）或拒绝（不需要校验）。等待批准的命令会打印 `waiting for approval in the Coffer app`；什么会触发批准，见[密钥 → 批准](/zh/guides/secrets#approvals)。
 
 ::: warning 开发版构建
-没有用 Coffer 的 Developer ID 签名的构建（所有从源码构建的版本，以及项目有 Developer ID 之前发布的所有版本）都是开发版：主密钥是一个你名下任何程序都能读取的文件，同一用户下的程序可以伪造应用的签名。应用在每个提示上都会标明 **Development build**。在没有 Touch ID 或 LocalAuthentication 的 Mac 上，开发版会改为在自己的窗口里弹一个对话框让你确认。见[安全模型 → 开发版构建](/zh/architecture/security#development-builds)。
+没有用 Coffer 的 Developer ID 签名的构建（所有从源码构建的版本）都是开发版。应用在每个提示上都会标明 **Development build**。在没有 Touch ID 或 LocalAuthentication 的 Mac 上，开发版会改为在自己的窗口里弹一个对话框让你确认。见[安全模型 → 开发版构建](/zh/architecture/security#development-builds)。
 :::
 
 ## 启动 {#launch}

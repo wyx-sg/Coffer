@@ -129,6 +129,9 @@ async def test_update_scope_records_audit_event(tmp_path):
     assert entries[0].resource_name == "t"
     assert entries[0].actor == "api"
     assert entries[0].details["scope"] == {"agents": [_AGENT_A]}
+    # What it replaced, and the agents by label (a uid with no agent row stays a uid).
+    assert entries[0].details["before"] is None
+    assert entries[0].details["agents"] == [_AGENT_A]
     await engine.dispose()
 
 

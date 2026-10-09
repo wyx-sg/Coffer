@@ -13,6 +13,7 @@ import time
 from typing import Any
 
 from tests.support.boundary_daemon import BoundaryDaemon
+from tests.support.mcp_wire import init_params
 
 SECRET_NAME = "billing-token"
 #: The secret holds the WHOLE header value, prefix included.
@@ -81,7 +82,7 @@ class Agent:
         self._d = d
         self.session = f"custom-tools-{next(_ids)}"
         meta = {"coffer/agent-uid": agent_uid} if agent_uid else {}
-        self.rpc("initialize", {"protocolVersion": "2025-06-18", "_meta": meta})
+        self.rpc("initialize", init_params(meta))
 
     def rpc(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         r = self._d.client.post(

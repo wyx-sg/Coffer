@@ -1,7 +1,8 @@
 // src/components/custom-tools/toolForm.ts — what the tool drawer edits, and the request it sends.
-import type { CustomTool, CustomToolIn, HttpMethod } from "@/lib/api/customTools";
+import type { CustomTool, CustomToolIn, HttpMethod, ResponseRule } from "@/lib/api/customTools";
 import { draftOf, emptyDraft } from "@/lib/customTools/drafts";
 import { changesDataByDefault } from "@/lib/customTools/groups";
+import { rulesValid } from "@/lib/customTools/responseRules";
 import { argsFromSchema, schemaFromArgs, type ArgRow } from "@/lib/customTools/schemaArgs";
 
 /** One header of this request, as a key/value row. */
@@ -24,6 +25,8 @@ export interface ToolForm {
   changesData: boolean;
   /** Set by hand rather than following the method. */
   changesDataSet: boolean;
+  /** Rules of this tool only; null follows the group's (an empty list judges by the HTTP status alone). */
+  responseRules: ResponseRule[] | null;
 }
 
 export function formOf(tool: CustomTool | null): ToolForm {
@@ -41,6 +44,7 @@ export function formOf(tool: CustomTool | null): ToolForm {
     enabled: draft.enabled ?? true,
     changesData: tool ? tool.changes_data : changesDataByDefault(method),
     changesDataSet: tool ? tool.changes_data_set : false,
+    responseRules: tool?.response_rules ?? null,
   };
 }
 
@@ -68,10 +72,16 @@ export function toolOf(form: ToolForm): CustomToolIn {
     input_schema: schemaFromArgs(form.args, form.schema),
     enabled: form.enabled,
     changes_data: form.changesDataSet ? form.changesData : null,
+    response_rules: form.responseRules,
   };
 }
 
 /** What still blocks a save: the required fields. */
 export function formReady(form: ToolForm): boolean {
-  return form.name.trim() !== "" && form.path.trim() !== "" && form.description.trim() !== "";
+  return (
+    form.name.trim() !== "" &&
+    form.path.trim() !== "" &&
+    form.description.trim() !== "" &&
+    (form.responseRules === null || rulesValid(form.responseRules))
+  );
 }

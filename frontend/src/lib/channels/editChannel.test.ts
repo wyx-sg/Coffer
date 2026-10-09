@@ -21,14 +21,11 @@ import {
   honoursRequireMention,
   normaliseDirectory,
   planChannelEdit,
+  showsStepLines,
   storedDefaultDirectory,
   storedDefaultModel,
 } from "@/lib/channels/editChannel";
-import {
-  parseBurstWait,
-  parseIdleHours,
-  parseNotifyAfter,
-} from "@/components/channel/channelTurnSettings";
+import { parseBurstWait, parseIdleHours } from "@/components/channel/channelTurnSettings";
 
 /** The two channels every case below edits: a uid to address, a name to read. */
 const TG = { uid: "u-3d9a1f77", name: "tg" };
@@ -243,58 +240,76 @@ describe("planChannelEdit", () => {
   });
 
   describe("replies", () => {
-    // Two per-channel settings: list each step under the live status line
-    // (show_steps) and the completion ping threshold (notify_after_seconds,
-    // 0 = off).
+    // The step-lines setting (show_steps): list each step under the live status
+    // line, on a platform that has one.
     const config = {
       channel_type: "telegram",
       bot_token_ref: "channel/tg/bot-token",
       show_steps: true,
-      notify_after_seconds: 90,
     };
 
-    test("values equal to the stored ones are not rewritten", () => {
+    test("a value equal to the stored one is not rewritten", () => {
       const plan = planChannelEdit({
         ...TG,
         config,
-        values: { default_agent: AGENT_A, show_steps: true, notify_after_seconds: 90 },
+        values: { default_agent: AGENT_A, show_steps: true },
       });
 
       expect(plan.config).toEqual({ ...config, default_agent: AGENT_A });
     });
 
-    test("changed values write their keys, and 0 turns the ping off", () => {
+    test("a changed value writes its key", () => {
       const plan = planChannelEdit({
         ...TG,
         config,
-        values: { default_agent: AGENT_A, show_steps: false, notify_after_seconds: 0 },
+        values: { default_agent: AGENT_A, show_steps: false },
       });
 
       expect(plan.config.show_steps).toBe(false);
-      expect(plan.config.notify_after_seconds).toBe(0);
     });
 
-    test("an unchanged stored value is kept as-is", () => {
-      const stored = { ...config, show_steps: false, notify_after_seconds: 300 };
+    test("only a platform with a live status line shows step lines", () => {
+      expect(showsStepLines("telegram")).toBe(true);
+      expect(showsStepLines("seatalk")).toBe(false);
+    });
+  });
+
+  describe("system prompts", () => {
+    const config = { channel_type: "telegram", bot_token_ref: "channel/tg/bot-token" };
+
+    test("an empty prompt over a config that holds none writes nothing", () => {
       const plan = planChannelEdit({
         ...TG,
-        config: stored,
-        values: { default_agent: AGENT_A, show_steps: false, notify_after_seconds: 300 },
+        config,
+        values: { default_agent: AGENT_A, direct_system_prompt: "", group_system_prompt: "" },
       });
 
-      expect(plan.config.show_steps).toBe(false);
-      expect(plan.config.notify_after_seconds).toBe(300);
+      expect(plan.config).toEqual({ ...config, default_agent: AGENT_A });
     });
 
-    test("parseNotifyAfter accepts 0..3600 seconds and rejects the rest", () => {
-      expect(parseNotifyAfter("0")).toBe(0);
-      expect(parseNotifyAfter("90")).toBe(90);
-      expect(parseNotifyAfter("3600")).toBe(3600);
-      expect(parseNotifyAfter("")).toBeNull();
-      expect(parseNotifyAfter("  ")).toBeNull();
-      expect(parseNotifyAfter("-1")).toBeNull();
-      expect(parseNotifyAfter("3601")).toBeNull();
-      expect(parseNotifyAfter("abc")).toBeNull();
+    test("a changed prompt writes its key and leaves the other alone", () => {
+      const plan = planChannelEdit({
+        ...TG,
+        config: { ...config, group_system_prompt: "Be brief." },
+        values: {
+          default_agent: AGENT_A,
+          direct_system_prompt: "Answer in Chinese.",
+          group_system_prompt: "Be brief.",
+        },
+      });
+
+      expect(plan.config.direct_system_prompt).toBe("Answer in Chinese.");
+      expect(plan.config.group_system_prompt).toBe("Be brief.");
+    });
+
+    test("clearing a prompt writes it empty", () => {
+      const plan = planChannelEdit({
+        ...TG,
+        config: { ...config, direct_system_prompt: "Answer in Chinese." },
+        values: { default_agent: AGENT_A, direct_system_prompt: "" },
+      });
+
+      expect(plan.config.direct_system_prompt).toBe("");
     });
   });
 

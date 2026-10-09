@@ -6,21 +6,19 @@
 // and installing; this renders its record — up to date, a newer version with
 // Download and restart, or a failed check that keeps the last good time — and
 // asks it to act. A busy control shows it and takes no second press. In a
-// browser there is nothing to control: a page the daemon serves cannot replace
-// the app, so the section says who installs updates and offers no update
-// button — only the daemon's hand-off that has an agent upgrade this copy the
-// way it was installed (`GET /daemon/upgrade`).
+// browser a page the daemon serves cannot replace the app, so the section is
+// `BrowserUpdates`: the daemon's own check on the installer's binaries, or who
+// installs updates, and the hand-off that has an agent upgrade this copy.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Download, RefreshCw } from "lucide-react";
 
-import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { useUpgradeHandoff } from "@/lib/hooks/useDaemon";
 import { useShellUpdates } from "@/lib/hooks/useShellUpdates";
 import type { UpdateStatus } from "@/lib/shellUpdates";
 import { formatClockOrMoment, formatDay } from "@/lib/time";
+import { BrowserUpdates } from "./BrowserUpdates";
 
 function percent(status: UpdateStatus): string {
   const { downloaded, total } = status;
@@ -30,19 +28,18 @@ function percent(status: UpdateStatus): string {
 export function UpdatesSection() {
   const { t, i18n } = useTranslation();
   const { inShell, status, actionError, check, install, setAutoCheck } = useShellUpdates();
-  const upgrade = useUpgradeHandoff(!inShell);
 
-  if (!inShell || (status && !status.configured)) {
+  if (!inShell) {
     return (
       <UpdatesBlock>
-        <div className="space-y-3 text-sm text-text-muted">
-          <p>
-            {inShell
-              ? t("settings.about.updates.unconfigured")
-              : t("settings.about.updates.browser")}
-          </p>
-          {!inShell && upgrade.data ? <AgentHandoff prompt={upgrade.data} size="sm" /> : null}
-        </div>
+        <BrowserUpdates />
+      </UpdatesBlock>
+    );
+  }
+  if (status && !status.configured) {
+    return (
+      <UpdatesBlock>
+        <p className="text-sm text-text-muted">{t("settings.about.updates.unconfigured")}</p>
       </UpdatesBlock>
     );
   }

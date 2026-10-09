@@ -35,6 +35,8 @@ pub enum Subject<'a> {
     ImportMasterKey {
         fingerprint: &'a str,
     },
+    /// Uninstalling Coffer and deleting `~/.coffer` with the master key.
+    DeleteData,
 }
 
 /// The prompt's reason. macOS shows it as "Coffer is trying to <reason>", so
@@ -56,6 +58,9 @@ pub fn reason(subject: &Subject<'_>, development: bool) -> String {
         Subject::ExportMasterKey => "export a backup of Coffer's master key".to_owned(),
         Subject::ImportMasterKey { fingerprint } => {
             format!("replace Coffer's master key with the key {fingerprint}")
+        }
+        Subject::DeleteData => {
+            "uninstall Coffer and delete all its data and the master key".to_owned()
         }
     };
     if development {

@@ -34,10 +34,6 @@ Three rules keep those two honest:
 
 This is the same pair of moves password managers and agent vendors settled on: a human-presence gate the agent cannot satisfy, and a broker that injects the secret so the agent never holds it.
 
-::: danger The boundary holds only in a signed release
-The presence grant that proves "a person approved this" is signed with a key derived from the master key, and only the signed desktop app can read that key — **once Coffer ships binaries signed with an Apple Developer ID**. It does not yet. Until then every build is a development build: the master key is the file `~/.coffer/master.key`, any process running as you can read it, and so a same-user process can forge a grant. **In a development build the secret boundary does not hold.** See [Development builds](#development-builds).
-:::
-
 ### What Coffer defends against
 
 | Threat | Defence |
@@ -45,7 +41,7 @@ The presence grant that proves "a person approved this" is signed with a key der
 | An agent asking Coffer for a secret's value — through REST, the CLI, MCP, or a master key export. | No route, command or tool returns a value or the key. Reveals and key backups exist only in the desktop app, behind a presence check; a command can only ask the app to start one. |
 | An agent making Coffer deliver an existing secret to a program or URL of its choosing. | Every destination is checked at the moment of use. A secret goes to a target no person approved only after an approval in the desktop app, signed with a presence grant. |
 | An agent switching the protection off. | It waits for an approval in the desktop app. |
-| An agent editing the boundary's files by hand to approve a destination or switch the protection off. | In a signed build the three state files carry an HMAC seal under a key derived from the master key. A file with a bad or missing seal is read as empty: the protection returns to on and every binding is approved again (see [Sealed state](#sealed-state)). |
+| An agent editing the boundary's files by hand to approve a destination or switch the protection off. | The three state files carry an HMAC seal under a key derived from the master key. A file with a bad or missing seal is read as empty: the protection returns to on and every binding is approved again (see [Sealed state](#sealed-state)). |
 | An agent standing in for the model proxy or the daemon to collect keys, the token or a grant. | The daemon attests the proxy before it pushes any provider key, and the desktop app attests the daemon before it hands over the token or signs a grant. Both answers are HMACs only a holder of the master key can make (see [Who is on the other end](#who-is-on-the-other-end)). |
 | An agent installing a master key of its own so it can forge grants. | Importing a key needs a presence grant over that key's fingerprint, so it happens only through the desktop app's Touch ID. |
 | An agent starting the signed binary with its own `HTTPS_PROXY` or CA bundle to read injected credentials. | A signed build drops the inherited proxy and certificate variables and takes both from macOS. |
@@ -53,9 +49,9 @@ The presence grant that proves "a person approved this" is signed with a key der
 | A secret pasted into a skill file, `.env` or script that syncs to git, or echoed into a transcript. | Standalone secrets are cited as `coffer://secret/<id>` and resolved by `coffer run` into one child's environment only, with exact values masked in its output, and only for a secret a person granted to local programs. Masking guards against accidents; the grant is what stands between a secret and an agent that runs `coffer run` (see below). |
 | A web page in your browser reaching the daemon — including through DNS rebinding. | Every request whose `Host` is not the daemon's own loopback address and port is refused, and so is every request whose `Origin` is not one of Coffer's own. Every management call must also carry the API token. The browser UI offers no reveal, backup or approval. |
 | A host on the network reaching the daemon. | The daemon binds `127.0.0.1` only. The OS refuses remote connections before they reach Coffer. |
-| Another user account on the same machine. | `daemon.json`, `daemon-config.json` and, in a development build, `master.key` are mode `0600`. |
+| Another user account on the same machine. | `daemon.json` and `daemon-config.json` are mode `0600`. |
 | Secrets leaking through ordinary artefacts: config files, logs, the audit trail, the sync remote, screenshots of a URL. | Secrets exist at rest only as Fernet ciphertext. Configs hold refs. Audit records refs, never values. Sync carries ciphertext only, and only when you opt in. The token is never put in a URL. |
-| An offline copy of `~/.coffer/` (a stolen backup, a synced folder). | In a signed release the master key is in the Keychain, not in `~/.coffer/`, so the copy is ciphertext without its key. In a development build, only in keychain mode. |
+| An offline copy of `~/.coffer/` (a stolen backup, a synced folder). | The master key is in the Keychain, not in `~/.coffer/`, so the copy is ciphertext without its key. |
 | A stranger messaging your Telegram or SeaTalk bot. | A channel obeys exactly one paired owner, bound by a single-use pairing code. Everyone else is ignored. |
 | A provider base URL pointed at an internal address. | The provider introspector resolves the host and refuses loopback, private, link-local and similar ranges. |
 
@@ -67,10 +63,8 @@ Stated plainly, so nobody over-trusts the boundary. Each is a consequence of run
 - **`coffer run` children.** A standalone secret resolved into a command's environment is readable by whoever started the command: the parent owns the child, and `ps eww` works regardless. It can also simply run `coffer run --secret X -- env`. So masking is an accident guard only, and `coffer run` resolves a secret only after a person [granted it to local programs](#local-process-grant). A secret an agent should merely use stays without that grant and reaches its service through Coffer instead: an MCP server whose environment or header the daemon fills, or a custom HTTP tool, where the daemon makes the request. A standalone secret with the grant on, like a secret in a stdio server's environment, is listed as readable by local processes.
 - **Computer-use agents.** An agent granted Accessibility or screen control can click an approval or type your password. The presence check holds against an agent with a shell, not one with the mouse.
 - **An agent can raise presence prompts.** `coffer approval approve`, `coffer secret reveal` and `coffer secret backup-key` let any process that can run `coffer` put a Touch ID prompt in front of you. Each prompt names exactly what it approves or reveals, only one is shown at a time, a request expires after two minutes, and cancelling approves nothing; but a person who confirms prompts without reading them approves what an injected agent asked for.
-- **The signed CLI shares the key's access group.** In a signed release the `coffer` CLI could read the master key. That is acceptable because no CLI code path returns plaintext, the key or a grant, and the hardened runtime keeps other processes from attaching to or injecting into Coffer's signed binaries.
+- **The signed CLI shares the key's access group.** The `coffer` CLI could read the master key. That is acceptable because no CLI code path returns plaintext, the key or a grant, and the hardened runtime keeps other processes from attaching to or injecting into Coffer's signed binaries.
 - **Bypass modes.** An agent in `bypassPermissions`, `--yolo` or `danger-full-access` has no sandbox of its own. Nothing above depends on one; nothing above protects what such an agent reaches outside Coffer either. Coffer's own chat turns run agents this way (below).
-- **The grant is not a boundary without the Keychain access group.** In a build without it — every build from source and every unsigned build — the master key is the file `~/.coffer/master.key`, readable by any process of the same user, so an agent with a shell can decrypt the store directly; the grant then removes the one-command path but does not keep the secret confidential. Even in a signed release, a stdio MCP server's environment is readable by same-user processes (`ps eww`). A real boundary against a same-user agent needs the agent sandboxed (no read of `~/.coffer`, no `ps` of other processes), or Coffer's daemon running as a separate operating-system user.
-- **Development builds.** Everything in [Development builds](#development-builds).
 
 And, as before:
 
@@ -98,7 +92,7 @@ flowchart LR
       STORE[("Ciphertext store")]
     end
     APP["Desktop app: presence check, signs grants"]
-    KEY["Master key: Keychain access group (signed) or master.key (development)"]
+    KEY["Master key: Keychain access group"]
   end
   subgraph ext["Outbound only"]
     PROV["Model providers"]
@@ -131,7 +125,7 @@ Three operations let plaintext out, and all three live only in the desktop app: 
 3. **A signed grant.** The app signs the challenge with a key derived from the master key, which only Coffer's signed binaries can read. The derived key is computed when needed and never stored.
 4. **The operation.** The daemon checks the signature and acts only if it verifies — releasing the one value to the app's window, writing the backup into the folder you picked, or applying the approval. A grant for one operation authorises nothing else, and a missing, reused, expired or forged grant is refused with `PRESENCE_GRANT_INVALID`.
 
-A process an agent controls cannot read the master key in a signed release, so it cannot sign a grant. The daemon releases a value to the app rather than letting the app decrypt ciphertext itself: there is one decryption path, and the app needs no access to the store.
+A process an agent controls cannot read the master key, so it cannot sign a grant. The daemon releases a value to the app rather than letting the app decrypt ciphertext itself: there is one decryption path, and the app needs no access to the store.
 
 Around the three operations:
 
@@ -142,7 +136,7 @@ Around the three operations:
 
 ### Started from the command line {#from-the-command-line}
 
-An agent works in a terminal, so each of the three operations can be *started* by a command — `coffer approval approve <id>…`, `coffer secret reveal <ref>`, `coffer secret backup-key` — but none is *performed* by one. The command leaves a **desktop request** with the daemon (`POST /api/v1/desktop/requests`: an operation, the approval ids or the ref, a status, an expiry) and waits. The desktop shell asks the daemon for the next request about once a second, and each ask is how the daemon knows the app is running; when none has asked for five seconds, the command starts the app (`open -b` on macOS) and waits up to 30 seconds, and where it cannot (no app, not a Mac, a session with no person at it) it exits `12` with nothing done. The shell claims one request at a time and runs the very flow its own buttons run: it reads each approval from the daemon itself rather than trusting the request, shows the operating system's prompt naming each action, secret, destination (with the custom-tool environment) and target, asks for a challenge, signs, and calls the operation's route. A reveal shows the value in the app's window; a backup opens the page's own dialog, where the passphrase is typed. The shell then reports the request done, cancelled or failed, which by itself approves nothing.
+An agent works in a terminal, so each of the three operations can be *started* by a command — `coffer approval approve <id>…`, `coffer secret reveal <ref>`, `coffer secret backup-key` — but none is *performed* by one. The command leaves a **desktop request** with the daemon (`POST /api/v1/desktop/requests`: an operation, the approval ids or the ref, a status, an expiry) and waits. The desktop shell asks the daemon for the next request about once a second, and each ask is how the daemon knows the app is running; when none has asked for five seconds, the command starts the app (`open -b` on macOS) and waits up to 30 seconds, and where it cannot (no app, not a Mac, a session with no person at it) it exits `12` with nothing done. The shell claims one request at a time and runs the very flow its own buttons run: it reads each approval from the daemon itself rather than trusting the request, shows the operating system's prompt naming each action, secret, destination (with the custom-tool environment) and target, asks for a challenge, signs, and calls the operation's route. A reveal shows the value in the app's window; a backup opens the page's own dialog, where the passphrase is typed, and its request stays open — up to ten minutes — until the shell's own export has written the file (the request ends done with the path and fingerprint the daemon answered) or the dialog is closed (cancelled). The shell then reports the request done, cancelled or failed, which by itself approves nothing.
 
 The command learns only how the request ended, then reads each approval's state back from the daemon, so a forged "done" changes nothing; it exits `0` when every approval is approved and `11` when the check was cancelled, failed or timed out, leaving every approval pending. No request carries a secret, a grant, a nonce or a signature, nothing clicks or scripts the app's window, and no flag skips the check.
 
@@ -172,7 +166,7 @@ Two things approve a binding without a person:
 
 Two more changes widen where a secret goes and wait for the same approval:
 
-- **Switching the protection off** (`secrets.require_approval`). Switching it on applies at once.
+- **Switching the protection off** (`secrets.require_approval`, on by default). Switching it on applies at once.
 - **Granting a standalone secret to local programs**, described next.
 
 Approving takes a presence grant. Rejecting does not — refusing only narrows what Coffer does — and works from every surface. The desktop app raises a notification for each new pending approval and opens a sheet to answer it; a command whose change leaves a secret waiting prints the approval ids and `next: coffer approval approve <id>…` and exits `9`, and that command brings the same presence check to the desktop app (see [Started from the command line](#from-the-command-line)). Several approvals can be answered under one presence check: the grant is signed over a digest of exactly the approvals and targets you were shown, so it approves that list and nothing else, and any item whose target changed since is skipped (see [Secrets → Answering several at once](/guides/secrets#answering-several-at-once)). A change the person saves in the desktop app runs that check as part of the save: the page asks the shell to approve exactly the bindings the save left waiting on its own destination, so the approval is one Touch ID at Save rather than a separate sheet — the daemon still cannot tell that request from an agent's, and the grant is what proves a person was there (see [Secrets → A change you make in the desktop app](/guides/secrets#approve-on-save)). See [Secrets → Approvals](/guides/secrets#approvals).
@@ -197,7 +191,7 @@ The boundary's state is machine-local: its bindings, pending approvals, switches
 
 ### Sealed state {#sealed-state}
 
-Those files are plain JSON in a directory the agent can write, and an approval is only a line in `bindings.json`. So the three that decide where a secret may go — `bindings.json`, `approvals.json` and `settings.json` — carry a seal: each write adds a `_seal` field holding the HMAC of the document under a key derived from the master key (a different derivation from the grant key's). A file whose seal does not verify, or that has no seal in a signed build, is **read as empty** and logged once as `secret_boundary.state_unsealed`. In practice the protection switch falls back to the build's default (on in a signed build) and every binding must be approved again; an edit by hand therefore costs the agent its own foothold and gains nothing. The next write reseals. A development build adopts an unsealed file left from before sealing, since its master key is readable anyway, but still rejects a wrong seal.
+Those files are plain JSON in a directory the agent can write, and an approval is only a line in `bindings.json`. So the three that decide where a secret may go — `bindings.json`, `approvals.json` and `settings.json` — carry a seal: each write adds a `_seal` field holding the HMAC of the document under a key derived from the master key (a different derivation from the grant key's). A file whose seal does not verify, or that has no seal, is **read as empty** and logged once as `secret_boundary.state_unsealed`. In practice the protection switch falls back to its default (on) and every binding must be approved again; an edit by hand therefore costs the agent its own foothold and gains nothing. The next write reseals.
 
 ### Who is on the other end {#who-is-on-the-other-end}
 
@@ -218,16 +212,7 @@ The SeaTalk SDK is operator-supplied code in a directory your agent can write (`
 
 ## Development builds
 
-The boundary rests on one fact: in a signed release, only Coffer's signed binaries can read the master key, so only the desktop app can sign a grant. Coffer does not ship such binaries yet, and a build from source never will. In those **development builds**:
-
-- the master key is the file `~/.coffer/master.key` (or, opt-in, a login-keychain item), readable by any process running as you;
-- that process can derive the grant key and forge a reveal, a key backup or an approval;
-- so **the secret boundary does not hold**. The rules still run — no plaintext route, approvals, the `coffer run` grant and masking — and still catch accidents, but they do not stop a determined same-user agent, which can read the master key file and decrypt the store directly.
-- so **approvals are off by default**. `secrets.require_approval` defaults by the build, by the same fact that decides where the master key lives: on in a signed release, off in a development build, where an approval a same-user process can forge would only add friction. A setting a person stores wins in both; turning it on needs nobody, and turning it off once it is on waits for the desktop app. Settings and the Secrets page say so in one line, and the Overview's "Secret approval is off" item is raised only where a signed build's default was turned off, so a development build is not nagged about its default.
-
-A development build says so. The daemon reports itself as one, and the desktop app titles every presence prompt "Development build". Where a development machine has no LocalAuthentication, the app falls back to a confirmation dialog in its own window — never to no check.
-
-The boundary holds only in a release signed with Coffer's Developer ID, under the hardened runtime and notarised, with the master key in a Keychain access group only those binaries can read.
+A build not signed with Coffer's Developer ID says so. The daemon reports itself as a development build, and the desktop app titles every presence prompt "Development build". Where a development machine has no LocalAuthentication, the app falls back to a confirmation dialog in its own window — never to no check.
 
 ## Loopback binding
 
@@ -325,30 +310,16 @@ Plaintext exists in memory only between decrypt and the spawn or header injectio
 
 ### The master key
 
-The one secret that is not ciphertext is the Fernet master key, managed by one master-key component behind a storage port. Which store it uses is fixed by how the build was made, never by a setting or an environment variable:
+The one secret that is not ciphertext is the Fernet master key, managed by one master-key component behind a storage port. It lives in one place, and no setting or environment variable moves it: one data-protection Keychain item (service `coffer`, account `master-key`) in an access group limited to Coffer's Team ID, with no presence flag. Only Coffer's signed binaries can read it. Any other program — an agent's script, `/usr/bin/security` — gets no access and no "Always Allow" dialog to click, and a copy of `~/.coffer/` is ciphertext without its key.
 
-| Build | Where the key lives | Defends against an offline copy of `~/.coffer/`? | Defends against a same-user process? |
-| --- | --- | --- | --- |
-| Signed release | One data-protection Keychain item (service `coffer`, account `master-key`) in an access group limited to Coffer's Team ID, with no presence flag | Yes | Yes — any other binary gets no access and no "Always Allow" dialog to click |
-| Development, `file` (default) | `~/.coffer/master.key`, mode `0600` | No | No |
-| Development, `keychain` (opt-in) | The login keychain, service `coffer`, entry `master-key` | Yes | No — any process can ask, and one "Always Allow" opens it for good |
+**Presence gates the operations, not the key.** The Keychain item carries no Touch ID flag, so the daemon reads the key silently at every start — including a login-service restart after a crash with nobody at the keyboard — and keeps it in memory for its lifetime. What needs a person is letting plaintext out or sending a secret somewhere new.
 
-**Presence gates the operations, not the key.** The Keychain item carries no Touch ID flag, so the signed daemon reads the key silently at every start — including a login-service restart after a crash with nobody at the keyboard — and keeps it in memory for its lifetime. What needs a person is letting plaintext out or sending a secret somewhere new.
-
-**A signed release reads only its Keychain item.** It never looks in `master.key` or the login keychain, and refuses to move the key to a file.
-
-**In a development build** you switch between the file and the keychain with **Settings → Security** or `coffer config set secrets.storage keychain`. Switching **moves the key, never re-encrypts the data**; the old copy is deleted last, and resolution is file-first, so an interrupted move always resolves to a working key.
-
-Startup is fail-closed in every build. The daemon counts the ciphertext files *before* resolving the key, and creates a new key only when there are none. Ciphertext with no resolvable key stops the daemon with `MASTER_KEY_MISSING`; a keychain that refuses the read stops it with `SECRET_LOCKED` rather than creating a second key that would shadow it.
+Startup is fail-closed. The daemon counts the ciphertext files *before* resolving the key, and creates a new key only when there are none. Ciphertext with no resolvable key stops the daemon with `MASTER_KEY_MISSING`; a Keychain that refuses the read stops it with `SECRET_LOCKED` rather than creating a second key that would shadow it.
 
 `keyring` is imported by exactly one module, the keyring adapter in the secret infrastructure package, and an import contract fails the build if surfaces or application code import it.
 
-::: warning The signed-release Keychain backend is not yet proven on a real build
-The access-group backend is built behind the storage port and tested against a fake Keychain. Whether a Developer-ID-signed `coffer-daemon` running as a bare binary outside an app bundle can claim the access group is still to be shown on a signed build; if it cannot, the daemon will run from inside the signed app bundle. Until the signed build exists, the development arrangement above is what runs.
-:::
-
 ::: tip Back up the key
-A copy of `~/.coffer` without its master key yields no secrets, and in a signed release the Keychain is the key's only home. Back it up in the desktop app, which writes a key file into a folder you pick behind a presence check. No command or browser page can export the key. See [Secrets → The master key and its backup](/guides/secrets#the-master-key-and-its-backup).
+A copy of `~/.coffer` without its master key yields no secrets, and the Keychain is the key's only home. Back it up in the desktop app, which writes a key file into a folder you pick behind a presence check. No command or browser page can export the key. See [Secrets → The master key and its backup](/guides/secrets#the-master-key-and-its-backup).
 :::
 
 ## Outbound requests
@@ -409,7 +380,7 @@ An agent that is tricked by a group member can still say something private. An o
 ## What goes into logs and audit
 
 - **Logs** (`~/.coffer/logs/`, one JSON object per line) record events, identifiers and errors. No code path logs a secret value, a token or a decrypted secret.
-- **Audit** records every lifecycle change with its actor. Secret events (`secret_set`, `secret_revealed`, `secret_deleted`, `secret_resolved` and the `secret_approval_*` events) record the **ref**, the secret's name or the destination only. Resource configs pass through the kind's audit redactor first — the MCP kind strips `transport.env` and `transport.headers` entirely — so a value pasted into the wrong field still does not reach the audit log. Master-key events (`master_key_relocated`, `master_key_exported`, `master_key_imported`) record that the event happened, not the key.
+- **Audit** records every lifecycle change with its actor. Secret events (`secret_set`, `secret_revealed`, `secret_deleted`, `secret_resolved` and the `secret_approval_*` events) record the **ref**, the secret's name or the destination only. Resource configs pass through the kind's audit redactor first — the MCP kind strips `transport.env` and `transport.headers` entirely — so a value pasted into the wrong field still does not reach the audit log. Master-key events (`master_key_exported`, `master_key_imported`) record that the event happened, not the key.
 - **The sync history** stores the remote's commit and errors after the push secret has been redacted out.
 
 ## Plaintext detection {#plaintext-detection}
@@ -427,7 +398,7 @@ One detector finds credentials written in plain text. **Find plaintext keys** on
 Vault sync pulls and pushes the vault repository with a git remote you own. It is off until you configure a remote, and its security rests on what does and does not travel:
 
 - **Secrets travel only if you opt in** (**Include encrypted secrets**), and then only as Fernet ciphertext, the `secret/<ref>.enc` files. Until then `secret/` is excluded from the repository. What lands in the repository cannot be decrypted on its own, and ciphertext that has been pushed cannot be withdrawn: revoking a secret means rotating it. Machine-local ciphertext in `local/secret/` never travels.
-- **The master key never travels with the data.** You carry it between machines yourself: the desktop app writes a passphrase-protected key backup on one machine behind a presence check, **Settings › Security › Import a master key** installs it on another — in the desktop app only, behind a presence check that names the key's fingerprint, because a key anyone could install would let them forge every later grant — and shows both fingerprints so you can compare the two. Importing a different key first keeps the existing one as a backup — a timestamped `master.key.bak-*` file in a development build, a second Keychain item in a signed release — because it may be the only key that decrypts existing ciphertext.
+- **The master key never travels with the data.** You carry it between machines yourself: the desktop app writes a passphrase-protected key backup on one machine behind a presence check, **Settings › Security › Import a master key** installs it on another — in the desktop app only, behind a presence check that names the key's fingerprint, because a key anyone could install would let them forge every later grant — and shows both fingerprints so you can compare the two. Importing a different key first keeps the existing one as a second Keychain item, because it may be the only key that decrypts existing ciphertext.
 - **The push token goes only to the URL it was approved for.** Pointing it at a new remote URL waits for an approval, like any new destination.
 - **A machine without the matching key** reports the refs it holds ciphertext for but cannot decrypt, and the **Machines** tab flags a machine whose key fingerprint differs, rather than failing silently.
 - **The secret boundary stays on the machine.** Its bindings, approvals and switches are in `local/secret-boundary/`, never in the vault, so another machine cannot pre-approve a destination for this one.
@@ -445,7 +416,7 @@ See [Vault sync](/architecture/vault-sync) for the full protocol.
 - **A presence flag on the master key itself.** Rejected: the daemon would prompt at every start and run locked after an unattended crash restart. Presence belongs on the operations that let plaintext out.
 - **The daemon as a separate OS user.** Rejected: an installer with privilege separation for a single-user tool, while upstream servers still run as you, which puts their environments back in reach.
 - **Every secret as its own Keychain item.** Rejected: vault sync could no longer carry ciphertext between your machines, and one key in an access group already makes a copied store useless.
-- **A file-default master key with a keychain opt-in** (the development arrangement). Kept only for development builds: under an unsigned, frequently rebuilt binary macOS re-prompts on every rebuild, and only a Team ID signature removes that.
+- **A master key in a file.** Rejected: any process running as you could read it.
 - **A passphrase-derived key.** Rejected for the default: a prompt at every daemon start, and a forgotten passphrase loses every secret.
 - **Persisting the API token across restarts.** Rejected: a long-lived on-disk token that unlocks the secret endpoints is worse than a per-process one.
 - **Putting the token in the URL.** Rejected: URLs leak into history, screenshots and bug reports; a response body does not.

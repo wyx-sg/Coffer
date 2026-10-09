@@ -14,7 +14,7 @@ Coffer 是一个 Python 程序，但它的用户是跑 AI 编程智能体的人�
 - **三个进程必须能找到彼此。** MCP 客户端启动 `coffer-mcp-shim`；shim 必须找到 `coffer-daemon`，必要时启动它；`coffer` 命令行也要做同样的事。
 - **升级不能搞坏正在运行的系统。** 新构建落地的那一刻，可能有守护进程正在运行，也可能有 MCP 客户端正要拉起一个 shim。
 - **未完成的功能必须能随包发布，又不伤到没要它的人。** 同一条发布线既服务维护者的日常测试，也服务其他所有人。
-- **Coffer 是自行分发的。** 只有维护者拿到 Apple Developer ID 之后发布才会签名；在那之前，未签名带来的每个后果——Gatekeeper、钥匙串、调试器附着到守护进程——都必须在设计上绕开，而不能假装不存在。
+- **Coffer 是自行分发的。** 只有维护者拿到 Apple Developer ID 之后发布才会签名；在那之前，未签名带来的每个后果——Gatekeeper、调试器附着到守护进程——都必须在设计上绕开，而不能假装不存在。
 - **桌面用户不会盯着发布页面。** 应用必须自己发现并安装更新，并且除了构建时内置的一把密钥之外什么都不信任。
 
 ## 设计决策 {#design-decisions}
@@ -54,7 +54,7 @@ bash scripts/smoke_test_bundle.sh dist
 
 构建脚本在 `backend/` 下运行 PyInstaller（spec 里的相对路径在那里解析），输出重定向到仓库的 `dist/` 和 `build/`。它会检测宿主机的目标三元组（`aarch64-apple-darwin`、`x86_64-apple-darwin`，以及 Linux 和 Windows 的三元组）用于命名，但只为宿主机构建。
 
-冒烟测试在隔离的 `HOME` 下启动打包好的守护进程，使用空闲的守护进程端口和代理端口以及一个独立的 master key 文件，所以能和本机已在运行的 Coffer 并存，也不会读取登录钥匙串。它等待 `daemon.json` 和 `/api/v1/daemon/status`，检查 `/` 是否提供打包的 Web 界面，用打包的 `coffer daemon status` 查询守护进程，然后通过打包的 shim 发送一次 JSON-RPC `initialize`，期望 15 秒内收到回复。退出时它会停掉守护进程及其启动的模型代理。指向 `Coffer.app/Contents/MacOS` 时，它测试的是桌面 app 自带的那几份二进制。
+冒烟测试在隔离的 `HOME` 下启动打包好的守护进程，使用空闲的守护进程端口和代理端口以及一把独立的主密钥，所以能和本机已在运行的 Coffer 并存，也不会碰到那个 Coffer 的主密钥。它等待 `daemon.json` 和 `/api/v1/daemon/status`，检查 `/` 是否提供打包的 Web 界面，用打包的 `coffer daemon status` 查询守护进程，然后通过打包的 shim 发送一次 JSON-RPC `initialize`，期望 15 秒内收到回复。退出时它会停掉守护进程及其启动的模型代理。指向 `Coffer.app/Contents/MacOS` 时，它测试的是桌面 app 自带的那几份二进制。
 
 ## 发布流水线 {#the-release-workflow}
 
@@ -173,9 +173,9 @@ stateDiagram-v2
 
 实验功能是一项在每个构建里都有、但在你开启之前一直关闭的能力。领域层里的功能注册表是唯一的清单；不在里面的一律开启。每个条目写明一个键、该功能拥有的 REST 前缀以及它拥有的资源类型。
 
-注册表里有四个条目，顺序为：`knowledge`、`memory`、`sync`（保险库同步）和 `models`（模型提供商、本地模型代理和用量）。对话和消息渠道始终开启。更早的设计里还有 `run` 和 `context` 两个条目，现在都没了，`context` 拆成了 `knowledge` 和 `memory`。存在注册表未声明、也没有出现在任何一张表里的键下的设置会被忽略，所以残留的键无害。转正或下线的功能则登记在注册表旁边的两张小表里：守护进程启动时对 `daemon-config.json` 应用一次，转正的功能删除它的开关并把表里指明的设置移到新键，下线的功能删除它的开关和表里指明的设置。两张表目前都是空的。
+注册表里有两个条目，顺序为：`knowledge` 和 `memory`。保险库同步、模型提供商（连同本地模型代理和用量）、对话和消息渠道始终开启。更早的设计里还有 `run` 和 `context` 两个条目，现在都没了，`context` 拆成了 `knowledge` 和 `memory`。存在注册表未声明、也没有出现在任何一张表里的键下的设置会被忽略，所以残留的键无害。转正或下线的功能则登记在注册表旁边的两张小表里：守护进程启动时对 `daemon-config.json` 应用一次，转正的功能删除它的开关并把表里指明的设置移到新键，下线的功能删除它的开关和表里指明的设置。转正表里有 `sync`（保险库同步）和 `models`（模型提供商、本地模型代理和用量），它们没有要迁移的设置；下线表是空的。
 
-没有哪个功能硬依赖另一个。关闭的功能只是在其他展示它的地方被略去那一部分：`knowledge` 关闭时，`coffer-guide` skill 没有知识相关章节；`memory` 关闭时，渠道对话不带记忆；`models` 关闭时，语音转文字的连接仍然可用。
+没有哪个功能硬依赖另一个。关闭的功能只是在其他展示它的地方被略去那一部分：`knowledge` 关闭时，`coffer-guide` skill 没有知识相关章节；`memory` 关闭时，渠道对话不带记忆。
 
 功能状态在每次读取时解析，优先级从高到低：
 
@@ -199,13 +199,13 @@ flowchart LR
 
 - 前缀落在某功能前缀之下的每个路由器，挂载时都带一个检查该功能状态的功能门禁依赖。路由始终保持注册，所以 OpenAPI 文档从不随开关变化，开关在下一个请求就生效。
 - 与类型无关的 `/api/v1/resources` 路由会拒绝属于被关闭功能的类型的资源，并在列表中略去这些资源。
-- MCP 网关唯一的内置工具 `coffer__search_tools` 不属于任何功能，所以开关某个功能不会改变工具列表。
-- 命令行命令经由被把关的路由访问守护进程，会打印一行指向 `coffer config set feature.<key> on` 的提示，然后以 1 退出。
-- 该功能拥有的后台任务跳过它们的这一轮：`knowledge` 关闭时知识清扫停止，`memory` 关闭时提炼和聚合停止，`models` 关闭时用量采集和价格刷新停止，`sync` 关闭时收敛任务停止。
-- 功能放到智能体面前的东西会被撤回，开启时放回：记忆投递 Hook 和指南里提到的记忆根目录（`memory`）、`coffer-guide` skill 的知识章节（`knowledge`），以及向每个智能体自己配置的提供商投射加上空的模型代理状态（`models`）。
+- MCP 网关的内置工具——`coffer__search_tools`，以及在 Coffer 轮次内的 `coffer__ask` 和 `coffer__channel_read_thread`——都不属于任何功能，所以开关某个功能不会改变工具列表。
+- 命令行命令经由被把关的路由访问守护进程，会打印守护进程给出的那一行提示，指明到**设置 → 功能**打开它，然后以 1 退出。
+- 该功能拥有的后台任务跳过它们的这一轮：`knowledge` 关闭时知识清扫停止，`memory` 关闭时提炼和聚合停止。
+- 功能放到智能体面前的东西会被撤回，开启时放回：记忆投递 Hook 和指南里提到的记忆根目录（`memory`），以及 `coffer-guide` skill 的知识章节（`knowledge`）。
 - Web 界面从守护进程状态读取功能状态，关闭的功能看起来就像不存在：它的侧边栏入口、命令面板条目、概览数字和页面里的相应部分都不见了，指向它页面的链接会落到“未找到”页面。页面上没有提示，也没有“开启”按钮。**设置 → 功能**是开启功能的唯一入口，每个构建里都有。
 
-关掉一个功能从不删除、移动或改写它保存的东西；重新打开后从同一状态继续。用 `coffer config set feature.<key> on|off` 或 `PUT /api/v1/daemon/features/{key}` 切换功能；被固定的功能会以 `409 FEATURE_PINNED` 拒绝修改。一个功能加入的方式是添加一个注册表条目，并通过它给自己的各个界面把关；准备好之后它离开（转正），方式是删除它的条目和所有提到它的门禁，并在转正表或下线表里加一个条目，下次守护进程启动时就会删除它存储的开关（并移动或删除表里指明的设置）。见[实验功能](/zh/guides/experimental-features)。
+关掉一个功能从不删除、移动或改写它保存的东西；重新打开后从同一状态继续。在**设置 → 功能**里、用 `coffer settings feature set <key> --set enabled=true|false` 或 `PUT /api/v1/daemon/features/{key}` 切换功能；被固定的功能会以 `409 FEATURE_PINNED` 拒绝修改。一个功能加入的方式是添加一个注册表条目，并通过它给自己的各个界面把关；准备好之后它离开（转正），方式是删除它的条目和所有提到它的门禁，并在转正表或下线表里加一个条目，下次守护进程启动时就会删除它存储的开关（并移动或删除表里指明的设置）。见[实验功能](/zh/guides/experimental-features)。
 
 ## 签名、公证与更新 {#signing-notarisation-and-updates}
 
@@ -219,7 +219,7 @@ flowchart LR
 
 ### 钥匙串 access group {#the-keychain-access-group}
 
-主密钥存在数据保护钥匙串的 access group `<TEAM_ID>.coffer` 里，只有由该团队签名、并带 `keychain-access-groups` entitlement 的二进制才能读取（[ADR：主密钥存放在 macOS 钥匙串中](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)）。一个 Team ID 同时设置三处：一个打标记步骤在 PyInstaller 冻结之前改写后端构建身份里的 access group 常量，壳在编译时带上 `COFFER_KEYCHAIN_ACCESS_GROUP`，`desktop/` 下的 entitlements 模板用同一个 ID 渲染后用于每一次签名。没有打标记的构建——所有源码构建和所有未签名发布——保留开发用的回退方案：主密钥放在一个 `0600` 文件里，并报告为开发构建。Developer ID 构建是否需要 provisioning profile 才能使用该 entitlement 还有待验证；可选的 `APPLE_PROVISIONING_PROFILE` secret 存在时会被嵌入应用。`coffer-seatalk-bridge` 是唯一的例外：它带 hardened runtime 签名但不带这个 entitlement，应用包里原样分发、不重新签名，所以它加载的第三方 SeaTalk SDK 永远读不到主密钥。
+主密钥存在数据保护钥匙串的 access group `<TEAM_ID>.coffer` 里，只有由该团队签名、并带 `keychain-access-groups` entitlement 的二进制才能读取（[ADR：主密钥存放在 macOS 钥匙串中](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)）。一个 Team ID 同时设置三处：一个打标记步骤在 PyInstaller 冻结之前改写后端构建身份里的 access group 常量，壳在编译时带上 `COFFER_KEYCHAIN_ACCESS_GROUP`，`desktop/` 下的 entitlements 模板用同一个 ID 渲染后用于每一次签名。没有打标记的构建——所有源码构建和所有未签名发布——会报告自己是开发构建。Developer ID 构建是否需要 provisioning profile 才能使用该 entitlement 还有待验证；可选的 `APPLE_PROVISIONING_PROFILE` secret 存在时会被嵌入应用。`coffer-seatalk-bridge` 是唯一的例外：它带 hardened runtime 签名但不带这个 entitlement，应用包里原样分发、不重新签名，所以它加载的第三方 SeaTalk SDK 永远读不到主密钥。
 
 ### 桌面应用怎样更新 {#how-the-desktop-app-updates}
 
@@ -241,9 +241,13 @@ sequenceDiagram
 
 更新器（Tauri 的更新插件）运行在壳的 Rust 进程里；webview 没有它的任何权限，其内容策略仍然只允许回环地址。壳检查其 Tauri 配置中作为更新端点指定的清单，并用编译时带入的公钥校验每个更新包。更新器还要求签名中的版本一致，拒绝签名版本与清单所写版本不同的更新包，所以被篡改的清单无法把新版本号和旧发布配在一起。编译时没有密钥的构建从不检查更新。安装完成后，壳带着环境变量里的一个标记重新启动，重启后的壳在第一次握手时，通过菜单栏用的同一套重启流程替换掉旧版本的守护进程。见[桌面应用 → 更新](/zh/guides/desktop-app#update)。
 
+### 安装脚本装的二进制怎样更新 {#how-the-installer-s-binaries-update}
+
+从 `~/.coffer/bin` 启动的守护进程（一行安装脚本或发布归档）没有壳来更新它。它在启动一分钟后读取 GitHub API 的 `releases/latest`，之后每天一次（`update_check` 关闭或设置了 `COFFER_UPDATE_CHECK=off` 时不读），并在**设置 › 关于**和 `GET /api/v1/daemon/upgrade` 里报告新版本。它从不自行安装。安装由 `coffer update` 完成，步骤与 `install.sh` 相同：下载 `coffer-cli-<triple>.tar.gz` 和 `SHA256SUMS`，SHA-256 与清单不符的归档会被拒绝，解压后把每个二进制经临时文件改名覆盖到 `~/.coffer/bin` 里的公开名字上，再从那里重启守护进程。新守护进程启动时会像任何冻结构建启动一样，把自己部署到带版本号的目录。校验文件和归档来自同一个发布，所以它防的是下载损坏，而不是被篡改的发布；防后者的是桌面应用的签名更新源。
+
 ### 未签名的发布 {#an-unsigned-release}
 
-没有 Developer ID 时，macOS 会隔离下载的压缩包或 `.dmg`。用 `xattr -dr com.apple.quarantine <extracted-directory>` 解除，或者把应用拖进去之后用 `xattr -dr com.apple.quarantine /Applications/Coffer.app`。一行安装脚本下载的内容不会被隔离。发布说明和 `.dmg` 文件名（`Coffer-unsigned-…`）会事先写明这一点。未签名的守护进程还是以 ad-hoc 方式签名、不带 hardened runtime，所以同一用户下的调试器可以附着到它；这一点，加上主密钥文件，就是开发构建所放弃的东西。
+没有 Developer ID 时，macOS 会隔离下载的压缩包或 `.dmg`。用 `xattr -dr com.apple.quarantine <extracted-directory>` 解除，或者把应用拖进去之后用 `xattr -dr com.apple.quarantine /Applications/Coffer.app`。一行安装脚本下载的内容不会被隔离。发布说明和 `.dmg` 文件名（`Coffer-unsigned-…`）会事先写明这一点。未签名的守护进程还是以 ad-hoc 方式签名、不带 hardened runtime，所以同一用户下的调试器可以附着到它；这就是开发构建所放弃的东西。
 
 ### 维护者需要提供什么 {#what-the-owner-provides}
 
@@ -259,7 +263,7 @@ sequenceDiagram
 
 **原地覆盖二进制。** 更简单，但部署可能替换掉一个正在运行的进程马上要 `exec` 的文件，而一个坏构建会让你无处可退。按版本分的目录只多占一份磁盘副本。
 
-**配合代码签名、按密钥分别存钥匙串。** 稳定的签名身份能让钥匙串访问列表跨构建保持有效，但它需要付费的 Apple Team ID。信封加密不依赖任何签名就消除了弹窗，剩下的唯一钥匙串条目——主密钥——通过 access group 读取，而不是访问列表。
+**配合代码签名、按密钥分别存钥匙串。** 每个密钥一个钥匙串条目能让密钥不出现在 `~/.coffer` 里，但保险库同步就无法在机器之间携带密文了。信封加密只保留一个钥匙串条目——主密钥——并通过 access group 读取它，而不是访问列表。
 
 **后台下载更新。** 用户一要更新就已经准备好了，但这会在按流量计费的连接上下载一个用户可能永远不想要的版本，而且校验过的更新包得在两次运行之间存放在某处。应用只在用户选择「下载并重启」时才下载。
 

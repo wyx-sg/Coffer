@@ -1,18 +1,15 @@
-"""Live-text surfaces: one message that grows in place while a turn runs.
+"""Live-text surfaces: a turn's progress, shown while it runs and dropped at its end.
 
-See "Grow a reply in place on one live surface". The core asks an adapter for a
+See "Show a turn's progress on one live surface". The core asks an adapter for a
 :class:`~coffer.application.channel.ports.LiveText` handle and writes ONE code path; the mechanism
-underneath differs per transport:
+underneath is the transport's. Telegram has two: a message draft in a direct chat
+(``telegram_draft``) and, elsewhere, a status message it edits and deletes
+(:class:`TelegramLiveText`).
 
-* Telegram edits a message it already sent (``editMessageText``).
-* SeaTalk cannot edit anything, but it *can* stream: ``init_stream`` opens a
-  message and each ``update_stream`` re-renders it from the FULL snapshot
-  (``seatalk_live``).
-
-The rules both transports share — one serialized writer that always sends the newest
+The rules every surface shares — one serialized writer that always sends the newest
 snapshot, never more often than the buffer interval, a keep-alive only when nothing else
 has written, and a dead latch on the first failure so a terminated surface is never
-reused — live in :class:`LiveTextSurface` rather than being written twice.
+reused — live in :class:`LiveTextSurface` rather than being written per surface.
 """
 
 from __future__ import annotations
@@ -20,7 +17,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import os
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -30,27 +26,14 @@ from coffer.infrastructure.channel.telegram_text import clip_snapshot_utf16
 
 _logger = logging.getLogger(__name__)
 
-#: Transport-level buffer: never call the platform more often than this, however
-#: eagerly the core offers new snapshots. This is the ONLY throttle on the path —
-#: the core used to add a 1.5 s one of its own, which hid this entirely and made
-#: a stream arrive a paragraph at a time.
-#:
-#: It is what decides how the reply READS, because the client "renders progress
-#: by displaying the latest snapshot received" — it replaces the text, it does
-#: not animate towards it. So the typewriter effect is made of update frequency
-#: and nothing else.
-#:
-#: Measured against the real SDK: text deltas arrive about every 25 ms carrying
-#: ~4 characters each. Buffering at SeaTalk's suggested 200 ms therefore folds
-#: roughly eight of them into one visible jump of ~30 characters — a sentence at
-#: a time, which is what a reader reported. Halving it halves the jump.
-#:
-#: 100 ms is a judgement, not a documented figure. SeaTalk publishes no rate
-#: limit for ``update_stream`` at all — only the advice to buffer "approximately
-#: every 200 ms" — so this trades an undocumented allowance for a visibly better
-#: reply. If the platform does push back, it answers 429/code=101, the transport
-#: backs off, and the refusal is logged; it cannot fail silently.
-MIN_UPDATE_INTERVAL = float(os.environ.get("COFFER_SEATALK_STREAM_INTERVAL", "0.1"))
+#: How often a snapshot that is NOT a pure append may be written. A client has
+#: no "append": every update replaces the whole preview, and a snapshot that
+#: changes anything already on screen — the step lines shifting up, the clock,
+#: "+N earlier" — redraws all of it. A long tool run offers one of those per
+#: step, so without this bound the preview redraws several times a second and
+#: visibly flickers. Text that only grows at the end keeps the surface's own
+#: fast interval; everything else is folded into one write at most this often.
+REDRAW_INTERVAL = 2.0
 
 #: Telegram edits a real message, and its flood limits (~one edit a second) are far
 #: tighter than a streaming endpoint's.
@@ -59,23 +42,15 @@ TELEGRAM_UPDATE_INTERVAL = 1.5
 #: One plain message's cap in UTF-16 units; the renderer clips to the far larger rich budget.
 TELEGRAM_TEXT_LIMIT = 4096
 
-#: SeaTalk terminates a stream that goes 30 s without an update, and a Telegram
-#: draft is a 30-second preview: the one keep-alive cadence every live surface
-#: shares. Re-send the last snapshot well inside that window so a long tool run
-#: does not kill the stream (a killed stream cannot be resumed — its id is
-#: rejected forever) or freeze the draft.
-#:
-#: 10 s, not 20. The margin matters more than it looks: the stream is now opened
-#: when the TURN starts rather than when the first text arrives, so the gap the
-#: keep-alive has to cover is the agent's whole thinking time, and a tick that
-#: slips — a slow request, a busy loop — used to leave only 10 s of headroom
-#: before the platform killed the stream. Three ticks per window instead of one
-#: and a half means a single missed tick is survivable.
+#: A Telegram draft is a 30-second preview: re-send the last snapshot well inside
+#: that window so a long tool run does not freeze it. 10 s, not 20: three ticks
+#: per window instead of one and a half means a single missed tick — a slow
+#: request, a busy loop — is survivable.
 LIVE_KEEPALIVE_SECONDS = 10.0
 
 #: How many keep-alive re-sends in a row — with nothing else written between
 #: them — a surface may make before it gives up (10 to 15 minutes at the cadence
-#: above): the bound that keeps an abandoned turn from holding a stream open
+#: above): the bound that keeps an abandoned turn from holding a surface open
 #: forever.
 _KEEPALIVE_MAX_TICKS = 60
 
@@ -91,25 +66,28 @@ class LiveTextSurface:
     every platform write they cause happens under one lock, carrying the NEWEST
     snapshot offered at that moment rather than the one its caller built. So a
     write can never land after a newer one, and a keep-alive can never re-send
-    an older snapshot than the one already on screen. Without the lock a
-    keep-alive fired while an update was in flight re-sent the previous
-    snapshot under the next ``seq``, and the message jumped back to older text
-    and an earlier clock before jumping forward again — the flicker a reader
-    reported on SeaTalk.
+    an older snapshot than the one already on screen — which would make the
+    preview jump back to older text and an earlier clock before jumping forward
+    again.
 
     A snapshot offered inside the buffer interval is kept, not dropped: it is
     written when the interval ends, so the last words before a pause are shown
-    rather than waiting for the next event.
+    rather than waiting for the next event. The interval depends on the
+    snapshot: one that only appends to what is on screen is due after
+    ``min_interval``, one that rewrites anything already shown (a redraw) after
+    ``redraw_interval``.
     """
 
     def __init__(
         self,
         *,
-        min_interval: float = MIN_UPDATE_INTERVAL,
+        min_interval: float,
+        redraw_interval: float = REDRAW_INTERVAL,
         keepalive_seconds: float | None = None,
         now: Callable[[], float] = time.monotonic,
     ) -> None:
         self._min_interval = min_interval
+        self._redraw_interval = max(redraw_interval, min_interval)
         self._keepalive_seconds = keepalive_seconds
         self._now = now
         self._last_write = 0.0
@@ -123,7 +101,7 @@ class LiveTextSurface:
         self._lock = asyncio.Lock()
         #: Diagnosis only — how many platform writes this surface has made, and
         #: when it opened. A refusal is a bare code; these say whether it came
-        #: after a long silence (the platform timed the stream out) or after a
+        #: after a long silence (the platform timed the surface out) or after a
         #: burst (it is refusing the pace).
         self._writes = 0
         self._opened_at: float | None = None
@@ -141,7 +119,7 @@ class LiveTextSurface:
             return
         self._latest = text
         busy = self._lock.locked() or (self._trailing is not None and not self._trailing.done())
-        if busy or (self._opened and self._now() - self._last_write < self._min_interval):
+        if busy or (self._opened and self._now() < self._due(text)):
             # A write is in flight or the buffer is not over: the pump sends the
             # newest snapshot when it can, and this caller is not held up by it.
             self._schedule_trailing()
@@ -197,6 +175,12 @@ class LiveTextSurface:
         self._start_keepalive()
         return True
 
+    def _due(self, text: str) -> float:
+        """When ``text`` may be written: an append to what is on screen after
+        the buffer interval, anything else after the redraw interval."""
+        appends = text.startswith(self._snapshot)
+        return self._last_write + (self._min_interval if appends else self._redraw_interval)
+
     def _schedule_trailing(self) -> None:
         """Start the pump unless it is already running: at most one pending
         writer per surface, and it always sends whatever is newest."""
@@ -205,12 +189,15 @@ class LiveTextSurface:
         self._trailing = spawn(self._pump(), name="channel-live-text-flush")
 
     async def _pump(self) -> None:
-        """Write the newest snapshot each time the buffer interval ends, until
-        what is on screen is the newest one offered."""
+        """Write the newest snapshot each time it falls due, until what is on
+        screen is the newest one offered. The due time is re-read after every
+        wait: a redraw offered while an append was waiting pushes it back."""
         try:
             while not self._dead and self._latest != self._snapshot:
-                delay = self._min_interval - (self._now() - self._last_write)
-                await asyncio.sleep(max(delay, 0.0))
+                delay = self._due(self._latest) - self._now()
+                if delay > 0:
+                    await asyncio.sleep(delay)
+                    continue
                 if not await self._flush():
                     return
         finally:
@@ -218,13 +205,13 @@ class LiveTextSurface:
                 self._trailing = None
 
     async def _attempt(self, text: str) -> bool:
-        """One guarded platform write: any failure latches the surface dead so a
-        terminated stream / deleted message is never written to again.
+        """One guarded platform write: any failure latches the surface dead so an
+        expired draft / deleted message is never written to again.
 
         The failure is LOGGED as well as swallowed. A live surface that cannot
-        open — the platform refuses the stream endpoint, the app lacks the
-        scope, a rate limit — degrades to an ordinary un-streamed reply, which
-        is correct behaviour but indistinguishable from "streaming was never
+        open — the platform refuses the draft endpoint, the bot lacks a
+        right, a rate limit — degrades to a turn with no progress shown, which
+        is correct behaviour but indistinguishable from "a surface was never
         attempted". Without this line the difference is invisible from the
         outside, and the only symptom is a reply that arrives all at once.
 
@@ -242,7 +229,7 @@ class LiveTextSurface:
                     "opened": self._opened,
                     # Which write, and how far into the surface's life. A refusal
                     # on the first update after a long silence means the platform
-                    # timed the stream out; one after many rapid writes means it
+                    # timed the surface out; one after many rapid writes means it
                     # is refusing the pace. The bare error code says neither.
                     "writes": self._writes,
                     "seconds_open": (
@@ -279,7 +266,7 @@ class LiveTextSurface:
         Bounded on purpose: a renderer whose task is cancelled mid-turn never
         closes its surface, and an unbounded loop would then re-send the same
         snapshot forever. After this many re-sends with no other write between
-        them the surface gives up (the platform terminates the stream shortly
+        them the surface gives up (the platform drops the preview shortly
         after, as it would anyway)."""
         interval = self._keepalive_seconds or LIVE_KEEPALIVE_SECONDS
         resends = 0

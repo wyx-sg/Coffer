@@ -26,6 +26,7 @@ from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.trace import TRACE_HEADER
+from tests.support.mcp_wire import INIT_PARAMS
 
 _TOKEN = "test-token-correlation"
 _HEADERS = {"X-Coffer-Token": _TOKEN, "X-Coffer-Actor": "user"}
@@ -86,7 +87,7 @@ def _cli(c: TestClient, monkeypatch: pytest.MonkeyPatch, *args: str) -> Any:
     """Run ``coffer <args>`` against this same app, as ``in_proc_daemon`` does."""
     api = _Api(c)
     info = DaemonInfo(version=1, pid=1, port=0, token=_TOKEN, started_at=None, binary_path="")  # type: ignore[arg-type]
-    monkeypatch.setattr(cli_client, "client_or_exit", lambda: (api, info))
+    monkeypatch.setattr(cli_client, "client_or_exit", lambda **_kw: (api, info))
     monkeypatch.setattr(cli_client, "daemon_is_running", lambda: True)
     result = _runner.invoke(cli_app, list(args), env={"COLUMNS": "250"})
     assert result.exit_code == 0, result.output
@@ -128,7 +129,7 @@ def test_a_requests_audit_row_and_log_line_carry_its_trace_id(client: TestClient
     spec="resource-framework", scenario="an MCP call's records carry its session and trace id"
 )
 def test_an_mcp_calls_invocation_audit_row_and_log_share_one_trace_id(client: TestClient) -> None:
-    session = _mcp(client, None, "initialize", {}, "init-1").headers["mcp-session-id"]
+    session = _mcp(client, None, "initialize", INIT_PARAMS, "init-1").headers["mcp-session-id"]
     called = _mcp(
         client,
         session,
@@ -161,7 +162,7 @@ def test_the_command_line_filters_each_log_by_trace_id(
         headers={TRACE_HEADER: "cli-trace-3"},
     )
     assert made.status_code == 201, made.text
-    session = _mcp(client, None, "initialize", {}, "init-2").headers["mcp-session-id"]
+    session = _mcp(client, None, "initialize", INIT_PARAMS, "init-2").headers["mcp-session-id"]
     _mcp(
         client,
         session,

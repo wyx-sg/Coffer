@@ -1,12 +1,10 @@
-// src/components/custom-tools/EditGroupDialog.tsx — Edit group (4.2.05, 640): its description, base URL, headers (the
-// shared header rows: a plain value or a secret from Coffer, the secret being the whole header value) and timeout.
+// src/components/custom-tools/EditGroupDialog.tsx — Edit group (4.2.35, 640): its description and timeout. Base URLs,
+// headers, secrets and variables belong to the environments and are edited from their rows, however many there are.
 // The name is fixed: it is the prefix agents see. Reach is the header's Reach control, not a field here.
 import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle } from "lucide-react";
 
-import { KeyValueSecretRows } from "@/components/secret/KeyValueSecretRows";
-import { persistNewSecrets, type KeyValueSecretRow } from "@/components/secret/secretValue";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,12 +15,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { translateApiError } from "@/lib/api/errors";
-import type { CustomToolGroup } from "@/lib/api/customTools";
+import type { CustomToolGroup, ResponseRule } from "@/lib/api/customTools";
+import { diagnosticHeadersProblem, rulesValid, splitList } from "@/lib/customTools/responseRules";
 import { agentPrefix } from "@/lib/customTools/groups";
-import { headerRowsOf, headersIn } from "./headerRows";
 import { useUpdateCustomToolGroup } from "@/lib/hooks/useCustomTools";
 import { FormField } from "./FormField";
 import { GroupDescriptionField } from "./GroupDescriptionField";
+import { GroupResponseFields } from "./GroupResponseFields";
 
 interface Props {
   group: CustomToolGroup;
@@ -35,49 +34,37 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
   const id = useId();
   const update = useUpdateCustomToolGroup(group.name);
   const [description, setDescription] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
-  const [rows, setRows] = useState<KeyValueSecretRow[]>([]);
   const [timeout, setTimeoutSeconds] = useState("30");
+  const [diagnostic, setDiagnostic] = useState("");
+  const [rules, setRules] = useState<ResponseRule[]>([]);
+  // The rule editor reads its rules once, so it starts over each time the dialog opens.
+  const [opened, setOpened] = useState(0);
   const [saving, setSaving] = useState(false);
-  const [failure, setFailure] = useState<unknown>(null);
 
   useEffect(() => {
     if (!open) return;
     setDescription(group.description ?? "");
-    setBaseUrl(group.base_url);
-    setRows(headerRowsOf(group));
     setTimeoutSeconds(String(group.timeout_seconds));
-    setFailure(null);
+    setDiagnostic((group.response?.diagnostic_headers ?? []).join(", "));
+    setRules(group.response?.rules ?? []);
+    setOpened((n) => n + 1);
     update.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on opening
   }, [open]);
 
-  // With several environments, each one's base URL and headers are edited in Environments.
-  const single = (group.environments?.length ?? 1) <= 1;
   const seconds = Number(timeout.replace(/\s*s$/, ""));
   const timeoutOk = Number.isInteger(seconds) && seconds >= 1 && seconds <= 300;
-  const ready = (!single || baseUrl.trim() !== "") && timeoutOk;
-  const error = failure ?? update.error;
-  const onSave = async () => {
-    setFailure(null);
+  const ready =
+    timeoutOk && rulesValid(rules) && diagnosticHeadersProblem(splitList(diagnostic)) === null;
+  const error = update.error;
+  const onSave = () => {
     setSaving(true);
-    try {
-      // A secret typed into a row is written to Secrets before the group names it.
-      await persistNewSecrets(rows.map((r) => r.value));
-    } catch (e) {
-      setSaving(false);
-      setFailure(e);
-      return;
-    }
     update.mutate(
-      single
-        ? {
-            description: description.trim() || null,
-            base_url: baseUrl.trim(),
-            headers: headersIn(rows),
-            timeout_seconds: seconds,
-          }
-        : { description: description.trim() || null, timeout_seconds: seconds },
+      {
+        description: description.trim() || null,
+        timeout_seconds: seconds,
+        response: { diagnostic_headers: splitList(diagnostic), rules },
+      },
       {
         onSuccess: () => onOpenChange(false),
         onSettled: () => setSaving(false),
@@ -103,41 +90,7 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
             <Input id={`${id}-name`} className="font-mono" value={group.name} disabled readOnly />
           </FormField>
           <GroupDescriptionField value={description} onChange={setDescription} />
-          {single ? (
-            <>
-              <FormField
-                label={t("customTools.fields.baseUrl")}
-                htmlFor={`${id}-base`}
-                required
-                help={t("customTools.fields.baseUrlHelp")}
-              >
-                <Input
-                  id={`${id}-base`}
-                  className="font-mono"
-                  value={baseUrl}
-                  onChange={(e) => setBaseUrl(e.target.value)}
-                />
-              </FormField>
-              <FormField
-                label={t("customTools.fields.headers")}
-                help={t("customTools.fields.headersHelp")}
-              >
-                <KeyValueSecretRows
-                  rows={rows}
-                  onChange={setRows}
-                  label={t("customTools.fields.headers")}
-                  keyPlaceholder={t("customTools.editor.headerKey")}
-                  addLabel={t("customTools.editor.addHeader")}
-                  schemes
-                  secretLabelFor={(key) => `${group.name}-${key}`}
-                />
-              </FormField>
-            </>
-          ) : (
-            <p className="text-xs text-text-muted">
-              {t("customTools.environments.editGroupNote", { count: group.environments.length })}
-            </p>
-          )}
+          <p className="text-xs text-text-muted">{t("customTools.editGroup.environmentsNote")}</p>
           <FormField
             label={t("customTools.editGroup.timeout")}
             htmlFor={`${id}-timeout`}
@@ -157,6 +110,13 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
               </span>
             </div>
           </FormField>
+          <GroupResponseFields
+            key={opened}
+            headers={diagnostic}
+            onHeaders={setDiagnostic}
+            rules={rules}
+            onRules={setRules}
+          />
           {error ? (
             <div role="alert" className="flex items-start gap-2 text-sm text-danger">
               <AlertCircle className="mt-0.5 size-[15px] shrink-0" aria-hidden />
@@ -168,7 +128,7 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t("common.cancel")}
           </Button>
-          <Button disabled={!ready || saving} onClick={() => void onSave()}>
+          <Button disabled={!ready || saving} onClick={onSave}>
             {saving ? t("common.saving") : error ? t("common.retry") : t("common.save")}
           </Button>
         </DialogFooter>

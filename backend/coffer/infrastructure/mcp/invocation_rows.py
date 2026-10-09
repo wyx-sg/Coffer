@@ -6,6 +6,7 @@ Split from ``invocation_writer`` (the buffered writer and the readers) for the
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -41,6 +42,9 @@ class MCPInvocationModel(Base):
     trace_id: Mapped[str | None] = mapped_column(String, nullable=True)
     #: A custom-tool call's environment (migration 0151); null otherwise.
     environment: Mapped[str | None] = mapped_column(String, nullable=True)
+    #: The call's redacted, bounded content as JSON (migration 0152); null when
+    #: recording was off. Deferred by every list read.
+    content_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         Index("idx_invocations_trace", "trace_id"),
@@ -105,7 +109,9 @@ def filtered(
     return stmt
 
 
-def inv_to_domain(row: MCPInvocationModel) -> MCPInvocation:
+def inv_to_domain(row: MCPInvocationModel, *, with_content: bool = False) -> MCPInvocation:
+    """The domain row; ``with_content`` reads the (deferred) content column."""
+    content = json.loads(row.content_json) if with_content and row.content_json else None
     return MCPInvocation(
         id=row.id,
         timestamp=tz(row.timestamp),
@@ -119,6 +125,7 @@ def inv_to_domain(row: MCPInvocationModel) -> MCPInvocation:
         agent_uid=row.agent_uid,
         trace_id=row.trace_id,
         environment=row.environment,
+        content=content,
     )
 
 
@@ -135,4 +142,5 @@ def inv_to_model(inv: MCPInvocation) -> MCPInvocationModel:
         agent_uid=inv.agent_uid,
         environment=inv.environment,
         trace_id=inv.trace_id,
+        content_json=json.dumps(inv.content, ensure_ascii=False) if inv.content else None,
     )

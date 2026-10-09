@@ -39,7 +39,7 @@ Coffer 为自己保留三类记录：保险库变更的审计日志、经 MCP �
 
 **由谁**一次可选多个值，记录匹配其中任何一个就显示。它先列出你的智能体，然后在“不是智能体”之下列出你（Web 界面或 Coffer 应用）、命令行、Coffer 自己和同步；在 工具调用上只列智能体。“全部”上的**类型**有三个值：**工具调用**、**变更**和**守护进程记录**。在“变更”上它列出十一种变更：某种资源，或者对不涉及资源的变更用密钥、同步、设置和命令行工具。筛选、搜索和时间范围都保存在地址里（`q`、`range`、`by`、`kind`、`status`、`level`、`logger`），所以 `/activity?tab=mcp&q=github` 这样的链接打开时就已经在搜索了，别的页面上的**在活动中查看**用的就是它。换到另一个标签页会保留搜索、时间范围和**由谁**，丢掉只有旧标签页才有的筛选。
 
-**详情。** 在“全部”、“变更”或“工具调用”上选中一行，会在页面旁边打开一个 640 像素宽的抽屉；**Esc**、点击抽屉外部或 ✕ 关闭它，**↑** 和 **↓** 切到上一条或下一条记录。失败的调用以它的错误开头，并说明它的服务器最近怎么样（从什么时候开始失败，以及过去 24 小时里有多少次错误）；变更会说明谁做的、动了什么，然后把改动前后的配置以 diff 展示（密钥的值从不记录）。下面是各项事实、它前后五分钟内写入的记录，以及原始记录，默认折叠，需要时再展开。调用只显示元数据：它的参数和结果从不存储。底部是下一步：**打开**该资源，旁边是**复制详情**。
+**详情。** 在“全部”、“变更”或“工具调用”上选中一行，会在页面旁边打开一个 640 像素宽的抽屉；**Esc**、点击抽屉外部或 ✕ 关闭它，**↑** 和 **↓** 切到上一条或下一条记录。失败的调用以它的错误开头，并说明它的服务器最近怎么样（从什么时候开始失败，以及过去 24 小时里有多少次错误）；变更会说明谁做的、动了什么，然后把改动前后的配置以 diff 展示（密钥的值从不记录）。下面是各项事实、它前后五分钟内写入的记录，以及原始记录，默认折叠，需要时再展开。调用接着显示它带了什么：参数、返回结果或错误，[自定义工具](/zh/guides/custom-tools)还有 HTTP 请求和响应，每一部分都是可折叠的区块，带**复制**（见[调用记录了什么](#what-a-call-records)）。底部是下一步：**打开**该资源，旁边是**复制详情**。
 
 在**守护进程日志**上，一行改为就地在它自己那一行下面展开，带着它的 traceback、**复制记录**，以及——当记录点名了服务器和工具时——**显示这次 工具调用**，它会切到 工具调用并搜索那次调用。
 
@@ -100,6 +100,9 @@ coffer log audit --json
 | `--event-type` | 某一种事件类型。 |
 | `--since` | ISO 8601 下界，或者 `30m`、`1h`、`2d` 这样的时长。 |
 | `--trace` | 只看一个请求或轮次的行：它的 trace id，也就是抽屉、`X-Coffer-Trace` 响应头或一行守护进程日志上显示的那个。`coffer log mcp` 和 `coffer log daemon` 也接受它。 |
+| `--q` | 自由文本，不区分大小写，匹配事件代码、资源名、执行者和详情——也就是页面上的搜索框。 |
+| `--q-type` | 配合 `--q`：同样算作匹配的事件类型（可重复），就像页面把译文里含有该文本的事件也加进来。 |
+| `--cursor` | 读下一页：上一次读取打印出的 `next_cursor`。后面还有内容的页面会在末尾给出要用的 `--cursor` 值。 |
 | `--limit` | 1–500，默认 50。 |
 | `--json` | 机器可读的输出。 |
 
@@ -110,10 +113,12 @@ coffer log audit --json
 ```sh
 coffer log mcp                              # every server, newest 20
 coffer log mcp --server filesystem          # one server
-coffer log mcp --status error --since 1d --json
+coffer log mcp --status failed --since 1d --json   # every outcome but ok
+coffer log mcp --agent-uid <agent-uid> --q timeout
+coffer log mcp --uid coffer                 # Coffer's own tools, or a deleted server's uid
 ```
 
-不带 `--server` 时，输出包括 Coffer 自己的内置工具调用（服务器为 `coffer`）以及已删除服务器的行（以其 uid 显示）。`--limit` 接受 1–500。[自定义工具](/zh/guides/custom-tools#environments)的调用还会写明它在哪个环境里发出：活动页面在工具旁边（`@live`）和抽屉里显示它，`--json` 以 `environment` 字段带出。不记录任何请求头、变量或凭据。
+不带 `--server` 时，输出包括 Coffer 自己的内置工具调用（服务器为 `coffer`）以及已删除服务器的行（以其 uid 显示）。`--status` 接受 `ok`、`error`、`timeout`、`denied`，或用 `failed` 表示除 `ok` 以外的所有结果；`--agent-uid` 只保留某个智能体的调用；`--q` 搜索工具、错误、会话、结果和服务器名；`--uid` 按写入这些行时的服务器 uid 过滤，能选中 `--server` 叫不出名字的 `coffer` 和已删除的服务器（`--uid` 和 `--q` 读的是所有服务器，所以不能和 `--server` 同用）。`--limit` 接受 1–500，`--cursor` 读下一页。[自定义工具](/zh/guides/custom-tools#environments)的调用还会写明它在哪个环境里发出：活动页面在工具旁边（`@live`）和抽屉里显示它，`--json` 以 `environment` 字段带出。`coffer log mcp` 会打印每次调用的 id；`coffer log call <id>` 打印一次调用及其内容。
 
 每次调用处于四种状态之一：
 
@@ -124,20 +129,30 @@ coffer log mcp --status error --since 1d --json
 | `timeout` | 上游没有在该服务器的请求超时时间内应答。 |
 | `denied` | Coffer 在到达上游之前就拒绝了：服务器或该能力被禁用，或服务器不在该智能体的生效范围内。 |
 
-::: info 参数和结果从不存储
-调用日志记录的是谁、在什么时候、调用了什么、耗时多久、结果如何。它没有存放调用参数或返回值的列。对于报告了 `isError` 的工具，存下的消息是 Coffer 的固定文本 `upstream tool returned an error result (isError)`，而不是上游自己的消息，因为那可能回显参数。要查看工具失败的原因，请看该服务器在 `~/.coffer/logs/upstream/<server>.log` 中的 stderr。
-:::
+### 调用记录了什么 {#what-a-call-records}
+
+每次调用保存它的参数，以及结果或错误。自定义工具的调用还保存它发出的 HTTP 请求（方法、URL、请求头、请求体）和收到的响应（状态码、响应头、响应体）。写入之前，Coffer 会把下面这些遮盖成 `••••••`：
+
+- 它注入给这个服务器或自定义工具的每一个密钥值；
+- 整个凭据请求头（`Authorization`、`Cookie`、`X-Api-Key`，以及名字里带 token、secret、key 或 auth 的请求头）；
+- 名字表明是密钥的字段（`password`、`token`、`api_key` 之类）；
+- 它的泄漏规则认得的任何明文密钥，例如 `ghp_…` 开头的 GitHub 令牌。
+
+每一部分在 16 KB 处截断；被截断的部分会写明原来有多大。这些记录跟随调用日志的保留期（默认 30 天）。这一行的错误消息仍是 Coffer 的固定文本，例如工具标记了错误时是 `upstream tool returned an error result (isError)`；上游实际说了什么，在这次调用的**错误**部分里。经过 Coffer 模型代理的模型请求不记录。
+
+在命令行用 `coffer log call <id>` 读取一次调用及其内容（`coffer log mcp` 会打印 id）。要在这台机器上停止记录内容，在**设置 › 数据 › 历史记录**里关掉**记录工具调用内容**，或运行 `coffer settings call-content set --set enabled=false`。关闭期间的调用只保留元数据，抽屉里会这样说明。
 
 ## 用命令行读取守护进程日志 {#read-the-daemon-log-from-the-cli}
 
 ```sh
 coffer log daemon                           # newest 100 records
 coffer log daemon --errors --since 1h
+coffer log daemon --level warning --q sync --with-total
 coffer log daemon --json
 coffer path logs                            # the log directory and its daemon.log
 ```
 
-`coffer log daemon` 读取 `daemon.log` 的尾部，并按 **守护进程日志** 标签页的方式规整格式。`--limit` 接受 1–500。`coffer path logs` 打印文件位置（`COFFER_LOG_DIR` 可以改变它），方便你直接 `grep`。
+`coffer log daemon` 读取 `daemon.log` 的尾部，并按 **守护进程日志** 标签页的方式规整格式。`--level` 只保留某个严重级别及以上的记录（`debug`、`info`、`warning`、`error`、`critical`），`--q` 搜索消息、记录器、级别和折叠的行，`--with-total` 还会统计最近尾部里的匹配数，`--cursor` 读下一页。`--limit` 接受 1–500。这个命令经由守护进程读取，守护进程没在运行时会先启动它；`coffer path logs` 打印文件位置（`COFFER_LOG_DIR` 可以改变它），不需要守护进程，方便你直接 `grep`。
 
 ## 让智能体查看 Coffer {#let-an-agent-look-into-coffer}
 

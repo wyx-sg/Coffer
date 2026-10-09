@@ -5,7 +5,11 @@ from __future__ import annotations
 import contextlib
 from typing import Any
 
-from coffer.application.mcp.supervisor import SubprocessSupervisor
+from coffer.application.mcp.supervisor import (
+    SubprocessSupervisor,
+    restore_server,
+    retire_server,
+)
 from coffer.domain.mcp.server_config import MCPServerConfig
 from coffer.domain.resource import Kind, Resource
 
@@ -101,8 +105,15 @@ def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
     async def on_delete(resource: Resource) -> None:
         # Async hook AWAITED by ResourceService.delete BEFORE the row
         # is removed, so every live session's upstream connection for this
-        # server is fully evicted before deletion completes — no in-flight call
-        # can outlive the registration and leak the subprocess.
+        # server is fully evicted before deletion completes.
+        #
+        # The row is still there while this runs, and each eviction awaits a
+        # child's exit, so a listing or call landing meanwhile — in a session
+        # already visited, or one created after the walk began — would find the
+        # row and spawn a child nothing evicts again. Retiring the uid FIRST
+        # makes every supervisor in the process refuse that spawn, or close it
+        # if it was already under way (spec mcp-gateway "Manage MCP servers as
+        # resources").
         #
         # Evicted by NAME because that is what a supervisor keys its live
         # connections on: the downstream client speaks namespaced wire names
@@ -110,6 +121,7 @@ def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
         # supervisor's entries, the discovery caches, the notification
         # subscriptions — is keyed on the label the client used. The identity is
         # ``resource.uid``; the label is how a live connection is found.
+        retire_server(resource.uid)
         await _evict_everywhere(resource.name)
 
     async def _evict_everywhere(name: str) -> None:
@@ -129,6 +141,9 @@ def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
         the session ends, for a registration the user switched off. Re-enabling
         needs nothing: the next call spawns afresh.
         """
+        # The row is still here, so a delete that failed after its hook ran
+        # no longer holds this server's spawns back.
+        restore_server(resource.uid)
         if not resource.enabled:
             await _evict_everywhere(resource.name)
 
@@ -147,6 +162,7 @@ def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
         the window is one database write wide and the next edit, disable,
         crash or session end clears it.
         """
+        restore_server(before.uid)
         await _evict_everywhere(before.name)
 
     return Kind(

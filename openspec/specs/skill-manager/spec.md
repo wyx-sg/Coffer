@@ -602,7 +602,9 @@ The system MUST let a person add a command-line tool by hand, with no skill and
 no MCP server behind it: `POST /api/v1/clis` takes a bare command name or the
 absolute path of an executable, and optionally a `title`, a `description`, a
 `min_version` and a `login_check` (a command line whose first word is the
-command itself, run without a shell exactly as a skill's login check is). The
+command itself, run without a shell exactly as a skill's login check is; for a
+command given as a path that word is its file name, and the check runs the
+registered executable). The
 tool is kept as one entry in the vault's `cli-tools` state document — the
 declaration only; where the command is found on one machine is machine-local and
 never written there — and is then listed, checked and read like every required
@@ -629,7 +631,9 @@ the same `cli-tools` document under `notes`, and the other fields under
 hand drops its edits. A command nobody lists is refused with 404
 `CLI_NOT_KNOWN`. A name added twice is refused with 409
 `CLI_TOOL_EXISTS`, and a bad name, path, minimum version or login check with 400
-`CLI_TOOL_INVALID`. Each add, edit and removal MUST be audited. Coffer MUST NOT
+`CLI_TOOL_INVALID`; a login check that starts with anything but the command
+name carries the reason `login_check_command`, the field `login_check` and the
+`command` it must start with, so a form shows the refusal at that field. Each add, edit and removal MUST be audited. Coffer MUST NOT
 read a command's `--help`, build a tree of its subcommands or keep one: what it
 knows of a tool is its path, its version and its login state.
 
@@ -638,6 +642,12 @@ knows of a tool is its path, its version and its login state.
 - **WHEN** the user adds `jq` with a title, a description and the minimum `1.6`
 - **THEN** `GET /api/v1/clis` lists `jq` as `ready`, added by hand, needed by nobody, and the vault's `cli-tools` document holds the declaration and no path
 - **AND** adding it again is refused with `CLI_TOOL_EXISTS`, and a minimum of `latest` with `CLI_TOOL_INVALID`
+
+#### Scenario: a path command's login check starts with its file name
+- **GIVEN** an executable at `/fake/bin/tool` and no declaration
+- **WHEN** the user adds `/fake/bin/tool` with the login check `/fake/bin/tool auth status`, and then with `tool auth status`
+- **THEN** the first is refused with `CLI_TOOL_INVALID` whose details name the reason `login_check_command`, the field `login_check` and the command `tool`, and nothing is saved
+- **AND** the second adds `tool` with the login check `tool auth status`
 
 #### Scenario: a hand-added tool and a skill are one entry
 - **GIVEN** a skill requiring `jq` with minimum `1.5`, and `jq` added by hand with the title `Mine` and minimum `1.7`

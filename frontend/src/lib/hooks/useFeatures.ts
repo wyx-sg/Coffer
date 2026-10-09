@@ -1,7 +1,7 @@
 // frontend/src/lib/hooks/useFeatures.ts
 //
 // The experimental features (spec experimental-features): which of them are
-// switched on on this machine, and the switch itself. The four keys are named
+// switched on on this machine, and the switch itself. The two keys are named
 // in `lib/features.ts`; the daemon says what state each is in.
 //
 // Two reads, on purpose. Every surface that only needs "is it on?" — the

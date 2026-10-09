@@ -96,7 +96,7 @@ def test_the_agents_own_roll_up_file_is_not_among_the_sources(tmp_path: pathlib.
     assert [pathlib.Path(s.path).name for s in sources] == ["feedback-worktree-development.md"]
 
 
-def test_a_reference_typed_file_is_skipped(tmp_path: pathlib.Path) -> None:
+def test_a_reference_typed_file_is_carried_as_reference(tmp_path: pathlib.Path) -> None:
     project_root = tmp_path / "Users" / "dev" / "ref-project"
     project_root.mkdir(parents=True)
     memory_dir = _memory_dir(tmp_path, "claude", project_root)
@@ -105,7 +105,23 @@ def test_a_reference_typed_file_is_skipped(tmp_path: pathlib.Path) -> None:
 
     reader = ClaudeCodeMemoryReader()
     sources = reader.sources(str(tmp_path / "claude"))
-    assert reader.read(sources[0]) == ()
+    (entry,) = reader.read(sources[0])
+    assert entry.type == "reference"
+
+
+def test_a_copy_coffer_wrote_reads_as_nothing(tmp_path: pathlib.Path) -> None:
+    project_root = tmp_path / "Users" / "dev" / "copy-project"
+    project_root.mkdir(parents=True)
+    memory_dir = _memory_dir(tmp_path, "claude", project_root)
+    copy = _ENTRY.replace("---\n\n", "coffer:\n  entry: 3f2a91c4de55b071\n---\n\n", 1)
+    (memory_dir / "coffer_some-copy.md").write_text(copy, encoding="utf-8")
+    # The prefix alone is not enough: a file of the agent's own stays its own.
+    (memory_dir / "coffer_own.md").write_text(_ENTRY, encoding="utf-8")
+
+    reader = ClaudeCodeMemoryReader()
+    by_name = {pathlib.Path(s.path).name: s for s in reader.sources(str(tmp_path / "claude"))}
+    assert reader.read(by_name["coffer_some-copy.md"]) == ()
+    assert len(reader.read(by_name["coffer_own.md"])) == 1
 
 
 @pytest.mark.acceptance(

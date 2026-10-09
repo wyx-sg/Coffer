@@ -143,7 +143,7 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 ### A page or tool is missing because a feature is switched off
 
-**Cause.** The page or tool belongs to an [experimental feature](/guides/experimental-features) that is switched off on this machine. Experimental features are off by default, and a switched-off feature looks absent: no sidebar entry, no palette result, and a link to its page shows the not-found page. The four features are Knowledge, Memory, Sync and Model providers.
+**Cause.** The page or tool belongs to an [experimental feature](/guides/experimental-features) that is switched off on this machine. Experimental features are off by default, and a switched-off feature looks absent: no sidebar entry, no palette result, and a link to its page shows the not-found page. The two experimental features are Knowledge and Memory; Sync and Model providers (with Usage) are always on and never hidden this way.
 
 **Fix.** Switch it on under **Settings → Features**. **Decided by** shows what decided each feature; if it says `pin`, `COFFER_FEATURES` holds it in the daemon's environment, so change it where the daemon is started.
 
@@ -151,18 +151,9 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 ### macOS asks for keychain access every time the daemon starts
 
-**Cause.** One of two things:
+**Cause.** A resource cites a secret that is not in Coffer's encrypted store. At each start Coffer looks for that ref once in the OS keychain and moves it into the store if it finds it. A locked or denied read is retried at the next start, with another prompt.
 
-- The secret master key is stored in the OS keychain (you opted in under **Settings → Security**). Reading it costs one prompt per daemon start.
-- A resource cites a secret that is not in Coffer's encrypted store. At each start Coffer looks for that ref once in the OS keychain and moves it into the store if it finds it. A locked or denied read is retried at the next start, with another prompt.
-
-**Fix.**
-
-- Move the master key back to the file `~/.coffer/master.key`:
-  ```sh
-  ```
-  by switching off **Store master key in OS keychain** in **Settings → Security**.
-- Find secrets that are cited but missing with `coffer secret list`, then store each one on the **Secrets** page or with `coffer secret set <ref>`.
+**Fix.** Find secrets that are cited but missing with `coffer secret list`, then store each one on the **Secrets** page or with `coffer secret set <ref>`.
 
 ### A command exits 9: "waiting for approval"
 

@@ -23,6 +23,8 @@ from coffer.surfaces.http.auth import set_active_token
 
 _TOKEN = "test-token-internal-engine"
 _PASSES = ("aggregate", "distil")
+# The memory sync pass ships switched off until its page lands.
+_ALL_PASSES = (*_PASSES, "memory_sync")
 
 
 @pytest.fixture
@@ -123,7 +125,7 @@ async def test_the_settings_read_reports_the_stored_values_beside_the_defaults(
 
     assert body["transcribe_model"] == "hears"
     assert body["updated_at"]
-    assert set(body["upkeep"]) == set(_PASSES)
+    assert set(body["upkeep"]) == set(_ALL_PASSES)
     assert body["upkeep"]["aggregate"]["enabled"] is False
     assert body["upkeep"]["distil"]["enabled"] is True
     assert "model" not in body and "curate_owner_machine_id" not in body
@@ -136,8 +138,8 @@ async def test_the_settings_read_reports_the_stored_values_beside_the_defaults(
 )
 async def test_the_upkeep_block_names_exactly_the_two_timed_passes(api: AsyncClient) -> None:
     upkeep = (await _config(api))["upkeep"]
-    assert set(upkeep) == set(_PASSES)
-    for name in _PASSES:
+    assert set(upkeep) == set(_ALL_PASSES)
+    for name in _ALL_PASSES:
         assert set(upkeep[name]) == {
             "enabled",
             "interval_s",
@@ -296,4 +298,4 @@ async def test_the_retired_routes_and_keys_are_gone(api: AsyncClient) -> None:
     body = await _config(api)
     assert "model" not in body
     assert "curate_owner_machine_id" not in body
-    assert set(body["upkeep"]) == set(_PASSES)
+    assert set(body["upkeep"]) == set(_ALL_PASSES)

@@ -1,7 +1,7 @@
 """The MCP server page's reads: status detail, 24 h summary, server log, tiering split.
 
 Spec mcp-gateway "Explain a server's state on its page", "Read a server's own
-log from its page", "Record invocations without content" and "Forward tools,
+log from its page", "Record invocations with redacted, bounded content" and "Forward tools,
 resources and prompts".
 """
 

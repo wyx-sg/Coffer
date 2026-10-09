@@ -31,7 +31,7 @@ def test_a_connection_lost_mid_command_exits_3_with_a_message(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     client = httpx.Client(base_url=f"http://127.0.0.1:{_closed_port()}/api/v1", timeout=2)
-    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (client, object()))
+    monkeypatch.setattr(_cli_client, "client_or_exit", lambda **_kw: (client, object()))
     monkeypatch.setattr(sys, "argv", ["coffer", "secret", "list"])
 
     with pytest.raises(SystemExit) as exc:
@@ -78,7 +78,7 @@ def test_a_connection_dropped_mid_request_exits_3_with_a_message(
     dropping_port: int, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     client = httpx.Client(base_url=f"http://127.0.0.1:{dropping_port}/api/v1", timeout=2)
-    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (client, object()))
+    monkeypatch.setattr(_cli_client, "client_or_exit", lambda **_kw: (client, object()))
     monkeypatch.setattr(sys, "argv", ["coffer", "secret", "list"])
 
     with pytest.raises(SystemExit) as exc:

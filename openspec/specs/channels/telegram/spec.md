@@ -138,9 +138,9 @@ replies as Telegram HTML chunked at 4000 characters" stays as the fallback that
 
 ### Requirement: Use a deleted status message as the live scaffolding
 Telegram's live surface MUST be **scaffolding**, not the reply: a status message
-that is edited as the turn runs and **deleted** before the real answer is sent.
-It therefore declares `live_text_persists` false, and opens only once the turn
-has run past the update interval — either tool activity opens it or the reply
+that is edited as the turn runs and **deleted** before the real answer is sent
+([channels](../spec.md) "Show a turn's progress on one live surface"). It opens
+only once the turn has run past the update interval — either tool activity opens it or the reply
 text does — so a reply that finishes sooner opens none and there is no create →
 delete → resend flicker; the 👀 receipt reaction ([channels](../spec.md) "Acknowledge receipt and completion by capability") has
 already said the message was heard. When the turn ends, the status message is

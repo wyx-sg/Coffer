@@ -42,6 +42,23 @@ def audit_safe_config(kind_def: Kind, config: dict[str, Any]) -> dict[str, Any]:
     return kind_def.audit_redactor(config)
 
 
+def audit_config_change(
+    kind_def: Kind, before: dict[str, Any], after: dict[str, Any]
+) -> dict[str, Any]:
+    """An update's audit details: both configs through the kind's redactor,
+    and ``changed``, the top-level keys whose redacted values differ — so a
+    reader sees what moved without comparing two dicts, and a change to a
+    redacted value (an env var) is named by its key only."""
+    safe_before = audit_safe_config(kind_def, before)
+    safe_after = audit_safe_config(kind_def, after)
+    changed = sorted(
+        k
+        for k in set(safe_before) | set(safe_after)
+        if safe_before.get(k) != safe_after.get(k) or before.get(k) != after.get(k)
+    )
+    return {"before": safe_before, "after": safe_after, "changed": changed}
+
+
 def secret_refs(kind_def: Kind, config: dict[str, Any]) -> dict[str, str]:
     """Return ``{key: secret_ref}`` for ``config`` using the kind's extractor.
 
@@ -125,6 +142,7 @@ def check_derived_name(kind_def: Kind, name: str, config: dict[str, Any]) -> Non
 
 __all__ = [
     "Registry",
+    "audit_config_change",
     "audit_safe_config",
     "check_derived_name",
     "check_name",

@@ -26,6 +26,7 @@ _logger = logging.getLogger(__name__)
 _STATUS: dict[str, int] = {
     **VAULT_AND_SYNC_STATUS,
     "RESOURCE_NOT_FOUND": 404,
+    "INVOCATION_NOT_FOUND": 404,
     # Nothing informational is listed under that key to ignore.
     "ATTENTION_NOT_IGNORABLE": 409,
     # custom tools (spec mcp-gateway "Manage custom tools through REST and the Custom tools page")
@@ -39,6 +40,7 @@ _STATUS: dict[str, int] = {
     "CUSTOM_TOOL_ENVIRONMENT_REQUIRED": 422,
     "CUSTOM_TOOL_ENVIRONMENT_UNKNOWN": 422,
     "CUSTOM_TOOL_ENVIRONMENT_DISABLED": 422,
+    "CUSTOM_TOOL_REQUEST_INVALID": 422,
     "CUSTOM_TOOL_ENVIRONMENT_NOT_FOUND": 404,
     "CUSTOM_TOOL_ENVIRONMENT_EXISTS": 409,
     "CUSTOM_TOOL_LAST_ENVIRONMENT": 409,
@@ -172,6 +174,8 @@ _STATUS: dict[str, int] = {
     "MEMORY_RAW_ENTRY_NOT_FOUND": 404,
     "MEMORY_UNSAFE_PATH": 400,
     "MEMORY_UNREADABLE": 422,
+    "MEMORY_SYNC_RUNNING": 409,
+    "MEMORY_SYNC_NO_PREVIEW": 409,
     "MEMORY_DELIVERY_UNSUPPORTED": 422,
     "MEMORY_DELIVERY_CONFIG_INVALID": 422,
     # agent turns (spec chat)

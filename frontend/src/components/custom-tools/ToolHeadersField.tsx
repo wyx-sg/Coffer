@@ -1,6 +1,7 @@
-// src/components/custom-tools/ToolHeadersField.tsx — a request's headers: the group's headers shown read-only
-// ("Authorization ← 🔑 deploy-token · from the group"), then this request's own key/value rows. A request's own
-// header is a plain value: secrets belong to the group's headers.
+// src/components/custom-tools/ToolHeadersField.tsx — a request's headers: the chosen environment's headers shown
+// read-only ("Authorization ← 🔑 deploy-token · from the group", or "· from test" when the group has several
+// environments), then this request's own key/value rows. A request's own header is a plain value: secrets belong to
+// the environment's headers.
 import { useTranslation } from "react-i18next";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -12,8 +13,10 @@ import { AuthLine } from "./AuthLine";
 import type { HeaderRow } from "./toolForm";
 
 interface Props {
-  /** The group's headers, shown as what the group already adds. */
+  /** The chosen environment's headers, shown as what is already added. */
   groupHeaders: readonly CustomToolHeaderOut[];
+  /** The group has several environments and these are this one's headers. */
+  environment?: string | null;
   headers: HeaderRow[];
   onChange: (headers: HeaderRow[]) => void;
   /** The drawer's wording: "Add header for this request". */
@@ -24,13 +27,18 @@ export function ToolHeadersField({
   groupHeaders,
   headers,
   onChange,
+  environment = null,
   forThisRequest = false,
 }: Props) {
   const { t } = useTranslation();
   const set = (i: number, row: HeaderRow) =>
     onChange(headers.map((existing, j) => (j === i ? row : existing)));
   const fromGroup = (
-    <span className="text-xs text-text-muted">{t("customTools.editor.fromGroup")}</span>
+    <span className="text-xs text-text-muted">
+      {environment
+        ? t("customTools.editor.fromEnvironment", { environment })
+        : t("customTools.editor.fromGroup")}
+    </span>
   );
   return (
     <div className="flex flex-col gap-1.5">

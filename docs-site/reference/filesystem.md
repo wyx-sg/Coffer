@@ -24,7 +24,6 @@ State is kept in five [storage classes](/architecture/persistence), one director
 ├── config-backups/               # copies of agent config files made before Coffer rewrites them: never synced, pruned by retention (each file's newest is kept)
 ├── skill-data/                   # logs, journals and temp files skill scripts write, one folder per skill: never synced, pruned by retention
 ├── derived/                      # rebuilt from the rest: always safe to delete
-├── master.key                    # secret master key (when stored as a file)
 ├── machine-id                    # fallback machine id (only if the host gives none)
 ├── daemon.json                   # running daemon: pid, port, API token
 ├── daemon.lock                   # spawn lock
@@ -103,8 +102,9 @@ An earlier version also kept `content/chat-media/` (files attached on the Conver
 | `runs.db` | History: audit log, MCP invocation log, the conversation index (titles and session ids, no text), channel threads, sync rounds and usage. `COFFER_DB_URL` names another database. | daemon | Never | You lose history, not configuration. Stop the daemon first. |
 | `runs.db-wal`, `runs.db-shm` | SQLite write-ahead log and shared-memory index. The WAL can hold committed data not yet folded into `runs.db`. | daemon | No | **No**, and never copy `runs.db` without them while the daemon runs. |
 | `runs.db.pre-<revision>` (+ `-wal`, `-shm`) | A copy taken just before a migration changes the schema. Only the newest three are kept. | daemon | No | Yes, once the upgraded daemon works. |
-| `master.key` | The Fernet key that decrypts stored secrets, mode `0600`. Absent when the key lives in the OS keychain (service `coffer`, entry `master-key`). | daemon | **Never.** Back it up in the desktop app and install it on another machine from **Settings › Security › Import a master key**. | **No.** Without it every stored secret is unreadable. |
 | `machine-id` | A random id, mode `0600`, used only when the host exposes no hardware id (macOS `IOPlatformUUID`, Linux machine-id). Never rewritten. | daemon | No | No: a new id splits this machine's identity in a synced vault. |
+
+The master key that decrypts stored secrets is not in this tree. It is one item in the macOS Keychain (service `coffer`, account `master-key`) that only Coffer's signed binaries can read, so a copy of `~/.coffer` holds the secrets' ciphertext without their key. The key never syncs: back it up in the desktop app and install it on another machine from **Settings › Security › Import a master key**.
 
 ### Derived
 
@@ -140,6 +140,8 @@ See [Daemon and processes](/architecture/daemon) and [Running the daemon](/guide
 | `bin/coffer`, `bin/coffer-daemon`, `bin/coffer-mcp-shim` | Relative symlinks into the current version directory, flipped atomically on upgrade. Agents' MCP entries, the login service and your `PATH` use these stable names. | installer, daemon | No | No: agents' MCP entries point at `bin/coffer-mcp-shim`. |
 
 To undo an upgrade by hand, point the symlinks back at the previous version directory. A frozen daemon deploys its sibling binaries here on start; a source install uses the console scripts `pip` put on `PATH` instead. See [Distribution and releases](/architecture/distribution).
+
+`coffer update` replaces the binaries here with a newer release's. `coffer uninstall` deletes `bin/` and leaves the rest of `~/.coffer` in place; see [Install → Uninstall](/start/install#uninstall).
 
 ### Skill working files
 

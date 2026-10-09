@@ -22,7 +22,7 @@ from typing import Any
 
 import httpx
 
-from coffer.infrastructure.daemon.pid_lock import DaemonInfo
+from coffer.infrastructure.daemon.pid_lock import DaemonInfo, pid_is_coffer_daemon
 from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
 from coffer.infrastructure.daemon.version_skew import skew_warning
 from coffer.infrastructure.logging.files import log_dir
@@ -30,6 +30,13 @@ from coffer.surfaces.cli._client import discover
 
 _logger = logging.getLogger("coffer.shim")
 _DAEMON_BOOT_TIMEOUT = 10  # seconds
+# How long to wait for a daemon that daemon.json names and that is running but
+# has not answered yet — busy, or still booting — before spawning another. The
+# CLI's liveness probe waits as long. One second used to be the whole wait, so
+# a busy daemon got a spawn from every MCP session that opened meanwhile.
+_BUSY_DAEMON_WAIT = 15.0
+# How long to look when daemon.json names no running daemon at all.
+_ABSENT_DAEMON_WAIT = 1.0
 
 #: MCP-reserved extension key the daemon reads the launch cwd from.
 _CWD_META_KEY = "coffer/cwd"
@@ -171,7 +178,9 @@ def _spawn_daemon() -> None:
 
 async def _ensure_daemon() -> DaemonInfo:
     """Return a DaemonInfo for a reachable daemon, spawning one if needed."""
-    info = await _wait_for_daemon(timeout=1.0)
+    recorded = discover()
+    running = recorded is not None and pid_is_coffer_daemon(recorded.pid)
+    info = await _wait_for_daemon(timeout=_BUSY_DAEMON_WAIT if running else _ABSENT_DAEMON_WAIT)
     if info is not None:
         return info
     _spawn_daemon()

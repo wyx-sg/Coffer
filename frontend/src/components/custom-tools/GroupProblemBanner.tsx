@@ -14,13 +14,18 @@ import { GroupBanner } from "./GroupBanner";
 
 export function GroupFailingBanner({ group }: { group: CustomToolGroup }) {
   const { t } = useTranslation();
-  const host = hostOf(group.base_url);
+  // With several environments the calls went to several hosts: the title names the group instead.
+  const several = (group.environments?.length ?? 0) > 1;
   return (
     <GroupBanner
       tint="err"
       icon={CircleAlert}
       testId="group-banner-failing"
-      title={t("customTools.alert.failingTitle", { host })}
+      title={
+        several
+          ? t("customTools.alert.failingTitleGroup", { group: group.name })
+          : t("customTools.alert.failingTitle", { host: hostOf(group.base_url) })
+      }
       actions={
         <>
           <Button asChild size="sm" variant="outline">

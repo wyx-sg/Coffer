@@ -26,6 +26,8 @@ interface Props {
   group: string;
   secret: string | null;
   timeoutSeconds: number;
+  /** The environment whose own timeout applied; null when it was the group's. */
+  timeoutEnvironment?: string | null;
   /** A timeout offers "Change timeout" (opens Edit group); omit before the group exists. */
   onChangeTimeout?: () => void;
 }
@@ -72,23 +74,42 @@ function UrlLine({ method, url }: { method: string; url: string }) {
   );
 }
 
+/** The allow-listed response headers the daemon kept (request and trace ids, server, date). */
+function ResponseHeaders({ headers }: { headers: Record<string, string> }) {
+  const { t } = useTranslation();
+  const rows = Object.entries(headers);
+  if (rows.length === 0) return null;
+  return (
+    <div aria-label={t("customTools.test.responseHeaders")} className="flex flex-col gap-0.5">
+      {rows.map(([name, value]) => (
+        <p key={name} className="break-all font-mono text-2xs text-text-muted">
+          {name}: {value}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export function ToolTestResult({
   result,
   method,
   group,
   secret,
   timeoutSeconds,
+  timeoutEnvironment = null,
   onChangeTimeout,
 }: Props) {
   const { t } = useTranslation();
-  const { rowOf } = useSecretChoices();
+  const { rowOf, displayOf } = useSecretChoices();
   const [changing, setChanging] = useState(false);
   const host = result.url ? hostOf(result.url) : "";
   const status = (result.status_line ?? "").replace(/^HTTP /, "");
   const rejected = (result.status === 401 || result.status === 403) && secret !== null;
   const failed = result.failure !== null;
-  const good = result.ok && !failed;
-  const size = formatBytes(new TextEncoder().encode(result.body).length);
+  const ruleFailure = result.rule_failure ?? null;
+  const good = result.ok && !failed && ruleFailure === null;
+  const bytes = result.body_bytes || new TextEncoder().encode(result.body).length;
+  const size = bytes === 0 ? t("customTools.test.emptyBody") : formatBytes(bytes);
 
   const title = failed
     ? t(`customTools.test.failure.${result.failure}`, { host, seconds: timeoutSeconds })
@@ -99,18 +120,31 @@ export function ToolTestResult({
         kind: kindOf(result.content_type),
       });
   const hint = failed
-    ? t(`customTools.test.hint.${result.failure}`, {
-        host,
-        group,
-        seconds: timeoutSeconds,
-        reason: result.error ?? "",
-        detail: result.error ? ` (${result.error})` : "",
-      })
+    ? t(
+        result.failure === "timeout" && timeoutEnvironment
+          ? "customTools.test.hint.timeoutEnv"
+          : `customTools.test.hint.${result.failure}`,
+        {
+          host,
+          group,
+          environment: timeoutEnvironment,
+          seconds: timeoutSeconds,
+          reason: result.error ?? "",
+          detail: result.error ? ` (${result.error})` : "",
+        },
+      )
     : rejected
-      ? t("customTools.test.hint.rejected", { secret, group })
-      : !result.ok
-        ? t("customTools.test.hint.httpError")
-        : null;
+      ? result.environment
+        ? t("customTools.test.hint.rejectedEnv", {
+            secret: displayOf(secret),
+            environment: result.environment,
+          })
+        : t("customTools.test.hint.rejected", { secret: displayOf(secret), group })
+      : ruleFailure
+        ? t("customTools.test.hint.ruleFailed")
+        : !result.ok
+          ? t("customTools.test.hint.httpError")
+          : null;
   // The daemon sends the prompt for a failure that depends on this machine (no connection, timeout).
   const handoff = result.handoff?.prompt ?? null;
   const actions =
@@ -158,7 +192,14 @@ export function ToolTestResult({
             {t("customTools.test.ranIn", { environment: result.environment })}
           </p>
         ) : null}
+        {ruleFailure ? (
+          <p role="alert" className="text-xs leading-[1.45] text-danger">
+            <span className="font-label">{t("customTools.test.ruleFailed")}</span>{" "}
+            <span className="break-all">{ruleFailure.summary}</span>
+          </p>
+        ) : null}
         {result.url ? <UrlLine method={method} url={result.url} /> : null}
+        <ResponseHeaders headers={result.response_headers ?? {}} />
         {hint ? <p className="text-xs leading-[1.45] text-text-muted">{hint}</p> : null}
         {actions}
       </div>

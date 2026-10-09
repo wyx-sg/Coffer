@@ -25,7 +25,7 @@ Coffer is a background process that other programs talk to. When something goes 
 | Every background task runs under one supervisor that names it, logs its crash and counts it | A task that raises is reported the moment it dies, instead of never; a channel adapter that crashes is restarted alone. |
 | An event-loop lag probe on the status | One synchronous call blocking the loop stalls everything at once; the lag makes that visible as itself. |
 | A separate, structured audit log in SQLite | "What changed, and who changed it" needs filtering by resource, kind and event type, and has to survive a rename. |
-| An invocation log for proxied MCP calls, with no payloads | Latency and outcome per call are useful; arguments and results can carry secrets and stay out. |
+| An invocation log for proxied MCP calls, with redacted, bounded payloads | Latency and outcome alone do not say what a call did. Arguments and results are kept after secrets are masked, cut at 16 KB, and can be switched off per machine. |
 | One retention mechanism for every log-like table and log file | Bounded growth without a separate cleanup job per feature. |
 | Records are read through the CLI (`coffer log`) and the log file (`coffer path logs`), not through an MCP tool | The realistic reader at the moment of failure is an agent with a shell and its own file tools; finding a record needs no extra tool in every session's tool list. |
 | Eval capture is a separate, opt-in sink | Curating eval cases needs request text, which the shared database deliberately never stores. |
@@ -76,7 +76,7 @@ The desktop shell writes its own few records (which daemon binary it chose, a fa
 | File | Written by | Rotation and cleanup |
 | --- | --- | --- |
 | `~/.coffer/logs/daemon.log` (+ `.1`–`.3`) | daemon, detached daemon's stdio, desktop shell | rotated at 10 MB; never deleted by the pruner |
-| `~/.coffer/logs/upstream/<server>.log` | stderr of each stdio MCP server, one file per registered server | rolled to `<server>.log.1` at 2 MB when opened; `.log.1` files older than 7 days are pruned |
+| `~/.coffer/logs/upstream/<server>.log` | stderr of each stdio MCP server, one file per registered server; secret values Coffer injected are masked as `••••••` before writing | rolled to `<server>.log.1` at 2 MB when opened; `.log.1` files older than 7 days are pruned |
 | `~/.coffer/logs/shim-<pid>-<epoch>.log` | one per `coffer-mcp-shim` process, created only when the shim logs something | pruned after 7 days |
 | `~/.coffer/eval-capture.jsonl` | eval capture, only when opted in | never pruned |
 
@@ -163,7 +163,9 @@ Two decisions shape this:
 
 The actor comes from the `X-Coffer-Actor` request header, which must match `^[a-z][a-z0-9_-]{0,31}$`; a missing header means `api`, and anything else is rejected with `400`.
 
-Every audit event is also written to `daemon.log` as an `info` line carrying the event type, resource name, kind, uid and actor — but not `details`, so the redactor stays the only place that decides which fields are secret.
+Every audit event is also written to `daemon.log` as an `info` line carrying the event type, resource name, kind, uid, actor and its `details`, the same redacted payload the row stores, cut at 2 KB (`details_truncated: true` then). The redactor stays the only place that decides which fields are secret. Tool call content never goes to `daemon.log`.
+
+`details` says what changed, not only that something did: a rename carries the old and new title, a switch its `from` and `to`, a scope change the agents before and after, and a delete the secrets it released. A hand edit of a text file under `knowledge/` or `skills/`, or a restore of one, carries a unified diff of the edit, cut at 8 KB (`diff_truncated` and the full `diff_bytes` then).
 
 ### Event vocabulary
 
@@ -174,7 +176,7 @@ The vocabulary is a closed enumeration, defined in the domain layer.
 | Resources | `resource_created`, `resource_updated`, `resource_enabled`, `resource_disabled`, `resource_deleted`, `resource_renamed`, `resource_scope_updated` |
 | MCP capabilities | `capability_enabled`, `capability_disabled` |
 | Daemon | `token_rotated`, `daemon_residency_updated`, `daemon_restarted`, `retention_updated`, `internal_engine_model_set` |
-| Secrets | `secret_set`, `secret_revealed`, `secret_deleted`, `master_key_relocated`, `secret_resolved`, `secret_local_access_revoked`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected` |
+| Secrets | `secret_set`, `secret_revealed`, `secret_deleted`, `secret_resolved`, `secret_local_access_revoked`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected` |
 | Agents | `agent_mcp_installed`, `agent_mcp_uninstalled`, `agent_mcp_entry_removed`, `agent_mcp_entry_adopted`, `agent_plugin_toggled`, `agent_plugin_uninstalled` |
 | Skills | `skill_imported`, `skill_updated`, `skill_update_merged`, `skill_bound`, `skill_unbound`, `skill_relinked`, `skill_drift_remediated`, `skill_adopted`, `skill_unmanaged_deleted` |
 | Knowledge | `knowledge_written`, `knowledge_edited`, `knowledge_deleted` |
@@ -210,6 +212,7 @@ Every call the gateway proxies — a tool call, a resource read, a prompt get �
 | `duration_ms` | wall time of the upstream request |
 | `status` | `ok`, `error`, `timeout` or `denied` |
 | `error_message` | a Coffer-authored summary, never the upstream's result text |
+| `content` | the call's arguments, result or error, and a custom tool's request and response, redacted and cut ([below](#call-content)); empty when recording was off |
 | `session_id` | the `/mcp` session the call came from |
 | `agent_uid` | the agent whose session made the call, as its shim reported it on `initialize`; empty when the session reported none (a hand-configured shim, a bare MCP client) |
 | `trace_id` | the `/mcp` request's trace id; the audit rows and log lines the call caused carry the same one |
@@ -217,7 +220,7 @@ Every call the gateway proxies — a tool call, a resource read, a prompt get �
 What `status` means:
 
 - `ok` — the upstream answered and the result was not an error.
-- `error` — the upstream would not start (a failed spawn, or a server in cooldown), the request raised (a transport failure, or a JSON-RPC error from the upstream), or the upstream returned a well-formed tool result with `isError: true`. When the upstream answered, the row stores a fixed marker rather than its text: `upstream tool returned an error result (isError)` for an `isError` result, `upstream answered with a JSON-RPC error (code <n>)` for a JSON-RPC error. The error text is upstream-controlled and may echo arguments or secrets. The markers are also how the server status route tells a failing tool (the server is up) from a failing server. A builtin tool that raises is also `error`, with the exception's class name or Coffer's own message, truncated to 200 characters.
+- `error` — the upstream would not start (a failed spawn, or a server in cooldown), the request raised (a transport failure, or a JSON-RPC error from the upstream), or the upstream returned a well-formed tool result with `isError: true`. When the upstream answered, the row stores a fixed marker rather than its text: `upstream tool returned an error result (isError)` for an `isError` result, `upstream answered with a JSON-RPC error (code <n>)` for a JSON-RPC error. The error text is upstream-controlled and may echo arguments or secrets, so it goes to the redacted `content`, not this column. The markers are also how the server status route tells a failing tool (the server is up) from a failing server. A builtin tool that raises is also `error`, with the exception's class name or Coffer's own message, truncated to 200 characters.
 - `timeout` — the upstream did not answer within its timeout.
 - `denied` — the call was refused before reaching the upstream: the server is disabled, the server is out of [reach](/architecture/resource-framework#reach) for the calling agent, or the user disabled that tool. Duration is `0`.
 
@@ -228,6 +231,19 @@ Rows are keyed by uid rather than name, so a server's history belongs to that re
 Writes are buffered: an in-memory queue (up to 5,000 rows) is flushed by a writer task every 50 ms or every 50 rows, whichever comes first, so a tool-heavy session does not pay an SQLite commit per call. When the queue is full, callers wait rather than drop rows. A read of the log first waits, for up to two seconds, until every row queued before it is committed, so a call followed at once by a look at the log finds that call.
 
 You read it on the **Tool calls** tab of the Activity page, per server on the server's detail page, with `coffer log mcp [--server <name>]`, or through `GET /api/v1/mcp/invocations` and `GET /api/v1/resources/mcp_server/{uid}/invocations`. Both routes page newest first by cursor, take `agent_uid` to show one agent's calls and `trace_id` to show one request's, and answer each row with its `id`. Their answer, like the audit log's, carries `total`: how many rows match the filters across every page, so a filtered view can say how big it is without paging to the end.
+
+### Call content
+
+`content` is a JSON object with up to five parts: `arguments`, `result`, `error`, and for a custom tool `request` (method, URL, headers, body) and `response` (status, headers, body). Each part is `{text, truncated, bytes}`: the text as stored, whether it was cut, and the original size. A refused call keeps its arguments only.
+
+Redaction runs in two places, both before the row is written:
+
+1. **In the gateway, where the secrets are known.** The supervisor remembers the secret values it injected into each upstream's environment or headers, and a custom tool masks the credentials it added to that one request. Those values are replaced with `••••••` wherever they appear, including in an upstream's echo of them. Credential headers (`Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key`, and any header whose name says token, secret, key or auth) and JSON fields whose name or last word is a secret word (`password`, `token`, `api_key`, `client_secret`…) are masked whole. Then each part is cut at 16 KB.
+2. **In the writer, as a backstop.** Before a batch is inserted, the writer runs every part through the bundled gitleaks rules Coffer uses to find plaintext keys (`ghp_…`, `sk-…`, AWS keys and the rest) and masks what they find.
+
+The vault's other secrets are deliberately not looked for: matching them would mean decrypting every secret on every call, past the approval each secret has for each destination.
+
+Recording is on by default and switched per machine by `record_call_content` in `~/.coffer/daemon-config.json`, through **Settings › Data › History**, `coffer settings call-content`, or `GET`/`PUT /api/v1/settings/call-content`; a switch is audited as `call_content_recording_updated`. With it off, rows are written without `content`. List routes leave `content` out; `GET /api/v1/mcp/invocations/{id}` and `coffer log call <id>` read one call with it (`INVOCATION_NOT_FOUND` when the id is unknown or pruned). Content never goes to `daemon.log`, and the [model proxy](/architecture/model-proxy) still records no prompt or completion.
 
 ## Retention
 
@@ -325,7 +341,7 @@ The invocation log's honest `error` status for in-band tool errors is what makes
 
 ## Trade-offs and alternatives
 
-**Payloads in the invocation log.** Recording arguments and results would make debugging a single call easier. Coffer does not, because both routinely carry secrets, personal data and file contents, and the log is retained for a month and readable by any agent through `coffer log mcp`. The fixed error marker for in-band tool errors follows the same rule.
+**Payloads in the invocation log.** Coffer used to keep them out, because arguments and results routinely carry secrets, personal data and file contents, and the log is retained for a month and readable by any agent through `coffer log`. That left a reader unable to tell what a call did. Coffer now keeps them, masked and cut as described in [Call content](#call-content), with a per-machine switch for anyone who would rather not; the [decision record](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/record-tool-call-content-redacted-and-bounded.md) weighs the options. Masking every secret in the vault, not only those the call carried, was rejected: it would decrypt every secret on every call, past the per-destination approval each secret has.
 
 **A log file per writer.** Giving the desktop shell or a detached daemon's stdio their own files would keep `daemon.log` pure JSON. Coffer keeps one file and a tolerant reader instead, because every "check the log" message points at one path and a second file is a place nobody is told to look. Upstream MCP servers are the exception, because their volume would evict Coffer's own records.
 

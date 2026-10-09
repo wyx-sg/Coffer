@@ -1,6 +1,6 @@
 // src/components/settings/security/ImportedKeyResult.tsx — the answer an import gives.
 //
-// Spec vault-sync "Import a master key after showing whose key it is": the key
+// Spec secret "Import a master key after showing whose key it is": the key
 // this Mac now uses, how many stored secrets it decrypts, and — when some were
 // stored here with the old key — their names, with a way to the Secrets page to
 // add their values again.

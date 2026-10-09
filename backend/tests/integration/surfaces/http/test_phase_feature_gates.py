@@ -15,6 +15,7 @@ import pytest
 from coffer.infrastructure.daemon import config as daemon_config
 from tests.integration.surfaces.http import test_feature_gates as gates
 from tests.integration.surfaces.http import test_feature_kind_gates as kind_gates
+from tests.support.mcp_wire import INIT_PARAMS
 
 home = gates.home
 _client = gates._client
@@ -24,7 +25,7 @@ _assert_disabled = gates._assert_disabled
 
 @pytest.mark.parametrize(
     ("key", "kind"),
-    [("models", "provider"), ("knowledge", "knowledge"), ("memory", "memory")],
+    [("knowledge", "knowledge"), ("memory", "memory")],
 )
 def test_a_kind_an_experimental_feature_owns_is_out_of_reach_while_it_is_off(
     home: pathlib.Path, key: str, kind: str
@@ -37,13 +38,15 @@ def test_a_kind_an_experimental_feature_owns_is_out_of_reach_while_it_is_off(
         assert all(r["kind"] != kind for r in listed)
         assert c.get("/api/v1/resources", params={"kind": "agent"}).status_code == 200
         assert c.get("/api/v1/resources", params={"kind": "skill"}).status_code == 200
+        # The provider kind graduated with models: never out of reach.
+        assert c.get("/api/v1/resources", params={"kind": "provider"}).status_code == 200
         # Switching on makes the kind reachable again, without a restart.
         _switch(c, key, True)
         assert c.get("/api/v1/resources", params={"kind": kind}).status_code == 200
 
 
 def _unknown_call(c: object, name: str) -> bool:
-    session = gates._mcp(c, None, "initialize", {}).headers["mcp-session-id"]  # type: ignore[arg-type]
+    session = gates._mcp(c, None, "initialize", INIT_PARAMS).headers["mcp-session-id"]  # type: ignore[arg-type]
     unknown = gates._mcp(
         c,  # type: ignore[arg-type]
         session,

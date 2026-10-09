@@ -51,7 +51,6 @@ export function TryOperation({ reading, group, picked }: Props) {
             headers: headersIn(group.headers),
           },
         }}
-        secret={null}
         timeoutSeconds={30}
         args={argsFromSchema(op.tool.input_schema ?? {})}
         draft={() => ({ ...op.tool, name: op.tool.name })}

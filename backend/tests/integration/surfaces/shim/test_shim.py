@@ -53,6 +53,7 @@ from coffer.surfaces.http.mcp.protocol_routes import router as mcp_router
 from coffer.surfaces.http.mcp.protocol_routes import shutdown_all_sessions
 from tests.fixtures.keyring import install_in_memory_keyring
 from tests.fixtures.net import free_port
+from tests.support.mcp_wire import INIT_PARAMS
 from tests.support.vault_stores import derived_sm, make_resource_repo
 
 _FAKE = Path(__file__).resolve().parents[3] / "fixtures" / "fake_mcp_server.py"
@@ -219,7 +220,15 @@ def _spawn_shim(env: dict[str, str]) -> subprocess.Popen[str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        env={**os.environ, **env},
+        # A daemon the shim spawns (its probe can miss this in-process one on
+        # a slow runner) stays off the real port and follows pytest out.
+        env={
+            **os.environ,
+            "COFFER_PORT_RANGE_START": "59700",
+            "COFFER_PORT_RANGE_END": "59709",
+            "COFFER_DAEMON_EXIT_WITH_PID": str(os.getpid()),
+            **env,
+        },
     )
 
 
@@ -266,7 +275,7 @@ def test_initialize_round_trip(running_daemon: tuple) -> None:
                 "jsonrpc": "2.0",
                 "id": 1,
                 "method": "initialize",
-                "params": {"protocolVersion": "2025-06-18"},
+                "params": INIT_PARAMS,
             },
         )
         reply = _read_reply(proc)
@@ -283,7 +292,7 @@ def test_tools_list_round_trip(running_daemon: tuple) -> None:
     try:
         _send_envelope(
             proc,
-            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
         )
         _read_reply(proc)  # discard init reply
         _send_envelope(
@@ -305,7 +314,9 @@ def test_stdin_eof_causes_graceful_exit(running_daemon: tuple) -> None:
     home, _port, _token = running_daemon
     proc = _spawn_shim({"HOME": str(home)})
     try:
-        _send_envelope(proc, {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
+        _send_envelope(
+            proc, {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS}
+        )
         _read_reply(proc)
     finally:
         proc.stdin.close()  # type: ignore[union-attr]

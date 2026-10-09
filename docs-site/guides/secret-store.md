@@ -12,7 +12,7 @@ No command, route or MCP tool prints a stored value. You see a value only in the
 ## How secrets are stored
 
 - Each secret is encrypted with [Fernet](https://cryptography.io/en/latest/fernet/) and stored as ciphertext in its own file, `~/.coffer/vault/secret/<ref>.enc` (for example `secret/<id>.enc`) (mode `0600`), holding the Fernet token and nothing else. The token carries its own encryption time; when this machine first stored the ref is kept in `~/.coffer/local/secret-boundary/times.json`. The vault's git repository leaves `secret/` out of its commits until a sync remote carries secrets.
-- One **master key** decrypts them all. It lives in exactly one place. A signed release keeps it in a Keychain item only Coffer's signed binaries can read. A development build — every build from source, and every build until signed releases exist — keeps it in a file (`~/.coffer/master.key`, mode `0600`, the default) or your OS keychain (opt-in). See [Where the master key lives](#where-the-master-key-lives).
+- One **master key** decrypts them all. It lives in exactly one place: a Keychain item only Coffer's signed binaries can read. See [Where the master key lives](#where-the-master-key-lives).
 - Resource configuration — MCP servers, providers, channels, the sync remote — holds only **refs**. A ref is resolved to plaintext at the moment of use: when an MCP server is started or an HTTP header is sent, when a provider key is fetched.
 - The daemon is the only process that opens the store. The CLI and web UI write and list secrets through the daemon's `/api/v1/secrets` routes; neither touches the key, and no route hands a value back.
 
@@ -21,7 +21,7 @@ flowchart LR
     CFG["resource config: secret_refs"] -->|ref| D["daemon"]
     D -->|decrypt with master key| DB[("vault/secret/*.enc: ciphertext")]
     D -->|plaintext, in memory only| UP["upstream process env / HTTP header"]
-    MK["master key: Keychain access group (signed) or master.key (development)"] --> D
+    MK["master key: Keychain access group"] --> D
 ```
 
 ## Store a secret
@@ -49,7 +49,7 @@ Most of the time you do not run this by hand. The dialogs that ask for a secret 
 | --- | --- |
 | stdio MCP server | An environment variable row set to **Secret** in the **Add server** or **Edit** dialog — becomes an environment variable of the server process |
 | HTTP MCP server | A header row set to **Secret** in the same dialogs — becomes a request header; the secret is the credential only, and the row's auth scheme (Bearer, Token or None) is put in front of it when sent |
-| Adopting an agent's MCP entry | **Import from your agents** in the **Add server** dialog — Coffer stores the entry's current value under a minted `secret/<id>` |
+| Adopting an agent's MCP entry | **Adopt** on the agent's **MCP servers** tab — Coffer stores the entry's current value under a minted `secret/<id>` |
 | Model provider | the **API key** field of **Add provider** |
 | Channel | the channel's token fields (see [Channels](/guides/channels)) |
 | Sync remote | the push secret on the **Sync** page |
@@ -110,35 +110,14 @@ You rarely need to delete by hand. A secret you pasted into a resource's own dia
 
 ## Where the master key lives
 
-Where the key lives is fixed by how Coffer was built, not by a setting.
+The master key is one item in the macOS data-protection Keychain (service `coffer`, account `master-key`), in an access group limited to Coffer's Apple Team ID. Only Coffer's signed binaries can read it. Any other program — an agent's script, `/usr/bin/security` — gets no access and no "Allow" dialog to click.
 
-| Build | Where the key lives | Who can read it |
-| --- | --- | --- |
-| **Signed release** | One item in the macOS data-protection Keychain, in an access group limited to Coffer's Apple Team ID | Only Coffer's signed binaries. Any other program — an agent's script, `/usr/bin/security` — gets no access and no "Allow" dialog to click. The daemon reads it silently at every start. |
-| **Development build** | `~/.coffer/master.key`, mode `0600` (default), or the OS keychain (opt-in) | Any program running as you can read the file. |
+The item carries no presence flag: the daemon reads it silently at every start, including a restart after a crash with nobody at the Mac, and keeps it in memory. Presence checks guard what lets plaintext out, not the key itself.
 
-A signed release reads only its Keychain item: it never looks in `master.key` or the login keychain.
-
-::: warning Signed releases do not exist yet
-Coffer does not yet ship binaries signed with an Apple Developer ID, so every build today is a development build and keeps the key in a file. In a development build the [secret boundary](/guides/secrets) does not hold: any process running as you can read the key and forge the desktop app's approval. The desktop app says "Development build" on every presence prompt. See [Security model → Development builds](/architecture/security#development-builds).
-:::
-
-In a development build you can still choose between the file and the OS keychain:
-
-| | File (default) | OS keychain (opt-in) |
-| --- | --- | --- |
-| Location | `~/.coffer/master.key`, mode `0600` | service `coffer`, entry `master-key` |
-| Prompts | none | macOS may ask to allow access once per daemon start |
-| Protects against | — | someone who copies `~/.coffer/` without your keychain |
-
-Open **Settings › Security**, the **Encryption** section. Toggle **Store master key in OS keychain**, then **Move key** in the confirmation.
-
-A move writes the key to its destination and reads it back before removing the source, so an interruption leaves the key where it was. Every stored secret stays readable in both directions, and the move is audited as `master_key_relocated`. The key can be moved but not rotated: Coffer does not re-encrypt the store under a new key. A signed release refuses to move its key out of the Keychain.
-
-At startup a development build looks for the key in the file first, then the keychain. Either build creates a new key only when the secret store is empty.
+Where the key lives is fixed: no setting moves it, so a copy of `~/.coffer/` holds only ciphertext without the key that opens it. The key cannot be rotated either: Coffer does not re-encrypt the store under a new key. The daemon creates a new key only when the secret store is empty.
 
 ::: danger Keep a copy of the master key
-Without the master key, every stored secret is unrecoverable. If ciphertext exists and no usable key is found, the daemon refuses to start with `MASTER_KEY_MISSING`, and it never writes a replacement key over existing ciphertext. Restoring the original key restores every secret. In a signed release the Keychain is the only copy, so a reset login keychain or a new Mac without migration loses every secret unless you made a backup.
+Without the master key, every stored secret is unrecoverable. If ciphertext exists and no usable key is found, the daemon refuses to start with `MASTER_KEY_MISSING`, and it never writes a replacement key over existing ciphertext. Restoring the original key restores every secret. The Keychain is the only copy, so a reset login keychain or a new Mac without migration loses every secret unless you made a backup.
 :::
 
 **Back up the master key** is on **Settings › Security** in the [desktop app](/guides/desktop-app#presence-checks-and-approvals): you choose a passphrase, and after a Touch ID or password check the app asks for a folder and writes `coffer-master-key.cfk` there — the key encrypted under that passphrase, in a file only you can read — recorded as `master_key_exported` in Activity. Move that file off the Mac — a password manager or a USB drive — and delete the copy. A browser tab shows a disabled **Open in Coffer app to export** instead, because the key never crosses the daemon's API.
@@ -153,9 +132,7 @@ Settings › Security holds what belongs to this Mac only: **Encryption** (where
 
 Open the **desktop app** and back up the master key: choose a passphrase of at least eight characters (typed twice), confirm with Touch ID or your login password, pick a folder, and the app writes `coffer-master-key.cfk` into that folder with mode `0600`. The file holds the key encrypted under a key derived from the passphrase (scrypt), plus the key's fingerprint; without the passphrase it opens nothing, and Coffer cannot recover a forgotten one. It never overwrites an existing file (a second backup is `coffer-master-key-2.cfk`), neither the key nor the passphrase passes through the page's answer, the log or the audit, and the backup is audited as `master_key_exported`. Keep the file and the passphrase somewhere safe, such as your password manager.
 
-No command, REST route or browser page writes a key backup. An agent can run any command you can, so a command that exported the key would hand every secret to it. `coffer secret backup-key` only opens the backup in the desktop app, where you confirm presence, type the passphrase and pick the folder.
-
-In a development build the key is also simply the file `~/.coffer/master.key` (or the keychain entry, service `coffer`, entry `master-key`), and copying all of `~/.coffer/` with the daemon stopped captures it.
+No command, REST route or browser page writes a key backup. An agent can run any command you can, so a command that exported the key would hand every secret to it. `coffer secret backup-key` only opens the backup in the desktop app, where you confirm presence, type the passphrase and pick the folder; it then reports where the app wrote the file, or that the dialog was closed with nothing written.
 
 ## Carry the key to another machine
 
@@ -167,12 +144,12 @@ To let a second machine decrypt them, move the key yourself, over a channel you 
 2. Copy the backup file to machine B.
 3. On machine B, use **Import a master key** on **Settings › Security**, in the desktop app, choose the file and type the passphrase, then confirm with Touch ID or your login password (the prompt names the key's fingerprint); the **Key in the file** must read *same* as the fingerprint of machine A. Then delete the copied file.
 
- Importing needs the desktop app: the daemon installs a key only against a presence grant for that key's fingerprint, because a key that any program could install would let it forge every later grant under a key of its own. A browser tab shows **Open the Coffer app to import a master key**. A bare key (a development build's `master.key`) imports without a passphrase. The running daemon uses the imported key at once. A key you replace is first backed up to a `master.key.bak-*` file, wherever it was kept (in a development build that includes the OS keychain, where the imported key then replaces it). The **Sync** page offers **Import key** as well (it needs the app too), and its machine list shows whether each machine holds the **Same key**. Importing a different key keeps the previous one as a backup beside it: a timestamped `master.key.bak-*` file in a development build, a second Keychain item in a signed release.
+Importing needs the desktop app: the daemon installs a key only against a presence grant for that key's fingerprint, because a key that any program could install would let it forge every later grant under a key of its own. A browser tab shows **Open the Coffer app to import a master key**. The key belongs to the secret store, not to sync, so the fingerprint and the import work whether or not [sync](/guides/vault-sync) is switched on. On the command line, `coffer secret key-fingerprint` prints the fingerprint and `coffer secret key-preview --data @coffer-master-key.cfk` names whose key a file holds; the import itself is `coffer secret import-key`, which opens it in the app (`coffer secret key-install` is the app's own request and is refused without the grant only the app can sign). The running daemon uses the imported key at once. Importing a different key keeps the previous one as a backup beside it, in a second Keychain item. The **Sync** page offers **Import key** as well (it needs the app too), and its machine list shows whether each machine holds the **Same key**.
 
 ## What never gets logged
 
 - Secret values never appear in plaintext in the vault, in `runs.db`, in log files, in the audit log, or in the MCP invocation log.
-- Secret audit events — `secret_set`, `secret_revealed`, `secret_deleted`, `secret_notes_updated`, `master_key_relocated`, `master_key_exported`, `secret_resolved` and the `secret_approval_*` events — carry the ref, the destination or the names of changed fields, never a value or the text of a name or description. `secret_resolved` names who used the secret and the slot, at most once a minute per destination. `secret_revealed` records a reveal or copy in the desktop app; listings are not audited.
+- Secret audit events — `secret_set`, `secret_revealed`, `secret_deleted`, `secret_notes_updated`, `master_key_exported`, `secret_resolved` and the `secret_approval_*` events — carry the ref, the destination or the names of changed fields, never a value or the text of a name or description. `secret_resolved` names who used the secret and the slot, at most once a minute per destination. `secret_revealed` records a reveal or copy in the desktop app; listings are not audited.
 - Plaintext exists only in the daemon's memory, between decryption and the process spawn or HTTP request that uses it — and in the desktop app's window while you look at a revealed value.
 - A stdio MCP server receives only its own secrets. It does not inherit the daemon's environment, so it cannot read other secrets the daemon was started with. Its own secrets sit in its environment, where other programs running as you can read them; the listing marks such refs "readable by local processes".
 - An HTTP upstream's connection errors are reported by exception type only, so a URL or header carrying a secret is not echoed into a message.
@@ -181,8 +158,8 @@ To let a second machine decrypt them, move the key yourself, over a channel you 
 
 | Error | Meaning | Fix |
 | --- | --- | --- |
-| `MASTER_KEY_MISSING` at startup | Ciphertext exists but no usable key was found | Import your key backup with **Import a master key** on **Settings › Security**, or in a development build restore `~/.coffer/master.key` (or the keychain entry). |
-| `SECRET_LOCKED` at startup | The keychain could not be read — it is locked or the prompt was dismissed | Unlock the keychain and start the daemon again. |
+| `MASTER_KEY_MISSING` at startup | Ciphertext exists but no usable key was found | Import your key backup with **Import a master key** on **Settings › Security**, or set the secrets again. |
+| `SECRET_LOCKED` at startup | The Keychain refused to hand over the key — usually because it is locked | Unlock the Keychain and start the daemon again. |
 | `SECRET_UNREADABLE` naming a ref | The ciphertext does not decrypt with the current key — usually a key from another machine | Import the matching key, or set the ref again with its value. |
 | `SECRET_IN_USE` | A resource still cites the ref | Detach or delete the resources the message names. |
 | `waiting for approval: <id>`, exit `9` | A secret in the change goes somewhere it has not gone before | Run the `next:` command it printed, `coffer approval approve <id>`, and confirm in the desktop app, or approve it in the app's approvals dialog, which lists what waits. See [Secrets → Approvals](/guides/secrets#approvals). |

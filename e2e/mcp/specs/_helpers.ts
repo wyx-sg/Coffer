@@ -133,6 +133,9 @@ export function spawnShim(): ShimHandle {
         ...process.env,
         HOME: homePath,
         PYTHONPATH: path.join(REPO_ROOT, "backend"),
+        // A daemon this shim had to spawn follows the test worker out
+        // instead of outliving the run.
+        COFFER_DAEMON_EXIT_WITH_PID: String(process.pid),
       },
     },
   );
@@ -331,3 +334,12 @@ export async function resolveResourceUid(
   const body = (await resp.json()) as { resources: Array<{ uid: string }> };
   return body.resources[0]?.uid ?? null;
 }
+
+/** The params of an MCP `initialize`: the gateway refuses one without
+ * `protocolVersion`, `capabilities` and `clientInfo` (spec mcp-gateway
+ * "Answer every MCP message by the JSON-RPC rules"). */
+export const INIT_PARAMS = {
+  protocolVersion: "2025-06-18",
+  capabilities: {},
+  clientInfo: { name: "coffer-e2e", version: "1" },
+};

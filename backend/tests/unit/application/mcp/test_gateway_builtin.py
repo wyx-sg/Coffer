@@ -3,9 +3,9 @@
 The built-in (``coffer__*``) path shares the invocation log surface with
 upstream tools, so it must honour the same leak rule (spec secret "Hold
 plaintext only in memory at the moment of use", spec mcp-gateway "Record
-invocations without content"): an arbitrary
-downstream exception is logged by class name only, never its message (which
-could echo args / returned content). Coffer-authored errors keep their message.
+invocations with redacted, bounded content"): an arbitrary downstream
+exception's ``error_message`` is its class name only — its text goes to the
+row's redacted content. Coffer-authored errors keep their message.
 """
 
 from __future__ import annotations

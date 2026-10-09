@@ -140,6 +140,52 @@ def test_a_graduated_features_switch_is_removed_and_its_settings_carry_over(
 
 @pytest.mark.acceptance(
     spec="experimental-features",
+    scenario="sync and models graduated and their switches are removed at startup",
+)
+def test_the_sync_and_models_switches_are_removed_at_startup(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The shipped tables, not a fake: ``sync`` and ``models`` graduated, so
+    their switches leave ``features`` and every other key stays."""
+    _write_raw(
+        {
+            "port": 9123,
+            "features": {
+                "knowledge": True,
+                "sync": False,
+                "memory": False,
+                "models": True,
+                "from_newer_build": True,
+            },
+        }
+    )
+    with caplog.at_level(logging.INFO):
+        apply_feature_lifecycle()
+    assert json.loads(daemon_config.config_path().read_text()) == {
+        "port": 9123,
+        "features": {"knowledge": True, "memory": False, "from_newer_build": True},
+    }
+    removed = [
+        getattr(r, "feature", None)
+        for r in caplog.records
+        if r.message == "daemon.config.graduated_switch_removed"
+    ]
+    assert removed == ["sync", "models"]
+
+
+def test_a_pin_naming_sync_or_models_is_ignored(caplog: pytest.LogCaptureFixture) -> None:
+    """Against the shipped registry, ``sync`` and ``models`` are unknown keys."""
+    with caplog.at_level(logging.WARNING):
+        pins = daemon_config.parse_feature_pins(
+            "sync=on,models=off,knowledge=on", feature_registry.feature_keys()
+        )
+    assert pins == {"knowledge": True}
+    assert "'sync'" in caplog.text
+    assert "'models'" in caplog.text
+
+
+@pytest.mark.acceptance(
+    spec="experimental-features",
     scenario="a retired feature's switch and settings are removed at startup",
 )
 def test_a_retired_features_switch_and_settings_are_removed(

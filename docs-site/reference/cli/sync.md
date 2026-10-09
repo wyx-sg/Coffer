@@ -54,10 +54,6 @@ This page matches what `coffer sync --help` prints. Add `--help` to any command 
 | [`sync machine rename`](#sync-machine-rename) | Rename this machine. |
 | [`sync machine retire`](#sync-machine-retire) | Retire a machine. |
 | [`sync machine restore`](#sync-machine-restore) | Bring a retired machine back. |
-| [`sync key`](#sync-key) | The master key, as sync moves it between machines (never shown). |
-| [`sync key fingerprint`](#sync-key-fingerprint) | The master key's fingerprint (never the key). |
-| [`sync key import-preview`](#sync-key-import-preview) | Read a key backup's fingerprint. |
-| [`sync key import`](#sync-key-import) | Import a key backup. |
 
 ## sync status
 
@@ -315,7 +311,7 @@ coffer sync file-versions [OPTIONS]
 
 ## sync file-answer
 
-Answer for one file. Body: path, answer (mine | theirs | merged text).
+Answer for one file. Body: path, answer (mine | theirs | edited); edited keeps the copy you resolved in your editor.
 
 <p class="cli-label">Synopsis</p>
 
@@ -660,68 +656,4 @@ coffer sync machine restore [OPTIONS] MACHINE_ID
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `MACHINE_ID` <span class="cli-chip">argument</span> | text | required | machine id |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## sync key
-
-The master key, as sync moves it between machines (never shown).
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer sync key [OPTIONS] COMMAND [ARGS]...
-```
-
-Subcommands: `fingerprint`, `import-preview`, `import`.
-
-## sync key fingerprint
-
-The master key's fingerprint (never the key).
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer sync key fingerprint [OPTIONS]
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## sync key import-preview
-
-Read a key backup's fingerprint. Body: material (read from a file with --data @backup.json).
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer sync key import-preview [OPTIONS]
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
-| `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
-| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## sync key import
-
-Import a key backup. Body: material, passphrase (give both on stdin).
-
-<p class="cli-label">Synopsis</p>
-
-```sh
-coffer sync key import [OPTIONS]
-```
-
-<p class="cli-label">Arguments and options</p>
-
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
-| `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

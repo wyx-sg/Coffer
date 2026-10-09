@@ -24,6 +24,7 @@ from typing import Any
 import typer
 
 from coffer.surfaces.cli import _io
+from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli.groups import group
 from coffer.surfaces.cli.registry import record
 
@@ -63,6 +64,9 @@ class RouteCommand:
     columns: tuple[str, ...] = ()
     #: Report approvals the answer waits on with exit 9.
     pending: bool = False
+    #: A test whose answer carries its outcome in this field: ``false`` exits 7
+    #: (upstream test failed) after the whole answer is printed.
+    outcome: str | None = None
     #: Query parameters always sent (``kind=mcp_server`` for a kind's list).
     fixed_query: Mapping[str, str] = field(default_factory=dict)
     #: Body fields always sent, under what ``--data``/``--set`` give.
@@ -76,12 +80,10 @@ def _py(name: str) -> str:
 
 
 def _uid(kind: str, ref: str, *, as_json: bool) -> str:
-    from coffer.surfaces.cli import _client
     from coffer.surfaces.cli._resolve import resolve_ref
 
-    client, _ = _client.client_or_exit()
-    with client as c:
-        return str(resolve_ref(c, kind, ref)["uid"])
+    with _io.client(as_json=as_json) as c:
+        return str(resolve_ref(c, kind, ref, as_json=as_json)["uid"])
 
 
 def _human(spec: RouteCommand) -> Callable[[Any], None] | None:
@@ -171,6 +173,8 @@ def build(spec: RouteCommand) -> Callable[..., None]:
         _io.emit(answer, as_json=as_json, human=_human(spec))
         if spec.pending:
             _io.report_pending(answer, as_json=as_json)
+        if spec.outcome and isinstance(answer, dict) and answer.get(spec.outcome) is False:
+            raise typer.Exit(int(ExitCode.UPSTREAM_TEST_FAILED))
 
     run.__signature__ = inspect.Signature(params)  # type: ignore[attr-defined]
     run.__annotations__ = annotations

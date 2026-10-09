@@ -70,6 +70,13 @@ class DiscoveredTool:
     input_schema: dict[str, Any]
     enabled: bool
     annotations: dict[str, Any] | None = None
+    output_schema: dict[str, Any] | None = None
+
+
+def _output_schema_of(tool: Any) -> dict[str, Any] | None:
+    """An upstream tool's declared ``outputSchema`` as declared, or None."""
+    raw = getattr(tool, "output_schema", None)
+    return dict(raw) if isinstance(raw, dict) and raw else None
 
 
 def _annotations_of(tool: Any) -> dict[str, Any] | None:
@@ -170,6 +177,7 @@ class CapabilityDiscovery:
                         description=getattr(t, "description", None),
                         input_schema=getattr(t, "input_schema", None) or {},
                         annotations=_annotations_of(t),
+                        output_schema=_output_schema_of(t),
                     )
                     for t in getattr(result, "tools", [])
                 ]
@@ -186,6 +194,7 @@ class CapabilityDiscovery:
                 input_schema=t.input_schema,
                 enabled=prefs.get(t.name, True),
                 annotations=t.annotations,
+                output_schema=t.output_schema,
             )
             for t in cache.tools
             if include_disabled or prefs.get(t.name, True)
@@ -294,8 +303,15 @@ class CapabilityDiscovery:
             if include_disabled or prefs.get(p.name, True)
         ]
 
+    async def request(self, server_name: str, method: str, params: dict[str, Any]) -> Any:
+        """One upstream request for the server page's previews (``resources/read``,
+        ``prompts/get``), on the same healed connection as the listings. An error
+        the upstream answers with (a missing argument, an unknown URI) is its
+        answer, raised as is, and never costs the connection."""
+        return await self._request_self_heal(server_name, method, params, answered_ok=True)
+
     async def _request_self_heal(
-        self, server_name: str, method: str, params: dict[str, Any]
+        self, server_name: str, method: str, params: dict[str, Any], *, answered_ok: bool = False
     ) -> Any:
         """Issue an upstream ``*/list`` request, healing a stale reused
         connection in place.
@@ -322,7 +338,7 @@ class CapabilityDiscovery:
         except UpstreamTimeout:
             raise
         except Exception as first_exc:
-            if _is_method_not_found(first_exc):
+            if _is_method_not_found(first_exc) or (answered_ok and isinstance(first_exc, MCPError)):
                 raise
             await self._supervisor.evict(server_name)
             conn = await self._supervisor.get_or_spawn(server_name)

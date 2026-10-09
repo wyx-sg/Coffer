@@ -331,10 +331,33 @@ one. The event-type vocabulary is shared: this spec defines the resource and ret
 events and every kind contributes its own, so one record answers "what happened" for the
 whole vault rather than each kind growing a private log.
 
+An entry's `details` MUST say what changed, not only that something did: a value that
+changed carries its value before and after (a name, a scope, a switch, a retention period,
+a provider), an action over several things names them or counts them (the agents, files,
+skills or pages it touched), and an action with a cause the caller knows names it. A text
+edit to a vault file Coffer writes or commits — a knowledge page, a memory note, a skill
+file — carries a unified diff of the edit, cut at 8 KB (UTF-8) with `diff_truncated: true`
+and its size before the cut (`diff_bytes`). `details` MUST NOT hold a secret value: a
+secret is named by its reference, and a resource's configuration passes its kind's
+redactor first. Every audited event is also written to `daemon.log` as one `coffer.<event>`
+line carrying the actor, the resource and the entry's `details`, cut at 2 KB with
+`details_truncated: true`.
+
 #### Scenario: audit lifecycle changes
 - **GIVEN** the user performs any add / enable / disable / update / delete on a server or capability,
 - **WHEN** they open the Activity page's audit tab or run `coffer log audit`,
 - **THEN** they see one row per change with actor, timestamp, and a payload describing what changed.
+
+#### Scenario: a rename and a knowledge edit say what changed
+- **GIVEN** a skill renamed from `notes` to `journal`, and a knowledge page whose one line was edited
+- **WHEN** the audit log is read
+- **THEN** the rename's details carry `notes` before and `journal` after
+- **AND** the edit's details carry a unified diff with the line removed and the line added
+
+#### Scenario: the daemon log line carries the event's details
+- **GIVEN** a retention period changed from 30 to 7 days
+- **WHEN** `daemon.log` is read
+- **THEN** its `coffer.retention_updated` line carries the actor, the table and both periods
 
 ### Requirement: Prune each registered log table on its own retention period
 The system MUST provide per-table retention configuration (in days, or "keep forever")
@@ -678,8 +701,15 @@ whose key the upstream refused reads `mcp_key_rejected` and offers
 whose launcher is missing or whose cited secret is absent, agents whose program is
 missing, whose connection is partial or who are not connected, whose Coffer memory hook the agent has not approved or has never run, a sync stopped on
 a conflict or holding deletions, channels reconnecting, disconnected or not
-running, and commands a skill requires that are missing, older than a skill's
-minimum or not logged in (kind `cli`, the command as the uid). Each item MUST carry its kind, the resource's uid and title, a stable
+running, model provider connections that an agent or Coffer's speech to text
+runs on whose endpoint does not answer (`provider_unreachable`, offering
+`check` through `POST /api/v1/providers/{uid}/check`, run in place) or refuses
+the key (`provider_key_rejected`, offering `replace_key`, which opens the
+connection's page) — read from the kept health verdict
+([provider-switching](../provider-switching/spec.md) "Know each connection's
+health without opening it"), only while `models` is on — and commands a skill
+requires that are missing, older than a skill's minimum or not logged in (kind
+`cli`, the command as the uid). Each item MUST carry its kind, the resource's uid and title, a stable
 reason code with one sentence, a severity (`error`, `warning`, `info`), when
 the condition was first seen where that is known, and exactly one action: a
 verb and the REST route and body the kind's own page uses — the list has no
@@ -722,6 +752,12 @@ items, and the answer MUST count the items per kind.
 - **WHEN** the attention list is read
 - **THEN** it carries one `cli` item for `gh` with reason `cli_outdated` whose action is `check` through `POST /api/v1/clis/gh/check`
 - **AND** once `gh` is current, present and logged in, no `cli` item is listed
+
+#### Scenario: a connection an agent runs on that fails is listed
+- **GIVEN** Claude Code runs on connection A, whose verdict is `unreachable`, and connection B, which nothing runs on, whose verdict is `key_rejected`
+- **WHEN** the attention list is read
+- **THEN** it carries one `provider` item for A with reason `provider_unreachable` whose action is `check` through `POST /api/v1/providers/{uid}/check`, and none for B
+- **AND** once A's verdict is `key_rejected`, its item reads `provider_key_rejected` and offers `replace_key`
 
 ### Requirement: Announce every write to a resource as an in-process hint
 Every change to a resource MUST emit an in-process hint naming the kind, the uid and
@@ -968,8 +1004,22 @@ unchanged; and the exit codes are 0 ok, 2 usage, 3 daemon unreachable, 4 not
 found, 5 conflict, 6 invalid input, 7 upstream test failed, 8 secret, 9 approval
 pending (with the approval ids and the command that approves them), 10 git
 needed, 11 presence not confirmed, 12 desktop app unavailable and 13 a wait
-ran out. An operation that runs on after its request returns offers a status
-command and a way to wait for its result. The rule is policy over every spec
+ran out, with 1 for any other failure (a switched-off feature among them). An
+operation that runs on after its request returns offers a status command and a
+way to wait for its result.
+
+The contract MUST hold on every path, not only the daemon's answer: a name the
+command resolves to nothing, a refusal read by an older hand-written reader, and
+a daemon that cannot be started each print the same `--json` error envelope. A
+file or standard input that cannot be read or is not UTF-8 text exits 6 with
+`CLI_INVALID_INPUT` before anything is sent or started. An answer that waits on
+approvals exits 9 whether it names them as a list (`pending_approvals`,
+`approval_ids`), as `pending_approval_id`, or as an `approval_id` beside a
+`pending` state. A test command whose answer reports `ok: false` prints the
+whole answer and exits 7. `coffer --verbose` adds the request behind a daemon's
+refusal (method, path, status; never a header) to the text or the envelope.
+Every management command MUST be reachable from the visible help; only a
+command a program runs (`memory hook`, `proxy token`) is hidden. The rule is policy over every spec
 and is stated as such in [`.agents/openspec.md`](../../../.agents/openspec.md);
 this requirement is where it becomes testable, because the assertion runs over
 the entire command tree across every spec and so has no narrower home.
@@ -1001,6 +1051,21 @@ the entire command tree across every spec and so has no narrower home.
 - **WHEN** it is run with `--data -` on standard input, with `--data @file`, with JSON that does not parse, and against a daemon answering 404 with `--json`
 - **THEN** the first two send the body read, the third exits 6 with the code `CLI_INVALID_INPUT`, and the last exits 4 printing the daemon's error envelope and the exit code as JSON on standard error
 
+#### Scenario: every failure path keeps the JSON error contract
+- **GIVEN** a command run with `--json`
+- **WHEN** a name it resolves matches nothing, an older reader's route refuses, a `--data @file` is not UTF-8, or a test's answer says `ok: false`
+- **THEN** the first three print one `{"error", "exit_code"}` object on standard error and exit 4, 6 and 6 with nothing sent for the file, and the last prints the answer and exits 7
+
+#### Scenario: a single pending approval exits 9
+- **GIVEN** a change whose answer names one approval as `pending_approval_id`, or as `approval_id` beside a `pending` state
+- **WHEN** the command that made it ends
+- **THEN** it exits 9 printing `next: coffer approval approve <id>`
+
+#### Scenario: management commands are visible in help
+- **GIVEN** the CLI's live command tree
+- **WHEN** each registry command is looked up from the root help
+- **THEN** no management command sits under a hidden group or is hidden itself, and the only hidden leaves are the program-run `memory hook` and `proxy token`
+
 #### Scenario: a plain file is read with the reader's own tools
 - **GIVEN** a plain file that its owning spec declares directly readable or editable
 - **WHEN** a person or an agent needs it
@@ -1010,4 +1075,4 @@ the entire command tree across every spec and so has no narrower home.
 #### Scenario: a kept command surfaces the daemon's errors
 - **GIVEN** any failure surfaced by the management API,
 - **WHEN** it reaches a command that calls the daemon,
-- **THEN** the user sees an actionable message and a non-zero exit code; `--verbose` shows a full trace.
+- **THEN** the user sees an actionable message and a non-zero exit code; `--verbose` adds the request behind it (method, path and status)

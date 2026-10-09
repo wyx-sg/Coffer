@@ -220,14 +220,11 @@ class FakeSeaTalk:
         # -- thread fetch (Task 5) --
         self.thread_calls: list[dict[str, Any]] = []  # query params, one per /get_thread... GET
         self.thread_response: dict[str, Any] = {"code": 0, "thread_messages": []}
-        # -- message streaming ("Stream the reply under SeaTalk's streaming contract") --
-        # (surface, body) per call, where surface is "single_chat"/"group_chat".
+        # -- message streaming: Coffer never streams a reply (spec channels/seatalk
+        # "Show only typing while a turn runs"); the endpoints are recorded so a
+        # test can prove no request reaches them. (surface, body) per call.
         self.init_stream_calls: list[tuple[str, dict[str, Any]]] = []
         self.update_stream_calls: list[tuple[str, dict[str, Any]]] = []
-        self.stream_init_fails = 0  # reject init_stream N times
-        self.fail_stream_update_at: int | None = None  # reject the Nth update (1-based)
-        self._live_streams: set[str] = set()  # ids that are still open
-        self._next_stream_id = 0
         self.file_downloads: list[str] = []  # file ids fetched, one per media GET
         self.file_bytes = b"\x89PNG\r\n\x1a\nFAKE"  # served for any file download
         self.app = FastAPI()
@@ -292,29 +289,11 @@ class FakeSeaTalk:
         return JSONResponse(content={"code": 0})
 
     async def _init_stream(self, surface: str, request: Request) -> JSONResponse:
-        body: dict[str, Any] = await request.json()
-        self.init_stream_calls.append((surface, body))
-        if self.stream_init_fails > 0:
-            self.stream_init_fails -= 1
-            return JSONResponse(content={"code": 5, "message": "stream refused"})
-        self._next_stream_id += 1
-        stream_id = f"s{self._next_stream_id}"
-        self._live_streams.add(stream_id)
-        return JSONResponse(content={"code": 0, "stream_id": stream_id})
+        self.init_stream_calls.append((surface, await request.json()))
+        return JSONResponse(content={"code": 0, "stream_id": "s1"})
 
     async def _update_stream(self, surface: str, request: Request) -> JSONResponse:
-        body: dict[str, Any] = await request.json()
-        self.update_stream_calls.append((surface, body))
-        stream_id = str(body.get("stream_id", ""))
-        if stream_id not in self._live_streams:
-            # The real platform rejects any request naming a stream that has
-            # ended (finished, timed out, or errored) — never reusable.
-            return JSONResponse(content={"code": 5, "message": "stream is not active"})
-        if self.fail_stream_update_at == len(self.update_stream_calls):
-            self._live_streams.discard(stream_id)  # an errored stream is terminated
-            return JSONResponse(content={"code": 5, "message": "stream update rejected"})
-        if body.get("finish"):
-            self._live_streams.discard(stream_id)
+        self.update_stream_calls.append((surface, await request.json()))
         return JSONResponse(content={"code": 0})
 
     async def _thread(self, request: Request) -> JSONResponse:

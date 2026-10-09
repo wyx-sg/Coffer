@@ -88,9 +88,9 @@ every CLI a skill requires on the CLIs page". An
 entry whose experimental feature is switched off (spec
 [experimental-features](../experimental-features/spec.md) "Close every surface of a switched-off feature")
 MUST be left out, and MUST appear on the next render after the feature is
-switched on. Model providers, Usage tab included, belongs to `models`, Knowledge to `knowledge`,
-Memory to `memory` and Sync to `sync`; every other entry, Conversations and
-Channels included, is owned by no feature and is always there:
+switched on. Knowledge belongs to `knowledge` and Memory to `memory`; every
+other entry, Model providers, Sync, Conversations and Channels included, is
+owned by no feature and is always there:
 
 ```
   Overview         /                  — the landing page
@@ -129,7 +129,7 @@ Channels included, is owned by no feature and is always there:
 - **WHEN** the app shell is rendered
 - **THEN** the sidebar leaves that entry out and lists every other entry under its heading
 - **AND** with every feature switched on, the sidebar lists all fourteen entries
-- **AND** with the four features switched off, it lists only Overview, Agents, Conversations, Channels, MCP servers, Custom tools, Skills, CLIs, Secrets and Activity
+- **AND** with both features switched off, it lists only Overview, Agents, Model providers, Conversations, Channels, MCP servers, Custom tools, Skills, CLIs, Secrets, Activity and Sync
 
 ### Requirement: Call a surface by one name everywhere
 A surface MUST carry one name in every place it is named — sidebar, page header,
@@ -570,7 +570,7 @@ server's command and settings need from this machine (see mcp-gateway "Show what
 an MCP server requires"): the launcher as a row reading "Found · <version>" or
 "Not found" with a View in CLIs link to `/clis/<launcher>`, and each secret as
 named by the secret's own name (the setting that carries it is its tooltip) as
-Set, Missing or Waiting for approval with a View in Secrets link to
+Set, Missing, Refused or Waiting for approval with a View in Secrets link to
 `/secrets?q=<name>`, the Secrets list searched for it —
 and **Most-called tools**: the busiest four, read-only with no switches, each
 marked when it sits behind search, with the rest one link away ("Show all N in
@@ -681,7 +681,7 @@ naming the secret. A success is a toast that says what was kept or added.
 - **THEN** the dialog says the secret waits for approval before it closes
 
 ### Requirement: Keep the capability tabs uniform
-The Tools, Resources and Prompts tabs MUST be uniform — each carrying a filter box, a per-row enable toggle and a per-row checkbox with a select-all box in the header, with each row's use in the last 24 hours; while rows are ticked a selection bar replaces the filter with Turn on, Turn off and (on Tools, while tiering is on) Exposure for the ticked rows — and MUST keep that chrome even when the upstream exposes none of that kind, saying so inside the tab rather than as a bare card. A tool row opens to its full description, its input parameters and the name agents see it by. The server list likewise carries a search box and a Reach filter (every server, or those reaching one agent) and a client-side pager so a large vault stays navigable; the skills list works the same way.
+The Tools, Resources and Prompts tabs MUST be uniform — each carrying a filter box, a per-row enable toggle and a per-row checkbox with a select-all box in the header, with each row's use in the last 24 hours; while rows are ticked a selection bar replaces the filter with Turn on, Turn off and (on Tools, while tiering is on) Exposure for the ticked rows — and MUST keep that chrome even when the upstream exposes none of that kind, saying so inside the tab rather than as a bare card. A tool row opens to its full description, its input parameters and the name agents see it by. A resource row and a prompt row open the same way, in place under the row and one row at a time: a resource to its description, name, MIME type and the address agents read it by, with **Read content** reading it from the server now (JSON laid out, text past 64 KB cut and said so, a binary body named by its type and size and never shown); a prompt to its description, its arguments as fields (required ones marked, each with its description) and the name agents see, with **Get prompt** showing the messages the server fills it to, offered once every required argument is filled. An error the server answers with reads in place of the content. The server list likewise carries a search box and a Reach filter (every server, or those reaching one agent) and a client-side pager so a large vault stays navigable; the skills list works the same way.
 
 #### Scenario: capability toggle uses the redesigned tab layout
 - **GIVEN** a registered MCP server with at least one tool and one resource
@@ -705,7 +705,19 @@ The Tools, Resources and Prompts tabs MUST be uniform — each carrying a filter
 - **WHEN** the user types a partial name in the capability search box on the Tools tab
 - **THEN** only matching tools remain visible and non-matching tools are hidden
 
-### Requirement: Add MCP servers from one paste box
+#### Scenario: a resource row opens to its details and reads its content
+- **GIVEN** a server offering a JSON resource
+- **WHEN** the user opens its row on the Resources tab and presses Read content
+- **THEN** the details show its MIME type and the address agents read it by, and nothing is read before the press
+- **AND** after the press its content shows laid out as JSON
+
+#### Scenario: a prompt row opens to its arguments and fills the prompt
+- **GIVEN** a server offering a prompt with one required argument
+- **WHEN** the user opens its row on the Prompts tab
+- **THEN** the argument shows as a field marked required, and Get prompt waits until it is filled
+- **AND** once filled, Get prompt shows the messages the server returns, each with its role
+
+### Requirement: Add MCP servers by pasting them into one box
 The MCP servers page MUST carry one **Add server** action, and no separate
 paste-JSON action. It opens a modal whose first step is one paste box that
 recognises what was pasted, so the user can paste whatever an MCP server's
@@ -721,10 +733,11 @@ README gives them:
   host.
 
 One recognised server MUST open the manual form prefilled with it; several MUST
-open the review step. The same dialog carries **Import from agents** as a link,
-which lists the direct MCP entries in the agents' own config files to adopt
-([agent-registry](../agent-registry/spec.md) "Adopt a direct MCP entry into Coffer"); it is not a
-second button on the page. The dialog adds MCP servers only: it offers no
+open the review step. The dialog MUST NOT offer importing the direct MCP
+entries in the agents' own config files: that is done on each agent's MCP
+servers tab ([agent-registry](../agent-registry/spec.md) "Adopt a direct MCP entry into Coffer"). While no
+server is registered, the page's welcome MAY list those entries per agent, each
+row opening that agent's MCP servers tab. The dialog adds MCP servers only: it offers no
 custom tool (an HTTP API imported from an OpenAPI document or defined by hand),
 which is added on the Custom tools page (see "Manage custom tool groups on their
 own page").
@@ -791,10 +804,10 @@ the dialog MUST NOT send that server's registration until the name is shortened.
 - **WHEN** the user pastes a `[mcp_servers.docs]` table with a command, arguments and an `env` table
 - **THEN** the manual form opens prefilled as a stdio server named `docs` with that command, arguments and environment, the secret-looking values offered as secrets
 
-#### Scenario: the add dialog links to importing from agents
-- **GIVEN** the MCP servers page
+#### Scenario: the add dialog offers no import from agents
+- **GIVEN** the MCP servers page, and an agent whose own config file holds a direct MCP entry
 - **WHEN** it renders and the user opens Add server
-- **THEN** the page carries one Add server action and no separate paste-JSON action, and the dialog carries an Import from agents link
+- **THEN** the page carries one Add server action and no separate paste-JSON action, and the dialog carries no Import from agents link
 - **AND** the dialog offers no custom tool, neither an OpenAPI import nor a hand-made HTTP request
 
 ### Requirement: Explain unreadable pasted input in the dialog
@@ -893,7 +906,13 @@ daemon record's message and traceback — then the records written within five
 minutes of it, ending in its raw underlying record, pretty-printed in a
 monospace, scrollable block, open and foldable. The footer holds
 the next step: **Open** the resource's own detail page beside **Copy details**. A call's drawer
-shows its metadata only, since Coffer stores no call's arguments or results. A
+shows, after its answer, the content the call recorded ([mcp-gateway](../mcp-gateway/spec.md)
+"Record invocations with redacted, bounded content"), read when the drawer opens: **Arguments**,
+**Result** (or **Error**), and for a custom tool **Request** and **Response**, each a foldable
+monospace block — JSON laid out, other text as it is — with **Copy**, and a cut part ending in
+"Cut at 16 KB — the call carried N KB". A call recorded while recording was off says "Content
+was not recorded for this call" with a link to the setting, and the drawer notes that secret
+values are masked before anything is stored. A
 change whose event the page has no sentence for reads through the same facts and
 diff. On the Daemon log a row opens in place under its own line instead, with its
 traceback, **Copy record** and, when the record names a server and tool, **Show
@@ -914,6 +933,12 @@ the tool call**, which opens the Tool calls tab looking for that call.
 - **GIVEN** Everything holding a call by an agent, a change made in the web UI, a change made from the command line and a daemon warning
 - **WHEN** the user chooses the agent and "You" under By, then Tool calls and Changes under Kind
 - **THEN** the list keeps the agent's call and the web UI's change and drops the others, and the Kind pill reads "Kind: Tool calls, Changes"
+
+#### Scenario: a call's drawer shows its arguments and result
+- **GIVEN** a recorded tool call with arguments, a cut result and a call recorded while recording was off
+- **WHEN** the user opens each on the Tool calls tab
+- **THEN** the first drawer shows Arguments and Result as laid-out JSON with Copy, the result ending in its cut note
+- **AND** the second says its content was not recorded and links to Settings › Data
 
 ### Requirement: Query only the visible Activity tab and isolate failures
 Only the visible tab pages through records — Everything through all three
@@ -948,9 +973,18 @@ audit log (`GET /api/v1/audit`), `coffer log mcp` reads the invocation log, and
 `--server`, `coffer log mcp` reads the same cross-server log the Tool calls tab
 renders (`GET /api/v1/mcp/invocations`), Coffer's own built-in calls (`coffer`)
 and deleted servers' rows (`deleted:<name>`) included; with `--server <name>`, it
-reads that server's log. Each reader takes `--since`, `--limit` and `--json`,
-plus the filter its record affords: `--status` for invocations, and `--errors`
-for the daemon log.
+reads that server's log. Each reader takes `--since`, `--limit`, `--cursor`
+and `--json`, and MUST offer every filter the page sends for its record: `--q`
+on all three (with repeatable `--q-type` on the audit log), `--status`,
+`--agent-uid` and `--uid` on invocations, and `--errors`, `--level` and
+`--with-total` on the daemon log. A page with more after it ends with the
+`--cursor` value that reads the next one. `coffer log daemon` reads through the
+daemon; the file itself, with no daemon, is the one `coffer path logs` names.
+
+#### Scenario: every filter the Activity page sends has a reader option
+- **GIVEN** the Activity page's search, event-type, agent, server-uid, severity, paging and count filters
+- **WHEN** `coffer log audit`, `coffer log mcp` and `coffer log daemon` are run with the matching options
+- **THEN** each request carries the same query parameters the page sends, and a combination the route cannot serve (`--q-type` without `--q`, `--server` with `--uid` or `--q`) exits 2 before any request
 
 #### Scenario: the command-line readers still read the records
 - **GIVEN** a running daemon that has recorded an audit entry, MCP invocations on
@@ -984,7 +1018,7 @@ rather than by how Coffer is built, and MUST open on General:
   **Speech-to-text** section: the connection and model that transcribe voice
   messages (spec [internal-engine](../internal-engine/spec.md) "Show the speech-to-text pair in Settings › General").
   It carries no experimental-features card; the switches are on the Features
-  tab. While `models` is off the connection choice for speech-to-text is left out.
+  tab.
 - **Security** (`/settings/security`) — what is about this machine only: where
   the master encryption key lives — in a signed release its Keychain access
   group; in a development build the file `~/.coffer/master.key` or the login
@@ -997,7 +1031,7 @@ rather than by how Coffer is built, and MUST open on General:
   and Rebuildable cache (see "Group the Data tab by what kind of data it is").
 - **Daemon** (`/settings/daemon`) — the daemon's state and the controls a user
   needs for it (see "Show and manage the daemon on Settings → Daemon").
-- **Features** (`/settings/features`) — the four experimental features, each
+- **Features** (`/settings/features`) — the two experimental features, each
   marked Experimental, with its switch (spec
   [experimental-features](../experimental-features/spec.md) "Show the Features tab in every build").
 - **About** (`/settings/about`) — version, license, source, whether a newer
@@ -1077,7 +1111,10 @@ machine only is a setting shown on the tab it belongs to:
   window deletes.
 - **History** — the retention of each record kind — changes, tool calls,
   **Skill working files** (the logs, journals and temporary files skill scripts write under `~/.coffer/skill-data`, 30 days by default, a row whose confirmation counts files) and **Config backups** (the copies Coffer keeps of an agent's config file before it rewrites it, under `~/.coffer/config-backups`, 30 days by default, with the newest copy of each file always kept; a row whose confirmation counts files) — Keep forever or a number of days, cleaned up by the retention
-  worker's schedule (at daemon start and every six hours), with a
+  worker's schedule (at daemon start and every six hours), and, under the tool
+  calls row, a **Record tool call content** switch (on by default; [mcp-gateway](../mcp-gateway/spec.md)
+  "Switch call content recording per machine") whose help says that arguments and
+  results are kept with secrets masked and that turning it off keeps metadata only, with a
   **Clear expired now** action behind a confirmation, which reports what it
   removed; the last cleanup reads "Last cleared today at 12:00 — 1,284 rows" ("30 Sep at 12:00" for another day); a saved value survives a reload. Shortening a
   window (or turning Keep forever off) MUST ask first, and the confirmation
@@ -1101,7 +1138,7 @@ Edits auto-save, like every settings surface: there is no Save button.
 #### Scenario: the data tab shows four blocks and no this-mac block
 - **GIVEN** a vault with versions, channel media on disk, and memory partitions
 - **WHEN** the user opens `/settings/data`
-- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced, and the Attachments retention row), History (retention for changes, tool calls, skill working files and config backups with Clear expired now) and Rebuildable cache (memory tree with Clear), and no This Mac only block
+- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced, and the Attachments retention row), History (retention for changes, tool calls, skill working files and config backups, the Record tool call content switch, and Clear expired now) and Rebuildable cache (memory tree with Clear), and no This Mac only block
 
 #### Scenario: the attachments retention is set where the attachments are listed
 - **GIVEN** attachments kept for 30 days
@@ -1138,6 +1175,11 @@ Edits auto-save, like every settings surface: there is no Save button.
 - **WHEN** the user opens `/settings/data`
 - **THEN** History has a Config backups row at 30 days, after Skill working files, whose help text says the newest backup of each file is always kept
 - **AND** shortening it asks first and the confirmation counts files, not records
+
+#### Scenario: tool call content recording is switched on the Data tab
+- **GIVEN** recording on, its default
+- **WHEN** the user turns Record tool call content off on `/settings/data` and reloads
+- **THEN** the switch reads off, and calls made from then on open with "Content was not recorded for this call"
 
 ### Requirement: Switch language from the sidebar
 The English / 简体中文 switch MUST be reachable from every screen in Settings ›
@@ -1332,13 +1374,20 @@ control MUST show that it is busy — a download its progress — and not accept
 second press; a check or a download that fails MUST show a readable error on
 the tab, keep the last successful check's time, and leave the running version
 untouched. A desktop build made without an updater key MUST say it does not
-check for updates. In a browser, About MUST show the version and say that
-updates are installed by the desktop app, with no update control, because a page
-the daemon serves cannot replace the application; it MUST instead offer the
-daemon's upgrade hand-off (spec [daemon](../daemon/spec.md) "Hand an upgrade of
-Coffer to an agent") — Copy prompt, and Ask an agent when a managed agent is
-available — and name no install command itself. The desktop shell never asks
-for that hand-off.
+check for updates.
+
+In a browser, a page the daemon serves cannot replace the application, so About
+MUST NOT offer Download and restart. When the daemon runs from the installer's
+binaries, About MUST show the daemon's own check (spec
+[daemon](../daemon/spec.md) "Check the installed binaries for a new release") —
+when it last checked, up to date or the newer version with its notes, a
+**Check for updates** control and the **Check automatically** switch, which
+here sets the daemon's switch — and, when a newer version is found, the command
+`coffer update` with a copy button. Otherwise it MUST say that updates are
+installed by the desktop app. In both cases it MUST offer the daemon's upgrade
+hand-off (spec [daemon](../daemon/spec.md) "Hand an upgrade of Coffer to an
+agent") — Copy prompt, and Ask an agent when a managed agent is available. The
+desktop shell never asks for that hand-off.
 
 #### Scenario: about shows the version and when updates were last checked
 - **GIVEN** the desktop shell running version 1.0.0, last checked at launch, with no newer release
@@ -1364,10 +1413,15 @@ for that hand-off.
 - **AND** the running version is unchanged
 
 #### Scenario: about in a browser offers no update control
-- **GIVEN** the web UI opened in a browser
+- **GIVEN** the web UI opened in a browser on a daemon running from the desktop app
 - **WHEN** the user opens `/settings/about`
 - **THEN** the tab shows the version and says updates are installed by the desktop app
 - **AND** it shows no Check for updates or Download and restart control, and offers Copy prompt with the daemon's upgrade hand-off
+
+#### Scenario: about in a browser shows the daemon's check and coffer update
+- **GIVEN** the web UI opened in a browser on a daemon running from the installer's binaries that found a newer release
+- **WHEN** the user opens `/settings/about`
+- **THEN** the tab shows the newer version, its notes, when the daemon checked, the Check automatically switch and `coffer update` with a copy button, and no Download and restart control
 
 ### Requirement: Test a server in the Add dialog before adding it
 The Add server dialog's one-server form MUST offer Test, which tests the
@@ -1388,37 +1442,25 @@ released to the test, which says the server is tested once it is added.
 - **THEN** the app posts the form's config to `/api/v1/resources/mcp_server/test-config` with the typed value in `secret_values`, and shows "Test passed in 1.4 s" with the tools it listed
 - **AND** no resource is registered and no secret is written
 
-### Requirement: Review an import from the agents before it is applied
-Import from your agents MUST open the shared change preview of the daemon's
-import plan ([agent-registry](../agent-registry/spec.md) "Plan an import of
-agents' direct MCP entries") before anything is written: the servers found,
-each ticked, with the agents that hold it and a note when two agents' entries
-merge into one server or an entry duplicates a server Coffer already has;
-what will happen to Coffer and to each agent; and each agent config file the
-import edits, with its diff. A name the daemon cannot register is listed
-unticked. Unticking a server re-plans without it. Import MUST apply the ticked
-entries through the apply route, and the outcome MUST say which entries were
-not imported and why.
-
-#### Scenario: the import review shows each file's diff before it imports
-- **GIVEN** an agent whose config file holds one direct MCP entry
-- **WHEN** the user opens Import from your agents and presses Import 1 server
-- **THEN** the dialog first shows the plan with that agent's file and its diff, and only then posts the ticked entries to `/api/v1/agents/mcp-import/apply`
-- **AND** the entry is not adopted one by one through the agent's adopt route
-
 ### Requirement: Show the built-in coffer server read-only
 The MCP servers list MUST end with a Built-in group holding Coffer's own
 `coffer` server, and its detail MUST be read-only: no Test, Edit, Delete, Turn
 off or ⋯ menu, its reach a fixed "All connected agents", a note that it cannot
 be edited or removed because it is how agents reach the other servers, its
 calls in the last 24 hours, and its tools, always on, with the names agents see
-them by. It is described by the daemon ([mcp-gateway](../mcp-gateway/spec.md)
+them by. On its Tools tab a tool row opens the way a registered server's does, to
+its full description, its input parameters and the name agents see it by. It is described by the daemon ([mcp-gateway](../mcp-gateway/spec.md)
 "Describe the built-in coffer server") and is not a registered resource.
 
 #### Scenario: the built-in coffer server is listed last and opens read-only
 - **GIVEN** the MCP servers page with one registered server
 - **WHEN** it renders and the user opens the Built-in `coffer` row
 - **THEN** the row sits under Built-in after the registered servers and its detail shows its tools with no Test, Edit or ⋯ menu
+
+#### Scenario: a built-in tool row opens to its details
+- **GIVEN** the built-in `coffer` server's Tools tab
+- **WHEN** the user opens the `search_tools` row
+- **THEN** it shows the tool's input parameters and the name `coffer__search_tools`
 
 ### Requirement: Offer a found update in a card above the sidebar footer
 In the desktop shell, when the shell's update check has found a newer version,
@@ -2763,13 +2805,16 @@ gateway as every other MCP server, and carries:
 - a **description** of what its API is for, which agents read when they search
   for a tool ([mcp-gateway](../mcp-gateway/spec.md) "Describe a custom-tool group"),
   shown first in the group's definition;
-- a shared **base URL** its tools' paths are relative to;
-- **header rows** — each a name and a value that is plain text or one stored
+- its **environments** — at least one, each with the **base URL** its tools'
+  paths are relative to, its own header rows, variables and, when it differs
+  from the group's, its own timeout; the tools are the same in each
+  ([mcp-gateway](../mcp-gateway/spec.md) "Keep a custom-tool group's environments in the group");
+- per environment, **header rows** — each a name and a value that is plain text or one stored
   secret holding the credential alone, behind the row's auth scheme (a bearer
   token is stored as `<token>` with the scheme **Bearer**), chosen by its name on the Secrets page
   or pasted to be saved there with the group (see "Choose secrets in one field
   and one set of rows"): Coffer's gateway adds each header when it calls the API,
-  once a person has approved a secret for the group's host
+  once a person has approved a secret for that environment's host
   ([mcp-gateway](../mcp-gateway/spec.md) "Wait for approval before a custom tool
   sends its secret"), and neither a secret header's value nor the secret's
   reference is ever part of what an agent sees or sends;
@@ -2782,12 +2827,14 @@ GET, and editable — which the gateway passes to agents as the tool's MCP
 annotations (`readOnlyHint` false and `destructiveHint` true when it changes
 data, `readOnlyHint` true otherwise), so each agent's own approval prompts apply
 to it. The page MUST list the groups under Needs attention, Healthy and Off, the failing
-ones first, each showing what is wrong in place of its tools, and an Off group
-leaves its reach column empty. Its header MUST carry one action, **Add custom tool**,
+ones first, each showing what is wrong in place of its tools — when nothing is,
+its one environment's host or, with several, how many environments it has and
+its tool count — and an Off group leaves its reach column empty. Its header MUST carry one action, **Add custom tool**,
 whose flow asks first for the group, in a select you can type into that starts
 on **New group** and lists every existing group with its source, tool count and
 description. An existing group MUST only take a request
-added by hand, which uses that group's base URL and secret; only a **new** group
+added by hand, which runs in that group's environments, each with its own base
+URL and secret; only a **new** group
 offers the two ways in:
 
 - **Import an OpenAPI spec** — from a URL or a file, into the new group; the user
@@ -2808,11 +2855,38 @@ offers the two ways in:
   header rows and reach, then its first request: method, path, headers, body template
   and arguments.
 
-Every request form MUST end with a **Test** section, whose Run runs the request as the form
+Every request form — the tool drawer and Add a request alike — MUST be the same
+**tool editor**: tabs on the left and **Try it** on the right, always in view.
+The tabs are **General** (the tool's name — editable while it is being added,
+fixed once it is saved — its description, the changes-data flag and what agents
+see: the full name with its arguments, the description, the read-only or
+changes-data hint and the environments `coffer_environment` takes),
+**Request** (method and path; the path's **query parameters** as key/value rows
+kept in step with the path, a row whose value is an `{argument}` hole marked as
+an argument; the headers; and the body template, which a GET replaces with a
+line saying it sends none), **Arguments** (one row per argument with its type,
+Required, where the request uses it — the path, a query key, a header or the
+body — and the description agents read under it; an argument no hole names is
+marked not used with **Add as query parameter** and **Remove argument**, and a
+hole no argument names is listed with **Add argument <name>**; the tab counts
+those problems) and **Response** (whether the tool follows its group's response
+rules, shown one per line, or has rules of its own — edited with the same rule
+editor as the group's, where an empty list judges by the HTTP status alone
+([mcp-gateway](../mcp-gateway/spec.md) "Judge a custom tool's answer by its
+group's response rules") — and what the agent gets: the status line, the
+headers the group names, the broken rule if any, and the body or a note that it
+was empty, cut at 1 MiB). A new tool opens on General, a saved one on Request.
+**Try it** takes a sample value per argument, and its Run runs the request as the form
 holds it once and shows the answer — the status and time in a block, the response
 in a viewer under it — the API's error body, a timeout, a failed
 connection (each of these two with the daemon's hand-off and, for a timeout,
-**Change timeout**) or a response cut short; nothing — neither a new group nor a tool — is
+**Change timeout**), a response cut short or an answer that broke a response
+rule (the block turns to a failure and names the rule, the value read and the
+API's message), with the body's size and the response headers that
+name the request on the API's side ([mcp-gateway](../mcp-gateway/spec.md)
+"Report what a custom tool's test reached"); a saved group's form previews and
+tests in one environment ("Preview and test a custom tool in one chosen
+environment"); nothing — neither a new group nor a tool — is
 saved until the form's **Add** or **Save**. A request of a group that is not saved
 yet is tested without its secret (see [mcp-gateway](../mcp-gateway/spec.md) "Test
 a custom tool request before its group is saved"). With no group yet the page
@@ -2822,20 +2896,27 @@ Off turns the group off), **Edit group** and a **⋯** menu that holds only Dele
 group… — and each problem is answered in a banner under it, never in the header:
 failing calls (with **View calls**, which opens Activity on its calls, and the daemon's hand-off), a group that is
 off (Turn on), a secret missing (Add secret, Choose another, no hand-off) and a
-secret waiting for approval (Open approvals, the only button). Re-import is a
+secret waiting for approval (Open approvals, the only button) and a secret
+whose approval a person refused (Ask again, the only button: in the desktop app
+it asks for Touch ID at once and approves, elsewhere the request goes back on
+the approvals list). Re-import is a
 button in the definition of an imported group.
 
 A group's detail page (`/custom-tools/<group>/<tab>`) MUST carry, under its
 header — its **reach** and a one-line summary of the last 24 hours (calls and
 failures) — two tabs laid out like every other detail page's. **Overview** (the
 default, at the bare `/custom-tools/<group>`) stacks the group's **definition**
-(base URL, and the auth header with the name of the secret it is bound to), then
+(its description, the name agents see, its timeout, its diagnostic headers and
+response rules — "HTTP status only" when it has none — and, for an imported group,
+its spec), then **Environments** — one row per environment, however many there
+are, each with its switch, base URL, secret state and variables, edited from the
+row — then
 what an MCP server's Overview shows ("Open an MCP server on its Overview"):
 **Last 24 hours** — the group's calls and errors with a table of the agents that
 made them, and for a group that is on a View in Activity link to Activity's Tool
 calls tab searching the group's name (for a group that is off, only its last
 call and who made it); **Requires** — each secret its headers cite, named by the
-secret's own name, as Set, Missing or Waiting for approval with a View in
+secret's own name, as Set, Missing, Refused or Waiting for approval with a View in
 Secrets link to `/secrets?q=<name>` (a group runs no command, so it has no
 launcher row); and **Most-called tools** — the busiest four, read-only with no
 switches, each marked when it sits behind search, with the rest one link away
@@ -2852,11 +2933,18 @@ adding stays in view however many tools the group has. Tools are ticked with a
 per-row checkbox (select-all in the header); while any is ticked a selection bar
 replaces that row with **Turn on**, **Turn off** and, while the exposure column
 shows, **Exposure**, acting on the ticked tools. Choosing
-a tool opens its editor in a 640-wide **drawer** below the title bar, where the
-request is edited — the headers the group already adds shown as "from the group",
-no switch, which lives in the table — with **Delete tool** and Cancel
-beside it, and its **Test** section under the fields runs the tool with sample
-arguments and shows the response. Script tools are not offered: they are deferred past 1.0.
+a tool opens the tool editor in a 1040-wide **drawer** below the title bar —
+the headers the chosen environment already adds shown as
+"from the group" ("from <environment>" when the group has several),
+no switch, which lives in the table — with **Delete tool**, Cancel and Save
+in its footer. **Edit group** edits the group's description, timeout and response
+settings — the **diagnostic headers** to report and the **response rules**, one
+card per rule (read the HTTP status, a response header or a JSON field; the
+success values; what a missing value means; where the API's error message is),
+whose mistakes are named under the field and keep Save off:
+base URLs, headers, secrets and variables are the environments', edited from
+their rows, so a group with one environment is edited the same way as one with
+several. Script tools are not offered: they are deferred past 1.0.
 How the gateway runs an HTTP API tool is mcp-gateway's ([mcp-gateway](../mcp-gateway/spec.md)
 "Serve an HTTP API as a group of custom tools", "Make a custom tool's request in
 the gateway").
@@ -2877,12 +2965,12 @@ the gateway").
 #### Scenario: a hand-made request joins an existing group
 - **GIVEN** the `billing` group
 - **WHEN** the user chooses Add custom tool, defines one request by hand and picks `billing` as its group
-- **THEN** the tool is added to `billing`, using its base URL and auth header
+- **THEN** the tool is added to `billing`, using its environments' base URLs and auth headers
 - **AND** the flow offers no Import an OpenAPI spec for `billing`, only for a new group
 
 #### Scenario: a new group made by hand is saved with its first request
 - **GIVEN** no group named `search-api`
-- **WHEN** the user chooses Add custom tool, keeps New group and picks By hand, fills in `search-api`, its description and its base URL, chooses Create group, then fills in the first request and tests it
+- **WHEN** the user chooses Add custom tool, keeps New group and picks By hand, fills in `search-api`, its description and its base URL, chooses Create group, then fills in the first tool's name and description on General and its path on Request, and tries it
 - **THEN** nothing is saved until the user chooses Add to search-api, which creates `search-api` with its description and that one tool
 - **AND** the test ran without the group's secret
 
@@ -2907,11 +2995,17 @@ the gateway").
 - **WHEN** the user opens `/custom-tools`
 - **THEN** the failing group is listed first with its tools, and the page header carries one Add custom tool action whose flow asks for the group in a select that starts on New group and narrows the groups as the user types, and offers Import an OpenAPI spec and Add one request by hand, and no Script type
 
+#### Scenario: a refused secret on a group's page offers Ask again
+- **GIVEN** a group whose secret's approval a person refused
+- **WHEN** its page is opened
+- **THEN** a banner says the secret was refused, with Ask again as its only button, and no banner says it waits for approval
+- **AND** pressing Ask again asks again for that approval
+
 #### Scenario: a group's page has Overview and Tools tabs
 - **GIVEN** the `billing` group with three tools and a call in the last 24 hours
 - **WHEN** the user opens `/custom-tools/billing`, switches to Tools and chooses one tool
-- **THEN** the page opens on Overview with the definition and the bound secret's name, under a header with the reach and a one-line 24-hour summary, and its tabs are Overview and Tools and no other
-- **AND** Tools, at `/custom-tools/billing/tools`, shows the tools table, and the tool opens in a drawer with its request and Test without changing the address
+- **THEN** the page opens on Overview with the definition and the environment's base URL under Environments, under a header with the reach and a one-line 24-hour summary, and its tabs are Overview and Tools and no other
+- **AND** Tools, at `/custom-tools/billing/tools`, shows the tools table, and the tool opens in a drawer on its Request tab beside Try it, which shows the request it would send, without changing the address
 
 #### Scenario: a group's Overview shows what it requires, its busiest tools and the last 24 hours
 - **GIVEN** the `billing` group, on, whose `Authorization` header is bound to the stored secret `billing-token`, with 31 calls from Claude Code in 24 hours, most of them to `get_invoice`
@@ -2949,6 +3043,33 @@ the gateway").
 - **GIVEN** the `billing` group with the tools `list_invoices`, `refund` and `void_invoice`
 - **WHEN** the user types `invoice` in the search above the tools table
 - **THEN** only `list_invoices` and `void_invoice` are listed, no row carries a reach control, and Add request sits beside the search above the table
+
+#### Scenario: an argument the request never uses is flagged with its fix
+- **GIVEN** a tool `GET /orgs/{org}/search?q={query}` whose arguments are `query` and `status`
+- **WHEN** the user opens its Arguments tab
+- **THEN** `query` reads as used in `?q=`, `status` as not used with Add as query parameter and Remove argument, and `{org}` is listed with Add argument org, and the tab counts two problems
+- **AND** Add as query parameter adds `status={status}` to the path, which the Request tab's query parameters show as an argument row
+
+#### Scenario: Edit group edits the description, timeout and response settings
+- **GIVEN** the `billing` group with one environment
+- **WHEN** the user opens Edit group, changes the timeout to 45 s and saves
+- **THEN** the dialog shows no base URL or header rows and says they belong to the environments, and the group is saved with its description, 45 s and its response settings as they were
+
+#### Scenario: a response rule is added to a group and a refused header keeps Save off
+- **GIVEN** the `billing` group with no response rules
+- **WHEN** the user opens Edit group, names `X-Trace-Id` as a diagnostic header, adds a rule reading the header `X-Result-Code` with the success values `OK, 0`, and saves; then adds a rule reading `Set-Cookie`
+- **THEN** the group is saved with that diagnostic header and that rule
+- **AND** the rule on `Set-Cookie` is named as a header that carries credentials or cookies, and Save is off
+
+#### Scenario: a tool follows its group's response rules or sets its own
+- **GIVEN** a group whose rule reads `x-result-code`, and one of its tools
+- **WHEN** the user opens the tool's Response tab, picks rules for this tool only, changes the success values, then removes the rule
+- **THEN** the tab first shows the group's rule and the tool follows it; the tool's own rules start as a copy of the group's, and removing the last one leaves the tool judged by its HTTP status alone
+
+#### Scenario: Try it names the response rule an answer broke
+- **GIVEN** a tool whose answer breaks a response rule
+- **WHEN** the user runs it in Try it
+- **THEN** the block reads as a failure, names the rule failed with the value read, the success values and the API's message, and the body's size is shown
 
 ### Requirement: Draw every diff in the web UI with one renderer
 Every diff the web UI shows of a file's changed lines — a change preview of a write Coffer is about to make, a version on a History tab, a skill's copy or folder-in-the-way review, and a custom-tool group's re-import — MUST be drawn by one renderer: old and new line numbers, a sign, additions and deletions on their colour, hunk headers muted, and a long line wrapped at a word boundary with a ↳ on its continuation rows, never cut off. Each file is shown under its path, operation and line counts.
@@ -3123,3 +3244,74 @@ A knowledge document and a managed skill MUST each carry a **History** tab (spec
 - **GIVEN** the history read failing
 - **WHEN** the user opens the History tab and chooses Retry once the read works again
 - **THEN** the tab shows one Load error row with Retry, and after Retry it lists the versions
+
+### Requirement: Preview and test a custom tool in one chosen environment
+A saved group's request form — the tool drawer and Add request into an existing
+group — MUST hold ONE chosen environment, starting at the first one that is on,
+and everything the form shows about where the request goes MUST come from it:
+the help under Request names its base URL (and, with several environments, the
+environment), the headers already added are its headers, and Try it
+shows a **preview** of the request, on its own tab beside the result (the
+preview until the first run, the result after it) — method and URL with the environment's
+`{env:NAME}` filled and `{argument}` holes left, the merged headers (the
+environment's plain ones, a tool header replacing one of the same name, the
+environment's secret headers last, each by its secret's name and state, never a
+value), its variables and the timeout that applies (its own, else the group's) —
+by the gateway's rules ([mcp-gateway](../mcp-gateway/spec.md) "Make a custom
+tool's request in the gateway"). The note under Try it names that environment's
+secret, and none when it has no secret header. Run MUST send the chosen
+environment by name. Try it's picker lists the environments that are
+on and only changes the choice: it saves nothing and changes no group setting.
+An environment switched off or deleted while the form is open MUST stay chosen
+and be reported — off, deleted, or no environment on — with Run off and no
+preview, until another is picked; the form never runs in another environment in
+its place.
+
+#### Scenario: the tool form previews and tests in the environment it names
+- **GIVEN** a group with environments `test` (a secret header, a plain header, `region=eu-1`, the group's 30 s timeout) and `live` (a different base URL and plain header, no secret header, `region=us-1`, its own 7 s timeout) and a tool `GET /v1/{env:region}/items/{id}`
+- **WHEN** the person opens the tool, reads the preview, picks `live` in Try it and runs it
+- **THEN** the help, headers and preview first show `test`'s base URL, headers, secret and 30 s, then `live`'s base URL with `us-1`, its header and 7 s, and no secret of `test` anywhere
+- **AND** the run names `live`, its result shows the allow-listed response headers, and nothing about the group is saved
+
+#### Scenario: a tool form never runs in an environment that is off or gone
+- **GIVEN** a tool drawer open on environment `test`
+- **WHEN** `test` is switched off, then deleted, while the drawer stays open
+- **THEN** Try it says `test` is off, then that it was deleted, with Run off and no preview each time
+- **AND** Run comes back only once the person picks another environment
+
+### Requirement: Offer uninstall on Settings › About
+Settings › About MUST end with an **Uninstall** section. In the desktop shell it
+MUST offer **Uninstall Coffer…**, which opens the shell's one confirmation
+dialog ("Confirm a destructive action in one dialog that names its cost"),
+titled "Uninstall Coffer?", listing what uninstalling does — disconnect every
+agent and take Coffer's model routing out of their settings, remove the skill
+links Coffer delivered, turn off start at login, remove the command-line tools
+and the installer's `PATH` lines, move the app to the Trash — and saying that
+the vault, secrets, skills and settings in `~/.coffer` stay, so installing again
+finds them, and that the agents must be connected again. It MUST carry an
+unticked **Also delete my data (~/.coffer)**; ticking it MUST say, as a danger
+note, that this deletes every secret, skill, knowledge collection and the
+master key for good, offer **Back up the master key** first, and turn the
+confirm button into **Uninstall and delete data**. Confirming runs the shell's
+uninstall (spec [desktop-app](../desktop-app/spec.md) "Uninstall Coffer from
+the app"); while it runs the dialog cannot be left, a failure stays in it with
+the reason, and on success it shows each step's outcome before the app quits.
+`?uninstall=1` (and `&delete=1`) in the address MUST open the dialog (with the
+data option ticked). In a browser the section MUST instead say that uninstalling
+runs from the desktop app or the command line and show `coffer uninstall` with a
+copy button.
+
+#### Scenario: the uninstall dialog names what it removes and keeps the data by default
+- **GIVEN** Settings › About open in the desktop shell
+- **WHEN** the user chooses Uninstall Coffer…
+- **THEN** the dialog lists each step, says `~/.coffer` stays, and shows Also delete my data unticked with the confirm button reading Uninstall
+
+#### Scenario: ticking delete my data warns and offers a backup
+- **GIVEN** the uninstall dialog open
+- **WHEN** the user ticks Also delete my data
+- **THEN** a danger note says the data and the master key are deleted for good, Back up the master key is offered, and the confirm button reads Uninstall and delete data
+
+#### Scenario: about in a browser shows the uninstall command
+- **GIVEN** the web UI opened in a browser
+- **WHEN** the user opens `/settings/about`
+- **THEN** the Uninstall section shows `coffer uninstall` with a copy button and no Uninstall Coffer… control

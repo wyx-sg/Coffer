@@ -347,7 +347,7 @@ coffer skill stage-archive [OPTIONS] ARCHIVE
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
-| `ARCHIVE` <span class="cli-chip">argument</span> | path | required | A .zip or .tar.gz of one or more skills |
+| `ARCHIVE` <span class="cli-chip">argument</span> | path | required | A .zip or .skill archive of one or more skills |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## skill copy

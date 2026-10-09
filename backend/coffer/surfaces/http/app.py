@@ -58,10 +58,7 @@ from coffer.surfaces.http import daemon_routes, middleware, webui
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_connection_wiring import wire_agent_connection
 from coffer.surfaces.http.agent_facet_wiring import build_agent_catalog
-from coffer.surfaces.http.app_mcp_composition import (
-    build_retention_service,
-    reaper_kwargs_from_env,
-)
+from coffer.surfaces.http.app_mcp_composition import build_retention_service, reaper_kwargs_from_env
 from coffer.surfaces.http.app_shutdown import Running, shutdown
 from coffer.surfaces.http.attention_wiring import lifespan_attention_sources
 from coffer.surfaces.http.background_workers import start_background_workers
@@ -87,16 +84,16 @@ from coffer.surfaces.http.memory_wiring import (
     register_delivery_hook_target,
 )
 from coffer.surfaces.http.openapi_route import include_openapi_route
+from coffer.surfaces.http.provider_health_wiring import wire_provider_health
 from coffer.surfaces.http.reconcile_wiring import (
     build_reconciler,
     run_boot_pass,
     start_reconciler,
     wire_attention,
 )
+from coffer.surfaces.http.release_check_wiring import wire_release_check
 from coffer.surfaces.http.routing import include_all_routers
-from coffer.surfaces.http.secret_boundary_wiring import (
-    remember_destination_sources,
-)
+from coffer.surfaces.http.secret_boundary_wiring import remember_destination_sources
 from coffer.surfaces.http.secret_composition import init_secret_store
 from coffer.surfaces.http.secret_index_wiring import wire_secret_index
 from coffer.surfaces.http.session_conversation_wiring import wire_session_conversations
@@ -228,6 +225,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         ),
         retrieve_memory=memory_turn_retriever(kinds.memory.turn_retrieval, features.is_enabled),
     )
+    # Each connection's health, kept without anyone opening it (provider_health_wiring).
+    wire_provider_health(vault.derived_sm, kinds, chat.introspection_service, events)
     # An agent's native sessions that a channel conversation points at are also
     # that conversation: the sessions service joins the turn platform here (the
     # two kinds meet only in a composition root).
@@ -241,12 +240,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Kept on app.state: an integration test asserts the registry's contents.
     app.state.mcp_session_supervisors = kinds.mcp.session_supervisors
 
-    # Wire the channel kind (spec channels) AFTER wire_chat: the inbound processor
-    # drives turns through the chat platform's handles.
-    channel_runtime = wire_channel_kind(app, resource_svc, audit, sm, vault, secret_store, chat)
+    # The channel kind AFTER wire_chat: its turns run through the chat platform.
+    channel_runtime = wire_channel_kind(
+        app, resource_svc, audit, sm, vault, secret_store, chat, builtin_tools
+    )
 
-    # Every kind has registered its secret destinations: the approval refresh
-    # reads them from here on.
+    # Every kind has registered its secret destinations; the approval refresh reads them.
     remember_destination_sources(resource_svc, audit)
     # What cites each secret, and the one-time move of old refs to minted ids.
     await wire_secret_index(resource_svc, events)
@@ -270,15 +269,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # (cheap when nothing moved; heals an edited master; upgrades old renders).
     await run_builtin_guide_refresh(kinds.guide)
 
-    # Start the batched invocation writer alongside the retention
-    # worker. The repo's start() is a no-op if already started.
+    # Start the batched invocation writer (its start() is a no-op if started).
     await kinds.mcp.invocation_repo.start()
-
     publish_daemon_identity()
 
     # Frozen builds only; no-op from source (spec daemon "Deploy frozen sibling
     # binaries and back up the history database before migrating", see binary_deploy).
     await asyncio.to_thread(deploy_frozen_sidecars)
+    wire_release_check()
     # Leftover of the retired transcript summary cache (derived, safe to drop).
     await asyncio.to_thread(remove_transcript_sidecar)
     # ONE-TIME (require-an-agent-while-on): an empty agent list becomes off.

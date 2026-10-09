@@ -129,7 +129,7 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 | 表 | 用途 |
 | --- | --- |
 | `audit_log` | 每一次生命周期变更：时间、事件类型、操作者、资源的 uid 及其当时的类型和名字、脱敏后的 details。 |
-| `mcp_invocations` | 经网关的每次工具调用一行，由批量写入器写入。默认 30 天后清理。 |
+| `mcp_invocations` | 经网关的每次工具调用一行，带遮盖并截断后的内容，由批量写入器写入。默认 30 天后清理。 |
 | `conversations` | 对话索引：标题、智能体、目录、智能体的会话 id，以及拥有它的消息渠道线程。不含对话文本：文本留在智能体自己的会话里。随对话（或它的会话）一起删除；没有保留策略。 |
 | `channel_thread_conversations`、`channel_thread_history` | IM 线程对应哪个对话，以及一个线程开过的每个对话。 |
 | `channel_outbox` | Coffer 欠某个聊天、还没送达的回复。 |
@@ -157,7 +157,7 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 ```text
 ~/.coffer/derived/
 ├── channel-avatars/            已配对的人在平台上的头像，由各消息渠道的适配器拉取
-├── derived.db                   MCP server health, skill deliveries, capability first/last seen
+├── derived.db                   MCP server and model provider health, skill deliveries, capability first/last seen
 ├── memory/<partition>/          the memory tree (MEMORY.md, notes/, RETIRED.md, .raw/)
 ├── resources/                   derived resource files (memory partitions, coffer-guide)
 ├── skills/coffer-guide/         Coffer's own guide skill, rendered from the build
@@ -214,7 +214,7 @@ flowchart TB
 
 ## 静态存储的密钥 {#secrets-at-rest}
 
-密钥的密文是一个文件 `vault/secret/<ref>.enc`：Fernet 令牌加一个结尾换行，权限 `0600`，所在目录权限 `0700`。本机专属的 ref（比如模型代理的令牌）改放在 `local/secret/`，从不进入保险库。密文放在保险库里是安全的，因为密钥不在那里：主密钥留在操作系统的密钥存储里，或者 `0600` 权限的文件 `~/.coffer/master.key` 里。`vault/secret/` 是否提交由你的同步远端的 `include_secret` 设置决定；在那之前它被排除在仓库之外。密钥边界的绑定、批准和开关在 `local/secret-boundary/`。见[安全模型](/zh/architecture/security)。
+密钥的密文是一个文件 `vault/secret/<ref>.enc`：Fernet 令牌加一个结尾换行，权限 `0600`，所在目录权限 `0700`。本机专属的 ref（比如模型代理的令牌）改放在 `local/secret/`，从不进入保险库。密文放在保险库里是安全的，因为密钥不在那里：主密钥留在 macOS 钥匙串里。`vault/secret/` 是否提交由你的同步远端的 `include_secret` 设置决定；在那之前它被排除在仓库之外。密钥边界的绑定、批准和开关在 `local/secret-boundary/`。见[安全模型](/zh/architecture/security)。
 
 ## 不属于任何类别的设置 {#settings-that-live-outside-every-class}
 

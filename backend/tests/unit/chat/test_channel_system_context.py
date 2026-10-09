@@ -15,7 +15,10 @@ import pytest
 from coffer.domain.chat.channel_note import ChannelNote
 from coffer.infrastructure.channel.seatalk_caps import SEATALK_RENDER_NOTES
 from coffer.infrastructure.channel.telegram_caps import RICH_RENDER_NOTES
-from coffer.infrastructure.chat.adapter_support import channel_system_context
+from coffer.infrastructure.chat.adapter_support import (
+    channel_system_context,
+    owner_prompt_context,
+)
 
 _SEATALK_GROUP_THREAD = ChannelNote(
     name="ops", platform="SeaTalk", chat_kind="group", in_thread=True, renders=SEATALK_RENDER_NOTES
@@ -63,11 +66,25 @@ def test_asks_for_outcome_first_details_png_and_coffer_ask() -> None:
     text = channel_system_context(_SEATALK_GROUP_THREAD)
 
     assert "The first line is the outcome in one sentence" in text
-    assert "`## Details`" in text
+    assert "only what you write after your last tool call is sent" in text
     assert "as a PNG file" in text
     assert "call `coffer__ask`" in text
     assert "NEEDS YOU" not in text
     assert "`MEDIA:/absolute/path`" in text
+
+
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="only a transport that collapses details is asked for a details section",
+)
+def test_only_a_collapsing_transport_is_asked_for_a_details_section() -> None:
+    telegram = ChannelNote(
+        platform="Telegram", chat_kind="direct", renders=RICH_RENDER_NOTES, collapses_details=True
+    )
+
+    assert "`## Details` heading, which Coffer collapses" in channel_system_context(telegram)
+    assert "## Details" not in channel_system_context(_SEATALK_GROUP_THREAD)
+    assert "## Details" not in channel_system_context(None)
 
 
 def test_the_note_stays_short_because_it_rides_on_every_turn() -> None:
@@ -80,3 +97,73 @@ def test_an_unresolvable_channel_keeps_the_guidance() -> None:
     assert text.startswith("You are replying in a chat channel")
     assert "Short never means dropping evidence" in text
     assert "`coffer__ask`" in text
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="the owner's prompt follows Coffer's note under its own heading"
+)
+def test_the_owner_prompt_follows_the_note_under_its_heading() -> None:
+    prompt = "Answer in Chinese.\n\nAlways name the ticket number."
+    note = ChannelNote(name="tg", platform="Telegram", chat_kind="direct", owner_prompt=prompt)
+
+    text = channel_system_context(note)
+    builtin = channel_system_context(
+        ChannelNote(name="tg", platform="Telegram", chat_kind="direct")
+    )
+
+    # Coffer's note is kept whole and comes first; the owner's text follows it
+    # under the heading, exactly as written.
+    assert text == f"{builtin}\n\nInstructions from the channel's owner:\n{prompt}"
+
+
+@pytest.mark.acceptance(spec="channels", scenario="an empty system prompt appends nothing")
+@pytest.mark.parametrize("prompt", ["", "   \n\t "])
+def test_an_empty_or_blank_owner_prompt_appends_nothing(prompt: str) -> None:
+    note = ChannelNote(platform="SeaTalk", chat_kind="group", owner_prompt=prompt)
+
+    text = channel_system_context(note)
+
+    assert "Instructions from the channel's owner" not in text
+    assert text == channel_system_context(ChannelNote(platform="SeaTalk", chat_kind="group"))
+
+
+def test_a_deleted_channel_has_no_owner_prompt() -> None:
+    assert owner_prompt_context(None) == ""
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="the note names the thread-reading tool where threads can be read"
+)
+def test_a_platform_that_reads_threads_names_the_tool() -> None:
+    reads = ChannelNote(
+        name="ops",
+        platform="SeaTalk",
+        chat_kind="group",
+        in_thread=True,
+        renders=SEATALK_RENDER_NOTES,
+        reads_threads=True,
+    )
+    text = channel_system_context(reads)
+
+    assert "`coffer__channel_read_thread`" in text
+    assert "[Message origin]" in text
+    assert "coffer__channel_read_thread" not in channel_system_context(_SEATALK_GROUP_THREAD)
+    assert len(text.split()) < 260
+
+
+def test_the_owner_prompt_stays_last_after_the_thread_tool_line() -> None:
+    note = ChannelNote(
+        name="ops",
+        platform="SeaTalk",
+        chat_kind="group",
+        in_thread=True,
+        reads_threads=True,
+        owner_prompt="Name the ticket number first.",
+    )
+
+    text = channel_system_context(note)
+
+    assert text.index("coffer__channel_read_thread") < text.index(
+        "Instructions from the channel's owner:"
+    )
+    assert text.endswith("\nName the ticket number first.")

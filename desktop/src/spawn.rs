@@ -20,6 +20,9 @@ use crate::resolve::{daemon_source, DaemonSource};
 /// wrong. Callers that are happy to take a running daemon over call
 /// [`crate::resolve::daemon_source`] themselves.
 pub fn spawn_resolved_daemon(app: &AppHandle) -> Result<u32, String> {
+    if crate::uninstall::in_progress() {
+        return Err("Coffer is being uninstalled; no daemon is started".to_owned());
+    }
     spawn_from_source(daemon_source(app)?)
 }
 
@@ -166,9 +169,12 @@ mod tests {
         let script = dir.join("fake-daemon");
         {
             let mut f = std::fs::File::create(&script).expect("create script");
-            f.write_all(b"#!/bin/sh
+            f.write_all(
+                b"#!/bin/sh
 exec sleep 30
-").expect("write");
+",
+            )
+            .expect("write");
             f.set_permissions(std::fs::Permissions::from_mode(0o755))
                 .expect("chmod");
         }

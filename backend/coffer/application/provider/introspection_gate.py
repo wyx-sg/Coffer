@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from coffer.application.provider.secret_gate import require_key
-from coffer.domain.errors import ConfigValidationError
+from coffer.domain.errors import StoredKeyDestinationRefused
 from coffer.domain.provider.config import ProviderConfig
 
 if TYPE_CHECKING:
@@ -48,7 +48,7 @@ async def authorize_stored_key(
         if cfg.secret_ref == secret_ref and _norm(cfg.base_url) == wanted:
             await require_key(service, row.uid, row.name, cfg)
             return
-    raise ConfigValidationError(
+    raise StoredKeyDestinationRefused(
         "a stored key can be tried only against the endpoint of the saved connection "
         "that holds it; paste the key to try it elsewhere"
     )

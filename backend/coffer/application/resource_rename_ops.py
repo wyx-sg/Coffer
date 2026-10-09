@@ -94,6 +94,14 @@ async def rename(
         AuditEventType.RESOURCE_RENAMED.value,
         resource=renamed,
         actor=actor,
-        details={"from": before.name, "to": new_name},
+        details={
+            "from": before.name,
+            "to": new_name,
+            # The display title, which the UI shows in place of the name.
+            "title": before.title,
+            # Whether the kind moved an on-disk folder named after it (a
+            # knowledge collection, a skill) along with the label.
+            "moved_folder": kind_def.on_rename is not None,
+        },
     )
     return renamed

@@ -5,7 +5,9 @@ custom tool's arguments before any request". A tool's definition comes from
 flags, ``--data @tool.json`` or ``--data -``; its argument schema from
 ``--schema`` (JSON text, ``@file`` or ``-``). Tests name their environment and
 go through the daemon, which validates the arguments, resolves only that
-environment's secrets and makes the one request.
+environment's secrets and makes the one request. ``--dry-run`` stops before
+both: it prints the request a call would send (spec mcp-gateway "Preview a
+custom tool's request without sending it") with no secret value read.
 """
 
 from __future__ import annotations
@@ -23,7 +25,9 @@ from coffer.surfaces.cli.commands.custom_tool_common import (
     json_arg,
     pairs,
     read_group,
+    set_rules,
     show_group,
+    show_preview,
     show_test,
     test_exit,
 )
@@ -48,6 +52,7 @@ def _tool_body(
     body_template: str | None = None,
     schema: str | None = None,
     changes_data: bool | None = None,
+    response_rules: str | None = None,
 ) -> dict[str, Any]:
     body = _io.body_from(data, sets, as_json=as_json)
     for key, value in (
@@ -65,6 +70,7 @@ def _tool_body(
         body["body_template"] = _io.read_text(body_template, as_json=as_json)
     if schema is not None:
         body["input_schema"] = json_arg(schema, "--schema", as_json=as_json)
+    set_rules(body, response_rules, as_json=as_json)
     return body
 
 
@@ -92,6 +98,11 @@ _C = typer.Option(
     None,
     "--changes-data/--read-only",
     help="Whether the tool changes data (default: on for every method but GET)",
+)
+_R = typer.Option(
+    None,
+    "--response-rules",
+    help="Own response rules, a JSON array (text, @file or -); 'group' follows the group's",
 )
 
 
@@ -145,6 +156,7 @@ def add(
     body_template: str | None = _B,
     schema: str | None = _S,
     changes_data: bool | None = _C,
+    response_rules: str | None = _R,
     data: str | None = _io.data_option("The tool as JSON (text, @file or -)"),
     sets: list[str] | None = _io.set_option(),
     as_json: bool = _io.json_option(),
@@ -162,6 +174,7 @@ def add(
         body_template=body_template,
         schema=schema,
         changes_data=changes_data,
+        response_rules=response_rules,
     )
     _io.emit(
         _io.call("POST", group_path(name) + "/tools", as_json=as_json, body=body),
@@ -183,6 +196,7 @@ def update(
     body_template: str | None = _B,
     schema: str | None = _S,
     changes_data: bool | None = _C,
+    response_rules: str | None = _R,
     data: str | None = _io.data_option("Fields to change, as JSON (text, @file or -)"),
     sets: list[str] | None = _io.set_option(),
     as_json: bool = _io.json_option(),
@@ -200,6 +214,7 @@ def update(
         body_template=body_template,
         schema=schema,
         changes_data=changes_data,
+        response_rules=response_rules,
     )
     _io.emit(
         _io.call("PATCH", f"{group_path(name)}/tools/{tool}", as_json=as_json, body=body),
@@ -258,6 +273,12 @@ def delete(
 
 _E = typer.Option(None, "--env", help="The environment to run it in (needed when several are on)")
 _A = typer.Option(None, "--args", help="The arguments as a JSON object: text, @file or -")
+_DRY = typer.Option(
+    False,
+    "--dry-run",
+    help="Print the request a call would send — URL, headers, body, timeout — and send "
+    "nothing; secret headers show their secret's name, not its value",
+)
 
 
 def _args(value: str | None, *, as_json: bool) -> dict[str, Any]:
@@ -280,43 +301,62 @@ def _report(result: dict[str, Any], *, as_json: bool) -> None:
 
 
 @tools.command("test")
-@maps("custom-tool tool test", ("POST", _TOOL + "/test"), ui=_UI + "test a saved tool")
+@maps(
+    "custom-tool tool test",
+    ("POST", _TOOL + "/test"),
+    ("POST", _TOOL + "/preview"),
+    ui=_UI + "test a saved tool",
+)
 def test(
     name: str = typer.Argument(...),
     tool: str = typer.Argument(...),
     env: str | None = _E,
     args: str | None = _A,
+    dry_run: bool = _DRY,
     as_json: bool = _io.json_option(),
 ) -> None:
     """Run a saved tool once in one environment; saves and logs nothing.
 
     Invalid arguments are refused before any request (exit 6, one error per
     field); a request the API answers with an error status exits 7.
+    ``--dry-run`` prints the request instead of sending it.
     """
     body = {"arguments": _args(args, as_json=as_json), "environment": env}
-    _report(
-        _io.call("POST", f"{group_path(name)}/tools/{tool}/test", as_json=as_json, body=body),
-        as_json=as_json,
-    )
+    path = f"{group_path(name)}/tools/{tool}"
+    if dry_run:
+        result = _io.call("POST", path + "/preview", as_json=as_json, body=body)
+        _io.emit(result, as_json=as_json, human=show_preview)
+        return
+    _report(_io.call("POST", path + "/test", as_json=as_json, body=body), as_json=as_json)
 
 
 @tools.command("test-draft")
 @maps(
     "custom-tool tool test-draft",
     ("POST", GROUPS + "/{name}/test"),
+    ("POST", GROUPS + "/{name}/preview"),
     ui=_UI + "test a tool being edited",
 )
 def test_draft(
     name: str = typer.Argument(..., help="The group"),
     env: str | None = _E,
     args: str | None = _A,
+    dry_run: bool = _DRY,
+    response_rules: str | None = _R,
     data: str | None = _io.data_option("The draft tool as JSON (text, @file or -)"),
     sets: list[str] | None = _io.set_option(),
     as_json: bool = _io.json_option(),
 ) -> None:
-    """Run a tool that is not saved, in one of the group's environments."""
+    """Run a tool that is not saved, in one of the group's environments.
+
+    ``--dry-run`` prints the request instead of sending it."""
     draft = _io.body_from(data, sets, as_json=as_json)
+    set_rules(draft, response_rules, as_json=as_json)
     body = {"tool": draft, "arguments": _args(args, as_json=as_json), "environment": env}
+    if dry_run:
+        result = _io.call("POST", group_path(name) + "/preview", as_json=as_json, body=body)
+        _io.emit(result, as_json=as_json, human=show_preview)
+        return
     _report(
         _io.call("POST", group_path(name) + "/test", as_json=as_json, body=body), as_json=as_json
     )
@@ -335,6 +375,9 @@ def test_unsaved(
     ),
     var: list[str] | None = typer.Option(None, "--var", help="NAME=value for {env:NAME}; repeat"),
     timeout: int = typer.Option(30, "--timeout"),
+    response: str | None = typer.Option(
+        None, "--response", help="The draft group's response settings as JSON: text, @file or -"
+    ),
     args: str | None = _A,
     data: str | None = _io.data_option("The draft tool as JSON (text, @file or -)"),
     sets: list[str] | None = _io.set_option(),
@@ -349,6 +392,8 @@ def test_unsaved(
         "tool": _io.body_from(data, sets, as_json=as_json),
         "arguments": _args(args, as_json=as_json),
     }
+    if response is not None:
+        body["response"] = json_arg(response, "--response", as_json=as_json)
     _report(_io.call("POST", GROUPS + "/test", as_json=as_json, body=body), as_json=as_json)
 
 

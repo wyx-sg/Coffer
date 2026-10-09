@@ -28,7 +28,9 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from coffer.domain.secrets import secret_uri
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli import _io
 from coffer.surfaces.cli._options import ExitCode
 
 app = typer.Typer(help="Manage encrypted secrets.")
@@ -68,6 +70,7 @@ def set_secret(
             "(UNSAFE — visible in shell history; prefer stdin)"
         ),
     ),
+    as_json: bool = _io.json_option(),
 ) -> None:
     """Create a secret with `--name "<label>"` (and `--description`), or replace one by ref.
 
@@ -77,51 +80,70 @@ def set_secret(
 
     Without --value the secret is read from stdin, or prompted for. --value
     still stores, but warns that the value lands in your shell history; the
-    value itself is never echoed.
+    value itself is never echoed. --json prints the ref and its URI (and the
+    --value warning), never the value; a failure is the shared JSON error.
 
     \f
     Spec secret "Read a secret on the command line without shell history".
     """
     verbose = (ctx.obj or {}).get("verbose", False)
     if (ref is None) == (name is None):
-        typer.echo('give --name "<label>" to create a secret, or a ref to replace one', err=True)
-        raise typer.Exit(int(ExitCode.INVALID_INPUT))
-    if description is not None and name is None:
-        typer.echo("--description goes with --name, for a new secret", err=True)
-        raise typer.Exit(int(ExitCode.INVALID_INPUT))
-    if value is not None:
-        typer.echo(
-            "warning: --value puts the secret in your shell history; "
-            "pipe it on stdin or omit --value to be prompted instead",
-            err=True,
+        _io.fail(
+            "CLI_INVALID_INPUT",
+            'give --name "<label>" to create a secret, or a ref to replace one',
+            ExitCode.INVALID_INPUT,
+            as_json=as_json,
         )
+    if description is not None and name is None:
+        _io.fail(
+            "CLI_INVALID_INPUT",
+            "--description goes with --name, for a new secret",
+            ExitCode.INVALID_INPUT,
+            as_json=as_json,
+        )
+    warning = None
+    if value is not None:
+        warning = (
+            "--value puts the secret in your shell history; "
+            "pipe it on stdin or omit --value to be prompted instead"
+        )
+        if not as_json:
+            typer.echo(f"warning: {warning}", err=True)
     secret = _read_value(value)
     if not secret:
-        typer.echo("empty value rejected", err=True)
-        raise typer.Exit(int(ExitCode.INVALID_INPUT))
-    c, _info = _cli_client.client_or_exit()
-    with c:
+        _io.fail(
+            "CLI_INVALID_INPUT", "empty value rejected", ExitCode.INVALID_INPUT, as_json=as_json
+        )
+    with _io.client(as_json=as_json) as c:
         if ref is not None:
             found = c.get(f"/secrets/{ref}/exists")
-            _cli_client.check(found, verbose=verbose)
+            _cli_client.check(found, verbose=verbose, as_json=as_json)
             if not found.json().get("present"):
-                typer.echo(
+                _io.fail(
+                    "CLI_INVALID_INPUT",
                     f'no secret {ref!r}: create one with --name "<label>" (Coffer mints the id)',
-                    err=True,
+                    ExitCode.INVALID_INPUT,
+                    as_json=as_json,
+                    details={"ref": ref},
                 )
-                raise typer.Exit(int(ExitCode.INVALID_INPUT))
             r = c.post("/secrets", json={"ref": ref, "value": secret})
-            _cli_client.check(r, verbose=verbose)
-            typer.echo(f"stored: {ref}")
-            return
-        body = {"label": name, "value": secret}
-        if description:
-            body["description"] = description
-        r = c.post("/secrets", json=body)
-        _cli_client.check(r, verbose=verbose)
-        minted = r.json()
-    typer.echo(f"stored: {minted['ref']}")
-    typer.echo(f"cite it as: {minted['uri']}")
+            _cli_client.check(r, verbose=verbose, as_json=as_json)
+            stored = {"status": "stored", "ref": ref, "uri": secret_uri(ref)}
+        else:
+            body = {"label": name, "value": secret}
+            if description:
+                body["description"] = description
+            r = c.post("/secrets", json=body)
+            _cli_client.check(r, verbose=verbose, as_json=as_json)
+            minted = r.json()
+            stored = {"status": "stored", "ref": minted["ref"], "uri": minted["uri"]}
+    if as_json:
+        # The ref and how to cite it — never the value.
+        _io.emit({**stored, **({"warning": warning} if warning else {})}, as_json=True)
+        return
+    typer.echo(f"stored: {stored['ref']}")
+    if ref is None:
+        typer.echo(f"cite it as: {stored['uri']}")
 
 
 @app.command("list")
@@ -137,10 +159,9 @@ def list_refs(
     the API.
     """
     verbose = (ctx.obj or {}).get("verbose", False)
-    c, _info = _cli_client.client_or_exit()
-    with c:
+    with _io.client(as_json=output_json) as c:
         r = c.get("/secrets")
-        _cli_client.check(r, verbose=verbose)
+        _cli_client.check(r, verbose=verbose, as_json=output_json)
         refs: list[dict[str, Any]] = r.json().get("refs", [])
     if output_json:
         typer.echo(_json.dumps({"refs": refs}))

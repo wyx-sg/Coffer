@@ -26,6 +26,7 @@ const STATE_VARIANT = {
   present: "success",
   missing: "destructive",
   pending_approval: "warning",
+  rejected: "destructive",
   none: "default",
 } as const;
 

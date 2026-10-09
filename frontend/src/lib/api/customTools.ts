@@ -181,3 +181,4 @@ export const customToolsApi = {
     return must(data, "re-import");
   },
 };
+export type ResponseRule = Schemas["CustomToolResponseRule"];

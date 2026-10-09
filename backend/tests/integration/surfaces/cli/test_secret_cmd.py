@@ -115,7 +115,7 @@ def _use_daemon(monkeypatch, daemon: _FakeDaemon) -> None:
     info = DaemonInfo(
         version=1, pid=1, port=9999, token="t", started_at=dt.now(tz=UTC), binary_path="/fake"
     )
-    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (daemon, info))
+    monkeypatch.setattr(_cli_client, "client_or_exit", lambda **_kw: (daemon, info))
 
 
 @pytest.fixture()
@@ -260,7 +260,7 @@ def test_secrets_list_5xx_renders_message_exits_nonzero(monkeypatch):
     info = DaemonInfo(
         version=1, pid=99, port=9999, token="t", started_at=dt.now(tz=UTC), binary_path="/fake"
     )
-    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (_HttpErrorClient(), info))
+    monkeypatch.setattr(_cli_client, "client_or_exit", lambda **_kw: (_HttpErrorClient(), info))
     result = runner.invoke(app, ["secret", "list"])
     assert result.exit_code != 0
     assert "Traceback" not in (result.output or "")

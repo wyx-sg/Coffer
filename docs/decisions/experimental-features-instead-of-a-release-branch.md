@@ -1,7 +1,7 @@
 # Experimental Features Instead of a Release Branch
 
 **Status**: Accepted
-**Date**: 2026-09-24
+**Date**: 2026-10-09
 **Deciders**: Yuxing Wu (project owner)
 **Related**: spec experimental-features, [Distribution](distribution-pyinstaller.md), [The Daemon Binds a Fixed Port](daemon-binds-a-fixed-port.md), [The Desktop Shell Hosts the Shared Frontend](desktop-shell-over-a-shared-frontend.md), [principles](../../docs-site/architecture/principles.md), PR #430
 
@@ -123,6 +123,15 @@ conditional router tables). Pros: the release carries no dormant code at all.
 Cons: a release user can never switch a feature on to try it; the OpenAPI
 document and the generated client would differ between builds; and the release
 would run a code shape nobody tests day to day. It loses on testability.
+Today it would also need a one-time refactor first: the always-on code reaches
+the four features directly in about seventy places outside their own packages
+(the composition root, the `coffer-guide` sections, the channel `/kb`, the
+provider projection, usage metering at the proxy). Each feature would have to
+become a package that registers its routes, tools, workers, CLI groups, kinds
+and extension points through one interface — a layout that cuts across the
+layers [Code Layout Is Layer-First](code-layout-layer-first.md) keeps apart, and
+one the frontend would have to mirror. For a single-user tool on loopback,
+dormant code that answers 404 and lists no tools is not worth that cost.
 
 ### Option D — Gate at wiring time, applied by a restart
 
@@ -152,6 +161,37 @@ LaunchDarkly, Unleash, or a remote JSON of flags. Pros: targeting, gradual
 rollout, a dashboard. Cons: a network dependency and an account for a
 local-first, single-user tool, and a remote party deciding what a local vault
 exposes. It loses; four boolean keys per machine need none of it.
+
+### Option G — Integration branches: features merge into both `next` and `main`
+
+The owner's own proposal, and how git itself is developed: `main` is the release
+line, a `next` (or `test`) branch holds every unreleased feature, and each
+feature branch merges into `next` to be tried and into `main` once it is ready.
+Linux's `linux-next` is the same idea, rebuilt daily from the subsystem trees.
+Pros: a release carries no unfinished code, and `next` is one place where every
+experiment runs together. Cons: it works for git only under three disciplines —
+topic branches live until they graduate, they are merged and never squashed, and
+`next` is thrown away and rebuilt every cycle — and Coffer squash-merges every
+pull request, so the two branches' histories stop sharing commits after the
+first merge. Every feature costs two pull requests and two CI runs; migration
+numbers, requirement titles, the generated OpenAPI client and the CLI reference
+diverge between the branches; and a `runs.db` migrated by a `next` build is newer
+than the `main` build its owner goes back to. It is Option B with a second
+long-lived branch, and loses for the same reason. The other projects surveyed
+(Rust, Firefox, Chromium, Kubernetes, VS Code) all develop on one trunk with
+runtime or compile-time feature gates, and separate testing from releasing by
+channel or by short-lived release branches, not by a second long-lived line.
+
+### Option H — A preview channel with every experimental feature on
+
+Build `main` on every merge as a pre-release, with experimental features on by
+default, and let the desktop app pick a stable or preview update feed. Pros: a
+build to try everything at once without touching Settings, and earlier access to
+always-on changes than a tag gives. Cons: a second build whose defaults differ
+(Option A2's flaw), a second updater manifest and channel switch to maintain, and
+nothing a person cannot already get: switching the four features on in Settings →
+Features gives the same code and the same behaviour. Not adopted; it stays the
+answer if trying `main` between tags becomes a need of its own.
 
 ## Decision
 

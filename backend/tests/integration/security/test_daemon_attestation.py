@@ -22,7 +22,7 @@ from tests.support.boundary_daemon import BoundaryDaemon, prepare_home, running_
 
 MASTER = b"ZmFrZS1tYXN0ZXIta2V5LWZvci10ZXN0cy0wMDAwMDA="
 ATTEST_URL = "/api/v1/secrets/presence/attest"
-IMPORT_URL = "/api/v1/sync/key/import"
+IMPORT_URL = "/api/v1/secrets/key/import"
 
 
 @pytest.fixture
@@ -73,7 +73,7 @@ def _import(d: BoundaryDaemon, material: str, grant: dict[str, str]) -> object:
 
 
 def _fingerprint_of(d: BoundaryDaemon, material: str) -> str:
-    r = d.client.post("/api/v1/sync/key/import/preview", json={"material": material})
+    r = d.client.post("/api/v1/secrets/key/import/preview", json={"material": material})
     assert r.status_code == 200, r.text
     return str(r.json()["fingerprint"])
 

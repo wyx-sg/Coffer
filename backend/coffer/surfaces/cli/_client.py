@@ -7,8 +7,6 @@ run ``coffer daemon start``.
 
 from __future__ import annotations
 
-import contextlib
-import subprocess
 import sys
 import time
 import traceback
@@ -24,8 +22,11 @@ from coffer.infrastructure.daemon.version_skew import skew_warning
 from coffer.infrastructure.vault.home import daemon_json_path
 from coffer.surfaces.cli._options import ExitCode
 
-# How long (seconds) to wait for daemon.json to appear after spawning.
-_DAEMON_BOOT_TIMEOUT: float = 10.0
+# How long (seconds) to wait for a spawned daemon to answer. The same budget as
+# `coffer daemon start`: a real vault's boot (migrations, the secret store, the
+# first scan) takes several seconds, and a shorter wait gave up on boots that
+# were about to succeed.
+_DAEMON_BOOT_TIMEOUT: float = 30.0
 
 
 #: What the CLI says when the running daemon's answer lacks a field this CLI
@@ -37,6 +38,17 @@ class DaemonNotRunning(SystemExit):
     """Exit code 3 — daemon not reachable."""
 
     code = 3
+
+
+class ClientUnavailable(Exception):  # noqa: N818
+    """Why no client could be had, for a ``--json`` caller to render as its
+    error envelope instead of the text :func:`client_or_exit` prints."""
+
+    def __init__(
+        self, code: str, message: str, exit_code: ExitCode, details: dict[str, object]
+    ) -> None:
+        super().__init__(message)
+        self.code, self.message, self.exit_code, self.details = code, message, exit_code, details
 
 
 def _daemon_json_path() -> Path:
@@ -75,23 +87,18 @@ def _wait_for_daemon(timeout: float = _DAEMON_BOOT_TIMEOUT) -> DaemonInfo | None
     return None
 
 
-def _spawn_daemon() -> subprocess.Popen[bytes] | None:
+def _spawn_daemon() -> None:
     """Detached best-effort spawn of the daemon process.
 
     Stdout/stderr go to ~/.coffer/logs/daemon.log; stdin is DEVNULL — the
     shared :func:`spawn_detached_daemon`, so the daemon's own refusal (a
     squatted port) lands in the log this surface tells the user to read.
-    The caller is responsible for waiting for daemon.json to appear.
-
-    Returns the ``Popen`` handle so the caller can ``kill()`` the
-    half-started daemon if it never publishes daemon.json within the boot
-    timeout; returns ``None`` if the spawn itself failed (OSError).
+    The caller is responsible for waiting for the daemon to answer.
     """
     try:
-        return spawn_detached_daemon()
+        spawn_detached_daemon()
     except OSError as e:
         print(f"coffer: failed to spawn daemon: {e}", file=sys.stderr)
-        return None
 
 
 #: How long the version-skew probe waits. Short: the daemon just answered the
@@ -139,7 +146,9 @@ def daemon_is_running() -> bool:
     return live_daemon() is not None
 
 
-def client_or_exit(*, allow_setup: bool = False) -> tuple[httpx.Client, DaemonInfo]:
+def client_or_exit(
+    *, allow_setup: bool = False, as_json: bool = False
+) -> tuple[httpx.Client, DaemonInfo]:
     """Return an authenticated httpx.Client + DaemonInfo for the running daemon.
 
     Implements detect-or-spawn: if no daemon is *reachable* — daemon.json
@@ -151,6 +160,9 @@ def client_or_exit(*, allow_setup: bool = False) -> tuple[httpx.Client, DaemonIn
     daemon waiting for git is answered here, before the command's own request:
     the reason and the hand-off, exit 10 — unless ``allow_setup`` (``coffer
     daemon status``, which reports it).
+
+    With ``as_json`` neither failure prints: :class:`ClientUnavailable` is
+    raised for the caller to render as the ``--json`` error envelope.
     """
     # live_daemon() (not discover()) so a stale daemon.json from a crashed
     # daemon is treated as "no daemon" and respawned, instead of returning a
@@ -158,23 +170,35 @@ def client_or_exit(*, allow_setup: bool = False) -> tuple[httpx.Client, DaemonIn
     info = live_daemon()
     if info is None:
         # Detect-or-spawn: auto-spawn the daemon rather than asking the user.
-        proc = _spawn_daemon()
+        _spawn_daemon()
         info = _wait_for_daemon(timeout=_DAEMON_BOOT_TIMEOUT)
         if info is None:
-            # Kill the half-started daemon so it can't finish booting *after*
-            # we gave up and leave a daemon.json the user was told failed.
-            if proc is not None:
-                with contextlib.suppress(OSError):
-                    proc.kill()
-            print(
+            # The spawned process is left alone: killing a boot mid-migration
+            # is worse than a late start, and in a one-file build the handle is
+            # only the bootloader, so a kill used to leave the real daemon
+            # running unseen. A start that cannot finish exits by itself once
+            # the spawn lock's wait runs out (spec daemon "Keep exactly one
+            # daemon per vault").
+            message = (
                 "daemon failed to start within "
-                f"{_DAEMON_BOOT_TIMEOUT:.0f}s; check ~/.coffer/logs/daemon.log",
-                file=sys.stderr,
+                f"{_DAEMON_BOOT_TIMEOUT:.0f}s; check ~/.coffer/logs/daemon.log"
             )
+            if as_json:
+                raise ClientUnavailable(
+                    "DAEMON_UNREACHABLE", message, ExitCode.DAEMON_UNREACHABLE, {}
+                )
+            print(message, file=sys.stderr)
             raise DaemonNotRunning()
 
     setup = waiting_for_git(warn_if_version_skew(info))
     if setup is not None and not allow_setup:
+        if as_json:
+            raise ClientUnavailable(
+                "DAEMON_WAITING_FOR_GIT",
+                str(setup.get("message", "Coffer needs git.")),
+                ExitCode.GIT_NEEDED,
+                {"handoff": setup["handoff"]} if isinstance(setup.get("handoff"), dict) else {},
+            )
         print_waiting_for_git(setup)
         raise typer.Exit(int(ExitCode.GIT_NEEDED))
     base = f"http://127.0.0.1:{info.port}/api/v1"
@@ -193,21 +217,21 @@ def client_or_exit(*, allow_setup: bool = False) -> tuple[httpx.Client, DaemonIn
     )
 
 
-def check(
-    r: httpx.Response,
-    *,
-    verbose: bool,
-) -> None:
-    """Call ``r.raise_for_status()``; on error, render it and raise ``typer.Exit``.
+def check(r: httpx.Response, *, verbose: bool = False, as_json: bool = False) -> None:
+    """Return when ``r`` succeeded; otherwise render its error and exit.
 
-    This is the single replacement for bare ``r.raise_for_status()`` calls in
-    the command modules. It routes every HTTP error through ``render_http_error``
-    so the user sees a human-readable message and the correct exit code.
+    The older hand-written readers call this; it renders exactly as the
+    management commands' :func:`coffer.surfaces.cli._io.check` does — the same
+    exit codes and, with ``as_json``, the same error envelope on stderr — so
+    ``--json`` holds on every path. ``verbose`` is kept for those callers;
+    ``coffer --verbose`` itself is read once, by ``_io``.
     """
-    try:
-        r.raise_for_status()
-    except httpx.HTTPStatusError as e:
-        raise typer.Exit(int(render_http_error(e, verbose=verbose))) from None
+    del verbose
+    if 200 <= r.status_code < 300:
+        return
+    from coffer.surfaces.cli import _io
+
+    _io.check(r, as_json=as_json)
 
 
 def render_http_error(
@@ -215,47 +239,19 @@ def render_http_error(
     *,
     verbose: bool,
 ) -> ExitCode:
-    """Print the error to stderr and return the appropriate ExitCode.
+    """Print a transport failure (or anything unexpected) and return its exit code.
 
     Callers should ``raise typer.Exit(int(render_http_error(err, verbose=v)))``.
     Secrets must never be passed here — this function may print context to stderr.
     """
     if isinstance(err, httpx.HTTPStatusError):
-        envelope = None
-        with contextlib.suppress(Exception):
-            envelope = err.response.json().get("error")
-        message = envelope.get("message") if envelope else str(err)
-        code_name = envelope.get("code") if envelope else None
-        if code_name == "FEATURE_DISABLED":
-            # One line, and it says what to run (spec experimental-features
-            # "Close every surface of a switched-off feature").
-            key = ((envelope or {}).get("details") or {}).get("feature", "?")
-            typer.echo(
-                f"{key} is switched off on this machine — run: coffer config set feature.{key} on",
-                err=True,
-            )
-            return ExitCode.GENERIC
-        typer.echo(message, err=True)
-        # A refusal whose fix is a chore for an agent carries the prompt
-        # (``domain/handoff.py``); print it the way the web UI offers it.
-        handoff = ((envelope or {}).get("details") or {}).get("handoff")
-        if isinstance(handoff, dict) and handoff.get("prompt"):
-            typer.echo("\nTo hand this to your agent, give it this prompt:\n", err=True)
-            typer.echo(handoff["prompt"], err=True)
+        from coffer.surfaces.cli import _io
 
-        status = err.response.status_code
-        exit_code: ExitCode = {
-            404: ExitCode.NOT_FOUND,
-            409: ExitCode.CONFLICT,
-            400: ExitCode.INVALID_INPUT,
-            422: ExitCode.INVALID_INPUT,
-        }.get(status, ExitCode.GENERIC)
-
-        if code_name in ("SECRET_MISSING", "SECRET_LOCKED"):
-            exit_code = ExitCode.SECRET_ISSUE
-        if code_name == "SECRET_BINDING_PENDING":
-            exit_code = ExitCode.APPROVAL_PENDING
-    elif isinstance(err, httpx.TransportError):
+        code, message, details = _io.envelope_of(err.response)
+        exit_code = _io.exit_code_for(err.response.status_code, code)
+        _io.render_failure(code, message, int(exit_code), as_json=False, details=details)
+        return exit_code
+    if isinstance(err, httpx.TransportError):
         # Refused, reset, closed without a response or timed out: from the
         # CLI's side each is the daemon not answering.
         typer.echo(

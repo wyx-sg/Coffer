@@ -132,7 +132,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`history-is-one-sqlite-file-written-only-by-the-daemon`](history-is-one-sqlite-file-written-only-by-the-daemon.md) | History Is One SQLite File, `runs.db`, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage |
 | [`every-vault-file-carries-its-format-version`](every-vault-file-carries-its-format-version.md) | Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades |
 | [`every-vault-write-is-a-validated-commit-naming-its-writer`](every-vault-write-is-a-validated-commit-naming-its-writer.md) | Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer |
-| [`audit-and-retention`](audit-and-retention.md) | Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table |
+| [`audit-and-retention`](audit-and-retention.md) | Audit Every Change With Its Actor, Log Every Invocation, Prune Per Table |
 | [`one-level-triggered-reconciler-compares-parameters`](one-level-triggered-reconciler-compares-parameters.md) | One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters |
 | [`wire-contract-generated-from-the-pydantic-models`](wire-contract-generated-from-the-pydantic-models.md) | The Wire Contract Is Generated From the Pydantic Models, and the Frontend Client From the Contract |
 | [`background-work-runs-supervised-and-correlated`](background-work-runs-supervised-and-correlated.md) | Background Work Runs Supervised, and Every Record Carries One Correlation Id |
@@ -162,6 +162,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream`](mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md) | MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream |
 | [`tool-overload-tier-the-list-search-the-rest`](tool-overload-tier-the-list-search-the-rest.md) | Tool Overload: List a Usage-Ranked Slice, Search the Rest |
 | [`eval-capture-and-regression-gate`](eval-capture-and-regression-gate.md) | Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate |
+| [`record-tool-call-content-redacted-and-bounded`](record-tool-call-content-redacted-and-bounded.md) | Record Tool Call Content, Masked Where the Secrets Are Known and Cut at 16 KB |
 
 ### Agents & providers
 
@@ -188,7 +189,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`channel-owner-gate`](channel-owner-gate.md) | A Channel Answers Only Its Paired Owner, and Fails Closed in Groups |
 | [`channel-conversation-identity-and-context`](channel-conversation-identity-and-context.md) | A Channel Conversation Is Keyed by (Channel, Chat, Thread) and Grounded in Its Thread and Quote |
 | [`channel-switches-structural-vs-parametric`](channel-switches-structural-vs-parametric.md) | Channel Switches: the Agent Opens a New Conversation, the Model Applies Next Turn |
-| [`channel-live-surface-strategy`](channel-live-surface-strategy.md) | A Channel Reply Grows on One Live Surface, Paced by the Transport |
+| [`channel-live-surface-strategy`](channel-live-surface-strategy.md) | A Channel Turn Shows Progress on a Preview Surface Where One Exists, and the Reply Is the Answer Alone |
 | [`channel-attachments`](channel-attachments.md) | Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send |
 | [`chat-attachment-uploads`](chat-attachment-uploads.md) | The Chat Page Uploads a File First and Sends Its Id, Into a Sibling Media Directory |
 | [`seatalk-websocket-inbound`](seatalk-websocket-inbound.md) | SeaTalk Inbound Is One Outbound WebSocket, Through an Operator-Supplied SDK |
@@ -202,8 +203,9 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`coffer-ships-its-own-skill`](coffer-ships-its-own-skill.md) | Coffer Ships Its Own Manual as a Skill Resource |
 | [`knowledge-is-plain-files`](knowledge-is-plain-files.md) | Knowledge Is a Directory of Markdown Files, Not an Index |
 | [`tidying-knowledge-and-memory-is-the-agents-job`](tidying-knowledge-and-memory-is-the-agents-job.md) | Tidying Knowledge and Memory Is the Agent's Job |
-| [`aggregate-agent-memory-never-write-it`](aggregate-agent-memory-never-write-it.md) | Aggregate the Agents' Memory; Never Write It |
-| [`memory-reaches-a-session-at-prompt-time-and-before-a-known-trap`](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md) | Memory Reaches a Session at Two Moments: an Index at Start and the Notes a Prompt Names |
+| [`aggregate-agent-memory-never-write-it`](aggregate-agent-memory-never-write-it.md) | Aggregate the Agents' Memory; Never Write It (superseded) |
+| [`memory-reaches-a-session-at-prompt-time-and-before-a-known-trap`](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md) | Memory Reaches a Session at Two Moments: an Index at Start and the Notes a Prompt Names (superseded) |
+| [`sync-memory-into-each-agents-own-memory`](sync-memory-into-each-agents-own-memory.md) | Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault |
 
 ### Sync & secrets
 

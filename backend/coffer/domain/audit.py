@@ -33,6 +33,7 @@ class AuditEventType(StrEnum):
     # start its successor and exit
     DAEMON_RESTARTED = "daemon_restarted"
     RETENTION_UPDATED = "retention_updated"
+    CALL_CONTENT_RECORDING_UPDATED = "call_content_recording_updated"
     # spec web-ui "Let the user ignore any item on Overview": a
     # "needs you" item ignored on this machine, or no longer.
     ATTENTION_IGNORED = "attention_ignored"
@@ -100,6 +101,10 @@ class AuditEventType(StrEnum):
     MEMORY_DELIVERY_INSTALLED = "memory_delivery_installed"
     MEMORY_DELIVERY_REMOVED = "memory_delivery_removed"
     MEMORY_DISTILLED = "memory_distilled"
+    # spec memory: the sync into each agent's own memory
+    MEMORY_SYNCED = "memory_synced"
+    MEMORY_SYNC_UNDONE = "memory_sync_undone"
+    MEMORY_CURATION_REQUESTED = "memory_curation_requested"
     # no longer emitted; kept so recorded events still read
     MEMORY_NOTE_EDITED = "memory_note_edited"
     MEMORY_NOTE_DELETED = "memory_note_deleted"

@@ -1,13 +1,13 @@
 // src/components/settings/security/ImportKeyRow.tsx — "Import a master key" on Settings › Security.
 //
-// Spec vault-sync "Import a master key after showing whose key it is". The
+// Spec secret "Import a master key after showing whose key it is". The
 // import runs in the desktop app only: installing a key needs a presence check
 // the shell signs (spec secret "Release plaintext only to a present human in
 // the desktop app"), so a browser shows "Open the Coffer app" instead. The flow
 // is one dialog:
 //
 //   1. Choose… — a hidden `<input type="file">`; the page reads the file's
-//      text and asks the daemon whose key it holds (`/sync/key/import/preview`),
+//      text and asks the daemon whose key it holds (`/secrets/key/import/preview`),
 //      which replaces nothing. The dialog then shows this Mac's key beside the
 //      file's, marked "same" or "different".
 //   2. Passphrase — only for a `.cfk` backup (a bare key has none).

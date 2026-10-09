@@ -2,7 +2,7 @@
 
 Spec experimental-features "Close every surface of a switched-off feature" and
 "Keep what a switched-off feature holds". The routes, kinds and error hints are
-exercised on the shipped features (``knowledge``, ``memory``, ``sync``, ``models``);
+exercised on the shipped features (``knowledge``, ``memory``);
 the built-in tool mechanism, which needs a tool no shipped feature owns, runs
 on a test-only feature registered beside them. Each test boots ``create_app``
 under a throwaway HOME (database, knowledge and memory roots all in
@@ -31,6 +31,7 @@ from coffer.surfaces.http import feature_dependencies
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 from tests.support.features import FAKE_FEATURE, enable_all_in_config, register_fake_feature
+from tests.support.mcp_wire import INIT_PARAMS
 
 _TOKEN = "test-token-feature-gates"
 _HEADERS = {"X-Coffer-Token": _TOKEN, "X-Coffer-Actor": "user"}
@@ -44,7 +45,7 @@ def home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[pa
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59789")
     monkeypatch.delenv(daemon_config.FEATURES_ENV, raising=False)
     (tmp_path / ".coffer").mkdir(parents=True, exist_ok=True)
-    # Every feature is off until switched on: start from all four on, so a test
+    # Every feature is off until switched on: start from both on, so a test
     # that switches one off is switching off what a person had switched on.
     enable_all_in_config()
     prior = feature_dependencies._feature_service
@@ -83,12 +84,12 @@ def _assert_disabled(r: Any, key: str) -> None:
     scenario="a switched-off feature's routes answer feature disabled",
 )
 def test_a_switched_off_features_routes_answer_feature_disabled(home: pathlib.Path) -> None:
-    daemon_config.write_feature_setting("sync", False)
+    daemon_config.write_feature_setting("knowledge", False)
     with _client() as c:
-        _assert_disabled(c.get("/api/v1/sync/status"), "sync")
+        _assert_disabled(c.get("/api/v1/knowledge/collections"), "knowledge")
         # Only the feature's own prefix: everything else still answers.
-        assert c.get("/api/v1/knowledge/collections").status_code == 200
         assert c.get("/api/v1/memory/partitions").status_code == 200
+        assert c.get("/api/v1/sync/status").status_code == 200
         assert c.get("/api/v1/agents").status_code == 200
 
 
@@ -96,15 +97,9 @@ def test_a_switched_off_features_routes_answer_feature_disabled(home: pathlib.Pa
 _ROUTE_OF = {
     "knowledge": "/api/v1/knowledge/collections",
     "memory": "/api/v1/memory/partitions",
-    "sync": "/api/v1/sync/status",
-    "models": "/api/v1/providers",
 }
 
 
-@pytest.mark.acceptance(
-    spec="experimental-features",
-    scenario="models off closes the provider, model, proxy and usage routes",
-)
 @pytest.mark.acceptance(
     spec="experimental-features",
     scenario="knowledge off closes the knowledge routes",
@@ -112,10 +107,6 @@ _ROUTE_OF = {
 @pytest.mark.acceptance(
     spec="experimental-features",
     scenario="memory off closes the memory routes",
-)
-@pytest.mark.acceptance(
-    spec="experimental-features",
-    scenario="sync off closes the sync routes",
 )
 @pytest.mark.parametrize("key", sorted(_ROUTE_OF))
 def test_each_experimental_feature_closes_only_its_own_routes(home: pathlib.Path, key: str) -> None:
@@ -127,9 +118,11 @@ def test_each_experimental_feature_closes_only_its_own_routes(home: pathlib.Path
                 _assert_disabled(r, key)
             else:
                 assert r.status_code == 200, (other, r.text)
-        # Always-on routes: conversations, and what the agent pages and the
-        # internal engine read.
+        # Always-on routes: conversations, what the agent pages and the
+        # internal engine read, and the graduated sync and models routes.
         for always_on in (
+            "/api/v1/sync/status",
+            "/api/v1/providers",
             "/api/v1/agents",
             "/api/v1/agent-sessions",
             "/api/v1/agent-providers",
@@ -174,9 +167,9 @@ def test_a_stored_setting_for_a_retired_feature_is_ignored(home: pathlib.Path) -
     with _client() as c:
         assert c.get("/api/v1/sync/status").status_code == 200
         listed = c.get("/api/v1/daemon/features").json()["features"]
-        assert [f["key"] for f in listed] == ["knowledge", "memory", "sync", "models"]
+        assert [f["key"] for f in listed] == ["knowledge", "memory"]
         status = c.get("/api/v1/daemon/status").json()
-    assert set(status["features"]) == {"knowledge", "memory", "sync", "models"}
+    assert set(status["features"]) == {"knowledge", "memory"}
 
 
 @pytest.mark.acceptance(
@@ -186,15 +179,15 @@ def test_a_stored_setting_for_a_retired_feature_is_ignored(home: pathlib.Path) -
 def test_switching_a_feature_on_opens_its_surfaces_without_a_restart(
     home: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    daemon_config.write_feature_setting("sync", False)
+    daemon_config.write_feature_setting("memory", False)
     with _client() as c:
-        _assert_disabled(c.get("/api/v1/sync/status"), "sync")
+        _assert_disabled(c.get(_ROUTE_OF["memory"]), "memory")
 
-        _switch(c, "sync", True)
+        _switch(c, "memory", True)
 
         # Same process, same app: no restart between the switch and the answer.
-        assert c.get("/api/v1/sync/status").status_code == 200
-    assert _daemon_config(home)["features"]["sync"] is True
+        assert c.get(_ROUTE_OF["memory"]).status_code == 200
+    assert _daemon_config(home)["features"]["memory"] is True
 
 
 # --- hint ---------------------------------------------------------------------
@@ -205,10 +198,10 @@ def test_switching_a_feature_on_opens_its_surfaces_without_a_restart(
     scenario="a switched-off feature's refusal says how to switch it on",
 )
 def test_a_switched_off_features_command_says_how_to_switch_it_on(home: pathlib.Path) -> None:
-    daemon_config.write_feature_setting("sync", False)
+    daemon_config.write_feature_setting("memory", False)
     daemon_config.write_feature_setting("knowledge", False)
     with _client() as c:
-        for key, route in (("sync", "/api/v1/sync/status"), ("knowledge", _ROUTE_OF["knowledge"])):
+        for key, route in _ROUTE_OF.items():
             error = c.get(route).json()["error"]
             assert error["code"] == "FEATURE_DISABLED"
             assert "Settings › Features" in error["message"], key  # noqa: RUF001
@@ -274,7 +267,7 @@ def test_a_switched_off_features_tool_leaves_the_tool_list(
 ) -> None:
     with _client() as c:
         _switch(c, FAKE_FEATURE, True)
-        session = _mcp(c, None, "initialize", {}).headers["mcp-session-id"]
+        session = _mcp(c, None, "initialize", INIT_PARAMS).headers["mcp-session-id"]
         assert fake_tool in _tool_names(c, session)
         unknown = _mcp(
             c, session, "tools/call", {"name": "coffer__nosuchtool", "arguments": {}}
@@ -304,7 +297,7 @@ def test_the_gateway_advertises_only_search_tools_as_a_built_in(home: pathlib.Pa
         return {n for n in _tool_names(c, session) if n.startswith("coffer__")}
 
     with _client() as c:
-        session = _mcp(c, None, "initialize", {}).headers["mcp-session-id"]
+        session = _mcp(c, None, "initialize", INIT_PARAMS).headers["mcp-session-id"]
         unknown = _mcp(
             c, session, "tools/call", {"name": "coffer__nosuchtool", "arguments": {}}
         ).json()
@@ -359,13 +352,61 @@ def test_switching_a_feature_off_and_on_keeps_what_it_holds(home: pathlib.Path) 
 )
 def test_the_status_names_this_machine_and_every_registered_feature(home: pathlib.Path) -> None:
     """Machine identity is not sync's: it rides on the daemon's own status, and
-    answers there even while the feature owning the sync routes is off."""
-    daemon_config.write_feature_setting("sync", False)
+    answers there with an experimental feature switched off."""
+    daemon_config.write_feature_setting("memory", False)
     with _client() as c:
         status = c.get("/api/v1/daemon/status", headers={"X-Coffer-Token": ""}).json()
-        _assert_disabled(c.get("/api/v1/sync/status"), "sync")
+        _assert_disabled(c.get(_ROUTE_OF["memory"]), "memory")
+        assert c.get("/api/v1/sync/status").status_code == 200
     assert status["machine_id"] == daemon_config.read_cached_machine_id()
     assert status["machine_id"]
     assert status["machine_name"] == daemon_config.read_machine_name()
     assert "channel" not in status
-    assert status["features"] == {"knowledge": True, "memory": True, "sync": False, "models": True}
+    assert status["features"] == {"knowledge": True, "memory": False}
+
+
+# --- graduated features ----------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="experimental-features",
+    scenario="sync and models graduated and their switches are removed at startup",
+)
+def test_sync_and_models_switches_are_removed_and_their_routes_always_answer(
+    home: pathlib.Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A machine where sync and models were switched off, and a daemon started
+    with a ``COFFER_FEATURES`` pin naming them: at startup both switches leave
+    ``daemon-config.json`` (the other keys stay), the pin's ``sync`` and
+    ``models`` are unknown keys, and the sync and provider routes answer."""
+    daemon_config.write_feature_setting("sync", False)
+    daemon_config.write_feature_setting("models", False)
+    daemon_config.write_feature_setting("from_newer_build", True)
+    monkeypatch.setenv(daemon_config.FEATURES_ENV, "sync=off,models=off,memory=off")
+    with caplog.at_level("WARNING"), _client() as c:
+        for route in (
+            "/api/v1/sync/status",
+            "/api/v1/providers",
+            "/api/v1/providers/price-list",
+            "/api/v1/usage/summary",
+            "/api/v1/proxy/status",
+        ):
+            assert c.get(route).status_code == 200, (route, c.get(route).text)
+        # The pin still pins what the registry names.
+        _assert_disabled(c.get(_ROUTE_OF["memory"]), "memory")
+        listed = c.get("/api/v1/daemon/features").json()["features"]
+        status = c.get("/api/v1/daemon/status").json()
+    assert [f["key"] for f in listed] == ["knowledge", "memory"]
+    assert status["features"] == {"knowledge": True, "memory": False}
+    assert _daemon_config(home)["features"] == {
+        "knowledge": True,
+        "memory": True,
+        "from_newer_build": True,
+    }
+    unknown = {
+        r.args[1]
+        for r in caplog.records
+        if r.getMessage().startswith(f"{daemon_config.FEATURES_ENV} names unknown feature")
+        and isinstance(r.args, tuple)
+    }
+    assert unknown == {"sync", "models"}

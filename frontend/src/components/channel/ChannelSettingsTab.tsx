@@ -4,7 +4,8 @@
 // any display name, kept as the resource's title — SeaTalk's App ID, the
 // secret shown masked and replaced through a dialog, and the machine that runs
 // it), Receiving messages (group rules and batching), Replies and
-// conversations, and Working directories; the one destructive action, Delete,
+// conversations, System prompts (edited through a dialog), and Working
+// directories; the one destructive action, Delete,
 // is a row at the bottom, not a section.
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
@@ -25,6 +26,7 @@ import {
   ChannelReceivingFields,
   ChannelReplyFields,
 } from "./ChannelTurnSettingsFields";
+import { ChannelSystemPromptsSection } from "./ChannelSystemPromptsSection";
 import { FieldError } from "./FieldError";
 import { useSettingDraft } from "./useSettingDraft";
 
@@ -164,6 +166,8 @@ export function ChannelSettingsTab({
       <SettingsSection title={t("channels.settings.replying.title")}>
         <ChannelReplyFields settings={settings} save={save} />
       </SettingsSection>
+
+      <ChannelSystemPromptsSection settings={settings} save={save} />
 
       <SettingsSection
         title={t("channels.edit.directories.title")}

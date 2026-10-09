@@ -1,5 +1,10 @@
 // src/components/ui/popover.tsx
 // Popover over @radix-ui/react-popover: a raised 260-wide help/detail box, 6 below its trigger.
+//
+// The content is portaled to <body>, outside an open modal Dialog / Sheet. Radix's modal scroll
+// lock (react-remove-scroll) cancels wheel and touch scrolling anywhere outside the modal, so a
+// scrollable list in a popover opened from a dialog would not scroll. Stopping those events at
+// the content keeps them from reaching the lock's document listeners.
 import * as React from "react";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { cn } from "@/lib/utils";
@@ -23,6 +28,14 @@ const PopoverContent = React.forwardRef<
         className,
       )}
       {...props}
+      onWheel={(event) => {
+        event.stopPropagation();
+        props.onWheel?.(event);
+      }}
+      onTouchMove={(event) => {
+        event.stopPropagation();
+        props.onTouchMove?.(event);
+      }}
     />
   </PopoverPrimitive.Portal>
 ));

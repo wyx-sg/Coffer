@@ -222,9 +222,9 @@ refused as [chat](../chat/spec.md) "Run a session in one place at a time" says.
 ### Requirement: Render replies by the adapter's declared capabilities
 Replies MUST render per channel capability — each adapter converts the agent's
 markdown into its platform's own format and chunks to its own limit, as its
-child spec states. Both stream a turn's progress into ONE surface that grows in
-place (see "Grow a reply in place on one live surface"), its lines describing
-each call from its input (e.g. `⏳ Bash · list the desktop`,
+child spec states. A transport with a live surface shows a turn's progress on
+ONE surface (see "Show a turn's progress on one live surface"), its lines
+describing each call from its input (e.g. `⏳ Bash · list the desktop`,
 `✅ Read · wedding.json`). Capabilities are declared by the adapter, not
 special-cased in the core: a `ChannelCapabilities` record states what the
 adapter can do — a live-updating surface via `supports_live_text`, rewriting a
@@ -362,8 +362,7 @@ A reply in a group cannot be unsaid by the platform on its own, and the agent ca
 read everything the owner keeps in Coffer, so the owner MUST be able to take any bot
 reply back. Two owner-only ways do it, and both end the same way. The command
 `/del` withdraws the reply it QUOTES (the platform's reply pointer or quote), the
-whole reply — every part a long answer was cut into, the files it carried and its
-details card — and `/del` with no quote withdraws the bot's most recent reply in
+whole reply — every part a long answer was cut into and the files it carried — and `/del` with no quote withdraws the bot's most recent reply in
 that chat (in a thread, in that thread; in a group's main chat, anywhere in the
 group). It works in groups and in direct chats. And every bot reply in a group
 carries a 🗑 button on its last text message, where the transport has buttons and
@@ -378,8 +377,9 @@ it refuses (`withdraw_window_hours`: 48 for Telegram, 168 for SeaTalk); a reply 
 it is not touched and the owner is told so in their direct chat, never in the group.
 The owner's own `/del` message is deleted too where the platform lets the bot remove
 it (Telegram, given the right), and left alone otherwise. A direct-chat reply a
-transport cannot take back (SeaTalk's streamed text) is not recorded, and `/del`
-says there is nothing to withdraw.
+transport cannot take back (SeaTalk's direct-chat text, which it can neither
+delete nor rewrite) is not recorded, and `/del` says there is nothing to
+withdraw.
 
 To make that reliable the channel records, for every reply, which platform messages
 it was delivered as — in `runs.db` (`channel_replies`: chat, thread, reply id, the
@@ -435,6 +435,13 @@ channel and how many messages went, and no content.
 - **WHEN** a new ledger opens the same database
 - **THEN** the reply and every message id of it are found by any of its messages, and replies past the retention are pruned
 
+#### Scenario: a direct-chat reply the transport cannot take back is not recorded
+- **GIVEN** a transport that can rewrite only cards and not delete, in a direct
+  chat
+- **WHEN** the bot answers in plain text and the owner then sends `/del`
+- **THEN** the reply was never put on record, nothing is withdrawn, and the owner
+  is told there is no reply to withdraw
+
 ### Requirement: Notify the paired owner on demand
 A notify entry point (`POST /api/v1/channels/{uid}/notify`) MUST deliver arbitrary text to a
 channel's paired peer, independent of any conversation and with no inbound message — the call
@@ -484,7 +491,11 @@ machine that runs it") and its secrets, and the channel's deletion. Choosing a t
 changes the address and nothing else.
 
 Settings are saved as they change, with no save button and no saved line; a save
-that fails says so in a toast and the field keeps what was typed. They cover the channel's title, its type's plain settings (a
+that fails says so in a toast and the field keeps what was typed. The one
+exception is the channel's two system prompts (see "Append the owner's system
+prompt to a channel turn"): they are prose, so their **System prompts** section
+shows them as written and edits them through an **Edit** button and a dialog
+with Cancel and Save. They cover the channel's title, its type's plain settings (a
 SeaTalk app id), its two group-gating switches, `require_mention` and
 `ignore_other_mentions` (see "Configure when the bot answers in a group"), and
 the rest of what this requirement and the others in this spec name as a channel
@@ -530,7 +541,7 @@ and `PATCH /api/v1/resources/{uid}`.
 #### Scenario: a channel's settings arrive with their defaults filled in
 - **GIVEN** a channel whose stored configuration names none of the optional settings
 - **WHEN** its status is read
-- **THEN** the settings carry every default (group gating, quiet windows, replies, idle period, directories)
+- **THEN** the settings carry every default (group gating, quiet windows, replies, idle period, directories, system prompts)
 - **AND** the Channels page shows them without a default of its own
 
 #### Scenario: rotating a channel secret keeps its refs and pairing
@@ -640,12 +651,11 @@ when messages were queued behind the turn, says they are on hold until the next
 message; where the platform can edit a message it replaces the "⏹ Stopping
 “<title>”…" the `/stop` sent instead of following it, and `/stop` with no turn
 in flight answers "Nothing is running.". A turn error
-is reported to the IM chat as a short notice and the channel stays up. Where a
-long turn pings (see "Ping the asker when a long turn ends"), the ping carries
-the tool count and tokens too. A clean success MUST send **no** closing line —
-the reply itself is the completion signal, so a fact line would only be noise
-(this holds regardless of whether the transport can edit messages); the one
-line a clean *long* turn may end with is its ping.
+is reported to the IM chat as a short notice and the channel stays up. A clean
+success MUST send **no** closing line — the reply itself is the completion
+signal, a new message that notifies however long the turn ran, so a fact line
+would only be noise (this holds regardless of whether the transport can edit
+messages).
 
 #### Scenario: a turn error is reported to the IM chat
 - **GIVEN** a scripted agent that fails mid-turn
@@ -661,7 +671,7 @@ line a clean *long* turn may end with is its ping.
 
 #### Scenario: a clean success sends no completion summary
 - **GIVEN** a paired channel (whether or not the transport can edit messages)
-- **WHEN** a turn shorter than the ping threshold completes successfully
+- **WHEN** a turn completes successfully
 - **THEN** no completion summary is sent — the reply itself is the end-of-turn
   signal
 
@@ -673,17 +683,23 @@ the channel by its current label — and **what renders there**, in the sentence
 or two the running transport declares as its `render_notes` (SeaTalk: bold,
 italic, inline code, code fences and lists, but no headings, links or tables;
 Telegram: its rich Markdown, tables included). It then asks for a reply shaped
-for a phone: do not narrate steps (Coffer already shows the working state); the
-first line is the outcome in one sentence, because it becomes the notification;
-at most about 15 lines, anything longer under a `## Details` heading; code blocks
+for a phone: do not narrate steps (Coffer already shows that it is working), and
+only what it writes after its last tool call is sent, so the whole answer goes
+there; the first line is the outcome in one sentence, because it becomes the
+notification; at most about 15 lines — and, only where the transport collapses
+one (`collapses_details`, Telegram), anything longer under a `## Details`
+heading; code blocks
 under 30 lines, longer logs attached as files; diagrams and charts as PNG files,
 never as source; and, when the agent needs a yes or a choice before it goes on,
 to call `coffer__ask` (see "Ask the owner in the chat and take the chat's answer back to the agent").
 Concise never drops evidence — an investigation's key log lines, error messages
 and IDs are quoted verbatim — and the agent is told it cannot click permission
-or confirmation dialogs on the user's computer. Web-UI turns are unaffected —
-the note rides only on a conversation whose `channel_uid` is set. A channel that
-has been deleted, or is not running, still gets the note, saying less.
+or confirmation dialogs on the user's computer. Where the running transport can
+read threads, the note also names `coffer__channel_read_thread` for a thread's
+earlier messages, with its arguments taken from the origin block. Web-UI turns
+are unaffected — the note rides only on a conversation whose `channel_uid` is
+set. A channel that has been deleted, or is not running, still gets the note,
+saying less.
 
 #### Scenario: the channel-driven agent is told it is on a chat channel
 - **GIVEN** a channel-originated conversation
@@ -701,9 +717,91 @@ has been deleted, or is not running, still gets the note, saying less.
 
 #### Scenario: the note asks for the answer's shape
 - **WHEN** a channel turn's note is composed
-- **THEN** it asks for the outcome in one first sentence, long content under
-  `## Details`, diagrams as PNG files, and a `coffer__ask` call when the agent
-  needs the owner's answer
+- **THEN** it asks for the outcome in one first sentence, says only the text
+  after the last tool call is sent, and asks for diagrams as PNG files and a
+  `coffer__ask` call when the agent needs the owner's answer
+
+#### Scenario: only a transport that collapses details is asked for a details section
+- **GIVEN** a Telegram direct chat and a SeaTalk group thread
+- **WHEN** each turn's note is composed
+- **THEN** the Telegram note asks for long content under a `## Details` heading
+  Coffer collapses, and the SeaTalk note does not mention one
+
+### Requirement: Append the owner's system prompt to a channel turn
+A channel MUST carry two optional system prompts of the owner's own, stored in
+its configuration beside its other settings: `direct_system_prompt`, for direct
+chats and the threads opened in them, and `group_system_prompt`, for a group's
+main chat and its threads. Each is plain multi-line text of at most 4,000
+characters, trimmed of surrounding whitespace, and empty by default; a longer
+one MUST be refused and leave the stored value as it was.
+
+A channel turn MUST append the prompt for its conversation's chat kind after the
+note of "Tell a channel-driven agent it is on a chat channel", under its own
+heading line, `Instructions from the channel's owner:`, followed by the text as
+written. It never replaces or shortens that note, and an empty prompt appends
+nothing. A conversation whose chat cannot be located gets neither prompt.
+
+The prompt MUST be read from the channel's stored configuration each time a
+turn's system prompt is composed, so a change applies from the next turn of
+every conversation — with no restart, and also when the turn resumes the agent's
+existing session: Coffer sends its system context with every turn (Claude Code's
+appended system prompt, Codex's `developerInstructions` on `thread/resume` as on
+`thread/start`). See [Chat and turns](../../../docs-site/architecture/chat.md).
+
+On the Channels page the prompts are a **System prompts** section of the
+channel's Settings tab, after Replies and conversations: a **Direct chats** row
+and a **Group chats** row, each showing its prompt as written and blank when
+there is none, and an **Edit** button that opens a dialog with one text area for
+each, a character count, Cancel and Save. Nothing is saved until Save, the
+dialog closes only once the save has landed, and Save is unavailable while a
+prompt is over the limit. Over REST they are fields of the channel's config
+(`PATCH /api/v1/resources/{uid}`, `coffer channel update`) and are reported in
+the channel's status settings.
+
+#### Scenario: the owner's prompt follows Coffer's note under its own heading
+- **GIVEN** a channel whose direct-chat prompt is "Answer in Chinese."
+- **WHEN** a direct-chat turn's system prompt is composed
+- **THEN** it holds Coffer's channel note in full, then the line
+  `Instructions from the channel's owner:` and the prompt as written
+
+#### Scenario: each chat kind reads its own system prompt
+- **GIVEN** a channel with a direct-chat prompt and a different group-chat prompt
+- **WHEN** a turn runs in its direct chat, in a group's main chat and in a group thread
+- **THEN** the direct-chat turn carries the direct-chat prompt, and both group
+  turns carry the group-chat prompt
+
+#### Scenario: an empty system prompt appends nothing
+- **GIVEN** a channel whose group-chat prompt is empty or only whitespace
+- **WHEN** a group turn's system prompt is composed
+- **THEN** it is Coffer's channel note alone, with no owner heading
+
+#### Scenario: an edited system prompt applies from the next turn
+- **GIVEN** a direct-chat conversation that has already run a turn, so its next
+  turn resumes the agent's session
+- **WHEN** the owner changes the direct-chat prompt and sends another message
+- **THEN** that turn's system prompt carries the new text and not the old one,
+  with no restart of the channel
+
+#### Scenario: a system prompt longer than 4,000 characters is refused
+- **GIVEN** a channel
+- **WHEN** a prompt of 4,001 characters is saved, over REST or in the dialog
+- **THEN** the REST save is refused with 422 and the stored prompt is unchanged,
+  and the dialog states the limit with Save disabled
+
+#### Scenario: the system prompts are edited through a dialog on the Settings tab
+- **GIVEN** a channel with a group-chat prompt and no direct-chat prompt
+- **WHEN** the owner opens its Settings tab, chooses Edit under System prompts,
+  types a direct-chat prompt, clears the group one and saves
+- **THEN** the section showed the group prompt as written and the direct row
+  blank, nothing was saved before Save, and the saved configuration carries both
+  changes with every other setting and ref as it was
+
+#### Scenario: the note names the thread-reading tool where threads can be read
+- **GIVEN** a conversation on a running channel whose transport can read threads
+- **WHEN** its turn's note is composed
+- **THEN** it names `coffer__channel_read_thread` and the origin block its
+  arguments come from, while a note for a transport that cannot read threads
+  does not
 
 ### Requirement: Hand inbound photos and files to the agent
 Inbound photos and files MUST drive a turn. The transport downloads each
@@ -852,8 +950,10 @@ than a dead link.
 Threads MUST be read and replied-to in place, and a group reply always lands in
 a thread — never the group main chat. A DM or group message sent in a thread
 also replies into that thread, and so does the reply to a slash command sent
-there. A thread is read in full: every message it holds, not a first page.
-Reading *recent group-main* history is intentionally NOT done: the
+there. A thread is read through every page the platform returns, and a turn
+folds a bounded slice of it (see "Ground a thread turn in a bounded slice of the
+thread"); the rest is read on demand ("Read a thread's earlier messages on
+demand"). Reading *recent group-main* history is intentionally NOT done: the
 addressed message is self-contained, and the permission to read a group's
 back-chatter is not something this product asks for. How a thread is
 identified, and whether its history can be fetched at all, is a platform fact
@@ -1140,11 +1240,12 @@ The Channels page holds each channel's setup, connection status and settings onl
 - **THEN** it shows its setup, connection status and settings and no conversation list, and its link opens the Conversations page filtered to that channel
 
 ### Requirement: Download the media a thread's messages carry
-Thread-history media MUST be downloaded, not flattened to a dead link. When the
-owner @mentions the bot inside a thread on a transport that can fetch thread
-history, the media carried by the thread's own messages is downloaded and
-attached to the turn, alongside the flattened text, rather than surfacing only
-as an auth-gated `[image] <url>` the agent could not open.
+Thread-history media MUST be downloaded, not flattened to a dead link. When a
+turn folds thread messages on a transport that can fetch thread history, the
+media those **folded** messages carry is downloaded and attached to the turn,
+alongside the flattened text, rather than surfacing only as an auth-gated
+`[image] <url>` the agent could not open. Messages the fold leaves out are not
+downloaded; a page the read tool returns has its own messages' media downloaded.
 
 #### Scenario: thread-history images reach a vision agent
 - **GIVEN** a paired channel and a group thread whose own messages include an
@@ -1152,6 +1253,12 @@ as an auth-gated `[image] <url>` the agent could not open.
 - **WHEN** the owner @mentions the bot inside that thread
 - **THEN** the thread's images are downloaded and attached to the turn — reaching
   the vision agent as real bytes, not a dead auth-gated file link
+
+#### Scenario: only the folded messages' media is downloaded
+- **GIVEN** a thread of more than 20 earlier messages, the oldest and one of the
+  newest carrying an image
+- **WHEN** the owner @mentions the bot in that thread for the first time
+- **THEN** only the newer message's image is downloaded
 
 ### Requirement: Give documents to every agent as extracted text
 PDFs and office documents MUST reach every agent as extracted text, not as a
@@ -1253,35 +1360,36 @@ the channel's status reports it.
 
 ### Requirement: Open every turn with its message origin
 Every turn MUST carry its own origin. The turn text opens with a
-`[Message origin]` block naming the platform, the chat (kind, the chat title
-where the platform supplies one, and always the chat id), the thread, and the
-sender (display name **and** the stable platform id, which a platform tool call
-takes and which, in a group, appears nowhere else because `chat_id` is the
-group's) — so an agent asked "which group is this?" answers from the turn it was
-given instead of listing the bot's groups and inferring, and a platform tool call
-has a chat id to aim at. The block is folded in after command detection (a
-prefixed `/help` would stop being a command) and after the empty-envelope check,
-and is folded into the turn's text exactly like thread context, so it stays one
-string and the agent's own session records it. It rides on **every** turn, not just a conversation's first: `/new <agent>`
-can swap the agent between conversations of one thread (see "Drive every managed agent from one
-bot") and a resumed session would otherwise lose it. Title and sender name are
-chat-member-settable, so both are collapsed to one clipped line before they
-reach the prompt — a rename cannot forge extra origin lines. Where a platform
-hands the chat title over for free it is included; where it does not the chat is
-named by id alone, which an agent can resolve to a name through the platform's
-own tools.
+`[Message origin]` block naming the platform, the channel (its current name,
+which `coffer__channel_read_thread` takes), the chat (kind, the chat title where
+the platform supplies one, and always the chat id), the thread, and the sender
+(display name **and** the stable platform id, which a platform tool call takes
+and which, in a group, appears nowhere else because `chat_id` is the group's) —
+so an agent asked "which group is this?" answers from the turn it was given
+instead of listing the bot's groups and inferring, and a platform tool call has a
+chat id to aim at. The block is folded in after command detection (a prefixed
+`/help` would stop being a command) and after the empty-envelope check, and is
+folded into the turn's text exactly like thread context, so it stays one string
+and the agent's own session records it. It rides on **every** turn, not just a
+conversation's first: `/new <agent>` can swap the agent between conversations of
+one thread (see "Drive every managed agent from one bot") and a resumed session
+would otherwise lose it. Title and sender name are chat-member-settable, so both
+are collapsed to one clipped line before they reach the prompt — a rename cannot
+forge extra origin lines. Where a platform hands the chat title over for free it
+is included; where it does not the chat is named by id alone, which an agent can
+resolve to a name through the platform's own tools.
 
 #### Scenario: a group turn names the group it came from
 - **GIVEN** a paired channel whose owner @mentions the bot in a group thread
 - **WHEN** the turn is driven
 - **THEN** the turn text opens with a `[Message origin]` block naming the platform,
-  the chat kind and title, the chat id, the thread id, and the sender
+  the channel, the chat kind and title, the chat id, the thread id, and the sender
 
 #### Scenario: a DM turn names its own chat
 - **GIVEN** a paired channel and a DM from its owner
 - **WHEN** the turn is driven
-- **THEN** the origin block names the platform and the direct chat by id, omitting
-  the thread line a DM has no value for
+- **THEN** the origin block names the platform, the channel and the direct chat by
+  id, omitting the thread line a DM has no value for
 
 #### Scenario: every turn carries its origin
 - **GIVEN** a paired channel that has already run one turn
@@ -1383,83 +1491,6 @@ a failed mark never breaks the turn.
 - **WHEN** the owner's message drives a turn that is interrupted
 - **THEN** the message's marks are received, working, then stopped
 
-### Requirement: Grow a reply in place on one live surface
-A reply MUST grow in place, by whatever live-text mechanism the platform has —
-chosen from the adapter's declared capabilities, never its type — so the answer
-never arrives as a run of fragments. The capability the core asks about is
-`supports_live_text` ("is there a surface I can keep updating while this turn
-runs?"), whether the transport gets there by editing one message (Telegram) or
-by streaming one (SeaTalk, which cannot rewrite a delivered message at all). The
-core asks for a live-text handle and never branches on the mechanism underneath,
-so no capability says "can rewrite a delivered text message": keying the strategy
-on that would silently deny a streaming transport the live experience it does
-support, and its replies would arrive as several chunked messages at the end of
-the turn.
-
-A turn keeps exactly ONE live surface. WHEN it opens depends on whether that
-surface becomes the reply or is scaffolding thrown away at the end, which the
-adapter declares as `live_text_persists`. Where it persists, the surface opens
-the moment the turn starts and says so — its status line (see "Show a turn's
-working state as one status line") is an acknowledgement the user can see,
-because the wait between a message and an answer is otherwise the whole of what
-they get, and on a long turn it reads as the bot having missed them. That
-acknowledgement costs no extra message: the reply is the same one, rewritten in
-place. Where the surface is scaffolding, it opens only once the turn has run
-past the update interval — either tool activity opens it or the reply text does
-— so a reply that finishes sooner opens none, avoiding a create → delete →
-resend flicker. A turn still thinking in silence opens it on the status line's
-first tick.
-
-The cadence of updates belongs to the TRANSPORT, which alone knows its own
-limits: the core offers every snapshot and each surface buffers to what it can
-sustain. A throttle added by the core on top hides that buffer completely and
-makes a stream arrive a paragraph at a time. Interim snapshots are clipped to
-the platform's per-message limit and their formatting characters are ESCAPED, so
-a long or half-written-markdown preview never breaks a platform parser or
-exceeds the cap. They are escaped rather than sent as plain text because the
-message has to be able to carry an @mention from the moment it is created (see
-"Mention the asker in a group answer"), and a mention is only a name in rich
-text.
-
-A transport may also declare that its surface cannot stream in a GROUP
-(`streams_in_groups` false — SeaTalk, whose stream cannot be rewritten and so
-cannot be withdrawn): a group turn there opens no surface at all, shows the typing
-indication, and its finished reply is sent through the ordinary send path (see
-"Withdraw a bot reply on the owner's command"). Direct chats stream as before.
-
-How a surface *ends* is the transport's business, and each child spec states its
-own. A transport with no live surface at all posts no interim traffic; its final
-reply is the whole signal. All best-effort — a failed update, close, or
-heartbeat never breaks the turn.
-
-#### Scenario: the streamed reply preview is clipped to the platform limit
-- **GIVEN** a paired channel on an adapter that can edit messages
-- **WHEN** the accumulating reply text grows past the platform's per-message limit
-- **THEN** each interim edit is clipped to that limit (keeping the most recent
-  text behind a leading ellipsis) so the edit never fails, while the final reply
-  carries the full text
-
-#### Scenario: a transport with no live-text surface posts no interim status message
-- **GIVEN** a paired channel on an adapter that can neither edit nor stream and
-  declares no typing signal either, in a group/thread
-- **WHEN** a turn runs
-- **THEN** no interim signal is posted at all — only the final chunked reply
-  lands in the originating group/thread
-
-#### Scenario: a reply grows in place on a transport that streams but cannot edit
-- **GIVEN** a paired channel on an adapter that cannot edit or delete a message
-  but can stream one, in a group/thread
-- **WHEN** a turn runs tools and then writes its reply
-- **THEN** exactly ONE message reaches the chat and grows in place — tool
-  progress first, then the accumulating reply — and it finishes carrying the
-  final reply, so nothing is sent twice and the answer never arrives as
-  fragments
-
-#### Scenario: a group turn opens no live surface on a transport that cannot stream in a group
-- **GIVEN** a paired group on a transport that streams in direct chats but declares it cannot in a group
-- **WHEN** a turn runs and writes its reply
-- **THEN** no live surface is opened, and the finished reply arrives through the ordinary send path
-
 ### Requirement: Process each inbound event once
 Inbound events MUST be de-duplicated: a redelivered platform event (same message
 id) is processed once. When inbound connectivity is lost the adapter backs off
@@ -1501,14 +1532,13 @@ trace.
 - **AND** no thread history is read, because the @mention roots a fresh thread
 
 ### Requirement: Ground a DM thread's turn in the thread
-A thread MUST ground its turn in a DM too, not only in a group. The
-thread-context fetch of "Download the media a thread's messages carry" was
-written when only group chats threaded; direct chats with a bot thread as well,
-and a transport that can fetch a DM thread does so — same flatten, same media
-download, same degrade-to-empty on any failure. The asymmetry this removes was
-real and invisible: a DM thread was already replied to in place (see "Reply in
-place inside threads") yet the turn driving that reply could not see anything
-else in the thread. Group-*main* chatter is still never fetched.
+A thread MUST ground its turn in a DM too, not only in a group. Direct chats with
+a bot thread as well, and a transport that can fetch a DM thread does so — the
+same bounded fold ("Ground a thread turn in a bounded slice of the thread"), the
+same media download, the same degrade-to-nothing on any failure. The asymmetry
+this removes was real and invisible: a DM thread was already replied to in place
+(see "Reply in place inside threads") yet the turn driving that reply could not
+see anything else in the thread. Group-*main* chatter is still never fetched.
 
 #### Scenario: a DM thread grounds its turn in the thread's own messages
 - **GIVEN** a paired direct chat on an adapter that supports history fetch, and a
@@ -1518,18 +1548,29 @@ else in the thread. Group-*main* chatter is still never fetched.
   endpoint and folded into the turn, exactly as a group thread's are
 
 ### Requirement: Say what a thread read cannot show
-SeaTalk's thread endpoints return only replies sent in the last 7 days, and never
-whisper or deleted messages; a root message is exempt from the window. A thread
-whose root predates the window therefore reads as its root plus recent replies,
-however long it looks in the app. The thread context MUST end with a note saying
-so whenever a returned message predates the window, so the agent reports what it
-could not see instead of answering as if the fragment were the whole thread.
+A thread's folded context MUST say what it does not show. SeaTalk's thread
+endpoints return only replies sent in the last 7 days, and never whisper or
+deleted messages; a root message is exempt from the window. A thread whose root
+predates the window therefore reads as its root plus recent replies, however long
+it looks in the app. A conversation's first fold in such a thread ends with a
+note saying so, so the agent reports what it could not see instead of answering
+as if the fragment were the whole thread. And whenever the fold leaves older
+messages out, it ends with one line saying how many and how to read them: a
+`coffer__channel_read_thread` call with the channel, chat id, chat kind, thread
+id and `before` set to the oldest message shown.
 
 #### Scenario: a thread older than the platform's 7-day reach says what it cannot show
 - **GIVEN** a thread whose root was sent more than 7 days ago
 - **WHEN** its context is fetched for a turn
 - **THEN** the returned messages are followed by a note that SeaTalk returns only
   the last 7 days of replies and that older messages are not shown
+
+#### Scenario: a fold that leaves out older messages says how to read them
+- **GIVEN** a thread of 25 earlier messages
+- **WHEN** a conversation's first turn there folds the latest 20
+- **THEN** the block ends with a note that 5 earlier messages are not shown,
+  naming `coffer__channel_read_thread` with the channel, the thread id and
+  `before` set to the oldest message shown
 
 ### Requirement: Track the bot's own standing in a group
 The bot's own standing in a group MUST be tracked. Platform events that change
@@ -1611,7 +1652,7 @@ passes a table through as raw pipes. The existing renderer stays as the fallback
 ### Requirement: Stream through the platform's own surface where the chat has one
 A live reply MUST use the platform's own streaming surface **where there is one
 for that chat**. Where the platform can stream a partial message while it is
-generated, the live-text handle (see "Grow a reply in place on one live
+generated, the live-text handle (see "Show a turn's progress on one live
 surface") drives that instead of rewriting a delivered message: no status
 message to delete, no rewrite of an already-delivered message, and no edit-rate
 ceiling on how often progress may show. A streaming surface the platform offers
@@ -1755,71 +1796,6 @@ re-offered.
 - **WHEN** a selection card is rendered with one option currently in effect
 - **THEN** that option's button is disabled and marked as the current choice
 - **AND** every other option's button stays an ordinary tappable button
-
-### Requirement: Mention the asker in a group answer
-A group answer MUST name who it is for, and notify them. In a group, the bot's
-reply MUST open by @mentioning the member whose message drove the turn, using the
-platform's own mention markup — so the answer notifies the person waiting for it
-and a busy room can see at a glance which of them it belongs to. In a direct chat
-it MUST NOT: a 1:1 conversation has nobody to disambiguate, and an @ there is
-only shouting. Four constraints bound it.
-
-- **The mention MUST be in the content the reply is CREATED with**, not added to
-  it later. A platform decides @ notifications at creation; a mention that
-  arrives on a later update of the same message renders as a name and notifies
-  nobody, which is the worst of both — the room sees an @ the mentioned person
-  never got. For a streamed reply that means the opening post carries it, and
-  therefore so does every snapshot in between: a mention that appeared at
-  creation, vanished for the length of the stream and returned at the end would
-  be a visible glitch.
-- Because every snapshot then carries markup, every snapshot MUST be sent in the
-  platform's rich format. The protection that the plain format used to give a
-  reply clipped mid-word — an unclosed emphasis run the client would render as
-  noise — MUST instead come from ESCAPING the agent's partial text, leaving the
-  mention markup itself untouched.
-- The mention is built from the id the PLATFORM addresses a member by, which is
-  not always the id the owner gate matches — so the transport carries both.
-  Where the platform documents a second way to address a member, it is a
-  FALLBACK for a sender whose id is missing, never the primary: the id is the
-  identifier that is always present.
-- A platform whose mention is a link that shows a name (Telegram) spells it
-  with the asker's display name as well as the id; the name is stripped of
-  anything that could end the link text.
-- It degrades silently: no id and no usable fallback, or a transport that cannot
-  mention at all, yields an ordinary unmentioned reply — never a broken tag.
-- Only a surface that persists as the reply carries the mention while it grows;
-  scaffolding that is deleted before the answer carries none, and the answer —
-  a new message — opens with it.
-
-#### Scenario: a group reply @mentions whoever asked
-- **GIVEN** an addressed message in a group from a member the transport named,
-- **WHEN** the turn replies,
-- **THEN** the reply opens with the platform's mention markup for that member.
-
-#### Scenario: a direct reply carries no mention
-- **GIVEN** the same channel answering in a 1:1 chat,
-- **WHEN** the turn replies,
-- **THEN** the reply carries no mention — there is nobody to disambiguate.
-
-#### Scenario: a streamed group reply is created already mentioning the asker
-- **GIVEN** a group turn that opens a live surface before it has anything to say,
-- **WHEN** the first snapshot is posted and the reply then grows in place,
-- **THEN** the mention markup is in the content the message is created with, and
-  in every snapshot after it, exactly once.
-
-#### Scenario: an @ notification needs the mention in the message that creates it
-- **GIVEN** the transport that creates its reply as a stream and grows it,
-- **WHEN** the reply is delivered,
-- **THEN** the mention travels in the creating call, because the platform decides
-  @ notifications then and not on any later update of the same message.
-
-#### Scenario: an interim snapshot reaches the chat as written, not as markup
-- **GIVEN** an in-flight snapshot of a reply, clipped mid-word so it can end
-  inside an unclosed emphasis run,
-- **WHEN** it is sent in the platform's rich format, as carrying a mention
-  requires,
-- **THEN** its formatting characters are escaped — one escape each — so the
-  reader sees the text the agent has written so far.
 
 ### Requirement: Take a burst of messages as one turn
 Messages that arrive in quick succession in one chat and thread MUST become one
@@ -2232,117 +2208,6 @@ changes: commands apply to that conversation.
 - **WHEN** the owner sends `@bot /stop` in the group's main chat
 - **THEN** both turns are interrupted and the answer lists both
 
-### Requirement: Show a turn's working state as one status line
-While a turn runs, its live surface MUST open with one status block the reader
-can take in at a glance: a header saying that the turn is working, for how long,
-and how many steps it has taken (`⏳ Working · 2m 14s · 7 steps`, with the
-failed count when there is one); the agent's latest narration as a `💬` line;
-and the newest three step lines, older ones collapsed into `+N earlier`. A step
-line names the tool, plus a short descriptor from its input in a direct chat
-only; a group's step lines carry nothing from the input. The answer written so
-far follows under a rule. The header MUST keep ticking while nothing else
-happens — a long silent tool still shows time passing — on the cadence the live
-surfaces already keep alive at, so the tick costs no extra traffic.
-
-Text the agent writes before a tool call is narration ("Let me check the
-logs"): once the tool call arrives it moves up into the `💬` line and the answer
-tail shows only text written after the last tool call. The final reply keeps
-every segment the agent wrote, with a paragraph break between the text either
-side of a tool call, so two sentences never run together.
-
-A channel setting `show_steps` (default on) hides the step lines and keeps the
-header and narration — useful in a busy group. It is edited on the Channels
-page.
-
-A transport that must shorten a snapshot to its own limit clips the answer's
-oldest words and keeps the status block whole; only a limit too small for the
-block drops the step lines, then the header.
-
-#### Scenario: a long turn shows elapsed time and step count in one status line
-- **GIVEN** a turn that has run for 2 minutes 14 seconds and called eight tools,
-  one of which failed
-- **WHEN** its status block is drawn
-- **THEN** the header reads `⏳ Working · 2m 14s · 8 steps (1 failed)`, followed by
-  `+5 earlier` and the newest three step lines
-
-#### Scenario: narration between tool calls moves to the status line
-- **GIVEN** a turn whose agent writes a sentence and then calls a tool
-- **WHEN** the tool call arrives and the agent then writes its answer
-- **THEN** the sentence appears as the status block's `💬` line and the answer
-  alone grows under the rule
-
-#### Scenario: the status line keeps ticking during a silent tool
-- **GIVEN** a turn whose tool runs for minutes without producing an event
-- **WHEN** the live surface is next redrawn on its cadence
-- **THEN** the header shows the new elapsed time
-
-#### Scenario: the final reply keeps every paragraph the agent wrote
-- **GIVEN** a turn whose agent wrote text, called a tool, then wrote more text
-- **WHEN** the reply is delivered
-- **THEN** it holds both texts with a paragraph break between them
-
-#### Scenario: hiding steps keeps only the header
-- **GIVEN** a channel with `show_steps` off
-- **WHEN** a turn calls a tool
-- **THEN** the status block shows the header and narration but no step line
-
-#### Scenario: the step lines are hidden in the channel's settings
-- **WHEN** the owner switches the channel's step lines off in its settings, then on again
-- **THEN** the channel's `show_steps` setting is off, then on again
-
-### Requirement: Ping the asker when a long turn ends
-A turn that ran at least the channel's `notify_after_seconds` (default 90, from
-0 to 3600; 0 turns it off) MUST end with one short new message wherever its
-answer would not notify on its own — that is, where the answer was delivered by
-finishing a live surface that persists from the turn's start (see "Grow a reply
-in place on one live surface"): a message created minutes ago notifies nobody
-when it is finished. The ping reads `✅ Done · 4m 12s — <first line of the
-answer>`, the first line read as plain words and clipped to 120 characters; a
-turn that failed or was stopped pings `⚠️ Failed · …` or `⏹ Stopped · …` with the tool count and tokens, and
-that ping takes the place of its separate summary. It is sent the way the turn's
-other replies are — into the same chat and thread — and in a group it opens with
-the asker's @mention (see "Mention the asker in a group answer"). A turn whose
-answer went out as a new message (a scaffolding surface, or a stream that died
-and fell back to the ordinary send) needs no ping: that message already
-notified. A turn shorter than the threshold sends none either — the answer
-itself is the signal.
-
-Presence is not observable on any platform, so duration is the only signal. The
-setting is edited on the Channels page.
-
-#### Scenario: a long turn whose answer does not notify ends with a ping
-- **GIVEN** a transport whose streamed answer persists from the turn's start, and
-  a turn that ran 4 minutes 12 seconds against the default threshold
-- **WHEN** the turn ends cleanly
-- **THEN** after the streamed answer one new message reads `✅ Done · 4m 12s —`
-  followed by the answer's first line in plain words
-
-#### Scenario: a short turn or a zero threshold sends no ping
-- **GIVEN** a turn shorter than the threshold, and a long turn on a channel whose
-  threshold is 0
-- **WHEN** each ends
-- **THEN** neither sends a ping
-
-#### Scenario: an answer sent as a new message needs no ping
-- **GIVEN** a transport whose live surface is scaffolding deleted before the answer
-- **WHEN** a long turn ends
-- **THEN** no ping is sent — the answer's own new message notified
-
-#### Scenario: a long failed turn pings instead of summarising
-- **GIVEN** a long turn on a persisting surface that errors after one tool
-- **WHEN** it ends
-- **THEN** exactly one message follows the answer: `⚠️ Failed · <elapsed> · 1 tool
-  — <error>`
-
-#### Scenario: the ping threshold comes from the channel's settings
-- **WHEN** a channel config omits `notify_after_seconds`, sets it to 0, or sets it
-  past 3600
-- **THEN** it is 90, it is 0 (off), and it is refused
-
-#### Scenario: the ping threshold is edited in the channel's settings
-- **WHEN** the owner sets the ping threshold to 0 in the channel's settings
-- **THEN** the channel's threshold is 0, and a value past 3600 is refused
-
 ### Requirement: Shape a reply for what the chat can show
 A finished reply MUST pass one structure pass before the platform renderer,
 driven by the transport's declared capabilities, never its type:
@@ -2357,8 +2222,9 @@ driven by the transport's declared capabilities, never its type:
 - The files follow the answer, through the transport's ordinary file upload,
   under their own names. A transport that cannot send files keeps everything in
   the body instead.
-- A `## Details` section — where the agent is asked to put long content — is the
-  transport's to present: one that collapses it does so (see each child spec).
+- A `## Details` section is the transport's to present: one that collapses it
+  does so (see each child spec); on any other it goes out as ordinary text in
+  the reply, cut into messages like the rest — never behind a card or a button.
 - A reply cut into several messages is never cut inside a fenced code block (a
   fence longer than one message is closed and reopened, its language kept), and
   every message after the first opens with its place, `(2/3)`, so a busy group
@@ -2388,26 +2254,12 @@ driven by the transport's declared capabilities, never its type:
 - **THEN** no message holds half a fence, and an oversized fence is closed and
   reopened with its language
 
-### Requirement: Offer a reply's details behind a summary card
-On a transport that has cards (`supports_buttons`) but does not collapse a
-`## Details` section itself (`collapses_details` false), a clean reply's details
-section MUST move behind a summary card: the answer's head is delivered as the
-reply, then a card whose title is the answer's first line, whose body says how
-many lines of details there are, and whose buttons are **Details** and **As
-file**. The details are kept as a file under the temporary directory, keyed by a
-random id the buttons carry (`details:<id>`, `detailsfile:<id>`). A tap is
-owner-gated like every card tap: **Details** posts them into the card's thread
-and rewrites the card to say so, **As file** uploads them as a `.md`, and an id
-whose file is gone answers that the details are no longer available. A card the
-platform refuses leaves the details as an ordinary message — they are never
-lost. A transport that collapses details (Telegram) sends no such card.
-
-#### Scenario: details go behind a card where the chat cannot collapse them
-- **GIVEN** a transport with cards that does not collapse details
+#### Scenario: a details section goes out whole where the chat cannot collapse it
+- **GIVEN** a transport that does not collapse a details section
 - **WHEN** a reply `Deploy is green on live.` ends with a two-line `## Details`
   section
-- **THEN** the reply carries the head only, and a card titled `Deploy is green on
-  live.` reads `2 more lines of details.` with the buttons Details and As file
+- **THEN** one text message carries the head and the details, and no card or
+  button is sent
 
 ### Requirement: Name a channel by any display name
 A channel's name MUST be any display name a person types — spaces, capitals and
@@ -2606,61 +2458,6 @@ size cap). See
 - **WHEN** the retention sweep runs
 - **THEN** the stale file is deleted and the recent one is kept
 
-### Requirement: Ask the owner in the chat and take the chat's answer back to the agent
-A question raised in a channel conversation (spec chat "Pause a turn on a question
-for the owner") MUST go out in that chat, one card per question in order: the
-context (a diff as a code block), "❓ <question>", the options — with their
-descriptions listed in the body when any has one — as up to four equal buttons,
-and "Or reply with your answer.". A multi-select question's buttons MUST toggle a
-✓ in place and a **Submit** button sends the choice. A tap MUST be owner-gated
-like every card tap. The owner's next text message in that chat or thread while
-the question is pending MUST be taken as the answer and not start or queue a
-turn. Nothing MUST be posted in the owner's name. Once the question is answered or
-cancelled, every card of it MUST be rewritten in place to
-"✓ Answered: <answer> · HH:MM" ("Stopped" when cancelled); where the platform
-cannot rewrite it, that line is sent as a reply. A long turn that is waiting on a
-question pings "❓ Needs you · <elapsed> — <question>" on a surface that pings.
-
-#### Scenario: a tap answers the agent without a message from the owner
-- **GIVEN** a SeaTalk card "❓ Apply this change to staging?" with Yes and No
-- **WHEN** the owner taps Yes
-- **THEN** the agent receives "Yes", the card reads "✓ Answered: Yes · 11:42", and no message is sent as the owner
-
-#### Scenario: a text reply answers the pending question
-- **GIVEN** a pending question in the owner's Telegram chat
-- **WHEN** the owner sends "only the read replica"
-- **THEN** the agent receives that text as the answer and no new turn starts
-
-#### Scenario: a multi-select question is answered with Submit in the chat
-- **GIVEN** a SeaTalk card for a multi-select question with three options
-- **WHEN** the owner taps two options and then Submit
-- **THEN** the two buttons showed a ✓ before Submit, and the agent receives both labels
-
-#### Scenario: a question with described options lists them in the card
-- **GIVEN** a question whose options "Yes, apply" and "No, keep" each have a description
-- **WHEN** its card goes out
-- **THEN** the body lists "• Yes, apply — <description>" and "• No, keep — <description>" under the question, with one button per option and "Or reply with your answer."
-
-#### Scenario: several questions go out one card at a time
-- **GIVEN** an ask of two questions in a SeaTalk chat
-- **WHEN** the owner answers the first
-- **THEN** its card reads "✓ Answered: <answer> · HH:MM" and only then does the second question's card go out
-
-#### Scenario: a non-owner's tap is refused
-- **GIVEN** a question card in a paired group
-- **WHEN** a member who is not the owner taps an option
-- **THEN** the group is told only the bot’s owners can use it and the question stays pending
-
-#### Scenario: stopping a turn rewrites the pending card
-- **GIVEN** a pending question card in a chat
-- **WHEN** the owner stops the turn
-- **THEN** the card reads "Stopped" with its buttons gone
-
-#### Scenario: a long turn that waits on the owner pings
-- **GIVEN** a long turn on a persisting surface
-- **WHEN** it raises a question
-- **THEN** a short message reads "❓ Needs you · <elapsed> — <question>" before the card
-
 ### Requirement: Report a channel that is starting apart from one that failed to start
 The daemon starts an enabled channel on its next reconcile tick, so for a moment
 after a channel is switched on (or bound to this machine) its adapter is not
@@ -2717,3 +2514,319 @@ MUST drop their cached picture, and a person not paired to the channel has none.
 - **WHEN** a client reads `GET /api/v1/channels/{uid}/people/{sender_id}/avatar` for each, and for a sender who is not paired
 - **THEN** the first answers 200 with the image, the others 204
 - **AND** after the first person is removed their cached picture is gone
+
+### Requirement: Show a turn's progress on one live surface
+A turn's progress MUST show on a live surface where the transport has one —
+chosen from the adapter's declared capabilities, never its type. The capability
+the core asks about is `supports_live_text` ("is there a surface I can keep
+updating while this turn runs?"), whether the transport gets there through a
+message draft or by editing one message (Telegram). The core asks for a
+live-text handle and never branches on the mechanism underneath, so no
+capability says "can rewrite a delivered text message".
+
+A live surface is **scaffolding**, never the reply: when the turn ends it is
+closed (a draft expires, a status message is deleted) and the finished reply is
+sent as a new message. A reply created when the turn began would notify nobody
+when it ends, and a message that carries the turn's progress and then turns into
+the answer redraws itself on every step; the other IM-agent products show a
+running turn through typing or a status surface and keep their final message for
+the answer. A turn keeps at most ONE live surface, opened only once the turn has
+run past the update interval — either tool activity opens it or the reply text
+does — so a reply that finishes sooner opens none, avoiding a create → delete →
+resend flicker. A turn still thinking in silence opens it on the status line's
+first tick.
+
+The cadence of updates belongs to the TRANSPORT, which alone knows its own
+limits: the core offers every snapshot and each surface buffers to what it can
+sustain. A throttle added by the core on top hides that buffer completely and
+makes progress arrive a paragraph at a time. Interim snapshots are plain text
+clipped to the platform's per-message limit, keeping their newest words, so a
+long or half-written-markdown preview never breaks a platform parser or exceeds
+the cap.
+
+A transport with no live surface (SeaTalk) posts no interim traffic: its typing
+indication is the progress (see "Acknowledge receipt and completion by
+capability") and its final reply is the whole signal. All best-effort — a
+failed update, close, or heartbeat never breaks the turn.
+
+#### Scenario: the streamed reply preview is clipped to the platform limit
+- **GIVEN** a paired channel on an adapter that can edit messages
+- **WHEN** the accumulating reply text grows past the platform's per-message limit
+- **THEN** each interim edit is clipped to that limit (keeping the most recent
+  text behind a leading ellipsis) so the edit never fails, while the final reply
+  carries the full text
+
+#### Scenario: a transport with no live-text surface posts no interim status message
+- **GIVEN** a paired channel on an adapter that can neither edit nor stream and
+  declares no typing signal either, in a group/thread
+- **WHEN** a turn runs
+- **THEN** no interim signal is posted at all — only the final chunked reply
+  lands in the originating group/thread
+
+#### Scenario: a live surface is never the reply
+- **GIVEN** a paired channel on an adapter with a live surface
+- **WHEN** a turn runs a tool and then answers
+- **THEN** the surface shows the progress and is closed when the turn ends, and
+  the answer arrives as a new message after it
+
+### Requirement: Show a turn's working state as one status line
+While a turn runs on a transport with a live surface (see "Show a turn's
+progress on one live surface"), that surface MUST show one status block the
+reader can take in at a glance: a header saying that the turn is working, for how long,
+and how many steps it has taken (`⏳ Working · 2m 14s · 7 steps`, with the
+failed count when there is one); the agent's latest narration as a `💬` line;
+and the newest three step lines, older ones collapsed into `+N earlier`. A step
+line names the tool, plus a short descriptor from its input in a direct chat
+only; a group's step lines carry nothing from the input. The answer written so
+far follows under a rule. The header MUST keep ticking while nothing else
+happens — a long silent tool still shows time passing — on the cadence the live
+surfaces already keep alive at, so the tick costs no extra traffic.
+
+Text the agent writes before a tool call is narration ("Let me check the
+logs"): once the tool call arrives it moves up into the `💬` line and the answer
+tail shows only text written after the last tool call. The final reply, on every
+transport, MUST carry only the answer: the text written after the last tool
+call. A turn that wrote nothing after its last tool call replies with the last
+text it did write, so an answer is never lost to a trailing tool call.
+Narration never reaches the final message.
+
+A channel setting `show_steps` (default on) hides the step lines and keeps the
+header and narration — useful in a busy group. It is edited on the Channels
+page, which offers it only for a platform that has a live surface (Telegram).
+
+A transport that must shorten a snapshot to its own limit clips the answer's
+oldest words and keeps the status block whole; only a limit too small for the
+block drops the step lines, then the header.
+
+#### Scenario: a long turn shows elapsed time and step count in one status line
+- **GIVEN** a turn that has run for 2 minutes 14 seconds and called eight tools,
+  one of which failed
+- **WHEN** its status block is drawn
+- **THEN** the header reads `⏳ Working · 2m 14s · 8 steps (1 failed)`, followed by
+  `+5 earlier` and the newest three step lines
+
+#### Scenario: narration between tool calls moves to the status line
+- **GIVEN** a turn whose agent writes a sentence and then calls a tool
+- **WHEN** the tool call arrives and the agent then writes its answer
+- **THEN** the sentence appears as the status block's `💬` line and the answer
+  alone grows under the rule
+
+#### Scenario: the status line keeps ticking during a silent tool
+- **GIVEN** a turn whose tool runs for minutes without producing an event
+- **WHEN** the live surface is next redrawn on its cadence
+- **THEN** the header shows the new elapsed time
+
+#### Scenario: the final reply carries only the answer
+- **GIVEN** a turn whose agent wrote text, called a tool, wrote more text, called
+  another tool, then wrote its answer
+- **WHEN** the reply is delivered
+- **THEN** it holds the answer alone, and neither earlier text appears in it
+
+#### Scenario: a turn that ends on a tool call replies with its last text
+- **GIVEN** a turn whose agent wrote its answer and then called one more tool,
+  writing nothing after it
+- **WHEN** the reply is delivered
+- **THEN** it holds the last text the agent wrote
+
+#### Scenario: hiding steps keeps only the header
+- **GIVEN** a channel with `show_steps` off
+- **WHEN** a turn calls a tool
+- **THEN** the status block shows the header and narration but no step line
+
+#### Scenario: the step lines are hidden in the channel's settings
+- **WHEN** the owner switches the channel's step lines off in its settings, then on again
+- **THEN** the channel's `show_steps` setting is off, then on again
+
+### Requirement: Mention the asker in a group answer
+A group answer MUST name who it is for, and notify them. In a group, the bot's
+reply MUST open by @mentioning the member whose message drove the turn, using the
+platform's own mention markup — so the answer notifies the person waiting for it
+and a busy room can see at a glance which of them it belongs to. In a direct chat
+it MUST NOT: a 1:1 conversation has nobody to disambiguate, and an @ there is
+only shouting. Five constraints bound it.
+
+- **The mention MUST be in the content the reply is CREATED with**, not added to
+  it later. A platform decides @ notifications at creation; a mention that
+  arrives on a later update of the same message renders as a name and notifies
+  nobody, which is the worst of both — the room sees an @ the mentioned person
+  never got. The reply is always a new message sent when the turn ends (see
+  "Show a turn's progress on one live surface"), so it opens with the mention,
+  exactly once.
+- The mention is built from the id the PLATFORM addresses a member by, which is
+  not always the id the owner gate matches — so the transport carries both.
+  Where the platform documents a second way to address a member, it is a
+  FALLBACK for a sender whose id is missing, never the primary: the id is the
+  identifier that is always present.
+- A platform whose mention is a link that shows a name (Telegram) spells it
+  with the asker's display name as well as the id; the name is stripped of
+  anything that could end the link text.
+- It degrades silently: no id and no usable fallback, or a transport that cannot
+  mention at all, yields an ordinary unmentioned reply — never a broken tag.
+- A live surface carries no mention: it is scaffolding, deleted or expired
+  before the answer, and a mention there would only render as markup.
+
+#### Scenario: a group reply @mentions whoever asked
+- **GIVEN** an addressed message in a group from a member the transport named,
+- **WHEN** the turn replies,
+- **THEN** the reply opens with the platform's mention markup for that member.
+
+#### Scenario: a direct reply carries no mention
+- **GIVEN** the same channel answering in a 1:1 chat,
+- **WHEN** the turn replies,
+- **THEN** the reply carries no mention — there is nobody to disambiguate.
+
+#### Scenario: a live surface carries no mention and the reply does
+- **GIVEN** a group turn on a transport with a live surface and a mention
+  spelling
+- **WHEN** the turn shows its progress and then replies
+- **THEN** no snapshot of the surface carries the mention, and the reply — a new
+  message — opens with it exactly once
+
+### Requirement: Ask the owner in the chat and take the chat's answer back to the agent
+A question raised in a channel conversation (spec chat "Pause a turn on a question
+for the owner") MUST go out in that chat, one card per question in order: the
+context (a diff as a code block), "❓ <question>", the options — with their
+descriptions listed in the body when any has one — as up to four equal buttons,
+and "Or reply with your answer.". A multi-select question's buttons MUST toggle a
+✓ in place and a **Submit** button sends the choice. A tap MUST be owner-gated
+like every card tap. The owner's next text message in that chat or thread while
+the question is pending MUST be taken as the answer and not start or queue a
+turn. Nothing MUST be posted in the owner's name. Once the question is answered or
+cancelled, every card of it MUST be rewritten in place to
+"✓ Answered: <answer> · HH:MM" ("Stopped" when cancelled); where the platform
+cannot rewrite it, that line is sent as a reply. The card is itself a new
+message, so it notifies the owner however long the turn has run.
+
+#### Scenario: a tap answers the agent without a message from the owner
+- **GIVEN** a SeaTalk card "❓ Apply this change to staging?" with Yes and No
+- **WHEN** the owner taps Yes
+- **THEN** the agent receives "Yes", the card reads "✓ Answered: Yes · 11:42", and no message is sent as the owner
+
+#### Scenario: a text reply answers the pending question
+- **GIVEN** a pending question in the owner's Telegram chat
+- **WHEN** the owner sends "only the read replica"
+- **THEN** the agent receives that text as the answer and no new turn starts
+
+#### Scenario: a multi-select question is answered with Submit in the chat
+- **GIVEN** a SeaTalk card for a multi-select question with three options
+- **WHEN** the owner taps two options and then Submit
+- **THEN** the two buttons showed a ✓ before Submit, and the agent receives both labels
+
+#### Scenario: a question with described options lists them in the card
+- **GIVEN** a question whose options "Yes, apply" and "No, keep" each have a description
+- **WHEN** its card goes out
+- **THEN** the body lists "• Yes, apply — <description>" and "• No, keep — <description>" under the question, with one button per option and "Or reply with your answer."
+
+#### Scenario: several questions go out one card at a time
+- **GIVEN** an ask of two questions in a SeaTalk chat
+- **WHEN** the owner answers the first
+- **THEN** its card reads "✓ Answered: <answer> · HH:MM" and only then does the second question's card go out
+
+#### Scenario: a non-owner's tap is refused
+- **GIVEN** a question card in a paired group
+- **WHEN** a member who is not the owner taps an option
+- **THEN** the group is told only the bot’s owners can use it and the question stays pending
+
+#### Scenario: stopping a turn rewrites the pending card
+- **GIVEN** a pending question card in a chat
+- **WHEN** the owner stops the turn
+- **THEN** the card reads "Stopped" with its buttons gone
+
+### Requirement: Ground a thread turn in a bounded slice of the thread
+A thread turn MUST fold a bounded slice of its thread, never the whole thread,
+and never what the conversation it runs in already saw. On a transport that can
+read thread history, a message that lands in a thread folds in:
+
+- on the **first turn of a conversation in that thread** — a new conversation
+  (the thread's first, after `/new`, after an idle rollover or a deleted
+  conversation), or a conversation `/resume` switched to that has had no turn
+  there — the thread's **20 most recent messages** other than the triggering
+  message, the bot's earlier replies included, under `[Thread messages]`;
+- on **every later turn of that conversation in that thread**, only the messages
+  posted **since that conversation's previous turn there**, leaving out the bot's
+  own replies and the triggering message, under
+  `[New thread messages since your last turn in this thread]` — at most the 20
+  most recent of them — and **nothing at all** when there are none.
+
+Where the conversation is in each thread is a per-conversation cursor (the
+message that triggered its latest turn there) kept in `runs.db`, so it survives a
+daemon restart. A message that roots a fresh thread at itself reads nothing but
+still sets the cursor; a read that fails folds nothing and leaves the cursor
+where it was. A quoted message is folded as before ("Ground a turn in the message
+it quotes"). See the [chat architecture](../../../docs-site/architecture/chat.md)
+page for where the cursor is taken and claimed.
+
+#### Scenario: a conversation's first turn in a thread folds the thread's latest messages
+- **GIVEN** a paired group on a transport that can read threads, and a thread of
+  25 earlier messages
+- **WHEN** the owner @mentions the bot in that thread for the first time
+- **THEN** the turn opens with `[Thread messages]` and the 20 most recent of those
+  messages, and the triggering message is not among them
+
+#### Scenario: a later turn folds only what was posted since the previous turn
+- **GIVEN** a conversation that already had a turn in a thread, after which the
+  bot replied and two other members posted
+- **WHEN** the owner @mentions the bot in that thread again
+- **THEN** the turn folds only the two members' messages, under
+  `[New thread messages since your last turn in this thread]`, without the
+  earlier messages, the bot's reply or the triggering message
+
+#### Scenario: a later turn with nothing new folds no thread context
+- **GIVEN** a conversation that already had a turn in a thread, after which only
+  the bot posted
+- **WHEN** the owner @mentions the bot in that thread again
+- **THEN** the turn carries no thread block, only the owner's message
+
+#### Scenario: a new conversation in the thread is seeded again
+- **GIVEN** a thread whose conversation already had a turn there
+- **WHEN** the owner sends `/new` in the thread and then @mentions the bot
+- **THEN** the new conversation's first turn folds the thread's latest messages
+  again under `[Thread messages]`
+
+#### Scenario: the thread cursor survives a daemon restart
+- **GIVEN** a conversation that had a turn in a thread
+- **WHEN** the daemon's cursor store is opened afresh over the same `runs.db`
+- **THEN** it still holds that conversation's place in the thread: the message
+  that triggered its turn
+
+### Requirement: Read a thread's earlier messages on demand
+Coffer MUST give an agent in a channel turn the built-in tool
+`coffer__channel_read_thread`, which reads a thread's messages page by page,
+newest page first. It takes the `channel` (name or uid), `chat_id`, `chat_kind`
+and `thread_id` the turn's origin block names, an optional `before` (a message
+id: return messages older than it) and a `limit` (1–100, default 20). It returns
+the page oldest first — each message's id, sender, time, text, whether the bot
+sent it, and the local paths of the images and files it carries, downloaded with
+the bot's credentials — plus whether older messages remain, the `before` value
+that reads them, and the platform's note on what it cannot return. It reads only
+through a channel running on this machine, only a thread of a chat that channel
+has paired (the owner's direct chat, or a group the owner has addressed the bot
+in), and never a chat's main history. On a platform with no history API it
+fails saying so. It is turn-scoped like `coffer__ask`: listed to and served for
+only an MCP session inside a turn Coffer runs.
+
+#### Scenario: an agent pages back through a thread with the tool
+- **GIVEN** a paired group thread of eight messages on a transport that can read
+  threads, one of which carries an image
+- **WHEN** the agent calls the tool with a limit of 3, then again with the
+  returned `before`, then once more
+- **THEN** the pages hold the three newest, the three before them (the image as a
+  local file path), and the remaining two with no more to read
+
+#### Scenario: the tool reads only threads of paired chats
+- **GIVEN** a running channel
+- **WHEN** the agent calls the tool for a chat the channel has not paired, without
+  a thread id, or for a channel that is not running
+- **THEN** each call fails with a message saying why and nothing is read
+
+#### Scenario: the tool says a platform without a history API cannot be read
+- **GIVEN** a Telegram channel
+- **WHEN** the agent calls the tool for one of its threads
+- **THEN** the call fails saying the platform has no history API
+
+#### Scenario: the tool is offered only inside a Coffer turn
+- **GIVEN** the daemon is running
+- **WHEN** one MCP session inside a live Coffer turn and one outside any turn list
+  tools and call `coffer__channel_read_thread`
+- **THEN** only the session inside the turn sees and runs it; outside it is an
+  unknown tool

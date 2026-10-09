@@ -98,7 +98,7 @@ The source daemon also serves the built UI at its own origin when `frontend/dist
 | `HOME` | Every Coffer tree — the vault, `local/`, `content/`, `derived/`, `runs.db` — resolves from it; there is no per-tree override. A sandbox `HOME` is a separate Coffer |
 | `COFFER_DB_URL` | SQLAlchemy URL of the history database (default `sqlite+aiosqlite:///~/.coffer/runs.db`) |
 | `COFFER_LOG_DIR` | Where the daemon writes its log files |
-| `COFFER_FEATURES` | Pin experimental features for this daemon, as `<key>=on,<other-key>=off`. For example `models=on,sync=off`; the keys are `knowledge`, `memory`, `sync` and `models`, and each is off unless pinned or switched on in Settings |
+| `COFFER_FEATURES` | Pin experimental features for this daemon, as `<key>=on,<other-key>=off`. For example `knowledge=on,memory=off`; the keys are `knowledge` and `memory`, and each is off unless pinned or switched on in Settings |
 | `COFFER_WEBUI_DIR` | Serve a built UI from another directory |
 
 The [configuration reference](/reference/configuration) lists every variable the daemon reads.
@@ -148,7 +148,7 @@ Run `make help` for the same list.
 | `make verify-benchmark` | Every perf-budget test marked `benchmark`, including the ones too slow for `verify` |
 | `make verify-secrets` | gitleaks over the full git history, as CI's `secrets-scan` job runs it. Skips when gitleaks is not installed |
 | `make lint` | Every static gate: see [Testing](/contributing/testing#what-make-verify-runs) |
-| `make format` | `ruff format` and `ruff check --fix` over `backend` and `evals`. The frontend is formatted by its own prettier setup, not by this target |
+| `make format` | `ruff format` and `ruff check --fix` over `backend`, `evals` and `e2e/installed`. The frontend is formatted by its own prettier setup, not by this target |
 | `make verify-visual` | Screenshot baseline: every route, light and dark. Not part of `verify` or `verify-all` |
 | `make visual-update` | Re-record this platform's screenshot baseline |
 | `make test-durations` | Re-measure test durations for the integration shard balance (serial, about 15 minutes) |
@@ -160,7 +160,7 @@ Run `make help` for the same list.
 | `make contracts` | Regenerate every capability's wire contract from the backend's models, then the frontend's types from those contracts |
 | `make frontend-codegen` | Regenerate only the frontend's TypeScript API types from the checked-in contracts |
 | `make docs-reference` | Regenerate the CLI reference pages of this site (English and Chinese) |
-| `make docs-build` | Build this site the way the Pages workflow does; fails on a dead internal link. The second stage of `make verify` |
+| `make docs-build` | Build this site the way the Pages workflow does; fails on a Mermaid diagram that does not parse or a dead internal link. The second stage of `make verify` |
 | `make refresh-prices` | Refresh the bundled model price list (needs the network; not in `verify`) |
 | `make refresh-secret-rules` | Refresh the bundled gitleaks detection rules before a release (needs the network; not in `verify`) |
 | `make bundle-binaries` | Freeze `coffer`, `coffer-daemon` and `coffer-mcp-shim` with PyInstaller into `dist/` |

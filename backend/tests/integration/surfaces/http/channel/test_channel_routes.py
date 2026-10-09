@@ -286,9 +286,10 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
             "wait_after_text_seconds": 1.5,
             "wait_after_forward_seconds": 5.0,
             "show_steps": True,
-            "notify_after_seconds": 90.0,
             "new_conversation_after_idle_hours": 24.0,
             "directories": [],
+            "direct_system_prompt": "",
+            "group_system_prompt": "",
             "runs_on": None,
         },
     }

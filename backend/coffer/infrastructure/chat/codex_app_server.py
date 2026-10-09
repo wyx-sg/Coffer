@@ -29,7 +29,7 @@ from collections.abc import Callable, Sequence
 from typing import Protocol
 
 from coffer.application.runtime.supervisor import spawn
-from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient
+from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient, NdjsonLineReader
 from coffer.infrastructure.daemon.child_process import ChildProcess
 from coffer.infrastructure.platform.user_path import which_on_user_path
 
@@ -103,7 +103,7 @@ class CodexSubprocessSession:
             self._stderr_task = spawn(
                 self._drain_stderr(proc.stderr), name="codex-app-server-stderr"
             )
-        self._rpc = CodexRpcClient(proc.stdout, proc.stdin)
+        self._rpc = CodexRpcClient(NdjsonLineReader(proc.stdout), proc.stdin)
         self._rpc.start()
 
     @staticmethod
