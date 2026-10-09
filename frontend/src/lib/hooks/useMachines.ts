@@ -15,19 +15,14 @@ import { syncApi } from "@/lib/api/sync";
 import { resourcesKey, scopeKey, skillsKey, syncMachinesKey } from "@/lib/api/queryKeys";
 import { invalidateSync } from "@/lib/syncInvalidate";
 import { useDaemonStatus } from "@/lib/hooks/useDaemon";
-import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 
 /** The registry. A vault that never converged has an empty one —
  *  `machineOptions` still offers this machine, and `bindingState` never reads
- *  an empty registry as a fault. It is read only while the Sync feature is on
- *  (the route answers 404 while it is off); channels and knowledge then see the
- *  same empty registry, which is the single-machine case. */
+ *  an empty registry as a fault. */
 export function useMachines() {
-  const syncOn = useFeatureEnabled("sync") === true;
   return useQuery({
     queryKey: syncMachinesKey,
     queryFn: () => syncApi.machines(),
-    enabled: syncOn,
   });
 }
 

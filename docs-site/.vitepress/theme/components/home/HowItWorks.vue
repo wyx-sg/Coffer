@@ -79,7 +79,6 @@ const href = (p: string) => withBase((props.lang === "zh" ? "/zh" : "") + p);
           <div class="remote">
             <span class="rt"><HomeIcon name="branch" :size="15" class="ri" />{{ s.remote.title }}</span>
             <span class="meta2">{{ s.remote.sub }}</span>
-            <span class="tag">{{ s.exp }}</span>
             <span class="meta2">{{ s.remote.note }}</span>
           </div>
         </div>
@@ -348,19 +347,6 @@ h2 {
   font-size: 13px;
   line-height: 20px;
   color: var(--vp-c-text-2);
-}
-.tag {
-  display: inline-flex;
-  align-items: center;
-  height: 16px;
-  padding: 0 4px;
-  box-sizing: border-box;
-  border: 1px solid var(--vp-c-border);
-  border-radius: 4px;
-  font-size: 11px;
-  line-height: 1;
-  color: var(--vp-c-text-2);
-  white-space: nowrap;
 }
 .take {
   display: grid;

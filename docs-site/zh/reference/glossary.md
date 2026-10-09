@@ -107,7 +107,7 @@ Coffer 发送密钥明文的地方：MCP 服务器的环境变量或 HTTP 请求
 
 ### 实验功能（Experimental feature） {#experimental-feature}
 
-默认关闭、可按机器开启的能力。目前有四个：`knowledge`（知识）、`memory`（记忆）、`sync`（保险库同步）和 `models`（模型提供商、代理和用量）。功能关闭期间，它的路由返回 `404 FEATURE_DISABLED`，它的工具从 MCP 工具列表中消失，它的界面看起来就像不存在；数据会保留。见[实验功能](/zh/guides/experimental-features)和[配置](/zh/reference/configuration#experimental-features)。
+默认关闭、可按机器开启的能力。目前有两个：`knowledge`（知识）和 `memory`（记忆）。保险库同步和模型提供商已经转正，始终开启。功能关闭期间，它的路由返回 `404 FEATURE_DISABLED`，它的工具从 MCP 工具列表中消失，它的界面看起来就像不存在；数据会保留。见[实验功能](/zh/guides/experimental-features)和[配置](/zh/reference/configuration#experimental-features)。
 
 ## I {#i}
 
@@ -139,7 +139,7 @@ Coffer 发送密钥明文的地方：MCP 服务器的环境变量或 HTTP 请求
 
 ### 主密钥（Master key） {#master-key}
 
-解密所有已存密钥的密钥。签名的正式版把它放在只有 Coffer 签名二进制才能读取的钥匙串项目里；开发构建把它放在数据库旁边的 `master.key` 中（权限 `0600`），或者你挪过去的操作系统钥匙串中。它从不同步。在桌面应用中备份它，桌面应用会在在场验证之后写出一个密钥文件；再通过**设置 › 安全 › 导入主密钥**装到另一台机器上。见[密钥存储](/zh/guides/secret-store#where-the-master-key-lives)。
+解密所有已存密钥的密钥。它是 macOS 钥匙串中的一个项目，只有 Coffer 的签名二进制才能读取，守护进程运行期间把它保存在内存中。它从不同步。在桌面应用中备份它，桌面应用会在在场验证之后写出一个密钥文件；再通过**设置 › 安全 › 导入主密钥**装到另一台机器上。见[密钥存储](/zh/guides/secret-store#where-the-master-key-lives)。
 
 ### 主存储（Master store） {#master-store}
 
@@ -185,7 +185,7 @@ Coffer 在一轮[同步](#sync-round)检出任何内容之前打的 git 标签�
 
 ### 在场授权（Presence grant） {#presence-grant}
 
-证明有人在这台 Mac 前的凭证。桌面应用为一次操作——查看密钥、写出密钥备份、批准一项审批——运行 Touch ID 或登录密码验证，然后用一个从主密钥派生的密钥，对守护进程发来的一次性挑战签名，该挑战绑定到这次操作及其目标。守护进程只对验证通过的授权采取行动；授权只能用一次，两分钟内过期。它只在签名的正式版中成立。见[安全模型](/zh/architecture/security#plaintext-reaches-only-a-present-human)。
+证明有人在这台 Mac 前的凭证。桌面应用为一次操作——查看密钥、写出密钥备份、批准一项审批——运行 Touch ID 或登录密码验证，然后用一个从主密钥派生的密钥，对守护进程发来的一次性挑战签名，该挑战绑定到这次操作及其目标。守护进程只对验证通过的授权采取行动；授权只能用一次，两分钟内过期。见[安全模型](/zh/architecture/security#plaintext-reaches-only-a-present-human)。
 
 ### 投影（Projection） {#projection}
 

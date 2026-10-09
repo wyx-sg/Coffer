@@ -98,7 +98,7 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 | `HOME` | Coffer 的每一棵目录树（保险库、`local/`、`content/`、`derived/`、`runs.db`）都从它解析，没有针对单棵树的覆盖选项。沙盒 `HOME` 就是一个独立的 Coffer |
 | `COFFER_DB_URL` | 历史数据库的 SQLAlchemy URL（默认 `sqlite+aiosqlite:///~/.coffer/runs.db`） |
 | `COFFER_LOG_DIR` | 守护进程写日志文件的位置 |
-| `COFFER_FEATURES` | 为这个守护进程固定实验功能的开关，格式为 `<key>=on,<other-key>=off`。例如 `models=on,sync=off`；键为 `knowledge`、`memory`、`sync` 和 `models`，没有被固定、也没在设置里开启的功能一律关闭 |
+| `COFFER_FEATURES` | 为这个守护进程固定实验功能的开关，格式为 `<key>=on,<other-key>=off`。例如 `knowledge=on,memory=off`；键为 `knowledge` 和 `memory`，没有被固定、也没在设置里开启的功能一律关闭 |
 | `COFFER_WEBUI_DIR` | 从另一个目录提供构建好的界面 |
 
 [配置参考](/zh/reference/configuration)列出了守护进程读取的每一个变量。
@@ -160,7 +160,7 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 | `make contracts` | 从后端模型重新生成每项能力的传输契约，再从这些契约生成前端类型 |
 | `make frontend-codegen` | 只从签入的契约重新生成前端的 TypeScript API 类型 |
 | `make docs-reference` | 重新生成本站的 CLI 参考页面（英文和中文） |
-| `make docs-build` | 按 Pages 工作流的方式构建本站；有失效的内部链接就会失败。它是 `make verify` 的第二个阶段 |
+| `make docs-build` | 按 Pages 工作流的方式构建本站；有解析不了的 Mermaid 图或失效的内部链接就会失败。它是 `make verify` 的第二个阶段 |
 | `make refresh-prices` | 刷新内置的模型价格表（需要联网；不在 `verify` 中） |
 | `make refresh-secret-rules` | 发版前刷新内置的 gitleaks 检测规则（需要联网；不在 `verify` 中） |
 | `make bundle-binaries` | 用 PyInstaller 把 `coffer`、`coffer-daemon` 和 `coffer-mcp-shim` 冻结到 `dist/` |

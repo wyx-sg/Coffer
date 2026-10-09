@@ -266,7 +266,7 @@ The CLI prints it on stderr before every command. The shim writes it to stderr a
 
 ## Background work
 
-The periodic workers that belong to no single kind start in one place, the HTTP surface's background-worker launcher. A kind that owns a loop starts it in its own wiring, and the lifespan and entry point own a few tasks directly. Each worker runs a catch-up pass or a start delay, then loops on an interval. A failing pass is logged and never kills its loop. A worker that belongs to an experimental feature reads its switch at the top of every round and skips the round while the feature is off: the knowledge sweep, distil and aggregate, usage ingest and price refresh, and the sync converge worker each do.
+The periodic workers that belong to no single kind start in one place, the HTTP surface's background-worker launcher. A kind that owns a loop starts it in its own wiring, and the lifespan and entry point own a few tasks directly. Each worker runs a catch-up pass or a start delay, then loops on an interval. A failing pass is logged and never kills its loop. A worker that belongs to an experimental feature reads its switch at the top of every round and skips the round while the feature is off: the knowledge sweep and distil and aggregate each do. Usage ingest, the price refresh and the sync converge worker belong to no experimental feature and check no switch.
 
 | Worker | Cadence | What it does |
 | --- | --- | --- |

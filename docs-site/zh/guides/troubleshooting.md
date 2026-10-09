@@ -143,7 +143,7 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 ### 因为功能已关闭，页面或工具不见了 {#a-page-or-tool-is-missing-because-a-feature-is-switched-off}
 
-**原因。** 这个页面或工具属于一个在这台机器上被关掉的[实验功能](/zh/guides/experimental-features)。实验功能默认关闭，关闭的功能看起来就像不存在：没有侧边栏入口，命令面板里搜不到，直接打开它的页面链接会显示「未找到」页面。四个功能是知识、记忆、同步和模型提供商。
+**原因。** 这个页面或工具属于一个在这台机器上被关掉的[实验功能](/zh/guides/experimental-features)。实验功能默认关闭，关闭的功能看起来就像不存在：没有侧边栏入口，命令面板里搜不到，直接打开它的页面链接会显示「未找到」页面。两个实验功能是知识和记忆；同步和模型提供商（含用量）始终开启，不会以这种方式被隐藏。
 
 **解决办法。** 在**设置 → 功能**里开启它。**决定方**会显示每个功能由什么决定；如果显示 `pin`，说明 `COFFER_FEATURES` 在守护进程的环境里把它固定了，到启动守护进程的地方去改。
 
@@ -151,18 +151,9 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 ### 每次守护进程启动时 macOS 都要求访问钥匙串 {#macos-asks-for-keychain-access-every-time-the-daemon-starts}
 
-**原因。** 两者之一：
+**原因。** 某个资源引用了一个不在 Coffer 加密存储里的密钥。每次启动时，Coffer 会在系统钥匙串里查找一次那个引用，找到就把它移进存储。读取被锁定或被拒绝时，会在下次启动时重试，于是又一次提示。
 
-- 密钥的主密钥存放在系统钥匙串里（你在**设置 → 安全**里选择了这样做）。读取它每次守护进程启动都要一次提示。
-- 某个资源引用了一个不在 Coffer 加密存储里的密钥。每次启动时，Coffer 会在系统钥匙串里查找一次那个引用，找到就把它移进存储。读取被锁定或被拒绝时，会在下次启动时重试，于是又一次提示。
-
-**解决办法。**
-
-- 把主密钥移回文件 `~/.coffer/master.key`：
-  ```sh
-  ```
-  方法是在**设置 → 安全**里关闭**将主密钥存入系统钥匙串**。
-- 用 `coffer secret list` 找出被引用但缺失的密钥，然后在**密钥**页面或用 `coffer secret set <ref>` 逐个存储。
+**解决办法。** 用 `coffer secret list` 找出被引用但缺失的密钥，然后在**密钥**页面或用 `coffer secret set <ref>` 逐个存储。
 
 ### 命令以 9 退出："waiting for approval" {#a-command-exits-9-waiting-for-approval}
 

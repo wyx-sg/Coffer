@@ -39,11 +39,10 @@ import {
  * one while the user sits on the page. Slowly: rounds run on the order of minutes, so a minute's lag
  * costs nothing and a background tab wakes the daemon for nothing.
  */
-export function useSyncStatus(enabled = true) {
+export function useSyncStatus() {
   return useQuery({
     queryKey: syncStatusKey,
     queryFn: () => syncApi.status(),
-    enabled,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });

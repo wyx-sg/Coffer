@@ -22,9 +22,9 @@ export COFFER_DEV_CORS=1
 # snapshot bundled in the tree.
 export COFFER_PRICE_REFRESH=off
 # Every experimental feature starts off; the suite's specs drive the pages of
-# all four, so the daemon pins them on. COFFER_E2E_FEATURES overrides the pin
+# both (knowledge and memory), so the daemon pins them on. COFFER_E2E_FEATURES overrides the pin
 # (a spec about a switched-off feature starts its own daemon with it).
-export COFFER_FEATURES="${COFFER_E2E_FEATURES:-knowledge=on,memory=on,sync=on,models=on}"
+export COFFER_FEATURES="${COFFER_E2E_FEATURES:-knowledge=on,memory=on}"
 
 # Make sure the .coffer dir exists so daemon bootstrap can write daemon.json
 mkdir -p "${COFFER_E2E_HOME}/.coffer"

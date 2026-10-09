@@ -1,13 +1,12 @@
 // src/components/agents/model/ChangeModelDialog.tsx — the Overview › Model "Change…" flow (boards 2.1.16–2.1.19, 2.1.65).
 //
-// A 480 form (Experimental tag): Provider, Model and Model per tier, as far as the agent and the provider call for them.
+// A 480 form: Provider, Model and Model per tier, as far as the agent and the provider call for them.
 // Nothing is written here; Review changes hands the draft to the review (a 1060 preview of
 // the files that change) and Apply happens there. The form closes with the
 // review once the change is applied.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ExperimentalTag } from "@/components/ExperimentalTag";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,9 +36,8 @@ export function ChangeModelDialog({ agent, open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle>
             {t("agents.changeModel.title", { name: agentTypeLabel(agent.type) })}
-            <ExperimentalTag />
           </DialogTitle>
           <DialogDescription className="text-sm">
             {t("agents.changeModel.description")}

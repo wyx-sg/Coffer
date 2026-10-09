@@ -17,8 +17,8 @@ vi.mock("@/lib/events/eventStream", () => ({ followDaemonEvents: vi.fn() }));
 const { getApiClient } = await import("@/lib/api/client");
 const { followDaemonEvents } = await import("@/lib/events/eventStream");
 
-const ALL_ON = { knowledge: true, memory: true, sync: true, models: true };
-const ALL_OFF = { knowledge: false, memory: false, sync: false, models: false };
+const ALL_ON = { knowledge: true, memory: true };
+const ALL_OFF = { knowledge: false, memory: false };
 
 // Midday, so "since HH:MM" never crosses midnight into a dated label.
 vi.useFakeTimers({ toFake: ["Date"] });
@@ -218,9 +218,18 @@ function install(setup: Setup = {}) {
                 actor: "ui",
                 details: null,
               },
+              {
+                id: 3,
+                timestamp: ago(180_000),
+                event_type: "resource_created",
+                resource_kind: "knowledge",
+                resource_name: "team-notes",
+                actor: "ui",
+                details: null,
+              },
             ],
             next_cursor: null,
-            total: 2,
+            total: 3,
           });
         default:
           try {
@@ -651,10 +660,10 @@ describe("one area failing to load leaves the rest of overview working", () => {
   });
 });
 
-/** Every request the page made to a route of one of the four experimental features. */
+/** Every request the page made to a route of one of the two experimental features. */
 function gatedRequests(get: ReturnType<typeof install>): string[] {
-  const GATED = /^\/(providers|models|proxy|usage|knowledge|memory|sync)(\/|$)/;
-  const KINDS = new Set(["provider", "knowledge", "memory"]);
+  const GATED = /^\/(knowledge|memory)(\/|$)/;
+  const KINDS = new Set(["knowledge", "memory"]);
   const viaClient = get.mock.calls
     .filter(([path, init]) => {
       const kind = (init as { params?: { query?: { kind?: string } } } | undefined)?.params?.query
@@ -673,7 +682,7 @@ describe("overview hides an area whose backend or feature is off", () => {
     const region = health();
     const tools = await within(region).findByRole("link", { name: "Custom tools" });
     // Only the always-on areas have a tile while every feature is off.
-    for (const name of ["Knowledge", "Memory", "Model providers", "Sync", "Usage"]) {
+    for (const name of ["Knowledge", "Memory"]) {
       expect(within(region).queryByRole("link", { name })).toBeNull();
     }
     await waitFor(() => expect(tools).toHaveTextContent("31 requests · 0 errors in the last 24 h"));
@@ -688,21 +697,25 @@ describe("overview hides an area whose backend or feature is off", () => {
       "Agents",
       "MCP servers",
       "Skills",
+      "Model providers",
       "Channels",
+      "Sync",
       "Custom tools",
       "CLIs",
       "Secrets",
+      "Usage",
     ]);
     // Nothing of a switched-off feature was asked for, so nothing can have failed.
     expect(gatedRequests(get)).toEqual([]);
   });
 
   test("recent activity leaves out entries of a switched-off feature", async () => {
-    install({ features: { ...ALL_ON, models: false } });
+    install({ features: { ...ALL_ON, knowledge: false } });
     renderPage();
     const recent = await screen.findByRole("region", { name: "Recent activity" });
     expect(await within(recent).findByText("github")).toBeInTheDocument();
-    expect(within(recent).queryByText("anthropic-direct")).toBeNull();
+    expect(within(recent).getByText("anthropic-direct")).toBeInTheDocument();
+    expect(within(recent).queryByText("team-notes")).toBeNull();
   });
 
   test("with every feature on, each area has its tile", async () => {
@@ -725,14 +738,13 @@ describe("overview hides an area whose backend or feature is off", () => {
   });
 
   test("one feature off hides only its own tiles and requests", async () => {
-    const get = install({ features: { ...ALL_ON, models: false } });
+    const get = install({ features: { ...ALL_ON, knowledge: false } });
     renderPage();
     const region = health();
     expect(await within(region).findByRole("link", { name: "Memory" })).toBeInTheDocument();
-    expect(within(region).queryByRole("link", { name: "Model providers" })).toBeNull();
-    expect(within(region).queryByRole("link", { name: "Usage" })).toBeNull();
-    expect(within(region).getByRole("link", { name: "Knowledge" })).toBeInTheDocument();
-    expect(gatedRequests(get).filter((p) => /providers|usage|proxy|models/.test(p))).toEqual([]);
+    expect(within(region).queryByRole("link", { name: "Knowledge" })).toBeNull();
+    expect(within(region).getByRole("link", { name: "Model providers" })).toBeInTheDocument();
+    expect(gatedRequests(get).filter((p) => /knowledge/.test(p))).toEqual([]);
   });
 
   test("the first-run panel offers only the areas whose feature is on", async () => {
@@ -744,9 +756,8 @@ describe("overview hides an area whose backend or feature is off", () => {
     expect(within(then).getByText("MCP servers")).toBeInTheDocument();
     expect(within(then).getByText("Skills")).toBeInTheDocument();
     expect(within(then).getByText("Channels")).toBeInTheDocument();
-    for (const name of ["Knowledge", "Model providers"]) {
-      expect(within(then).queryByText(name)).toBeNull();
-    }
+    expect(within(then).getByText("Model providers")).toBeInTheDocument();
+    expect(within(then).queryByText("Knowledge")).toBeNull();
     expect(gatedRequests(get)).toEqual([]);
   });
 });

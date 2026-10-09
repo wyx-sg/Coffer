@@ -39,7 +39,7 @@ port:    38470
 pid:     41822
 ```
 
-守护进程正常服务时 `status` 为 `ready`，关闭过程中为 `draining`，等待 git 时为 `setup`：这时命令还会打印原因和一段给智能体的提示词（见 [Coffer 需要 git](/zh/guides/troubleshooting#coffer-needs-git)）。没有更早的阶段可看：守护进程启动完成后才打开端口。四个[实验功能](/zh/guides/experimental-features)在你开启之前都是关闭的。脚本里可加 `--json`。
+守护进程正常服务时 `status` 为 `ready`，关闭过程中为 `draining`，等待 git 时为 `setup`：这时命令还会打印原因和一段给智能体的提示词（见 [Coffer 需要 git](/zh/guides/troubleshooting#coffer-needs-git)）。没有更早的阶段可看：守护进程启动完成后才打开端口。两个[实验功能](/zh/guides/experimental-features)——知识和记忆——在你开启之前都是关闭的。脚本里可加 `--json`。
 
 没有守护进程运行时，`coffer daemon status` 打印 `status:  not running`（`--json` 下为 `{"status": "stopped"}`），退出码为 3。它不会启动守护进程，所以它的回答不会改变它所报告的对象；要启动请用 `coffer daemon start`。
 
@@ -206,7 +206,6 @@ Coffer 保存的一切都在 `~/.coffer` 下。无法重建的部分是：
 | `local/` | 本机的智能体、生效范围、保留策略、同步远端和密钥审批。 |
 | `content/` | 附件和聊天工作目录。 |
 | `runs.db`（+ `-wal`、`-shm`） | 对话、审计日志、调用日志、同步轮次、用量。 |
-| `master.key` | 解密所有已存密钥的钥匙。如果你把主密钥移到了系统钥匙串（**设置 → 安全**），这个文件就不存在。 |
 
 `derived/`，包括从智能体自己的记忆文件派生出的记忆树，都可以重新生成。要取得一致的副本，先停止守护进程：
 
@@ -217,7 +216,7 @@ coffer daemon start
 ```
 
 ::: warning
-包含 `master.key` 的备份能解密其中的所有密钥，请像对待密码一样保管它。不含主密钥的备份里，密钥只是谁也读不了的密文。
+这份副本不包含主密钥，主密钥在 macOS 钥匙串中：没有它，副本里的密钥只是谁也读不了的密文。在桌面应用中备份主密钥（**设置 › 安全 › 备份主密钥**），并像对待密码一样保管这份备份。
 :::
 
 如果你在多台机器上用 Coffer，[保险库同步](/zh/guides/vault-sync)会把保险库仓库连同历史推送到你自己的 git 仓库，这也顺带成了知识、技能和资源定义的异地备份。

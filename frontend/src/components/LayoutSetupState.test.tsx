@@ -33,7 +33,7 @@ const status = vi.hoisted(() => {
     refetch: () => Promise.resolve(),
     data: {
       status: value,
-      features: { knowledge: false, memory: false, sync: false, models: false },
+      features: { knowledge: false, memory: false },
       setup:
         value === "setup"
           ? {

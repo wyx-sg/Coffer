@@ -88,9 +88,9 @@ every CLI a skill requires on the CLIs page". An
 entry whose experimental feature is switched off (spec
 [experimental-features](../experimental-features/spec.md) "Close every surface of a switched-off feature")
 MUST be left out, and MUST appear on the next render after the feature is
-switched on. Model providers, Usage tab included, belongs to `models`, Knowledge to `knowledge`,
-Memory to `memory` and Sync to `sync`; every other entry, Conversations and
-Channels included, is owned by no feature and is always there:
+switched on. Knowledge belongs to `knowledge` and Memory to `memory`; every
+other entry, Model providers, Sync, Conversations and Channels included, is
+owned by no feature and is always there:
 
 ```
   Overview         /                  — the landing page
@@ -129,7 +129,7 @@ Channels included, is owned by no feature and is always there:
 - **WHEN** the app shell is rendered
 - **THEN** the sidebar leaves that entry out and lists every other entry under its heading
 - **AND** with every feature switched on, the sidebar lists all fourteen entries
-- **AND** with the four features switched off, it lists only Overview, Agents, Conversations, Channels, MCP servers, Custom tools, Skills, CLIs, Secrets and Activity
+- **AND** with both features switched off, it lists only Overview, Agents, Model providers, Conversations, Channels, MCP servers, Custom tools, Skills, CLIs, Secrets, Activity and Sync
 
 ### Requirement: Call a surface by one name everywhere
 A surface MUST carry one name in every place it is named — sidebar, page header,
@@ -1006,7 +1006,7 @@ rather than by how Coffer is built, and MUST open on General:
   **Speech-to-text** section: the connection and model that transcribe voice
   messages (spec [internal-engine](../internal-engine/spec.md) "Show the speech-to-text pair in Settings › General").
   It carries no experimental-features card; the switches are on the Features
-  tab. While `models` is off the connection choice for speech-to-text is left out.
+  tab.
 - **Security** (`/settings/security`) — what is about this machine only: where
   the master encryption key lives — in a signed release its Keychain access
   group; in a development build the file `~/.coffer/master.key` or the login
@@ -1019,7 +1019,7 @@ rather than by how Coffer is built, and MUST open on General:
   and Rebuildable cache (see "Group the Data tab by what kind of data it is").
 - **Daemon** (`/settings/daemon`) — the daemon's state and the controls a user
   needs for it (see "Show and manage the daemon on Settings → Daemon").
-- **Features** (`/settings/features`) — the four experimental features, each
+- **Features** (`/settings/features`) — the two experimental features, each
   marked Experimental, with its switch (spec
   [experimental-features](../experimental-features/spec.md) "Show the Features tab in every build").
 - **About** (`/settings/about`) — version, license, source, whether a newer

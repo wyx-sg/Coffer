@@ -1,6 +1,6 @@
 // frontend/src/pages/sync/SyncHeader.tsx — the Sync page's header (every 6.5 board).
 //
-// One row: "Sync", the Experimental tag, the status pill, and the primary
+// One row: "Sync", the status pill, and the primary
 // action on the right — always "Sync now" (6.4 Status group), "Syncing…" and
 // disabled while a round runs. Under it the description line is the remote:
 // "Keeps this vault in step with <url> [copy] · main · every hour". A Mac that
@@ -77,7 +77,6 @@ export function SyncHeader({ state, remote, onRun }: Props) {
   return (
     <PageHeader
       title={t("sync.title")}
-      experimental
       subtitle={
         setUp && remote ? <RemoteLine remote={remote} /> : setUp ? undefined : t("sync.setup.lead")
       }
