@@ -140,6 +140,10 @@ class ChannelPeerRepo:
 
 # Re-exported at the end so the models above are defined first; importing this
 # module registers every channel table on ``Base.metadata``.
+from coffer.infrastructure.channel.cursor_persistence import (  # noqa: E402
+    ChannelThreadCursorModel,
+    ChannelThreadCursorRepo,
+)
 from coffer.infrastructure.channel.outbox_persistence import (  # noqa: E402
     ChannelOutboxModel,
     ChannelOutboxRepo,
@@ -163,5 +167,7 @@ __all__ = [
     "ChannelReplyRepo",
     "ChannelThreadConversationModel",
     "ChannelThreadConversationRepo",
+    "ChannelThreadCursorModel",
+    "ChannelThreadCursorRepo",
     "ChannelThreadHistoryModel",
 ]

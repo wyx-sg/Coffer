@@ -60,9 +60,10 @@ export function makeSettings(channel: ResourceOut): ChannelSettings {
     wait_after_text_seconds: 1.5,
     wait_after_forward_seconds: 5,
     show_steps: true,
-    notify_after_seconds: 90,
     new_conversation_after_idle_hours: 24,
     directories: [],
+    direct_system_prompt: "",
+    group_system_prompt: "",
     runs_on: null,
     ...channel.config,
   } as unknown as ChannelSettings;

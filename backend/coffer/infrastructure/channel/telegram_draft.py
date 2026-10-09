@@ -36,8 +36,8 @@ __all__ = ["TelegramDraftLiveText", "draft_markdown", "new_draft_id"]
 
 Call = Callable[..., Awaitable[Any]]
 
-#: A draft is a 30-second preview — the same window SeaTalk gives a stream — so
-#: it is refreshed on the one keep-alive cadence every live surface shares
+#: A draft is a 30-second preview, so it is refreshed on the one keep-alive
+#: cadence every live surface shares
 #: (``live_text.LIVE_KEEPALIVE_SECONDS``), well inside it, or the user watches
 #: a frozen half-reply through a long tool run.
 
@@ -48,14 +48,10 @@ Call = Callable[..., Awaitable[Any]]
 #: "Thinking…" placeholder for it.)
 DRAFT_TEXT_LIMIT = 4096
 
-#: Deliberately not either of ``live_text``'s two intervals. It is not
-#: ``TELEGRAM_UPDATE_INTERVAL`` (1.5 s), which exists because editing a
-#: delivered message runs into Telegram's edit flood limits — a draft is not a
-#: message and not an edit, it is the endpoint the platform built for
-#: streaming, which is the entire reason to prefer it. Nor is it
-#: ``MIN_UPDATE_INTERVAL``, which is SeaTalk's own tunable
-#: (``COFFER_SEATALK_STREAM_INTERVAL``) and has no business setting the cadence
-#: of a different platform. So: its own value, on the same order, and moved
+#: Deliberately not ``TELEGRAM_UPDATE_INTERVAL`` (1.5 s), which exists because
+#: editing a delivered message runs into Telegram's edit flood limits — a draft
+#: is not a message and not an edit, it is the endpoint the platform built for
+#: streaming, which is the entire reason to prefer it. So: its own value, moved
 #: only against Telegram's own behaviour.
 _DRAFT_UPDATE_INTERVAL = 0.2
 

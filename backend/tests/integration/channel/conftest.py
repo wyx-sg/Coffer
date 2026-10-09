@@ -57,6 +57,7 @@ from coffer.infrastructure.channel.persistence import (
     ChannelPeerRepo,
     ChannelReplyRepo,
     ChannelThreadConversationRepo,
+    ChannelThreadCursorRepo,
 )
 from coffer.infrastructure.chat.persistence import ConversationRepo
 from coffer.infrastructure.persistence.base import Base
@@ -379,6 +380,7 @@ class ChannelEnv:
     resources: ResourceService
     peers: ChannelPeerRepo
     threads: ChannelThreadConversationRepo
+    cursors: ChannelThreadCursorRepo
     pairing: PairingManager
     provider: ScriptedAgentProvider
     registry: AgentProviderRegistry
@@ -620,6 +622,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
     peers = ChannelPeerRepo(name_of=resource_repo.name_of)
     resource_repo.add_follower(peers.documents.follow)
     threads = ChannelThreadConversationRepo(sm)
+    cursors = ChannelThreadCursorRepo(sm)
     pairing = PairingManager()
 
     conversation_repo = ConversationRepo(sm)
@@ -642,6 +645,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         agents=registry,
         model_suggestions=model_suggestions,
         replies=ChannelReplyRepo(sm),
+        cursors=cursors,
         questions=ChatQuestions(),
     )
 
@@ -702,6 +706,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         resources=resources,
         peers=peers,
         threads=threads,
+        cursors=cursors,
         pairing=pairing,
         provider=provider,
         registry=registry,

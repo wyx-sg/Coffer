@@ -26,7 +26,7 @@ from coffer.application.mcp.gateway_aggregate_lists import (
     list_prompts_across,
     list_resources_across,
 )
-from coffer.application.mcp.gateway_ask import dispatch_turn_ask, with_ask_tool
+from coffer.application.mcp.gateway_ask import dispatch_turn_ask, turn_is_live, with_ask_tool
 from coffer.application.mcp.gateway_builtin import (
     agent_actor_label,
     dispatch_builtin_tool,
@@ -113,22 +113,19 @@ class MCPGatewaySession:
         # Called once on dispose: the root drops this session's supervisor.
         self._on_dispose = on_dispose
         # ``is not None``, not ``or``: a registry with every tool off is falsy.
-        self._builtin = builtin_tools if builtin_tools is not None else BuiltinToolRegistry()
+        self._registry = builtin_tools if builtin_tools is not None else BuiltinToolRegistry()
         # Tool tiering: how much of the catalogue this session lists (None = read env).
         self._tiering = tiering or load_tiering_config()
-        # Upstream tools left unlisted by tiering: estimated at ``initialize``,
-        # replaced by the real count at every ``tools/list``.
+        # Upstream tools tiering left unlisted (estimated at initialize, real at tools/list).
         self.last_hidden_count = 0
         # The agent's launch cwd (params._meta["coffer/cwd"]), threaded into built-in calls.
         self._session_cwd: str | None = None
-        # The turn's ``X-Coffer-Turn`` token (set by the HTTP surface on every
-        # request); ``coffer__ask`` is offered only while it is live.
+        # The turn's ``X-Coffer-Turn`` token (set per request); turn-scoped tools need it live.
         self._turn_ask = turn_ask
         self.turn_token: str | None = None
         # Servers whose notifications this session already subscribed to.
         self._notification_subscriptions: set[str] = set()
-        # The loop holds tasks weakly; strong refs keep an upstream
-        # notification from being garbage-collected mid-flight.
+        # The loop holds tasks weakly; strong refs keep a notification from being collected.
         self._notification_tasks: set[asyncio.Task[None]] = set()
         # Servers whose discovery failed on the last tools/list; the tracker retries them.
         self._degraded = DegradedTracker(discovery, self._send_downstream)
@@ -185,9 +182,9 @@ class MCPGatewaySession:
         )
         result = build_initialize_result(
             hidden_count=self.last_hidden_count,
-            tools=[tool.name for tool in self._builtin.list()],
-            memory_root=self._builtin.directory("memory"),
-            knowledge=self._builtin.directory("knowledge") is not None,
+            tools=[tool.name for tool in self._registry.list()],
+            memory_root=self._registry.directory("memory"),
+            knowledge=self._registry.directory("knowledge") is not None,
         )
         self.protocol_version = result["protocolVersion"]
         return result
@@ -275,9 +272,12 @@ class MCPGatewaySession:
         """Re-discover degraded servers once; True if any recovered."""
         return await self._degraded.recover_now()
 
-    # --- tools/list, resources/list, prompts/list ---
-    # Aggregate fan-out lives in gateway_aggregate_lists.py — see that
-    # module's header for the per-server budget + parallelism rationale.
+    # --- tools/list, resources/list, prompts/list (fan-out: gateway_aggregate_lists.py) ---
+
+    @property
+    def _builtin(self) -> BuiltinToolRegistry:
+        """The built-ins this session sees now: turn-scoped ones only inside a live turn."""
+        return self._registry.view(in_turn=turn_is_live(self._turn_ask, self.turn_token))
 
     async def _handle_tools_list(self) -> dict[str, Any]:
         servers, hidden, exposure, _ = await self._servers_and_hidden()

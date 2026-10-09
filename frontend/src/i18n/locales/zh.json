@@ -3612,6 +3612,19 @@
       "replying": {
         "title": "回复与会话"
       },
+      "prompts": {
+        "title": "系统提示词",
+        "description": "你给智能体的指令，每个回合都追加在 Coffer 关于这个聊天的说明之后。修改从下一条消息起生效。",
+        "direct": "私聊",
+        "directHint": "与机器人的私聊，以及在私聊中开出的话题。",
+        "group": "群聊",
+        "groupHint": "群的主聊天及其中的话题。",
+        "editAria": "编辑系统提示词",
+        "dialogTitle": "编辑系统提示词",
+        "dialogDescription": "例如回复用的语言，或每次都要包含的内容。留空则不追加任何内容。",
+        "count": "{{count}} / {{max}}",
+        "tooLong": "最多 {{max}} 个字符。"
+      },
       "unavailable": "这个渠道已保存的设置无效，无法在此显示。请修正 `~/.coffer/vault/resources/channel/` 下这个渠道的文件，或删除这个渠道后重新添加。",
       "machine": {
         "runsOn": "运行在",
@@ -3788,8 +3801,6 @@
         "invalid": "请输入 {{min}} 到 {{max}} 之间的秒数。"
       },
       "replies": {
-        "notifyAfter": "长任务完成提醒",
-        "notifyAfterHint": "运行达到这个时长的回合结束时发一条简短的“完成”消息。0 表示关闭。",
         "showSteps": "显示步骤行",
         "showStepsHint": "工作中在状态行下显示最近 3 个步骤。"
       },

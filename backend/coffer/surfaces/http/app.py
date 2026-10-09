@@ -240,12 +240,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Kept on app.state: an integration test asserts the registry's contents.
     app.state.mcp_session_supervisors = kinds.mcp.session_supervisors
 
-    # Wire the channel kind (spec channels) AFTER wire_chat: the inbound processor
-    # drives turns through the chat platform's handles.
-    channel_runtime = wire_channel_kind(app, resource_svc, audit, sm, vault, secret_store, chat)
+    # The channel kind AFTER wire_chat: its turns run through the chat platform.
+    channel_runtime = wire_channel_kind(
+        app, resource_svc, audit, sm, vault, secret_store, chat, builtin_tools
+    )
 
-    # Every kind has registered its secret destinations: the approval refresh
-    # reads them from here on.
+    # Every kind has registered its secret destinations; the approval refresh reads them.
     remember_destination_sources(resource_svc, audit)
     # What cites each secret, and the one-time move of old refs to minted ids.
     await wire_secret_index(resource_svc, events)

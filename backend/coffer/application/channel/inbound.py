@@ -40,8 +40,9 @@ from coffer.application.channel.store_ports import (
     ChannelPeerRepoPort,
     ChannelThreadConversationRepoPort,
     ReplyLedgerPort,
+    ThreadCursorPort,
 )
-from coffer.application.channel.turn_context import fold_turn_context
+from coffer.application.channel.turn_context import ThreadContextFolder
 from coffer.application.channel.turn_driver import (
     ConversationPort,
     QueuedInbound,
@@ -82,6 +83,7 @@ class InboundProcessor:
         agents: AgentCatalogPort,
         model_suggestions: ModelSuggestionPort,
         replies: ReplyLedgerPort,
+        cursors: ThreadCursorPort,
         questions: QuestionPort | None = None,
     ) -> None:
         self._peers = peers
@@ -91,6 +93,9 @@ class InboundProcessor:
         self._turns = turns
         self._audit = audit
         self._questions = questions
+        self._context = ThreadContextFolder(
+            threads=threads, conversations=conversations, cursors=cursors, replies=replies
+        )
         self._bindings: dict[str, ChannelBinding] = {}
         # Keyed by (channel, chat_id, conversation thread): one peer's DM, one
         # group's main chat, each of that group's threads and each parallel
@@ -115,6 +120,7 @@ class InboundProcessor:
             safe_send=safe_send,
             session=self._session,
             replies=replies,
+            cursors=cursors,
         )
         # Each chat/thread's burst, held until quiet ("Take a burst of messages as one turn").
         self._burst = InboundBurst(
@@ -247,7 +253,9 @@ class InboundProcessor:
             return
         # The thread it landed in and the message it quotes ground the turn
         # (see "Ground a turn in the message it quotes").
-        text, attachments = await fold_turn_context(binding, msg, text, attachments)
+        text, attachments = await self._context.fold(
+            binding, msg, text, attachments, conversation_thread_id=conv_thread
+        )
         if not text and not attachments:
             # An empty envelope with nothing downloadable (a sticker, a location,
             # a media type the transport does not extract) — and no thread
@@ -282,7 +290,9 @@ class InboundProcessor:
             (binding.resource.uid, peer.chat_id, msg.thread_id),
             (binding, peer),
             BurstPart(
-                origin=format_origin(msg, platform=binding.channel_type),
+                origin=format_origin(
+                    msg, platform=binding.channel_type, channel=binding.resource.name
+                ),
                 body=text or attachment_note(attachments),
                 item=item,
                 window=window_for(binding, msg),

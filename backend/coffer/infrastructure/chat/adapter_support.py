@@ -70,13 +70,26 @@ def channel_system_context(note: ChannelNote | None) -> str:
     and every instruction that holds regardless stays.
     """
     renders = f" {note.renders}" if note is not None and note.renders else ""
+    # Only a transport that collapses a details section is told to write one;
+    # elsewhere the section would arrive as ordinary text, so it buys nothing.
+    details = (
+        " Put anything longer under a `## Details` heading, which Coffer collapses."
+        if note is not None and note.collapses_details
+        else ""
+    )
+    threads = (
+        " Earlier thread messages: read them with `coffer__channel_read_thread` "
+        "(ids from [Message origin])."
+        if note is not None and note.reads_threads
+        else ""
+    )
     return (
         f"You are replying in {_where(note)}, most likely on the user's phone. Coffer "
-        "already shows that you are working and which tools you run, so do not "
-        "narrate your steps — write only the answer. The first line is the outcome "
-        "in one sentence (it becomes the notification); then at most about 15 lines; "
-        "put anything longer under a `## Details` heading, which Coffer collapses or "
-        f"attaches.{renders} Keep code blocks under 30 lines and attach longer logs "
+        "already shows that you are working, so do not narrate your steps — only what "
+        "you write after your last tool call is sent, so write the whole answer there. "
+        "The first line is the outcome "
+        "in one sentence (it becomes the notification); then at most about 15 lines."
+        f"{details}{renders} Keep code blocks under 30 lines and attach longer logs "
         "or diffs as a file. Draw a diagram or chart as a PNG file and attach it, "
         "never as diagram source. Short never means dropping evidence: quote the few "
         "log lines, errors and IDs that prove a finding verbatim, in code blocks. If "
@@ -87,8 +100,21 @@ def channel_system_context(note: ChannelNote | None) -> str:
         "something needs one, say so and do what you can. To send a file or image, "
         "put `MEDIA:/absolute/path` (optionally `| a caption`) on its own line; the "
         "channel uploads that existing file and removes the line — nothing else you "
-        "write is sent as a file."
-    )
+        f"write is sent as a file.{threads}"
+    ) + owner_prompt_context(note)
+
+
+#: The heading that sets the owner's own prompt apart from Coffer's note above it.
+OWNER_PROMPT_HEADING = "Instructions from the channel's owner:"
+
+
+def owner_prompt_context(note: ChannelNote | None) -> str:
+    """The channel owner's own system prompt for this chat kind, under its own
+    heading after Coffer's note (spec channels "Append the owner's system prompt
+    to a channel turn"); "" when there is none. It follows the note and never
+    replaces it, so the reply-shaping contract above it always holds."""
+    prompt = note.owner_prompt.strip() if note is not None else ""
+    return f"\n\n{OWNER_PROMPT_HEADING}\n{prompt}" if prompt else ""
 
 
 #: How many ids the per-turn model note names before deferring to the picker.
@@ -136,6 +162,7 @@ __all__ = [
     "SessionSink",
     "channel_system_context",
     "model_system_context",
+    "owner_prompt_context",
 ]
 
 

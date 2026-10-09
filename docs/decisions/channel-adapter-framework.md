@@ -35,7 +35,7 @@ The forces:
   signature check.
 - **The platforms differ in exactly the places that shape a reply**: Telegram
   can edit a delivered message and has reactions and a draft-streaming API;
-  SeaTalk cannot edit a text message at all but can stream one, has a typing
+  SeaTalk cannot edit or delete a text message at all, has a typing
   cue but no reactions, and can fetch a thread's history. A core that branched
   on platform would grow a conditional per platform per behaviour.
 - **The chat platform already exists** — conversations, a per-conversation turn
@@ -57,7 +57,7 @@ The forces:
   normalising inbound platform payloads into the envelopes in
   `domain/channel/envelopes.py` (`InboundMessage`, `InboundCallback`,
   `InboundLifecycle`), and a `ChannelCapabilities` declaration —
-  `supports_live_text`, `live_text_persists`,
+  `supports_live_text`,
   `supports_typing`, `supports_reactions`, `supports_buttons`,
   `supports_card_update`, `supports_media`,
   `supports_history_fetch`, `max_message_chars`, mention templates.
@@ -109,9 +109,9 @@ loop) degrades the daemon, not a separate process. The 2 s tick is the latency
 of an enable or a rebind.
 
 Wins because it holds N + M with the smallest process surface, and the
-capability split has already paid for itself: when SeaTalk gained streaming,
-only its adapter changed (`supports_live_text` became true) while the renderer
-stayed identical.
+capability split has already paid for itself: when SeaTalk dropped its live
+surface for typing alone, only its adapter changed (`supports_live_text` became
+false) while the renderer stayed identical.
 
 ### Option B — Adopt platform SDKs or bot frameworks (python-telegram-bot, aiogram, a SeaTalk SDK for everything)
 

@@ -8,7 +8,6 @@ from typing import Any
 
 import pytest
 
-from coffer.infrastructure.channel.seatalk_live import SeaTalkLiveText
 from coffer.infrastructure.channel.seatalk_send import send_text_pieces
 from coffer.infrastructure.channel.telegram_features import Feature
 from coffer.infrastructure.channel.telegram_send import send_text_chunks
@@ -48,12 +47,7 @@ async def test_telegram_html_collapses_details_into_an_expandable_quote() -> Non
 
 class _SeaTalk:
     def __init__(self) -> None:
-        self.posts: list[tuple[str, dict[str, Any]]] = []
         self.sends: list[str] = []
-
-    async def post(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
-        self.posts.append((path, body))
-        return {"stream_id": "s1"}
 
     async def send(self, chat_id: str, message: dict[str, Any], thread: str, kind: str) -> Any:
         self.sends.append(message["text"]["content"])
@@ -61,21 +55,8 @@ class _SeaTalk:
 
 
 @pytest.mark.acceptance(
-    spec="channels/seatalk", scenario="continuations after the stream are numbered"
+    spec="channels/seatalk", scenario="a long seatalk reply goes out as numbered messages"
 )
-async def test_the_seatalk_stream_sends_its_own_numbered_remainder() -> None:
-    fake = _SeaTalk()
-    live = SeaTalkLiveText(fake.post, "e1", send=fake.send, char_limit=3000, byte_limit=3000)
-    await live.update("⏳ Working · 1s")
-    reply = "\n\n".join([("a" * 1500), ("b" * 1500), ("c" * 2500), ("d" * 2500)])
-
-    assert await live.close(reply) == ""
-    assert len(fake.sends) >= 1
-    total = len(fake.sends) + 1
-    for i, text in enumerate(fake.sends, start=2):
-        assert text.startswith(f"({i}/{total})\n")
-
-
 async def test_seatalk_numbers_a_chunked_ordinary_send() -> None:
     fake = _SeaTalk()
     text = "\n\n".join(["x" * 30] * 3)

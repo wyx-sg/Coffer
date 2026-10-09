@@ -138,7 +138,7 @@ flowchart TD
 
 **Degraded recovery.** Clients cache `tools/list`, and a server that never connected cannot send `list_changed`. So a degraded-server tracker keeps the names of the servers that failed. It retries them in the background after 2, 8 and 30 seconds. On the first recovery, it invalidates that server's cached tool list and sends `notifications/tools/list_changed` downstream, and the client re-lists.
 
-**Built-ins.** Next, the list gains every built-in the registry currently holds, prefixed `coffer__`, plus `coffer__search_tools`.
+**Built-ins.** Next, the list gains every built-in the registry currently holds, prefixed `coffer__`, plus `coffer__search_tools`. A built-in registered as turn-scoped — `coffer__channel_read_thread`, which a channel turn's agent uses to read a thread's earlier messages — is in the session's view of the registry only while the session's `X-Coffer-Turn` header names a live turn, like `coffer__ask`; elsewhere it is neither listed nor callable.
 
 ### Budget-driven tiering
 
@@ -190,8 +190,9 @@ The built-in tool registry is an in-process registry that the composition root f
 | Tool | Declared by |
 | --- | --- |
 | `coffer__search_tools` | The gateway itself (gateway-owned) |
+| `coffer__channel_read_thread` | The channels feature (turn-scoped) |
 
-`coffer__search_tools` is gateway-owned and always present. A call to any other `coffer__` name falls through to upstream routing and fails as an unknown tool would. Knowledge and memory have no built-in tool: agents change them with their own file tools, so the registry holds no tool for either.
+`coffer__search_tools` is gateway-owned and always present. `coffer__channel_read_thread` is registered by the channels feature as turn-scoped, so only a session inside a live Coffer turn sees or calls it. A call to any other `coffer__` name falls through to upstream routing and fails as an unknown tool would. Knowledge and memory have no built-in tool: agents change them with their own file tools, so the registry holds no tool for either.
 
 Before a built-in handler runs, the gateway sets `agent` as described above. It also fills `cwd` when the tool's schema declares that property and the client left it empty. The handler's return value is wrapped as an MCP tool result: JSON text in `content`, the same object in `structuredContent`, and `isError: false`. An exception inside a handler becomes an in-band `isError: true` result, not a JSON-RPC error, so the model can read it and correct itself. The text shows the message of a Coffer-authored error or an invalid-value error, and only the exception's type name for any other exception. For tool behaviour, see [MCP tools](/reference/mcp-tools).
 

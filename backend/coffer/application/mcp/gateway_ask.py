@@ -24,6 +24,12 @@ from coffer.application.turn_ask import (
 )
 
 
+def turn_is_live(port: TurnAskPort | None, token: str | None) -> bool:
+    """Whether ``token`` names a turn Coffer is running now."""
+    port = port or current_turn_ask()
+    return port is not None and token is not None and port.is_live(token)
+
+
 def with_ask_tool(
     tools: list[dict[str, Any]], port: TurnAskPort | None, token: str | None
 ) -> list[dict[str, Any]]:

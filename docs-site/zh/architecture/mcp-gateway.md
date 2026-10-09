@@ -138,7 +138,7 @@ flowchart TD
 
 **降级恢复。** 客户端会缓存 `tools/list`，而一个从没连上的服务器发不出 `list_changed`。所以一个降级服务器跟踪器会记下失败的服务器名，在后台于 2、8 和 30 秒后重试它们。第一次恢复时，它使这个服务器缓存的工具列表失效，并向下游发送 `notifications/tools/list_changed`，客户端就会重新列出。
 
-**内置工具。** 接着，列表里加入注册表当前持有的每个内置工具，前缀为 `coffer__`，再加上 `coffer__search_tools`。
+**内置工具。** 接着，列表里加入注册表当前持有的每个内置工具，前缀为 `coffer__`，再加上 `coffer__search_tools`。注册为轮次范围的内置工具——`coffer__channel_read_thread`，消息渠道轮次里的智能体用它读取会话串里较早的消息——只有当会话的 `X-Coffer-Turn` 头指向一个正在运行的轮次时，才出现在该会话看到的注册表里，和 `coffer__ask` 一样；其他情况下它既不会被列出，也无法调用。
 
 ### 按预算分层 {#budget-driven-tiering}
 
@@ -190,8 +190,9 @@ coffer__search_tools(query: string, top_k?: integer = 5, 1..20)
 | 工具 | 声明方 |
 | --- | --- |
 | `coffer__search_tools` | 网关自己（网关自有） |
+| `coffer__channel_read_thread` | 消息渠道功能（按轮次限定） |
 
-`coffer__search_tools` 由网关自己持有，始终存在。对任何其他 `coffer__` 名字的调用都会落到上游路由，并像一个未知工具那样失败。知识和记忆没有内置工具：智能体用自己的文件工具修改它们，所以注册表里没有对应任何一个的工具。
+`coffer__search_tools` 由网关自己持有，始终存在。`coffer__channel_read_thread` 由消息渠道功能注册为按轮次限定，所以只有处在正在运行的 Coffer 轮次内的会话才能看到或调用它。对任何其他 `coffer__` 名字的调用都会落到上游路由，并像一个未知工具那样失败。知识和记忆没有内置工具：智能体用自己的文件工具修改它们，所以注册表里没有对应任何一个的工具。
 
 内置工具的处理函数运行之前，网关会按上面所说设置 `agent`。当工具的 schema 声明了 `cwd` 属性而客户端没填时，它还会填上 `cwd`。处理函数的返回值被包装成一个 MCP 工具结果：`content` 里是 JSON 文本，`structuredContent` 里是同一个对象，`isError: false`。处理函数内部的异常会变成带内的 `isError: true` 结果，而不是 JSON-RPC 错误，这样模型能读到它并自我纠正。文本会显示 Coffer 编写的错误和无效值错误的消息，其他异常只显示异常的类型名。工具的具体行为见 [MCP 工具](/zh/reference/mcp-tools)。
 

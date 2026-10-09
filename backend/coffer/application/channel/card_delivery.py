@@ -27,7 +27,6 @@ from coffer.application.channel import model_switch, new_conversation
 from coffer.application.channel.agent_routing import routable_choices
 from coffer.application.channel.command_cards import PICK_AGENT, current_help_card
 from coffer.application.channel.command_context import deliver_card
-from coffer.application.channel.details_card import DETAILS_KINDS, apply_details_tap
 from coffer.application.channel.dir_switch import apply_dir, current_dir_card
 from coffer.application.channel.reply_tracking import WITHDRAW_KIND
 from coffer.application.channel.resume_switch import apply_resume, current_resume_card
@@ -86,10 +85,6 @@ async def dispatch_card_tap(ctx: CommandContext, data: str) -> None:
         # Exactly what typing it would do — a name not on the roster is ignored.
         if command_name(f"/{value}") is not None:
             await ctx.commands.run(ctx, f"/{value}")
-        return
-    if kind in DETAILS_KINDS:
-        # A reply's details, behind its summary card: one-shot, nothing to re-tick.
-        await apply_details_tap(ctx, kind, value)
         return
     if kind == "agent" and value == PICK_AGENT:
         # The `/new` card's Agent button: offer the agents, change nothing yet.

@@ -32,6 +32,7 @@ __all__ = [
     "explain_conversation_error",
     "inherited_setting",
     "open_conversation",
+    "predict_conversation",
 ]
 
 
@@ -200,6 +201,32 @@ async def ensure_conversation(
     return await open_conversation(
         conversations, threads, binding, peer, thread_id, chat_kind=chat_kind
     )
+
+
+async def predict_conversation(
+    conversations: ConversationPort,
+    threads: ChannelThreadConversationRepoPort,
+    resource_uid: str,
+    chat_id: str,
+    thread_id: str,
+    *,
+    idle_hours: float = 0,
+    now: Callable[[], datetime] = lambda: datetime.now(tz=UTC),
+) -> str | None:
+    """The conversation :func:`ensure_conversation` would continue, or ``None``
+    when it would open a new one — the same two "nothing usable" cases, read
+    without writing anything, so a message's context can be built for the
+    conversation it will run in before that conversation exists."""
+    row = await threads.get(resource_uid, chat_id, thread_id)
+    if row is None or row.active_conversation_id is None:
+        return None
+    try:
+        current = await conversations.get_conversation(row.active_conversation_id)
+    except ConversationNotFound:
+        return None
+    if idle_hours > 0 and now() - current.updated_at > timedelta(hours=idle_hours):
+        return None
+    return row.active_conversation_id
 
 
 def explain_conversation_error(e: CofferError) -> str:

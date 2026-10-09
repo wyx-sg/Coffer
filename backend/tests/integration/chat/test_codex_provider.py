@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 
 from coffer.domain.channel_turn import CHANNEL_TURN_ENV
+from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.channel_note import ChannelNote
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
@@ -478,5 +479,47 @@ async def test_a_channel_turn_sends_codex_the_notes_its_prompt_names(tmp_path: A
 
     turn = next(p for m, p in server.requests if m == "turn/start")
     assert turn["input"][0]["text"] == f"why does make verify fail\n\n{notes}"
+
+    await engine.dispose()
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="an edited system prompt applies from the next turn"
+)
+@pytest.mark.asyncio
+async def test_a_resumed_thread_carries_the_owner_prompt_as_it_is_now(tmp_path: Any) -> None:
+    """Codex is told Coffer's context in ``developerInstructions`` on every
+    ``thread/resume`` too, composed for that turn — so the group prompt the owner
+    just edited rides on the resumed thread's next turn."""
+    import asyncio
+
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv(channel_uid=_SEATALK_UID))
+    await repo.set_agent_config(conv.id, AgentConfig(cwd=str(tmp_path), session_id="thread-99"))
+
+    async def _note(uid: str, conversation_id: str) -> ChannelNote | None:
+        return ChannelNote(
+            name="st-ops", platform="SeaTalk", chat_kind="group", owner_prompt="Be brief."
+        )
+
+    factory, server = _make_factory()
+    server._frames = [
+        _Frame("thread/resume", "thread/started", {"thread": {"id": "thread-99"}}),
+        _Frame(
+            "turn/start",
+            "turn/completed",
+            {"threadId": "thread-99", "turn": {"id": "turn-99", "status": "completed"}},
+        ),
+    ]
+    provider = CodexAppServerProvider(
+        conversations=repo, session_factory=factory, resolve_channel=_note
+    )
+    adapter = await provider.build_adapter(conv.id)
+    await asyncio.wait_for(_collect(adapter, _user_turn("hi", conv.id)), timeout=5)
+
+    resume = next(p for m, p in server.requests if m == "thread/resume")
+    assert resume["threadId"] == "thread-99"
+    assert resume["developerInstructions"].count("Instructions from the channel's owner:") == 1
+    assert "Instructions from the channel's owner:\nBe brief." in resume["developerInstructions"]
 
     await engine.dispose()

@@ -54,7 +54,6 @@ Coffer 把配置放在五个地方，每个地方都有其理由：
 | --- | --- | --- |
 | `COFFER_TURN_IDLE_TIMEOUT_SECONDS` | `300` | 聊天或消息渠道的轮次在没有任何事件的情况下可持续多少秒，超过后看门狗会取消它。`0`、负数或非数字会关闭看门狗。 |
 | `COFFER_SEATALK_SDK_DIR` | `~/.coffer/vendor` | 导入 SeaTalk WebSocket SDK 包（`seatalk_oapi_sdk`）的目录。 |
-| `COFFER_SEATALK_STREAM_INTERVAL` | `0.1` | SeaTalk 回复两次流式更新之间的最小秒数。 |
 
 ### 存储位置 {#storage-locations}
 

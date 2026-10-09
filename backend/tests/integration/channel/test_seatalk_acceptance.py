@@ -16,6 +16,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from coffer.application.channel.ports import AdapterCallbacks
+from coffer.domain.chat.events import TextDelta, ToolCall, ToolResult, TurnDone, TurnStarted
 from coffer.domain.errors import ConfigValidationError
 from coffer.infrastructure.channel.seatalk_ws import SeaTalkWebSocketConnector
 from tests.integration.infrastructure.channel.conftest import (
@@ -23,8 +24,9 @@ from tests.integration.infrastructure.channel.conftest import (
     RecordingCallbacks,
     make_seatalk_adapter,
 )
+from tests.unit.chat.conftest import FakeAgentAdapter
 
-from .conftest import DEFAULT_AGENT_KEY, ChannelEnv, tap_event, wait_until
+from .conftest import DEFAULT_AGENT_KEY, ChannelEnv, inbound, tap_event, wait_until
 from .fake_seatalk_sdk import build_fake_sdk, deliver, envelope, hold
 from .in_process_bridge import in_process_bridge
 
@@ -171,20 +173,14 @@ async def test_a_main_chat_mention_is_answered_in_a_thread_rooted_at_it(env: Cha
 
         await env.processor.on_message(msg)
 
-        def replied() -> bool:
-            return any(
-                "Hello world" in str(body)
-                for _s, body in fake.init_stream_calls + fake.update_stream_calls
-            ) or any("Hello world" in str(body) for body, _ in fake.group_chat_calls)
-
-        await wait_until(replied)
+        await wait_until(
+            lambda: any("Hello world" in str(body) for body, _ in fake.group_chat_calls)
+        )
     finally:
         await adapter.stop()
 
     # Every group post the turn made went into the thread rooted at gm-1.
-    group_posts = [body for _s, body in fake.init_stream_calls] + [
-        body for body, _ in fake.group_chat_calls
-    ]
+    group_posts = [body for body, _ in fake.group_chat_calls]
     assert group_posts
     assert all(body["message"].get("thread_id") == "gm-1" for body in group_posts)
     assert fake.single_chat_calls == []
@@ -232,16 +228,80 @@ async def test_an_event_pushed_down_the_socket_drives_a_turn(env: ChannelEnv) ->
     )
     await connector.start()
     try:
-
-        def replied() -> bool:
-            return any(
-                "Hello world" in str(body)
-                for _s, body in fake.init_stream_calls + fake.update_stream_calls
-            ) or any("Hello world" in str(body) for body, _ in fake.single_chat_calls)
-
-        await wait_until(replied, message="the pushed event never drove a turn")
+        await wait_until(
+            lambda: any("Hello world" in str(body) for body, _ in fake.single_chat_calls),
+            message="the pushed event never drove a turn",
+        )
         assert connector.state() == ("connected", None)
         assert sdk.connects == [("app-1", "app-secret-value")]
     finally:
         await connector.stop()
         await adapter.stop()
+
+
+# -- how a reply looks ("Show only typing while a turn runs") -------------------
+
+_DONE = TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn")
+
+
+def _texts(fake: FakeSeaTalk) -> list[str]:
+    return [
+        body["message"]["text"]["content"]
+        for body, _ in fake.single_chat_calls
+        if body["message"].get("tag") == "text"
+    ]
+
+
+@pytest.mark.acceptance(
+    spec="channels/seatalk", scenario="a seatalk direct turn shows typing and then one new message"
+)
+async def test_a_direct_turn_types_and_then_sends_the_answer_alone(env: ChannelEnv) -> None:
+    env.provider.adapter = FakeAgentAdapter(
+        [
+            TurnStarted(),
+            TextDelta(text="Let me check the deploy logs."),
+            ToolCall(tool_use_id="t1", tool_name="Bash", tool_input={"command": "tail"}),
+            ToolResult(tool_use_id="t1", tool_name="Bash", output={"out": "ok"}, error=None),
+            TextDelta(text="Deploy is **green** on live."),
+            _DONE,
+        ]
+    )
+    fake = FakeSeaTalk()
+    _resource, adapter = await _bound_seatalk(env, fake)
+    try:
+        await env.processor.on_message(inbound("st", "emp-1", "is the deploy ok?"))
+        await wait_until(lambda: bool(_texts(fake)), message="no reply was sent")
+    finally:
+        await adapter.stop()
+
+    # Typing was the only progress; no stream was ever opened.
+    assert fake.typing_calls
+    assert fake.init_stream_calls == [] and fake.update_stream_calls == []
+    # One ordinary message, holding the answer alone — never the narration.
+    assert _texts(fake) == ["Deploy is **green** on live."]
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a details section goes out whole where the chat cannot collapse it"
+)
+async def test_a_details_section_goes_out_as_ordinary_text(env: ChannelEnv) -> None:
+    env.provider.adapter = FakeAgentAdapter(
+        [
+            TurnStarted(),
+            TextDelta(text="Deploy is green on live.\n\n## Details\n\n- built in 3m\n- 412 passed"),
+            _DONE,
+        ]
+    )
+    fake = FakeSeaTalk()
+    _resource, adapter = await _bound_seatalk(env, fake)
+    try:
+        await env.processor.on_message(inbound("st", "emp-1", "how did it go?"))
+        await wait_until(lambda: bool(_texts(fake)), message="no reply was sent")
+    finally:
+        await adapter.stop()
+
+    [text] = _texts(fake)
+    assert text.startswith("Deploy is green on live.")
+    assert "built in 3m" in text and "412 passed" in text
+    # No summary card and no buttons: nothing to tap for the rest.
+    assert _card_sends(fake) == []

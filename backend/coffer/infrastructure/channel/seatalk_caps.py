@@ -27,10 +27,11 @@ SEATALK_RENDER_NOTES = (
 )
 
 SEATALK_CAPABILITIES = ChannelCapabilities(
-    # A delivered SeaTalk text message cannot be rewritten, but one CAN grow in
-    # place — init_stream/update_stream.
-    supports_live_text=True,
-    live_text_persists=True,  # the streamed message IS the reply
+    # No live surface: while a turn runs the chat shows only the typing indicator
+    # (a heartbeat keeps it up), and the finished reply is one new message. The
+    # platform's stream re-types the whole message whenever anything already
+    # shown changes, so a growing status message flickered (spec channels/seatalk
+    # "Show only typing while a turn runs").
     # Both chat kinds: single_chat_typing and group_chat_typing. The group one
     # silently no-ops above 200 members (code 7003), so this promises an
     # attempt, never a delivered receipt.
@@ -54,8 +55,7 @@ SEATALK_CAPABILITIES = ChannelCapabilities(
     renders_tables=False,
     max_inline_code_lines=30,
     # A SeaTalk bot cannot delete a message, but it can rewrite a card it sent for 7
-    # days (``/messaging/v2/update``): a group reply is therefore a card (never a
-    # stream, which cannot be rewritten) and "withdrawing" it rewrites it blank.
-    streams_in_groups=False,
+    # days (``/messaging/v2/update``): a group reply is therefore a card (never
+    # plain text, which cannot be rewritten) and "withdrawing" it rewrites it blank.
     withdraw_window_hours=168,
 )

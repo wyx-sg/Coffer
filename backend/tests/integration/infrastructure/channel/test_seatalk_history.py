@@ -24,6 +24,8 @@ import pytest
 from coffer.infrastructure.channel.seatalk_history import (
     fetch_quoted_context,
     fetch_thread_context,
+    message_media,
+    to_thread_message,
 )
 
 
@@ -50,19 +52,21 @@ def _text_message(email: str, plain_text: str) -> dict[str, Any]:
 
 
 async def _fetch(get: _RecordingGet, tmp_path: pathlib.Path, **kwargs: Any):
-    async with httpx.AsyncClient() as client:
-        return await fetch_thread_context(
-            get, client, tmp_path, _never_called_token, "chat-1", "t1", **kwargs
-        )
+    del tmp_path  # a thread read downloads nothing
+    return await fetch_thread_context(get, "chat-1", "t1", **kwargs)
+
+
+def _texts(read: Any) -> list[tuple[str, str]]:
+    return [(it.sender, it.text) for m in read.messages for it in m.items]
 
 
 async def test_group_thread_reads_the_group_endpoint_by_group_id(tmp_path):
     get = _RecordingGet()
-    await _fetch(get, tmp_path, limit=50)
+    await _fetch(get, tmp_path)
     assert get.calls == [
         (
             "/messaging/v2/group_chat/get_thread_by_thread_id",
-            {"group_id": "chat-1", "thread_id": "t1", "page_size": 50},
+            {"group_id": "chat-1", "thread_id": "t1", "page_size": 100},
         )
     ]
 
@@ -71,11 +75,11 @@ async def test_direct_thread_reads_the_single_chat_endpoint_by_employee_code(tmp
     # A SeaTalk DM's chat_id IS the peer's employee_code, so the same argument
     # feeds a differently-named parameter on the single-chat endpoint.
     get = _RecordingGet()
-    await _fetch(get, tmp_path, limit=20, chat_kind="direct")
+    await _fetch(get, tmp_path, chat_kind="direct")
     assert get.calls == [
         (
             "/messaging/v2/single_chat/get_thread_by_thread_id",
-            {"employee_code": "chat-1", "thread_id": "t1", "page_size": 20},
+            {"employee_code": "chat-1", "thread_id": "t1", "page_size": 100},
         )
     ]
 
@@ -100,14 +104,14 @@ async def test_both_kinds_flatten_the_identical_response_body(tmp_path):
     }
     expected = [("alice@example.com", "in the thread"), ("bob@example.com", "replying")]
     for kind in ("group", "direct"):
-        items, atts = await _fetch(_RecordingGet(payload), tmp_path, chat_kind=kind)
-        assert [(it.sender, it.text) for it in items] == expected
-        assert atts == ()  # a text-only thread downloads nothing
+        read = await _fetch(_RecordingGet(payload), tmp_path, chat_kind=kind)
+        assert _texts(read) == expected
+        assert not any(m.has_media for m in read.messages)
 
 
 async def test_an_unrecognised_chat_kind_degrades_instead_of_reading_the_wrong_chat(tmp_path):
     get = _RecordingGet()
-    assert await _fetch(get, tmp_path, chat_kind="broadcast") == ([], ())
+    assert (await _fetch(get, tmp_path, chat_kind="broadcast")).failed
     assert get.calls == []  # no request went out at all
 
 
@@ -120,7 +124,7 @@ async def test_a_failing_fetch_degrades_to_empty_on_both_kinds(tmp_path):
             raise httpx.HTTPError("boom")
 
     for kind in ("group", "direct"):
-        assert await _fetch(_Failing(), tmp_path, chat_kind=kind) == ([], ())
+        assert (await _fetch(_Failing(), tmp_path, chat_kind=kind)).failed
 
 
 def _page(cursor: str, *texts: str) -> dict[str, Any]:
@@ -138,16 +142,16 @@ async def test_every_page_of_a_thread_is_read_by_following_next_cursor(tmp_path)
     # Pages run oldest-first, so stopping after page one would drop exactly the
     # messages written just before the @mention.
     get = _RecordingGet(_page("c2", "first", "second"), _page("", "latest"))
-    items, _ = await _fetch(get, tmp_path, limit=2)
-    assert [it.text for it in items] == ["first", "second", "latest"]
+    read = await _fetch(get, tmp_path)
+    assert [text for _, text in _texts(read)] == ["first", "second", "latest"]
     assert [params.get("cursor") for _, params in get.calls] == [None, "c2"]
 
 
 async def test_a_cursor_that_never_ends_stops_at_the_page_cap(tmp_path):
     get = _RecordingGet(_page("again", "loop"))
-    items, _ = await _fetch(get, tmp_path)
+    read = await _fetch(get, tmp_path)
     assert len(get.calls) == 20
-    assert len(items) == 20
+    assert len(read.messages) == 20
 
 
 async def test_a_later_page_failing_keeps_the_pages_already_read(tmp_path):
@@ -157,8 +161,9 @@ async def test_a_later_page_failing_keeps_the_pages_already_read(tmp_path):
                 raise httpx.HTTPError("boom")
             return await super().__call__(path, params)
 
-    items, _ = await _fetch(_FailsOnPageTwo(_page("c2", "older")), tmp_path)
-    assert [it.text for it in items] == ["older"]
+    read = await _fetch(_FailsOnPageTwo(_page("c2", "older")), tmp_path)
+    assert not read.failed
+    assert [text for _, text in _texts(read)] == ["older"]
 
 
 async def _fetch_quoted(get: _RecordingGet, tmp_path: pathlib.Path):
@@ -197,10 +202,10 @@ async def test_thread_older_than_seven_days_carries_a_note(tmp_path):
     reply = {**_text_message("b@x.com", "hi"), "message_sent_time": now - 60}
     get = _RecordingGet({"code": 0, "next_cursor": "", "thread_messages": [root, reply]})
 
-    items, _ = await _fetch(get, tmp_path)
+    read = await _fetch(get, tmp_path)
 
-    assert [i.sender for i in items] == ["a@x.com", "b@x.com", "note"]
-    assert "7 days" in items[-1].text
+    assert [m.sender for m in read.messages] == ["a@x.com", "b@x.com"]
+    assert "7 days" in read.window_note
 
 
 async def test_recent_thread_carries_no_note(tmp_path):
@@ -208,6 +213,28 @@ async def test_recent_thread_carries_no_note(tmp_path):
     root = {**_text_message("a@x.com", "start"), "message_sent_time": now - 3600}
     get = _RecordingGet({"code": 0, "next_cursor": "", "thread_messages": [root]})
 
-    items, _ = await _fetch(get, tmp_path)
+    read = await _fetch(get, tmp_path)
 
-    assert [i.sender for i in items] == ["a@x.com"]
+    assert [m.sender for m in read.messages] == ["a@x.com"]
+    assert read.window_note == ""
+
+
+def test_a_thread_message_carries_its_id_time_and_whether_the_bot_sent_it():
+    message = {
+        **_text_message("", "done"),
+        "message_id": "m-9",
+        "message_sent_time": 1_700_000_000,
+        "sender": {"sender_type": 2},
+    }
+    converted = to_thread_message(message)
+    assert converted.message_id == "m-9"
+    assert converted.sent_at is not None and converted.sent_at.timestamp() == 1_700_000_000
+    assert converted.from_bot is True
+    assert converted.sender == "bot"
+    assert converted.has_media is False
+
+
+async def test_a_text_message_downloads_no_media(tmp_path):
+    message = to_thread_message(_text_message("a@x.com", "hi"))
+    async with httpx.AsyncClient() as client:
+        assert await message_media(client, tmp_path, _never_called_token, message) == ()

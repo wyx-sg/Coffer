@@ -135,7 +135,11 @@ async def test_a_thread_file_and_a_forwarded_image_are_attached(
 
     adapter = make_seatalk_adapter(fake_seatalk, media_dir=tmp_path)
     try:
-        items, atts = await adapter.fetch_thread("gid-1", "t1", limit=50)
+        read = await adapter.fetch_thread("gid-1", "t1")
+        items = [item for message in read.messages for item in message.items]
+        atts: tuple[Any, ...] = ()
+        for message in read.messages:
+            atts += await adapter.fetch_message_media(message)
     finally:
         await adapter.stop()
 
@@ -230,11 +234,11 @@ async def test_a_dm_thread_reads_only_the_direct_chat_thread_endpoint(
     paths = _record_paths(fake_seatalk)
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
-        await adapter.fetch_thread("emp-1", "t1", limit=20, chat_kind="direct")
+        await adapter.fetch_thread("emp-1", "t1", chat_kind="direct")
     finally:
         await adapter.stop()
 
-    assert dm_calls == [{"employee_code": "emp-1", "thread_id": "t1", "page_size": "20"}]
+    assert dm_calls == [{"employee_code": "emp-1", "thread_id": "t1", "page_size": "100"}]
     assert fake_seatalk.thread_calls == []  # the group-thread endpoint is untouched
     # Beyond the token grant, the DM thread read is the only call made: no
     # group-thread read and no group-chat history read of any kind.

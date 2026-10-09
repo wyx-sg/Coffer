@@ -3,7 +3,7 @@
 // the Replace secret dialog): rotated secrets are written to their
 // existing secret refs FIRST (so the channel keeps working off the same
 // refs), then the resource config is PATCHed (bound agent / SeaTalk app id /
-// group gating / message batching / replies / /dir directories), with the
+// group gating / message batching / replies / system prompts / /dir directories), with the
 // title when it changed.
 // Unlike registration there is nothing to roll back — overwriting a ref's
 // value and PATCHing a live resource are both in-place updates.
@@ -61,9 +61,6 @@ export interface ChannelEditValues {
   /** List each step under the live status line while a turn runs. Undefined
    *  leaves the stored value alone. */
   show_steps?: boolean;
-  /** A turn running at least this long (seconds) ends with a completion ping;
-   *  0 turns it off. Undefined leaves the stored value alone. */
-  notify_after_seconds?: number;
   /** Open a new conversation when the chat was idle this many hours; 0 never
    *  does. Undefined leaves the stored value alone. */
   new_conversation_after_idle_hours?: number;
@@ -73,11 +70,19 @@ export interface ChannelEditValues {
   /** The folder new conversations start in (`default_agent_config.cwd`);
    *  `null` clears it. Undefined leaves the stored value alone. */
   default_directory?: string | null;
+  /** The owner's system prompt for direct chats and their threads; "" sets
+   *  none. Undefined leaves the stored value alone. */
+  direct_system_prompt?: string;
+  /** The owner's system prompt for a group's main chat and its threads. */
+  group_system_prompt?: string;
   /** The default agent's model for new conversations (`default_agent_config.model`);
    *  `null` clears it. Undefined leaves the stored value alone — except that
    *  changing the default agent drops it, since it named the old agent's model. */
   default_model?: string | null;
 }
+
+/** The longest system prompt a channel keeps per chat kind (the backend's cap). */
+export const SYSTEM_PROMPT_MAX = 4000;
 
 /** The most folders a channel may list (the backend's cap). */
 export const DIRECTORIES_MAX = 32;
@@ -115,6 +120,13 @@ export function normaliseDirectory(text: string): string | null {
  * nothing.
  */
 export function honoursRequireMention(channelType: unknown): boolean {
+  return channelType === "telegram";
+}
+
+/** Whether a channel type shows a turn's progress on a live status line, so its
+ *  step-lines setting means anything. SeaTalk shows only the typing indicator
+ *  while a turn runs (spec channels/seatalk "Show only typing while a turn runs"). */
+export function showsStepLines(channelType: unknown): boolean {
   return channelType === "telegram";
 }
 
@@ -169,13 +181,18 @@ export function planChannelEdit(input: ChannelEditInput): ChannelEditPlan {
   setIfChanged(nextConfig, config, "wait_after_text_seconds", values.wait_after_text_seconds);
   setIfChanged(nextConfig, config, "wait_after_forward_seconds", values.wait_after_forward_seconds);
   setIfChanged(nextConfig, config, "show_steps", values.show_steps);
-  setIfChanged(nextConfig, config, "notify_after_seconds", values.notify_after_seconds);
   setIfChanged(
     nextConfig,
     config,
     "new_conversation_after_idle_hours",
     values.new_conversation_after_idle_hours,
   );
+  // A prompt the config does not hold reads as empty, so saving an empty one
+  // over a missing key writes nothing.
+  for (const key of ["direct_system_prompt", "group_system_prompt"] as const) {
+    const value = values[key];
+    if (value !== undefined && value !== (config[key] ?? "")) nextConfig[key] = value;
+  }
   // The /dir allow-list is compared as a list (order matters: the chat lists it
   // as given).
   const storedDirs = Array.isArray(config.directories) ? config.directories : [];

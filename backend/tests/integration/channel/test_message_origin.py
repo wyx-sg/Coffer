@@ -41,6 +41,7 @@ async def test_group_turn_carries_the_chat_id_title_thread_and_sender(env: Chann
     assert (await _user_texts(env))[0] == (
         "[Message origin]\n"
         "platform: telegram\n"
+        "channel: tg\n"
         'chat: group "account-campaign-reaction" (id: grp-1)\n'
         "thread: th-1\n"
         "from: yuxing.wu@shopee.com (id: owner-1)\n"
@@ -57,7 +58,7 @@ async def test_dm_turn_carries_a_direct_origin_block(env: ChannelEnv) -> None:
     await wait_until(lambda: "Hello world" in adapter.texts())
 
     assert (await _user_texts(env))[0] == (
-        "[Message origin]\nplatform: telegram\nchat: direct (id: owner)\n"
+        "[Message origin]\nplatform: telegram\nchannel: tg\nchat: direct (id: owner)\n"
         "from: Owner (id: owner)\n\nhi"
     )
 
