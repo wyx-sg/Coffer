@@ -232,9 +232,9 @@ describe("ModelProvidersPage", () => {
     serve([makeProvider({ name: "official" })]);
     renderAt();
     expect(await screen.findByRole("heading", { name: "Model providers" })).toBeInTheDocument();
-    // The header names the feature as experimental and carries the primary
-    // button for both tabs.
-    expect(screen.getByText("Experimental")).toBeInTheDocument();
+    // The header carries no Experimental tag, and the primary button for both
+    // tabs.
+    expect(screen.queryByText("Experimental")).toBeNull();
     expect(
       screen.getByText(
         "Where your agents’ models come from, and what requests through Coffer cost.",
@@ -248,7 +248,6 @@ describe("ModelProvidersPage", () => {
     expect(await screen.findByText("usage tab body")).toBeInTheDocument();
     // The header, with its Add provider, is the same one on both tabs.
     expect(screen.getByRole("button", { name: /Add provider/ })).toBeInTheDocument();
-    expect(screen.getByText("Experimental")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Endpoint" })).toBeNull();
   });
 

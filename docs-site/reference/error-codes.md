@@ -272,7 +272,7 @@ give the status each code is actually sent with.
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `FEATURE_DISABLED` | 404 | The route or resource belongs to an experimental feature that is switched off on this machine. `details.feature` names it. | Switch it on in **Settings → Features**. See [Experimental features](/guides/experimental-features). |
-| `FEATURE_UNKNOWN` | 404 | The key is not an experimental feature. The keys are `knowledge`, `memory`, `sync` and `models`. | Use one of those four keys. |
+| `FEATURE_UNKNOWN` | 404 | The key is not an experimental feature. The keys are `knowledge` and `memory`; `sync` and `models` graduated and are no longer features. | Use one of those two keys. |
 | `FEATURE_PINNED` | 409 | `COFFER_FEATURES` pins this feature for the daemon's lifetime. | Change `COFFER_FEATURES` and restart the daemon. |
 
 ## Startup errors

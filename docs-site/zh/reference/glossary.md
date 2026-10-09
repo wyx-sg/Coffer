@@ -107,7 +107,7 @@ Coffer 发送密钥明文的地方：MCP 服务器的环境变量或 HTTP 请求
 
 ### 实验功能（Experimental feature） {#experimental-feature}
 
-默认关闭、可按机器开启的能力。目前有四个：`knowledge`（知识）、`memory`（记忆）、`sync`（保险库同步）和 `models`（模型提供商、代理和用量）。功能关闭期间，它的路由返回 `404 FEATURE_DISABLED`，它的工具从 MCP 工具列表中消失，它的界面看起来就像不存在；数据会保留。见[实验功能](/zh/guides/experimental-features)和[配置](/zh/reference/configuration#experimental-features)。
+默认关闭、可按机器开启的能力。目前有两个：`knowledge`（知识）和 `memory`（记忆）。保险库同步和模型提供商已经转正，始终开启。功能关闭期间，它的路由返回 `404 FEATURE_DISABLED`，它的工具从 MCP 工具列表中消失，它的界面看起来就像不存在；数据会保留。见[实验功能](/zh/guides/experimental-features)和[配置](/zh/reference/configuration#experimental-features)。
 
 ## I {#i}
 

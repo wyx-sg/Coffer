@@ -98,7 +98,7 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 | `HOME` | Coffer 的每一棵目录树（保险库、`local/`、`content/`、`derived/`、`runs.db`）都从它解析，没有针对单棵树的覆盖选项。沙盒 `HOME` 就是一个独立的 Coffer |
 | `COFFER_DB_URL` | 历史数据库的 SQLAlchemy URL（默认 `sqlite+aiosqlite:///~/.coffer/runs.db`） |
 | `COFFER_LOG_DIR` | 守护进程写日志文件的位置 |
-| `COFFER_FEATURES` | 为这个守护进程固定实验功能的开关，格式为 `<key>=on,<other-key>=off`。例如 `models=on,sync=off`；键为 `knowledge`、`memory`、`sync` 和 `models`，没有被固定、也没在设置里开启的功能一律关闭 |
+| `COFFER_FEATURES` | 为这个守护进程固定实验功能的开关，格式为 `<key>=on,<other-key>=off`。例如 `knowledge=on,memory=off`；键为 `knowledge` 和 `memory`，没有被固定、也没在设置里开启的功能一律关闭 |
 | `COFFER_WEBUI_DIR` | 从另一个目录提供构建好的界面 |
 
 [配置参考](/zh/reference/configuration)列出了守护进程读取的每一个变量。

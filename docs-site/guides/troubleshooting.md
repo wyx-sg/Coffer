@@ -143,7 +143,7 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 ### A page or tool is missing because a feature is switched off
 
-**Cause.** The page or tool belongs to an [experimental feature](/guides/experimental-features) that is switched off on this machine. Experimental features are off by default, and a switched-off feature looks absent: no sidebar entry, no palette result, and a link to its page shows the not-found page. The four features are Knowledge, Memory, Sync and Model providers.
+**Cause.** The page or tool belongs to an [experimental feature](/guides/experimental-features) that is switched off on this machine. Experimental features are off by default, and a switched-off feature looks absent: no sidebar entry, no palette result, and a link to its page shows the not-found page. The two experimental features are Knowledge and Memory; Sync and Model providers (with Usage) are always on and never hidden this way.
 
 **Fix.** Switch it on under **Settings → Features**. **Decided by** shows what decided each feature; if it says `pin`, `COFFER_FEATURES` holds it in the daemon's environment, so change it where the daemon is started.
 

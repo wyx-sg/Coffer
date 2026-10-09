@@ -1143,15 +1143,11 @@
       "saveFailed": "无法保存这次更改：{{reason}}",
       "names": {
         "knowledge": "知识",
-        "memory": "记忆",
-        "sync": "同步",
-        "models": "模型提供商"
+        "memory": "记忆"
       },
       "descriptions": {
         "knowledge": "智能体可以查阅的笔记和文档，以可直接编辑的普通文件保存。",
-        "memory": "智能体在多次会话之间记住的内容，以及投递它的钩子。",
-        "sync": "把保险库与你自己的 git 远端在多台机器间保持一致。",
-        "models": "模型提供商、本机模型中转和用量。"
+        "memory": "智能体在多次会话之间记住的内容，以及投递它的钩子。"
       },
       "source": {
         "pin": "由 COFFER_FEATURES 固定——请在启动守护进程的地方修改",

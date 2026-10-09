@@ -73,12 +73,7 @@ _log = logging.getLogger(__name__)
 
 TARGET = "provider_projection"
 #: The triggers that carry a warrant to change what an agent talks to.
-#: ``SWITCH`` is the ``models`` feature being switched: off withdraws Coffer's
-#: keys from every agent, on projects each agent's connection again (spec
-#: experimental-features "Withdraw what a switched-off feature put in front of
-#: agents"). Without the warrant, switching on would read as a contradicted
-#: choice and clear the agents' records.
-_WARRANTED = frozenset({Trigger.IMPORT, Trigger.MANUAL, Trigger.SWITCH})
+_WARRANTED = frozenset({Trigger.IMPORT, Trigger.MANUAL})
 
 #: ``ProviderService.clear_agent_connection`` — takes an agent uid, clears that
 #: agent's connection and writes nothing else.
@@ -133,12 +128,7 @@ class ProviderProjectionTarget:
         projector: ProviderProjector,
         store: _Store,
         clear_choice: ClearChoice,
-        is_enabled: Callable[[], bool] = lambda: True,
     ) -> None:
-        # Whether the ``models`` feature is on right now: while it is off no
-        # agent is wanted on a connection, so every projection is withdrawn
-        # (the agents' records keep their choice, and switching on restores it).
-        self._is_enabled = is_enabled
         self._providers = providers
         self._agents = agents
         self._projector = projector
@@ -225,8 +215,6 @@ class ProviderProjectionTarget:
     # --- the target --------------------------------------------------------------
 
     async def desired(self) -> Sequence[Item]:
-        if not self._is_enabled():
-            return []
         scan = await self._scan()
         return [self._item(s, s.desired) for s in scan.seen.values() if s.desired is not None]
 
@@ -256,14 +244,6 @@ class ProviderProjectionTarget:
                         "projection_stale",
                         f"The projection's {names} differ from what the agent's connection "
                         "writes; it is projected again.",
-                    )
-                )
-            elif d.op is Op.REMOVE and not self._is_enabled():
-                out.append(
-                    Decision(
-                        Disposition.REPAIR,
-                        "feature_off",
-                        "Models is switched off, so Coffer's keys are withdrawn from this agent.",
                     )
                 )
             elif d.op is Op.REMOVE:

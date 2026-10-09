@@ -17,11 +17,10 @@ import { fakeApi } from "@/test/fakeApi";
 
 const callMock = fakeApi();
 
-// The Models feature is on unless a test says otherwise.
-let modelsOn = true;
+// Every experimental feature (memory) is on.
 vi.mock("@/lib/hooks/useFeatures", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/hooks/useFeatures")>()),
-  useFeatureEnabled: () => modelsOn,
+  useFeatureEnabled: () => true,
 }));
 
 const HOME = "/Users/me";
@@ -300,26 +299,6 @@ describe("AgentOverviewTab — tiles, model, details", () => {
     fireEvent.click(screen.getByRole("button", { name: "Change…" }));
     expect(await screen.findByText("Change Claude Code’s model")).toBeInTheDocument();
   });
-
-  acceptance(
-    "experimental-features",
-    "a page omits the section that belongs to a switched-off feature",
-    async () => {
-      modelsOn = false;
-      try {
-        renderTab();
-        expect(await screen.findByText("claude-opus-5-5")).toBeInTheDocument();
-        // The model stays; the provider line, the link to the Model
-        // tab and any notice about the switched-off feature do not.
-        expect(screen.queryByText("Provider")).toBeNull();
-        expect(screen.queryByText(/Built-in login/)).toBeNull();
-        expect(screen.queryByRole("button", { name: "Change…" })).toBeNull();
-        expect(screen.queryByText(/switched off|needs/i)).toBeNull();
-      } finally {
-        modelsOn = true;
-      }
-    },
-  );
 
   test("on its built-in login the model is the agent's own, not a binding left from a connection", async () => {
     world.nativeModel = "gpt-6-luna";

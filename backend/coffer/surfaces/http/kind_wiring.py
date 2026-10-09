@@ -23,7 +23,6 @@ from coffer.application.platform_port import PlatformPort
 from coffer.application.reconcile.reconciler import Reconciler
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.facets import AgentCatalog
-from coffer.domain.features import MODELS
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.surfaces.http.agent_skill_wiring import AgentSkillWiring, wire_agent_and_skill_kinds
 from coffer.surfaces.http.app_mcp_composition import McpWiring, wire_mcp_kind
@@ -102,7 +101,6 @@ async def wire_resource_kinds(
         sm,
         provider.service,
         prices=provider.prices,
-        is_enabled=lambda: app.state.feature_service.is_enabled(MODELS),
     )
 
     # Coffer's own skill carries the knowledge catalogue, so a collection

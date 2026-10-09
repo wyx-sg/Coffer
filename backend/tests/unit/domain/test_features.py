@@ -1,4 +1,4 @@
-"""The experimental-feature registry: its four keys, and what each owns."""
+"""The experimental-feature registry: its two keys, and what each owns."""
 
 from __future__ import annotations
 
@@ -22,27 +22,28 @@ from tests.support.features import FAKE_FEATURE, replace_registry
 
 @pytest.mark.acceptance(
     spec="experimental-features",
-    scenario="the registry names the four experimental features",
+    scenario="the registry names the two experimental features",
 )
-def test_the_registry_names_the_four_experimental_features() -> None:
-    assert feature_keys() == ("knowledge", "memory", "sync", "models")
+def test_the_registry_names_the_two_experimental_features() -> None:
+    assert feature_keys() == ("knowledge", "memory")
     assert feature_for_kind("knowledge") == "knowledge"
     assert feature_for_kind("memory") == "memory"
-    assert feature_for_kind("provider") == "models"
-    # Everything else is always there, channels and conversations included.
-    for kind in ("agent", "skill", "mcp_server", "secret", "channel"):
+    # Everything else is always there: channels, conversations, and the
+    # graduated sync and models features (the ``provider`` kind) included.
+    for kind in ("agent", "skill", "mcp_server", "secret", "channel", "provider"):
         assert feature_for_kind(kind) is None
     assert feature_for_path("/api/v1/chat/conversations") is None
     assert feature_for_path("/api/v1/channels/abc") is None
-    assert feature_for_path("/api/v1/providers/price-list") == "models"
-    assert feature_for_path("/api/v1/models/list-models") == "models"
-    assert feature_for_path("/api/v1/proxy/status") == "models"
-    assert feature_for_path("/api/v1/usage/summary") == "models"
     assert feature_for_path("/api/v1/knowledge/collections") == "knowledge"
     assert feature_for_path("/api/v1/memory/partitions") == "memory"
-    assert feature_for_path("/api/v1/sync/status") == "sync"
-    # Always-on routes, and the routes the agent pages and the internal engine use.
+    # Always-on routes, the routes the agent pages and the internal engine use,
+    # and the graduated sync and models routes.
     for path in (
+        "/api/v1/sync/status",
+        "/api/v1/providers/price-list",
+        "/api/v1/models/list-models",
+        "/api/v1/proxy/status",
+        "/api/v1/usage/summary",
         "/api/v1/agents",
         "/api/v1/agent-providers",
         "/api/v1/internal-engine-config",
@@ -52,6 +53,10 @@ def test_the_registry_names_the_four_experimental_features() -> None:
     ):
         assert feature_for_path(path) is None
     assert {f.key for f in EXPERIMENTAL_FEATURES} == set(feature_keys())
+    for gone in ("sync", "models"):
+        with pytest.raises(FeatureUnknown):
+            get_feature(gone)
+    assert {g.key for g in GRADUATED_FEATURES} >= {"sync", "models"}
 
 
 def test_a_registered_feature_is_found_by_key_kind_and_path(

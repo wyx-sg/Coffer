@@ -1,4 +1,4 @@
-// src/components/providers/ModelProvidersHeader.tsx — the one header of Model providers: title, Experimental, subtitle, Add provider, and the Providers | Usage tabs.
+// src/components/providers/ModelProvidersHeader.tsx — the one header of Model providers: title, subtitle, Add provider, and the Providers | Usage tabs.
 //
 // Both tabs sit under this same header (canvas 2.2.01 / 2.2.19): Add provider
 // is the page's one primary button whichever tab is open, and the tab rail's
@@ -30,7 +30,6 @@ export function ModelProvidersHeader({ tab, onAdd }: Props) {
       <div className={cn(PAGE_BLEED_HEAD, "pb-3")}>
         <PageHeader
           title={t("providers.title")}
-          experimental
           subtitle={t("providers.subtitle")}
           actions={
             <Button onClick={onAdd}>

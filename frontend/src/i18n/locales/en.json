@@ -1143,15 +1143,11 @@
       "saveFailed": "Couldn’t save the change: {{reason}}",
       "names": {
         "knowledge": "Knowledge",
-        "memory": "Memory",
-        "sync": "Sync",
-        "models": "Model providers"
+        "memory": "Memory"
       },
       "descriptions": {
         "knowledge": "Notes and documents that agents can look up, kept as plain files you can edit.",
-        "memory": "What agents remember between sessions, and the hook that delivers it.",
-        "sync": "Keep the vault in step with your own git remote across machines.",
-        "models": "Model providers, the local model proxy and token usage."
+        "memory": "What agents remember between sessions, and the hook that delivers it."
       },
       "source": {
         "pin": "Pinned by COFFER_FEATURES — change it where the daemon is started",

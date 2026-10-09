@@ -29,8 +29,8 @@ const MCP: Row[] = [{ uid: "u-gh", name: "github-mcp", title: "Octo bridge" }];
 const SKILLS = [{ uid: "s-pdf", name: "pdf", title: null, bindings: [] }];
 const COLLECTIONS: Row[] = [{ uid: "k-notes", name: "team-notes", title: null }];
 
-const ALL_ON = { knowledge: true, memory: true, sync: true, models: true };
-const ALL_OFF = { knowledge: false, memory: false, sync: false, models: false };
+const ALL_ON = { knowledge: true, memory: true };
+const ALL_OFF = { knowledge: false, memory: false };
 let features: Record<string, boolean>;
 let daemonUp: boolean;
 /** Per path: what the list route answers. A function lets a test hang or reject. */
@@ -189,18 +189,19 @@ describe("CommandPalette", () => {
     renderPalette();
     await settled();
     // Their pages are not listed, and nothing of theirs is asked for: no
-    // provider, knowledge, memory or sync list is read.
-    for (const name of ["Model providers", "Knowledge", "Memory", "Sync"]) {
+    // knowledge or memory list is read.
+    for (const name of ["Knowledge", "Memory"]) {
       type(name);
       expect(options()).toEqual([]);
     }
     const asked = call.mock.calls.map(([path]) => path as string);
-    expect(asked.filter((p) => /^\/(providers|knowledge|memory|sync)/.test(p))).toEqual([]);
-    const kinds = api.GET.mock.calls
-      .filter(([path]) => path === "/resources")
-      .map(([, init]) => (init as { params: { query: { kind?: string } } }).params.query.kind);
-    expect(kinds).not.toContain("provider");
-    // The always-on pages stay: Activity, Conversations, Channels and the MCP server list.
+    expect(asked.filter((p) => /^\/(knowledge|memory)/.test(p))).toEqual([]);
+    // The always-on pages stay: Model providers, Sync, Activity, Conversations
+    // and Channels.
+    type("model providers");
+    expect(options()).toContain("Model providers");
+    type("sync");
+    expect(options()).toContain("Sync");
     type("activity");
     expect(options()).toEqual(["Activity"]);
     type("channels");
@@ -216,9 +217,8 @@ describe("CommandPalette", () => {
     await settled();
     type("knowledge");
     expect(options()).toContain("Knowledge");
-    type("providers");
-    expect(options()).toContain("Model providers");
-    expect(call.mock.calls.map(([path]) => path)).toContain("/providers");
+    type("memory");
+    expect(options()).toContain("Memory");
   });
 
   acceptance("web-ui", "the palette lists pages while objects load", async () => {
