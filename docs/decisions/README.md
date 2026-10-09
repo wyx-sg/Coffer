@@ -174,7 +174,8 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`agent-hook-installation`](agent-hook-installation.md) | Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale |
 | [`provider-connections-projected-into-agent-config`](provider-connections-projected-into-agent-config.md) | LLM Connections Are Projected Into Each Agent's Own Config File |
 | [`api-key-providers-are-reached-through-a-separate-local-model-proxy`](api-key-providers-are-reached-through-a-separate-local-model-proxy.md) | API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged |
-| [`one-connection-is-one-endpoint`](one-connection-is-one-endpoint.md) | One Connection Is One Endpoint; a Vendor That Serves Two Wires at Two Roots Is Two Connections |
+| [`one-connection-serves-both-wires`](one-connection-serves-both-wires.md) | One Connection Serves Both Wires: an Optional Anthropic Address Beside the Base URL |
+| [`provider-reach-is-what-its-addresses-serve`](provider-reach-is-what-its-addresses-serve.md) | A Connection Reaches the Agents Its Addresses Serve; No Scope, No Off Switch |
 | [`context-windows-for-provider-models`](context-windows-for-provider-models.md) | A Provider Model's Context Window Comes From You, Then the Endpoint, Then the Bundled List, Else Nothing |
 | [`usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota`](usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md) | Usage Is Metered at the Proxy; Subscription Agents Are Not Metered |
 | [`model-catalogue-read-from-the-agent`](model-catalogue-read-from-the-agent.md) | The Model Catalogue Is Read Back From the Installed Agent |

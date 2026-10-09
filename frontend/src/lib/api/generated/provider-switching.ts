@@ -911,6 +911,8 @@ export interface components {
          *     offers downstream, each with its modality (``None`` ⇒ empty ⇒ no restriction).
          */
         ProviderCreate: {
+            /** Anthropic Base Url */
+            anthropic_base_url?: string | null;
             /** Base Url */
             base_url: string;
             /** Description */
@@ -1042,6 +1044,8 @@ export interface components {
          *     nothing (ADR identity-is-the-uid-inside-the-file).
          */
         ProviderOut: {
+            /** Anthropic Base Url */
+            anthropic_base_url: string | null;
             /** Base Url */
             base_url: string;
             /** Compatible Agents */
@@ -1063,6 +1067,8 @@ export interface components {
             protocol: components["schemas"]["Protocol"];
             /** Secret Ref */
             secret_ref: string | null;
+            /** Served Agents */
+            served_agents: components["schemas"]["AgentType"][];
             /** Title */
             title: string | null;
             /** Transcribe Default */
@@ -1098,6 +1104,8 @@ export interface components {
          *     the restriction.
          */
         ProviderPatch: {
+            /** Anthropic Base Url */
+            anthropic_base_url?: string | null;
             /** Base Url */
             base_url?: string | null;
             /** Description */

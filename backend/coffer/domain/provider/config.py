@@ -186,6 +186,12 @@ class ProviderConfig(BaseModel):
 
     protocol: Protocol
     base_url: str
+    # Where an OpenAI-protocol endpoint ALSO serves the Anthropic Messages wire,
+    # when that is not at ``base_url`` (DeepSeek: ``https://api.deepseek.com``
+    # and ``…/anthropic``). Claude Code is reached there, Codex at ``base_url``,
+    # so one connection serves both (ADR one-connection-serves-both-wires).
+    # ``None``: no second address.
+    anthropic_base_url: str | None = None
     # Fernet vault ref — an opaque address (``provider/<uuid4>/key``), never
     # derived from anything the user can change; multiple connections MAY
     # share one ref. Required for anthropic/openai/unknown; ``None`` for ollama
@@ -218,8 +224,9 @@ class ProviderConfig(BaseModel):
         """A connection that is no local runtime carries no ``local_runtime``
         key at all, so every existing document keeps its shape."""
         data: dict[str, Any] = handler(self)
-        if data.get("local_runtime") is None:
-            data.pop("local_runtime", None)
+        for key in ("local_runtime", "anthropic_base_url"):
+            if data.get(key) is None:
+                data.pop(key, None)
         return data
 
     @field_validator("base_url")
@@ -228,6 +235,11 @@ class ProviderConfig(BaseModel):
         if not v or not v.strip():
             raise ValueError("must not be empty")
         return v.strip()
+
+    @field_validator("anthropic_base_url")
+    @classmethod
+    def _blank_is_none(cls, v: str | None) -> str | None:
+        return v.strip() or None if v is not None else None
 
     @field_validator("secret_ref")
     @classmethod
@@ -272,7 +284,36 @@ class ProviderConfig(BaseModel):
             raise ValueError(f"{self.protocol.value} connection requires a secret_ref")
         if self.local_runtime is not None and not is_loopback_url(self.base_url):
             raise ValueError("a local runtime connection must point at this machine (loopback)")
+        if self.anthropic_base_url is not None and (
+            self.protocol is not Protocol.OPENAI or self.local_runtime is not None
+        ):
+            raise ValueError("only a remote openai connection takes a second, Anthropic address")
         return self
+
+    def served_wires(self) -> frozenset[str]:
+        """The wires this connection has an address for — what decides which
+        agents it can serve (ADR one-connection-serves-both-wires): an
+        Anthropic connection serves the Anthropic wire; an OpenAI one the OpenAI
+        wire, and the Anthropic wire too when it names an Anthropic address; a
+        local runtime what detection found it serving; an ``unknown`` one both,
+        since the probe could not tell and the switch test decides; a retired
+        ``ollama`` one none."""
+        if self.protocol is Protocol.OLLAMA:
+            return frozenset()
+        if self.local_runtime is not None and self.local_runtime.wires:
+            return frozenset(self.local_runtime.wires) | {self.protocol.value}
+        if self.protocol is Protocol.UNKNOWN:
+            return frozenset({Protocol.ANTHROPIC.value, Protocol.OPENAI.value})
+        if self.protocol is Protocol.OPENAI and self.anthropic_base_url:
+            return frozenset({Protocol.ANTHROPIC.value, Protocol.OPENAI.value})
+        return frozenset({self.protocol.value})
+
+    def base_url_for(self, anthropic: bool) -> str:
+        """Where this connection serves a wire: the Anthropic address for the
+        Anthropic wire when it has one, else ``base_url``."""
+        if anthropic and self.anthropic_base_url:
+            return self.anthropic_base_url
+        return self.base_url
 
     @property
     def is_local(self) -> bool:

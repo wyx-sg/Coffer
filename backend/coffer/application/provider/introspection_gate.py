@@ -45,7 +45,8 @@ async def authorize_stored_key(
     wanted = _norm(base_url or default_base_url)
     for row in await service.list():
         cfg = ProviderConfig.model_validate(row.config)
-        if cfg.secret_ref == secret_ref and _norm(cfg.base_url) == wanted:
+        roots = {_norm(cfg.base_url), _norm(cfg.anthropic_base_url)} - {""}
+        if cfg.secret_ref == secret_ref and wanted in roots:
             await require_key(service, row.uid, row.name, cfg)
             return
     raise StoredKeyDestinationRefused(

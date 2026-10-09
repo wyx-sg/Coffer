@@ -23,10 +23,18 @@ const modelSwitchTestKey = (pair: string | null, baseUrl?: string | null, ref?: 
 
 const DEBOUNCE_MS = 400;
 
-/** The protocol a probe for `agentType` on `connection` speaks: Claude Code
- *  only speaks Anthropic; any other agent, the connection's own protocol. */
-export function probeProtocol(connection: Provider, agentType?: string): string {
-  return agentType === "claude_code" ? "anthropic" : connection.protocol;
+/** Where and how a probe for `agentType` on `connection` speaks: Claude Code
+ *  only speaks Anthropic, at the connection's Anthropic address when it has one
+ *  (ADR one-connection-serves-both-wires); any other agent, the connection's
+ *  own protocol at its base URL. */
+export function probeEndpoint(
+  connection: Provider,
+  agentType?: string,
+): { provider: string; base_url: string } {
+  if (agentType === "claude_code") {
+    return { provider: "anthropic", base_url: connection.anthropic_base_url ?? connection.base_url };
+  }
+  return { provider: connection.protocol, base_url: connection.base_url };
 }
 
 /** @ui-only derived view; never crosses the wire. */
@@ -75,9 +83,8 @@ export function useModelSwitchTest(
       try {
         const r = await modelProbeApi.test(
           {
-            provider: probeProtocol(connection!, agentType),
+            ...probeEndpoint(connection!, agentType),
             model,
-            base_url: connection!.base_url,
             secret_ref: connection!.secret_ref,
           },
           signal,

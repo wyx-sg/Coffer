@@ -5998,7 +5998,6 @@
     },
     "fields": {
       "name": "名称",
-      "protocol": "协议",
       "baseUrl": "Base URL",
       "apiKey": "API Key"
     },
@@ -6006,7 +6005,8 @@
       "nameRequired": "请输入名称。",
       "baseUrl": "请输入完整 URL，例如 https://api.openai.com/v1",
       "secretRequired": "请输入 API Key。",
-      "loopback": "本地运行时必须在这台 Mac 上——请用 localhost 或 127.0.0.1。"
+      "loopback": "本地运行时必须在这台 Mac 上——请用 localhost 或 127.0.0.1。",
+      "address": "至少填一个地址。"
     },
     "rejected": {
       "title": "接入地址拒绝了已保存的密钥（{{status}}）",
@@ -6024,7 +6024,6 @@
     },
     "endpoint": {
       "title": "接入地址",
-      "locked": "{{agents}} 正在使用，已锁定",
       "runtime": "运行时",
       "wires": "提供 {{wires}}",
       "route": "路由",
@@ -6109,7 +6108,7 @@
       "stepEndpoint": "接入地址",
       "stepModels": "模型",
       "vendor": "厂商",
-      "vendorHint": "选择厂商会自动填写协议和 Base URL。网关和中转服务请选「自定义」。",
+      "vendorHint": "选择厂商会自动填好地址。网关和中转服务请选「自定义」。",
       "custom": "自定义",
       "keyHint": "选择一个已存的密钥，或粘贴新的 Key：添加服务商时会把它存进密钥库。",
       "keyName": "{{name}} API Key",
@@ -6117,20 +6116,6 @@
       "next": "下一步：模型",
       "back": "上一步",
       "submit": "添加提供商",
-      "protocols": {
-        "openai": {
-          "title": "OpenAI 兼容",
-          "body": "Codex 和对话都能用。"
-        },
-        "anthropic": {
-          "title": "Anthropic 兼容",
-          "body": "Claude Code 和对话都能用。"
-        },
-        "unknown": {
-          "title": "未知",
-          "body": "无法判断协议。"
-        }
-      },
       "local": {
         "title": "在这台 Mac 上找到",
         "looking": "正在查找这台 Mac 上的模型运行时…",
@@ -6155,7 +6140,7 @@
     "edit": {
       "title": "编辑 {{name}}",
       "renameHint": "重命名只改名称——密钥、历史记录和智能体都保持不变。",
-      "locked": "{{agents}} 正在使用，已锁定。",
+      "locked": "{{agents}} 正在使用，换到别的服务商之前不能添加或删除 OpenAI 兼容地址。",
       "keyHint": "密钥只写不读。要更改值，请用「更换密钥」。"
     },
     "replace": {
@@ -6238,6 +6223,25 @@
       "field": "上下文窗口",
       "hint": "token 数，例如 128000、128k 或 1m。",
       "invalid": "请输入 1k 到 100m 之间的 token 数。"
+    },
+    "address": {
+      "openai": {
+        "label": "OpenAI 兼容地址",
+        "help": "Codex 用这个地址。"
+      },
+      "anthropic": {
+        "label": "Anthropic 兼容地址",
+        "help": "Claude Code 用这个地址。"
+      },
+      "bothHint": "网关支持哪种就填哪个。同一个地址两种都支持的话，两个框填一样的。"
+    },
+    "served": "{{agents}} 可用",
+    "servedNone": "没有智能体可用",
+    "region": {
+      "label": "区域",
+      "intl": "国际",
+      "cn": "中国大陆",
+      "hint": "API key 只能在创建它的区域使用。"
     }
   },
   "skillSources": {

@@ -61,7 +61,7 @@ at a different root from its OpenAI-compatible one (DeepSeek: `https://api.deeps
 `https://api.deepseek.com/anthropic`) MUST be reachable from Claude Code as a second connection, not
 through a second address on the first. The Add dialog's preset for such a vendor MUST offer both
 wires, and picking one fills the base URL that wire is served at; both connections may use the same
-stored secret (ADR one-connection-is-one-endpoint).
+stored secret (ADR one-connection-serves-both-wires).
 
 #### Scenario: DeepSeek offers its Anthropic endpoint as a second connection
 - **GIVEN** the Add dialog with the DeepSeek preset chosen

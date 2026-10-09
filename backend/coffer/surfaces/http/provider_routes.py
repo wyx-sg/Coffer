@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from coffer.application.provider.local_runtime_handoff import local_runtime_handoff
 from coffer.application.provider.prices import ProviderPriceResolver
 from coffer.application.provider.service import ProviderService
-from coffer.application.provider.targets import scoped_targets
+from coffer.application.provider.targets import scoped_targets, served_agents
 from coffer.application.provider.windows import ProviderWindowResolver
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.types import AgentType
@@ -123,7 +123,9 @@ def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
         title=resource.title,
         protocol=cfg.protocol,
         base_url=cfg.base_url,
+        anthropic_base_url=cfg.anthropic_base_url,
         secret_ref=cfg.secret_ref,
+        served_agents=served_agents(cfg),
         # Reported, never accepted: the reach comes from the resource's
         # per-agent scope (ADR per-agent-resource-scope). This is the CONFIGURED
         # reach, not the effective projection — ``enabled`` rides the same
@@ -208,6 +210,7 @@ async def create_provider(
         body.name,
         protocol=body.protocol,
         base_url=body.base_url,
+        anthropic_base_url=body.anthropic_base_url,
         secret_value=body.secret_value,
         secret_ref=body.secret_ref,
         models=_curated(body.models),
@@ -241,6 +244,7 @@ async def update_provider(
         uid,
         protocol=body.protocol,
         base_url=body.base_url,
+        anthropic_base_url=body.anthropic_base_url,
         secret_value=body.secret_value,
         secret_ref=body.secret_ref,
         models=_curated(body.models),

@@ -2006,6 +2006,11 @@ components:
         kind uses. ``models`` curates which of the endpoint's models this connection
         offers downstream, each with its modality (``None`` ⇒ empty ⇒ no restriction).
       properties:
+        anthropic_base_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Anthropic Base Url
         base_url:
           minLength: 1
           title: Base Url
@@ -2209,6 +2214,11 @@ components:
         ``apiKeyHelper`` prints the agent's local proxy token), so a rename rewrites
         nothing (ADR identity-is-the-uid-inside-the-file).
       properties:
+        anthropic_base_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Anthropic Base Url
         base_url:
           title: Base Url
           type: string
@@ -2248,6 +2258,11 @@ components:
           - type: string
           - type: 'null'
           title: Secret Ref
+        served_agents:
+          items:
+            $ref: '#/components/schemas/AgentType'
+          title: Served Agents
+          type: array
         title:
           anyOf:
           - type: string
@@ -2269,8 +2284,10 @@ components:
       - title
       - protocol
       - base_url
+      - anthropic_base_url
       - secret_ref
       - compatible_agents
+      - served_agents
       - models
       - transcribe_default
       - enabled
@@ -2302,6 +2319,11 @@ components:
         replaces the curated set as a whole: ``None`` leaves it alone, ``[]`` clears
         the restriction.
       properties:
+        anthropic_base_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Anthropic Base Url
         base_url:
           anyOf:
           - type: string

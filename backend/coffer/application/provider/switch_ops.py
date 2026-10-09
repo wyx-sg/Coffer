@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 from coffer.application.provider.projection_ops import deproject_connection, project_connection
 from coffer.application.provider.projector import NativeModel, Priors
 from coffer.application.provider.results import ActivateResult, DeactivateResult
-from coffer.application.provider.targets import connection_for_agent, reaches
+from coffer.application.provider.targets import agent_wire, connection_for_agent, reaches
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
@@ -64,9 +64,14 @@ async def activate_checks(
         raise ProviderDoesNotReachAgent(
             resource.name, agent_type.value, "the connection is switched off"
         )
+    # A connection reaches the agents its addresses serve (ADR
+    # provider-reach-is-what-its-addresses-serve).
     if not reaches(resource, cfg, agent):
         raise ProviderDoesNotReachAgent(
-            resource.name, agent_type.value, "its scope does not name the agent"
+            resource.name,
+            agent_type.value,
+            "it has no address for the wire the agent speaks"
+            + (" (add its Anthropic address)" if agent_wire(agent_type) == "anthropic" else ""),
         )
 
 

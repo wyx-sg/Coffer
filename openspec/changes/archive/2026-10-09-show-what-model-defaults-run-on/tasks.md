@@ -11,7 +11,7 @@
 - [x] 2.2 Change model dialog says a Claude Code switch leaves the desktop app alone; en/zh copy
 - [x] 2.3 Root-cause the DeepSeek 404 (an OpenAI-protocol connection has no Messages API at its root); the switch test speaks the agent's wire; test
 - [x] 2.4 DeepSeek preset offers its Anthropic endpoint as a second connection (agreed: separate connections); test
-- [x] 2.5 ADR one-connection-is-one-endpoint
+- [x] 2.5 ADR one-connection-serves-both-wires
 
 ## 3. Context windows
 

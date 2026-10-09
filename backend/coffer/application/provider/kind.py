@@ -49,14 +49,14 @@ def make_provider_kind(rows: _Rows | None = None) -> Kind:
         # spec provider-switching "Keep an independent speech-to-text default":
         # the vault refuses a file that would make a second one.
         exclusive_flags=tuple(EXCLUSIVE_FLAGS),
-        # Per-agent scope: a connection's scope names the agents it projects
-        # into — the reach this kind used to carry itself, as
-        # ``compatible_agents`` inside its config, before the framework grew
-        # one (ADR per-agent-resource-scope). The projection seam
-        # (``application.provider.targets``) is the enforcement point: the
-        # switch, the per-agent key lookup, the import reconcile and the boot
-        # self-heal all read it.
-        supports_scope=True,
+        # No per-agent scope: a connection reaches the agents its addresses
+        # serve (ADR provider-reach-is-what-its-addresses-serve). Its switch is
+        # retired: nothing can turn a connection off, but the stored flag stays
+        # readable so the startup migration can find the ones that were off
+        # and move their agents back to their own login. A later release makes
+        # it non-toggleable and deletes that migration.
+        supports_scope=False,
+        switch_retired=True,
         validate_config=on_register,
         on_update_config=on_update,
     )

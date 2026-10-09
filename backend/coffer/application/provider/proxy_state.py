@@ -93,7 +93,9 @@ async def _member(
     return ProxyMember(
         connection_uid=resource.uid,
         connection_name=resource.name,
-        upstream_root=upstream_root(cfg.base_url),
+        # The Anthropic wire goes to the connection's Anthropic address when it
+        # has one (ADR one-connection-serves-both-wires).
+        upstream_root=upstream_root(cfg.base_url_for(wire is Wire.ANTHROPIC)),
         auth=auth,
         key=key,
         local=cfg.is_local,

@@ -88,7 +88,8 @@ Coffer 保留三类设计文本，各司其职：
 | Coffer 的智能体 Hook 按标记划定范围、显式安装、有审计，过期时会被修复 | [`agent-hook-installation`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-hook-installation.md) |
 | LLM 连接被投影进每个智能体自己的配置文件 | [`provider-connections-projected-into-agent-config`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-connections-projected-into-agent-config.md) |
 | API 密钥类提供商经由一个独立的本地模型代理访问，代理原样转发字节 | [`api-key-providers-are-reached-through-a-separate-local-model-proxy`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/api-key-providers-are-reached-through-a-separate-local-model-proxy.md) |
-| 一个连接就是一个接入地址；两种协议在不同根地址上的厂商建两个连接 | [`one-connection-is-one-endpoint`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/one-connection-is-one-endpoint.md) |
+| 一个连接同时服务两种协议：在 Base URL 旁可选一个 Anthropic 地址 | [`one-connection-serves-both-wires`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/one-connection-serves-both-wires.md) |
+| 连接能给哪些 agent 用，由它的地址决定；不再有可用范围和开关 | [`provider-reach-is-what-its-addresses-serve`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-reach-is-what-its-addresses-serve.md) |
 | 提供商模型的上下文窗口依次取：你设置的、接口返回的、内置列表的，否则不写 | [`context-windows-for-provider-models`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/context-windows-for-provider-models.md) |
 | 用量在代理处计量；订阅制智能体不计量 | [`usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md) |
 | 模型目录从已安装的智能体读回 | [`model-catalogue-read-from-the-agent`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/model-catalogue-read-from-the-agent.md) |

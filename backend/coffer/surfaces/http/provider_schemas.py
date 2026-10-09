@@ -62,6 +62,9 @@ class ProviderCreate(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     protocol: Protocol
     base_url: str = Field(min_length=1)
+    #: Where an ``openai`` endpoint also serves the Anthropic wire, for Claude
+    #: Code (DeepSeek's ``…/anthropic``); omitted: no such address.
+    anthropic_base_url: str | None = None
     secret_ref: str | None = None
     secret_value: str | None = Field(default=None, max_length=8192)
     models: list[ProviderModel] | None = None
@@ -94,6 +97,8 @@ class ProviderPatch(BaseModel):
 
     protocol: Protocol | None = None
     base_url: str | None = None
+    #: ``""`` removes the Anthropic address; omitted leaves it as it is.
+    anthropic_base_url: str | None = None
     secret_value: str | None = Field(default=None, max_length=8192)
     secret_ref: str | None = None
     models: list[ProviderModel] | None = None
@@ -135,8 +140,13 @@ class ProviderOut(BaseModel):
     title: str | None = None
     protocol: Protocol
     base_url: str
+    #: Where Claude Code reaches an ``openai`` connection; ``None``: nowhere.
+    anthropic_base_url: str | None = None
     secret_ref: str | None
     compatible_agents: list[AgentType]
+    #: The agent types this connection has an address for (ADR
+    #: one-connection-serves-both-wires); its scope can only name these.
+    served_agents: list[AgentType] = Field(default_factory=list)
     models: list[ProviderModel]
     transcribe_default: bool
     enabled: bool

@@ -1,14 +1,12 @@
 """Which agents a connection reaches, and which connection an agent is on
-(ADR per-agent-resource-scope; spec provider-switching).
+(ADR provider-reach-is-what-its-addresses-serve; spec provider-switching).
 
 Two different questions live here and must not be confused:
 
-- **Reach** — which agents a connection MAY serve. It is the resource's
-  framework-level ``scope``, narrowed by its ``enabled`` switch, and this module
-  is the single seam where the agent UIDS a scope holds are resolved into
-  ``AgentType`` (ADR identity-is-the-uid-inside-the-file): a uid says nothing
-  about the agent's type by itself, only the registry knows, which is why
-  ``scoped_targets`` takes the agent rows.
+- **Reach** — which agents a connection MAY serve. It is what the connection's
+  addresses serve (Claude Code needs an Anthropic one, Codex an OpenAI one),
+  narrowed by its ``enabled`` switch. A connection has no per-agent scope: a
+  scope stored before that rule is ignored.
 - **Choice** — which connection one agent actually runs on. That is a field of
   the agent record (``AgentConfig.connection_uid``), so it can name at most one
   connection by construction, and :func:`connection_for_agent` is the ONE
@@ -18,11 +16,10 @@ Two different questions live here and must not be confused:
 
 Reach has two readings, and collapsing them loses information:
 
-- **Configured reach** (``scoped_targets``) — which agents this connection is
-  set up to cover, whether or not it is switched on right now. This is what a
+- **Configured reach** (``scoped_targets``) — which agents this connection can
+  cover, whether or not it is switched on right now. This is what a
   management surface should show: blanking a connection's agent list because
-  the user disabled it makes the list look erased, and re-enabling appear to
-  restore data that was never lost.
+  the user disabled it makes the list look erased.
 - **Effective reach** (:func:`reaches`) — one agent, and the user's ``enabled``
   switch applied. What routing and the reconcile paths want.
 """
@@ -33,66 +30,63 @@ from collections.abc import Iterable
 
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
+from coffer.domain.provider.agent_projection import PROVIDER_PROJECTIONS
 from coffer.domain.provider.config import Protocol, ProviderConfig
 from coffer.domain.resource import Resource
-from coffer.domain.scope import is_active
+
+#: The wire each agent type speaks to a provider, as its projection declares it.
+_AGENT_WIRE = {p.agent_type: p.protocols[0] for p in PROVIDER_PROJECTIONS if p.protocols}
+
+
+def agent_wire(agent_type: AgentType) -> str | None:
+    """The wire ``agent_type`` speaks to a provider (``anthropic`` / ``openai``)."""
+    return _AGENT_WIRE.get(agent_type)
+
+
+def serves(cfg: ProviderConfig, agent_type: AgentType) -> bool:
+    """Whether ``cfg`` has an address for the wire ``agent_type`` speaks (ADR
+    one-connection-serves-both-wires): Claude Code needs an Anthropic one,
+    Codex an OpenAI one."""
+    wire = _AGENT_WIRE.get(agent_type)
+    return wire is not None and wire in cfg.served_wires()
+
+
+def served_agents(cfg: ProviderConfig) -> list[AgentType]:
+    """The agent types ``cfg`` can serve, in ``AgentType`` order."""
+    return [t for t in AgentType if serves(cfg, t)]
 
 
 def scoped_targets(
     resource: Resource, cfg: ProviderConfig, agents: list[Resource]
 ) -> list[AgentType]:
-    """The agent types ``resource`` is CONFIGURED to cover, in ``AgentType`` order.
+    """The agent types ``resource`` covers, in ``AgentType`` order: the ones its
+    addresses serve (ADR provider-reach-is-what-its-addresses-serve).
 
-    ``agents`` is the agent registry — every ``agent`` resource row.
-    Leaving an agent's type out of the reach here would hide it from the
-    management surface and, worse, from ``activate``'s ``skipped`` list, which
-    exists to tell the user that a type they scoped the connection to received nothing.
-
-    A uid in the scope that matches no registered agent contributes no type —
-    the scope layer's own rule for a reference to an agent this machine does
-    not have. It is dropped rather than guessed at, which narrows the reach and
-    never widens it.
-
-    A stored, retired ollama connection returns nothing whatever its scope says: it
-    has no key to write into an agent's config, so it covers no agent even in
-    principle. The rule is enforced here rather than in the config, because scope
-    lives outside the config and the rule is about projection, not about the
-    config's shape.
+    A connection has no per-agent scope: which connection an agent runs on is
+    the agent's own choice, and the agents a connection can serve follow from
+    its addresses. A scope stored before that rule is ignored, so it can
+    neither narrow nor widen the answer. ``agents`` is kept for the callers'
+    shape and not read.
 
     ``enabled`` is not consulted — see this module's docstring for why the
     configured reach and the effective projection are kept apart.
     """
+    del agents
     if cfg.protocol is Protocol.OLLAMA:
         return []
-    if resource.scope is None or resource.scope.agents is None:
-        # Unscoped: every agent type, including one whose agent is not
-        # registered on this machine yet. Answering from the registry instead
-        # would make "every agent" mean "every agent I happen to have", and a
-        # connection created before the user installed Codex would quietly
-        # never reach it.
-        return list(AgentType)
-    reached: set[AgentType] = set()
-    for agent in agents:
-        if not is_active(resource.scope, agent.uid):
-            continue
-        try:
-            reached.add(AgentConfig.model_validate(agent.config).type)
-        except Exception:
-            # A row whose config no longer parses is surfaced by the agent
-            # routes; here it simply contributes no type. Skipping narrows the
-            # reach, which is the safe direction — the projector could not
-            # write that agent's file anyway.
-            continue
-    return [t for t in AgentType if t in reached]
+    return served_agents(cfg)
 
 
 def reaches(resource: Resource, cfg: ProviderConfig, agent: Resource) -> bool:
-    """Whether ``resource`` may serve ``agent`` right now: switched on, not a
-    retired ollama connection, and its scope names the agent (an unscoped
-    connection names every agent)."""
+    """Whether ``resource`` may serve ``agent`` right now: switched on and
+    with an address for the wire the agent speaks."""
     if not resource.enabled or cfg.protocol is Protocol.OLLAMA:
         return False
-    return is_active(resource.scope, agent.uid)
+    try:
+        agent_type = AgentConfig.model_validate(agent.config).type
+    except ValueError:
+        return False
+    return serves(cfg, agent_type)
 
 
 def connection_for_agent(
@@ -126,4 +120,11 @@ def connection_for_agent(
     return None
 
 
-__all__ = ["connection_for_agent", "reaches", "scoped_targets"]
+__all__ = [
+    "agent_wire",
+    "connection_for_agent",
+    "reaches",
+    "scoped_targets",
+    "served_agents",
+    "serves",
+]
