@@ -447,6 +447,12 @@ html[lang="zh-CN"] .vp-doc .mermaid p {
   margin: 0;
   line-height: inherit;
 }
+/* If a label still measures short (a web font that swaps in after Mermaid
+   measured, a browser that sizes foreignObject differently), let the text run
+   past its box rather than cut its last line off. */
+.vp-doc .mermaid foreignObject {
+  overflow: visible;
+}
 .cli-ref .VPDocOutlineItem .outline-link {
   font-family: var(--vp-font-family-mono);
   font-size: 12.5px;
