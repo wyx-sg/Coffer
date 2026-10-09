@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 
 import { customToolsApi } from "@/lib/api/customTools";
 import { secretsApi } from "@/lib/api/secret";
+import { acceptance } from "@/test/acceptance";
 import { EditGroupDialog } from "./EditGroupDialog";
 import { makeGroup } from "./testFixtures";
 
@@ -76,7 +77,7 @@ describe("EditGroupDialog", () => {
     );
   });
 
-  test("edits only the description and timeout: base URLs and headers are the environments'", async () => {
+  acceptance("web-ui", "Edit group edits only the description and timeout", async () => {
     const onOpenChange = vi.fn();
     const dialog = open(onOpenChange);
     expect(within(dialog).queryByLabelText(/Base URL/)).toBeNull();

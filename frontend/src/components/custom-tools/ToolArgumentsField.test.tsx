@@ -3,6 +3,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
+import { acceptance } from "@/test/acceptance";
 import { argumentUses } from "@/lib/customTools/requestParts";
 import { argsFromSchema } from "@/lib/customTools/schemaArgs";
 import { ToolArgumentsField } from "./ToolArgumentsField";
@@ -15,7 +16,7 @@ const args = argsFromSchema({
 });
 
 describe("ToolArgumentsField", () => {
-  test("marks where each argument goes and offers the fix for the ones that go nowhere", () => {
+  acceptance("web-ui", "an argument the request never uses is flagged with its fix", () => {
     const onChange = vi.fn();
     const onAddToQuery = vi.fn();
     const uses = argumentUses({
