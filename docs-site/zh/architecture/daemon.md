@@ -80,7 +80,7 @@ Telegram 在守护进程的事件循环里轮询。SeaTalk 的 SDK 是第三方�
 | 文件 | 方向 | 由谁写 | 内容 | 生命周期 |
 | --- | --- | --- | --- | --- |
 | `daemon-config.json` | 进 | 命令行、功能开关、同步的机器身份 | `port`（可选）、`proxy_port`（可选）、`machine_name`、缓存的 `machine_id`、`features` 开关 | 跨重启保留 |
-| `daemon.json` | 出 | 守护进程，在启动时 | `version`（schema 版本，当前为 `1`）、`pid`、`port`、`token`、`started_at`、`binary_path` | 退出时删除 |
+| `daemon.json` | 出 | 守护进程，在启动时 | `version`（schema 版本，当前为 `1`）、`pid`、`port`、`token`、`started_at` | 退出时删除 |
 
 `daemon-config.json` 不能放在 SQLite 里，因为端口必须在打开或迁移数据库之前选定。它也不能是环境变量：拉起守护进程的调用方会传下自己的环境，而 shell 配置文件只作用于你的终端。这个文件只用标准库读取。读不了或格式错误的文件会记一条警告并按「没有设置」处理，所以手改出的错别字永远不会让守护进程起不来。写入时合并进已有对象，并保留本构建不认识的键，所以新版 Coffer 写的文件被旧版碰过之后仍然完好。
 
@@ -94,8 +94,7 @@ Telegram 在守护进程的事件循环里轮询。SeaTalk 的 SDK 是第三方�
   "pid": 48213,
   "port": 38470,
   "token": "q3V0…",
-  "started_at": "2026-09-24T08:12:40.118204+00:00",
-  "binary_path": "/Users/you/.coffer/bin/0.1.1/coffer-daemon"
+  "started_at": "2026-09-24T08:12:40.118204+00:00"
 }
 ```
 

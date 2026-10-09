@@ -283,7 +283,7 @@ flowchart LR
 | `coffer log audit [--kind] [--name] [--event-type] [--since] [--trace] [--limit] [--json]` | 审计日志，最新的在前 |
 | `coffer log mcp [--server] [--status ok\|error] [--since] [--trace] [--limit] [--json]` | MCP 调用日志，最新的在前 |
 | `coffer log daemon [--errors] [--since] [--trace] [--limit] [--json]` | `daemon.log` 的末尾，经过与「活动」页相同的宽容读取器 |
-| `coffer daemon status [--json]` | 事件循环延迟和后台任务计数，与守护进程的版本和端口一起 |
+| `coffer daemon status [--tasks] [--json]` | 事件循环延迟和后台任务计数（加 `--tasks` 时按名字列出），与守护进程的版本和端口一起 |
 | `coffer path logs` | 日志目录及其中的 `daemon.log`，供 `grep` 或 `tail` 使用 |
 
 `--since` 接受一个 ISO 8601 时间点，或 `30m`、`1h`、`2d` 这样的时长。解析不了的过滤条件——只给了名字没给类型，或者该类型下没有这个名字的资源——会报错，而不是被悄悄忽略，因为不加过滤的答案看起来就像“这个资源什么都没发生”。每条命令都是只读的，不打印任何密钥值：审计 details 在存储前就已脱敏，日志记录从构造上就不含密钥。
@@ -302,7 +302,7 @@ flowchart LR
 
 在函数返回前就被它自己等待或取消的任务——`asyncio.wait` 竞速的两边、一次 shield 住的写入、每个请求一个的泵——是结构化并发，不是后台工作，保持原样。`scripts/check_bare_tasks.py`（由 `make lint` 运行）按文件统计 `create_task` 和 `ensure_future` 调用，任何文件的调用数超过它在允许清单里的条目就失败，每个条目都写明它的调用为何是就地等待的。因此新加的裸任务会让 lint 失败，直到它改用监督器，或者带着理由加进清单。
 
-**被阻塞的循环看起来只是普遍变慢。** 循环上的一个同步调用——一次大的文件遍历、一次等待子进程——会让每个请求、渠道和轮次同时卡住。`application/runtime/loop_lag.py` 每次睡 0.5 秒，记录循环比要求的晚了多少才把它叫醒，保留五分钟的样本。
+**被阻塞的循环看起来只是普遍变慢。** 循环上的一个同步调用——一次大的文件遍历、一次等待子进程——会让每个请求、渠道和轮次同时卡住。`application/runtime/loop_lag.py` 每次睡 0.5 秒，记录循环比要求的晚了多少才把它叫醒，保留五分钟的样本。光有延迟只能说明发生过卡顿，说不出是谁造成的：探针醒来时，阻塞的调用早已返回。所以探针睡着时，有一个小线程（`application/runtime/stall_watch.py`）在等它。探针晚了 100 毫秒以上，说明循环此刻仍被阻塞，线程就往 `daemon.log` 写一行 `runtime.loop.stalled`，带上循环线程当前的调用栈和循环正在运行的任务名。阻塞的调用就是栈里最内层的 Coffer 帧。每 10 秒最多写一行；它的 `suppressed` 字段记录自上一行以来被压下的卡顿次数。
 
 `GET /api/v1/daemon/status` 在它的 `runtime` 块里带着这两样，`coffer daemon status` 会把它们打印出来：
 
@@ -313,12 +313,15 @@ flowchart LR
   "loop_lag_samples": 600,
   "loop_lag_window_seconds": 300.0,
   "tasks_running": 14,
+  "tasks_by_name": {"reconciler": 1, "telegram-poll": 1, "coffer-mcp-http-upstream": 6, "turn": 1, "loop-lag-probe": 1},
   "task_crashes": 1,
   "last_crash": {"task": "telegram-poll:family", "error": "RuntimeError", "at": "2026-10-01T08:12:03Z", "restarting": true}
 }
 ```
 
 空闲的守护进程读数是一两毫秒。p99 到了几百毫秒，说明有东西在阻塞循环；最大值前后的守护进程日志通常会说明是什么。状态路由不需要令牌就能回答，所以 `last_crash` 只带异常的类名；它的消息和 traceback 在 `daemon.log` 的 `runtime.task.crashed` 下。
+
+`tasks_by_name` 按任务名第一个 `:` 之前的部分统计正在运行的任务。冒号后面的部分是任务服务的对象（一个渠道、一个 MCP server、一个会话），而这个路由不需要令牌，所以不放进来。`tasks_running` 上涨时，它能说明是哪一类任务在涨：一直没被回收的会话表现为 `coffer-mcp-http-upstream` 计数不断上升，启动了两次的渠道循环表现为 `telegram-poll` 等于 2。`coffer daemon status --tasks` 打印同样的计数，从多到少。
 
 ## 评测采集 {#eval-capture}
 

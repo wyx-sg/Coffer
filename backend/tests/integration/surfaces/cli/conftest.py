@@ -158,7 +158,6 @@ def in_proc_daemon(tmp_path, monkeypatch):
         port=_PORT,
         token=_TOKEN,
         started_at=dt.now(tz=UTC),
-        binary_path="/test",
     )
     write(home / ".coffer" / "daemon.json", info)
 

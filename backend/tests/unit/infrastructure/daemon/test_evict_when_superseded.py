@@ -31,7 +31,6 @@ def _info(pid: int = 999, port: int = 8003) -> DaemonInfo:
         port=port,
         token="tok",
         started_at=datetime.now(tz=UTC),
-        binary_path="/fake/coffer-daemon",
     )
 
 

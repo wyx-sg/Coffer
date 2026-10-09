@@ -160,7 +160,6 @@ async def test_started_at_matches_daemon_json(tmp_path, monkeypatch):
             port=8765,
             token="test-tok",
             started_at=known_started_at,
-            binary_path="/usr/bin/coffer",
         ),
     )
 
@@ -231,6 +230,7 @@ async def test_status_reports_draining_during_teardown(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(spec="daemon", scenario="the status reports loop lag and task crashes")
+@pytest.mark.acceptance(spec="daemon", scenario="the status counts running tasks by name")
 @pytest.mark.asyncio
 async def test_status_reports_loop_lag_and_task_crashes(tmp_path, monkeypatch):
     """The ``runtime`` block: the loop-lag probe's window and the supervisor's
@@ -254,13 +254,21 @@ async def test_status_reports_loop_lag_and_task_crashes(tmp_path, monkeypatch):
             raise LookupError("no such row")
 
         await asyncio.wait({spawn(broken(), name="test-broken-worker")})
+        parked = asyncio.Event()
+        waiting = [spawn(parked.wait(), name=f"test-parked:private-{i}") for i in range(2)]
         r = await c.get("/api/v1/daemon/status")
+        parked.set()
+        await asyncio.wait(waiting)
     assert r.status_code == 200
     runtime = r.json()["runtime"]
     assert runtime["loop_lag_samples"] >= 1
     assert runtime["loop_lag_p99_ms"] is not None and runtime["loop_lag_max_ms"] >= 4.0
     assert runtime["loop_lag_window_seconds"] == 300.0
     assert runtime["tasks_running"] >= 1  # the probe itself, at least
+    # Counted by the name before the colon; what follows it stays out.
+    assert runtime["tasks_by_name"]["loop-lag-probe"] == 1
+    assert runtime["tasks_by_name"]["test-parked"] == 2
+    assert "private-" not in str(runtime)
     assert runtime["task_crashes"] == before + 1
     last = runtime["last_crash"]
     assert last["task"] == "test-broken-worker"

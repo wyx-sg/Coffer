@@ -146,3 +146,18 @@ async def test_shutdown_cancels_every_task_still_running() -> None:
     assert first.cancelled() and second.cancelled()
     assert sup.stats().running == 0
     assert sup.stats().crashes == 0
+
+
+async def test_running_tasks_are_counted_by_the_name_before_the_colon() -> None:
+    sup = TaskSupervisor()
+    gate = asyncio.Event()
+    started = [
+        sup.spawn(gate.wait(), name="seatalk-ws:family"),
+        sup.spawn(gate.wait(), name="seatalk-ws:work"),
+        sup.spawn(gate.wait(), name="reconciler"),
+    ]
+    await asyncio.sleep(0)
+    assert sup.running_by_name() == {"reconciler": 1, "seatalk-ws": 2}
+    gate.set()
+    await asyncio.wait(started)
+    assert sup.running_by_name() == {}

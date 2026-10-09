@@ -35,7 +35,6 @@ def _write_daemon_json(home: Path, *, pid: int, port: int = 38471) -> None:
             port=port,
             token="tok",
             started_at=datetime.now(tz=UTC),
-            binary_path="/fake/coffer-daemon",
         ),
     )
 
