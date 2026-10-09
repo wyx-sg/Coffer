@@ -23,7 +23,7 @@ PYTEST_XDIST := -n $(PYTEST_WORKERS) --dist loadgroup
 
 .PHONY: help install install-e2e-browsers hooks \
 	verify verify-all \
-	verify-unit verify-integration verify-contract verify-e2e verify-visual visual-update verify-acceptance openspec-validate verify-benchmark verify-secrets \
+	verify-unit verify-integration verify-contract verify-e2e verify-visual visual-update docs-shots verify-acceptance openspec-validate verify-benchmark verify-secrets \
 	test-durations \
 	coverage lock \
 	eval eval-routing eval-curate \
@@ -48,6 +48,7 @@ help:
 	@echo "  make verify-e2e            e2e tier only (Playwright: web + mcp projects)"
 	@echo "  make verify-visual         screenshot baseline: every route, light + dark (not in verify / verify-e2e)"
 	@echo "  make visual-update         re-record this platform's screenshot baseline after a deliberate visual change"
+	@echo "  make docs-shots            regenerate the docs site's app pictures (docs-site/public/shots/) from a seeded daemon"
 	@echo "  make verify-acceptance     openspec validate + audit scenarios vs test markers"
 	@echo "  make verify-benchmark      every perf-budget test, the slow ones too (COFFER_RUN_BENCHMARKS=1)"
 	@echo "  make verify-secrets        gitleaks over the full git history (skips when gitleaks is not installed)"

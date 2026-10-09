@@ -218,3 +218,9 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`secrets-cross-machines-only-as-ciphertext`](secrets-cross-machines-only-as-ciphertext.md) | Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository |
 | [`standalone-secrets-are-named-references-injected-into-one-child`](standalone-secrets-are-named-references-injected-into-one-child.md) | Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process |
 | [`only-a-present-human-sees-a-secret-or-sends-it-somewhere-new`](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md) | Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New |
+
+### Documentation
+
+| ADR | Decision |
+| --- | --- |
+| [`docs-screenshots-are-generated-from-a-seeded-daemon`](docs-screenshots-are-generated-from-a-seeded-daemon.md) | Docs Screenshots Are Generated From a Seeded Daemon, Not Captured by Hand |
