@@ -174,21 +174,22 @@ The vocabulary is a closed enumeration, defined in the domain layer.
 | Area | Events |
 | --- | --- |
 | Resources | `resource_created`, `resource_updated`, `resource_enabled`, `resource_disabled`, `resource_deleted`, `resource_renamed`, `resource_scope_updated` |
-| MCP capabilities | `capability_enabled`, `capability_disabled` |
-| Daemon | `token_rotated`, `daemon_residency_updated`, `daemon_restarted`, `retention_updated`, `internal_engine_model_set` |
-| Secrets | `secret_set`, `secret_revealed`, `secret_deleted`, `secret_resolved`, `secret_local_access_revoked`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected` |
+| MCP capabilities | `capability_enabled`, `capability_disabled`, `tool_exposure_changed` |
+| Daemon | `token_rotated`, `daemon_residency_updated`, `daemon_restarted`, `retention_updated`, `call_content_recording_updated`, `attention_ignored`, `attention_unignored`, `storage_cache_cleared`, `internal_engine_model_set` |
+| Secrets | `secret_set`, `secret_revealed`, `secret_deleted`, `secret_notes_updated`, `secret_resolved`, `secret_imported`, `secret_plaintext_ignored`, `secret_plaintext_unignored`, `secret_local_access_revoked`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected`, `secret_protection_enabled`, `master_key_relocated` |
 | Agents | `agent_mcp_installed`, `agent_mcp_uninstalled`, `agent_mcp_entry_removed`, `agent_mcp_entry_adopted`, `agent_plugin_toggled`, `agent_plugin_uninstalled` |
 | Skills | `skill_imported`, `skill_updated`, `skill_update_merged`, `skill_bound`, `skill_unbound`, `skill_relinked`, `skill_drift_remediated`, `skill_adopted`, `skill_unmanaged_deleted` |
+| CLIs | `cli_tool_added`, `cli_tool_edited`, `cli_tool_removed` |
 | Knowledge | `knowledge_written`, `knowledge_edited`, `knowledge_deleted` |
 | Memory | `memory_aggregated`, `memory_distilled`, `memory_delivery_installed`, `memory_delivery_removed`, `memory_delivery_fired`, `memory_trigger_added`, `memory_trigger_proposed`, `memory_trigger_armed`, `memory_trigger_disarmed`, `memory_trigger_deleted` |
-| Channels | `channel_pairing_issued`, `channel_paired` |
-| Vault files | `vault_file_edited` (a hand edit committed as `disk`, by a person) |
+| Channels | `channel_pairing_issued`, `channel_paired`, `channel_person_removed`, `channel_reply_withdrawn` |
+| Vault files | `vault_file_edited` (a hand edit committed as `disk`, by a person), `vault_file_restored` |
 | Vault sync | `sync_run`, `sync_confirmed`, `sync_rejected`, `sync_rolled_back`, `sync_machine_removed`, `sync_plaintext_pushed`, `master_key_exported`, `master_key_imported` |
-| Providers | `provider_switched`, `provider_transcribe_default_set`, `provider_projection_refused` |
+| Providers | `provider_switched`, `provider_transcribe_default_set`, `provider_projection_refused`, `provider_projection_repaired` |
 
 No secret event carries a secret value; each records the ref, the standalone secret's name or the destination only.
 
-Three events are no longer recorded, because the web UI no longer edits an agent's config file or a memory note: `agent_config_file_written`, `agent_config_file_deleted` and `memory_note_edited`. Rows already in the log keep their labels in the Activity page, so they still read in plain words. `vault_file_restored` is recorded: restoring a version from a History tab is Coffer's own write. An edit made on disk, or a restore an agent commits itself, is a vault commit naming `Coffer-Writer: disk` or `agent`; the vault's git history answers who changed the file.
+Five events are no longer recorded: `agent_config_file_written`, `agent_config_file_deleted` and `memory_note_edited`, because the web UI does not edit an agent's config file or a memory note, and `knowledge_curated` and `provider_internal_default_set`. Rows already in the log keep their labels in the Activity page, so they still read in plain words. `vault_file_restored` is recorded: restoring a version from a History tab or drawer is Coffer's own write. An edit made on disk, or a restore an agent commits itself, is a vault commit naming `Coffer-Writer: disk` or `agent`; the vault's git history answers who changed the file.
 
 - `secret_revealed` — a person revealed or copied a value in the desktop app, behind a presence check. It is the only way a value is shown, since no route, command or tool returns one.
 - `secret_resolved` — `coffer run` resolved a standalone secret into one child process. The row names the secret, the program and the working directory, never the value or the rest of the command line.
@@ -249,28 +250,38 @@ Recording is on by default and switched per machine by `record_call_content` in 
 
 Everything log-like is bounded by one mechanism.
 
-Every table the retention worker sweeps is described declaratively: its policy key, timestamp column, default window, display name, and an action of `delete` or `archive`. The composition root registers every such description in one registry, and the SQL allowlist the repository accepts is derived from those registrations, so a table cannot be pruned unless it is registered.
+Every table the retention worker sweeps is described declaratively: its policy key, timestamp column, default window, display name and description, and optionally the policy it follows (`policy_name`): a follower has no policy of its own and is pruned with that policy's window. Rows older than the window are deleted; there is no other action. The composition root registers every such description in one registry, and the SQL allowlist the repository accepts is derived from those registrations, so a table cannot be pruned unless it is registered.
 
-| Policy (`name`) | Table | Timestamp column | Default | Action |
-| --- | --- | --- | --- | --- |
-| `audit_log` | `audit_log` | `timestamp` | 365 days | delete |
-| `mcp_invocations` | `mcp_invocations` | `timestamp` | 30 days | delete |
-| `sync_runs` | `sync_runs` | `finished_at` | 90 days | delete |
+| Policy (`name`) | Table | Timestamp column | Default |
+| --- | --- | --- | --- |
+| `audit_log` | `audit_log` | `timestamp` | 365 days |
+| `mcp_invocations` | `mcp_invocations` | `timestamp` | 30 days |
+| `sync_runs` | `sync_runs` | `finished_at` | 90 days |
+| `usage_daily` | `usage_daily` | `day` | 365 days |
+| `usage_requests` | `usage_requests` | `started_at` | follows `mcp_invocations` |
+
+Three **file policies** prune folders the same way, by each file's modification time:
+
+| Policy | Folder | Default |
+| --- | --- | --- |
+| `attachments` | `~/.coffer/content/channel-media` (what channels downloaded) | 30 days |
+| `skill_data` | `~/.coffer/skill-data` (logs, journals and temp files skill scripts write) | 30 days |
+| `config_backups` | `~/.coffer/config-backups` (copies of agent config files made before a rewrite); the newest copy of each file is kept however old | 30 days |
 
 ```mermaid
 flowchart LR
     W["Retention worker (every 6 h)"] --> S["Prune"]
     S --> R["Registered prunable tables"]
     R --> T1["delete rows older than window"]
-    S --> M["sweep channel media dir"]
+    S --> M["file policies: channel media, skill-data, config-backups"]
     W --> F["Log-file pruning: shim and upstream logs older than 7 days"]
     S --> P["local/retention.json: last_pruned_at, rows"]
 ```
 
-- At startup the retention service seeds a policy for each registered table in `~/.coffer/local/retention.json` and never overwrites one you changed. An entry in the file for a policy that is no longer registered, such as the removed conversation policies, is dropped at startup.
+- At startup the retention service seeds a policy for each registered table and file policy in `~/.coffer/local/retention.json` and never overwrites one you changed. An entry in the file for a policy that is no longer registered, such as the removed conversation policies, is dropped at startup.
 - The retention worker runs a prune immediately at startup (catch-up), then every 6 hours. A failing prune is logged and the worker keeps going.
-- A full prune also sweeps the channel media directory, and the worker prunes old shim and upstream log files on the same cadence. `daemon.log` itself is bounded by its own rotation and is never deleted.
-- A window of "none" disables pruning for that table. Changing a window records `retention_updated` in the audit log.
+- A full prune also sweeps the file policies' folders, and the worker prunes old shim and upstream log files on the same cadence. `daemon.log` itself is bounded by its own rotation and is never deleted.
+- A window of "none" disables pruning for that policy. Changing a window records `retention_updated` in the audit log.
 
 You manage policies from **Settings → Data**, or through `/api/v1/retention/policies` and `POST /api/v1/retention/prune`.
 

@@ -68,11 +68,11 @@ flowchart TB
 资源的**生效范围**（reach）决定它在哪里起作用。它由两部分组成：
 
 - **`enabled`**：开关。知识集、记忆分区和智能体没有开关，始终开启。
-- **scope**：一个可选的智能体允许列表。不设 scope 表示所有智能体，`--agents a,b` 表示只有这些智能体，空列表表示一个都没有。
+- **scope**：一个可选的智能体允许列表。不设 scope 表示所有智能体；一个列表表示只有这些智能体。列表不能为空：不应作用于任何智能体的资源要关闭它。
 
 scope 适用于 MCP 服务器（哪些智能体能看到该服务器的工具）、技能（哪些智能体会收到该技能）、提供商（切换时写入哪些智能体的配置）和消息渠道（该渠道可以驱动哪些智能体）。知识集和记忆分区两者都没有：每一个都对所有智能体提供。生效范围是**本机专属**的：它在所作用的机器上设置，永不同步，所以你的每台机器各自决定生效范围。
 
-用 `coffer <kind> scope <name> --agents <types>` 设置 scope（智能体按类型命名，比如 `claude-code`）（`--all` 表示所有智能体，`--none` 表示一个都没有），也可以在 Web 界面资源页面上的**生效范围**控件里设置。指南：[MCP 服务器](/zh/guides/mcp-servers)、[技能](/zh/guides/skills)。架构：[资源框架](/zh/architecture/resource-framework)。
+用 `coffer mcp|skill|channel reach <name> --data '{"scope":{"agents":["<agent uid>"]}}'` 设置 scope（`{"scope":null}` 表示所有智能体），任何类型都可以用 `coffer resource reach set <uid>`；自定义工具分组用 `coffer custom-tool group reach <group> --agent <agent>`（可重复）或 `--all`。Web 界面资源页面上的**生效范围**控件效果相同。指南：[MCP 服务器](/zh/guides/mcp-servers)、[技能](/zh/guides/skills)。架构：[资源框架](/zh/architecture/resource-framework)。
 
 ## 智能体 {#agent}
 
@@ -94,7 +94,9 @@ scope 适用于 MCP 服务器（哪些智能体能看到该服务器的工具）
 | --- | --- |
 | `coffer__search_tools` | 按一段自然语言查询对完整的上游目录排序，返回真实的工具 schema，智能体随后可以直接调用。 |
 
-没有知识工具、记忆工具，也没有日志工具。知识文档和记忆笔记都是 Markdown 文件，智能体用自己的文件工具读取和修改；Coffer 的记录用 `coffer log audit|mcp|daemon` 读取。
+在 Coffer 运行的回合里（来自**对话**页面或消息渠道），会话还会多两个回合内的工具：`coffer__ask` 向你提问并等待回答，`coffer__channel_read_thread` 读取聊天话题里更早的消息。在终端里启动的智能体永远看不到它们。
+
+没有知识工具、记忆工具，也没有日志工具。知识页面和记忆笔记都是 Markdown 文件，智能体用自己的文件工具读取和修改；Coffer 的记录用 `coffer log audit|mcp|daemon` 读取。
 
 网关从 MCP 握手中获取调用方智能体的身份，这不是智能体能自己设置的参数。
 
@@ -108,7 +110,7 @@ scope 适用于 MCP 服务器（哪些智能体能看到该服务器的工具）
 
 ## 知识集与整理 {#knowledge-collections-and-tidying}
 
-**知识集**是 `~/.coffer/vault/knowledge/<collection>/` 下的一个文件夹，存放一棵由你和你的智能体共同编写的 Markdown 文档树。文档的路径就是它的身份。网页界面以只读方式显示文档并在你的编辑器里打开它们，你在那里编辑；智能体用自己的文件工具读取和编辑，通过 `coffer-guide` 里的目录找到它们。要新增知识，智能体把一篇 Markdown 文档直接写进知识集；上传的文件会原样成为一篇文档。`coffer-guide` 技能告诉智能体一条事实该放在哪里、怎样整理知识集：合并讲同一件事的文档、拆开过长的文档、订正过时的说法。Coffer 不会用自己的模型去改你的文档。知识集上的**整理**会把这件事交给你的默认智能体，在一个新对话里完成。
+**知识集**是 `~/.coffer/vault/knowledge/<collection>/` 下的一个文件夹，存放一个由你和你的智能体共同编写的 Markdown 小型 wiki：一个说明这里放什么的 `README.md` 结构说明，`sources/` 下的**来源**（每次上传和收件箱里放入的文件，转换成 Markdown，智能体只读不改），以及 `pages/` 下的**页面**（由你和智能体编写，用 `[[slug]]` 互相链接，每页注明它依据的来源）。网页界面以只读方式显示文件并在你的编辑器里打开它们，你在那里编辑；智能体用自己的文件工具读取和编辑页面，通过 `coffer-guide` 里的目录找到它们。`coffer-guide` 技能告诉智能体一条事实该放在哪里、怎样整理知识集：把待整理的来源并入页面、合并讲同一件事的页面、拆开过长的页面、订正过时的说法。Coffer 不会用自己的模型去改你的知识。知识集上的**整理**会把这件事交给你的默认智能体，在一个新对话里完成。Coffer 还会检查每个知识集里的失效链接、没有来源的页面等问题，**交给智能体检查**会把审查交给你的智能体。
 
 指南：[知识](/zh/guides/knowledge)。架构：[知识](/zh/architecture/knowledge)。
 
@@ -132,13 +134,13 @@ Coffer 以只读方式**聚合**每个已注册智能体自己的原生记忆，
 
 ## 密钥引用 {#secret-refs}
 
-Coffer 只以 Fernet 密文形式保存密钥，所用的主密钥存放在 macOS 钥匙串中，只有 Coffer 的签名二进制能读取。资源里从不包含密钥本身，而是包含一个**密钥引用**，即一个名字，比如 `github.token`；守护进程只在启动上游服务器或发送请求的那一刻才解析它。用 `coffer secret set <ref>` 设置密钥。明文永远不会进入数据库、日志或审计日志。
+Coffer 只以 Fernet 密文形式保存密钥，所用的主密钥存放在 macOS 钥匙串中，只有 Coffer 的签名二进制能读取。资源里从不包含密钥本身，而是包含一个**密钥引用**，形如 `secret/<id>`，id 由 Coffer 生成；守护进程只在启动上游服务器或发送请求的那一刻才解析它。用 `coffer secret set --name "<label>"` 新建密钥；`coffer secret set <ref>` 替换已有密钥的值。明文永远不会进入数据库、日志或审计日志。
 
 指南：[密钥存储](/zh/guides/secret-store)。架构：[安全模型](/zh/architecture/security)。
 
 ## 审计日志 {#audit-log}
 
-对资源的每一次生命周期改动都会连同操作者写入**审计日志**：`cli`、`api`、`ui`、`system`、`sync`、`channel`，或者智能体自己操作时写智能体的名字。它旁边还有另外两份记录：**MCP 调用日志**（调用了哪个工具、什么时候、耗时多久、结果如何，从不记录内容）和**守护进程日志**。Web 界面的**活动**页面把三者分别放在各自的 tab 上展示。
+对资源的每一次生命周期改动都会连同操作者写入**审计日志**：`cli`、`api`、`ui`、`system`、`sync`、`channel`，或者智能体自己操作时写智能体的名字。它旁边还有另外两份记录：**MCP 调用日志**（调用了哪个工具、什么时候、耗时多久、结果如何，默认还记录参数和返回内容，其中的密钥会被遮盖）和**守护进程日志**。Web 界面的**活动**页面把三者分别放在各自的 tab 上展示。
 
 指南：[活动与审计](/zh/guides/activity)。架构：[可观测性](/zh/architecture/observability)。
 

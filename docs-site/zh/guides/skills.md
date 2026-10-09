@@ -67,7 +67,7 @@ Coffer 还会读取可选的 `license` 字段、实验性的 `allowed-tools` 字
 
 **技能**（侧边栏的能力分组下）左边是你的技能库，右边是你正在看的技能。左侧列表有一个搜索框和 **检查副本**，并把技能按需要你处理的程度分组：**需要处理**、**使用中**、**未使用**、**已关闭** 和 **内置**。每一行显示技能的名称和用徽标表示的生效范围（描述在技能详情页里），名称下面只在有事要你处理时显示那一件事：**主文件夹不见了**、**Codex 中有文件夹挡住**、**需要 jq · 未安装**、**工具已关闭**、**缺少密钥**、**无法访问来源** 或 **有可用更新**。搜索框下方的 **生效范围** 筛选可以把列表缩小到对某一个智能体生效的技能（智能体的技能 tab 会带着这个智能体跳到这里，`/skills?agent=<uid>`）。勾选行（悬停时会出现复选框）可以一次设置多个技能的生效范围或删除它们；选中的内容会以一条工具栏显示在搜索框下方和阅读窗格中。`~/.coffer/vault/skills/` 中没有被任何技能认领的文件夹会单独列在 **不在技能库中** 下（见[下文](#folders-not-in-your-library)）。
 
-打开的技能的页头有它的名称、一个状态标签（**使用中**、**已关闭**、**主文件夹不见了**、**有文件夹挡住**、**缺少命令**、**工具已关闭**、**缺少密钥**、**无法访问来源**），以及两个固定的按钮：**生效范围** 和一个 **⋯** 菜单，里面有 **在编辑器中打开**、**在 Finder 中显示**、**复制主文件夹路径**、**检查智能体的副本**、**关闭**（从所有智能体中移除，但保留你选过的智能体）和 **删除…**。标签页上方的横幅会说明需要你处理的事——有文件夹挡住、缺少命令、工具已关闭、有更新——并给出唯一对应的操作。
+打开的技能的页头有它的名称、一个状态标签（**使用中**、**已关闭**、**主文件夹不见了**、**有文件夹挡住**、**缺少命令**、**工具已关闭**、**缺少密钥**、**无法访问来源**），以及两个固定的按钮：**生效范围** 和一个 **⋯** 菜单，里面有 **在编辑器中打开**、**在 Finder 中显示**、**复制主文件夹路径** 和 **删除…**。关闭技能用 **生效范围** › **关闭**；检查它的副本用 **投递** 标签页的 **重新检查**，或技能库的 **检查副本**。标签页上方的横幅会说明需要你处理的事——有文件夹挡住、缺少命令、工具已关闭、有更新——并给出唯一对应的操作。
 
 选中一个技能会在右侧打开它，有自己的地址（`/skills/<name>`），包含四个标签页：
 
@@ -105,7 +105,7 @@ Skills → Add skill → From an archive → Choose file… (or drop a .zip or .
 ### 从 Git 仓库 {#from-a-git-repository}
 
 ```text
-Skills → Add skill → From Git → Repository URL, and optionally Branch or tag and Folder → Add skill
+Skills → Add skill → From Git → Repository URL, and optionally Branch or tag and Folder in the repository → Clone → Add skill
 ```
 
 Coffer 用这台机器自己的 `git` 克隆仓库，把你给出的分支、标签或提交（没给就用默认分支）解析为一个具体的提交，然后按与压缩包相同的规则，在你指定的文件夹里查找技能。像 `https://github.com/acme/agent-skills/tree/main/terraform-plan` 这样的 GitHub 文件夹地址，会被解读为仓库、分支和文件夹。
@@ -120,14 +120,14 @@ Git 在不弹提示的情况下运行，Coffer 不给它任何凭据，也不保
 
 添加一个 `name` 已存在的技能会因冲突被拒绝。要用新内容替换已有技能，请在对话框中该行选择 **替换**。主文件夹的内容会一步替换完成，技能的生效范围和已投递的链接都保留。
 
-新添加的技能默认启用，并对所有已注册的智能体生效，所以会立即链接到每个智能体的技能文件夹里。
+新添加的技能默认启用，并对添加技能对话框里 **可用于** 选中的智能体生效（默认是所有智能体），所以会立即链接到这些智能体的技能文件夹里。
 
 ## 从仓库更新技能 {#update-a-skill-from-its-repository}
 
-从 Git 仓库添加的技能会在它的页面上显示来源：仓库、文件夹、固定的提交，以及是否有更新在等待。Coffer 按你在**设置 › 通用 › 检查技能更新**里选的计划在后台检查仓库——**每 6 小时**（默认）、**每天**、**每周**或**仅在我要求时**——你也可以随时用**检查更新**检查，在任何设置下都可以。这个选择只保存在这台机器上（`~/.coffer/daemon-config.json`），不同步，立即生效。
+从 Git 仓库添加的技能会在它的页面上显示来源：仓库、文件夹、固定的提交，以及是否有更新在等待。Coffer 按你在**设置 › 通用 › 检查技能更新**里选的计划在后台检查仓库——**每 6 小时**（默认）、**每天**、**每周**或**仅在我要求时**——你也可以随时在技能的来源里用**再次检查**检查，在任何设置下都可以。这个选择只保存在这台机器上（`~/.coffer/daemon-config.json`），不同步，立即生效。
 
 ```text
-Skills → the skill → Check for updates, then Hand off to <Agent> to update when an update is available
+Skills → the skill → Check again, then Hand off to <Agent> to update when an update is available
 ```
 
 当分支或标签上有新的提交改动了技能文件夹，技能会在技能页和技能自己的页面上显示**有可用更新**，并写明从固定提交到新提交的提交范围。**Coffer 自己不应用更新。**没有更新预览，没有**保留我的**、**采用对方的**或**对比**，也没有它自己的合并：把上游的新内容带进一个可能带着你的改动的文件夹，是你的智能体的活。
@@ -277,7 +277,7 @@ requires: [jq, "gh>=2.40", uv]
 
 ## 技能需要的密钥 {#secrets-a-skill-needs}
 
-如果技能的命令需要某个令牌或密钥，就在 `requires` 的映射形式中用 `secrets:` 写出这个 Coffer 密钥的名称：
+如果技能的命令需要某个令牌或密钥，就在 `requires` 的映射形式中用 `secrets:` 写出这个 Coffer 密钥的 id：
 
 ```yaml
 ---
@@ -285,19 +285,19 @@ name: gh-triage
 description: Label new issues, find duplicates, ask for missing details.
 requires:
   commands: [jq, "gh>=2.40"]
-  secrets: [GITHUB_TOKEN]
+  secrets: [<id>]   # 密钥的 32 位十六进制 id，在密钥页面上它的页面里
 ---
 ```
 
-每个条目是 Coffer 密钥存储中一个密钥的名称，绝不是它的值。只有映射形式能带 `secrets:`；列表形式（`requires: [jq, gh]`）只声明命令。密钥存储不接受的名称，或重复写出的名称，会被跳过并给出警告；`commands`、`secrets` 和 `tools` 之外的键会被拒绝：Coffer 把它报告为警告，不读取它下面的任何内容。
+每个条目是 Coffer 密钥存储中一个密钥的 id（`secret/<id>` 里的 `<id>`），既不是它的名称，也不是它的值。只有映射形式能带 `secrets:`；列表形式（`requires: [jq, gh]`）只声明命令。不是有效 id 的条目，或重复写出的条目，会被跳过并给出警告；`commands`、`secrets` 和 `tools` 之外的键会被拒绝：Coffer 把它报告为警告，不读取它下面的任何内容。
 
 值由你自己在[密钥页面](/zh/guides/secrets)设置，并在那里允许 `coffer run` 使用该密钥一次（[密钥 → 允许 `coffer run` 使用它](/zh/guides/secrets#allow-coffer-run-to-use-it)）。之后技能的命令在 `coffer run --secret` 下运行时拿到它，这个值只设置在该命令的环境中：
 
 ```sh
-coffer run --secret GITHUB_TOKEN -- gh issue list
+coffer run --secret GITHUB_TOKEN=coffer://secret/<id> -- gh issue list
 ```
 
-技能的 **依赖** 标签页在命令下方列出每个声明的密钥，显示为 **已设置**，或“密钥 GITHUB_TOKEN 未设置”并附 **打开密钥**。Coffer 只按名称向密钥存储查询，从不读取值。有未设置密钥的技能还会在它的列表行和标签页上方的横幅中说明，并出现在总览的 **需要你处理** 列表中，其操作会打开密钥页面。和命令一样，无论密钥是否已设置，技能都会投递。
+技能的 **依赖** 标签页在命令下方列出每个声明的密钥，显示为 **已设置**，或“密钥 `<id>` 未设置”并附 **打开密钥**。Coffer 只按 id 向密钥存储查询，从不读取值。有未设置密钥的技能还会在它的列表行和标签页上方的横幅中说明，并出现在总览的 **需要你处理** 列表中，其操作会打开密钥页面。和命令一样，无论密钥是否已设置，技能都会投递。
 
 ## 技能需要的工具 {#tools-a-skill-needs}
 
@@ -309,7 +309,7 @@ name: invoice-chaser
 description: Find overdue invoices and draft reminders.
 requires:
   commands: [jq]
-  secrets: [BILLING_TOKEN]
+  secrets: [<id>]
   tools: [github, {name: billing-api, why: Reads invoices.}]
 ---
 ```
@@ -329,7 +329,7 @@ requires:
   commands:
     - command: gh
       login_check: gh auth status
-  secrets: [EXAMPLE_TOKEN]
+  secrets: [<id>]
 ---
 ```
 

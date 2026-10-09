@@ -45,7 +45,7 @@ login, tell me what to do instead.
 | 方式 | 适合 | 你会得到 |
 | --- | --- | --- |
 | [桌面应用](#desktop-app) | 喜欢窗口和菜单栏图标的人 | `Coffer.app`，首次打开后还有同样的四个二进制 |
-| [一行安装脚本](#one-line-installer) | 在 Mac 上用终端的人 | `~/.coffer/bin` 里的 `coffer`、`coffer-daemon`、`coffer-mcp-shim` |
+| [一行安装脚本](#one-line-installer) | 在 Mac 上用终端的人 | `~/.coffer/bin` 里的 `coffer`、`coffer-daemon`、`coffer-mcp-shim`、`coffer-seatalk-bridge` |
 | [发布压缩包](#release-archive) | 手动安装，或没有图形界面的机器 | 同样的四个二进制，解压到你选的位置 |
 | [从源码](#from-source) | 贡献者、Linux 用户，以及想跟进 `main` 的人 | 一套 Python 安装，`PATH` 上有 `coffer` 和 `coffer-mcp-shim` |
 
@@ -95,7 +95,7 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 
 1. 检查你是否在 macOS arm64 上。其他操作系统或架构会报错退出，并提示你从源码安装。
 2. 从 GitHub Releases 下载 `coffer-cli-aarch64-apple-darwin.tar.gz` 和该版本的 `SHA256SUMS`，然后校验压缩包的校验和。校验和不匹配，脚本就会停止。
-3. 把 `coffer`、`coffer-daemon`、`coffer-mcp-shim` 和 shim 的库文件夹 `coffer-mcp-shim-lib/` 装进安装目录。库文件夹先通过临时同级目录加改名装入，每个二进制再先复制成旁边的一个临时名字，加上可执行权限，再重命名覆盖公开名字。所以当这个名字是指向某个版本目录的符号链接时（一旦从别处启动的守护进程，比如桌面应用，把它的构建部署到那里，就会是这样），被替换的是链接本身，上一个版本的二进制原样保留，可用于回滚。
+3. 把 `coffer`、`coffer-daemon`、`coffer-mcp-shim`、`coffer-seatalk-bridge` 和 shim 的库文件夹 `coffer-mcp-shim-lib/` 装进安装目录。库文件夹先通过临时同级目录加改名装入，每个二进制再先复制成旁边的一个临时名字，加上可执行权限，再重命名覆盖公开名字。所以当这个名字是指向某个版本目录的符号链接时（一旦从别处启动的守护进程，比如桌面应用，把它的构建部署到那里，就会是这样），被替换的是链接本身，上一个版本的二进制原样保留，可用于回滚。
 4. 如果该目录还不在你的 `PATH` 上，就往你的 shell 配置文件追加一行。配置文件取决于你的 shell：zsh 是 `~/.zshrc`（或 `$ZDOTDIR/.zshrc`），macOS 上的 bash 是 `~/.bash_profile`，fish 是 `~/.config/fish/config.fish`（以 `fish_add_path` 的形式），其他 shell 是 `~/.profile`。再次运行脚本不会重复添加这一行。
 5. 如果 `git` 不存在或低于 2.40，给出警告（不会失败），并指向[系统要求](#requirements)。
 
@@ -159,14 +159,14 @@ cd frontend && npm install && npm run build && cd ..
 
 | 命令 | 产出 |
 | --- | --- |
-| `make bundle-binaries` | 用 PyInstaller 冻结到 `dist/` 的 `coffer`、`coffer-daemon` 和 `coffer-mcp-shim`，布局与发布压缩包相同 |
+| `make bundle-binaries` | 用 PyInstaller 冻结到 `dist/` 的 `coffer`、`coffer-daemon`、`coffer-mcp-shim`（带 `coffer-mcp-shim-lib/`）和 `coffer-seatalk-bridge`，布局与发布压缩包相同 |
 | `make desktop` | `Coffer.app` 和一个未签名的 `.dmg`。需要 Rust 工具链和 Node.js，由于要先跑 PyInstaller，大约需要 50 分钟。 |
 
 ## 各文件装在哪里 {#what-gets-installed-where}
 
 | 路径 | 是什么 |
 | --- | --- |
-| `~/.coffer/bin/coffer`、`coffer-daemon`、`coffer-mcp-shim` | 公开名字。发布构建中它们是指向某个版本目录的符号链接。 |
+| `~/.coffer/bin/coffer`、`coffer-daemon`、`coffer-mcp-shim`、`coffer-seatalk-bridge` | 公开名字。发布构建中它们是指向某个版本目录的符号链接。 |
 | `~/.coffer/bin/<version>/` | 每个已部署的构建一个目录。当前版本和上一个版本都会保留，所以把链接指回旧目录就能回滚。 |
 | `~/.coffer/vault/` | 保险库：一个 git 仓库，存放资源文件、技能、知识和加密后的密钥。 |
 | `~/.coffer/local/` | 只对本机成立的设置：智能体、生效范围、保留策略、同步远端。 |
@@ -250,7 +250,7 @@ coffer uninstall
 
 `~/.coffer` 会保留：重新安装 Coffer 后，你的保险库、密钥、技能、知识和设置都还在。重新安装后需要重新连接智能体。源码检出和它的 `.venv` 需要你自己删除。已经打开的 shell 在重启之前仍使用旧的 `PATH`。
 
-如果也要删除数据，在对话框里勾选**同时删除我的数据**；Coffer 会在删除任何东西之前要求 Touch ID。应用还会在守护进程停止后删除主密钥的钥匙串条目。在终端里，`coffer uninstall --delete-data` 会要求你输入 `delete my data`，没有可输入的终端时什么也不做；它会删除 `~/.coffer`，但不碰钥匙串（只有 Coffer 的守护进程会访问钥匙串），请自己在“钥匙串访问”里删除 `coffer` 条目。移到别处的保险库会保留在原处。
+如果也要删除数据，在对话框里勾选**同时删除我的数据**；Coffer 会在删除任何东西之前要求 Touch ID。应用还会在守护进程停止后删除主密钥的钥匙串条目。守护进程属于桌面应用时，`coffer uninstall`（无论是否带 `--delete-data`）会改为打开这个对话框。用安装脚本或从源码安装时，`coffer uninstall --delete-data` 会要求你输入 `delete my data`，没有可输入的终端时什么也不做；它会删除 `~/.coffer`，但不碰钥匙串（只有 Coffer 的守护进程会访问钥匙串），请自己在“钥匙串访问”里删除 `coffer` 条目。移到别处的保险库会保留在原处。
 
 ::: danger 删除 ~/.coffer 不可恢复
 `~/.coffer` 里有你的数据库、知识集、技能库和加密的密钥。删除它会销毁所有已保存的密钥，以及只存在于那里的所有文档，包括 Coffer 从智能体那里接管的技能。如果以后可能还要用，先[备份主密钥](/zh/guides/secrets#the-master-key-and-its-backup)。

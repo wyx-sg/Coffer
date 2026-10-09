@@ -118,7 +118,7 @@ flowchart LR
 
 ## 明文只交给在场的真人 {#plaintext-reaches-only-a-present-human}
 
-有三种操作会放出明文，而三者都只存在于桌面应用中：**查看或复制密钥**、**写出主密钥备份**，以及**批准**一项[审批](#a-secret-goes-somewhere-new-only-with-your-approval)。导入主密钥也受同样的把关。每一种的运行方式相同：
+有三种操作会放出明文，而三者都只存在于桌面应用中：**查看或复制密钥**、**写出主密钥备份**，以及**批准**一项[审批](#a-secret-goes-somewhere-new-only-with-your-approval)。导入主密钥、以及卸载时删除 Coffer 的数据，也受同样的把关。每一种的运行方式相同：
 
 1. **先做存在性校验。** 应用运行一次 LocalAuthentication 校验——Touch ID，或你的登录密码——为这一次操作使用全新的上下文，**没有复用窗口**：下一次查看还会再问。macOS 显示的提示会写明操作及其目标（"reveal the secret github/token"），所以告诉你在批准什么的是操作系统，而不是页面。取消则什么都不发送。
 2. **一次性挑战。** 应用向守护进程请求一个绑定到该操作和该目标的挑战——这个引用、这项审批、这个文件夹。挑战在两分钟内过期，并在第一次使用时被消耗，无论验证是否通过。
@@ -198,7 +198,7 @@ flowchart LR
 `daemon.json` 和 `proxy.json` 是文件，回环端口也只是端口；任何以你身份运行的进程都能改写前者、占用后者并在上面应答。所以每次交接之前，接收的一方都要先证明自己是 Coffer 的：
 
 - **守护进程验明模型代理。** 代理启动时拿到一个由主密钥派生的 attest 密钥，写在子进程的标准输入上（绝不放进参数或环境变量，其他进程能读到那些）。每次推送状态（其中带有提供商密钥）之前，以及重新挂接 `proxy.json` 指向的代理之前，守护进程都会向 `POST /_coffer/attest` 发一个新的 nonce，只接受对 nonce 和代理自身端口的 HMAC。端口上答不出来的进程什么都拿不到，日志里记为 `model_proxy.attest_failed`。
-- **桌面应用验明守护进程。** `POST /api/v1/secrets/presence/attest` 返回同类的 HMAC，密钥由应用用自己从钥匙串读到的主密钥派生。应用在把令牌交给页面之前（接入、冷启动和重启时）、以及每次需要在场校验的操作之前（查看、批准、密钥备份、密钥导入）都会检查它。校验失败时，应用会停下并提示“This is not Coffer's daemon — nothing was sent”。
+- **桌面应用验明守护进程。** `POST /api/v1/secrets/presence/attest` 返回同类的 HMAC，密钥由应用用自己从钥匙串读到的主密钥派生。应用在把令牌交给页面之前（接入、冷启动和重启时）、以及每次需要在场校验的操作之前（查看、批准、密钥备份、密钥导入、卸载时删除数据）都会检查它。校验失败时，应用会停下并提示“This is not Coffer's daemon — nothing was sent”。
 
 端口也在签名的内容里，所以从真实进程在另一个端口上中继来的回答一文不值。
 
@@ -343,7 +343,7 @@ SSRF 防护会解析 URL 的主机，只要解析出的任一地址是回环、�
 - **保险库同步**，它是针对你配置的远端运行的 `git` 子进程。
 - **技能的 Git 仓库**，同样是针对你输入的 URL 运行的 `git` 子进程，运行时不弹任何提示，只允许 `https`、`http`、`ssh`、`git` 和 `file` 传输，不拉子模块；公司自己的 Git 主机通常位于私有地址上（见[技能](/zh/architecture/skills#git-repositories)）。
 
-有一个出站请求发往的是 Coffer 自己选定的地址，而不是你输入或配置的，因此不受防护：**每日价格表刷新**。守护进程启动后不久一次，之后每 24 小时一次，它向 pydantic/genai-prices 发布的文件 `https://raw.githubusercontent.com/pydantic/genai-prices/refs/heads/main/prices/new_data/v2/data.json` 发送一个只读 `GET`，超时 10 秒，上限 16 MiB，不跟随重定向，不带凭据，也不带任何关于你或你用量的信息。响应在缓存之前会先校验，计算请求费用时从不临时去查价格。在防火墙后面的机器上，可以用设置 › 通用中的**刷新模型价格**（`coffer config set prices.refresh off`）关掉它；之后 Coffer 按构建中附带的价格表计价。
+有两个出站请求发往的是 Coffer 自己选定的地址，而不是你输入或配置的，因此不受防护：**每日价格表刷新**和**每日发布检查**。守护进程启动后不久一次，之后每 24 小时一次，它向 pydantic/genai-prices 发布的文件 `https://raw.githubusercontent.com/pydantic/genai-prices/refs/heads/main/prices/new_data/v2/data.json` 发送一个只读 `GET`，超时 10 秒，上限 16 MiB，不跟随重定向，不带凭据，也不带任何关于你或你用量的信息。响应在缓存之前会先校验，计算请求费用时从不临时去查价格。在防火墙后面的机器上，可以用设置 › 通用中的**刷新模型价格**（`coffer provider price-list refresh --set refresh=false`，或 `COFFER_PRICE_REFRESH=off`）关掉它；之后 Coffer 按构建中附带的价格表计价。发布检查是一个只读的 `GET https://api.github.com/repos/wyx-sg/Coffer/releases/latest`，在守护进程启动一分钟后发一次，之后每天一次，超时 10 秒，上限 1 MiB，不带任何关于你的信息；它不安装任何东西。关于标签页上的**自动检查**（`daemon-config.json` 里的 `update_check`，或 `COFFER_UPDATE_CHECK=off`）可以关掉它。桌面应用还会从最新的 GitHub Release 获取它自己的已签名更新清单，且只在它构建时带有更新密钥时才这样做。
 
 防护在校验时解析 DNS，HTTP 客户端在连接时会再解析一次，所以在两次之间重新指向的主机可能溜过去。把解析出的地址一路钉到客户端会破坏 TLS 证书校验；对于一个 URL 由你自己输入的单用户守护进程，这个残余风险是可以接受的。
 
@@ -391,6 +391,7 @@ Coffer 把它的 MCP 条目装进某个智能体时，写入的是 `coffer-mcp-s
 - **Coffer 的白名单先行。** 密钥引用（`coffer://secret/<id>`、单独的 `secret/<id>`）、`$VAR` 和 `${VAR}`、双花括号模板、占位符，以及只说明值从哪里来的代码，一律不算发现。
 - **关键词窗口限定开销。** 一条规则只在它点名的关键词周围运行，所以很长的一行（压缩过的代码、粘贴进来的大段内容）不会让扫描变得昂贵。
 - **不扫描解码后的内容。** base64 或十六进制的值按写下的样子读取，不先解码；这个取舍让扫描可预期。
+- **可以把一个值标记为“不是密钥”。** 它只以 HMAC 指纹的形式记住，密钥由主密钥派生，存在这台机器的 `local/secret/plaintext-ignored.json` 里（从不同步），所以这份列表里既没有值，也没有可以拿来验证猜测的普通哈希。之后查找明文密钥和同步的推送检查都会跳过这个值，不管它在哪里（`POST /api/v1/secrets/scan/ignore` 和 `/scan/unignore`，审计为 `secret_plaintext_ignored` 和 `secret_plaintext_unignored`）。
 - **发版时人工刷新。** `make refresh-secret-rules` 拉取下一个 gitleaks 发布版；没有定时任务，守护进程运行时也从不下载规则，所以一个构建的规则是固定的、可审查的。
 
 ## 同步只携带密文 {#sync-carries-ciphertext-only}
@@ -429,7 +430,7 @@ Coffer 把它的 MCP 条目装进某个智能体时，写入的是 `coffer-mcp-s
 | --- | --- |
 | HTTP 接口层 | 令牌检查、`Host` 和 `Origin` 检查、CORS 白名单和中间件顺序、提供注入了令牌的界面，以及密钥边界路由（受存在性校验保护的查看和密钥备份、审批、`coffer run` 的解析、扫描和导入）。 |
 | 守护进程基础设施 | 令牌生成、`daemon.json`、`0600` 写入、回环绑定。 |
-| 密钥基础设施 | 加密存储、主密钥及其存储后端、keyring 适配器、绑定与审批存储、明文扫描。 |
+| 密钥基础设施 | 加密存储、主密钥及其存储后端、keyring 适配器、绑定与审批存储、明文扫描、“不是密钥”列表和密钥备注存储。 |
 | 密钥应用层 | 密钥边界（目的地、绑定、审批）、存在性授权、受保护的解析器。 |
 | 命令行接口层 | `coffer run` 及其输出遮蔽。 |
 | `desktop/` | 桌面应用的存在性校验、授权签名和审批通知。 |
@@ -442,7 +443,6 @@ Coffer 把它的 MCP 条目装进某个智能体时，写入的是 `coffer-mcp-s
 - [密钥存储指南](/zh/guides/secret-store)
 - [安全策略](/zh/contributing/security)——如何报告漏洞。
 - [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)
-- [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
 - [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/standalone-secrets-are-named-references-injected-into-one-child.md)
 - [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
 - [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-auth-and-origin-guard.md)

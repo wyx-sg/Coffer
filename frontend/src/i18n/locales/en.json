@@ -1138,7 +1138,7 @@
       "handoffAgent": "Hand-off agent",
       "handoffAgentHelp": "The agent a hand-off button starts.",
       "skillUpdateCheck": "Check skills for updates",
-      "skillUpdateCheckHelp": "How often this Mac looks for newer versions of skills added from Git. Check for updates on a skill always works.",
+      "skillUpdateCheckHelp": "How often this Mac looks for newer versions of skills added from Git. Check again on a skill's page always works.",
       "skillUpdateCheck6h": "Every 6 hours",
       "skillUpdateCheck1d": "Every day",
       "skillUpdateCheck7d": "Every week",
@@ -3603,7 +3603,7 @@
       },
       "approvalRefused": {
         "title": "This channel's secret was refused",
-        "body": "You refused its secret in the Coffer app, so the channel can't connect to {{platform}}. Open the Secrets page and press Ask again to raise it again — pairing and settings are kept."
+        "body": "You refused its secret in the Coffer app, so the channel can't connect to {{platform}}. Press Ask again to raise it again — pairing and settings are kept."
       }
     },
     "meta": {
@@ -3630,6 +3630,7 @@
       "replaceSecret": "Replace secret",
       "replaceToken": "Replace token",
       "openSecrets": "Open Secrets",
+      "askAgain": "Ask again",
       "runHere": "Run it here",
       "runHereConfirm": "Run it here…",
       "turnOn": "Turn on",

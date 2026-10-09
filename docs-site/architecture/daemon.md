@@ -63,12 +63,12 @@ flowchart LR
 | Process | Lifetime | Role |
 | --- | --- | --- |
 | `coffer-daemon` | Long-lived, one per vault | Serves the REST API (`/api/v1/*`), the MCP endpoint (`/mcp`) and the built web UI on `127.0.0.1:<port>`. It owns all state and is the only SQLite writer. From source it runs as the Python package's daemon entry module. A frozen build runs the `coffer-daemon` binary. |
-| Local model proxy | Long-lived, outlives the daemon | `coffer-daemon proxy` in a frozen build (the package's proxy entry module from source), the daemon's only sibling process, on `127.0.0.1:38471`. Agents on an API-key or local provider send their model requests to it; it relays them upstream with the real key and spools usage records the daemon ingests. The daemon spawns it, re-attaches to it after its own restart through `~/.coffer/proxy.json`, and restarts it after a crash. See [The local model proxy](/architecture/model-proxy). |
+| Local model proxy | Long-lived, outlives the daemon | `coffer-daemon proxy` in a frozen build (the package's proxy entry module from source), the daemon's only sibling process, on `127.0.0.1:38471`. Agents on an API-key or local provider send their model requests to it; it relays them upstream with the real key and spools usage records the daemon ingests. The daemon spawns it once an agent is routed through it, re-attaches to it after its own restart through `~/.coffer/proxy.json`, and restarts it after a crash. See [The local model proxy](/architecture/model-proxy). |
 | `coffer` CLI | One command | Calls the daemon over loopback HTTP with the token from `daemon.json` and an `X-Coffer-Actor: cli` header, so its mutations are audited as the CLI. |
 | `coffer-mcp-shim` | One MCP client session | A stdio ↔ HTTP/SSE forwarder. An agent launches it as a stdio MCP server, and it relays each JSON-RPC line to `/mcp`. See [MCP gateway](/architecture/mcp-gateway). |
 | Desktop shell | While the app runs | A Tauri 2 app that hosts the same frontend build as a local asset and hands it the daemon's URL and token over IPC. It detects or spawns the daemon, but the daemon outlives the app: quitting the app does not stop it. See [Desktop app](/guides/desktop-app). |
 | Upstream MCP servers | Per client session | Subprocesses the gateway spawns for each `/mcp` session. Each is recorded under `~/.coffer/upstream-pids/` so a later daemon can reap it after a crash. |
-| `codex app-server` | Per Codex chat | A long-lived child the chat platform keeps open. It is spawned and recorded through the same path as upstream MCP servers. |
+| `codex app-server` | Per Codex turn | A child the chat platform spawns for the turn and closes when the turn ends. It is spawned and recorded through the same path as upstream MCP servers. |
 | SeaTalk websocket | Thread in the daemon, reading a `coffer-seatalk-bridge` child | One outbound websocket connection per SeaTalk channel, held by the bridge process that loads the SDK. Nothing listens. |
 
 Telegram is polled from the daemon's event loop. SeaTalk's SDK is third-party code in a directory an agent can write, so it runs in a separate executable, `coffer-seatalk-bridge`, which has no keychain entitlement and receives the app credentials on standard input; each SeaTalk channel gets its own named thread that reads the bridge's JSON-line events and hands each to the event loop through a thread-safe callback. The SDK does not reconnect, so the connector supervises the connection itself. On a failure it backs off exponentially from 1 s up to 30 s. When another registration of the same app kicks it, it waits a flat 60 s, because SeaTalk allows one live connection per app and racing the other holder would only trade the connection back and forth. Because this socket is outbound, the daemon's loopback listener stays the only socket the vault exposes. See [SeaTalk Inbound Over WebSocket](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/seatalk-websocket-inbound.md).
@@ -79,7 +79,7 @@ The daemon reads one file before it binds and writes another once it has bound. 
 
 | File | Direction | Written by | Contents | Lifetime |
 | --- | --- | --- | --- | --- |
-| `daemon-config.json` | In | CLI, feature switches, sync machine identity | `port` (optional), `proxy_port` (optional), `machine_name`, cached `machine_id`, `features` switches | Survives restarts |
+| `daemon-config.json` | In | CLI, feature switches, sync machine identity, the switches on **Settings** and **Settings › About** | `port` (optional), `proxy_port` (optional), `machine_name`, cached `machine_id`, `features` switches, `update_check` (the release check), `record_call_content`, `skill_update_check`, `price_refresh` | Survives restarts |
 | `daemon.json` | Out | The daemon, at start | `version` (schema, currently `1`), `pid`, `port`, `token`, `started_at`, `binary_path` | Unlinked at exit |
 
 `daemon-config.json` cannot live in SQLite, because the port has to be chosen before the database is opened or migrated. It cannot be an environment variable either: whichever caller spawns the daemon passes on its own environment, and a shell profile only reaches your terminal. The file is read with the standard library alone. An unreadable or malformed file logs a warning and reads as "no setting", so a hand-edited typo never keeps the daemon from starting. Writes merge into the existing object and keep keys this build does not know, so a file written by a newer Coffer survives being touched by an older one.
@@ -141,7 +141,7 @@ sequenceDiagram
 
 Step by step (two arguments skip all of it: `--version` prints the package version, the same line `coffer --version` prints, and exits; `proxy` runs the [local model proxy](/architecture/model-proxy) instead):
 
-1. **Environment hygiene.** The daemon removes every agent-home variable it inherited (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, taken from the agent descriptors). Otherwise a daemon started from a shell that exports one would run agents against that directory while Coffer delivers skills and config into the registered one. It also raises its `RLIMIT_NOFILE` soft limit toward the hard limit, capped at 8192, because a daemon launched by a GUI app inherits a limit of about 256.
+1. **Environment hygiene.** A signed build first drops the proxy and CA variables it inherited and takes its proxy settings from the OS instead, so an agent cannot point the daemon's network clients at its own proxy. The daemon then removes every agent-home variable it inherited (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, taken from the agent descriptors). Otherwise a daemon started from a shell that exports one would run agents against that directory while Coffer delivers skills and config into the registered one. It also raises its `RLIMIT_NOFILE` soft limit toward the hard limit, capped at 8192, because a daemon launched by a GUI app inherits a limit of about 256.
 2. **Spawn lock.** It takes an exclusive `flock` on `~/.coffer/daemon.lock` and writes its pid into the file. The lock lives on the open descriptor, so the file stays on disk between runs. The wait is bounded at two minutes: a holder that has not finished booting by then is stuck, and queueing behind it would only add one more idle process for every CLI command, shim, desktop launch and login-service restart. A start that gives up logs the holder's pid and exits 0.
 3. **Liveness probe.** Under the lock, it calls `GET /api/v1/daemon/status` on the port `daemon.json` records, with a 15 s timeout. The timeout must outlast the slowest status a warming daemon can produce, because a timeout looks exactly like "nobody is live". If a daemon answers, the new process releases the lock, logs "already running" and exits 0. That line, and every other duplicate exit before logging is configured, is a warning, because only warnings reach the daemon log at that point and a duplicate start must leave a trace.
 4. **Bind.** It reads the port from `daemon-config.json` (the pinned port, else `38470`) and binds exactly `127.0.0.1:<port>` with `SO_REUSEADDR`. It retries four times, 0.3 s apart, so a restart outlasts the outgoing daemon's last moment. If the port is still held, it fails with a port-in-use error, prints a message naming the holder's pid and command line, and exits with code 2. When the holder is a Coffer daemon serving this same vault — one too busy to answer the probe in 15 s — the start is a duplicate rather than a failure: it logs that the daemon is already running but busy and exits 0, so the login service does not restart it every few seconds.
@@ -227,7 +227,7 @@ The shell resolves a daemon in a fixed order:
 2. The `coffer-daemon` inside the app bundle.
 3. `~/.coffer/bin/coffer-daemon`.
 4. `coffer-daemon` on `PATH`.
-5. Otherwise, a message telling you to install the CLI.
+5. Otherwise, a message saying this copy of Coffer is probably damaged or incomplete. It lists where the shell looked, points at the install page to download Coffer again, and carries a prompt you can hand to your coding agent.
 
 The liveness check has to come first. Steps 2 to 4 answer "which binary would we spawn", while step 1 answers "should we spawn at all". In the other order, a bundled app would start a second daemon beside the one you already started from a terminal, and under the fixed port that second daemon would refuse to start. The shell spawns detached rather than as a managed sidecar, because a managed sidecar dies with the app, and it gives the child your login shell's `PATH`. Restart from the tray or the offline banner is rate-limited to once every 5 s. It stops the running daemon through `POST /api/v1/daemon/shutdown`, waits up to 8 s for the port to free, and then spawns. A daemon that does not answer its status call within 15 s, or that answers the shutdown request but keeps its port, is forced out first: the shell sends `SIGTERM` to the pid `daemon.json` records once `ps` shows a Coffer daemon command line (never `coffer-daemon proxy`), then `SIGKILL` after 5 s, and waits for the port. A discovery file that names no live Coffer daemon is left alone and the shell goes straight to spawning.
 
@@ -278,7 +278,7 @@ The periodic workers that belong to no single kind start in one place, the HTTP 
 | --- | --- | --- |
 | Retention | Immediately, then every 6 h | Prunes each registered log-style table to its policy, and ages out files in `~/.coffer/logs/` (including per-process shim logs). |
 | Vault sync | First round after 30 s, then on the configured remote's interval (default 1 h). With no remote, or a paused one, it re-checks every minute | Runs a sync round with your git remote. A no-op until you configure one. See [Vault sync](/architecture/vault-sync#the-worker). |
-| Knowledge sweep | Immediately, then every 60 s | Promotes files dropped into a collection's hidden `.inbox/` to documents, commits documents edited out of band, and re-renders the guide skill. Runs on every machine. See [Knowledge](/architecture/knowledge). |
+| Knowledge sweep | Immediately, then every 60 s | Files each document dropped into a collection's hidden `.inbox/` as a source under `sources/`, moves loose Markdown outside `pages/` and `sources/` into `pages/`, commits edits found on disk as `disk` writes, and re-renders the guide skill. Runs on every machine. See [Knowledge](/architecture/knowledge). |
 | Memory aggregation | Immediately, then hourly by default | Reads each agent's native memory into the derived memory tree. See [Memory](/architecture/memory). |
 | Memory distil | First pass after 60 s, then every 6 h by default | Turns each new raw entry in the aggregated memory into a note and renders the index. No model is involved. |
 | Channel runtime | Every 2 s | Reconciles running adapters (Telegram polling, SeaTalk connections) against the channel resources bound to this machine. |
@@ -289,9 +289,11 @@ The periodic workers that belong to no single kind start in one place, the HTTP 
 | Vault scanner | A boot scan, then on file events and every 60 s | Settles hand edits in the vault into commits. |
 | Reconciler | Every 60 s, sooner on a hint | Converges agents' MCP entries, skill links, provider projections and delivery hooks, and records open drift. |
 | Attention watch | Every 30 s, sooner on a hint | Recomputes the Overview's "needs you" list and publishes changes on `GET /api/v1/events`. |
-| Model proxy supervisor | Every 5 s | Finds or spawns the [local model proxy](/architecture/model-proxy), pushes it its state and restarts it if it dies. |
+| Model proxy supervisor | Every 5 s | Finds the [local model proxy](/architecture/model-proxy), or spawns it once an agent is routed through it, pushes it its state and restarts it with backoff if it dies. |
 | Usage ingest | Every 2 s | Empties the proxy's usage spool into `runs.db`. |
 | Price refresh | First after 60 s, then daily | Refreshes the model price list used to estimate cost. |
+| Provider health | Once at boot, then every 30 min, and again on each edit to a connection | Lists each enabled model provider's models to tell whether its endpoint answers and accepts the key, and feeds the providers' attention items. |
+| Release check | First after 60 s, then daily | Installer binaries only. Asks GitHub for the latest Coffer release and reports a newer one on **Settings › About**. Off when `update_check` is off or `COFFER_UPDATE_CHECK=off`. See [Distribution](/architecture/distribution#how-the-installer-s-binaries-update). |
 
 The aggregation and distil intervals come from the internal-engine settings and are re-read while a worker waits, so a change in **Settings** takes effect without a restart. The sweep's 60 s interval is fixed.
 
@@ -327,16 +329,17 @@ Uvicorn then shuts down gracefully with a 10 s bound on open connections. Withou
 6. Cancel the session reaper, then drain the buffered invocation writer.
 7. Stop supervising the model proxy (the proxy itself keeps running, so agents' in-flight model streams survive a restart), then stop the price refresh and the usage loops.
 8. Dispose every MCP session supervisor, including the process-wide one behind the management routes, which terminates their upstream subprocesses, then close the `/mcp` session state.
-9. Dispose the database engine and clear the active token.
-10. Stop the vault scanner, then dispose the derived database.
+9. Cancel, with a bound, every supervised background task its owner did not stop above, such as the release check, before the database it may be writing to goes.
+10. Dispose the database engine and clear the active token.
+11. Stop the vault scanner, then dispose the derived database.
 
-Each step is best effort: a failure is logged with the step's name and does not stop the steps after it. Finally the entry point releases `daemon.json` (only if it still names this pid) and closes the socket.
+Each step is best effort: a failure is logged with the step's name and does not stop the steps after it. Finally the entry point releases `daemon.json` (only if it still names this pid) and closes the socket. Once nothing serves, it deletes `~/.coffer` if an uninstall asked for the data to go, and last it boots out a start-at-login job that an uninstall removed while this daemon was running under it.
 
 Long-lived children share one termination ladder: `SIGTERM`, a bounded wait, `SIGKILL`, a bounded wait. The child's pid record is dropped only because the child was reaped here. Upstream MCP wrappers such as `uvx` and `npx` spawn interpreter grandchildren, so the whole process tree is enumerated before any of it is signalled. A crash skips all of this. That is what the pid records and the next daemon's startup sweep are for.
 
 ## Binary deployment
 
-A frozen build deploys its siblings (`coffer`, `coffer-daemon`, `coffer-mcp-shim` with its `coffer-mcp-shim-lib/` folder) into versioned directories under `~/.coffer/bin` during startup, and flips the public names as relative symlinks. The daemon owns this job because it is the one process every frozen install starts, whether it came from the terminal archive or the `.dmg`. Deploying `coffer-daemon` there is also what lets a frozen shim find a daemon to spawn after a reboot, and what gives the login service a path that survives upgrades. A source install does none of this, because `pip install` already puts `coffer` and `coffer-mcp-shim` on `PATH`.
+A frozen build deploys its siblings (`coffer`, `coffer-daemon`, `coffer-mcp-shim` with its `coffer-mcp-shim-lib/` folder, and `coffer-seatalk-bridge`) into versioned directories under `~/.coffer/bin` during startup, and flips the public names as relative symlinks. The daemon owns this job because it is the one process every frozen install starts, whether it came from the terminal archive or the `.dmg`. Deploying `coffer-daemon` there is also what lets a frozen shim find a daemon to spawn after a reboot, and what gives the login service a path that survives upgrades. A source install does none of this, because `pip install` already puts `coffer` and `coffer-mcp-shim` on `PATH`.
 
 The copy, sentinel, symlink-flip and pruning rules are described once, in [Distribution and releases](/architecture/distribution#versioned-directories-and-the-symlink-flip).
 
@@ -367,8 +370,8 @@ Turning it on and off is the web UI's residency setting (`PUT /api/v1/daemon/res
 
 | Place | Responsibility |
 | --- | --- |
-| The `daemon` package in the infrastructure layer | Process entry and environment hygiene, the spawn lock, liveness probe, fixed-port bind and publish, `daemon-config.json` and `daemon.json`, spawn-command resolution, the skew warning, pid records and the startup sweep, the long-lived child path, the self-restart, the unpack keep-alive, the launchd agent |
-| The HTTP surface | Composition root and lifespan, the startup migration step, the background-worker launcher, ordered teardown, the `/api/v1/daemon/*` routes (status, residency, shutdown, rotate-token, logs) |
+| The `daemon` package in the infrastructure layer | Process entry and environment hygiene, the spawn lock, liveness probe, fixed-port bind and publish, `daemon-config.json` and `daemon.json`, spawn-command resolution, the skew warning, pid records and the startup sweep, the long-lived child path, the self-restart, the unpack keep-alive, the launchd agent, the release check, the uninstall data purge |
+| The HTTP surface | Composition root and lifespan, the startup migration step, the background-worker launcher, ordered teardown, the `/api/v1/daemon/*` routes (status, residency, shutdown, restart, rotate-token, logs, port, setup/check, upgrade, upgrade/check, upgrade/auto-check, uninstall). `coffer update` and the release check are described in [Distribution](/architecture/distribution#how-the-installer-s-binaries-update) |
 | The application layer | Frozen sibling deployment into `~/.coffer/bin` |
 | The CLI surface | CLI detect-or-spawn and `coffer daemon …` |
 | The shim surface | Shim detect-or-spawn, handshake metadata, restart recovery |

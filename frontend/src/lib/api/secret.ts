@@ -62,6 +62,13 @@ export const secretsApi = {
   /** Every approval still waiting, newest first. */
   pendingApprovals: () =>
     unwrap(getApiClient().GET("/secrets/approvals", { params: { query: { status: "pending" } } })),
+  /** The refused approvals for one destination (a channel, a tool group): what Ask again answers. */
+  rejectedApprovalsFor: (destinationUid: string) =>
+    unwrap(
+      getApiClient().GET("/secrets/approvals", {
+        params: { query: { status: "rejected", destination_uid: destinationUid } },
+      }),
+    ),
   /** Refuse several at once. Needs no presence: refusing only narrows what is sent. */
   rejectApprovals: (ids: string[]) =>
     unwrap(getApiClient().POST("/secrets/approvals/reject", { body: { ids } })),

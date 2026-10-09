@@ -94,6 +94,8 @@ A Git skill's source can also be changed: the new repository, ref and folder are
 
 A `SKILL.md` may list the commands it relies on under `requires` — `jq`, `gh>=2.40`, or a mapping with a command and a version. Coffer reads that list from the master folder each time it shows the skill, so an edit is visible at once, and it links each command to its page on the CLIs page. Declaring a requirement changes nothing about delivery: a skill whose command is missing is still delivered, and the agent that follows it will fail at the step that needs the command.
 
+The same `requires` may name the Coffer secrets the skill needs (`requires: {secrets: [...]}`). Coffer reports each one that is not set, asking the secret store only whether the name exists, never for a value; setting it is done on the **Secrets** page.
+
 ## Related
 
 - [Skills guide](/guides/skills) — adding, updating and delivering skills.

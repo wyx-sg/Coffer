@@ -63,12 +63,12 @@ flowchart LR
 | 进程 | 生命周期 | 作用 |
 | --- | --- | --- |
 | `coffer-daemon` | 常驻，每个保险库一个 | 在 `127.0.0.1:<port>` 上提供 REST API（`/api/v1/*`）、MCP 端点（`/mcp`）和构建好的 Web 界面。它拥有全部状态，是唯一的 SQLite 写入者。从源码运行时是 Python 包里的守护进程入口模块。冻结构建运行 `coffer-daemon` 二进制。 |
-| 本地模型代理 | 常驻，比守护进程活得久 | 正式构建里是 `coffer-daemon proxy`（从源码运行时是包里的代理入口模块），守护进程唯一的兄弟进程，在 `127.0.0.1:38471` 上。使用 API 密钥 或本地提供商的智能体把模型请求发给它；它用真实的 key 转发到上游，并把用量记录写入缓冲区，供守护进程摄取。守护进程拉起它，在自己重启后通过 `~/.coffer/proxy.json` 重新附着到它，并在它崩溃后重启它。见[本地模型代理](/zh/architecture/model-proxy)。 |
+| 本地模型代理 | 常驻，比守护进程活得久 | 正式构建里是 `coffer-daemon proxy`（从源码运行时是包里的代理入口模块），守护进程唯一的兄弟进程，在 `127.0.0.1:38471` 上。使用 API 密钥 或本地提供商的智能体把模型请求发给它；它用真实的 key 转发到上游，并把用量记录写入缓冲区，供守护进程摄取。守护进程在有智能体经由它路由时拉起它，在自己重启后通过 `~/.coffer/proxy.json` 重新附着到它，并在它崩溃后重启它。见[本地模型代理](/zh/architecture/model-proxy)。 |
 | `coffer` 命令行 | 一条命令 | 通过回环 HTTP 调用守护进程，带上 `daemon.json` 里的令牌和 `X-Coffer-Actor: cli` 请求头，所以它的修改会以命令行身份记入审计。 |
 | `coffer-mcp-shim` | 一个 MCP 客户端会话 | 一个 stdio ↔ HTTP/SSE 转发器。智能体把它当作 stdio MCP 服务器启动，它把每行 JSON-RPC 转发给 `/mcp`。见 [MCP 网关](/zh/architecture/mcp-gateway)。 |
 | 桌面壳 | 应用运行期间 | 一个 Tauri 2 应用，把同一份前端构建作为本地资源加载，并通过 IPC 把守护进程的 URL 和令牌交给它。它会检测或拉起守护进程，但守护进程比应用活得久：退出应用不会停止守护进程。见[桌面应用](/zh/guides/desktop-app)。 |
 | 上游 MCP 服务器 | 每个客户端会话 | 网关为每个 `/mcp` 会话拉起的子进程。每个都记录在 `~/.coffer/upstream-pids/` 下，这样崩溃后下一个守护进程可以回收它。 |
-| `codex app-server` | 每个 Codex 对话 | 对话平台一直开着的常驻子进程。它和上游 MCP 服务器走同一条路径拉起和记录。 |
+| `codex app-server` | 每个 Codex 轮次 | 对话平台为这个轮次拉起、轮次结束时关闭的子进程。它和上游 MCP 服务器走同一条路径拉起和记录。 |
 | SeaTalk websocket | 守护进程内读取 `coffer-seatalk-bridge` 子进程的线程 | 每个 SeaTalk 消息渠道一条出站 websocket 连接，由加载 SDK 的桥接进程持有。没有任何监听。 |
 
 Telegram 在守护进程的事件循环里轮询。SeaTalk 的 SDK 是第三方代码，放在智能体可写的目录里，所以它在一个独立的可执行文件 `coffer-seatalk-bridge` 中运行，这个文件没有钥匙串 entitlement，从标准输入接收应用凭据；每个 SeaTalk 消息渠道有一个自己的具名线程，读取桥接进程输出的 JSON 行事件，并通过线程安全的回调把每个事件交回事件循环。SDK 不会重连，所以连接器自己监管连接。出错时它按指数退避，从 1 s 到最多 30 s。当同一个应用的另一处注册把它踢下线时，它固定等待 60 s，因为 SeaTalk 每个应用只允许一条活跃连接，和另一方抢只会让连接来回易手。由于这个 socket 是出站的，守护进程的回环监听仍是保险库唯一暴露的 socket。见 [SeaTalk Inbound Over WebSocket](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/seatalk-websocket-inbound.md)。
@@ -79,7 +79,7 @@ Telegram 在守护进程的事件循环里轮询。SeaTalk 的 SDK 是第三方�
 
 | 文件 | 方向 | 由谁写 | 内容 | 生命周期 |
 | --- | --- | --- | --- | --- |
-| `daemon-config.json` | 进 | 命令行、功能开关、同步的机器身份 | `port`（可选）、`proxy_port`（可选）、`machine_name`、缓存的 `machine_id`、`features` 开关 | 跨重启保留 |
+| `daemon-config.json` | 进 | 命令行、功能开关、同步的机器身份、**设置**和**设置 › 关于**里的开关 | `port`（可选）、`proxy_port`（可选）、`machine_name`、缓存的 `machine_id`、`features` 开关、`update_check`（发布检查）、`record_call_content`、`skill_update_check`、`price_refresh` | 跨重启保留 |
 | `daemon.json` | 出 | 守护进程，在启动时 | `version`（schema 版本，当前为 `1`）、`pid`、`port`、`token`、`started_at`、`binary_path` | 退出时删除 |
 
 `daemon-config.json` 不能放在 SQLite 里，因为端口必须在打开或迁移数据库之前选定。它也不能是环境变量：拉起守护进程的调用方会传下自己的环境，而 shell 配置文件只作用于你的终端。这个文件只用标准库读取。读不了或格式错误的文件会记一条警告并按「没有设置」处理，所以手改出的错别字永远不会让守护进程起不来。写入时合并进已有对象，并保留本构建不认识的键，所以新版 Coffer 写的文件被旧版碰过之后仍然完好。
@@ -141,7 +141,7 @@ sequenceDiagram
 
 逐步说明（有两个参数会跳过下面全部步骤：`--version` 打印包版本——与 `coffer --version` 打印的是同一行——然后退出；`proxy` 改为运行[本地模型代理](/zh/architecture/model-proxy)）：
 
-1. **环境清理。** 守护进程移除它继承来的每个智能体 home 变量（`CLAUDE_CONFIG_DIR`、`CODEX_HOME`，取自智能体描述符）。否则，从导出了这类变量的 shell 启动的守护进程，会让智能体跑在那个目录上，而 Coffer 却把技能和配置投递到登记的目录里。它还会把 `RLIMIT_NOFILE` 软上限提高到接近硬上限，最多 8192，因为由 GUI 应用启动的守护进程继承到的上限大约只有 256。
+1. **环境清理。** 签名构建先丢掉继承来的代理和 CA 变量，改从操作系统读取代理设置，这样智能体就没法把守护进程的网络客户端指向它自己的代理。然后守护进程移除它继承来的每个智能体 home 变量（`CLAUDE_CONFIG_DIR`、`CODEX_HOME`，取自智能体描述符）。否则，从导出了这类变量的 shell 启动的守护进程，会让智能体跑在那个目录上，而 Coffer 却把技能和配置投递到登记的目录里。它还会把 `RLIMIT_NOFILE` 软上限提高到接近硬上限，最多 8192，因为由 GUI 应用启动的守护进程继承到的上限大约只有 256。
 2. **拉起锁。** 它在 `~/.coffer/daemon.lock` 上取一把独占 `flock`，并把自己的 pid 写进文件。锁挂在打开的描述符上，所以文件在两次运行之间一直留在磁盘上。等待上限是两分钟：到那时还没启动完的持有者已经卡住了，排在它后面只会让每次 CLI 命令、shim、桌面启动和登录服务重启都多出一个闲置进程。放弃等待的启动会在日志里写下持有者的 pid，并以 0 退出。
 3. **存活探测。** 在锁内，它对 `daemon.json` 记录的端口调用 `GET /api/v1/daemon/status`，超时 15 s。超时必须长于一个正在预热的守护进程可能给出的最慢状态响应，因为超时看起来和「没人在线」一模一样。如果有守护进程应答，新进程释放锁，记下「已在运行」并以 0 退出。这一行和日志配置好之前的其他重复退出都按警告级别记录，因为那时只有警告会写进守护进程日志，而重复启动必须留下痕迹。
 4. **绑定。** 它从 `daemon-config.json` 读取端口（指定的端口，否则 `38470`），用 `SO_REUSEADDR` 精确绑定 `127.0.0.1:<port>`。它重试四次，间隔 0.3 s，让重启能熬过即将退出的守护进程的最后时刻。如果端口仍被占用，它以端口被占用的错误失败，打印一条写明占用者 pid 和命令行的消息，并以退出码 2 退出。如果占用者是服务同一保险库的 Coffer 守护进程（忙到 15 s 内没应答探测），这次启动就是重复启动而不是失败：它记下「守护进程已在运行但正忙」并以 0 退出，这样登录服务不会每隔几秒重启它一次。
@@ -227,7 +227,7 @@ sequenceDiagram
 2. 应用包里的 `coffer-daemon`。
 3. `~/.coffer/bin/coffer-daemon`。
 4. `PATH` 上的 `coffer-daemon`。
-5. 否则，提示你安装命令行。
+5. 否则，提示这份 Coffer 可能已损坏或不完整。提示里列出壳查找过的位置，指向安装页让你重新下载 Coffer，并附上一段可以交给编程智能体的提示词。
 
 存活检查必须放在最前面。第 2 到 4 步回答的是「要拉起哪个二进制」，而第 1 步回答的是「到底要不要拉起」。如果顺序反过来，打包的应用会在你已经从终端启动的守护进程旁边再启动一个，而在固定端口下，第二个守护进程会拒绝启动。壳以脱离方式拉起，而不是作为托管的 sidecar，因为托管的 sidecar 会随应用一起死掉；它还会把你登录 shell 的 `PATH` 交给子进程。从托盘或离线横幅发起的重启限制为每 5 s 最多一次。它通过 `POST /api/v1/daemon/shutdown` 停止运行中的守护进程，最多等 8 s 让端口释放，然后拉起。如果守护进程 15 s 内不应答状态调用，或者应答了关闭请求却一直占着端口，就先强制结束它：壳在 `ps` 显示 `daemon.json` 记录的 pid 是 Coffer 守护进程命令行（从不是 `coffer-daemon proxy`）之后，给它发 `SIGTERM`，5 s 后发 `SIGKILL`，再等端口释放。发现文件指向的不是活着的 Coffer 守护进程时，壳不动它，直接拉起。
 
@@ -278,7 +278,7 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.0 (/Users/you/.coffe
 | --- | --- | --- |
 | 保留策略 | 立即，然后每 6 h | 把每张登记的日志型表按策略清理，并让 `~/.coffer/logs/` 里的文件（包括每个进程的 shim 日志）按时过期。 |
 | 保险库同步 | 30 s 后第一轮，然后按所配远端的间隔（默认 1 h）。没有远端或远端已暂停时，每分钟重新检查一次 | 和你的 git 远端跑一轮同步。在你配置远端之前什么都不做。见[保险库同步](/zh/architecture/vault-sync#the-worker)。 |
-| 知识清扫 | 立即一次，然后每 60 s | 把丢进知识集隐藏目录 `.inbox/` 的文件提升为文档，提交在外部编辑过的文档，并重新渲染指南技能。每台机器上都运行。见[知识](/zh/architecture/knowledge)。 |
+| 知识清扫 | 立即一次，然后每 60 s | 把丢进知识集隐藏目录 `.inbox/` 的每个文件作为来源归档到 `sources/` 下，把 `pages/` 和 `sources/` 之外的零散 Markdown 移进 `pages/`，把在磁盘上发现的编辑作为 `disk` 写入提交，并重新渲染指南技能。每台机器上都运行。见[知识](/zh/architecture/knowledge)。 |
 | 记忆聚合 | 立即，然后默认每小时 | 把每个智能体的原生记忆读进派生的记忆树。见[记忆](/zh/architecture/memory)。 |
 | 记忆提炼 | 60 s 后第一次，然后默认每 6 h | 把聚合后的记忆里每条新的原始条目变成一篇笔记，并渲染索引。不涉及任何模型。 |
 | 消息渠道运行时 | 每 2 s | 把运行中的适配器（Telegram 轮询、SeaTalk 连接）和绑定到本机的消息渠道资源进行调和。 |
@@ -289,9 +289,11 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.0 (/Users/you/.coffe
 | 保险库扫描器 | 启动时扫一次，然后在文件事件时以及每 60 s | 把保险库里的手工编辑落成提交。 |
 | 调和器 | 每 60 s，收到提示时提前 | 收敛智能体的 MCP 条目、技能链接、提供商投射和投递 Hook，并记录尚未解决的偏移。 |
 | 待处理事项监视 | 每 30 s，收到提示时提前 | 重新计算总览的「需要你处理」列表，并在 `GET /api/v1/events` 上发布变化。 |
-| 模型代理监管者 | 每 5 s | 找到或拉起[本地模型代理](/zh/architecture/model-proxy)，把状态推给它，它挂掉时重启它。 |
+| 模型代理监管者 | 每 5 s | 找到[本地模型代理](/zh/architecture/model-proxy)，或在有智能体经由它路由时拉起它，把状态推给它，它挂掉时按退避重启它。 |
 | 用量摄取 | 每 2 s | 把代理的用量暂存文件写进 `runs.db`。 |
 | 价格刷新 | 60 s 后第一次，然后每天 | 刷新用于估算费用的模型价格表。 |
+| 提供商健康 | 启动时一次，然后每 30 分钟，每次编辑某个连接时也会再查 | 列出每个启用的模型提供商的模型，判断它的接入地址能否应答、是否接受密钥，并据此产生提供商的待处理事项。 |
+| 发布检查 | 60 s 后第一次，然后每天 | 仅限安装脚本装的二进制。向 GitHub 查询最新的 Coffer 发布，有更新的版本时在**设置 › 关于**里报告。`update_check` 关闭或设置了 `COFFER_UPDATE_CHECK=off` 时不运行。见[分发](/zh/architecture/distribution#how-the-installer-s-binaries-update)。 |
 
 聚合和提炼的间隔来自内部引擎设置，并在后台任务等待期间重新读取，所以在**设置**里的改动无需重启就生效。清扫的 60 s 间隔是固定的。
 
@@ -327,16 +329,17 @@ stateDiagram-v2
 6. 取消会话回收器，然后排空带缓冲的调用记录写入器。
 7. 停止监管模型代理（代理本身继续运行，所以智能体正在进行的模型流能熬过重启），然后停止价格刷新和用量循环。
 8. 销毁每个 MCP 会话监管者，包括管理路由背后那个进程级的监管者，这会终止它们的上游子进程；然后关闭 `/mcp` 会话状态。
-9. 销毁数据库引擎并清除当前令牌。
-10. 停止保险库扫描器，然后销毁派生数据库。
+9. 在它可能正在写入的数据库关闭之前，有时限地取消上面没有被各自所有者停掉的每个受监管后台任务，比如发布检查。
+10. 销毁数据库引擎并清除当前令牌。
+11. 停止保险库扫描器，然后销毁派生数据库。
 
-每一步都是尽力而为：失败会带着步骤名记日志，不会阻止后面的步骤。最后入口释放 `daemon.json`（仅当它仍写着本 pid 时）并关闭 socket。
+每一步都是尽力而为：失败会带着步骤名记日志，不会阻止后面的步骤。最后入口释放 `daemon.json`（仅当它仍写着本 pid 时）并关闭 socket。不再提供服务之后，如果某次卸载要求删除数据，它会删除 `~/.coffer`；最后，如果卸载移除了登录启动任务、而本守护进程正作为这个任务在运行，它把这个任务 boot out。
 
 常驻子进程共用一套终止阶梯：`SIGTERM`、有限等待、`SIGKILL`、有限等待。子进程的 pid 记录只在它确实在这里被回收时才删除。像 `uvx` 和 `npx` 这样的上游 MCP 包装器会拉起解释器孙进程，所以在发任何信号之前会先枚举整棵进程树。崩溃会跳过这一切。这正是 pid 记录和下一个守护进程的启动清扫存在的意义。
 
 ## 二进制部署 {#binary-deployment}
 
-冻结构建在启动时把它的兄弟二进制（`coffer`、`coffer-daemon`、`coffer-mcp-shim` 及其 `coffer-mcp-shim-lib/` 文件夹）部署到 `~/.coffer/bin` 下按版本分的目录里，并把公开名字切换为相对符号链接。这件事由守护进程负责，因为不管来自终端压缩包还是 `.dmg`，它都是每个冻结安装一定会启动的那个进程。把 `coffer-daemon` 部署到那里，也让冻结的 shim 在重启电脑后能找到要拉起的守护进程，并让登录服务有一个能跨升级保持有效的路径。源码安装不做这些，因为 `pip install` 已经把 `coffer` 和 `coffer-mcp-shim` 放到了 `PATH` 上。
+冻结构建在启动时把它的兄弟二进制（`coffer`、`coffer-daemon`、`coffer-mcp-shim` 及其 `coffer-mcp-shim-lib/` 文件夹、`coffer-seatalk-bridge`）部署到 `~/.coffer/bin` 下按版本分的目录里，并把公开名字切换为相对符号链接。这件事由守护进程负责，因为不管来自终端压缩包还是 `.dmg`，它都是每个冻结安装一定会启动的那个进程。把 `coffer-daemon` 部署到那里，也让冻结的 shim 在重启电脑后能找到要拉起的守护进程，并让登录服务有一个能跨升级保持有效的路径。源码安装不做这些，因为 `pip install` 已经把 `coffer` 和 `coffer-mcp-shim` 放到了 `PATH` 上。
 
 复制、哨兵文件、符号链接切换和清理的规则只在一处描述：[分发与发布](/zh/architecture/distribution#versioned-directories-and-the-symlink-flip)。
 
@@ -367,8 +370,8 @@ stateDiagram-v2
 
 | 位置 | 职责 |
 | --- | --- |
-| 基础设施层的 `daemon` 包 | 进程入口与环境清理、拉起锁、存活探测、固定端口绑定与发布、`daemon-config.json` 和 `daemon.json`、拉起命令解析、版本不一致警告、pid 记录与启动清扫、常驻子进程路径、自我重启、解包保活、launchd agent |
-| HTTP 界面 | 组合根与 lifespan、启动时的迁移步骤、后台任务启动器、有序清理、`/api/v1/daemon/*` 路由（状态、常驻、关闭、轮换令牌、日志） |
+| 基础设施层的 `daemon` 包 | 进程入口与环境清理、拉起锁、存活探测、固定端口绑定与发布、`daemon-config.json` 和 `daemon.json`、拉起命令解析、版本不一致警告、pid 记录与启动清扫、常驻子进程路径、自我重启、解包保活、launchd agent、发布检查、卸载时的数据清除 |
+| HTTP 界面 | 组合根与 lifespan、启动时的迁移步骤、后台任务启动器、有序清理、`/api/v1/daemon/*` 路由（状态、常驻、关闭、重启、轮换令牌、日志、端口、setup/check、upgrade、upgrade/check、upgrade/auto-check、卸载）。`coffer update` 和发布检查在[分发](/zh/architecture/distribution#how-the-installer-s-binaries-update)里描述 |
 | 应用层 | 把冻结的兄弟二进制部署到 `~/.coffer/bin` |
 | 命令行界面 | 命令行的检测或拉起，以及 `coffer daemon …` |
 | shim 界面 | shim 的检测或拉起、握手元数据、重启恢复 |

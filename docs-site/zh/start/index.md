@@ -37,7 +37,7 @@ Coffer 管理的一切都是**资源**，共七种**类型**。每个资源都�
 | `mcp_server` | 一个上游 MCP 服务器（stdio 或 HTTP），由 Coffer 运行并重新暴露给每个智能体 | [MCP 服务器](/zh/guides/mcp-servers) |
 | `agent` | 一个已注册的本地编程智能体：Claude Code 或 Codex | [智能体](/zh/guides/agents) |
 | `skill` | 一个 [AgentSkills](https://agentskills.io) 文件夹，投递到各智能体的 `skills/` 目录 | [技能](/zh/guides/skills) |
-| `knowledge` | 一个知识集：`~/.coffer/vault/knowledge/` 下存放 Markdown 文档的文件夹 | [知识](/zh/guides/knowledge) |
+| `knowledge` | 一个知识集：`~/.coffer/vault/knowledge/` 下由保留的来源整理成的 Markdown 页面 wiki | [知识](/zh/guides/knowledge) |
 | `memory` | Coffer 从智能体自身记忆中生成的一个笔记分区，每个仓库一个，另加 `global` | [记忆](/zh/guides/memory) |
 | `channel` | 一个 Telegram 或 SeaTalk 机器人，让你在手机上和智能体聊天 | [消息渠道](/zh/guides/channels) |
 | `provider` | 一份模型提供商配置（协议、base URL、密钥），由 Coffer 写入每个智能体的配置 | [模型提供商](/zh/guides/providers) |

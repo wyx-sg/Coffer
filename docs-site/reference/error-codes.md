@@ -305,6 +305,7 @@ not an HTTP error. Its `code` is one of:
 | `empty_prompt` | There was no user message to send. |
 | `sdk_connect_error`, `sdk_stream_error`, `sdk_error` | Claude Code could not start, its stream failed, or it reported an error. The message says which. |
 | `codex_connect_error`, `codex_stream_error`, `codex_error` | The same for Codex. |
+| `session_in_use` | The agent's session is open somewhere else (a terminal running `claude --resume <id>` or `codex resume <id>`), so the turn was refused instead of forking it. Continue it there, or start a new conversation. |
 | `INTERNAL_ERROR` | An unexpected failure inside Coffer, including a queued turn that could not start. |
 
 ## MCP gateway errors
@@ -313,8 +314,12 @@ Calls through `/mcp` answer with JSON-RPC errors, not the envelope above.
 
 | JSON-RPC code | Meaning |
 | --- | --- |
+| `-32700` | Parse error: the body is not valid JSON (with HTTP `400`). |
 | `-32600` | Invalid request: the body is not a JSON-RPC object, or has no `method`. |
-| `-32000` | `TOOL_DISABLED`: the capability is switched off, outside the agent's reach, or not recognised. |
+| `-32601` | Method not found: the gateway does not answer that method. |
+| `-32602` | Invalid params: a parameter the method needs is missing or of the wrong type, or no server in reach offers a tool, prompt or resource by that name. |
+| `-32000` | `TOOL_DISABLED`: the capability is switched off or outside the agent's reach. |
+| Upstream's own code | An upstream server answered with a JSON-RPC error: its code is kept, with Coffer's message `the upstream server answered with JSON-RPC error <code>` in place of the upstream's text. |
 | `-32603` | Any other failure. A Coffer error carries its message; anything else is reported as `internal error: <ExceptionClass>` so no upstream content leaks. |
 
 A built-in tool that fails returns an in-band result with `isError: true` instead; see
@@ -338,7 +343,7 @@ is printed on standard error as `{"error": {"code", "message", "details"}, "exit
 | `4` | Not found | The daemon answered `404`. |
 | `5` | Conflict | The daemon answered `409`. |
 | `6` | Invalid input | The daemon answered `400` or `422`, or the command's own input did not parse (`CLI_INVALID_INPUT`). A custom-tool test whose arguments break the schema exits here, with one error per field. |
-| `7` | Upstream test failed | `coffer mcp test` could not initialize the upstream server, or a custom-tool test (`coffer custom-tool tool test`, `test-draft`, `test-unsaved`) reached an API that failed or answered with an error status. |
+| `7` | Upstream test failed | `coffer mcp test` could not initialize the upstream server, or a custom-tool test (`coffer custom-tool tool test`, `test-draft`, `test-unsaved`) reached an API that failed or answered with an error status. Any other command exits here too when the daemon answered `502` or `504` because something it called failed (for example `SYNC_REMOTE_FAILED`, `SKILL_SOURCE_UNREACHABLE`, `OPENAPI_UNREACHABLE`, `CHANNEL_SEND_FAILED` or `UPSTREAM_TIMEOUT`); `UPSTREAM_UNAVAILABLE` exits `1`. |
 | `8` | Secret issue | The error code was `SECRET_MISSING`, `SECRET_LOCKED`, `SECRET_UNREADABLE` or `SECRET_BINDING_REJECTED`. |
 | `9` | Waiting for approval | The change was saved but a secret in it waits for a person's approval (`SECRET_BINDING_PENDING`). The command printed the approval ids and `next: coffer approval approve <id>…` (with `--json`, `{"status": "pending_approval", "approval_ids", "next"}`). Do not retry: run that command, which asks the person in the desktop app, or approve it in the app. See [Secrets → On the command line](/guides/secrets#on-the-command-line). |
 | `10` | Waiting for git | The daemon is running but waits for git: none was found, or it is older than 2.40. The command printed why and a prompt for your agent before sending anything. See [Coffer needs git](/guides/troubleshooting#coffer-needs-git). |
@@ -355,7 +360,15 @@ Besides the daemon's codes, which pass through unchanged, a command names these 
 | `CLI_INVALID_INPUT` | `6` | The command's own input is not valid: `--data` or `--args` is not JSON, `@file` cannot be read, `--set` is not `key=value`, or a flag's value is malformed. Nothing was sent. |
 | `CLI_APP_UNAVAILABLE` | `12` | The desktop app is not running and could not be started. |
 | `CLI_WAIT_TIMEOUT` | `13` | `coffer sync wait` ran past its `--timeout` before the operation finished. |
-| `CLI_DESKTOP_REQUEST_FAILED` | `1` | The desktop app could not carry out an update request (`coffer app update …`). |
+| `DAEMON_UNREACHABLE` | `3` | The daemon could not be started, or stopped answering mid-request. |
+| `DAEMON_WAITING_FOR_GIT` | `10` | The daemon is running but waits for git. `details.handoff` carries the prompt for your agent. |
+| `CLI_DESKTOP_REQUEST_FAILED` | `1` | The desktop app could not carry out a request handed to it: `coffer app update …`, or `coffer update` / `coffer uninstall` when Coffer runs as the desktop app. |
+| `CLI_UPDATE_SOURCE` | `2` | `coffer update` on a source checkout: upgrade it with `git pull` instead. |
+| `CLI_UPDATE_CHECK_FAILED` | `1` | `coffer update` could not read the latest release. |
+| `CLI_UPDATE_FAILED` | `1` | `coffer update` could not download, check or install the new binaries. |
+| `CLI_UPDATE_RESTART` | `1` | `coffer update` installed the new binaries, but the daemon on them did not start; check `~/.coffer/logs/daemon.log`. |
+| `CLI_UNINSTALL_NOT_CONFIRMED` | `2` | `coffer uninstall` was not confirmed: no terminal and no `--yes`, or `--delete-data` without the phrase typed at a terminal. Nothing was removed. |
+| `CLI_UNINSTALL_DAEMON_RUNNING` | `1` | `coffer uninstall --delete-data` uninstalled Coffer, but the daemon did not stop, so `~/.coffer` was not deleted. |
 
 Pass `--verbose` (`coffer -v …`) to add the request behind a refusal — method, path and status, never a header — as a line on standard error, or as a `request` object beside `error` with `--json`; an unexpected error also prints its traceback.
 

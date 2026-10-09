@@ -16,7 +16,7 @@ Not by Coffer's own doing, unless you configure it to. The daemon listens only o
 - **Vault sync.** If you configure a remote, rounds push to and pull from that git repository. Secrets travel only as ciphertext and only if you opt in; the master key never does.
 - **Channels.** A Telegram or SeaTalk channel exchanges messages with that platform.
 
-The endpoints you configure as your own — an HTTP MCP server, a model or transcription endpoint, a sync remote — may be on your own machine or network. A URL Coffer only probes on your behalf while you fill in a form (**Test connection** and model listing in the provider editor) is refused if it resolves to a private or link-local address. A loopback address is allowed, which is how a model runtime on your own machine works.
+The endpoints you configure as your own — an HTTP MCP server, a model or transcription endpoint, a sync remote — may be on your own machine or network. A URL Coffer only probes on your behalf while you fill in a form (**Test** and model listing in the provider editor) is refused if it resolves to a private or link-local address. A loopback address is allowed, which is how a model runtime on your own machine works.
 
 See [Security model](/architecture/security).
 
@@ -99,7 +99,7 @@ The desktop app updates itself from **Settings › About**. With the one-line in
 
 ## How do I uninstall Coffer?
 
-Choose **Uninstall Coffer…** on **Settings › About** in the desktop app, or run `coffer uninstall`. Coffer disconnects your agents, removes the skill links it delivered, start at login, its binaries and `PATH` lines and the app, and keeps `~/.coffer` for a reinstall. Deleting your data too is a separate choice that asks for Touch ID. See [Install → Uninstall](/start/install#uninstall).
+Choose **Uninstall Coffer…** on **Settings › About** in the desktop app, or run `coffer uninstall`. Coffer disconnects your agents, puts agents on a provider back on their own login, removes the skill links it delivered, the terminal launch files, start at login, its binaries and `PATH` lines and the app, and keeps `~/.coffer` for a reinstall. Deleting your data too is a separate choice that asks for Touch ID. See [Install → Uninstall](/start/install#uninstall).
 
 If you used vault sync, the remote repository is untouched and still holds your vault's documents.
 
