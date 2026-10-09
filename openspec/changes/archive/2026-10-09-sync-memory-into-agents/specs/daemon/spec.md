@@ -1,3 +1,25 @@
+## ADDED Requirements
+
+### Requirement: Report what Coffer stores
+The daemon MUST report, for Settings › Data, what Coffer keeps on this machine in the three kinds
+of [Storage Is Five Classes by Nature](../../../docs/decisions/storage-is-five-classes-by-nature.md)
+the user acts on, through `GET /api/v1/storage`: the **vault** (the vault repository
+`~/.coffer/vault/`, a git repository whether or not it syncs — its path, its size with its
+history and how many versions it holds; no version count before the repository has been created), the
+**local content** (channel media under `~/.coffer/content/`, which never sync:
+their locations, the one folder to open, and their size), the **history** (the database file
+holding the records, `~/.coffer/runs.db` unless `COFFER_DB_URL` names another, with its WAL, and
+its size together with the log directory's, `~/.coffer/logs/` unless `COFFER_LOG_DIR` names
+another, and with the skills' working files in `~/.coffer/skill-data/` and the config backups in `~/.coffer/config-backups/`). Coffer keeps no cache the user clears: what is under
+`~/.coffer/derived/` is rebuilt by the daemon on its own and is not reported. Every path MUST come from the same place its owner
+resolves it, so an override the owner honours is honoured here.
+
+#### Scenario: the storage summary reports the three kinds
+- **GIVEN** a vault repository of three commits, channel media, and a database with its WAL
+- **WHEN** `GET /api/v1/storage` is called
+- **THEN** it reports the vault as `~/.coffer/vault` with 3 versions, the local content with the channel media location under `~/.coffer/content` and its size, the history as `runs.db` with its WAL plus the log directory, `skill-data` and `config-backups`, and no cache
+- **AND** before the vault repository has been created it reports the vault with no version count
+
 ## MODIFIED Requirements
 
 ### Requirement: Manage the daemon from the command line
@@ -136,26 +158,6 @@ would be less honest than recording none.
 - **WHEN** the daemon is restarted
 - **THEN** it binds 8123 and records it in `~/.coffer/daemon.json`, each agent's Coffer MCP entry names no port and is left as it is, and the discovery the CLI and an MCP shim share finds the daemon on 8123
 
-### Requirement: Report what Coffer stores
-The daemon MUST report, for Settings › Data, what Coffer keeps on this machine in the three kinds
-of [Storage Is Five Classes by Nature](../../../docs/decisions/storage-is-five-classes-by-nature.md)
-the user acts on, through `GET /api/v1/storage`: the **vault** (the vault repository
-`~/.coffer/vault/`, a git repository whether or not it syncs — its path, its size with its
-history and how many versions it holds; no version count before the repository has been created), the
-**local content** (channel media under `~/.coffer/content/`, which never sync:
-their locations, the one folder to open, and their size), the **history** (the database file
-holding the records, `~/.coffer/runs.db` unless `COFFER_DB_URL` names another, with its WAL, and
-its size together with the log directory's, `~/.coffer/logs/` unless `COFFER_LOG_DIR` names
-another, and with the skills' working files in `~/.coffer/skill-data/` and the config backups in `~/.coffer/config-backups/`). Coffer keeps no cache the user clears: what is under
-`~/.coffer/derived/` is rebuilt by the daemon on its own and is not reported. Every path MUST come from the same place its owner
-resolves it, so an override the owner honours is honoured here.
-
-#### Scenario: the storage summary reports the three kinds
-- **GIVEN** a vault repository of three commits, channel media, and a database with its WAL
-- **WHEN** `GET /api/v1/storage` is called
-- **THEN** it reports the vault as `~/.coffer/vault` with 3 versions, the local content with the channel media location under `~/.coffer/content` and its size, the history as `runs.db` with its WAL plus the log directory, `skill-data` and `config-backups`, and no cache
-- **AND** before the vault repository has been created it reports the vault with no version count
-
 ### Requirement: Uninstall Coffer from this machine
 `POST /api/v1/daemon/uninstall` MUST remove what Coffer wrote outside
 `~/.coffer` and then stop the daemon, so uninstalling is one action instead of a
@@ -200,7 +202,8 @@ daemon owns: it MUST say that the master key's Keychain items stay.
 - **WHEN** `coffer uninstall --delete-data --yes` runs with no interactive terminal
 - **THEN** it refuses, and nothing is removed
 
-## RENAMED Requirements
+## REMOVED Requirements
 
-- FROM: `### Requirement: Report what Coffer stores and clear the rebuildable cache`
-- TO: `### Requirement: Report what Coffer stores`
+### Requirement: Report what Coffer stores and clear the rebuildable cache
+**Reason**: Coffer keeps no rebuildable cache the person clears: the memory tree under `~/.coffer/derived/` is gone, and with it `POST /api/v1/storage/cache/clear` and `coffer settings storage clear-cache`. The storage summary is restated, reporting three kinds, as "Report what Coffer stores" (see ADDED below).
+**Migration**: Read what Coffer stores with `GET /api/v1/storage` as before; there is nothing to clear.

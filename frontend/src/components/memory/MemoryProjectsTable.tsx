@@ -1,6 +1,6 @@
 // frontend/src/components/memory/MemoryProjectsTable.tsx
 //
-// The hub's projects (spec memory "Manage memory sync in the web UI"): global
+// The hub's projects (spec memory "Manage memory sync in the web UI and on the command line"): global
 // memories first — written into every agent on every machine — then one row per
 // project with where it is checked out on this machine (a project that is not
 // is held back: its memories wait in the hub), how many memories it holds and

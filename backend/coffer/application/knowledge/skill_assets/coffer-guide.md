@@ -2,8 +2,8 @@
 
 Coffer is this machine's local vault. It stands between you and the MCP servers
 this developer registered, it holds what they have written down about their
-working environment, and it holds a note for everything every agent on this
-machine has learned. This is the manual: what Coffer will do for you, and
+working environment, and it copies what each of their agents has learned into
+the others' own memory. This is the manual: what Coffer will do for you, and
 what it will not.
 
 ## Coffer's own tools

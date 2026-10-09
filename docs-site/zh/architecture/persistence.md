@@ -17,7 +17,7 @@ Coffer 把状态存在 `~/.coffer/` 下的五个**存储类别**里，每个类�
 - **关于这台机器的事实**（这里启用了哪些智能体、同步远端、保留策略）永远不能跟着走，丢了可以重新设置。
 - **媒体文件和聊天工作目录** 是你唯一的副本，但体积大，不值得同步。
 - **历史记录**（审计、调用、对话）只追加，会被清理。
-- **派生状态**（健康检查、缓存、记忆树）可以从其余部分重建。
+- **派生状态**（健康检查、缓存、渲染出的指南技能）可以从其余部分重建。
 
 所以由类别决定目录，由目录决定一样东西能不能跟着走。“生效范围永不同步”不再是翻译器必须记住的一条规则，而是生效范围存放位置本身的一个事实。
 
@@ -43,20 +43,20 @@ flowchart LR
     L["local/ — JSON<br/>仅限这台机器"]
     C["content/ — 媒体、工作目录<br/>你唯一的副本"]
     R[("runs.db — 历史")]
-    D["derived/ — 可重建<br/>derived.db、记忆、缓存"]
+    D["derived/ — 可重建<br/>derived.db、缓存"]
   end
   V -- "同步（可选）" --> Remote["你的 git 远端"]
 ```
 
 | 类别 | 位置 | 存放内容 | 同步 | 历史 | 删掉是否安全 |
 | --- | --- | --- | --- | --- | --- |
-| **vault** | `vault/` | 资源定义、状态文档、知识、技能、密钥密文、机器描述。 | 设置了远端时同步 | Git | 否：这是唯一副本 |
+| **vault** | `vault/` | 资源定义、状态文档、知识、技能、记忆中心库、密钥密文、机器描述。 | 设置了远端时同步 | Git | 否：这是唯一副本 |
 | **local** | `local/` | 本机专属资源（智能体）、生效范围、同步远端、保留策略、密钥边界的批准记录、本机专属密文。 | 从不 | 无 | 你会丢掉一些需要重新设置的设置 |
 | **content** | `content/` | 聊天和消息渠道的附件、聊天工作目录。 | 暂不 | 无 | 否：这是你唯一的副本 |
 | **runs** | `runs.db`（以及 `skill-data/`、`config-backups/`） | 审计日志、MCP 调用、对话、消息渠道线程和发件箱、同步轮次和用量；`skill-data/` 里是 skill 脚本写的日志、操作记录和临时文件；`config-backups/` 里是每次改写前留下的智能体配置文件副本。 | 从不 | 它*本身*就是历史 | 你会丢掉历史 |
-| **derived** | `derived/` | `derived.db`、记忆树、Coffer 自己的指南技能、同步冲突的编辑器副本、消息渠道主人的头像。 | 从不 | 无 | 是：会被重建 |
+| **derived** | `derived/` | `derived.db`、Coffer 自己的指南技能、同步冲突的编辑器副本、消息渠道主人的头像。 | 从不 | 无 | 是：会被重建 |
 
-一个资源属于哪个类别由它的类型声明，并可按行细化：大多数类型在保险库里，`agent` 在本地（智能体的配置目录是关于这台机器的事实），`memory` 分区是派生的，内置的 `coffer-guide` 技能也是派生的，因为每台机器都自己渲染它。
+一个资源属于哪个类别由它的类型声明，并可按行细化：大多数类型在保险库里，`agent` 在本地（智能体的配置目录是关于这台机器的事实），内置的 `coffer-guide` 技能也是派生的，因为每台机器都自己渲染它。
 
 ### 保险库 {#the-vault}
 
@@ -69,6 +69,7 @@ flowchart LR
 ├── state/settings/internal-engine.json upkeep and speech-to-text model settings (absent = defaults)
 ├── knowledge/<collection>/…            Markdown documents, hidden .inbox/ for new material
 ├── skills/<name>/…                     skill master folders
+├── memory/global/, memory/projects/<project>/  the memory hub: one Markdown file per memory
 ├── secret/<ref>.enc                    Fernet ciphertext, one file per secret
 └── machines/<machine id>.json          one descriptor per machine that syncs
 ```
@@ -110,6 +111,7 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 ├── engine.json                   when this machine last changed engine settings
 ├── retention.json                retention policy per prunable table
 ├── skill-source-status.json      what this machine last found at a Git-imported skill's source
+├── memory-sync.json              what the memory sync wrote into this machine's agents (and memory-sync-preview.json)
 ├── secret/                       machine-local ciphertext (proxy tokens)
 ├── secret-boundary/              bindings, approvals, switches, first-stored times
 ├── sync/remote.json              the one sync remote
@@ -158,13 +160,12 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 ~/.coffer/derived/
 ├── channel-avatars/            已配对的人在平台上的头像，由各消息渠道的适配器拉取
 ├── derived.db                   MCP server and model provider health, skill deliveries, capability first/last seen
-├── memory/<partition>/          the memory tree (MEMORY.md, notes/, RETIRED.md, .raw/)
-├── resources/                   derived resource files (memory partitions, coffer-guide)
+├── resources/                   derived resource files (coffer-guide)
 ├── skills/coffer-guide/         Coffer's own guide skill, rendered from the build
 └── sync-conflicts/              editor copies of a stopped round's conflicting files
 ```
 
-`derived.db` 没有 Alembic 迁移链。它的表在打开时创建，它的 `PRAGMA user_version` 会与构建的版本比较：版本不同的文件会被删除并重新创建。在守护进程停止时删掉整个 `derived/` 永远是安全的；「设置 → 数据」可以替你清理缓存。
+`derived.db` 没有 Alembic 迁移链。它的表在打开时创建，它的 `PRAGMA user_version` 会与构建的版本比较：版本不同的文件会被删除并重新创建。在守护进程停止时删掉整个 `derived/` 永远是安全的。
 
 ## 进入保险库的唯一写入路径 {#the-one-write-path-into-the-vault}
 

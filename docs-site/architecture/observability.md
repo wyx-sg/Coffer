@@ -180,7 +180,7 @@ The vocabulary is a closed enumeration, defined in the domain layer.
 | Agents | `agent_mcp_installed`, `agent_mcp_uninstalled`, `agent_mcp_entry_removed`, `agent_mcp_entry_adopted`, `agent_plugin_toggled`, `agent_plugin_uninstalled` |
 | Skills | `skill_imported`, `skill_updated`, `skill_update_merged`, `skill_bound`, `skill_unbound`, `skill_relinked`, `skill_drift_remediated`, `skill_adopted`, `skill_unmanaged_deleted` |
 | Knowledge | `knowledge_written`, `knowledge_edited`, `knowledge_deleted` |
-| Memory | `memory_aggregated`, `memory_distilled`, `memory_delivery_installed`, `memory_delivery_removed`, `memory_delivery_fired`, `memory_trigger_added`, `memory_trigger_proposed`, `memory_trigger_armed`, `memory_trigger_disarmed`, `memory_trigger_deleted` |
+| Memory | `memory_synced`, `memory_sync_undone`, `memory_curation_requested`, `memory_hook_removed` |
 | Channels | `channel_pairing_issued`, `channel_paired` |
 | Vault files | `vault_file_edited` (a hand edit committed as `disk`, by a person) |
 | Vault sync | `sync_run`, `sync_confirmed`, `sync_rejected`, `sync_rolled_back`, `sync_machine_removed`, `sync_plaintext_pushed`, `master_key_exported`, `master_key_imported` |
@@ -188,7 +188,7 @@ The vocabulary is a closed enumeration, defined in the domain layer.
 
 No secret event carries a secret value; each records the ref, the standalone secret's name or the destination only.
 
-Three events are no longer recorded, because the web UI no longer edits an agent's config file or a memory note: `agent_config_file_written`, `agent_config_file_deleted` and `memory_note_edited`. Rows already in the log keep their labels in the Activity page, so they still read in plain words. `vault_file_restored` is recorded: restoring a version from a History tab is Coffer's own write. An edit made on disk, or a restore an agent commits itself, is a vault commit naming `Coffer-Writer: disk` or `agent`; the vault's git history answers who changed the file.
+Some events are no longer recorded: `agent_config_file_written` and `agent_config_file_deleted`, because the web UI no longer edits an agent's config file, and the earlier memory layer's `memory_aggregated`, `memory_distilled`, `memory_delivery_installed`, `memory_delivery_removed`, `memory_delivery_fired`, `memory_note_edited` and `memory_note_deleted`. Rows already in the log keep their labels in the Activity page, so they still read in plain words. `vault_file_restored` is recorded: restoring a version from a History tab is Coffer's own write. An edit made on disk, or a restore an agent commits itself, is a vault commit naming `Coffer-Writer: disk` or `agent`; the vault's git history answers who changed the file.
 
 - `secret_revealed` — a person revealed or copied a value in the desktop app, behind a presence check. It is the only way a value is shown, since no route, command or tool returns one.
 - `secret_resolved` — `coffer run` resolved a standalone secret into one child process. The row names the secret, the program and the working directory, never the value or the rest of the command line.

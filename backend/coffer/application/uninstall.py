@@ -1,13 +1,13 @@
 """Uninstall Coffer from this machine (spec daemon "Uninstall Coffer from this
 machine"; design D3 of ``add-self-update-and-uninstall``).
 
-Coffer writes into files it does not own: the agents' MCP config, settings and
-hooks, their skill folders, the login items, the shell profiles and Warp's
+Coffer writes into files it does not own: the agents' MCP config and settings,
+their skill folders, the login items, the shell profiles and Warp's
 launch configurations. Each kind already knows how to take its own writes out
 again; this runs them all, in the order that keeps anything from coming back:
 
 1. Inside the reconciler's hold: the model-provider routing (it runs Coffer's
-   binaries), every agent's connection — MCP entry and memory hook — and every
+   binaries), every agent's MCP entry, and every
    skill link with its delivery records.
 2. Freeze the reconciler for the rest of the process, so no pass restores a
    link before the daemon exits.

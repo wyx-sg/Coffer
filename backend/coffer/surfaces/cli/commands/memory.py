@@ -1,6 +1,6 @@
 """``coffer memory`` — the Memory page.
 
-Spec memory "Manage memory sync in the web UI". The hub and each agent's own
+Spec memory "Manage memory sync in the web UI and on the command line". The hub and each agent's own
 memory are plain files, read and edited with the reader's own tools; the sync,
 its preview, undo, the Codex import switch and curation are commands.
 """

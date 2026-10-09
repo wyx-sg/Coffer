@@ -1,24 +1,4 @@
-## MODIFIED Requirements
-
-### Requirement: Deliver the catalogue through the coffer-guide skill
-The catalogue MUST be carried by Coffer's own skill, `coffer-guide`, which MUST be an ordinary registered `skill` Resource — one master folder, `~/.coffer/derived/skills/coffer-guide/`, one resource, delivered by the predicate and the links every imported skill uses ([skill-manager](../skill-manager/spec.md) "Regenerate Coffer's builtin skill from the build", [skill-manager](../skill-manager/spec.md) "Deliver a skill only where it is enabled and in scope", [skill-manager](../skill-manager/spec.md) "Deliver a skill as a directory link"). This layer contributes the **text** and nothing else: it renders, and the skill kind writes, registers and delivers.
-
-This layer MUST NOT push anything into a session of its own accord and MUST NOT write into any agent's own memory files: knowledge is pulled. Writing into an agent's native memory belongs to [memory](../memory/spec.md), and nothing in Coffer puts memory into a session ([memory](../memory/spec.md) "Deliver no memory into a session"). Coffer's own skill is indistinguishable from an imported one everywhere the skill kind touches it — listed, scoped, enabled, delivered, verified for drift and repaired by the same code — and the only thing that sets it apart is that its master folder is Coffer's to rewrite and its deletion is refused.
-
-#### Scenario: Coffer's own skill is an ordinary skill resource
-- **GIVEN** a daemon starting with a collection holding documents
-- **WHEN** the boot refresh runs
-- **THEN** there is one `coffer-guide` master folder under `~/.coffer/derived/skills/` and one `skill:coffer-guide` resource carrying the `builtin` source, and the skills listing shows it beside the user's imported skills
-- **AND** this layer has written nothing into any agent's own skill directory itself, and nothing into any agent's memory files
-
-### Requirement: Describe Coffer and the collections' subjects in the skill description
-The skill's **frontmatter description** MUST describe Coffer itself — naming its built-in tool so a model recognises it — **and** name the subjects the collections cover, drawn from their READMEs, and, while the knowledge feature is on, that the skill teaches how to write and tidy knowledge (see "Teach writing and tidying in the guide"). It is the only part of this layer that is always in a model's context, so it MUST carry matchable specifics rather than a description of the layer, and it MUST fit the tightest frontmatter ceiling any importer imposes (1024 characters), dropping whole collection subjects from the tail rather than cutting a sentence mid-way.
-
-#### Scenario: one skill carries both Coffer's manual and the catalogue
-- **GIVEN** a rendered `coffer-guide` `SKILL.md`
-- **WHEN** its frontmatter and its body are read
-- **THEN** the description names Coffer and its built-in tool as well as the collections' subjects, and is within 1024 characters — a catalogue too large to fit drops whole collection subjects from the tail rather than ending mid-sentence
-- **AND** the body carries the manual first — the built-in tool, the tiering contract and that no Coffer tool waits on an approval — and the catalogue after it, in one file
+## ADDED Requirements
 
 ### Requirement: Merge the manual and the catalogue in the skill body
 The skill's **body** MUST be one merged manual: Coffer's own — its one built-in tool, `coffer__search_tools`, and when to reach for it; the tiering contract that makes an unlisted upstream tool still callable; the knowledge root; that Coffer's own logs are read with `coffer log` and located with `coffer path logs`; that a skill's scripts keep their logs, operation journals and temp files under `~/.coffer/skill-data/<skill-name>/` (found with `coffer path skill-data`), never in the skill's own folder or elsewhere in `~/.coffer`, and that files there are deleted after the Skill working files retention window, so durable data does not belong there; that `coffer cli list` lists the command-line tools Coffer manages, what each is for and whether it is ready on this machine; that no Coffer tool waits on a human approval; and what does not belong in knowledge — **followed by** the catalogue: the path of the knowledge root, and, for each collection, every document's collection-relative path, title and description. It MUST instruct the agent to read those files with its own tools, and to write what it learns that is durable straight into the collection's documents, and to tidy a collection when asked (see "Teach writing and tidying in the guide"); a change to a document is carried by the sweep into the vault's history (see "Treat a direct file edit as a complete change"). The manual MUST name no memory directory: an agent reaches memory through its own native memory ([memory](../memory/spec.md) "Deliver no memory into a session"). One skill, not a set: a frontmatter description is resident in every session whether the skill is opened or not, while a body is paid for only when a model reaches for it, so a second skill would spend the resident budget again to describe something most sessions never open.
@@ -40,6 +20,28 @@ The skill's **body** MUST be one merged manual: Coffer's own — its one built-i
 - **WHEN** the skill is rendered, with or without the knowledge and memory features on
 - **THEN** its manual says a skill's scripts write their logs, operation journals and temp files under `~/.coffer/skill-data/<skill-name>/`, found with `coffer path skill-data`
 - **AND** it says never to write them inside the skill's own folder, that files there are deleted after the Skill working files retention window, and that durable data does not belong there
+
+## MODIFIED Requirements
+
+### Requirement: Deliver the catalogue through the coffer-guide skill
+The catalogue MUST be carried by Coffer's own skill, `coffer-guide`, which MUST be an ordinary registered `skill` Resource — one master folder, `~/.coffer/derived/skills/coffer-guide/`, one resource, delivered by the predicate and the links every imported skill uses ([skill-manager](../skill-manager/spec.md) "Regenerate Coffer's builtin skill from the build", [skill-manager](../skill-manager/spec.md) "Deliver a skill only where it is enabled and in scope", [skill-manager](../skill-manager/spec.md) "Deliver a skill as a directory link"). This layer contributes the **text** and nothing else: it renders, and the skill kind writes, registers and delivers.
+
+This layer MUST NOT push anything into a session of its own accord and MUST NOT write into any agent's own memory files: knowledge is pulled. Writing into an agent's native memory belongs to [memory](../memory/spec.md), and nothing in Coffer puts memory into a session ([memory](../memory/spec.md) "Deliver no memory into a session"). Coffer's own skill is indistinguishable from an imported one everywhere the skill kind touches it — listed, scoped, enabled, delivered, verified for drift and repaired by the same code — and the only thing that sets it apart is that its master folder is Coffer's to rewrite and its deletion is refused.
+
+#### Scenario: Coffer's own skill is an ordinary skill resource
+- **GIVEN** a daemon starting with a collection holding documents
+- **WHEN** the boot refresh runs
+- **THEN** there is one `coffer-guide` master folder under `~/.coffer/derived/skills/` and one `skill:coffer-guide` resource carrying the `builtin` source, and the skills listing shows it beside the user's imported skills
+- **AND** this layer has written nothing into any agent's own skill directory itself, and nothing into any agent's memory files
+
+### Requirement: Describe Coffer and the collections' subjects in the skill description
+The skill's **frontmatter description** MUST describe Coffer itself — naming its built-in tool so a model recognises it — **and** name the subjects the collections cover, drawn from their READMEs, and, while the knowledge feature is on, that the skill teaches how to write and tidy knowledge (see "Teach writing and tidying in the guide"). It is the only part of this layer that is always in a model's context, so it MUST carry matchable specifics rather than a description of the layer, and it MUST fit the tightest frontmatter ceiling any importer imposes (1024 characters), dropping whole collection subjects from the tail rather than cutting a sentence mid-way.
+
+#### Scenario: one skill carries both Coffer's manual and the catalogue
+- **GIVEN** a rendered `coffer-guide` `SKILL.md`
+- **WHEN** its frontmatter and its body are read
+- **THEN** the description names Coffer and its built-in tool as well as the collections' subjects, and is within 1024 characters — a catalogue too large to fit drops whole collection subjects from the tail rather than ending mid-sentence
+- **AND** the body carries the manual first — the built-in tool, the tiering contract and that no Coffer tool waits on an approval — and the catalogue after it, in one file
 
 ### Requirement: Keep the handshake instructions to what a skill cannot carry
 The MCP gateway's own `initialize` instructions MUST stay within their character cap and MUST carry only what a skill cannot: what Coffer is, the name of its one built-in tool (`coffer__search_tools`) so it is recognisable in a tool list, one line, while the knowledge feature is on, saying that Coffer's knowledge is Markdown read with the agent's own file tools, one line saying that Coffer's own logs are read with `coffer log`, the tiering sentence when tools are actually hidden this session, and a pointer to the `coffer-guide` skill for everything else. It MUST NOT restate the manual, MUST NOT name a memory directory, MUST NOT name a retrieval tool, and MUST NOT carry the catalogue — the catalogue is in the skill body, which costs a session nothing until a model opens it. A built-in tool whose experimental feature is switched off is not in the tool list, and the instructions MUST NOT name it either ([experimental-features](../experimental-features/spec.md) "Withdraw what a switched-off feature put in front of agents").
@@ -99,3 +101,14 @@ The Knowledge page's title MUST carry the **Experimental** tag ([experimental-fe
 - **WHEN** its page renders
 - **THEN** it shows the folder name, the description, the Documents and Folder properties and a Tidy button
 - **AND** its ⋯ menu offers Reveal in Finder, Copy path and Delete collection
+
+## REMOVED Requirements
+
+### Requirement: Merge the manual and the catalogue in the skill body (before memory sync)
+**Reason**: A MODIFIED block cannot drop a scenario, and this requirement loses "name one tool, both roots and the log reader in the manual", which described the retired memory layer; it is renamed out of the way, removed, and added again under its own title (see ADDED below).
+**Migration**: The dropped scenarios' markers are deleted or pointed at the scenarios of the requirement added again.
+
+## RENAMED Requirements
+
+- FROM: `### Requirement: Merge the manual and the catalogue in the skill body`
+- TO: `### Requirement: Merge the manual and the catalogue in the skill body (before memory sync)`

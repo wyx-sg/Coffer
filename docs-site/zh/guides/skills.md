@@ -399,7 +399,6 @@ Coffer 自带一个技能 `coffer-guide`。它是智能体用好 Coffer 要读�
 - Coffer 自己的 MCP 工具，以及各自在什么时候用。
 - 没出现在智能体工具列表里的工具，仍然可以通过 `coffer__search_tools` 调用。
 - [知识](/zh/guides/knowledge)：知识根目录在哪里、如何用智能体自己的文件工具读取、如何往里写入并整理，以及每个知识集中每篇文档的目录，附带路径、标题和描述。
-- [记忆](/zh/guides/memory)：Coffer 读取智能体的记忆但从不写入；Coffer 的笔记是记忆根目录下的 Markdown，智能体用自己的文件工具 grep 它们。
 - [命令行工具](/zh/guides/clis#what-your-agents-see)：`coffer cli list` 打印 Coffer 管理的命令行工具——每个是做什么的、谁需要它、在本机是否就绪。
 - 没有任何 Coffer 工具会等待人工批准。
 

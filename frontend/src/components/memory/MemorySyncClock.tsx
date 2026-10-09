@@ -1,7 +1,7 @@
 // frontend/src/components/memory/MemorySyncClock.tsx
 //
 // The Memory header's subtitle (spec memory "Manage memory sync in the web
-// UI"): when memory last synced on this machine and when it syncs next —
+// UI and on the command line"): when memory last synced on this machine and when it syncs next —
 // "Last synced 14 min ago · next in 46 min" — or that automatic sync is off.
 // The next run is the internal engine's clock for the `memory_sync` pass; the
 // last is the sync's own ledger, whoever asked for it.

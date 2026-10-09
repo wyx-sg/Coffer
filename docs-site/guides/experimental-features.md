@@ -14,7 +14,7 @@ A stable release and a build from source behave the same way here: every experim
 | Key | Name | What it covers |
 | --- | --- | --- |
 | `knowledge` | Knowledge | The Knowledge page and its files, and the knowledge sections of the `coffer-guide` skill. |
-| `memory` | Memory | The Memory page, the memory delivery hook in your agents, and memory in channel turns. |
+| `memory` | Memory | The Memory page and memory sync, which carries each agent's memories into your other agents' own memory. |
 
 Everything else is always on: the app shell, Overview, Agents, model providers, the local model proxy and Usage, the MCP gateway and custom tools, Skills, Secrets, Activity, Sync, Settings, Conversations and Channels. The agent list and its model catalogue, the speech-to-text settings, the vault and an agent's own transcripts and memory files are not gated either.
 
@@ -25,7 +25,7 @@ Neither feature needs the other. When one is off, the other keeps working:
 | When this is off | What happens |
 | --- | --- |
 | `knowledge` | The Knowledge page and its API are gone, the `coffer-guide` skill has no knowledge catalogue, the knowledge sweep skips. Memory is unaffected. |
-| `memory` | The Memory page and its API are gone, the handshake does not name the memory root, the memory hook is taken out of your agents (and put back when you switch it on), distil and aggregate skip, and channel turns carry no memory. Knowledge is unaffected. |
+| `memory` | The Memory page and its API are gone and memory sync does not run. Copies already written stay in your agents as ordinary memory they own (see [Turning memory off](/guides/memory#turning-memory-off)). Knowledge is unaffected. |
 
 ### Graduated features
 

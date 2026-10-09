@@ -1,22 +1,15 @@
-"""YAML frontmatter and atomic writes for the memory layer's markdown files.
+"""YAML frontmatter and atomic writes for the memory layer's Markdown files.
 
-Every file this layer writes — a note, a raw entry, the retirement record — is
-a ``---``-fenced YAML block followed by a body, and this module is the only
-place that reads or writes that block (PyYAML lives in infrastructure, and
-:mod:`coffer.infrastructure.memory.store` is already at the file-size cap
-without it).
+Every file this layer writes — a hub entry, a Claude Code copy — is a
+``---``-fenced YAML block followed by a body, and this module is the only place
+that renders or splits that block (PyYAML lives in infrastructure).
 
 It is deliberately **not** ``infrastructure/knowledge/frontmatter.py``, which
-does the same job for the knowledge layer, and the difference is one line of
-behaviour that matters here and nowhere else: knowledge strips the body's
-surrounding newlines and re-adds exactly one, which is right for a file a human
-hand-edits and wrong for a raw entry. A raw entry is an agent's own words
-carried verbatim (spec memory "Keep raw entries verbatim and hidden"), so
-``split(render(fm, body))`` must give back that body **byte for byte**,
-including whatever whitespace the agent left at the end — otherwise "re-run the
-distillation without re-reading the agents" quietly stops meaning what it says.
-The import-linter fence between kinds forbids borrowing knowledge's module
-anyway; this is what the two would have had to diverge into even if it did not.
+strips the body's surrounding newlines and re-adds exactly one. A memory's body
+is an agent's own words carried as they stand (spec memory "Keep every agent's
+memories in a hub in the vault"), so ``split(render(fm, body))`` gives that body
+back **byte for byte**, and an unchanged memory never looks changed. The
+import-linter fence between kinds forbids borrowing knowledge's module anyway.
 """
 
 from __future__ import annotations

@@ -1,3 +1,28 @@
+## ADDED Requirements
+
+### Requirement: Close the memory feature's surfaces
+While `memory` is off, `/api/v1/memory` MUST answer 404 `FEATURE_DISABLED`,
+and the memory sync worker MUST skip its rounds, so nothing is read from an
+agent, published to the hub or written into an agent. Switching `memory` off
+MUST leave the hub and every copy already written into an agent where they are;
+switching it on again MUST resume syncing at the next round, with no daemon
+restart. The feature owns no resource kind and puts nothing in front of agents
+of its own: there is no memory tool, no memory directory named in the gateway's
+instructions or the `coffer-guide` skill, no hook, and no memory in a channel
+turn, whether the feature is on or off
+([memory](../memory/spec.md) "Deliver no memory into a session").
+
+#### Scenario: memory off closes the memory routes
+- **GIVEN** `memory` off
+- **WHEN** a route under `/api/v1/memory` is requested
+- **THEN** it answers 404 `FEATURE_DISABLED` naming `memory`
+
+#### Scenario: memory off skips the memory sync
+- **GIVEN** `memory` off
+- **WHEN** the memory sync worker's round comes due
+- **THEN** it skips the round and syncs nothing
+- **AND** once `memory` is switched on, the next round runs
+
 ## MODIFIED Requirements
 
 ### Requirement: Declare the experimental features in one registry
@@ -46,25 +71,13 @@ person already holds is kept as it is.
 - **THEN** its routes and kind are no longer gated, its stored setting is logged and not listed, and the other key is kept
 - **AND** asking for the deleted feature's state raises `FeatureUnknown` and registering the tagged tool raises `FeatureUnknown`, so a gate left behind is caught rather than silently open
 
-### Requirement: Close the memory feature's surfaces
-While `memory` is off, `/api/v1/memory` MUST answer 404 `FEATURE_DISABLED`,
-and the memory sync worker MUST skip its rounds, so nothing is read from an
-agent, published to the hub or written into an agent. Switching `memory` off
-MUST leave the hub and every copy already written into an agent where they are;
-switching it on again MUST resume syncing at the next round, with no daemon
-restart. The feature owns no resource kind and puts nothing in front of agents
-of its own: there is no memory tool, no memory directory named in the gateway's
-instructions or the `coffer-guide` skill, no hook, and no memory in a channel
-turn, whether the feature is on or off
-([memory](../memory/spec.md) "Deliver no memory into a session").
+## REMOVED Requirements
 
-#### Scenario: memory off closes the memory routes
-- **GIVEN** `memory` off
-- **WHEN** a route under `/api/v1/memory` is requested
-- **THEN** it answers 404 `FEATURE_DISABLED` naming `memory`
+### Requirement: Close the memory feature's surfaces (before memory sync)
+**Reason**: A MODIFIED block cannot drop a scenario, and this requirement loses "memory off hides the memory root", "memory off withdraws the memory delivery hook", "switching memory on installs the memory hook again", "memory off skips the distil and aggregate passes", "memory off leaves channel turns without memory", which described the retired memory layer; it is renamed out of the way, removed, and added again under its own title (see ADDED below).
+**Migration**: The dropped scenarios' markers are deleted or pointed at the scenarios of the requirement added again.
 
-#### Scenario: memory off skips the memory sync
-- **GIVEN** `memory` off
-- **WHEN** the memory sync worker's round comes due
-- **THEN** it skips the round and syncs nothing
-- **AND** once `memory` is switched on, the next round runs
+## RENAMED Requirements
+
+- FROM: `### Requirement: Close the memory feature's surfaces`
+- TO: `### Requirement: Close the memory feature's surfaces (before memory sync)`

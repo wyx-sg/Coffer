@@ -81,6 +81,9 @@ def _parts(body: dict[str, Any]) -> dict[str, bool]:
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="connect installs every part that applies")
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="read an agent's connection without writing anything"
+)
 def test_connect_installs_the_gateway_entry(home: pathlib.Path) -> None:
     with _client() as c:
         uid = _register(c)
@@ -107,7 +110,10 @@ def test_connect_installs_the_gateway_entry(home: pathlib.Path) -> None:
         assert actors == {"user"}
         # Reading the connection writes and audits nothing.
         audit_before = _connection_events(c, uid)
-        c.get(f"/api/v1/agents/{uid}/coffer-connection")
+        written = (home / ".claude.json").stat().st_mtime_ns
+        after = c.get(f"/api/v1/agents/{uid}/coffer-connection").json()
+        assert after["state"] == "connected" and _parts(after) == {"mcp": True}
+        assert (home / ".claude.json").stat().st_mtime_ns == written
         assert _connection_events(c, uid) == audit_before
 
 

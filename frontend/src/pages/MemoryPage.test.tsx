@@ -1,6 +1,6 @@
 // frontend/src/pages/MemoryPage.test.tsx — the Memory sync page in each state it renders.
 //
-// Spec memory "Manage memory sync in the web UI": the header's last-synced
+// Spec memory "Manage memory sync in the web UI and on the command line": the header's last-synced
 // clock and Sync now, a first or large sync's preview with Write and Cancel,
 // the hub's projects, this machine's agents with their own curation and Curate
 // now, and Undo sync… behind a confirmation naming what it removes. Nothing on

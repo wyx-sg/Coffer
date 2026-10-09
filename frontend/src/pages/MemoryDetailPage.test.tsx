@@ -1,6 +1,6 @@
 // frontend/src/pages/MemoryDetailPage.test.tsx — one project's memories and where each was written.
 //
-// Spec memory "Manage memory sync in the web UI": choosing a project lists its
+// Spec memory "Manage memory sync in the web UI and on the command line": choosing a project lists its
 // memories with their origin agent and machine and, per agent on this machine,
 // what became of the copy — the origin itself, written, in the rules file,
 // waiting for the next sync, held back, left to Codex's own import, or edited

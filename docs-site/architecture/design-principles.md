@@ -23,7 +23,7 @@ Coffer is a **custodian, not an owner**. It holds your assets on your machine, h
 | [Identity is an immutable uid](#identity-is-an-immutable-uid) | Names are labels; references hold uids. |
 | [Agent files are the source of truth](#agent-files-are-the-source-of-truth) | Coffer reads an agent's state where it lives and never keeps a copy that could drift. |
 | [Files are the truth for bulk content](#files-are-the-truth-for-bulk-content) | Knowledge and memory are plain Markdown; nothing indexes, chunks or embeds them. |
-| [Pull, not push](#pull-not-push) | Coffer puts paths and a catalogue in front of the agent; nothing reaches a session except through a hook you installed and can remove. |
+| [Pull, not push](#pull-not-push) | Coffer puts paths and a catalogue in front of the agent and puts nothing into a session; memory reaches an agent only as files in its own memory, which you can see and undo. |
 | [Reach is machine-local](#reach-is-machine-local) | Whether a resource is enabled, and for which agents, is decided on the machine it applies to. |
 | [Each kind enforces reach at its own choke point](#each-kind-enforces-reach-at-its-own-choke-point) | One predicate, many enforcement points, no central gate. |
 | [Secrets are never plaintext at rest](#secrets-are-never-plaintext-at-rest) | Fernet ciphertext files in the vault, refs everywhere else. |
@@ -61,9 +61,9 @@ Sync is bidirectional but only under the sync spec's safety rules: git computes 
 
 ## Everything user-managed is a Resource
 
-**Statement.** Every entity you manage — an MCP server, an agent, a skill, a knowledge collection, a memory partition, a channel, a model provider — is a **Resource** of some **kind**. The framework unifies identity, lifecycle, audit, schema validation and reach. It does not unify behaviour: how an MCP server is invoked and how a skill is delivered stay entirely inside their kinds.
+**Statement.** Every entity you manage — an MCP server, an agent, a skill, a knowledge collection, a channel, a model provider — is a **Resource** of some **kind**. The framework unifies identity, lifecycle, audit, schema validation and reach. It does not unify behaviour: how an MCP server is invoked and how a skill is delivered stay entirely inside their kinds.
 
-**Rationale.** Every kind needs the same things: to be named, listed, edited, enabled, disabled, deleted, audited and scoped. Building those seven times is more code and seven chances to drift. But a framework that tried to own behaviour too — one invoke operation for everything — would be a leaky abstraction over things that have nothing in common.
+**Rationale.** Every kind needs the same things: to be named, listed, edited, enabled, disabled, deleted, audited and scoped. Building those six times is more code and six chances to drift. But a framework that tried to own behaviour too — one invoke operation for everything — would be a leaky abstraction over things that have nothing in common.
 
 **In the code.** One immutable kind descriptor per kind, one kind-agnostic resource service, one JSON file per resource in the vault (`resources/<kind>/<name>.json`), one `/api/v1/resources` router, one `audit_log`. The kind-agnostic core is tested against a fake kind and an import contract forbids it from importing any real one. See [Resource framework](/architecture/resource-framework).
 
@@ -85,13 +85,13 @@ Sync is bidirectional but only under the sync spec's safety rules: git computes 
 
 **Rationale.** A copy of someone else's state drifts the moment they change it, and the agent changes its own state constantly. Deriving at read time means Coffer is never wrong about what the agent has, and uninstalling Coffer leaves every agent exactly as functional as before.
 
-**In the code.** The `agent` kind stores only a config directory and install state; everything else is read from the agent's own files by the agent adapters in the infrastructure layer (the `infrastructure/agent/` and `infrastructure/agent_files/` packages). Codex TOML is edited with `tomlkit` so comments and ordering survive. An agent's internal state (for example Claude Code's `installed_plugins.json`) is only read; a change that must reach it is delegated to the agent's own CLI. The memory layer reads each agent's native memory and never writes it; everything under `~/.coffer/derived/memory/` is derived and rebuildable. See [Memory](/architecture/memory).
+**In the code.** The `agent` kind stores only a config directory and install state; everything else is read from the agent's own files by the agent adapters in the infrastructure layer (the `infrastructure/agent/` and `infrastructure/agent_files/` packages). Codex TOML is edited with `tomlkit` so comments and ordering survive. An agent's internal state (for example Claude Code's `installed_plugins.json`) is only read; a change that must reach it is delegated to the agent's own CLI. The memory layer reads each agent's native memory and never changes what the agent wrote; it adds only files of its own beside it, which it records and can remove. See [Memory](/architecture/memory).
 
-**Rules out.** Mirroring an agent's config into Coffer's own store; writing into an agent's memory files; editing undocumented internal files; any change an agent could not survive Coffer being removed.
+**Rules out.** Mirroring an agent's config into Coffer's own store; editing or deleting a memory an agent wrote; editing undocumented internal files; any change an agent could not survive Coffer being removed.
 
 ## Files are the truth for bulk content
 
-**Statement.** The vault's files are the system of record for configuration, and `runs.db` for history. Bulk user content — knowledge collections and memory partitions — is plain Markdown on disk, and those files are the only copy: nothing indexes, chunks or embeds them.
+**Statement.** The vault's files are the system of record for configuration, and `runs.db` for history. Bulk user content — knowledge collections and the memory hub — is plain Markdown on disk, and those files are the only copy: nothing indexes, chunks or embeds them.
 
 **Rationale.** A derived index has to be reconciled with its source, and every reconciliation is a place to be wrong. Plain files are live the moment you save them in your own editor, readable by every agent's own `Read` and `Grep`, diffable in git, and survive Coffer entirely. Measured usage showed agents never reached for a retrieval tool they had to remember to call, while they read files constantly.
 
@@ -101,13 +101,13 @@ Sync is bidirectional but only under the sync spec's safety rules: git computes 
 
 ## Pull, not push
 
-**Statement.** Coffer puts nothing into an agent's session except through an explicitly installed, removable, audited hook. It puts the right paths and a catalogue in front of the model and lets the model read what it needs. The catalogue is a skill: Coffer's own `coffer-guide`, whose resident description names Coffer, its builtin tools and the subjects your knowledge covers, and whose body carries the manual and every knowledge document's path, title and description.
+**Statement.** Coffer puts nothing into an agent's session. It puts the right paths and a catalogue in front of the model and lets the model read what it needs. The catalogue is a skill: Coffer's own `coffer-guide`, whose resident description names Coffer, its builtin tools and the subjects your knowledge covers, and whose body carries the manual and every knowledge document's path, title and description.
 
 **Rationale.** Anything in the MCP handshake or a session-start hook is charged to every session whether or not it is needed. A skill has the opposite cost structure: its short description is always in context, its body costs nothing until a model opens it. So the resident budget is spent once, on one description a model can match against.
 
-**In the code.** The gateway's handshake `instructions` are capped at 800 characters: what Coffer is, the builtin tool names, the per-session count of hidden upstream tools, and a pointer to the skill. `coffer-guide` is an ordinary `skill` resource rendered by the knowledge layer and delivered by the skill kind. The only context Coffer delivers into a session is memory, at two moments (the index at session start, and up to three matching notes with each prompt). Both go through hooks that connecting an agent installs and disconnecting removes, and every fire is an audit event.
+**In the code.** The gateway's handshake `instructions` are capped at 800 characters: what Coffer is, the builtin tool names, the per-session count of hidden upstream tools, and a pointer to the skill. `coffer-guide` is an ordinary `skill` resource rendered by the knowledge layer and delivered by the skill kind. Coffer installs no hook and appends nothing to a turn. Memory reaches an agent as files in the agent's own memory, which the agent loads the way it loads its own: Coffer's memory sync writes only its own copies and one marked block, backs up what it changes, shows a first or large sync as a preview, audits every sync and offers a one-click undo.
 
-**Rules out.** Silently installed hooks; context injected into a session without an audit trail; writing Coffer's output into an agent's own memory; a catalogue spread across several always-resident skills.
+**Rules out.** Hooks or context injected into a session; changing a memory an agent wrote; writing into an agent's memory without a record, a preview and an undo; a catalogue spread across several always-resident skills.
 
 ## Reach is machine-local
 
@@ -125,7 +125,7 @@ Sync is bidirectional but only under the sync spec's safety rules: git computes 
 
 **Rationale.** A central gate would have to sit on every kind's read path and know every kind's notion of "use". The gateway already knows which agent is asking for tools; skill delivery already iterates agents; the provider projection already knows which config file it is writing. Putting the check there costs one function call and no new machinery.
 
-**In the code.** `mcp_server` filters in the gateway, `skill` in delivery reconciliation, `provider` where the provider projection chooses which agent config files to write, and `channel` — whose scope is inverted to name the agents it may *drive* — in its agent routing and its runtime. An unidentified session matches only an unrestricted scope, so it sees strictly less, never more. See the [kinds table](/architecture/resource-framework#the-seven-kinds).
+**In the code.** `mcp_server` filters in the gateway, `skill` in delivery reconciliation, `provider` where the provider projection chooses which agent config files to write, and `channel` — whose scope is inverted to name the agents it may *drive* — in its agent routing and its runtime. An unidentified session matches only an unrestricted scope, so it sees strictly less, never more. See the [kinds table](/architecture/resource-framework#the-six-kinds).
 
 **Rules out.** A reach evaluator object; a deny-list (a new agent would silently gain access); a kind inventing its own "which agents" field.
 
@@ -167,7 +167,7 @@ The same stance governs other mismatches Coffer can detect but not safely resolv
 
 **Rationale.** An abstraction designed against one use case either over-fits it or is too generic to enforce anything. Waiting for the second caller means the shared shape is discovered, not guessed.
 
-**In the code.** Shared packages exist exactly where two kinds met: `infrastructure/net/` (the SSRF guard), `infrastructure/agent_files/` (transcript readers shared by agent and memory), and the hook-trust check in the domain layer (whether an agent will run a hook, which memory reports and the agent kind's hooks listing shows). The cross-kind import contracts make any other sharing fail the build.
+**In the code.** Shared packages exist exactly where two kinds met: `infrastructure/net/` (the SSRF guard) and `infrastructure/agent_files/` (transcript readers shared by agent and memory). The cross-kind import contracts make any other sharing fail the build.
 
 **Rules out.** Speculative "common" packages; a utilities module that grows ahead of its callers; one kind importing another's services.
 
@@ -184,7 +184,7 @@ The principles group into three families, and the places where they pull against
 Two tensions are resolved by a declared, bounded exception rather than by quietly bending a rule:
 
 - **Local-first versus several machines.** Vault sync is allowed only as a rendezvous you own, off by default, with secrets as ciphertext. See [Local-first](#local-first).
-- **Pull, not push, versus memory at session start.** The memory index is the one thing a session is handed, through a hook you install per agent, remove the same way, and see fire in the audit log. See [Pull, not push](#pull-not-push).
+- **Pull, not push, versus memory sync.** Memory is the one thing Coffer writes into an agent's own files unasked: only its own copies and one marked block, recorded per sync in the audit log, previewed when first or large, and removed by one undo. See [Pull, not push](#pull-not-push).
 
 When a proposal needs a third exception, that is the signal to amend [Principles](/architecture/principles) in its own pull request, not to add a special case in code.
 

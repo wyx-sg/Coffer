@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Compose the agent's prompt appends in one place
 The appends an agent receives on top of its own prompt MUST be composed in
@@ -18,3 +18,14 @@ agent reaches memory only through its own native memory, which it loads itself
 - **THEN** the channel note and the model note are appended in that order, and
   nothing from the memory layer; a conversation with no channel receives the
   model note only.
+
+## REMOVED Requirements
+
+### Requirement: Compose the agent's prompt appends in one place (before memory sync)
+**Reason**: A MODIFIED block cannot drop a scenario, and this requirement loses "a channel-driven turn carries the memory digest", which described the retired memory layer; it is renamed out of the way, removed, and added again under its own title (see ADDED below).
+**Migration**: The dropped scenarios' markers are deleted or pointed at the scenarios of the requirement added again.
+
+## RENAMED Requirements
+
+- FROM: `### Requirement: Compose the agent's prompt appends in one place`
+- TO: `### Requirement: Compose the agent's prompt appends in one place (before memory sync)`

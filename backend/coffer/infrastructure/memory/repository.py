@@ -1,7 +1,7 @@
 """Which repository a directory belongs to, read off the disk.
 
-See spec memory "Identify a partition by its repository" and "Create no
-partition for a non-repository directory".
+See spec memory "Identify a project by a key that does not depend on the
+machine".
 
 :mod:`coffer.domain.memory.repository` decides what a repository's *identity*
 is once you know its root and its remote. This module is the half that has to
@@ -17,8 +17,8 @@ It resolves three shapes to one answer, which is the whole point:
   That directory holds a ``commondir`` file — usually ``../..`` — naming the
   main ``.git``, and *that* directory's parent is the root. Following the
   pointer is what makes this repository's own development worktrees (which sit
-  under ``.claude/worktrees/``) file into the same partition as the main
-  checkout instead of one partition per branch in flight.
+  under ``.claude/worktrees/``) file into the same project as the main
+  checkout instead of one project per branch in flight.
 * **A second clone.** A different root entirely, but the same ``origin`` URL,
   which :func:`coffer.domain.memory.repository.repository_key` prefers over the
   path for exactly this case.
@@ -34,11 +34,11 @@ a file cannot be made to do anything but read a file.
 **Nothing here raises for a broken repository.** A ``gitdir:`` pointing at a
 directory that was deleted, a ``commondir`` climbing past the filesystem root, a
 ``config`` that is unreadable or is not UTF-8 — each is an ordinary state of a
-developer's disk, not an error in Coffer, and "Create no partition for a
-non-repository directory" already says that *not being in a repository* is a
-normal answer with a normal consequence (no partition). A pass that crashed on
-one of them would stop aggregating every other agent's memory over a stale
-pointer in a directory nobody has opened in a year.
+developer's disk, not an error in Coffer, and spec memory "Identify a project
+by a key that does not depend on the machine" already says that *not being in a
+repository* is a normal answer with a normal consequence (no project). A sync
+that crashed on one of them would stop publishing every other agent's memory
+over a stale pointer in a directory nobody has opened in a year.
 """
 
 from __future__ import annotations
@@ -67,12 +67,11 @@ MAX_WALK_DEPTH = 64
 
 @dataclass(frozen=True)
 class Repository:
-    """One repository on this disk, as much of it as partitioning needs.
+    """One repository on this disk, as much of it as filing needs.
 
     Two fields, because the domain's identity rule reads exactly two: the
-    absolute root — which "Identify a partition by its repository" also requires
-    be recorded on the partition's Resource and restated in its ``MEMORY.md`` —
-    and the ``origin`` URL, which is ``""`` when the repository has no remote at
+    absolute root, where the project is checked out on this machine, and the
+    ``origin`` URL, which is ``""`` when the repository has no remote at
     all. A repository with no remote is not a degraded case; it can only ever be
     itself, and the domain falls back to its path for exactly that reason.
     """
@@ -90,27 +89,27 @@ class Repository:
 
     @property
     def name(self) -> str:
-        """The readable name a partition derived from this should carry."""
+        """The readable name a project derived from this should carry."""
         return repository_name(remote_url=self.remote_url, root_path=self.root)
 
 
 def resolve_repository(directory: str | pathlib.Path) -> Repository | None:
     """The repository ``directory`` is inside, or ``None`` when it is in none.
 
-    ``None`` is the answer "Create no partition for a non-repository directory"
-    is about, and it is not an error: a dated scratch folder a session happened
-    to run in gets no partition, and its entries are held for the distil pass to
-    judge on their merits. The previous design keyed partitions on the raw
+    ``None`` is not an error: a dated scratch folder a session happened to run
+    in gets no project, and only a memory about the person learned there is
+    published, under ``global`` (spec memory "Identify a project by a key that
+    does not depend on the machine"). The previous design keyed projects on the raw
     working directory and turned six such folders on the maintainer's machine
-    into six permanent partitions whose contents could never reach the project
+    into six permanent projects whose contents could never reach the project
     they were actually about.
 
     The path is resolved before the walk, so a symlinked checkout and its real
-    location agree on one answer rather than producing two partitions for one
+    location agree on one answer rather than producing two projects for one
     repository. It is resolved non-strictly, because a directory an agent
     recorded months ago may no longer exist — in which case the walk simply
     finds no marker above it and the answer is ``None``, which is what "Report
-    unresolvable partitions" then reports as unresolvable rather than delivering
+    unresolvable projects" then reports as unresolvable rather than delivering
     to nobody.
     """
     try:
@@ -209,9 +208,9 @@ def _is_plausible_root(root: pathlib.Path) -> bool:
     """Refuse a "root" that is the filesystem root or is not a directory.
 
     A ``commondir`` of ``../../../../..`` that climbs out of everything
-    resolves to ``/``, and ``/`` as a partition's repository root would name
+    resolves to ``/``, and ``/`` as a project's repository root would name
     the whole machine as one project. It is cheaper to refuse it here than to
-    explain later why a partition called ``global`` appeared twice.
+    explain later why a project called ``global`` appeared twice.
     """
     try:
         return root.parent != root and root.is_dir()
@@ -250,7 +249,7 @@ def read_origin_url(git_dir: pathlib.Path) -> str:
             continue
         if not in_origin:
             continue
-        key, sep, value = stripped.partition("=")
+        key, sep, value = stripped.project("=")
         if sep and key.strip().lower() == "url":
             return value.strip()
     return ""
@@ -266,10 +265,10 @@ def _is_origin_section(header: str) -> bool:
     subsection is case-insensitive and is.
     """
     if '"' in header:
-        name, _, rest = header.partition('"')
+        name, _, rest = header.project('"')
         subsection = rest.rsplit('"', 1)[0]
         return name.strip().lower() == "remote" and subsection == "origin"
-    name, _, subsection = header.partition(".")
+    name, _, subsection = header.project(".")
     return name.strip().lower() == "remote" and subsection.strip().lower() == "origin"
 
 

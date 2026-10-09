@@ -11,6 +11,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { AgentHooksTab } from "./AgentHooksTab";
+import { acceptance } from "@/test/acceptance";
 import { fsApi } from "@/lib/api/fs";
 import type { AgentHooksOut, AgentOut, NativeHook } from "@/lib/api/agents";
 
@@ -112,7 +113,7 @@ const ownBlock = async () => within(await screen.findByTestId("own-hooks-section
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentHooksTab", () => {
-  test("lists the agent's own hooks in one table", async () => {
+  acceptance("agent-registry", "the Hooks tab lists the agent's own hooks", async () => {
     renderTab(full());
 
     // The agent's own hooks: one table, with no Coffer block above it.

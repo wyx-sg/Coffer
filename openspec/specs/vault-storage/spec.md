@@ -30,7 +30,7 @@ MUST NOT stop the next start, and that start MUST write it again. The reasoning 
 - **AND** reach, the sync remote and retention settings are under `local/`, never under `vault/`
 
 #### Scenario: deleting derived state loses nothing
-- **GIVEN** a running vault with a memory tree, MCP health and skill delivery bindings under `derived/`
+- **GIVEN** a running vault with MCP health and skill delivery bindings under `derived/`
 - **WHEN** `derived/` is deleted and the daemon restarts
 - **THEN** every resource, secret, knowledge document and skill is still present
 - **AND** the derived state is rebuilt

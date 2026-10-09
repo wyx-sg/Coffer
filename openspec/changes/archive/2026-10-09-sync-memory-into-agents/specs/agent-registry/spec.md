@@ -1,3 +1,40 @@
+## ADDED Requirements
+
+### Requirement: List every hook in the agent's native config
+The system MUST list, read only, every command hook the agent will run. That covers the hooks in the agent's own hook-carrying files (the type's child spec names them) and those in each enabled plugin's hook file. Each is listed with its event, matcher, command, timeout, source (`user` or `plugin`, with the plugin's id) and the file that declares it. Project-level settings are not read, because Coffer does not know which repositories the agent is used in.
+
+The listing MUST be served by `GET /api/v1/agents/{uid}/hooks` as the hooks (`items`) and the files that did not parse (`parse_errors`), and MUST write nothing and record no audit event. A file that does not parse MUST be reported as a parse error beside the hooks the other files yield. Coffer installs no hook into an agent, so no hook is marked as Coffer's and the listing carries no health, trust or last fire.
+
+Each listed hook MUST also carry where it sits in its file — `group_index` and `hook_index`, the positions in `hooks.<event>[group_index].hooks[hook_index]` — so a person can find the entry, and the REST listing reports them.
+
+On the agent's Hooks tab the agent's hooks are one table of Event, Command, Matcher and File, with a search over the command and an **Event** filter that lists each event with its count; the table says how many of how many are shown once either narrows it. A file that does not parse is named above the table. A row opens a read-only details dialog with the command in full, the event and when it runs, the matcher, the type, the timeout, the file and the entry's position in it (`hooks.<event>[group].hooks[hook]`), with **Copy command** and **Open in editor**; nothing in the dialog writes, because a hook is changed in its own file, in the person's own editor. A file name opens that file in the preferred editor (see "Open config files in an external editor or reveal them").
+
+#### Scenario: list an agent's hooks
+- **GIVEN** a registered Claude Code agent whose `settings.json` carries a `PreToolUse` hook, whose `settings.local.json` carries a `Stop` hook, and which has one enabled and one disabled plugin with a hook file each
+- **WHEN** the user lists the agent's hooks
+- **THEN** the `PreToolUse` hook, the `Stop` hook and the enabled plugin's hook are listed with their sources and files, and the disabled plugin's hook is not
+- **AND** nothing is written or audited
+
+#### Scenario: list the hooks with their position in the file
+- **GIVEN** a Claude Code `settings.json` whose `PreToolUse` event holds two groups, the second with two hooks
+- **WHEN** the user lists the agent's hooks
+- **THEN** the second hook of the second group reports `group_index` 1 and `hook_index` 1, and the first group's hook reports 0 and 0
+
+#### Scenario: the Hooks tab lists the agent's own hooks
+- **GIVEN** a Claude Code agent whose settings files and an enabled plugin carry hooks of its own
+- **WHEN** the user opens the agent's Hooks tab
+- **THEN** the tab is one table with a row per hook, with no block for a hook of Coffer's
+- **AND** choosing a row opens a read-only dialog with the command, event, matcher, type, timeout, file and position, and searching or filtering by event narrows the table and says how many of how many show
+
+### Requirement: Report an agent's Coffer connection part by part
+The system MUST report an agent's Coffer connection (`GET /api/v1/agents/{uid}/coffer-connection`) as the list of parts its type has — today the one `mcp` part — each with its key, whether it is installed, and the installed command when it is — and a state: `connected` when every listed part is installed, `disconnected` when none is, and `partial` otherwise, which a type with one part never reports. The report MUST be read from the agent's own configuration files on demand, never stored, and MUST write nothing and record no audit event.
+
+#### Scenario: read an agent's connection without writing anything
+- **GIVEN** a registered agent without the gateway entry
+- **WHEN** the user reads its Coffer connection, connects it, and reads it again
+- **THEN** the first read reports `disconnected` with the `mcp` part not installed, and the second `connected` with the `mcp` part installed and its shim command
+- **AND** neither read writes a file or records an audit event
+
 ## MODIFIED Requirements
 
 ### Requirement: Audit every agent lifecycle event
@@ -35,32 +72,6 @@ Connect, Repair and Disconnect MUST each open **Review changes** first — every
 - **THEN** Review changes shows Coffer's lines leaving the old directory and arriving in the new one, and nothing moves until the user applies it
 - **AND** applying leaves the agent connected at the new directory
 
-### Requirement: List every hook in the agent's native config
-The system MUST list, read only, every command hook the agent will run. That covers the hooks in the agent's own hook-carrying files (the type's child spec names them) and those in each enabled plugin's hook file. Each is listed with its event, matcher, command, timeout, source (`user` or `plugin`, with the plugin's id) and the file that declares it. Project-level settings are not read, because Coffer does not know which repositories the agent is used in.
-
-The listing MUST be served by `GET /api/v1/agents/{uid}/hooks` as the hooks (`items`) and the files that did not parse (`parse_errors`), and MUST write nothing and record no audit event. A file that does not parse MUST be reported as a parse error beside the hooks the other files yield. Coffer installs no hook into an agent, so no hook is marked as Coffer's and the listing carries no health, trust or last fire.
-
-Each listed hook MUST also carry where it sits in its file — `group_index` and `hook_index`, the positions in `hooks.<event>[group_index].hooks[hook_index]` — so a person can find the entry, and the REST listing reports them.
-
-On the agent's Hooks tab the agent's hooks are one table of Event, Command, Matcher and File, with a search over the command and an **Event** filter that lists each event with its count; the table says how many of how many are shown once either narrows it. A file that does not parse is named above the table. A row opens a read-only details dialog with the command in full, the event and when it runs, the matcher, the type, the timeout, the file and the entry's position in it (`hooks.<event>[group].hooks[hook]`), with **Copy command** and **Open in editor**; nothing in the dialog writes, because a hook is changed in its own file, in the person's own editor. A file name opens that file in the preferred editor (see "Open config files in an external editor or reveal them").
-
-#### Scenario: list an agent's hooks
-- **GIVEN** a registered Claude Code agent whose `settings.json` carries a `PreToolUse` hook, whose `settings.local.json` carries a `Stop` hook, and which has one enabled and one disabled plugin with a hook file each
-- **WHEN** the user lists the agent's hooks
-- **THEN** the `PreToolUse` hook, the `Stop` hook and the enabled plugin's hook are listed with their sources and files, and the disabled plugin's hook is not
-- **AND** nothing is written or audited
-
-#### Scenario: list the hooks with their position in the file
-- **GIVEN** a Claude Code `settings.json` whose `PreToolUse` event holds two groups, the second with two hooks
-- **WHEN** the user lists the agent's hooks
-- **THEN** the second hook of the second group reports `group_index` 1 and `hook_index` 1, and the first group's hook reports 0 and 0
-
-#### Scenario: the Hooks tab lists the agent's own hooks
-- **GIVEN** a Claude Code agent whose `settings.json` carries three hooks of its own
-- **WHEN** the user opens the agent's Hooks tab
-- **THEN** the tab is one table of three rows, with no block for a hook of Coffer's
-- **AND** choosing a row opens a read-only dialog with the command, event, matcher, type, timeout, file and position, and searching or filtering by event narrows the table and says how many of how many show
-
 ### Requirement: Connect an agent to Coffer in one action
 Users MUST be able to connect an agent to Coffer in one action, from the REST API (`POST /api/v1/agents/{uid}/coffer-connection`) and the web UI. Connecting MUST install every **part** Coffer writes into the agent's own configuration for that agent's type. Today every type has one part:
 
@@ -73,15 +84,6 @@ Coffer writes no hook into an agent. A connect refused for want of a shim writes
 - **WHEN** the user connects it to Coffer
 - **THEN** the agent's `.claude.json` carries the `coffer` MCP entry, naming the agent by its uid
 - **AND** one `agent_mcp_installed` audit entry names the user as actor, and the connection reports `connected` with its `mcp` part installed
-
-### Requirement: Report an agent's Coffer connection part by part
-The system MUST report an agent's Coffer connection (`GET /api/v1/agents/{uid}/coffer-connection`) as the list of parts its type has — today the one `mcp` part — each with its key, whether it is installed, and the installed command when it is — and a state: `connected` when every listed part is installed, `disconnected` when none is, and `partial` otherwise, which a type with one part never reports. The report MUST be read from the agent's own configuration files on demand, never stored, and MUST write nothing and record no audit event.
-
-#### Scenario: read an agent's connection without writing anything
-- **GIVEN** a registered agent without the gateway entry
-- **WHEN** the user reads its Coffer connection, connects it, and reads it again
-- **THEN** the first read reports `disconnected` with the `mcp` part not installed, and the second `connected` with the `mcp` part installed and its shim command
-- **AND** neither read writes a file or records an audit event
 
 ### Requirement: Disconnect an agent from Coffer
 Users MUST be able to disconnect an agent from Coffer in one action (`DELETE /api/v1/agents/{uid}/coffer-connection`, the web UI). Disconnecting MUST remove every part the agent type has, taking out only Coffer's own marked entries and leaving every other entry, key and hook in those files as it was. A part that is absent MUST be a no-op that writes no file and records no audit event.
@@ -281,3 +283,19 @@ The Agents page in the web UI MUST expose all of these. It renders within the we
 ### Requirement: Report an agent whose Coffer hook never fires
 **Reason**: Coffer installs no hook into an agent, so there is no hook of Coffer's to report as never firing; the `agent_hook_attention` item is gone.
 **Migration**: None. An agent that needs repair or whose config directory is left behind is still listed by "List the supported agents as fixed rows on the Agents page".
+
+### Requirement: List every hook in the agent's native config (before memory sync)
+**Reason**: A MODIFIED block cannot drop a scenario, and this requirement loses "list an agent's hooks with Coffer's own marked", "report a stale Coffer hook", "coffer's memory hook leads the Hooks tab and the agent's own follow", which described the retired memory layer; it is renamed out of the way, removed, and added again under its own title (see ADDED below).
+**Migration**: The dropped scenarios' markers are deleted or pointed at the scenarios of the requirement added again.
+
+### Requirement: Report an agent's Coffer connection part by part (before memory sync)
+**Reason**: A MODIFIED block cannot drop a scenario, and this requirement loses "report a partly installed connection", which described the retired memory layer; it is renamed out of the way, removed, and added again under its own title (see ADDED below).
+**Migration**: The dropped scenarios' markers are deleted or pointed at the scenarios of the requirement added again.
+
+## RENAMED Requirements
+
+- FROM: `### Requirement: List every hook in the agent's native config`
+- TO: `### Requirement: List every hook in the agent's native config (before memory sync)`
+
+- FROM: `### Requirement: Report an agent's Coffer connection part by part`
+- TO: `### Requirement: Report an agent's Coffer connection part by part (before memory sync)`

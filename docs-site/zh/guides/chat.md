@@ -150,10 +150,9 @@ Claude Code 会删除超过 `cleanupPeriodDays` 没有动过的会话，**默认
 在智能体自己的系统提示词之后，Coffer 按以下顺序追加：
 
 1. 一段说明，告诉智能体它在聊天渠道上，回复要简短，而且它不能点你电脑上的对话框。
-2. 对话工作目录和 `global` 的[记忆](/zh/guides/memory#in-channel-turns)索引，以及笔记所在的位置。
-3. 说明 Coffer 让智能体用的是哪个模型。
+2. 说明 Coffer 让智能体用的是哪个模型。
 
-从对话页面打开或用**新建对话**开启的会话在你的终端里运行，在 Coffer 之外，所以不追加记忆；智能体连接到 Coffer 后，会通过它自己设置里 Coffer 的记忆 Hook 收到记忆。
+从对话页面打开或用**新建对话**开启的会话在你的终端里运行，在 Coffer 之外，所以这两段说明都不追加。两种情况下记忆都以同样的方式到达智能体：通过智能体自己的记忆，[记忆同步](/zh/guides/memory)把你其他智能体学到的东西写进去。
 
 ::: danger 完全权限
 消息渠道的轮次以 `bypassPermissions` 运行 Claude Code，以 `approvalPolicy: never` 和 `sandbox: danger-full-access` 运行 Codex。Coffer 不会让你逐个批准工具调用。把消息渠道配对到你自己的账号，就是来自 IM 的轮次的关卡；见[消息渠道](/zh/guides/channels#security)。

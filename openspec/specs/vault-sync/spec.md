@@ -173,9 +173,10 @@ travel (see "Write only this machine's descriptor").
 ### Requirement: Keep machine-local state out of the repository
 Only `~/.coffer/vault/` is a repository. Everything true of one machine only
 MUST be stored outside it: `local/` (agents, reach, the sync remote, retention,
-the secret boundary's files, machine-local ciphertext), `content/` (media and
+the secret boundary's files, machine-local ciphertext, and what memory sync
+wrote into this machine's agents), `content/` (media and
 the chat workspace), `runs.db` (conversations, the audit log, MCP invocation
-records, rounds, usage), `derived/` (the memory tree and everything rebuilt),
+records, rounds, usage), `derived/` (everything rebuilt),
 and `daemon-config.json`, `daemon.json`, the master key and logs directly under
 `~/.coffer` ([vault-storage](../vault-storage/spec.md) "Store state in five
 classes by nature"). The master key MUST **never** be written into the vault
@@ -208,7 +209,9 @@ two machines holding identical files render different bytes, each correct where
 it is. **Both halves** are
 derived: its master folder (`derived/skills/coffer-guide/`) and its resource
 file (`derived/resources/skill/coffer-guide.json`). Every other skill is in the
-vault. Memory partitions are derived the same way.
+vault. Memory is not derived: the memory hub, `vault/memory/`, is vault content
+and converges like any other vault file
+([memory](../memory/spec.md) "Keep every agent's memories in a hub in the vault").
 
 #### Scenario: a locally generated skill is neither published nor overwritten
 - **GIVEN** Coffer's own skill and a person's imported skill
@@ -1419,7 +1422,7 @@ one side and deleted on the other are decisions, not merges, and are not handed 
 
 ### Requirement: Apply knowledge and skill file changes
 What a round applies MUST be a checkout of the merged tree: an added or modified file
-under `knowledge/`, `skills/`, `resources/`, `state/`,
+under `knowledge/`, `skills/`, `memory/`, `resources/`, `state/`,
 `secret/` or `machines/` is written, and a deleted one removed, in the one
 compare-and-swap step that refuses to overwrite a person's unsettled edit (see
 "Never overwrite a person's unsettled edit"). Stores that read the vault reload

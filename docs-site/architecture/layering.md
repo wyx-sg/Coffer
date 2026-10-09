@@ -9,7 +9,7 @@ Coffer's backend is a layered application: surfaces call application services, a
 
 ## The problem it solves
 
-Coffer has seven resource kinds, a turn platform, a sync engine and four surfaces (REST, MCP, CLI, shim), and much of it is written together with AI coding agents. Without enforced boundaries, a codebase like that erodes in predictable ways: a route reaches into SQLAlchemy directly, one kind imports another kind's service because it was convenient, an SDK leaks from the one adapter that needed it into the domain. Each shortcut is small; together they make every change touch everything.
+Coffer has six resource kinds, a turn platform, a sync engine and four surfaces (REST, MCP, CLI, shim), and much of it is written together with AI coding agents. Without enforced boundaries, a codebase like that erodes in predictable ways: a route reaches into SQLAlchemy directly, one kind imports another kind's service because it was convenient, an SDK leaks from the one adapter that needed it into the domain. Each shortcut is small; together they make every change touch everything.
 
 Coffer answers with two rule families, both checked on every build:
 
@@ -64,7 +64,7 @@ The rules are [import-linter](https://github.com/seddonym/import-linter) contrac
 | Dropped engines banned everywhere | `llama_index`, `mem0`, `chromadb`, `sentence_transformers`, `sqlite_vec`, `fastembed`, `langgraph` and the `langchain*` packages may not be imported anywhere. Coffer embeds nothing and runs no chat model of its own (its one model call is a plain HTTP speech-to-text request), and a reintroduction has to be a deliberate change to this contract. |
 | Claude Agent SDK confined | Domain, application and the other infrastructure packages may not import `claude_agent_sdk`. Its homes are `infrastructure/chat` (the agent adapters) and `infrastructure/agent` (reading the installed agent's catalogue). |
 
-When two kinds genuinely need the same code, it moves to a kind-agnostic package or module at the layer root: `infrastructure/net/` (the SSRF guard), `infrastructure/agent_files/` (agent transcript readers shared by `agent` and `memory`), and a small hook-trust module at the domain root (the hook-trust values the `memory` kind reports and the `agent` kind's hooks listing shows). Everything else crosses between kinds through a port the consuming kind declares and the composition root satisfies — for example the model-catalogue port the chat platform declares, which it uses to read the agent kind's model catalogue without importing it.
+When two kinds genuinely need the same code, it moves to a kind-agnostic package or module at the layer root: `infrastructure/net/` (the SSRF guard), `infrastructure/agent_files/` (agent transcript readers shared by `agent` and `memory`). Everything else crosses between kinds through a port the consuming kind declares and the composition root satisfies — for example the model-catalogue port the chat platform declares, which it uses to read the agent kind's model catalogue without importing it.
 
 ## The composition root
 
@@ -72,7 +72,7 @@ The composition root is the only code allowed to see every kind. For the daemon 
 
 ### Explicit per-kind wiring
 
-There is no plugin discovery, no global registry and no import-time side effect. Each registered kind has a factory in its own application package, named after that package, that takes the services the kind needs and returns a frozen [kind](/architecture/resource-framework#kind). The registry key can differ from the package name: the MCP kind registers as `"mcp_server"`. Chat and sync register no kind. A per-kind wiring module in `surfaces/http/` builds the kind's services, calls the factory, and stores the result in a per-app table of kinds. One wiring module registers `"agent"` and `"skill"` together; `"provider"`, `"knowledge"`, `"memory"`, `"mcp_server"` and `"channel"` each have their own.
+There is no plugin discovery, no global registry and no import-time side effect. Each registered kind has a factory in its own application package, named after that package, that takes the services the kind needs and returns a frozen [kind](/architecture/resource-framework#kind). The registry key can differ from the package name: the MCP kind registers as `"mcp_server"`. Chat, memory and sync register no kind. A per-kind wiring module in `surfaces/http/` builds the kind's services, calls the factory, and stores the result in a per-app table of kinds. One wiring module registers `"agent"` and `"skill"` together; `"provider"`, `"knowledge"`, `"mcp_server"` and `"channel"` each have their own; the memory sync has a wiring module of its own that the background-worker launcher calls.
 
 The resource service is constructed with a reference to that same table and reads it for every dispatch.
 
@@ -84,14 +84,14 @@ The daemon's lifespan runs a fixed sequence, and each step *returns* a small fro
 flowchart TB
   M["Run migrations"] --> C["Secret store and master key"]
   C --> R["Resource service, audit, retention"]
-  R --> K["Kinds: agent and skill, provider, knowledge, memory, MCP"]
+  R --> K["Kinds: agent and skill, provider, knowledge, MCP"]
   K --> CH["Chat platform"]
   CH --> CN["Channel kind and runtime"]
   CN --> H["Boot heals and guide refresh"]
   H --> W["Background workers"]
 ```
 
-The kind-wiring step orders the kinds themselves: provider after agent, because it projects into each agent's config; memory before MCP, so the gateway's handshake can name the memory root; MCP last, so it picks up every builtin tool the others registered. The chat platform is wired after all kinds because its internal gateway session needs the complete builtin tool registry; the channel kind comes after chat because it drives turns through chat's handles. Sync needs nothing from any kind: it moves the vault repository's files, and after a round that changed something the reconciler runs one pass so each kind re-projects what arrived.
+The kind-wiring step orders the kinds themselves: provider after agent, because it projects into each agent's config; MCP last, so it picks up every builtin tool the others registered. The chat platform is wired after all kinds because its internal gateway session needs the complete builtin tool registry; the channel kind comes after chat because it drives turns through chat's handles. Sync needs nothing from any kind: it moves the vault repository's files, and after a round that changed something the reconciler runs one pass so each kind re-projects what arrived.
 
 HTTP routers are included from one router table in `surfaces/http/`, which also puts every router under an experimental feature's prefix behind that feature's request-time gate. Typer groups are added in the CLI's main module.
 
@@ -119,7 +119,7 @@ backend/coffer/
 │   ├── knowledge/          # catalogue and file values
 │   ├── channel/            # channel config, envelopes
 │   ├── chat/               # conversation, message, attachment, turn events
-│   ├── memory/             # note, partition, budget, reader protocol
+│   ├── memory/             # hub entries, project keys, portable paths, sync plan, reader protocol
 │   ├── provider/           # provider config, projection rules, local runtimes
 │   ├── model_proxy/        # the state the daemon pushes the model proxy
 │   ├── usage/              # usage records, stream usage readers, prices, ranges
@@ -145,7 +145,7 @@ backend/coffer/
 │   ├── knowledge/          # the write tool, tidy hand-off, sweep, guide rendering
 │   ├── channel/            # adapter protocol, pairing, inbound, runtime
 │   ├── chat/               # turn orchestrator, runner, conversation service
-│   ├── memory/             # aggregate, mechanical distil, tidy hand-off, delivery, session-start context
+│   ├── memory/             # memory sync: publish, write, preview, undo, worker, upgrade removal
 │   ├── provider/           # provider service, projection, projection target, proxy tokens and state
 │   ├── usage/              # usage ingest and reports
 │   ├── vault/              # validation rules, problems
@@ -167,7 +167,7 @@ backend/coffer/
 │   ├── knowledge/          # paths, file tree, frontmatter, ripgrep
 │   ├── channel/            # Telegram and SeaTalk transports
 │   ├── chat/               # Claude SDK and Codex adapters, persistence
-│   ├── memory/             # native-memory readers, store
+│   ├── memory/             # native-memory readers and writers, hub store, ledger
 │   ├── provider/           # provider introspector, local-runtime detection
 │   ├── model_proxy/        # the local model proxy process and its supervisor
 │   ├── usage/              # the proxy's usage spool, as the daemon reads it

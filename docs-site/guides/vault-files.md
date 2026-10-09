@@ -16,6 +16,7 @@ Everything Coffer keeps that you would want on another machine — MCP servers, 
 ├── state/channel-peers/<channel>.json  who is paired with a channel
 ├── state/settings/internal-engine.json speech-to-text model and upkeep settings
 ├── knowledge/<collection>/…            knowledge documents (Markdown)
+├── memory/global/, memory/projects/<key>/  the memory hub, written by memory sync
 ├── skills/<name>/…                     skill folders (SKILL.md and the rest)
 ├── secret/<ref>.enc                    encrypted secrets (never edit these)
 └── machines/<id>.json                  one descriptor per machine that syncs
@@ -49,7 +50,7 @@ Some rules to know:
 - **Keep the `uid`.** It is the resource's identity. You can rename the file or move it within its kind's folder and it stays the same resource. A file you create with no `uid` gets one: Coffer writes it into the file in its own commit. A copy of a file with the same `uid` is refused and flagged; the original stays in effect.
 - **`name` is a label**, but some kinds fix it once agents can see it (an MCP server's name is part of its tool names). Change a name through Coffer when it refuses a rename.
 - **Unknown top-level fields are kept.** A field beside `uid`, `kind`, `name` and `config` that this build does not know is reported as a warning, never dropped, so a field a newer Coffer added survives your edit.
-- **`config` holds only the settings the kind has.** A key the kind does not declare (a typo, or a setting Coffer has retired) is refused: the edit is not committed, the problem names the key, and the last valid version stays in effect. The same goes for a name the kind does not allow (an MCP server's name is at most 24 characters and has no `__`; a skill's name uses lowercase letters, digits and hyphens), and for a `title` on an MCP server, agent, skill, knowledge collection or memory partition, which have none.
+- **`config` holds only the settings the kind has.** A key the kind does not declare (a typo, or a setting Coffer has retired) is refused: the edit is not committed, the problem names the key, and the last valid version stays in effect. The same goes for a name the kind does not allow (an MCP server's name is at most 24 characters and has no `__`; a skill's name uses lowercase letters, digits and hyphens), and for a `title` on an MCP server, agent, skill or knowledge collection, which have none.
 - **`${HOME}`** stands for your home directory, so the same file works on every machine. A setting that must be an absolute path (a channel's working directories) accepts `${HOME}/...`: the check reads it expanded, as Coffer does.
 - **Never edit `secret/`.** The files are ciphertext; use the Secrets page (**Add secret**).
 

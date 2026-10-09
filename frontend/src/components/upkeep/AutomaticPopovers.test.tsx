@@ -10,6 +10,7 @@ import { MemoryRouter } from "react-router-dom";
 
 import { MemorySyncButton } from "@/components/memory/MemorySyncButton";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { acceptance } from "@/test/acceptance";
 import type { InternalEngineConfig, UpkeepSetting } from "@/lib/api/internalEngine";
 
 const MINUTE = 60_000;
@@ -63,7 +64,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-test("the memory popover switches and times the one memory_sync pass", () => {
+acceptance("internal-engine", "the memory popover switches and times the one memory_sync pass", () => {
   config = { upkeep: { memory_sync: pass({ last_pass_at: at(-14), next_pass_at: at(46) }) } };
   renderIt(<MemorySyncButton running={false} />);
   const dialog = open("memory-automatic");

@@ -67,7 +67,7 @@ The app updates itself. It checks the newest GitHub release's update manifest 30
 
 ### Uninstall
 
-**Settings › About › Uninstall Coffer…** removes Coffer from this Mac. The dialog lists what goes — Coffer's MCP entry, memory hook and model routing in each agent, the skill links it delivered, start at login, the command-line tools and the installer's `PATH` lines, and the app — and what stays: `~/.coffer`, ready for a reinstall. Confirm, and the app shows each step as the daemon reports it, then moves itself to the Trash and quits.
+**Settings › About › Uninstall Coffer…** removes Coffer from this Mac. The dialog lists what goes — Coffer's MCP entry and model routing in each agent, the skill links it delivered, start at login, the command-line tools and the installer's `PATH` lines, and the app — and what stays: `~/.coffer`, ready for a reinstall. Confirm, and the app shows each step as the daemon reports it, then moves itself to the Trash and quits.
 
 **Also delete my data** is unticked by default. Ticking it says what is lost for good, offers **Back up the master key first**, and renames the button **Uninstall and delete data**; confirming asks for Touch ID, and only then is anything removed. `~/.coffer` and the master key's Keychain item are deleted after the daemon has stopped.
 

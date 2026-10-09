@@ -85,7 +85,6 @@ Explained in: [Agents](/guides/agents), [Model providers](/guides/providers), [A
 | Per-Agent Behaviour Lives in One Descriptor Record per Agent | [`agent-descriptor-manifest`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-descriptor-manifest.md) |
 | Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry | [`agent-mechanisms-are-optional-facets-on-the-descriptor`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-mechanisms-are-optional-facets-on-the-descriptor.md) |
 | Writing Agent-Native Config Safely | [`writing-agent-native-config-safely`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/writing-agent-native-config-safely.md) |
-| Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale | [`agent-hook-installation`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-hook-installation.md) |
 | LLM Connections Are Projected Into Each Agent's Own Config File | [`provider-connections-projected-into-agent-config`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-connections-projected-into-agent-config.md) |
 | API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged | [`api-key-providers-are-reached-through-a-separate-local-model-proxy`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/api-key-providers-are-reached-through-a-separate-local-model-proxy.md) |
 | Usage Is Metered at the Proxy; Subscription Agents Are Not Metered | [`usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md) |
@@ -120,9 +119,8 @@ Explained in: [Knowledge](/architecture/knowledge), [Memory](/architecture/memor
 | Skills Reach an Agent as a Directory Link to One Master Folder | [`cross-platform-skill-delivery`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/cross-platform-skill-delivery.md) |
 | Coffer Ships Its Own Manual as a Skill Resource | [`coffer-ships-its-own-skill`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md) |
 | Knowledge Is a Directory of Markdown Files, Not an Index | [`knowledge-is-plain-files`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) |
-| Tidying Knowledge and Memory Is the Agent's Job | [`tidying-knowledge-and-memory-is-the-agents-job`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-and-memory-is-the-agents-job.md) |
-| Aggregate the Agents' Memory; Never Write It | [`aggregate-agent-memory-never-write-it`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md) |
-| Memory Reaches a Session at Three Moments: an Index at Start, Retrieval per Prompt, and a Guard Before a Known Trap | [`memory-reaches-a-session-at-prompt-time-and-before-a-known-trap`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md) |
+| Tidying Knowledge Is the Agent's Job | [`tidying-knowledge-is-the-agents-job`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md) |
+| Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault | [`sync-memory-into-each-agents-own-memory`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-memory-into-each-agents-own-memory.md) |
 
 ## Sync & secrets
 

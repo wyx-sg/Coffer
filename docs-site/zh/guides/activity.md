@@ -78,7 +78,7 @@ Coffer 为自己保留三类记录：保险库变更的审计日志、经 MCP �
 | `sync` | 同步 | 同步轮次应用另一台机器的改动。 |
 | `channel` | 消息渠道 | 从聊天渠道发起的操作。 |
 | `human` | human | 不是由任何 Coffer 操作造成的保险库文件改动——你的编辑器、shell、智能体自己的文件工具、你自己的 `git commit`。保险库提交之后，它以 `vault_file_edited` 审计，每个文件一条（见[手动编辑保险库](/zh/guides/vault-files)）。 |
-| 智能体的名字 | 该名字 | 智能体自己的操作，例如它的记忆 Hook 投递一条笔记（`memory_delivery_fired`，details 中写明时机、会话和笔记）。 |
+| 智能体的名字 | 该名字 | 智能体自己的操作，例如它通过 Coffer 某个内置 MCP 工具做出的改动。 |
 
 并非每个事件都会被审计。审计日志保留的是：落在 Coffer 之外的变更（写进智能体配置的文件）、不可逆或涉及安全的变更（删除、在桌面应用中查看密钥或由 `coffer run` 解析密钥、审批、主密钥备份），以及事后从当前状态无法看出的变更（保留窗口）。保险库的每一次改动同时也是一个标明写入者的提交，所以即使审计日志没记的，保险库的 git 历史（在保险库文件夹中执行 `git log -- <path>`）也能回答是谁改了某个文件。例行的运行时事件只是日志行，不是审计行。每个被审计的事件也会以同样的事件名写入守护进程日志，所以两边都能搜到。
 
@@ -88,7 +88,7 @@ Coffer 为自己保留三类记录：保险库变更的审计日志、经 MCP �
 coffer log audit                                   # newest 50
 coffer log audit --kind mcp_server --name filesystem
 coffer log audit --event-type secret_resolved --since 2026-09-01T00:00:00Z
-coffer log audit --event-type memory_delivery_fired --limit 20
+coffer log audit --event-type memory_synced --limit 20
 coffer log audit --trace 44e10b60da1b4f26         # one request's or turn's rows
 coffer log audit --json
 ```

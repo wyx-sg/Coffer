@@ -16,8 +16,6 @@ from __future__ import annotations
 
 import pathlib
 
-import pytest
-
 from coffer.infrastructure.memory.readers.claude_code import ClaudeCodeMemoryReader
 from coffer.infrastructure.memory.readers.codex import CodexMemoryReader
 
@@ -75,9 +73,6 @@ def _snapshot(root: pathlib.Path) -> dict[str, tuple[bytes, float]]:
     }
 
 
-@pytest.mark.acceptance(
-    spec="memory", scenario="aggregation never modifies an agent's native memory files"
-)
 def test_a_full_read_leaves_every_fixture_file_untouched(tmp_path: pathlib.Path) -> None:
     claude_dir, codex_dir = _build_fixtures(tmp_path)
 

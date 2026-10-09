@@ -1,5 +1,5 @@
 // frontend/src/pages/MemoryPage.tsx — the Memory page: the sync between the agents' own memories
-// (spec memory "Manage memory sync in the web UI").
+// (spec memory "Manage memory sync in the web UI and on the command line").
 //
 // Coffer keeps every memory an agent wrote for itself in a hub in the vault and
 // writes each one into the person's other agents, in their own memory format;

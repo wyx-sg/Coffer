@@ -269,6 +269,9 @@ async def test_build_adapter_resumes_stored_session(tmp_path) -> None:  # type: 
     spec="channels",
     scenario="the channel-driven agent is told it is on a chat channel",
 )
+@pytest.mark.acceptance(
+    spec="chat", scenario="a channel-driven turn carries the channel note and the model note"
+)
 @pytest.mark.asyncio
 async def test_channel_conversation_appends_system_context(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """A channel-originated conversation makes build_adapter inject a system-prompt
@@ -300,8 +303,11 @@ async def test_channel_conversation_appends_system_context(tmp_path) -> None:  #
     assert system_prompt["type"] == "preset"
     assert system_prompt["preset"] == "claude_code"
     assert "Telegram" in system_prompt["append"]
-    # The channel note and the model note are composed into one append.
-    assert "no model override" in system_prompt["append"]
+    # The channel note and the model note are composed into one append, in
+    # that order, and nothing from the memory layer.
+    append = system_prompt["append"]
+    assert append.index("Telegram") < append.index("no model override")
+    assert "memory" not in append.lower()
 
     await engine.dispose()
 
@@ -341,6 +347,9 @@ async def test_a_channel_whose_name_will_not_resolve_still_gets_the_channel_note
     await engine.dispose()
 
 
+@pytest.mark.acceptance(
+    spec="chat", scenario="a channel-driven turn carries the channel note and the model note"
+)
 @pytest.mark.asyncio
 async def test_web_conversation_gets_the_model_note_only(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """A non-channel (web UI) conversation gets no channel guidance, but still

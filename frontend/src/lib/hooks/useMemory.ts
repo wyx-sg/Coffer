@@ -1,7 +1,7 @@
 // frontend/src/lib/hooks/useMemory.ts
 //
 // ALL queries + mutations for the memory sync (agents/frontend.md §3; spec
-// memory "Manage memory sync in the web UI"). Keys are hierarchical under one
+// memory "Manage memory sync in the web UI and on the command line"). Keys are hierarchical under one
 // `["memory"]` root, so a sync, a write or an undo — each of which can change
 // every count on the page and every project's copy states — invalidates the
 // whole subtree with one prefix. The sync's switch and interval are the

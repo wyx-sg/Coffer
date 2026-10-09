@@ -1,5 +1,5 @@
 // frontend/src/pages/MemoryDetailPage.tsx — one project's memories, at /memory/projects/<folder>,
-// and the global ones at /memory/global (spec memory "Manage memory sync in the web UI").
+// and the global ones at /memory/global (spec memory "Manage memory sync in the web UI and on the command line").
 //
 // The header is the project's key (or "Global memories") over one line: where
 // it is checked out on this machine — or that it is not, so its memories wait

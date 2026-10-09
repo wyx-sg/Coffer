@@ -1,3 +1,55 @@
+## ADDED Requirements
+
+### Requirement: Carry a switch and interval for each unattended pass
+The same document MUST carry a switch and an interval for each pass Coffer runs
+on its own behalf — today one, `memory_sync`, the memory sync
+([memory](../memory/spec.md) "Sync on an interval and on demand"). This
+capability owns only whether and how often it runs, one switch and interval per
+pass rather than per target. The retired `aggregate` and `distil` passes are
+gone. A document an older build wrote may still carry `upkeep.aggregate` and no
+`upkeep.memory_sync`: the memory sync MUST then read its switch and interval
+from `upkeep.aggregate`, so a person who had switched memory reading off does
+not find memory syncing, and the next write MUST store them under `memory_sync`
+and drop `aggregate`.
+
+#### Scenario: report the memory sync's switch and interval
+- **GIVEN** a vault,
+- **WHEN** `GET /api/v1/internal-engine-config` is read,
+- **THEN** its upkeep block names exactly `memory_sync`, with a switch, a chosen
+  interval, a default interval and when it last ran and runs next,
+- **AND** a switch and an interval written for it are what the next read reports.
+
+#### Scenario: an older build's aggregation switch carries over to the memory sync
+- **GIVEN** a settings document an older build wrote, whose `upkeep.aggregate` is
+  switched off at a 900-second interval and which has no `upkeep.memory_sync`,
+- **WHEN** the settings are read, and then written again by choosing a
+  speech-to-text model,
+- **THEN** the memory sync reads switched off at 900 seconds,
+- **AND** the rewritten document holds that switch and interval under
+  `memory_sync`, and no `aggregate`.
+
+### Requirement: Show and change the memory passes on the Memory page
+The web UI MUST show and change the memory sync on the page whose content it
+keeps, not in Settings: the ▾ half of the Memory page header's **Sync now** split
+button opens a popover. Edits MUST
+save on their own — a switch on toggle, an interval on selection — through
+`PUT /api/v1/internal-engine-config/upkeep` as one `memory_sync` request each,
+and the interval's default option MUST name the real number. The popover's one
+switch, "Sync memory automatically", writes the memory sync's switch; its
+interval is the memory sync's interval; and it shows when the sync last ran and
+runs next ("Last synced 14m ago · next in 46m").
+
+The Knowledge page carries no automatic control, because its sweep has no switch or interval to
+set.
+
+#### Scenario: the memory popover switches and times the one memory_sync pass
+- **GIVEN** the memory sync switched on, last synced 14 minutes ago and due again in 46 minutes
+- **WHEN** the ▾ beside Sync now in the Memory header is opened and the operator switches it
+  off and then picks an interval
+- **THEN** the popover shows "Sync memory automatically" and "Last synced 14m ago · next in
+  46m", switching it off writes `memory_sync` off as one request, and the interval writes the
+  `memory_sync` interval as one request (TypeScript acceptance test)
+
 ## MODIFIED Requirements
 
 ### Requirement: Audit every write to the engine settings
@@ -121,8 +173,8 @@ The system MUST accept a settings document that still carries the keys `model`,
 entry, and MUST ignore them on read: they change no setting, raise no error and appear in no answer. The next
 write of the document MUST drop them. A key this build has never known MUST
 still survive a write, so only the retired keys are removed. An `upkeep.aggregate` entry is
-not ignored: it carries over to the memory sync (see "Carry a switch and interval for each
-unattended pass").
+not ignored: it carries over to the memory sync
+(see "Carry a switch and interval for each unattended pass").
 
 #### Scenario: ignore retired keys when the settings are read
 - **GIVEN** a settings document holding `model`, `curate_owner_machine_id`, `model_timeout_s`, an `upkeep.curate` entry, an `upkeep.distil` entry and a speech-to-text model,
@@ -136,57 +188,17 @@ unattended pass").
 - **THEN** the rewritten document holds no `model`, no `curate_owner_machine_id`, no `model_timeout_s`, no `upkeep.curate` and no `upkeep.distil`, and its upkeep block holds `memory_sync` alone,
 - **AND** the newer build's key is still in the document.
 
-### Requirement: Carry a switch and interval for each unattended pass
-The same document MUST carry a switch and an interval for each pass Coffer runs
-on its own behalf — today one, `memory_sync`, the memory sync
-([memory](../memory/spec.md) "Sync on an interval and on demand"). This
-capability owns only whether and how often it runs, one switch and interval per
-pass rather than per target. The retired `aggregate` and `distil` passes are
-gone. A document an older build wrote may still carry `upkeep.aggregate` and no
-`upkeep.memory_sync`: the memory sync MUST then read its switch and interval
-from `upkeep.aggregate`, so a person who had switched memory reading off does
-not find memory syncing, and the next write MUST store them under `memory_sync`
-and drop `aggregate`.
+## REMOVED Requirements
 
-#### Scenario: report the memory sync's switch and interval
-- **GIVEN** a vault,
-- **WHEN** `GET /api/v1/internal-engine-config` is read,
-- **THEN** its upkeep block names exactly `memory_sync`, with a switch, a chosen
-  interval, a default interval and when it last ran and runs next,
-- **AND** a switch and an interval written for it are what the next read reports.
+### Requirement: Carry a switch and interval for each of the two unattended passes
+**Reason**: The `aggregate` and `distil` passes are retired; Coffer runs one unattended pass, the memory sync. The requirement is restated for it as "Carry a switch and interval for each unattended pass" (see ADDED below), which also carries an older build's aggregation switch over to the memory sync.
+**Migration**: A stored `upkeep.aggregate` with no `upkeep.memory_sync` becomes the memory sync's switch and interval; `upkeep.distil` is ignored and dropped on the next write.
 
-#### Scenario: an older build's aggregation switch carries over to the memory sync
-- **GIVEN** a settings document an older build wrote, whose `upkeep.aggregate` is
-  switched off at a 900-second interval and which has no `upkeep.memory_sync`,
-- **WHEN** the settings are read, and then written again by choosing a
-  speech-to-text model,
-- **THEN** the memory sync reads switched off at 900 seconds,
-- **AND** the rewritten document holds that switch and interval under
-  `memory_sync`, and no `aggregate`.
-
-### Requirement: Show and change the memory passes on the Memory page
-The web UI MUST show and change the memory sync on the page whose content it
-keeps, not in Settings: the ▾ half of the Memory page header's **Sync now** split
-button opens a popover. Edits MUST
-save on their own — a switch on toggle, an interval on selection — through
-`PUT /api/v1/internal-engine-config/upkeep` as one `memory_sync` request each,
-and the interval's default option MUST name the real number. The popover's one
-switch, "Sync memory automatically", writes the memory sync's switch; its
-interval is the memory sync's interval; and it shows when the sync last ran and
-runs next ("Last synced 14m ago · next in 46m").
-
-The Knowledge page carries no automatic control, because its sweep has no switch or interval to
-set.
-
-#### Scenario: the memory popover switches and times the one memory_sync pass
-- **GIVEN** the memory sync switched on, last synced 14 minutes ago and due again in 46 minutes
-- **WHEN** the ▾ beside Sync now in the Memory header is opened and the operator switches it
-  off and then picks an interval
-- **THEN** the popover shows "Sync memory automatically" and "Last synced 14m ago · next in
-  46m", switching it off writes `memory_sync` off as one request, and the interval writes the
-  `memory_sync` interval as one request (TypeScript acceptance test)
+### Requirement: Show and change the memory passes on the Memory page (before memory sync)
+**Reason**: A MODIFIED block cannot drop a scenario, and this requirement loses "the memory popover switches reading and distilling together", which described the retired memory layer; it is renamed out of the way, removed, and added again under its own title (see ADDED below).
+**Migration**: The dropped scenarios' markers are deleted or pointed at the scenarios of the requirement added again.
 
 ## RENAMED Requirements
 
-- FROM: `### Requirement: Carry a switch and interval for each of the two unattended passes`
-- TO: `### Requirement: Carry a switch and interval for each unattended pass`
+- FROM: `### Requirement: Show and change the memory passes on the Memory page`
+- TO: `### Requirement: Show and change the memory passes on the Memory page (before memory sync)`

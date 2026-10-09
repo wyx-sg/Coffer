@@ -89,7 +89,7 @@ The sidebar says where you can go, never what is wrong. It carries no count badg
 
 ## Split views are resizable, per browser
 
-The sidebar against the page, the Knowledge tree against its reading pane and a memory partition's list against the open memory are split views divided by a hairline you can drag. Every split behaves the same way:
+The sidebar against the page and the Knowledge tree against its reading pane are split views divided by a hairline you can drag. Every split behaves the same way:
 
 - The divider has a wider invisible grip than the line it draws, and lights up in the accent on hover or drag.
 - Double-clicking restores the default, and the arrow keys move a focused divider in small steps, so resizing does not require a mouse.
@@ -105,9 +105,9 @@ A detail page's tab is part of its address: the default tab is the bare path and
 Which identifier fills `<id>` depends on whether the kind can be renamed:
 
 - **Skills and MCP servers** are addressed by their **name**, because the name is fixed once registered and is what you already recognise — `/mcp-servers/github/tools`.
-- **Kinds you can rename** — model providers, channels, knowledge collections, memory partitions — are addressed by their immutable **uid**, so renaming never breaks a link.
+- **Kinds you can rename** — model providers, channels, knowledge collections — are addressed by their immutable **uid**, so renaming never breaks a link.
 
-An unknown tab segment falls back to the bare address. A knowledge collection's pane is addressed the same way — `/knowledge/<uid>?file=<document>` for a document — and a memory partition's Delivered tab is `/memory/<uid>/delivered`. A list page with no detail to nest under, such as Sync or Activity, carries its tab as `?tab=` instead; the default tab is the bare address.
+An unknown tab segment falls back to the bare address. A knowledge collection's pane is addressed the same way — `/knowledge/<uid>?file=<document>` for a document — and a memory project's page is `/memory/projects/<project folder>` (`/memory/global` for the global memories). A list page with no detail to nest under, such as Sync or Activity, carries its tab as `?tab=` instead; the default tab is the bare address.
 
 A list's filters are query parameters too, because a filtered list is something you link to. The Conversations list is the one that needs it most: `/conversations?source=local|<channel uid>&agent=codex&q=sentry` narrows it by source (`local` is This Mac, the rest are channels), agent and search text (title and directory), and a channel links to its own conversations as `/conversations?source=<uid>`. The page is only a list: a row opens in the terminal, not at an address of its own.
 

@@ -5,14 +5,14 @@ description: How Coffer keeps everything that differs between coding agents in o
 
 # Agent facets
 
-Coffer manages coding agents it does not own: today Claude Code and Codex. Almost everything Coffer does ends in one of them — an MCP entry written into its config, a skill linked into its skills folder, a model provider projected into its settings, a hook that hands it memory, a chat turn driven through it. This page explains how Coffer keeps the differences between agents in one place, so that supporting another agent, or placing another kind of asset into the agents it has, is an addition rather than a search. Read it before writing anything that behaves differently per agent. The decision and the alternatives weighed are recorded in the ADR [Agent Mechanisms Are Optional Facets on the Descriptor](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-mechanisms-are-optional-facets-on-the-descriptor.md).
+Coffer manages coding agents it does not own: today Claude Code and Codex. Almost everything Coffer does ends in one of them — an MCP entry written into its config, a skill linked into its skills folder, a model provider projected into its settings, its memory read for memory sync, a chat turn driven through it. This page explains how Coffer keeps the differences between agents in one place, so that supporting another agent, or placing another kind of asset into the agents it has, is an addition rather than a search. Read it before writing anything that behaves differently per agent. The decision and the alternatives weighed are recorded in the ADR [Agent Mechanisms Are Optional Facets on the Descriptor](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-mechanisms-are-optional-facets-on-the-descriptor.md).
 
 ## The problem
 
 Two kinds of thing differ between agents.
 
 - **Values.** Where the config directory is, which environment variable moves it, which files Coffer may show and edit, which file holds MCP servers and in which format, where skills go, which program the agent runs as. These are facts about a product.
-- **Mechanisms.** How a model provider is written into the agent's settings, how Coffer's session hook is installed, how the agent's native memory is read, how a turn is run on it, how to tell whether it is installed. These are behaviour.
+- **Mechanisms.** How a model provider is written into the agent's settings, how the agent's native memory is read, how a turn is run on it, how to tell whether it is installed. These are behaviour.
 
 The values have lived in one record per agent for a long time. The mechanisms did not: each one asked "which agent is this?" in its own module. Adding an agent meant finding every such question by search, and a missed one failed only when that agent reached that path. Worse, three places quietly assumed that one model-provider protocol stands for exactly one agent — Anthropic's for Claude Code, OpenAI's for Codex — so a second agent that speaks the same protocol had no way to exist.
 
@@ -26,14 +26,14 @@ There are four facets:
 | --- | --- |
 | Projection | Which assets Coffer can place into this agent, where each lands, and how Coffer's asset is translated into the agent's own shape. |
 | Driver | How Coffer runs a turn on this agent. |
-| Memory reader | How the agent's native memory is read, read only. |
+| Memory reader | How the agent's native memory is read for [memory sync](/architecture/memory), read only. |
 | Dependency probe | Whether the agent's program is installed here, and which version. |
 
-A missing facet is simply empty, and every consumer already handles absence: an agent with no delivery hook is never offered one, an agent with no driver does not appear in the chat picker.
+A missing facet is simply empty, and every consumer already handles absence: an agent with no memory reader publishes nothing to the memory hub, an agent with no driver does not appear in the chat picker.
 
 ### Where the implementations live
 
-The record itself is pure data in the domain layer. The implementations are adapter work — they read files, spawn programs, speak an SDK — and each belongs to the part of Coffer that uses it: the provider translation to the provider feature, the delivery hook and the memory reader to the memory feature, the driver to chat, the probe to the agent feature. So the record only **names** the type of each facet, and the implementations are **bound** to it at the composition root, the one place that is allowed to see every feature at once.
+The record itself is pure data in the domain layer. The implementations are adapter work — they read files, spawn programs, speak an SDK — and each belongs to the part of Coffer that uses it: the provider translation to the provider feature, the memory reader to the memory feature, the driver to chat, the probe to the agent feature. So the record only **names** the type of each facet, and the implementations are **bound** to it at the composition root, the one place that is allowed to see every feature at once.
 
 Binding never says which agent is which. Each implementation declares the agent it serves, and the binder groups them by that declaration. A second implementation for the same agent is refused at startup. The composition root builds the bound catalogue once and hands it to every service that needs a mechanism; tests build the same catalogue, with the dependency probe replaced by a fixed answer so a test never depends on what the developer happens to have installed.
 
@@ -41,10 +41,10 @@ Binding never says which agent is which. Each implementation declares the agent 
 
 Projection is the facet with the most in it, because the set of things Coffer places into an agent keeps growing. It is a **registry keyed by asset type and landing point**:
 
-- the **asset type** is what is placed: an MCP entry, a skill, a model provider, a delivery hook — and later rules, commands, subagents and permissions;
+- the **asset type** is what is placed: an MCP entry, a skill, a model provider — and later rules, commands, subagents and permissions;
 - the **landing point** is where it lands: **user** (the agent's own config directory), **project** (inside a repository), or **shared** (a directory several agents read, written once and kept while any reader still wants it). Every entry of the two shipped agents lands at user level today.
 
-Each entry states the file or folder it lands in — always through the agent's config-file allowlist, which is the security boundary for what Coffer may write — a translation from Coffer's asset to the agent's native fragment, and a capability declaration. The declaration is deliberately small: only what a shipped agent actually uses. For a model provider it is the wire protocols the agent's native config speaks, which may be none. For a delivery hook it is the event the hook sits on.
+Each entry states the file or folder it lands in — always through the agent's config-file allowlist, which is the security boundary for what Coffer may write — a translation from Coffer's asset to the agent's native fragment, and a capability declaration. The declaration is deliberately small: only what a shipped agent actually uses. For a model provider it is the wire protocols the agent's native config speaks, which may be none.
 
 The registry is also the list of targets the [reconciler](/architecture/reconciler) walks: a new asset type is a new entry on the agents that can receive it, not a new service.
 
@@ -76,11 +76,9 @@ The combination is one state:
 
 There is one agent per type, named by it (spec agent-registry "Keep one agent per type, named by it"), so detection is reported per type rather than per directory (spec agent-registry "Report every supported type's detection state"). Every supported type gets one row, registered or not, carrying its state, version, the directory it has or would be registered at, its standard directory and whether it can be added. For each type discovery looks at the standard directory and at the directory the type's own environment variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) names in the daemon's environment, when one is set, and nowhere else. That second directory never becomes a second candidate: it is offered as "use a different config directory" for the one agent, or is the directory Add registers when only it exists. A type that is not registered and is seen by either signal is a candidate, at most one per type. Nothing is stored: the state is read whenever an agent or a candidate is shown.
 
-## Hooks are read, and Coffer's own is checked
+## Hooks are read, never written {#hooks-are-read}
 
-An agent runs hooks from its own settings files and from its plugins, and Coffer installs one of its own. Coffer reads all of them, read only: each hook's event, matcher, command and the file that declares it. Both agents keep hooks in the same shape, so one reader serves both; which files carry hooks is a value on each agent's record, and each enabled plugin's hook file is found through the plugin listing. A project's own settings are not read, because Coffer does not know which repositories the agent is used in.
-
-Coffer's own hook is found by its marker and checked the way the boot repair checks it: current when the installed command is exactly the one Coffer would write now, stale when the marker carries some other command, missing when it is not there. The last time it fired comes from the audit log, where every real fire is recorded — "installed" and "has ever run" stay two different facts.
+An agent runs hooks from its own settings files and from its plugins; Coffer installs none of its own. Coffer reads all of them, read only: each hook's event, matcher, command and the file that declares it. Both agents keep hooks in the same shape, so one reader serves both; which files carry hooks is a value on each agent's record, and each enabled plugin's hook file is found through the plugin listing. A project's own settings are not read, because Coffer does not know which repositories the agent is used in.
 
 ## How the rule is protected
 

@@ -1,6 +1,6 @@
 // frontend/src/components/memory/MemoryEntriesTable.tsx
 //
-// One project's memories (spec memory "Manage memory sync in the web UI"): each
+// One project's memories (spec memory "Manage memory sync in the web UI and on the command line"): each
 // hub entry with its title and one-line description, its type, the agent and
 // machine it came from, and — one column per agent on this machine — what
 // became of its copy here: the origin itself, written, in Claude Code's rules

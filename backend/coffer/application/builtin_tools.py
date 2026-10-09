@@ -7,9 +7,9 @@ its own tools at composition-root time; the gateway only sees the kind-agnostic
 `BuiltinTool` interface.
 
 A kind whose content an agent reads as files rather than through a tool
-registers the directory instead (:class:`AgentDirectory`) — memory's notes are
-Markdown under the memory root, found with the agent's own search (spec memory
-"Expose no memory tool and name the memory root at session start"). The
+registers the directory instead (:class:`AgentDirectory`) — knowledge is
+Markdown under the knowledge root, found with the agent's own search (spec
+knowledge "Keep the handshake instructions to what a skill cannot carry"). The
 handshake names that directory the way it names a tool, and under the same
 rule: a tool or directory an experimental feature owns is there only while
 that feature is switched on (spec experimental-features "Withdraw what a

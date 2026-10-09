@@ -1,7 +1,7 @@
 // frontend/src/lib/api/memory.ts
 //
 // Request helpers for the memory sync (`/api/v1/memory/sync/*`, spec memory
-// "Manage memory sync in the web UI"): its state, Sync now, the pending
+// "Manage memory sync in the web UI and on the command line"): its state, Sync now, the pending
 // preview's Write and Cancel, Undo sync…, the person's answer to "Codex
 // imports Claude Code's memories itself", one project's memories and Curate
 // now. The sync's switch and interval are the internal engine's `memory_sync`

@@ -139,7 +139,7 @@ function mockApi({
 describe("DataSettings", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  acceptance("web-ui", "the data tab shows four blocks and no this-mac block", async () => {
+  acceptance("web-ui", "the data tab shows three blocks and no this-mac block", async () => {
     mockApi();
     render(wrap(<DataSettings />));
     const vault = await screen.findByTestId("settings-data-vault");

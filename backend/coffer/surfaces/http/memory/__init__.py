@@ -1,5 +1,5 @@
 """HTTP surface for the memory sync (spec memory "Manage memory sync in the
-web UI").
+web UI and on the command line").
 
 One route module, ``sync_routes``, under ``/api/v1/memory/sync``.
 """

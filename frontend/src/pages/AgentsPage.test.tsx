@@ -50,6 +50,19 @@ const writes = () => daemon.calls.filter((c) => c.method !== "GET");
 beforeEach(() => setDaemon(fakeDaemon()));
 afterEach(() => vi.clearAllMocks());
 
+describe("an agent and a collection carry no reach or status control", () => {
+  acceptance("web-ui", "a kind that cannot be disabled shows no status control", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getAllByRole("row").length).toBeGreaterThan(1));
+    // The list: neither a Status nor a Reach column, and no switch in any row.
+    const heads = screen.getAllByRole("columnheader").map((h) => h.textContent ?? "");
+    expect(heads.some((h) => /^(status|reach)$/i.test(h.trim()))).toBe(false);
+    expect(screen.queryByRole("switch")).toBeNull();
+    expect(screen.queryByTestId("scope-control")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^(enabled|disabled|every agent)$/i })).toBeNull();
+  });
+});
+
 describe("AgentsPage", () => {
   acceptance("agent-registry", "desktop app agents page", async () => {
     setDaemon(
