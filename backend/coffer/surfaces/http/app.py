@@ -333,12 +333,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # session + per-session supervisor + upstream subprocesses indefinitely.
     reaper_task = start_session_reaper(**reaper_kwargs_from_env())
 
-    # Set the lifecycle phase
     daemon_routes.set_daemon_phase("ready")
-
     try:
         yield
     finally:
+        # First: the scanner audits edits into the database shutdown() disposes.
+        await _best_effort("vault_scanner", vault_scanning.stop())
         await shutdown(
             Running(
                 workers=workers,
@@ -351,7 +351,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 engine=engine,
             )
         )
-        await _best_effort("vault_scanner", vault_scanning.stop())
         await _best_effort("derived_db", vault.derived_engine.dispose())
 
 
