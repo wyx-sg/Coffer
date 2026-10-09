@@ -1,7 +1,8 @@
 // frontend/src/components/knowledge/KnowledgeTidy.test.tsx
 //
-// Tidy on a collection's page and Tidy all in the Knowledge header (spec
-// knowledge "Hand a tidy to the agent"): pressing either asks the daemon to start
+// Tidy and Check with agent on a collection's page and Tidy all in the
+// Knowledge header (spec knowledge "Hand a tidy to the agent", "Hand a check to
+// the agent"): pressing any asks the daemon to start
 // the hand-off agent in the preferred terminal with the prompt sent; with no managed
 // agent only Copy prompt is offered. Mocked only at the network boundary.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -21,6 +22,7 @@ vi.mock("@/lib/api/knowledge", () => ({
   listChanges: vi.fn(),
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
+  getCheck: vi.fn(),
   getTidyHandoff: vi.fn(),
 }));
 vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => undefined }));
@@ -78,14 +80,35 @@ describe("Tidy on a collection's page", () => {
   acceptance("knowledge", "Tidy offers only Copy prompt with no managed agent", async () => {
     withAgent(false);
     renderKnowledge(`/knowledge/${UID}`);
-    // The page header's Tidy all is a Copy prompt too; the collection's is the one in its pane.
+    // The page header's Tidy all is a Copy prompt too, and so is the pane's
+    // Check with agent; the collection's Tidy is the one before it in its pane.
     await waitFor(() =>
-      expect(screen.getAllByRole("button", { name: "Copy prompt" })).toHaveLength(2),
+      expect(screen.getAllByRole("button", { name: "Copy prompt" })).toHaveLength(3),
     );
-    fireEvent.click(screen.getAllByRole("button", { name: "Copy prompt" }).at(-1) as HTMLElement);
+    fireEvent.click(screen.getAllByRole("button", { name: "Copy prompt" })[1] as HTMLElement);
     expect(writeText).toHaveBeenCalledWith(COLLECTION.tidy_handoff.prompt);
     expect(screen.queryByRole("button", { name: "Tidy" })).toBeNull();
     expect(openTerminal).not.toHaveBeenCalled();
+  });
+});
+
+describe("Check with agent on a collection's page", () => {
+  test("sends the collection's check prompt to the default managed agent at once", async () => {
+    withAgent(true);
+    renderKnowledge(`/knowledge/${UID}`);
+    fireEvent.click(await screen.findByRole("button", { name: "Check with agent" }));
+    await waitFor(() =>
+      expect(openTerminal).toHaveBeenCalledWith({
+        agent: "claude_code",
+        prompt: COLLECTION.check_handoff.prompt,
+        terminal: null,
+      }),
+    );
+    expect(openTerminal).toHaveBeenCalledTimes(1);
+    // It sits beside Tidy, after it.
+    const tidy = screen.getByRole("button", { name: "Tidy" });
+    const check = screen.getByRole("button", { name: "Check with agent" });
+    expect(tidy.compareDocumentPosition(check) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 

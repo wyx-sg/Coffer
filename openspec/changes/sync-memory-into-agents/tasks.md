@@ -6,18 +6,18 @@
 
 ## 1. Hub and writers (PR 1, beside the old layer, worker off)
 
-- [ ] 1.1 Domain: hub entry (id, origin, project key, type, frontmatter round-trip), project folder name, path portability (`<repo>`, `~`, boundary-safe replace and expand)
-- [ ] 1.2 Infrastructure: hub store under `vault/memory/` through the vault write path, one commit per sync, writer `memory-sync`; traversal guard for every built segment
-- [ ] 1.3 Readers: keep both; skip Coffer's own copies (`coffer_` + `coffer.entry`, marked block, rules file, `extensions/`, `[via Coffer]`); carry `reference` memories; stable source identity
-- [ ] 1.4 Checkout map: working directories recorded by registered agents → `resolve_repository` → project key → local root
-- [ ] 1.5 Claude Code writer: project directory by `encode_slug`, `coffer_<slug>.md`, marked block with cap and overflow line, backup before change, rules file for global
-- [ ] 1.6 Codex writer: layout check, `memories` feature check, `instructions.md`, `resources/<id>-<slug>.md`
-- [ ] 1.7 Ledger `local/memory-sync.json`: sources, copies with state, delivered sentence fingerprints; absorption check
-- [ ] 1.8 Secret withholding with the bundled plaintext detector
-- [ ] 1.9 Sync service: plan → publish → write (or save preview) → `memory_synced`; one at a time; Sync now; Write preview; Undo sync; Curate now
-- [ ] 1.10 Worker with switch and interval in the internal-engine settings (default off until PR 3)
-- [ ] 1.11 REST routes for the new page (state, sync now, preview write/cancel, undo, curate, projects and entries)
-- [ ] 1.12 Tests carrying `acceptance("memory", …)` for every ADDED and MODIFIED scenario, including a two-round curation simulation for "an absorbed copy does not circulate" and a two-machine vault test for "the hub travels with vault sync"
+- [x] 1.1 Domain: hub entry (id, origin, project key, type, frontmatter round-trip), project folder name, path portability (`<repo>`, `~`, boundary-safe replace and expand)
+- [x] 1.2 Infrastructure: hub store under `vault/memory/` through the vault write path, one commit per sync, writer `memory-sync`; traversal guard for every built segment
+- [x] 1.3 Readers: keep both; skip Coffer's own copies (`coffer_` + `coffer.entry`, marked block, rules file, `extensions/`, `[via Coffer]`); carry `reference` memories; stable source identity
+- [x] 1.4 Checkout map: working directories recorded by registered agents → `resolve_repository` → project key → local root
+- [x] 1.5 Claude Code writer: project directory by `encode_slug`, `coffer_<slug>.md`, marked block with cap and overflow line, backup before change, rules file for global
+- [x] 1.6 Codex writer: layout check, `memories` feature check, `instructions.md`, `resources/<id>-<slug>.md`
+- [x] 1.7 Ledger `local/memory-sync.json`: sources, copies with state, delivered sentence fingerprints; absorption check
+- [x] 1.8 Secret withholding with the bundled plaintext detector
+- [x] 1.9 Sync service: plan → publish → write (or save preview) → `memory_synced`; one at a time; Sync now; Write preview; Undo sync; Curate now
+- [x] 1.10 Worker with switch and interval in the internal-engine settings (default off until PR 3)
+- [x] 1.11 REST routes for the new page (state, sync now, preview write/cancel, undo, curate, projects and entries)
+- [ ] 1.12 Tests carrying `acceptance("memory", …)` for every ADDED and MODIFIED scenario, including a two-round curation simulation for "an absorbed copy does not circulate" and a two-machine vault test for "the hub travels with vault sync" (all but the two-machine vault round are in PR 1)
 
 ## 2. Remove the old layer (PR 2)
 

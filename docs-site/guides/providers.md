@@ -20,6 +20,8 @@ A provider is always optional. An agent with no provider switched on runs on its
 
 ## The Model providers page
 
+<Shot name="providers" alt="The Model providers page." />
+
 **Model providers** is one page with one header — the title, a line saying what the page is for, and **Add provider** — over two tabs, **Providers** and **Usage**. The header and its **Add provider** button are the same on both tabs. This section is the **Providers** tab, one list beside one provider; the **Usage** tab, `/model-providers?tab=usage`, is described in [Usage](/guides/usage).
 
 - **The list** (left) has a **Filter** and one row per provider, sorted by name: its mark, its name, its protocol and what it offers ("9 models" or "All models"), and the marks of the agents running on it. A provider whose endpoint does not answer or refuses its key says so on its row in red — **Unreachable** or **Key rejected** in place of protocol and models — whether or not you have opened it (see [Health](#health)). A chip marks the provider that transcribes speech (**Coffer · speech to text**); it is changed in **Settings › General**. Opening the page opens the first provider.
@@ -42,6 +44,8 @@ Coffer keeps each provider's health itself, so a broken one shows before you ope
 ## Add a provider
 
 Open **Model providers** and click **Add provider**. The dialog has two steps.
+
+<Shot name="add-provider-dialog" alt="The Add provider dialog." />
 
 1. **Endpoint.** Pick a **Vendor** from the grid, or **Custom** for a gateway or relay. A vendor fills in its addresses:
    - the **OpenAI-compatible address**, which Codex uses;

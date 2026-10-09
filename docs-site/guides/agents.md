@@ -37,6 +37,8 @@ Coffer never copies an agent's configuration into its own store. Config files, M
 
 ## Register an agent
 
+<Shot name="agents-list" alt="The Agents page, with one agent connected and one not yet." />
+
 ### From detected agents
 
 Coffer detects an agent from two signals: its program on your `PATH` — the `PATH` your login shell gives you, so an agent installed with Homebrew or a Node version manager is found even when the daemon was started from the Dock — and its config directory. It reads the program's version (`claude --version`, `codex --version`) along the way. It never registers anything on its own, and the daemon does not auto-register agents at startup.
@@ -95,6 +97,8 @@ Connecting writes everything Coffer needs into the agent's own config, in one ac
 | --- | --- | --- |
 | Gateway MCP entry | A `coffer` stdio MCP server entry pointing at `coffer-mcp-shim`. The agent reaches every enabled upstream server, Coffer's own tools, and its delivered knowledge through it. | Always |
 | Memory delivery hook | Two hook entries — session start and each prompt — through which Coffer hands the agent its memory. See [Memory](/guides/memory#install-the-hook). | Always |
+
+<Shot name="agent-page" alt="An agent's page, with the connection entries Coffer wrote." />
 
 Disconnecting removes both, and only Coffer's own entries; everything else in those files stays as it was.
 

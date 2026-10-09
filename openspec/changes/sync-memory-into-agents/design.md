@@ -25,10 +25,12 @@ and in the ADR's Context table.
   itself is in each entry's frontmatter (`project:`), so the folder name never
   has to be decoded.
 - **Entry id.** `sha256(machine_id, agent_type, source_identity)[:16]`, where
-  the source identity is the Claude Code topic file's stem, or the Codex task
-  group title plus section plus bullet index (the same anchor the current
-  Codex reader computes). A re-read of an unchanged source maps to the same id,
-  so an edit is an update, not a new entry.
+  the source identity is the Claude Code topic file's path under the config
+  directory without `.md` (`projects/<slug>/memory/feedback_testing`), or the
+  Codex file plus task group title, section and the bullet's position in it
+  (the reader's anchor ends in the bullet's content hash, which a rewrite
+  would change). A re-read of an unchanged source maps to the same id, so an
+  edit is an update, not a new entry.
 - **Frontmatter.**
 
   ```yaml
@@ -180,10 +182,13 @@ with `resolve_repository` and keyed by `repository_key`. No disk crawl.
   "previewed": true,
   "sources": {"<native path>": {"digest": "…", "entries": ["<id>", …]}},
   "copies": {
-    "claude_code": {"<abs path>": {"entry": "<id>", "entry_updated_at": "…", "digest": "…", "state": "written|edited|removed"}},
-    "codex": {"…": {…}}
+    "claude_code@<config dir>": {"<abs path>": {"entry": "<id>", "entry_updated_at": "…", "digest": "…", "state": "written|edited|removed"}},
+    "codex@<config dir>": {"…": {…}}
   },
-  "delivered": {"claude_code": ["<sentence sha1>", …], "codex": [...]}
+  "delivered": {"claude_code": ["<sentence sha1>", …], "codex": [...]},
+  "codex_imports_claude": null,
+  "last_synced_at": "…",
+  "last_report": {…}
 }
 ```
 
@@ -220,7 +225,11 @@ databases:
 
 ## 7. Preview
 
-A sync computes its plan (hub changes and copy changes) before writing. Hub
+A sync computes its plan (hub changes and copy changes) before writing. The
+routes are under `/api/v1/memory/sync/` (`state`, `run`, `preview/write`,
+`preview/cancel`, `undo`, `codex-import`, `entries?project=`, `curate`); the
+switch and interval are the `memory_sync` pass of the internal-engine
+settings, off by default. Hub
 changes are applied at once. Copy changes are applied only when
 `ledger.previewed` is true and the number of copies to write or rewrite is at
 most 50; otherwise the plan is saved as the pending preview

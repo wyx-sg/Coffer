@@ -50,7 +50,7 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.migrations_runner import run_migrations
+from coffer.infrastructure.persistence.migrations_runner import run_migrations, sqlite_file
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.infrastructure.platform import HostPlatform
 from coffer.infrastructure.vault.home import runs_db_path
@@ -262,8 +262,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     register_delivery_hook_target(
         reconciler, kinds.memory.delivery_service, features, connection.connected_agents
     )
-    # The boot pass converges every target at once — MCP entries, skill links,
-    # provider projections, delivery hooks — before the daemon reports ready.
+    # One boot pass converges every target (MCP, skills, providers, hooks) before ready.
     await migrate_saved_connections(kinds.provider.service)
     await run_boot_pass(reconciler)
     follow_memory_switch(reconciler, kinds.guide, features)
@@ -298,6 +297,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         master_key=secrets.master_key,
         features=features,
         platform=platform,
+        history_db=sqlite_file(_db_url()),
     )
     # Published like ``app.state.kinds``: a test asserting the lifespan started
     # a worker needs a seam to reach it through.

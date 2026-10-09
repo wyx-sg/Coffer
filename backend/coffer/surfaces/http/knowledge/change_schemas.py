@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from coffer.domain.knowledge.history import WRITER_DISK, WRITERS, Change
 
-Writer = Literal["user", "agent", "curation", "sync", "disk"]
+Writer = Literal["user", "agent", "curation", "sync", "disk", "daemon"]
 DocumentStatus = Literal["added", "modified", "removed"]
 
 
@@ -40,11 +40,12 @@ class ChangeOut(BaseModel):
         description="`user` a person; `agent` an agent whose material became a document on "
         "arrival; `curation` a change Coffer's retired curation pass made, kept in the "
         "history; `sync` another machine's change; `disk` an edit made outside Coffer "
-        "(a person's editor, an agent's file tools)."
+        "(a person's editor, an agent's file tools); `daemon` Coffer filing a loose document "
+        "into `pages/`."
     )
     operation: str = Field(
         description="`save`, `delete`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, "
-        "`remove` or `baseline`; a change a retired curation pass made also reads "
+        "`remove`, `layout` or `baseline`; a change a retired curation pass made also reads "
         "`pass`, `submit` or `undo`."
     )
     summary: str
@@ -68,9 +69,8 @@ def change_out(change: Change) -> ChangeOut:
     return ChangeOut(
         version=change.version,
         time=change.time,
-        # The vault's ``daemon`` writer (a layout upgrade touching knowledge)
-        # is not a knowledge writer; it is Coffer acting on the files outside
-        # any knowledge operation, which the contract names ``disk``.
+        # Any writer the knowledge feed does not name is Coffer acting on the
+        # files outside a knowledge operation, which the contract names ``disk``.
         writer=meta.writer if meta.writer in WRITERS else WRITER_DISK,  # type: ignore[arg-type]
         operation=meta.operation,
         summary=meta.summary,

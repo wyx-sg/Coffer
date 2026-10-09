@@ -9,6 +9,10 @@ export const SHELL_CMD =
 export const RELEASES = "https://github.com/wyx-sg/Coffer/releases/latest";
 export const GITHUB = "https://github.com/wyx-sg/Coffer";
 
+// The pictures on the home page, in tab order: files under public/shots/, made
+// by `make docs-shots`. Each language's `shots` list follows this order.
+export const SHOT_IDS = ["overview", "agents", "mcp-servers", "skills", "knowledge"] as const;
+
 export const STR = {
   en: {
     h1: "One setup for all your AI coding agents.",
@@ -26,7 +30,14 @@ export const STR = {
     copyCmd: "Copy",
     copied: "Copied",
     note: "Prebuilt for macOS on Apple silicon. On other machines, install from source.",
-    shot: "The Coffer app open on Overview",
+    shotsLabel: "Parts of the Coffer app",
+    shots: [
+      { label: "Overview", text: "What Coffer runs for your agents, and what needs you, on one page.", alt: "The Coffer app open on Overview: items that need attention, then a health card for each area" },
+      { label: "Agents", text: "Claude Code and Codex, with what each one is connected to.", alt: "The Coffer app open on Agents, listing Claude Code and Codex" },
+      { label: "MCP servers", text: "Register a server once; every agent reaches it through one endpoint.", alt: "The Coffer app open on a healthy MCP server, with its tools listed" },
+      { label: "Skills", text: "One skill library, delivered into each agent you choose.", alt: "The Coffer app open on Skills, listing imported skills" },
+      { label: "Knowledge", text: "Plain Markdown collections every agent can read and add to.", alt: "The Coffer app open on Knowledge, showing one collection and its documents" },
+    ],
     exp: "Experimental",
     allGuides: "All guides",
     groups: [
@@ -91,7 +102,14 @@ export const STR = {
     copyCmd: "复制",
     copied: "已复制",
     note: "预编译版本支持 Apple 芯片的 macOS；其他机器请从源码安装。",
-    shot: "打开概览页的 Coffer app",
+    shotsLabel: "Coffer app 的各个部分",
+    shots: [
+      { label: "总览", text: "Coffer 为你的智能体运行的一切，以及需要你处理的事，都在一页里。", alt: "打开总览页的 Coffer app：先是需要处理的事项，再是各个方面的健康卡片" },
+      { label: "智能体", text: "Claude Code 和 Codex，以及各自连到了什么。", alt: "打开智能体页的 Coffer app，列出 Claude Code 和 Codex" },
+      { label: "MCP 服务器", text: "服务器只注册一次，每个智能体通过同一个端点使用。", alt: "打开某个运行正常的 MCP 服务器的 Coffer app，列出它的工具" },
+      { label: "技能", text: "一份技能库，投递进你选的每个智能体。", alt: "打开技能页的 Coffer app，列出已导入的技能" },
+      { label: "知识", text: "普通 Markdown 文集，每个智能体都能读、能补充。", alt: "打开知识页的 Coffer app，显示一个集合及其文档" },
+    ],
     exp: "实验性",
     allGuides: "全部指南",
     groups: [

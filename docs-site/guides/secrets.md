@@ -22,6 +22,8 @@ Writing a resource's secret stays open to every surface: whoever supplies a valu
 
 ## The Secrets page
 
+<Shot name="secrets" alt="The Secrets page." />
+
 **Secrets** in the sidebar's System group (`/secrets`) is the one place in the web UI that lists and manages stored secrets. Secrets come only from Coffer: a secret field inside a resource's own dialog — an MCP server's token, a provider's key — either picks a stored secret from this page or takes a pasted value and saves it here with the form, and a header or environment row is plain text with a 🔑 button at the end of the field that picks a stored secret instead. A value pasted into a plain row that looks like a secret offers to be stored. Nothing secret sits in a resource's own settings, only the secret's id. This page is where you see all of them together and what each one is for.
 
 The page is a split view. The list is on the left; the secret you choose is on the right, at `/secrets/<id>`.

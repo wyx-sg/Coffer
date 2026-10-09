@@ -12,6 +12,7 @@ this code at all.
 from __future__ import annotations
 
 import asyncio
+import pathlib
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -28,11 +29,13 @@ from coffer.application.retention_worker import RetentionWorker
 from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.application.sync.worker import SyncWorker
 from coffer.infrastructure.logging.files import prune_log_dir
+from coffer.infrastructure.persistence.space import reclaim_free_pages
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.surfaces.http.guide_wiring import BuiltinGuide
 from coffer.surfaces.http.knowledge_sweep_wiring import start_knowledge_sweep
 from coffer.surfaces.http.memory.distil_state import DistilRunner
+from coffer.surfaces.http.memory_sync_wiring import start_memory_sync_worker, wire_memory_sync
 from coffer.surfaces.http.memory_wiring import start_aggregate_worker, start_distil_worker
 from coffer.surfaces.http.sync_wiring import SyncWiring, start_sync, start_sync_worker
 
@@ -48,6 +51,7 @@ class BackgroundWorkers:
     knowledge_sweep_task: asyncio.Task[None]
     distil_task: asyncio.Task[None]
     aggregate_task: asyncio.Task[None]
+    memory_sync_task: asyncio.Task[None]
 
 
 def start_background_workers(
@@ -65,8 +69,13 @@ def start_background_workers(
     master_key: MasterKeyManager,
     features: FeatureService,
     platform: PlatformPort,
+    history_db: pathlib.Path | None,
 ) -> BackgroundWorkers:
-    retention_worker = RetentionWorker(retention_svc, prune_logs=prune_log_dir)
+    retention_worker = RetentionWorker(
+        retention_svc,
+        prune_logs=prune_log_dir,
+        reclaim_space=lambda: reclaim_free_pages(history_db),
+    )
     retention_task = spawn_restarting(retention_worker.run, name="retention-worker")
 
     # Vault sync (spec vault-sync): a round on the configured remote's
@@ -92,6 +101,10 @@ def start_background_workers(
     # only reads the agents' own memory and only writes the derived tree, so
     # nothing here has to wait on the vault rewriters above.
     aggregate_task = start_aggregate_worker(memory_service, engine_config, features)
+    # The memory sync into each agent's own memory (spec memory "Sync on an
+    # interval and on demand"): off until the person turns it on.
+    memory_sync = wire_memory_sync(resource_svc, audit, engine_config)
+    memory_sync_task = start_memory_sync_worker(memory_sync, engine_config, features)
 
     return BackgroundWorkers(
         retention_worker=retention_worker,
@@ -101,4 +114,5 @@ def start_background_workers(
         knowledge_sweep_task=knowledge_sweep_task,
         distil_task=distil_task,
         aggregate_task=aggregate_task,
+        memory_sync_task=memory_sync_task,
     )

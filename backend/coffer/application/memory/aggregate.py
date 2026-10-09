@@ -270,7 +270,10 @@ def run_aggregation(
                 continue
 
             try:
-                entries = reader.read(source)
+                # ``reference`` memories are the memory sync's to carry; this
+                # layer never filed them (spec memory "Write the hub into
+                # Claude Code's native memory").
+                entries = tuple(e for e in reader.read(source) if e.type != "reference")
             except Exception as exc:
                 failures.append(_source_failure(agent_source.agent, source.path, exc))
                 continue

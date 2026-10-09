@@ -133,6 +133,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`every-vault-file-carries-its-format-version`](every-vault-file-carries-its-format-version.md) | Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades |
 | [`every-vault-write-is-a-validated-commit-naming-its-writer`](every-vault-write-is-a-validated-commit-naming-its-writer.md) | Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer |
 | [`audit-and-retention`](audit-and-retention.md) | Audit Every Change With Its Actor, Log Every Invocation, Prune Per Table |
+| [`runs-db-gives-pruned-space-back`](runs-db-gives-pruned-space-back.md) | `runs.db` Gives Pruned Space Back With a Threshold `VACUUM`, and Copies Itself With `VACUUM INTO` |
 | [`one-level-triggered-reconciler-compares-parameters`](one-level-triggered-reconciler-compares-parameters.md) | One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters |
 | [`wire-contract-generated-from-the-pydantic-models`](wire-contract-generated-from-the-pydantic-models.md) | The Wire Contract Is Generated From the Pydantic Models, and the Frontend Client From the Contract |
 | [`background-work-runs-supervised-and-correlated`](background-work-runs-supervised-and-correlated.md) | Background Work Runs Supervised, and Every Record Carries One Correlation Id |
@@ -161,6 +162,8 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`session-subprocess-model`](session-subprocess-model.md) | One Upstream Subprocess Set Per Downstream Client Session |
 | [`mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream`](mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md) | MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream |
 | [`tool-overload-tier-the-list-search-the-rest`](tool-overload-tier-the-list-search-the-rest.md) | Tool Overload: List a Usage-Ranked Slice, Search the Rest |
+| [`tool-search-cuts-cjk-text-into-bigrams`](tool-search-cuts-cjk-text-into-bigrams.md) | Tool Search Cuts CJK Text Into Bigrams |
+| [`tool-search-indexes-parameter-text`](tool-search-indexes-parameter-text.md) | Tool Search Indexes Parameter Text |
 | [`eval-capture-and-regression-gate`](eval-capture-and-regression-gate.md) | Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate |
 | [`record-tool-call-content-redacted-and-bounded`](record-tool-call-content-redacted-and-bounded.md) | Record Tool Call Content, Masked Where the Secrets Are Known and Cut at 16 KB |
 
@@ -206,6 +209,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`coffer-ships-its-own-skill`](coffer-ships-its-own-skill.md) | Coffer Ships Its Own Manual as a Skill Resource |
 | [`knowledge-is-plain-files`](knowledge-is-plain-files.md) | Knowledge Is a Directory of Markdown Files, Not an Index |
 | [`tidying-knowledge-and-memory-is-the-agents-job`](tidying-knowledge-and-memory-is-the-agents-job.md) | Tidying Knowledge and Memory Is the Agent's Job |
+| [`knowledge-is-a-wiki-of-pages-compiled-from-kept-sources`](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md) | Knowledge Is a Wiki of Pages Compiled From Kept Sources |
 | [`aggregate-agent-memory-never-write-it`](aggregate-agent-memory-never-write-it.md) | Aggregate the Agents' Memory; Never Write It (superseded) |
 | [`memory-reaches-a-session-at-prompt-time-and-before-a-known-trap`](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md) | Memory Reaches a Session at Two Moments: an Index at Start and the Notes a Prompt Names (superseded) |
 | [`sync-memory-into-each-agents-own-memory`](sync-memory-into-each-agents-own-memory.md) | Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault |
@@ -223,3 +227,9 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`secrets-cross-machines-only-as-ciphertext`](secrets-cross-machines-only-as-ciphertext.md) | Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository |
 | [`standalone-secrets-are-named-references-injected-into-one-child`](standalone-secrets-are-named-references-injected-into-one-child.md) | Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process |
 | [`only-a-present-human-sees-a-secret-or-sends-it-somewhere-new`](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md) | Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New |
+
+### Documentation
+
+| ADR | Decision |
+| --- | --- |
+| [`docs-screenshots-are-generated-from-a-seeded-daemon`](docs-screenshots-are-generated-from-a-seeded-daemon.md) | Docs Screenshots Are Generated From a Seeded Daemon, Not Captured by Hand |

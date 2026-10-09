@@ -132,13 +132,16 @@ def test_a_nested_document_is_listed_and_catalogued_where_it_was_filed(
     spec="knowledge", scenario="keep the README out of listings, counts and curation"
 )
 def test_the_readme_is_never_a_document(root: pathlib.Path) -> None:
-    document = fs.write_file(directory="shopee", title="Gateway", description="d", body="b").path
+    document = fs.write_file(
+        directory="shopee/pages", title="Gateway", description="d", body="b"
+    ).path
     paths.readme_path("shopee").write_text("# shopee\n\nEdited later.\n", encoding="utf-8")
 
-    level = catalogue.list_level("shopee")
+    level = catalogue.list_level("shopee/pages")
     assert [f.path for f in level.files] == [document]
+    assert catalogue.list_level("shopee").files == ()
     [entry] = catalogue.list_collections()
-    assert entry.document_count == 1
+    assert (entry.page_count, entry.source_count, entry.finding_count) == (1, 0, 2)
 
 
 # ----- presented as files --------------------------------------------------

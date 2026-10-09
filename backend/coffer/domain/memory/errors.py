@@ -29,3 +29,38 @@ class UnreadableMemory(CofferError):  # noqa: N818
         super().__init__(f"cannot read memory at {path!r}: {reason}")
         self.path = path
         self.reason = reason
+
+
+class UnsafeMemoryPath(CofferError):  # noqa: N818
+    """A path segment that is hidden, all dots, or otherwise unsafe.
+
+    See "Confine reads to registered agents' memory paths": every path built
+    from a source's or a hub entry's contents passes this guard.
+    """
+
+    code = "MEMORY_UNSAFE_PATH"
+
+    def __init__(self, segment: str, reason: str) -> None:
+        super().__init__(f"unsafe memory path segment {segment!r}: {reason}")
+        self.segment = segment
+        self.reason = reason
+
+
+class MemorySyncRunning(CofferError):  # noqa: N818
+    """A memory sync was asked for while one runs (spec memory "Sync on an
+    interval and on demand")."""
+
+    code = "MEMORY_SYNC_RUNNING"
+
+    def __init__(self) -> None:
+        super().__init__("a memory sync is already running")
+
+
+class MemorySyncNoPreview(CofferError):  # noqa: N818
+    """**Write** or **Cancel** with no preview pending (spec memory "Preview
+    a first or large sync")."""
+
+    code = "MEMORY_SYNC_NO_PREVIEW"
+
+    def __init__(self) -> None:
+        super().__init__("no memory sync preview is pending")

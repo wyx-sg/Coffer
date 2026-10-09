@@ -5,10 +5,12 @@ tree of Markdown files"): a catalogue is produced by walking the tree and
 reading frontmatter when someone asks, so it cannot drift from what is on
 disk — there is no second copy to keep in sync.
 
-A walk sees every visible Markdown document under a collection. It never sees
-the hidden ``.inbox/`` — material there is not knowledge yet — and it never lists a ``README.md``,
-which describes the directory it sits in rather than being content in it (see
-"Keep the collection README out of the corpus").
+A walk sees every visible file under a collection and says what each is — a
+page, a source or a plain file (``paths.kind_of``) — with a page's type and
+whether a source waits, read off the collection's wiki graph (``wiki.build``).
+It never sees the hidden ``.inbox/`` — material there is not knowledge yet —
+and it never lists a ``README.md``, which is the collection's schema rather
+than content in it (see "Keep the collection README out of the corpus").
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ from coffer.domain.knowledge.entry import (
     FileEntry,
 )
 from coffer.domain.knowledge.errors import KnowledgeFileNotFound
-from coffer.infrastructure.knowledge import paths
+from coffer.infrastructure.knowledge import paths, wiki
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 
 MARKDOWN_SUFFIX = ".md"
@@ -126,24 +128,34 @@ def list_collections() -> tuple[CollectionEntry, ...]:
     if not root.is_dir():
         return ()
     found = [d for d in sorted(root.iterdir()) if d.is_dir() and visible(d)]
-    return tuple(
-        CollectionEntry(
-            # Empty here by construction: this walks the DIRECTORY, which knows
-            # names and counts and nothing about identity. The application layer
-            # joins the registry in and fills it, and that join is
-            # what keeps an unclaimed folder out of the list a caller gets.
-            uid="",
-            name=d.name,
-            description=readme_description(d.name),
-            document_count=count_files(d, markdown_only=True),
-            folder_path=str(d),
-            updated_at=latest_edit(d),
-        )
-        for d in found
+    return tuple(collection_entry(d) for d in found)
+
+
+def collection_entry(
+    directory: pathlib.Path, graph: wiki.WikiGraph | None = None
+) -> CollectionEntry:
+    """One collection directory with its counts, read off its wiki graph."""
+    graph = graph if graph is not None else wiki.build(directory.name)
+    findings = tuple(graph.findings())
+    return CollectionEntry(
+        # Empty here by construction: this walks the DIRECTORY, which knows
+        # names and counts and nothing about identity. The application layer
+        # joins the registry in and fills it, and that join is
+        # what keeps an unclaimed folder out of the list a caller gets.
+        uid="",
+        name=directory.name,
+        description=readme_description(directory.name),
+        page_count=len(graph.pages),
+        source_count=len(graph.sources),
+        waiting_source_count=len(graph.waiting()),
+        finding_count=len(findings),
+        findings=findings,
+        folder_path=str(directory),
+        updated_at=latest_edit(directory),
     )
 
 
-def _file_entry(path: pathlib.Path) -> FileEntry:
+def _file_entry(path: pathlib.Path, graph: wiki.WikiGraph | None = None) -> FileEntry:
     if not is_markdown(path.name):
         # A file a person dropped in that is not Markdown: bytes, not prose. It
         # has no frontmatter to read and may be large, so it is described by
@@ -158,12 +170,19 @@ def _file_entry(path: pathlib.Path) -> FileEntry:
     text = path.read_text(encoding="utf-8", errors="replace")
     fm, _ = split_frontmatter(text)
     relpath = paths.relative_of(path)
+    kind = paths.kind_of(relpath)
+    waiting = False
+    if kind == paths.KIND_SOURCE and graph is not None:
+        waiting = relpath in {s.path for s in graph.waiting()}
     return FileEntry(
         path=relpath,
         title=str(fm.get("title") or path.stem),
         description=str(fm.get("description") or ""),
         actor=str(fm.get("actor") or ACTOR_AGENT),
         updated_at=str(fm.get("updated_at") or ""),
+        kind=kind,
+        page_type=str(fm.get("type") or "").strip() if kind == paths.KIND_PAGE else "",
+        waiting=waiting,
     )
 
 
@@ -172,9 +191,19 @@ def list_level(relpath: str) -> CatalogueLevel:
     directory = paths.resolve(relpath)
     if not directory.is_dir():
         raise KnowledgeFileNotFound(relpath)
+    graph = wiki.build(paths.collection_of(relpath))
     directories: list[DirectoryEntry] = []
     files: list[FileEntry] = []
-    for child in sorted(directory.iterdir()):
+    # At a collection's root its pages and sources come first, in that order
+    # (spec knowledge "Show a collection as one tree of read-only documents in
+    # the web UI"); everything else follows by name.
+    first = {paths.PAGES_DIR_NAME: 0, paths.SOURCES_DIR_NAME: 1}
+    at_root = len(paths.split(relpath)) == 1
+    children = sorted(
+        directory.iterdir(),
+        key=lambda c: (first.get(c.name, 2) if at_root else 2, c.name),
+    )
+    for child in children:
         if not visible(child):
             continue
         if child.is_dir():
@@ -186,7 +215,7 @@ def list_level(relpath: str) -> CatalogueLevel:
                 )
             )
         elif is_listed(child.name) and not is_collection_readme(child):
-            files.append(_file_entry(child))
+            files.append(_file_entry(child, graph))
     return CatalogueLevel(
         path=relpath.strip("/"),
         directories=tuple(directories),
@@ -195,20 +224,23 @@ def list_level(relpath: str) -> CatalogueLevel:
 
 
 def walk_files(directory: pathlib.Path) -> tuple[FileEntry, ...]:
-    """Every content file under ``directory``, recursively, in path order.
+    """Every page and source under a collection ``directory``, recursively, in
+    path order, each with its kind, its type and whether it waits.
 
     The catalogue a skill carries is a whole collection at once (see "Merge the
     manual and the catalogue in the skill body"), unlike the level-at-a-time
     listing a human surface pages through — so this is the shape that builds
-    it.
+    it. A Markdown file outside ``pages/`` and ``sources/`` is listed as a plain
+    file until the sweep files it into ``pages/``.
     """
     if not directory.is_dir():
         return ()
+    graph = wiki.build(directory.name)
     found: list[FileEntry] = []
     for root, dirnames, filenames in os.walk(directory):
         dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
         for name in sorted(filenames):
             # The narrow rule: this feeds the catalogue, which needs text.
             if is_markdown(name) and not is_collection_readme(pathlib.Path(root) / name):
-                found.append(_file_entry(pathlib.Path(root) / name))
+                found.append(_file_entry(pathlib.Path(root) / name, graph))
     return tuple(sorted(found, key=lambda f: f.path))

@@ -38,6 +38,8 @@ flowchart LR
 
 stdio 服务器是一条由 Coffer 作为子进程启动的命令。
 
+<Shot name="add-server-dialog" alt="“添加服务器”对话框。" />
+
 打开 **MCP 服务器**，点**添加服务器**，把服务器 README 给你的内容原样粘贴进那个输入框。它会边输入边识别：
 
 - 一个 `mcpServers` JSON 块，或单个服务器对象——一个或多个服务器；
@@ -158,6 +160,8 @@ Coffer 存储的配置：
 每次发现之后，Coffer 会测量像 Claude Code 这样的客户端为每个工具显示的名字 `mcp__coffer__<server>__<tool>` 的长度。服务器的**工具** tab 会标记名字超过 64 个字符（模型提供商 API 接受的上限）的工具；Cursor 已经会丢掉超过 60 的工具。被标记的工具仍保持启用和列出。修复要在上游一侧（更短的工具名），或在新注册时用更短的服务器名。
 
 ## 编辑、测试、刷新和删除 {#edit-test-refresh-and-delete}
+
+<Shot name="mcp-server" alt="一个 MCP 服务器的页面，含健康状态和工具。" />
 
 | 任务 | Web 界面 |
 | --- | --- |

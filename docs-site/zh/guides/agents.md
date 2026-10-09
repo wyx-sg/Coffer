@@ -37,6 +37,8 @@ Coffer 从不把智能体的配置复制进自己的存储。配置文件、MCP 
 
 ## 注册智能体 {#register-an-agent}
 
+<Shot name="agents-list" alt="智能体页面：一个已连接，一个尚未连接。" />
+
 ### 从检测到的智能体注册 {#from-detected-agents}
 
 Coffer 靠两个信号检测智能体：`PATH` 上的程序——用的是你登录 shell 给出的 `PATH`，所以即使守护进程是从 Dock 启动的，用 Homebrew 或 Node 版本管理器装的智能体也能被找到——以及它的配置目录。顺带会读取程序版本（`claude --version`、`codex --version`）。Coffer 从不自行注册任何东西，守护进程启动时也不会自动注册智能体。
@@ -93,6 +95,8 @@ Claude Code 用 `CLAUDE_CONFIG_DIR` 启动时会读取另一个目录，Codex �
 | --- | --- | --- |
 | 网关 MCP 条目 | 一个指向 `coffer-mcp-shim` 的 `coffer` stdio MCP 服务器条目。智能体通过它访问所有启用的上游服务器、Coffer 自己的工具，以及投递给它的知识。 | 总是 |
 | 记忆投递 Hook | 两个 Hook 条目——会话开始、每次提问——Coffer 通过它们把记忆交给智能体。见[记忆](/zh/guides/memory#install-the-hook)。 | 总是 |
+
+<Shot name="agent-page" alt="智能体页面，含 Coffer 写入的连接条目。" />
 
 断开连接会移除这两部分，而且只移除 Coffer 自己的条目；这些文件里的其他内容保持原样。
 

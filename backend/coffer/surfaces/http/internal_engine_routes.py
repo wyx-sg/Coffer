@@ -28,6 +28,7 @@ from coffer.application.upkeep_schedule import DEFAULT_INTERVALS
 from coffer.domain.internal_engine_config import (
     AGGREGATE,
     DISTIL,
+    MEMORY_SYNC,
     GlobalInternalEngineConfig,
     UpkeepSetting,
 )
@@ -39,7 +40,7 @@ from coffer.surfaces.http.dependencies import (
 )
 
 #: The passes a client may name, in the order they run.
-_PASSES = (AGGREGATE, DISTIL)
+_PASSES = (AGGREGATE, DISTIL, MEMORY_SYNC)
 
 
 # The request/response models live here rather than in ``schemas.py``, which is
@@ -73,7 +74,7 @@ class InternalEngineConfigOut(BaseModel):
     """Coffer's own operating settings: its unattended work and its speech-to-text."""
 
     updated_at: datetime | None = None
-    #: Keyed by pass name (``aggregate`` / ``distil``).
+    #: Keyed by pass name (``aggregate`` / ``distil`` / ``memory_sync``).
     upkeep: dict[str, UpkeepSettingOut] = Field(default_factory=dict)
     #: The speech-to-text model. ``null`` means Coffer transcribes nothing and
     #: hands the agent the audio file untouched — a real answer, not an unset
@@ -104,7 +105,7 @@ class UpkeepUpdate(BaseModel):
     timer can be changed independently.
     """
 
-    pass_name: Literal["aggregate", "distil"] = Field(alias="pass")
+    pass_name: Literal["aggregate", "distil", "memory_sync"] = Field(alias="pass")
     enabled: bool | None = None
     interval_s: int | None = Field(default=None, ge=60)
     #: Explicitly return this pass to its own default interval. Needed because

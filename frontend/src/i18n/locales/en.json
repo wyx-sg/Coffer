@@ -828,7 +828,10 @@
       "secret_set": "Stored a secret",
       "attention_ignored": "Ignored an item on Overview",
       "attention_unignored": "Stopped ignoring an item on Overview",
-      "secret_revealed": "Revealed a secret in the Coffer app"
+      "secret_revealed": "Revealed a secret in the Coffer app",
+      "memory_synced": "Synced memory between the agents",
+      "memory_sync_undone": "Removed the memories Coffer synced into the agents",
+      "memory_curation_requested": "Asked an agent to tidy its own memory"
     },
     "capType": {
       "tool": "tool",
@@ -1884,7 +1887,9 @@
     "CUSTOM_TOOL_ENVIRONMENT_UNKNOWN": "That environment isn't registered in this group.",
     "INVOCATION_NOT_FOUND": "That tool call isn't in the log. It may have been cleared by retention.",
     "CUSTOM_TOOL_LAST_ENVIRONMENT": "A group needs at least one environment, so its last one can't be deleted.",
-    "DESKTOP_REQUEST_NOT_FOUND": "That request to the Coffer app has expired or was already handled."
+    "DESKTOP_REQUEST_NOT_FOUND": "That request to the Coffer app has expired or was already handled.",
+    "MEMORY_SYNC_RUNNING": "A memory sync is already running",
+    "MEMORY_SYNC_NO_PREVIEW": "There is no memory sync preview waiting"
   },
   "pagination": {
     "showing": "Showing {{shown}} of {{total}}",
@@ -3081,7 +3086,7 @@
     }
   },
   "knowledge": {
-    "subtitle": "Documents you and your agents write together. Every agent can read them.",
+    "subtitle": "Pages your agents write from the sources you keep. Every agent can read them.",
     "title": "Knowledge",
     "nav": {
       "label": "Collections and documents",
@@ -3090,17 +3095,21 @@
       "collapse": "Collapse {{name}}"
     },
     "tree": {
-      "empty": "No documents yet",
-      "emptyFolder": "Nothing here yet"
+      "empty": "No pages or sources yet",
+      "emptyFolder": "Nothing here yet",
+      "pages": "Pages",
+      "sources": "Sources"
     },
     "stats": {
-      "documents": "Documents",
+      "pages": "Pages",
+      "sources": "Sources",
+      "sourcesWaiting": "{{count}} · {{waiting}} waiting",
       "folder": "Folder"
     },
     "collection": {
       "descriptionLabel": "What belongs in this collection",
       "noDescription": "No description yet. Say what belongs in here so agents recognise it.",
-      "emptyLine": "No documents yet. Upload one, or drop Markdown files into the folder.",
+      "emptyLine": "No pages or sources yet. Upload a source, or drop Markdown files into the folder.",
       "more": "More actions for {{name}}",
       "copyPath": "Copy path",
       "descriptionSaved": "Description updated",
@@ -3129,8 +3138,8 @@
     "deleteCollection": {
       "menu": "Delete collection…",
       "title": "Delete {{name}}?",
-      "body_one": "{{count}} document goes with it. Undo is offered for a few seconds; after that only git still has its files.",
-      "body_other": "{{count}} documents go with it. Undo is offered for a few seconds; after that only git still has their files.",
+      "body_one": "{{count}} file goes with it. Undo is offered for a few seconds; after that only git still has its files.",
+      "body_other": "{{count}} files go with it. Undo is offered for a few seconds; after that only git still has their files.",
       "confirm": "Delete collection",
       "pending": "Deleting…",
       "failed": "Couldn’t delete {{name}}",
@@ -3139,8 +3148,8 @@
     },
     "upload": {
       "button": "Upload",
-      "title": "Upload a document",
-      "body": "Coffer converts it to Markdown and adds it to the collection as a document. The original file isn’t kept.",
+      "title": "Upload a source",
+      "body": "Coffer converts it to Markdown and keeps it as a source of the collection. The uploaded file itself is not stored.",
       "choose": "Drop a file here, or choose one",
       "types": "PDF, Word, PowerPoint, Excel, HTML, CSV, Markdown or text · up to 20 MB",
       "remove": "Remove this file",
@@ -3160,7 +3169,7 @@
       "failedTitle": "Couldn't upload this file"
     },
     "document": {
-      "where": "Where this document is",
+      "where": "Where this file is",
       "more": "More actions for {{path}}",
       "createdBy": "Created {{date}} by {{who}}",
       "you": "you",
@@ -3168,14 +3177,13 @@
       "preview": "Preview",
       "source": "Source",
       "created": "Created {{date}}",
-      "views": "Document views",
-      "tabs": {
-        "document": "Document",
-        "history": "History"
-      }
+      "sources": "Sources:",
+      "missingSource": "No source is named {{slug}}",
+      "citedBy_one": "Cited by {{count}} page:",
+      "citedBy_other": "Cited by {{count}} pages:"
     },
     "deleteDocument": {
-      "menu": "Delete document",
+      "menu": "Delete",
       "deletedToast": "Deleted {{name}}",
       "undoFailed": "Couldn’t restore {{name}}"
     },
@@ -3184,7 +3192,8 @@
       "agent": "An agent",
       "curation": "Curation",
       "sync": "Sync",
-      "disk": "Edited on disk"
+      "disk": "Edited on disk",
+      "daemon": "Coffer"
     },
     "when": {
       "today": "Today {{time}}",
@@ -3201,6 +3210,57 @@
     "landing": {
       "title": "Pick a collection",
       "body": "Choose a collection on the left to read its documents, or create a new one."
+    },
+    "waiting": "Waiting",
+    "operation": {
+      "save": "Saved",
+      "delete": "Deleted",
+      "promote": "Added",
+      "restore": "Restored",
+      "edit": "Edited",
+      "sync": "Synced",
+      "create": "Created",
+      "rename": "Renamed",
+      "remove": "Removed",
+      "layout": "Filed into pages",
+      "baseline": "Recorded",
+      "curation": "Curated"
+    },
+    "link": {
+      "dead": "No page or source is named {{target}}",
+      "ambiguous": "{{target}} names more than one file"
+    },
+    "history": {
+      "title": "History",
+      "label": "History of {{name}}",
+      "close": "Close history"
+    },
+    "check": {
+      "title": "Check",
+      "description": "What Coffer finds in the collection's files on every read. It fixes none of it.",
+      "none": "Nothing found.",
+      "failed": "Couldn’t check this collection",
+      "handoff": "Check with agent",
+      "target": "→ {{target}}",
+      "others": "also {{paths}}",
+      "kinds": {
+        "dead_link": "Dead links",
+        "ambiguous_link": "Ambiguous links",
+        "duplicate_slug": "Names used twice",
+        "missing_source": "Missing sources",
+        "incomplete_page": "Incomplete pages",
+        "unsourced_page": "Pages without sources",
+        "orphan_page": "Pages nothing links to",
+        "waiting_source": "Waiting sources"
+      }
+    },
+    "changeLog": {
+      "title": "Change log",
+      "description": "Every change to this collection, newest first. A file opens with its history.",
+      "none": "No changes yet.",
+      "failed": "Couldn’t read the change log",
+      "more": "Show more",
+      "lines": "+{{added}} −{{removed}}"
     }
   },
   "memory": {
@@ -4044,7 +4104,8 @@
         "skills": "Skills",
         "resources": "MCP servers & tools",
         "secret": "Encrypted secrets",
-        "machines": "Machines"
+        "machines": "Machines",
+        "memory": "Memory"
       }
     },
     "resolve": {
@@ -4682,8 +4743,8 @@
         "ok": "Up to date",
         "warn_one": "{{count}} needs attention",
         "warn_other": "{{count}} need attention",
-        "unit_one": "document",
-        "unit_other": "documents",
+        "unit_one": "page",
+        "unit_other": "pages",
         "collections_one": "{{count}} collection",
         "collections_other": "{{count}} collections"
       },

@@ -3,14 +3,15 @@
 // A collection's own page (boards 5.1.10, 5.1.11, 5.1.12, 5.1.14), mocked only
 // at the network boundary: the folder name as the heading, the description
 // edited in place (blur / ⌘Enter saves, Esc cancels, the toast offers Undo),
-// the properties rows, the empty collection's one muted line, Rename… from the
+// the properties rows (Pages, Sources with how many wait, Folder), the empty
+// collection's one muted line, Rename… from the
 // ⋯ menu (a dialog that closes only on success), and Delete collection… from
 // the same menu — which asks first, then offers Undo in a toast.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
 import { answerFromFixtures, renderKnowledge } from "@/test/knowledgeHarness";
-import { COLLECTION, EDIT, NAME, OTHER, UID } from "./knowledgeTestData";
+import { COLLECTION, EDIT, NAME, OTHER, UID, change } from "./knowledgeTestData";
 import { acceptance } from "@/test/acceptance";
 import { ApiError } from "@/lib/api/errors";
 
@@ -24,9 +25,24 @@ vi.mock("@/lib/api/knowledge", () => ({
   listChanges: vi.fn(),
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
+  getCheck: vi.fn(),
 }));
 vi.mock("@/lib/api/resources", () => ({ resourcesApi: { remove: vi.fn(), rename: vi.fn() } }));
 vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => undefined }));
+vi.mock("@/lib/api/agentProviders", () => ({
+  agentProvidersApi: {
+    list: vi.fn().mockResolvedValue({
+      agents: [{ agent_key: "claude_code", display_name: "Claude Code", available: true }],
+    }),
+  },
+}));
+vi.mock("@/lib/api/fs", () => ({
+  fsApi: {
+    listTerminals: vi.fn().mockResolvedValue([]),
+    openTerminal: vi.fn(),
+    reveal: vi.fn().mockResolvedValue(undefined),
+  },
+}));
 
 const api = vi.mocked(await import("@/lib/api/knowledge"));
 const { resourcesApi } = await import("@/lib/api/resources");
@@ -41,10 +57,13 @@ afterEach(() => {
 const DESCRIPTION = { name: "What belongs in this collection" };
 
 describe("the properties", () => {
-  test("Documents and Folder — no inbox, no last-curated, no big numbers or danger zone", async () => {
+  test("Pages, Sources and Folder — no inbox, no last-curated, no big numbers or danger zone", async () => {
     renderKnowledge(`/knowledge/${UID}`);
     const stats = await screen.findByTestId("knowledge-stats");
-    expect(within(stats).getByText("Documents")).toBeInTheDocument();
+    expect(within(stats).getByText("Pages")).toBeInTheDocument();
+    expect(within(stats).getByText("Sources")).toBeInTheDocument();
+    expect(within(stats).getByText("1 · 1 waiting")).toBeInTheDocument();
+    expect(within(stats).queryByText("Documents")).toBeNull();
     expect(within(stats).getByText("Folder")).toBeInTheDocument();
     expect(within(stats).getByText("~/.coffer/knowledge/shopee")).toBeInTheDocument();
     expect(within(stats).queryByText("Inbox")).toBeNull();
@@ -62,12 +81,54 @@ describe("the properties", () => {
   });
 
   acceptance("knowledge", "a collection page shows its properties", async () => {
+    api.getCheck.mockResolvedValue({
+      collection: COLLECTION,
+      findings: [
+        {
+          kind: "waiting_source",
+          path: `${NAME}/sources/release-notes.md`,
+          target: null,
+          others: [],
+        },
+      ],
+    });
+    api.listChanges.mockResolvedValue({
+      changes: [
+        change({
+          version: "c1",
+          writer: "agent",
+          agent: "claude-code",
+          operation: "edit",
+          documents: [
+            { path: `${NAME}/pages/gateway.md`, status: "modified", added: 3, removed: 1 },
+          ],
+        }),
+      ],
+      next_cursor: null,
+    });
     renderKnowledge(`/knowledge/${UID}`);
     expect(await screen.findByRole("heading", { name: NAME })).toBeInTheDocument();
     expect(screen.getByText(COLLECTION.description)).toBeInTheDocument();
+    // Pages, Sources (1 waiting) and Folder.
     const stats = screen.getByTestId("knowledge-stats");
-    expect(within(stats).getByText("Documents")).toBeInTheDocument();
+    expect(within(stats).getByText("Pages")).toBeInTheDocument();
+    expect(within(stats).getByText(String(COLLECTION.page_count))).toBeInTheDocument();
+    expect(within(stats).getByText("Sources")).toBeInTheDocument();
+    expect(within(stats).getByText("1 · 1 waiting")).toBeInTheDocument();
     expect(within(stats).getByText("Folder")).toBeInTheDocument();
+    // Tidy and Check with agent.
+    expect(await screen.findByRole("button", { name: "Tidy" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check with agent" })).toBeInTheDocument();
+    // A Check section listing the waiting source.
+    const check = screen.getByRole("region", { name: "Check" });
+    expect(await within(check).findByText("Waiting sources")).toBeInTheDocument();
+    expect(
+      within(check).getByRole("link", { name: "sources/release-notes.md" }),
+    ).toBeInTheDocument();
+    // A Change log.
+    const log = screen.getByRole("region", { name: "Change log" });
+    expect(await within(log).findByText("Edited")).toBeInTheDocument();
+    // Its ⋯ menu.
     fireEvent.click(screen.getByRole("button", { name: `More actions for ${NAME}` }));
     expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
       "Reveal in Finder",
@@ -83,7 +144,9 @@ describe("a just created, empty collection", () => {
     renderKnowledge(`/knowledge/${OTHER.uid}`);
     expect(await screen.findByRole("heading", { name: OTHER.name })).toBeInTheDocument();
     expect(
-      screen.getByText(/No documents yet\. Upload one, or drop Markdown files into the folder\./),
+      screen.getByText(
+        /No pages or sources yet\. Upload a source, or drop Markdown files into the folder\./,
+      ),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reveal in Finder" })).toBeInTheDocument();
     // No Add a document: people write in their own editor, agents write files.
@@ -176,9 +239,9 @@ describe("Delete collection…", () => {
       renderKnowledge(`/knowledge/${UID}`);
       const dialog = await askToDelete();
 
-      // The confirmation names the collection and its documents, and nothing is deleted yet.
+      // The confirmation names the collection and its files, and nothing is deleted yet.
       expect(within(dialog).getByText(`Delete ${NAME}?`)).toBeInTheDocument();
-      expect(within(dialog).getByText(/2 documents go with it/)).toBeInTheDocument();
+      expect(within(dialog).getByText(/3 files go with it/)).toBeInTheDocument();
       expect(within(dialog).queryByRole("textbox")).toBeNull();
       expect(resourcesApi.remove).not.toHaveBeenCalled();
 

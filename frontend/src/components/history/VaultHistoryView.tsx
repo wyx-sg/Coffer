@@ -35,7 +35,7 @@ interface Props {
 function writerIcon(displayWriter: string): LucideIcon {
   if (displayWriter.startsWith("agent")) return Bot;
   if (displayWriter === "sync") return GitBranch;
-  if (displayWriter === "daemon" || displayWriter === "curation") return Vault;
+  if (["daemon", "curation", "memory-sync"].includes(displayWriter)) return Vault;
   return User;
 }
 

@@ -225,6 +225,153 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/memory/sync/codex-import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Codex Import */
+        put: operations["set_codex_import_api_v1_memory_sync_codex_import_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory/sync/curate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Curate Now
+         * @description **Curate now**: start the agent headless with a prompt to consolidate
+         *     its own memory.
+         */
+        post: operations["curate_now_api_v1_memory_sync_curate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory/sync/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Entries */
+        get: operations["list_entries_api_v1_memory_sync_entries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory/sync/preview/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Preview */
+        post: operations["cancel_preview_api_v1_memory_sync_preview_cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory/sync/preview/write": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Write Preview */
+        post: operations["write_preview_api_v1_memory_sync_preview_write_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory/sync/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Now
+         * @description **Sync now**: 409 ``MEMORY_SYNC_RUNNING`` while a sync runs.
+         */
+        post: operations["sync_now_api_v1_memory_sync_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory/sync/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sync State */
+        get: operations["sync_state_api_v1_memory_sync_state_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory/sync/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Sync
+         * @description **Undo sync…**: removes Coffer's copies from this machine's agents and
+         *     turns automatic sync off.
+         */
+        post: operations["undo_sync_api_v1_memory_sync_undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/memory/tidy-handoff": {
         parameters: {
             query?: never;
@@ -276,6 +423,28 @@ export interface components {
             sources_read: number;
             /** Sources Skipped */
             sources_skipped: number;
+        };
+        /** CodexImportIn */
+        CodexImportIn: {
+            /** Value */
+            value?: boolean | null;
+        };
+        /** CurateIn */
+        CurateIn: {
+            /** Agent Type */
+            agent_type: string;
+        };
+        /** CurateOut */
+        CurateOut: {
+            /** Started */
+            started: boolean;
+        };
+        /** CurationStateOut */
+        CurationStateOut: {
+            /** Curation */
+            curation: string;
+            /** Memory */
+            memory: string;
         };
         /** DeliveredOut */
         DeliveredOut: {
@@ -402,6 +571,89 @@ export interface components {
             output: {
                 [key: string]: unknown;
             } | null;
+        };
+        /** HubEntryListOut */
+        HubEntryListOut: {
+            /** Entries */
+            entries: components["schemas"]["HubEntryOut"][];
+            /** Project */
+            project: string;
+        };
+        /** HubEntryOut */
+        HubEntryOut: {
+            /** Copies */
+            copies: {
+                [key: string]: string;
+            };
+            /** Created At */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Origin Agent */
+            origin_agent: string;
+            /** Origin Machine */
+            origin_machine: string;
+            /**
+             * Project
+             * @default
+             */
+            project: string;
+            /** Title */
+            title: string;
+            /** Type */
+            type: string;
+            /** Updated At */
+            updated_at: string;
+        };
+        /**
+         * MemorySyncReportOut
+         * @description What one sync, write or undo did (the ``memory_synced`` details).
+         */
+        MemorySyncReportOut: {
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /** Summary */
+            summary: {
+                [key: string]: unknown;
+            };
+        };
+        /** MemorySyncStateOut */
+        MemorySyncStateOut: {
+            /** Agents */
+            agents: components["schemas"]["SyncAgentOut"][];
+            /** Codex Imports Claude */
+            codex_imports_claude: boolean | null;
+            /**
+             * Global Memories
+             * @default 0
+             */
+            global_memories: number;
+            /** Last Report */
+            last_report: {
+                [key: string]: unknown;
+            };
+            /**
+             * Last Synced At
+             * @default
+             */
+            last_synced_at: string;
+            /**
+             * Machine
+             * @default
+             */
+            machine: string;
+            /** Preview */
+            preview: {
+                [key: string]: unknown;
+            } | null;
+            /** Projects */
+            projects: components["schemas"]["SyncProjectOut"][];
+            /** Running */
+            running: boolean;
         };
         /** NoteListOut */
         NoteListOut: {
@@ -611,6 +863,49 @@ export interface components {
             slug: string;
             /** Title */
             title: string;
+        };
+        /** SyncAgentOut */
+        SyncAgentOut: {
+            /** Agent */
+            agent: string;
+            /** Agent Type */
+            agent_type: string;
+            /** Copies */
+            copies: {
+                [key: string]: number;
+            };
+            curation: components["schemas"]["CurationStateOut"];
+            writer: components["schemas"]["WriterStatusOut"];
+        };
+        /** SyncProjectOut */
+        SyncProjectOut: {
+            /** Agents */
+            agents: {
+                [key: string]: number;
+            };
+            /** Checked Out */
+            checked_out: string | null;
+            /** Folder */
+            folder: string;
+            /** Key */
+            key: string;
+            /** Memories */
+            memories: number;
+        };
+        /** WriterStatusOut */
+        WriterStatusOut: {
+            /**
+             * Path
+             * @default
+             */
+            path: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** State */
+            state: string;
         };
     };
     responses: never;
@@ -1058,6 +1353,337 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AggregationResultOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_codex_import_api_v1_memory_sync_codex_import_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodexImportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    curate_now_api_v1_memory_sync_curate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CurateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurateOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_entries_api_v1_memory_sync_entries_get: {
+        parameters: {
+            query?: {
+                /** @description A project key; empty for global memories. */
+                project?: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubEntryListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_preview_api_v1_memory_sync_preview_cancel_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    write_preview_api_v1_memory_sync_preview_write_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemorySyncReportOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    sync_now_api_v1_memory_sync_run_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemorySyncReportOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    sync_state_api_v1_memory_sync_state_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemorySyncStateOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    undo_sync_api_v1_memory_sync_undo_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemorySyncReportOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

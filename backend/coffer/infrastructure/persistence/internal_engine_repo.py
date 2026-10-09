@@ -34,6 +34,7 @@ from typing import Any
 from coffer.domain.internal_engine_config import (
     AGGREGATE,
     DISTIL,
+    MEMORY_SYNC,
     GlobalInternalEngineConfig,
     UpkeepSetting,
 )
@@ -43,7 +44,9 @@ from coffer.infrastructure.vault.state_documents import StateDocument
 
 AREA = "settings"
 DOC = "internal-engine"
-_PASSES = (AGGREGATE, DISTIL)
+_PASSES = (AGGREGATE, DISTIL, MEMORY_SYNC)
+#: A pass that is off until the person turns it on.
+_OFF_BY_DEFAULT = frozenset({MEMORY_SYNC})
 #: Top-level keys an older build wrote. A write names each as ``None``, which
 #: the document encoder reads as "remove it from the file".
 _RETIRED_KEYS = ("model", "curate_owner_machine_id", "model_timeout_s")
@@ -64,21 +67,24 @@ def _str(raw: Any) -> str | None:
 def _upkeep(doc: Mapping[str, Any], name: str) -> UpkeepSetting:
     block = doc.get("upkeep")
     entry = block.get(name) if isinstance(block, dict) else None
+    default = name not in _OFF_BY_DEFAULT
     if not isinstance(entry, dict):
-        return UpkeepSetting(enabled=True)
-    return UpkeepSetting(
-        enabled=entry.get("enabled", True) is not False, interval_s=_int(entry.get("interval_s"))
-    )
+        return UpkeepSetting(enabled=default)
+    raw = entry.get("enabled", default)
+    enabled = raw is not False if default else raw is True
+    return UpkeepSetting(enabled=enabled, interval_s=_int(entry.get("interval_s")))
 
 
 def _to_domain(doc: Mapping[str, Any], updated_at: datetime) -> GlobalInternalEngineConfig:
-    aggregate, distil = (_upkeep(doc, name) for name in _PASSES)
+    aggregate, distil, memory_sync = (_upkeep(doc, name) for name in _PASSES)
     return GlobalInternalEngineConfig(
         updated_at=updated_at,
         auto_aggregate_enabled=aggregate.enabled,
         aggregate_interval_s=aggregate.interval_s,
         auto_distil_enabled=distil.enabled,
         distil_interval_s=distil.interval_s,
+        memory_sync_enabled=memory_sync.enabled,
+        memory_sync_interval_s=memory_sync.interval_s,
         transcribe_model=_str(doc.get("transcribe_model")),
     )
 

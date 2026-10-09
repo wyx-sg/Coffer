@@ -3,11 +3,12 @@
 One root, one tree per collection: ``~/.coffer/vault/knowledge/<collection>/…``
 — inside the vault repository (ADR storage-is-five-classes-by-nature), so a
 collection's history is the vault's history under ``knowledge/``.
-Everything visible under a collection is a **document** — Markdown a person and
-Coffer and its agents write together, in whatever nesting either of them
-chooses (spec knowledge "Store each collection as one tree of Markdown files",
-"Allow nesting without giving it meaning"). The collection's ``README.md``
-sits at its root and describes it rather than being content in it (see "Keep
+A collection holds two things (spec knowledge "Keep sources and pages apart in
+each collection"): ``sources/``, the material that arrived, kept as it came, and
+``pages/``, the wiki pages a person and the agents write from it, in whatever
+nesting either of them chooses ("Allow nesting without giving it meaning").
+:func:`kind_of` says which a path is. The collection's ``README.md`` sits at
+its root and is the collection's schema rather than content in it (see "Keep
 the collection README out of the corpus").
 
 There is exactly one hidden directory, and it is Coffer's: ``.inbox/``, the drop
@@ -39,8 +40,17 @@ README_NAME = "README.md"
 #: The knowledge root's path inside the vault repository.
 VAULT_PREFIX = "knowledge"
 
-#: Where material lands before it is promoted into a collection's documents.
+#: Where material lands before it is adopted as a collection's source.
 INBOX_DIR_NAME = ".inbox"
+
+#: A collection's wiki pages, and the kept material they are compiled from.
+PAGES_DIR_NAME = "pages"
+SOURCES_DIR_NAME = "sources"
+
+#: What a file under a collection is (see :func:`kind_of`).
+KIND_PAGE = "page"
+KIND_SOURCE = "source"
+KIND_FILE = "file"
 
 _DOTS_ONLY = re.compile(r"^\.+$")
 _SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._\- 一-鿿]+$")
@@ -193,3 +203,27 @@ def inbox_parts(relpath: str) -> tuple[str, str | None] | None:
         return segments[0], None
     check_segment(segments[2], relpath)
     return segments[0], segments[2]
+
+
+def pages_dir(collection: str) -> pathlib.Path:
+    """Where a collection's wiki pages live."""
+    return collection_dir(collection) / PAGES_DIR_NAME
+
+
+def sources_dir(collection: str) -> pathlib.Path:
+    """Where a collection's kept material lives."""
+    return collection_dir(collection) / SOURCES_DIR_NAME
+
+
+def kind_of(relpath: str) -> str:
+    """``page`` for Markdown under ``pages/``, ``source`` for Markdown under
+    ``sources/``, else ``file`` — an original kept beside a source, a file a
+    person put anywhere else."""
+    segments = [s for s in (relpath or "").strip().strip("/").split("/") if s]
+    if len(segments) < 3 or not segments[-1].endswith(".md"):
+        return KIND_FILE
+    if segments[1] == PAGES_DIR_NAME:
+        return KIND_PAGE
+    if segments[1] == SOURCES_DIR_NAME:
+        return KIND_SOURCE
+    return KIND_FILE

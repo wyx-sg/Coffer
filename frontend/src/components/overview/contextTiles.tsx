@@ -20,7 +20,7 @@ export function KnowledgeTile({ area, items }: AreaProps) {
       area={area}
       query={useKnowledgeCollections()}
       content={(collections) => {
-        const docs = collections.reduce((n, c) => n + c.document_count, 0);
+        const docs = collections.reduce((n, c) => n + c.page_count, 0);
         return {
           status: tileStatus(t, area, items, collections.length > 0),
           value: docs,

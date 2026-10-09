@@ -1,7 +1,7 @@
 // frontend/src/components/knowledge/KnowledgeCollectionNode.tsx
 //
 // One collection in the Knowledge tree: its row (chevron, folder, its folder
-// name — no document count), and while expanded its documents. A collection
+// name — no count), and while expanded its files, Pages and Sources first. A collection
 // has no title — the tree names it by its folder.
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -72,6 +72,7 @@ export function KnowledgeCollectionNode({ collection, expanded, onToggle, curren
             selectedPath={current ? file : null}
             onSelect={(path) => navigate(collectionPath(collection.uid, path))}
             emptyLabel={t("knowledge.tree.empty")}
+            root
           />
         </div>
       ) : null}

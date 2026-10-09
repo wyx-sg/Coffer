@@ -29,6 +29,9 @@ from coffer.surfaces.http.knowledge import schemas
 _EXPECTED_ROUTES = {
     ("GET", "/api/v1/knowledge/collections"),
     ("POST", "/api/v1/knowledge/collections"),
+    # A collection's mechanical findings (see "Check a collection mechanically
+    # on every read"); nothing here fixes one.
+    ("GET", "/api/v1/knowledge/collections/{uid}/check"),
     ("GET", "/api/v1/knowledge/tree"),
     ("GET", "/api/v1/knowledge/file"),
     ("DELETE", "/api/v1/knowledge/file"),
@@ -110,19 +113,25 @@ def test_no_wire_model_carries_a_retrieval_payload() -> None:
         assert not hasattr(schemas, gone), gone
 
 
-def test_an_ingested_document_names_no_original() -> None:
-    """Neither the uploaded bytes nor a separate extracted file is kept, so
-    there is no original to report — only the document the upload became (see
-    "Convert uploads into documents without keeping the original")."""
+def test_an_ingested_document_names_the_source_it_became() -> None:
+    """Only the Markdown is kept, so no wire model names an original (see
+    "Keep every upload as a Markdown source")."""
     fields = set(schemas.IngestedDocumentOut.model_fields)
     assert {"path", "title", "description", "converter"} == fields
-    assert not fields & {"original_path", "raw_path"}
+    assert "original_path" not in schemas.FileOut.model_fields
 
 
-def test_a_collection_reports_its_documents_and_a_tidy_handoff() -> None:
+def test_a_collection_reports_its_pages_sources_and_both_handoffs() -> None:
     fields = set(schemas.CollectionOut.model_fields)
-    assert {"document_count", "tidy_handoff"} <= fields
-    assert not fields & {"pending_count", "file_count", "source_count", "topic_count"}
+    assert {
+        "page_count",
+        "source_count",
+        "waiting_source_count",
+        "finding_count",
+        "tidy_handoff",
+        "check_handoff",
+    } <= fields
+    assert not fields & {"document_count", "pending_count", "file_count", "topic_count"}
 
 
 def test_no_curation_wire_model_remains() -> None:

@@ -1,12 +1,11 @@
-"""Turning an uploaded document into new knowledge for a collection.
+"""Turning an uploaded document into a source for a collection.
 
 An upload is one of the entrances new knowledge arrives by — the Knowledge page's upload
-button and a channel attachment (see "Convert uploads into documents without keeping
-the original" and "Ingest documents sent to a channel"). The document is converted to
-Markdown and **submitted as material**: it goes through :meth:`KnowledgeService.submit`,
-which makes it a document of its own on the spot (see "Promote submitted material at
-once"). Nothing else of the upload is kept — not the original bytes: what the collection
-holds is the document's text, and the file it arrived in was only its carrier.
+button and a channel attachment (see "Keep every upload as a Markdown source"
+and "Ingest documents sent to a channel"). The document is converted to Markdown and
+**submitted as material**: it goes through :meth:`KnowledgeService.submit`, which keeps
+it as a source under ``sources/`` on the spot (see "Promote submitted material at
+once"). Only the Markdown is kept; the uploaded file itself is not.
 
 What this module owns that ``submit`` does not need to think about: **the
 description is optional input, never optional output.** The catalogue the
@@ -58,7 +57,7 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 class IngestedDocument:
     """What one successful ingest produced.
 
-    ``path`` is the document the upload became.
+    ``path`` is the source the upload became.
     """
 
     path: str
