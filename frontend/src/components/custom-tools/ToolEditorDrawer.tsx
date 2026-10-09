@@ -1,6 +1,6 @@
-// src/components/custom-tools/ToolEditorDrawer.tsx — one saved tool's editor (4.2.08), a 640 drawer under the title
-// bar over the group's page (the address stays `/custom-tools/<group>`): the request, headers, body, arguments and
-// Test with its result; Delete tool (outline danger) · Cancel · Save in the footer. The tool's switch and reach are
+// src/components/custom-tools/ToolEditorDrawer.tsx — one saved tool's editor (4.2.30–33), a 1040 drawer under the
+// title bar over the group's page (the address stays `/custom-tools/<group>`): the editor's tabs beside Try it
+// (ToolEditorForm); Delete tool (outline danger) · Cancel · Save in the footer. The tool's switch and reach are
 // in the table, not here. Nothing is saved until Save. The request help, the group's headers, the preview and the
 // test all read ONE environment — the one the test's picker names (useToolEnvironment); picking it saves nothing.
 import { useEffect, useState } from "react";
@@ -11,7 +11,6 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
-  SheetBody,
   SheetContent,
   SheetDescription,
   SheetFooter,
@@ -21,10 +20,7 @@ import {
 import { translateApiError } from "@/lib/api/errors";
 import type { CustomToolGroup } from "@/lib/api/customTools";
 import { useDeleteCustomTool, useSaveCustomTool } from "@/lib/hooks/useCustomTools";
-import { ToolArgumentsField } from "./ToolArgumentsField";
-import { ToolHeadersField } from "./ToolHeadersField";
-import { BodyField, ChangesDataField, DescriptionField, RequestField } from "./ToolRequestFields";
-import { ToolTestSection } from "./ToolTestSection";
+import { ToolEditorForm } from "./ToolEditorForm";
 import { formOf, formReady, toolOf, type ToolForm } from "./toolForm";
 import { useToolEnvironment } from "./useToolEnvironment";
 
@@ -61,8 +57,8 @@ export function ToolEditorDrawer({ group, toolName, open, onClose, onEditGroup }
 
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
-      <SheetContent>
-        <SheetHeader>
+      <SheetContent className="max-w-[1040px]">
+        <SheetHeader className="border-b-0 pb-2">
           <SheetTitle className="font-mono">{toolName}</SheetTitle>
           <SheetDescription>
             {t("customTools.editor.subtitle", {
@@ -71,42 +67,30 @@ export function ToolEditorDrawer({ group, toolName, open, onClose, onEditGroup }
             })}
           </SheetDescription>
         </SheetHeader>
-        <SheetBody className="flex flex-col gap-5">
-          <RequestField
-            form={form}
-            onChange={setForm}
-            baseUrl={shown?.base_url ?? ""}
-            environment={several ? (shown?.name ?? null) : null}
-          />
-          <DescriptionField form={form} onChange={setForm} />
-          <ChangesDataField form={form} onChange={setForm} />
-          <ToolHeadersField
-            groupHeaders={shown?.headers ?? []}
-            headers={form.headers}
-            onChange={(headers) => setForm({ ...form, headers })}
-            environment={several ? (shown?.name ?? null) : null}
-            forThisRequest
-          />
-          <BodyField form={form} onChange={setForm} />
-          <ToolArgumentsField args={form.args} onChange={(args) => setForm({ ...form, args })} />
-          <ToolTestSection
-            target={{ saved: group, environment }}
-            args={form.args}
-            draft={() => toolOf(form)}
-            ready={form.path.trim() !== ""}
-            saveWord="save"
-            onChangeTimeout={() => {
-              onClose();
-              onEditGroup();
-            }}
-          />
-          {save.error ? (
-            <div role="alert" className="flex items-start gap-2 text-sm text-danger">
-              <AlertCircle className="mt-0.5 size-[15px] shrink-0" aria-hidden />
-              <span>{translateApiError(t, save.error)}</span>
-            </div>
-          ) : null}
-        </SheetBody>
+        <ToolEditorForm
+          form={form}
+          onChange={setForm}
+          group={group.name}
+          nameLocked
+          baseUrl={shown?.base_url ?? ""}
+          environment={several ? (shown?.name ?? null) : null}
+          groupHeaders={shown?.headers ?? []}
+          environments={(group.environments ?? []).filter((e) => e.enabled).map((e) => e.name)}
+          test={{ saved: group, environment }}
+          saveWord="save"
+          onChangeTimeout={() => {
+            onClose();
+            onEditGroup();
+          }}
+          initialTab="request"
+          key={`${toolName ?? ""}-${open}`}
+        />
+        {save.error ? (
+          <div role="alert" className="flex items-start gap-2 px-5 pb-3 text-sm text-danger">
+            <AlertCircle className="mt-0.5 size-[15px] shrink-0" aria-hidden />
+            <span>{translateApiError(t, save.error)}</span>
+          </div>
+        ) : null}
         <SheetFooter>
           <Button variant="danger" onClick={() => setConfirmDelete(true)}>
             <Trash2 aria-hidden />
