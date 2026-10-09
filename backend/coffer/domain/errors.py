@@ -88,6 +88,17 @@ class ConfigValidationError(CofferError):
     code = "CONFIG_INVALID"
 
 
+class StoredKeyDestinationRefused(ConfigValidationError):  # noqa: N818
+    """A stored key was offered to an endpoint no saved connection approved it for.
+
+    A policy refusal before any request is sent, not a failed probe: its
+    ``reason`` lets a client say so instead of suggesting the endpoint is down
+    or the key revoked.
+    """
+
+    reason = "stored_key_destination"
+
+
 class ScopeInvalidError(CofferError):
     """A per-agent activation-scope payload failed validation (ADR per-agent-resource-scope):
     either the kind does not declare ``supports_scope`` (it carries no scope at

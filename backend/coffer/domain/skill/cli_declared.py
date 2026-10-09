@@ -33,6 +33,25 @@ class CliToolInvalid(CofferError):  # noqa: N818
     code = "CLI_TOOL_INVALID"
 
 
+class LoginCheckCommandInvalid(CliToolInvalid):
+    """The login check does not start with the tool's command name.
+
+    The envelope names the field and the name it must start with, so a form
+    puts the refusal at the Login check field: a command given as a path is
+    registered under its file name, and that name is the login check's first
+    word (it runs the registered executable, never another program on PATH).
+    """
+
+    reason = "login_check_command"
+
+    def __init__(self, given: str, command: str) -> None:
+        super().__init__(
+            f"the login check runs {given!r}, not {command!r}; it may only run the tool, "
+            f"so it must start with the command name {command!r}"
+        )
+        self.error_details: dict[str, object] = {"field": "login_check", "command": command}
+
+
 class CliToolExists(CofferError):  # noqa: N818
     """The command is already declared by hand. Maps to 409."""
 
@@ -105,9 +124,7 @@ def clean_login_check(command: str, value: str | None) -> tuple[str, ...] | None
     except ValueError as exc:
         raise CliToolInvalid(f"the login check cannot be read ({exc})") from None
     if argv[0] != command:
-        raise CliToolInvalid(
-            f"the login check runs {argv[0]!r}, not {command!r}; it may only run the tool"
-        )
+        raise LoginCheckCommandInvalid(argv[0], command)
     return tuple(argv)
 
 
@@ -150,6 +167,7 @@ __all__ = [
     "CliToolInvalid",
     "CliToolNotDeclared",
     "DeclaredTool",
+    "LoginCheckCommandInvalid",
     "clean_login_check",
     "clean_min_version",
     "clean_text",

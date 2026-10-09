@@ -527,7 +527,8 @@ superseded those nothing asks for any more.
 #### Scenario: a stored key goes only to the endpoint of the connection that holds it
 - **GIVEN** an MCP server's token stored under a ref, and a saved provider connection whose key is another ref
 - **WHEN** `POST /api/v1/models/list-models` or `/test-connection` is sent that ref with a base URL no saved connection holds it for, or a ref no connection holds
-- **THEN** each is refused as a validation error before anything is decrypted or sent, whatever protocol the request names, while an inline typed key and a saved connection's own ref and base URL work as before
+- **THEN** each is refused as a validation error carrying the reason `stored_key_destination` before anything is decrypted or sent, whatever protocol the request names, while an inline typed key and a saved connection's own ref and base URL work as before
+- **AND** a provider dialog's Test shows that refusal as not tested, with the paste-the-key or add-and-approve remedy, never as an unreachable endpoint or a revoked key
 
 #### Scenario: a value supplied for its destination needs no approval
 - **GIVEN** a secret stored under a ref nothing has ever received
