@@ -131,13 +131,13 @@ Sync is bidirectional but only under the sync spec's safety rules: git computes 
 
 ## Secrets are never plaintext at rest
 
-**Statement.** Secrets live only as Fernet ciphertext, one file per secret under `~/.coffer/vault/secret/`. Plaintext exists in memory solely between decrypt and the spawn or header injection that consumes it, and never reaches a file, logs, audit or any structured event. All other code holds secret **refs**. The master key is managed only by the secret module in the infrastructure layer — a `0600` file, `~/.coffer/master.key`, by default, the OS keychain when you opt in — and that module is the only importer of `keyring`.
+**Statement.** Secrets live only as Fernet ciphertext, one file per secret under `~/.coffer/vault/secret/`. Plaintext exists in memory solely between decrypt and the spawn or header injection that consumes it, and never reaches a file, logs, audit or any structured event. All other code holds secret **refs**. The master key is managed only by the secret module in the infrastructure layer — one item in the macOS Keychain, in an access group only Coffer's signed binaries can read — and that module is the only importer of `keyring`.
 
-**Rationale.** Envelope encryption gives zero keychain prompts under an unsigned, frequently rebuilt binary, while the keychain opt-in still defends against offline copying of `~/.coffer/`. Refs make every config document safe to audit, sync and display.
+**Rationale.** Envelope encryption puts one key in the Keychain for any number of secrets, so vault sync can still carry ciphertext, while a copy of `~/.coffer/` holds only ciphertext without its key. Refs make every config document safe to audit, sync and display.
 
 **In the code.** An import contract confines `keyring`; another stops the CLI from importing the secret store at all, so the daemon is the single reader of the key. The MCP server schema rejects static `env` and header values that look like tokens. Kinds supply an audit redactor so config written to the audit log carries no secret-bearing maps. See [Security model](/architecture/security).
 
-**Rules out.** Secrets in resource config; the CLI decrypting in-process; the master key inside anything the vault publishes; re-encrypting data to switch key storage (the key moves, the ciphertext does not).
+**Rules out.** Secrets in resource config; the CLI decrypting in-process; the master key inside anything the vault publishes; a setting that moves the master key out of the Keychain.
 
 ## Detect, never refuse
 

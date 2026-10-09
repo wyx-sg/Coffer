@@ -14,7 +14,7 @@ Coffer is a Python program, but its users are people running AI coding agents, n
 - **Three processes have to find each other.** The MCP client launches `coffer-mcp-shim`; the shim has to find and, if needed, start `coffer-daemon`; the `coffer` CLI has to do the same.
 - **Upgrades must not break the running system.** A daemon may be running, and an MCP client may be about to spawn a shim, at the moment a new build lands.
 - **Unfinished features must ship without harming people who did not ask for them.** A single release line serves both the owner's daily testing and everyone else.
-- **Coffer is self-distributed.** A release is signed only once the owner has an Apple Developer ID, and until then every consequence of being unsigned — Gatekeeper, the keychain, a debugger attaching to the daemon — has to be designed around rather than assumed away.
+- **Coffer is self-distributed.** A release is signed only once the owner has an Apple Developer ID, and until then every consequence of being unsigned — Gatekeeper, a debugger attaching to the daemon — has to be designed around rather than assumed away.
 - **A desktop user does not watch a releases page.** The app has to find and install its own updates, without trusting anything but a key it was built with.
 
 ## Design decisions
@@ -54,7 +54,7 @@ bash scripts/smoke_test_bundle.sh dist
 
 The build script runs PyInstaller from `backend/` (where the specs' relative paths resolve) with output redirected to the repository's `dist/` and `build/`. It detects the host's target triple (`aarch64-apple-darwin`, `x86_64-apple-darwin`, the Linux and Windows triples) for naming, but builds only for the host.
 
-The smoke test starts the bundled daemon under an isolated `HOME`, with a free daemon port and proxy port and a master key file of its own, so it runs beside a Coffer already on the machine and never reads the login keychain. It waits for `daemon.json` and `/api/v1/daemon/status`, checks that `/` serves the bundled web UI, runs the bundled `coffer daemon status` against the daemon, then sends one JSON-RPC `initialize` through the bundled shim and expects a reply within 15 seconds. On exit it stops the daemon and the model proxy the daemon started. Pointed at `Coffer.app/Contents/MacOS`, it tests the copies the desktop app carries.
+The smoke test starts the bundled daemon under an isolated `HOME`, with a free daemon port and proxy port and a master key of its own, so it runs beside a Coffer already on the machine and never touches that Coffer's key. It waits for `daemon.json` and `/api/v1/daemon/status`, checks that `/` serves the bundled web UI, runs the bundled `coffer daemon status` against the daemon, then sends one JSON-RPC `initialize` through the bundled shim and expects a reply within 15 seconds. On exit it stops the daemon and the model proxy the daemon started. Pointed at `Coffer.app/Contents/MacOS`, it tests the copies the desktop app carries.
 
 ## The release workflow
 
@@ -219,7 +219,7 @@ Three kinds of credential turn an unsigned release into a signed one, and each i
 
 ### The keychain access group
 
-The master key lives in the data-protection Keychain in the access group `<TEAM_ID>.coffer`, which only binaries signed by that team and carrying the `keychain-access-groups` entitlement can read ([ADR: the master key lives in the macOS Keychain](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)). One Team ID sets it in three places at once: a stamping step rewrites the access-group constant in the backend's build identity before PyInstaller freezes it, the shell is compiled with `COFFER_KEYCHAIN_ACCESS_GROUP`, and the entitlements template in `desktop/` is rendered with the same ID for every signature. A build that is not stamped — every build from source and every unsigned release — keeps the development fallback: the key in a `0600` file, reported as a development build. Whether a Developer ID build needs a provisioning profile for the entitlement is still to be proven; an optional `APPLE_PROVISIONING_PROFILE` secret is embedded in the app when present. `coffer-seatalk-bridge` is the one exception: it is signed with the hardened runtime but without that entitlement, and the app bundle ships it without re-signing, so the third-party SeaTalk SDK it loads can never read the master key.
+The master key lives in the data-protection Keychain in the access group `<TEAM_ID>.coffer`, which only binaries signed by that team and carrying the `keychain-access-groups` entitlement can read ([ADR: the master key lives in the macOS Keychain](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)). One Team ID sets it in three places at once: a stamping step rewrites the access-group constant in the backend's build identity before PyInstaller freezes it, the shell is compiled with `COFFER_KEYCHAIN_ACCESS_GROUP`, and the entitlements template in `desktop/` is rendered with the same ID for every signature. A build that is not stamped — every build from source and every unsigned release — reports itself as a development build. Whether a Developer ID build needs a provisioning profile for the entitlement is still to be proven; an optional `APPLE_PROVISIONING_PROFILE` secret is embedded in the app when present. `coffer-seatalk-bridge` is the one exception: it is signed with the hardened runtime but without that entitlement, and the app bundle ships it without re-signing, so the third-party SeaTalk SDK it loads can never read the master key.
 
 ### How the desktop app updates
 
@@ -243,7 +243,7 @@ The updater (Tauri's updater plugin) runs in the shell's Rust process; the webvi
 
 ### An unsigned release
 
-Without a Developer ID, macOS quarantines a downloaded archive or `.dmg`. Clear it with `xattr -dr com.apple.quarantine <extracted-directory>`, or `xattr -dr com.apple.quarantine /Applications/Coffer.app` after dragging the app across. The one-line installer's download is not quarantined. The release notes and the `.dmg` file name (`Coffer-unsigned-…`) say this up front. An unsigned daemon is also ad-hoc signed without the hardened runtime, so a same-user debugger can attach to it; that, and the master key file, are what a development build gives up.
+Without a Developer ID, macOS quarantines a downloaded archive or `.dmg`. Clear it with `xattr -dr com.apple.quarantine <extracted-directory>`, or `xattr -dr com.apple.quarantine /Applications/Coffer.app` after dragging the app across. The one-line installer's download is not quarantined. The release notes and the `.dmg` file name (`Coffer-unsigned-…`) say this up front. An unsigned daemon is also ad-hoc signed without the hardened runtime, so a same-user debugger can attach to it; that is what a development build gives up.
 
 ### What the owner provides
 
@@ -259,7 +259,7 @@ Without a Developer ID, macOS quarantines a downloaded archive or `.dmg`. Clear 
 
 **Overwriting binaries in place.** Simpler, but a deploy could replace a file a running process is about to `exec`, and a bad build would leave nothing to return to. Versioned directories cost one extra copy on disk.
 
-**Per-secret keychain storage with code signing.** A stable signing identity would keep keychain access lists valid across builds, but it needs a paid Apple Team ID. Envelope encryption removes the prompts without any signing dependency, and the one Keychain item left — the master key — is read through the access group instead of an access list.
+**Per-secret keychain storage with code signing.** One Keychain item per secret would keep secrets out of `~/.coffer`, but vault sync could no longer carry ciphertext between machines. Envelope encryption keeps a single Keychain item — the master key — and reads it through the access group instead of an access list.
 
 **Downloading updates in the background.** The update would be ready the moment the user asks, but it spends a metered connection on a version the user may never want, and a verified archive would have to be kept somewhere between runs. The app downloads only when the user chooses Download and restart.
 

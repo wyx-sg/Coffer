@@ -14,7 +14,7 @@ Coffer 是一个 Python 程序，但它的用户是跑 AI 编程智能体的人�
 - **三个进程必须能找到彼此。** MCP 客户端启动 `coffer-mcp-shim`；shim 必须找到 `coffer-daemon`，必要时启动它；`coffer` 命令行也要做同样的事。
 - **升级不能搞坏正在运行的系统。** 新构建落地的那一刻，可能有守护进程正在运行，也可能有 MCP 客户端正要拉起一个 shim。
 - **未完成的功能必须能随包发布，又不伤到没要它的人。** 同一条发布线既服务维护者的日常测试，也服务其他所有人。
-- **Coffer 是自行分发的。** 只有维护者拿到 Apple Developer ID 之后发布才会签名；在那之前，未签名带来的每个后果——Gatekeeper、钥匙串、调试器附着到守护进程——都必须在设计上绕开，而不能假装不存在。
+- **Coffer 是自行分发的。** 只有维护者拿到 Apple Developer ID 之后发布才会签名；在那之前，未签名带来的每个后果——Gatekeeper、调试器附着到守护进程——都必须在设计上绕开，而不能假装不存在。
 - **桌面用户不会盯着发布页面。** 应用必须自己发现并安装更新，并且除了构建时内置的一把密钥之外什么都不信任。
 
 ## 设计决策 {#design-decisions}
@@ -54,7 +54,7 @@ bash scripts/smoke_test_bundle.sh dist
 
 构建脚本在 `backend/` 下运行 PyInstaller（spec 里的相对路径在那里解析），输出重定向到仓库的 `dist/` 和 `build/`。它会检测宿主机的目标三元组（`aarch64-apple-darwin`、`x86_64-apple-darwin`，以及 Linux 和 Windows 的三元组）用于命名，但只为宿主机构建。
 
-冒烟测试在隔离的 `HOME` 下启动打包好的守护进程，使用空闲的守护进程端口和代理端口以及一个独立的 master key 文件，所以能和本机已在运行的 Coffer 并存，也不会读取登录钥匙串。它等待 `daemon.json` 和 `/api/v1/daemon/status`，检查 `/` 是否提供打包的 Web 界面，用打包的 `coffer daemon status` 查询守护进程，然后通过打包的 shim 发送一次 JSON-RPC `initialize`，期望 15 秒内收到回复。退出时它会停掉守护进程及其启动的模型代理。指向 `Coffer.app/Contents/MacOS` 时，它测试的是桌面 app 自带的那几份二进制。
+冒烟测试在隔离的 `HOME` 下启动打包好的守护进程，使用空闲的守护进程端口和代理端口以及一把独立的主密钥，所以能和本机已在运行的 Coffer 并存，也不会碰到那个 Coffer 的主密钥。它等待 `daemon.json` 和 `/api/v1/daemon/status`，检查 `/` 是否提供打包的 Web 界面，用打包的 `coffer daemon status` 查询守护进程，然后通过打包的 shim 发送一次 JSON-RPC `initialize`，期望 15 秒内收到回复。退出时它会停掉守护进程及其启动的模型代理。指向 `Coffer.app/Contents/MacOS` 时，它测试的是桌面 app 自带的那几份二进制。
 
 ## 发布流水线 {#the-release-workflow}
 
@@ -219,7 +219,7 @@ flowchart LR
 
 ### 钥匙串 access group {#the-keychain-access-group}
 
-主密钥存在数据保护钥匙串的 access group `<TEAM_ID>.coffer` 里，只有由该团队签名、并带 `keychain-access-groups` entitlement 的二进制才能读取（[ADR：主密钥存放在 macOS 钥匙串中](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)）。一个 Team ID 同时设置三处：一个打标记步骤在 PyInstaller 冻结之前改写后端构建身份里的 access group 常量，壳在编译时带上 `COFFER_KEYCHAIN_ACCESS_GROUP`，`desktop/` 下的 entitlements 模板用同一个 ID 渲染后用于每一次签名。没有打标记的构建——所有源码构建和所有未签名发布——保留开发用的回退方案：主密钥放在一个 `0600` 文件里，并报告为开发构建。Developer ID 构建是否需要 provisioning profile 才能使用该 entitlement 还有待验证；可选的 `APPLE_PROVISIONING_PROFILE` secret 存在时会被嵌入应用。`coffer-seatalk-bridge` 是唯一的例外：它带 hardened runtime 签名但不带这个 entitlement，应用包里原样分发、不重新签名，所以它加载的第三方 SeaTalk SDK 永远读不到主密钥。
+主密钥存在数据保护钥匙串的 access group `<TEAM_ID>.coffer` 里，只有由该团队签名、并带 `keychain-access-groups` entitlement 的二进制才能读取（[ADR：主密钥存放在 macOS 钥匙串中](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)）。一个 Team ID 同时设置三处：一个打标记步骤在 PyInstaller 冻结之前改写后端构建身份里的 access group 常量，壳在编译时带上 `COFFER_KEYCHAIN_ACCESS_GROUP`，`desktop/` 下的 entitlements 模板用同一个 ID 渲染后用于每一次签名。没有打标记的构建——所有源码构建和所有未签名发布——会报告自己是开发构建。Developer ID 构建是否需要 provisioning profile 才能使用该 entitlement 还有待验证；可选的 `APPLE_PROVISIONING_PROFILE` secret 存在时会被嵌入应用。`coffer-seatalk-bridge` 是唯一的例外：它带 hardened runtime 签名但不带这个 entitlement，应用包里原样分发、不重新签名，所以它加载的第三方 SeaTalk SDK 永远读不到主密钥。
 
 ### 桌面应用怎样更新 {#how-the-desktop-app-updates}
 
@@ -243,7 +243,7 @@ sequenceDiagram
 
 ### 未签名的发布 {#an-unsigned-release}
 
-没有 Developer ID 时，macOS 会隔离下载的压缩包或 `.dmg`。用 `xattr -dr com.apple.quarantine <extracted-directory>` 解除，或者把应用拖进去之后用 `xattr -dr com.apple.quarantine /Applications/Coffer.app`。一行安装脚本下载的内容不会被隔离。发布说明和 `.dmg` 文件名（`Coffer-unsigned-…`）会事先写明这一点。未签名的守护进程还是以 ad-hoc 方式签名、不带 hardened runtime，所以同一用户下的调试器可以附着到它；这一点，加上主密钥文件，就是开发构建所放弃的东西。
+没有 Developer ID 时，macOS 会隔离下载的压缩包或 `.dmg`。用 `xattr -dr com.apple.quarantine <extracted-directory>` 解除，或者把应用拖进去之后用 `xattr -dr com.apple.quarantine /Applications/Coffer.app`。一行安装脚本下载的内容不会被隔离。发布说明和 `.dmg` 文件名（`Coffer-unsigned-…`）会事先写明这一点。未签名的守护进程还是以 ad-hoc 方式签名、不带 hardened runtime，所以同一用户下的调试器可以附着到它；这就是开发构建所放弃的东西。
 
 ### 维护者需要提供什么 {#what-the-owner-provides}
 
@@ -259,7 +259,7 @@ sequenceDiagram
 
 **原地覆盖二进制。** 更简单，但部署可能替换掉一个正在运行的进程马上要 `exec` 的文件，而一个坏构建会让你无处可退。按版本分的目录只多占一份磁盘副本。
 
-**配合代码签名、按密钥分别存钥匙串。** 稳定的签名身份能让钥匙串访问列表跨构建保持有效，但它需要付费的 Apple Team ID。信封加密不依赖任何签名就消除了弹窗，剩下的唯一钥匙串条目——主密钥——通过 access group 读取，而不是访问列表。
+**配合代码签名、按密钥分别存钥匙串。** 每个密钥一个钥匙串条目能让密钥不出现在 `~/.coffer` 里，但保险库同步就无法在机器之间携带密文了。信封加密只保留一个钥匙串条目——主密钥——并通过 access group 读取它，而不是访问列表。
 
 **后台下载更新。** 用户一要更新就已经准备好了，但这会在按流量计费的连接上下载一个用户可能永远不想要的版本，而且校验过的更新包得在两次运行之间存放在某处。应用只在用户选择「下载并重启」时才下载。
 

@@ -61,7 +61,7 @@ The vault, local state, content and derived state have no per-tree override: eve
 
 | Name | Default | Effect |
 | --- | --- | --- |
-| `COFFER_DB_URL` | `sqlite+aiosqlite:///~/.coffer/runs.db` | SQLAlchemy URL of the history database. The master key file (`master.key`) stays in `~/.coffer` whatever this says. |
+| `COFFER_DB_URL` | `sqlite+aiosqlite:///~/.coffer/runs.db` | SQLAlchemy URL of the history database. The master key stays in the macOS Keychain whatever this says. |
 | `COFFER_PROXY_SPOOL_DIR` | `~/.coffer/proxy-usage` | Directory the model proxy writes its usage spool files to and the daemon ingests them from. Both processes must see the same value. |
 | `COFFER_LOG_DIR` | `~/.coffer/logs` | Directory for `daemon.log`, `proxy.log`, upstream server logs, MCP shim logs and the login service's output. |
 | `HOME` | the user's home | Every `~/.coffer` path is resolved against `$HOME` at the moment it is needed, so an alternate `HOME` gives a fully separate vault. |
@@ -232,8 +232,7 @@ Conversations have no retention policy: Coffer keeps no conversation text, and t
 
 | Setting | Default | Effect |
 | --- | --- | --- |
-| **Store master key in OS keychain** | off (file) | Moves the secret master key between `~/.coffer/master.key` and the OS keychain (service `coffer`, entry `master-key`). The key itself never changes, so stored secrets stay readable. The move is audited. Development builds only: a signed release keeps the key in its Keychain access group and refuses to move it. |
-| Approval for new secret destinations (`secrets.require_approval`) | on in a signed release, off in a development build | When on, a secret waits for approval in the desktop app before it goes to a new destination or target. When off, a new destination is approved without asking. Switching it on applies at once; switching it off waits for an approval in the desktop app. See [Secrets](/guides/secrets#switching-the-protection-off). |
+| Approval for new secret destinations (`secrets.require_approval`) | on | When on, a secret waits for approval in the desktop app before it goes to a new destination or target. When off, a new destination is approved without asking. Switching it on applies at once; switching it off waits for an approval in the desktop app. See [Secrets](/guides/secrets#switching-the-protection-off). |
 
 ## Related
 

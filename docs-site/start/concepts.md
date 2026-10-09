@@ -132,7 +132,7 @@ Guide: [Channels](/guides/channels), [Conversations](/guides/chat). Architecture
 
 ## Secret refs
 
-Coffer stores secrets only as Fernet ciphertext, under a master key kept in a `0600` file (or in the macOS keychain if you choose). Resources never contain a secret. They contain a **secret ref**, a name such as `github.token`, which the daemon resolves only at the moment it starts an upstream server or sends a request. Set a secret with `coffer secret set <ref>`. Plaintext never reaches the database, the logs or the audit log.
+Coffer stores secrets only as Fernet ciphertext, under a master key kept in the macOS Keychain, where only Coffer's signed binaries can read it. Resources never contain a secret. They contain a **secret ref**, a name such as `github.token`, which the daemon resolves only at the moment it starts an upstream server or sends a request. Set a secret with `coffer secret set <ref>`. Plaintext never reaches the database, the logs or the audit log.
 
 Guide: [Secret store](/guides/secret-store). Architecture: [Security model](/architecture/security).
 

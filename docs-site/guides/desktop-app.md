@@ -84,7 +84,7 @@ Each action runs its own check, with nothing remembered in between:
 **Approvals come to you.** The app checks the daemon every 15 seconds, whether or not its window is open. For each new pending approval it posts one notification, **Coffer needs your approval**, whose text names the change, and the window opens its approval sheet. From there, approve (with the check above) or reject (no check needed). A command that waits prints `waiting for approval in the Coffer app`; see [Secrets → Approvals](/guides/secrets#approvals) for what triggers one.
 
 ::: warning Development builds
-A build that is not signed with Coffer's Developer ID — every build from source, and every release made before the project had one — is a development build: the master key is a file any program running as you can read, and a same-user program could forge what the app signs. The app says **Development build** on every prompt. On a Mac without Touch ID or LocalAuthentication, a development build asks you to confirm in a dialog in its own window instead. See [Security model → Development builds](/architecture/security#development-builds).
+A build that is not signed with Coffer's Developer ID — every build from source — is a development build. The app says **Development build** on every prompt. On a Mac without Touch ID or LocalAuthentication, a development build asks you to confirm in a dialog in its own window instead. See [Security model → Development builds](/architecture/security#development-builds).
 :::
 
 ## Launch
