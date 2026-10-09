@@ -2,12 +2,12 @@
 //
 // The one /knowledge page end-to-end, against a live daemon: create a
 // collection and upload an item over the REST API, then walk the page in the
-// real DOM — the collection in the tree, its document opened read-only, and
-// the upload listed as a version on the document's History tab.
+// real DOM — the collection in the tree, the upload opened read-only from its
+// Sources folder, and listed as a version in the file's History drawer.
 //
 // Nothing auto-provisions a collection (spec knowledge "Create collections
-// only deliberately"), so a walk starts by making one. A submitted item is
-// written as a document on the spot, so the tree lists it at once, with no
+// only deliberately"), so a walk starts by making one. An upload is kept as a
+// source on the spot, so the tree lists it under Sources at once, with no
 // Inbox and no curation control; the page offers Tidy (or Copy prompt when no
 // managed agent is available) in place of them.
 //
@@ -63,7 +63,7 @@ async function submitItem(page: Page, collection: string, body: string) {
   return (await res.json()) as { path: string };
 }
 
-test("a collection is one tree; a document is read, opened in the editor and has a History tab", async ({
+test("a collection is one tree; an uploaded source is read, opened in the editor and has a History drawer", async ({
   page,
 }) => {
   const name = `e2e-tree-${Date.now()}`;
@@ -92,9 +92,13 @@ test("a collection is one tree; a document is read, opened in the editor and has
   ).toBeVisible();
   await expect(tree.getByRole("button", { name: /^Inbox/ })).toHaveCount(0);
   await expect(page.getByTestId("knowledge-automatic")).toHaveCount(0);
-  // The tree names a document by its file, as it is on disk.
+  // The upload is a source: the tree lists it under the Sources folder, by
+  // its file as it is on disk.
+  expect(submitted.path).toContain("/sources/");
   const fileName = submitted.path.split("/").pop() ?? "";
-  await tree.getByRole("button", { name: fileName, exact: true }).click();
+  await tree.getByRole("button", { name: "Sources", exact: true }).click();
+  // No page cites it yet, so it is marked Waiting.
+  await tree.getByRole("button", { name: `${fileName} Waiting`, exact: true }).click();
   await expect(page).toHaveURL(/\?file=/);
   await expect(page.getByText("The first body.")).toBeVisible();
 
@@ -106,15 +110,12 @@ test("a collection is one tree; a document is read, opened in the editor and has
     page.getByRole("button", { name: "Edit", exact: true }),
   ).toHaveCount(0);
 
-  // History lists the upload as the document's one version, read from the
-  // vault's history, with no restore offered on the current version.
-  await page
-    .getByRole("navigation", { name: "Document views" })
-    .getByRole("link", { name: "History" })
-    .click();
-  await expect(page).toHaveURL(
-    new RegExp(`/knowledge/${collection.uid}/history\\?file=`),
-  );
+  // History opens a drawer beside the file (no tabs) and lists the upload as
+  // the file's one version, read from the vault's history, with no restore
+  // offered on the current version. The file stays in view.
+  await page.getByRole("button", { name: "History", exact: true }).click();
+  await expect(page).toHaveURL(/[?&]history=1/);
+  await expect(page.getByText("The first body.")).toBeVisible();
   const versions = page.getByRole("list", { name: "Versions" });
   await expect(versions.getByRole("button")).toHaveCount(1);
   await expect(versions.getByRole("button").first()).toContainText("Current");
