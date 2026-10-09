@@ -58,10 +58,15 @@ deterministic gate.
 ranker that lifts aggregation tool-overload (spec mcp-gateway /
 [Tool Overload](../docs/decisions/tool-overload-tier-the-list-search-the-rest.md)). It runs the
 `datasets/tool_search.jsonl` intent queries through the same pure BM25-lite
-ranker the gateway uses and scores **recall@k** and **MRR** over an
-upstream-shaped catalogue (`datasets/tool_search_catalog.jsonl` — `<server>__<tool>`
-names with near-duplicates across servers, the kind of aggregated catalogue the
-live tool actually ranks) — does the right upstream tool land in the top-k? The
+ranker the gateway uses and scores **recall@5** and **MRR** over an
+upstream-shaped catalogue (`datasets/tool_search_catalog.jsonl` — 285 tools
+with their input schemas, modelled on public MCP servers plus internal-style
+services described in Chinese, `<server>__<tool>` names with near-duplicates
+across servers, the kind of aggregated catalogue the live tool actually ranks)
+— does the right upstream tool land in the top 5, and how high? The 89 queries
+are English, Chinese and mixed, written blind to the ranker; the report gives
+recall on the Chinese queries on its own, and the gate holds both recall@5 and
+MRR. The
 ranker is pure, deterministic, and local (no model), so it is the whole of the
 default `python -m evals.run` — the only suite in the gate.
 

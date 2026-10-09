@@ -90,3 +90,25 @@ async def test_worker_stops_cleanly():
     assert task.done()
     # Task completed without exception
     assert task.exception() is None
+
+
+@pytest.mark.asyncio
+async def test_worker_reclaims_space_after_each_prune():
+    """The space a prune frees inside runs.db is given back after the prune,
+    never before it."""
+    svc = _FakeService()
+    order: list[str] = []
+
+    def reclaim() -> int:
+        order.append(f"reclaim after {svc.calls} prune(s)")
+        return 4096
+
+    worker = RetentionWorker(service=svc, interval_seconds=3600, reclaim_space=reclaim)  # type: ignore[arg-type]
+    task = asyncio.create_task(worker.run())
+    for _ in range(100):
+        await asyncio.sleep(0.005)
+        if order:
+            break
+    worker.stop()
+    await asyncio.wait_for(task, timeout=1.0)
+    assert order == ["reclaim after 1 prune(s)"]

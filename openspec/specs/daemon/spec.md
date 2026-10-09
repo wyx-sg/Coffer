@@ -750,8 +750,11 @@ instead of lingering on the user's `PATH`; anything at such a path that is not a
 version directory is not Coffer's deployment and MUST be left alone.
 
 Before `alembic upgrade head` changes the on-disk history database, `~/.coffer/runs.db`, the
-daemon MUST copy it (and any `-wal`/`-shm` companions) to `runs.db.pre-<revision>`, keeping the
-three newest copies; an already-current schema or an in-memory database MUST NOT be copied.
+daemon MUST write a copy of it to `runs.db.pre-<revision>` with `VACUUM INTO`: one self-contained
+file holding a consistent snapshot of its live data, including what its write-ahead log still
+holds, without its free pages and without `-wal`/`-shm` companions. It keeps the three newest
+copies, never overwrites an earlier copy, removes a copy that failed half-way and does not migrate
+without one; an already-current schema or an in-memory database MUST NOT be copied.
 A source install MUST NOT do
 any of this: `pip install` already puts the console scripts on `PATH` (see "Install the console
 scripts from source"). The daemon owns the deployment because it is the one process every frozen install starts,
@@ -772,7 +775,7 @@ whichever tier it came from.
 #### Scenario: a schema upgrade keeps a copy of the history database
 - **GIVEN** a daemon starting against a `runs.db` whose Alembic revision is behind this build's head,
 - **WHEN** the migrations run at startup,
-- **THEN** `runs.db.pre-<revision>` (with its `-wal`/`-shm` companions, when present) holds the pre-upgrade state beside the live file, only the three newest such copies are kept, and a start against an already-current schema — or an in-memory database — copies nothing.
+- **THEN** `runs.db.pre-<revision>` holds the pre-upgrade state beside the live file as one file, with what the write-ahead log held and none of the free pages, only the three newest such copies are kept, and a start against an already-current schema — or an in-memory database — copies nothing.
 
 ### Requirement: Clear inherited agent-home variables at start
 In a signed build the daemon MUST also drop the inherited proxy and certificate settings from its own environment

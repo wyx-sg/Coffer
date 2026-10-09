@@ -1,50 +1,54 @@
 // frontend/src/components/channel/useSettingDraft.ts
 // A typed field on an auto-saving settings page: it holds what was typed, and
-// commits the parsed value a moment after typing stops — but only when it
-// parses. An invalid entry stays on screen (the field shows its own error)
-// and is never saved. A pending commit is flushed on blur and on unmount, so
-// leaving the tab never drops the last edit.
-import { useCallback, useEffect, useRef, useState } from "react";
-
-const SETTING_SAVE_DELAY_MS = 600;
+// commits the parsed value when the person finishes the field — on blur or
+// Enter, like the retention days on Settings → Data — and only when it parses
+// and differs from what was last saved. A value half typed ("3" on the way to
+// "32") is never saved, so it never takes effect. An invalid entry stays on
+// screen (the field shows its own error) and is never saved. A pending value
+// is also committed on unmount, so leaving the tab never drops the last edit.
+//
+// Spread `commitProps` on the field, or on an element wrapping it: blur and
+// keydown both bubble in React.
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 export function useSettingDraft<T>(
   initial: string,
   parse: (text: string) => T | null,
   commit: (value: T) => void,
-  delay = SETTING_SAVE_DELAY_MS,
 ) {
   const [text, setText] = useState(initial);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queued = useRef<{ value: T } | null>(null);
+  const saved = useRef(JSON.stringify(parse(initial)));
   const commitRef = useRef(commit);
   commitRef.current = commit;
 
   const flush = useCallback(() => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
     const next = queued.current;
     queued.current = null;
-    if (next) commitRef.current(next.value);
+    if (!next) return;
+    const key = JSON.stringify(next.value);
+    if (key === saved.current) return;
+    saved.current = key;
+    commitRef.current(next.value);
   }, []);
 
   const change = useCallback(
     (next: string) => {
       setText(next);
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = null;
       const value = parse(next);
-      if (value === null) {
-        queued.current = null;
-        return;
-      }
-      queued.current = { value };
-      timer.current = setTimeout(flush, delay);
+      queued.current = value === null ? null : { value };
     },
-    [parse, delay, flush],
+    [parse],
+  );
+
+  const onKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Enter") flush();
+    },
+    [flush],
   );
 
   useEffect(() => flush, [flush]);
 
-  return { text, change, flush };
+  return { text, change, flush, commitProps: { onBlur: flush, onKeyDown } };
 }

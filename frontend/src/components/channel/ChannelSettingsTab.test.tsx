@@ -1,8 +1,9 @@
 // frontend/src/components/channel/ChannelSettingsTab.test.tsx
 //
 // A channel's Settings save as they change (no Save button): a switch PATCHes
-// at once, a typed value a moment after typing stops — and only when valid;
-// an invalid value shows its error and is never sent. Every PATCH carries the
+// at once, a typed value when the field is finished (blur or Enter) — and only
+// when valid; a value half typed is never sent, and an invalid value shows its
+// error and is never sent. Every PATCH carries the
 // whole config back with every secret ref untouched, and two saves a
 // moment apart never undo each other. Replacing a secret writes the new value
 // under the ref the channel already cites; the daemon restarts the adapter.
@@ -107,8 +108,6 @@ function patched(api: ApiClientMock, nth = 0): Record<string, unknown> {
     .config;
 }
 
-const SLOW = { timeout: 2500 };
-
 beforeEach(() => installApi());
 afterEach(() => vi.clearAllMocks());
 
@@ -125,8 +124,9 @@ describe("message batching", () => {
     expect(textField()).toHaveValue(3);
     expect(forwardField()).toHaveValue(10);
     fireEvent.change(textField(), { target: { value: "0" } });
+    fireEvent.blur(textField());
 
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1), SLOW);
+    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
     expect(api.PATCH.mock.calls[0][1]).toMatchObject({ params: { path: { uid: "u-c0be4512" } } });
     const config = patched(api);
     expect(config.wait_after_text_seconds).toBe(0);
@@ -149,8 +149,28 @@ describe("message batching", () => {
 
     fireEvent.change(forwardField(), { target: { value: "61" } });
     expect(screen.getByRole("alert")).toHaveTextContent(/0 to 60/);
+    fireEvent.blur(forwardField());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(api.PATCH).not.toHaveBeenCalled();
+  });
+
+  acceptance("channels", "a value half typed into a channel setting never takes effect", async () => {
+    const api = installApi();
+    renderSettings(makeChannel({ config: { wait_after_text_seconds: 1.5 } }));
+
+    // Typing "32" passes through "3", a valid window, and pauses there.
+    fireEvent.change(textField(), { target: { value: "3" } });
     await new Promise((r) => setTimeout(r, 900));
     expect(api.PATCH).not.toHaveBeenCalled();
+    fireEvent.change(textField(), { target: { value: "32" } });
+    fireEvent.keyDown(textField(), { key: "Enter" });
+
+    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+    expect(patched(api).wait_after_text_seconds).toBe(32);
+    // Leaving the field afterwards sends nothing more: the value is saved.
+    fireEvent.blur(textField());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(api.PATCH).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -182,12 +202,14 @@ describe("conversations", () => {
 
     expect(idleField()).toHaveValue(24);
     fireEvent.change(idleField(), { target: { value: "6" } });
+    fireEvent.blur(idleField());
 
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1), SLOW);
+    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
     expect(patched(api).new_conversation_after_idle_hours).toBe(6);
     // Zero is a value, not an empty field: it turns the rollover off.
     fireEvent.change(idleField(), { target: { value: "0" } });
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(2), SLOW);
+    fireEvent.blur(idleField());
+    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(2));
     expect(patched(api, 1).new_conversation_after_idle_hours).toBe(0);
   });
 
@@ -196,7 +218,8 @@ describe("conversations", () => {
     renderSettings();
     fireEvent.change(idleField(), { target: { value: "" } });
     expect(screen.getByRole("alert")).toHaveTextContent(/0 to 8760/);
-    await new Promise((r) => setTimeout(r, 900));
+    fireEvent.blur(idleField());
+    await new Promise((r) => setTimeout(r, 50));
     expect(api.PATCH).not.toHaveBeenCalled();
   });
 });

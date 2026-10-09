@@ -58,7 +58,8 @@ The gateway also injects two arguments that are not in any public schema:
 Searches the aggregated catalogue of upstream MCP tools by intent and returns the most
 relevant tool definitions. It is the way to reach a tool that the budgeted `tools/list` did
 not include: every returned tool is callable by name, whether or not it was listed. Ranking
-is deterministic BM25 over each tool's server, name and description. Coffer's own
+is deterministic BM25 over each tool's server, name, description and parameters, and a query
+in Chinese, Japanese or Korean matches tools described in that language. Coffer's own
 `coffer__*` tools are excluded from the results. The search sees the whole catalogue of
 servers in the session's reach; a server that fails to answer is skipped.
 
