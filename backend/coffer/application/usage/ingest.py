@@ -26,10 +26,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, tzinfo
 
+from coffer.application.runtime.wakeable import WakeableLoop
+from coffer.application.runtime.workers import WorkerMode
 from coffer.application.usage.ports import (
     ConnectionPriceLookup,
     PricedRecord,
@@ -77,8 +79,10 @@ class UsageIngestService:
         # The rollup is keyed by the LOCAL day a request started on, so the
         # Usage page's "today" is the user's today.
         self._tz = tz or local_tz()
-        self._stop = asyncio.Event()
         self._lock = asyncio.Lock()
+        self._loop: WakeableLoop | None = None
+        #: Whether the model proxy may be writing to the spool (see :meth:`set_wanted`).
+        self._wanted = True
         #: Told every ingested file's records, after their commit.
         self.observe: Callable[[Sequence[UsageRecord]], Awaitable[None]] | None = None
 
@@ -133,18 +137,40 @@ class UsageIngestService:
             return IngestResult(files, inserted, duplicates, malformed)
 
     async def run(self, interval: float) -> None:
-        """Ingest every ``interval`` seconds until :meth:`stop`."""
-        self._stop.clear()
-        while not self._stop.is_set():
-            try:
-                await self.ingest_once()
-            except Exception:
-                _logger.exception("usage.ingest.pass_failed")
-            with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(self._stop.wait(), timeout=interval)
+        """Ingest every ``interval`` seconds while the proxy may be writing;
+        parked, with no timer, while it cannot be (:meth:`set_wanted`)."""
+        self._loop = WakeableLoop(
+            "usage-ingest",
+            self._pass,
+            fallback=interval,
+            mode=WorkerMode.ON_DEMAND,
+            failure_event="usage.ingest.pass_failed",
+        )
+        self._loop.set_demand(self._wanted)
+        await self._loop.serve()
 
-    def stop(self) -> None:
-        self._stop.set()
+    def set_wanted(self, wanted: bool) -> None:
+        """Whether a model proxy runs. When it stops, one more pass empties
+        what it left in the spool, then the loop parks until one runs again."""
+        self._wanted = wanted
+        if self._loop is None:
+            return
+        if wanted:
+            self._loop.set_demand(True)
+        else:
+            self._loop.poke()
+
+    async def _pass(self, _poked: bool) -> None:
+        await self.ingest_once()
+        if not self._wanted and self._loop is not None:
+            self._loop.set_demand(False)
+
+    @contextlib.asynccontextmanager
+    async def between_passes(self) -> AsyncIterator[None]:
+        """Hold off passes: inside, none is half done (the shutdown cancels the
+        loop here, never in a pass's transaction)."""
+        async with self._lock:
+            yield
 
 
 __all__ = ["IngestResult", "UsageIngestService", "local_tz"]

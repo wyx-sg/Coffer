@@ -14,9 +14,12 @@ import asyncio
 import contextlib
 import logging
 import time
+from collections.abc import Awaitable, Callable
 
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.runtime.supervisor import spawn
+from coffer.application.runtime.wakeable import WakeableLoop
+from coffer.application.runtime.workers import WorkerMode
 
 _logger = logging.getLogger(__name__)
 
@@ -80,6 +83,8 @@ def _stream_stop_event(session_id: str) -> asyncio.Event:
 
 def _touch(session_id: str) -> None:
     _LAST_ACTIVITY[session_id] = time.monotonic()
+    if _REAPER is not None:
+        _REAPER.set_demand(True)
 
 
 def _acquire_session_ref(session_id: str) -> None:
@@ -171,21 +176,20 @@ async def reap_idle_sessions(max_idle_seconds: float = _DEFAULT_IDLE_TIMEOUT_S) 
     return stale
 
 
-async def _session_reaper_loop(interval_seconds: float, max_idle_seconds: float) -> None:
-    """Periodically reap idle sessions until cancelled."""
-    while True:
-        try:
-            await asyncio.sleep(interval_seconds)
-            stale = await reap_idle_sessions(max_idle_seconds)
-            if stale:
-                _logger.info(
-                    "mcp.session.reaped",
-                    extra={"count": len(stale), "session_ids": stale},
-                )
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            _logger.exception("mcp.session.reaper_failed")
+#: The running reaper's loop: parked while no session is open (ADR
+#: background-workers-wake-on-events), woken by the first activity.
+_REAPER: WakeableLoop | None = None
+
+
+def _reaper_pass(max_idle_seconds: float) -> Callable[[bool], Awaitable[None]]:
+    async def reap(_poked: bool) -> None:
+        stale = await reap_idle_sessions(max_idle_seconds)
+        if stale:
+            _logger.info("mcp.session.reaped", extra={"count": len(stale), "session_ids": stale})
+        if not _LAST_ACTIVITY and _REAPER is not None:
+            _REAPER.set_demand(False)
+
+    return reap
 
 
 def start_session_reaper(
@@ -194,5 +198,13 @@ def start_session_reaper(
     max_idle_seconds: float = _DEFAULT_IDLE_TIMEOUT_S,
 ) -> asyncio.Task[None]:
     """Spawn the background session reaper task. Caller must cancel on shutdown."""
-    reaper = _session_reaper_loop(interval_seconds, max_idle_seconds)
-    return spawn(reaper, name="mcp-session-reaper")
+    global _REAPER
+    _REAPER = WakeableLoop(
+        "mcp-session-reaper",
+        _reaper_pass(max_idle_seconds),
+        fallback=interval_seconds,
+        mode=WorkerMode.ON_DEMAND,
+        failure_event="mcp.session.reaper_failed",
+    )
+    _REAPER.set_demand(bool(_LAST_ACTIVITY))
+    return spawn(_REAPER.serve(), name="mcp-session-reaper")

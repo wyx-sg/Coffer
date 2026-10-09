@@ -19,7 +19,7 @@ def _runtime(env: ChannelEnv, stamps: dict[str, str]) -> ChannelRuntime:
         adapter_factory=env.adapter_factory,
         processor=env.processor,
         pairing=env.pairing,
-        interval_seconds=0.05,
+        fallback_seconds=0.05,
         secret_revision=lambda ref: stamps.get(ref),
     )
 

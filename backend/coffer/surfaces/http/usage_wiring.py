@@ -4,7 +4,7 @@ subscriptions-show-only-official-quota).
 :func:`wire_usage` builds the ingest and query services over the SQLAlchemy
 repo and the spool reader, publishes the route dependencies, and returns a
 :class:`UsageWiring` whose ``start()`` / ``stop()`` the lifespan drives: the
-spool ingest every 2 seconds.
+spool ingest every 2 seconds while a model proxy runs.
 """
 
 from __future__ import annotations
@@ -53,18 +53,16 @@ class UsageWiring:
         self._tasks = [spawn(self.ingest.run(INGEST_INTERVAL_SECONDS), name="usage-ingest")]
 
     async def stop(self) -> None:
-        """Stop the loop; a final ingest pass drains what the spool holds."""
-        self.ingest.stop()
+        """Stop the loop between passes; a final pass drains what the spool holds."""
         tasks, self._tasks = self._tasks, []
         for task in tasks:
             try:
-                await asyncio.wait_for(task, timeout=5)
-            except (TimeoutError, asyncio.CancelledError):
+                async with asyncio.timeout(5), self.ingest.between_passes():
+                    task.cancel()
+            except TimeoutError:
                 task.cancel()
-                with contextlib.suppress(asyncio.CancelledError, Exception):
-                    await task
-            except Exception:
-                _logger.warning("usage.loop_stop_failed", exc_info=True)
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
         try:
             await self.ingest.ingest_once()
         except Exception:

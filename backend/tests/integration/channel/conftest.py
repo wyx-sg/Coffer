@@ -654,7 +654,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         pairing=pairing,
         websockets=websockets,
         materialize=materialize,
-        interval_seconds=0.05,
+        fallback_seconds=0.05,
     )
 
     async def on_delete(resource: Resource) -> None:
