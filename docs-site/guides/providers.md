@@ -212,7 +212,7 @@ After a [vault sync](/guides/vault-sync) round brings in provider changes from a
 
 ## Speech to text
 
-Coffer makes one model call of its own: transcribing the voice messages that arrive through [channels](/guides/channels). It never runs a model over your knowledge or memory; your own agent does that work when you press **Tidy**. The speech-to-text model borrows the endpoint and key of one provider and names its own model. With nothing configured, a voice message reaches the agent as an audio file.
+Coffer makes one model call of its own: transcribing the voice messages that arrive through [channels](/guides/channels). It never runs a model over your knowledge or memory; your own agent does that work when you press **Tidy** or **Curate now**. The speech-to-text model borrows the endpoint and key of one provider and names its own model. With nothing configured, a voice message reaches the agent as an audio file.
 
 **Web UI:** open **Settings › General** and find the **Speech to text** section. Choose a provider first, then a model from that provider's list of speech models; **Off — do not transcribe** clears the model. It is a provider of its own on purpose: a chat gateway often has no transcription endpoint, so it is chosen separately from the connections your agents run on.
 
@@ -224,7 +224,7 @@ A choice saves as soon as you make it; there is no Save button. A line under the
 
 At most one provider carries speech to text; setting it moves the flag from wherever it was. A provider can be switched into agents and carry speech to text at the same time. When the speech-to-text provider changes, the model is cleared unless the new provider's curated list includes it. The speech-to-text provider has no default: move the flag by choosing another provider.
 
-The two memory passes that run on a timer, reading agents' memory and turning it into notes, call no model; they are switched from the **Automatic** control in the Memory header. `coffer daemon status` shows the passes running right now.
+Memory sync, which runs on a timer and copies what each agent wrote into the others' own memory, calls no model; it is switched and timed from the **▾** on **Sync now** on the Memory page. `coffer daemon status` shows the passes running right now.
 
 ## Troubleshooting
 

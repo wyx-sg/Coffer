@@ -16,10 +16,8 @@ Coffer's own operating settings: one document per vault,
 
 | Field | Type | Constraints / Notes |
 |---|---|---|
-| `auto_aggregate_enabled` | `bool` | The `aggregate` pass's switch. Ships **ON**: it writes only the derived tree (see "Ship every unattended pass switched on"). |
-| `aggregate_interval_s` | `int \| None` | `None` = the pass's own default interval (see "Report an unchosen interval beside its default"). |
-| `auto_distil_enabled` | `bool` | The `distil` pass's switch. Ships **ON** — it writes only a derived digest that deleting and re-running reproduces. |
-| `distil_interval_s` | `int \| None` | As above. |
+| `memory_sync_enabled` | `bool` | The `memory_sync` pass's switch (spec memory). Ships **ON** (see "Ship every unattended pass switched on"): a first or large sync waits for the person to confirm a preview before it writes into an agent. |
+| `memory_sync_interval_s` | `int \| None` | `None` = the pass's own default interval, one hour (see "Report an unchosen interval beside its default"). |
 | `transcribe_model` | `str \| None` | The speech-to-text model, run on the connection flagged `transcribe_default` (see "Transcribe speech on its own connection and model"). `None` until chosen, and while it is `None` Coffer transcribes nothing and the agent receives the audio file. A blank value on write is normalised to `None`. |
 | `updated_at` | `datetime` | When this machine last changed the settings (`local/engine.json`), reported so a surface can say when they last moved. Not in the vault document. |
 
@@ -45,11 +43,13 @@ default").
 
 ### Pass names
 
-`AGGREGATE = "aggregate"`, `DISTIL = "distil"` — named in
-the domain rather than in the workers, so a surface can offer exactly these
-two without importing two application modules. These are the words every
-surface uses: the route enum, the CLI's `<pass>` argument and the document's
-`upkeep` block.
+`MEMORY_SYNC = "memory_sync"` — the one pass, named in the domain rather than
+in the worker, so a surface can offer it without importing an application
+module. This is the word every surface uses: the route enum, the CLI's
+`<pass>` argument and the document's `upkeep` block. `RETIRED_AGGREGATE =
+"aggregate"` names the retired layer's pass only so an older document's entry
+can be read as the memory sync's (see "Carry a switch and interval for each
+unattended pass").
 
 ## Application services
 
@@ -124,8 +124,7 @@ machine-local timestamp:
   "format_version": 1,
   "transcribe_model": "<model id>",
   "upkeep": {
-    "aggregate": { "enabled": true, "interval_s": null },
-    "distil": { "enabled": true, "interval_s": null }
+    "memory_sync": { "enabled": true, "interval_s": null }
   }
 }
 ```
@@ -138,9 +137,14 @@ machine-local timestamp:
 | `upkeep.<pass>.interval_s` | `null` = the pass's own default |
 
 A document written by an older build may still carry `model`,
-`curate_owner_machine_id`, `model_timeout_s` and an `upkeep.curate` entry. They are ignored on read
-and dropped by the next write of the document, while every other key the
-document holds is kept (see "Ignore retired keys in the settings document").
+`curate_owner_machine_id`, `model_timeout_s` and `upkeep.curate` and
+`upkeep.distil` entries. They are ignored on read and dropped by the next write
+of the document, while every other key the document holds is kept (see "Ignore
+retired keys in the settings document"). An `upkeep.aggregate` entry is the one
+that carries over: while the document has no `upkeep.memory_sync`, its switch
+and interval are read as the memory sync's, and the next write stores them
+under `memory_sync` and drops `aggregate` (see "Carry a switch and interval for
+each unattended pass").
 
 `VaultInternalEngineConfigRepo` (`infrastructure/persistence/internal_engine_repo.py`)
 reads the document at `HEAD`. A vault that never chose anything has no document

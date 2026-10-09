@@ -38,8 +38,8 @@ description: Coffer 如何通过拉取和推送保险库自己的 git 仓库，�
 | 会传输（在 `~/.coffer/vault` 中） | 留在每台机器上 |
 | --- | --- |
 | `mcp_server`、`skill`、`channel`、`provider` 和 `knowledge` 的资源文件 | 智能体（`local/resources/agent/`）：智能体的配置目录是关于这台机器的事实 |
-| 知识文档和 `.inbox/` 材料、技能主文件夹 | 生效范围（`local/reach.json`）、自定义工具的生效范围、保留策略、同步远端本身 |
-| MCP 能力开关、消息渠道配对、Coffer 的设置（`state/`：维护、语音转文字模型） | 派生树：记忆、缓存、`derived.db`、渲染出来的 `coffer-guide` 技能 |
+| 知识文档和 `.inbox/` 材料、技能主文件夹、记忆中心库（`memory/`） | 生效范围（`local/reach.json`）、自定义工具的生效范围、保留策略、同步远端本身 |
+| MCP 能力开关、消息渠道配对、Coffer 的设置（`state/`：维护、语音转文字模型） | 派生树：缓存、`derived.db`、渲染出来的 `coffer-guide` 技能；记忆同步台账（`local/memory-sync.json`） |
 | 密钥密文（`secret/`），仅在开启 `include_secret` 时 | 本机专属密文（`local/secret/`）、密钥边界、主密钥 |
 | 每台机器一个描述文件（`machines/<id>.json`） | `runs.db`（对话、审计、调用、同步轮次）、`content/`、日志、`daemon-config.json` |
 

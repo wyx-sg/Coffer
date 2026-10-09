@@ -38,8 +38,8 @@ Everything committed in the vault repository, and nothing else:
 | Travels (in `~/.coffer/vault`) | Stays on each machine |
 | --- | --- |
 | Resource files of `mcp_server`, `skill`, `channel`, `provider` and `knowledge` | Agents (`local/resources/agent/`): an agent's config directory is a fact about this machine |
-| Knowledge documents and `.inbox/` material, skill master folders | Reach (`local/reach.json`), custom tools' reach, retention, the sync remote itself |
-| MCP capability switches, channel pairings, Coffer's settings (`state/`: upkeep, the speech-to-text model) | The derived tree: memory, caches, `derived.db`, the rendered `coffer-guide` skill |
+| Knowledge documents and `.inbox/` material, skill master folders, the memory hub (`memory/`) | Reach (`local/reach.json`), custom tools' reach, retention, the sync remote itself |
+| MCP capability switches, channel pairings, Coffer's settings (`state/`: upkeep, the speech-to-text model) | The derived tree: caches, `derived.db`, the rendered `coffer-guide` skill; the memory-sync ledger (`local/memory-sync.json`) |
 | Secret ciphertext (`secret/`), only with `include_secret` | Machine-local ciphertext (`local/secret/`), the secret boundary, the master key |
 | One descriptor per machine (`machines/<id>.json`) | `runs.db` (conversations, audit, invocations, rounds), `content/`, logs, `daemon-config.json` |
 
