@@ -175,7 +175,7 @@ metadata:
 ---
 ```
 
-`metadata.profiles` 是该领域附带的 profile 文件的索引。`metadata.requires` 在[声明的依赖](#declared-dependencies)中介绍。顶层的 `requires:` 是另一回事：技能驱动的命令行工具（`gh`、`jq`），可带最低版本和登录检查，Coffer 会检查它们，缺失时交给你的智能体去安装——见[命令行工具](/zh/guides/clis)。封装某个 CLI 的载体技能在那里声明它；但只是把工作委托给载体技能的产品领域不声明它：技能只声明自己运行或使用的命令、密钥和工具，绝不替其他技能（无论是 Coffer 托管的还是外部的）声明。Coffer 只读取技能声明的内容，从不扫描技能去猜测，所以不遵守这些规则的技能要在技能里修好。同一个键的映射形式还可以写出技能的命令需要的 Coffer 密钥，如 `requires: {commands: [psql], secrets: [orders-db]}`，这样技能的 **依赖** 标签页和总览会在某个密钥未设置时告诉使用者——见[技能需要的密钥](/zh/guides/skills#secrets-a-skill-needs)。同一个映射还可以在 `tools:` 下按名字（即它们在 Coffer 里的名字）写出技能调用的 MCP 服务器和自定义工具分组，如 `requires: {commands: [psql], secrets: [orders-db], tools: [orders-api]}`：**依赖** 标签页会在**工具**下列出它们，工具关闭的技能会进入**需要处理**。Coffer 不认识的名字会被跳过，警告显示在[命令行工具](/zh/guides/clis)页面上——见[技能需要的工具](/zh/guides/skills#tools-a-skill-needs)。映射下的其他键会被拒绝并给出警告。profile 自己的 frontmatter 也可以带同样的 `requires:`，见[profile 声明的依赖](#requirements-a-profile-declares)。包含 `: `（冒号加空格）的描述要加引号；不加的话它是无效的 YAML，技能会解析失败。描述最多 1024 个字符；更长的 Coffer 会拒绝导入。
+`metadata.profiles` 是该领域附带的 profile 文件的索引。`metadata.requires` 在[声明的依赖](#declared-dependencies)中介绍。顶层的 `requires:` 是另一回事：技能驱动的命令行工具（`gh`、`jq`），可带最低版本和登录检查，Coffer 会检查它们，缺失时交给你的智能体去安装——见[命令行工具](/zh/guides/clis)。封装某个 CLI 的载体技能在那里声明它；但只是把工作委托给载体技能的产品领域不声明它：技能只声明自己运行或使用的命令、密钥和工具，绝不替其他技能（无论是 Coffer 托管的还是外部的）声明。Coffer 只读取技能声明的内容，从不扫描技能去猜测，所以不遵守这些规则的技能要在技能里修好。同一个键的映射形式还可以按 id 写出技能的命令需要的 Coffer 密钥，如 `requires: {commands: [psql], secrets: [<id>]}`，这样技能的 **依赖** 标签页和总览会在某个密钥未设置时告诉使用者——见[技能需要的密钥](/zh/guides/skills#secrets-a-skill-needs)。同一个映射还可以在 `tools:` 下按名字（即它们在 Coffer 里的名字）写出技能调用的 MCP 服务器和自定义工具分组，如 `requires: {commands: [psql], secrets: [<id>], tools: [orders-api]}`：**依赖** 标签页会在**工具**下列出它们，工具关闭的技能会进入**需要处理**。Coffer 不认识的名字会被跳过，警告显示在[命令行工具](/zh/guides/clis)页面上——见[技能需要的工具](/zh/guides/skills#tools-a-skill-needs)。映射下的其他键会被拒绝并给出警告。profile 自己的 frontmatter 也可以带同样的 `requires:`，见[profile 声明的依赖](#requirements-a-profile-declares)。包含 `: `（冒号加空格）的描述要加引号；不加的话它是无效的 YAML，技能会解析失败。描述最多 1024 个字符；更长的 Coffer 会拒绝导入。
 
 ### 文件夹卫生 {#folder-hygiene}
 
@@ -188,7 +188,7 @@ metadata:
   coffer run --env-file connection.env -- ./query.sh
   ```
 
-  不要把密钥放在 `~/.coffer/secrets/<name>.env` 这样的明文文件里；把它们存成密钥。见[密钥](/zh/guides/secrets)。在 `requires: {secrets: [...]}` 下写出技能用到的每个密钥的名称，这样 Coffer 能在它未设置时告诉你。
+  不要把密钥放在 `~/.coffer/secrets/<name>.env` 这样的明文文件里；把它们存成密钥。见[密钥](/zh/guides/secrets)。在 `requires: {secrets: [...]}` 下写出技能用到的每个密钥的 id，这样 Coffer 能在它未设置时告诉你。
 
 ## 描述 {#descriptions}
 

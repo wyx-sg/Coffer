@@ -176,6 +176,18 @@ class TaskSupervisor:
     def running_names(self) -> list[str]:
         return sorted(t.get_name() for t in self._tasks if not t.done())
 
+    def running_by_name(self) -> dict[str, int]:
+        """Running tasks counted by the part of their name before the first ``:``.
+
+        The part after it names what the task serves — a channel, an MCP server,
+        a chat — and stays out: the status route answers without a token.
+        """
+        counts: dict[str, int] = {}
+        for name in self.running_names():
+            prefix = name.split(":", 1)[0]
+            counts[prefix] = counts.get(prefix, 0) + 1
+        return counts
+
     # -- stopping -----------------------------------------------------------
 
     async def shutdown(self, timeout: float = 5.0) -> list[str]:

@@ -1,9 +1,9 @@
-# Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App
+# Distribution — Four PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App
 
 **Status**: Accepted
 **Date**: 2026-09-12
 **Deciders**: Yuxing Wu
-**Related**: [The Desktop Shell Hosts the Shared Frontend](desktop-shell-over-a-shared-frontend.md), [Daemon Detect-or-Spawn](daemon-detect-or-spawn.md), [Stdio Shim Bridge](stdio-shim-bridge.md), [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md), [principles](../../docs-site/architecture/principles.md), [architecture: distribution](../../docs-site/architecture/distribution.md), spec daemon "Release the macOS arm64 terminal archive", spec daemon "Deploy frozen sibling binaries and back up the history database before migrating", spec desktop-app "Ship the desktop tier as a macOS arm64 dmg", PRs #317, #376, #386
+**Related**: [The Desktop Shell Hosts the Shared Frontend](desktop-shell-over-a-shared-frontend.md), [Daemon Detect-or-Spawn](daemon-detect-or-spawn.md), [Stdio Shim Bridge](stdio-shim-bridge.md), [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md), [principles](../../docs-site/architecture/principles.md), [architecture: distribution](../../docs-site/architecture/distribution.md), spec daemon "Release the macOS arm64 terminal archive", spec daemon "Deploy frozen sibling binaries and back up the history database before migrating", spec desktop-app "Ship the desktop tier as a macOS arm64 dmg", spec daemon "Delete what exited one-file binaries unpacked", PRs #317, #376, #386
 
 ## Context
 
@@ -25,41 +25,47 @@ Three more forces shape the answer:
   Shared Frontend](desktop-shell-over-a-shared-frontend.md)).
 - **No paid Apple Developer ID.** Nothing Coffer ships can be signed or
   notarised today.
+- **The shim starts far more often than anything else.** Every MCP session an
+  agent opens starts one, and agents end sessions by killing it. One machine
+  ran a dozen at a time, and in a week collected 1,155 copies of the shim's
+  unpacked archive in `$TMPDIR` (17 GB), because a one-file binary removes its
+  unpacked copy only when it exits normally.
 
 ## Options Considered
 
 ### Packaging the Python
 
-#### Option A — PyInstaller single-file executables (chosen)
+#### Option A — PyInstaller (chosen)
 
-`backend/coffer-daemon.spec`, `backend/coffer-mcp-shim.spec` and
-`backend/coffer.spec` each freeze one entry point into a single-file binary;
-`scripts/build_binaries.sh` (`make bundle-binaries`) runs all three of those into `dist/`; the SeaTalk bridge is a fourth, shipped beside them.
+`backend/coffer-daemon.spec`, `backend/coffer-mcp-shim.spec`,
+`backend/coffer.spec` and `backend/coffer-seatalk-bridge.spec` each freeze one
+entry point; `scripts/build_binaries.sh` (`make bundle-binaries`) runs all four
+into `dist/`. Three are single files; the shim is a one-folder build (see
+"Packaging the shim" below).
 The daemon spec carries its Alembic migrations and the built web UI
 (`frontend/dist`, shipped as `webui/`) as data files, and pins the modules
 imported lazily inside functions — `markitdown` and its document parsers,
 and `openai` — in `hiddenimports`, because PyInstaller's
-static analysis cannot see them. The shim spec excludes the server stack
-(FastAPI, uvicorn, SQLAlchemy, Alembic, structlog) since it only needs `httpx`
-to reach the daemon over loopback, and every spec excludes the heavy ML stack
-(`torch`, `scipy`, …) as a guard — a transitive pull would take a binary from
-about 95 MB to about 260 MB.
+static analysis cannot see them. The shim spec freezes only what its entry
+script imports and excludes the daemon's stacks, and every spec excludes the
+heavy ML stack (`torch`, `scipy`, …) as a guard — a transitive pull would take
+a binary from about 95 MB to about 260 MB.
 
 Pros: the broadest support for this dependency set (Pydantic 2, SQLAlchemy 2
 async, `keyring` backends) and the largest cookbook of hidden-import fixes; no C
 compiler in CI; nothing in the daemon's runtime contract depends on it, so a
-later switch is bounded. Cons: binaries of roughly 100 MB; a cold start that
-unpacks the archive (acceptable for a daemon that starts once per login, noticed
-on the shim); and the sharp edge that a missing import or data path passes every
+later switch is bounded. Cons: binaries of roughly 100 MB; a single-file binary
+unpacks its archive on every start (acceptable for a daemon that starts once per
+login, not for the shim); and the sharp edge that a missing import or data path passes every
 test and fails only in the frozen build. That edge is fenced by two gates:
 `scripts/check_pyinstaller_specs.py` (`make lint`) fails when a spec's entry
 script or `datas` path no longer exists, or when an `EXE` loses the frozen
 `-X utf8` option (without it a binary started from Finder or launchd with no
 `LANG` falls back to ASCII); and `scripts/smoke_test_bundle.sh`, run by the
-release workflow on the built `dist/`, boots the frozen daemon under an isolated
-`HOME` to a live `/daemon/status`, requires it to serve the bundled web UI, and
-exchanges a JSON-RPC `initialize` with the frozen shim. It wins on dependency
-coverage at the lowest build cost.
+release workflow on the built `dist/` and again on the built app, boots the
+frozen daemon under an isolated `HOME` to a live `/daemon/status`, requires it
+to serve the bundled web UI, and exchanges a JSON-RPC `initialize` with the
+frozen shim. It wins on dependency coverage at the lowest build cost.
 
 #### Option B — `pip install` / `pipx install` / `uv tool install`
 
@@ -102,6 +108,58 @@ installer for the GUI. Cons: two runtimes (Chromium/Node and Python), several
 hundred MB, and still no CLI on `PATH` for MCP clients. It loses on size and
 because the terminal tier would still need Option A.
 
+### Packaging the shim
+
+The shim forwards JSON-RPC between an agent's stdio and the daemon's loopback
+`/mcp`. As a single-file build it unpacked about 170 MB into `$TMPDIR/_MEI*` on
+every start (two seconds before the agent saw a reply), ran as a bootloader
+plus a child, and left the unpacked copy behind whenever the agent killed it.
+Most of the 170 MB was the daemon's dependencies: the spec collected every
+`coffer` submodule, so Pillow, numpy, cryptography, keyring and test libraries
+came along.
+
+How comparable tools ship a Python command that starts often: the AWS CLI v2
+is a PyInstaller one-folder build installed under
+`/usr/local/aws-cli/v2/<version>/` with `aws` symlinked onto `PATH`, chosen for
+start-up time; PyInstaller's own documentation recommends one-folder for
+programs started frequently and warns that a one-file program killed with
+`SIGKILL` leaves its temporary folder behind. Inside a macOS app, code with
+data files beside it goes in `Contents/Resources`, not `Contents/MacOS`
+(Apple's code-signing rules treat everything in `MacOS` as code): Docker
+Desktop keeps its command-line binaries in `Docker.app/Contents/Resources/bin`
+and Electron apps their native modules in `Contents/Resources`.
+
+#### Option S1 — One-folder build, only what the shim imports (chosen)
+
+The shim spec builds an executable plus a `coffer-mcp-shim-lib/` folder beside
+it (PyInstaller's `contents_directory`), collects nothing it does not import,
+and excludes the daemon's stacks. The two travel together: in `dist/`, in the
+archive, in `~/.coffer/bin/<version>/`, and in the app's `Contents/Resources`.
+Pros: no unpacking, so nothing to leak and nothing for the OS temp cleaner to
+delete; one process per session instead of two; about 30 MB instead of
+170 MB; a start of about half a second. Cons: every place that copies the
+binaries (the deploy, `install.sh`, `coffer update`, the release staging) must
+carry the folder too, and the app's layout differs from the archive's. Chosen
+because the cost is a one-time change to the copy paths, and the gain repeats
+on every MCP session.
+
+#### Option S2 — Keep one file, slim it, and sweep the leftovers
+
+Exclude the daemon's dependencies and have the daemon delete unpacked copies
+whose process has exited. Pros: no layout change anywhere. Cons: every session
+still unpacks (smaller, but still on each start) and still runs two
+processes; the leftovers are cleaned up after the fact instead of never being
+made. It loses because it treats the symptom; the sweep it needs is kept for
+the three binaries that stay single-file (below).
+
+#### Option S3 — Rewrite the shim in Go or Rust
+
+A native forwarder of a few hundred lines. Pros: a few MB, instant start, no
+Python at all. Cons: the shim shares the daemon's discovery, detect-or-spawn
+and version-skew code ([Daemon Detect-or-Spawn](daemon-detect-or-spawn.md)),
+which would then exist twice in two languages, and a second toolchain enters
+the build. It loses on keeping one implementation of that logic.
+
 ### How many download tiers
 
 #### Option G — Two tiers built from one freeze: a CLI archive and a desktop `.dmg` (chosen)
@@ -110,13 +168,15 @@ Per `v*` tag, `.github/workflows/release.yml` (one leg, `macos-14`,
 `aarch64-apple-darwin`) freezes the four binaries (`coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge`, the executable that loads the SeaTalk SDK, signed without the keychain entitlement so third-party code never runs where the master key can be read) once and wraps them twice:
 
 - `coffer-cli-aarch64-apple-darwin.tar.gz` holding `coffer`, `coffer-daemon`,
-  `coffer-mcp-shim` and `coffer-seatalk-bridge` under their plain names, installed by
+  `coffer-mcp-shim` and `coffer-seatalk-bridge` under their plain names, with the shim's `coffer-mcp-shim-lib/` folder beside them, installed by
   `curl … install.sh | sh` (served from `docs-site/public/install.sh`) into
   `~/.coffer/bin`, which it adds to `PATH` (overridable with
   `COFFER_INSTALL_DIR`, `COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`);
 - `Coffer-unsigned-aarch64-apple-darwin.dmg`, the Tauri app with the **same
-  four files** copied from `dist/` into `desktop/binaries/` as `externalBin` —
-  a copy, not a second PyInstaller run.
+  four binaries** copied from `dist/` into `desktop/binaries/` — a copy, not a
+  second PyInstaller run. `coffer` and `coffer-daemon` are `externalBin` in
+  `Contents/MacOS`; the bridge is copied there unchanged, and the one-folder
+  shim with its library folder into `Contents/Resources`.
 
 One aggregated `SHA256SUMS` covers both (spec daemon "Publish one aggregated
 checksum file"). The `.dmg` needs nothing installed beforehand, and installing
@@ -170,10 +230,11 @@ create.
 
 ## Decision
 
-**Coffer freezes `coffer`, `coffer-daemon` and `coffer-mcp-shim` with
-PyInstaller once per release on macOS arm64, and publishes them twice: as
-`coffer-cli-<triple>.tar.gz` and inside the unsigned `Coffer-unsigned-<triple>.dmg`,
-under one `SHA256SUMS`.** Rules that follow:
+**Coffer freezes `coffer`, `coffer-daemon`, `coffer-mcp-shim` and
+`coffer-seatalk-bridge` with PyInstaller once per release on macOS arm64 — the
+shim as a one-folder build, the others as single files — and publishes them
+twice: as `coffer-cli-<triple>.tar.gz` and inside the
+`Coffer-unsigned-<triple>.dmg`, under one `SHA256SUMS`.** Rules that follow:
 
 - **The daemon deploys its siblings; nothing else does.** On a frozen start,
   `deploy_frozen_sidecars` (`backend/coffer/application/binary_deploy.py`,
@@ -193,6 +254,22 @@ under one `SHA256SUMS`.** Rules that follow:
   `PATH`. The same frozen start, before it migrates the history database,
   copies `~/.coffer/runs.db` to `runs.db.pre-<revision>` (the three newest
   are kept), so a bad upgrade leaves the previous state beside the live file.
+- **The shim and its library folder go together.** `coffer-mcp-shim-lib/`
+  sits beside the shim executable wherever it is: in `dist/` and the archive,
+  in `~/.coffer/bin/<version>/` (the deploy copies the folder first, and redoes
+  a version whose folder is missing), and with `install.sh` and `coffer update`
+  in `~/.coffer/bin` itself. In the app the two are in `Contents/Resources`, so
+  the daemon in `Contents/MacOS` deploys them from there, and with no shim
+  beside it the daemon writes the deployed `~/.coffer/bin/coffer-mcp-shim` into
+  agent configs. The smoke test fails a shim whose folder is missing, carries
+  the daemon's stacks, or is over 60 MB.
+- **What a killed single-file binary unpacked is deleted.** `coffer`,
+  `coffer-daemon` and the bridge stay single files, so each runs a runtime hook
+  (`backend/packaging/rth_unpack_owner.py`) that writes its pid into its
+  `_MEI*` directory, and the daemon's unpack keep-alive deletes the marked
+  directories whose process has exited, at start and every 6 hours. An
+  unmarked directory may be another PyInstaller program's and is left alone.
+  `check_pyinstaller_specs.py` fails a single-file spec without the hook.
 - **The build stamp is written before the freeze.** On a tag,
   `scripts/stamp_channel.py stable` rewrites `backend/coffer/build_channel.py`
   before `build_binaries.sh` runs, because PyInstaller freezes the module as it
@@ -218,6 +295,9 @@ under one `SHA256SUMS`.** Rules that follow:
 - Every dependency upgrade must be proven on a frozen build, not only on the
   source tree; the smoke test and the spec checker are what catch it before a
   user does.
+- Starting an MCP session costs a half-second shim start with nothing written
+  to `$TMPDIR`; the app's agent configs name `~/.coffer/bin/coffer-mcp-shim`,
+  the same path a CLI install writes.
 - A local `make desktop` takes roughly 50 minutes because it freezes all four
   binaries first; the release pays the freeze once for both tiers.
 - Until the Developer ID secrets are added (Option K), every install starts with a quarantine

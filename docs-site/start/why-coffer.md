@@ -47,14 +47,14 @@ See [MCP gateway](/architecture/mcp-gateway) for how sessions, namespacing and t
 
 ## Knowledge is pulled, not pushed
 
-**The decision.** Coffer does not insert knowledge into an agent's prompt. A knowledge collection is a folder of Markdown files under `~/.coffer/vault/knowledge/`. Coffer delivers one skill of its own, `coffer-guide`, which lists every collection's documents with their paths, titles and descriptions. The agent reads what it needs with its own `Read` and `Grep` tools. Coffer does not index, chunk or embed the files.
+**The decision.** Coffer does not insert knowledge into an agent's prompt. A knowledge collection is a folder of Markdown files under `~/.coffer/vault/knowledge/`. Coffer delivers one skill of its own, `coffer-guide`, which lists every collection's pages, grouped by type, with their paths, titles and descriptions, and the sources still waiting to be integrated. The agent reads what it needs with its own `Read` and `Grep` tools. Coffer does not index, chunk or embed the files.
 
-**Why.** Retrieval that depends on the agent remembering to call a special tool gets skipped. Every supported agent can already read files. What an agent needs is to know which files exist and where they are, and a catalogue gives it that. Keeping the files as the only copy also means you can edit a document in your own editor and the next read picks up the change.
+**Why.** Retrieval that depends on the agent remembering to call a special tool gets skipped. Every supported agent can already read files. What an agent needs is to know which files exist and where they are, and a catalogue gives it that. Keeping the files as the only copy also means you can edit a page in your own editor and the next read picks up the change.
 
 **What it means for you.**
 
 - Your knowledge is plain Markdown you can open, grep, version and edit in any tool.
-- Agents add knowledge by writing a Markdown document straight into a collection, and change one by editing it. The `coffer-guide` skill tells them where a fact belongs. When a collection gets cluttered, press **Tidy** and your default agent merges, splits and corrects its documents.
+- What you upload is kept as a source; agents write pages that cite those sources, and change a page by editing it. The `coffer-guide` skill tells them where a fact belongs. When a collection gets cluttered, press **Tidy** and your default agent folds the waiting sources into pages, then merges, splits and corrects its pages.
 - Memory works the other way round. Coffer writes what one agent learned into your other agents' own memory, on every machine you sync, and each agent loads and curates it like its own. The [memory guide](/guides/memory) explains how.
 
 ## Secrets are encrypted with a key you hold
@@ -65,7 +65,7 @@ See [MCP gateway](/architecture/mcp-gateway) for how sessions, namespacing and t
 
 **What it means for you.**
 
-- Store a secret with `coffer secret set <ref>`, which prompts for the value without echoing it or reads it from stdin, and refer to it by name everywhere else.
+- Store a secret with `coffer secret set --name "<label>"`, which prompts for the value without echoing it or reads it from stdin, and refer to it by the `secret/<id>` ref Coffer prints everywhere else.
 - Plaintext never reaches the vault, the logs or the audit log.
 - If you lose the master key, you lose every stored secret. The Keychain is the key's only home, so back it up in the desktop app and keep the backup the way you would keep an SSH private key.
 

@@ -64,6 +64,10 @@ export function answerFromFixtures() {
     if (!found) throw new Error(`no fixture for ${path}`);
     return found;
   });
-  // The changes feed is read only to find the delete an Undo restores.
+  // The changes feed: a collection's Change log, and the delete an Undo restores.
   api.listChanges.mockResolvedValue({ changes: [], next_cursor: null });
+  api.getCheck.mockImplementation(async (uid: string) => ({
+    collection: [COLLECTION, OTHER].find((c) => c.uid === uid) ?? COLLECTION,
+    findings: [],
+  }));
 }

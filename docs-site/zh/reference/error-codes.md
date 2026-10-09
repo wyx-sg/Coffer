@@ -292,6 +292,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `empty_prompt` | 没有可发送的用户消息。 |
 | `sdk_connect_error`、`sdk_stream_error`、`sdk_error` | Claude Code 无法启动、它的流失败了，或它报告了错误。消息会说明是哪种。 |
 | `codex_connect_error`、`codex_stream_error`、`codex_error` | Codex 的同类错误。 |
+| `session_in_use` | 智能体的会话正在别处打开（终端里运行着 `claude --resume <id>` 或 `codex resume <id>`），所以轮次被拒绝，而不是分叉出新会话。在那里继续，或开始一个新对话。 |
 | `INTERNAL_ERROR` | Coffer 内部的意外失败，包括排队的轮次无法启动。 |
 
 ## MCP 网关错误 {#mcp-gateway-errors}
@@ -300,8 +301,12 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 
 | JSON-RPC 错误码 | 含义 |
 | --- | --- |
+| `-32700` | 解析错误：请求体不是合法的 JSON（HTTP 状态为 `400`）。 |
 | `-32600` | 无效请求：请求体不是 JSON-RPC 对象，或没有 `method`。 |
-| `-32000` | `TOOL_DISABLED`：该能力被关闭、不在智能体的生效范围内，或无法识别。 |
+| `-32601` | 方法不存在：网关不应答这个方法。 |
+| `-32602` | 参数无效：方法需要的参数缺失或类型不对，或生效范围内没有服务器提供该名称的工具、提示词或资源。 |
+| `-32000` | `TOOL_DISABLED`：该能力被关闭，或不在智能体的生效范围内。 |
+| 上游自己的错误码 | 上游服务器以 JSON-RPC 错误应答：保留它的错误码，消息换成 Coffer 自己的 `the upstream server answered with JSON-RPC error <code>`，不转发上游的文本。 |
 | `-32603` | 其他任何失败。Coffer 的错误会带上它的消息；其他错误一律报告为 `internal error: <ExceptionClass>`，以免泄漏任何上游内容。 |
 
 失败的内置工具则会返回一个带 `isError: true` 的带内结果；见[MCP 工具](/zh/reference/mcp-tools#how-built-in-tools-answer)。在任何请求之前就被拒绝的自定义工具也一样：它的文本以错误码开头（`CUSTOM_TOOL_ARGUMENTS_INVALID` 每个字段一行，`CUSTOM_TOOL_ENVIRONMENT_*`、`SECRET_MISSING`，或带审批 id 和 `next: coffer approval approve <id>` 的 `SECRET_BINDING_PENDING`）。
@@ -319,7 +324,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `4` | Not found | 守护进程返回了 `404`。 |
 | `5` | Conflict | 守护进程返回了 `409`。 |
 | `6` | Invalid input | 守护进程返回了 `400` 或 `422`，或者命令自己的输入无法解析（`CLI_INVALID_INPUT`）。参数违反 schema 的自定义工具测试在这里退出，每个字段一条错误。 |
-| `7` | Upstream test failed | `coffer mcp test` 无法初始化上游服务器，或者自定义工具测试（`coffer custom-tool tool test`、`test-draft`、`test-unsaved`）连到的 API 失败或以错误状态码回应。 |
+| `7` | Upstream test failed | `coffer mcp test` 无法初始化上游服务器，或者自定义工具测试（`coffer custom-tool tool test`、`test-draft`、`test-unsaved`）连到的 API 失败或以错误状态码回应。其他命令在守护进程因它调用的东西失败而返回 `502` 或 `504` 时也在这里退出（例如 `SYNC_REMOTE_FAILED`、`SKILL_SOURCE_UNREACHABLE`、`OPENAPI_UNREACHABLE`、`CHANNEL_SEND_FAILED` 或 `UPSTREAM_TIMEOUT`）；`UPSTREAM_UNAVAILABLE` 以 `1` 退出。 |
 | `8` | Secret issue | 错误码为 `SECRET_MISSING`、`SECRET_LOCKED`、`SECRET_UNREADABLE` 或 `SECRET_BINDING_REJECTED`。 |
 | `9` | Waiting for approval | 改动已保存，但其中的某个密钥在等待本人批准（`SECRET_BINDING_PENDING`）。命令打印了审批 id 和 `next: coffer approval approve <id>…`（加 `--json` 时为 `{"status": "pending_approval", "approval_ids", "next"}`）。不要重试：运行那条命令，它会在桌面应用里询问本人；或直接在应用里批准。见[密钥 → 在命令行上](/zh/guides/secrets#on-the-command-line)。 |
 | `10` | Waiting for git | 守护进程在运行，但在等 git：没有找到，或版本低于 2.40。命令在发送任何请求之前打印了原因和一段给智能体的提示词。见 [Coffer 需要 git](/zh/guides/troubleshooting#coffer-needs-git)。 |
@@ -336,7 +341,15 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `CLI_INVALID_INPUT` | `6` | 命令自己的输入无效：`--data` 或 `--args` 不是 JSON、`@file` 读不了、`--set` 不是 `key=value`，或某个参数的值格式不对。什么都没发送。 |
 | `CLI_APP_UNAVAILABLE` | `12` | 桌面应用没在运行，也无法启动。 |
 | `CLI_WAIT_TIMEOUT` | `13` | 操作完成之前 `coffer sync wait` 就超过了 `--timeout`。 |
-| `CLI_DESKTOP_REQUEST_FAILED` | `1` | 桌面应用无法执行一次更新请求（`coffer app update …`）。 |
+| `DAEMON_UNREACHABLE` | `3` | 守护进程无法启动，或在请求中途不再应答。 |
+| `DAEMON_WAITING_FOR_GIT` | `10` | 守护进程在运行，但在等 git。`details.handoff` 带有给智能体的提示词。 |
+| `CLI_DESKTOP_REQUEST_FAILED` | `1` | 桌面应用无法执行交给它的请求：`coffer app update …`，或 Coffer 以桌面应用运行时的 `coffer update` / `coffer uninstall`。 |
+| `CLI_UPDATE_SOURCE` | `2` | 在源码检出上运行了 `coffer update`：请改用 `git pull` 升级。 |
+| `CLI_UPDATE_CHECK_FAILED` | `1` | `coffer update` 读不到最新版本。 |
+| `CLI_UPDATE_FAILED` | `1` | `coffer update` 无法下载、校验或安装新的二进制文件。 |
+| `CLI_UPDATE_RESTART` | `1` | `coffer update` 装好了新的二进制文件，但用它们的守护进程没有启动；查看 `~/.coffer/logs/daemon.log`。 |
+| `CLI_UNINSTALL_NOT_CONFIRMED` | `2` | `coffer uninstall` 未经确认：没有终端也没有 `--yes`，或用了 `--delete-data` 却没在终端里输入确认短语。什么都没删除。 |
+| `CLI_UNINSTALL_DAEMON_RUNNING` | `1` | `coffer uninstall --delete-data` 已卸载 Coffer，但守护进程没有停下，所以没有删除 `~/.coffer`。 |
 
 传 `--verbose`（`coffer -v …`）会在被拒绝时补上背后的请求——方法、路径和状态码，从不包含请求头——文本模式下是标准错误上的一行，`--json` 时是 `error` 旁边的一个 `request` 对象；意外错误还会打印 traceback。
 

@@ -49,7 +49,7 @@ flowchart LR
   G2 --> U4["jira (http)"]
 ```
 
-会话 A 和会话 B 各自持有自己的 `github` 进程。有 N 个已连接客户端和 M 个启用的服务器时，最坏情况是 N × M 个上游连接。在单用户机器上，N 通常是两三个，而且只有会话真正列出或调用过的服务器才会被启动。
+会话 A 和会话 B 各自持有自己的 `github` 进程。有 N 个已连接客户端和 M 个启用的服务器时，最坏情况是 N × M 个上游连接。在单用户机器上，N 通常是两三个，而且只有会话真正列出或调用过的服务器才会被启动。10 分钟没有请求的会话会连同它的上游一起被回收，所以 N 统计的是在干活的客户端，而不是仅仅开着的客户端。
 
 ## 端点与 shim {#the-endpoint-and-the-shim}
 
@@ -63,15 +63,15 @@ flowchart LR
   - 没有 `id` 的消息是通知，返回 `202`，没有响应体。`notifications/cancelled` 取消同一会话里的那个请求（见 [取消](#cancellation)）。
   - 有 `id` 但没有 `method` 的消息，是客户端对服务器发起的请求（`sampling/createMessage` 或 `roots/list`）的回复。它会被匹配到正在等待它的那个服务器请求，并以不带响应体的 `202` 确认。
   - 批量请求（顶层是数组）以 `-32600` 拒绝。
-- **`GET /mcp`** 打开一条 Server-Sent Events 流，用于服务器到客户端的消息。它要求带一个存活会话的 `Mcp-Session-Id`（否则 `404`）。打开着的流会让其会话不被空闲回收器回收。消息在一个按会话的队列里等待，上限 1000 条。队列满时丢掉最旧的消息。
+- **`GET /mcp`** 打开一条 Server-Sent Events 流，用于服务器到客户端的消息。它要求带一个存活会话的 `Mcp-Session-Id`（否则 `404`）。打开着的流不算活动，不会让其会话躲过空闲回收器。消息在一个按会话的队列里等待，上限 1000 条。队列满时丢掉最旧的消息。
 
-SSE 流关闭时会话仍然保持打开，因为 shim 会经常重连。会话有三种结束方式：空闲回收、守护进程关闭或被销毁。回收器每 60 秒醒来一次，丢掉 30 分钟内既没有 POST 也没有上游流量、且没有请求正在进行的会话（`coffer__ask` 会等所有者好几个小时）。两个值都可以用 `COFFER_MCP_SESSION_REAPER_INTERVAL_S` 和 `COFFER_MCP_SESSION_IDLE_S` 修改。销毁会话之前，回收器会最多等约 5 秒让进行中的 POST 完成，所以正在运行的请求永远不会碰到一个销毁了一半的会话。
+SSE 流关闭时会话仍然保持打开，因为 shim 会经常重连。会话有三种结束方式：空闲回收、守护进程关闭或被销毁。回收器每 60 秒醒来一次，丢掉 10 分钟内既没有 POST 也没有转发的上游通知、且没有请求正在进行的会话（`coffer__ask` 会等所有者好几个小时）。保持 SSE 流打开不算活动，它每 15 秒的保活唤醒也不算，所以只保持流打开的客户端和其他空闲客户端一样被回收：流干净地结束，客户端的下一个请求得到 `404` 并重新握手。两个值都可以用 `COFFER_MCP_SESSION_REAPER_INTERVAL_S` 和 `COFFER_MCP_SESSION_IDLE_S` 修改。销毁会话之前，回收器会最多等约 5 秒让进行中的 POST 完成，所以正在运行的请求永远不会碰到一个销毁了一半的会话。
 
 ### `coffer-mcp-shim` {#coffer-mcp-shim}
 
 智能体说的是 stdio MCP，所以由 `coffer-mcp-shim` 把 stdio 桥接到 `/mcp`：
 
-1. **找到守护进程，或者启动一个。** shim 读取 `~/.coffer/daemon.json` 并探测 `GET /api/v1/daemon/status`。如果 1 秒内没有守护进程应答，它以分离方式拉起一个，最多等 10 秒。如果守护进程还是起不来，shim 以退出码 `3` 退出，并指向 `~/.coffer/logs/daemon.log`。如果守护进程报告的版本与 shim 不同，shim 在 stderr 上打印一行警告然后继续。见 [守护进程与进程](/zh/architecture/daemon)。
+1. **找到守护进程，或者启动一个。** shim 读取 `~/.coffer/daemon.json` 并探测 `GET /api/v1/daemon/status`。如果没有守护进程应答，它以分离方式拉起一个，最多等 10 秒。`daemon.json` 写着一个正在运行的守护进程（忙碌或仍在启动）时，它等应答 15 秒；没有写着任何守护进程时只等 1 秒。如果守护进程还是起不来，shim 以退出码 `3` 退出，并指向 `~/.coffer/logs/daemon.log`。如果守护进程报告的版本与 shim 不同，shim 在 stderr 上打印一行警告然后继续。见 [守护进程与进程](/zh/architecture/daemon)。
 2. **在握手上盖章。** 在 `initialize` 信封里，shim 写入 `params._meta["coffer/cwd"]`（它的启动目录）。如果它是以 `--agent-uid <uid>` 启动的，还会写入 `params._meta["coffer/agent-uid"]`。它会缓存这个信封以便之后重放。如果它的环境里设置了 `COFFER_TURN_TOKEN`（该智能体进程正在运行 Coffer 发起的对话轮次），它还会把它作为 `X-Coffer-Turn` 头随每个请求发出，重放的握手也不例外。网关只向头里指向一个存活轮次的会话提供 `coffer__ask`；见 [MCP 工具参考](/zh/reference/mcp-tools#coffer-ask)。
 3. **泵送 stdin。** 每一行 stdin 都作为一个独立任务 POST 出去。所以一个慢的 `tools/call` 不会把后面的 `ping` 堵住。单行上限 64 MiB。
 4. **排空 SSE。** shim 一直保持 `GET /mcp` 打开，把每个 `data:` 载荷写到 stdout。如果流断了，它会带退避重连，从 0.5 秒开始，最多增长到 5 秒。
@@ -174,8 +174,8 @@ coffer__search_tools(query: string, top_k?: integer = 5, 1..20)
 
 它不分层地聚合可见服务器的工具，去掉所有 `coffer__` 工具，然后给其余工具排序。排序器是一个确定性的简化版 BM25：
 
-- **分词。** 按 camelCase 边界切开，文本转小写，保留 `[a-z0-9]+` 连续串。名字文本是 `"<server> <tool>"`。先把命名空间切开，这样服务器 token 只算一次，而不是两次。
-- **词频。** 每个名字 token 加 `3.0`，每个描述 token 加 `1.0`。文档长度是它的权重之和。自定义工具分组的说明算进它每个工具的描述文本，并作为 `group_description` 随结果返回。
+- **分词。** 文本先做 NFKC 归一（全角字符变成普通字符），按 camelCase 边界切开，再转小写。`[a-z0-9]+` 连续串原样保留。中文、日文、韩文字符的连续串词与词之间没有空格，按相邻两个字切成相互重叠的词（查询账号 → 查询、询账、账号）；只有一个字的串保留这个字（[Tool Search Cuts CJK Text Into Bigrams](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-search-cuts-cjk-text-into-bigrams.md)）。名字文本是 `"<server> <tool>"`。先把命名空间切开，这样服务器 token 只算一次，而不是两次。
+- **词频。** 每个名字 token 加 `3.0`，每个描述 token 加 `1.0`，输入 schema 参数文本里的每个 token 加 `0.5`。参数文本是每个属性的名字、说明和字符串枚举值，嵌套对象和数组元素里的也算（[Tool Search Indexes Parameter Text](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-search-indexes-parameter-text.md)）。文档长度是名字和描述的权重之和；参数文本参与得分，但不算进长度。自定义工具分组的说明算进它每个工具的描述文本，并作为 `group_description` 随结果返回。
 - **得分。** 对工具中出现的每个不同查询词 `t`：
   `idf(t) = ln(1 + (N - df + 0.5) / (df + 0.5))`，这个词贡献
   `idf(t) · f · (k1 + 1) / (f + k1 · (1 - b + b · len / avg_len))`，其中 `k1 = 1.5`，`b = 0.75`。
@@ -191,8 +191,9 @@ coffer__search_tools(query: string, top_k?: integer = 5, 1..20)
 | --- | --- |
 | `coffer__search_tools` | 网关自己（网关自有） |
 | `coffer__channel_read_thread` | 消息渠道功能（按轮次限定） |
+| `coffer__ask` | 网关，由对话类型通过一个轮次提问端口作答（按轮次限定） |
 
-`coffer__search_tools` 由网关自己持有，始终存在。`coffer__channel_read_thread` 由消息渠道功能注册为按轮次限定，所以只有处在正在运行的 Coffer 轮次内的会话才能看到或调用它。对任何其他 `coffer__` 名字的调用都会落到上游路由，并像一个未知工具那样失败。知识和记忆没有内置工具：智能体用自己的文件工具修改知识，把记忆放在自己的原生记忆里，所以注册表里没有对应任何一个的工具。
+`coffer__search_tools` 由网关自己持有，始终存在。`coffer__channel_read_thread` 由消息渠道功能注册为按轮次限定，所以只有处在正在运行的 Coffer 轮次内的会话才能看到或调用它。`coffer__ask` 由网关自己提供，只列给 `X-Coffer-Turn` header 指向一个正在运行的轮次的会话；对话类型通过组合根交给网关的一个端口来作答，所以网关不导入任何对话代码。对任何其他 `coffer__` 名字的调用都会落到上游路由，并像一个未知工具那样失败。知识和记忆没有内置工具：智能体用自己的文件工具修改知识，把记忆放在自己的原生记忆里，所以注册表里没有对应任何一个的工具。
 
 内置工具的处理函数运行之前，网关会按上面所说设置 `agent`。当工具的 schema 声明了 `cwd` 属性而客户端没填时，它还会填上 `cwd`。处理函数的返回值被包装成一个 MCP 工具结果：`content` 里是 JSON 文本，`structuredContent` 里是同一个对象，`isError: false`。处理函数内部的异常会变成带内的 `isError: true` 结果，而不是 JSON-RPC 错误，这样模型能读到它并自我纠正。文本会显示 Coffer 编写的错误和无效值错误的消息，其他异常只显示异常的类型名。工具的具体行为见 [MCP 工具](/zh/reference/mcp-tools)。
 
@@ -267,23 +268,23 @@ stateDiagram-v2
   [*] --> UNHEALTHY
   UNHEALTHY --> STARTING: 调用需要连接
   STARTING --> HEALTHY: 拉起并 initialize 成功
-  STARTING --> STARTING: 尝试失败，等 1 s、5 s、30 s
-  STARTING --> COOLDOWN: 第 4 次尝试失败
+  STARTING --> STARTING: 尝试失败，等 1 s、5 s
+  STARTING --> COOLDOWN: 第 3 次尝试失败
   STARTING --> UNHEALTHY: 服务器被停用
-  COOLDOWN --> UNHEALTHY: 过了 60 s，下一次调用
+  COOLDOWN --> UNHEALTHY: 退避结束，下一次调用
   HEALTHY --> UNHEALTHY: 逐出（传输失败、编辑、停用、删除）
   HEALTHY --> [*]: 会话被销毁
 ```
 
-- **重试阶梯。** 最多尝试四次，之间分别等 1、5 和 30 秒。只重试暂时性的拉起失败：上游不可用或超时，以及操作系统错误、连接错误和超时错误。配置错误、密钥错误或取消会立刻终止阶梯。每次尝试受服务器的 `spawn_timeout_seconds` 限制（默认 30，范围 5–120）。
-- **冷却。** 第四次失败之后，条目进入 60 秒的冷却期。冷却期间的调用以上游不可用快速失败。在拿到按服务器的拉起锁之前和之后都会检查冷却，所以排在一条失败阶梯后面的调用方不会每个都再跑一遍。
+- **重试阶梯。** 最多尝试三次，之间分别等 1 和 5 秒。阶梯很短，因为它在服务器的拉起锁里运行，它的每一秒都是调用方在等的一秒。只重试暂时性的拉起失败：上游不可用或超时，以及操作系统错误、连接错误和超时错误。配置错误、密钥错误或取消会立刻终止阶梯。每次尝试受服务器的 `spawn_timeout_seconds` 限制（默认 30，范围 5–120）。
+- **共享退避。** 跑完的阶梯会记进整个守护进程共用的一份失败台账，所以每个会话的 supervisor 等的是同一段退避，而不是各自再跑一遍阶梯。服务器在 60 秒内不会再被尝试，之后每多跑完一条阶梯，等待翻倍，上限 30 分钟。退避期间的调用以上游不可用快速失败，并写明最后一次错误和下次尝试的时间。连续跑完 3 条阶梯后，服务器被报告为失败。一次成功、对服务器的编辑或删除会清掉这条记录。在拿到按服务器的拉起锁之前和之后都会检查退避，所以排在一条失败阶梯后面的调用方不会每个都再跑一遍。
 - **并发。** 每个 supervisor 同时最多跑 4 个冷启动（`COFFER_MCP_MAX_CONCURRENT_SPAWNS`）。名额只在构建和 initialize 期间占用，退避睡眠期间从不占用。
 - **逐出。** 逐出不拿锁。它把代数计数器加一，并关闭当前连接。在逐出之后才完成的拉起会看到代数变了，于是关闭它的新连接并抛出异常。因此删除、停用或编辑一个服务器从不需要等一条慢吞吞的阶梯。删除 Hook 运行时注册还在，所以它先在整个进程里把这个服务器的 uid 标为退役：从此任何 supervisor 开始或完成的拉起——无论在已经逐出过的会话里，还是删除期间新开的会话里——都被拒绝或关闭，这种被逐出的启动既不重试也不计入退避。销毁会话时也会给每个条目的代数加一，所以还在进行中的拉起会关闭它建好的连接。这个类型的删除、停用和配置编辑 Hook 会把服务器从每个活动会话的 supervisor 中逐出，也从支撑管理路由的进程级 supervisor 中逐出。配置编辑之后，下一次调用会用新的命令、URL 或密钥引用拉起服务器；重新启用什么都不用做，因为下一次调用会重新拉起。
 - **崩溃恢复。** 在传输层失败的 `tools/call` 会逐出连接，下一次调用会重新拉起服务器。传输失败指任何不是 MCP 协议错误的异常，或说明连接已关闭的 MCP 错误。其他格式正确的 MCP 错误说明上游应答了，所以连接保留。超时也不逐出，一开始就没拿到连接的失败也不逐出。
 - **拆除。** stdio 关闭时最多等 10 秒让 SDK 自己关停，SDK 会从 SIGTERM 升级到 SIGKILL。连接自己的生命周期任务先关闭进程及其管道，然后连接杀掉为它记录的每个 PID 及其所有后代。每次拉起都会在 `~/.coffer/upstream-pids/` 下记录一个 PID 文件（PID 取自 SDK 创建的那个进程，而不是靠比对守护进程的其他子进程来猜），以服务器的 uid 为键。启动时，守护进程会清扫崩溃遗留的文件。
 - **日志。** 每个 stdio 上游的 stderr 写到它自己的文件 `~/.coffer/logs/upstream/<name>.log`，而不是 `daemon.log`。服务器环境里注入了密钥时，它的 stderr 经过一条由 Coffer 读取的管道进入文件：每个四个字符及以上的注入值在写盘前替换为 `••••••`，即使被拆在两次写入里、或在进程退出前一刻才打印也一样；Coffer 自己的启动、停止和错误行也同样遮盖。只遮盖与注入值完全相同的内容；服务器重新编码过的密钥不在此列。
 
-守护进程还为管理路由运行一个进程级的 supervisor 和发现模块：`GET …/capabilities`、`POST …/refresh` 以及能力开关。范围从不限制这些路由，所以你总能测试一个没有任何会话被允许看到的服务器。
+守护进程还为管理路由运行一个进程级的 supervisor 和发现模块：`GET …/capabilities`、`POST …/refresh`、能力开关，以及行详情里的预览 `POST …/{uid}/resources/read` 和 `POST …/{uid}/prompts/get`。范围从不限制这些路由，所以你总能测试一个没有任何会话被允许看到的服务器。
 
 ### 测试一个服务器 {#testing-a-server}
 
@@ -306,6 +307,10 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 - `notifications/resources/updated` 在把 URI 改写为 `coffer://<server>/…` 后转发。
 - `notifications/message` 和 `notifications/progress` 被丢掉。工具调用受该服务器的请求超时约束；Coffer 不向上游索要进度，所以没有什么会延长这个超时。
 - 上游发来的 `sampling/createMessage` 和 `roots/list` 通过 SSE 转给这个会话自己的客户端，并按 id 与客户端的回复匹配，超时 30 秒。SDK 在构造客户端会话时就固定了采样和 roots 的处理函数，所以 supervisor 在每个新连接启动之前就把会话的处理函数交给它，并且只在客户端于 `initialize` 时声明了采样或 roots 时才向上游提供；没声明的直接回答「不支持」，不去问客户端。HTTP 上游只有保留了通往客户端的回传通道才能发问（无状态的 Streamable HTTP 服务器不行）。
+
+### HTTP 上游的推送流 {#the-push-stream-of-an-http-upstream}
+
+`initialize` 之后，Coffer 连接 Streamable HTTP 上游的客户端会打开 `GET <endpoint>`，让上游可以推送通知；这条流结束一秒后，MCP SDK 会重新打开它。有些上游回应 `200` 后立刻关闭，这会让该连接在整个存续期间每秒重开一次。HTTP 客户端发送处的一个守卫会统计在打开后 5 秒内就结束的推送流。连续出现 3 次后，Coffer 不再为这条连接打开推送流。保持打开 5 秒或更久的流会把计数清零。请求和响应仍然通过 `POST` 往来；只有这个上游发给这条连接的服务器主动通知不再到达。守卫位于客户端的发送处，所以经过环境代理时同样生效。
 
 ### 取消 {#cancellation}
 
@@ -376,10 +381,13 @@ MCP 领域包里有一个纯 JSON Schema 校验器（只用标准库），有两
 
 ### 测试一个请求 {#testing-a-request}
 
-请求测试用与真实调用相同的请求构建和发送逻辑运行一个草稿工具，什么都不记录。有两个入口：
+请求测试用与真实调用相同的请求构建和发送逻辑运行一个草稿工具，什么都不记录。有三个入口：
 
 - **已保存的组**（`POST /api/v1/custom-tools/{name}/test`）在请求指定的环境里运行，通过该环境已批准的绑定具体化它的密钥，和一次真实调用完全一样；结果写明它在哪个环境运行以及实际目标。
+- **已保存的工具**（`POST /api/v1/custom-tools/{name}/tools/{tool}/test`）按保存的样子运行一个工具，在请求选定的那个环境里，方式相同。
 - **尚未保存的组**（`POST /api/v1/custom-tools/test`，内联带上组的基础 URL、header 和超时）。它没有绑定，所以不发送任何已存储的密钥，也不加认证 header。它的基础 URL 是在表单里输入的，所以在发送任何东西之前要先经过 SSRF 防护（见 [安全 → 出站请求](/zh/architecture/security#outbound-requests)）；被拒绝或解析不了的地址报告为未测试。
+
+两个预览展示一个工具将会发送的请求，既不发送，也不读取任何密钥值：`POST /api/v1/custom-tools/{name}/tools/{tool}/preview` 用于已保存的工具，`POST /api/v1/custom-tools/{name}/preview` 用于已保存的组里的草稿工具。
 
 没有收到应答时，结果会说明是怎么失败的：`request`（请求无法构建）、`timeout`、`connect` 或 `blocked`。重新导入的预览还会指出保留下来、但请求被规格改变了的工具（新增了必填参数，或者方法、路径、请求体模板变了），而读取结果会带上每个操作的第一个 tag，方便导入表单对它们分组。
 

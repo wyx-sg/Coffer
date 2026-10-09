@@ -95,7 +95,13 @@ _PROVIDERS: list[_Provider] = [
         "_model_catalog",
     ),
     # provider kind
-    *_pairs(provider_deps, "_provider_service", "_introspection_service", "_price_resolver"),
+    *_pairs(
+        provider_deps,
+        "_provider_service",
+        "_introspection_service",
+        "_price_resolver",
+        "_window_resolver",
+    ),
     # secret store + master key
     *_pairs(cred_comp, "_secret_store", "_master_key_manager"),
 ]

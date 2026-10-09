@@ -79,7 +79,6 @@ export function ProviderDetail({
         <ProviderUsedBy use={use} />
         <ProviderEndpoint
           provider={provider}
-          use={use}
           status={status}
           rejectedStatus={rejectedStatus}
           reason={

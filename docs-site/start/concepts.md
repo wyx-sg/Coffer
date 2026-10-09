@@ -68,11 +68,11 @@ Architecture: [Resource framework](/architecture/resource-framework).
 A resource's **reach** decides where it takes effect. Reach has two parts:
 
 - **`enabled`**: the on/off switch. Knowledge collections and agents have none: they are always on.
-- **scope**: an optional allow-list of agents. No scope means every agent, `--agents a,b` means only those agents, and an empty list means none.
+- **scope**: an optional allow-list of agents. No scope means every agent; a list means only those agents. A list is never empty: a resource that should reach no agent is switched off.
 
 Scope applies to MCP servers (which agents see the server's tools), skills (which agents receive the skill), providers (which agents' config a switch writes into) and channels (which agents the channel may drive). Knowledge collections have neither: each is served to every agent. Reach is **machine-local**: it is set on the machine it applies to and never syncs, so each of your machines decides reach for itself.
 
-Set scope with `coffer <kind> scope <name> --agents <types>` (an agent is named by its type, such as `claude-code`) (`--all` for every agent, `--none` for none), or from the **Reach** control on the resource's page in the web UI. Guide: [MCP servers](/guides/mcp-servers), [Skills](/guides/skills). Architecture: [Resource framework](/architecture/resource-framework).
+Set scope with `coffer mcp|skill|channel reach <name> --data '{"scope":{"agents":["<agent uid>"]}}'` (`{"scope":null}` for every agent), or `coffer resource reach set <uid>` for any kind; a custom-tool group takes `coffer custom-tool group reach <group> --agent <agent>` (repeatable) or `--all`. The **Reach** control on the resource's page in the web UI does the same. Guide: [MCP servers](/guides/mcp-servers), [Skills](/guides/skills). Architecture: [Resource framework](/architecture/resource-framework).
 
 ## Agent
 
@@ -94,7 +94,9 @@ Besides upstream tools, the gateway always offers Coffer's own tool, prefixed `c
 | --- | --- |
 | `coffer__search_tools` | Ranks the full upstream catalogue against a plain-language query and returns real tool schemas the agent can then call. |
 
-There is no knowledge, memory or log tool. Agents read and change knowledge documents, which are Markdown files, with their own file tools, reach memory through their own native memory, and Coffer's records are read with `coffer log audit|mcp|daemon`.
+Inside a turn Coffer runs (from the **Conversations** page or a channel), the session also gets two turn-scoped tools: `coffer__ask`, which asks you a question and waits for the answer, and `coffer__channel_read_thread`, which reads a chat thread's earlier messages. An agent started in a terminal never sees them.
+
+There is no knowledge, memory or log tool. Agents read and change knowledge pages, which are Markdown files, with their own file tools, reach memory through their own native memory, and Coffer's records are read with `coffer log audit|mcp|daemon`.
 
 The gateway takes the calling agent's identity from the MCP handshake. It is not an argument the agent can set.
 
@@ -108,7 +110,7 @@ Guide: [Skills](/guides/skills).
 
 ## Knowledge collections and tidying
 
-A **collection** is a folder under `~/.coffer/vault/knowledge/<collection>/` holding one tree of Markdown documents that you and your agents write together. A document's path is its identity. The web UI shows documents read-only and opens them in your editor; you edit them there, and agents read and edit them with their own file tools, finding them through the catalogue in `coffer-guide`. To add knowledge, an agent writes a document straight into the collection; an upload becomes a document as it stands. The `coffer-guide` skill tells the agent where a fact belongs and how to tidy a collection: merge documents on one subject, split a long one, correct a stale statement. Coffer runs no model of its own over your documents. **Tidy** on a collection hands that job to your default agent, in a new conversation.
+A **collection** is a folder under `~/.coffer/vault/knowledge/<collection>/` holding a small wiki of Markdown that you and your agents write together: a `README.md` schema that says what belongs there, **sources** under `sources/` (every upload and inbox drop, converted to Markdown, which agents read and never edit) and **pages** under `pages/` (written by you and your agents, linked by `[[slug]]`, each naming the sources it draws on). The web UI shows files read-only and opens them in your editor; you edit them there, and agents read and edit pages with their own file tools, finding them through the catalogue in `coffer-guide`. The `coffer-guide` skill tells the agent where a fact belongs and how to tidy a collection: fold waiting sources into pages, merge pages on one subject, split a long one, correct a stale statement. Coffer runs no model of its own over your knowledge. **Tidy** on a collection hands that job to your default agent, in a new conversation. Coffer also checks each collection for dead links, pages without sources and the like, and **Check with agent** hands a review to your agent.
 
 Guide: [Knowledge](/guides/knowledge). Architecture: [Knowledge](/architecture/knowledge).
 
@@ -120,7 +122,7 @@ Guide: [Memory](/guides/memory). Architecture: [Memory](/architecture/memory).
 
 ## Providers
 
-A **provider** is a model-provider profile: a wire protocol, a base URL and one secret ref. **Switching** to a provider writes it into the native config of each agent in its scope, so you change gateways once instead of once per agent. Switching back to an agent's own login is a separate action. One provider can also be marked as the default for speech to text, which transcribes voice messages.
+A **provider** is a model-provider connection: an OpenAI-compatible address (for Codex), an Anthropic-compatible address (for Claude Code), either or both, and one secret ref. Its addresses decide which agents it serves. **Switching** an agent to a provider writes the connection into that agent's native config. Switching back to an agent's own login is a separate action. One provider can also be marked as the default for speech to text, which transcribes voice messages.
 
 Guide: [Model providers](/guides/providers).
 
@@ -132,13 +134,13 @@ Guide: [Channels](/guides/channels), [Conversations](/guides/chat). Architecture
 
 ## Secret refs
 
-Coffer stores secrets only as Fernet ciphertext, under a master key kept in the macOS Keychain, where only Coffer's signed binaries can read it. Resources never contain a secret. They contain a **secret ref**, a name such as `github.token`, which the daemon resolves only at the moment it starts an upstream server or sends a request. Set a secret with `coffer secret set <ref>`. Plaintext never reaches the database, the logs or the audit log.
+Coffer stores secrets only as Fernet ciphertext, under a master key kept in the macOS Keychain, where only Coffer's signed binaries can read it. Resources never contain a secret. They contain a **secret ref**, `secret/<id>` with an id Coffer mints, which the daemon resolves only at the moment it starts an upstream server or sends a request. Create a secret with `coffer secret set --name "<label>"`; `coffer secret set <ref>` replaces the value of one that exists. Plaintext never reaches the database, the logs or the audit log.
 
 Guide: [Secret store](/guides/secret-store). Architecture: [Security model](/architecture/security).
 
 ## Audit log
 
-Every lifecycle change to a resource is written to the **audit log** with an actor: `cli`, `api`, `ui`, `system`, `sync`, `channel`, or an agent's name when the agent itself acted. The log sits beside two other records: the **MCP invocation log** (which tool was called, when, how long it took and the outcome, never the content) and the **daemon log**. The web UI's **Activity** page shows all three, each on its own tab.
+Every lifecycle change to a resource is written to the **audit log** with an actor: `cli`, `api`, `ui`, `system`, `sync`, `channel`, or an agent's name when the agent itself acted. The log sits beside two other records: the **MCP invocation log** (which tool was called, when, how long it took and the outcome, and by default its arguments and result with secrets masked) and the **daemon log**. The web UI's **Activity** page shows all three, each on its own tab.
 
 Guide: [Activity and audit](/guides/activity). Architecture: [Observability](/architecture/observability).
 

@@ -31,7 +31,6 @@ def bridge() -> _Bridge:
         started_at=__import__("datetime").datetime.now(
             tz=__import__("datetime").UTC,
         ),
-        binary_path="/usr/bin/python3",
     )
     return _Bridge(info)
 

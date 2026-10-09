@@ -1,0 +1,434 @@
+{
+  "en/dark/add-provider-dialog": [
+    1280,
+    1000
+  ],
+  "en/dark/add-server-dialog": [
+    1280,
+    956
+  ],
+  "en/dark/agent-page": [
+    1638,
+    1284
+  ],
+  "en/dark/agents-list": [
+    1638,
+    660
+  ],
+  "en/dark/channels": [
+    1638,
+    1172
+  ],
+  "en/dark/connect-dialog": [
+    2120,
+    896
+  ],
+  "en/dark/conversations": [
+    1638,
+    1112
+  ],
+  "en/dark/home-activity": [
+    2880,
+    1800
+  ],
+  "en/dark/home-agents": [
+    2880,
+    1800
+  ],
+  "en/dark/home-channels": [
+    2880,
+    1800
+  ],
+  "en/dark/home-clis": [
+    2880,
+    1800
+  ],
+  "en/dark/home-conversations": [
+    2880,
+    1800
+  ],
+  "en/dark/home-custom-tools": [
+    2880,
+    1800
+  ],
+  "en/dark/home-knowledge": [
+    2880,
+    1800
+  ],
+  "en/dark/home-mcp-servers": [
+    2880,
+    1800
+  ],
+  "en/dark/home-memory": [
+    2880,
+    1800
+  ],
+  "en/dark/home-model-providers": [
+    2880,
+    1800
+  ],
+  "en/dark/home-overview": [
+    2880,
+    1800
+  ],
+  "en/dark/home-secrets": [
+    2880,
+    1800
+  ],
+  "en/dark/home-settings": [
+    2880,
+    1800
+  ],
+  "en/dark/home-skills": [
+    2880,
+    1800
+  ],
+  "en/dark/home-sync": [
+    2880,
+    1800
+  ],
+  "en/dark/knowledge-page": [
+    1638,
+    1284
+  ],
+  "en/dark/mcp-server": [
+    1638,
+    1284
+  ],
+  "en/dark/providers": [
+    1638,
+    1284
+  ],
+  "en/dark/secrets": [
+    1638,
+    1284
+  ],
+  "en/dark/skill": [
+    1638,
+    1284
+  ],
+  "en/light/add-provider-dialog": [
+    1280,
+    1000
+  ],
+  "en/light/add-server-dialog": [
+    1280,
+    956
+  ],
+  "en/light/agent-page": [
+    1638,
+    1284
+  ],
+  "en/light/agents-list": [
+    1638,
+    660
+  ],
+  "en/light/channels": [
+    1638,
+    1172
+  ],
+  "en/light/connect-dialog": [
+    2120,
+    896
+  ],
+  "en/light/conversations": [
+    1638,
+    1112
+  ],
+  "en/light/home-activity": [
+    2880,
+    1800
+  ],
+  "en/light/home-agents": [
+    2880,
+    1800
+  ],
+  "en/light/home-channels": [
+    2880,
+    1800
+  ],
+  "en/light/home-clis": [
+    2880,
+    1800
+  ],
+  "en/light/home-conversations": [
+    2880,
+    1800
+  ],
+  "en/light/home-custom-tools": [
+    2880,
+    1800
+  ],
+  "en/light/home-knowledge": [
+    2880,
+    1800
+  ],
+  "en/light/home-mcp-servers": [
+    2880,
+    1800
+  ],
+  "en/light/home-memory": [
+    2880,
+    1800
+  ],
+  "en/light/home-model-providers": [
+    2880,
+    1800
+  ],
+  "en/light/home-overview": [
+    2880,
+    1800
+  ],
+  "en/light/home-secrets": [
+    2880,
+    1800
+  ],
+  "en/light/home-settings": [
+    2880,
+    1800
+  ],
+  "en/light/home-skills": [
+    2880,
+    1800
+  ],
+  "en/light/home-sync": [
+    2880,
+    1800
+  ],
+  "en/light/knowledge-page": [
+    1638,
+    1284
+  ],
+  "en/light/mcp-server": [
+    1638,
+    1284
+  ],
+  "en/light/providers": [
+    1638,
+    1284
+  ],
+  "en/light/secrets": [
+    1638,
+    1284
+  ],
+  "en/light/skill": [
+    1638,
+    1284
+  ],
+  "zh/dark/add-provider-dialog": [
+    1280,
+    1000
+  ],
+  "zh/dark/add-server-dialog": [
+    1280,
+    956
+  ],
+  "zh/dark/agent-page": [
+    1638,
+    1284
+  ],
+  "zh/dark/agents-list": [
+    1638,
+    660
+  ],
+  "zh/dark/channels": [
+    1638,
+    1172
+  ],
+  "zh/dark/connect-dialog": [
+    2120,
+    896
+  ],
+  "zh/dark/conversations": [
+    1638,
+    1112
+  ],
+  "zh/dark/home-activity": [
+    2880,
+    1800
+  ],
+  "zh/dark/home-agents": [
+    2880,
+    1800
+  ],
+  "zh/dark/home-channels": [
+    2880,
+    1800
+  ],
+  "zh/dark/home-clis": [
+    2880,
+    1800
+  ],
+  "zh/dark/home-conversations": [
+    2880,
+    1800
+  ],
+  "zh/dark/home-custom-tools": [
+    2880,
+    1800
+  ],
+  "zh/dark/home-knowledge": [
+    2880,
+    1800
+  ],
+  "zh/dark/home-mcp-servers": [
+    2880,
+    1800
+  ],
+  "zh/dark/home-memory": [
+    2880,
+    1800
+  ],
+  "zh/dark/home-model-providers": [
+    2880,
+    1800
+  ],
+  "zh/dark/home-overview": [
+    2880,
+    1800
+  ],
+  "zh/dark/home-secrets": [
+    2880,
+    1800
+  ],
+  "zh/dark/home-settings": [
+    2880,
+    1800
+  ],
+  "zh/dark/home-skills": [
+    2880,
+    1800
+  ],
+  "zh/dark/home-sync": [
+    2880,
+    1800
+  ],
+  "zh/dark/knowledge-page": [
+    1638,
+    1284
+  ],
+  "zh/dark/mcp-server": [
+    1638,
+    1284
+  ],
+  "zh/dark/providers": [
+    1638,
+    1284
+  ],
+  "zh/dark/secrets": [
+    1638,
+    1284
+  ],
+  "zh/dark/skill": [
+    1638,
+    1284
+  ],
+  "zh/light/add-provider-dialog": [
+    1280,
+    1000
+  ],
+  "zh/light/add-server-dialog": [
+    1280,
+    956
+  ],
+  "zh/light/agent-page": [
+    1638,
+    1284
+  ],
+  "zh/light/agents-list": [
+    1638,
+    660
+  ],
+  "zh/light/channels": [
+    1638,
+    1172
+  ],
+  "zh/light/connect-dialog": [
+    2120,
+    896
+  ],
+  "zh/light/conversations": [
+    1638,
+    1112
+  ],
+  "zh/light/home-activity": [
+    2880,
+    1800
+  ],
+  "zh/light/home-agents": [
+    2880,
+    1800
+  ],
+  "zh/light/home-channels": [
+    2880,
+    1800
+  ],
+  "zh/light/home-clis": [
+    2880,
+    1800
+  ],
+  "zh/light/home-conversations": [
+    2880,
+    1800
+  ],
+  "zh/light/home-custom-tools": [
+    2880,
+    1800
+  ],
+  "zh/light/home-knowledge": [
+    2880,
+    1800
+  ],
+  "zh/light/home-mcp-servers": [
+    2880,
+    1800
+  ],
+  "zh/light/home-memory": [
+    2880,
+    1800
+  ],
+  "zh/light/home-model-providers": [
+    2880,
+    1800
+  ],
+  "zh/light/home-overview": [
+    2880,
+    1800
+  ],
+  "zh/light/home-secrets": [
+    2880,
+    1800
+  ],
+  "zh/light/home-settings": [
+    2880,
+    1800
+  ],
+  "zh/light/home-skills": [
+    2880,
+    1800
+  ],
+  "zh/light/home-sync": [
+    2880,
+    1800
+  ],
+  "zh/light/knowledge-page": [
+    1638,
+    1284
+  ],
+  "zh/light/mcp-server": [
+    1638,
+    1284
+  ],
+  "zh/light/providers": [
+    1638,
+    1284
+  ],
+  "zh/light/secrets": [
+    1638,
+    1284
+  ],
+  "zh/light/skill": [
+    1638,
+    1284
+  ]
+}

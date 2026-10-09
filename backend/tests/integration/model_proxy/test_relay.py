@@ -147,6 +147,27 @@ def test_an_upstream_error_reaches_the_agent_as_sent(proxy: Proxy, upstreams) ->
 
 @pytest.mark.acceptance(
     spec="provider-switching",
+    scenario="an upstream error status is logged without its body",
+)
+def test_an_upstream_error_status_is_logged_without_its_body(
+    proxy: Proxy, upstreams, caplog: pytest.LogCaptureFixture
+) -> None:
+    error = {"type": "error", "error": {"type": "not_found_error", "message": "secret-detail"}}
+    up, server = upstreams()
+    up.script = json_reply(404, error)
+    proxy.push(state(member(server, "a")))
+    with caplog.at_level("WARNING"):
+        r = proxy.client.post(
+            "/anthropic/v1/messages", content=b'{"model":"m1"}', headers=claude_headers()
+        )
+    assert r.status_code == 404 and r.json() == error
+    line = next(m for m in caplog.messages if m.startswith("model_proxy.upstream_failed"))
+    assert "status=404" in line and "model=m1" in line
+    assert "secret-detail" not in line
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
     scenario="an unreachable upstream is answered with 502",
 )
 def test_an_unreachable_upstream_is_answered_with_502(proxy: Proxy) -> None:

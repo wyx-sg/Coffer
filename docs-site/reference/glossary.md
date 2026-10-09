@@ -67,7 +67,9 @@ it. See [Model providers](/guides/providers).
 ### Built-in tool
 
 An MCP tool Coffer itself provides, listed with the reserved `coffer__` prefix alongside
-upstream tools. There is one: `coffer__search_tools`. See [MCP tools](/reference/mcp-tools).
+upstream tools. There are three: `coffer__search_tools`, always listed, and `coffer__ask` and
+`coffer__channel_read_thread`, listed only inside a turn Coffer runs. See
+[MCP tools](/reference/mcp-tools).
 
 ## C
 
@@ -81,8 +83,9 @@ receive notifications when you are away from the machine. A channel is a
 
 ### Collection
 
-One knowledge tree: a directory of Markdown documents under
-`~/.coffer/vault/knowledge/<collection>/`, written by you and your agents. A collection is a
+One knowledge tree under `~/.coffer/vault/knowledge/<collection>/`: a small wiki of
+[pages](#page) under `pages/`, compiled by you and your agents from the [sources](#source) kept
+under `sources/`, with a `README.md` at its root. A collection is a
 [resource](#resource) of kind `knowledge`. See [Knowledge](/guides/knowledge).
 
 ### `coffer-guide`
@@ -155,8 +158,7 @@ daemon if none answers, under a lock so two clients never start two daemons. See
 ### Experimental feature
 
 A capability that ships switched off and can be switched on per machine. Two are: `knowledge`
-(Knowledge) and `memory` (Memory). Vault sync and model providers graduated and are always on. While a feature is off its routes answer `404 FEATURE_DISABLED`, its tools leave the MCP
-tool list, and its UI looks absent; its data is kept. See [Experimental features](/guides/experimental-features) and
+(Knowledge) and `memory` (Memory). Vault sync and model providers graduated and are always on. While a feature is off its routes answer `404 FEATURE_DISABLED` and its UI looks absent; its data is kept. See [Experimental features](/guides/experimental-features) and
 [Configuration](/reference/configuration#experimental-features).
 
 ## H
@@ -173,14 +175,15 @@ machines; only the machine a memory came from changes its file. See [Memory](/gu
 ### Inbox
 
 A collection's hidden `.inbox/` directory, a drop zone: a file an agent or another machine
-leaves there is adopted and promoted to a document by the next [sweep](#upkeep-pass). See
+leaves there is adopted and kept as a [source](#source) by the next [sweep](#upkeep-pass). See
 [Knowledge](/architecture/knowledge).
 
 ### Invocation log
 
 The record of every MCP call through the gateway, upstream and built-in: server, tool,
-duration, status (`ok`, `error`, `timeout` or `denied`) and session. It never holds arguments or
-results. See [Observability](/architecture/observability#the-mcp-invocation-log).
+duration, status (`ok`, `error`, `timeout` or `denied`) and session. Each call also keeps its
+arguments and result, masked and cut at 16 KB, unless **Record tool call content** is switched
+off ([Configuration](/reference/configuration#daemon-config-json)). See [Observability](/architecture/observability#the-mcp-invocation-log).
 
 ## J
 
@@ -224,7 +227,7 @@ machine from **Settings › Security › Import a master key**. See [Secret stor
 ### Material
 
 New knowledge submitted to a collection: an upload, or a file left in the
-[inbox](#inbox). It becomes a document as it stands, at once. See
+[inbox](#inbox). It becomes a [source](#source) as it stands. See
 [Knowledge](/guides/knowledge).
 
 ### MCP gateway
@@ -268,6 +271,12 @@ with it becomes the channel's owner, and every other sender is ignored silently.
 [Channels](/guides/channels).
 
 ## P
+
+### Page
+
+A Markdown file under a [collection's](#collection) `pages/`: the wiki itself, written and kept
+current by you and your agents from the collection's [sources](#source). See
+[Knowledge](/guides/knowledge).
 
 ### Pre-apply snapshot
 
@@ -353,6 +362,12 @@ needed, and reports the agent's uid (`--agent-uid`). See
 A folder with a `SKILL.md` that teaches an agent a task. Coffer keeps managed skills in its
 [master store](#master-store) and [binds](#binding) each to the agents in its reach. A skill
 is a [resource](#resource) of kind `skill`. See [Skills](/guides/skills).
+
+### Source
+
+A Markdown file under a [collection's](#collection) `sources/`: [material](#material) kept as
+it arrived, which agents read and never edit. [Pages](#page) say which sources they draw on. See
+[Knowledge](/guides/knowledge).
 
 ### Standalone secret
 
@@ -440,7 +455,7 @@ agent's page lists them so you can [adopt](#adopt) or discard them. See [Skills]
 
 Mechanical work Coffer does on a timer, without being asked: the [memory sync](#memory-sync),
 and the sweep for knowledge (re-render the guide, adopt files left in the
-[inbox](#inbox), commit edits made on disk). None of them calls a model. The memory sync can be switched
+[inbox](#inbox), file loose documents into `pages/`, commit edits made on disk). None of them calls a model. The memory sync can be switched
 off or retimed from the **▾** on **Sync now** on the Memory page.
 See [Memory](/architecture/memory#the-sync-pass) and [Knowledge](/architecture/knowledge#the-sweep).
 

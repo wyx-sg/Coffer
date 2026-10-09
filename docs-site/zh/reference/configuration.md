@@ -35,6 +35,7 @@ Coffer 把配置放在五个地方，每个地方都有其理由：
 | `COFFER_PRICE_REFRESH` | 未设置 | `off` 强制关闭每日模型价格表刷新，无论 `price_refresh` 怎么设；价格取自构建中附带的列表。测试套件和 e2e 守护进程会设置它。 |
 | `COFFER_MODEL_PROXY` | 未设置 | `off` 让守护进程不启动也不监管[本地模型代理](/zh/architecture/model-proxy)；其他任何值或不设置则保持开启。测试套件会设置它。 |
 | `COFFER_UPDATE_CHECK` | 未设置 | `off` 会固定关闭守护进程每天的新版本检查，不管 `update_check` 怎么设。只有从安装脚本装的二进制启动的守护进程才会检查。 |
+| `COFFER_PROVIDER_HEALTH` | 未设置 | `off` 会停掉模型提供商连接的后台健康检查：没有定期巡检，连接被编辑后也不再重新检查。你主动要求的检查仍会运行。测试套件会设置它。 |
 
 ### MCP 网关 {#mcp-gateway}
 
@@ -44,7 +45,7 @@ Coffer 把配置放在五个地方，每个地方都有其理由：
 | `COFFER_TOOL_TIERING_BUDGET` | `50` | 直接列出多少个上游工具，其余的只能通过 `coffer__search_tools` 找到。非正数或格式错误的值回退到默认值。 |
 | `COFFER_TOOL_TIERING_WINDOW_DAYS` | `90` | 为预算给工具排序时使用的调用历史的回溯窗口。 |
 | `COFFER_MCP_MAX_CONCURRENT_SPAWNS` | `4` | 一个会话同时冷启动多少个上游 MCP 服务器。 |
-| `COFFER_MCP_SESSION_IDLE_S` | `1800` | `/mcp` 会话可空闲多少秒，之后回收器会关闭它及其上游进程。 |
+| `COFFER_MCP_SESSION_IDLE_S` | `600` | `/mcp` 会话在没有请求、也没有上游通知的情况下可持续多少秒，之后回收器会关闭它及其上游进程。打开着的通知流不算活动。 |
 | `COFFER_MCP_SESSION_REAPER_INTERVAL_S` | `60` | 回收器两次扫描之间的秒数。 |
 | `COFFER_MCP_SHIM_PATH` | 未设置 | `coffer-mcp-shim` 二进制的绝对路径，会写进智能体的 MCP 条目，优先于 `PATH` 和打包附带的副本。文件不存在时忽略。 |
 
@@ -91,6 +92,7 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 | `COFFER_PORT_RANGE_START`、`COFFER_PORT_RANGE_END` | 未设置 | 绑定该范围内第一个空闲端口，而不是配置的单一端口。优先级高于 `daemon-config.json`。只设置一端时，另一端回退到 `38470` 或 `8009`。 |
 | `COFFER_EVAL_CAPTURE` | 未设置 | 把每次 `coffer__search_tools` 查询及其结果以 JSON 行的形式记录下来，供评测工具使用。`1`、`true` 或 `yes` 写入 `~/.coffer/eval-capture.jsonl`；其他任何非假值都被当作输出路径。 |
 | `COFFER_RUN_BENCHMARKS` | 未设置 | `1` 运行慢到进不了 `make verify` 的性能预算测试，比如调和单轮成本（`make verify-benchmark`）。 |
+| `COFFER_DAEMON_EXIT_WITH_PID` | 未设置 | 守护进程跟随的进程 id：那个进程退出时，守护进程也随之关闭。由 e2e 运行器和会启动守护进程的测试设置，这样被杀掉的测试运行不会留下守护进程。 |
 
 ### Coffer 为它启动的进程设置的变量 {#variables-coffer-sets-for-processes-it-starts}
 
@@ -101,6 +103,10 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 | `CLAUDE_CONFIG_DIR` | Claude Code 的轮次 | 当已注册智能体的配置目录不是 `~/.claude` 时，让 Claude Code 指向它。 |
 | `CODEX_HOME` | Codex 的轮次 | 当已注册智能体的配置目录不是 `~/.codex` 时，让 Codex 指向它。 |
 | `COFFER_GIT_TOKEN`、`COFFER_GIT_USERNAME` | 保险库同步期间的 `git` | 同步远端的令牌及据远端主机推导出的、随之发送的用户名，由 credential helper 在运行时读取，所以令牌永远不会出现在 `argv` 中或磁盘上。 |
+| `COFFER_GIT_PROTOCOL`、`COFFER_GIT_HOST` | 保险库同步期间的 `git` | 同步远端自己的协议和主机。只有当 git 询问的正是这个源时，credential helper 才交出令牌，所以重定向到别的主机永远拿不到它。 |
+| `COFFER_TURN_TOKEN` | Claude Code 和 Codex 的轮次 | 一个标识本轮次的随机令牌。MCP shim 把它作为 `X-Coffer-Turn` 请求头转发，网关据此只在 Coffer 运行的轮次里列出 `coffer__ask` 和 `coffer__channel_read_thread`。 |
+| `COFFER_CHANNEL_TURN` | 由渠道驱动的 Claude Code 和 Codex 轮次 | `1`，标明这个智能体进程在回答一个[渠道](/zh/guides/channels)轮次。 |
+| `COFFER_DAEMON_PREDECESSOR_PID` | 守护进程自行重启时启动的接替进程 | 被接替的守护进程的 pid；接替进程等它退出后再绑定端口。 |
 | `PATH`、`HOME` | 开机自启服务 | 安装服务时从你的登录 shell 采集，这样守护进程能找到 `npx`、`uvx` 等上游启动器。 |
 
 桌面应用读取 `HOME`（或 `USERPROFILE`）、`SHELL` 和 `PATH`，用来定位 `~/.coffer` 并探测登录 shell 的 `PATH`；它自己不定义任何变量。
@@ -131,6 +137,7 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 | `price_refresh` | 布尔值 | `true` | 守护进程是否每天从 genai-prices 刷新一次模型价格表。关闭时使用构建中附带的价格表。每次刷新时读取。 | **设置 › 通用 → 刷新模型价格** |
 | `update_check` | 布尔值 | `true` | 从安装脚本装的二进制运行的守护进程是否每天去 GitHub 检查一次新版本。它只报告结果，由 `coffer update` 安装。每次检查时读取。 | **设置 › 关于 → 自动检查**，或 `coffer daemon upgrade-auto-check --set enabled=false` |
 | `record_call_content` | 布尔值 | `true` | 每次 MCP 工具调用是否在调用日志里保存它的参数和返回结果（以及自定义工具的请求和响应），先遮盖密钥并截断到 16 KB。关闭后新的行只保留元数据。立即生效。 | **设置 › 数据 → 历史记录 → 记录工具调用内容**，或 `coffer settings call-content set` |
+| `skill_update_check` | `"6h"`、`"1d"`、`"7d"` 或 `"manual"` | `"6h"` | 这台机器多久在后台检查一次从 Git 导入的技能有没有更新的提交。立即生效。 | **设置 › 通用 → 检查技能更新**，或 `coffer skill update-check set --set interval=1d` |
 
 守护进程的运行时状态——它的 pid、端口和 API 令牌——在另一个文件 `~/.coffer/daemon.json` 中，启动时创建、退出时删除。见[文件与目录](/zh/reference/filesystem#daemon-files)。
 
@@ -200,7 +207,7 @@ Coffer 自身工作的设置是保险库中的一个文档 `state/settings/inter
 | --- | --- | --- | --- |
 | `memory_sync` | **记忆**页头 → **立即同步**的 **▾** → **自动同步记忆** | 开，每 1 小时 | 把每个智能体在本机写下的内容发布到保险库的记忆中心库，并把中心库写进每个智能体自己的记忆。一台机器上的第一次同步，以及要写入超过 50 份副本的同步，会先作为预览等待。它不调用任何模型。见[记忆](/zh/guides/memory)。 |
 
-知识的扫描没有设置。**知识**[实验功能](#experimental-features)开启期间，它每分钟运行一次：重新渲染 `coffer-guide` 技能，把投到知识集 `.inbox/` 里的文件升格为文档，并提交磁盘上的编辑。
+知识的扫描没有设置。**知识**[实验功能](#experimental-features)开启期间，它每分钟运行一次：重新渲染 `coffer-guide` 技能，把投到知识集 `.inbox/` 里的文件作为来源保留到 `sources/` 下，把散落的文档归入 `pages/`，并提交磁盘上的编辑。
 
 ### 同步远端 {#sync-remote}
 

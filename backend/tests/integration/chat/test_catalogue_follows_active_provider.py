@@ -10,11 +10,8 @@ The regression it guards: the channel ``/model`` card offered ``claude-opus-5``
 while every turn went to a gateway that has never heard of it, so tapping it
 failed the turn at the SDK.
 
-The agents are REGISTERED rows here rather than a hand-built list, which they
-did not have to be before: a connection's reach is a scope holding agent UIDS
-(ADR identity-is-the-uid-inside-the-file), so resolving that reach back into
-the agent TYPE this catalogue is asked about only works against a registry that
-actually holds the agents.
+The agents are REGISTERED rows here rather than a hand-built list: the switch
+records the choice on the agent's own row.
 """
 
 from __future__ import annotations
@@ -40,7 +37,6 @@ from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import CuratedModel, Protocol
 from coffer.domain.provider.modality import Modality
 from coffer.domain.resource import Resource
-from coffer.domain.scope import Scope
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.agent.model_discovery import NativeConfigModelDiscovery
 from coffer.infrastructure.persistence.base import Base
@@ -212,18 +208,12 @@ async def _gateway(
         name,
         protocol=Protocol.OPENAI,
         base_url="https://agnes.example.test/v1",
+        anthropic_base_url="https://agnes.example.test",
         secret_value="sk-test",
         models=models,
     )
-    # Which agents a connection reaches is its framework scope now, not a
-    # create argument (ADR per-agent-resource-scope) — and the scope names them
-    # by uid, not by agent type (ADR identity-is-the-uid-inside-the-file), so
-    # the types a test reads at are resolved through the registered rows.
-    await env.resources.update_scope(
-        connection.uid,
-        Scope(agents=[env.agent_uids[a] for a in agents]),
-        actor="test",
-    )
+    # The gateway serves both wires, so it reaches both agents (ADR
+    # provider-reach-is-what-its-addresses-serve); each agent chooses it.
     for agent in agents:
         await env.providers.activate(connection.uid, agent)
 
@@ -392,15 +382,13 @@ async def test_the_model_picker_offers_a_fixed_list_without_free_form_entry(env:
         "agnes",
         protocol=Protocol.OPENAI,
         base_url="https://agnes.example.test/v1",
+        anthropic_base_url="https://agnes.example.test",
         secret_value="sk-test",
         models=[
             CuratedModel(id="agnes-2.5-pro-beta"),
             CuratedModel(id="agnes-canvas-1", modality=Modality.IMAGE),
             CuratedModel(id="agnes-mini"),
         ],
-    )
-    await env.resources.update_scope(
-        connection.uid, Scope(agents=[env.agent_uids[AgentType.CLAUDE_CODE]]), actor="test"
     )
     await env.providers.activate(connection.uid, AgentType.CLAUDE_CODE)
 

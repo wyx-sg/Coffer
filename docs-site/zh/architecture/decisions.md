@@ -30,6 +30,7 @@ Coffer 保留三类设计文本，各司其职：
 | 决定 | 记录 |
 | --- | --- |
 | 资源框架是核心领域，在第二种类型出现之前就设计好 | [`resource-framework-upfront`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-framework-upfront.md) |
+| 每个 Web 界面和桌面应用操作都有一条走同一路由的 `coffer` 命令 | [`command-line-parity-with-the-web-ui`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/command-line-parity-with-the-web-ui.md) |
 | 一种类型以一条冻结的可选 Hook 记录接入：写入前做校验，写入后做响应 | [`kind-plugin-contract`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/kind-plugin-contract.md) |
 | 资源的身份是它文件里的 `uid`；路径和名称只是位置和标签 | [`identity-is-the-uid-inside-the-file`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/identity-is-the-uid-inside-the-file.md) |
 | 智能体能看到的名称是固定的 | [`names-visible-to-agents-are-fixed`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/names-visible-to-agents-are-fixed.md) |
@@ -60,7 +61,8 @@ Coffer 保留三类设计文本，各司其职：
 | 智能体通过 stdio shim 到达网关，而不是原生 HTTP 条目 | [`stdio-shim-bridge`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/stdio-shim-bridge.md) |
 | 桌面外壳托管共享的前端，只负责浏览器做不到的事 | [`desktop-shell-over-a-shared-frontend`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/desktop-shell-over-a-shared-frontend.md) |
 | 回环守护进程替界面执行操作系统的文件操作 | [`daemon-proxies-os-file-actions`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-proxies-os-file-actions.md) |
-| 分发——三个 PyInstaller 二进制，以 CLI 压缩包和桌面应用两种形式发布 | [`distribution-pyinstaller`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/distribution-pyinstaller.md) |
+| 分发——四个 PyInstaller 二进制，以 CLI 压缩包和桌面应用两种形式发布 | [`distribution-pyinstaller`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/distribution-pyinstaller.md) |
+| Coffer 采用 AGPL-3.0-or-later 许可证 | [`project-license-is-agpl-3-0`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/project-license-is-agpl-3-0.md) |
 | 用实验功能代替发布分支 | [`experimental-features-instead-of-a-release-branch`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/experimental-features-instead-of-a-release-branch.md) |
 | 侧边栏按人来做的事分组：智能体、运行、能力、上下文、系统 | [`sidebar-grouped-by-what-the-person-comes-to-do`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md) |
 
@@ -87,6 +89,9 @@ Coffer 保留三类设计文本，各司其职：
 | 安全地写入智能体原生配置 | [`writing-agent-native-config-safely`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/writing-agent-native-config-safely.md) |
 | LLM 连接被投影进每个智能体自己的配置文件 | [`provider-connections-projected-into-agent-config`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-connections-projected-into-agent-config.md) |
 | API 密钥类提供商经由一个独立的本地模型代理访问，代理原样转发字节 | [`api-key-providers-are-reached-through-a-separate-local-model-proxy`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/api-key-providers-are-reached-through-a-separate-local-model-proxy.md) |
+| 一个连接同时服务两种协议：在 Base URL 旁可选一个 Anthropic 地址 | [`one-connection-serves-both-wires`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/one-connection-serves-both-wires.md) |
+| 连接能给哪些 agent 用，由它的地址决定；不再有可用范围和开关 | [`provider-reach-is-what-its-addresses-serve`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-reach-is-what-its-addresses-serve.md) |
+| 提供商模型的上下文窗口依次取：你设置的、接口返回的、内置列表的，否则不写 | [`context-windows-for-provider-models`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/context-windows-for-provider-models.md) |
 | 用量在代理处计量；订阅制智能体不计量 | [`usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md) |
 | 模型目录从已安装的智能体读回 | [`model-catalogue-read-from-the-agent`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/model-catalogue-read-from-the-agent.md) |
 | 语音转文字的模型是一项设置；它的接入地址借自一个被标记的连接 | [`internal-engine-settings`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/internal-engine-settings.md) |
@@ -120,6 +125,7 @@ Coffer 保留三类设计文本，各司其职：
 | Coffer 把自己的说明书作为技能资源随包发布 | [`coffer-ships-its-own-skill`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md) |
 | 知识是一个 Markdown 文件目录，而不是索引 | [`knowledge-is-plain-files`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) |
 | 整理知识是智能体的工作 | [`tidying-knowledge-is-the-agents-job`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md) |
+| 知识是一个由保留下来的来源编译出页面的 wiki | [`knowledge-is-a-wiki-of-pages-compiled-from-kept-sources`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md) |
 | 通过保险库里的中心库，把记忆同步进每个智能体自己的记忆 | [`sync-memory-into-each-agents-own-memory`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-memory-into-each-agents-own-memory.md) |
 
 ## 同步与密钥 {#sync-secrets}
@@ -137,3 +143,11 @@ Coffer 保留三类设计文本，各司其职：
 | 密钥只以密文形式跨机器传递；主密钥和推送令牌从不进入仓库 | [`secrets-cross-machines-only-as-ciphertext`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/secrets-cross-machines-only-as-ciphertext.md) |
 | 独立密钥是具名的 `coffer://secret/` 引用，只注入一个子进程 | [`standalone-secrets-are-named-references-injected-into-one-child`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/standalone-secrets-are-named-references-injected-into-one-child.md) |
 | 智能体可以配置 Coffer；只有在场的人能看到密钥明文或把它发往新的地方 | [`only-a-present-human-sees-a-secret-or-sends-it-somewhere-new`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md) |
+
+## 文档 {#documentation}
+
+详见：[参与贡献](/zh/contributing/#docs-site-in-two-languages)。
+
+| 决定 | 记录 |
+| --- | --- |
+| 文档截图由一个预置数据的守护进程生成，而不是手工截取 | [`docs-screenshots-are-generated-from-a-seeded-daemon`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/docs-screenshots-are-generated-from-a-seeded-daemon.md) |

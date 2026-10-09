@@ -42,7 +42,7 @@ What each box is:
 | --- | --- |
 | Coding agents | Claude Code and Codex, the two agent types Coffer registers. Each reaches Coffer through an MCP server entry Coffer writes into its config, and reads skills Coffer delivers into its skills directory. |
 | `coffer-mcp-shim` | A small stdio-to-HTTP forwarder the agent launches as an MCP server. It finds (or starts) the daemon and relays JSON-RPC to `/mcp`, stamping the agent's identity onto the handshake. |
-| `coffer` CLI | A Typer application with a short command list: the daemon's lifecycle, the logs, `coffer run`, and the few commands a program or an agent hand-off runs. Each command that reads or writes state is an HTTP call to the daemon; the CLI never opens the database or the secret store itself. |
+| `coffer` CLI | A Typer application with a command for every operation the UI offers, each registered from one command registry, plus the daemon's lifecycle, `coffer update` and `coffer uninstall`, the logs and `coffer run`. Each command that reads or writes state is an HTTP call to the daemon; the CLI never opens the database or the secret store itself. |
 | Web UI | A React single-page app, built to static files that the daemon serves from its own origin. |
 | Desktop shell | A Tauri 2 app that hosts the same built frontend in a native window with a menu bar item. It supplies the page its daemon address and token over IPC, starts the daemon when none is running, and updates itself from a signed release manifest. |
 | HTTP API | FastAPI routes under `/api/v1/*`: the management plane every client uses. |
@@ -62,11 +62,12 @@ Coffer runs as a small set of cooperating processes. Only one of them holds stat
 
 | Process | Lifetime | Role |
 | --- | --- | --- |
-| `coffer-daemon` | Long-lived. Serves until you stop it or another daemon supersedes it; never stands down on its own. | Owns all state: the vault's one writer and the single SQLite writer. Binds `127.0.0.1` on the port you pinned in `~/.coffer/daemon-config.json`, else `38470`, and refuses to start (naming the holder) if it cannot bind that port. |
+| `coffer-daemon` | Long-lived. Serves until you stop it or another daemon supersedes it; never stands down on its own. | Owns all state: the vault's one writer and the single SQLite writer. Binds `127.0.0.1` on the port you pinned in `~/.coffer/daemon-config.json`, else `38470`, and refuses to start (naming the holder) if it cannot bind that port, unless the holder is this vault's own daemon, when the start exits as a duplicate. |
 | `coffer-mcp-shim` | One per MCP client session. | Forwards stdio to the daemon's `/mcp` endpoint; detect-or-spawns the daemon; recovers when the daemon restarts. |
 | `coffer` | One per command. | Calls the daemon over loopback; detect-or-spawns it; warns on stderr when the daemon's version differs from its own. |
 | Desktop shell | While the app runs. | Hosts the frontend, supplies secrets over IPC, detect-or-spawns and restarts the daemon. Quitting it does not stop the daemon. |
 | Upstream MCP servers | Per client session, per server. | Spawned by the gateway's per-session supervisor and reaped when the session closes. |
+| `coffer-seatalk-bridge` | One per SeaTalk connection attempt. | Holds a SeaTalk websocket connection with the operator-supplied SDK outside the daemon, and writes events back to it as JSON lines. Exits when the daemon closes its stdin. |
 | Agent runtimes | Per chat turn or conversation. | The Claude Agent SDK and the Codex app-server, started by the chat platform to run a turn. |
 
 The CLI, the shim and the desktop shell all discover the daemon through `~/.coffer/daemon.json` (pid, port, token; mode `0600`), which the daemon writes at start and removes at exit. A spawn lock on `~/.coffer/daemon.lock` makes concurrent detect-or-spawn attempts converge on one daemon. On macOS, **Start at login** registers the daemon as a login service. The full lifecycle is in [Daemon and processes](/architecture/daemon).
@@ -159,7 +160,7 @@ Versions are the ones pinned in [`backend/uv.lock`](https://github.com/wyx-sg/Co
 | API client | openapi-typescript, openapi-fetch | Wire types generated from each spec's OpenAPI contract. |
 | i18n | i18next, react-i18next | English and Simplified Chinese interface. |
 | Desktop | Tauri 2 (Rust 2021) | The native shell, menu bar item and updater. |
-| Packaging | PyInstaller | Frozen `coffer-daemon`, `coffer-mcp-shim` and `coffer` binaries. |
+| Packaging | PyInstaller | Frozen `coffer-daemon`, `coffer-mcp-shim`, `coffer` and `coffer-seatalk-bridge` binaries. |
 
 ## Reading guide
 

@@ -107,7 +107,7 @@ Which identifier fills `<id>` depends on whether the kind can be renamed:
 - **Skills and MCP servers** are addressed by their **name**, because the name is fixed once registered and is what you already recognise — `/mcp-servers/github/tools`.
 - **Kinds you can rename** — model providers, channels, knowledge collections — are addressed by their immutable **uid**, so renaming never breaks a link.
 
-An unknown tab segment falls back to the bare address. A knowledge collection's pane is addressed the same way — `/knowledge/<uid>?file=<document>` for a document — and a memory project's page is `/memory/projects/<project folder>` (`/memory/global` for the global memories). A list page with no detail to nest under, such as Sync or Activity, carries its tab as `?tab=` instead; the default tab is the bare address.
+An unknown tab segment falls back to the bare address. A knowledge collection's pane is addressed the same way — `/knowledge/<uid>?file=<document>` for a document, `&history=1` added for its history drawer — and a memory project's page is `/memory/projects/<project folder>` (`/memory/global` for the global memories). A list page with no detail to nest under, such as Sync or Activity, carries its tab as `?tab=` instead; the default tab is the bare address.
 
 A list's filters are query parameters too, because a filtered list is something you link to. The Conversations list is the one that needs it most: `/conversations?source=local|<channel uid>&agent=codex&q=sentry` narrows it by source (`local` is This Mac, the rest are channels), agent and search text (title and directory), and a channel links to its own conversations as `/conversations?source=<uid>`. The page is only a list: a row opens in the terminal, not at an address of its own.
 

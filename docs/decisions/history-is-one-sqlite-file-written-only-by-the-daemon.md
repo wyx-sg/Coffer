@@ -65,10 +65,12 @@ Forces on the choice:
   service, off the event loop. It (1) refuses a database
   whose revision this build does not know, raising `DatabaseSchemaTooNew`
   (`DB_SCHEMA_TOO_NEW`) with an actionable message instead of Alembic's; (2) if
-  an upgrade is due, copies `runs.db` and its
-  `-wal`/`-shm` companions to `runs.db.pre-<revision>` — never overwriting an
-  earlier copy for the same revision, keeping the three newest — and copies
-  nothing when the schema is already current; (3) runs `alembic upgrade head`
+  an upgrade is due, writes a compact copy of `runs.db` to
+  `runs.db.pre-<revision>` with `VACUUM INTO` — never overwriting an earlier
+  copy for the same revision, keeping the three newest — and copies nothing
+  when the schema is already current (how the copy is made, and how the file
+  gives pruned space back, is
+  [its own ADR](runs-db-gives-pruned-space-back.md)); (3) runs `alembic upgrade head`
   with the URL pinned on the Alembic config, so a caller that names a database
   cannot migrate a different one (such as the developer's real home from a
   test).
@@ -240,7 +242,9 @@ Rules this implies for every future change:
   linear; two revisions with the same number on two branches is the incident
   above.
 - Retention is a registry of prunable tables consulted by one worker rather than
-  per-table code; see [Audit and Retention](audit-and-retention.md).
+  per-table code; see [Audit and Retention](audit-and-retention.md). The same
+  worker gives the pages a prune frees back to the disk
+  ([`runs.db` Gives Pruned Space Back](runs-db-gives-pruned-space-back.md)).
 - `derived.db`, the small SQLite file under `derived/`, is outside this
   lineage: it holds only rebuildable state, carries a schema version in
   `PRAGMA user_version`, and is deleted and created again when that differs.

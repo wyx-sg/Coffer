@@ -148,7 +148,10 @@ not bound here. The lifecycle MUST retry on its normal failure interval, so an
 approval given meanwhile starts the adapter with no restart; a pairing and the
 channel's settings are untouched throughout. The Channels page and the Overview
 attention item MUST name the approval (and, for `refused`, that it was refused)
-instead of "not running" or a suggestion to replace the key.
+instead of "not running" or a suggestion to replace the key. For `refused`,
+the Channels page's banner MUST offer Ask again, which asks again on each refused
+request for this channel's secret (see [secret](../secret/spec.md)); in the
+desktop app it is approved on the spot with Touch ID.
 
 #### Scenario: a channel whose secret waits for approval says so and starts once approved
 - **GIVEN** an enabled channel whose secret has not been approved for it
@@ -2830,3 +2833,27 @@ only an MCP session inside a turn Coffer runs.
   tools and call `coffer__channel_read_thread`
 - **THEN** only the session inside the turn sees and runs it; outside it is an
   unknown tool
+
+### Requirement: Name the model the default resolves to
+Every place a channel shows its no-override model choice — `Default model` in the `/model` card and its text fallback, the reply to `/model default`, the settings line of `/status` and `/new`, and Provider default in the channel's Overview › Agents — MUST name the model it resolves to when Coffer can know it, as `Default model (<name>)` (`Provider default (<name>)` on the web), and MUST name none otherwise. The model is the agent's resolved default from [provider-switching](../provider-switching/spec.md) "Name the model a default resolves to", shown by the name its `/model` card button carries.
+
+#### Scenario: the default model names the model it resolves to
+- **GIVEN** a channel on an agent whose default resolves to `gpt-5-codex`, labelled `GPT-5 Codex`
+- **WHEN** the owner sends `/model default` and then bare `/model`
+- **THEN** the reply reads `Model: Default model (GPT-5 Codex) — from your next message` and the model text names `Default model (GPT-5 Codex)`
+- **AND** for an agent whose default Coffer cannot know, the same replies read plain `Default model`
+
+### Requirement: Commit a typed channel setting when its field is finished
+On a channel's Settings tab, a value typed into a field (the title, a SeaTalk app id,
+the two quiet windows, the idle period) MUST be saved when the person finishes the field,
+on blur or Enter, never while they are still typing: a value passed on the way to another
+("3" on the way to "32") MUST NOT be saved, so it never takes effect on the running channel
+and never becomes a version in the vault. A finished value MUST be saved only when it is
+valid and differs from the value last saved; leaving the tab saves a pending one.
+Switches, choices and list edits keep saving as they change.
+
+#### Scenario: a value half typed into a channel setting never takes effect
+- **GIVEN** a channel whose wait after a text message is 1.5 seconds
+- **WHEN** the owner types "3", pauses, types "2" and presses Enter
+- **THEN** exactly one save is sent, carrying 32 seconds
+- **AND** leaving the field afterwards sends nothing more

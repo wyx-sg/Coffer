@@ -310,7 +310,7 @@ function install(setup: Setup = {}) {
           ],
         };
       case "/knowledge/collections":
-        return { collections: [{ uid: "k1", name: "shopee", document_count: 142 }] };
+        return { collections: [{ uid: "k1", name: "shopee", page_count: 142 }] };
       case "/secrets":
         return {
           refs: [
@@ -597,7 +597,7 @@ describe("each health tile carries the numbers and lines the board shows", () =>
     routeFallback = (path) => {
       if (path === "/knowledge/collections") {
         return {
-          collections: [{ uid: "k1", name: "shopee", document_count: 142, updated_at: minutes(1) }],
+          collections: [{ uid: "k1", name: "shopee", page_count: 142, updated_at: minutes(1) }],
         };
       }
       if (path === "/memory/sync/state") {

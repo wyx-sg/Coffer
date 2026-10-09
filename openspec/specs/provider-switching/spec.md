@@ -46,7 +46,8 @@ The system MUST register each managed connection as a Resource of kind `provider
 framework's immutable `uid`
 ([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](../../../docs/decisions/identity-is-the-uid-inside-the-file.md));
 its `name` is a mutable label, validated by `validate_name` and unique within the kind. The `provider`
-kind declares `supports_scope`, and its `enabled` switch is the framework's.
+kind declares no scope: a connection reaches the agents its addresses serve (see "Derive the agents a
+connection serves from its addresses"), and no surface offers it an off switch.
 
 #### Scenario: a connection is a provider resource addressed by its uid
 - **GIVEN** a running daemon
@@ -56,18 +57,18 @@ kind declares `supports_scope`, and its `enabled` switch is the framework's.
 
 ### Requirement: Validate connection config against the provider schema
 The system MUST validate a connection's config against a kind-specific schema over
-`{protocol, base_url, secret_ref, models, transcribe_default, local_runtime}`,
+`{protocol, base_url, anthropic_base_url, secret_ref, models, transcribe_default, local_runtime}`,
 rejecting any other key. The one retired key, `internal_default`, is accepted and ignored
 (see "Ignore a stored internal-default flag"). The config MUST NOT carry a model the connection runs (no `model`, no
-`fast_model`), nor the agents it reaches — reach is the resource row's per-agent `scope` — nor a
+`fast_model`), nor the agents it reaches — those follow from its addresses — nor a
 manually chosen wire format or a `wire_api`: Codex loads only `responses`, so the Codex block writes that
 fixed value and nothing stores it.
 
 `protocol` says what the endpoint speaks: `anthropic`, `openai` or `unknown`, where
 `unknown` means a probe was inconclusive. A fourth value, `ollama`, is retired: it is never offered and
 a stored one is only read (see "Stop offering the ollama protocol"). The protocol drives model
-introspection and whether a key is required; it does not choose the agent a connection is written into,
-but the wire cannot move under a live connection (see "Refuse to move the wire of a live connection"). The config carries no flag saying a
+introspection, whether a key is required and, with `anthropic_base_url`, which agents the connection
+serves (see "Give a connection an Anthropic address"); the wire cannot move under a live connection (see "Refuse to move the wire of a live connection"). The config carries no flag saying a
 connection is switched on: which agent runs on which connection is a field of the agent record (see
 "Keep an agent on at most one connection"). No wire names an agent: each agent
 declares the wire protocols its native config speaks, possibly none (see "Keep projection transforms
@@ -186,8 +187,9 @@ replacing the built-in rows on an endpoint that serves no Claude ids and keeping
 does. Every option Coffer writes into `modelPicker` carries the description `via Coffer`, which is
 how de-projection tells Coffer's picker from the user's. For a connection to
 a model runtime on this machine it also writes `env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` (local
-runtimes reject Claude Code's beta request fields) and `env.CLAUDE_CODE_MAX_CONTEXT_TOKENS` set to
-the chosen model's recorded window (Claude Code otherwise assumes 200k for an id it does not know).
+runtimes reject Claude Code's beta request fields). For any connection whose chosen model is not a
+Claude id and records a window, it writes `env.CLAUDE_CODE_MAX_CONTEXT_TOKENS` set to that window
+(see "Tell Claude Code a provider model's window").
 
 Coffer writes no reasoning-effort key: an `effortLevel` already in the file is the user's own and is left as it is.
 
@@ -256,8 +258,9 @@ another type, that runs on the previous connection stays on it. One pure functio
 `connection_for_agent(agent, connections)`, answers which connection an agent is on, and projection,
 the proxy's route, the chat model list and the protocol lock all ask it. A
 connection SERVES an agent when the agent's `connection_uid` names it, it exists, is enabled, is not a
-stored `ollama` connection, and its scope reaches the agent; a pointer that names a missing, switched-off or
-out-of-scope connection means the agent is treated as on its built-in login, and the reconciler reports
+stored `ollama` connection, and it has an address for the wire the agent speaks (see "Derive the agents
+a connection serves from its addresses"); a pointer that names a missing or switched-off connection, or
+one with no address for that wire, means the agent is treated as on its built-in login, and the reconciler reports
 the keys left in its file rather than silently routing it elsewhere.
 
 #### Scenario: switching one agent onto a connection moves only that agent
@@ -271,9 +274,9 @@ the keys left in its file rather than silently routing it elsewhere.
 connection. The operation:
 
 1. requires the connection to exist, else 404, and the agent of that type to be registered, else 404;
-2. refuses with 409 `PROVIDER_DOES_NOT_REACH_AGENT` when the connection is switched off or
-   the connection's scope does not name the agent, and with 422 `PROVIDER_PROTOCOL_RETIRED` for a
-   stored `ollama` connection;
+2. refuses with 409 `PROVIDER_DOES_NOT_REACH_AGENT` when the connection is switched off or has no
+   address for the wire the agent speaks (the message says to add an Anthropic address for Claude
+   Code), and with 422 `PROVIDER_PROTOCOL_RETIRED` for a stored `ollama` connection;
 3. projects the connection into that agent's native config file, recording the file's prior content;
 4. sets the agent's `connection_uid` to the connection's uid;
 5. emits `provider_switched`;
@@ -283,18 +286,13 @@ The projection MUST run before the agent record is written, and a failure at any
 file back and leave the record unchanged, so the agent is never left pointed at the proxy with no
 connection behind it. The operation writes no other agent's file and no other agent's record.
 
-Reach is the framework's per-agent `scope`
-([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)); there is no
-`compatible_agents` field in the config, in `ProviderCreate` or in `ProviderPatch`. A new connection
-starts unscoped on every wire (including `unknown`, so an inconclusive probe hides nothing and the
-user decides), which reaches every agent including one registered later; the kind has no
-start-up scope of its own. A stored `ollama` connection (a retired wire) already projects to no agent.
-Re-targeting is a scope edit (`PUT /api/v1/resources/{uid}/scope`, which the
-connection's scope control calls); an empty list is refused, and a connection that should reach no
-agent is switched off, so no agent resolves its key. The projection writer MUST be chosen by AGENT type, not by
-protocol: a connection reaching `claude_code` writes Claude's `settings.json` in the anthropic shape
-and one reaching `codex` writes Codex's `config.toml`, which is how an OpenAI-compatible gateway is
-routed to Claude Code. Coffer translates nothing between protocols.
+Reach follows from the connection's addresses (see "Derive the agents a connection serves from its
+addresses"); there is no `compatible_agents` field in the config, in `ProviderCreate` or in
+`ProviderPatch`, and no scope. A stored `ollama` connection (a retired wire) projects to no agent. The
+projection writer MUST be chosen by AGENT type, not by protocol: a connection reaching `claude_code`
+writes Claude's `settings.json` in the anthropic shape, pointing at the proxy route whose upstream is
+the connection's Anthropic address, and one reaching `codex` writes Codex's `config.toml`. Coffer
+translates nothing between protocols.
 
 #### Scenario: a switch whose write fails puts the file back
 - **GIVEN** a Codex agent whose `config.toml` the user edits between Coffer's read and its write
@@ -302,12 +300,12 @@ routed to Claude Code. Coffer translates nothing between protocols.
 - **THEN** the switch fails with `config_file_stale`, the user's Codex edit survives, and the agent's `connection_uid` is unchanged
 
 #### Scenario: a connection the agent is not reached by is refused
-- **GIVEN** a registered Codex agent and a connection scoped to `["claude_code"]`
+- **GIVEN** a registered Codex agent and an `anthropic` connection, which has no OpenAI address
 - **WHEN** the user switches the Codex agent onto it
 - **THEN** the switch is refused with 409 `PROVIDER_DOES_NOT_REACH_AGENT`, no file is written and the agent's `connection_uid` is unchanged
 
 #### Scenario: route an openai-compatible connection to Claude Code with its scope
-- **GIVEN** a Claude Code agent is registered and an `openai`-wire connection is created and then scoped to `["claude_code"]`,
+- **GIVEN** a Claude Code agent is registered and an `openai`-wire connection is created with an Anthropic address,
 - **WHEN** the user switches the Claude Code agent onto that connection,
 - **THEN** it projects into Claude Code's `settings.json` (the anthropic shape) with `apiKeyHelper = "<absolute path to the coffer CLI> proxy token --agent-uid <agent uid>"`, and the model proxy routes that agent's requests to exactly that connection with that connection's key.
 
@@ -411,7 +409,7 @@ An agent's model MUST be changed in two calls, so the person sees the lines befo
 
 The files are the agent's own: for Claude Code, `settings.json` — the top-level `model` and the `env.ANTHROPIC_DEFAULT_<TIER>_MODEL` pins; for Codex, `config.toml` — `model` and `[model_providers.coffer]` — together with Coffer's own model-list file `coffer-model-catalog.json` beside it, so a Codex change reads as two changes. A model the user has since changed with `/model` no longer equals the agent's binding and is theirs. No reasoning effort is written, so none is previewed.
 
-The web UI's **Change model** dialog (Overview › Model › Change…, or `?change-model=1`) is the one form for both agents: Provider, Model and, for Claude Code, Model per tier — Codex has one model per session and no tiers. **Review changes** opens the 1060-wide review of the files from the preview, with a note that only the lines shown change, a backup copy is kept in Coffer's own folder, and, for Codex, that the model list file is Coffer's own; **Apply** writes them and closes both dialogs. With a provider and a model chosen, Coffer tests that provider with that model by itself once the draft has rested for a moment (`POST /api/v1/models/test-connection` with the connection's protocol, base URL and stored secret ref — the call of Overview › Model › Test; the page never handles a key), cancels a run the draft has moved past, and shows the result as a line under Model: **Testing connection…**, **Connection OK** with how long it took, or **Connection failed** with the reason and **Retry**. **Review changes** is enabled only when the draft differs from what is applied, names a model, AND the test for exactly this provider and model passed; while it is testing or after a failure it stays off and a line beside it says why. A local runtime connection is tested the same way. The review runs no second test. When Apply is refused as stale, the review says which file changed and offers **Reload preview**, and writes nothing. With the built-in login chosen the dialog offers **Model** with no tier section: **Built-in default** (the agent's config names no model), then the agent's own built-in models — the label shown, the id stored — preselected with what the agent's config names now (a configured id the list lacks still reads as its id); when the agent runs on a connection the field starts at Built-in default, and the list is the agent's own, asked of `GET /api/v1/agent-providers/{agent_key}/models?source=builtin` (see "Serve one model list to every surface"), so it never shows the connection's curated set. Choosing one sends `native_model`, Built-in default sends `clear_native_model`, and no connection test runs.
+The web UI's **Change model** dialog (Overview › Model › Change…, or `?change-model=1`) is the one form for both agents: Provider, Model and, for Claude Code, Model per tier — Codex has one model per session and no tiers. **Review changes** opens the 1060-wide review of the files from the preview, with a note that only the lines shown change, a backup copy is kept in Coffer's own folder, and, for Codex, that the model list file is Coffer's own; **Apply** writes them and closes both dialogs. With a provider and a model chosen, Coffer tests that provider with that model by itself once the draft has rested for a moment (`POST /api/v1/models/test-connection` with the protocol the agent speaks (see "Test a connection on the wire the agent speaks"), the connection's base URL and stored secret ref — the call of Overview › Model › Test; the page never handles a key), cancels a run the draft has moved past, and shows the result as a line under Model: **Testing connection…**, **Connection OK** with how long it took, or **Connection failed** with the reason and **Retry**. **Review changes** is enabled only when the draft differs from what is applied, names a model, AND the test for exactly this provider and model passed; while it is testing or after a failure it stays off and a line beside it says why. A local runtime connection is tested the same way. The review runs no second test. When Apply is refused as stale, the review says which file changed and offers **Reload preview**, and writes nothing. With the built-in login chosen the dialog offers **Model** with no tier section: **Built-in default** (the agent's config names no model), then the agent's own built-in models — the label shown, the id stored — preselected with what the agent's config names now (a configured id the list lacks still reads as its id); when the agent runs on a connection the field starts at Built-in default, and the list is the agent's own, asked of `GET /api/v1/agent-providers/{agent_key}/models?source=builtin` (see "Serve one model list to every surface"), so it never shows the connection's curated set. Choosing one sends `native_model`, Built-in default sends `clear_native_model`, and no connection test runs.
 
 A change written into an agent's config files is read when that agent starts: Codex (App and CLI) reads `config.toml` at startup, and nothing in Coffer establishes that a running Claude Code re-reads `settings.json`, so both are treated as needing a restart. After a successful **Apply** the web UI MUST show a notice naming the agent by its display name — "Restart <agent> to use this change — sessions already open keep the old setting." — at the moment of the change; sessions already open are not touched.
 
@@ -747,8 +745,7 @@ count as Coffer's only while Coffer's `apiKeyHelper` is in the file ([data-model
 untouched and are not reported as drift. It also clears that agent's `connection_uid`, idempotently — succeeding when
 the agent was on no connection — and touches only that agent: another agent that runs on the same
 connection stays on it. The route takes an agent
-type; a wire is not accepted, because a connection reaches agents through its scope and no protocol
-names an agent.
+type; a wire is not accepted, because no protocol names an agent.
 
 #### Scenario: switch an agent back to its built-in login
 - **GIVEN** the Claude Code agent runs on a connection and is projected into it,
@@ -1325,16 +1322,16 @@ not used).
 - **AND** a `config.toml` whose `auth` table lacks `timeout_ms` is re-projected on the next reconcile pass
 
 ### Requirement: Offer every connection operation over REST and in the web UI
-Create, switch, revert-to-built-in, rename, edit, enable and disable, scope and delete MUST be
+Create, switch, revert-to-built-in, rename, edit and delete MUST be
 available via (a) the REST API and (b) the web surfaces — the Model providers library for create and
 delete, the Agent detail page for the switch and the revert, the connection's own page for the
-rename, the edit, the scope control and the enabled switch (see "Rename a connection without moving
-anything else"). The `coffer provider` and `coffer model` commands call the same routes ([resource-framework](../resource-framework/spec.md) "Offer every management operation on the command line"). The list carries no Active column, and a
+rename and the edit (see "Rename a connection without moving anything else"). A connection has no
+scope and no off switch: the agents it serves follow from its addresses. The `coffer provider` and `coffer model` commands call the same routes ([resource-framework](../resource-framework/spec.md) "Offer every management operation on the command line"). The list carries no Active column, and a
 connection's lifecycle verbs are the ones every kind's page offers. Editing a connection MUST be
-available over REST (`PATCH /api/v1/providers/{uid}`: `base_url`, `protocol`, `models`,
-`secret_value`, `description`) and from its detail page, including correcting the wire.
-Creating one (`POST /api/v1/providers` with a name, a protocol, a base URL and an inline secret, a
-secret ref or the `local_runtime` detection) takes no model; a local runtime connection is created
+available over REST (`PATCH /api/v1/providers/{uid}`: `base_url`, `anthropic_base_url` (`""`
+clears it), `protocol`, `models`, `secret_value`, `description`) and from its detail page, including
+correcting the wire. Creating one (`POST /api/v1/providers` with a name, a protocol, a base URL, an
+optional Anthropic address and an inline secret, a secret ref or the `local_runtime` detection) takes no model; a local runtime connection is created
 without a key (see "Configure a local model connection"). No route returns a provider's key: the
 agents reach a connection through the local model proxy, which injects the key itself (see "Reach
 API-key and local connections through the local model proxy"). Reverting is
@@ -1351,7 +1348,7 @@ The web surfaces:
   the connection's vendor mark, its name, its protocol and what it offers (its curated model count,
   or all models), and the marks of the agents running on it, read from the agents' `connection_uid`; a filter narrows the list over name,
   title, endpoint and description, and the list is sorted by name, with no order heading and no drag handle on a row. It has no per-row switch, because activation is per agent, and no
-  per-row reach or delete: both are on the open connection's header. A row MUST say what Coffer
+  per-row delete: it is on the open connection's header. A row MUST say what Coffer
   ITSELF uses the connection for: the `transcribe_default` connection carries a "Coffer · speech to
   text" badge with a hint naming Settings › General as where it is changed, and the connection's Used by repeats
   it. The label leads with Coffer because a bare "Speech to text" reads as a capability of the
@@ -1359,18 +1356,17 @@ The web surfaces:
   agent is switched to the connection. The vendor mark is derived from `base_url` by matching the
   preset list (an unmatched endpoint gets Coffer's neutral provider glyph); the name is the user's
   own, and the row links to the detail page by `uid`.
-- The add-connection dialog asks for the vendor from a grid of eight equal buttons — Anthropic, OpenAI, Google Gemini, DeepSeek, OpenRouter, Ollama, LM Studio and Custom — which fill in the
-  endpoint and protocol (Custom reveals a manual protocol selector), in two steps, Endpoint and then Models. A local runtime (Ollama, LM Studio) asks for no key, offers only the wires the detected runtime serves to agents (Anthropic, OpenAI) and,
+- The add-connection dialog asks for the vendor from a grid of equal buttons (see "Offer the
+  mainstream vendors as presets"), which fill in the vendor's addresses, in two steps, Endpoint and then
+  Models. It asks for addresses, not a protocol (see "Ask for addresses, not a protocol"). A local runtime (Ollama, LM Studio) asks for no key, offers only the wires the detected runtime serves to agents (Anthropic, OpenAI) and,
   until a runtime is detected, does not let the user go on to Models; the connection's Name
   appears once a runtime is chosen. The dialog surfaces test-connection and list-models with an inline, not-yet-saved
   secret.
-- The connection detail (`/model-providers/<uid>`, addressed by `uid` because a connection can be renamed) is one column opened beside the list — Used by, Endpoint, Models — and has no tabs. Its header carries a health pill (Reachable, Key rejected or Unreachable, read from a probe that runs when it opens), the protocol, the host and, when the endpoint answered, how long it took, and the shared
-  scope control — the single place the connection's reach and its enabled state are both shown and
-  changed — with Test, Edit and a menu holding Delete provider ("Review what deleting a connection changes"). **Used by** is read-only: each agent whose `connection_uid` names the connection (and that the connection still serves),
+- The connection detail (`/model-providers/<uid>`, addressed by `uid` because a connection can be renamed) is one column opened beside the list — Used by, Endpoint, Models — and has no tabs. Its header carries a health pill (Reachable, Key rejected or Unreachable, read from a probe that runs when it opens), the agents its addresses serve ("For Claude Code, Codex", or that none can use it), the host and, when the endpoint answered, how long it took, with Test, Edit and a menu holding Delete provider ("Review what deleting a connection changes"). **Used by** is read-only: each agent whose `connection_uid` names the connection (and that the connection still serves),
   with the model it runs, as a link reading "<Agent> › Change model" that opens that agent's page with its Change model dialog already open (`/agents/<type>?change-model=1`); and Speech to text
   when the connection is flagged for it, reading "Settings › General" and opening it. Used by carries no
   switch, activate or revert control, and no row repeats a fault: a connection's fault shows in its header pill and in the section it belongs to (Endpoint for Unreachable or Key rejected, Models for a failed listing).
-- Per-agent connection and model selection lives on the agent detail page's **Overview › Model** section and its **Change model** dialog; the agent page has no Model tab. The section reads **Provider**, **Model** and **Route** and carries **Change…**. The dialog is one 480-wide form for both agents ("Review a model change before writing it"), filtered to the connections that reach that agent and narrowed by `enabled`: **Provider** (the agent's built-in login or a connection), then, for a connection, **Model** and, for Claude Code, **Model per tier** (Opus, Sonnet, Haiku, and Fable only when the connection lists a Fable model; see "Suggest a model for each Claude Code tier"). It carries no
+- Per-agent connection and model selection lives on the agent detail page's **Overview › Model** section and its **Change model** dialog; the agent page has no Model tab. The section reads **Provider**, **Model** and **Route** and carries **Change…**. The dialog is one 480-wide form for both agents ("Review a model change before writing it"), filtered to the connections that serve that agent: **Provider** (the agent's built-in login or a connection), then, for a connection, **Model** and, for Claude Code, **Model per tier** (Opus, Sonnet, Haiku, and Fable only when the connection lists a Fable model; see "Suggest a model for each Claude Code tier"). It carries no
   other model setting — no output-limit, subagent, thinking or fast-mode
   control — because what else a model needs Coffer derives and writes itself. Picking a non-built-in
   connection introspects its endpoint and stages a default model — the first model returned — and
@@ -1386,9 +1382,9 @@ The web surfaces:
 - **THEN** each operation succeeds and the list answers with the connections as JSON,
 - **AND** after the revert the agent's `connection_uid` is empty, so the switch that was made can be undone.
 #### Scenario: the connections page lists profiles and their compatible agents
-- **GIVEN** the connections page is rendered with two mock connections whose reach differs,
+- **GIVEN** the connections page is rendered with two mock connections that serve different agents,
 - **WHEN** the page renders,
-- **THEN** it lists both connections, marks the one an agent runs on with that agent's mark, and shows the open connection's endpoint and its reach in the header's shared control — not as a second column repeating it in words — with NO per-row "Switch" action, because activation is per agent in its Change model dialog (TypeScript acceptance test).
+- **THEN** it lists both connections, marks the one an agent runs on with that agent's mark, and shows the open connection's address and, in its header, the agents it serves, with NO per-row "Switch" action, because activation is per agent in its Change model dialog (TypeScript acceptance test).
 
 #### Scenario: the library names the connections Coffer itself uses
 - **GIVEN** connection A is the speech-to-text default, and connection B carries no flag
@@ -1416,16 +1412,25 @@ The web surfaces:
 Each curated model of a connection (see "Store a modality with each curated model") MUST be able to
 record its **context window**, which the Codex catalogue needs (see "Project into Codex config without overwriting it"). It
 travels through `POST` / `PATCH /api/v1/providers` with the rest of the curated entry and is read from
-the endpoint where it reports them (the person never chooses a context window); an unknown value is left
-out of the stored document rather than guessed.
+the endpoint where it reports them as `context_window`, and the window the person sets on the Models tab
+is recorded beside it as `user_context_window` (see "Resolve each provider model's context window"); an
+unknown value is left out of the stored document rather than guessed. A remote endpoint reports a window in its `/models`
+entry as Anthropic's `max_input_tokens`, OpenRouter's `context_length` (or its `top_provider`'s), or the
+`context_window` / `max_model_len` spellings gateways and vLLM use; most OpenAI-compatible endpoints
+report none.
 
-The add-connection dialog shows each listed model's window where the endpoint reports it and keeps
-it on the curated entry; on the web it is not edited after that, only over REST. A curated entry an earlier version wrote with `effort_levels` or `default_effort` is read without them, and the next write drops them.
+The add-connection dialog and the Models tab keep each listed model's reported window on the curated
+entry when the model is switched on. A curated entry an earlier version wrote with `effort_levels` or `default_effort` is read without them, and the next write drops them.
 
 #### Scenario: a curated model keeps its window
 - **GIVEN** a connection whose curated model `gpt-x` records no window
 - **WHEN** the user patches its curated models with a 200000-token window for `gpt-x`
 - **THEN** the connection reports it on `gpt-x`
+
+#### Scenario: a window the endpoint reports is kept
+- **GIVEN** an endpoint whose `/models` lists `claude-x` with `max_input_tokens` 1000000, `or/x` with `context_length` 163840, and `gpt-x` with no window
+- **WHEN** its models are listed for the add-connection dialog
+- **THEN** `claude-x` and `or/x` carry those windows and `gpt-x` carries none
 
 ### Requirement: Ignore a stored internal-default flag
 The system MUST accept a connection whose stored config still carries
@@ -1455,7 +1460,7 @@ The `ollama` protocol (the Ollama-native API) is retired. Creating a connection 
 `protocol="ollama"` for a connection that does not already hold it) MUST be refused with `422
 PROVIDER_PROTOCOL_RETIRED` before anything is stored. The message names the way on: a local Ollama
 runtime is added on its Anthropic or OpenAI wire. A stored connection that already holds `ollama`
-MUST stay readable and listed, MUST reach no agent whatever its scope says, MUST be refused with the
+MUST stay readable and listed, MUST reach no agent, MUST be refused with the
 same code when an agent is switched onto it, and MUST remain deletable; its other fields stay
 editable, and re-sending its stored protocol is not a move. The add-connection dialog MUST NOT offer
 `ollama`: a detected local runtime offers only the wires it serves to agents, and a stored
@@ -1478,7 +1483,7 @@ unaffected: it is reached over its Anthropic and OpenAI wires.
 - **THEN** it is listed with no reachable agent, the patch succeeds, and the delete removes it
 
 #### Scenario: activating an ollama connection writes no native config
-- **GIVEN** a registered Claude Code agent and a stored `ollama` connection whose scope names that agent
+- **GIVEN** a registered Claude Code agent and a stored `ollama` connection
 - **WHEN** the user switches the agent onto the connection
 - **THEN** the switch is refused with `422 PROVIDER_PROTOCOL_RETIRED`, no native config file is written and the agent's `connection_uid` is unchanged
 - **AND** the connection reports no reachable agent
@@ -1544,3 +1549,215 @@ open. The open row follows its own live probe.
 - **GIVEN** a saved connection with a kept verdict
 - **WHEN** the Edit dialog lists models with a typed, unsaved key and the connection's uid
 - **THEN** the kept verdict is unchanged
+
+### Requirement: Name the model a default resolves to
+Wherever the web UI offers or shows a default model choice — the Agents list's Default model column and Overview › Model's Default model for an agent on its built-in login, and the Change model dialog's Built-in default — it MUST name the model that choice runs on when Coffer can know it, as `Built-in default (<model>)`, and MUST NOT name one it cannot know. The model is, in order: the model the agent's own config names, then the built-in default the agent itself reports (Codex marks it in `model/list`). Claude Code decides its built-in default from its organisation, account tier and entitlements, read from the server at turn time, so nothing on the machine names it and a Claude Code agent whose config names no model shows plain `Built-in default`. Coffer never infers a default from the first catalogue entry or from an alias.
+
+`GET /api/v1/agent-providers/{agent_key}/models` MUST carry `builtin_default` (the model the agent reports as its built-in default, with its label, or null) and `resolved_default` (the config's model, else that built-in default's id, or null). While a connection's catalogue replaces Codex's own list, Codex would only echo the connection's ids, so `builtin_default` is null then.
+
+#### Scenario: a default names the model it resolves to only when known
+- **GIVEN** a Codex agent whose `model/list` marks `gpt-5-codex` as its default, and a Claude Code agent, neither config naming a model
+- **WHEN** their models are read
+- **THEN** Codex's `builtin_default` and `resolved_default` are `gpt-5-codex`, and Claude Code's are both null
+- **AND** with `gpt-5` named in Codex's config, `resolved_default` is `gpt-5`
+
+#### Scenario: the built-in default shows its model in the web UI
+- **GIVEN** a Codex agent on its built-in login whose config names no model and whose reported default is labelled `GPT-5 Codex`
+- **WHEN** the Agents list and the agent's Overview › Model are shown
+- **THEN** both read `Built-in default (GPT-5 Codex)`, and a Claude Code agent in the same state reads `Built-in default`
+
+### Requirement: Log an upstream error status without its body
+When the upstream a request was relayed to answers with an error status, the model proxy MUST log one metadata line — `model_proxy.upstream_failed` with the agent, the connection, the endpoint, the requested model and the status — so a person can tell an upstream that does not know the model (404) from a refused key or an outage. Like every other proxy log line it MUST NOT contain the response body, which still reaches the agent unchanged ("Reach API-key and local connections through the local model proxy").
+
+#### Scenario: an upstream error status is logged without its body
+- **GIVEN** an agent on a connection whose upstream answers 404 with an error body
+- **WHEN** the agent sends a request for `m1`
+- **THEN** the agent receives the 404 and its body unchanged, and one `model_proxy.upstream_failed` line names `status=404` and `model=m1` without any of the body
+
+### Requirement: Say that a Claude Code switch leaves the Claude desktop app alone
+The Change model dialog for Claude Code MUST say, beside its Provider field, that the switch changes the Claude Code CLI only and that the Claude desktop app keeps its own model settings. The desktop app reads gateway routing from its own third-party inference configuration, not from `settings.json` or `ANTHROPIC_BASE_URL`, and Coffer writes nothing there.
+
+#### Scenario: the Change model dialog names what a Claude Code switch reaches
+- **GIVEN** a Claude Code agent and a connection reaching it
+- **WHEN** the Change model dialog is opened
+- **THEN** the Provider hint says the switch changes the Claude Code CLI only and the Claude desktop app keeps its own model settings
+
+### Requirement: Tell Claude Code a provider model's window
+When Claude Code is projected onto any connection — remote or local — and the agent's model is not a Claude id and its window resolves on that connection (see "Resolve each provider model's context window"), the projection MUST write `env.CLAUDE_CODE_MAX_CONTEXT_TOKENS` set to that window. Claude Code otherwise assumes 200k for an id its catalog does not describe, warns that it does, and compacts there. A Claude id's window is Claude Code's own and an unknown window is never guessed, so neither writes the key, and a key Coffer wrote earlier is removed. The value is one for the session: a model picked later inside Claude Code with `/model` keeps the window of the model Coffer projected until the next projection.
+
+#### Scenario: a provider model's recorded window reaches Claude Code
+- **GIVEN** a Claude Code agent on a remote connection, bound to `agnes-2.5-pro-alpha` whose curated entry records a 1000000-token window
+- **WHEN** the agent is switched onto it
+- **THEN** `settings.json` carries `env.CLAUDE_CODE_MAX_CONTEXT_TOKENS` = `1000000` and no `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`
+- **AND** bound to `claude-opus-4-8`, or to a model with no recorded window, the key is absent
+
+### Requirement: Test a connection on the wire the agent speaks
+
+The connection test behind the Change model dialog and Overview › Model › Test MUST speak the wire
+the agent will use, not the connection's own protocol: Claude Code is tested on the Anthropic wire
+at the connection's Anthropic address (its base URL when it has none), any other agent on the
+connection's protocol at its base URL. An endpoint that serves no Messages API there then fails the
+test before the switch can be reviewed, instead of every Claude Code turn failing after it.
+
+#### Scenario: Claude Code tests an OpenAI-protocol connection on the Anthropic wire
+- **GIVEN** a connection with protocol `openai` that reaches Claude Code
+- **WHEN** the user picks it and a model in Claude Code's Change model dialog
+- **THEN** the test is sent with protocol `anthropic`, the connection's Anthropic address and its secret ref
+
+### Requirement: Resolve each provider model's context window
+
+A model's context window on a connection MUST resolve in one order, used by the projection (Claude
+Code's `CLAUDE_CODE_MAX_CONTEXT_TOKENS`, Codex's model list) and by the Models tab alike: **You set**
+(the curated entry's `user_context_window`) → **From the endpoint** (its `context_window`, kept from the
+listing) → **Bundled** (the `context_window` the release's price list records for the model at the
+provider the endpoint belongs to, found the way a bundled price is) → unknown, in which case nothing
+is written and nothing is guessed (ADR context-windows-for-provider-models). A model the connection
+does not curate still resolves from the bundled list. `POST /api/v1/providers/{uid}/windows` takes
+`{models}` and answers each model's `{model, tokens, source}`; it is read-only and touches no network.
+
+The Models tab shows a **Window** column: the window in compact form ("1M", "128K") with its source
+(You set, From the endpoint, Bundled), or "—" with **Set window…**. Either opens a dialog with one field
+in tokens (`128000`, `128k`, `1m`, between 1k and 100m) that saves `user_context_window` on the model,
+writing an unrestricted connection out first as a price does, and **Reset to default**, offered only
+while a window of yours exists, which removes it.
+
+#### Scenario: a model's window comes from you, then the endpoint, then the bundled list
+- **GIVEN** a connection whose curated `deepseek-flash` records a 128000 window from the endpoint and a 64000 window you set, whose `endpoint-said` records only 128000 from the endpoint, and a bundled list that records 1000000 for `deepseek-flash`
+- **WHEN** their windows are resolved
+- **THEN** `deepseek-flash` is 64000 from You set and `endpoint-said` is 128000 from the endpoint
+- **AND** on a connection curating nothing `deepseek-flash` is 1000000 from Bundled, and a model nothing records is unknown
+
+#### Scenario: each model's window names where it came from and can be set
+- **GIVEN** a provider's Models tab with models whose windows come from you, the endpoint, the bundled list, and nothing
+- **WHEN** it shows them
+- **THEN** each reads its window and source, and the unknown one reads "—" with Set window…
+- **AND** setting 128k there saves `user_context_window` 128000 on that model, keeping every other row offered with the window its endpoint reported
+
+### Requirement: Give a connection an Anthropic address
+
+A remote `openai` connection MAY carry `anthropic_base_url`, the address where the same account serves
+the Anthropic Messages wire when that is not at `base_url` (DeepSeek: `https://api.deepseek.com` and
+`https://api.deepseek.com/anthropic`), so one connection serves Claude Code and Codex (ADR
+one-connection-serves-both-wires). Any other connection MUST be refused one (422). The model proxy
+MUST send the Anthropic wire to `anthropic_base_url` when set and every other wire to `base_url`. The
+key's approved destination names both addresses, so adding or moving the Anthropic address waits for
+approval like a new base URL; the same address as `base_url` sends the key nowhere new. A stored key
+may be tried against either address of the saved connection that holds it. A blank value is no
+address, and the read carries `anthropic_base_url` (or `null`).
+
+#### Scenario: the Anthropic wire goes to the Anthropic address
+- **GIVEN** a connection with base URL `https://api.deepseek.com` and Anthropic address `https://api.deepseek.com/anthropic`
+- **WHEN** Claude Code and Codex both run on it
+- **THEN** the proxy relays Claude Code's requests to `https://api.deepseek.com/anthropic` and Codex's to `https://api.deepseek.com`
+
+#### Scenario: adding an Anthropic address waits for the key's approval
+- **GIVEN** a connection whose key is approved for its base URL
+- **WHEN** an Anthropic address at another root is added
+- **THEN** the key waits for approval for the new destination before it is sent there
+
+### Requirement: Ask for addresses, not a protocol
+
+The Add and Edit dialogs MUST ask a remote connection for its addresses rather than its protocol: an
+**OpenAI-compatible address**, which Codex uses, and an **Anthropic-compatible address**, which
+Claude Code uses, each saying so. At least one is required, and each one typed must be a full URL.
+The stored shape follows: an OpenAI address makes the connection `openai` with the Anthropic address
+as its second; an Anthropic address alone makes it `anthropic`. A vendor preset shows the addresses
+the vendor has, filled in; Custom shows both, empty, with a hint to fill what the gateway serves (the
+same address twice for one that serves both at one address). Edit shows both for a remote connection
+and the one address of a local runtime, and sends the addresses only when one moved. Test probes the
+OpenAI address when there is one, else the Anthropic address.
+
+#### Scenario: DeepSeek fills both of its addresses in one connection
+- **GIVEN** the Add dialog
+- **WHEN** the user picks DeepSeek
+- **THEN** the OpenAI-compatible address is `https://api.deepseek.com`, the Anthropic-compatible address is `https://api.deepseek.com/anthropic`, and no protocol is asked for (TypeScript acceptance test)
+
+#### Scenario: Custom asks for the addresses the gateway serves
+- **GIVEN** the Add dialog
+- **WHEN** the user picks Custom
+- **THEN** both address fields show, empty (TypeScript acceptance test)
+
+#### Scenario: a vendor shows only the addresses it has
+- **GIVEN** the Add dialog
+- **WHEN** the user picks OpenAI
+- **THEN** only the OpenAI-compatible address shows, filled with `https://api.openai.com/v1` (TypeScript acceptance test)
+
+### Requirement: Derive the agents a connection serves from its addresses
+
+A connection MUST serve exactly the agents whose wire it has an address for (ADR
+provider-reach-is-what-its-addresses-serve): Claude Code needs an Anthropic address (an `anthropic`
+connection's base URL, or an `openai` connection's `anthropic_base_url`), Codex an OpenAI one. A
+local runtime serves the wires detection found; an `unknown` connection serves both, since the probe
+could not tell and the switch test decides; a stored `ollama` connection serves none. Every read
+carries the answer as `served_agents`, and `compatible_agents` is the same list. A scope stored before
+this rule is ignored. The connection's page says which agents can use it, and an agent's Change model
+dialog offers only the connections that serve it.
+
+#### Scenario: a connection with no Anthropic address does not serve Claude Code
+- **GIVEN** an `openai` connection with no Anthropic address and a registered Claude Code agent
+- **WHEN** the user reads the connection and previews switching Claude Code onto it
+- **THEN** `served_agents` is `["codex"]` and the preview is refused with 409 `PROVIDER_DOES_NOT_REACH_AGENT`
+
+### Requirement: Fill in the Anthropic address of an existing connection
+
+At startup, before the boot reconcile pass, an `openai` remote connection with no Anthropic address
+MUST be given one when:
+
+- its base URL is a vendor whose Anthropic address is known (DeepSeek) and Codex does not run on it:
+  that address, whose key then waits for approval like any new destination;
+- otherwise Claude Code runs on it: its own base URL, which is where Claude Code's requests already
+  went.
+
+A connection that has an Anthropic address is left alone, so clearing it later sticks. A failure is
+logged and never stops the start.
+
+#### Scenario: a gateway Claude Code runs on keeps working
+- **GIVEN** an `openai` connection with no Anthropic address that Claude Code runs on
+- **WHEN** Coffer starts
+- **THEN** its Anthropic address is its base URL, and Claude Code still runs on it
+
+#### Scenario: a DeepSeek connection gets DeepSeek's Anthropic address
+- **GIVEN** an `openai` connection at `https://api.deepseek.com` that Codex does not run on
+- **WHEN** Coffer starts
+- **THEN** its Anthropic address is `https://api.deepseek.com/anthropic`
+
+### Requirement: Retire the off switch and scope of existing connections
+
+At startup, before the boot reconcile pass, every agent whose `connection_uid` names a switched-off
+connection MUST be put back on its own login (Coffer's keys removed from its config, its connection
+cleared), and the connection switched on; a scope a connection stored MUST be cleared. A connection
+that is on and unscoped is left alone, and a failure is logged and never stops the start. Every
+surface MUST refuse to switch a connection off (`RESOURCE_NOT_TOGGLEABLE`); the stored flag stays
+readable only so this step can find the connections that were off, and a later release makes the
+kind non-toggleable and drops the step.
+
+#### Scenario: an agent on a switched-off connection goes back to its own login
+- **GIVEN** a switched-off connection that a Claude Code agent's record names, and a scoped connection
+- **WHEN** Coffer starts
+- **THEN** the Claude Code agent is on its own login, the first connection is switched on, and the second's scope is cleared
+
+#### Scenario: a connection cannot be switched off
+- **GIVEN** a connection a Claude Code agent runs on
+- **WHEN** the generic disable route is called for it
+- **THEN** it is refused with `RESOURCE_NOT_TOGGLEABLE` and the agent keeps its route
+
+### Requirement: Offer the mainstream vendors as presets
+
+The Add dialog MUST offer these vendors, each with its mark and the addresses its own documentation
+gives, and Custom for anything else:
+
+- Anthropic, OpenAI, Google Gemini, DeepSeek, OpenRouter, xAI, Mistral, Groq, Together AI,
+  Fireworks AI, Kimi, Zhipu GLM, MiniMax, Qwen, SiliconFlow, Baidu Qianfan, Tencent Hunyuan and
+  StepFun;
+- the local runtimes Ollama and LM Studio.
+
+A vendor names an Anthropic address only where its documentation gives one for Claude Code. A vendor
+whose mainland-China addresses differ (Kimi, Zhipu GLM, MiniMax, Qwen, SiliconFlow) offers a region,
+International or Mainland China, which swaps both addresses, and says that a key works only in the
+region it was created in. A saved connection reads as its vendor, with its mark, from either region's
+addresses.
+
+#### Scenario: a vendor with a Mainland China region swaps both addresses
+- **GIVEN** the Add dialog with Kimi picked
+- **WHEN** the user picks Mainland China
+- **THEN** the addresses become `https://api.moonshot.cn/v1` and `https://api.moonshot.cn/anthropic` (TypeScript acceptance test)

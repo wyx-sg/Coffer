@@ -497,6 +497,7 @@ def test_switching_one_agent_moves_only_that_agent(tmp_path, monkeypatch):
                 "name": "both",
                 "protocol": "openai",
                 "base_url": "https://gw/v1",
+                "anthropic_base_url": "https://gw",
                 "secret_value": "sk-both",
             },
         )
@@ -520,13 +521,10 @@ def test_a_connection_that_does_not_reach_the_agent_is_refused(tmp_path, monkeyp
     app = _app(tmp_path, monkeypatch, 59810)
     cx_dir = _agent_dir(tmp_path, "cx")
     with _client(app) as c:
-        cc = _register_agent(c, agent_type="claude_code", config_dir=_agent_dir(tmp_path, "cc"))
+        _register_agent(c, agent_type="claude_code", config_dir=_agent_dir(tmp_path, "cc"))
         _register_agent(c, agent_type="codex", config_dir=cx_dir)
+        # An Anthropic connection has no OpenAI address for Codex.
         uid = _new(c, _anthropic_body())
-        assert (
-            c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": [cc]}}).status_code
-            == 200
-        )
         r = _activate(c, uid, "codex")
         assert r.status_code == 409, r.text
         assert r.json()["error"]["code"] == "PROVIDER_DOES_NOT_REACH_AGENT"
@@ -601,20 +599,15 @@ def test_openai_connection_scoped_to_claude_code(tmp_path, monkeypatch):
                 "name": "agnes",
                 "protocol": "openai",
                 "base_url": "https://agnes/v1",
+                "anthropic_base_url": "https://agnes",
                 "secret_value": "sk-agnes",
             },
         )
         assert r.status_code == 201, r.text
         uid = r.json()["uid"]
-        # A new connection starts on the wire default...
+        assert r.json()["anthropic_base_url"] == "https://agnes"
+        assert r.json()["served_agents"] == ["claude_code", "codex"]
         assert r.json()["compatible_agents"] == ["claude_code", "codex"]
-        scoped = c.put(
-            f"/api/v1/resources/{uid}/scope",
-            json={"scope": {"agents": [cc]}},
-        )
-        assert scoped.status_code == 200, scoped.text
-        # ...and the reported effective set follows the scope.
-        assert c.get(f"/api/v1/providers/{uid}").json()["compatible_agents"] == ["claude_code"]
 
         act = _activate(c, uid)
         assert act.status_code == 200, act.text
@@ -700,18 +693,16 @@ def test_a_stored_ollama_connection_is_listed_and_deleted(tmp_path, monkeypatch)
     spec="provider-switching", scenario="activating an ollama connection writes no native config"
 )
 def test_activating_an_ollama_connection_is_refused_and_writes_nothing(tmp_path, monkeypatch):
-    """A stored ollama connection reaches no agent: even scoped to a registered
-    Claude Code agent, switching it on writes no native config, never becomes
+    """A stored ollama connection reaches no agent: with a registered Claude
+    Code agent, switching it on writes no native config, never becomes
     the agent's connection, and says so rather than reporting a switch that did
     not happen."""
     app = _app(tmp_path, monkeypatch, 59855)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
-        cc = _register_agent(c, agent_type="claude_code", config_dir=cfg)
+        _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body(name="local-llama"))
         _store_retired_protocol(tmp_path)
-        scoped = c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": [cc]}})
-        assert scoped.status_code == 200, scoped.text
 
         act = _activate(c, uid)
         assert act.status_code == 422, act.text
@@ -856,6 +847,7 @@ def test_curated_models_round_trip(tmp_path, monkeypatch):
         # ``text``, the kind every curated set held before modalities existed.
         unknown = {
             "context_window": None,
+            "user_context_window": None,
             "price": None,
         }
         curated_set = [
@@ -911,6 +903,7 @@ def test_uncurated_connection_is_unrestricted(tmp_path, monkeypatch):
                 "id": "opus",
                 "modality": "text",
                 "context_window": None,
+                "user_context_window": None,
                 "price": None,
             }
         ]
@@ -1083,14 +1076,13 @@ def test_rename_unknown_connection_is_404(tmp_path, monkeypatch):
         assert r.status_code == 404, r.text
 
 
-# -- per-agent key routing reads the scope (ADR per-agent-resource-scope) ---------------------
+# -- per-agent key routing reads the addresses (ADR provider-reach-is-what-its-addresses-serve) --
 
 
-def test_each_agents_route_follows_the_connections_scope(tmp_path, monkeypatch):
-    """Two connections, one per agent, told apart by their scope alone: the
-    proxy serves each agent the connection in its reach, with that
-    connection's key — the wrong answer would send one agent's traffic on
-    another's key."""
+def test_each_agents_route_follows_the_connection_it_chose(tmp_path, monkeypatch):
+    """Two connections, one per agent: the proxy serves each agent the
+    connection it chose, with that connection's key — the wrong answer would
+    send one agent's traffic on another's key."""
     app = _app(tmp_path, monkeypatch, 59920)
     with _client(app) as c:
         cc = _register_agent(c, agent_type="claude_code", config_dir=_agent_dir(tmp_path, "cc"))
@@ -1105,9 +1097,6 @@ def test_each_agents_route_follows_the_connections_scope(tmp_path, monkeypatch):
                 "secret_value": "sk-codex",
             },
         )
-        for uid, agent_uids in ((for_claude, [cc]), (for_codex, [cx])):
-            r = c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": agent_uids}})
-            assert r.status_code == 200, r.text
         assert _activate(c, for_claude).status_code == 200
         assert _activate(c, for_codex, "codex").status_code == 200
 
@@ -1116,36 +1105,46 @@ def test_each_agents_route_follows_the_connections_scope(tmp_path, monkeypatch):
         assert routes[cx] == (for_codex, "sk-codex")
 
 
-def test_a_disabled_connection_serves_no_agent(tmp_path, monkeypatch):
-    """``enabled`` is honoured at the projection seam, so switching a
-    connection off takes its route out of the proxy even while the agent's
-    record still names it."""
+@pytest.mark.acceptance(spec="provider-switching", scenario="a connection cannot be switched off")
+def test_a_connection_cannot_be_switched_off(tmp_path, monkeypatch):
+    """A connection's switch is retired (ADR
+    provider-reach-is-what-its-addresses-serve): the generic disable route
+    refuses it and the agent keeps its route."""
     app = _app(tmp_path, monkeypatch, 59930)
     with _client(app) as c:
         cc = _register_agent(c, agent_type="claude_code", config_dir=_agent_dir(tmp_path))
         uid = _new(c, _anthropic_body("acme"))
         assert _activate(c, uid).status_code == 200
+        r = c.post(f"/api/v1/resources/{uid}/disable")
+        assert r.status_code == 409, r.text
+        assert r.json()["error"]["code"] == "RESOURCE_NOT_TOGGLEABLE"
+        assert c.post(f"/api/v1/resources/{uid}/enable").status_code == 200
         assert cc in _route_keys(c)
-        assert c.post(f"/api/v1/resources/{uid}/disable").status_code == 200
-        assert cc not in _route_keys(c)
 
 
-def test_scoping_a_connection_away_from_an_agent_retires_its_reach(tmp_path, monkeypatch):
-    """A scope that names no agent registered here reaches nobody on this machine."""
+def test_clearing_the_anthropic_address_retires_claude_codes_reach(tmp_path, monkeypatch):
+    """Claude Code is reached through the Anthropic address; without it the
+    connection serves Codex only, and Claude Code's route leaves the proxy."""
     app = _app(tmp_path, monkeypatch, 59940)
     with _client(app) as c:
         cc = _register_agent(c, agent_type="claude_code", config_dir=_agent_dir(tmp_path))
-        uid = _new(c, _anthropic_body("acme"))
-        assert _activate(c, uid).status_code == 200
-        elsewhere = "ffffffffffffffffffffffffffffffff"
-        assert (
-            c.put(
-                f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": [elsewhere]}}
-            ).status_code
-            == 200
+        uid = _new(
+            c,
+            {
+                "name": "gw",
+                "protocol": "openai",
+                "base_url": "https://gw/v1",
+                "anthropic_base_url": "https://gw",
+                "secret_value": "sk-gw",
+            },
         )
+        assert _activate(c, uid).status_code == 200
+        assert cc in _route_keys(c)
+        r = c.patch(f"/api/v1/providers/{uid}", json={"anthropic_base_url": ""})
+        assert r.status_code == 200, r.text
+        assert r.json()["anthropic_base_url"] is None
         assert cc not in _route_keys(c)
-        assert c.get(f"/api/v1/providers/{uid}").json()["compatible_agents"] == []
+        assert c.get(f"/api/v1/providers/{uid}").json()["compatible_agents"] == ["codex"]
 
 
 async def _flag(uid: str) -> bool:
@@ -1179,3 +1178,35 @@ def test_provider_out_carries_the_resource_title(tmp_path, monkeypatch):
 
         assert c.patch(f"/api/v1/resources/{uid}", json={"title": ""}).status_code == 200
         assert c.get(f"/api/v1/providers/{uid}").json()["title"] is None
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching", scenario="the Anthropic wire goes to the Anthropic address"
+)
+def test_each_agent_is_relayed_to_the_address_of_its_wire(tmp_path, monkeypatch):
+    """One DeepSeek connection serves both agents (ADR
+    one-connection-serves-both-wires): Claude Code's route goes to the
+    Anthropic address, Codex's to the base URL."""
+    app = _app(tmp_path, monkeypatch, 59960)
+    with _client(app) as c:
+        cc = _register_agent(c, agent_type="claude_code", config_dir=_agent_dir(tmp_path, "cc"))
+        cx = _register_agent(c, agent_type="codex", config_dir=_agent_dir(tmp_path, "cx"))
+        uid = _new(
+            c,
+            {
+                "name": "deepseek",
+                "protocol": "openai",
+                "base_url": "https://api.deepseek.com",
+                "anthropic_base_url": "https://api.deepseek.com/anthropic",
+                "secret_value": "sk-ds",
+            },
+        )
+        assert c.get(f"/api/v1/providers/{uid}").json()["served_agents"] == [
+            "claude_code",
+            "codex",
+        ]
+        assert _activate(c, uid).status_code == 200
+        assert _activate(c, uid, "codex").status_code == 200
+        roots = {r.agent_uid: r.member.upstream_root for r in _proxy_state(c).routes}
+        assert roots[cc] == "https://api.deepseek.com/anthropic"
+        assert roots[cx] == "https://api.deepseek.com"

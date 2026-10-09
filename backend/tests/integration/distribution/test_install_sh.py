@@ -72,6 +72,27 @@ def test_install_replaces_version_symlinks_without_touching_their_targets(tmp_pa
 
 
 @pytest.mark.skipif(shutil.which("sh") is None, reason="install.sh is POSIX sh")
+def test_install_puts_the_shims_library_folder_beside_it(tmp_path: Path) -> None:
+    dest = tmp_path / "bin"
+    stale = dest / "coffer-mcp-shim-lib"
+    stale.mkdir(parents=True)
+    (stale / "old.so").write_text("old")
+
+    src = tmp_path / "extracted"
+    (src / "coffer-mcp-shim-lib").mkdir(parents=True)
+    (src / "coffer-mcp-shim-lib" / "base_library.zip").write_text("new")
+    for name in _BINARIES:
+        (src / name).write_text(f"new {name}\n")
+
+    result = _run_install(src, dest)
+    assert result.returncode == 0, result.stderr
+
+    lib = dest / "coffer-mcp-shim-lib"
+    assert sorted(p.name for p in lib.iterdir()) == ["base_library.zip"]
+    assert sorted(p.name for p in dest.iterdir()) == sorted([*_BINARIES, lib.name])
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="install.sh is POSIX sh")
 def test_install_refuses_an_archive_missing_a_binary(tmp_path: Path) -> None:
     src = tmp_path / "extracted"
     src.mkdir()

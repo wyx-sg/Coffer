@@ -5,8 +5,8 @@
 // for a burst of messages to end; `ChannelReplyFields` — how a running turn shows
 // itself (the step lines, where the platform has a live status line) and when a
 // chat starts a fresh conversation; `ChannelDirectoryFields` — its working directories. Switches and
-// list edits save at once; typed values save a moment after typing stops, and
-// only when valid (useSettingDraft).
+// list edits save at once; typed values save when the field is finished (blur
+// or Enter), and only when valid (useSettingDraft).
 //
 // Every starting value is read from the daemon's typed settings
 // (`ChannelSettings`, defaults filled in), never from the raw config.
@@ -65,13 +65,25 @@ export function ChannelReceivingFields({
           });
         }}
       />
-      <EditChannelBurstFields
-        draft={{ waitAfterText: afterText.text, waitAfterForward: afterForward.text }}
-        onChange={(patch) => {
-          if (patch.waitAfterText !== undefined) afterText.change(patch.waitAfterText);
-          if (patch.waitAfterForward !== undefined) afterForward.change(patch.waitAfterForward);
+      {/* One wrapper for both fields: finishing either commits whichever changed. */}
+      <div
+        onBlur={() => {
+          afterText.flush();
+          afterForward.flush();
         }}
-      />
+        onKeyDown={(e) => {
+          afterText.commitProps.onKeyDown(e);
+          afterForward.commitProps.onKeyDown(e);
+        }}
+      >
+        <EditChannelBurstFields
+          draft={{ waitAfterText: afterText.text, waitAfterForward: afterForward.text }}
+          onChange={(patch) => {
+            if (patch.waitAfterText !== undefined) afterText.change(patch.waitAfterText);
+            if (patch.waitAfterForward !== undefined) afterForward.change(patch.waitAfterForward);
+          }}
+        />
+      </div>
     </>
   );
 }
@@ -95,7 +107,7 @@ export function ChannelReplyFields({ settings, save }: { settings: ChannelSettin
           }}
         />
       )}
-      <div onBlur={idle.flush}>
+      <div {...idle.commitProps}>
         <EditChannelIdleField value={idle.text} onChange={idle.change} />
       </div>
     </>

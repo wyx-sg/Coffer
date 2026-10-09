@@ -179,6 +179,7 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | UI operation | Route | Command | Acceptance |
 | --- | --- | --- | --- |
 | Knowledge · recent changes | `GET /knowledge/changes` | `coffer knowledge changes` | `test_cli_parity.py` |
+| Knowledge · a collection's Check | `GET /knowledge/collections/{uid}/check` | `coffer knowledge check` | `test_cli_parity.py` |
 | Knowledge · collections | `GET /knowledge/collections` | `coffer knowledge collections` | `test_cli_parity.py` |
 | Knowledge · New collection | `POST /knowledge/collections` | `coffer knowledge create` | `test_cli_parity.py` |
 | Knowledge · Delete | `DELETE /resources/{uid}` | `coffer knowledge delete` | `test_cli_parity.py` |
@@ -268,6 +269,7 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Agents · switch model · review | `POST /providers/model-switch/preview` | `coffer provider switch preview` | `test_cli_parity.py` |
 | Model providers · Use for transcription | `POST /providers/{uid}/transcribe-default` | `coffer provider transcribe-default` | `test_cli_parity.py` |
 | Model providers · edit a connection | `PATCH /providers/{uid}` | `coffer provider update` | `test_cli_parity.py` |
+| Model providers · model context windows | `POST /providers/{uid}/windows` | `coffer provider windows` | `test_cli_parity.py` |
 
 ## `coffer proxy` {#proxy}
 
@@ -412,13 +414,13 @@ Every management operation a person does on a Coffer page or in the desktop app 
 
 | UI operation | Route | Command | Acceptance |
 | --- | --- | --- | --- |
-| Settings · About · Uninstall Coffer (desktop app) | `POST /daemon/uninstall` | `coffer uninstall` | `test_cli_parity.py` |
+| Settings · About · Uninstall Coffer (desktop app) | `POST /daemon/uninstall` | `coffer uninstall` | `test_lifecycle_cli.py` |
 
 ## `coffer update` {#update}
 
 | UI operation | Route | Command | Acceptance |
 | --- | --- | --- | --- |
-| Settings · About · Check for updates (installer binaries) | `GET /daemon/upgrade` | `coffer update` | `test_cli_parity.py` |
+| Settings · About · Check for updates (installer binaries) | `GET /daemon/upgrade` | `coffer update` | `test_lifecycle_cli.py` |
 
 ## `coffer usage` {#usage}
 

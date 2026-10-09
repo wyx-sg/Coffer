@@ -85,7 +85,6 @@ def daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[Pa
             port=port,
             token=_TOKEN,
             started_at=datetime.now(tz=UTC),
-            binary_path=sys.executable,
         ),
     )
     yield home, port

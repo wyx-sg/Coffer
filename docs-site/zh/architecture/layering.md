@@ -57,6 +57,7 @@ flowchart TB
 | 应用层不导入基础设施 | 应用代码依赖它自己定义的端口。例外：`application.knowledge` 可以导入 `infrastructure.knowledge`，`application.memory` 可以导入 `infrastructure.memory`，因为这两个底层都只是很薄的文件 I/O 辅助代码，背后没有引擎，加一个端口纯属形式主义；以及 `application.binary_deploy` 可以读 `infrastructure.vault.home`，它是唯一列出 `~/.coffer` 下所有路径的模块。 |
 | 领域层是纯的 | 领域层不导入项目的其他层，也不导入 `fastapi`、`sqlalchemy`、`sqlite3`、`httpx`、`keyring` 或 `anyio`。 |
 | keyring 只限于基础设施 | 界面层和应用层从不直接导入 `keyring`。 |
+| CLI 不导入 HTTP 界面层 | `surfaces.cli` 不能导入 `surfaces.http`。CLI 是守护进程 HTTP API 的客户端，不是它路由的同级模块。 |
 | CLI 不直接访问钥匙串 | `surfaces.cli` 完全不能导入 `infrastructure.secret`。CLI 只能通过守护进程的 HTTP API 接触密钥，所以在每台机器上，守护进程是主密钥唯一的读取者。 |
 | 禁止跨类型导入（每种类型一条） | 九条对称的契约：`mcp`、`agent`、`skill`、`knowledge`、`channel`、`chat`、`provider`、`memory`、`sync`，每条都禁止该领域的模块导入其他领域的模块。指名的例外只涉及纯领域词汇：`provider` 和 `memory` 可以读 `domain.agent`，`channel` 可以读 `domain.chat`。`domain.knowledge` 和 `infrastructure.knowledge` 是共享底层。 |
 | 与类型无关的核心不导入类型专属代码 | 资源服务及其范围、启停、删除、重命名、标题和类型辅助模块、仓库端口、调和器、关注列表和事件流、审计服务、保留期服务和 worker、内置工具注册表、Coffer 自己的引擎模块、领域层的资源、调和、范围和审计模块、共享的基础设施包、通用的依赖提供者和通用路由，都不能导入任何类型。获准的例外有两个：Alembic 的迁移环境（它把每种类型的 ORM 模型导入到同一份 metadata 里），以及一次性的保险库迁移（它要读遍每个领域才能搬数据）。 |
@@ -93,7 +94,7 @@ flowchart TB
 
 类型接线这一步决定各类型自身的顺序：provider 在 agent 之后，因为它要投射进每个智能体的配置；MCP 最后，这样它能拿到其他类型注册的每个内置工具。对话平台在所有类型之后接线，因为它内部的网关会话需要完整的内置工具注册表；消息渠道类型在对话之后，因为它通过对话的句柄驱动轮次。同步不需要任何类型的东西：它搬动的是保险库仓库里的文件，一轮同步改了东西之后，调和器会跑一轮，让每种类型重新投射新到的内容。
 
-HTTP 路由器由 `surfaces/http/` 里的一张路由器表统一纳入，这张表还会把某个实验功能前缀下的每个路由器放到该功能的请求时闸门后面。Typer 命令组在 CLI 主模块里添加。
+HTTP 路由器由 `surfaces/http/` 里的一张路由器表统一纳入，这张表还会把某个实验功能前缀下的每个路由器放到该功能的请求时闸门后面。Typer 命令组在 CLI 主模块里添加；`surfaces/cli/commands/` 下的管理命令在主模块加载它们时把自己加进这些命令组，并把每条命令对应的路由记进 CLI 的命令注册表。
 
 ### 依赖提供者 {#dependency-providers}
 
@@ -130,7 +131,7 @@ backend/coffer/
 │   ├── audit_service.py
 │   ├── retention_service.py # plus retention_registry.py, retention_worker.py
 │   ├── builtin_tools.py    # BuiltinTool and its registry
-│   ├── features.py         # FeatureService: pin, machine setting, channel default
+│   ├── features.py         # FeatureService: pin, machine setting, default off
 │   ├── upkeep_runs.py      # passes in flight, in process
 │   ├── attention.py        # the cross-kind "needs you" list and its source port
 │   ├── reconcile/          # the unified reconciler: target port, loop, hints, drift source
@@ -142,7 +143,7 @@ backend/coffer/
 │   ├── mcp/                # gateway, supervisor, discovery, search_tools
 │   ├── agent/              # agent services
 │   ├── skill/              # skill services, builtin-skill seed
-│   ├── knowledge/          # the write tool, tidy hand-off, sweep, guide rendering
+│   ├── knowledge/          # intake and upload ingest, wiki layout, change history, tidy hand-off, sweep, guide rendering
 │   ├── channel/            # adapter protocol, pairing, inbound, runtime
 │   ├── chat/               # turn orchestrator, runner, conversation service
 │   ├── memory/             # memory sync: publish, write, preview, undo, worker, upgrade removal

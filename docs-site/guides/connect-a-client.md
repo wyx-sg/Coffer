@@ -26,6 +26,8 @@ For a registered [agent](/guides/agents), connect it to Coffer instead of writin
 
 Open **Agents → (agent)** and press **Connect**. Coffer shows the exact lines first, and you confirm them.
 
+<Shot name="connect-dialog" alt="The review dialog before Coffer changes the agent's files." />
+
 Coffer writes the shim's absolute path and the agent's uid:
 
 ::: code-group
@@ -126,7 +128,7 @@ curl -s http://127.0.0.1:38470/mcp \
 The daemon mints a fresh token each time it starts, and **Rotate…** under **Settings → Security → Daemon access token** replaces it on demand. A client configured with a literal token stops working after the next restart. Prefer the shim wherever the client can run a command.
 :::
 
-The daemon listens on loopback only and refuses requests whose `Host` is not a loopback name. Use `127.0.0.1` or `localhost`. An idle HTTP session is dropped after 30 minutes without traffic (`COFFER_MCP_SESSION_IDLE_S` changes this).
+The daemon listens on loopback only and refuses requests whose `Host` is not a loopback name. Use `127.0.0.1` or `localhost`. An idle HTTP session is dropped after 10 minutes without a request (a client that only holds its notification stream open counts as idle; the client then handshakes again) (`COFFER_MCP_SESSION_IDLE_S` changes this).
 
 ## Agent identity
 
@@ -148,7 +150,7 @@ The identity is self-reported, not cryptographically verified. Any local process
 
 ## Verify the connection
 
-1. **Check the entry.** Open **Agents → (agent)**: the **Connection** section says the agent reaches Coffer through one MCP entry and one hook, and names the shim's path.
+1. **Check the entry.** Open **Agents → (agent)**: the **Connection** section says the agent reaches Coffer through one MCP entry, and names the shim's path.
 
 2. **Check the daemon.**
 

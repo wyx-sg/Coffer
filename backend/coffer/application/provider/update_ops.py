@@ -67,6 +67,7 @@ async def update(
     *,
     protocol: Protocol | None = None,
     base_url: str | None = None,
+    anthropic_base_url: str | None = None,
     secret_value: str | None = None,
     secret_ref: str | None = None,
     models: _CuratedModels | None = None,
@@ -104,6 +105,9 @@ async def update(
         config["protocol"] = protocol.value
     if base_url is not None:
         config["base_url"] = base_url
+    # ``""`` removes the second address; ``None`` leaves it as it is.
+    if anthropic_base_url is not None:
+        config["anthropic_base_url"] = anthropic_base_url or None
     if models is not None:
         config["models"] = [m.model_dump(mode="json") for m in models]
     # Re-validate so a bad edit is rejected before the rotation / DB write.

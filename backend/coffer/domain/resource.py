@@ -154,6 +154,11 @@ class Kind:
     # resource-framework "Address every resource by an immutable uid through
     # one kind-agnostic surface").
     toggleable: bool = True
+    # A kind retiring its switch: a row can still be switched on, never off,
+    # and the stored flag stays readable so a startup migration can bring the
+    # rows that were off back on. `provider` sets it (ADR
+    # provider-reach-is-what-its-addresses-serve).
+    switch_retired: bool = False
     # Which storage class this kind's resources are filed in (ADR
     # storage-is-five-classes-by-nature): ``vault`` for everything a person
     # authored (``vault/resources/<kind>/``, committed, synced when a remote is

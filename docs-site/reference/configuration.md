@@ -35,6 +35,7 @@ The daemon is usually spawned detached — by the CLI, by an agent's MCP shim, b
 | `COFFER_PRICE_REFRESH` | unset | `off` pins the daily model price-list refresh off, whatever `price_refresh` says; prices come from the list shipped in the build. The test suite and the e2e daemon set it. |
 | `COFFER_MODEL_PROXY` | unset | `off` keeps the daemon from starting or supervising the [local model proxy](/architecture/model-proxy); any other value, or none, leaves it on. The test suite sets it. |
 | `COFFER_UPDATE_CHECK` | unset | `off` pins the daemon's daily release check off, whatever `update_check` says. The check runs only for a daemon started from the installer's binaries. |
+| `COFFER_PROVIDER_HEALTH` | unset | `off` stops the background health checks of provider connections: no periodic sweep and no re-check after a connection is edited. A check you ask for still runs. The test suite sets it. |
 
 ### MCP gateway
 
@@ -44,7 +45,7 @@ The daemon is usually spawned detached — by the CLI, by an agent's MCP shim, b
 | `COFFER_TOOL_TIERING_BUDGET` | `50` | How many upstream tools are listed directly before the rest are reachable only through `coffer__search_tools`. Non-positive or malformed values fall back to the default. |
 | `COFFER_TOOL_TIERING_WINDOW_DAYS` | `90` | The trailing window of invocation history used to rank tools for the budget. |
 | `COFFER_MCP_MAX_CONCURRENT_SPAWNS` | `4` | How many upstream MCP servers one session cold-starts at the same time. |
-| `COFFER_MCP_SESSION_IDLE_S` | `1800` | Seconds a `/mcp` session may sit idle before the reaper closes it and its upstream processes. |
+| `COFFER_MCP_SESSION_IDLE_S` | `600` | Seconds a `/mcp` session may go without a request or an upstream notification before the reaper closes it and its upstream processes. An open notification stream does not count. |
 | `COFFER_MCP_SESSION_REAPER_INTERVAL_S` | `60` | Seconds between reaper sweeps. |
 | `COFFER_MCP_SHIM_PATH` | unset | Absolute path to a `coffer-mcp-shim` binary to write into an agent's MCP entry, tried before `PATH` and the bundled copy. Ignored if the file does not exist. |
 
@@ -91,6 +92,7 @@ These are for contributors. Do not set them on a daemon you use day to day.
 | `COFFER_PORT_RANGE_START`, `COFFER_PORT_RANGE_END` | unset | Bind the first free port in this range instead of the single configured port. Outranks `daemon-config.json`. If only one end is set, the other falls back to `38470` or `8009`. |
 | `COFFER_EVAL_CAPTURE` | unset | Records each `coffer__search_tools` query and its results as JSON lines for the eval harness. `1`, `true` or `yes` writes to `~/.coffer/eval-capture.jsonl`; any other non-falsy value is taken as the output path. |
 | `COFFER_RUN_BENCHMARKS` | unset | `1` runs the perf-budget tests too slow for `make verify`, such as the reconcile pass cost (`make verify-benchmark`). |
+| `COFFER_DAEMON_EXIT_WITH_PID` | unset | A process id the daemon follows: when that process exits, the daemon shuts down. Set by the e2e runners and by tests that start a daemon, so a killed test run leaves no daemon behind. |
 
 ### Variables Coffer sets for processes it starts
 
@@ -101,6 +103,10 @@ Coffer never reads these from its own environment; it sets them for child proces
 | `CLAUDE_CONFIG_DIR` | Claude Code turns | Points Claude Code at a registered agent's config directory when it is not `~/.claude`. |
 | `CODEX_HOME` | Codex turns | Points Codex at a registered agent's config directory when it is not `~/.codex`. |
 | `COFFER_GIT_TOKEN`, `COFFER_GIT_USERNAME` | `git` during vault sync | The sync remote's token and the username derived from the remote's host, read by a credential helper at run time so the token never appears in `argv` or on disk. |
+| `COFFER_GIT_PROTOCOL`, `COFFER_GIT_HOST` | `git` during vault sync | The sync remote's own protocol and host. The credential helper hands the token over only when git asks for exactly that origin, so a redirect to another host never receives it. |
+| `COFFER_TURN_TOKEN` | Claude Code and Codex turns | A random token naming the turn. The MCP shim forwards it as the `X-Coffer-Turn` header, which is how the gateway lists `coffer__ask` and `coffer__channel_read_thread` only inside a turn Coffer runs. |
+| `COFFER_CHANNEL_TURN` | Claude Code and Codex turns a channel drives | `1`, marking the agent process as answering a [channel](/guides/channels) turn. |
+| `COFFER_DAEMON_PREDECESSOR_PID` | the successor a daemon starts when it restarts itself | The pid of the daemon being replaced; the successor waits for it to exit before it binds the port. |
 | `PATH`, `HOME` | the login service | Captured from your login shell when you install the service, so the daemon can find `npx`, `uvx` and other upstream launchers. |
 
 The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~/.coffer` and to probe your login shell's `PATH`; it defines no variables of its own.
@@ -131,6 +137,7 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
 | `price_refresh` | boolean | `true` | Whether the daemon refreshes the model price list from genai-prices once a day. Off, it prices from the list shipped in the build. Read at each refresh. | **Settings › General → Refresh model prices** |
 | `update_check` | boolean | `true` | Whether a daemon running from the installer's binaries checks GitHub for a newer release once a day. It only reports what it finds; `coffer update` installs it. Read at each check. | **Settings › About → Check automatically**, or `coffer daemon upgrade-auto-check --set enabled=false` |
 | `record_call_content` | boolean | `true` | Whether each MCP tool call keeps its arguments and result (and a custom tool's request and response), masked and cut at 16 KB, in the invocation log. Off, new rows keep metadata only. Takes effect at once. | **Settings › Data → History → Record tool call content**, or `coffer settings call-content set` |
+| `skill_update_check` | `"6h"`, `"1d"`, `"7d"` or `"manual"` | `"6h"` | How often this machine checks Git-imported skills for newer commits in the background. Takes effect at once. | **Settings › General → Check skills for updates**, or `coffer skill update-check set --set interval=1d` |
 
 The daemon's runtime state — its pid, port and API token — lives in a different file, `~/.coffer/daemon.json`, which is created on start and removed on exit. See [Files and directories](/reference/filesystem#daemon-files).
 
@@ -200,7 +207,7 @@ The memory sync is not in Settings. It is switched and retimed from the **▾** 
 | --- | --- | --- | --- |
 | `memory_sync` | **Memory** header → **▾** on **Sync now** → **Sync memory automatically** | on, every 1 h | Publishes what each agent wrote on this machine to the vault's memory hub and writes the hub into each agent's own memory. The first sync on a machine, and one that would write more than 50 copies, waits as a preview. It calls no model. See [Memory](/guides/memory). |
 
-The knowledge sweep has no setting. While the **Knowledge** [experimental feature](#experimental-features) is on, it runs every minute: it re-renders the `coffer-guide` skill, promotes files dropped in a collection's `.inbox/`, and commits edits made on disk.
+The knowledge sweep has no setting. While the **Knowledge** [experimental feature](#experimental-features) is on, it runs every minute: it re-renders the `coffer-guide` skill, keeps files dropped in a collection's `.inbox/` as sources under `sources/`, files loose documents into `pages/`, and commits edits made on disk.
 
 ### Sync remote
 

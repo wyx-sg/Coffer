@@ -118,7 +118,7 @@ flowchart LR
 
 ## Plaintext reaches only a present human
 
-Three operations let plaintext out, and all three live only in the desktop app: **revealing or copying a secret**, **writing a master key backup**, and **approving** an [approval](#a-secret-goes-somewhere-new-only-with-your-approval). Installing a master key is gated the same way. Each runs the same way:
+Three operations let plaintext out, and all three live only in the desktop app: **revealing or copying a secret**, **writing a master key backup**, and **approving** an [approval](#a-secret-goes-somewhere-new-only-with-your-approval). Installing a master key, and deleting Coffer's data on uninstall, are gated the same way. Each runs the same way:
 
 1. **A presence check first.** The app runs a LocalAuthentication check — Touch ID, or your login password — with a fresh context for this one operation and **no reuse window**: the next reveal asks again. The prompt macOS shows names the operation and its target ("reveal the secret github/token"), so it is the operating system, not the page, that tells you what you are approving. Cancelling sends nothing.
 2. **A one-time challenge.** The app asks the daemon for a challenge bound to that operation and that target — this ref, this approval, this folder. A challenge expires within two minutes and is consumed by its first use, whether or not it verifies.
@@ -198,7 +198,7 @@ Those files are plain JSON in a directory the agent can write, and an approval i
 `daemon.json` and `proxy.json` are files, and the loopback ports are ports; any process running as you can rewrite the first, bind the second and answer on it. So each side of a hand-over proves it is Coffer's before it receives anything:
 
 - **The daemon attests the model proxy.** The proxy is spawned with an attest key derived from the master key, written to the child's standard input (never its arguments or environment, which other processes can read). Before every state push — which carries the provider keys — and before re-attaching to a proxy found through `proxy.json`, the daemon sends a fresh nonce to `POST /_coffer/attest` and accepts only the HMAC of the nonce and the proxy's own port. A process on the port that cannot answer gets nothing and is logged as `model_proxy.attest_failed`.
-- **The desktop app attests the daemon.** `POST /api/v1/secrets/presence/attest` answers the same kind of HMAC, under a key the app derives for itself from the master key it reads from the Keychain. The app checks it before it hands the token to the page (attach, cold start and restart) and before every presence-gated operation: reveal, approval, key backup, key import. If it fails, the app stops with "This is not Coffer's daemon — nothing was sent".
+- **The desktop app attests the daemon.** `POST /api/v1/secrets/presence/attest` answers the same kind of HMAC, under a key the app derives for itself from the master key it reads from the Keychain. The app checks it before it hands the token to the page (attach, cold start and restart) and before every presence-gated operation: reveal, approval, key backup, key import, deleting data on uninstall. If it fails, the app stops with "This is not Coffer's daemon — nothing was sent".
 
 The port is part of what is signed, so an answer relayed from the real process on another port is worthless.
 
@@ -343,7 +343,7 @@ So a probe of an endpoint on a private or link-local address is refused. Saving 
 - **Vault sync**, which is a `git` subprocess against the remote you configured.
 - **A skill's Git repository**, also a `git` subprocess against a URL you typed, run with no prompt, only the `https`, `http`, `ssh`, `git` and `file` transports and no submodules; a company's own Git host usually sits on a private address (see [Skills](/architecture/skills#git-repositories)).
 
-One outbound request goes to an address Coffer chose itself rather than one you typed or configured, and so is not guarded: the **daily price-list refresh**. Once shortly after the daemon starts and then every 24 hours it sends a read-only `GET` to the file pydantic/genai-prices publishes, `https://raw.githubusercontent.com/pydantic/genai-prices/refs/heads/main/prices/new_data/v2/data.json`, with a 10-second timeout, a 16 MiB cap, no redirects, no credentials and nothing about you or your usage. The answer is validated before it is cached, and prices are never looked up while a request is being costed. **Refresh model prices** in Settings › General (`coffer config set prices.refresh off`) turns it off on a firewalled machine; Coffer then prices from the list shipped in the build.
+Two outbound requests go to addresses Coffer chose itself rather than ones you typed or configured, and so are not guarded: the **daily price-list refresh** and the **daily release check**. Once shortly after the daemon starts and then every 24 hours it sends a read-only `GET` to the file pydantic/genai-prices publishes, `https://raw.githubusercontent.com/pydantic/genai-prices/refs/heads/main/prices/new_data/v2/data.json`, with a 10-second timeout, a 16 MiB cap, no redirects, no credentials and nothing about you or your usage. The answer is validated before it is cached, and prices are never looked up while a request is being costed. **Refresh model prices** in Settings › General (`coffer provider price-list refresh --set refresh=false`, or `COFFER_PRICE_REFRESH=off`) turns it off on a firewalled machine; Coffer then prices from the list shipped in the build. The release check is a read-only `GET https://api.github.com/repos/wyx-sg/Coffer/releases/latest` a minute after the daemon starts and then daily, with a 10-second timeout, a 1 MiB cap and nothing about you; it installs nothing. **Check automatically** on the About tab (`update_check` in `daemon-config.json`, or `COFFER_UPDATE_CHECK=off`) turns it off. The desktop app also fetches its own signed update manifest from the newest GitHub Release, and only when it was built with an update key.
 
 The guard resolves DNS at validation time and the HTTP client resolves again when it connects, so a host that re-points between the two can slip past. Pinning the resolved address through to the client would break TLS certificate verification; for a single-user daemon where you typed the URL yourself, that residual risk is accepted.
 
@@ -391,6 +391,7 @@ One detector finds credentials written in plain text. **Find plaintext keys** on
 - **Coffer's allowlist runs first.** Secret references (`coffer://secret/<id>`, a bare `secret/<id>`), `$VAR` and `${VAR}`, double-brace templates, placeholders and code that only says where a value comes from are never findings.
 - **Keyword windows bound the cost.** A rule runs only around the keywords it names, so a very long line (minified code, a pasted blob) cannot make a scan expensive.
 - **Decoded content is not scanned.** A base64 or hex value is read as it is written, not decoded first; that trade keeps the scan predictable.
+- **A person can mark a value as not a secret.** It is remembered only as an HMAC fingerprint, under a key derived from the master key, in `local/secret/plaintext-ignored.json` on this machine (never synced), so the list holds no value and no plain hash a guess could be checked against. Find plaintext keys and sync's push check then skip that value wherever it sits (`POST /api/v1/secrets/scan/ignore` and `/scan/unignore`, audited as `secret_plaintext_ignored` and `secret_plaintext_unignored`).
 - **Refreshed by hand at release.** `make refresh-secret-rules` pulls the next gitleaks release; there is no scheduled job and the daemon never fetches rules while running, so a build's rules are fixed and reviewable.
 
 ## Sync carries ciphertext only
@@ -429,7 +430,7 @@ See [Vault sync](/architecture/vault-sync) for the full protocol.
 | --- | --- |
 | The HTTP surface | The token check, the `Host` and `Origin` checks, the CORS allowlist and middleware order, serving the UI with the injected token, and the secret-boundary routes (presence-gated reveal and key backup, approvals, the `coffer run` resolve, scan and import). |
 | The daemon infrastructure | Token minting, `daemon.json`, `0600` writes, the loopback bind. |
-| The secret infrastructure | Encrypted store, master key and its storage backends, keyring adapter, binding and approval store, plaintext scan. |
+| The secret infrastructure | Encrypted store, master key and its storage backends, keyring adapter, binding and approval store, plaintext scan, the not-a-secret list and the secret notes store. |
 | The secret application layer | The secret boundary (destinations, bindings, approvals), presence grants, the guarded resolver. |
 | The CLI surface | `coffer run` and its output masking. |
 | `desktop/` | The desktop app's presence check, grant signing and approval notifications. |
@@ -442,7 +443,6 @@ See [Vault sync](/architecture/vault-sync) for the full protocol.
 - [Secret store guide](/guides/secret-store)
 - [Security policy](/contributing/security) — how to report a vulnerability.
 - [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)
-- [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
 - [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/standalone-secrets-are-named-references-injected-into-one-child.md)
 - [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/master-key-lives-in-the-macos-keychain.md)
 - [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-auth-and-origin-guard.md)

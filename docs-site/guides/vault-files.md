@@ -15,7 +15,7 @@ Everything Coffer keeps that you would want on another machine — MCP servers, 
 ├── state/mcp-preferences/<server>.json the tools, prompts and resources you switched off on a server
 ├── state/channel-peers/<channel>.json  who is paired with a channel
 ├── state/settings/internal-engine.json speech-to-text model and upkeep settings
-├── knowledge/<collection>/…            knowledge documents (Markdown)
+├── knowledge/<collection>/…            knowledge collections (README.md, sources/, pages/)
 ├── memory/global/, memory/projects/<key>/  the memory hub, written by memory sync
 ├── skills/<name>/…                     skill folders (SKILL.md and the rest)
 ├── secret/<ref>.enc                    encrypted secrets (never edit these)
@@ -77,7 +77,7 @@ While you are editing a file, Coffer does not overwrite it: a write Coffer itsel
 
 Every accepted change to the vault is a version with the time, who wrote it (you, edited on disk, an agent, Coffer or sync) and on which machine. Any file or folder has a history. Secrets have no readable history and cannot be restored.
 
-In the web UI, a knowledge document and a skill each have a **History** tab. It lists the versions newest first, each with what it did, who wrote it (**You**, **Edited on disk**, an agent by name, **Coffer** or **Sync**) and when, shows the diff of the chosen one, and offers **Restore this version…**. Coffer asks first, then writes the file (for a skill, every file of the folder) back to that version as a new version by you, and records it in the audit log as `vault_file_restored`. If the file changed since you opened the tab, the restore is refused with `VAULT_FILE_STALE`; reopen the tab and try again. Opening the tab first records any edit you made on disk as its own version. Coffer's built-in skill has the tab but no history, since it is rebuilt at every start. See [Bring back an earlier version](/guides/knowledge#bring-back-an-earlier-version).
+In the web UI, a skill has a **History** tab, and a knowledge page or source a **History** drawer, opened from **History** in its pane bar. Each lists the versions newest first, each with what it did, who wrote it (**You**, **Edited on disk**, an agent by name, **Coffer** or **Sync**) and when, shows the diff of the chosen one, and offers **Restore this version…**. Coffer asks first, then writes the file (for a skill, every file of the folder) back to that version as a new version by you, and records it in the audit log as `vault_file_restored`. If the file changed since you opened the history, the restore is refused with `VAULT_FILE_STALE`; reopen the history and try again. Opening the history first records any edit you made on disk as its own version. Coffer's built-in skill has the tab but no history, since it is rebuilt at every start. See [Bring back an earlier version](/guides/knowledge#bring-back-an-earlier-version).
 
 You can also read the history with git: `git -C ~/.coffer/vault log -p -- <path>`.
 

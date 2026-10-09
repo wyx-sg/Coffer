@@ -17,7 +17,7 @@ import { agentRowStateKey, agentRowTone, type AgentRowState } from "@/lib/agents
 import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
 import { useAgent, useAgentConnection } from "@/lib/hooks/useAgents";
 import { useAgentCounts } from "@/lib/hooks/useAgentCounts";
-import { useAgentDefaultModel } from "@/lib/hooks/useAgentModels";
+import { useAgentBuiltinDefault, useAgentDefaultModel } from "@/lib/hooks/useAgentModels";
 import { useAgentPending } from "@/lib/hooks/useAgentPending";
 import { cn } from "@/lib/utils";
 import { useProviderLabel } from "../overview/useProviderLabel";
@@ -88,6 +88,7 @@ export function ModelCell({ uid, type }: { uid: string | null; type: AgentTypeOu
   const agent = useAgent(uid ?? "").data;
   const onConnection = !!agent?.connection_uid;
   const own = useAgentDefaultModel(onConnection ? "" : type).data ?? null;
+  const builtinDefault = useAgentBuiltinDefault(onConnection ? "" : type).data ?? null;
   if (!uid || !agent) return <span className="font-mono text-xs text-text">{DASH}</span>;
   const model = onConnection ? agent.model : own;
   if (model)
@@ -96,10 +97,10 @@ export function ModelCell({ uid, type }: { uid: string | null; type: AgentTypeOu
         {model}
       </span>
     );
+  const named = builtinDefault ? { model: builtinDefault } : undefined;
+  const text = t(named ? "agents.list.builtinDefaultNamed" : "agents.list.builtinDefault", named);
   return (
-    <span className="whitespace-nowrap text-xs text-text-subtle">
-      {onConnection ? DASH : t("agents.list.builtinDefault")}
-    </span>
+    <span className="whitespace-nowrap text-xs text-text-subtle">{onConnection ? DASH : text}</span>
   );
 }
 

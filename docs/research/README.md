@@ -20,11 +20,13 @@ the ADRs the research informs. What Coffer decided, and why, lives in
 | [Agent chat clients](./agent-chat-clients.md) | GUIs that drive locally installed agent CLIs as chat | `chat` |
 | [IM agent bridges](./im-agent-bridges.md) | Driving a local coding agent from an IM app | `channels` |
 | [Knowledge curation](./knowledge-curation.md) | Plain-Markdown knowledge bases co-maintained by people and an LLM | `knowledge` |
+| [Knowledge structures](./knowledge-structures.md) | How agent knowledge is structured (raw sources, compiled pages, links, indexes, lint) and how history and sources are shown | `knowledge` |
 | [Agent memory](./agent-memory.md) | Capturing, consolidating and re-delivering what agents learn across sessions | `memory` |
 | [Multi-machine sync](./multi-machine-sync.md) | Converging one user's vault across their machines through a remote they own | `vault-sync` |
 | [Credentials & secrets](./credentials-secrets.md) | Holding secrets for agents and MCP servers without exposing plaintext | `secret` |
 | [Activity & audit](./activity-and-audit.md) | Audit logs, invocation logs, daemon logs, retention and the UI over them | `resource-framework`, `web-ui`, `daemon` |
 | [Desktop shell & daemon](./desktop-shell-and-daemon.md) | A resident localhost daemon plus a native shell and CLI from one download | `daemon`, `desktop-app` |
+| [Documentation screenshots](./docs-screenshots.md) | Keeping product pictures in docs and on home pages current | none — docs site |
 | [Agent evaluation](./agent-evaluation.md) | Capturing interactions into datasets and gating CI on regressions | none — engineering harness |
 
 Capabilities with no note: `resource-framework` (as a framework), `vault-storage`, `experimental-features`

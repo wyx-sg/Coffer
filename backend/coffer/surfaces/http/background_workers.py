@@ -11,6 +11,7 @@ this code at all.
 from __future__ import annotations
 
 import asyncio
+import pathlib
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -26,6 +27,7 @@ from coffer.application.retention_worker import RetentionWorker
 from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.application.sync.worker import SyncWorker
 from coffer.infrastructure.logging.files import prune_log_dir
+from coffer.infrastructure.persistence.space import reclaim_free_pages
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.surfaces.http.guide_wiring import BuiltinGuide
@@ -59,8 +61,13 @@ def start_background_workers(
     master_key: MasterKeyManager,
     features: FeatureService,
     platform: PlatformPort,
+    history_db: pathlib.Path | None,
 ) -> BackgroundWorkers:
-    retention_worker = RetentionWorker(retention_svc, prune_logs=prune_log_dir)
+    retention_worker = RetentionWorker(
+        retention_svc,
+        prune_logs=prune_log_dir,
+        reclaim_space=lambda: reclaim_free_pages(history_db),
+    )
     retention_task = spawn_restarting(retention_worker.run, name="retention-worker")
 
     # Vault sync (spec vault-sync): a round on the configured remote's

@@ -5,7 +5,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 
 # 文件与目录 {#files-and-directories}
 
-本页列出 Coffer 在磁盘上保存的一切：`~/.coffer` 目录树、它之外的那一个文件，以及 Coffer 写进每个已注册智能体自身配置目录的条目。备份保险库、安全清理，或者想弄清楚某个文件是干什么的，都可以查这一页。
+本页列出 Coffer 在磁盘上保存的一切：`~/.coffer` 目录树、它之外的文件，以及 Coffer 写进每个已注册智能体自身配置目录的条目。备份保险库、安全清理，或者想弄清楚某个文件是干什么的，都可以查这一页。
 
 下面所有路径都相对 `$HOME` 解析。目录树没有逐项覆盖的方式，环境变量能挪动的只有日志、模型代理的用量暂存目录和历史数据库（见[配置](/zh/reference/configuration#storage-locations)）。
 
@@ -48,7 +48,9 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 ├── state/mcp-preferences/<server>.json
 ├── state/channel-peers/<channel>.json
 ├── state/settings/internal-engine.json
-├── knowledge/<collection>/             # documents, README.md, hidden .inbox/
+├── state/secret-notes/notes.json
+├── state/cli-tools/tools.json
+├── knowledge/<collection>/             # README.md, pages/, sources/, hidden .inbox/
 ├── skills/<name>/                      # skill master folders
 ├── memory/                             # the memory hub: global/ and projects/<project>/
 ├── secret/<ref>.enc
@@ -64,8 +66,12 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `state/mcp-preferences/<server>.json` | 你在某个 MCP 服务器上关掉的工具、提示词和资源，附带该服务器的 uid。 | 你、守护进程 | 是 | 可以：该服务器上的一切都会重新打开。 |
 | `state/channel-peers/<channel>.json` | 与某个消息渠道配对的身份，包括所有者。 | 守护进程 | 是 | 配对关系会丢失。 |
 | `state/settings/internal-engine.json` | 语音转文字模型，以及记忆同步的开关和间隔。不存在时用默认值。 | 你、守护进程 | 是 | 可以：设置恢复默认。 |
-| `knowledge/<collection>/` | 一个知识集：任意层级嵌套的 Markdown 文档，加一个描述它的 `README.md`。你和你的智能体编辑这些文件；整理则由智能体来合并和纠正。 | 你、守护进程 | 是 | **不能。** 这是写下来的知识。 |
-| `knowledge/<collection>/.inbox/` | 投放区：智能体或另一台机器放在这里的 Markdown 文件，会被下一次扫描（一分钟内）收编并升格为文档，之后这个文件就不在了。 | 你、你的智能体、守护进程 | 是 | 不能：尚未升格的文件会丢失。 |
+| `state/secret-notes/notes.json` | 每个密钥的标签和描述（从不含值）。 | 你、守护进程 | 是 | 标签和描述会丢失，值还在。 |
+| `state/cli-tools/tools.json` | 你手动添加的命令行工具，以及你对技能所需工具的修改。 | 你、守护进程 | 是 | 可以：手动添加的工具和你的修改会丢失。 |
+| `knowledge/<collection>/` | 一个知识集：一个描述它的 `README.md`，加上 `pages/` 和 `sources/`。放在其他位置的 Markdown 文档会被扫描移进 `pages/`。整理则由智能体来合并和纠正。 | 你、守护进程 | 是 | **不能。** 这是写下来的知识。 |
+| `knowledge/<collection>/pages/` | wiki 本身：任意层级嵌套的 Markdown 页面，由你和你的智能体编写并保持更新。 | 你、你的智能体、守护进程 | 是 | **不能。** 这是写下来的知识。 |
+| `knowledge/<collection>/sources/` | 到达的素材——每次上传和每个收件箱文件——按原样以 Markdown 保留。智能体读来源，从不编辑来源。 | 守护进程 | 是 | **不能。** 页面引用这些来源。 |
+| `knowledge/<collection>/.inbox/` | 投放区：智能体或另一台机器放在这里的 Markdown 文件，会被下一次扫描（一分钟内）收编并作为来源保留到 `sources/` 下，之后这个文件就不在了。 | 你、你的智能体、守护进程 | 是 | 不能：尚未收编的文件会丢失。 |
 | `skills/<name>/` | 托管技能的主副本：`SKILL.md`、其他文件，以及 `.coffer.meta.json`（Coffer 的元数据）。智能体拿到的是指向这个目录的符号链接。 | 你、守护进程 | 是 | **不能。** 删掉目录会让投递给智能体的链接失效。 |
 | `memory/` | [记忆](/zh/guides/memory)中心库：你任意一台机器上的智能体为自己写下的每条记忆一个 Markdown 文件，放在 `global/` 或 `projects/<project>/` 下（项目是仓库的远端，`[A-Za-z0-9._-]` 之外的字符都换成 `-`）。Frontmatter 写明来源机器、智能体和来源文件；文本里的路径存为 `<repo>` 和 `~`。只有条目来源的那台机器会修改它。 | 记忆同步 | 是 | 每台机器会在下次同步时重新发布自己智能体的记忆；另一台机器的记忆只能由那台机器重新发布。 |
 | `secret/<ref>.enc` | 一个密钥的 Fernet 密文，权限 `0600`。从不包含主密钥本身。除非同步远端允许携带密钥，否则不进仓库。 | 守护进程 | 仅在 `--with-secret` 时 | **不能。** 密钥就没了。 |
@@ -78,11 +84,13 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | --- | --- | --- | --- | --- |
 | `local/resources/agent/<name>.json` | 本机的智能体，每个一个资源文件。 | 守护进程 | 从不 | 该智能体在本机被取消注册。 |
 | `local/reach.json` | 每个资源在本机的生效范围：是否启用，对哪些智能体生效。 | 守护进程 | 从不 | 每个资源恢复为所属类型的默认生效范围。 |
-| `local/engine.json` | 本机上次修改 Coffer 设置文档（模型超时、语音转文字、维护任务）的时间。 | 守护进程 | 从不 | 可以。 |
+| `local/engine.json` | 本机上次修改 Coffer 设置文档（语音转文字、维护任务）的时间。 | 守护进程 | 从不 | 可以。 |
+| `local/cli-paths.json` | 你用绝对路径添加的每个命令行工具在本机的位置。 | 守护进程 | 从不 | 这些工具会重新在 `PATH` 上查找。 |
 | `local/retention.json` | 每张可清理表的保留期限，以及上次清理的时间。 | 守护进程 | 从不 | 可以：使用默认值。 |
 | `local/skill-source-status.json` | 本机上次在每个从 Git 导入的技能来源处看到的情况。 | 守护进程 | 从不 | 可以：下次检查会补上。 |
 | `local/secret/` | 仅限本机的密文，比如模型代理的令牌。 | 守护进程 | 从不 | 代理令牌会重新生成；使用提供商的智能体会重新读取自己的令牌。 |
-| `local/secret-boundary/` | `bindings.json`、`approvals.json`、`settings.json`、`times.json`：每个密钥被批准发往哪个目的地、待处理的审批、密钥边界的开关、每个密钥首次存到本机的时间。 | 守护进程 | 从不 | 每个密钥都要重新等待审批。 |
+| `local/secret/plaintext-ignored.json` | 你说过不是密钥的值的指纹，这样它们不会再被标出来。不保存值本身。 | 守护进程 | 从不 | 这些值会再次被标出来。 |
+| `local/secret-boundary/` | `bindings.json`、`approvals.json`、`settings.json`、`times.json`、`last-used.json`：每个密钥被批准发往哪个目的地、待处理的审批、密钥边界的开关、每个密钥首次存到本机的时间和最近一次被使用的时间。 | 守护进程 | 从不 | 每个密钥都要重新等待审批。 |
 | `local/memory-sync.json` | 记忆同步的账本：每个来源的摘要、Coffer 写进本机智能体的每份副本及其状态（已写入、被智能体修改或移除）、交付内容的指纹、Codex 导入开关、本机是否确认过预览、上次同步及其报告。 | 守护进程 | 从不 | 可以：下次同步会根据 `coffer_` 文件重新推出它，并先给出预览。 |
 | `local/memory-sync-preview.json` | 一次首次或大量的记忆同步，正在记忆页上等待**写入**或**取消**。 | 守护进程 | 从不 | 可以：下次同步会重新规划。 |
 | `local/sync/remote.json` | 唯一的同步远端：URL、分支、推送用密钥引用、是否携带密钥、间隔、是否暂停。 | 守护进程 | 从不 | 本机忘掉这个远端。 |
@@ -96,8 +104,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | --- | --- | --- | --- | --- |
 | `content/channel-media/` | 通过 Telegram 和 SeaTalk 收到的附件，保存下来让智能体能打开。超过附件保留期（默认 30 天）的文件会被清理。 | 守护进程 | 否 | 可以。 |
 | `content/workspace/` | 没选工作目录时，对话默认使用的工作目录。 | 守护进程 | 否 | 仅在没有对话使用它时可以。 |
-
-早期版本还在 `content/chat-media/` 保存对话页面上附加的文件。现在没有任何东西再写入它；如果它还在，可以手动删除。
+| `content/backup/skills/` | Coffer 移到一边的技能文件夹：从智能体的技能链接路径或技能库里移出来的文件夹。它是那个文件夹唯一的一份。 | 守护进程 | 否 | 确认不再需要这些文件夹后可以。 |
 
 ### 历史与密钥 {#history-and-keys}
 
@@ -116,7 +123,10 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 
 | 路径 | 用途 | 由谁重建 |
 | --- | --- | --- |
+| `derived/channel-avatars/` | 与渠道配对的人的头像，每人一个文件，从平台获取。 | 下一次获取 |
 | `derived/derived.db` | MCP 服务器健康状态、哪些技能副本投递到了哪些智能体、每项上游能力首次和最近一次被看到的时间。表结构版本不一致时会重建。 | 健康检查、技能投递、网关 |
+| `derived/genai-prices.json` | 从 genai-prices 获取的模型价格表，以及获取时间。 | 每天的价格刷新 |
+| `derived/reported-prices.json` | 列出模型时，提供商的 API 报告的价格。 | 下一次列出模型 |
 | `derived/resources/` | 派生的资源文件：`skill/coffer-guide.json`。 | 守护进程启动时 |
 | `derived/secret-citations.json` | 每个密钥被谁引用：引用它的资源和技能文件。不会同步。 | 守护进程启动时重建，之后每次资源或技能变化时更新 |
 | `derived/skills/coffer-guide/` | Coffer 自带的指南技能，由当前构建渲染。 | 守护进程启动时 |
@@ -126,9 +136,9 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 
 | 路径 | 用途 | 所有者 | 是否同步 | 能否安全删除 |
 | --- | --- | --- | --- | --- |
-| `daemon.json` | 正在运行的守护进程的运行时状态：`version`、`pid`、`port`、`token`、`started_at`、`binary_path`。权限 `0600`。每个客户端（CLI、shim、桌面应用、Web 界面开发服务器）都从这里读端口和 API 令牌。守护进程退出时删除。 | 守护进程 | 否 | 仅在没有守护进程运行时可以。过期的文件会被识别并忽略。 |
+| `daemon.json` | 正在运行的守护进程的运行时状态：`version`、`pid`、`port`、`token`、`started_at`。权限 `0600`。每个客户端（CLI、shim、桌面应用、Web 界面开发服务器）都从这里读端口和 API 令牌。守护进程退出时删除。 | 守护进程 | 否 | 仅在没有守护进程运行时可以。过期的文件会被识别并忽略。 |
 | `daemon.lock` | `flock` 锁文件，让“检测或启动”串行执行，两个客户端就不会启动两个守护进程。按设计在两次运行之间留在磁盘上。 | 守护进程、CLI、shim | 否 | 没有守护进程正在启动时可以。 |
-| `daemon-config.json` | 打开数据库之前读取的设置：`port`、`proxy_port`、`machine_name`、`machine_id`（缓存）、`features`。权限 `0600`。见[配置](/zh/reference/configuration#daemon-config-json)。 | 守护进程、CLI | 否（有意只属于本机） | 可以：守护进程会回退到 38470 端口、主机名和默认值（每个实验功能都关闭）。 |
+| `daemon-config.json` | 打开数据库之前读取的设置：`port`、`proxy_port`、`machine_name`、`machine_id`（缓存）、`features`、`price_refresh`、`update_check`、`record_call_content`、`skill_update_check`。权限 `0600`。见[配置](/zh/reference/configuration#daemon-config-json)。 | 守护进程、CLI | 否（有意只属于本机） | 可以：守护进程会回退到 38470 端口、主机名和默认值（每个实验功能都关闭）。 |
 | `proxy.json` | 正在运行的[模型代理](/zh/architecture/model-proxy)的运行时状态：`port`、`pid`、`started_at`、`version` 和 `control_token`，后者是守护进程用来向代理推送状态、通知它排空的令牌。权限 `0600`。代理绑定好 socket 后写入；退出时仅当文件里记录的仍是自己的 pid 才删除。代理能活过守护进程重启，新的守护进程通过这个文件找到它。 | 模型代理 | 否 | 仅在没有代理运行时可以。 |
 | `proxy-usage/<pid>-<start>-<seq>.jsonl`（打开期间为 `.jsonl.part`） | 模型代理的用量记录，每行一个 JSON 对象，只含元数据。代理从不打开数据库；守护进程会导入每个写完的文件。`COFFER_PROXY_SPOOL_DIR` 可以挪动这个目录。 | 模型代理、守护进程 | 否 | 已写完但尚未导入的文件会从用量报告中丢失。 |
 | `upstream-pids/<server-uid>-<pid>.json` | 守护进程启动的每个上游 MCP 服务器进程一个文件，这样崩溃后下一个守护进程能回收孤儿进程。 | 守护进程 | 否 | 守护进程停止时可以。 |
@@ -139,8 +149,8 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 
 | 路径 | 用途 | 所有者 | 是否同步 | 能否安全删除 |
 | --- | --- | --- | --- | --- |
-| `bin/<version>/` | 每个已部署的 frozen 构建一个目录，里面有 `coffer`、`coffer-daemon` 和 `coffer-mcp-shim`，每个都带一个复制完成后才写入的 `.<name>.version` 标记文件。保留当前版本和上一个版本。 | 安装程序、守护进程（frozen 构建） | 否 | 旧版本目录可以删，但符号链接指向的那个不行。 |
-| `bin/coffer`、`bin/coffer-daemon`、`bin/coffer-mcp-shim` | 指向当前版本目录的相对符号链接，升级时原子切换。智能体的 MCP 条目、登录服务和你的 `PATH` 都使用这些固定名称。 | 安装程序、守护进程 | 否 | 不能：智能体的 MCP 条目指向 `bin/coffer-mcp-shim`。 |
+| `bin/<version>/` | 每个已部署的 frozen 构建一个目录，里面有 `coffer`、`coffer-daemon`、`coffer-mcp-shim` 和 `coffer-seatalk-bridge`，每个都带一个复制完成后才写入的 `.<name>.version` 标记文件，另有 shim 的库文件夹 `coffer-mcp-shim-lib/`。保留当前版本和上一个版本。 | 安装程序、守护进程（frozen 构建） | 否 | 旧版本目录可以删，但符号链接指向的那个不行。 |
+| `bin/coffer`、`bin/coffer-daemon`、`bin/coffer-mcp-shim`、`bin/coffer-seatalk-bridge` | 指向当前版本目录的相对符号链接，升级时原子切换。智能体的 MCP 条目、登录服务和你的 `PATH` 都使用这些固定名称。 | 安装程序、守护进程 | 否 | 不能：智能体的 MCP 条目指向 `bin/coffer-mcp-shim`。 |
 
 要手动撤销一次升级，把这些符号链接指回上一个版本目录即可。frozen 守护进程启动时会把同级二进制部署到这里；源码安装则使用 `pip` 放到 `PATH` 上的命令行脚本。见[分发与发布](/zh/architecture/distribution)。
 
@@ -183,6 +193,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | --- | --- | --- | --- |
 | `~/Library/LaunchAgents/dev.coffer.daemon.plist` | 登录时启动守护进程、崩溃后重启它的登录服务（macOS）。运行 `~/.coffer/bin/coffer-daemon`，日志写到 `~/.coffer/logs/daemon.log`。 | 守护进程（**设置 → 守护进程 → 开机自启动**） | 请改为关闭**开机自启动**。 |
 | 你的 shell 配置文件 | `install.sh` 会把 `~/.coffer/bin` 追加到 `PATH`，除非设置了 `COFFER_NO_MODIFY_PATH=1`。 | 安装程序 | 手动删掉那一行。 |
+| `~/.warp/launch_configurations/coffer-*.yaml` | Coffer 在 Warp 里打开会话时写的启动文件，每次启动一个。 | 守护进程 | 可以。 |
 
 ## 智能体配置目录里的内容 {#inside-an-agent-s-config-directory}
 
@@ -214,7 +225,7 @@ Coffer 只会为你要求的事写入已注册智能体自己的配置目录：�
 Coffer 通过 `coffer` 服务器键，以及运行 `coffer` CLI（裸名或任意路径）加 `proxy token` 的 `apiKeyHelper` 来识别自己的条目，并且只删除这些。其他条目——你自己的 MCP 服务器、你的 Hook、你的 `env`——保持原样。在智能体的记忆里，Coffer 只写上面列出的文件和标记区块，从不写智能体自己写的记忆；记忆页上的**撤销同步…**会移除它们。升级后首次启动时，守护进程会移除早期版本装在 `settings.json` 和 `hooks.json` 里的 `: coffer-memory` Hook 条目。
 
 ::: tip 清理智能体
-卸载 Coffer 之前，先断开每个智能体与 Coffer 的连接，并在每个智能体的页面上移除提供商投影，然后再删除 `~/.coffer`。先删 `~/.coffer` 的话，智能体会指向一个已经不存在的 shim。
+要移除 Coffer，运行 `coffer uninstall`（桌面应用里是**设置 › 关于 › 卸载 Coffer**）。它会断开每个智能体与 Coffer 的连接、移除每个智能体上的提供商投影，并删除技能链接、开机自启动、终端启动文件、安装脚本加的 `PATH` 行和 `~/.coffer/bin`；`~/.coffer` 会保留，除非加上 `--delete-data`。先手动删 `~/.coffer` 的话，智能体会指向一个已经不存在的 shim。见[安装 → 卸载](/zh/start/install#uninstall)。
 :::
 
 ## 相关页面 {#related}

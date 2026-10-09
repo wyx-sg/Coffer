@@ -1139,7 +1139,7 @@
       "handoffAgent": "Hand-off agent",
       "handoffAgentHelp": "The agent a hand-off button starts.",
       "skillUpdateCheck": "Check skills for updates",
-      "skillUpdateCheckHelp": "How often this Mac looks for newer versions of skills added from Git. Check for updates on a skill always works.",
+      "skillUpdateCheckHelp": "How often this Mac looks for newer versions of skills added from Git. Check again on a skill's page always works.",
       "skillUpdateCheck6h": "Every 6 hours",
       "skillUpdateCheck1d": "Every day",
       "skillUpdateCheck7d": "Every week",
@@ -2402,6 +2402,7 @@
         "route": "Route",
         "test": "Test",
         "auto": "Built-in default",
+        "autoNamed": "Built-in default ({{model}})",
         "routeProxy": "Through Coffer’s proxy",
         "reachable": "reachable",
         "routeDirect": {
@@ -2492,7 +2493,7 @@
         "label": "Provider",
         "none": "No other compatible provider yet. <link>Add one in Model providers</link>",
         "hint": {
-          "claude_code": "Built-in login, or a provider from Model providers.",
+          "claude_code": "Built-in login, or a provider from Model providers. It changes the Claude Code CLI only: the Claude desktop app keeps its own model settings.",
           "codex": "Built-in login (ChatGPT account), or a provider from Model providers."
         }
       },
@@ -2543,6 +2544,7 @@
         "version": "v{{version}}"
       },
       "builtinDefault": "Built-in default",
+      "builtinDefaultNamed": "Built-in default ({{model}})",
       "detail": {
         "mcpMissing": "MCP entry missing",
         "gone": "{{dir}} and its program are gone",
@@ -3001,7 +3003,7 @@
     }
   },
   "knowledge": {
-    "subtitle": "Documents you and your agents write together. Every agent can read them.",
+    "subtitle": "Pages your agents write from the sources you keep. Every agent can read them.",
     "title": "Knowledge",
     "nav": {
       "label": "Collections and documents",
@@ -3010,17 +3012,21 @@
       "collapse": "Collapse {{name}}"
     },
     "tree": {
-      "empty": "No documents yet",
-      "emptyFolder": "Nothing here yet"
+      "empty": "No pages or sources yet",
+      "emptyFolder": "Nothing here yet",
+      "pages": "Pages",
+      "sources": "Sources"
     },
     "stats": {
-      "documents": "Documents",
+      "pages": "Pages",
+      "sources": "Sources",
+      "sourcesWaiting": "{{count}} · {{waiting}} waiting",
       "folder": "Folder"
     },
     "collection": {
       "descriptionLabel": "What belongs in this collection",
       "noDescription": "No description yet. Say what belongs in here so agents recognise it.",
-      "emptyLine": "No documents yet. Upload one, or drop Markdown files into the folder.",
+      "emptyLine": "No pages or sources yet. Upload a source, or drop Markdown files into the folder.",
       "more": "More actions for {{name}}",
       "copyPath": "Copy path",
       "descriptionSaved": "Description updated",
@@ -3049,8 +3055,8 @@
     "deleteCollection": {
       "menu": "Delete collection…",
       "title": "Delete {{name}}?",
-      "body_one": "{{count}} document goes with it. Undo is offered for a few seconds; after that only git still has its files.",
-      "body_other": "{{count}} documents go with it. Undo is offered for a few seconds; after that only git still has their files.",
+      "body_one": "{{count}} file goes with it. Undo is offered for a few seconds; after that only git still has its files.",
+      "body_other": "{{count}} files go with it. Undo is offered for a few seconds; after that only git still has their files.",
       "confirm": "Delete collection",
       "pending": "Deleting…",
       "failed": "Couldn’t delete {{name}}",
@@ -3059,8 +3065,8 @@
     },
     "upload": {
       "button": "Upload",
-      "title": "Upload a document",
-      "body": "Coffer converts it to Markdown and adds it to the collection as a document. The original file isn’t kept.",
+      "title": "Upload a source",
+      "body": "Coffer converts it to Markdown and keeps it as a source of the collection. The uploaded file itself is not stored.",
       "choose": "Drop a file here, or choose one",
       "types": "PDF, Word, PowerPoint, Excel, HTML, CSV, Markdown or text · up to 20 MB",
       "remove": "Remove this file",
@@ -3080,7 +3086,7 @@
       "failedTitle": "Couldn't upload this file"
     },
     "document": {
-      "where": "Where this document is",
+      "where": "Where this file is",
       "more": "More actions for {{path}}",
       "createdBy": "Created {{date}} by {{who}}",
       "you": "you",
@@ -3088,14 +3094,13 @@
       "preview": "Preview",
       "source": "Source",
       "created": "Created {{date}}",
-      "views": "Document views",
-      "tabs": {
-        "document": "Document",
-        "history": "History"
-      }
+      "sources": "Sources:",
+      "missingSource": "No source is named {{slug}}",
+      "citedBy_one": "Cited by {{count}} page:",
+      "citedBy_other": "Cited by {{count}} pages:"
     },
     "deleteDocument": {
-      "menu": "Delete document",
+      "menu": "Delete",
       "deletedToast": "Deleted {{name}}",
       "undoFailed": "Couldn’t restore {{name}}"
     },
@@ -3104,7 +3109,8 @@
       "agent": "An agent",
       "curation": "Curation",
       "sync": "Sync",
-      "disk": "Edited on disk"
+      "disk": "Edited on disk",
+      "daemon": "Coffer"
     },
     "when": {
       "today": "Today {{time}}",
@@ -3121,6 +3127,57 @@
     "landing": {
       "title": "Pick a collection",
       "body": "Choose a collection on the left to read its documents, or create a new one."
+    },
+    "waiting": "Waiting",
+    "operation": {
+      "save": "Saved",
+      "delete": "Deleted",
+      "promote": "Added",
+      "restore": "Restored",
+      "edit": "Edited",
+      "sync": "Synced",
+      "create": "Created",
+      "rename": "Renamed",
+      "remove": "Removed",
+      "layout": "Filed into pages",
+      "baseline": "Recorded",
+      "curation": "Curated"
+    },
+    "link": {
+      "dead": "No page or source is named {{target}}",
+      "ambiguous": "{{target}} names more than one file"
+    },
+    "history": {
+      "title": "History",
+      "label": "History of {{name}}",
+      "close": "Close history"
+    },
+    "check": {
+      "title": "Check",
+      "description": "What Coffer finds in the collection's files on every read. It fixes none of it.",
+      "none": "Nothing found.",
+      "failed": "Couldn’t check this collection",
+      "handoff": "Check with agent",
+      "target": "→ {{target}}",
+      "others": "also {{paths}}",
+      "kinds": {
+        "dead_link": "Dead links",
+        "ambiguous_link": "Ambiguous links",
+        "duplicate_slug": "Names used twice",
+        "missing_source": "Missing sources",
+        "incomplete_page": "Incomplete pages",
+        "unsourced_page": "Pages without sources",
+        "orphan_page": "Pages nothing links to",
+        "waiting_source": "Waiting sources"
+      }
+    },
+    "changeLog": {
+      "title": "Change log",
+      "description": "Every change to this collection, newest first. A file opens with its history.",
+      "none": "No changes yet.",
+      "failed": "Couldn’t read the change log",
+      "more": "Show more",
+      "lines": "+{{added}} −{{removed}}"
     }
   },
   "memory": {
@@ -3540,7 +3597,7 @@
       },
       "approvalRefused": {
         "title": "This channel's secret was refused",
-        "body": "You refused its secret in the Coffer app, so the channel can't connect to {{platform}}. Open the Secrets page and press Ask again to raise it again — pairing and settings are kept."
+        "body": "You refused its secret in the Coffer app, so the channel can't connect to {{platform}}. Press Ask again to raise it again — pairing and settings are kept."
       }
     },
     "meta": {
@@ -3567,6 +3624,7 @@
       "replaceSecret": "Replace secret",
       "replaceToken": "Replace token",
       "openSecrets": "Open Secrets",
+      "askAgain": "Ask again",
       "runHere": "Run it here",
       "runHereConfirm": "Run it here…",
       "turnOn": "Turn on",
@@ -3591,6 +3649,7 @@
         "default": "Default agent",
         "model": "Default model",
         "modelDefault": "Provider default",
+        "modelDefaultNamed": "Provider default ({{model}})",
         "reach": "Agents it may drive",
         "help": "Each message becomes a conversation in Conversations, on the default agent unless /new names another.",
         "reachHint": "/new <agent> in a chat picks only from these."
@@ -4677,8 +4736,8 @@
         "ok": "Up to date",
         "warn_one": "{{count}} needs attention",
         "warn_other": "{{count}} need attention",
-        "unit_one": "document",
-        "unit_other": "documents",
+        "unit_one": "page",
+        "unit_other": "pages",
         "collections_one": "{{count}} collection",
         "collections_other": "{{count}} collections"
       },
@@ -5993,7 +6052,6 @@
     },
     "fields": {
       "name": "Name",
-      "protocol": "Protocol",
       "baseUrl": "Base URL",
       "apiKey": "API key"
     },
@@ -6001,7 +6059,8 @@
       "nameRequired": "Enter a name.",
       "baseUrl": "Enter a full URL, e.g. https://api.openai.com/v1",
       "secretRequired": "Enter the API key.",
-      "loopback": "A local runtime must be on this Mac — use localhost or 127.0.0.1."
+      "loopback": "A local runtime must be on this Mac — use localhost or 127.0.0.1.",
+      "address": "Enter at least one address."
     },
     "rejected": {
       "title": "The endpoint rejects the stored key ({{status}})",
@@ -6019,7 +6078,6 @@
     },
     "endpoint": {
       "title": "Endpoint",
-      "locked": "locked while {{agents}} runs on it",
       "runtime": "Runtime",
       "wires": "serves {{wires}}",
       "route": "Route",
@@ -6072,6 +6130,7 @@
       "cols": {
         "model": "Model",
         "price": "Price",
+        "window": "Window",
         "type": "Type"
       }
     },
@@ -6103,7 +6162,7 @@
       "stepEndpoint": "Endpoint",
       "stepModels": "Models",
       "vendor": "Vendor",
-      "vendorHint": "A vendor fills in the protocol and base URL. Custom for gateways and proxies.",
+      "vendorHint": "A vendor fills in its addresses. Custom for gateways and proxies.",
       "custom": "Custom",
       "keyHint": "Pick a stored secret, or paste a new key: it is saved to Secrets when the provider is added.",
       "keyName": "{{name}} API key",
@@ -6111,20 +6170,6 @@
       "next": "Next: Models",
       "back": "Back",
       "submit": "Add provider",
-      "protocols": {
-        "openai": {
-          "title": "OpenAI-compatible",
-          "body": "Codex and chat can use it."
-        },
-        "anthropic": {
-          "title": "Anthropic-compatible",
-          "body": "Claude Code and chat can use it."
-        },
-        "unknown": {
-          "title": "Unknown",
-          "body": "The wire could not be told."
-        }
-      },
       "local": {
         "title": "Found on this Mac",
         "looking": "Looking for model runtimes on this Mac…",
@@ -6149,7 +6194,7 @@
     "edit": {
       "title": "Edit {{name}}",
       "renameHint": "Renaming changes only the label — the key, history and agents stay put.",
-      "locked": "Locked while {{agents}} runs on it.",
+      "locked": "{{agents}} runs on it, so the OpenAI address can't be added or removed until it moves to another provider.",
       "keyHint": "Keys are write-only. Use Replace key to change the value."
     },
     "replace": {
@@ -6216,7 +6261,42 @@
       "providers": "Providers",
       "usage": "Usage"
     },
-    "latency": "{{ms}} ms"
+    "latency": "{{ms}} ms",
+    "window": {
+      "source": {
+        "user": "You set",
+        "endpoint": "From the endpoint",
+        "bundled": "Bundled"
+      },
+      "set": "Set window…",
+      "reset": "Reset to default",
+      "noneAria": "No context window known for {{id}}",
+      "editAria": "{{id}}: {{tokens}} tokens, change the context window",
+      "dialogTitle": "Context window of {{id}}",
+      "dialogBody": "How many tokens this provider serves the model with. Coffer tells Claude Code and Codex this window, so they compact at the right point. It wins over what the endpoint reports and Coffer's bundled list.",
+      "field": "Context window",
+      "hint": "Tokens, for example 128000, 128k or 1m.",
+      "invalid": "Enter a number of tokens between 1k and 100m."
+    },
+    "address": {
+      "openai": {
+        "label": "OpenAI-compatible address",
+        "help": "Codex uses this address."
+      },
+      "anthropic": {
+        "label": "Anthropic-compatible address",
+        "help": "Claude Code uses this address."
+      },
+      "bothHint": "Fill in the addresses your gateway serves. If it serves both at one address, enter the same address in both."
+    },
+    "served": "For {{agents}}",
+    "servedNone": "No agent can use it",
+    "region": {
+      "label": "Region",
+      "intl": "International",
+      "cn": "Mainland China",
+      "hint": "Keys work only in the region they were created in."
+    }
   },
   "skillSources": {
     "add": {

@@ -117,10 +117,6 @@ def _on_disk(collection: str = "shopee") -> list[str]:
 
 
 @pytest.mark.acceptance(
-    spec="knowledge",
-    scenario="an upload is converted into a document, keeping no original",
-)
-@pytest.mark.acceptance(
     spec="knowledge", scenario="an upload becomes a document at the collection root"
 )
 async def test_an_upload_becomes_a_document_and_nothing_else(knowledge) -> None:  # type: ignore[no-untyped-def]
@@ -132,20 +128,21 @@ async def test_an_upload_becomes_a_document_and_nothing_else(knowledge) -> None:
     )
 
     assert isinstance(result, IngestedDocument)
-    assert result.path == "shopee/meeting-notes.md"
+    assert result.path == "shopee/sources/meeting-notes.md"
     assert result.title == "Meeting Notes"
     assert result.converter == "passthrough"
     assert result.description == "Discussed the launch plan and open risks."
 
-    # One document, carrying the text; no original and no inbox item beside it.
-    assert _on_disk() == ["meeting-notes.md"]
+    # One source, carrying the text, and no inbox item left beside it.
+    assert _on_disk() == ["sources/meeting-notes.md"]
     document = fs.read_file(result.path)
     assert document.actor == ACTOR_USER
     assert document.description == result.description
     assert document.body.strip() == data.decode().strip()
 
 
-async def test_a_non_markdown_upload_is_converted_and_its_original_dropped(knowledge) -> None:  # type: ignore[no-untyped-def]
+@pytest.mark.acceptance(spec="knowledge", scenario="an upload is kept as a Markdown source")
+async def test_a_non_markdown_upload_is_converted_and_only_its_markdown_kept(knowledge) -> None:  # type: ignore[no-untyped-def]
     service = _service(knowledge)
     data = b"name,role\nAda,engineer\nGrace,engineer\n"
 
@@ -155,12 +152,14 @@ async def test_a_non_markdown_upload_is_converted_and_its_original_dropped(knowl
 
     assert result.converter == "csv"
     assert result.title == "team"
-    document = fs.read_file("shopee/team.md")
+    assert result.path == "shopee/sources/team.md"
+    document = fs.read_file("shopee/sources/team.md")
     assert "| name | role |" in document.body
     assert "| Ada | engineer |" in document.body
-    # The `.csv` itself is nowhere: the collection keeps knowledge, not the
-    # document it arrived in.
-    assert _on_disk() == ["team.md"]
+    assert document.actor == ACTOR_USER
+    # The `.csv` itself is nowhere: the collection keeps the Markdown, not the
+    # file it arrived in.
+    assert _on_disk() == ["sources/team.md"]
 
 
 @pytest.mark.acceptance(

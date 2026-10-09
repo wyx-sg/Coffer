@@ -69,8 +69,8 @@ need_cmd() {
     fi
 }
 
-# Put the four binaries from $1 into $2 without writing through any existing
-# file. After the first frozen daemon start, $2/<name> is a symlink into
+# Put the four binaries from $1 (and the shim's library folder) into $2
+# without writing through any existing file. After the first frozen daemon start, $2/<name> is a symlink into
 # $2/<version>/, and a plain cp would follow it and overwrite the previous
 # version's binary — the one a rollback needs. Copy to a temp sibling instead,
 # make it executable, and rename it over the name: rename replaces the link
@@ -81,6 +81,19 @@ install_binaries() {
     for bin in coffer coffer-daemon coffer-mcp-shim coffer-seatalk-bridge; do
         if [ ! -f "${_src}/${bin}" ]; then
             err "binary '${bin}' not found in archive — the release may be malformed"
+        fi
+        # A one-folder binary (the shim) keeps its libraries in <name>-lib
+        # beside it. The folder goes in first, so the executable never runs
+        # beside libraries from another build.
+        if [ -d "${_src}/${bin}-lib" ]; then
+            _tmp_lib="${_dest}/.${bin}-lib.install.$$"
+            rm -rf "$_tmp_lib" "${_dest}/.${bin}-lib.old.$$"
+            cp -R "${_src}/${bin}-lib" "$_tmp_lib"
+            if [ -e "${_dest}/${bin}-lib" ]; then
+                mv "${_dest}/${bin}-lib" "${_dest}/.${bin}-lib.old.$$"
+            fi
+            mv "$_tmp_lib" "${_dest}/${bin}-lib"
+            rm -rf "${_dest}/.${bin}-lib.old.$$"
         fi
         _tmp_bin="${_dest}/.${bin}.install.$$"
         cp "${_src}/${bin}" "$_tmp_bin"

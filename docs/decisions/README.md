@@ -133,6 +133,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`every-vault-file-carries-its-format-version`](every-vault-file-carries-its-format-version.md) | Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades |
 | [`every-vault-write-is-a-validated-commit-naming-its-writer`](every-vault-write-is-a-validated-commit-naming-its-writer.md) | Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer |
 | [`audit-and-retention`](audit-and-retention.md) | Audit Every Change With Its Actor, Log Every Invocation, Prune Per Table |
+| [`runs-db-gives-pruned-space-back`](runs-db-gives-pruned-space-back.md) | `runs.db` Gives Pruned Space Back With a Threshold `VACUUM`, and Copies Itself With `VACUUM INTO` |
 | [`one-level-triggered-reconciler-compares-parameters`](one-level-triggered-reconciler-compares-parameters.md) | One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters |
 | [`wire-contract-generated-from-the-pydantic-models`](wire-contract-generated-from-the-pydantic-models.md) | The Wire Contract Is Generated From the Pydantic Models, and the Frontend Client From the Contract |
 | [`background-work-runs-supervised-and-correlated`](background-work-runs-supervised-and-correlated.md) | Background Work Runs Supervised, and Every Record Carries One Correlation Id |
@@ -147,9 +148,10 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`daemon-is-a-resident-login-service`](daemon-is-a-resident-login-service.md) | The Daemon Is Resident: It Never Idles Out, and a Login Service Restarts Only a Crash |
 | [`daemon-auth-and-origin-guard`](daemon-auth-and-origin-guard.md) | A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard |
 | [`stdio-shim-bridge`](stdio-shim-bridge.md) | Agents Reach the Gateway Through a stdio Shim, Not a Native HTTP Entry |
+| [`an-installed-daemon-names-the-deployed-shim`](an-installed-daemon-names-the-deployed-shim.md) | An Installed Daemon Names the Deployed Shim |
 | [`desktop-shell-over-a-shared-frontend`](desktop-shell-over-a-shared-frontend.md) | The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do |
 | [`daemon-proxies-os-file-actions`](daemon-proxies-os-file-actions.md) | The Loopback Daemon Performs OS File Actions for the UI |
-| [`distribution-pyinstaller`](distribution-pyinstaller.md) | Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App |
+| [`distribution-pyinstaller`](distribution-pyinstaller.md) | Distribution — Four PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App |
 | [`project-license-is-agpl-3-0`](project-license-is-agpl-3-0.md) | Coffer Is Licensed Under AGPL-3.0-or-later |
 | [`experimental-features-instead-of-a-release-branch`](experimental-features-instead-of-a-release-branch.md) | Experimental Features Instead of a Release Branch |
 | [`sidebar-grouped-by-what-the-person-comes-to-do`](sidebar-grouped-by-what-the-person-comes-to-do.md) | The Sidebar Is Grouped by What the Person Comes to Do: Agents, Run, Capabilities, Context, System |
@@ -161,6 +163,8 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`session-subprocess-model`](session-subprocess-model.md) | One Upstream Subprocess Set Per Downstream Client Session |
 | [`mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream`](mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md) | MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream |
 | [`tool-overload-tier-the-list-search-the-rest`](tool-overload-tier-the-list-search-the-rest.md) | Tool Overload: List a Usage-Ranked Slice, Search the Rest |
+| [`tool-search-cuts-cjk-text-into-bigrams`](tool-search-cuts-cjk-text-into-bigrams.md) | Tool Search Cuts CJK Text Into Bigrams |
+| [`tool-search-indexes-parameter-text`](tool-search-indexes-parameter-text.md) | Tool Search Indexes Parameter Text |
 | [`eval-capture-and-regression-gate`](eval-capture-and-regression-gate.md) | Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate |
 | [`record-tool-call-content-redacted-and-bounded`](record-tool-call-content-redacted-and-bounded.md) | Record Tool Call Content, Masked Where the Secrets Are Known and Cut at 16 KB |
 
@@ -173,6 +177,9 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`writing-agent-native-config-safely`](writing-agent-native-config-safely.md) | Writing Agent-Native Config Safely |
 | [`provider-connections-projected-into-agent-config`](provider-connections-projected-into-agent-config.md) | LLM Connections Are Projected Into Each Agent's Own Config File |
 | [`api-key-providers-are-reached-through-a-separate-local-model-proxy`](api-key-providers-are-reached-through-a-separate-local-model-proxy.md) | API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged |
+| [`one-connection-serves-both-wires`](one-connection-serves-both-wires.md) | One Connection Serves Both Wires: an Optional Anthropic Address Beside the Base URL |
+| [`provider-reach-is-what-its-addresses-serve`](provider-reach-is-what-its-addresses-serve.md) | A Connection Reaches the Agents Its Addresses Serve; No Scope, No Off Switch |
+| [`context-windows-for-provider-models`](context-windows-for-provider-models.md) | A Provider Model's Context Window Comes From You, Then the Endpoint, Then the Bundled List, Else Nothing |
 | [`usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota`](usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota.md) | Usage Is Metered at the Proxy; Subscription Agents Are Not Metered |
 | [`model-catalogue-read-from-the-agent`](model-catalogue-read-from-the-agent.md) | The Model Catalogue Is Read Back From the Installed Agent |
 | [`internal-engine-settings`](internal-engine-settings.md) | The Speech-to-Text Model Is a Setting; Its Endpoint Is Borrowed From a Flagged Connection |
@@ -202,6 +209,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`coffer-ships-its-own-skill`](coffer-ships-its-own-skill.md) | Coffer Ships Its Own Manual as a Skill Resource |
 | [`knowledge-is-plain-files`](knowledge-is-plain-files.md) | Knowledge Is a Directory of Markdown Files, Not an Index |
 | [`tidying-knowledge-is-the-agents-job`](tidying-knowledge-is-the-agents-job.md) | Tidying Knowledge Is the Agent's Job |
+| [`knowledge-is-a-wiki-of-pages-compiled-from-kept-sources`](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md) | Knowledge Is a Wiki of Pages Compiled From Kept Sources |
 | [`sync-memory-into-each-agents-own-memory`](sync-memory-into-each-agents-own-memory.md) | Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault |
 
 ### Sync & secrets
@@ -217,3 +225,9 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`secrets-cross-machines-only-as-ciphertext`](secrets-cross-machines-only-as-ciphertext.md) | Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository |
 | [`standalone-secrets-are-named-references-injected-into-one-child`](standalone-secrets-are-named-references-injected-into-one-child.md) | Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process |
 | [`only-a-present-human-sees-a-secret-or-sends-it-somewhere-new`](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md) | Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New |
+
+### Documentation
+
+| ADR | Decision |
+| --- | --- |
+| [`docs-screenshots-are-generated-from-a-seeded-daemon`](docs-screenshots-are-generated-from-a-seeded-daemon.md) | Docs Screenshots Are Generated From a Seeded Daemon, Not Captured by Hand |

@@ -301,6 +301,8 @@ ACCEPTANCE = {
     "daemon status": "test_daemon_status_cmd.py",
     "vault problems": "test_vault_cmd.py",
     "sync wait": "test_cli_parity.py",
+    "update": "test_lifecycle_cli.py",
+    "uninstall": "test_lifecycle_cli.py",
 }
 _DECLARED = "test_cli_parity.py"
 

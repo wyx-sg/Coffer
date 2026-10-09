@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-10-09
 **Deciders**: Yuxing Wu
-**Related**: [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [Internal Engine Settings](internal-engine-settings.md), research note [knowledge curation](../research/knowledge-curation.md), spec knowledge "Teach writing and tidying in the guide", spec knowledge "Hand a tidy to the agent", spec knowledge "Promote submitted material at once"
+**Related**: [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Knowledge Is a Wiki of Pages Compiled From Kept Sources](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [Internal Engine Settings](internal-engine-settings.md), research note [knowledge curation](../research/knowledge-curation.md), spec knowledge "Teach writing and tidying in the guide", spec knowledge "Hand a tidy to the agent", spec knowledge "Promote submitted material at once"
 
 ## Context
 
@@ -122,8 +122,12 @@ behalf.
 
 Tidying knowledge is the agent's job. The `coffer-guide` skill holds the
 judgement; the person starts it with Tidy; nothing tidies unattended; and
-Coffer runs no model of its own over knowledge. Rules a future change must
-respect:
+Coffer runs no model of its own over knowledge. Tidy first integrates the
+sources no page cites yet, and a report-only **Check with agent** hand-off sits
+beside it; Coffer computes the mechanical findings (dead links, orphan pages,
+waiting sources) itself, without judgement
+([Knowledge Is a Wiki of Pages Compiled From Kept Sources](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md)).
+Rules a future change must respect:
 
 - Coffer's mechanical passes (the knowledge sweep, the memory sync) merge or
   rewrite no content by meaning. Anything that needs to decide where a fact

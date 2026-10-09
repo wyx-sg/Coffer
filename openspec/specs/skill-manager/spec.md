@@ -831,7 +831,7 @@ A skill whose SKILL.md and every `profiles/*.md` frontmatter lack a `requires` k
 ### Requirement: Declare the secrets a skill requires
 The mapping form of a skill's `requires:` frontmatter MAY name the Coffer
 secrets the skill needs under `secrets:` — `requires: {commands: [...],
-secrets: [...]}` — each entry a secret name as the secret store accepts it.
+secrets: [...]}` — each entry a secret's id, the `<id>` of its `secret/<id>` ref.
 The list form of `requires:` MUST stay commands only. An entry that is not a
 valid secret name, and a name given twice, MUST be skipped with a warning
 without failing the skill. A key of the mapping other than `commands`,
@@ -846,10 +846,10 @@ the person on the Secrets page, and the skill's commands receive it through
 skill is delivered whether or not the secret is set.
 
 #### Scenario: a skill's secrets are read from the mapping form
-- **GIVEN** a SKILL.md declaring `requires: {commands: [gh], secrets: [GITHUB_TOKEN, "bad name", GITHUB_TOKEN, npm.token]}`
+- **GIVEN** a SKILL.md declaring `requires: {commands: [gh], secrets: [<a>, "bad name", <a>, <b>]}`, where `<a>` and `<b>` are two secrets' ids
 - **WHEN** its requirements are read
-- **THEN** `gh` is the one command and `GITHUB_TOKEN` and `npm.token` are the secrets, in that order
-- **AND** `bad name` and the second `GITHUB_TOKEN` are skipped, each with a warning naming why
+- **THEN** `gh` is the one command and `<a>` and `<b>` are the secrets, in that order
+- **AND** `bad name` and the second `<a>` are skipped, each with a warning naming why
 
 #### Scenario: an unknown key under requires is refused
 - **GIVEN** a SKILL.md declaring `requires: {commands: [jq], flags: [rg], env: {A: b}}`
@@ -858,10 +858,10 @@ skill is delivered whether or not the secret is set.
 - **AND** one warning names `env` and `flags` as refused
 
 #### Scenario: the read model says whether each declared secret is set
-- **GIVEN** an imported skill declaring the secrets `GH_TOKEN` and `NPM_TOKEN`, with only `NPM_TOKEN` in the secret store
+- **GIVEN** an imported skill declaring the secrets `<a>` and `<b>` by id, with only `secret/<b>` in the secret store
 - **WHEN** the skill is read through `GET /api/v1/skills/{uid}`
-- **THEN** `requires_secrets` is `GH_TOKEN` not set and `NPM_TOKEN` set, and no secret value appears in the response
-- **AND** once `GH_TOKEN` is stored the skill list reports both set
+- **THEN** `requires_secrets` is `<a>` not set and `<b>` set, and no secret value appears in the response
+- **AND** once `secret/<a>` is stored the skill list reports both set
 
 ### Requirement: Report per agent whether a reach change was delivered
 `PUT /api/v1/resources/{uid}/scope` for a skill MUST answer, beside the resource, `delivery`: one row per registered agent the new reach grants (and per agent a failed or blocked write names), each with `agent_uid`, `agent_name`, `ok` and, when it is not ok, the `reason` the link was not made. The reach is saved whether or not every delivery succeeded, so the page can say which agent was saved and which could not be linked. Kinds that deliver nothing answer `delivery: null`.

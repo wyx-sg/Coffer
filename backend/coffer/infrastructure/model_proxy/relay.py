@@ -210,6 +210,10 @@ class Relay:
             self._log_failure(a, f"stream broke: {type(tail.error).__name__}")
         elif not ok_status(status):
             a.outcome = Outcome.UPSTREAM_ERROR
+            # Metadata only, like every proxy line: the status and the model,
+            # never the error body — enough to tell "the upstream does not know
+            # this model" (404) from a refused key or an outage.
+            self._log_failure(a, "upstream answered with an error status")
         else:
             self._settle_ok(a, sse, copy)
         self._finish(a)

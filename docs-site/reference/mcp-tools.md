@@ -58,7 +58,8 @@ The gateway also injects two arguments that are not in any public schema:
 Searches the aggregated catalogue of upstream MCP tools by intent and returns the most
 relevant tool definitions. It is the way to reach a tool that the budgeted `tools/list` did
 not include: every returned tool is callable by name, whether or not it was listed. Ranking
-is deterministic BM25 over each tool's server, name and description. Coffer's own
+is deterministic BM25 over each tool's server, name, description and parameters, and a query
+in Chinese, Japanese or Korean matches tools described in that language. Coffer's own
 `coffer__*` tools are excluded from the results. The search sees the whole catalogue of
 servers in the session's reach; a server that fails to answer is skipped.
 
@@ -86,6 +87,9 @@ Always present. Background: [MCP gateway](/architecture/mcp-gateway).
   "total_searched": 138
 }
 ```
+
+An entry also carries `outputSchema` when the upstream tool declares one, and
+`group_description`, the group's description, for a [custom tool](/guides/custom-tools).
 
 ### Example call
 
@@ -192,7 +196,7 @@ platform that can read threads tells the agent about it.
       "sent_at": "2026-10-01T08:05:00+00:00",
       "from_bot": false,
       "text": "the deploy is red again",
-      "files": [{ "path": "/Users/you/.coffer/tmp/seatalk-media/3f…a1.png", "mime": "image/png", "filename": "chart.png" }]
+      "files": [{ "path": "/Users/you/.coffer/content/channel-media/3f…a1.png", "mime": "image/png", "filename": "chart.png" }]
     }
   ],
   "has_more": true,
@@ -293,10 +297,11 @@ Your tool list is a budgeted slice: 88 more upstream tools are unlisted, all cal
 ## Knowledge, memory and logs without a tool {#memory-and-logs-without-a-tool}
 
 Coffer has no tool for knowledge, memory or its own records, because an agent can
-already do all of them with what it has. To add knowledge, write a Markdown document straight
-into a collection, as the `coffer-guide` skill describes; a file left in a collection's `.inbox/`
-folder is adopted by Coffer's sweep, which fills in any missing frontmatter and promotes it to a
-document. To change a document, edit the file in place. Memory needs no tool at all: an agent
+already do all of them with what it has. To add knowledge, write a Markdown page into a
+collection's `pages/`, as the `coffer-guide` skill describes; a file left in a collection's
+`.inbox/` folder is adopted by Coffer's sweep and kept as a source under `sources/`, and a
+document written outside `pages/` and `sources/` is moved into `pages/`. To change a document,
+edit the file in place. Memory needs no tool at all: an agent
 keeps writing its own memory, and [memory sync](/guides/memory) writes what your other agents
 learned into that same memory, which the agent loads itself.
 

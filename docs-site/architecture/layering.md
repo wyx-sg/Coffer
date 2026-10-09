@@ -57,6 +57,7 @@ The rules are [import-linter](https://github.com/seddonym/import-linter) contrac
 | Application does not import infrastructure | Application code depends on ports it defines. Exceptions: `application.knowledge` may import `infrastructure.knowledge`, and `application.memory` may import `infrastructure.memory`, because both substrates are thin file-I/O helpers with no engine behind them, where a port would be ceremony; and `application.binary_deploy` may read `infrastructure.vault.home`, the one module that names every path under `~/.coffer`. |
 | Domain is pure | Domain imports no other project layer and none of `fastapi`, `sqlalchemy`, `sqlite3`, `httpx`, `keyring` or `anyio`. |
 | keyring confined to infrastructure | Surfaces and application never import `keyring` directly. |
+| CLI does not import the HTTP surface | `surfaces.cli` may not import `surfaces.http`. The CLI is a client of the daemon's HTTP API, not a sibling of its routes. |
 | CLI does not access the keychain directly | `surfaces.cli` may not import `infrastructure.secret` at all. The CLI reaches secrets only through the daemon's HTTP API, so the daemon is the only reader of the master key on each machine. |
 | Cross-kind imports forbidden (one per kind) | Nine symmetric contracts — `mcp`, `agent`, `skill`, `knowledge`, `channel`, `chat`, `provider`, `memory`, `sync` — each forbidding that area's modules from importing any other area's modules. Named exceptions cover pure domain vocabulary only: `provider` and `memory` may read `domain.agent`, and `channel` may read `domain.chat`. `domain.knowledge` and `infrastructure.knowledge` are shared substrate. |
 | Kind-agnostic core does not import kind-specific code | The resource service and its scope, enable, delete, rename, title and kind helpers, the repository ports, the reconciler, the attention list and the event stream, the audit service, the retention service and worker, the builtin tool registry, Coffer's own engine modules, the domain's resource, reconcile, scope and audit modules, the shared infrastructure packages, the generic dependency providers and the generic routes may import no kind. Two sanctioned exceptions: Alembic's migration environment, which imports every kind's ORM models into one metadata, and the one-time vault migration, which reads every area to move its data. |
@@ -93,7 +94,7 @@ flowchart TB
 
 The kind-wiring step orders the kinds themselves: provider after agent, because it projects into each agent's config; MCP last, so it picks up every builtin tool the others registered. The chat platform is wired after all kinds because its internal gateway session needs the complete builtin tool registry; the channel kind comes after chat because it drives turns through chat's handles. Sync needs nothing from any kind: it moves the vault repository's files, and after a round that changed something the reconciler runs one pass so each kind re-projects what arrived.
 
-HTTP routers are included from one router table in `surfaces/http/`, which also puts every router under an experimental feature's prefix behind that feature's request-time gate. Typer groups are added in the CLI's main module.
+HTTP routers are included from one router table in `surfaces/http/`, which also puts every router under an experimental feature's prefix behind that feature's request-time gate. Typer groups are added in the CLI's main module; the management commands under `surfaces/cli/commands/` add themselves to those groups when the main module loads them, recording each command's route in the CLI's command registry.
 
 ### Dependency providers
 
@@ -130,7 +131,7 @@ backend/coffer/
 │   ├── audit_service.py
 │   ├── retention_service.py # plus retention_registry.py, retention_worker.py
 │   ├── builtin_tools.py    # BuiltinTool and its registry
-│   ├── features.py         # FeatureService: pin, machine setting, channel default
+│   ├── features.py         # FeatureService: pin, machine setting, default off
 │   ├── upkeep_runs.py      # passes in flight, in process
 │   ├── attention.py        # the cross-kind "needs you" list and its source port
 │   ├── reconcile/          # the unified reconciler: target port, loop, hints, drift source
@@ -142,7 +143,7 @@ backend/coffer/
 │   ├── mcp/                # gateway, supervisor, discovery, search_tools
 │   ├── agent/              # agent services
 │   ├── skill/              # skill services, builtin-skill seed
-│   ├── knowledge/          # the write tool, tidy hand-off, sweep, guide rendering
+│   ├── knowledge/          # intake and upload ingest, wiki layout, change history, tidy hand-off, sweep, guide rendering
 │   ├── channel/            # adapter protocol, pairing, inbound, runtime
 │   ├── chat/               # turn orchestrator, runner, conversation service
 │   ├── memory/             # memory sync: publish, write, preview, undo, worker, upgrade removal

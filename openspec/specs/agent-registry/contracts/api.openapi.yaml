@@ -1969,6 +1969,10 @@ components:
       type: object
     AgentModelsOut:
       properties:
+        builtin_default:
+          anyOf:
+          - $ref: '#/components/schemas/AgentModelOut'
+          - type: 'null'
         default_model:
           anyOf:
           - type: string
@@ -1979,9 +1983,16 @@ components:
             $ref: '#/components/schemas/AgentModelOut'
           title: Models
           type: array
+        resolved_default:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resolved Default
       required:
       - models
       - default_model
+      - builtin_default
+      - resolved_default
       title: AgentModelsOut
       type: object
     AgentOut:

@@ -37,6 +37,7 @@ from coffer.application.binary_deploy import deploy_frozen_sidecars
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.memory.legacy_removal import remove_memory_hooks
+from coffer.application.provider.reach_retirement import migrate_saved_connections
 from coffer.application.reconcile.hints import HintingResourceRepo
 from coffer.application.resource_service import ResourceService
 from coffer.application.runtime import loop_lag
@@ -52,7 +53,7 @@ from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
     session_maker,
 )
-from coffer.infrastructure.persistence.migrations_runner import run_migrations
+from coffer.infrastructure.persistence.migrations_runner import run_migrations, sqlite_file
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.infrastructure.platform import HostPlatform
 from coffer.infrastructure.vault.home import runs_db_path
@@ -249,8 +250,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     connection = wire_agent_connection(
         kinds.agent_skill.agent_service, kinds.agent_skill.mcp_service
     )
-    # The boot pass converges every target at once — MCP entries, skill links,
-    # provider projections — before the daemon reports ready.
+    # One boot pass converges every target (MCP, skills, providers) before ready.
+    await migrate_saved_connections(kinds.provider.service)
     await run_boot_pass(reconciler)
     follow_guide_features(kinds.guide, features)
     # Coffer's own skill, re-rendered from this build and the corpus every boot
@@ -285,6 +286,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         master_key=secrets.master_key,
         features=features,
         platform=platform,
+        history_db=sqlite_file(_db_url()),
     )
     # Published like ``app.state.kinds``: a test asserting the lifespan started
     # a worker needs a seam to reach it through.
@@ -320,12 +322,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # session + per-session supervisor + upstream subprocesses indefinitely.
     reaper_task = start_session_reaper(**reaper_kwargs_from_env())
 
-    # Set the lifecycle phase
     daemon_routes.set_daemon_phase("ready")
-
     try:
         yield
     finally:
+        # First: the scanner audits edits into the database shutdown() disposes.
+        await _best_effort("vault_scanner", vault_scanning.stop())
         await shutdown(
             Running(
                 workers=workers,
@@ -338,7 +340,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 engine=engine,
             )
         )
-        await _best_effort("vault_scanner", vault_scanning.stop())
         await _best_effort("derived_db", vault.derived_engine.dispose())
 
 

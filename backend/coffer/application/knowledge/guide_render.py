@@ -135,7 +135,8 @@ def _lead(*, knowledge: bool) -> str:
     covers = f"Covers its own tool ({_SEARCH_TOOLS_GLOSS})"
     if knowledge:
         return (
-            f"{head}. {covers}, how to write and tidy knowledge, and THIS developer's own knowledge"
+            f"{head}. {covers}, how to write, tidy and check knowledge (整理知识), "
+            "and THIS developer's own knowledge"
         )
     return f"{head}. {covers}"
 
@@ -150,7 +151,7 @@ def render_description(catalogue: Catalogue | None) -> str:
         lead = _lead(knowledge=False)
         return f"{lead}. {_TAIL}"[:MAX_DESCRIPTION_CHARS]
     lead = _lead(knowledge=True)
-    subjects = [_subject(entry) for entry, _ in catalogue if entry.document_count]
+    subjects = [_subject(entry) for entry, _ in catalogue if entry.page_count or entry.source_count]
     while subjects:
         joined = "; ".join(subjects)
         candidate = f"{lead}, covering {joined}. {_TAIL}"
@@ -194,44 +195,98 @@ def _manual(root: str, *, knowledge: bool) -> str:
     return _select_spans(_static_body(), enabled).replace(_ROOT_PLACEHOLDER, root)
 
 
+#: The catalogue's budget in characters. Past it the catalogue drops every
+#: description, and past it again lists only each collection's counts and the
+#: directories to search (spec knowledge "Merge the manual and the catalogue in
+#: the skill body"): the body is paid for whenever an agent opens the skill.
+MAX_CATALOGUE_CHARS = 60_000
+
+#: How a page with no ``type`` is grouped.
+_UNTYPED = "untyped"
+
+#: The three levels of detail, most first.
+_FULL, _TITLES, _COUNTS = "full", "titles", "counts"
+
+
+def _pages_by_type(files: Sequence[FileEntry]) -> list[tuple[str, list[FileEntry]]]:
+    groups: dict[str, list[FileEntry]] = {}
+    for file in files:
+        if file.kind == "page":
+            groups.setdefault(file.page_type or _UNTYPED, []).append(file)
+    return sorted(groups.items(), key=lambda item: (item[0] == _UNTYPED, item[0]))
+
+
+def _entry_line(file: FileEntry, *, describe: bool) -> str:
+    relative = file.path.split("/", 1)[-1]
+    line = f"- `{relative}` — **{file.title}**"
+    description = " ".join(file.description.split()) if describe else ""
+    return line + (f": {description}" if description else "")
+
+
 def _catalogue_lines(
-    root: str, entry: CollectionEntry, documents: Sequence[FileEntry]
+    root: str, entry: CollectionEntry, files: Sequence[FileEntry], detail: str
 ) -> list[str]:
     lines = [f"### {entry.name}"]
     if entry.description:
         lines += ["", " ".join(entry.description.split())]
-    if not documents:
+    lines += ["", f"Files live under `{root}/{entry.name}/`; its `README.md` is the schema."]
+    pages = [f for f in files if f.kind == "page"]
+    waiting = [f for f in files if f.kind == "source" and f.waiting]
+    sources = sum(1 for f in files if f.kind == "source")
+    if not pages and not sources:
+        lines += ["", "_No pages or sources here yet._"]
+        return lines
+    if detail == _COUNTS:
         lines += [
             "",
-            "_No documents here yet._ There is nothing to read in this collection right now.",
+            f"{len(pages)} pages under `pages/`, {sources} sources under `sources/` "
+            f"({len(waiting)} waiting). Search those directories.",
         ]
         return lines
-    lines += ["", f"Files live under `{root}/{entry.name}/`.", ""]
-    for document in documents:
-        relative = document.path.split("/", 1)[-1]
-        description = " ".join(document.description.split())
-        lines.append(
-            f"- `{relative}` — **{document.title}**" + (f": {description}" if description else "")
-        )
+    describe = detail == _FULL
+    for page_type, group in _pages_by_type(files):
+        lines += ["", f"**Pages: {page_type}**", ""]
+        lines += [_entry_line(page, describe=describe) for page in group]
+    if waiting:
+        lines += ["", "**Sources waiting to be integrated**", ""]
+        lines += [_entry_line(source, describe=False) for source in waiting]
+    lines += ["", f"{sources} sources in all under `sources/`; grep them for an exact fact."]
     return lines
 
 
-def render_catalogue(root: str, catalogue: Catalogue) -> str:
-    """The generated half: every collection, every document."""
-    total = sum(len(documents) for _, documents in catalogue)
+def _render_catalogue_at(root: str, catalogue: Catalogue, detail: str) -> str:
+    pages = sum(1 for _, files in catalogue for f in files if f.kind == "page")
     lines = [
         "## What is in this developer's knowledge",
         "",
-        f"Every document, {total} in all. Read one at "
+        f"Every page, {pages} in all, and every source waiting to be integrated. Read one at "
         f"`{root}/<collection>/<path>` with your own file tool.",
         "",
     ]
+    if detail == _TITLES:
+        lines += ["_Shortened: descriptions are left out. Read a page for its own._", ""]
+    elif detail == _COUNTS:
+        lines += [
+            "_Shortened: only counts are listed. Search each collection's `pages/` and "
+            "`sources/` with your own tools._",
+            "",
+        ]
     if not catalogue:
         lines.append("_No collections have been created yet._")
-    for entry, documents in catalogue:
-        lines += _catalogue_lines(root, entry, documents)
+    for entry, files in catalogue:
+        lines += _catalogue_lines(root, entry, files, detail)
         lines.append("")
     return "\n".join(lines).rstrip()
+
+
+def render_catalogue(root: str, catalogue: Catalogue) -> str:
+    """The generated half: every collection, its pages by type and its waiting
+    sources, shortened to fit :data:`MAX_CATALOGUE_CHARS`."""
+    for detail in (_FULL, _TITLES):
+        text = _render_catalogue_at(root, catalogue, detail)
+        if len(text) <= MAX_CATALOGUE_CHARS:
+            return text
+    return _render_catalogue_at(root, catalogue, _COUNTS)
 
 
 def render_body(root: str, catalogue: Catalogue | None) -> str:
@@ -283,6 +338,7 @@ def render(root: str, catalogue: Catalogue | None) -> str:
 
 __all__ = [
     "GUIDE_SKILL_NAME",
+    "MAX_CATALOGUE_CHARS",
     "MAX_DESCRIPTION_CHARS",
     "display_root",
     "render",

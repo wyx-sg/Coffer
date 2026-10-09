@@ -64,6 +64,7 @@ A kind is described by one fixed, immutable descriptor. Everything it declares i
 | `toggleable` | yes | Whether the kind has an enabled switch at all. `knowledge` and `agent` are not toggleable: every one of their resources reads as enabled and served (including one whose stored reach says off, left from before its kind became non-toggleable), and enabling or disabling one is refused with `RESOURCE_NOT_TOGGLEABLE` (409), changing nothing. |
 | Storage class | `vault` | The storage class the kind's resource files live in: `vault` (synced) or `local` (`agent`); a single row can be `derived` through per-row storage. The directory is the sync policy. |
 | Per-row storage | none | A refinement of the storage class per row, decided by the config alone. The `skill` kind files the builtin `coffer-guide` as `derived`. |
+| Exclusive flags | none | Config flags at most one resource of the kind may hold. The service keeps each of its writes to one holder, and the vault validator refuses any commit (a hand edit, a sync merge) that would leave two. `provider` declares `transcribe_default`. |
 | Fixed name | no | Whether the name is fixed once registered because it is quoted outside Coffer, or derived from the config. A `PATCH` with a different name is refused with `409 NAME_IMMUTABLE`. |
 | What re-registering resets | empty | What deleting and registering again resets, named in the `NAME_IMMUTABLE` message. |
 | Name from config | none | The one name a row may carry, derived from its config. `agent` declares it: an agent is named by its type (`claude_code` → `claude-code`), and registration refuses any other name. |
@@ -86,7 +87,6 @@ A kind is described by one fixed, immutable descriptor. Everything it declares i
 | --- | --- |
 | Secret references | Returns `{key: secret_ref}` for a config. The core probes each ref before any write (`SECRET_MISSING`) and uses the same answer to refuse deleting a secret that is still cited, and to release secrets nothing cites after a delete. |
 | Audit redactor | Returns an audit-safe copy of a config. |
-| Default scope | The scope a newly registered row starts with, instead of "every agent". |
 
 **Post-write reactions — run after persistence and audit; cannot undo the write**
 
@@ -107,7 +107,7 @@ Sync has no hook into a kind. A resource file that arrives by sync, like one you
 | `skill` | No generic creation, scope support, a name rule (the `SKILL.md` frontmatter rule), a delete guard (refuses deleting the builtin `coffer-guide`), per-row storage (files `coffer-guide` as derived), a fixed name (the name is the folder an agent loads it from), no title, delete cleanup, a scope reaction, an enabled reaction |
 | `knowledge` | No generic creation, no title, not toggleable, a rename mover (moves the collection directory), delete cleanup |
 | `channel` | Scope support (inverted, see below), secret references, a registration check, a config-change check, a scope check, delete cleanup |
-| `provider` | Scope support, a default scope, secret references, a registration check, a config-change check |
+| `provider` | An exclusive flag (`transcribe_default`), secret references, a registration check, a config-change check (no scope: its addresses decide which agents it serves) |
 
 ### The resource service {#resourceservice}
 
@@ -115,7 +115,7 @@ The resource service is built with the app's set of kinds, a repository, the aud
 
 | Operation | Steps |
 | --- | --- |
-| Register | Refuse if the kind disallows generic creation and the caller did not opt in → framework and kind name rules (plus the derived name when the kind names rows from their config) → title rule (at most 80 characters, and none on a kind that does not carry a title) → schema validation → registration check → probe cited secrets → mint `uid` → write the resource file with the default scope → audit `resource_created` with the redacted config. |
+| Register | Refuse if the kind disallows generic creation and the caller did not opt in → framework and kind name rules (plus the derived name when the kind names rows from their config) → title rule (at most 80 characters, and none on a kind that does not carry a title) → schema validation → registration check → probe cited secrets → mint `uid` → write the resource file unscoped (every agent) → audit `resource_created` with the redacted config. |
 | Edit config | Same generic-create gate → schema → secret probe → config-change check → write → audit `resource_updated` with redacted before and after. |
 | Rename | No-op if unchanged → refuse a fixed-name kind (`NAME_IMMUTABLE`, 409, nothing audited) → name rules → collision check (`RESOURCE_ALREADY_EXISTS`, 409) → rename mover → write → audit `resource_renamed` with `from` and `to`. |
 | Set title | No-op if unchanged → title rule (blank clears; over 80 characters, or any title on a kind that does not carry one, is `CONFIG_INVALID`) → write → audit `resource_updated` with the title's `before` and `after`. Not gated on generic creation. |
@@ -227,7 +227,7 @@ For every other kind, scope names the agents a resource is *delivered to*. A cha
 | `skill` | Its source, the `SKILL.md` description and a version hash of the master folder under `~/.coffer/vault/skills/`. | Yes | Delivery: a skill reaches an agent if and only if it is enabled and its scope admits that agent; anything else is reclaimed. |
 | `knowledge` | One collection, a directory under `~/.coffer/vault/knowledge/`. | No, and not `toggleable` | Nowhere: every collection appears in the delivered catalogue. |
 | `channel` | Transport config, secret refs, `default_agent`, `runs_on` (the one machine whose daemon runs the adapter). | Yes, inverted | Agent routing (`/new <agent>` and the default agent) and the channel runtime, which does not start a switched-off channel. |
-| `provider` | Wire protocol, base URL, one `secret_ref`. | Yes | The provider kind's one projection seam: the switch, per-agent key lookup, post-import reconcile and boot self-heal. |
+| `provider` | Wire protocol, base URL, an optional Anthropic address, one `secret_ref`. | No: its addresses decide | The provider kind's one projection seam: the switch, per-agent key lookup, post-import reconcile and boot self-heal. |
 
 `knowledge` carries no scope and no switch because it serves files an agent is handed the path to: a scope or a switch could only ever hide them from a well-behaved lookup, never withhold them. Memory is not a resource kind at all: it is files in the vault's `memory/` hub and in each agent's own memory (see [Memory](/architecture/memory)).
 

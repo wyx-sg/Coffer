@@ -827,6 +827,10 @@ export interface components {
             loop_lag_window_seconds: number;
             /** Task Crashes */
             task_crashes: number;
+            /** Tasks By Name */
+            tasks_by_name: {
+                [key: string]: number;
+            };
             /** Tasks Running */
             tasks_running: number;
         };

@@ -21,7 +21,7 @@ def test_the_feed_lists_a_promoted_upload(client) -> None:  # type: ignore[no-un
     _submit(client, collection="shopee", title="Cache", description="d", body="first")
     feed = client.get("/api/v1/knowledge/changes").json()
     promote = next(c for c in feed["changes"] if c["operation"] == "promote")
-    assert [d["path"] for d in promote["documents"]] == ["shopee/cache.md"]
+    assert [d["path"] for d in promote["documents"]] == ["shopee/sources/cache.md"]
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="recent changes lists edits across collections")
@@ -34,7 +34,8 @@ def test_the_feed_lists_edits_across_collections_newest_first(client) -> None:  
     _create_collection(client, "shopee")
     _create_collection(client, "personal")
     # An agent's edit on disk, in another collection, found by the sweep …
-    (paths.collection_dir("personal") / "agent.md").write_text("one\ntwo\n", encoding="utf-8")
+    paths.pages_dir("personal").mkdir(parents=True)
+    (paths.pages_dir("personal") / "agent.md").write_text("one\ntwo\n", encoding="utf-8")
     client.portal.call(sweep_once, get_knowledge_service(), _no_refresh)  # type: ignore[union-attr]
     # … then a person's upload.
     _submit(client, collection="shopee", title="Cache", description="d", body="first")
@@ -44,7 +45,9 @@ def test_the_feed_lists_edits_across_collections_newest_first(client) -> None:  
     by_collection = {c["collections"][0]: c for c in edits}
     assert by_collection["personal"]["writer"] == "disk"
     assert by_collection["shopee"]["writer"] == "user"
-    assert [d["path"] for d in by_collection["personal"]["documents"]] == ["personal/agent.md"]
+    assert [d["path"] for d in by_collection["personal"]["documents"]] == [
+        "personal/pages/agent.md"
+    ]
     assert by_collection["personal"]["documents"][0]["added"] == 2
     assert by_collection["shopee"]["documents"][0]["added"] > 0
     times = [c["time"] for c in changes]
@@ -63,7 +66,7 @@ def test_the_feed_filters_to_one_collection(client) -> None:  # type: ignore[no-
     shopee = client.get("/api/v1/knowledge/changes", params={"collection": "shopee"}).json()
     assert all(c["collections"] == ["shopee"] for c in shopee["changes"])
     personal = client.get("/api/v1/knowledge/changes", params={"collection": "personal"}).json()
-    assert personal["changes"][0]["documents"][0]["path"] == "personal/mine.md"
+    assert personal["changes"][0]["documents"][0]["path"] == "personal/sources/mine.md"
 
 
 def test_there_is_no_route_for_a_documents_versions(client) -> None:  # type: ignore[no-untyped-def]

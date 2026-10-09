@@ -181,6 +181,9 @@ export const knowledgeKey = ["knowledge"] as const;
 export const knowledgeCollectionsKey = ["knowledge", "collections"] as const;
 export const knowledgeTreeKey = (path: string) => ["knowledge", "tree", path] as const;
 export const knowledgeFileKey = (path: string) => ["knowledge", "file", path] as const;
+export const knowledgeCheckKey = (uid: string) => ["knowledge", "check", uid] as const;
+export const knowledgeChangesKey = (collection: string) =>
+  ["knowledge", "changes", collection] as const;
 
 // --- memory — the sync between the agents' own memories (spec memory) -------
 

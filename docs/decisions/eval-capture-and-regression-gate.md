@@ -17,8 +17,10 @@ quietly make either worse while every unit test still passes.
 
 - **`tool_search`** scores the real ranker (`domain/mcp/tool_search.py`) against
   hand-written queries over a fixed catalogue (`datasets/tool_search.jsonl`,
-  14 cases over `tool_search_catalog.jsonl`). It is deterministic and needs no
-  model. Its primary metric is recall@3.
+  89 cases in English, Chinese and both, over the 285 tools of
+  `tool_search_catalog.jsonl`, input schemas included). It is deterministic and
+  needs no model. Its primary metric is recall@5; MRR is gated beside it, and
+  recall on the Chinese queries is reported on its own.
 - **`routing`** asks a model to choose among Coffer's builtins for a request
   (`datasets/tool_routing.jsonl`), samples each case k times, and reports
   accuracy, pass@k and pass^k. It needs a model endpoint (a local Ollama model

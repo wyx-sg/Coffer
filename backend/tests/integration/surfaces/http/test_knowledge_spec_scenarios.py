@@ -28,7 +28,10 @@ def test_two_documents_of_one_title_get_a_slug_and_a_suffix(client, tmp_path) ->
         client, collection="shopee", title="Session Ownership", description="d", body="two"
     )
 
-    assert (first, second) == ("shopee/session-ownership.md", "shopee/session-ownership-2.md")
+    assert (first, second) == (
+        "shopee/sources/session-ownership.md",
+        "shopee/sources/session-ownership-2.md",
+    )
     for relpath in (first, second):
         frontmatter, _ = split_frontmatter(
             (tmp_path / ".coffer" / "vault" / "knowledge" / relpath).read_text(encoding="utf-8")
@@ -50,7 +53,7 @@ def test_hidden_entries_are_in_no_listing_count_or_catalogue(  # type: ignore[no
     (inbox_dir / "waiting.md").write_text("waiting\n", encoding="utf-8")
 
     [entry] = client.get("/api/v1/knowledge/collections").json()["collections"]
-    assert entry["document_count"] == 1
+    assert (entry["page_count"], entry["source_count"]) == (0, 1)
 
     from coffer.infrastructure.knowledge import catalogue
 
@@ -59,8 +62,10 @@ def test_hidden_entries_are_in_no_listing_count_or_catalogue(  # type: ignore[no
 
     # The tree names the document — and nothing from `.scratch/` or the inbox.
     level = client.get("/api/v1/knowledge/tree", params={"path": "shopee"}).json()
+    assert level["files"] == []
+    assert [d["path"] for d in level["directories"]] == ["shopee/sources"]
+    level = client.get("/api/v1/knowledge/tree", params={"path": "shopee/sources"}).json()
     assert [f["path"] for f in level["files"]] == [document]
-    assert level["directories"] == []
     refused = client.get("/api/v1/knowledge/file", params={"path": "shopee/.scratch/hidden.md"})
     assert refused.status_code == 400, refused.text
     assert refused.json()["error"]["code"] == "KNOWLEDGE_PATH_UNSAFE"

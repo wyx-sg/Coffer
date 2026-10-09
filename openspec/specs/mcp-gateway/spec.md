@@ -85,8 +85,10 @@ list-changed notifications) between clients and upstream MCP servers.
   inputSchema, score, group_description? }], total_searched: N }`. It ranks the **live** aggregated upstream catalogue against the
   query and returns the top-k **real** upstream tool schemas, which the agent then calls directly; it is a
   retrieval primitive and MUST NOT select-and-invoke on the agent's behalf. Ranking MUST be a pure,
-  deterministic, local keyword ranker (BM25-lite over each tool's name + description, with name tokens
-  weighted higher) — no LLM, no embeddings, no network. Results MUST be upstream-only (Coffer's own
+  deterministic, local keyword ranker (BM25-lite over each tool's name, its description and its input
+  schema's parameter names, parameter descriptions and enum values, weighted in that order) — no LLM, no
+  embeddings, no network. A query in Chinese, Japanese or Korean MUST match tools described in that language: such text is
+  matched by overlapping character pairs, since it has no spaces between words. Results MUST be upstream-only (Coffer's own
   `coffer__` built-ins excluded); each returned `name` is the same `<server>__<tool>` identifier the agent
   would call directly, with routing unchanged; and the invocation MUST be recorded in the invocation log like
   any other gateway call.
@@ -147,6 +149,16 @@ list-changed notifications) between clients and upstream MCP servers.
 - **GIVEN** an upstream that declares an `outputSchema` on tool `typed` and none on tool `plain`
 - **WHEN** the agent lists tools or searches with `coffer__search_tools`
 - **THEN** `typed` carries exactly the declared `outputSchema` in both results, `plain` carries no `outputSchema` key, and a call to `typed` returns its `structuredContent` unchanged
+
+#### Scenario: search the catalogue in Chinese
+- **GIVEN** an aggregated upstream tool `account__get_account_list` described as 查询账号列表 among tools described in English and Chinese
+- **WHEN** an agent calls `coffer__search_tools` with the query 查询账号列表
+- **THEN** `account__get_account_list` is the first result
+
+#### Scenario: search reaches a tool through its parameters
+- **GIVEN** an aggregated upstream tool whose name and description say only that it lists accounts, and whose input schema has a parameter `phone_list` described as 手机号列表 and a `status` parameter with the enum values `active` and `frozen`
+- **WHEN** an agent searches for "find a user by phone number", for "frozen", or for 按手机号查
+- **THEN** that tool is among the results each time, and first for the last two
 
 ### Requirement: Namespace every upstream capability
 The system MUST namespace every upstream capability with its server's name (`<server>__<tool>` for tools and
@@ -437,7 +449,10 @@ used for every subsequent list and call.
   answered `404` for every method but `initialize` (and for a notification stream), never silently rebuilt as
   a session that lost the handshake's identity and scope; the shim MUST then replay its cached `initialize` and
   resend the call. A session id that starts with `__` MUST NOT be taken as a client's session id. An open
-  notification stream MUST keep its session from being reaped as idle.
+  notification stream is not activity: a session is idle when it has seen no downstream request and no forwarded
+  upstream notification for 10 minutes (`COFFER_MCP_SESSION_IDLE_S` changes the window), a request in flight keeps it
+  alive, and the keepalive wake-ups of an open stream do not. Reaping a session ends its open stream cleanly, and
+  the client's next request on that id is answered `404`.
 - The handshake happens once per session: a second `initialize` on a session that already completed one MUST
   be refused with JSON-RPC `-32600` and change nothing — not the identity, the client's capabilities or the
   cwd. A new session may report any identity, as before.
@@ -460,6 +475,12 @@ used for every subsequent list and call.
 - **GIVEN** a session whose handshake reported an agent's uid and that the idle reaper has since dropped,
 - **WHEN** the client sends `tools/list` on its old session id,
 - **THEN** the answer is `404` and no session is created; an `initialize` carrying the identity then opens a new one, and the shim does both and resends the call
+
+#### Scenario: an open notification stream with no requests does not keep a session alive
+- **GIVEN** a session whose client holds its notification stream open and sends no request,
+- **WHEN** the session has been idle past the idle window,
+- **THEN** the reaper drops it and its stream ends cleanly,
+- **AND** the client's next request on that session id is answered `404`
 
 #### Scenario: a name-only handshake is treated as unidentified
 - **GIVEN** one server scoped to a single agent's uid and one unscoped server,

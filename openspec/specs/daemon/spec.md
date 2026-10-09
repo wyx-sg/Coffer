@@ -704,7 +704,9 @@ The release pipeline MUST produce, per `v*` tag, the **terminal-install tier** f
 only**: a `coffer-cli-<triple>.tar.gz` archive containing exactly four binaries: `coffer` (the
 management CLI), `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge` (the executable
 that loads the SeaTalk SDK on the daemon's behalf, see [channels/seatalk](../channels/seatalk/spec.md)
-"Load the websocket client library from an operator-supplied directory"). The binaries MUST stay co-located inside the archive so the frozen resolution
+"Load the websocket client library from an operator-supplied directory"), plus `coffer-mcp-shim-lib/`,
+the folder of libraries the one-folder shim loads from beside itself (see
+[ADR distribution-pyinstaller](../../../docs/decisions/distribution-pyinstaller.md)). The binaries MUST stay co-located inside the archive so the frozen resolution
 of "Spawn a detached daemon from any surface that needs one" finds `coffer-daemon` next to
 `coffer`. macOS x64 (Intel), Linux and Windows are deliberately not built — those legs were never
 validated end to end. This archive carries the "no system Python required" promise on its own: on a
@@ -716,7 +718,7 @@ neither is a substitute for the other.
 #### Scenario: release tag produces the CLI archive and SHA256SUMS
 - **GIVEN** a release tag matching `v*` is pushed,
 - **WHEN** the release workflow finishes,
-- **THEN** the release contains the terminal tier — `coffer-cli-<triple>.tar.gz` for macOS arm64, holding `coffer`, `coffer-daemon` and `coffer-mcp-shim`, co-located, and no other binary,
+- **THEN** the release contains the terminal tier — `coffer-cli-<triple>.tar.gz` for macOS arm64, holding `coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge`, co-located with the shim's `coffer-mcp-shim-lib/` folder, and no other binary,
 - **AND** the release contains a single aggregated `SHA256SUMS` file covering every artifact of every tier, including the desktop tier of [desktop-app](../desktop-app/spec.md) "Ship the desktop tier as a macOS arm64 dmg",
 - **AND** no other platform is built.
 
@@ -736,7 +738,11 @@ When the daemon detects that it is running as a frozen build, it MUST idempotent
 sibling binaries — `coffer`, `coffer-daemon`, `coffer-mcp-shim` — into
 `~/.coffer/bin/` at startup. `coffer` is in that list so that a user who installed only the desktop
 tier has the management CLI on disk after the first launch, and `coffer-daemon` so the frozen shim
-can resolve it as a sibling. Each build MUST land in its own `~/.coffer/bin/<version>/` directory,
+can resolve it as a sibling. The shim is a one-folder build: its library folder,
+`coffer-mcp-shim-lib/`, MUST be deployed with it into the same version directory, before the
+executable, and a version directory whose shim lacks that folder MUST be deployed again. The
+daemon finds each sibling beside itself or, in the desktop app, in `Contents/Resources`, where the
+app keeps the shim. Each build MUST land in its own `~/.coffer/bin/<version>/` directory,
 with the public `~/.coffer/bin/<name>` paths being symlinks into it that are flipped atomically, so
 that a deploy never overwrites a binary in place and the previous version's directory stays on disk
 for a rollback (the two newest version directories are kept; older ones are pruned). The copy MUST
@@ -750,8 +756,11 @@ instead of lingering on the user's `PATH`; anything at such a path that is not a
 version directory is not Coffer's deployment and MUST be left alone.
 
 Before `alembic upgrade head` changes the on-disk history database, `~/.coffer/runs.db`, the
-daemon MUST copy it (and any `-wal`/`-shm` companions) to `runs.db.pre-<revision>`, keeping the
-three newest copies; an already-current schema or an in-memory database MUST NOT be copied.
+daemon MUST write a copy of it to `runs.db.pre-<revision>` with `VACUUM INTO`: one self-contained
+file holding a consistent snapshot of its live data, including what its write-ahead log still
+holds, without its free pages and without `-wal`/`-shm` companions. It keeps the three newest
+copies, never overwrites an earlier copy, removes a copy that failed half-way and does not migrate
+without one; an already-current schema or an in-memory database MUST NOT be copied.
 A source install MUST NOT do
 any of this: `pip install` already puts the console scripts on `PATH` (see "Install the console
 scripts from source"). The daemon owns the deployment because it is the one process every frozen install starts,
@@ -772,7 +781,13 @@ whichever tier it came from.
 #### Scenario: a schema upgrade keeps a copy of the history database
 - **GIVEN** a daemon starting against a `runs.db` whose Alembic revision is behind this build's head,
 - **WHEN** the migrations run at startup,
-- **THEN** `runs.db.pre-<revision>` (with its `-wal`/`-shm` companions, when present) holds the pre-upgrade state beside the live file, only the three newest such copies are kept, and a start against an already-current schema — or an in-memory database — copies nothing.
+- **THEN** `runs.db.pre-<revision>` holds the pre-upgrade state beside the live file as one file, with what the write-ahead log held and none of the free pages, only the three newest such copies are kept, and a start against an already-current schema — or an in-memory database — copies nothing.
+
+#### Scenario: the shim's library folder is deployed with it
+- **GIVEN** a frozen `coffer-daemon` whose build holds `coffer-mcp-shim` with its `coffer-mcp-shim-lib/` folder, beside the daemon or in the app's `Contents/Resources`
+- **WHEN** the daemon starts
+- **THEN** `~/.coffer/bin/<version>/` holds the shim with `coffer-mcp-shim-lib/` beside it, and `~/.coffer/bin/coffer-mcp-shim` starts from there
+- **AND** a later start finding that version's folder missing deploys the shim again
 
 ### Requirement: Clear inherited agent-home variables at start
 In a signed build the daemon MUST also drop the inherited proxy and certificate settings from its own environment
@@ -967,13 +982,20 @@ loop stalls every request, channel and turn at once and is otherwise visible
 only as general slowness. `GET /api/v1/daemon/status` MUST carry a `runtime`
 block with the window's 99th-percentile and maximum lag in milliseconds (null
 before the first sample), the number of samples and the window's length, the
-number of supervised tasks running, the number of background task crashes
-since the daemon started, and the most recent crash's task name, exception
-class, time and whether it was restarted. The crash's exception message MUST
-NOT appear there — the probe answers without a token, and a message can carry
-what it failed on — only in `daemon.log`. `coffer daemon status` MUST print the
-lag and the task counts, and `--json` MUST carry the `runtime` block as the
-route answers it.
+number of supervised tasks running, those running tasks counted by name
+(`tasks_by_name`, keyed by the part of each task's name before the first `:`),
+the number of background task crashes since the daemon started, and the most
+recent crash's task name, exception class, time and whether it was restarted.
+The crash's exception message MUST NOT appear there, nor the part of a task's
+name after the first `:` (a channel, a server, a chat) — the probe answers
+without a token, and a message can carry what it failed on — only in
+`daemon.log`. When the loop misses the probe's wake-up by more than 100 ms, the
+daemon MUST log a `runtime.loop.stalled` line to `daemon.log` carrying the loop
+thread's stack and the running task's name as they are while the loop is still
+blocked, at most one such line per 10 seconds with a count of the ones held
+back. `coffer daemon status` MUST print the lag and the task counts,
+`--tasks` MUST add the counts by name, largest first, and `--json` MUST carry
+the `runtime` block as the route answers it.
 
 #### Scenario: the status reports loop lag and task crashes
 - **GIVEN** a running daemon whose probe has taken a sample, and a supervised task that has crashed with `LookupError`
@@ -981,11 +1003,29 @@ route answers it.
 - **THEN** its `runtime` block carries the lag's p99 and maximum over a 300-second window, the tasks running and the crash count including that crash
 - **AND** `last_crash` names the task and `LookupError`, and the exception's message is nowhere in the block
 
+#### Scenario: the status counts running tasks by name
+- **GIVEN** a running daemon with two supervised tasks named `test-parked:private-0` and `test-parked:private-1`
+- **WHEN** `GET /api/v1/daemon/status` is called with no token
+- **THEN** `runtime.tasks_by_name` counts `test-parked` as 2 and the lag probe's `loop-lag-probe` as 1
+- **AND** `private-` appears nowhere in the block
+
+#### Scenario: a stalled loop is logged with what blocked it
+- **GIVEN** the lag probe running with its stall watch
+- **WHEN** a task blocks the loop with a synchronous call for longer than the threshold
+- **THEN** `daemon.log` gains a `runtime.loop.stalled` line naming that task and carrying a stack that contains the blocking call
+- **AND** a loop that keeps up logs no such line, and repeated stalls inside the rate-limit window log one line
+
 #### Scenario: the command line prints loop lag and task crashes
 - **GIVEN** a running daemon whose probe has taken a sample
 - **WHEN** the user runs `coffer daemon status`, and `coffer daemon status --json`
 - **THEN** the first prints a `loop lag:` line with the p99 and maximum and the window, and a `tasks:` line with the running and crashed counts
 - **AND** the second carries the route's `runtime` block
+
+#### Scenario: the command line lists running tasks by name
+- **GIVEN** a running daemon whose tasks count `seatalk-ws` 2, `turn` 2 and `reconciler` 1
+- **WHEN** the user runs `coffer daemon status --tasks`
+- **THEN** below the `tasks:` line it lists each name with its count, largest first and by name within a count
+- **AND** without `--tasks` the names are not printed, and `--json` carries `tasks_by_name`
 
 ### Requirement: Hand a daemon error about the environment to an agent
 A record of `GET /api/v1/daemon/logs` that is an ERROR (or CRITICAL) whose message
@@ -1217,7 +1257,8 @@ the same record; `PUT /api/v1/daemon/upgrade/auto-check` MUST set the switch.
 release: download the command-line archive for this machine and the release's
 `SHA256SUMS`, refuse an archive whose checksum does not match, put each binary
 over its public name in `~/.coffer/bin` the way the installer does (a temporary
-sibling, then a rename), and restart the daemon from the new
+sibling, then a rename), with the shim's `coffer-mcp-shim-lib/` folder put beside
+it the same way before the shim itself, and restart the daemon from the new
 `~/.coffer/bin/coffer-daemon`. Nothing is replaced until the archive has
 verified. `coffer update --check` MUST only report the running and the newest
 version. When the running daemon is the desktop app's, `coffer update` MUST ask
@@ -1319,3 +1360,18 @@ resolves it, so an override the owner honours is honoured here.
 - **WHEN** `GET /api/v1/storage` is called
 - **THEN** it reports the vault as `~/.coffer/vault` with 3 versions, the local content with the channel media location under `~/.coffer/content` and its size, the history as `runs.db` with its WAL plus the log directory, `skill-data` and `config-backups`, and no cache
 - **AND** before the vault repository has been created it reports the vault with no version count
+
+### Requirement: Delete what exited one-file binaries unpacked
+Each of Coffer's one-file binaries (`coffer`, `coffer-daemon`, `coffer-seatalk-bridge`) MUST
+write its process id into the directory its bootloader unpacked it into (`$TMPDIR/_MEI*`) before
+any Coffer code runs. A frozen daemon MUST, when it starts and every 6 hours after, delete each
+such directory whose marked process no longer runs. It MUST NOT delete an unmarked directory —
+another PyInstaller program's, or one whose process has not marked it yet — nor its own. The
+bootloader removes the directory when its program exits, but not when the process is killed
+outright, and each leftover is the size of the whole archive.
+
+#### Scenario: a frozen daemon deletes the unpack directories of exited Coffer binaries
+- **GIVEN** `$TMPDIR` holding a `_MEI*` directory marked with the pid of an exited Coffer process, one marked with a running process's pid, and one with no mark
+- **WHEN** a frozen daemon starts
+- **THEN** the directory of the exited process is deleted
+- **AND** the other two, and the daemon's own unpack directory, are left as they were

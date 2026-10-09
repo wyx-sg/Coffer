@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -101,9 +101,10 @@ class Target:
     daemon_json: Path
     port: int
     pid: int
-    binary_path: Path
     started_at: str
     token: str = field(repr=False)
+    #: The serving executable, from ``/daemon/status`` (see :func:`with_executable`).
+    binary_path: Path = Path()
     shim: Path | None = None
     coffer: Path | None = None
 
@@ -149,14 +150,18 @@ def read_target(args: argparse.Namespace) -> Target:
     if not path.is_file():
         raise RefusedError(f"no daemon rendezvous at {path}: is the target Coffer running?")
     raw = json.loads(path.read_text())
-    binary = Path(raw["binary_path"])
     return Target(
         daemon_json=path,
         port=int(raw["port"]),
         pid=int(raw["pid"]),
-        binary_path=binary,
         started_at=str(raw.get("started_at")),
         token=str(raw["token"]),
-        shim=resolve_shim(args.shim, binary),
         coffer=Path(args.coffer).expanduser() if args.coffer else None,
     )
+
+
+def with_executable(target: Target, args: argparse.Namespace, status: dict[str, Any]) -> Target:
+    """The target, completed from ``/daemon/status``: the binary that is serving
+    (``executable``) and the shim beside it."""
+    binary = Path(str(status.get("executable") or ""))
+    return replace(target, binary_path=binary, shim=resolve_shim(args.shim, binary))

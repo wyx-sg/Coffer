@@ -1,10 +1,12 @@
-"""A collection's inbox: the drop zone where new material lands before it is a document.
+"""A collection's inbox: the drop zone where new material lands before it is a source.
 
 The hidden ``.inbox/`` half of what ``fs.py`` writes (see "Promote submitted
 material at once"). An item is ordinary frontmatter and Markdown;
-:func:`promote` makes it a document of its own and removes it. Coffer's own
-entrances promote at once, and the sweep adopts and promotes whatever an agent
-outside Coffer, another machine or an older guide dropped there.
+:func:`promote` keeps it as a source under ``sources/`` — with the original
+Markdown and frontmatter only ("Keep every upload as a Markdown source") — and
+removes it. Coffer's own entrances promote at once, and the
+sweep adopts and promotes whatever an agent outside Coffer, another machine or
+an older guide dropped there.
 """
 
 from __future__ import annotations
@@ -162,22 +164,27 @@ def inbox_items(collection: str) -> tuple[str, ...]:
 
 
 def promote(collection: str, name: str) -> KnowledgeFile:
-    """Make an inbox item a document of its own, as it stands.
+    """Keep an inbox item as a source, as it stands.
 
-    The material is knowledge the moment it arrives, so it must not wait in a
-    hidden directory: it lands at the collection root with its frontmatter, and
-    the inbox file is removed.
+    The material must not wait in a hidden directory: it lands under the
+    collection's ``sources/`` with its frontmatter — every key a writer set
+    kept — and the inbox file is removed. Only the Markdown is kept: an
+    upload's own file stays wherever it came from.
     """
     path = _inbox_item(collection, name)
     if not path.is_file():
         raise KnowledgeFileNotFound(inbox_path(collection, name))
     fm, body = split_frontmatter(decode(path.read_bytes()))
+    title = str(fm.get("title") or path.stem)
+    directory = paths.sources_dir(collection)
+    directory.mkdir(parents=True, exist_ok=True)
     written = write_file(
-        directory=collection,
-        title=str(fm.get("title") or path.stem),
+        directory=f"{collection}/{paths.SOURCES_DIR_NAME}",
+        title=title,
         description=str(fm.get("description") or ""),
         body=body,
         actor=str(fm.get("actor") or ACTOR_AGENT),
+        extra=dict(fm),
     )
     path.unlink(missing_ok=True)
     return written

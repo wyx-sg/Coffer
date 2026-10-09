@@ -41,6 +41,8 @@ Coffer never registers an agent on its own; you choose it on the **Agents** page
 
 Open **Agents → claude-code** and click **Connect**. The agent's **Coffer** status on the Agents list changes from **Not connected** to **Connected**.
 
+<Shot name="connect-dialog" alt="The review dialog before Coffer changes the agent's files." />
+
 Connecting adds one entry to `mcpServers` in `~/.claude.json`. Coffer writes the file atomically and keeps a copy of the previous version in `~/.coffer/config-backups`:
 
 ```json
@@ -64,6 +66,8 @@ You can add `coffer-mcp-shim` to any MCP client by hand. However, a hand-written
 
 Register the reference [filesystem server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) and give it access to one directory:
 
+
+<Shot name="mcp-server" alt="An MCP server's page, with its health and tools." />
 ```sh
 mkdir -p ~/projects
 ```
@@ -83,7 +87,7 @@ Open **MCP servers**, click **Add server**, and paste the server's JSON in the s
 
 A server that needs an API key takes it as a secret ref (see [Secret store](/guides/secret-store)).
 
-Click **Continue**, review what will be imported, and click **Import 1**. On the server's page, **Test connection** checks that Coffer can start the server and see its tools; from a terminal, `coffer mcp test filesystem` runs the same check. The **Tools** tab lists each tool with an **Enabled** switch. An agent sees each tool as `filesystem__<tool>`. The tab's **Name length** counts the full name a client such as Claude Code sees, `mcp__coffer__filesystem__<tool>`; a name over 64 characters is flagged with `!`, because model provider APIs refuse it. The first test can take a few seconds while `npx` downloads the package.
+Click **Continue**: one server opens the form prefilled with it; click **Add server**. On the server's page, **Test** (or **Test again** while the server is failing) checks that Coffer can start the server and see its tools; from a terminal, `coffer mcp test filesystem` runs the same check. The **Tools** tab lists each tool with an **Enabled** switch. An agent sees each tool as `filesystem__<tool>`. Coffer also measures the full name a client such as Claude Code sees, `mcp__coffer__filesystem__<tool>`; a tool whose name is over 64 characters gets a warning under its name, because model provider APIs refuse it. The first test can take a few seconds while `npx` downloads the package.
 
 ### Use the tools from Claude Code
 
@@ -98,7 +102,7 @@ Claude Code adds its own prefix to every MCP tool, so in its tool list the names
 > Use the filesystem tools to list what is in ~/projects.
 ```
 
-Claude Code calls `filesystem__list_directory`. Coffer routes the call to the filesystem server under its original name, `list_directory`, and records the call. You can see the record on the **Activity** page (search the server's name), or with `coffer log mcp --server filesystem`. The record holds the tool, the time, the duration and the outcome. It never holds the arguments or the result.
+Claude Code calls `filesystem__list_directory`. Coffer routes the call to the filesystem server under its original name, `list_directory`, and records the call. You can see the record on the **Activity** page (search the server's name), or with `coffer log mcp --server filesystem`. The record holds the tool, the time, the duration and the outcome, and, unless **Settings › Data › Record tool call content** is switched off on this machine, its arguments and result with secrets masked.
 
 Every agent you connect in step 3 now gets this server. You did not edit Claude Code's MCP config again, and you will not need to for the next server either.
 
@@ -106,6 +110,8 @@ Every agent you connect in step 3 now gets this server. You did not edit Claude 
 
 A skill is a folder containing a `SKILL.md` in the [AgentSkills](https://agentskills.io) format. Create a small one:
 
+
+<Shot name="skill" alt="A skill's page, with the agents it is delivered to." />
 ```sh
 mkdir -p ~/skills-src/commit-message
 cat > ~/skills-src/commit-message/SKILL.md <<'EOF'
@@ -122,7 +128,7 @@ description: Write a Conventional Commits message for the staged changes. Use wh
 EOF
 ```
 
-Open **Skills**, click **Add skill**, choose the folder, and click **Import**. The skill's page shows which agents it is delivered to and lets you change its reach.
+Open **Skills**, click **Add skill**, choose the folder, and click **Add skill**. The skill's page shows which agents it is delivered to and lets you change its reach.
 
 Coffer copied the folder into its library at `~/.coffer/vault/skills/commit-message/` and linked it into Claude Code:
 
@@ -137,7 +143,7 @@ commit-message -> /Users/you/.coffer/vault/skills/commit-message
 
 Some things to know:
 
-- **Scope `everywhere`** means every registered agent receives the skill, including agents you register later. To limit the skill to certain agents, change its reach on the skill's page. Scope applies to this machine only.
+- **All agents** means every registered agent receives the skill, including agents you register later. To limit the skill to certain agents, change its reach on the skill's page. Scope applies to this machine only.
 - **`coffer-guide`** is Coffer's own skill, delivered automatically. It explains Coffer's tools to the agent and lists your knowledge collections.
 - **Editing.** The delivered copy is a link to the library copy, so an edit through either path changes the same file. The **Skills** page reports any link that has gone missing or been changed.
 
@@ -163,7 +169,7 @@ flowchart LR
 - **Add Codex.** Connect Codex on the **Agents** page. Codex gets the same servers and skills with no further setup. See [Agents](/guides/agents).
 - **Curate tools.** Switch off tools you do not want agents to see, or restrict a server to particular agents. See [MCP servers](/guides/mcp-servers).
 - **Store a key.** Register a server that needs an API key, using a secret ref. See [Secret store](/guides/secret-store).
-- **Share knowledge.** Create a collection on the Knowledge page and add Markdown files to it, or ask an agent to write a document into the collection. See [Knowledge](/guides/knowledge).
+- **Share knowledge.** Create a collection on the Knowledge page and upload files to it, which are kept as sources, or ask an agent to write a page into the collection. See [Knowledge](/guides/knowledge).
 - **Switch providers.** Point both agents at the same model gateway in one step. See [Model providers](/guides/providers).
 - **Learn the model.** [Core concepts](/start/concepts) explains the terms used throughout these docs.
 

@@ -114,7 +114,9 @@ a = Analysis(
     datas=datas,
     hiddenimports=hidden,
     hookspath=[],
-    runtime_hooks=[],
+    # Marks the unpack directory with this process's pid so the daemon can
+    # delete it once the process is gone (packaging/rth_unpack_owner.py).
+    runtime_hooks=["packaging/rth_unpack_owner.py"],
     excludes=[
         # Heavy ML stack (torch/mlx/numba/scipy/…). No coffer source imports
         # any of it: nothing local decodes audio or runs a model — voice is

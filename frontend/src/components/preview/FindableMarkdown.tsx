@@ -12,6 +12,7 @@
 // the fences became rules and `sources:` became a bullet list that read as if
 // it were part of the document. Done once here so every Markdown preview gets it.
 import { useRef } from "react";
+import type { Components } from "react-markdown";
 
 import { Markdown } from "@/components/Markdown";
 import { splitFrontmatter, type FrontmatterEntry } from "@/lib/preview/frontmatter";
@@ -35,6 +36,8 @@ interface FindableMarkdownProps {
    *  search hit). Empty string closes/clears; `undefined` leaves find as the
    *  Cmd/Ctrl+F-only default. */
   initialQuery?: string;
+  /** Per-element overrides for the renderer (a knowledge page's `[[links]]`). */
+  components?: Components;
 }
 
 function FrontmatterList({ entries }: { entries: FrontmatterEntry[] }) {
@@ -69,6 +72,7 @@ export function FindableMarkdown({
   fill = false,
   frontmatter = true,
   initialQuery,
+  components,
 }: FindableMarkdownProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // Pass the markdown source as the revision so an open search re-applies when
@@ -90,7 +94,7 @@ export function FindableMarkdown({
             so long lines don't stretch edge-to-edge on wide screens. */}
         <div className="mx-auto max-w-3xl">
           {entries.length > 0 ? <FrontmatterList entries={entries} /> : null}
-          <Markdown>{body}</Markdown>
+          <Markdown components={components}>{body}</Markdown>
         </div>
       </div>
       {find.open ? (

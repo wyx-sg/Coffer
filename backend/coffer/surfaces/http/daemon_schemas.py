@@ -50,6 +50,10 @@ class RuntimeHealthOut(BaseModel):
     loop_lag_window_seconds: float
     #: Supervised background tasks running now.
     tasks_running: int
+    #: The running tasks counted by name, where a name is the part before the
+    #: first ``:`` (``seatalk-ws``, ``coffer-mcp-http-upstream``): what follows
+    #: it names a channel, a server or a chat, and this route needs no token.
+    tasks_by_name: dict[str, int]
     #: Background task crashes since the daemon started.
     task_crashes: int
     last_crash: TaskCrashOut | None = None

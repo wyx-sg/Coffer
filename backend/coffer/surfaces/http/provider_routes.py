@@ -12,7 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from coffer.application.provider.local_runtime_handoff import local_runtime_handoff
 from coffer.application.provider.prices import ProviderPriceResolver
 from coffer.application.provider.service import ProviderService
-from coffer.application.provider.targets import scoped_targets
+from coffer.application.provider.targets import scoped_targets, served_agents
+from coffer.application.provider.windows import ProviderWindowResolver
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import CuratedModel, ProviderConfig
@@ -24,7 +25,18 @@ from coffer.infrastructure.provider import local_runtime
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_resource_service
 from coffer.surfaces.http.handoff_schemas import handoff_out
-from coffer.surfaces.http.provider_dependencies import get_price_resolver, get_provider_service
+from coffer.surfaces.http.provider_dependencies import (
+    get_price_resolver,
+    get_provider_service,
+    get_window_resolver,
+)
+from coffer.surfaces.http.provider_model_schemas import (
+    ModelPriceOut,
+    ModelPricesIn,
+    ModelPricesOut,
+    ModelWindowOut,
+    ModelWindowsOut,
+)
 from coffer.surfaces.http.provider_schemas import (
     ActivateIn,
     ActivateOut,
@@ -36,9 +48,6 @@ from coffer.surfaces.http.provider_schemas import (
     DetectLocalOut,
     LocalModelOut,
     LocalRuntimeOut,
-    ModelPriceOut,
-    ModelPricesIn,
-    ModelPricesOut,
     ProviderCreate,
     ProviderDeletePreviewOut,
     ProviderListOut,
@@ -66,6 +75,7 @@ def _curated(models: list[ProviderModel] | None) -> list[CuratedModel] | None:
             id=m.id,
             modality=m.modality,
             context_window=m.context_window,
+            user_context_window=m.user_context_window,
             price=m.price,
         )
         for m in models
@@ -113,7 +123,9 @@ def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
         title=resource.title,
         protocol=cfg.protocol,
         base_url=cfg.base_url,
+        anthropic_base_url=cfg.anthropic_base_url,
         secret_ref=cfg.secret_ref,
+        served_agents=served_agents(cfg),
         # Reported, never accepted: the reach comes from the resource's
         # per-agent scope (ADR per-agent-resource-scope). This is the CONFIGURED
         # reach, not the effective projection — ``enabled`` rides the same
@@ -127,6 +139,7 @@ def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
                 id=m.id,
                 modality=m.modality,
                 context_window=m.context_window,
+                user_context_window=m.user_context_window,
                 price=m.price,
             )
             for m in cfg.models
@@ -197,6 +210,7 @@ async def create_provider(
         body.name,
         protocol=body.protocol,
         base_url=body.base_url,
+        anthropic_base_url=body.anthropic_base_url,
         secret_value=body.secret_value,
         secret_ref=body.secret_ref,
         models=_curated(body.models),
@@ -230,6 +244,7 @@ async def update_provider(
         uid,
         protocol=body.protocol,
         base_url=body.base_url,
+        anthropic_base_url=body.anthropic_base_url,
         secret_value=body.secret_value,
         secret_ref=body.secret_ref,
         models=_curated(body.models),
@@ -255,6 +270,31 @@ async def model_prices(
     return ModelPricesOut(
         prices=[price_out(model, r) for model, r in resolved.items()],
         bundled_version=resolver.bundled_version,
+    )
+
+
+@router.post("/{uid}/windows", response_model=ModelWindowsOut)
+async def model_windows(
+    uid: str,
+    body: ModelPricesIn,
+    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
+    resolver: ProviderWindowResolver = Depends(get_window_resolver),  # noqa: B008
+) -> ModelWindowsOut:
+    """Each model's context window on this provider, with its source: You set,
+    the endpoint, or the bundled list — or none (spec provider-switching
+    "Resolve each provider model's context window"). Read-only; nothing is
+    fetched from the network."""
+    await svc.get(uid)
+    resolved = await resolver.resolve_many(uid, body.models)
+    return ModelWindowsOut(
+        windows=[
+            ModelWindowOut(
+                model=model,
+                tokens=r.tokens if r else None,
+                source=r.source if r else None,
+            )
+            for model, r in resolved.items()
+        ]
     )
 
 

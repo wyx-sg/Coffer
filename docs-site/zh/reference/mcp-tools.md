@@ -52,7 +52,7 @@ Coffer 以名为 `coffer` 的 MCP 服务器装进智能体的配置，所以大�
 
 按意图搜索聚合后的上游 MCP 工具目录，返回最相关的工具定义。受预算限制的 `tools/list`
 没有列出的工具，就用它来找：返回的每个工具都能按名称调用，无论有没有被列出。排序是确定性的
-BM25，依据每个工具的服务器、名称和描述。Coffer 自己的 `coffer__*` 工具不会出现在结果里。
+BM25，依据每个工具的服务器、名称、描述和参数；用中文、日文或韩文搜索，能找到用同一种语言描述的工具。Coffer 自己的 `coffer__*` 工具不会出现在结果里。
 搜索范围是会话生效范围内所有服务器的完整目录；没有应答的服务器会被跳过。
 
 始终存在。背景：[MCP 网关](/zh/architecture/mcp-gateway)。
@@ -79,6 +79,8 @@ BM25，依据每个工具的服务器、名称和描述。Coffer 自己的 `coff
   "total_searched": 138
 }
 ```
+
+上游工具声明了 `outputSchema` 时，条目也会带上它；[自定义工具](/zh/guides/custom-tools)的条目还带有 `group_description`，即所在分组的描述。
 
 ### 调用示例 {#example-call}
 
@@ -168,7 +170,7 @@ BM25，依据每个工具的服务器、名称和描述。Coffer 自己的 `coff
       "sent_at": "2026-10-01T08:05:00+00:00",
       "from_bot": false,
       "text": "the deploy is red again",
-      "files": [{ "path": "/Users/you/.coffer/tmp/seatalk-media/3f…a1.png", "mime": "image/png", "filename": "chart.png" }]
+      "files": [{ "path": "/Users/you/.coffer/content/channel-media/3f…a1.png", "mime": "image/png", "filename": "chart.png" }]
     }
   ],
   "has_more": true,
@@ -253,7 +255,7 @@ Your tool list is a budgeted slice: 88 more upstream tools are unlisted, all cal
 ## 不用工具处理知识、记忆和日志 {#memory-and-logs-without-a-tool}
 
 Coffer 没有用于知识、记忆或自身记录的工具，因为智能体用已有的能力就都能做到。
-要新增知识，就按 `coffer-guide` 技能的说明，直接往某个知识集里写一篇 Markdown 文档；留在知识集 `.inbox/` 文件夹里的文件，会被 Coffer 的扫描收编，补全缺失的 frontmatter 并升格为文档。
+要新增知识，就按 `coffer-guide` 技能的说明，往某个知识集的 `pages/` 里写一个 Markdown 页面；留在知识集 `.inbox/` 文件夹里的文件，会被 Coffer 的扫描收编，作为来源保留在 `sources/` 下；写在 `pages/` 和 `sources/` 之外的文档会被移进 `pages/`。
 要修改文档，直接就地编辑文件。记忆根本不需要工具：智能体照常写自己的记忆，[记忆同步](/zh/guides/memory)把你其他智能体学到的东西写进同一份记忆，由智能体自己加载。
 
 | 要找 | 做法 |
@@ -264,7 +266,7 @@ Coffer 没有用于知识、记忆或自身记录的工具，因为智能体用�
 | 守护进程记录了什么，包括 traceback | `coffer log daemon --errors --since 1h`，或 grep `coffer path logs` 指明的文件 |
 
 每个 `coffer log` 读取命令都支持 `--json`，方便脚本使用。见
-[活动与审计](/zh/guides/activity)和[记忆](/zh/guides/memory)。
+[活动与审计](/zh/guides/activity)、[知识](/zh/guides/knowledge)和[记忆](/zh/guides/memory)。
 
 ## 相关页面 {#related}
 

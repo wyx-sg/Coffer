@@ -37,6 +37,8 @@ Coffer never copies an agent's configuration into its own store. Config files, M
 
 ## Register an agent
 
+<Shot name="agents-list" alt="The Agents page, with one agent connected and one not yet." />
+
 ### From detected agents
 
 Coffer detects an agent from two signals: its program on your `PATH` — the `PATH` your login shell gives you, so an agent installed with Homebrew or a Node version manager is found even when the daemon was started from the Dock — and its config directory. It reads the program's version (`claude --version`, `codex --version`) along the way. It never registers anything on its own, and the daemon does not auto-register agents at startup.
@@ -66,7 +68,7 @@ A row whose agent is not installed shows no version, and says **Not on this Mac*
 
 Coffer does not install agents, and installing one depends on the machine, so a row whose program is not found hands the job to an agent instead of naming an install command. The row carries the hand-off split button, **Hand off to &lt;Agent&gt; ▾**, before its **⋯**. It works with a prompt the daemon writes: install (or reinstall) this agent on this machine, keep its existing config directory, make sure its program is found on the `PATH` Coffer looks on (the prompt lists it) and confirm with `claude --version` or `codex --version`, then come back and choose **Check again** — leaving the login to you. **Hand off to &lt;Agent&gt;** starts your hand-off agent in your preferred terminal with the prompt as its first message; behind the chevron, **Hand off to** the other agent (when it is available) and **Copy prompt**, which copies it for any assistant outside Coffer. While no managed agent is available to run it — the missing agent cannot run its own install — the row offers **Copy prompt** alone. The **⋯** menu never repeats it. The agent's page offers the same prompt on its Overview tab's problem states. You can still install the agent yourself the way its maker documents; the row updates on its own once the program is on your `PATH`.
 
-**Connect** on a newly found agent registers it at its standard directory and connects it. It first opens **Review changes** — every file it will write and the lines it adds — and writes nothing until you apply it. On a first run with both agents installed and neither connected, **Connect both** reviews and connects the two in one confirmation. A registered row also shows its provider — the Coffer connection it runs on, or its built-in login — its default model, read from the agent's own config (**Built-in default** when that names none, so the agent runs whatever its maker defaults to), and how many skills, MCP servers and plugins reach it, and opens the agent's page. A line under the table says what the counts mean.
+**Connect** on a newly found agent registers it at its standard directory and connects it. It first opens **Review changes** — every file it will write and the lines it adds — and writes nothing until you apply it. On a first run with both agents installed and neither connected, **Connect both** reviews and connects the two in one confirmation. A registered row also shows its provider — the Coffer connection it runs on, or its built-in login — its default model, read from the agent's own config (**Built-in default** when that names none, so the agent runs whatever its maker defaults to, with the model named in brackets when the agent reports it, as Codex does), and how many skills, MCP servers and plugins reach it, and opens the agent's page. A line under the table says what the counts mean.
 
 ### Use a different config directory
 
@@ -94,6 +96,8 @@ Connecting writes the one entry Coffer needs into the agent's own config:
 | Part | What it does | When |
 | --- | --- | --- |
 | Gateway MCP entry | A `coffer` stdio MCP server entry pointing at `coffer-mcp-shim`. The agent reaches every enabled upstream server, Coffer's own tools, and its delivered knowledge through it. | Always |
+
+<Shot name="agent-page" alt="An agent's page, with the connection entries Coffer wrote." />
 
 Disconnecting removes it, and only Coffer's own entry; everything else in those files stays as it was.
 
@@ -137,11 +141,13 @@ Connecting is idempotent: connecting again rewrites each entry in place and neve
 The daemon may run from the desktop app, a login service or a virtualenv, none of which inherit your shell's `PATH`, and the agent may not either. Coffer therefore writes the full path. It resolves the shim in this order:
 
 1. `COFFER_MCP_SHIM_PATH`, if set and the file exists;
-2. `coffer-mcp-shim` on the daemon's `PATH`;
-3. the scripts directory of the Python interpreter running the daemon (where `pip` and `uv` put console scripts);
-4. the binary bundled beside the running executable.
+2. in an installed Coffer, the deployed `~/.coffer/bin/coffer-mcp-shim`, if it exists;
+3. `coffer-mcp-shim` on the daemon's `PATH`;
+4. the scripts directory of the Python interpreter running the daemon (where `pip` and `uv` put console scripts);
+5. the binary bundled beside the running executable;
+6. the deployed `~/.coffer/bin/coffer-mcp-shim`.
 
-When the answer is the installed build, Coffer writes the stable `~/.coffer/bin/coffer-mcp-shim` link rather than a versioned directory, so the entry survives upgrades. If no shim can be found, install fails with `SHIM_NOT_FOUND`, naming the missing binary, and writes nothing. The refusal carries a hand-off prompt that lists every place Coffer looked and asks an agent to find or reinstall the shim so it resolves at `~/.coffer/bin/coffer-mcp-shim`: the Connect review offers it as **Copy prompt** beside **Retry**.
+An installed Coffer stops at step 2, so a daemon started by the app, from a terminal or by the login service writes the same entry, and the entry still works after the app is moved or removed. Steps 3 to 6 are for a Coffer run from source. When the answer is the installed build, Coffer writes the stable `~/.coffer/bin/coffer-mcp-shim` link rather than a versioned directory, so the entry survives upgrades. If no shim can be found, install fails with `SHIM_NOT_FOUND`, naming the missing binary, and writes nothing. The refusal carries a hand-off prompt that lists every place Coffer looked and asks an agent to find or reinstall the shim so it resolves at `~/.coffer/bin/coffer-mcp-shim`: the Connect review offers it as **Copy prompt** beside **Retry**.
 
 ### The agent uid and reach
 
@@ -283,7 +289,7 @@ The agent page is addressed by the agent's type (`/agents/claude_code`, `/agents
 - **Codex:** **Model**, with no tiers. It writes `config.toml` and Coffer's own model list file `coffer-model-catalog.json` beside it, so the review shows two changes.
 - **The built-in login** asks for a **Model** only, with no tiers: **Built-in default** (the agent's own config names no model) or one of the agent's own models, preselected with what its config names now. Coffer writes it to the top-level `model` of the agent's own config — `config.toml` for Codex, `settings.json` for Claude Code — or removes that key for **Built-in default**. Choosing the built-in login also takes out the keys Coffer wrote and clears the model Coffer had recorded for the provider. For Codex, while a provider that lists its own models is in use, the list of Codex's own models is empty, so only **Built-in default** is offered.
 
-Under **Model**, Coffer tests the provider with the chosen model by itself — **Testing connection…**, then **Connection OK** with how long it took, or **Connection failed** with the reason and **Retry**. **Review changes** stays off until the test for exactly this provider and model has passed (the built-in login needs none), and a line beside it says why. It then opens the exact lines each file will gain or lose, with a note that only those lines change and a backup copy is kept in Coffer's folder; **Apply** writes them.  If a file changed on disk after the review was drawn — the agent rewrote it, or you edited it — Apply refuses, writes nothing, says which file changed and offers **Reload preview**. After a successful Apply, a notice says the change takes effect once you restart that agent; sessions already open keep the old setting. A link from a provider's **Used by** list (**Codex › Change model**) opens this form on arrival.
+Under **Model**, Coffer tests the provider with the chosen model by itself, the way the agent will call it (Claude Code always over the Anthropic-compatible API, so a provider that serves only the OpenAI-compatible one fails here) — **Testing connection…**, then **Connection OK** with how long it took, or **Connection failed** with the reason and **Retry**. **Review changes** stays off until the test for exactly this provider and model has passed (the built-in login needs none), and a line beside it says why. It then opens the exact lines each file will gain or lose, with a note that only those lines change and a backup copy is kept in Coffer's folder; **Apply** writes them.  If a file changed on disk after the review was drawn — the agent rewrote it, or you edited it — Apply refuses, writes nothing, says which file changed and offers **Reload preview**. After a successful Apply, a notice says the change takes effect once you restart that agent; sessions already open keep the old setting. A link from a provider's **Used by** list (**Codex › Change model**) opens this form on arrival.
 
 ### Native memory and sessions
 

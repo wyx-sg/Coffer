@@ -2,14 +2,18 @@
 
 Real git over a real directory, because "found on disk" is decided by what the
 vault repository has committed. The registry and the audit log are in-memory
-stand-ins. Each tick promotes what waits in an inbox, commits edits found on
-disk, and re-renders the guide (spec knowledge "Adopt a file
-dropped into the inbox", "Treat a direct file edit as a complete change").
+stand-ins. Each tick promotes what waits in an inbox, files loose documents into
+``pages/``, commits edits found on disk, and re-renders the guide (spec
+knowledge "Adopt a file dropped into the inbox", "Sweep the knowledge root on
+its mechanical duties", "Treat a direct file edit as a complete change").
 """
 
 from __future__ import annotations
 
 import asyncio
+import os
+import pathlib
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -95,7 +99,7 @@ async def test_a_file_dropped_into_the_inbox_becomes_a_document_on_the_next_swee
     await sweep_once(service, guide.refresh)
 
     assert inbox.inbox_items("shopee") == ()
-    document = fs.read_file("shopee/gateway.md")
+    document = fs.read_file("shopee/sources/gateway.md")
     assert document.title == "Gateway"
     assert document.description == _DROPPED.strip()
     assert document.actor == "agent"
@@ -119,14 +123,15 @@ async def test_a_second_sweep_finds_nothing_to_do() -> None:
 async def test_a_document_dropped_in_by_hand_is_committed_as_a_disk_write() -> None:
     service, history, _ = _world()
     guide = _Guide()
-    (paths.collection_dir("shopee") / "by-hand.md").write_text(_DROPPED, encoding="utf-8")
+    paths.pages_dir("shopee").mkdir(parents=True)
+    (paths.pages_dir("shopee") / "by-hand.md").write_text(_DROPPED, encoding="utf-8")
 
     await sweep_once(service, guide.refresh)
     assert guide.refreshes == 1
 
     [change] = history.log("shopee", limit=1)
     assert change.meta.writer == "disk"
-    assert [d.path for d in change.documents] == ["shopee/by-hand.md"]
+    assert [d.path for d in change.documents] == ["shopee/pages/by-hand.md"]
 
 
 async def test_a_failing_guide_refresh_does_not_stop_the_sweep() -> None:
@@ -147,18 +152,74 @@ async def test_a_failing_guide_refresh_does_not_stop_the_sweep() -> None:
 )
 async def test_an_agents_new_document_is_readable_before_any_sweep() -> None:
     service, history, _ = _world()
-    (paths.collection_dir("shopee") / "agent.md").write_text(
+    paths.pages_dir("shopee").mkdir(parents=True)
+    (paths.pages_dir("shopee") / "agent.md").write_text(
         f"---\ntitle: Agent\ndescription: d\nactor: agent\n---\n\n{_DROPPED}",
         encoding="utf-8",
     )
 
-    assert _DROPPED.strip() in fs.read_file("shopee/agent.md").body
+    assert _DROPPED.strip() in fs.read_file("shopee/pages/agent.md").body
 
     await sweep_once(service, _Guide().refresh)
 
     [change] = history.log("shopee", limit=1)
     assert change.meta.writer == "disk"
-    assert [d.path for d in change.documents] == ["shopee/agent.md"]
+    assert [d.path for d in change.documents] == ["shopee/pages/agent.md"]
+
+
+def _age(path: pathlib.Path, seconds: float = 120) -> None:
+    stamp = time.time() - seconds
+    os.utime(path, (stamp, stamp))
+
+
+@pytest.mark.acceptance(spec="knowledge", scenario="a sweep files a loose document into pages")
+async def test_a_sweep_files_loose_documents_into_pages_in_one_daemon_commit() -> None:
+    service, history, _ = _world()
+    guide = _Guide()
+    root = paths.collection_dir("shopee")
+    (root / "infra").mkdir()
+    cache = root / "infra" / "cache.md"
+    notes = root / "notes.md"
+    cache.write_text("---\ntitle: Cache\n---\n\nTTL is 60s.\n", encoding="utf-8")
+    notes.write_text("Plain notes.\n", encoding="utf-8")
+    paths.readme_path("shopee").write_text("# shopee\n\nThe schema.\n", encoding="utf-8")
+    fresh = root / "fresh.md"
+    fresh.write_text("Still being written.\n", encoding="utf-8")
+    texts = {"infra/cache.md": cache.read_bytes(), "notes.md": notes.read_bytes()}
+    for path in (cache, notes, paths.readme_path("shopee")):
+        _age(path)
+
+    await sweep_once(service, guide.refresh)
+
+    for relative, data in texts.items():
+        assert not (root / relative).exists()
+        assert (root / "pages" / relative).read_bytes() == data
+    assert paths.readme_path("shopee").is_file()
+    assert fresh.is_file()  # touched within the minute: left for the next sweep
+    layout = [c for c in history.log("shopee") if c.meta.operation == "layout"]
+    [change] = layout
+    assert change.meta.writer == "daemon"
+    moved = {d.path: d.status for d in change.documents}
+    assert moved == {
+        "shopee/infra/cache.md": "removed",
+        "shopee/notes.md": "removed",
+        "shopee/pages/infra/cache.md": "added",
+        "shopee/pages/notes.md": "added",
+    }
+
+
+async def test_a_loose_document_never_overwrites_a_page() -> None:
+    service, _, _ = _world()
+    root = paths.collection_dir("shopee")
+    paths.pages_dir("shopee").mkdir(parents=True)
+    (root / "pages" / "notes.md").write_text("the page\n", encoding="utf-8")
+    (root / "notes.md").write_text("the loose one\n", encoding="utf-8")
+    _age(root / "notes.md")
+
+    await sweep_once(service, _Guide().refresh)
+
+    assert (root / "pages" / "notes.md").read_text(encoding="utf-8") == "the page\n"
+    assert (root / "pages" / "notes-2.md").read_text(encoding="utf-8") == "the loose one\n"
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="a sweep runs while a sync round waits")
@@ -176,4 +237,4 @@ async def test_a_sweep_does_not_wait_for_a_long_operation_holding_other_paths() 
         held.abort()
 
     assert inbox.inbox_items("shopee") == ()
-    assert fs.read_file("shopee/gateway.md").title == "Gateway"
+    assert fs.read_file("shopee/sources/gateway.md").title == "Gateway"

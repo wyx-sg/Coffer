@@ -54,7 +54,7 @@ Coffer 自己的模块通过 Python 标准库的 logging 记日志。根 logger 
 {"event": "mcp.upstream.spawn_failed", "logger": "coffer.application.mcp.supervisor", "level": "warning", "timestamp": "2026-09-24T13:50:15.869933Z", "server": "smart", "attempt": 1, "error": "upstream init failed: ConnectError", "trace_id": "44e10b60da1b4f26"}
 ```
 
-守护进程不把 HTTP 客户端库（`httpx`、`httpcore`）的 INFO 请求行写进 `daemon.log`：它们带着完整的请求 URL，而 Telegram 机器人令牌就在 URL 路径里。
+守护进程不把 HTTP 客户端库（`httpx`、`httpcore`、MCP SDK 使用的 HTTP 客户端 `httpx2`，以及 `mcp.client.streamable_http`）的 INFO 日志写进 `daemon.log`：它们带着完整的请求 URL，URL 里可能带有凭据（Telegram 机器人令牌就在 URL 路径里），还会记录每次推送流重连。这些日志器被设为 WARNING。
 
 `structlog` 也配置成走同一组 handler，所以将来通过 structlog 自己的 API 记日志的代码也会产出同样的形状，而不是打印到 stdout。
 
@@ -174,21 +174,22 @@ sequenceDiagram
 | 领域 | 事件 |
 | --- | --- |
 | 资源 | `resource_created`、`resource_updated`、`resource_enabled`、`resource_disabled`、`resource_deleted`、`resource_renamed`、`resource_scope_updated` |
-| MCP 能力 | `capability_enabled`、`capability_disabled` |
-| 守护进程 | `token_rotated`、`daemon_residency_updated`、`daemon_restarted`、`retention_updated`、`internal_engine_model_set` |
-| 密钥 | `secret_set`、`secret_revealed`、`secret_deleted`、`secret_resolved`、`secret_local_access_revoked`、`secret_approval_requested`、`secret_approval_approved`、`secret_approval_rejected` |
+| MCP 能力 | `capability_enabled`、`capability_disabled`、`tool_exposure_changed` |
+| 守护进程 | `token_rotated`、`daemon_residency_updated`、`daemon_restarted`、`retention_updated`、`call_content_recording_updated`、`attention_ignored`、`attention_unignored`、`storage_cache_cleared`、`internal_engine_model_set` |
+| 密钥 | `secret_set`、`secret_revealed`、`secret_deleted`、`secret_notes_updated`、`secret_resolved`、`secret_imported`、`secret_plaintext_ignored`、`secret_plaintext_unignored`、`secret_local_access_revoked`、`secret_approval_requested`、`secret_approval_approved`、`secret_approval_rejected`、`secret_protection_enabled`、`master_key_relocated` |
 | 智能体 | `agent_mcp_installed`、`agent_mcp_uninstalled`、`agent_mcp_entry_removed`、`agent_mcp_entry_adopted`、`agent_plugin_toggled`、`agent_plugin_uninstalled` |
 | 技能 | `skill_imported`、`skill_updated`、`skill_update_merged`、`skill_bound`、`skill_unbound`、`skill_relinked`、`skill_drift_remediated`、`skill_adopted`、`skill_unmanaged_deleted` |
+| 命令行工具 | `cli_tool_added`、`cli_tool_edited`、`cli_tool_removed` |
 | 知识 | `knowledge_written`、`knowledge_edited`、`knowledge_deleted` |
 | 记忆 | `memory_synced`、`memory_sync_undone`、`memory_curation_requested`、`memory_hook_removed` |
-| 消息渠道 | `channel_pairing_issued`、`channel_paired` |
-| 保险库文件 | `vault_file_edited`（人手动编辑、以 `disk` 提交） |
+| 消息渠道 | `channel_pairing_issued`、`channel_paired`、`channel_person_removed`、`channel_reply_withdrawn` |
+| 保险库文件 | `vault_file_edited`（人手动编辑、以 `disk` 提交）、`vault_file_restored` |
 | 保险库同步 | `sync_run`、`sync_confirmed`、`sync_rejected`、`sync_rolled_back`、`sync_machine_removed`、`sync_plaintext_pushed`、`master_key_exported`、`master_key_imported` |
-| 提供商 | `provider_switched`、`provider_transcribe_default_set`、`provider_projection_refused` |
+| 提供商 | `provider_switched`、`provider_transcribe_default_set`、`provider_projection_refused`、`provider_projection_repaired` |
 
 没有任何密钥事件携带密钥值；每条只记录 ref、独立密钥的名字或目的地。
 
-有些事件不再被记录：`agent_config_file_written` 和 `agent_config_file_deleted`，因为 Web 界面不再编辑智能体的配置文件；以及早先记忆层的 `memory_aggregated`、`memory_distilled`、`memory_delivery_installed`、`memory_delivery_removed`、`memory_delivery_fired`、`memory_note_edited` 和 `memory_note_deleted`。日志里已有的行在活动页面里仍保留它们的标签，所以依然能用平实的话读出来。`vault_file_restored` 会被记录：从历史标签恢复一个版本是 Coffer 自己的写入。在磁盘上做的编辑，或智能体自己提交的恢复，是写明 `Coffer-Writer: disk` 或 `agent` 的保险库提交；保险库的 git 历史能回答是谁改了这个文件。
+有些事件不再被记录：`agent_config_file_written` 和 `agent_config_file_deleted`，因为 Web 界面不再编辑智能体的配置文件；`knowledge_curated` 和 `provider_internal_default_set`；以及早先记忆层的 `memory_aggregated`、`memory_distilled`、`memory_delivery_installed`、`memory_delivery_removed`、`memory_delivery_fired`、`memory_note_edited` 和 `memory_note_deleted`。日志里已有的行在活动页面里仍保留它们的标签，所以依然能用平实的话读出来。`vault_file_restored` 会被记录：从历史标签或抽屉恢复一个版本是 Coffer 自己的写入。在磁盘上做的编辑，或智能体自己提交的恢复，是写明 `Coffer-Writer: disk` 或 `agent` 的保险库提交；保险库的 git 历史能回答是谁改了这个文件。
 
 - `secret_revealed`——有人在桌面应用里经过在场验证后显示或复制了一个值。这是值被展示的唯一途径，因为没有任何路由、命令或工具会返回它。
 - `secret_resolved`——`coffer run` 把一个独立密钥解析进一个子进程。记录写明密钥、程序和工作目录，从不记录值或命令行的其余部分。
@@ -249,28 +250,38 @@ sequenceDiagram
 
 所有类似日志的东西都由同一套机制限定大小。
 
-保留 worker 所清扫的每张表都有一份声明式描述：策略键、时间戳列、默认窗口、显示名，以及 `delete` 或 `archive` 之一的动作。组合根把每份这样的描述注册到同一个注册表里，仓储层接受的 SQL 白名单也由这些注册推导，所以没注册的表无法被清理。
+保留 worker 所清扫的每张表都有一份声明式描述：策略键、时间戳列、默认窗口、显示名和描述，以及可选的它所跟随的策略（`policy_name`）：跟随者没有自己的策略，按所跟随策略的窗口清理。超出窗口的行会被删除；没有别的动作。组合根把每份这样的描述注册到同一个注册表里，仓储层接受的 SQL 白名单也由这些注册推导，所以没注册的表无法被清理。
 
-| 策略（`name`） | 表 | 时间戳列 | 默认 | 动作 |
-| --- | --- | --- | --- | --- |
-| `audit_log` | `audit_log` | `timestamp` | 365 天 | delete |
-| `mcp_invocations` | `mcp_invocations` | `timestamp` | 30 天 | delete |
-| `sync_runs` | `sync_runs` | `finished_at` | 90 天 | delete |
+| 策略（`name`） | 表 | 时间戳列 | 默认 |
+| --- | --- | --- | --- |
+| `audit_log` | `audit_log` | `timestamp` | 365 天 |
+| `mcp_invocations` | `mcp_invocations` | `timestamp` | 30 天 |
+| `sync_runs` | `sync_runs` | `finished_at` | 90 天 |
+| `usage_daily` | `usage_daily` | `day` | 365 天 |
+| `usage_requests` | `usage_requests` | `started_at` | 跟随 `mcp_invocations` |
+
+三个**文件策略**以同样的方式按每个文件的修改时间清理文件夹：
+
+| 策略 | 文件夹 | 默认 |
+| --- | --- | --- |
+| `attachments` | `~/.coffer/content/channel-media`（消息渠道下载的内容） | 30 天 |
+| `skill_data` | `~/.coffer/skill-data`（技能脚本写的日志、操作记录和临时文件） | 30 天 |
+| `config_backups` | `~/.coffer/config-backups`（改写前留下的智能体配置文件副本）；每个文件最新的一份副本不论多旧都会保留 | 30 天 |
 
 ```mermaid
 flowchart LR
     W["保留 worker（每 6 小时）"] --> S["清理"]
     S --> R["已注册的可清理表"]
     R --> T1["删除超出窗口的行"]
-    S --> M["清扫消息渠道媒体目录"]
+    S --> M["文件策略：消息渠道媒体、skill-data、config-backups"]
     W --> F["日志文件清理：超过 7 天的 shim 和上游日志"]
     S --> P["local/retention.json：last_pruned_at、rows"]
 ```
 
-- 保留服务在启动时为每张已注册的表在 `~/.coffer/local/retention.json` 里写入默认策略，从不覆盖你改过的策略。文件里属于已不再注册的策略的条目，例如已移除的对话策略，会在启动时被丢弃。
+- 保留服务在启动时为每张已注册的表和每个文件策略在 `~/.coffer/local/retention.json` 里写入默认策略，从不覆盖你改过的策略。文件里属于已不再注册的策略的条目，例如已移除的对话策略，会在启动时被丢弃。
 - 保留 worker 在启动时立即执行一次清理（补跑），之后每 6 小时一次。清理失败会记日志，worker 继续运行。
-- 完整的清理还会清扫消息渠道的媒体目录，worker 也按同样的节奏清理旧的 shim 和上游日志文件。`daemon.log` 本身由自己的滚动限定大小，从不被删除。
-- 窗口设为 “none” 会关闭该表的清理。修改窗口会在审计日志里记一条 `retention_updated`。
+- 完整的清理还会清扫各文件策略的文件夹，worker 也按同样的节奏清理旧的 shim 和上游日志文件。`daemon.log` 本身由自己的滚动限定大小，从不被删除。
+- 窗口设为 “none” 会关闭该策略的清理。修改窗口会在审计日志里记一条 `retention_updated`。
 
 你可以在**设置 → 数据**里管理策略，或者通过 `/api/v1/retention/policies` 和 `POST /api/v1/retention/prune`。
 
@@ -283,7 +294,7 @@ flowchart LR
 | `coffer log audit [--kind] [--name] [--event-type] [--since] [--trace] [--limit] [--json]` | 审计日志，最新的在前 |
 | `coffer log mcp [--server] [--status ok\|error] [--since] [--trace] [--limit] [--json]` | MCP 调用日志，最新的在前 |
 | `coffer log daemon [--errors] [--since] [--trace] [--limit] [--json]` | `daemon.log` 的末尾，经过与「活动」页相同的宽容读取器 |
-| `coffer daemon status [--json]` | 事件循环延迟和后台任务计数，与守护进程的版本和端口一起 |
+| `coffer daemon status [--tasks] [--json]` | 事件循环延迟和后台任务计数（加 `--tasks` 时按名字列出），与守护进程的版本和端口一起 |
 | `coffer path logs` | 日志目录及其中的 `daemon.log`，供 `grep` 或 `tail` 使用 |
 
 `--since` 接受一个 ISO 8601 时间点，或 `30m`、`1h`、`2d` 这样的时长。解析不了的过滤条件——只给了名字没给类型，或者该类型下没有这个名字的资源——会报错，而不是被悄悄忽略，因为不加过滤的答案看起来就像“这个资源什么都没发生”。每条命令都是只读的，不打印任何密钥值：审计 details 在存储前就已脱敏，日志记录从构造上就不含密钥。
@@ -302,7 +313,7 @@ flowchart LR
 
 在函数返回前就被它自己等待或取消的任务——`asyncio.wait` 竞速的两边、一次 shield 住的写入、每个请求一个的泵——是结构化并发，不是后台工作，保持原样。`scripts/check_bare_tasks.py`（由 `make lint` 运行）按文件统计 `create_task` 和 `ensure_future` 调用，任何文件的调用数超过它在允许清单里的条目就失败，每个条目都写明它的调用为何是就地等待的。因此新加的裸任务会让 lint 失败，直到它改用监督器，或者带着理由加进清单。
 
-**被阻塞的循环看起来只是普遍变慢。** 循环上的一个同步调用——一次大的文件遍历、一次等待子进程——会让每个请求、渠道和轮次同时卡住。`application/runtime/loop_lag.py` 每次睡 0.5 秒，记录循环比要求的晚了多少才把它叫醒，保留五分钟的样本。
+**被阻塞的循环看起来只是普遍变慢。** 循环上的一个同步调用——一次大的文件遍历、一次等待子进程——会让每个请求、渠道和轮次同时卡住。`application/runtime/loop_lag.py` 每次睡 0.5 秒，记录循环比要求的晚了多少才把它叫醒，保留五分钟的样本。光有延迟只能说明发生过卡顿，说不出是谁造成的：探针醒来时，阻塞的调用早已返回。所以探针睡着时，有一个小线程（`application/runtime/stall_watch.py`）在等它。探针晚了 100 毫秒以上，说明循环此刻仍被阻塞，线程就往 `daemon.log` 写一行 `runtime.loop.stalled`，带上循环线程当前的调用栈和循环正在运行的任务名。阻塞的调用就是栈里最内层的 Coffer 帧。每 10 秒最多写一行；它的 `suppressed` 字段记录自上一行以来被压下的卡顿次数。
 
 `GET /api/v1/daemon/status` 在它的 `runtime` 块里带着这两样，`coffer daemon status` 会把它们打印出来：
 
@@ -313,12 +324,15 @@ flowchart LR
   "loop_lag_samples": 600,
   "loop_lag_window_seconds": 300.0,
   "tasks_running": 14,
+  "tasks_by_name": {"reconciler": 1, "telegram-poll": 1, "coffer-mcp-http-upstream": 6, "turn": 1, "loop-lag-probe": 1},
   "task_crashes": 1,
   "last_crash": {"task": "telegram-poll:family", "error": "RuntimeError", "at": "2026-10-01T08:12:03Z", "restarting": true}
 }
 ```
 
 空闲的守护进程读数是一两毫秒。p99 到了几百毫秒，说明有东西在阻塞循环；最大值前后的守护进程日志通常会说明是什么。状态路由不需要令牌就能回答，所以 `last_crash` 只带异常的类名；它的消息和 traceback 在 `daemon.log` 的 `runtime.task.crashed` 下。
+
+`tasks_by_name` 按任务名第一个 `:` 之前的部分统计正在运行的任务。冒号后面的部分是任务服务的对象（一个渠道、一个 MCP server、一个会话），而这个路由不需要令牌，所以不放进来。`tasks_running` 上涨时，它能说明是哪一类任务在涨：一直没被回收的会话表现为 `coffer-mcp-http-upstream` 计数不断上升，启动了两次的渠道循环表现为 `telegram-poll` 等于 2。`coffer daemon status --tasks` 打印同样的计数，从多到少。
 
 ## 评测采集 {#eval-capture}
 

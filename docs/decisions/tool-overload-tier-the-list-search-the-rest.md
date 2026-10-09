@@ -68,7 +68,11 @@ as before.
 **Search reaches the rest.** `coffer__search_tools(query, top_k=5, max 20)`
 ranks the full upstream catalogue with a BM25-lite scorer
 (`domain/mcp/tool_search.py`): name tokens weigh 3.0 against 1.0 for
-description tokens, and the doubled server namespace
+description tokens and 0.5 for the input schema's parameter text
+([Tool Search Indexes Parameter Text](tool-search-indexes-parameter-text.md)),
+CJK text is cut into bigrams
+([Tool Search Cuts CJK Text Into Bigrams](tool-search-cuts-cjk-text-into-bigrams.md)),
+and the doubled server namespace
 (`jira__jira_get_issue`) is collapsed to one token so it does not crowd out
 the intent words. Coffer's own tools are excluded from results. It returns
 real `{name, description, inputSchema, score}` entries that the agent then
@@ -182,12 +186,13 @@ Rules a change must keep:
 - The upstream slice a session lists drops from ~125 to at most 50, inside the
   30–50 accuracy band, with at most two builtins on top. Whether that clears a given client's own
   deferral threshold is the client's business.
-- The `tool_search` eval suite (recall@3 over the ranker, deterministic)
-  gates ranker changes in CI ([Eval Capture and Regression Gate](eval-capture-and-regression-gate.md)).
+- The `tool_search` eval suite (recall@5 and MRR over the ranker on a
+  285-tool, mixed-language catalogue, deterministic) gates ranker changes in CI ([Eval Capture and Regression Gate](eval-capture-and-regression-gate.md)).
 - The split between listed and hidden tools is not shown on a management page.
   It is visible to the agent through the instructions, and to an operator by
   comparing `tools/list` with the capability view.
-- Search is lexical, so a query that shares no word with a tool's name or
-  description will not find it. An embedding ranking path was added, never wired
+- Search is lexical, so a query that shares no word with a tool's name,
+  description or parameters will not find it, and a query in one language does
+  not find a tool described in another. An embedding ranking path was added, never wired
   to a real embedder, and removed with every other use of embeddings in Coffer. The eval suite is where a recall gap
   would show up first.

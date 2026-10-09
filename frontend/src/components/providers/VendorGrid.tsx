@@ -1,4 +1,4 @@
-// src/components/providers/VendorGrid.tsx — the Add dialog's vendor picker: a 4 × 2 grid of equal buttons, each with its 16px mark.
+// src/components/providers/VendorGrid.tsx — the Add dialog's vendor picker: a four-column grid of equal buttons, each with its 16px mark.
 import { cn } from "@/lib/utils";
 import type { PresetId } from "@/lib/providers/presets";
 import { VendorIcon } from "./VendorIcon";

@@ -38,6 +38,8 @@ The gateway:
 
 A stdio server is a command Coffer starts as a subprocess.
 
+<Shot name="add-server-dialog" alt="The Add server dialog." />
+
 Open **MCP servers**, click **Add server**, and paste whatever the server's README gives you into the one box. It is read as you type:
 
 - an `mcpServers` JSON block, or a single server object — one server or many;
@@ -158,6 +160,8 @@ A server carries no title: its name is what every page and every agent shows. Ne
 After each discovery, Coffer measures the name a client like Claude Code shows for every tool, `mcp__coffer__<server>__<tool>`. The server's **Tools** tab flags a tool whose name is over 64 characters, the limit model provider APIs accept; Cursor already drops tools above 60. A flagged tool stays enabled and listed. The fix is on the upstream side (a shorter tool name) or a shorter server name for a new registration.
 
 ## Edit, test, refresh and delete
+
+<Shot name="mcp-server" alt="An MCP server's page, with its health and tools." />
 
 | Task | Web UI |
 | --- | --- |

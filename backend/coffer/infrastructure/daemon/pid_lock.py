@@ -47,7 +47,6 @@ class DaemonInfo:
     port: int
     token: str
     started_at: datetime
-    binary_path: str
 
 
 def write(path: Path, info: DaemonInfo) -> None:
@@ -69,5 +68,4 @@ def read(path: Path) -> DaemonInfo:
         port=raw["port"],
         token=raw["token"],
         started_at=datetime.fromisoformat(raw["started_at"]),
-        binary_path=raw["binary_path"],
     )

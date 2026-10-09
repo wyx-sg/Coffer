@@ -96,6 +96,8 @@ The files are pruned after the **Attachments** retention window (30 days after t
 
 ## Manage conversations {#manage-conversations}
 
+<Shot name="conversations" alt="The Conversations page." />
+
 `/conversations` lists every session of every managed agent, wherever it was started: in a terminal, by a channel, or from **New conversation**. Newest activity first; a conversation moves to the top when a turn starts in it, not only when one ends. The list reads 30 sessions and loads more as you scroll, and it shows no total, because Codex cannot count its sessions without reading all of them. Above the rows sits a header naming the columns, **Title**, **Source**, **Agent**, **Directory** and **Last active**, and the rows are grouped under **Today**, **Yesterday** and **Earlier**. Each row shows:
 
 - the title, with a status word on a channel's conversation: **Running** (a green dot) while a turn is in progress, **Needs you** (an amber dot) while the agent is waiting for your answer;
@@ -149,7 +151,7 @@ A channel turn runs against the config directory of the registered agent of its 
 
 On top of the agent's own system prompt, Coffer appends, in this order:
 
-1. A note that the agent is on a chat channel — keep replies short, and it cannot click dialogs on your computer.
+1. A note that the agent is on a chat channel — keep replies short, and it cannot click dialogs on your computer — then the channel's own system prompt for this chat kind, if set, under "Instructions from the channel's owner:" (see [Your own system prompts](/guides/channels#your-own-system-prompts)).
 2. The note naming the model Coffer put the agent on.
 
 A session you open from the Conversations page, or start with **New conversation**, runs in your terminal, outside Coffer, so it gets neither note. Memory reaches the agent the same way in both: through the agent's own memory, which [memory sync](/guides/memory) fills with what your other agents learned.
@@ -160,13 +162,13 @@ A channel turn runs Claude Code with `bypassPermissions` and Codex with `approva
 
 ## How it works {#how-it-works}
 
-A channel message starts or queues a turn in the daemon. The turn's output is a stream of typed events (`turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_done`, `turn_error` and `queue_changed`) that the channel renders into the chat. The stream lives in memory while the turn runs and nothing is stored from it; the web UI does not subscribe to it. For the design, see [Chat and turns](/architecture/chat).
+A channel message starts or queues a turn in the daemon. The turn's output is a stream of typed events (`turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_done`, `turn_error`, `question_asked` and `question_closed`) that the channel renders into the chat. The stream lives in memory while the turn runs and nothing is stored from it; the web UI does not subscribe to it. For the design, see [Chat and turns](/architecture/chat).
 
 ## Troubleshooting {#troubleshooting}
 
 **The agent is listed as unavailable.** Either its CLI is not on your `PATH` (your login shell's `PATH` merged with the daemon's own), or no agent of that type is registered. Install the CLI, then choose **Connect** on the Agents page. Coffer runs only agents it manages.
 
-**Every turn fails with `stream_ended`.** The agent process is exiting mid-turn. Check that the agent works in a terminal, then look at **Activity → Daemon** for the underlying error.
+**Every turn fails with `stream_ended`.** The agent process is exiting mid-turn. Check that the agent works in a terminal, then look at **Activity → Daemon log** for the underlying error.
 
 **Nothing streams, and the reply appears all at once.** Claude Code turns need a CLI that supports partial messages. The SDK uses its own bundled CLI; if that is missing and the `claude` on `PATH` is old, the turn fails at connect. Update Claude Code.
 

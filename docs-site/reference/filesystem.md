@@ -5,7 +5,7 @@ description: Every file and directory Coffer keeps under ~/.coffer and writes in
 
 # Files and directories
 
-This page maps everything Coffer keeps on disk: the `~/.coffer` tree, the one file outside it, and the entries Coffer writes into each registered agent's own config directory. Use it to back up a vault, to clean up safely, or to understand what a file you found is for.
+This page maps everything Coffer keeps on disk: the `~/.coffer` tree, the files outside it, and the entries Coffer writes into each registered agent's own config directory. Use it to back up a vault, to clean up safely, or to understand what a file you found is for.
 
 Every path below is resolved against `$HOME`. There is no per-tree override, and the only locations environment variables move are the logs, the model proxy's usage spool and the history database (see [Configuration](/reference/configuration#storage-locations)).
 
@@ -48,7 +48,9 @@ State is kept in five [storage classes](/architecture/persistence), one director
 ├── state/mcp-preferences/<server>.json
 ├── state/channel-peers/<channel>.json
 ├── state/settings/internal-engine.json
-├── knowledge/<collection>/             # documents, README.md, hidden .inbox/
+├── state/secret-notes/notes.json
+├── state/cli-tools/tools.json
+├── knowledge/<collection>/             # README.md, pages/, sources/, hidden .inbox/
 ├── skills/<name>/                      # skill master folders
 ├── memory/                             # the memory hub: global/ and projects/<project>/
 ├── secret/<ref>.enc
@@ -64,8 +66,12 @@ State is kept in five [storage classes](/architecture/persistence), one director
 | `state/mcp-preferences/<server>.json` | The tools, prompts and resources you switched off on one MCP server, with that server's uid. | you, daemon | Yes | Yes: everything on that server is switched back on. |
 | `state/channel-peers/<channel>.json` | The identities paired with one channel, including the owner. | daemon | Yes | The pairings are lost. |
 | `state/settings/internal-engine.json` | The speech-to-text model, and the memory sync's switch and interval. Absent means defaults. | you, daemon | Yes | Yes: the settings return to their defaults. |
-| `knowledge/<collection>/` | A collection: Markdown documents in any nesting, plus a `README.md` describing it. You and your agents edit these files; a Tidy hands the merging and correcting to an agent. | you, daemon | Yes | **No.** This is written knowledge. |
-| `knowledge/<collection>/.inbox/` | A drop zone: a Markdown file an agent or another machine leaves here is adopted and promoted to a document by the next sweep (within a minute), then the file is gone. | you, your agents, daemon | Yes | No: a file not yet promoted is lost. |
+| `state/secret-notes/notes.json` | Each secret's label and description (never its value). | you, daemon | Yes | The labels and descriptions are lost; the values stay. |
+| `state/cli-tools/tools.json` | The command-line tools you added by hand, and your edits to ones a skill requires. | you, daemon | Yes | Yes: hand-added tools and your edits are gone. |
+| `knowledge/<collection>/` | A collection: a `README.md` describing it, plus `pages/` and `sources/`. A Markdown document left anywhere else in it is moved into `pages/` by the sweep. A Tidy hands the merging and correcting to an agent. | you, daemon | Yes | **No.** This is written knowledge. |
+| `knowledge/<collection>/pages/` | The wiki: Markdown pages in any nesting, written and kept current by you and your agents. | you, your agents, daemon | Yes | **No.** This is written knowledge. |
+| `knowledge/<collection>/sources/` | The material that arrived — each upload and each inbox file — kept as Markdown, as it came. Agents read sources and never edit them. | daemon | Yes | **No.** Pages cite these sources. |
+| `knowledge/<collection>/.inbox/` | A drop zone: a Markdown file an agent or another machine leaves here is adopted and kept as a source under `sources/` by the next sweep (within a minute), then the file is gone. | you, your agents, daemon | Yes | No: a file not yet adopted is lost. |
 | `skills/<name>/` | The master copy of a managed skill: `SKILL.md`, its other files, and `.coffer.meta.json` (Coffer's metadata). Agents receive a symlink to this folder. | you, daemon | Yes | **No.** Deleting a folder breaks the links delivered to agents. |
 | `memory/` | The [memory](/guides/memory) hub: one Markdown file per memory an agent on any of your machines wrote for itself, under `global/` or `projects/<project>/` (the project's repository remote, with every character outside `[A-Za-z0-9._-]` turned into `-`). Frontmatter names the origin machine, agent and source; paths in the text are stored as `<repo>` and `~`. Only the machine an entry came from changes it. | memory sync | Yes | Each machine publishes its own agents' memories again at the next sync; another machine's memories come back only from that machine. |
 | `secret/<ref>.enc` | One secret's Fernet ciphertext, mode `0600`. Never the key. Excluded from the repository unless the sync remote carries secrets. | daemon | Only with `--with-secret` | **No.** The secret is gone. |
@@ -78,11 +84,13 @@ State is kept in five [storage classes](/architecture/persistence), one director
 | --- | --- | --- | --- | --- |
 | `local/resources/agent/<name>.json` | This machine's agents, one resource file each. | daemon | Never | The agent is unregistered here. |
 | `local/reach.json` | Every resource's reach on this machine: enabled, and for which agents. | daemon | Never | Every resource returns to its kind's default reach. |
-| `local/engine.json` | When this machine last changed Coffer's settings document (the model timeout, speech-to-text and upkeep). | daemon | Never | Yes. |
+| `local/engine.json` | When this machine last changed Coffer's settings document (speech-to-text and upkeep). | daemon | Never | Yes. |
+| `local/cli-paths.json` | Where each command-line tool you added by an absolute path is found on this machine. | daemon | Never | Those tools are looked up on `PATH` again. |
 | `local/retention.json` | Each prunable table's retention and when it was last pruned. | daemon | Never | Yes: the defaults apply. |
 | `local/skill-source-status.json` | What this machine last found at each Git-imported skill's source. | daemon | Never | Yes: the next check fills it in. |
 | `local/secret/` | Machine-local ciphertext, such as the model proxy's tokens. | daemon | Never | The proxy tokens are minted again; agents on a provider re-read theirs. |
-| `local/secret-boundary/` | `bindings.json`, `approvals.json`, `settings.json`, `times.json`: which destination each secret is approved for, pending approvals, the boundary's switches, when each secret was first stored here. | daemon | Never | Every secret waits for approval again. |
+| `local/secret/plaintext-ignored.json` | Fingerprints of the values you said are not secrets, so they are not flagged again. Holds no value. | daemon | Never | Those values are flagged again. |
+| `local/secret-boundary/` | `bindings.json`, `approvals.json`, `settings.json`, `times.json`, `last-used.json`: which destination each secret is approved for, pending approvals, the boundary's switches, when each secret was first stored here and when it was last used. | daemon | Never | Every secret waits for approval again. |
 | `local/memory-sync.json` | The memory sync's ledger: each source's digest, every copy Coffer wrote into this machine's agents and its state (written, edited or removed by the agent), fingerprints of what was delivered, the Codex-import switch, whether this machine confirmed a preview, the last sync and its report. | daemon | Never | Yes: the next sync re-derives it from the `coffer_` files and shows a preview first. |
 | `local/memory-sync-preview.json` | A first or large memory sync waiting for **Write** or **Cancel** on the Memory page. | daemon | Never | Yes: the next sync plans again. |
 | `local/sync/remote.json` | The one sync remote: URL, branch, push secret ref, whether secrets travel, interval, paused. | daemon | Never | This machine forgets the remote. |
@@ -96,8 +104,7 @@ A local file that does not parse is moved aside as `<name>.unreadable-<n>` and r
 | --- | --- | --- | --- | --- |
 | `content/channel-media/` | Attachments received over Telegram and SeaTalk, saved so the agent can open them. Files older than the attachments retention window (30 days by default) are pruned. | daemon | No | Yes. |
 | `content/workspace/` | The default working directory for a chat when you pick none. | daemon | No | Only if no chat uses it. |
-
-An earlier version also kept `content/chat-media/` (files attached on the Conversations page). Nothing writes it any more; delete the folder by hand if it is still there.
+| `content/backup/skills/` | Skill folders Coffer set aside: one moved out of an agent's skill link path, or out of the skill store. It is the only copy of that folder. | daemon | No | Only once you no longer need the folders. |
 
 ### History and keys
 
@@ -116,7 +123,10 @@ Everything under `derived/` is rebuilt from the rest, so deleting it (with the d
 
 | Path | Purpose | Rebuilt by |
 | --- | --- | --- |
+| `derived/channel-avatars/` | Pictures of the people paired with a channel, one file per person, fetched from the platform. | The next fetch |
 | `derived/derived.db` | MCP server health, which skill copies were delivered into which agent, when each upstream capability was first and last seen. Recreated when its schema version differs. | Health checks, skill delivery, the gateway |
+| `derived/genai-prices.json` | The model price list fetched from genai-prices, with when it was fetched. | The daily price refresh |
+| `derived/reported-prices.json` | The prices providers' APIs reported when their models were listed. | The next model listing |
 | `derived/resources/` | Derived resource files: `skill/coffer-guide.json`. | The daemon at start |
 | `derived/secret-citations.json` | What cites each secret: the resources and skill files holding its reference. Never synced. | The daemon at start, then on every resource and skill change |
 | `derived/skills/coffer-guide/` | Coffer's own guide skill, rendered from this build. | The daemon at start |
@@ -126,9 +136,9 @@ Everything under `derived/` is rebuilt from the rest, so deleting it (with the d
 
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
-| `daemon.json` | Runtime state of the running daemon: `version`, `pid`, `port`, `token`, `started_at`, `binary_path`. Mode `0600`. Every client (CLI, shim, desktop app, web UI dev server) reads the port and API token from it. Removed when the daemon exits. | daemon | No | Only while no daemon runs. A stale file is detected and ignored. |
+| `daemon.json` | Runtime state of the running daemon: `version`, `pid`, `port`, `token`, `started_at`. Mode `0600`. Every client (CLI, shim, desktop app, web UI dev server) reads the port and API token from it. Removed when the daemon exits. | daemon | No | Only while no daemon runs. A stale file is detected and ignored. |
 | `daemon.lock` | `flock` target that serialises detect-or-spawn, so two clients never start two daemons. Left on disk between runs by design. | daemon, CLI, shim | No | Yes, while no daemon is starting. |
-| `daemon-config.json` | Settings read before the database opens: `port`, `proxy_port`, `machine_name`, `machine_id` (cache), `features`. Mode `0600`. See [Configuration](/reference/configuration#daemon-config-json). | daemon, CLI | No (machine-local on purpose) | Yes: the daemon falls back to port 38470, the host name and the defaults (every experimental feature off). |
+| `daemon-config.json` | Settings read before the database opens: `port`, `proxy_port`, `machine_name`, `machine_id` (cache), `features`, `price_refresh`, `update_check`, `record_call_content`, `skill_update_check`. Mode `0600`. See [Configuration](/reference/configuration#daemon-config-json). | daemon, CLI | No (machine-local on purpose) | Yes: the daemon falls back to port 38470, the host name and the defaults (every experimental feature off). |
 | `proxy.json` | Runtime state of the running [model proxy](/architecture/model-proxy): `port`, `pid`, `started_at`, `version` and `control_token`, the token the daemon uses to push the proxy its state and tell it to drain. Mode `0600`. Written by the proxy once its socket is bound, and removed on exit only while it still names that proxy's pid. The proxy outlives daemon restarts, and a new daemon finds it through this file. | model proxy | No | Only while no proxy runs. |
 | `proxy-usage/<pid>-<start>-<seq>.jsonl` (`.jsonl.part` while open) | The model proxy's usage records, one JSON object per line, metadata only. The proxy never opens the database; the daemon ingests each finished file. `COFFER_PROXY_SPOOL_DIR` moves the directory. | model proxy, daemon | No | Finished files not yet ingested are lost from the usage report. |
 | `upstream-pids/<server-uid>-<pid>.json` | One file per upstream MCP server process the daemon spawned, so the next daemon can reap orphans after a crash. | daemon | No | Yes, while the daemon is stopped. |
@@ -139,8 +149,8 @@ See [Daemon and processes](/architecture/daemon) and [Running the daemon](/guide
 
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
-| `bin/<version>/` | One directory per deployed frozen build, holding `coffer`, `coffer-daemon` and `coffer-mcp-shim`, each with a `.<name>.version` sentinel written after the copy completes. The current and the previous version are kept. | installer, daemon (frozen builds) | No | Old version directories, yes. Not the one the symlinks point at. |
-| `bin/coffer`, `bin/coffer-daemon`, `bin/coffer-mcp-shim` | Relative symlinks into the current version directory, flipped atomically on upgrade. Agents' MCP entries, the login service and your `PATH` use these stable names. | installer, daemon | No | No: agents' MCP entries point at `bin/coffer-mcp-shim`. |
+| `bin/<version>/` | One directory per deployed frozen build, holding `coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge`, each with a `.<name>.version` sentinel written after the copy completes, and the shim's library folder `coffer-mcp-shim-lib/`. The current and the previous version are kept. | installer, daemon (frozen builds) | No | Old version directories, yes. Not the one the symlinks point at. |
+| `bin/coffer`, `bin/coffer-daemon`, `bin/coffer-mcp-shim`, `bin/coffer-seatalk-bridge` | Relative symlinks into the current version directory, flipped atomically on upgrade. Agents' MCP entries, the login service and your `PATH` use these stable names. | installer, daemon | No | No: agents' MCP entries point at `bin/coffer-mcp-shim`. |
 
 To undo an upgrade by hand, point the symlinks back at the previous version directory. A frozen daemon deploys its sibling binaries here on start; a source install uses the console scripts `pip` put on `PATH` instead. See [Distribution and releases](/architecture/distribution).
 
@@ -183,6 +193,7 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 | --- | --- | --- | --- |
 | `~/Library/LaunchAgents/dev.coffer.daemon.plist` | The login service that starts the daemon at login and restarts it after a crash (macOS). Runs `~/.coffer/bin/coffer-daemon` and logs to `~/.coffer/logs/daemon.log`. | daemon (**Settings → Daemon → Start at login**) | Turn off **Start at login** instead. |
 | Your shell profile | `install.sh` appends `~/.coffer/bin` to `PATH` unless `COFFER_NO_MODIFY_PATH=1`. | installer | Remove the line by hand. |
+| `~/.warp/launch_configurations/coffer-*.yaml` | The launch file for a session Coffer opened in Warp, one per start. | daemon | Yes. |
 
 ## Inside an agent's config directory
 
@@ -214,7 +225,7 @@ The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by 
 Coffer recognises its own entries by the `coffer` server key and an `apiKeyHelper` that runs the `coffer` CLI (bare or by any path) with `proxy token`, and removes only those. Every other entry — your own MCP servers, your hooks, your `env` — is left as it was. In an agent's memory, Coffer writes only the files and the marked block above, never a memory the agent wrote itself; **Undo sync…** on the Memory page removes them. On its first start after an upgrade, the daemon removes the `: coffer-memory` hook entries earlier builds installed in `settings.json` and `hooks.json`.
 
 ::: tip Cleaning up an agent
-Before removing Coffer, disconnect each agent from Coffer and remove the provider projection from each agent's page, then delete `~/.coffer`. Deleting `~/.coffer` first leaves the agents pointing at a shim that no longer exists.
+To remove Coffer, run `coffer uninstall` (in the desktop app, **Settings › About › Uninstall Coffer**). It disconnects every agent from Coffer, takes the provider projection out of each, and removes the skill links, start at login, the terminal launch files, the installer's `PATH` lines and `~/.coffer/bin`; `~/.coffer` stays unless you add `--delete-data`. Deleting `~/.coffer` by hand first leaves the agents pointing at a shim that no longer exists. See [Install → Uninstall](/start/install#uninstall).
 :::
 
 ## Related

@@ -7,6 +7,8 @@
 
 **Partly superseded** (2026-10-05): the web UI no longer edits a document (it shows it read-only and opens it in the person's editor), and has no History tab or Recent changes; a delete keeps its toast Undo, see the OpenSpec change `hand-files-to-external-tools`.
 
+**Amended** (2026-10-09): a collection is now a wiki of `pages/` compiled from kept `sources/` (each upload kept as Markdown only), and pages link each other by `[[slug]]` instead of never naming another file. Knowledge is still plain Markdown with no index; see [Knowledge Is a Wiki of Pages Compiled From Kept Sources](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md).
+
 ## Context
 
 A developer who runs more than one coding agent over the same work writes the
