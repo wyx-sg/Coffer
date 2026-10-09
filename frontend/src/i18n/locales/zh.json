@@ -787,6 +787,7 @@
       "resource_scope_updated": "更新了 {{resource}} 的生效范围",
       "resource_updated": "重新配置了 {{resource}}",
       "retention_updated": "更新了数据保留策略",
+      "call_content_recording_updated": "更改了是否记录工具调用内容",
       "cli_tool_added": "添加了命令行工具 {{command}}",
       "cli_tool_edited": "编辑了命令行工具 {{command}}",
       "cli_tool_removed": "移除了命令行工具 {{command}}",
@@ -1001,7 +1002,7 @@
         "denied": "对 {{server}} 的调用被拒绝",
         "unreachable": "无法连接 {{server}}"
       },
-      "callNote": "Coffer 只记录谁在何时调用了哪个工具、结果如何。参数和返回内容直接透传，从不存储。",
+      "callNote": "密钥的值在存储前就会被遮盖。每一部分最多保留前 16 KB，随工具调用历史一起按保留期删除。",
       "level": "级别",
       "logger": "记录器",
       "around": "同一时间前后",
@@ -1019,7 +1020,18 @@
       "whenToday": "今天 {{time}}",
       "whenYesterday": "昨天 {{time}}",
       "whenOn": "{{date}} {{time}}",
-      "environment": "环境"
+      "environment": "环境",
+      "content": {
+        "arguments": "参数",
+        "result": "返回结果",
+        "error": "错误",
+        "request": "请求",
+        "response": "响应",
+        "copy": "复制{{part}}",
+        "cut": "已截断到 16 KB，原始大小 {{size}} KB。",
+        "notRecorded": "这次调用没有记录内容。",
+        "setting": "记录工具调用内容"
+      }
     },
     "daemon": {
       "noMessage": "（没有消息的日志记录）"
@@ -1487,7 +1499,12 @@
       },
       "history": {
         "title": "历史记录",
-        "description": "发生过的事情的记录。旧记录按下面的期限删除。"
+        "description": "发生过的事情的记录。旧记录按下面的期限删除。",
+        "callContent": {
+          "label": "记录工具调用内容",
+          "description": "保存每次调用的参数和返回结果，密钥的值会被遮盖。关闭后只记录谁在何时调用了什么、结果如何。",
+          "notSaved": "未保存"
+        }
       },
       "cache": {
         "title": "可重建的缓存",
@@ -1817,6 +1834,7 @@
     "CUSTOM_TOOL_ENVIRONMENT_NOT_FOUND": "这个分组没有这个名字的环境。",
     "CUSTOM_TOOL_ENVIRONMENT_REQUIRED": "请选择一个环境：这个分组开启了不止一个环境。",
     "CUSTOM_TOOL_ENVIRONMENT_UNKNOWN": "这个环境没有在该分组中登记。",
+    "INVOCATION_NOT_FOUND": "日志里没有这次工具调用，可能已按保留期清理。",
     "CUSTOM_TOOL_LAST_ENVIRONMENT": "分组至少需要一个环境，最后一个不能删除。",
     "DESKTOP_REQUEST_NOT_FOUND": "这个发给 Coffer 应用的请求已过期或已处理。"
   },

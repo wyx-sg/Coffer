@@ -53,6 +53,7 @@ give the status each code is actually sent with.
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `RESOURCE_NOT_FOUND` | 404 | Nothing answers to the uid or name you gave. | Check the name on the kind's page; names are unique only within a kind. |
+| `INVOCATION_NOT_FOUND` | 404 | No tool call in the log has that id — it never existed, or retention removed it. | Take the id from `coffer log mcp` or the Activity page. |
 | `RESOURCE_ALREADY_EXISTS` | 409 | A resource of that kind already has that name. | Pick another name, or edit the existing resource. |
 | `UNKNOWN_KIND` | 400 | The kind is not one this daemon registers. | Use a registered kind, such as `mcp_server`, `skill` or `agent`. |
 | `GENERIC_CREATE_NOT_ALLOWED` | 409 | This kind cannot be created or updated through the generic `/resources` endpoints. | Use the kind's own endpoint or its page in the web UI. |

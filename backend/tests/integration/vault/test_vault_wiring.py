@@ -94,9 +94,55 @@ async def test_a_hand_edit_is_committed_as_disk_and_audited_as_human() -> None:
             (
                 "vault_file_edited",
                 HUMAN,
-                {"path": "knowledge/notes/a.md", "version": result.version},
+                {"path": "knowledge/notes/a.md", "version": result.version, "change": "added"},
             )
         ]
+    finally:
+        await scanning.stop()
+
+
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="a rename and a knowledge edit say what changed"
+)
+async def test_a_hand_edit_of_a_knowledge_document_is_audited_with_its_diff() -> None:
+    path = vault_root() / "knowledge" / "notes" / "d.md"
+    path.parent.mkdir(parents=True)
+    path.write_text("one\ntwo\nthree\n")
+    audit = _Audit()
+    scanning = await _start(audit)  # the boot scan commits the first version
+    try:
+        await scanning.drain()
+        audit.events.clear()
+        path.write_text("one\n2\nthree\n")
+        result = await _settle(scanning)
+        assert result is not None
+        ((event, _, details),) = audit.events
+        assert event == "vault_file_edited"
+        assert details["change"] == "modified"
+        assert "-two\n+2\n" in details["diff"]
+        assert details["diff"].startswith("--- a/knowledge/notes/d.md\n")
+        assert "diff_truncated" not in details
+    finally:
+        await scanning.stop()
+
+
+async def test_a_hand_edit_outside_knowledge_and_skills_is_never_diffed() -> None:
+    """Only knowledge and skill text is diffed: any other file (a resource's
+    config may hold an MCP server's env) is named with its change, never its
+    content."""
+    path = vault_root() / "notes.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("TOKEN=one\n")
+    audit = _Audit()
+    scanning = await _start(audit)
+    try:
+        await scanning.drain()
+        audit.events.clear()
+        path.write_text("TOKEN=two\n")
+        assert await _settle(scanning) is not None
+        (details,) = [e[2] for e in audit.events]
+        assert details["change"] == "modified"
+        assert "diff" not in details
     finally:
         await scanning.stop()
 

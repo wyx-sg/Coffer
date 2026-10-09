@@ -96,6 +96,46 @@ class InvocationOut(BaseModel):
     handoff: HandoffOut | None = None
 
 
+class CapturedPartOut(BaseModel):
+    """One recorded part of a call: its JSON (or the first 16 KB of it), redacted."""
+
+    text: str
+    #: Cut at 16 KB; ``text`` is then a prefix and may not parse.
+    truncated: bool
+    #: The part's size, in UTF-8 bytes, before any cut.
+    bytes: int
+
+
+class InvocationContentOut(BaseModel):
+    """What a call carried (spec mcp-gateway "Record invocations with redacted,
+    bounded content"). A part the call did not have is null."""
+
+    arguments: CapturedPartOut | None = None
+    result: CapturedPartOut | None = None
+    error: CapturedPartOut | None = None
+    #: A custom tool's request (method, url, headers, body) and response
+    #: (status, headers, body); null for any other call.
+    request: CapturedPartOut | None = None
+    response: CapturedPartOut | None = None
+
+
+class InvocationDetailOut(InvocationOut):
+    """One call, with its content; ``content`` is null for a call recorded
+    while recording was off."""
+
+    content: InvocationContentOut | None
+
+
+class CallContentSettingOut(BaseModel):
+    """Whether calls record their arguments and results on this machine."""
+
+    enabled: bool
+
+
+class CallContentSettingIn(BaseModel):
+    enabled: bool
+
+
 class InvocationListOut(BaseModel):
     """One page of the invocation log, newest first."""
 

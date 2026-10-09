@@ -37,6 +37,9 @@ coffer settings [OPTIONS] COMMAND [ARGS]...
 | [`settings retention set`](#settings-retention-set) | Set how long a log is kept. |
 | [`settings retention preview`](#settings-retention-preview) | What a shorter period would delete. |
 | [`settings retention prune`](#settings-retention-prune) | Prune every log to its period now. |
+| [`settings call-content`](#settings-call-content) | Whether tool calls record their arguments and results. |
+| [`settings call-content show`](#settings-call-content-show) | Whether tool calls record their arguments and results. |
+| [`settings call-content set`](#settings-call-content-set) | Switch recording a call's content. |
 | [`settings storage`](#settings-storage) | What Coffer stores, and clearing its caches. |
 | [`settings storage show`](#settings-storage-show) | What Coffer stores and how much. |
 | [`settings storage clear-cache`](#settings-storage-clear-cache) | Delete caches Coffer can rebuild. |
@@ -334,6 +337,52 @@ Prune every log to its period now.
 
 ```sh
 coffer settings retention prune [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## settings call-content
+
+Whether tool calls record their arguments and results.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings call-content [OPTIONS] COMMAND [ARGS]...
+```
+
+子命令：`show`, `set`。
+
+## settings call-content show
+
+Whether tool calls record their arguments and results.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings call-content show [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## settings call-content set
+
+Switch recording a call's content. Body: enabled.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer settings call-content set [OPTIONS]
 ```
 
 <p class="cli-label">参数与选项</p>

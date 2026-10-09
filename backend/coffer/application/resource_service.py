@@ -289,10 +289,7 @@ class ResourceService:
             AuditEventType.RESOURCE_UPDATED.value,
             resource=updated,
             actor=actor,
-            details={
-                "before": resource_kind_ops.audit_safe_config(kind_def, before.config),
-                "after": resource_kind_ops.audit_safe_config(kind_def, validated),
-            },
+            details=resource_kind_ops.audit_config_change(kind_def, before.config, validated),
         )
         await settle_bindings(self._bindings, updated, actor)
         return updated
@@ -370,7 +367,7 @@ class ResourceService:
                 await result
         with acting_as(actor):
             await self._repo.delete(uid)
-        await release_orphaned_secrets(self, kind_def, snapshot.config, actor, uid)
+        released = await release_orphaned_secrets(self, kind_def, snapshot.config, actor, uid)
         await self._audit.record(
             AuditEventType.RESOURCE_DELETED.value,
             resource=snapshot,
@@ -381,6 +378,8 @@ class ResourceService:
                     "name": snapshot.name,
                     "config": resource_kind_ops.audit_safe_config(kind_def, snapshot.config),
                     "enabled": snapshot.enabled,
-                }
+                },
+                # Secret refs (never values) released because nothing else cites them.
+                "released_secrets": released,
             },
         )

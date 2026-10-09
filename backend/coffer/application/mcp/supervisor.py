@@ -136,6 +136,8 @@ class SubprocessSupervisor:
         self._entries: dict[str, _UpstreamEntry] = {}
         self._clock = clock or (lambda: datetime.now(tz=UTC))
         self._disposed = False
+        # Per server, the secrets its connection was given (``mask_values``).
+        self._injected: dict[str, tuple[str, ...]] = {}
         # The composition root passes ONE ledger to every session's supervisor
         # so a dead server is backed off once for the daemon, not once per
         # session. Alone (tests, scripts) a supervisor keeps its own.
@@ -172,12 +174,9 @@ class SubprocessSupervisor:
     def _enforce_cooldown(self, entry: _UpstreamEntry, server_name: str) -> None:
         """Raise while the shared failure ledger says this server is backing off.
 
-        Called both BEFORE acquiring spawn_lock (cheap fast-fail for the many
-        waiters during a backoff) and AGAIN after acquiring it: a concurrent
-        caller may have exhausted the retry ladder while we were queued on the
-        lock. Without the second check every waiter re-ran the entire ladder.
-        The ledger is shared by every session's supervisor, so a second session
-        asking for the same dead server fails here too instead of trying again.
+        Called BEFORE acquiring spawn_lock (fast-fail for waiters) and AGAIN
+        after: a concurrent caller may have exhausted the ladder meanwhile. The
+        ledger is shared by every session's supervisor.
         """
         rec = self._failures.backing_off(server_name)
         if rec is None:
@@ -345,6 +344,7 @@ class SubprocessSupervisor:
             transport.secret_refs,
             mcp_destination(resource.uid, resource.name, config),
         )
+        self._injected[resource.name] = tuple(overlay.values())
         return self._upstream_factory(
             transport,
             overlay,
@@ -352,6 +352,10 @@ class SubprocessSupervisor:
             config.request_timeout_seconds,
             resource,
         )
+
+    def mask_values(self, server_name: str) -> tuple[str, ...]:
+        """What a call's recorded content is masked with (``call_content``)."""
+        return self._injected.get(server_name, ())
 
     async def evict(self, server_name: str) -> None:
         """Drop this server's connection — after a crash, a delete or an edit.
@@ -377,13 +381,10 @@ class SubprocessSupervisor:
     async def dispose(self) -> None:
         """Close all connections owned by this supervisor. Called on session end.
 
-        Closes are intentionally SEQUENTIAL. The stdio/HTTP
-        upstreams wrap an mcp ClientSession inside an anyio task group; that
-        group's cancel scope is bound to the task that opened it, and aclosing
-        it from a child task (as ``asyncio.gather`` would require) raises
-        anyio's "cancel scope in a different task" error. Each close() is
-        already bounded by its own ~5s teardown timeout, so a hung upstream
-        cannot stall shutdown unboundedly even serially.
+        Closes are SEQUENTIAL: an upstream's anyio cancel scope is bound to the
+        task that opened it, so closing from a child task (``asyncio.gather``)
+        raises "cancel scope in a different task". Each close() is bounded by
+        its own ~5s teardown timeout.
 
         A spawn still in flight sees its entry's generation move and closes
         what it built, and nothing spawns here afterwards.

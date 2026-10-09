@@ -1106,6 +1106,49 @@ paths:
       summary: List All Invocations
       tags:
       - mcp
+  /api/v1/mcp/invocations/{invocation_id}:
+    get:
+      description: |-
+        One call with its redacted content (spec mcp-gateway "Record invocations
+        with redacted, bounded content"); lists never carry it.
+      operationId: get_invocation_api_v1_mcp_invocations__invocation_id__get
+      parameters:
+      - in: path
+        name: invocation_id
+        required: true
+        schema:
+          title: Invocation Id
+          type: integer
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvocationDetailOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Invocation
+      tags:
+      - mcp
   /api/v1/resources/mcp_server/test-config:
     post:
       description: Test a config without registering it; persists nothing.
@@ -1912,6 +1955,89 @@ paths:
       summary: Set Tool Exposure
       tags:
       - mcp
+  /api/v1/settings/call-content:
+    get:
+      description: Whether calls record their arguments and results on this machine.
+      operationId: get_call_content_api_v1_settings_call_content_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallContentSettingOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Call Content
+      tags:
+      - settings
+    put:
+      description: Switch recording; the file is written before the answer, and the change audited.
+      operationId: put_call_content_api_v1_settings_call_content_put
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CallContentSettingIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallContentSettingOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Put Call Content
+      tags:
+      - settings
 components:
   schemas:
     AgentCallCountOut:
@@ -1961,6 +2087,25 @@ components:
       - description
       - input_schema
       title: BuiltinToolOut
+      type: object
+    CallContentSettingIn:
+      properties:
+        enabled:
+          title: Enabled
+          type: boolean
+      required:
+      - enabled
+      title: CallContentSettingIn
+      type: object
+    CallContentSettingOut:
+      description: Whether calls record their arguments and results on this machine.
+      properties:
+        enabled:
+          title: Enabled
+          type: boolean
+      required:
+      - enabled
+      title: CallContentSettingOut
       type: object
     CapabilityKeyBody:
       description: |-
@@ -2039,6 +2184,24 @@ components:
       - description
       - error
       title: CapabilityPreviewOut
+      type: object
+    CapturedPartOut:
+      description: 'One recorded part of a call: its JSON (or the first 16 KB of it), redacted.'
+      properties:
+        bytes:
+          title: Bytes
+          type: integer
+        text:
+          title: Text
+          type: string
+        truncated:
+          title: Truncated
+          type: boolean
+      required:
+      - text
+      - truncated
+      - bytes
+      title: CapturedPartOut
       type: object
     CustomToolEnvironmentIn:
       description: |-
@@ -3114,6 +3277,131 @@ components:
       required:
       - prompt
       title: HandoffOut
+      type: object
+    InvocationContentOut:
+      description: |-
+        What a call carried (spec mcp-gateway "Record invocations with redacted,
+        bounded content"). A part the call did not have is null.
+      properties:
+        arguments:
+          anyOf:
+          - $ref: '#/components/schemas/CapturedPartOut'
+          - type: 'null'
+        error:
+          anyOf:
+          - $ref: '#/components/schemas/CapturedPartOut'
+          - type: 'null'
+        request:
+          anyOf:
+          - $ref: '#/components/schemas/CapturedPartOut'
+          - type: 'null'
+        response:
+          anyOf:
+          - $ref: '#/components/schemas/CapturedPartOut'
+          - type: 'null'
+        result:
+          anyOf:
+          - $ref: '#/components/schemas/CapturedPartOut'
+          - type: 'null'
+      required:
+      - arguments
+      - result
+      - error
+      - request
+      - response
+      title: InvocationContentOut
+      type: object
+    InvocationDetailOut:
+      description: |-
+        One call, with its content; ``content`` is null for a call recorded
+        while recording was off.
+      properties:
+        agent_uid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent Uid
+        capability_key:
+          title: Capability Key
+          type: string
+        capability_type:
+          enum:
+          - tool
+          - resource
+          - prompt
+          title: Capability Type
+          type: string
+        content:
+          anyOf:
+          - $ref: '#/components/schemas/InvocationContentOut'
+          - type: 'null'
+        duration_ms:
+          title: Duration Ms
+          type: integer
+        environment:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Environment
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+        handoff:
+          anyOf:
+          - $ref: '#/components/schemas/HandoffOut'
+          - type: 'null'
+        id:
+          title: Id
+          type: integer
+        resource_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resource Name
+        resource_uid:
+          title: Resource Uid
+          type: string
+        session_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Session Id
+        status:
+          enum:
+          - ok
+          - error
+          - timeout
+          - denied
+          title: Status
+          type: string
+        timestamp:
+          format: date-time
+          title: Timestamp
+          type: string
+        trace_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trace Id
+      required:
+      - id
+      - timestamp
+      - resource_uid
+      - resource_name
+      - capability_type
+      - capability_key
+      - duration_ms
+      - status
+      - error_message
+      - session_id
+      - trace_id
+      - agent_uid
+      - environment
+      - handoff
+      - content
+      title: InvocationDetailOut
       type: object
     InvocationListOut:
       description: One page of the invocation log, newest first.

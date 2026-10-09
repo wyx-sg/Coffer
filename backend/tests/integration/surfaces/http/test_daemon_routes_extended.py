@@ -267,7 +267,12 @@ async def test_the_change_is_audited_with_what_became_true(tmp_path, monkeypatch
         # response and the audit line say so.
         assert r.json()["login_service_installed"] is False
 
-    assert recorded == [("daemon_residency_updated", {"login_service_installed": False})]
+    assert recorded == [
+        (
+            "daemon_residency_updated",
+            {"login_service_installed": False, "was_installed": False, "requested": True},
+        )
+    ]
 
 
 @pytest.mark.asyncio
@@ -356,7 +361,11 @@ async def test_the_settings_page_changes_residency_in_one_request(tmp_path, monk
 
         entries = await audit.query(event_type="daemon_residency_updated")
         assert len(entries) == 1
-        assert entries[0].details == {"login_service_installed": True}
+        assert entries[0].details == {
+            "login_service_installed": True,
+            "was_installed": False,
+            "requested": True,
+        }
     finally:
         await engine.dispose()
         set_active_token(None)

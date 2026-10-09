@@ -122,7 +122,7 @@ A custom tool is listed to agents the way an MCP server's tool is (see [Many too
 
 ## How a call is made
 
-When an agent calls a tool, the gateway picks the environment the call names, checks the arguments, renders the request, sends it to that environment's base URL with its timeout (the group's 30 seconds unless you change it, up to 300), **does not follow redirects** — a redirect is returned to the agent with its location, so the secret never travels to a host you did not configure — and reads at most 1 MiB of the response. The agent receives `HTTP <status> <reason>` followed by the body; a status of 400 or more is returned as a tool error. Every call is recorded in Activity with its tool, environment, time, duration and outcome, never its arguments, headers or response.
+When an agent calls a tool, the gateway picks the environment the call names, checks the arguments, renders the request, sends it to that environment's base URL with its timeout (the group's 30 seconds unless you change it, up to 300), **does not follow redirects** — a redirect is returned to the agent with its location, so the secret never travels to a host you did not configure — and reads at most 1 MiB of the response. The agent receives `HTTP <status> <reason>` followed by the body; a status of 400 or more is returned as a tool error. Every call is recorded in Activity with its tool, environment, time, duration and outcome, and with the request it sent and the response it got, the secret and every credential header masked and each part cut at 16 KB (see [What a call records](/guides/activity#what-a-call-records)).
 
 ### Arguments are checked before any request
 

@@ -63,6 +63,7 @@ GROUP_HELP: dict[str, str] = {
     "resource reach": "Which agents a resource reaches.",
     "secret local-access": "Hand a standalone secret to programs `coffer run` starts.",
     "settings approvals": "Whether a secret going somewhere new waits for approval.",
+    "settings call-content": "Whether tool calls record their arguments and results.",
     "settings engine": "Coffer's own model: transcription and upkeep passes.",
     "settings feature": "Switch one experimental feature on this machine.",
     "settings retention": "How long each log is kept.",

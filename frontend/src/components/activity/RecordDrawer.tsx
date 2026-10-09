@@ -8,7 +8,8 @@
 // records written around the same time and the raw JSON, open. The footer
 // holds the next step — "Open X" secondary, "Copy details" ghost — and the
 // drawer steps to the previous or next record without closing. An MCP call
-// shows its metadata only: Coffer never stores a call's arguments or results.
+// also shows what it carried — its arguments and result, redacted and cut at
+// 16 KB — read when the drawer opens (CallContent).
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ChevronDown, ChevronRight } from "lucide-react";

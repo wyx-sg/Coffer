@@ -27,7 +27,7 @@ The gateway:
 - prefixes every upstream tool and prompt with its server name — `github__search_issues`, `filesystem__read_file` — and every resource URI with `coffer://<server>/`, so two servers exposing a tool called `search` never collide;
 - routes each call back to the server it came from under the tool's original name, and returns the upstream's result unchanged;
 - forwards tools, resources and prompts, including list-changed notifications;
-- records each call's target, time, duration and outcome — never its arguments or results.
+- records each call's target, time, duration and outcome, with its arguments and result after secrets are masked.
 
 ## Prerequisites
 
@@ -244,7 +244,7 @@ A malformed value falls back to the default, and any failure of the usage query 
 
 ## The invocation log
 
-Every tool call, resource read and prompt fetch is recorded with its time, server, capability, duration and status — `ok`, `error`, `timeout` or `denied`. A tool that returns a result flagged `isError` is recorded as `error`. Arguments and results are never stored. Entries are kept for 30 days by default (see [Activity and audit](/guides/activity) to change retention).
+Every tool call, resource read and prompt fetch is recorded with its time, server, capability, duration and status — `ok`, `error`, `timeout` or `denied`. A tool that returns a result flagged `isError` is recorded as `error`. Its arguments and result are kept too, with secret values masked and each part cut at 16 KB ([what a call records](/guides/activity#what-a-call-records)). Entries are kept for 30 days by default (see [Activity and audit](/guides/activity) to change retention).
 
 **Web UI:** the **Last 24 hours** block of its Overview (calls and errors, per calling agent), its **Server log** drawer (stdio servers), or the **Activity** page for every server (its search matches a server's name, so **View in Activity** opens it already searching).
 

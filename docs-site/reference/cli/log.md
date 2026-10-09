@@ -20,6 +20,7 @@ This page matches what `coffer log --help` prints. Add `--help` to any command b
 | --- | --- |
 | [`log audit`](#log-audit) | Read the audit log, newest first, one page at a time. |
 | [`log mcp`](#log-mcp) | Read the MCP invocation log, newest first. |
+| [`log call`](#log-call) | Read one tool call with its arguments and result, secrets masked. |
 | [`log daemon`](#log-daemon) | Read the tail of the daemon log, newest first, normalised as the Activity page shows it. |
 
 ## log audit
@@ -72,6 +73,23 @@ coffer log mcp [OPTIONS]
 | `--q` <span class="cli-chip">option</span> | text |  | Only the records holding this text, in any case (the page's search box): tool, error, session, outcome and server name |
 | `--agent-uid` <span class="cli-chip">option</span> | text |  | Only the calls made by this agent's sessions (its uid) |
 | `--uid` <span class="cli-chip">option</span> | text |  | Only the calls written under this server uid — the reserved coffer, or a server since deleted, which --server cannot name |
+| `--json` <span class="cli-chip">option</span> | flag |  | JSON output for scripts |
+
+## log call
+
+Read one tool call with its arguments and result, secrets masked.
+
+<p class="cli-label">Synopsis</p>
+
+```sh
+coffer log call [OPTIONS] INVOCATION_ID
+```
+
+<p class="cli-label">Arguments and options</p>
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `INVOCATION_ID` <span class="cli-chip">argument</span> | integer | required | The call's id, as `coffer log mcp` prints it |
 | `--json` <span class="cli-chip">option</span> | flag |  | JSON output for scripts |
 
 ## log daemon

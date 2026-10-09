@@ -82,7 +82,8 @@ async def release_orphaned_secrets(
             await service._audit.record(
                 AuditEventType.SECRET_DELETED.value,
                 actor=actor,
-                details={"ref": cred_ref},
+                # The ref only, never the value; and why it went.
+                details={"ref": cred_ref, "reason": "released_with_resource", "resource_uid": uid},
             )
             released.append(cred_ref)
         except Exception:

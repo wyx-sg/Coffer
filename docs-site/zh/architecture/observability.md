@@ -25,7 +25,7 @@ Coffer 是一个供其他程序调用的后台进程。出问题时，发现问�
 | 每个后台任务都在同一个监督器下运行，由它命名、记录崩溃并计数 | 抛异常的任务在它死掉的那一刻就被报告，而不是永远无声；崩溃的渠道适配器单独重启。 |
 | 状态接口上有一个事件循环延迟探针 | 一个阻塞循环的同步调用会让所有东西同时卡住；延迟指标让这件事以它本来的面目显现出来。 |
 | 一个独立的、结构化的审计日志，存在 SQLite 里 | “改了什么、谁改的”需要按资源、类型和事件类型过滤，而且要能挺过改名。 |
-| 一个记录经代理的 MCP 调用的调用日志，不含载荷 | 每次调用的延迟和结果有用；参数和结果可能带有密钥，不记录。 |
+| 一个记录经代理的 MCP 调用的调用日志，载荷先脱敏、有上限 | 只有延迟和结果说不清一次调用做了什么。参数和结果在遮盖密钥后保存，截断到 16 KB，每台机器可以关闭。 |
 | 所有类似日志的表和日志文件共用一套保留机制 | 增长有界，不必为每个功能单独写一个清理任务。 |
 | 记录通过 CLI（`coffer log`）和日志文件（`coffer path logs`）读取，而不是通过 MCP 工具 | 故障发生时真正的读者是一个带 shell 和自己文件工具的智能体；查找记录不需要在每个会话的工具列表里再加一个工具。 |
 | 评测采集是一个独立的、需要手动开启的输出 | 整理评测用例需要请求文本，而共享数据库刻意从不存储它。 |
@@ -163,7 +163,9 @@ sequenceDiagram
 
 操作者来自 `X-Coffer-Actor` 请求头，必须匹配 `^[a-z][a-z0-9_-]{0,31}$`；没有这个头表示 `api`，其他值一律以 `400` 拒绝。
 
-每个审计事件也会作为一行 `info` 写进 `daemon.log`，带上事件类型、资源名、类型、uid 和操作者——但不带 `details`，这样决定哪些字段是密钥的地方始终只有脱敏器一处。
+每个审计事件也会作为一行 `info` 写进 `daemon.log`，带上事件类型、资源名、类型、uid、操作者和它的 `details`，即这一行存的同一份已脱敏内容，截断到 2 KB（此时带 `details_truncated: true`）。决定哪些字段是密钥的地方始终只有脱敏器一处。工具调用内容从不进入 `daemon.log`。
+
+`details` 说明改了什么，而不只是改了：改名带新旧标题，开关带 `from` 和 `to`，范围变更带前后的智能体，删除带它释放的密钥。手动编辑 `knowledge/` 或 `skills/` 下的文本文件，或恢复这样的文件，会带上这次编辑的 unified diff，截断到 8 KB（此时带 `diff_truncated` 和完整的 `diff_bytes`）。
 
 ### 事件词汇表 {#event-vocabulary}
 
@@ -210,6 +212,7 @@ sequenceDiagram
 | `duration_ms` | 上游请求的实际耗时 |
 | `status` | `ok`、`error`、`timeout` 或 `denied` |
 | `error_message` | 由 Coffer 撰写的摘要，从不是上游的结果文本 |
+| `content` | 调用的参数、结果或错误，以及自定义工具的请求和响应，已脱敏、已截断（[见下文](#call-content)）；记录关闭时为空 |
 | `session_id` | 调用来自的 `/mcp` 会话 |
 | `agent_uid` | 发起调用的会话所属的智能体，即它的 shim 在 `initialize` 时报告的值；会话没有报告时为空（手工配置的 shim、裸的 MCP 客户端） |
 | `trace_id` | `/mcp` 请求的 trace id；这次调用引起的审计行和日志行带的是同一个 |
@@ -217,7 +220,7 @@ sequenceDiagram
 `status` 的含义：
 
 - `ok`——上游作答了，结果不是错误。
-- `error`——上游起不来（启动失败，或服务器在冷却中）、请求抛了异常（传输失败，或上游返回 JSON-RPC 错误），或者上游返回了一个格式正确但带 `isError: true` 的工具结果。上游作答了的情况下，这一行存的是一个固定标记而不是它的文本：`isError` 结果为 `upstream tool returned an error result (isError)`，JSON-RPC 错误为 `upstream answered with a JSON-RPC error (code <n>)`。错误文本由上游控制，可能回显参数或密钥。服务器状态路由也靠这些标记区分是工具失败（服务器正常）还是服务器失败。内置工具抛异常同样是 `error`，记录异常的类名或 Coffer 自己的消息，截断到 200 个字符。
+- `error`——上游起不来（启动失败，或服务器在冷却中）、请求抛了异常（传输失败，或上游返回 JSON-RPC 错误），或者上游返回了一个格式正确但带 `isError: true` 的工具结果。上游作答了的情况下，这一行存的是一个固定标记而不是它的文本：`isError` 结果为 `upstream tool returned an error result (isError)`，JSON-RPC 错误为 `upstream answered with a JSON-RPC error (code <n>)`。错误文本由上游控制，可能回显参数或密钥，所以它进入脱敏后的 `content`，而不是这一列。服务器状态路由也靠这些标记区分是工具失败（服务器正常）还是服务器失败。内置工具抛异常同样是 `error`，记录异常的类名或 Coffer 自己的消息，截断到 200 个字符。
 - `timeout`——上游没有在超时内作答。
 - `denied`——调用在到达上游之前就被拒绝了：服务器已禁用、调用方智能体不在服务器的[生效范围](/zh/architecture/resource-framework#reach)内，或者用户禁用了那个工具。耗时为 `0`。
 
@@ -228,6 +231,19 @@ sequenceDiagram
 写入是缓冲的：一个内存队列（最多 5,000 行）由一个写入任务每 50 毫秒或每 50 行刷一次，以先到者为准，所以一个大量调用工具的会话不必每次调用都付出一次 SQLite 提交的代价。队列满时，调用方会等待，而不是丢弃记录。读取日志前会先等待（最多两秒），直到在它之前排队的每一行都已提交，所以刚调用完就去看日志，也能看到这次调用。
 
 你可以在「活动」页的「工具调用」标签页、在服务器详情页按服务器、用 `coffer log mcp [--server <name>]`，或通过 `GET /api/v1/mcp/invocations` 和 `GET /api/v1/resources/mcp_server/{uid}/invocations` 读取它。两个路由都按游标分页、最新的在前，接受 `agent_uid` 以只显示某个智能体的调用、`trace_id` 以只显示某个请求的调用，并在每行返回它的 `id`。它们的回答和审计日志一样带有 `total`：所有分页中匹配过滤条件的行数，这样过滤后的视图不用翻到最后一页就能说出有多大。
+
+### 调用内容 {#call-content}
+
+`content` 是一个 JSON 对象，最多有五部分：`arguments`、`result`、`error`，以及自定义工具的 `request`（方法、URL、请求头、请求体）和 `response`（状态码、响应头、响应体）。每一部分是 `{text, truncated, bytes}`：存下的文本、是否被截断、原始大小。被拒绝的调用只保存参数。
+
+脱敏在两处进行，都在写入这一行之前：
+
+1. **在网关里，密钥已知的地方。** supervisor 记住它注入到每个上游环境变量或请求头里的密钥值，自定义工具遮盖它给这一个请求加上的凭据。这些值无论出现在哪里都替换成 `••••••`，包括上游把它们回显回来的时候。凭据请求头（`Authorization`、`Cookie`、`Set-Cookie`、`X-Api-Key`，以及名字里带 token、secret、key 或 auth 的请求头）和名字或最后一个词是密钥词的 JSON 字段（`password`、`token`、`api_key`、`client_secret`……）整个遮盖。然后每一部分在 16 KB 处截断。
+2. **在写入器里，作为兜底。** 一批记录插入之前，写入器用 Coffer 查找明文密钥的那套内置 gitleaks 规则（`ghp_…`、`sk-…`、AWS 密钥等）检查每一部分，遮盖找到的内容。
+
+刻意不去查找保险库里的其他密钥：匹配它们意味着每次调用都要解密每一个密钥，绕过每个密钥对每个目的地的审批。
+
+记录默认开启，按机器由 `~/.coffer/daemon-config.json` 里的 `record_call_content` 切换，可以通过**设置 › 数据 › 历史记录**、`coffer settings call-content` 或 `GET`/`PUT /api/v1/settings/call-content` 修改；每次切换都以 `call_content_recording_updated` 审计。关闭时写入的行不带 `content`。列表路由不返回 `content`；`GET /api/v1/mcp/invocations/{id}` 和 `coffer log call <id>` 读取带内容的单次调用（id 不存在或已被清理时为 `INVOCATION_NOT_FOUND`）。内容从不进入 `daemon.log`，[模型代理](/zh/architecture/model-proxy)仍然不记录任何提示词或补全。
 
 ## 保留 {#retention}
 
@@ -325,7 +341,7 @@ flowchart LR
 
 ## 权衡与备选方案 {#trade-offs-and-alternatives}
 
-**在调用日志里记录载荷。** 记录参数和结果会让调试单次调用更容易。Coffer 不这么做，因为两者经常带有密钥、个人数据和文件内容，而这个日志要保留一个月，任何智能体都能通过 `coffer log mcp` 读到。带内工具错误用固定标记，遵循的也是这条规则。
+**在调用日志里记录载荷。** Coffer 过去不记录，因为参数和结果经常带有密钥、个人数据和文件内容，而这个日志要保留一个月，任何智能体都能通过 `coffer log` 读到。结果是读的人看不出一次调用做了什么。现在 Coffer 记录它们，按[调用内容](#call-content)所述遮盖和截断，不想记录的人可以按机器关闭；[决策记录](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/record-tool-call-content-redacted-and-bounded.md)权衡了各个方案。遮盖保险库里的每一个密钥、而不只是这次调用带着的那些，这个方案被否决了：它要在每次调用时解密每一个密钥，绕过每个密钥按目的地的审批。
 
 **每个写入者一个日志文件。** 给桌面壳或脱离终端的守护进程的 stdio 各自一个文件，能让 `daemon.log` 保持纯 JSON。Coffer 选择只保留一个文件加一个宽容的读取器，因为所有“去看日志”的提示都指向同一个路径，多出来的文件就是一个没人被告知要去看的地方。上游 MCP 服务器是例外，因为它们的量会把 Coffer 自己的记录挤掉。
 

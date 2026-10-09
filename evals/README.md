@@ -106,10 +106,12 @@ asked and the ranked tool names that came back:
 {"kind": "tool_search", "query": "open the budget sheet", "results": ["sheets__open", "sheets__read"]}
 ```
 
-Only this shape is recorded — never tool arguments or result content (that stays
-out of any Coffer store; [mcp-gateway](../openspec/specs/mcp-gateway/spec.md)
-"Record invocations without content" and [secrets](../openspec/specs/secret/spec.md)
-"Hold plaintext only in memory at the moment of use"). Capture writes
+Only this shape is recorded — never tool arguments or result content (the
+invocation log keeps those, redacted and bounded, under
+[mcp-gateway](../openspec/specs/mcp-gateway/spec.md) "Record invocations with
+redacted, bounded content"; capture never does, and
+[secrets](../openspec/specs/secret/spec.md) "Hold plaintext only in memory at
+the moment of use" holds for both). Capture writes
 nothing unless the env var is set, so it is safe to leave wired in.
 
 **Curate captured traces into golden cases:**

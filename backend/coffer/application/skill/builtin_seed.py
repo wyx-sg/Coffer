@@ -149,7 +149,14 @@ class BuiltinSkillSeed:
             event.value,
             resource=seeded,
             actor=SEED_ACTOR,
-            details={"version_hash": validation.skill_md_sha256, "builtin": True},
+            details={
+                "version_hash": validation.skill_md_sha256,
+                "builtin": True,
+                # The version this start replaced (``None`` on the first seed),
+                # and why it ran: a new Coffer build ships new skill text.
+                "previous_version_hash": row.config.get("version_hash") if row else None,
+                "trigger": "startup_seed",
+            },
         )
         return True
 
