@@ -28,6 +28,8 @@ Coffer manages the channels it hosts. An agent's own official integration — Cl
 
 Registering stores the secret first and registers the channel with a reference to it.
 
+<Shot name="channels" alt="The Channels page." />
+
 ```text
 Channels → Add channel
   1 Platform:  SeaTalk | Telegram

@@ -1,15 +1,16 @@
 // e2e/docs/specs/shots.docs.spec.ts
 //
-// One scenario per docs image: open the page on the seeded daemon and write a
-// PNG for each language and theme into docs-site/public/shots/. The list below
+// One scenario per docs image: open the page on the seeded daemon and write an
+// image for each language and theme into docs-site/public/shots/. The list below
 // is the whole set; a page is added here only when a reader needs to find
-// something on screen.
-import { expect, test, type Page } from "@playwright/test";
+// something on screen. `manifest.json` beside the images records each one's
+// size, so a page reserves its space before the image loads.
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { DOCS_HOME } from "../env";
+import { DOCS_DAEMON_PORT, DOCS_HOME } from "../env";
 import { seedDemoWorkspace } from "../seed";
 
 const OUT = path.resolve(
@@ -26,11 +27,40 @@ interface Shot {
   route: string;
   /** What shows the page has settled with its data in. */
   ready: (page: Page) => Promise<void>;
+  /**
+   * `window` (default) is the whole app at 1440x900, for the home page. `panel`
+   * is the page area alone at 1040x680, which a guide's column shows at a size
+   * the text can still be read at.
+   */
+  frame?: "window" | "panel";
+  /** Do something on the page, such as opening a dialog; the dialog is the picture. */
+  open?: (page: Page) => Promise<Locator>;
 }
+
+const PANEL = { width: 1040, height: 680 };
+const WINDOW = { width: 1440, height: 900 };
 
 const heading = (re: RegExp) => async (page: Page) => {
   await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
   await expect(page.locator("main#main")).toContainText(re);
+};
+
+// The server's own tools are listed once the daemon has connected to it.
+const serverTested = async (page: Page) => {
+  await page.getByRole("button", { name: /^(Test|测试)$/ }).click();
+  await expect(page.locator("main#main")).toContainText(
+    "Open an issue in a repository.",
+    { timeout: 20_000 },
+  );
+};
+
+const skillOpen = async (page: Page) => {
+  await expect(
+    page.getByRole("heading", { level: 2, name: "gh-triage" }).first(),
+  ).toBeVisible();
+  await expect(page.locator("main#main")).toContainText(
+    "Sort new GitHub issues by area and urgency.",
+  );
 };
 
 export const SHOTS: Shot[] = [
@@ -43,28 +73,98 @@ export const SHOTS: Shot[] = [
   {
     name: "mcp-servers",
     route: "/mcp-servers/github",
-    // The server's own tools are listed once the daemon has connected to it.
-    ready: async (page) => {
-      await page.getByRole("button", { name: /^(Test|测试)$/ }).click();
-      await expect(page.locator("main#main")).toContainText(
-        "Open an issue in a repository.",
-        { timeout: 20_000 },
-      );
-    },
+    ready: serverTested,
   },
   {
     name: "skills",
     route: "/skills/gh-triage",
-    ready: async (page) => {
-      await expect(
-        page.getByRole("heading", { level: 2, name: "gh-triage" }).first(),
-      ).toBeVisible();
-      await expect(page.locator("main#main")).toContainText(
-        "Sort new GitHub issues by area and urgency.",
-      );
-    },
+    ready: skillOpen,
   },
   { name: "knowledge", route: "/knowledge", ready: heading(/engineering/) },
+
+  // Guide pictures: the page area, or the dialog a step opens.
+  {
+    name: "agents-list",
+    route: "/agents",
+    frame: "panel",
+    ready: heading(/Claude Code/),
+  },
+  {
+    name: "agent-page",
+    route: "/agents/claude_code",
+    frame: "panel",
+    ready: heading(/Claude Code/),
+  },
+  {
+    name: "connect-dialog",
+    route: "/agents",
+    ready: heading(/Codex/),
+    open: async (page) => {
+      await page.getByRole("button", { name: /^(Connect|连接)$/ }).click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toBeVisible();
+      return dialog;
+    },
+  },
+  {
+    name: "mcp-server",
+    route: "/mcp-servers/github",
+    frame: "panel",
+    ready: serverTested,
+  },
+  {
+    name: "add-server-dialog",
+    route: "/mcp-servers",
+    ready: heading(/github/),
+    open: async (page) => {
+      await page
+        .getByRole("button", { name: /^(Add server|添加服务器)$/ })
+        .click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toBeVisible();
+      return dialog;
+    },
+  },
+  {
+    name: "providers",
+    route: "/model-providers",
+    frame: "panel",
+    ready: heading(/./),
+  },
+  {
+    name: "add-provider-dialog",
+    route: "/model-providers",
+    ready: heading(/./),
+    open: async (page) => {
+      await page
+        .getByRole("button", { name: /^(Add provider|添加提供商)$/ })
+        .first()
+        .click();
+      const dialog = page.getByRole("dialog");
+      await expect(dialog).toBeVisible();
+      return dialog;
+    },
+  },
+  {
+    name: "skill",
+    route: "/skills/gh-triage",
+    frame: "panel",
+    ready: skillOpen,
+  },
+  {
+    name: "conversations",
+    route: "/conversations",
+    frame: "panel",
+    ready: heading(/./),
+  },
+  { name: "channels", route: "/channels", frame: "panel", ready: heading(/./) },
+  {
+    name: "knowledge-page",
+    route: "/knowledge",
+    frame: "panel",
+    ready: heading(/engineering/),
+  },
+  { name: "secrets", route: "/secrets", frame: "panel", ready: heading(/./) },
 ];
 
 const FREEZE_CSS = `*, *::before, *::after {
@@ -110,6 +210,84 @@ async function toWebp(page: Page, png: Buffer): Promise<Buffer> {
   return Buffer.from(base64, "base64");
 }
 
+/**
+ * The page area below the title strip. The strip is the window's, not the
+ * page's, so a picture of the page leaves it out.
+ */
+async function panelBox(page: Page) {
+  const box = await page.locator("main#main").boundingBox();
+  if (!box) throw new Error("main#main has no box");
+  const inset = await page.evaluate(() =>
+    parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue(
+        "--titlebar-inset",
+      ),
+    ),
+  );
+  // End the picture a little below the page's last content, so a short page
+  // is not followed by a blank half; elements that stretch to the window's
+  // bottom (a full-height pane) do not count.
+  const bottom = await page.evaluate(() => {
+    const main = document.querySelector("main#main")!;
+    const top = main.getBoundingClientRect().top;
+    const full = main.getBoundingClientRect().height * 0.9;
+    let last = 0;
+    for (const el of main.querySelectorAll("*")) {
+      const r = el.getBoundingClientRect();
+      if (r.height > 0 && r.width > 0 && r.height < full) {
+        last = Math.max(last, r.bottom - top);
+      }
+    }
+    return last;
+  });
+  const height = Math.min(
+    box.height - inset,
+    Math.max(bottom - inset + 32, 240),
+  );
+  return { x: box.x, y: box.y + inset, width: box.width, height };
+}
+
+/**
+ * The three lights macOS draws over the app's title strip. They belong to the
+ * system, not the page, so a browser capture has none; these sit where the
+ * strip reserves room for them (14px frames, 20px apart, from x 20, centred on
+ * y 19).
+ */
+async function addTrafficLights(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const colours = ["#ff5f57", "#febc2e", "#28c840"];
+    colours.forEach((colour, i) => {
+      const light = document.createElement("div");
+      light.setAttribute("aria-hidden", "true");
+      light.style.cssText = `position:fixed;z-index:99999;top:13px;left:${21 + i * 20}px;width:12px;height:12px;border-radius:50%;background:${colour};box-shadow:inset 0 0 0 0.5px rgba(0,0,0,.18)`;
+      document.body.appendChild(light);
+    });
+  });
+}
+
+/** Width and height from a PNG's header. */
+function pngSize(png: Buffer): [number, number] {
+  return [png.readUInt32BE(16), png.readUInt32BE(20)];
+}
+
+const sizes: Record<string, [number, number]> = {};
+
+test.afterAll(() => {
+  const file = path.join(OUT, "manifest.json");
+  let known: Record<string, [number, number]> = {};
+  try {
+    known = JSON.parse(fs.readFileSync(file, "utf-8"));
+  } catch {
+    /* no manifest yet */
+  }
+  // Merged, so a run of a few scenarios (`-g`) keeps the rest.
+  const merged = { ...known, ...sizes };
+  const sorted = Object.fromEntries(
+    Object.entries(merged).sort(([a], [b]) => a.localeCompare(b)),
+  );
+  fs.writeFileSync(file, JSON.stringify(sorted, null, 2) + "\n");
+});
+
 test.beforeAll(async () => {
   await seedDemoWorkspace();
 });
@@ -127,6 +305,35 @@ test.beforeEach(async ({ context }) => {
   await context.addInitScript((tok: string) => {
     (window as unknown as { __COFFER_TOKEN__?: string }).__COFFER_TOKEN__ = tok;
   }, daemonToken());
+  // The pictures show the desktop app, which is what the docs tell people to
+  // install: macOS keys (⌘K) and the window's own title strip with the traffic
+  // lights, which the system draws and a browser cannot. The app takes that
+  // from the Tauri host, so a stand-in answers the one thing it asks.
+  await context.addInitScript(
+    ({ tok, base }: { tok: string; base: string }) => {
+      Object.defineProperty(navigator, "platform", { get: () => "MacIntel" });
+      // A window the size of the screen reads as full screen, which hides the
+      // traffic lights and moves the controls; the docs show a normal window.
+      Object.defineProperty(window.screen, "width", { get: () => 2560 });
+      Object.defineProperty(window.screen, "height", { get: () => 1600 });
+      (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {
+        invoke: async (command: string) => {
+          if (command === "get_daemon_info")
+            return { baseUrl: base, token: tok };
+          // The app and the daemon are one build.
+          if (command === "daemon_version_matches") return true;
+          return null;
+        },
+        transformCallback: () => 0,
+        unregisterCallback: () => undefined,
+        metadata: {
+          currentWindow: { label: "main" },
+          currentWebview: { label: "main", windowLabel: "main" },
+        },
+      };
+    },
+    { tok: daemonToken(), base: `http://127.0.0.1:${DOCS_DAEMON_PORT}/api/v1` },
+  );
 });
 
 for (const lang of LANGS) {
@@ -145,6 +352,7 @@ for (const lang of LANGS) {
           colorScheme: theme,
           reducedMotion: "reduce",
         });
+        await page.setViewportSize(shot.frame === "panel" ? PANEL : WINDOW);
         await page.goto(shot.route);
         await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
         await shot.ready(page);
@@ -156,7 +364,18 @@ for (const lang of LANGS) {
 
         const dir = path.join(OUT, lang, theme);
         fs.mkdirSync(dir, { recursive: true });
-        const png = await page.screenshot();
+        let png: Buffer;
+        if (shot.open) {
+          const dialog = await shot.open(page);
+          await page.waitForTimeout(500);
+          png = await dialog.screenshot();
+        } else if (shot.frame === "panel") {
+          png = await page.screenshot({ clip: await panelBox(page) });
+        } else {
+          await addTrafficLights(page);
+          png = await page.screenshot();
+        }
+        sizes[`${lang}/${theme}/${shot.name}`] = pngSize(png);
         fs.writeFileSync(
           path.join(dir, `${shot.name}.webp`),
           await toWebp(page, png),

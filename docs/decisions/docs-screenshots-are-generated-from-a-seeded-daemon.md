@@ -87,9 +87,18 @@ tools do.
 - Bad: the frontend has no daemon-less mode, so this needs a mock API covering
   every page shown, kept in step with the wire contract, plus a second build of
   the frontend shipped with the docs and its weight on first load.
-- Deferred, not rejected: it is the natural next step once Option A's seeded
-  data exists, because that data is the mock layer's fixture. It is decided
-  separately when the home page needs more than static pictures.
+- Evaluated 2026-10-09 against [onorca.dev](https://www.onorca.dev/): its hero
+  is not an iframe or a replay of the real app but a hand-built HTML and CSS
+  mock-up of the window, and its feature grid is static posters. A mock-up like
+  that is crisp and cheap to load but is a second copy of the UI that drifts the
+  way a hand-captured picture does, so it fails this ADR's first force.
+- Deferred, not rejected: the version that fits is a read-only replay. The
+  seeded daemon's responses are recorded once per scenario and served to a
+  static build of the real frontend inside an iframe on the home page only, so
+  the fixture comes from Option A's seed and the UI is the real one. Clicks
+  that write have nothing to answer them, which is the limit of this version.
+  It is worth building when the home page needs hover and click inside the
+  window, not before.
 
 ## Decision
 
@@ -108,3 +117,8 @@ is a changed scenario or a changed UI, regenerated with `make docs-shots`.
 - The set of scenarios is a deliberate list, so a new guide asks "does a reader
   need to find this on screen?" before adding one.
 - Option D stays open and reuses the seed.
+- Pictures show the desktop app, not a browser tab: the scenario stands in for
+  the Tauri host (a Mac platform, the daemon handshake, a screen larger than the
+  window) so the app draws its own title strip, and the three traffic lights the
+  system would draw are painted on top. Full-window shots keep that chrome;
+  page-level shots crop to the page below it.

@@ -41,6 +41,8 @@ Coffer 从不自行注册智能体；由你在**智能体**页面上选择。每
 
 打开**智能体 → claude-code**，点击**连接**。智能体列表上该智能体的 **Coffer** 状态会从**未接入**变为**已接入**。
 
+<Shot name="connect-dialog" alt="Coffer 改动智能体文件之前的确认对话框。" />
+
 连接会在 `~/.claude.json` 的 `mcpServers` 中添加一条条目（同时往 `~/.claude/settings.json` 写入 Coffer 的记忆 Hook，共四条，从会话开始覆盖到每条 shell 命令，见[记忆](/zh/guides/memory)）。Coffer 以原子方式写入文件，并把上一个版本复制到 `~/.coffer/config-backups`：
 
 ```json
@@ -64,6 +66,8 @@ Coffer 靠 `--agent-uid` 参数知道一个会话属于哪个智能体，之后�
 
 注册官方参考实现 [filesystem 服务器](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem)，并给它一个目录的访问权限：
 
+
+<Shot name="mcp-server" alt="一个 MCP 服务器的页面，含健康状态和工具。" />
 ```sh
 mkdir -p ~/projects
 ```
@@ -106,6 +110,8 @@ Claude Code 调用 `filesystem__list_directory`。Coffer 把这次调用以原�
 
 技能是一个包含 `SKILL.md` 的文件夹，格式遵循 [AgentSkills](https://agentskills.io)。先建一个小的：
 
+
+<Shot name="skill" alt="一个技能的页面，含它交付给哪些智能体。" />
 ```sh
 mkdir -p ~/skills-src/commit-message
 cat > ~/skills-src/commit-message/SKILL.md <<'EOF'

@@ -26,6 +26,8 @@ For a registered [agent](/guides/agents), connect it to Coffer instead of writin
 
 Open **Agents → (agent)** and press **Connect**. Coffer shows the exact lines first, and you confirm them.
 
+<Shot name="connect-dialog" alt="The review dialog before Coffer changes the agent's files." />
+
 Coffer writes the shim's absolute path and the agent's uid:
 
 ::: code-group

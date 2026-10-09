@@ -41,6 +41,8 @@ Coffer never registers an agent on its own; you choose it on the **Agents** page
 
 Open **Agents → claude-code** and click **Connect**. The agent's **Coffer** status on the Agents list changes from **Not connected** to **Connected**.
 
+<Shot name="connect-dialog" alt="The review dialog before Coffer changes the agent's files." />
+
 Connecting adds one entry to `mcpServers` in `~/.claude.json` (and Coffer's memory hook — four entries, from session start to each shell command — to `~/.claude/settings.json` — see [Memory](/guides/memory)). Coffer writes the file atomically and keeps a copy of the previous version in `~/.coffer/config-backups`:
 
 ```json
@@ -64,6 +66,8 @@ You can add `coffer-mcp-shim` to any MCP client by hand. However, a hand-written
 
 Register the reference [filesystem server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) and give it access to one directory:
 
+
+<Shot name="mcp-server" alt="An MCP server's page, with its health and tools." />
 ```sh
 mkdir -p ~/projects
 ```
@@ -106,6 +110,8 @@ Every agent you connect in step 3 now gets this server. You did not edit Claude 
 
 A skill is a folder containing a `SKILL.md` in the [AgentSkills](https://agentskills.io) format. Create a small one:
 
+
+<Shot name="skill" alt="A skill's page, with the agents it is delivered to." />
 ```sh
 mkdir -p ~/skills-src/commit-message
 cat > ~/skills-src/commit-message/SKILL.md <<'EOF'

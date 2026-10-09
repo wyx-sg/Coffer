@@ -20,6 +20,8 @@ A provider is always optional. An agent with no provider switched on runs on its
 
 ## The Model providers page
 
+<Shot name="providers" alt="The Model providers page." />
+
 **Model providers** is one page with one header — the title, a line saying what the page is for, and **Add provider** — over two tabs, **Providers** and **Usage**. The header and its **Add provider** button are the same on both tabs. This section is the **Providers** tab, one list beside one provider; the **Usage** tab, `/model-providers?tab=usage`, is described in [Usage](/guides/usage).
 
 - **The list** (left) has a **Filter** and one row per provider, sorted by name: its mark, its name, its protocol and what it offers ("9 models" or "All models"), and the marks of the agents running on it. A provider whose endpoint does not answer or refuses its key says so on its row in red — **Unreachable** or **Key rejected** in place of protocol and models — whether or not you have opened it (see [Health](#health)). A chip marks the provider that transcribes speech (**Coffer · speech to text**); it is changed in **Settings › General**. Opening the page opens the first provider.
@@ -42,6 +44,8 @@ Coffer keeps each provider's health itself, so a broken one shows before you ope
 ## Add a provider
 
 Open **Model providers** and click **Add provider**. The dialog has two steps.
+
+<Shot name="add-provider-dialog" alt="The Add provider dialog." />
 
 1. **Endpoint.** Pick a **Vendor** from the grid — **Anthropic**, **OpenAI**, **Google Gemini**, **DeepSeek**, **OpenRouter**, **Ollama**, **LM Studio** — which fills in the protocol and base URL, or **Custom** for a gateway or relay, which asks for the protocol by what can use it: **OpenAI-compatible** (Codex and chat) or **Anthropic-compatible** (Claude Code and chat). Give it a **Name** and, under **API key**, pick a secret Coffer already holds or paste a new key; a pasted key becomes a new secret in this Mac's keychain-encrypted store and is never shown again. **Test** lists the endpoint's models with that key — "Connected in 180 ms", or "The endpoint rejected the key (401)" — and nothing is saved until you add the provider. A stored key is sent only to the endpoint of the connection that holds it, so testing one against a new endpoint reads "Not tested: this stored key can't go to this endpoint yet" and sends nothing: paste the key to test it, or add the provider, approve its key for the endpoint, and test it from the provider's page. Missing or malformed fields are named under each field.
 2. **Models.** Tick the models the provider should offer, with search and a type filter. Nothing ticked means every model the endpoint serves is offered. **Add provider** saves it and opens it.

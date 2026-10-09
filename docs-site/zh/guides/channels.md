@@ -28,6 +28,8 @@ Coffer 只管理它自己托管的消息渠道。智能体自己的官方集成�
 
 登记会先保存密钥，再用一个指向它的引用登记消息渠道。
 
+<Shot name="channels" alt="“渠道”页面。" />
+
 ```text
 Channels → Add channel
   1 Platform:  SeaTalk | Telegram
