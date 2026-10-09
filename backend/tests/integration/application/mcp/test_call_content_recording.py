@@ -29,7 +29,7 @@ from coffer.infrastructure.persistence.engine import (
 )
 from tests.support.fake_http_api import FakeHttpApi, fake_http_api
 
-LIVE_TOKEN = "tok-live-0123456789abcdef"
+LIVE_TOKEN = "tok-live-2222-call"
 INJECTED = "stdio-secret-value-98765"
 
 

@@ -6,3 +6,7 @@
 # commit of the signed-build gaps PR; replaced with a plain repeated string before
 # merge, but the historical commit still trips generic-api-key in the PR range.
 4b08a8fa5775a0f668648d9d78c14bd91db4ff98:backend/tests/integration/channel/test_seatalk_bridge_process.py:generic-api-key:123
+# Fake test value ("tok-live-…") for a custom tool's injected credential, in a
+# feature-branch commit; the string was replaced with a low-entropy one before
+# merge, but the historical commit still trips generic-api-key in the PR range.
+39af4b772e4009b6c694860a769c23a0d389754a:backend/tests/integration/application/mcp/test_call_content_recording.py:generic-api-key:32
