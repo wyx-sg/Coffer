@@ -79,7 +79,7 @@ export function ChannelSettingsTab({
         title={t("channels.settings.connection.title")}
         description={t("channels.settings.secrets.hint")}
       >
-        <div onBlur={title.flush}>
+        <div {...title.commitProps}>
           <SettingRow
             label={t("channels.dialog.name")}
             labelFor={`${id}-title`}
@@ -123,7 +123,7 @@ export function ChannelSettingsTab({
               autoComplete="off"
               aria-invalid={nonEmpty(appId.text) === null ? true : undefined}
               onChange={(e) => appId.change(e.target.value)}
-              onBlur={appId.flush}
+              {...appId.commitProps}
             />
           </SettingRow>
         ) : null}

@@ -152,6 +152,8 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 | `cache_size` | `-64000` | 大约 64 MB 的页缓存。 |
 | `temp_store` | `MEMORY` | 临时表和索引放在内存里。 |
 
+**空间。** 保留策略会删除旧行，而 SQLite 不会因此缩小文件，只把这些行占用的页记为文件内的空闲页。每轮保留清理之后（守护进程启动时和之后每六小时），一旦空闲页至少占文件的一半、且至少 8 MB，清理任务就用 `VACUUM` 重建文件并截断 WAL，让 `runs.db` 大致保持在它所存历史的大小；不满足任一条件时不动它。重建不在请求路径上：读取照常进行，写入像等待其他锁一样等它完成（[ADR](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/runs-db-gives-pruned-space-back.md)）。
+
 ### 派生 {#derived}
 
 ```text
@@ -204,12 +206,12 @@ flowchart TB
   C -- 否 --> X["以 DB_SCHEMA_TOO_NEW 失败"]
   C -- 是 --> D{"已在 head？"}
   D -- 是 --> G["构建服务"]
-  D -- 否 --> E["把 runs.db 复制为 runs.db.pre-revision"]
+  D -- 否 --> E["把 runs.db 复制为 runs.db.pre-revision（VACUUM INTO）"]
   E --> F["alembic upgrade head"]
   F --> G
 ```
 
-- **备份。** 升级之前，运行器把数据库连同它的 `-wal` 和 `-shm` 伴随文件复制为 `runs.db.pre-<revision>`。已有的副本从不被覆盖，只保留最新的三份。要撤销一次有问题的迁移：停止守护进程，把 `runs.db` 挪开，把对应的副本改回原名，再启动上一个构建。
+- **备份。** 升级之前，运行器用 `VACUUM INTO` 把数据库写成 `runs.db.pre-<revision>`：一个文件，是实时数据的一致快照（包括 WAL 里尚未写回的内容），不含空闲页，所以和历史本身一样小。已有的副本从不被覆盖，只保留最新的三份；副本写失败时不会执行升级。要撤销一次有问题的迁移：停止守护进程，把 `runs.db` 及其 `-wal`、`-shm` 挪开，把对应的副本改名为 `runs.db`，再启动上一个构建。
 - **来自更新构建的 schema。** 这个构建不认识的修订会让守护进程在碰任何东西之前以 `DB_SCHEMA_TOO_NEW` 停止，遵循[检测而不是猜测](/zh/architecture/design-principles#detect-never-refuse)的原则。
 
 ## 静态存储的密钥 {#secrets-at-rest}
@@ -237,7 +239,7 @@ flowchart TB
 | 领域层的 `vault` 包 | 布局、文档、格式版本、写入者和 trailer。 |
 | 应用层的 `vault` 包 | 校验规则、问题。 |
 | 基础设施层的 `vault` 包 | `~/.coffer` 下各类别的根目录、仓库、写入器、扫描器、资源和状态存储、生效范围、本地 JSON。 |
-| 基础设施层的 `persistence` 包 | runs.db 引擎、模型和 Alembic 修订；`derived.db`。 |
+| 基础设施层的 `persistence` 包 | runs.db 引擎、模型和 Alembic 修订；`derived.db`；迁移运行器（启动时迁移、备份、“太新”守卫），由守护进程启动时调用；保留清理任务每轮之后执行的空间回收。 |
 | 基础设施层的 `persistence` 包（迁移运行器部分） | 迁移运行器：启动时迁移、备份、“太新”守卫；由守护进程启动时调用。 |
 | 基础设施层的 `secret` 包 | 以文件形式存放的密钥密文。 |
 | 基础设施层的 `daemon` 包 | `daemon-config.json`。 |
