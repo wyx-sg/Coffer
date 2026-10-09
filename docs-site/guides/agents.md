@@ -146,12 +146,13 @@ Connecting is idempotent: connecting again rewrites each entry in place and neve
 The daemon may run from the desktop app, a login service or a virtualenv, none of which inherit your shell's `PATH`, and the agent may not either. Coffer therefore writes the full path. It resolves the shim in this order:
 
 1. `COFFER_MCP_SHIM_PATH`, if set and the file exists;
-2. `coffer-mcp-shim` on the daemon's `PATH`;
-3. the scripts directory of the Python interpreter running the daemon (where `pip` and `uv` put console scripts);
-4. the binary bundled beside the running executable;
-5. the deployed `~/.coffer/bin/coffer-mcp-shim`.
+2. in an installed Coffer, the deployed `~/.coffer/bin/coffer-mcp-shim`, if it exists;
+3. `coffer-mcp-shim` on the daemon's `PATH`;
+4. the scripts directory of the Python interpreter running the daemon (where `pip` and `uv` put console scripts);
+5. the binary bundled beside the running executable;
+6. the deployed `~/.coffer/bin/coffer-mcp-shim`.
 
-When the answer is the installed build, Coffer writes the stable `~/.coffer/bin/coffer-mcp-shim` link rather than a versioned directory, so the entry survives upgrades. If no shim can be found, install fails with `SHIM_NOT_FOUND`, naming the missing binary, and writes nothing. The refusal carries a hand-off prompt that lists every place Coffer looked and asks an agent to find or reinstall the shim so it resolves at `~/.coffer/bin/coffer-mcp-shim`: the Connect review offers it as **Copy prompt** beside **Retry**.
+An installed Coffer stops at step 2, so a daemon started by the app, from a terminal or by the login service writes the same entry, and the entry still works after the app is moved or removed. Steps 3 to 6 are for a Coffer run from source. When the answer is the installed build, Coffer writes the stable `~/.coffer/bin/coffer-mcp-shim` link rather than a versioned directory, so the entry survives upgrades. If no shim can be found, install fails with `SHIM_NOT_FOUND`, naming the missing binary, and writes nothing. The refusal carries a hand-off prompt that lists every place Coffer looked and asks an agent to find or reinstall the shim so it resolves at `~/.coffer/bin/coffer-mcp-shim`: the Connect review offers it as **Copy prompt** beside **Retry**.
 
 ### The agent uid and reach
 
