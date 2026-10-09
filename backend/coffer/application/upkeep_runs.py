@@ -1,8 +1,8 @@
 """Which upkeep passes this daemon is running right now.
 
-An *upkeep pass* is one of the long rewrites a vault does to itself, such as
-memory's ``distil`` over a partition. Each rewrites files and can be started
-from three places — a button, the CLI, a timer. Two of them over the same target at the
+An *upkeep pass* is one of the long rewrites Coffer does on its own, such as
+the memory sync. Each rewrites files and can be started from three places — a
+button, the CLI, a timer. Two of them over the same target at the
 same time is not a slower version of one; it is two writers racing over the
 same directory.
 
@@ -49,8 +49,8 @@ class UpkeepRun:
     kind: str
     name: str
     started_at: datetime
-    #: For a run that works through several items one pass at a time (memory's
-    #: Update memory): how many it has done of how many. ``None``
+    #: For a run that works through several items one pass at a time: how
+    #: many it has done of how many. ``None``
     #: for a pass that is one unit of work.
     done: int | None = None
     total: int | None = None

@@ -71,18 +71,18 @@ any framework-level adapter.
 | `name_fixed_resets`         | `str`                                                                      | for a `name_fixed` kind, what deleting and registering again resets, quoted in the refusal message      |
 | `name_from_config`          | `Callable[[dict], str] \| None`                                            | the one name a row may carry, derived from its config; `register` refuses any other (422). `agent` derives it from its type (`claude_code` → `claude-code`) |
 | `titled`                    | `bool`                                                                     | whether rows carry the optional `title`; False for `agent`, `mcp_server`, `skill` and `knowledge`, where a non-empty title is refused (422) on register and on `set_title` |
-| `supports_scope`            | `bool`                                                                     | whether the kind takes a per-agent scope at all; False (the default) makes `update_scope` reject a non-null payload with 422. True for `mcp_server`, `skill`, `provider` and `channel`; False for `agent`, `knowledge` and `memory` |
+| `supports_scope`            | `bool`                                                                     | whether the kind takes a per-agent scope at all; False (the default) makes `update_scope` reject a non-null payload with 422. True for `mcp_server`, `skill`, `provider` and `channel`; False for `agent` and `knowledge` |
 | **Pre-write validators**    |                                                                            | run BEFORE persistence; raising rejects the write                                                       |
 | `validate_name`             | `Callable[[str], None] \| None`                                            | kind-specific name rule, run on register, rename and every change to its file (`mcp_server` reserves the `__` namespace separator and caps names at 24 characters)                     |
 | `validate_config`           | `Callable[[dict], None] \| None`                                           | semantic config validation at REGISTRATION only, beyond the schema's shape                              |
 | `on_update_config`          | `Callable[[Resource, dict], Awaitable[None] \| None] \| None`               | pre-write hook for `update_config`, handed the resource as it stands and the proposed config             |
-| `on_rename`                 | `Callable[[Resource, str], Awaitable[None] \| None] \| None`                | pre-write hook for `rename`; where a kind whose name is also a directory moves it. Raising aborts the rename with nothing moved. `knowledge` and `memory` supply one; `skill` keeps a directory too but its name is fixed, so it never renames |
+| `on_rename`                 | `Callable[[Resource, str], Awaitable[None] \| None] \| None`                | pre-write hook for `rename`; where a kind whose name is also a directory moves it. Raising aborts the rename with nothing moved. only `knowledge` supplies one; `skill` keeps a directory too but its name is fixed, so it never renames |
 | `validate_scope_for`        | `Callable[[Resource, Scope \| None], Awaitable[None] \| None] \| None`     | pre-write hook for `update_scope`; only `channel` supplies one                                           |
 | `secret_ref_extractor`  | `Callable[[dict], dict[str, str]] \| None`                                 | `{logical_key: keychain_ref}` so the service can probe refs before any write                             |
 | `audit_redactor`            | `Callable[[dict], dict] \| None`                                           | audit-safe copy of a config, so the core hardcodes no kind's secret fields                               |
 | `validate_delete`           | `Callable[[Resource], None] \| None`                                       | pre-write guard for `delete`: raising refuses the deletion before anything is torn down, on the kind's own DELETE and the kind-agnostic one alike (spec resource-framework "Let a kind refuse a deletion before anything is torn down"). Only `skill` supplies one, refusing its builtin skill with `RESOURCE_PROTECTED` |
 | **Storage**                 |                                                                            | read by the resource store (`FileResourceRepo`) when it files a resource                                |
-| `storage`                   | `StorageClass`                                                             | the class the kind's files are filed in: `vault` (default; `vault/resources/<kind>/`, committed, synced when a remote is set), `local` for `agent` (`local/resources/agent/`, never committed), `derived` for `memory` (`derived/resources/memory/`, rebuilt). The directory is the policy: nothing else decides whether a resource travels |
+| `storage`                   | `StorageClass`                                                             | the class the kind's files are filed in: `vault` (default; `vault/resources/<kind>/`, committed, synced when a remote is set), `local` for `agent` (`local/resources/agent/`, never committed); no kind is `derived` as a whole: only `skill`'s `storage_row` files one row there (`coffer-guide`, under `derived/resources/skill/`). The directory is the policy: nothing else decides whether a resource travels |
 | `storage_row`               | `Callable[[dict], StorageClass] \| None`                                   | per-row refinement of `storage`, given the config at creation; `skill` supplies one so Coffer's own `coffer-guide` is filed under `derived/` |
 | `exclusive_flags`           | `tuple[str, ...]`                                                          | config flags at most one resource of the kind may hold (`provider`'s `transcribe_default`); the vault validator refuses any commit — an API write, a hand edit, a sync merge — that would leave two |
 | **Post-write reactions**    |                                                                            | run AFTER persistence + audit; cannot reject                                                            |
@@ -117,7 +117,7 @@ Plain dataclass.
 | `resource_uid`  | `str \| None`    | the resource's uid — what makes a trail survive a rename; `None` for an event naming no resource |
 | `resource_kind` | `str \| None`    | nullable; the LABEL the resource carried at the time    |
 | `resource_name` | `str \| None`    | nullable; daemon-lifecycle events have no resource     |
-| `actor`         | `str`            | free string: `"cli"`, `"api"` or `"ui"` from the `X-Coffer-Actor` header (`"api"` when it is absent), `"system"` for the daemon's own work, `"sync"` for a change applied from the sync remote, a named worker such as `"system:memory-aggregate-worker"` or `"system:memory-distil-worker"`, or a domain actor a kind names itself (`"user"`, `"channel"`, an agent's name, or `"agent"` for a knowledge write whose session reported no agent) |
+| `actor`         | `str`            | free string: `"cli"`, `"api"` or `"ui"` from the `X-Coffer-Actor` header (`"api"` when it is absent), `"system"` for the daemon's own work, `"sync"` for a change applied from the sync remote, a named worker such as `"system:memory-sync-worker"`, or a domain actor a kind names itself (`"user"`, `"channel"`, an agent's name, or `"agent"` for a knowledge write whose session reported no agent) |
 | `details`       | `dict[str, Any]` | JSON-serialisable payload                              |
 | `trace_id`      | `str \| None`    | the correlation id bound when the row was written: the HTTP request's `X-Coffer-Trace`, or the turn's own id for a turn no request started; the key that joins this row to the MCP invocations and daemon log lines of the same request or turn. `None` for a row written with none bound (a boot pass, a periodic worker) |
 | `conversation_id` | `str \| None`  | the chat conversation, for a row a chat or channel turn wrote |
@@ -178,7 +178,10 @@ timestamp column that appear in its allowlists.
 
 ### `UpkeepRun` (`application/upkeep_runs.py`)
 
-Frozen dataclass, held in an in-process registry keyed by `(kind, name)`. Not
+Frozen dataclass, held in an in-process registry (`UPKEEP_RUNS`, an
+`UpkeepRunRegistry`) keyed by `(kind, name)` and read by `GET
+/api/v1/upkeep/runs`, which leaves out a run whose kind's experimental feature
+is off. Not
 persisted, and deliberately so: there is no queue, no row and no lease, so a
 daemon restart ends any pass it was running and the registry comes back empty.
 A claim that outlived the process holding it would wedge a target forever with
@@ -186,9 +189,17 @@ no runner left to release it.
 
 | Field        | Type       | Notes                                          |
 | ------------ | ---------- | ---------------------------------------------- |
-| `kind`       | `str`      | the kind whose pass this is: `memory`, `knowledge` |
-| `name`       | `str`      | the partition or collection being rewritten    |
+| `kind`       | `str`      | the layer whose pass this is, e.g. `memory`    |
+| `name`       | `str`      | the target being rewritten, e.g. `sync`        |
 | `started_at` | `datetime` | when this daemon started the pass              |
+| `done`       | `int \| None` | for a run that works through several items one pass at a time, how many it has done; `None` for a one-unit pass |
+| `total`      | `int \| None` | for such a run, how many items were pending when it started |
+
+A pass claims its key (`claim` / `release`, or `guard`, which refuses a busy
+target with `UpkeepAlreadyRunning` → 409) and reports progress with
+`progress`. The memory sync (spec memory) holds `("memory", "sync")` while a
+sync, a preview write or an undo runs; it refuses a second one with its own
+lock first, so that key is never refused here.
 
 ## Storage
 
@@ -202,7 +213,7 @@ newline, unknown keys kept in place; spec vault-storage) at
 | ------- | ------------------------------------ | --------------------------------------------------------- | --------------------------------------------------------------------- |
 | vault   | `~/.coffer/vault/resources/<kind>/`   | `mcp_server`, `skill`, `channel`, `provider`, `knowledge` | through the vault's one writer, one commit per operation; read at `HEAD` |
 | local   | `~/.coffer/local/resources/<kind>/`   | `agent`                                                   | atomically, no history                                                |
-| derived | `~/.coffer/derived/resources/<kind>/` | `memory`, and the builtin skill `coffer-guide`            | atomically, no history; rebuilt                                       |
+| derived | `~/.coffer/derived/resources/<kind>/` | none as a kind; only the builtin skill `coffer-guide`     | atomically, no history; rebuilt                                       |
 
 ```json
 {

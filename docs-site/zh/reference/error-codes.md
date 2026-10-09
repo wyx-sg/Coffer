@@ -53,8 +53,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `NAME_IMMUTABLE` | 409 | 该资源的类型在注册后就固定了名字，因为智能体会引用它：MCP 服务器的名字是它工具名的前缀，技能的名字就是它的文件夹。智能体的名字就是它的类型，完全不能改。消息会说明重新注册会重置哪些东西。 | 删除该 MCP 服务器或技能，再用新名字重新注册。 |
 | `SCOPE_INVALID` | 422 | 生效范围（激活范围）的内容无效，或该类型没有生效范围。 | 发送智能体允许列表，或在支持的类型的页面上设置生效范围。见[生效范围](/zh/architecture/resource-framework#reach)。 |
 | `RESOURCE_PROTECTED` | 409 | 该资源由 Coffer 自己管理（例如 Coffer 生成的技能），不能被接管或删除。 | 不用管它；Coffer 会维护它。 |
-| `RESOURCE_NOT_TOGGLEABLE` | 409 | 该资源的类型不能启用或禁用：每个知识集和记忆分区都始终提供。 | 如果不再需要提供，就删除该资源。 |
-| `UPKEEP_ALREADY_RUNNING` | 409 | 该记忆分区已有一个维护任务（aggregate 或 distil）正在运行；此时清除派生缓存也会得到它。 | 等正在运行的任务完成；`coffer daemon status` 和界面都会显示它。 |
+| `RESOURCE_NOT_TOGGLEABLE` | 409 | 该资源的类型不能启用或禁用：每个知识集都始终提供。 | 如果不再需要提供，就删除该资源。 |
+| `UPKEEP_ALREADY_RUNNING` | 409 | 此守护进程中已有一个针对同一目标的长任务正在运行。 | 等正在运行的任务完成；`coffer daemon status` 和界面都会显示它。 |
 | `UNKNOWN_PRUNABLE_TABLE` | 404 | 保留请求指定的表没有保留策略。 | 使用**设置 → 数据**里列出的表。 |
 | `ATTENTION_NOT_IGNORABLE` | 409 | 该键下没有可以忽略的提醒项：要么什么都没列出，要么列出的是故障而不是提示。 | 刷新提醒列表；故障要修好，而不是忽略。 |
 

@@ -249,7 +249,7 @@ def read_origin_url(git_dir: pathlib.Path) -> str:
             continue
         if not in_origin:
             continue
-        key, sep, value = stripped.project("=")
+        key, sep, value = stripped.partition("=")
         if sep and key.strip().lower() == "url":
             return value.strip()
     return ""
@@ -265,10 +265,10 @@ def _is_origin_section(header: str) -> bool:
     subsection is case-insensitive and is.
     """
     if '"' in header:
-        name, _, rest = header.project('"')
+        name, _, rest = header.partition('"')
         subsection = rest.rsplit('"', 1)[0]
         return name.strip().lower() == "remote" and subsection == "origin"
-    name, _, subsection = header.project(".")
+    name, _, subsection = header.partition(".")
     return name.strip().lower() == "remote" and subsection.strip().lower() == "origin"
 
 

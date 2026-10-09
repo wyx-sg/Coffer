@@ -86,10 +86,10 @@ route").
 ### The schedule (`backend/coffer/application/upkeep_schedule.py`)
 
 `wait_for_next_pass()` takes the wait in slices and re-reads the interval each
-slice, so a change lands within one slice instead of after the six hours a
+slice, so a change lands within one slice instead of after the hour a
 worker was already asleep (see "Apply a changed switch or interval without a
-restart"). `DEFAULT_INTERVALS` holds each pass's own interval, used while the
-operator has chosen none, and is what `default_interval_s` reports over the wire
+restart"). `DEFAULT_INTERVALS` holds each pass's own interval (`memory_sync`: 3600
+seconds), used while the operator has chosen none, and is what `default_interval_s` reports over the wire
 (see "Report an unchosen interval beside its default").
 
 ## Audit events

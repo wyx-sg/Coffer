@@ -14,6 +14,8 @@ import pathlib
 import pytest
 
 from coffer.application.memory.sync_report import SyncReport
+from coffer.application.memory.sync_service import SYNC_RUN
+from coffer.application.upkeep_runs import UPKEEP_RUNS
 from coffer.infrastructure.memory.readers import MEMORY_READERS
 from coffer.infrastructure.memory.readers.claude_code import ClaudeCodeMemoryReader
 from coffer.infrastructure.memory.readers.codex import CodexMemoryReader
@@ -109,3 +111,26 @@ async def test_an_unchanged_source_is_not_read_again(
     assert isinstance(second, SyncReport)
     assert (second.sources_read, second.sources_skipped, second.failures) == (0, 1, [])
     assert hub_files(_vault()) == before
+
+
+async def test_a_running_sync_is_listed_among_the_passes_in_flight(
+    tmp_path: pathlib.Path, payments: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``coffer daemon status`` reads the daemon's table of passes in flight
+    (spec resource-framework "Report the passes in flight in one cross-kind
+    read"): a sync is in it while it runs and gone once it ends."""
+    a = Machine("machine-a", tmp_path / "a")
+    cc_project(a.claude(), payments, {"feedback_a.md": _fact("Fact A")})
+    reader = next(r for r in MEMORY_READERS if r.agent_type == "claude_code")
+    seen: list[object] = []
+    real = reader.sources
+
+    def _sources(config_dir: str):  # type: ignore[no-untyped-def]
+        seen.append(UPKEEP_RUNS.running(*SYNC_RUN))
+        return real(config_dir)
+
+    monkeypatch.setattr(reader, "sources", _sources)
+    await a.sync()
+
+    assert seen and all(run is not None for run in seen)
+    assert UPKEEP_RUNS.running(*SYNC_RUN) is None
