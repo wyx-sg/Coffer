@@ -95,7 +95,7 @@ curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh
 
 1. 检查你是否在 macOS arm64 上。其他操作系统或架构会报错退出，并提示你从源码安装。
 2. 从 GitHub Releases 下载 `coffer-cli-aarch64-apple-darwin.tar.gz` 和该版本的 `SHA256SUMS`，然后校验压缩包的校验和。校验和不匹配，脚本就会停止。
-3. 把 `coffer`、`coffer-daemon`、`coffer-mcp-shim` 和 `coffer-seatalk-bridge` 装进安装目录。每个二进制先复制成旁边的一个临时名字，加上可执行权限，再重命名覆盖公开名字。所以当这个名字是指向某个版本目录的符号链接时（一旦从别处启动的守护进程，比如桌面应用，把它的构建部署到那里，就会是这样），被替换的是链接本身，上一个版本的二进制原样保留，可用于回滚。
+3. 把 `coffer`、`coffer-daemon`、`coffer-mcp-shim`、`coffer-seatalk-bridge` 和 shim 的库文件夹 `coffer-mcp-shim-lib/` 装进安装目录。库文件夹先通过临时同级目录加改名装入，每个二进制再先复制成旁边的一个临时名字，加上可执行权限，再重命名覆盖公开名字。所以当这个名字是指向某个版本目录的符号链接时（一旦从别处启动的守护进程，比如桌面应用，把它的构建部署到那里，就会是这样），被替换的是链接本身，上一个版本的二进制原样保留，可用于回滚。
 4. 如果该目录还不在你的 `PATH` 上，就往你的 shell 配置文件追加一行。配置文件取决于你的 shell：zsh 是 `~/.zshrc`（或 `$ZDOTDIR/.zshrc`），macOS 上的 bash 是 `~/.bash_profile`，fish 是 `~/.config/fish/config.fish`（以 `fish_add_path` 的形式），其他 shell 是 `~/.profile`。再次运行脚本不会重复添加这一行。
 5. 如果 `git` 不存在或低于 2.40，给出警告（不会失败），并指向[系统要求](#requirements)。
 
@@ -130,7 +130,7 @@ tar -xzf coffer-cli-aarch64-apple-darwin.tar.gz -C ~/.coffer/bin
 export PATH="$HOME/.coffer/bin:$PATH"          # add to your shell profile
 ```
 
-四个二进制要放在同一个目录里。`coffer` 和 `coffer-mcp-shim` 需要启动守护进程时，会在自己旁边找 `coffer-daemon`。如果你是用浏览器下载的压缩包，用 `xattr -dr com.apple.quarantine ~/.coffer/bin` 清除隔离标记。
+四个二进制和 `coffer-mcp-shim-lib/` 文件夹要放在同一个目录里。`coffer` 和 `coffer-mcp-shim` 需要启动守护进程时，会在自己旁边找 `coffer-daemon`。如果你是用浏览器下载的压缩包，用 `xattr -dr com.apple.quarantine ~/.coffer/bin` 清除隔离标记。
 
 ## 从源码 {#from-source}
 
@@ -159,7 +159,7 @@ cd frontend && npm install && npm run build && cd ..
 
 | 命令 | 产出 |
 | --- | --- |
-| `make bundle-binaries` | 用 PyInstaller 冻结到 `dist/` 的 `coffer`、`coffer-daemon`、`coffer-mcp-shim` 和 `coffer-seatalk-bridge`，布局与发布压缩包相同 |
+| `make bundle-binaries` | 用 PyInstaller 冻结到 `dist/` 的 `coffer`、`coffer-daemon`、`coffer-mcp-shim`（带 `coffer-mcp-shim-lib/`）和 `coffer-seatalk-bridge`，布局与发布压缩包相同 |
 | `make desktop` | `Coffer.app` 和一个未签名的 `.dmg`。需要 Rust 工具链和 Node.js，由于要先跑 PyInstaller，大约需要 50 分钟。 |
 
 ## 各文件装在哪里 {#what-gets-installed-where}

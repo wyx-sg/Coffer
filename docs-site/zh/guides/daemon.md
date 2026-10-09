@@ -57,9 +57,9 @@ pid:     41822
 
 每个保险库一个守护进程，不等于只有一个进程。在活动监视器或 `ps` 里，正常会看到：
 
-- 守护进程本身对应两个 `coffer-daemon` 进程：安装的程序是会自解压的单文件，一个小的启动进程会留下来，作为真正进程的父进程；
+- 守护进程本身对应两个 `coffer-daemon` 进程：安装的程序是会自解压的单文件，一个小的启动进程会留下来，作为真正进程的父进程（shim 是单文件夹构建，只有一个进程）；
 - 另一对运行 `proxy` 的 `coffer-daemon`，是[本地模型代理](/zh/architecture/model-proxy)；
-- 每个连着 Coffer 的智能体会话一对 `coffer-mcp-shim`，会话结束就退出；
+- 每个连着 Coffer 的智能体会话一个 `coffer-mcp-shim` 进程，会话结束就退出；
 - SeaTalk 渠道运行时一对 `coffer-seatalk-bridge`。
 
 除此之外的守护进程，`coffer daemon status` 会列出来。启动不了的进程两分钟后会自己放弃；发现守护进程正忙的启动会直接退出，不会再起第二个。

@@ -33,6 +33,8 @@ interface Shot {
    * the text can still be read at.
    */
   frame?: "window" | "panel";
+  /** Get the page into the state the picture shows, such as selecting a row. */
+  prepare?: (page: Page) => Promise<void>;
   /** Do something on the page, such as opening a dialog; the dialog is the picture. */
   open?: (page: Page) => Promise<Locator>;
 }
@@ -63,24 +65,79 @@ const skillOpen = async (page: Page) => {
   );
 };
 
+// The home page's tabs: one whole-window picture per sidebar page, in sidebar
+// order. Pages that are lists open on their first row, so the picture shows the
+// page doing its work.
+const HOME: Array<
+  [
+    string,
+    string,
+    (page: Page) => Promise<void>,
+    ((page: Page) => Promise<void>)?,
+  ]
+> = [
+  ["overview", "/", heading(/sentry/)],
+  ["agents", "/agents/claude_code", heading(/Claude Code/)],
+  ["model-providers", "/model-providers", heading(/./)],
+  ["conversations", "/conversations", heading(/./)],
+  ["channels", "/channels", heading(/./)],
+  ["mcp-servers", "/mcp-servers/github", serverTested],
+  ["custom-tools", "/custom-tools/orders-api", heading(/orders-api/)],
+  ["skills", "/skills/gh-triage", skillOpen],
+  ["clis", "/clis", heading(/./)],
+  [
+    "knowledge",
+    "/knowledge",
+    heading(/engineering/),
+    async (page) => {
+      await page.getByText("engineering", { exact: true }).first().click();
+      await page
+        .getByText("deploy-checklist", { exact: false })
+        .first()
+        .click();
+      await expect(page.locator("main#main")).toContainText(
+        "Run the migrations",
+      );
+    },
+  ],
+  ["memory", "/memory", heading(/./)],
+  [
+    "secrets",
+    "/secrets",
+    heading(/./),
+    async (page) => {
+      await page.getByText("LINEAR_API_KEY", { exact: true }).first().click();
+      await expect(page.locator("main#main")).not.toContainText(
+        "Nothing selected",
+      );
+    },
+  ],
+  ["activity", "/activity", heading(/./)],
+  ["sync", "/sync", heading(/./)],
+  [
+    "settings",
+    "/settings/general",
+    heading(/./),
+    async (page) => {
+      // Keep the close button's tooltip out of the picture.
+      await page
+        .getByRole("dialog")
+        .getByRole("heading", { level: 2 })
+        .first()
+        .click();
+    },
+  ],
+];
+
 export const SHOTS: Shot[] = [
-  { name: "overview", route: "/", ready: heading(/sentry/) },
-  {
-    name: "agents",
-    route: "/agents/claude_code",
-    ready: heading(/Claude Code/),
-  },
-  {
-    name: "mcp-servers",
-    route: "/mcp-servers/github",
-    ready: serverTested,
-  },
-  {
-    name: "skills",
-    route: "/skills/gh-triage",
-    ready: skillOpen,
-  },
-  { name: "knowledge", route: "/knowledge", ready: heading(/engineering/) },
+  ...HOME.map(
+    ([id, route, ready, prepare]): Shot => ({
+      name: `home-${id}`,
+      route,
+      ready,
+      prepare,
+    }),
+  ),
 
   // Guide pictures: the page area, or the dialog a step opens.
   {
@@ -356,6 +413,7 @@ for (const lang of LANGS) {
         await page.goto(shot.route);
         await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
         await shot.ready(page);
+        await shot.prepare?.(page);
         await expect(page.locator(".animate-pulse")).toHaveCount(0);
         await expect(page.locator(".animate-spin")).toHaveCount(0);
         await page.evaluate(() => document.fonts.ready);

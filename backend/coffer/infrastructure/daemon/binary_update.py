@@ -100,6 +100,20 @@ def _extract(archive: Path, into: Path) -> None:
         tar.extractall(into, filter="data")
 
 
+def _install_dir(source: Path, target: Path) -> None:
+    """Put the folder ``source`` at ``target`` by a temporary sibling and a rename."""
+    tmp = target.with_name(f".{target.name}.install.{os.getpid()}")
+    shutil.rmtree(tmp, ignore_errors=True)
+    shutil.copytree(source, tmp, symlinks=True)
+    if target.is_symlink() or target.is_file():
+        target.unlink()
+    elif target.exists():
+        old = target.with_name(f".{target.name}.old.{os.getpid()}")
+        os.replace(target, old)
+        shutil.rmtree(old, ignore_errors=True)
+    os.replace(tmp, target)
+
+
 def install_binaries(source: Path, dest: Path) -> None:
     """Put each binary in ``source`` over its public name in ``dest``: copy to a
     temporary sibling, make it executable, rename it over the name (which
@@ -109,6 +123,12 @@ def install_binaries(source: Path, dest: Path) -> None:
         raise UpdateError(f"the archive carries no {', '.join(missing)}; the release is malformed")
     dest.mkdir(parents=True, exist_ok=True)
     for name in BINARIES:
+        # A one-folder binary (the shim) keeps its libraries in `<name>-lib`
+        # beside it; that folder goes in first, so the executable never runs
+        # beside libraries from another build.
+        lib = source / f"{name}-lib"
+        if lib.is_dir():
+            _install_dir(lib, dest / lib.name)
         tmp = dest / f".{name}.install.{os.getpid()}"
         shutil.copyfile(source / name, tmp)
         tmp.chmod(tmp.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)

@@ -11,7 +11,7 @@ const active = ref(0);
 const tabs = computed(() => SHOT_IDS.map((id, i) => ({ id, ...s.value.shots[i] })));
 const current = computed(() => tabs.value[active.value]);
 const src = computed(
-  () => withBase(`/shots/${props.lang}/${isDark.value ? "dark" : "light"}/${current.value.id}.webp`),
+  () => withBase(`/shots/${props.lang}/${isDark.value ? "dark" : "light"}/home-${current.value.id}.webp`),
 );
 
 const buttons = ref<HTMLElement[]>([]);
@@ -63,18 +63,13 @@ function onKey(event: KeyboardEvent) {
 }
 .tabs {
   display: flex;
-  gap: 4px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  scrollbar-width: none;
-}
-.tabs::-webkit-scrollbar {
-  display: none;
+  gap: 2px;
+  flex-wrap: wrap;
 }
 .tab {
   flex: none;
   height: 36px;
-  padding: 0 16px;
+  padding: 0 12px;
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;

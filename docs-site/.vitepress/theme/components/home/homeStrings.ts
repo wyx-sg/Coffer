@@ -11,7 +11,23 @@ export const GITHUB = "https://github.com/wyx-sg/Coffer";
 
 // The pictures on the home page, in tab order: files under public/shots/, made
 // by `make docs-shots`. Each language's `shots` list follows this order.
-export const SHOT_IDS = ["overview", "agents", "mcp-servers", "skills", "knowledge"] as const;
+export const SHOT_IDS = [
+  "overview",
+  "agents",
+  "model-providers",
+  "conversations",
+  "channels",
+  "mcp-servers",
+  "custom-tools",
+  "skills",
+  "clis",
+  "knowledge",
+  "memory",
+  "secrets",
+  "activity",
+  "sync",
+  "settings",
+] as const;
 
 export const STR = {
   en: {
@@ -33,10 +49,20 @@ export const STR = {
     shotsLabel: "Parts of the Coffer app",
     shots: [
       { label: "Overview", text: "What Coffer runs for your agents, and what needs you, on one page.", alt: "The Coffer app open on Overview: items that need attention, then a health card for each area" },
-      { label: "Agents", text: "Claude Code and Codex, with what each one is connected to.", alt: "The Coffer app open on Agents, listing Claude Code and Codex" },
+      { label: "Agents", text: "Claude Code and Codex, with what each one is connected to.", alt: "The Coffer app open on an agent, showing its connection and what it can use" },
+      { label: "Model providers", text: "Store a provider once, switch agents onto it, and see what each costs.", alt: "The Coffer app open on Model providers" },
+      { label: "Conversations", text: "Every session of every agent, wherever it was started.", alt: "The Coffer app open on Conversations, listing sessions by day" },
+      { label: "Channels", text: "Talk to your agents from Telegram or SeaTalk.", alt: "The Coffer app open on Channels, with the chat platforms to connect" },
       { label: "MCP servers", text: "Register a server once; every agent reaches it through one endpoint.", alt: "The Coffer app open on a healthy MCP server, with its tools listed" },
+      { label: "Custom tools", text: "Turn an HTTP API into tools, with the secret kept out of the agent's reach.", alt: "The Coffer app open on a custom-tool group and its environment" },
       { label: "Skills", text: "One skill library, delivered into each agent you choose.", alt: "The Coffer app open on Skills, listing imported skills" },
-      { label: "Knowledge", text: "Plain Markdown collections every agent can read and add to.", alt: "The Coffer app open on Knowledge, showing one collection and its documents" },
+      { label: "CLIs", text: "The command-line tools your skills and servers need, checked on this Mac.", alt: "The Coffer app open on CLIs, showing which are found and which are missing" },
+      { label: "Knowledge", text: "Plain Markdown collections every agent can read and add to.", alt: "The Coffer app open on Knowledge, showing a collection and a document" },
+      { label: "Memory", text: "What one agent learns about a repository, the others know too.", alt: "The Coffer app open on Memory" },
+      { label: "Secrets", text: "Keys and tokens, encrypted on this Mac and never handed to an agent.", alt: "The Coffer app open on a stored secret and where it is used" },
+      { label: "Activity", text: "Every change, tool call and daemon record, newest first.", alt: "The Coffer app open on Activity, listing recent events" },
+      { label: "Sync", text: "Keep the same vault on every Mac through a git repository you own.", alt: "The Coffer app open on Sync, with the remote settings" },
+      { label: "Settings", text: "Language, theme, data and the daemon, in one place.", alt: "The Coffer app with Settings open on General" },
     ],
     exp: "Experimental",
     allGuides: "All guides",
@@ -105,10 +131,20 @@ export const STR = {
     shotsLabel: "Coffer app 的各个部分",
     shots: [
       { label: "总览", text: "Coffer 为你的智能体运行的一切，以及需要你处理的事，都在一页里。", alt: "打开总览页的 Coffer app：先是需要处理的事项，再是各个方面的健康卡片" },
-      { label: "智能体", text: "Claude Code 和 Codex，以及各自连到了什么。", alt: "打开智能体页的 Coffer app，列出 Claude Code 和 Codex" },
+      { label: "智能体", text: "Claude Code 和 Codex，以及各自连到了什么。", alt: "打开某个智能体页的 Coffer app，显示它的连接和能用的内容" },
+      { label: "模型提供商", text: "提供商只存一次，把智能体切换过去，并查看各自的花费。", alt: "打开模型提供商页的 Coffer app" },
+      { label: "对话", text: "每个智能体的每一次会话，无论从哪里开始。", alt: "打开对话页的 Coffer app，按日期列出会话" },
+      { label: "消息渠道", text: "在 Telegram 或 SeaTalk 里和你的智能体对话。", alt: "打开消息渠道页的 Coffer app，列出可连接的聊天平台" },
       { label: "MCP 服务器", text: "服务器只注册一次，每个智能体通过同一个端点使用。", alt: "打开某个运行正常的 MCP 服务器的 Coffer app，列出它的工具" },
+      { label: "自定义工具", text: "把 HTTP API 变成工具，密钥不会交到智能体手里。", alt: "打开某个自定义工具组的 Coffer app，显示它的环境" },
       { label: "技能", text: "一份技能库，投递进你选的每个智能体。", alt: "打开技能页的 Coffer app，列出已导入的技能" },
-      { label: "知识", text: "普通 Markdown 文集，每个智能体都能读、能补充。", alt: "打开知识页的 Coffer app，显示一个集合及其文档" },
+      { label: "命令行工具", text: "技能和服务器需要的命令行工具，在这台 Mac 上逐个检查。", alt: "打开命令行工具页的 Coffer app，显示哪些已找到、哪些缺失" },
+      { label: "知识", text: "普通 Markdown 文集，每个智能体都能读、能补充。", alt: "打开知识页的 Coffer app，显示一个集合和一篇文档" },
+      { label: "记忆", text: "一个智能体对某个仓库学到的，其他智能体也知道。", alt: "打开记忆页的 Coffer app" },
+      { label: "密钥", text: "密钥和令牌加密保存在这台 Mac 上，从不交给智能体。", alt: "打开某个已存储密钥的 Coffer app，显示它被谁使用" },
+      { label: "活动", text: "每一次改动、工具调用和守护进程记录，最新的在前。", alt: "打开活动页的 Coffer app，列出最近的事件" },
+      { label: "同步", text: "通过你自己的 git 仓库，让每台 Mac 上的保险库保持一致。", alt: "打开同步页的 Coffer app，显示远端设置" },
+      { label: "设置", text: "语言、主题、数据和守护进程，都在一处。", alt: "在常规页打开设置的 Coffer app" },
     ],
     exp: "实验性",
     allGuides: "全部指南",

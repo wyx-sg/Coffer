@@ -146,7 +146,7 @@ See [Daemon and processes](/architecture/daemon) and [Running the daemon](/guide
 
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
-| `bin/<version>/` | One directory per deployed frozen build, holding `coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge`, each with a `.<name>.version` sentinel written after the copy completes. The current and the previous version are kept. | installer, daemon (frozen builds) | No | Old version directories, yes. Not the one the symlinks point at. |
+| `bin/<version>/` | One directory per deployed frozen build, holding `coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge`, each with a `.<name>.version` sentinel written after the copy completes, and the shim's library folder `coffer-mcp-shim-lib/`. The current and the previous version are kept. | installer, daemon (frozen builds) | No | Old version directories, yes. Not the one the symlinks point at. |
 | `bin/coffer`, `bin/coffer-daemon`, `bin/coffer-mcp-shim`, `bin/coffer-seatalk-bridge` | Relative symlinks into the current version directory, flipped atomically on upgrade. Agents' MCP entries, the login service and your `PATH` use these stable names. | installer, daemon | No | No: agents' MCP entries point at `bin/coffer-mcp-shim`. |
 
 To undo an upgrade by hand, point the symlinks back at the previous version directory. A frozen daemon deploys its sibling binaries here on start; a source install uses the console scripts `pip` put on `PATH` instead. See [Distribution and releases](/architecture/distribution).

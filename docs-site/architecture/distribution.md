@@ -21,8 +21,8 @@ Coffer is a Python program, but its users are people running AI coding agents, n
 
 | Decision | Reason |
 | --- | --- |
-| Freeze each entry point with PyInstaller into a single-file executable | Runs on a clean machine with no Python; one build serves CLI use, MCP-client spawn and direct download. |
-| Ship four binaries, always together | The shim and the CLI find `coffer-daemon` as a sibling, so co-location is the discovery mechanism. `coffer-seatalk-bridge` is the fourth: it loads the SeaTalk SDK outside the daemon and is signed without the keychain entitlement. |
+| Freeze each entry point with PyInstaller: the daemon, the CLI and the SeaTalk bridge as single-file executables, the shim as a one-folder build | Runs on a clean machine with no Python; one build serves CLI use, MCP-client spawn and direct download. The shim is the one binary an MCP client starts for every session, and a single-file build unpacks its whole archive into `$TMPDIR/_MEI*` on each start (about 170 MB and 2 s on macOS) and leaves it behind whenever the client kills the process. A one-folder shim unpacks nothing, starts in about half a second and runs as one process. |
+| Ship four binaries, always together, with the shim's library folder | The shim and the CLI find `coffer-daemon` as a sibling, so co-location is the discovery mechanism. The shim finds `coffer-mcp-shim-lib/` beside its real path (symlinks are followed), so wherever the shim goes, the folder goes with it. `coffer-seatalk-bridge` is the fourth: it loads the SeaTalk SDK outside the daemon and is signed without the keychain entitlement. |
 | Two download tiers built in one job from the same binaries | The desktop app cannot drift from the CLI archive it wraps. |
 | The daemon deploys its siblings into versioned directories under `~/.coffer/bin` and flips symlinks | A deploy never overwrites a binary that may be running, and the previous build stays for a manual rollback. |
 | One build for everyone, every experimental feature off until a person switches it on | There is no release branch and no second build: the owner tests exactly what users run. |
@@ -38,24 +38,26 @@ Each binary is frozen from its own PyInstaller spec in `backend/`, one per entry
 | Binary | What it contains |
 | --- | --- |
 | `coffer-daemon` | The whole backend: FastAPI and uvicorn, SQLAlchemy and aiosqlite, alembic with its migration scripts as data files, the MCP SDK, document converters, model SDKs, and the built web UI when the frontend has been built (`frontend/dist`) at build time. |
-| `coffer-mcp-shim` | The stdio-to-HTTP bridge an MCP client launches. Excludes FastAPI, uvicorn, SQLAlchemy, alembic and structlog, so it starts quickly for clients that spawn it every session. |
+| `coffer-mcp-shim` | The stdio-to-HTTP bridge an MCP client launches: an executable plus a folder, `coffer-mcp-shim-lib/`, beside it that holds its libraries (about 30 MB). The spec freezes only what the shim's entry script imports and excludes the daemon's stacks: FastAPI, uvicorn, SQLAlchemy, alembic, structlog, Pillow, numpy, cryptography, keyring and the test libraries. |
 | `coffer` | The Typer CLI, httpx, and the `keyring` backends: a thin HTTP client of the daemon. Excludes the web server, SQLAlchemy, Alembic and the MCP SDK. |
 | `coffer-seatalk-bridge` | The process the daemon starts beside itself to load SeaTalk's operator-supplied WebSocket SDK outside the daemon. Nothing of the daemon is in it; since the SDK's imports cannot be traced, it carries the whole standard library, `websockets` and `certifi`. It is signed without the keychain entitlement, so third-party code never runs where the master key can be read. |
 
-Each spec builds a single-file console executable without UPX compression, and each freezes the interpreter option `-X utf8` in. That option matters only for the shipped binary: an unfrozen interpreter in the C locale turns UTF-8 mode on by itself, but a frozen binary started from Finder or launchd with no `LANG` would otherwise fall back to ASCII.
+The daemon, CLI and SeaTalk bridge specs build a single-file console executable; the shim spec builds a one-folder console executable. No spec uses UPX compression, and each freezes the interpreter option `-X utf8` in. That option matters only for the shipped binary: an unfrozen interpreter in the C locale turns UTF-8 mode on by itself, but a frozen binary started from Finder or launchd with no `LANG` would otherwise fall back to ASCII.
 
-PyInstaller finds imports by static analysis, so anything imported lazily inside a function — document converters, model SDKs — is pinned in the spec's list of hidden imports, and package data files are collected explicitly. A spec check runs in `make lint` and fails when a spec's entry script or a data-file source path no longer exists, or when a spec loses `-X utf8`. No CI job other than the release runs PyInstaller, so this check is what keeps the specs level with the tree between releases.
+Every single-file binary also runs a PyInstaller runtime hook, `backend/packaging/rth_unpack_owner.py`, that writes its pid into `<unpack dir>/.coffer-pid`. The daemon uses that marker to remove unpack directories a killed process left behind (see [Daemon and processes](/architecture/daemon#background-work)).
+
+PyInstaller finds imports by static analysis, so anything imported lazily inside a function — document converters, model SDKs — is pinned in the spec's list of hidden imports, and package data files are collected explicitly. A spec check runs in `make lint` and fails when a spec's entry script or a data-file source path no longer exists, when a spec loses `-X utf8`, when a `runtime_hooks` path does not exist, or when a single-file spec does not list the unpack-owner hook. No CI job other than the release runs PyInstaller, so this check is what keeps the specs level with the tree between releases.
 
 ### Building locally
 
 ```sh
-make bundle-binaries        # runs scripts/build_binaries.sh → dist/coffer, dist/coffer-daemon, dist/coffer-mcp-shim, dist/coffer-seatalk-bridge
+make bundle-binaries        # runs scripts/build_binaries.sh → dist/coffer, dist/coffer-daemon, dist/coffer-mcp-shim, dist/coffer-mcp-shim-lib/ and dist/coffer-seatalk-bridge
 bash scripts/smoke_test_bundle.sh dist
 ```
 
 The build script runs PyInstaller from `backend/` (where the specs' relative paths resolve) with output redirected to the repository's `dist/` and `build/`. It detects the host's target triple (`aarch64-apple-darwin`, `x86_64-apple-darwin`, the Linux and Windows triples) for naming, but builds only for the host.
 
-The smoke test starts the bundled daemon under an isolated `HOME`, with a free daemon port and proxy port and a master key of its own, so it runs beside a Coffer already on the machine and never touches that Coffer's key. It waits for `daemon.json` and `/api/v1/daemon/status`, checks that `/` serves the bundled web UI, runs the bundled `coffer daemon status` against the daemon, then sends one JSON-RPC `initialize` through the bundled shim and expects a reply within 15 seconds. On exit it stops the daemon and the model proxy the daemon started. Pointed at `Coffer.app/Contents/MacOS`, it tests the copies the desktop app carries.
+The smoke test starts the bundled daemon under an isolated `HOME`, with a free daemon port and proxy port and a master key of its own, so it runs beside a Coffer already on the machine and never touches that Coffer's key. It waits for `daemon.json` and `/api/v1/daemon/status`, checks that `/` serves the bundled web UI, runs the bundled `coffer daemon status` against the daemon, then sends one JSON-RPC `initialize` through the bundled shim and expects a reply within 15 seconds. It also fails when the shim's library folder is missing, carries one of the packages the shim spec excludes, or is over 60 MB. On exit it stops the daemon and the model proxy the daemon started. Pointed at `Coffer.app/Contents/MacOS`, it tests the copies the desktop app carries, and probes `../Resources` for the shim.
 
 ## The release workflow
 
@@ -84,8 +86,8 @@ flowchart TD
 3. Decide which signing steps can run (see [Signing, notarisation and updates](#signing-notarisation-and-updates)). When a Developer ID is present, import it into a temporary keychain and stamp the keychain access group.
 4. Stamp the build: the commit always, and the `stable` mark on a tag (see [The build stamp](#the-build-stamp)).
 5. Freeze the four binaries — signed with the Developer ID when there is one — and run the smoke test against `dist/`. A signed build then has its signatures verified and the binaries notarised.
-6. Package `coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge` into `coffer-cli-<triple>.tar.gz`.
-7. Stage the same four files in the desktop crate (three as `<name>-<triple>`, the SeaTalk bridge under its plain name) and run `tauri build`, producing the `.dmg` — `Coffer-<triple>.dmg` when signed (then notarised and stapled), `Coffer-unsigned-<triple>.dmg` otherwise — and, with the updater key, the signed updater archive and `latest.json`.
+6. Package `coffer`, `coffer-daemon`, `coffer-mcp-shim`, `coffer-seatalk-bridge` and the `coffer-mcp-shim-lib/` folder into `coffer-cli-<triple>.tar.gz`.
+7. Stage the same four executables in the desktop crate as `<name>-<triple>` and run `tauri build`, producing the `.dmg` — `Coffer-<triple>.dmg` when signed (then notarised and stapled), `Coffer-unsigned-<triple>.dmg` otherwise — and, with the updater key, the signed updater archive and `latest.json`. The release workflow runs the smoke test a second time against the built `Coffer.app/Contents/MacOS`.
 8. Write `SHA256SUMS` over every artifact, then create (or update, with `--clobber`) the GitHub Release for the tag.
 
 Only macOS on Apple Silicon is published. The specs and build script are cross-platform, so widening the release matrix is a workflow change rather than a redesign.
@@ -94,7 +96,7 @@ Versions are kept in several files that must agree exactly — the Python packag
 
 ## The desktop bundle
 
-The desktop app is a Tauri 2 shell around the same web UI the daemon serves. Its Tauri configuration bundles `app` and `dmg` targets, loads the built frontend as local assets, and lists `coffer`, `coffer-daemon` and `coffer-mcp-shim` as external binaries. Tauri resolves each binary name to `<name>-<target-triple>` and places it in `Coffer.app/Contents/MacOS/`, next to the app's own executable. `coffer-seatalk-bridge` is copied to the same folder as a plain bundle file, because Tauri re-signs external binaries with the app's keychain entitlement.
+The desktop app is a Tauri 2 shell around the same web UI the daemon serves. Its Tauri configuration bundles `app` and `dmg` targets, loads the built frontend as local assets, and lists `coffer` and `coffer-daemon` as external binaries. Tauri resolves each name to `<name>-<target-triple>` and places it in `Coffer.app/Contents/MacOS/`, next to the app's own executable. The SeaTalk bridge is copied into `Contents/MacOS` by `bundle.macOS.files`. The shim and its `coffer-mcp-shim-lib/` folder are copied by `bundle.macOS.files` into `Contents/Resources/`: `Contents/MacOS` may hold only signed code, and the library folder carries data files too.
 
 When the app starts, it resolves a daemon in a fixed order: an already-running daemon named by `~/.coffer/daemon.json` (attached to, never re-spawned); the binary inside the app bundle; `~/.coffer/bin/coffer-daemon`; `coffer-daemon` on `PATH`; otherwise a message saying this copy of Coffer is damaged or incomplete, with the install page and a prompt to hand to an agent. The shell never writes to `~/.coffer/bin` itself — the daemon it starts does that (next section). Installing the app therefore installs the CLI too.
 
@@ -119,7 +121,7 @@ See [Desktop app](/guides/desktop-app) for using it.
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
 ```
 
-It accepts only macOS on `arm64` and points everyone else at a source install. It downloads `coffer-cli-aarch64-apple-darwin.tar.gz` and `SHA256SUMS` from the latest release (or the tag in `COFFER_VERSION`), verifies the archive's checksum, installs the four binaries into `COFFER_INSTALL_DIR` (default `~/.coffer/bin`) by copying each to a temporary sibling and renaming it over the public name — a plain copy would write through the daemon's symlink into the previous version directory and destroy the build a rollback needs — and — unless `COFFER_NO_MODIFY_PATH=1` — appends a `PATH` line to your shell profile (`.zshrc`, `.bash_profile`, fish's `config.fish`, or `.profile`) if the directory is not already on `PATH`. A binary downloaded by `curl` is never quarantined, so this path needs no `xattr` step. See [Install](/start/install).
+It accepts only macOS on `arm64` and points everyone else at a source install. It downloads `coffer-cli-aarch64-apple-darwin.tar.gz` and `SHA256SUMS` from the latest release (or the tag in `COFFER_VERSION`), verifies the archive's checksum, installs the four binaries and `coffer-mcp-shim-lib/` into `COFFER_INSTALL_DIR` (default `~/.coffer/bin`) by copying each to a temporary sibling and renaming it over the public name (the library folder first, before the shim executable) — a plain copy would write through the daemon's symlink into the previous version directory and destroy the build a rollback needs — and — unless `COFFER_NO_MODIFY_PATH=1` — appends a `PATH` line to your shell profile (`.zshrc`, `.bash_profile`, fish's `config.fish`, or `.profile`) if the directory is not already on `PATH`. A binary downloaded by `curl` is never quarantined, so this path needs no `xattr` step. See [Install](/start/install).
 
 ### Versioned directories and the symlink flip
 
@@ -134,6 +136,8 @@ Every frozen daemon, whichever tier it came from, deploys its sibling binaries a
 ├── 0.2.0/
 │   ├── coffer-daemon
 │   ├── .coffer-daemon.version
+│   ├── coffer-mcp-shim
+│   ├── coffer-mcp-shim-lib/
 │   └── …
 └── 0.1.1/            the previous build, kept for rollback
 ```
@@ -152,8 +156,8 @@ stateDiagram-v2
 
 For each of `coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge`:
 
-1. **Decide.** A deploy is needed when `~/.coffer/bin/<version>/<name>` is missing, differs in size from the running build's sibling, lacks its `.<name>.version` sentinel (a copy that never completed), or the public name does not point at it. Modification time is not used: it records when a build was extracted, not what it contains.
-2. **Copy.** The binary is copied to a temporary name, made executable, and renamed into the version directory. The sentinel is written last, so a sentinel means a complete copy.
+1. **Decide.** A deploy is needed when `~/.coffer/bin/<version>/<name>` is missing, differs in size from the running build's sibling, lacks its `.<name>.version` sentinel (a copy that never completed), the public name does not point at it, or (for the shim) the version directory lacks `coffer-mcp-shim-lib/`. Modification time is not used: it records when a build was extracted, not what it contains.
+2. **Copy.** The binary is copied to a temporary name, made executable, and renamed into the version directory. For the shim, `coffer-mcp-shim-lib/` is copied into the same version directory first. The sentinel is written last, so a sentinel means a complete copy. The daemon finds the shim beside itself or, in the app, in `../Resources`.
 3. **Flip.** A relative symlink is created under a temporary name and renamed over `~/.coffer/bin/<name>`. A concurrent `exec` sees either the old binary or the new one, never a partial file.
 4. **Retire and prune.** A public symlink into a version directory under a name this build no longer ships is removed. Version directories beyond the newest two are deleted, except any directory a public symlink still points into.
 

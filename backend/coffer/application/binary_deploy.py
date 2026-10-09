@@ -27,6 +27,12 @@ ones are pruned once a newer deploy lands. A public name this build no longer
 ships — ``coffer-callback`` after the webhook listener was deleted — has its
 symlink removed, so it stops resolving to an old build on the user's ``PATH``.
 
+The shim is a one-folder build: its executable keeps its libraries in a
+``coffer-mcp-shim-lib`` folder beside it (:func:`lib_dir_for`), and the two are
+deployed together into the same version directory, the folder first. In the
+macOS app both sit in ``Contents/Resources`` rather than beside the daemon in
+``Contents/MacOS``, which may hold only code (:func:`find_source`).
+
 Staleness is two signals — byte size and a version sentinel written after the
 copy completes. mtime is deliberately not one: a build's mtime says when it was
 extracted, not what it contains, and comparing it re-copied binaries on every
@@ -64,6 +70,24 @@ DEPLOYED_BINARIES: tuple[str, ...] = (
 KEEP_VERSIONS = 2
 
 
+def lib_dir_for(binary: Path) -> Path:
+    """Where a one-folder binary keeps its libraries: ``<name>-lib`` beside it."""
+    return binary.with_name(f"{binary.name}-lib")
+
+
+def find_source(source_dir: Path, name: str) -> Path | None:
+    """The build's ``name`` binary: beside the daemon, or in the app's ``Resources``.
+
+    The macOS app's ``Contents/MacOS`` may hold only signed code, so a
+    one-folder binary, whose library folder carries data files too, ships in
+    ``Contents/Resources`` instead.
+    """
+    for candidate in (source_dir / name, source_dir.parent / "Resources" / name):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def user_bin_dir() -> Path:
     """Where deployed binaries land — ``~/.coffer/bin``."""
     return bin_dir()
@@ -87,6 +111,8 @@ def needs_deploy(link: Path, source: Path, version: str) -> bool:
     after a manual rollback the user has since undone.
     """
     target = versioned_target(link, version)
+    if lib_dir_for(source).is_dir() and not lib_dir_for(target).is_dir():
+        return True
     try:
         if target.stat().st_size != source.stat().st_size:
             return True
@@ -97,10 +123,28 @@ def needs_deploy(link: Path, source: Path, version: str) -> bool:
         return True
 
 
+def _replace_dir(source: Path, target: Path) -> None:
+    """Copy the folder ``source`` to ``target`` by a temporary sibling and a rename."""
+    tmp = target.with_name(f".{target.name}.tmp")
+    shutil.rmtree(tmp, ignore_errors=True)
+    shutil.copytree(source, tmp, symlinks=True)
+    if target.exists():
+        old = target.with_name(f".{target.name}.old")
+        shutil.rmtree(old, ignore_errors=True)
+        os.replace(target, old)
+        shutil.rmtree(old, ignore_errors=True)
+    os.replace(tmp, target)
+
+
 def _atomic_deploy(source: Path, target: Path, version: str) -> None:
     """Copy ``source`` to ``target`` atomically, executable bit set first,
-    then write the sentinel — so a sentinel present means a complete copy."""
+    then write the sentinel — so a sentinel present means a complete copy.
+
+    A one-folder binary's library folder is copied before the executable, so
+    the executable never runs beside a folder from another build."""
     target.parent.mkdir(parents=True, exist_ok=True)
+    if lib_dir_for(source).is_dir():
+        _replace_dir(lib_dir_for(source), lib_dir_for(target))
     tmp = target.with_name(f".{target.name}.tmp")
     shutil.copyfile(source, tmp)
     tmp.chmod(tmp.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
@@ -224,8 +268,8 @@ def deploy_frozen_sidecars(*, version: str | None = None) -> list[str]:
 
     deployed: list[str] = []
     for name in DEPLOYED_BINARIES:
-        source = source_dir / name
-        if not source.is_file():
+        source = find_source(source_dir, name)
+        if source is None:
             # A build that legitimately omits a helper (no voice extra, say)
             # is not an error — there is simply nothing to deploy.
             continue

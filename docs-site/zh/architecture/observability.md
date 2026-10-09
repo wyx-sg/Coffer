@@ -54,7 +54,7 @@ Coffer 自己的模块通过 Python 标准库的 logging 记日志。根 logger 
 {"event": "mcp.upstream.spawn_failed", "logger": "coffer.application.mcp.supervisor", "level": "warning", "timestamp": "2026-09-24T13:50:15.869933Z", "server": "smart", "attempt": 1, "error": "upstream init failed: ConnectError", "trace_id": "44e10b60da1b4f26"}
 ```
 
-守护进程不把 HTTP 客户端库（`httpx`、`httpcore`）的 INFO 请求行写进 `daemon.log`：它们带着完整的请求 URL，而 Telegram 机器人令牌就在 URL 路径里。
+守护进程不把 HTTP 客户端库（`httpx`、`httpcore`、MCP SDK 使用的 HTTP 客户端 `httpx2`，以及 `mcp.client.streamable_http`）的 INFO 日志写进 `daemon.log`：它们带着完整的请求 URL，URL 里可能带有凭据（Telegram 机器人令牌就在 URL 路径里），还会记录每次推送流重连。这些日志器被设为 WARNING。
 
 `structlog` 也配置成走同一组 handler，所以将来通过 structlog 自己的 API 记日志的代码也会产出同样的形状，而不是打印到 stdout。
 

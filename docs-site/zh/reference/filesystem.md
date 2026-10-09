@@ -146,7 +146,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 
 | 路径 | 用途 | 所有者 | 是否同步 | 能否安全删除 |
 | --- | --- | --- | --- | --- |
-| `bin/<version>/` | 每个已部署的 frozen 构建一个目录，里面有 `coffer`、`coffer-daemon`、`coffer-mcp-shim` 和 `coffer-seatalk-bridge`，每个都带一个复制完成后才写入的 `.<name>.version` 标记文件。保留当前版本和上一个版本。 | 安装程序、守护进程（frozen 构建） | 否 | 旧版本目录可以删，但符号链接指向的那个不行。 |
+| `bin/<version>/` | 每个已部署的 frozen 构建一个目录，里面有 `coffer`、`coffer-daemon`、`coffer-mcp-shim` 和 `coffer-seatalk-bridge`，每个都带一个复制完成后才写入的 `.<name>.version` 标记文件，另有 shim 的库文件夹 `coffer-mcp-shim-lib/`。保留当前版本和上一个版本。 | 安装程序、守护进程（frozen 构建） | 否 | 旧版本目录可以删，但符号链接指向的那个不行。 |
 | `bin/coffer`、`bin/coffer-daemon`、`bin/coffer-mcp-shim`、`bin/coffer-seatalk-bridge` | 指向当前版本目录的相对符号链接，升级时原子切换。智能体的 MCP 条目、登录服务和你的 `PATH` 都使用这些固定名称。 | 安装程序、守护进程 | 否 | 不能：智能体的 MCP 条目指向 `bin/coffer-mcp-shim`。 |
 
 要手动撤销一次升级，把这些符号链接指回上一个版本目录即可。frozen 守护进程启动时会把同级二进制部署到这里；源码安装则使用 `pip` 放到 `PATH` 上的命令行脚本。见[分发与发布](/zh/architecture/distribution)。

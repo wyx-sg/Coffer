@@ -47,7 +47,7 @@ The app is self-contained: it carries the four frozen binaries `coffer`, `coffer
 
 ### The app installs the CLI too
 
-On first start, the daemon copies all four binaries (`coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge`, which loads the SeaTalk SDK) into `~/.coffer/bin`. Put that directory on your `PATH` to use `coffer` in a terminal and to let MCP clients resolve `coffer-mcp-shim`:
+On first start, the daemon copies all four binaries (`coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge`, which loads the SeaTalk SDK), and the shim's library folder `coffer-mcp-shim-lib/`, into `~/.coffer/bin`. Put that directory on your `PATH` to use `coffer` in a terminal and to let MCP clients resolve `coffer-mcp-shim`:
 
 ```sh
 export PATH="$HOME/.coffer/bin:$PATH"   # add this to your shell profile

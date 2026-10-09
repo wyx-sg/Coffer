@@ -704,7 +704,9 @@ The release pipeline MUST produce, per `v*` tag, the **terminal-install tier** f
 only**: a `coffer-cli-<triple>.tar.gz` archive containing exactly four binaries: `coffer` (the
 management CLI), `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge` (the executable
 that loads the SeaTalk SDK on the daemon's behalf, see [channels/seatalk](../channels/seatalk/spec.md)
-"Load the websocket client library from an operator-supplied directory"). The binaries MUST stay co-located inside the archive so the frozen resolution
+"Load the websocket client library from an operator-supplied directory"), plus `coffer-mcp-shim-lib/`,
+the folder of libraries the one-folder shim loads from beside itself (see
+[ADR distribution-pyinstaller](../../../docs/decisions/distribution-pyinstaller.md)). The binaries MUST stay co-located inside the archive so the frozen resolution
 of "Spawn a detached daemon from any surface that needs one" finds `coffer-daemon` next to
 `coffer`. macOS x64 (Intel), Linux and Windows are deliberately not built — those legs were never
 validated end to end. This archive carries the "no system Python required" promise on its own: on a
@@ -716,7 +718,7 @@ neither is a substitute for the other.
 #### Scenario: release tag produces the CLI archive and SHA256SUMS
 - **GIVEN** a release tag matching `v*` is pushed,
 - **WHEN** the release workflow finishes,
-- **THEN** the release contains the terminal tier — `coffer-cli-<triple>.tar.gz` for macOS arm64, holding `coffer`, `coffer-daemon` and `coffer-mcp-shim`, co-located, and no other binary,
+- **THEN** the release contains the terminal tier — `coffer-cli-<triple>.tar.gz` for macOS arm64, holding `coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-seatalk-bridge`, co-located with the shim's `coffer-mcp-shim-lib/` folder, and no other binary,
 - **AND** the release contains a single aggregated `SHA256SUMS` file covering every artifact of every tier, including the desktop tier of [desktop-app](../desktop-app/spec.md) "Ship the desktop tier as a macOS arm64 dmg",
 - **AND** no other platform is built.
 
@@ -736,7 +738,11 @@ When the daemon detects that it is running as a frozen build, it MUST idempotent
 sibling binaries — `coffer`, `coffer-daemon`, `coffer-mcp-shim` — into
 `~/.coffer/bin/` at startup. `coffer` is in that list so that a user who installed only the desktop
 tier has the management CLI on disk after the first launch, and `coffer-daemon` so the frozen shim
-can resolve it as a sibling. Each build MUST land in its own `~/.coffer/bin/<version>/` directory,
+can resolve it as a sibling. The shim is a one-folder build: its library folder,
+`coffer-mcp-shim-lib/`, MUST be deployed with it into the same version directory, before the
+executable, and a version directory whose shim lacks that folder MUST be deployed again. The
+daemon finds each sibling beside itself or, in the desktop app, in `Contents/Resources`, where the
+app keeps the shim. Each build MUST land in its own `~/.coffer/bin/<version>/` directory,
 with the public `~/.coffer/bin/<name>` paths being symlinks into it that are flipped atomically, so
 that a deploy never overwrites a binary in place and the previous version's directory stays on disk
 for a rollback (the two newest version directories are kept; older ones are pruned). The copy MUST
@@ -776,6 +782,12 @@ whichever tier it came from.
 - **GIVEN** a daemon starting against a `runs.db` whose Alembic revision is behind this build's head,
 - **WHEN** the migrations run at startup,
 - **THEN** `runs.db.pre-<revision>` holds the pre-upgrade state beside the live file as one file, with what the write-ahead log held and none of the free pages, only the three newest such copies are kept, and a start against an already-current schema — or an in-memory database — copies nothing.
+
+#### Scenario: the shim's library folder is deployed with it
+- **GIVEN** a frozen `coffer-daemon` whose build holds `coffer-mcp-shim` with its `coffer-mcp-shim-lib/` folder, beside the daemon or in the app's `Contents/Resources`
+- **WHEN** the daemon starts
+- **THEN** `~/.coffer/bin/<version>/` holds the shim with `coffer-mcp-shim-lib/` beside it, and `~/.coffer/bin/coffer-mcp-shim` starts from there
+- **AND** a later start finding that version's folder missing deploys the shim again
 
 ### Requirement: Clear inherited agent-home variables at start
 In a signed build the daemon MUST also drop the inherited proxy and certificate settings from its own environment
@@ -1252,7 +1264,8 @@ the same record; `PUT /api/v1/daemon/upgrade/auto-check` MUST set the switch.
 release: download the command-line archive for this machine and the release's
 `SHA256SUMS`, refuse an archive whose checksum does not match, put each binary
 over its public name in `~/.coffer/bin` the way the installer does (a temporary
-sibling, then a rename), and restart the daemon from the new
+sibling, then a rename), with the shim's `coffer-mcp-shim-lib/` folder put beside
+it the same way before the shim itself, and restart the daemon from the new
 `~/.coffer/bin/coffer-daemon`. Nothing is replaced until the archive has
 verified. `coffer update --check` MUST only report the running and the newest
 version. When the running daemon is the desktop app's, `coffer update` MUST ask
@@ -1334,3 +1347,18 @@ MCP shim, the login service — MUST NOT kill a daemon.
 - **GIVEN** a `daemon.json` whose pid now belongs to a process that is not a Coffer daemon of this vault,
 - **WHEN** a restart forces the recorded daemon out,
 - **THEN** no signal is sent to that process.
+
+### Requirement: Delete what exited one-file binaries unpacked
+Each of Coffer's one-file binaries (`coffer`, `coffer-daemon`, `coffer-seatalk-bridge`) MUST
+write its process id into the directory its bootloader unpacked it into (`$TMPDIR/_MEI*`) before
+any Coffer code runs. A frozen daemon MUST, when it starts and every 6 hours after, delete each
+such directory whose marked process no longer runs. It MUST NOT delete an unmarked directory —
+another PyInstaller program's, or one whose process has not marked it yet — nor its own. The
+bootloader removes the directory when its program exits, but not when the process is killed
+outright, and each leftover is the size of the whole archive.
+
+#### Scenario: a frozen daemon deletes the unpack directories of exited Coffer binaries
+- **GIVEN** `$TMPDIR` holding a `_MEI*` directory marked with the pid of an exited Coffer process, one marked with a running process's pid, and one with no mark
+- **WHEN** a frozen daemon starts
+- **THEN** the directory of the exited process is deleted
+- **AND** the other two, and the daemon's own unpack directory, are left as they were
