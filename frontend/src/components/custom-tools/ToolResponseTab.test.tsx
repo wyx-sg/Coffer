@@ -5,6 +5,7 @@ import { describe, expect, test } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import type { ResponseRule } from "@/lib/api/customTools";
+import { acceptance } from "@/test/acceptance";
 import { makeTool } from "./testFixtures";
 import { ToolResponseTab } from "./ToolResponseTab";
 import { formOf, toolOf, type ToolForm } from "./toolForm";
@@ -42,7 +43,7 @@ describe("ToolResponseTab", () => {
     expect(screen.getByText("HTTP status only")).toBeInTheDocument();
   });
 
-  test("switching to this tool's own rules starts from the group's and sends them", () => {
+  acceptance("web-ui", "a tool follows its group's response rules or sets its own", () => {
     render(<Harness initial={formOf(makeTool())} groupRules={[GROUP_RULE]} />);
     fireEvent.click(screen.getByLabelText("Rules for this tool only"));
     expect(toolOf(latest).response_rules).toEqual([GROUP_RULE]);

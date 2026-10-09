@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 
 import type { CustomToolTestOut } from "@/lib/api/customTools";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { acceptance } from "@/test/acceptance";
 import { ToolTestResult } from "./ToolTestResult";
 
 vi.mock("@/lib/api/secret", () => ({
@@ -161,21 +162,24 @@ describe("ToolTestResult", () => {
     expect(screen.getByText(/Agents get the same first 1 MB/)).toBeInTheDocument();
   });
 
-  test("a broken response rule reads as failed and says which value broke it", () => {
+  acceptance("web-ui", "Try it names the response rule an answer broke", () => {
     show(
       result({
         rule_failure: {
           rule: { source: "header", name: "x-result-code", ok_values: ["OK"], missing: "ok" },
           value: "E42",
           message: "quota exceeded",
-          summary: "header x-result-code was E42, expected OK: quota exceeded",
+          summary: 'header x-result-code = "E42" (success: "OK"): quota exceeded',
         },
+        body: "",
+        body_bytes: 0,
       }),
     );
     expect(block()).toHaveClass("bg-danger-soft");
     expect(screen.getByText("Response rule failed")).toBeInTheDocument();
-    expect(screen.getByText(/was E42, expected OK: quota exceeded/)).toBeInTheDocument();
+    expect(screen.getByText(/= "E42" \(success: "OK"\): quota exceeded/)).toBeInTheDocument();
     expect(screen.getByText(/broke one of the response rules/)).toBeInTheDocument();
+    expect(screen.getByText(/0 bytes · empty body/)).toBeInTheDocument();
   });
 
   test("an empty body is said so", () => {
