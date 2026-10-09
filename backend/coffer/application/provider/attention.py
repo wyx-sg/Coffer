@@ -11,8 +11,6 @@ runtime that is not started); the provider list still marks it red.
   page;
 - ``provider_unreachable`` — the endpoint does not answer. The action checks it
   again in place.
-
-Belongs to the ``models`` feature: switched off, the source is not asked.
 """
 
 from __future__ import annotations
@@ -22,7 +20,6 @@ from typing import Protocol
 
 from coffer.application.attention import AttentionAction, AttentionItem, Severity
 from coffer.application.provider.targets import connection_for_agent
-from coffer.domain.features import MODELS
 from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.provider.health import HealthStatus, ProviderHealth
 from coffer.domain.resource import Resource
@@ -58,7 +55,7 @@ def _on(agent: Resource, connections: Sequence[Resource]) -> Resource | None:
 
 class ProviderAttentionSource:
     name = "provider"
-    feature: str | None = MODELS
+    feature: str | None = None
 
     def __init__(self, *, resources: ResourcesPort, health: HealthPort) -> None:
         self._resources = resources

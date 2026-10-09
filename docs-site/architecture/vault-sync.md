@@ -63,16 +63,16 @@ sequenceDiagram
     W->>S: run a round
     S->>S: take the vault lock
     S->>V: check: a repository, not inside a cloud-synced folder
-    S->>V: settle your valid edits; L := HEAD
-    S->>O: fetch; R := origin/branch
+    S->>V: settle your valid edits, L := HEAD
+    S->>O: fetch, R := origin/branch
     S->>S: refuse a newer layout, replace an older one
     S->>V: git merge-tree L R, giving tree T (outside the working tree)
     S->>S: any conflict, identity clash or invalid file? stop
     S->>S: deletion breaker, incoming (L to T) and outgoing (base to L)
-    S->>V: snapshot L; M := commit(T; L, R); read-tree -m -u L M
+    S->>V: snapshot L, M := commit of T with parents L and R, read-tree -m -u L M
     S->>V: this machine's descriptor
     S->>O: push
-    S->>S: record the round; reconcile once if anything changed
+    S->>S: record the round, then reconcile once if anything changed
 ```
 
 1. **Check.** The vault is a repository, and not inside a folder another tool synchronises (a Syncthing folder, Dropbox, iCloud Drive or a File Provider root). Two tools syncing one git repository corrupt it, so such a vault pauses with `paused_cloud_folder`.
@@ -173,7 +173,7 @@ Each machine writes exactly one file, `machines/<machine id>.json`, and never an
 - **Name.** A label. Renaming is free, nothing keys on it, and the new name is committed at once.
 - **Retire.** Deleting another machine's descriptor is an ordinary commit of yours that the next round pushes. A machine that syncs again comes back. Retiring runs at once and can be undone: `POST /api/v1/sync/machines/{id}/restore` writes the descriptor back exactly as the vault's history held it before it was retired (`SYNC_MACHINE_NOT_FOUND` for a machine the vault never held).
 - **Stop syncing.** Forgetting the remote runs at once and can be undone: this machine keeps, on itself only, the remote's settings (the push secret as a name, never its value), whether it had joined, a round waiting for a person and a join's differing files, and `POST /api/v1/sync/remote/restore` puts them back. It is refused with `SYNC_NOTHING_TO_RESTORE` when nothing was stopped or another remote was set since, and with `SYNC_REMOTE_EXISTS` while a remote is set.
-- **The master key.** Secrets whose ciphertext arrived but whose key did not are reported as locked, rather than failing at first use. Keys move between machines out of band: the desktop app writes a passphrase-protected key backup behind a presence check, and **Settings › Security › Import a master key** installs it on the other machine after showing whose key the file holds beside this machine's (`POST /api/v1/secrets/key/import/preview`). The key's routes belong to the secret store, so they answer whether or not sync is switched on. The key it replaces is kept as a backup, and the running daemon seals every secret stored afterwards under the imported key.
+- **The master key.** Secrets whose ciphertext arrived but whose key did not are reported as locked, rather than failing at first use. Keys move between machines out of band: the desktop app writes a passphrase-protected key backup behind a presence check, and **Settings › Security › Import a master key** installs it on the other machine after showing whose key the file holds beside this machine's (`POST /api/v1/secrets/key/import/preview`). The key's routes belong to the secret store, so they answer whether or not sync is switched on. The key it replaces is kept as a second Keychain item, and the running daemon seals every secret stored afterwards under the imported key.
 
 ## Problems a round reports
 

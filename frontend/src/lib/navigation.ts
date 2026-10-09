@@ -63,7 +63,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     labelKey: "nav.group.agents",
     entries: [
       { to: "/agents", labelKey: "nav.agents", icon: Bot },
-      { to: "/model-providers", labelKey: "nav.modelProviders", icon: Box, feature: "models" },
+      { to: "/model-providers", labelKey: "nav.modelProviders", icon: Box },
     ],
   },
   {
@@ -98,7 +98,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     entries: [
       { to: "/secrets", labelKey: "nav.secrets", icon: IdCard },
       { to: "/activity", labelKey: "nav.activity", icon: Activity },
-      { to: "/sync", labelKey: "nav.sync", icon: RefreshCw, feature: "sync" },
+      { to: "/sync", labelKey: "nav.sync", icon: RefreshCw },
     ],
   },
 ];

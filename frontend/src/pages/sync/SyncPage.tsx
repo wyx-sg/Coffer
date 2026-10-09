@@ -66,7 +66,7 @@ export function SyncPage() {
   if (!status) {
     return (
       <div className="space-y-6">
-        <PageHeader title={t("sync.title")} experimental />
+        <PageHeader title={t("sync.title")} />
         {isPending ? (
           <Skeleton className="h-40 w-full" />
         ) : (

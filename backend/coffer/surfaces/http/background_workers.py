@@ -79,10 +79,10 @@ def start_background_workers(
         secret_store=secret_store,
         platform=platform,
     )
+    sync_worker = start_sync_worker(sync)
+
     # Every experimental feature's pass reads its switch at the top of each
     # round and skips it while off (spec experimental-features).
-    sync_worker = start_sync_worker(sync, features)
-
     # The knowledge sweep: refresh the guide, promote what landed in a
     # collection's inbox, and commit edits found on disk.
     knowledge_sweep_task = start_knowledge_sweep(knowledge_service, guide, resource_svc, features)

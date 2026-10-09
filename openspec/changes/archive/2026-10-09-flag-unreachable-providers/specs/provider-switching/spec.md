@@ -28,7 +28,7 @@ with no models is `reachable`. A verdict older than the kept one MUST be
 dropped. A check MUST NOT send a stored key whose destination waits for
 approval or was refused: that connection is skipped. `GET
 /api/v1/providers/health` MUST answer every kept verdict without calling any
-endpoint. All of it follows the `models` feature. A moved status is announced
+endpoint. A moved status is announced
 on the event stream as a `provider` change, and the attention list is
 recomputed.
 

@@ -48,9 +48,10 @@ acceptance(
     // This list is the whole inventory, and the count assertion below is what
     // makes "and only those" true: a fence with no upper bound is not a fence.
     // Adding a sidebar entry means adding it here. See
-    // `frontend/src/lib/navigation.ts`. The e2e daemon pins all four
-    // experimental features on (`scripts/start_daemon.sh`), so the five
-    // entries they own are listed. The expanded row carries no Experimental
+    // `frontend/src/lib/navigation.ts`. The e2e daemon pins both
+    // experimental features on (`scripts/start_daemon.sh`), so the two
+    // entries they own are listed; Sync and Model providers are always
+    // there. The expanded row carries no Experimental
     // tag (spec experimental-features "Mark an experimental feature's
     // sidebar entry"): the tag is on the page title and in the rail tooltip.
     const SIDEBAR_GROUPS: [string | null, RegExp[]][] = [

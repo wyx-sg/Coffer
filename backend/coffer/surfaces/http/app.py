@@ -225,7 +225,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         retrieve_memory=memory_turn_retriever(kinds.memory.turn_retrieval, features.is_enabled),
     )
     # Each connection's health, kept without anyone opening it (provider_health_wiring).
-    wire_provider_health(vault.derived_sm, kinds, chat.introspection_service, events, features)
+    wire_provider_health(vault.derived_sm, kinds, chat.introspection_service, events)
     # An agent's native sessions that a channel conversation points at are also
     # that conversation: the sessions service joins the turn platform here (the
     # two kinds meet only in a composition root).

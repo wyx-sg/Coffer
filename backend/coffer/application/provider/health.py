@@ -19,8 +19,7 @@ provider-switching "Know each connection's health without opening it").
 A newer verdict replaces an older one; one from before the kept verdict is
 dropped (a usage file ingested late does not undo a fresh check). A stored key
 whose destination is not approved yet is never sent: that connection is
-skipped, and the secret approvals already say what waits. Everything here
-follows the ``models`` feature: switched off, nothing is checked or recorded.
+skipped, and the secret approvals already say what waits.
 """
 
 from __future__ import annotations
@@ -93,7 +92,6 @@ class ProviderHealthService:
         connections: ConnectionsPort,
         list_models: Lister,
         authorize: Authorize,
-        is_enabled: Callable[[], bool] = lambda: True,
         clock: Callable[[], datetime] = _now,
         background: bool = True,
     ) -> None:
@@ -101,7 +99,6 @@ class ProviderHealthService:
         self._connections = connections
         self._list = list_models
         self._authorize = authorize
-        self._is_enabled = is_enabled
         self._clock = clock
         #: False leaves out the checks nobody asked for (the sweep, the
         #: re-check after an edit); a test suite pins it off.
@@ -123,8 +120,6 @@ class ProviderHealthService:
 
     async def record(self, uid: str, health: ProviderHealth) -> None:
         """Keep ``health`` unless what is kept is newer; announce a moved status."""
-        if not self._is_enabled():
-            return
         kept = await self._store.get(uid)
         if kept is not None and kept.checked_at > health.checked_at:
             return
@@ -152,10 +147,7 @@ class ProviderHealthService:
 
     async def check(self, uid: str) -> ProviderHealth | None:
         """List ``uid``'s models now and keep the verdict. ``None`` when nothing
-        was checked: the feature is off, the connection is retired, or its key
-        waits for approval."""
-        if not self._is_enabled():
-            return None
+        was checked: the connection is retired, or its key waits for approval."""
         resource = await self._connections.get(uid)
         return await self._check(resource)
 
@@ -180,8 +172,6 @@ class ProviderHealthService:
 
     async def check_all(self) -> None:
         """Check every enabled connection, one after another."""
-        if not self._is_enabled():
-            return
         for resource in await self._connections.list():
             if not resource.enabled:
                 continue

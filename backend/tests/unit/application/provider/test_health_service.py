@@ -80,7 +80,6 @@ def _service(
     *,
     pending: set[str] = frozenset(),  # type: ignore[assignment]
     store: _Store | None = None,
-    enabled: bool = True,
     now: datetime = T0,
 ) -> tuple[ProviderHealthService, _Store, list[str]]:
     async def authorize(row: Resource, _cfg: ProviderConfig) -> None:
@@ -93,7 +92,6 @@ def _service(
         connections=connections,
         list_models=endpoints,
         authorize=authorize,
-        is_enabled=lambda: enabled,
         clock=lambda: now,
     )
     moved: list[str] = []
@@ -171,16 +169,6 @@ async def test_since_stays_while_the_status_does() -> None:
     assert kept.checked_at == T0 + timedelta(minutes=30)
     assert kept.started == T0
     assert moved == ["c1"]  # the second check moved nothing
-
-
-async def test_nothing_is_checked_or_kept_while_models_is_off() -> None:
-    endpoints = _Endpoints({"https://gw/v1": DOWN})
-    svc, store, _ = _service(_Connections(_connection("c1")), endpoints, enabled=False)
-    await svc.check_all()
-    assert await svc.check("c1") is None
-    await svc.observe([_usage(401, Outcome.UPSTREAM_ERROR, T0)])
-    assert endpoints.called == []
-    assert store.rows == {}
 
 
 @pytest.mark.acceptance(

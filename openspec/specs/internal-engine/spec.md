@@ -36,9 +36,7 @@ what each pass does (memory's; the knowledge sweep has no switch or interval of 
 per-partition timers. Coffer runs as a single-user tool behind the existing
 `X-Coffer-Token` gate.
 
-The engine keeps resolving its connection whatever the features say. While `models` is
-switched off the speech-to-text connection cannot be changed, and Settings › General omits
-what depends on Models; while `memory` is off the distil and aggregate passes skip their
+The engine keeps resolving its connection whatever the features say. While `memory` is off the distil and aggregate passes skip their
 rounds, and the knowledge sweep skips its rounds while `knowledge` is off (spec
 [experimental-features](../experimental-features/spec.md) "Keep dependencies between
 features soft").

@@ -37,7 +37,7 @@ because the user routed it there, and the endpoint must really speak what that a
 proxy relays each wire to an upstream of the same wire); curating an agent's own models; and
 deriving account entitlement locally.
 
-While the `models` feature is switched off (spec [experimental-features](../experimental-features/spec.md) "Close the models feature's surfaces"), the provider, model, proxy and usage routes answer 404 `FEATURE_DISABLED`, the projection into agents' own config files is withdrawn so each agent runs on its own login, and the local model proxy serves no agent; each agent record keeps its connection choice and the projection returns when the feature is switched on. Requirements below describe the feature while it is on.
+Model providers, the local model proxy and Usage are a regular feature: always on, with no switch (they graduated from the experimental features, spec [experimental-features](../experimental-features/spec.md) "Move a graduated feature's configuration and clean up a retired one's").
 
 ## Requirements
 
@@ -1370,7 +1370,7 @@ The web surfaces:
   with the model it runs, as a link reading "<Agent> › Change model" that opens that agent's page with its Change model dialog already open (`/agents/<type>?change-model=1`); and Speech to text
   when the connection is flagged for it, reading "Settings › General" and opening it. Used by carries no
   switch, activate or revert control, and no row repeats a fault: a connection's fault shows in its header pill and in the section it belongs to (Endpoint for Unreachable or Key rejected, Models for a failed listing).
-- Per-agent connection and model selection lives on the agent detail page's **Overview › Model** section and its **Change model** dialog; the agent page has no Model tab. The section reads **Provider**, **Model** and **Route** and, with the `models` feature on, carries **Change…**. The dialog is one 480-wide form for both agents ("Review a model change before writing it"), filtered to the connections that reach that agent and narrowed by `enabled`: **Provider** (the agent's built-in login or a connection), then, for a connection, **Model** and, for Claude Code, **Model per tier** (Opus, Sonnet, Haiku, and Fable only when the connection lists a Fable model; see "Suggest a model for each Claude Code tier"). It carries no
+- Per-agent connection and model selection lives on the agent detail page's **Overview › Model** section and its **Change model** dialog; the agent page has no Model tab. The section reads **Provider**, **Model** and **Route** and carries **Change…**. The dialog is one 480-wide form for both agents ("Review a model change before writing it"), filtered to the connections that reach that agent and narrowed by `enabled`: **Provider** (the agent's built-in login or a connection), then, for a connection, **Model** and, for Claude Code, **Model per tier** (Opus, Sonnet, Haiku, and Fable only when the connection lists a Fable model; see "Suggest a model for each Claude Code tier"). It carries no
   other model setting — no output-limit, subagent, thinking or fast-mode
   control — because what else a model needs Coffer derives and writes itself. Picking a non-built-in
   connection introspects its endpoint and stages a default model — the first model returned — and
@@ -1511,7 +1511,7 @@ with no models is `reachable`. A verdict older than the kept one MUST be
 dropped. A check MUST NOT send a stored key whose destination waits for
 approval or was refused: that connection is skipped. `GET
 /api/v1/providers/health` MUST answer every kept verdict without calling any
-endpoint. All of it follows the `models` feature. A moved status is announced
+endpoint. A moved status is announced
 on the event stream as a `provider` change, and the attention list is
 recomputed.
 

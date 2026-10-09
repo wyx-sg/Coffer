@@ -18,7 +18,7 @@ Coffer 把配置放在五个地方，每个地方都有其理由：
 | 浏览器 `localStorage` | Web 界面偏好 | 按浏览器保存，从不发给守护进程 |
 
 ::: warning 环境变量与脱离启动的守护进程
-守护进程通常是脱离调用方启动的——由命令行、智能体的 MCP shim、桌面应用或开机自启服务拉起——它继承的是启动它的那个进程的环境，而不是你的 shell 配置文件。只有在启动守护进程的进程的环境里设置环境变量，它才能到达守护进程，例如 `COFFER_FEATURES=run=off,models=off coffer daemon restart`。想长期保留的设置，应该放进 `daemon-config.json` 或 **设置**。
+守护进程通常是脱离调用方启动的——由命令行、智能体的 MCP shim、桌面应用或开机自启服务拉起——它继承的是启动它的那个进程的环境，而不是你的 shell 配置文件。只有在启动守护进程的进程的环境里设置环境变量，它才能到达守护进程，例如 `COFFER_FEATURES=knowledge=on,memory=off coffer daemon restart`。想长期保留的设置，应该放进 `daemon-config.json` 或 **设置**。
 :::
 
 ## 环境变量 {#environment-variables}
@@ -61,7 +61,7 @@ Coffer 把配置放在五个地方，每个地方都有其理由：
 
 | 名称 | 默认值 | 作用 |
 | --- | --- | --- |
-| `COFFER_DB_URL` | `sqlite+aiosqlite:///~/.coffer/runs.db` | 历史数据库的 SQLAlchemy URL。无论它怎么设，主密钥文件（`master.key`）都留在 `~/.coffer`。 |
+| `COFFER_DB_URL` | `sqlite+aiosqlite:///~/.coffer/runs.db` | 历史数据库的 SQLAlchemy URL。无论它怎么设，主密钥都留在 macOS 钥匙串中。 |
 | `COFFER_PROXY_SPOOL_DIR` | `~/.coffer/proxy-usage` | 模型代理写入用量暂存文件、守护进程从中读取的目录。两个进程必须看到相同的值。 |
 | `COFFER_LOG_DIR` | `~/.coffer/logs` | 存放 `daemon.log`、`proxy.log`、上游服务器日志、MCP shim 日志以及开机自启服务输出的目录。 |
 | `HOME` | 用户的主目录 | 每个 `~/.coffer` 路径都在需要的那一刻相对 `$HOME` 解析，所以换一个 `HOME` 就得到完全独立的保险库。 |
@@ -135,16 +135,16 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 
 实验功能是在你开启之前一直关闭的能力，按机器开启；关闭期间它看起来就像不存在——它的页面、命令和路由都不可用——但不会删除它保存的任何东西。每个注册表条目写明它的键、它拥有的路由和资源类型。
 
-注册表里有四个功能，按这个顺序：
+注册表里有两个功能，按这个顺序：
 
 | 键 | 关闭的内容 | REST 前缀 |
 | --- | --- | --- |
 | `knowledge` | 知识 | `/api/v1/knowledge` |
 | `memory` | 记忆 | `/api/v1/memory` |
-| `sync` | 保险库同步 | `/api/v1/sync` |
-| `models` | 模型提供商（含它的用量 tab）和本地模型代理 | `/api/v1/providers`、`/api/v1/models`、`/api/v1/proxy`、`/api/v1/usage` |
 
-其余一切始终开启，包括对话和消息渠道。其他任何键都不是功能：`PUT /api/v1/daemon/features/<key>` 会返回 `FEATURE_UNKNOWN`。注册表没有声明的键，其已保存的设置会被忽略。
+其余一切始终开启，包括保险库同步、模型提供商（连同本地模型代理和用量）、对话和消息渠道。其他任何键都不是功能：`PUT /api/v1/daemon/features/<key>` 会返回 `FEATURE_UNKNOWN`。注册表没有声明的键，其已保存的设置会被忽略。
+
+`sync` 和 `models` 曾是实验功能，现已转正。指向它们的 `COFFER_FEATURES` 条目或已保存的设置是未知的键：记日志并忽略。守护进程启动时会把它们的开关从 `daemon-config.json` 的 `features` 对象中移除，每移除一个开关记一行日志。
 
 功能关闭期间，它的路由返回 `404`，错误码为 `FEATURE_DISABLED`；在**设置 → 功能**里开启它。注册表位于 [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py)。
 
@@ -156,14 +156,14 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 2. **设置** — `daemon-config.json` 中 `features` 下本机的值。
 3. **默认值** — 每个构建中的每个功能都是关。
 
-**设置 → 功能** 在每个构建中都会列出这四个功能，状态的来源报告为 `pin`、`setting` 或 `default`。被固定的功能，开关不可用。
+**设置 → 功能** 在每个构建中都会列出这两个功能，状态的来源报告为 `pin`、`setting` 或 `default`。被固定的功能，开关不可用。
 
 ### COFFER_FEATURES 语法 {#coffer-features-syntax}
 
 逗号分隔的 `key=value` 条目列表。`on`、`true` 和 `1` 表示开启；`off`、`false` 和 `0` 表示关闭。条目两侧的空白会被忽略，值不区分大小写。未知的键或格式错误的条目会被记录并跳过，绝不会让守护进程停下。
 
 ```sh
-COFFER_FEATURES="knowledge=on,models=off" coffer daemon restart
+COFFER_FEATURES="knowledge=on,memory=off" coffer daemon restart
 ```
 
 面向任务的指南见[实验功能](/zh/guides/experimental-features)。
@@ -232,8 +232,7 @@ Coffer 自身工作的设置是保险库中的一个文档 `state/settings/inter
 
 | 设置 | 默认值 | 作用 |
 | --- | --- | --- |
-| **将主密钥存入系统钥匙串** | 关（文件） | 在 `~/.coffer/master.key` 和系统钥匙串（服务 `coffer`，条目 `master-key`）之间移动密钥的主密钥。主密钥本身不变，所以已存的密钥仍然可读。这次移动会被审计。仅限开发构建：签名的发布版把主密钥保存在自己的钥匙串访问组中，拒绝移动。 |
-| 新密钥去处需审批（`secrets.require_approval`） | 签名发布版开，开发构建关 | 开启时，密钥发往新的去处或目标之前，要先在桌面应用中等待审批。关闭时，新去处无需询问直接批准。开启立即生效；关闭则要等桌面应用中的一次审批。见[密钥](/zh/guides/secrets#switching-the-protection-off)。 |
+| 新密钥去处需审批（`secrets.require_approval`） | 开 | 开启时，密钥发往新的去处或目标之前，要先在桌面应用中等待审批。关闭时，新去处无需询问直接批准。开启立即生效；关闭则要等桌面应用中的一次审批。见[密钥](/zh/guides/secrets#switching-the-protection-off)。 |
 
 ## 相关内容 {#related}
 

@@ -50,7 +50,7 @@ Out of scope:
   machine-local"), so each machine already answers that question for itself by
   holding its own scope.
 
-While the `sync` feature is switched off (spec [experimental-features](../experimental-features/spec.md) "Close the sync feature's surfaces"), the sync routes are closed and the convergence worker skips its rounds; the configured remote and the history stay untouched, and the knowledge sweep treats the vault as single-machine. Requirements below describe the feature while it is on.
+Vault sync is a regular feature: always on, with no switch (it graduated from the experimental features, spec [experimental-features](../experimental-features/spec.md) "Move a graduated feature's configuration and clean up a retired one's").
 
 ## Requirements
 

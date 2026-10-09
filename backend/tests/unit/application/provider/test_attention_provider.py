@@ -8,7 +8,6 @@ import pytest
 
 from coffer.application.attention import AttentionAction, Severity
 from coffer.application.provider.attention import ProviderAttentionSource
-from coffer.domain.features import MODELS
 from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.provider.health import HealthSource, HealthStatus, ProviderHealth
 from coffer.domain.resource import Resource
@@ -49,8 +48,8 @@ def _source(rows: list[Resource], verdicts: dict[str, ProviderHealth]) -> Provid
     return ProviderAttentionSource(resources=FakeResources(rows), health=_Health(verdicts))
 
 
-def test_the_source_belongs_to_the_models_feature() -> None:
-    assert _source([], {}).feature == MODELS
+def test_the_source_belongs_to_no_feature() -> None:
+    assert _source([], {}).feature is None
 
 
 @pytest.mark.acceptance(

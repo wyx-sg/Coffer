@@ -11,7 +11,7 @@ Coffer's backend is Python 3.12+.
 - **Pydantic v2** for models + validation
 - **SQLite** via **SQLAlchemy 2 (async)** + **`aiosqlite`** (the only access path to `runs.db`, the history database; the vault's files are the system of record for configuration and are written only through `VaultWriter`, `infrastructure/vault/`)
 - **`cryptography`** (Fernet) for the envelope-encrypted secret store
-- **`keyring`** for OS keychain (secret module only — the opt-in master-key location)
+- **`keyring`** for OS keychain access (secret module only). The master key lives in the macOS Keychain; a build from source currently keeps it in a temporary `0600` file, a development stopgap removed before release
 - **`asyncio`** for async + subprocess management. Coffer's own code imports
   `asyncio`, never `anyio` (which `domain/` is forbidden to import at all) — but
   `anyio` is underneath Starlette and the `mcp` SDK, and its task-group cancel

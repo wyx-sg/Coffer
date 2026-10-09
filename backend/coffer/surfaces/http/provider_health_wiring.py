@@ -19,13 +19,11 @@ import os
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from coffer.application.features import FeatureService
 from coffer.application.provider.health import ProviderHealthService
 from coffer.application.provider.introspection import ModelIntrospectionService
 from coffer.application.provider.ports import ModelList
 from coffer.application.provider.secret_gate import require_key
 from coffer.application.runtime.supervisor import spawn_restarting
-from coffer.domain.features import MODELS
 from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.resource import Resource
 from coffer.infrastructure.provider.health_repo import ProviderHealthRepo
@@ -48,7 +46,6 @@ def wire_provider_health(
     kinds: KindWirings,
     introspection: ModelIntrospectionService,
     events: EventStream,
-    features: FeatureService,
 ) -> ProviderHealthService:
     """Build the health service, connect it, and start its sweep."""
     providers = kinds.provider.service
@@ -64,7 +61,6 @@ def wire_provider_health(
         connections=providers,
         list_models=list_models,
         authorize=authorize,
-        is_enabled=lambda: bool(features.is_enabled(MODELS)),
         background=background_checks_on(),
     )
 

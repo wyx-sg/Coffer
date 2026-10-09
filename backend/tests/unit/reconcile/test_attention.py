@@ -103,11 +103,11 @@ async def test_a_failing_source_is_reported_beside_the_others() -> None:
     spec="experimental-features", scenario="a switched-off feature's attention source is not asked"
 )
 async def test_a_switched_off_features_source_is_not_asked() -> None:
-    sync = _Source("sync", [_item("sync", Severity.ERROR)], feature="sync")
-    svc = AttentionService([sync], feature_enabled=lambda key: key != "sync")
+    gated = _Source("fake", [_item("fake", Severity.ERROR)], feature="fake_feature")
+    svc = AttentionService([gated], feature_enabled=lambda key: key != "fake_feature")
     report = await svc.report()
-    assert report.items == () and sync.asked == 0
-    svc_on = AttentionService([sync], feature_enabled=lambda _k: True)
+    assert report.items == () and gated.asked == 0
+    svc_on = AttentionService([gated], feature_enabled=lambda _k: True)
     assert len((await svc_on.report()).items) == 1
 
 

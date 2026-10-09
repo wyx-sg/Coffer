@@ -20,10 +20,6 @@ A coding agent can read a hostile web page, issue or README and start following 
 
 Writing a resource's secret stays open to every surface: whoever supplies a value already has it. Storing a secret, whether a new standalone one or a new value for one in use, takes effect at once.
 
-::: danger Only a signed release holds this boundary
-Coffer does not yet ship binaries signed with an Apple Developer ID. Until it does, every build is a **development build**: the master key is the file `~/.coffer/master.key`, which any program running as you can read, and with it a program can forge the desktop app's approval. The commands and approvals on this page work the same way in a development build, and the desktop app labels every prompt "Development build", but they do not stop a determined agent there. See [Security model → Development builds](/architecture/security#development-builds).
-:::
-
 ## The Secrets page
 
 **Secrets** in the sidebar's System group (`/secrets`) is the one place in the web UI that lists and manages stored secrets. Secrets come only from Coffer: a secret field inside a resource's own dialog — an MCP server's token, a provider's key — either picks a stored secret from this page or takes a pasted value and saves it here with the form, and a header or environment row is plain text with a 🔑 button at the end of the field that picks a stored secret instead. A value pasted into a plain row that looks like a secret offers to be stored. Nothing secret sits in a resource's own settings, only the secret's id. This page is where you see all of them together and what each one is for.
@@ -239,7 +235,7 @@ An agent that hits exit `9` should tell you what it changed and which approvals 
 
 ### Switching the protection off
 
-`secrets.require_approval` defaults by the build: **on** in a signed release, **off** in a development build, whose master key any program running as you can read, so approvals there would stop only accidents (Settings and this page say so in one line). A setting you store wins in either. Turning it on takes effect at once. Turning it off waits for an approval in the desktop app, and while it is off every new destination is approved without asking, except the `coffer run` allowance, which is never approved that way. Nothing else — no environment variable, file or flag — switches it off. The switch is the **Approvals** section of **Settings › Security**; a browser shows it as **Turn off in the Coffer desktop app**.
+`secrets.require_approval` defaults to **on**. Turning it on takes effect at once. Turning it off waits for an approval in the desktop app, and while it is off every new destination is approved without asking, except the `coffer run` allowance, which is never approved that way. Nothing else — no environment variable, file or flag — switches it off. The switch is the **Approvals** section of **Settings › Security**; a browser shows it as **Turn off in the Coffer desktop app**.
 
 ## List your secrets
 
@@ -255,14 +251,11 @@ Every time Coffer decrypts a secret to use it — a server starting, a channel c
 
 ## The master key and its backup
 
-Every secret is encrypted with one master key. How it is kept depends on the build:
-
-- **A signed release** keeps it in a Keychain item only Coffer's signed binaries can read. No other program gets access, or a dialog to click. The daemon reads it without asking, so it starts unattended after a crash or at login.
-- **A development build** keeps it in `~/.coffer/master.key` (or the OS keychain, opt-in), readable by any program running as you.
+Every secret is encrypted with one master key, kept in a Keychain item only Coffer's signed binaries can read. No other program gets access, or a dialog to click. The daemon reads it without asking, so it starts unattended after a crash or at login.
 
 Presence checks guard what lets plaintext out, not the key itself: that is why the daemon never waits for you.
 
-**Back up the key in the desktop app** (Settings › Security): choose a passphrase, confirm with Touch ID or your login password, pick a folder, and the app writes the passphrase-protected `coffer-master-key.cfk` there with mode `0600`, audited as `master_key_exported`. `coffer secret backup-key` opens the same backup in the app, where you type the passphrase and pick the folder, and waits: once the file is written it prints where (exit 0), and if you close the dialog it exits `11` with nothing written. No command or browser page writes the backup itself. Install the backup on another machine with **Import a master key** on **Settings › Security** (or `coffer secret import-key`, which opens it in the app), which also asks for Touch ID in the app — see [Secret store → Carry the key to another machine](/guides/secret-store#carry-the-key-to-another-machine). In a signed release the Keychain is the only copy, so make a backup.
+**Back up the key in the desktop app** (Settings › Security): choose a passphrase, confirm with Touch ID or your login password, pick a folder, and the app writes the passphrase-protected `coffer-master-key.cfk` there with mode `0600`, audited as `master_key_exported`. `coffer secret backup-key` opens the same backup in the app, where you type the passphrase and pick the folder, and waits: once the file is written it prints where (exit 0), and if you close the dialog it exits `11` with nothing written. No command or browser page writes the backup itself. Install the backup on another machine with **Import a master key** on **Settings › Security** (or `coffer secret import-key`, which opens it in the app), which also asks for Touch ID in the app — see [Secret store → Carry the key to another machine](/guides/secret-store#carry-the-key-to-another-machine). The Keychain is the only copy, so make a backup.
 
 ## Related
 

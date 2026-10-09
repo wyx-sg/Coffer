@@ -27,13 +27,11 @@ function useProviderToastError() {
   return (error: unknown) => toast.error(translateApiError(t, error));
 }
 
-/** The connections. `enabled` is false while the Models feature is off: a
- *  surface that is always on reads them only when the route answers. */
-export function useProviders(enabled = true) {
+/** The connections. */
+export function useProviders() {
   return useQuery({
     queryKey: providersKey,
     queryFn: async () => (await providersApi.list()).providers,
-    enabled,
   });
 }
 

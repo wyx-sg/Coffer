@@ -19,7 +19,6 @@ import { useAgent, useAgentConnection, useAgentHooks } from "@/lib/hooks/useAgen
 import { useAgentCounts } from "@/lib/hooks/useAgentCounts";
 import { useAgentDefaultModel } from "@/lib/hooks/useAgentModels";
 import { useAgentPending } from "@/lib/hooks/useAgentPending";
-import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { cn } from "@/lib/utils";
 import { useProviderLabel } from "../overview/useProviderLabel";
 import { AgentPendingStatus } from "./AgentPendingStatus";
@@ -59,13 +58,9 @@ export function ConfigDirCell({ row }: { row: AgentTypeOut }) {
 }
 
 /** Which provider the agent's turns go to: the Coffer connection it runs on, or its own built-in
- *  login — the Overview tab's Provider line. With the Models feature off no connection can be
- *  active, so it is the built-in login. */
+ *  login — the Overview tab's Provider line. */
 function ProviderLabel({ agent }: { agent: AgentOut }) {
-  const { t } = useTranslation();
-  const models = useFeatureEnabled("models") === true;
-  const label = useProviderLabel(agent);
-  const text = label ?? (models ? null : t(`agents.overviewTab.model.builtin.${agent.type}`));
+  const text = useProviderLabel(agent);
   if (!text) return <span className="text-xs text-text-subtle">{DASH}</span>;
   return (
     <span className="block truncate whitespace-nowrap text-xs text-text" title={text}>

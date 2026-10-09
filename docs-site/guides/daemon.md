@@ -39,7 +39,7 @@ port:    38470
 pid:     41822
 ```
 
-`status` is `ready` while the daemon serves and `draining` while it shuts down, or `setup` while it waits for git — then the command also prints why and a prompt for your agent (see [Coffer needs git](/guides/troubleshooting#coffer-needs-git)). There is no earlier phase to see: the daemon opens its port only once it has finished starting. Four [experimental features](/guides/experimental-features) are off until you switch them on. Add `--json` for scripts.
+`status` is `ready` while the daemon serves and `draining` while it shuts down, or `setup` while it waits for git — then the command also prints why and a prompt for your agent (see [Coffer needs git](/guides/troubleshooting#coffer-needs-git)). There is no earlier phase to see: the daemon opens its port only once it has finished starting. Two [experimental features](/guides/experimental-features), Knowledge and Memory, are off until you switch them on. Add `--json` for scripts.
 
 With no daemon running, `coffer daemon status` prints `status:  not running` (`{"status": "stopped"}` under `--json`) and exits 3. It does not start a daemon, so its answer never changes what it reports on; use `coffer daemon start` for that.
 
@@ -206,7 +206,6 @@ Everything Coffer holds is under `~/.coffer`. The parts that cannot be rebuilt a
 | `local/` | This machine's agents, reach, retention, sync remote and secret approvals. |
 | `content/` | Attachments and the chat workspace. |
 | `runs.db` (+ `-wal`, `-shm`) | Conversations, the audit log, invocation logs, sync rounds, usage. |
-| `master.key` | The key that decrypts every stored secret. It is absent if you moved the key to the OS keychain (**Settings → Security**). |
 
 `derived/`, including the memory tree derived from your agents' own memory files, can be regenerated. To take a consistent copy, stop the daemon first:
 
@@ -217,7 +216,7 @@ coffer daemon start
 ```
 
 ::: warning
-A backup that includes `master.key` can decrypt every secret in it. Store it like a password. A backup without the key keeps the secrets as ciphertext nobody can read.
+The copy does not include the master key, which lives in the macOS Keychain: without it the secrets in the copy are ciphertext nobody can read. Back the key up in the desktop app (**Settings › Security › Back up the master key**) and store that backup like a password.
 :::
 
 If you run Coffer on several machines, [vault sync](/guides/vault-sync) pushes the vault repository, history included, to a git repository you own, which doubles as an off-machine backup of knowledge, skills and resource definitions.
