@@ -141,9 +141,7 @@ async def test_an_upload_becomes_a_document_and_nothing_else(knowledge) -> None:
     assert document.body.strip() == data.decode().strip()
 
 
-@pytest.mark.acceptance(
-    spec="knowledge", scenario="an upload is kept as a Markdown source"
-)
+@pytest.mark.acceptance(spec="knowledge", scenario="an upload is kept as a Markdown source")
 async def test_a_non_markdown_upload_is_converted_and_only_its_markdown_kept(knowledge) -> None:  # type: ignore[no-untyped-def]
     service = _service(knowledge)
     data = b"name,role\nAda,engineer\nGrace,engineer\n"
