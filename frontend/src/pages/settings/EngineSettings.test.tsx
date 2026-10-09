@@ -28,13 +28,6 @@ vi.mock("@/lib/api/providers", async (orig) => {
   };
 });
 
-// The Models feature is on unless a test says otherwise.
-let modelsOn: boolean | undefined = true;
-vi.mock("@/lib/hooks/useFeatures", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/hooks/useFeatures")>()),
-  useFeatureEnabled: () => modelsOn,
-}));
-
 // The section reads/writes the settings singleton, and the model dropdown lists
 // the chosen endpoint's models — both hit the network.
 const setSttModel = vi.fn();
@@ -123,21 +116,8 @@ function renderPage() {
 describe("EngineSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    modelsOn = true;
     engineConfig = { updated_at: null, upkeep: {} };
   });
-
-  acceptance(
-    "experimental-features",
-    "a page omits the section that belongs to a switched-off feature",
-    () => {
-      modelsOn = false;
-      const { container } = renderPage();
-      // Speech to text is a connection of a model provider: with Models off the
-      // section is absent, with no notice about it.
-      expect(container).toBeEmptyDOMElement();
-    },
-  );
 
   acceptance(
     "internal-engine",

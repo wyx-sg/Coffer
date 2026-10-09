@@ -138,8 +138,8 @@ describe("SyncPage — header", () => {
     );
     renderAt();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Sync");
-    expect(screen.getByText("Experimental")).toBeInTheDocument();
-    // No "?" beside the title.
+    // No Experimental tag and no "?" beside the title.
+    expect(screen.queryByText("Experimental")).toBeNull();
     expect(screen.queryByRole("button", { name: "More info" })).toBeNull();
     expect(pill()).toHaveTextContent("In sync");
     expect(screen.getByText("Keeps this vault in step with")).toBeInTheDocument();
