@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { Section } from "@/components/Section";
 import type { CustomToolGroup } from "@/lib/api/customTools";
 import { agentPrefix } from "@/lib/customTools/groups";
+import { describeRule } from "@/lib/customTools/responseRules";
 import { formatDateTime } from "@/lib/utils";
 import { DefinitionRow } from "./DefinitionRow";
 
@@ -16,6 +17,9 @@ interface Props {
 
 export function GroupDefinition({ group, onReimport }: Props) {
   const { t } = useTranslation();
+  const diagnostic = group.response?.diagnostic_headers ?? [];
+  const rules = group.response?.rules ?? [];
+  const statusOnly = t("customTools.definition.statusOnly");
 
   return (
     <Section title={t("customTools.definition.title")} as="h2" gap="tight" labelled>
@@ -39,6 +43,29 @@ export function GroupDefinition({ group, onReimport }: Props) {
           value={t("customTools.definition.timeoutValue", { seconds: group.timeout_seconds })}
           copyable={false}
         />
+        <DefinitionRow
+          label={t("customTools.definition.diagnosticHeaders")}
+          value={diagnostic.length > 0 ? diagnostic.join(", ") : t("customTools.definition.none")}
+          mono={diagnostic.length > 0}
+          copyable={false}
+        />
+        <DefinitionRow
+          label={t("customTools.definition.responseRules")}
+          value={rules.length > 0 ? rules.map(describeRule).join("\n") : statusOnly}
+          copyable={false}
+        >
+          {rules.length > 0 ? (
+            <span className="flex flex-col gap-0.5 whitespace-normal py-1.5">
+              {rules.map((r, i) => (
+                <span key={i} className="break-all font-mono text-xs">
+                  {describeRule(r)}
+                </span>
+              ))}
+            </span>
+          ) : (
+            statusOnly
+          )}
+        </DefinitionRow>
         {group.source ? (
           <DefinitionRow
             label={t("customTools.definition.spec")}

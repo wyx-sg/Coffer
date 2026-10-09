@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { CustomToolHeaderOut } from "@/lib/api/customTools";
+import type { CustomToolHeaderOut, ResponseRule } from "@/lib/api/customTools";
 import { cn } from "@/lib/utils";
 import {
   argumentProblems,
@@ -26,6 +26,7 @@ import {
   NameField,
   RequestField,
 } from "./ToolRequestFields";
+import { ToolResponseTab } from "./ToolResponseTab";
 import { ToolTestSection, type TestTarget } from "./ToolTestSection";
 import { toolOf, type ToolForm } from "./toolForm";
 
@@ -42,6 +43,8 @@ interface Props {
   environment: string | null;
   /** The chosen environment's headers, shown read-only above the tool's own. */
   groupHeaders: readonly CustomToolHeaderOut[];
+  /** The group's response rules, for the Response tab to show or start from; none before the group exists. */
+  groupRules: readonly ResponseRule[];
   /** The environments agents can name in `coffer_environment`. */
   environments: readonly string[];
   test: TestTarget;
@@ -127,7 +130,7 @@ export function ToolEditorForm(props: Props) {
             />
           </TabsContent>
           <TabsContent value="response" className="flex flex-col gap-4">
-            <ResponseRules />
+            <ToolResponseTab form={form} onChange={onChange} groupRules={props.groupRules} />
           </TabsContent>
         </div>
       </Tabs>
@@ -191,24 +194,5 @@ function AgentPreview({
         ) : null}
       </span>
     </section>
-  );
-}
-
-/** How the gateway judges a call today: one rule for every custom tool. */
-function ResponseRules() {
-  const { t } = useTranslation();
-  return (
-    <>
-      <section className="flex flex-col gap-1.5">
-        <span className="text-xs font-label">{t("customTools.editor.response.success")}</span>
-        <p className="text-sm">{t("customTools.editor.response.rule")}</p>
-      </section>
-      <section className="flex flex-col gap-1.5">
-        <span className="text-xs font-label">{t("customTools.editor.response.agentGets")}</span>
-        <p className="rounded-lg border border-border-subtle bg-surface-sunken px-3 py-2.5 text-xs text-text-muted">
-          {t("customTools.editor.response.agentGetsBody")}
-        </p>
-      </section>
-    </>
   );
 }

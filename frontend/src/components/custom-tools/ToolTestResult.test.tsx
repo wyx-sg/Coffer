@@ -37,6 +37,8 @@ function result(patch: Partial<CustomToolTestOut>): CustomToolTestOut {
     status: 200,
     status_line: "HTTP 200 OK",
     body: '{"healthy":true}',
+    body_bytes: 16,
+    rule_failure: null,
     truncated: false,
     content_type: "application/json",
     response_headers: {},
@@ -157,5 +159,32 @@ describe("ToolTestResult", () => {
     const note = screen.getByText("Cut short at 1 MB.");
     expect(viewer()?.contains(note)).toBe(true);
     expect(screen.getByText(/Agents get the same first 1 MB/)).toBeInTheDocument();
+  });
+
+  test("a broken response rule reads as failed and says which value broke it", () => {
+    show(
+      result({
+        rule_failure: {
+          rule: { source: "header", name: "x-result-code", ok_values: ["OK"], missing: "ok" },
+          value: "E42",
+          message: "quota exceeded",
+          summary: "header x-result-code was E42, expected OK: quota exceeded",
+        },
+      }),
+    );
+    expect(block()).toHaveClass("bg-danger-soft");
+    expect(screen.getByText("Response rule failed")).toBeInTheDocument();
+    expect(screen.getByText(/was E42, expected OK: quota exceeded/)).toBeInTheDocument();
+    expect(screen.getByText(/broke one of the response rules/)).toBeInTheDocument();
+  });
+
+  test("an empty body is said so", () => {
+    show(result({ body: "", body_bytes: 0 }));
+    expect(screen.getByText(/0 bytes · empty body/)).toBeInTheDocument();
+  });
+
+  test("the body size comes from the daemon, not the cut text", () => {
+    show(result({ body_bytes: 3 * 1024 * 1024, truncated: true }));
+    expect(screen.getByText(/3 MB/)).toBeInTheDocument();
   });
 });

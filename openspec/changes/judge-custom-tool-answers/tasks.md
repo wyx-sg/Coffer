@@ -12,8 +12,8 @@
 
 ## 3. Custom tools page
 
-- [ ] 3.1 Edit a group's response settings and a tool's own rules
-- [ ] 3.2 Show a test's rule failure and body size
+- [x] 3.1 Edit a group's response settings and a tool's own rules
+- [x] 3.2 Show a test's rule failure and body size
 
 ## 4. Docs
 

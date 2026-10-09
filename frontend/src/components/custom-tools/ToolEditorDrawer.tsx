@@ -75,6 +75,7 @@ export function ToolEditorDrawer({ group, toolName, open, onClose, onEditGroup }
           baseUrl={shown?.base_url ?? ""}
           environment={several ? (shown?.name ?? null) : null}
           groupHeaders={shown?.headers ?? []}
+          groupRules={group.response?.rules ?? []}
           environments={(group.environments ?? []).filter((e) => e.enabled).map((e) => e.name)}
           test={{ saved: group, environment }}
           saveWord="save"

@@ -81,6 +81,7 @@ export function AddRequestStep({ group, pending, error, onChangeWay, onCancel, o
           baseUrl={baseUrl}
           environment={several ? (shown?.name ?? null) : null}
           groupHeaders={groupHeaders}
+          groupRules={saved?.response?.rules ?? []}
           environments={
             saved ? (saved.environments ?? []).filter((e) => e.enabled).map((e) => e.name) : []
           }

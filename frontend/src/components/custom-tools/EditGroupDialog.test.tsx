@@ -89,9 +89,54 @@ describe("EditGroupDialog", () => {
       expect(update).toHaveBeenCalledWith("billing", {
         description: group.description,
         timeout_seconds: 45,
+        response: { diagnostic_headers: [], rules: [] },
       }),
     );
     expect(secretsApi.set).not.toHaveBeenCalled();
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+
+  test("sends the diagnostic headers and response rules in the PATCH", async () => {
+    const dialog = open();
+    fireEvent.change(within(dialog).getByLabelText("Diagnostic headers"), {
+      target: { value: "X-Trace-Id, X-Error-Code" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
+    fireEvent.change(within(dialog).getByLabelText("Header or field"), {
+      target: { value: "X-Result-Code" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Success values"), {
+      target: { value: "OK, 0," },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith("billing", {
+        description: group.description,
+        timeout_seconds: 30,
+        response: {
+          diagnostic_headers: ["X-Trace-Id", "X-Error-Code"],
+          rules: [
+            {
+              source: "header",
+              name: "X-Result-Code",
+              ok_values: ["OK", "0"],
+              missing: "ok",
+              message: null,
+            },
+          ],
+        },
+      }),
+    );
+  });
+
+  test("a rule that the server would refuse blocks Save and says why", () => {
+    const dialog = open();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
+    fireEvent.change(within(dialog).getByLabelText("Header or field"), {
+      target: { value: "Set-Cookie" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Success values"), { target: { value: "x" } });
+    expect(within(dialog).getByText(/carries credentials or cookies/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
   });
 });
