@@ -1,4 +1,4 @@
-// src/components/activity/CallContent.tsx — a tool call's recorded content in its drawer (canvas 6.2.03).
+// src/components/activity/CallContent.tsx — a tool call's recorded content in its drawer (canvas 6.2.07, 6.2.11, 6.2.12).
 //
 // Spec web-ui "Filter each Activity tab and expand any row": after the call's
 // answer, what it carried — Arguments, Result or Error, and a custom tool's
