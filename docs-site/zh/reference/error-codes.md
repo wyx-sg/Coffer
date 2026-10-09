@@ -37,7 +37,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `CURSOR_INVALID` | 400 | 发给分页列表（审计日志、MCP 调用日志、智能体的原生会话、聊天对话）的 `cursor` 无法解码，或者是为另一个列表或另一组筛选条件签发的。 | 去掉 `cursor` 重新读第一页，或发送同一列表、同样筛选条件返回的 `next_cursor`。 |
 | `NOT_FOUND` | 404 | 没有这个路由或对象，由路由抛出而非领域错误。 | 检查路径；守护进程在 `/api/v1/openapi.json` 向带令牌的调用方提供实时的路由列表。 |
 | `FORBIDDEN` | 403 | 路由拒绝了该操作。 | 阅读 `message`。 |
-| `CONFIG_INVALID` | 422 | 请求体或查询参数未通过校验，或资源的配置无效。提交的值不会被回显。 | 对照 `/api/v1/openapi.json`（需带令牌）中该路由的 schema 检查请求体。 |
+| `CONFIG_INVALID` | 422 | 请求体或查询参数未通过校验，或资源的配置无效。提交的值不会被回显。已存密钥被用于没有保存连接持有它的接入地址时，`details.reason` 为 `stored_key_destination`，且不会发出任何请求。 | 对照 `/api/v1/openapi.json`（需带令牌）中该路由的 schema 检查请求体。 |
 | `INTERNAL_ERROR` | 500 | 意外的失败。完整的 traceback 在守护进程日志中，对应响应的 trace id。 | 运行 `grep <trace-id> ~/.coffer/logs/daemon.log`，或 `coffer log daemon --errors`。 |
 | `HTTP_<status>` | 同名状态 | 一个没有具名错误码的普通 HTTP 错误。 | 阅读 `message`。 |
 
@@ -114,7 +114,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | --- | --- | --- | --- |
 | `CLI_NOT_KNOWN` | 404 | 没有托管技能需要该命令，也没有以该名字添加的命令行工具。 | 在**命令行工具**页面列出已知的命令。 |
 | `CLI_TOOL_EXISTS` | 409 | 已经添加过同名的命令行工具。 | 在**命令行工具**页面修改它，或先移除。 |
-| `CLI_TOOL_INVALID` | 400 | 命令名、最低版本或登录检查不合法。 | 使用普通的命令名或绝对路径；字段见 `message`。 |
+| `CLI_TOOL_INVALID` | 400 | 命令名、最低版本或登录检查不合法。登录检查不以命令名开头时，`details.reason` 为 `login_check_command`，`details.field` 为 `login_check`，`details.command` 是它必须开头的名字（路径命令取文件名）。 | 使用普通的命令名或绝对路径；登录检查以命令名开头；字段见 `message`。 |
 | `CLI_TOOL_NOT_DECLARED` | 404 | 该命令行工具不是手动添加的，因此不能在这里编辑或移除。 | 技能需要的命令要在技能里修改，不在这里。 |
 
 ## 智能体与智能体工作目录 {#agents-and-agent-workspaces}

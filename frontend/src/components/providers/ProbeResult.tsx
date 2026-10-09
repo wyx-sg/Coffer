@@ -27,11 +27,14 @@ export function ProbeResult({ result, pending, okNote, failNote }: Props) {
   }
   if (!result) return null;
   const ok = result.kind === "ok";
+  const refused = result.kind === "refused";
   const title = ok
     ? t("providers.test.connected", { ms: result.ms })
     : result.kind === "rejected"
       ? t("providers.test.rejected", { status: result.status ?? t("providers.test.noStatus") })
-      : t("providers.test.failed");
+      : refused
+        ? t("providers.test.refused")
+        : t("providers.test.failed");
   return (
     <div
       role={ok ? "status" : "alert"}
@@ -48,8 +51,9 @@ export function ProbeResult({ result, pending, okNote, failNote }: Props) {
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="text-sm font-label text-text">{title}</span>
         <span className="text-xs text-text-muted">
-          {ok ? okNote(result.models.length) : failNote}
-          {!ok && result.kind === "failed" && result.message ? (
+          {/* A refusal sent nothing, so the dialog's "check the key / endpoint" note does not apply. */}
+          {ok ? okNote(result.models.length) : refused ? result.message : failNote}
+          {result.kind === "failed" && result.message ? (
             <span className="mt-0.5 block break-words font-mono">{result.message}</span>
           ) : null}
         </span>

@@ -8,7 +8,7 @@
 import { useState } from "react";
 
 import type { ListModelsIn, ProviderModel } from "@/lib/api/providers";
-import { translateApiError } from "@/lib/api/errors";
+import { ApiError, translateApiError } from "@/lib/api/errors";
 import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
 import { authStatusOf, isAuthFailure, probeFailed } from "@/lib/providers/probeStatus";
 import type { TFunction } from "i18next";
@@ -16,7 +16,9 @@ import type { TFunction } from "i18next";
 export type EndpointTestResult =
   | { kind: "ok"; ms: number; models: ProviderModel[] }
   | { kind: "rejected"; status: string | null; message: string }
-  | { kind: "failed"; message: string };
+  | { kind: "failed"; message: string }
+  /** Coffer did not send the request: a stored key may go only to the endpoint it was approved for. */
+  | { kind: "refused"; message: string };
 
 export function useEndpointTest(t: TFunction) {
   const list = useListProviderModels();
@@ -34,12 +36,24 @@ export function useEndpointTest(t: TFunction) {
         next = { kind: "rejected", status: authStatusOf(data.message), message: data.message };
       else next = { kind: "failed", message: data.message };
     } catch (e) {
-      // Rendered inline as the test's verdict, so no toast.
-      next = { kind: "failed", message: translateApiError(t, e) };
+      // Rendered inline as the test's verdict, so no toast. A destination
+      // refusal is not a failed probe: nothing was sent, so it must not read as
+      // an unreachable endpoint or a revoked key.
+      next = isDestinationRefusal(e)
+        ? { kind: "refused", message: translateApiError(t, e) }
+        : { kind: "failed", message: translateApiError(t, e) };
     }
     setResult(next);
     return next;
   };
 
   return { run, result, reset: () => setResult(null), isPending: list.isPending };
+}
+
+function isDestinationRefusal(e: unknown): boolean {
+  if (!(e instanceof ApiError) || e.code !== "CONFIG_INVALID") return false;
+  const d = e.details;
+  return (
+    !!d && typeof d === "object" && (d as { reason?: unknown }).reason === "stored_key_destination"
+  );
 }
