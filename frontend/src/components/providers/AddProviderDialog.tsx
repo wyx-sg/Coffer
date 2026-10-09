@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -48,6 +49,7 @@ function seed(id: PresetId): EndpointValues {
 export function AddProviderDialog({ preset, onClose, onCreated }: Props) {
   const { t } = useTranslation();
   const create = useCreateProvider();
+  const qc = useQueryClient();
   const test = useEndpointTest(t);
   const [presetId, setPresetId] = useState<PresetId>("anthropic");
   const [step, setStep] = useState<1 | 2>(1);
@@ -162,7 +164,7 @@ export function AddProviderDialog({ preset, onClose, onCreated }: Props) {
     const body = createBody(form.getValues(), runtime, candidates, selected);
     try {
       const created = await create.mutateAsync(body);
-      await labelNewKey(form.getValues("secret"), created.secret_ref);
+      await labelNewKey(qc, form.getValues("secret"), created.secret_ref);
       onCreated(created);
       onClose();
     } catch {

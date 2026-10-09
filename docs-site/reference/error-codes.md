@@ -44,7 +44,7 @@ give the status each code is actually sent with.
 | `CURSOR_INVALID` | 400 | A `cursor` sent to a paged list (the audit log, the MCP invocation log, an agent's native sessions, the chat conversations) does not decode, or was issued for another list or with other filters. | Drop `cursor` to read the first page again, or send the `next_cursor` the same list and filters returned. |
 | `NOT_FOUND` | 404 | No such route or object, raised by a route rather than a domain error. | Check the path; the daemon serves its live route list at `/api/v1/openapi.json` to a caller with the token. |
 | `FORBIDDEN` | 403 | The route refuses the operation. | Read `message`. |
-| `CONFIG_INVALID` | 422 | The request body or query failed validation, or a resource's config is invalid. The submitted values are not echoed back. | Compare the body with the route's schema at `/api/v1/openapi.json` (send the token). |
+| `CONFIG_INVALID` | 422 | The request body or query failed validation, or a resource's config is invalid. The submitted values are not echoed back. A stored key offered to an endpoint no saved connection holds it for has `details.reason` `stored_key_destination`; nothing was sent. | Compare the body with the route's schema at `/api/v1/openapi.json` (send the token). |
 | `INTERNAL_ERROR` | 500 | An unexpected failure. The full traceback is in the daemon log under the response's trace id. | Run `grep <trace-id> ~/.coffer/logs/daemon.log`, or run `coffer log daemon --errors`. |
 | `HTTP_<status>` | as named | A bare HTTP error with a status that has no named code. | Read `message`. |
 
@@ -121,7 +121,7 @@ give the status each code is actually sent with.
 | --- | --- | --- | --- |
 | `CLI_NOT_KNOWN` | 404 | No managed skill requires that command and no command-line tool was added under that name. | List the known commands on the **CLIs** page. |
 | `CLI_TOOL_EXISTS` | 409 | A command-line tool with that name was already added. | Edit it on the **CLIs** page, or remove it first. |
-| `CLI_TOOL_INVALID` | 400 | The command name, minimum version or login check is not valid. | Use a plain command name or an absolute path; read `message` for the field. |
+| `CLI_TOOL_INVALID` | 400 | The command name, minimum version or login check is not valid. A login check that does not start with the command name has `details.reason` `login_check_command`, `details.field` `login_check` and `details.command`, the name it must start with (a path command's file name). | Use a plain command name or an absolute path; start the login check with the command name; read `message` for the field. |
 | `CLI_TOOL_NOT_DECLARED` | 404 | That command-line tool was not added by hand, so it cannot be edited or removed. | A command a skill requires is changed in the skill, not here. |
 
 ## Agents and agent workspaces
