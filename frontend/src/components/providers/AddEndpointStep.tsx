@@ -1,10 +1,13 @@
-// src/components/providers/AddEndpointStep.tsx — step 1 of Add: vendor, protocol, name, base URL, key, and Test.
+// src/components/providers/AddEndpointStep.tsx — step 1 of Add: vendor, name, addresses, key, and Test.
 //
-// A vendor fills the protocol and base URL; Custom asks for the protocol by
-// what can use it. The key is the one secret field: a stored secret, or a
-// pasted value stored as a new secret when the provider is added. The local path (Ollama /
-// a runtime on this Mac) has no key: detection finds what answers instead.
-import type { ReactNode } from "react";
+// A vendor fills its addresses: the OpenAI-compatible one Codex uses and the
+// Anthropic-compatible one Claude Code uses, whichever the vendor has (both for
+// DeepSeek), for the region picked when the vendor has two. Custom shows both, and the person fills what their gateway
+// serves; no protocol is asked for (ADR one-connection-serves-both-wires). The
+// key is the one secret field: a stored secret, or a pasted value stored as a
+// new secret when the provider is added. The local path (Ollama / a runtime on
+// this Mac) has no key: detection finds what answers instead.
+import { useEffect, useState, type ReactNode } from "react";
 import { Controller, type UseFormReturn } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -12,9 +15,11 @@ import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SecretField } from "@/components/secret/SecretField";
-import { CUSTOM_PROTOCOLS, PRESETS, type PresetId } from "@/lib/providers/presets";
+import { presetAddresses, presetFields, type Region } from "@/lib/providers/addresses";
+import { PRESETS, presetById, type PresetId } from "@/lib/providers/presets";
+import { AddressInputs } from "./AddressInputs";
 import { FieldError } from "./FieldError";
-import { ProtocolCards } from "./ProtocolCards";
+import { RegionChoice } from "./RegionChoice";
 import { VendorGrid } from "./VendorGrid";
 import type { EndpointValues } from "./providerSchemas";
 
@@ -48,12 +53,21 @@ export function AddEndpointStep({
   const { register, watch, setValue, formState } = form;
   const { errors } = formState;
   const local = watch("local");
-  const protocol = watch("protocol");
   const vendors = PRESETS.map((p) => ({
     value: p.id,
     label: p.id === "custom" ? t("providers.add.custom") : p.label,
   }));
-  const protocols = presetId === "custom" ? CUSTOM_PROTOCOLS : [];
+  const preset = presetById(presetId);
+  // A vendor whose addresses and keys differ by region asks which one.
+  const [region, setRegion] = useState<Region>("intl");
+  useEffect(() => setRegion("intl"), [presetId]);
+  const pickRegion = (next: Region) => {
+    setRegion(next);
+    const at = presetAddresses(preset, next);
+    setValue("openaiUrl", at.openai);
+    setValue("anthropicUrl", at.anthropic);
+    onEdited();
+  };
   const vendorLabel = vendors.find((v) => v.value === presetId)?.label ?? "";
   const edited = { onChange: onEdited };
 
@@ -71,19 +85,6 @@ export function AddEndpointStep({
           {local ? t("providers.add.vendorHintLocal") : t("providers.add.vendorHint")}
         </p>
       </div>
-      {!local && presetId === "custom" ? (
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-label text-text">{t("providers.fields.protocol")}</span>
-          <ProtocolCards
-            value={protocol}
-            options={protocols}
-            onChange={(p) => {
-              setValue("protocol", p);
-              onEdited();
-            }}
-          />
-        </div>
-      ) : null}
       {local ? localPanel : null}
       {!local || showName ? (
         <div className="flex flex-col gap-1.5">
@@ -94,23 +95,30 @@ export function AddEndpointStep({
           <FieldError id="pa-name-error" message={errors.name?.message} />
         </div>
       ) : null}
-      {!local || showUrl ? (
+      {!local && preset.cn ? <RegionChoice value={region} onChange={pickRegion} /> : null}
+      {!local ? (
+        <AddressInputs
+          idPrefix="pa"
+          show={presetFields(preset)}
+          openai={register("openaiUrl", edited)}
+          anthropic={register("anthropicUrl", edited)}
+          errors={{ openai: errors.openaiUrl?.message, anthropic: errors.anthropicUrl?.message }}
+          hint={presetId === "custom"}
+        />
+      ) : null}
+      {local && showUrl ? (
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="pa-base" required={!local}>
-            {t("providers.fields.baseUrl")}
-          </Label>
+          <Label htmlFor="pa-base">{t("providers.fields.baseUrl")}</Label>
           <Input
             id="pa-base"
             inputMode="url"
             className="font-mono text-xs"
-            placeholder={local ? t("providers.add.localUrlPlaceholder") : undefined}
+            placeholder={t("providers.add.localUrlPlaceholder")}
             aria-describedby="pa-base-error"
             {...register("baseUrl", edited)}
           />
           <FieldError id="pa-base-error" message={errors.baseUrl?.message} />
-          {local ? (
-            <p className="text-xs text-text-muted">{t("providers.add.local.urlHint")}</p>
-          ) : null}
+          <p className="text-xs text-text-muted">{t("providers.add.local.urlHint")}</p>
         </div>
       ) : null}
       {local ? null : (

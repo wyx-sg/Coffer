@@ -1,20 +1,12 @@
 """Which agents a connection reaches, and which connection an agent runs on.
 
-``scoped_targets`` is the CONFIGURED reach the management surface reports.
+``scoped_targets`` is the CONFIGURED reach the management surface reports: what
+the connection's addresses serve (ADR provider-reach-is-what-its-addresses-serve).
 ``reaches`` is one agent's effective reach (the ``enabled`` switch applied) and
 ``connection_for_agent`` is the ONE function every consumer — the switch, the
 model proxy's state, the projection reconcile target, the chat model catalogue
 and the usage meter — asks which connection an agent runs on, so the answer
-cannot drift between them.
-
-Two traps the reach was written for:
-
-- framework ``scope is None`` means EVERY agent, while the
-  ``compatible_agents`` field it replaced meant "the wire default" (nothing at
-  all for ollama); and
-- a scope holds agent UIDS (ADR identity-is-the-uid-inside-the-file), so the
-  reach per TYPE is not readable from the connection alone: the registry has to
-  be handed in.
+cannot drift between them. A scope stored before the rule is ignored.
 """
 
 from __future__ import annotations
@@ -57,7 +49,7 @@ def _agent(
     )
 
 
-#: The registry every case resolves its scope against: one agent of each type.
+#: The registry: one agent of each type.
 _REGISTRY = [_agent(_CLAUDE_UID, AgentType.CLAUDE_CODE), _agent(_CODEX_UID, AgentType.CODEX)]
 
 _CONN_UID = "cccccccccccccccccccccccccccccccc"
@@ -68,10 +60,14 @@ def _connection(
     protocol: str = "openai",
     scope: Scope | None = None,
     enabled: bool = True,
+    anthropic_base_url: str | None = "https://gw",
 ) -> tuple[Resource, ProviderConfig]:
+    # A gateway serving both wires by default.
     config: dict[str, Any] = {"protocol": protocol, "base_url": "https://gw/v1"}
     if protocol != "ollama":
         config["secret_ref"] = "provider/x/key"
+    if protocol == "openai" and anthropic_base_url:
+        config["anthropic_base_url"] = anthropic_base_url
     resource = Resource(
         uid=_CONN_UID,
         kind="provider",
@@ -84,58 +80,6 @@ def _connection(
         scope=scope,
     )
     return resource, ProviderConfig.model_validate(config)
-
-
-def test_an_explicit_scope_is_the_reach() -> None:
-    resource, cfg = _connection(scope=Scope(agents=[_CLAUDE_UID]))
-    assert scoped_targets(resource, cfg, _REGISTRY) == [AgentType.CLAUDE_CODE]
-
-
-def test_the_reach_is_the_uid_resolved_against_the_registry_not_a_string_match() -> None:
-    # Nothing about the uid says "claude_code", so the same scope answers
-    # differently depending on which agent that uid is.
-    resource, cfg = _connection(scope=Scope(agents=[_CLAUDE_UID]))
-    swapped = [_agent(_CLAUDE_UID, AgentType.CODEX)]
-    assert scoped_targets(resource, cfg, swapped) == [AgentType.CODEX]
-
-
-def test_an_unscoped_connection_reaches_every_agent() -> None:
-    # The framework's own meaning for a null scope, and what a credentialed
-    # connection is CREATED with — including agent types not registered on this
-    # machine, so a connection made before the user installed Codex still
-    # covers it.
-    resource, cfg = _connection(scope=None)
-    assert scoped_targets(resource, cfg, []) == list(AgentType)
-
-
-def test_a_dormant_connection_reaches_nothing() -> None:
-    resource, cfg = _connection(scope=Scope(agents=[]))
-    assert scoped_targets(resource, cfg, _REGISTRY) == []
-
-
-def test_a_uid_no_registered_agent_answers_to_never_matches() -> None:
-    # A resource may be scoped to an agent this machine does not have (the
-    # scope layer's own rule). It contributes no type — dropped, never guessed
-    # at, so the reach narrows and never widens.
-    resource, cfg = _connection(scope=Scope(agents=[_CODEX_UID, "deadbeef" * 4]))
-    assert scoped_targets(resource, cfg, _REGISTRY) == [AgentType.CODEX]
-
-
-def test_an_agent_row_that_no_longer_parses_contributes_nothing() -> None:
-    broken = _agent(_CLAUDE_UID, AgentType.CLAUDE_CODE)
-    broken.config = {"type": "a product Coffer has never heard of"}
-    resource, cfg = _connection(scope=Scope(agents=[_CLAUDE_UID]))
-    assert scoped_targets(resource, cfg, [broken]) == []
-
-
-def test_the_configured_reach_survives_the_user_switching_the_connection_off() -> None:
-    # Reporting the ENABLED-narrowed set on the wire made a disabled
-    # connection's agent chips render as "—", so disabling looked like it had
-    # erased the agent list. `enabled` travels on the same payload, so the
-    # client can intersect.
-    resource, cfg = _connection(scope=Scope(agents=[_CLAUDE_UID]), enabled=False)
-    assert scoped_targets(resource, cfg, _REGISTRY) == [AgentType.CLAUDE_CODE]
-    assert not reaches(resource, cfg, _REGISTRY[0])
 
 
 def test_a_keyless_connection_covers_nothing_even_as_configured_reach() -> None:
@@ -184,13 +128,35 @@ def test_a_pointer_is_not_followed_to_a_disabled_connection() -> None:
     assert connection_for_agent(agent, [resource]) is None
 
 
-def test_a_pointer_is_not_followed_to_a_connection_whose_scope_dropped_the_agent() -> None:
-    resource, _ = _connection(scope=Scope(agents=[_CODEX_UID]))
+def test_a_pointer_is_not_followed_to_a_keyless_connection() -> None:
+    resource, _ = _connection(protocol="ollama", scope=None)
     agent = _agent(_CLAUDE_UID, AgentType.CLAUDE_CODE, connection_uid=_CONN_UID)
     assert connection_for_agent(agent, [resource]) is None
 
 
-def test_a_pointer_is_not_followed_to_a_keyless_connection() -> None:
-    resource, _ = _connection(protocol="ollama", scope=None)
+def test_an_anthropic_connection_covers_only_claude_code() -> None:
+    resource, cfg = _connection(protocol="anthropic", scope=None)
+    assert scoped_targets(resource, cfg, _REGISTRY) == [AgentType.CLAUDE_CODE]
+
+
+def test_the_reach_is_what_the_addresses_serve_whatever_a_stored_scope_says() -> None:
+    # ADR provider-reach-is-what-its-addresses-serve: a scope stored before
+    # the rule neither narrows nor widens it.
+    resource, cfg = _connection(scope=Scope(agents=[_CLAUDE_UID]))
+    assert scoped_targets(resource, cfg, _REGISTRY) == [AgentType.CLAUDE_CODE, AgentType.CODEX]
+    resource, cfg = _connection(scope=Scope(agents=[_CLAUDE_UID]), anthropic_base_url=None)
+    assert scoped_targets(resource, cfg, _REGISTRY) == [AgentType.CODEX]
+    assert not reaches(resource, cfg, _REGISTRY[0])
+    assert reaches(resource, cfg, _REGISTRY[1])
+
+
+def test_the_configured_reach_survives_the_connection_being_off() -> None:
+    resource, cfg = _connection(enabled=False)
+    assert scoped_targets(resource, cfg, _REGISTRY) == [AgentType.CLAUDE_CODE, AgentType.CODEX]
+    assert not reaches(resource, cfg, _REGISTRY[0])
+
+
+def test_a_pointer_is_not_followed_to_a_connection_with_no_address_for_the_agent() -> None:
+    resource, _ = _connection(anthropic_base_url=None)
     agent = _agent(_CLAUDE_UID, AgentType.CLAUDE_CODE, connection_uid=_CONN_UID)
     assert connection_for_agent(agent, [resource]) is None

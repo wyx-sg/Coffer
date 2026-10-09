@@ -27,6 +27,7 @@ coffer provider [OPTIONS] COMMAND [ARGS]...
 | [`provider delete-preview`](#provider-delete-preview) | What deleting a connection would change. |
 | [`provider delete`](#provider-delete) | Delete a connection. |
 | [`provider prices`](#provider-prices) | Prices of the given models on this connection. |
+| [`provider windows`](#provider-windows) | Context windows of the given models on this connection, with where each came from. |
 | [`provider transcribe-default`](#provider-transcribe-default) | Make this connection the transcription default. |
 | [`provider detect-local`](#provider-detect-local) | Find a local model runtime (Ollama, LM Studio). |
 | [`provider price-list`](#provider-price-list) | The bundled model price list. |
@@ -181,6 +182,25 @@ Prices of the given models on this connection. Body: models.
 
 ```sh
 coffer provider prices [OPTIONS] UID
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `UID` <span class="cli-chip">参数</span> | text | 必填 | The provider's name or uid |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## provider windows
+
+Context windows of the given models on this connection, with where each came from. Body: models.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer provider windows [OPTIONS] UID
 ```
 
 <p class="cli-label">参数与选项</p>

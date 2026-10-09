@@ -25,6 +25,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.provider.delete_ops import delete as _delete_op
 from coffer.application.provider.delete_ops import preview as _delete_preview_op
 from coffer.application.provider.ports import EngineNotifyPort
+from coffer.application.provider.projection_request import WindowOf, recorded_window
 from coffer.application.provider.projector import ProjectionConfigStore, ProviderProjector
 from coffer.application.provider.results import ActivateResult, DeactivateResult, DeletePreview
 from coffer.application.provider.secret_gate import ProviderSecretBoundary, require_key
@@ -89,6 +90,7 @@ class ProviderService:
         engine: EngineNotifyPort | None = None,
         hold: Callable[[], contextlib.AbstractAsyncContextManager[object]] | None = None,
         proxy_root: Callable[[], str] | None = None,
+        window_of: WindowOf = recorded_window,
     ) -> None:
         self._resources = resources
         self._secrets = secrets
@@ -100,9 +102,11 @@ class ProviderService:
         # Where the local model proxy listens, for the base URL the agents
         # are pointed at; the projector's default when not given.
         self._projector = (
-            ProviderProjector(config_store, agents=agent_catalog, proxy_root=proxy_root)
+            ProviderProjector(
+                config_store, agents=agent_catalog, proxy_root=proxy_root, window_of=window_of
+            )
             if proxy_root is not None
-            else ProviderProjector(config_store, agents=agent_catalog)
+            else ProviderProjector(config_store, agents=agent_catalog, window_of=window_of)
         )
         # Coffer's settings, told when the speech-to-text connection moves (spec
         # internal-engine "Drop the speech-to-text model when its connection
@@ -144,6 +148,7 @@ class ProviderService:
         *,
         protocol: Protocol,
         base_url: str,
+        anthropic_base_url: str | None = None,
         secret_value: str | None = None,
         secret_ref: str | None = None,
         models: _CuratedModels | None = None,
@@ -181,6 +186,7 @@ class ProviderService:
         config = ProviderConfig(
             protocol=protocol,
             base_url=base_url,
+            anthropic_base_url=anthropic_base_url,
             secret_ref=ref,
             models=list(models or []),
             local_runtime=local_runtime,
@@ -223,6 +229,7 @@ class ProviderService:
         *,
         protocol: Protocol | None = None,
         base_url: str | None = None,
+        anthropic_base_url: str | None = None,
         secret_value: str | None = None,
         secret_ref: str | None = None,
         models: _CuratedModels | None = None,
@@ -235,6 +242,7 @@ class ProviderService:
             uid,
             protocol=protocol,
             base_url=base_url,
+            anthropic_base_url=anthropic_base_url,
             secret_value=secret_value,
             secret_ref=secret_ref,
             models=models,

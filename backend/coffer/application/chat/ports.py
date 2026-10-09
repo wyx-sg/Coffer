@@ -147,6 +147,15 @@ class ModelCatalogPort(Protocol):
 
     async def native_default_model(self, agent_key: str) -> str | None: ...
 
+    async def builtin_default(self, agent_key: str) -> CatalogueModel | None:
+        """The model the agent's own login runs when its config names none, when
+        the agent itself reports it; ``None`` otherwise."""
+        ...
+
+    async def resolved_default(self, agent_key: str) -> str | None:
+        """The model a turn with no override runs on, when Coffer can know it."""
+        ...
+
 
 class ChannelPlacesPort(Protocol):
     """Where in its channel each conversation of a listing lives (spec chat

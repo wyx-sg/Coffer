@@ -125,7 +125,7 @@ Sync is bidirectional but only under the sync spec's safety rules: git computes 
 
 **Rationale.** A central gate would have to sit on every kind's read path and know every kind's notion of "use". The gateway already knows which agent is asking for tools; skill delivery already iterates agents; the provider projection already knows which config file it is writing. Putting the check there costs one function call and no new machinery.
 
-**In the code.** `mcp_server` filters in the gateway, `skill` in delivery reconciliation, `provider` where the provider projection chooses which agent config files to write, and `channel` — whose scope is inverted to name the agents it may *drive* — in its agent routing and its runtime. An unidentified session matches only an unrestricted scope, so it sees strictly less, never more. See the [kinds table](/architecture/resource-framework#the-seven-kinds).
+**In the code.** `mcp_server` filters in the gateway, `skill` in delivery reconciliation, and `channel` — whose scope is inverted to name the agents it may *drive* — in its agent routing and its runtime. An unidentified session matches only an unrestricted scope, so it sees strictly less, never more. A `provider` connection declares no scope: it serves the agents its addresses speak to. See the [kinds table](/architecture/resource-framework#the-seven-kinds).
 
 **Rules out.** A reach evaluator object; a deny-list (a new agent would silently gain access); a kind inventing its own "which agents" field.
 
