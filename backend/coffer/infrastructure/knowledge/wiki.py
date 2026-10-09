@@ -203,9 +203,7 @@ class WikiGraph:
             pages_named = sorted(h for h in named if h in page_paths)
             if len(pages_named) > 1 and tuple(pages_named) not in seen:
                 seen.add(tuple(pages_named))
-                found.append(
-                    Finding(DUPLICATE_SLUG, pages_named[0], alias, tuple(pages_named[1:]))
-                )
+                found.append(Finding(DUPLICATE_SLUG, pages_named[0], alias, tuple(pages_named[1:])))
         if len(self.pages) > 1:
             for page in self.pages:
                 if inbound[page.path] == 0 and page.page_type.lower() != OVERVIEW_TYPE:
