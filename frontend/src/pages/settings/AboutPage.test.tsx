@@ -4,6 +4,7 @@ import { acceptance } from "@/test/acceptance";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { AboutPage } from "./AboutPage";
 
 vi.mock("@/lib/api/client", async (orig) => ({
@@ -17,7 +18,11 @@ function wrap({ children }: PropsWithChildren) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>{children}</MemoryRouter>
+    </QueryClientProvider>
+  );
 }
 
 const STATUS = {
@@ -39,7 +44,11 @@ const STATUS = {
 
 function mockStatus() {
   getApiClientMock.mockReturnValue({
-    GET: vi.fn().mockResolvedValue({ data: STATUS, error: undefined }),
+    GET: vi.fn((path: string) =>
+      path === "/daemon/status"
+        ? Promise.resolve({ data: STATUS, error: undefined })
+        : new Promise(() => {}),
+    ),
   } as unknown as ReturnType<typeof getApiClient>);
 }
 

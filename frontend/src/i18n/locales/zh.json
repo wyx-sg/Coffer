@@ -1269,13 +1269,61 @@
         "auto": "自动检查",
         "autoHelp": "在启动时以及每 6 小时检查一次，安装前会先征得你的同意。",
         "browser": "更新由 Coffer 桌面应用安装。在浏览器中，可以把升级交给智能体：提示词里写明了这份 Coffer 的安装方式。",
-        "unconfigured": "此版本构建时没有更新密钥，因此不会检查更新。新版本发布在 GitHub Releases 页面。"
+        "unconfigured": "此版本构建时没有更新密钥，因此不会检查更新。新版本发布在 GitHub Releases 页面。",
+        "daemonNeverChecked": "守护进程会在启动一分钟后检查，之后每天检查一次。",
+        "commandHelp": "在终端运行这条命令：它会下载这个版本、校验后让守护进程换用它重启。",
+        "daemonAutoHelp": "守护进程每天向 GitHub 检查一次，不会自行安装任何东西。"
       },
       "diagnosticsCopied": "诊断信息已复制，可粘贴到问题报告中。",
       "versionLine": "版本 {{version}}",
       "versionLineLoading": "正在读取版本…",
       "details": "详细信息",
-      "versionWithCommit": "{{version}}（{{commit}}）"
+      "versionWithCommit": "{{version}}（{{commit}}）",
+      "uninstall": {
+        "title": "卸载",
+        "label": "卸载 Coffer",
+        "description": "从这台 Mac 上移除 Coffer。除非你选择删除，~/.coffer 里的数据会保留。",
+        "open": "卸载 Coffer…",
+        "browser": "卸载会连同应用一起移除，所以要在 Coffer 桌面应用（设置 › 关于）里进行，或者在终端运行：",
+        "dialog": {
+          "title": "卸载 Coffer？",
+          "body": "Coffer 会撤回它写在 ~/.coffer 之外的所有内容，然后停止运行，应用会把自己移到废纸篓。",
+          "removes": "移除",
+          "removesValue": "每个智能体里 Coffer 的 MCP 条目、记忆钩子和模型路由；Coffer 投递的技能链接；开机自启动；命令行工具和安装脚本加的 PATH 行；Coffer.app",
+          "keeps": "保留",
+          "keepsValue": "~/.coffer：你的保险库、密钥、技能、知识和设置。重新安装 Coffer 后它们都还在；需要重新连接智能体。",
+          "keepsNothing": "不保留。~/.coffer 和主密钥都会被删除。",
+          "deleteData": "同时删除我的数据（~/.coffer）",
+          "deleteDataHelp": "会先要求 Touch ID。",
+          "dangerTitle": "此操作无法撤销",
+          "danger": "~/.coffer 里的所有密钥、技能、知识集和记忆笔记，以及打开密钥所用的主密钥，都会被永久删除，包括 Coffer 从智能体那里接管的技能。移到别处的保险库会保留在原处。",
+          "backup": "先备份主密钥",
+          "confirm": "卸载",
+          "confirmDelete": "卸载并删除数据",
+          "pending": "正在卸载…",
+          "failed": "无法卸载 Coffer"
+        },
+        "done": {
+          "title": "Coffer 已卸载",
+          "body": "~/.coffer 里的数据已保留。Coffer 正在退出，并把自己移到废纸篓。",
+          "bodyDeleted": "守护进程停止后，你的数据会被删除。Coffer 正在退出，并把自己移到废纸篓。"
+        },
+        "steps": {
+          "agents": "读取智能体",
+          "provider_routing": "已撤回智能体里的模型路由",
+          "agent_connections": "已断开智能体",
+          "skill_links": "已移除技能链接",
+          "login_job": "已关闭开机自启动",
+          "terminal_files": "已移除终端启动文件",
+          "path_lines": "已移除安装脚本加的 PATH 行",
+          "binaries": "已移除命令行工具"
+        },
+        "outcome": {
+          "done": "完成",
+          "nothing": "无需处理",
+          "failed": "失败"
+        }
+      }
     },
     "security": {
       "masterKey": {

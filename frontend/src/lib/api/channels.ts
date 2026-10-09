@@ -74,7 +74,10 @@ export async function removeChannelPerson(uid: string, senderId: string): Promis
 /** A paired person's picture on the platform as a `data:` URL, or `null` when
  *  there is none to show — the list shows their initials then. The picture is
  *  cosmetic, so a failed request is `null` too rather than an error. */
-export async function getChannelPersonAvatar(uid: string, senderId: string): Promise<string | null> {
+export async function getChannelPersonAvatar(
+  uid: string,
+  senderId: string,
+): Promise<string | null> {
   const { data, response } = await getApiClient().GET("/channels/{uid}/people/{sender_id}/avatar", {
     params: { path: { uid, sender_id: senderId } },
     parseAs: "blob",

@@ -24,6 +24,7 @@ import { useDaemonStatus } from "@/lib/hooks/useDaemon";
 import { inDesktopShell } from "@/lib/tauri";
 import { diagnosticsText } from "./aboutDiagnostics";
 import { UpdatesSection } from "./UpdatesSection";
+import { UninstallSection } from "@/components/settings/about/UninstallSection";
 
 /** The published docs site (docs-site/), per interface language: Chinese lives under /zh/. */
 const DOCS_URL = {
@@ -118,6 +119,8 @@ export function AboutPage() {
             </span>
           </SettingRow>
         </SettingsSection>
+
+        <UninstallSection />
       </div>
     </div>
   );
