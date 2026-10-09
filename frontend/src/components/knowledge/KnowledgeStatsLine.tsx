@@ -1,7 +1,7 @@
 // frontend/src/components/knowledge/KnowledgeStatsLine.tsx
 //
 // A collection's properties (board 5.1.10): hairline rows with a 140px label
-// column — Documents · Folder. No big numbers: a number is shown only where it
+// column — Pages · Sources (with how many wait) · Folder. No big numbers: a number is shown only where it
 // is the data. The folder path is shown with the home directory as ~ and a
 // copy button.
 import { useState, type ReactNode } from "react";
@@ -48,8 +48,16 @@ export function KnowledgeStatsLine({ collection }: Props) {
 
   return (
     <div className="flex flex-col" data-testid="knowledge-stats">
-      <Row label={t("knowledge.stats.documents")} first>
-        {collection.document_count}
+      <Row label={t("knowledge.stats.pages")} first>
+        {collection.page_count}
+      </Row>
+      <Row label={t("knowledge.stats.sources")}>
+        {collection.waiting_source_count > 0
+          ? t("knowledge.stats.sourcesWaiting", {
+              count: collection.source_count,
+              waiting: collection.waiting_source_count,
+            })
+          : collection.source_count}
       </Row>
       <Row label={t("knowledge.stats.folder")}>
         <span className="truncate font-mono text-xs" title={collection.folder_path}>

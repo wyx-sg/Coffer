@@ -51,7 +51,9 @@ export function KnowledgeDeleteCollection({ collection, open, onOpenChange }: Pr
       open={open}
       onOpenChange={onOpenChange}
       title={t("knowledge.deleteCollection.title", { name: collection.name })}
-      description={t("knowledge.deleteCollection.body", { count: collection.document_count })}
+      description={t("knowledge.deleteCollection.body", {
+        count: collection.page_count + collection.source_count,
+      })}
       confirmLabel={t("knowledge.deleteCollection.confirm")}
       pendingLabel={t("knowledge.deleteCollection.pending")}
       errorTitle={t("knowledge.deleteCollection.failed", { name: collection.name })}

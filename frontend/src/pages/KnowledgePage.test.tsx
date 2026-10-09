@@ -22,6 +22,7 @@ vi.mock("@/lib/api/knowledge", () => ({
   listChanges: vi.fn(),
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
+  getCheck: vi.fn(),
 }));
 vi.mock("@/lib/api/fs", () => ({
   fsApi: {

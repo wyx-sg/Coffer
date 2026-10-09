@@ -23,6 +23,7 @@ vi.mock("@/lib/api/knowledge", () => ({
   listChanges: vi.fn(),
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
+  getCheck: vi.fn(),
 }));
 vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => undefined }));
 vi.mock("@/lib/api/agentProviders", () => ({
@@ -39,7 +40,7 @@ vi.mock("@/lib/api/fs", () => ({
 
 const api = vi.mocked(await import("@/lib/api/knowledge"));
 
-const SUBTITLE = "Documents you and your agents write together. Every agent can read them.";
+const SUBTITLE = "Pages your agents write from the sources you keep. Every agent can read them.";
 
 beforeEach(() => {
   answerFromFixtures();
@@ -91,16 +92,16 @@ describe("with no collection open", () => {
     expect(
       await within(screen.getByRole("banner")).findByRole("button", { name: "Tidy all" }),
     ).toBeInTheDocument();
-    // There is no Recent changes view: a document's history is its History tab.
+    // There is no Recent changes view: a file's history is its history drawer.
     expect(screen.queryByText("Recent changes")).toBeNull();
     expect(screen.queryByRole("link", { name: /Recent changes/ })).toBeNull();
   });
 
   test("an address naming an unknown tab opens the document", async () => {
-    renderKnowledge(`/knowledge/${UID}/changes?file=${encodeURIComponent("shopee/gateway.md")}`);
+    renderKnowledge(`/knowledge/${UID}/changes?file=${encodeURIComponent(GATEWAY.path)}`);
     await waitFor(() =>
       expect(screen.getByTestId("where")).toHaveTextContent(
-        `/knowledge/${UID}?file=shopee%2Fgateway.md`,
+        `/knowledge/${UID}?file=${encodeURIComponent(GATEWAY.path)}`,
       ),
     );
     expect(await screen.findByRole("heading", { level: 1, name: "Account Gateway" })).toBeVisible();
@@ -131,7 +132,7 @@ describe("the tree", () => {
   test("no node shows a count and no Inbox node is listed; Collections strip holds New collection", async () => {
     renderKnowledge(`/knowledge/${UID}`);
     const nav = tree();
-    await within(nav).findByRole("button", { name: "gateway.md" });
+    await within(nav).findByRole("button", { name: "Pages" });
     expect(within(nav).queryByRole("button", { name: /^Inbox/ })).toBeNull();
     // The collection rows carry no number.
     const row = within(nav).getByRole("button", { name: new RegExp(`^${COLLECTION.name}$`) });
@@ -163,7 +164,7 @@ describe("the Upload dialog", () => {
     const dialog = await screen.findByRole("dialog");
     expect(
       within(dialog).getByText(
-        "Coffer converts it to Markdown and adds it to the collection as a document. The original file isn’t kept.",
+        "Coffer converts it to Markdown and keeps it as a source of the collection, with the original file beside it.",
       ),
     ).toBeInTheDocument();
     const input = within(dialog).getByLabelText("Drop a file here, or choose one");
