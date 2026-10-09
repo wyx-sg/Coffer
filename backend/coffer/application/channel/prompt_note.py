@@ -57,4 +57,7 @@ class ChannelNoteReader:
             chat_kind=(loc.chat_kind or "") if loc is not None else "",
             in_thread=bool(loc is not None and loc.thread_id),
             renders=binding.adapter.capabilities.render_notes if binding is not None else "",
+            collapses_details=(
+                binding.adapter.capabilities.collapses_details if binding is not None else False
+            ),
         )

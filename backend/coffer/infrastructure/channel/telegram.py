@@ -316,7 +316,7 @@ class TelegramAdapter:
     async def open_live_text(
         self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
     ) -> TelegramLiveText | TelegramDraftLiveText:
-        """A surface the reply grows on ("Grow a reply in place on one live surface").
+        """A surface the turn's progress shows on ("Show a turn's progress on one live surface").
 
         A message draft is the platform's own answer to this and is preferred
         where it exists: nothing is delivered, so nothing has to be deleted

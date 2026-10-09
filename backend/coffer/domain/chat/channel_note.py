@@ -30,3 +30,6 @@ class ChannelNote:
     #: One or two sentences on the Markdown that renders there, declared by the
     #: transport (``ChannelCapabilities.render_notes``); "" when it is not running.
     renders: str = ""
+    #: The transport collapses a ``## Details`` section itself
+    #: (``ChannelCapabilities.collapses_details``), so the agent may use one.
+    collapses_details: bool = False

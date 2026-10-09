@@ -1,5 +1,6 @@
-"""The live surface shows the status block and the answer under it (spec
-channels "Show a turn's working state as one status line")."""
+"""The live surface shows the status block and the answer under it, and the
+final reply carries only the answer (spec channels "Show a turn's working state
+as one status line")."""
 
 from __future__ import annotations
 
@@ -18,11 +19,8 @@ _DONE = TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_tu
 
 
 def _streaming() -> FakeChannelAdapter:
-    adapter = FakeChannelAdapter(
-        supports_edit=False, supports_live_text=True, live_text_persists=True
-    )
-    adapter.live_text_finalizes = True
-    return adapter
+    """A Telegram-shaped transport: a live surface that is scaffolding."""
+    return FakeChannelAdapter(supports_edit=True)
 
 
 def _renderer(adapter: FakeChannelAdapter, **kwargs: Any) -> TurnRenderer:
@@ -66,10 +64,8 @@ async def test_narration_moves_up_and_the_answer_grows_under_the_status() -> Non
     assert answer == "PR #441 is red on one flaky e2e."
 
 
-@pytest.mark.acceptance(
-    spec="channels", scenario="the final reply keeps every paragraph the agent wrote"
-)
-async def test_the_final_reply_keeps_the_narration_as_its_own_paragraph() -> None:
+@pytest.mark.acceptance(spec="channels", scenario="the final reply carries only the answer")
+async def test_the_final_reply_leaves_the_narration_out() -> None:
     adapter = _streaming()
 
     await _run(
@@ -77,13 +73,41 @@ async def test_the_final_reply_keeps_the_narration_as_its_own_paragraph() -> Non
         [
             TextDelta(text="Let me check the deploy logs."),
             ToolCall(tool_use_id="t1", tool_name="Bash", tool_input={"command": "tail"}),
+            ToolResult(tool_use_id="t1", tool_name="Bash", output="", error=None),
+            TextDelta(text="Now the e2e run."),
+            ToolCall(tool_use_id="t2", tool_name="Read", tool_input={"file_path": "/a/e2e.log"}),
             TextDelta(text="PR #441 is red on one flaky e2e."),
             _DONE,
         ],
     )
 
     [live] = adapter.live_handles
-    assert live.final == "Let me check the deploy logs.\n\nPR #441 is red on one flaky e2e."
+    assert live.closed and live.final == "PR #441 is red on one flaky e2e."
+    # The scaffolding was deleted; the reply is one new message, the answer alone.
+    assert adapter.deleted
+    assert adapter.texts()[-1] == "PR #441 is red on one flaky e2e."
+    assert not any("Let me check" in t for t in adapter.texts()[1:])
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a turn that ends on a tool call replies with its last text"
+)
+async def test_a_turn_ending_on_a_tool_call_replies_with_its_last_text() -> None:
+    adapter = FakeChannelAdapter(supports_edit=False, supports_live_text=False)
+
+    await _run(
+        _renderer(adapter),
+        [
+            TextDelta(text="Checking."),
+            ToolCall(tool_use_id="t1", tool_name="Bash", tool_input={"command": "ls"}),
+            TextDelta(text="The report is written."),
+            ToolCall(tool_use_id="t2", tool_name="Write", tool_input={"file_path": "/a/r.md"}),
+            ToolResult(tool_use_id="t2", tool_name="Write", output="", error=None),
+            _DONE,
+        ],
+    )
+
+    assert adapter.texts() == ["The report is written."]
 
 
 @pytest.mark.acceptance(
@@ -106,15 +130,6 @@ async def test_the_header_ticks_while_a_tool_runs_in_silence() -> None:
     queue.put_nowait(_DONE)
     queue.put_nowait(None)
     await task
-
-
-async def test_a_persisting_surface_opens_straight_into_the_status_header() -> None:
-    adapter = _streaming()
-
-    await _run(_renderer(adapter), [TextDelta(text="hi"), _DONE])
-
-    [live] = adapter.live_handles
-    assert live.snapshots[0] == "⏳ Working · 0s"
 
 
 async def test_hidden_steps_keep_the_step_lines_off_the_surface() -> None:

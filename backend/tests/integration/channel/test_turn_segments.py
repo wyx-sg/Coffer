@@ -1,9 +1,10 @@
-"""Text written on either side of a tool call is two paragraphs, not one run-on.
+"""Text written on either side of a tool call is two segments, not one run-on.
 
 An agent streams "Let me check the logs." — runs a tool — then "The failure is…".
-Both arrive as bare ``TextDelta``s, so a renderer that only concatenates them
-delivers "…check the logs.The failure is…". The tool call between them is the
-boundary, and the final reply keeps both halves with a paragraph break.
+Both arrive as bare ``TextDelta``s, so a renderer that only concatenated them
+would deliver "…check the logs.The failure is…". The tool call between them is
+the boundary: the text before it is narration and the final reply is the text
+after it alone (spec channels "Show a turn's working state as one status line").
 """
 
 from __future__ import annotations
@@ -35,7 +36,7 @@ async def _render(adapter: FakeChannelAdapter, events: list[Any]) -> None:
     await renderer.consume(queue)
 
 
-async def test_text_either_side_of_a_tool_call_is_two_paragraphs() -> None:
+async def test_only_the_text_after_the_tool_call_is_the_reply() -> None:
     adapter = FakeChannelAdapter(supports_edit=False)
 
     await _render(
@@ -51,7 +52,7 @@ async def test_text_either_side_of_a_tool_call_is_two_paragraphs() -> None:
         ],
     )
 
-    assert adapter.texts() == ["Let me check the logs.\n\nThe failure is the 3DS step."]
+    assert adapter.texts() == ["The failure is the 3DS step."]
 
 
 async def test_deltas_within_one_text_block_still_join_without_a_break() -> None:

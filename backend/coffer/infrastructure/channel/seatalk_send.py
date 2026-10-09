@@ -42,8 +42,7 @@ __all__ = [
 #:
 #: It is MARKDOWN — it reaches the reader as a name only in a ``format: 1``
 #: message. In a ``format: 2`` (plain) one it shows as this literal string, so
-#: every snapshot that carries it goes out as ``format: 1`` (see
-#: ``turn_text.with_mention`` and ``SeaTalkLiveText``).
+#: every reply goes out as ``format: 1`` (see ``turn_text.with_mention``).
 SEATALK_MENTION_TEMPLATE = '<mention-tag target="seatalk://user?id={user_id}"/>'
 
 #: The SECOND documented mention form, from the same "Send a Message with

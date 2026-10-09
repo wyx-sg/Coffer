@@ -17,8 +17,9 @@ The header ticks on the live surfaces' keep-alive cadence, so a long silent tool
 still shows time passing. In a group a step line names only the tool: everyone
 there reads it, and a tool's input can carry a command, a query or a path. Text
 the agent writes BETWEEN tool calls is narration ("Let me check the logs"): it
-becomes the ``💬`` line rather than the answer. The final reply keeps it, with
-paragraph breaks (``ReplyText``).
+becomes the ``💬`` line rather than the answer, and the final reply leaves it
+out — it carries only what the agent wrote after its last tool call
+(``ReplyText.answer``).
 
 Pure: no I/O, no platform schema, no clock of its own — ``now`` is handed in.
 """
@@ -133,10 +134,10 @@ class ReplyText:
     """The reply's text, kept as the segments a tool call separates.
 
     Deltas inside one text block join as they came; a tool event closes the
-    segment, so the next text starts a paragraph — "…check the logs." and "The
-    failure is…" never run together. The current (last, still open) segment is
-    the answer tail a live surface shows under the status block; a segment a
-    tool call closed is narration.
+    segment. The current (last, still open) segment is the answer tail a live
+    surface shows under the status block; a segment a tool call closed is
+    narration, which a live surface may show but the final reply never carries
+    (spec channels "Show a turn's working state as one status line").
     """
 
     _segments: list[str] = field(default_factory=list)
@@ -164,6 +165,11 @@ class ReplyText:
     def started(self) -> bool:
         return any(s.strip() for s in self._segments)
 
-    def full(self) -> str:
-        """Everything the agent wrote, one paragraph break per tool boundary."""
-        return "\n\n".join(s.strip() for s in self._segments if s.strip())
+    def answer(self) -> str:
+        """The final reply: the text written after the last tool call. A turn
+        that wrote nothing after its last tool falls back to the last segment
+        that has any text, so a reply is never lost to a trailing tool call."""
+        for segment in reversed(self._segments):
+            if segment.strip():
+                return segment.strip()
+        return ""

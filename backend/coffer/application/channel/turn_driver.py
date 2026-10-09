@@ -332,7 +332,6 @@ class TurnDriver:
             mention_user_email=item.mention_user_email,
             mention_user_name=item.mention_user_name,
             show_steps=binding.show_steps,
-            notify_after_seconds=binding.notify_after_seconds,
             tracker=tracker,
         )
         outcome: TurnOutcome = "failed"

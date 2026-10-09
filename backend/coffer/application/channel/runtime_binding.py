@@ -30,7 +30,6 @@ def make_binding(
         wait_after_text_seconds=parsed.wait_after_text_seconds,
         wait_after_forward_seconds=parsed.wait_after_forward_seconds,
         show_steps=parsed.show_steps,
-        notify_after_seconds=parsed.notify_after_seconds,
         new_conversation_after_idle_hours=parsed.new_conversation_after_idle_hours,
         agent_scope=routing.agent_scope,
         directories=tuple(parsed.directories),

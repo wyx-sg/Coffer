@@ -3725,8 +3725,6 @@
         "invalid": "请输入 {{min}} 到 {{max}} 之间的秒数。"
       },
       "replies": {
-        "notifyAfter": "长任务完成提醒",
-        "notifyAfterHint": "运行达到这个时长的回合结束时发一条简短的“完成”消息。0 表示关闭。",
         "showSteps": "显示步骤行",
         "showStepsHint": "工作中在状态行下显示最近 3 个步骤。"
       },

@@ -63,11 +63,25 @@ def test_asks_for_outcome_first_details_png_and_coffer_ask() -> None:
     text = channel_system_context(_SEATALK_GROUP_THREAD)
 
     assert "The first line is the outcome in one sentence" in text
-    assert "`## Details`" in text
+    assert "only what you write after your last tool call is sent" in text
     assert "as a PNG file" in text
     assert "call `coffer__ask`" in text
     assert "NEEDS YOU" not in text
     assert "`MEDIA:/absolute/path`" in text
+
+
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="only a transport that collapses details is asked for a details section",
+)
+def test_only_a_collapsing_transport_is_asked_for_a_details_section() -> None:
+    telegram = ChannelNote(
+        platform="Telegram", chat_kind="direct", renders=RICH_RENDER_NOTES, collapses_details=True
+    )
+
+    assert "`## Details` heading, which Coffer collapses" in channel_system_context(telegram)
+    assert "## Details" not in channel_system_context(_SEATALK_GROUP_THREAD)
+    assert "## Details" not in channel_system_context(None)
 
 
 def test_the_note_stays_short_because_it_rides_on_every_turn() -> None:

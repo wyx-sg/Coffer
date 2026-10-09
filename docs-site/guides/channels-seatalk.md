@@ -76,7 +76,7 @@ Check the connection: the **SeaTalk connection** badge on the channel's status l
 
 SeaTalk has no start links, so you type the code. It is single-use, expires after one hour, and is invalidated after 10 wrong guesses.
 
-Send the bot a message. A typing indicator appears at once, the reply streams into a single message, and the conversation shows up on the web [Conversations](/guides/chat) page with the channel `SeaTalk · DM`.
+Send the bot a message. A typing indicator appears at once, the answer arrives as a new message when the turn ends, and the conversation shows up on the web [Conversations](/guides/chat) page with the channel `SeaTalk · DM`.
 
 ## Connection states
 
@@ -95,17 +95,12 @@ Before the first attempt there is no connection state: the daemon starts a chann
 
 ## How replies look
 
-- **Streaming (direct chats)** — the reply is one message that grows while the agent writes, starting the moment the turn begins with the status line (`⏳ Working · 0s`). Each update carries the full text so far, and the status line's clock moves every 10 seconds, which also keeps the stream inside SeaTalk's rule that a stream with no update for 30 seconds is ended. Updates are sent one at a time and each carries the newest text, so the message only ever moves forward. It never jumps back to an earlier version. SeaTalk redraws the whole message on every update, so while the agent writes, the text is appended about ten times a second, but changes to the status and step lines are combined into at most one update every 2 seconds. A run with many quick steps therefore does not make the message flicker. SeaTalk clients older than 3.67 show the finished message when the stream closes.
-- **Group replies are cards, not streams.** In a group the bot shows the working and typing indicator while the turn runs, and the finished reply arrives as one interactive card, split into several cards if it is long. Cards are used because SeaTalk can rewrite a card but cannot delete or edit anything else, and that is what lets the owner withdraw a group reply (see below). Each card carries a 🗑 button.
-- **Long replies** — in a direct chat one stream carries at most 4,096 characters. A longer reply finishes the stream at a paragraph boundary and the rest arrives as ordinary messages numbered `(2/3)`, `(3/3)`.
-- **Long turns** — finishing a stream notifies nobody, because the message was created when the turn began. A turn longer than the channel's threshold (90 seconds by default) therefore ends with one new message, `✅ Done · 4m 12s — <first line>`, in the same thread; in a group it @mentions whoever asked.
+- **While the turn runs** — SeaTalk has no reactions and cannot edit a text message, so the only sign of work is the typing indicator. It appears at once and is kept alive every 3 seconds until the reply is sent, in direct chats and group threads alike. SeaTalk silently skips group typing in groups of more than 200 members.
+- **Direct chats** — the answer arrives as one ordinary new message, so SeaTalk notifies you the way it does for any message. Only what the agent writes after its last tool call is sent; its earlier remarks between steps are not. A long answer is split at paragraph boundaries into several messages, and every message after the first is numbered `(2/3)`, `(3/3)`.
+- **Groups** — the finished answer arrives as one interactive card, split into several cards if it is long, and it opens by @mentioning whoever asked. Cards are used because SeaTalk can rewrite a card but cannot delete or edit anything else, and that is what lets the owner withdraw a group reply (see below). Each card carries a 🗑 button.
 - **Formatting** — the agent's Markdown is converted to SeaTalk Markdown: bold, italic, inline code, code fences and lists. Headings become bold and links become `label (url)`, since SeaTalk supports neither. A table becomes one bullet per row (a big one also arrives as a `.csv`), and a code block over 30 lines arrives as a file. Messages are split to stay under SeaTalk's 4,096-byte cap.
-- **Details** — a `## Details` section goes behind a card titled with the answer's first line; **Details** posts it as a reply in the card's thread, **As file** sends it as a `.md`.
-- **Receipt** — SeaTalk has no reactions, so a typing indicator is kept alive every 3 seconds while the turn runs, in direct chats and group threads alike. SeaTalk silently skips group typing in groups of more than 200 members.
-- **Tool progress** — under the status line, the message shows the newest tool calls, one line each. In a **group** the line names only the tool (`⏳ Bash`), because everyone in the group reads it and a tool's input can carry a command, a query or a path. In a **direct chat** it adds the agent's own one-line description or the file name (`⏳ Bash · list the desktop`), never a raw command.
-- **Withdrawing a reply.** SeaTalk's Open Platform has no API to delete a bot's message, and a finished stream cannot be updated. Only interactive cards can be rewritten, and only by the bot that sent them. So when the owner withdraws a group reply — by tapping its 🗑 button, or by quoting it and sending `/del` — Coffer rewrites each card of that reply into a neutral “🗑 Withdrawn” card with no buttons. The text is gone from the chat, but the card stays. SeaTalk allows rewriting for 7 days; past that the owner is told privately that the reply can no longer be withdrawn. Only the owner's tap or command counts, and `/del` without a quote withdraws the most recent reply in the group or thread. A direct-chat reply is a streamed message and cannot be withdrawn on SeaTalk. See [Withdrawing a reply](/guides/channels#withdrawing-a-reply).
-
-If nothing else has updated the message for 10 seconds, Coffer re-sends the latest text. That re-sending stops after about 10 minutes in which it was the only thing writing, so a stream whose turn has stopped without finishing does not stay open forever. If a stream is ended by SeaTalk — an error or a gap past 30 seconds — Coffer does not reuse it. The partial message stays in the chat and the full reply is sent as ordinary messages.
+- **Long sections** — SeaTalk cannot collapse text, so the answer arrives whole, including any section the agent puts under a heading such as `## Details`.
+- **Withdrawing a reply.** SeaTalk's Open Platform has no API to delete a bot's message, and only interactive cards can be rewritten, and only by the bot that sent them. So when the owner withdraws a group reply — by tapping its 🗑 button, or by quoting it and sending `/del` — Coffer rewrites each card of that reply into a neutral “🗑 Withdrawn” card with no buttons. The text is gone from the chat, but the card stays. SeaTalk allows rewriting for 7 days; past that the owner is told privately that the reply can no longer be withdrawn. Only the owner's tap or command counts, and `/del` without a quote withdraws the most recent reply in the group or thread. A direct-chat reply is an ordinary message and cannot be withdrawn on SeaTalk. See [Withdrawing a reply](/guides/channels#withdrawing-a-reply).
 
 ## Groups and threads
 
@@ -168,9 +163,7 @@ On the channel's page choose **Replace secret** (in the **⋯** menu, or under *
 
 | Limit | Value |
 | --- | --- |
-| Streamed reply (direct chat) | 4,096 characters per stream; the rest as ordinary messages |
 | Ordinary message | under 4,096 bytes |
-| Stream idle limit | 30 seconds (Coffer re-sends every 10) |
 | Card rewrite window | 7 days, interactive cards only |
 | Card content | 6 buttons in up to 3 rows; title 120 characters, description 1,000 |
 | Thread pages | 100 messages per page, bounded page count |
@@ -194,9 +187,6 @@ Check pairing (`peer: not paired` means the bot answers nobody), and that you @m
 
 **The bot says it can only see a few messages of a thread.**
 SeaTalk returns only the last 7 days of a thread's replies (see [Groups and threads](#groups-and-threads)), so an older discussion is invisible to the bot even though you can scroll to it. A thread you started today reads in full. Forward or quote the older messages to give the agent that context.
-
-**The streamed reply stops midway and the answer arrives again below it.** (Direct chats; group replies are not streamed.)
-SeaTalk ended the stream. The full answer is the one sent below.
 
 ## Related
 

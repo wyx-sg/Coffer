@@ -155,31 +155,21 @@ describe("message batching", () => {
 });
 
 describe("replies", () => {
-  test("the step lines switch saves at once; the ping threshold after typing stops", async () => {
+  acceptance("channels", "the step lines are hidden in the channel's settings", async () => {
     const api = installApi();
-    renderSettings();
+    renderSettings(TG);
 
     fireEvent.click(screen.getByRole("switch", { name: /show step lines/i }));
     await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
     expect(patched(api, 0).show_steps).toBe(false);
-
-    fireEvent.change(screen.getByLabelText(/long-task ping after/i), {
-      target: { value: "300" },
-    });
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(2), SLOW);
-    // The second save plans from what the first wrote, so it keeps it.
-    expect(patched(api, 1)).toMatchObject({ show_steps: false, notify_after_seconds: 300 });
   });
 
-  test("a blank threshold is refused inline and never sent", async () => {
-    const api = installApi();
+  test("a SeaTalk channel, which shows only typing while a turn runs, offers no step lines", () => {
+    installApi();
     renderSettings();
-    fireEvent.change(screen.getByLabelText(/long-task ping after/i), {
-      target: { value: "" },
-    });
-    expect(screen.getByRole("alert")).toHaveTextContent(/0 to 3600/);
-    await new Promise((r) => setTimeout(r, 900));
-    expect(api.PATCH).not.toHaveBeenCalled();
+
+    expect(screen.queryByRole("switch", { name: /show step lines/i })).toBeNull();
+    expect(screen.queryByLabelText(/long-task ping after/i)).toBeNull();
   });
 });
 

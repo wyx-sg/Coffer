@@ -5,8 +5,9 @@ The SeaTalk half of Coffer's channel plane. Its parent,
 [`channels`](../spec.md), owns everything a channel does regardless of platform
 — pairing, the owner gate, commands, conversations, media policy, scope and
 machine binding. This spec owns what only SeaTalk can answer: its inbound
-websocket transport and the configuration it needs, the streaming reply
-contract, the card payload shape, thread identity, and the two ids a member has.
+websocket transport and the configuration it needs, how a reply looks while a
+turn runs and when it ends, the card payload shape, thread identity, and the two
+ids a member has.
 
 **SeaTalk is Coffer-hosted for every agent**, because no external gateway speaks
 SeaTalk at all: there is no official Claude, Codex, Cursor or agent-native
@@ -27,11 +28,7 @@ The user is assumed to be able to create a SeaTalk Open Platform app, enable the
 Bot capability and set it Online, and obtain the scopes their organisation's
 approval flow requires (at minimum *Send Message to Bot User*). Outbound SeaTalk
 is spoken with `httpx` against the fixed host `openapi.seatalk.io`; the official
-SDK is used only for websocket inbound, where there is no alternative. One open
-question the platform's own documentation does not settle: the streaming
-parameter table marks `thread_id` optional while the group-chat request sample is
-annotated "thread_id required", so whether a group-**main** stream is accepted
-without one is unverified.
+SDK is used only for websocket inbound, where there is no alternative.
 
 Deliberately out of scope:
 
@@ -43,6 +40,12 @@ Deliberately out of scope:
   in more than one language; it is English-only in the backend, and the card
   would be the only translated surface in a conversation whose every other line
   comes from the agent in whatever language the owner wrote in.
+- **Streaming a reply.** The platform can stream a message (`init_stream` /
+  `update_stream`), but the client re-types the whole message whenever anything
+  already shown changes, so a reply that carries the turn's progress flickers,
+  and a message created when the turn begins notifies nobody when it ends.
+  Coffer shows typing instead and sends the finished answer as a new message
+  (see "Show only typing while a turn runs").
 - **Reading recent group-main history.** SeaTalk delivers neither emoji
   reactions nor non-@ group-main messages to a bot, and the permission that
   would grant the history endpoint is not granted to a self-built app at
@@ -203,88 +206,10 @@ name.
 - **THEN** the mention markup is delivered byte for byte, while the text around
   it is escaped as usual.
 
-### Requirement: Stream the reply under SeaTalk's streaming contract
-**The SeaTalk streaming constraints are contract, not implementation detail.**
-SeaTalk cannot edit a delivered text message at all, yet streams one, which is why
-the core asks for a live surface (`supports_live_text`) and not for edits
-([channels](../spec.md) "Grow a reply in place on one live surface"); the streamed message IS the reply, so
-`live_text_persists` MUST be true and the surface opens the moment the turn
-starts, acknowledging the owner immediately. This is the direct-chat reply: a
-group reply is a withdrawable card instead (see "Send group replies as
-withdrawable cards").
-
-- Every update carries the **FULL accumulated text**, never a delta: the client
-  renders the latest snapshot it received.
-- Updates must be **less than 30 s apart** or the platform terminates the
-  stream, so the last snapshot is re-sent on a keep-alive well inside that
-  window — only when nothing else has written for a whole keep-alive interval.
-- A stream has **one writer**. The turn's events, the status tick and the
-  keep-alive only offer snapshots; the platform writes run one at a time and
-  each sends the newest snapshot offered. Because the client shows the latest
-  snapshot it received, a write carrying an older snapshot than the one on
-  screen would make the message jump back and then forward. A snapshot offered
-  inside the buffer interval is written when the interval ends, never dropped.
-- The client has no append: every update **replaces the whole message**, so an
-  update that rewrites text already on screen (a step line shifting, the clock,
-  the step count) redraws the bubble. Only a snapshot that appends to the one on
-  screen goes at the fast buffer interval; any other is held to **at most one
-  write per redraw interval (2 s)**, folding everything offered meanwhile into
-  the newest snapshot. The status clock moves only with a redraw (a step, the
-  status tick), so answer text streaming under it stays a pure append.
-- One stream carries at most **4096 characters**; a reply that outgrows the
-  budget finishes the stream at the limit and the remainder is sent as ordinary
-  chunked messages. A reply's length is unknown until it ends, so refusing to
-  stream anything that *might* overrun would withhold the live reply from every
-  turn to serve the rare one.
-- A stream that has **ended** — finished, timed out, or errored — is never
-  reused, because the platform rejects any later request naming its id: the
-  surface latches dead, no replacement stream is opened, and the ordinary send
-  path delivers the reply in full. The partial message the platform kept stays
-  where it is — visibly stale, but the user still gets the whole answer.
-- The stream finishes carrying the final text rendered as SeaTalk markdown, so
-  nothing is sent twice. Clients older than 3.67 simply see the finished message
-  when the stream closes.
-
-#### Scenario: each seatalk stream update carries the full reply so far
-- **GIVEN** a SeaTalk channel streaming a reply
-- **WHEN** the reply text arrives in deltas
-- **THEN** the stream is opened once, every update carries the FULL accumulated
-  text (never a delta) under a monotonically increasing sequence number, and
-  only the last update finishes the stream
-
-#### Scenario: a seatalk stream never shows an older snapshot after a newer one
-- **GIVEN** a SeaTalk stream whose platform answers slower than the buffer
-  interval, with the status tick and keep-alive running beside the reply text
-- **WHEN** the turn streams its reply
-- **THEN** at most one stream request is in flight at a time, sequence numbers
-  arrive in order, and every interim snapshot's answer extends the previous
-  one and its clock never goes back
-
-#### Scenario: a long seatalk run redraws the message at a bounded cadence
-- **GIVEN** a SeaTalk stream for a turn that runs many quick tool steps, with
-  answer text written between them
-- **WHEN** the turn streams
-- **THEN** every interim write that is not a pure append of the previous one
-  comes at least a redraw interval after the previous write, and the steps
-  offered meanwhile are folded into that one write
-
-#### Scenario: a terminated seatalk stream is never reused
-- **GIVEN** a SeaTalk stream the platform has terminated (an error, or a gap
-  past its 30-second limit)
-- **WHEN** the turn produces more text and then ends
-- **THEN** no further request names that stream id, no replacement stream is
-  opened, and the reply is delivered through the ordinary send path instead
-
-#### Scenario: a reply past the stream budget finishes the stream and sends the rest
-- **GIVEN** a SeaTalk reply longer than one stream may carry (4096 characters)
-- **WHEN** the turn ends
-- **THEN** the stream finishes at the budget on a paragraph boundary and the
-  remainder is delivered as ordinary chunked messages
-
 ### Requirement: Keep a typing heartbeat alive in DMs and group threads
-SeaTalk has **no reaction to ack with**, so it MUST additionally keep a periodic
-**typing heartbeat** alive (an ephemeral action, zero chat clutter), covering the
-window before the first live update lands. It runs wherever the turn is, DM or
+SeaTalk has **no reaction to ack with** and no live surface, so it MUST keep a
+periodic **typing heartbeat** alive (an ephemeral action, zero chat clutter) for
+the whole turn: it is the only sign of progress until the reply lands. It runs wherever the turn is, DM or
 group thread alike: SeaTalk has a thread-scoped group typing endpoint
 (`group_chat_typing`) beside the direct-chat one, and the heartbeat was DM-only
 purely on the belief that no such endpoint existed. The gate is the receipt
@@ -334,10 +259,10 @@ so a long body degrades to a truncated card instead of a refused one.
 ### Requirement: Send group replies as withdrawable cards
 SeaTalk has no delete API, but a card its bot sent can be rewritten by that bot for 7
 days ([channels](../spec.md) "Withdraw a bot reply on the owner's command"). So a
-reply in a **group** MUST be sent as interactive cards and never streamed — a
-stream cannot be rewritten — and the adapter declares that it does not stream in a
-group, so the core shows the typing indication and delivers the finished reply
-(`streams_in_groups` false). Direct chats are unchanged: they stream. The reply is
+reply in a **group** MUST be sent as interactive cards and never as plain text,
+which cannot be rewritten. While the turn runs the group sees only the typing
+indication (see "Show only typing while a turn runs"); a direct chat's reply is
+ordinary text. The reply is
 markdown rendered as SeaTalk's own, in description blocks of at most 1000 characters
 (a card holds up to four such blocks here), cut on paragraph and never inside a code
 fence; a reply that does not fit one card runs on into further cards, numbered
@@ -352,7 +277,7 @@ core tells the owner privately.
 #### Scenario: a group reply is cards with the trash button on the last
 - **GIVEN** a SeaTalk group reply longer than one card holds
 - **WHEN** it is sent
-- **THEN** it goes out as interactive cards, never as text or a stream, each card id is reported, and only the last carries the 🗑 button
+- **THEN** it goes out as interactive cards, never as text, each card id is reported, and only the last carries the 🗑 button
 
 #### Scenario: a short group reply is one card with markdown rendered
 - **GIVEN** a SeaTalk group reply of a few lines with bold text and a code fence
@@ -367,7 +292,7 @@ core tells the owner privately.
 #### Scenario: a seatalk group turn does not stream
 - **GIVEN** a SeaTalk channel and a group turn
 - **WHEN** the capabilities are read
-- **THEN** streaming in a group is not offered, withdrawing takes up to 168 hours, and withdrawing does not remove the message
+- **THEN** no live surface is offered, withdrawing takes up to 168 hours, and withdrawing does not remove the message
 
 ### Requirement: Degrade card rewrites outside SeaTalk's update window
 A card rewrite ([channels](../spec.md) "Switch the agent with /new", [channels](../spec.md) "Offer choices and actions as owner-gated cards") reaches only
@@ -630,41 +555,38 @@ defaults from its main chat"); a mention inside a thread is not marked.
 - **THEN** the first is marked as the group's main chat with its own message id as
   the thread, and the second is not marked
 
-### Requirement: Ping a long turn's end into its thread
-SeaTalk's answer is the stream opened when the turn began, so finishing it
-notifies nobody. A turn past the channel's ping threshold ([channels](../spec.md)
-"Ping the asker when a long turn ends") MUST therefore end with the one short
-ping as a new text message in the same chat and thread, and in a group it MUST
-open with the asker's `<mention-tag>` — a mention decides its notification when
-the message is created, and this message is created now.
+### Requirement: Show only typing while a turn runs
+A SeaTalk turn MUST show its progress through the typing indicator alone (see
+"Keep a typing heartbeat alive in DMs and group threads"): the transport
+declares no live surface (`supports_live_text` false), so nothing is posted
+while the turn runs and no message stream is ever opened. When the turn ends the
+reply goes out as new messages — in a direct chat, ordinary text messages
+rendered as SeaTalk markdown and cut at paragraph boundaries, every message after
+the first opening with its place, `(2/3)`; in a group, withdrawable cards (see
+"Send group replies as withdrawable cards").
 
-#### Scenario: a group ping mentions the asker
-- **GIVEN** a long SeaTalk group-thread turn from a member with a SeaTalk id
-- **WHEN** it ends
-- **THEN** a new message in that thread opens with the member's mention tag and
-  reads `✅ Done · <elapsed> — <first line>`
+SeaTalk can stream a message, but its client re-types the whole message whenever
+a snapshot changes anything already on screen — a step line shifting, the clock
+— so a reply that carries the turn's progress flickers on every step. And a
+message created when the turn began notifies nobody when it is finished, so a
+long turn needed a second message to say it had ended. Typing says the turn is
+alive at no cost, and the answer, sent when it is ready, notifies.
 
-### Requirement: Number the messages after the stream
-A SeaTalk reply longer than one stream finishes the stream at its budget and
-MUST send the rest itself, as ordinary text messages into the same chat and
-thread, each opening with its place counting the stream as part one — `(2/3)`,
-`(3/3)`. An ordinary send cut into several messages is numbered the same way.
+#### Scenario: a seatalk direct turn shows typing and then one new message
+- **GIVEN** a SeaTalk direct chat and a turn whose agent narrates, runs a tool and
+  then answers
+- **WHEN** the turn runs and ends
+- **THEN** the typing indicator is sent, no stream request is made, and one text
+  message carries the answer alone
 
-#### Scenario: continuations after the stream are numbered
-- **GIVEN** a SeaTalk stream whose final reply is past the stream budget
-- **WHEN** the stream closes
-- **THEN** the remainder goes out as messages headed `(2/N)` … `(N/N)` and nothing
-  is handed back for the ordinary send
+#### Scenario: a long seatalk reply goes out as numbered messages
+- **GIVEN** a SeaTalk reply longer than one message holds
+- **WHEN** it is sent
+- **THEN** it is cut at paragraph boundaries into messages headed `(2/3)`, `(3/3)`
+  after the first
 
-### Requirement: Post a reply's details into the card's thread
-A SeaTalk thread's id is its root message's id and any message can root one, so
-the Details button of a summary card ([channels](../spec.md) "Offer a reply's
-details behind a summary card") MUST post the details as a reply in the thread
-the card sits in — or, in a direct chat, the thread the card itself roots — and
-rewrite the card (inside SeaTalk's update window) to say they were posted.
-
-#### Scenario: the details button posts them as a thread reply
-- **GIVEN** a SeaTalk summary card `m7` in a direct chat
-- **WHEN** the owner taps Details
-- **THEN** the details are sent into thread `m7` and the card reads `Details posted
-  in the thread.`
+#### Scenario: a seatalk transport offers no live surface
+- **WHEN** the SeaTalk transport's capabilities are read and a live surface is
+  asked for, in a direct chat or a group thread
+- **THEN** it declares none and opens none, and no stream request reaches the
+  platform

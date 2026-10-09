@@ -61,9 +61,6 @@ export interface ChannelEditValues {
   /** List each step under the live status line while a turn runs. Undefined
    *  leaves the stored value alone. */
   show_steps?: boolean;
-  /** A turn running at least this long (seconds) ends with a completion ping;
-   *  0 turns it off. Undefined leaves the stored value alone. */
-  notify_after_seconds?: number;
   /** Open a new conversation when the chat was idle this many hours; 0 never
    *  does. Undefined leaves the stored value alone. */
   new_conversation_after_idle_hours?: number;
@@ -118,6 +115,13 @@ export function honoursRequireMention(channelType: unknown): boolean {
   return channelType === "telegram";
 }
 
+/** Whether a channel type shows a turn's progress on a live status line, so its
+ *  step-lines setting means anything. SeaTalk shows only the typing indicator
+ *  while a turn runs (spec channels/seatalk "Show only typing while a turn runs"). */
+export function showsStepLines(channelType: unknown): boolean {
+  return channelType === "telegram";
+}
+
 export interface ChannelEditInput {
   /** The channel's identity — what the PATCH is addressed to. */
   uid: string;
@@ -169,7 +173,6 @@ export function planChannelEdit(input: ChannelEditInput): ChannelEditPlan {
   setIfChanged(nextConfig, config, "wait_after_text_seconds", values.wait_after_text_seconds);
   setIfChanged(nextConfig, config, "wait_after_forward_seconds", values.wait_after_forward_seconds);
   setIfChanged(nextConfig, config, "show_steps", values.show_steps);
-  setIfChanged(nextConfig, config, "notify_after_seconds", values.notify_after_seconds);
   setIfChanged(
     nextConfig,
     config,

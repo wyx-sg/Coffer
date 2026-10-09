@@ -53,7 +53,6 @@ The daemon is usually spawned detached — by the CLI, by an agent's MCP shim, b
 | --- | --- | --- |
 | `COFFER_TURN_IDLE_TIMEOUT_SECONDS` | `300` | Seconds a chat or channel turn may go without an event before the watchdog cancels it. `0`, a negative value or a non-number turns the watchdog off. |
 | `COFFER_SEATALK_SDK_DIR` | `~/.coffer/vendor` | Directory the SeaTalk WebSocket SDK package (`seatalk_oapi_sdk`) is imported from. |
-| `COFFER_SEATALK_STREAM_INTERVAL` | `0.1` | Minimum seconds between streamed updates of a SeaTalk reply. |
 
 ### Storage locations
 

@@ -18,13 +18,12 @@ from fastapi.responses import JSONResponse
 from coffer.application.channel.ports import AdapterCallbacks
 from coffer.domain.channel.envelopes import InboundLifecycle
 from coffer.domain.channel.errors import ChannelSendFailed
-from coffer.infrastructure.channel.seatalk_live import SeaTalkLiveText
 from coffer.infrastructure.channel.seatalk_send import (
     SEATALK_MENTION_EMAIL_TEMPLATE,
     SEATALK_MENTION_TEMPLATE,
 )
 
-from .conftest import FakeSeaTalk, RecordingCallbacks, make_seatalk_adapter, wait_until
+from .conftest import FakeSeaTalk, RecordingCallbacks, make_seatalk_adapter
 
 
 class LifecycleRecorder(RecordingCallbacks):
@@ -1503,271 +1502,22 @@ async def test_fetch_thread_degrades_to_empty_list_on_error(
         await adapter.stop()
 
 
-# -- live text: the message-streaming API ("Stream the reply under SeaTalk's
-# streaming contract") -------------------------------------------------------
-
-
-def _ticking(step: float = 1.0) -> Any:
-    """A clock that advances past the surface's buffer on every read, so a test
-    drives updates deterministically instead of sleeping."""
-    box = [0.0]
-
-    def now() -> float:
-        value = box[0]
-        box[0] += step
-        return value
-
-    return now
-
-
-def _live(adapter: Any, chat_id: str = "emp-1", **kwargs: Any) -> SeaTalkLiveText:
-    return SeaTalkLiveText(adapter._post, chat_id, now=_ticking(), **kwargs)
+# -- no live surface ("Show only typing while a turn runs") -------------------
 
 
 @pytest.mark.acceptance(
-    spec="channels/seatalk",
-    scenario="each seatalk stream update carries the full reply so far",
+    spec="channels/seatalk", scenario="a seatalk transport offers no live surface"
 )
-async def test_stream_opens_once_and_updates_carry_full_snapshots(
-    fake_seatalk: FakeSeaTalk,
-) -> None:
+async def test_seatalk_offers_no_live_surface(fake_seatalk: FakeSeaTalk) -> None:
     adapter = make_seatalk_adapter(fake_seatalk)
-    live = _live(adapter)
     try:
-        await live.update("I found")
-        await live.update("I found three")
-        leftover = await live.close("I found three cats.")
+        assert adapter.capabilities.supports_live_text is False
+        assert await adapter.open_live_text("emp-1") is None
+        assert await adapter.open_live_text("gid-1", thread_id="t1", chat_kind="group") is None
     finally:
         await adapter.stop()
-
-    # ONE init_stream for the whole turn, on the single-chat surface. It posts a
-    # real message, so it carries one — a body with only the target is refused
-    # (code=102), which is how this shipped broken.
-    assert [surface for surface, _ in fake_seatalk.init_stream_calls] == ["single_chat"]
-    assert fake_seatalk.init_stream_calls[0][1] == {
-        "employee_code": "emp-1",
-        # format 1 even for this opening snapshot: the message must be able to
-        # carry an @mention the instant it is created (spec channels "Mention the
-        # asker in a group answer"), and a tag in a format-2 message shows as its
-        # own source. Partial text stays literal because it is ESCAPED, not because
-        # the format is plain.
-        "message": {"tag": "text", "text": {"format": 1, "content": "I found"}},
-    }
-    bodies = [body for _surface, body in fake_seatalk.update_stream_calls]
-    # An update names its target too: a stream_id alone does not say which chat.
-    assert all(b["employee_code"] == "emp-1" for b in bodies)
-    # seq starts at 1 on the first UPDATE — init_stream consumes none…
-    assert [b["seq"] for b in bodies] == [1, 2]
-    assert {b["stream_id"] for b in bodies} == {"s1"}
-    # …each update carries the FULL accumulated text, never a delta…
-    assert [b["message"]["text"]["content"] for b in bodies] == [
-        "I found three",
-        "I found three cats.",
-    ]
-    # …an update never re-states the kind, which init_stream fixed…
-    assert all("tag" not in b["message"] for b in bodies)
-    # …and only the last one finishes the stream.
-    assert [b["finish"] for b in bodies] == [False, True]
-    assert leftover == ""  # the streamed message IS the reply
-
-
-async def test_stream_updates_are_buffered_not_sent_per_token(fake_seatalk: FakeSeaTalk) -> None:
-    # A frozen clock keeps every update inside the ~200 ms buffer, so only the
-    # first snapshot reaches the platform — the rest are dropped, not queued.
-    adapter = make_seatalk_adapter(fake_seatalk)
-    live = SeaTalkLiveText(adapter._post, "emp-1", now=lambda: 5.0)
-    try:
-        await live.update("I")
-        await live.update("I fo")
-        await live.update("I found")
-        await live.close("I found cats.")
-    finally:
-        await adapter.stop()
-
-    # The first snapshot opens the stream (init_stream carries it); the next two
-    # fall inside the buffer and are dropped, so only the finish updates.
-    assert fake_seatalk.init_stream_calls[0][1]["message"]["text"]["content"] == "I"
-    contents = [body["message"]["text"]["content"] for _s, body in fake_seatalk.update_stream_calls]
-    assert contents == ["I found cats."]
-
-
-@pytest.mark.acceptance(
-    spec="channels/seatalk",
-    scenario="a terminated seatalk stream is never reused",
-)
-async def test_a_terminated_stream_is_never_reused_and_the_reply_is_handed_back(
-    fake_seatalk: FakeSeaTalk,
-) -> None:
-    # The platform kills the stream on the 2nd update (as it does on a >30 s gap
-    # or any error); every later request naming that id would be rejected.
-    fake_seatalk.fail_stream_update_at = 2
-    adapter = make_seatalk_adapter(fake_seatalk)
-    live = _live(adapter)
-    try:
-        await live.update("one")
-        await live.update("one two")  # rejected → the stream is dead
-        await live.update("one two three")  # must not reach the platform
-        leftover = await live.close("one two three.")
-    finally:
-        await adapter.stop()
-
-    assert len(fake_seatalk.update_stream_calls) == 2  # nothing after the rejection
-    assert len(fake_seatalk.init_stream_calls) == 1  # and no second stream either
-    # The turn still owes the user a reply: the whole text comes back for the
-    # ordinary send path.
-    assert leftover == "one two three."
-
-
-async def test_a_stream_that_never_opened_hands_the_whole_reply_back(
-    fake_seatalk: FakeSeaTalk,
-) -> None:
-    fake_seatalk.stream_init_fails = 1
-    adapter = make_seatalk_adapter(fake_seatalk)
-    live = _live(adapter)
-    try:
-        await live.update("hello")
-        leftover = await live.close("hello there")
-    finally:
-        await adapter.stop()
-
+    assert fake_seatalk.init_stream_calls == []
     assert fake_seatalk.update_stream_calls == []
-    assert leftover == "hello there"
-
-
-@pytest.mark.acceptance(
-    spec="channels/seatalk",
-    scenario="a reply past the stream budget finishes the stream and sends the rest",
-)
-async def test_reply_past_the_stream_budget_finishes_at_the_limit_and_returns_the_rest(
-    fake_seatalk: FakeSeaTalk,
-) -> None:
-    # A reply's length is unknown until it ends, so an overlong one streams up to
-    # the platform's per-stream cap and hands the remainder back.
-    head = "A" * 3000
-    tail = "B" * 2000
-    adapter = make_seatalk_adapter(fake_seatalk)
-    live = _live(adapter)
-    try:
-        await live.update("A")
-        leftover = await live.close(f"{head}\n\n{tail}")
-    finally:
-        await adapter.stop()
-
-    final = fake_seatalk.update_stream_calls[-1][1]
-    assert final["finish"] is True
-    content = final["message"]["text"]["content"]
-    assert content == head  # the paragraph that fits, whole
-    assert len(content.encode("utf-8")) <= 4096  # inside the platform's stream cap
-    assert leftover == tail  # …and the rest goes out the ordinary way
-
-
-async def test_stream_finish_renders_seatalk_markdown(fake_seatalk: FakeSeaTalk) -> None:
-    # The streamed message IS the reply, so its final snapshot is rendered like
-    # any other SeaTalk send (interim snapshots stay plain).
-    adapter = make_seatalk_adapter(fake_seatalk)
-    live = _live(adapter)
-    try:
-        await live.update("## Result")
-        await live.close("## Result\n\nthe file is some_name.py")
-    finally:
-        await adapter.stop()
-
-    # The interim snapshot opens the stream exactly as it arrived — format 1 now,
-    # but with every marker escaped, so a reply cut mid-word still cannot be
-    # parsed as half a markdown run.
-    opening = fake_seatalk.init_stream_calls[0][1]["message"]["text"]
-    assert opening == {"format": 1, "content": "## Result"}
-    final = fake_seatalk.update_stream_calls[-1][1]["message"]["text"]
-    assert final == {"format": 1, "content": "**Result**\n\nthe file is some\\_name.py"}
-
-
-async def test_group_stream_uses_the_group_surface_and_threads_the_message(
-    fake_seatalk: FakeSeaTalk,
-) -> None:
-    adapter = make_seatalk_adapter(fake_seatalk)
-    live = _live(adapter, chat_id="gid-1", thread_id="t1", chat_kind="group")
-    try:
-        await live.update("working")
-        await live.close("done")
-    finally:
-        await adapter.stop()
-
-    assert [surface for surface, _ in fake_seatalk.init_stream_calls] == ["group_chat"]
-    # thread_id rides INSIDE the message body — the placement verified for sends
-    # and the one the platform's own sample uses.
-    assert fake_seatalk.init_stream_calls[0][1] == {
-        "group_id": "gid-1",
-        "message": {
-            "tag": "text",
-            "text": {"format": 1, "content": "working"},
-            "thread_id": "t1",
-        },
-    }
-    assert [surface for surface, _ in fake_seatalk.update_stream_calls] == ["group_chat"]
-    # A group update names the group, and nothing else: the stream is already
-    # bound to its thread, so an update carries no thread_id of its own.
-    assert all(
-        body["group_id"] == "gid-1" and "thread_id" not in body["message"]
-        for _s, body in fake_seatalk.update_stream_calls
-    )
-    assert fake_seatalk.single_chat_calls == []  # a group stream never hits single_chat
-
-
-async def test_open_live_text_is_declared_and_returns_a_stream_surface(
-    fake_seatalk: FakeSeaTalk,
-) -> None:
-    adapter = make_seatalk_adapter(fake_seatalk)
-    try:
-        # SeaTalk cannot rewrite a delivered text message; the live-text
-        # capability is what the core asks.
-        assert adapter.capabilities.supports_live_text is True
-        live = await adapter.open_live_text("emp-1")
-        assert isinstance(live, SeaTalkLiveText)
-    finally:
-        await adapter.stop()
-
-
-async def test_closing_with_no_final_text_finishes_on_the_last_snapshot(
-    fake_seatalk: FakeSeaTalk,
-) -> None:
-    # A reply whose text was entirely a file marker leaves nothing to say, but
-    # the stream still has to be finished — it closes on what it already showed.
-    adapter = make_seatalk_adapter(fake_seatalk)
-    live = _live(adapter)
-    try:
-        await live.update("uploading the chart")
-        leftover = await live.close("")
-    finally:
-        await adapter.stop()
-
-    final = fake_seatalk.update_stream_calls[-1][1]
-    assert final["finish"] is True
-    assert final["message"]["text"]["content"] == "uploading the chart"
-    assert leftover == ""
-
-
-async def test_a_silent_stream_is_kept_alive_inside_the_30_second_limit(
-    fake_seatalk: FakeSeaTalk,
-) -> None:
-    """SeaTalk terminates a stream that goes 30 s without an update, and a
-    terminated stream cannot be resumed — so a turn that is busy in a tool
-    re-sends its last snapshot on a keep-alive instead of losing the surface."""
-    adapter = make_seatalk_adapter(fake_seatalk)
-    live = SeaTalkLiveText(adapter._post, "emp-1", now=_ticking(), keepalive_seconds=0.01)
-    try:
-        await live.update("⏳ Bash · building")
-        await wait_until(lambda: len(fake_seatalk.update_stream_calls) > 2)
-        leftover = await live.close("done")
-    finally:
-        await adapter.stop()
-
-    bodies = [body for _s, body in fake_seatalk.update_stream_calls]
-    # Every keep-alive re-sends the SAME snapshot under the next seq, and the
-    # stream is still alive at the end (its finish is accepted).
-    assert bodies[1]["message"]["text"]["content"] == "⏳ Bash · building"
-    assert [b["seq"] for b in bodies] == list(range(1, len(bodies) + 1))
-    assert bodies[-1]["finish"] is True
-    assert leftover == ""
 
 
 # -- @mentioning the asker in a group reply ("Mention the asker in a group answer")
@@ -1903,91 +1653,25 @@ async def test_a_group_send_delivers_the_mention_tag_verbatim_as_markdown(
     }
 
 
-@pytest.mark.acceptance(
-    spec="channels",
-    scenario="an @ notification needs the mention in the message that creates it",
-)
-async def test_a_stream_carries_the_mention_from_the_message_it_is_created_as(
-    fake_seatalk: FakeSeaTalk,
-) -> None:
-    """SeaTalk decides @ notifications when the message is CREATED, so the tag has
-    to be in what ``init_stream`` posts. Shipped the other way round, the tag sat
-    on the finished snapshot only: it RENDERED as a blue, tappable name — the
-    client shows the content it has — and notified nobody at all.
-
-    That makes every snapshot ``format: 1``, and the in-flight ones safe by
-    ESCAPING the partial text instead of asking for plain text."""
-    adapter = make_seatalk_adapter(fake_seatalk)
-    mention = SEATALK_MENTION_TEMPLATE.replace("{user_id}", "st-77")
-    live = _live(adapter, "gid-1", chat_kind="group", thread_id="t1")
-    try:
-        await live.update(f"{mention} I found")
-        await live.update(f"{mention} I found **bo")
-        leftover = await live.close(f"{mention} I found **bold** cats.")
-    finally:
-        await adapter.stop()
-
-    assert leftover == ""
-    # The message is created already mentioning the asker.
-    opening = fake_seatalk.init_stream_calls[0][1]["message"]["text"]
-    assert opening == {"format": 1, "content": f"{mention} I found"}
-    bodies = [body["message"]["text"] for _surface, body in fake_seatalk.update_stream_calls]
-    # Every snapshot is rich, and keeps the mention, so it never blinks out.
-    assert all(t["format"] == 1 and t["content"].startswith(mention) for t in bodies)
-    # The interim one is ESCAPED: a half-written bold run reaches the chat as the
-    # characters the agent has written so far, not as markup the client must
-    # guess at. One backslash per marker — two would show one of them.
-    assert bodies[0]["content"] == f"{mention} I found \\*\\*bo"
-    assert "\\\\" not in bodies[0]["content"]
-    # …while the finished one is RENDERED, bold and all, and its tag survives.
-    assert bodies[-1]["content"] == f"{mention} I found **bold** cats."
-    assert bodies[-1]["content"].count("mention-tag") == 1
-
-
 async def test_a_mention_target_with_an_underscore_is_never_escaped(
     fake_seatalk: FakeSeaTalk,
 ) -> None:
     """Both documented targets can hold a character the SeaTalk markdown escaper
     would otherwise take: an id may contain ``_`` and an address routinely does.
-    An escaped tag reaches the reader as visible source, so neither path may
-    touch it — the interim (escape-only) one or the final (render) one."""
+    An escaped tag reaches the reader as visible source, so rendering must leave
+    it alone while still escaping the body around it."""
     adapter = make_seatalk_adapter(fake_seatalk)
     by_id = SEATALK_MENTION_TEMPLATE.replace("{user_id}", "abc_def")
     by_email = SEATALK_MENTION_EMAIL_TEMPLATE.replace("{user_id}", "ada_l@example.com")
-    live = _live(adapter, "gid-1", chat_kind="group", thread_id="t1")
     try:
-        await live.update(f"{by_id} thinking")
-        await live.close(f"{by_email} done_here")
+        await adapter.send_text("gid-1", f"{by_id} thinking", thread_id="t1", chat_kind="group")
+        await adapter.send_text("gid-1", f"{by_email} done_here", thread_id="t1", chat_kind="group")
     finally:
         await adapter.stop()
 
-    assert fake_seatalk.init_stream_calls[0][1]["message"]["text"]["content"] == (
-        f"{by_id} thinking"
-    )
-    final = fake_seatalk.update_stream_calls[-1][1]["message"]["text"]["content"]
-    # The tag verbatim; the BODY's underscore still escaped, as it must be.
-    assert final == f"{by_email} done\\_here"
-
-
-async def test_an_interim_snapshot_past_the_budget_keeps_its_mention(
-    fake_seatalk: FakeSeaTalk,
-) -> None:
-    """An in-flight snapshot is clipped from the FRONT (it shows the newest
-    words), which is exactly where the mention lives. Clip the body, not the
-    tag — otherwise a long reply loses the mention halfway through the stream."""
-    adapter = make_seatalk_adapter(fake_seatalk)
-    mention = SEATALK_MENTION_TEMPLATE.replace("{user_id}", "st-77")
-    live = _live(adapter, "gid-1", chat_kind="group", thread_id="t1")
-    try:
-        await live.update(f"{mention} {'A' * 5000}")
-        await live.close(f"{mention} {'A' * 5000}")
-    finally:
-        await adapter.stop()
-
-    opening = fake_seatalk.init_stream_calls[0][1]["message"]["text"]["content"]
-    assert opening.startswith(mention)
-    assert "…" in opening  # the body was clipped, the tag kept
-    assert len(opening) <= 4096  # inside the platform's stream cap
+    contents = [body["message"]["text"]["content"] for body, _ in fake_seatalk.group_chat_calls]
+    # The tags verbatim; the BODY's underscore still escaped, as it must be.
+    assert contents == [f"{by_id} thinking", f"{by_email} done\\_here"]
 
 
 # -- group replies as withdrawable cards ---------------------------------------
@@ -2085,8 +1769,7 @@ async def test_seatalk_declares_no_group_streaming_and_a_seven_day_card_window(
         caps = adapter.capabilities
     finally:
         await adapter.stop()
-    assert caps.supports_live_text and caps.live_text_persists  # direct chats still stream
-    assert caps.streams_in_groups is False
+    assert caps.supports_live_text is False  # typing only, in groups and direct chats
     assert caps.withdraw_window_hours == 168
     assert caps.withdraw_removes is False
 

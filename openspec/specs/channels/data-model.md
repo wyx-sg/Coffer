@@ -19,7 +19,6 @@ ChannelConfig (discriminator: channel_type)
 │   ├── wait_after_text_seconds: float = 1.5     # burst quiet window after text (0–60)
 │   ├── wait_after_forward_seconds: float = 5.0  # …after a forward or bare files (0–60)
 │   ├── show_steps: bool = True             # step lines under the live status line
-│   ├── notify_after_seconds: float = 90.0  # long-turn ping threshold (0–3600; 0 = off)
 │   ├── new_conversation_after_idle_hours: float = 24.0  # idle hours before a chat's next message opens a new conversation (0–8760; 0 = never)
 │   ├── directories: list[str] = []         # absolute paths `/dir` may switch into (≤32)
 │   └── runs_on: str | None = None          # machine_id that runs the adapter
@@ -320,13 +319,14 @@ EphemeralTarget:    who a privately-delivered reply is addressed to
 SentMessage:        what a send returned — the last message's id and the ids of
                     every message the send produced — so a later rewrite or
                     withdrawal can address them
-ChannelCapabilities: supports_live_text, live_text_persists,
+ChannelCapabilities: supports_live_text,
                     supports_card_update, supports_buttons, supports_typing,
                     supports_reactions, supports_media,
                     supports_history_fetch, max_message_chars,
                     withdraw_window_hours, withdraw_removes (can a bot message be
                     taken back, for how long, and does that remove it),
-                    streams_in_groups,
+                    collapses_details (does the transport fold a reply's
+                    `## Details` section itself),
                     mention_template, mention_email_template — how the
                     transport spells an @mention of an id (or of an email
                     address); an empty template means it cannot mention
@@ -335,8 +335,7 @@ ChannelCapabilities: supports_live_text, live_text_persists,
 Adapters translate platform payloads to/from these; the application core
 never sees a Telegram update or SeaTalk event shape. The core asks `supports_live_text`
 ("is there a surface I can keep updating?"), never whether a delivered text message can be
-rewritten, because SeaTalk streams one without being able to (see "Grow a reply in place on
-one live surface").
+rewritten (see "Show a turn's progress on one live surface").
 
 ## Audit events (spec channels)
 

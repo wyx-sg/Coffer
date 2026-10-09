@@ -7,7 +7,7 @@ without a network. Inbound traffic is simulated by calling the callbacks the
 core handed to :meth:`FakeChannelAdapter.start` (``adapter.callbacks``) —
 ``tap`` does it for a card button. Every capability flag is a constructor
 argument, so one fake stands in for a Telegram-shaped transport (edits, live
-text) or a SeaTalk-shaped one (streams, mentions, groups, threads).
+text) or a SeaTalk-shaped one (typing only, mentions, groups, threads).
 
 It lives here rather than in ``integration/channel/conftest.py`` so tiers other
 than the channel core's (the daemon, the HTTP routes) can wire a channel without
@@ -45,7 +45,6 @@ class FakeChannelAdapter:
         *,
         supports_edit: bool = True,
         supports_live_text: bool | None = None,
-        live_text_persists: bool = False,
         supports_typing: bool = True,
         max_message_chars: int = 4096,
         supports_buttons: bool = False,
@@ -61,11 +60,10 @@ class FakeChannelAdapter:
         **capabilities: Any,
     ) -> None:
         # ``supports_edit`` is this fake's own switch, not a capability: a fake that
-        # edits (``edit_text`` records) has a live surface by definition, one that
-        # does not may still stream (SeaTalk) — a test says so explicitly.
+        # edits (``edit_text`` records) has a live surface by definition; a test
+        # may say otherwise explicitly.
         self._caps = ChannelCapabilities(
             supports_live_text=supports_edit if supports_live_text is None else supports_live_text,
-            live_text_persists=live_text_persists,
             supports_typing=supports_typing,
             max_message_chars=max_message_chars,
             supports_buttons=supports_buttons,
@@ -166,14 +164,11 @@ class FakeChannelAdapter:
         self.quoted_items: list[ForwardedItem] = []
         self.quoted_attachments: tuple[InboundAttachment, ...] = ()
         self.fetch_quoted_calls: list[str] = []
-        # "Grow a reply in place on one live surface": every live-text handle the
+        # "Show a turn's progress on one live surface": every live-text handle the
         # core opened this session, and the
         # switch that makes the transport refuse to open one.
         self.live_handles: list[FakeLiveText] = []
         self.live_text_unavailable = False
-        # When True the live surface IS the reply (SeaTalk's stream): closing it
-        # finishes the message in place and leaves the caller nothing to send.
-        self.live_text_finalizes = False
         # (chat_id, mark, body, thread_id) for every ``open_thread`` the core
         # asked for ("Open parallel conversations beside a direct chat"), and the
         # scripted refusal a transport with no threads available raises.
@@ -329,7 +324,7 @@ class FakeChannelAdapter:
 
 
 class FakeLiveText:
-    """The fake's live surface ("Grow a reply in place on one live surface"),
+    """The fake's live surface ("Show a turn's progress on one live surface"),
     shaped like Telegram's: the first
     update sends a message, later ones edit it, and closing deletes it and hands
     the whole final text back for the ordinary send path."""
@@ -359,16 +354,11 @@ class FakeLiveText:
             )
             self.message_id = sent.message_id
             return
-        if self._adapter.live_text_finalizes:
-            return  # a stream re-renders its own message — no new chat traffic
         await self._adapter.edit_text(self._chat_id, self.message_id, text)
 
     async def close(self, text: str) -> str:
         self.closed = True
         self.final = text
-        if self._adapter.live_text_finalizes:
-            # A stream cannot be deleted: it finishes carrying the final text.
-            return ""
         if self.message_id:
             await self._adapter.delete_message(self._chat_id, self.message_id)
         return text

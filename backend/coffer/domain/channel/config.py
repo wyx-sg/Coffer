@@ -19,6 +19,7 @@ from pydantic import (
     Field,
     RootModel,
     field_validator,
+    model_validator,
 )
 
 # A secret ref is a vault ADDRESS, not a secret: Coffer mints
@@ -42,6 +43,12 @@ def _reject_raw_secret(field: str, value: str) -> str:
                 f"Secrets page (or `coffer secret set <ref>`) and put the ref here instead"
             )
     return value
+
+
+#: Keys a channel config used to carry and no longer does. A stored document
+#: may still hold them; they are dropped on read rather than refused, so an
+#: upgrade never stops a channel from starting.
+_RETIRED_KEYS = frozenset({"notify_after_seconds"})
 
 
 class _CommonChannelFields(BaseModel):
@@ -84,10 +91,6 @@ class _CommonChannelFields(BaseModel):
     # lists the turn's step lines under its header. Off keeps the header (time,
     # step count) and the narration line and hides the steps — e.g. in a group.
     show_steps: bool = True
-    # "Ping the asker when a long turn ends": a turn that ran at least this many
-    # seconds ends with one short completion line where its answer would not
-    # notify on its own. 0 turns the ping off.
-    notify_after_seconds: float = Field(default=90.0, ge=0, le=3600)
     # "Open a new conversation after an idle period": a chat whose active
     # conversation has been idle longer than this many hours opens a NEW
     # conversation on the owner's next message (the old one stays in the list).
@@ -128,6 +131,16 @@ class _CommonChannelFields(BaseModel):
     # them" — the rival-consumer failure this field exists to prevent. The
     # surfaces show an unbound channel as unbound and bind it in one click.
     runs_on: str | None = Field(default=None, max_length=64)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_retired_keys(cls, data: Any) -> Any:
+        """Migration for the removal of the long-turn ping: a stored config may
+        still carry ``notify_after_seconds``; drop it (the file loses the key
+        on its next write)."""
+        if isinstance(data, dict) and any(k in data for k in _RETIRED_KEYS):
+            return {k: v for k, v in data.items() if k not in _RETIRED_KEYS}
+        return data
 
     @field_validator("default_agent_config")
     @classmethod

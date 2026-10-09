@@ -111,13 +111,13 @@ class ReactionSet:
 class ChannelCapabilities:
     """What a transport can do; the core picks strategies from this.
 
-    The question the core asks about a reply surface is ``supports_live_text`` —
-    *is there a surface I can keep updating while a turn runs?* ("Grow a reply in
-    place on one live surface"). Telegram answers yes by editing one message;
-    SeaTalk answers yes through its message **streaming** API (``init_stream`` /
-    ``update_stream``). The core asks for a live-text handle (``open_live_text``)
-    and never branches on which mechanism is underneath, so there is no flag for
-    "can rewrite a delivered text message" — nothing would read it.
+    The question the core asks about progress is ``supports_live_text`` — *is
+    there a surface I can keep updating while a turn runs?* ("Show a turn's
+    progress on one live surface"). Telegram answers yes, with a message draft or
+    one message it edits; SeaTalk answers no and shows only its typing indicator.
+    The core asks for a live-text handle (``open_live_text``) and never branches
+    on which mechanism is underneath, so there is no flag for "can rewrite a
+    delivered text message" — nothing would read it.
     ``supports_card_update`` is the one narrower question: can an already-delivered
     *selection card* be rewritten? Without it a card keeps offering the option the
     user already took.
@@ -133,17 +133,10 @@ class ChannelCapabilities:
     # system line such as "Stopping…" is then rewritten into its result rather
     # than followed by a second message.
     edits_text: bool = False
-    # A surface the core can keep updating during a turn — by edit (Telegram)
-    # or by streaming (SeaTalk). Drives the progress/reply strategy of "Grow a
-    # reply in place on one live surface".
+    # A surface the core can keep updating during a turn — a draft or an edited
+    # message (Telegram). It is scaffolding: the finished reply is always a new
+    # message. See "Show a turn's progress on one live surface".
     supports_live_text: bool = False
-    # Whether that surface BECOMES the reply, or is scaffolding thrown away at
-    # the end. SeaTalk's stream persists — the message it opened is the answer,
-    # grown in place — so opening it early costs nothing and is worth doing the
-    # moment a turn starts, as an acknowledgement the user can see. Telegram's
-    # is a status message the renderer deletes before sending the real reply, so
-    # opening it early would post something only to remove it again.
-    live_text_persists: bool = False
     supports_media: bool = False  # outbound file/photo upload (send_media)
     supports_history_fetch: bool = False  # can fetch recent/thread messages for context
     supports_reactions: bool = False  # emoji reaction on a message (set_reaction),
@@ -178,8 +171,9 @@ class ChannelCapabilities:
     # "Shape a reply for what the chat can show": whether a markdown table
     # renders (False → bullet rows + a CSV), how many lines a code block may
     # keep inline (0 = any; more → attached as a file), and whether the
-    # transport collapses a ``## Details`` section itself (Telegram) — one that
-    # does not may move it behind a card's button instead.
+    # transport collapses a ``## Details`` section itself (Telegram). Only such a
+    # transport asks the agent for one ("Tell a channel-driven agent it is on a
+    # chat channel"); elsewhere the reply goes out whole.
     renders_tables: bool = True
     max_inline_code_lines: int = 0
     collapses_details: bool = False
@@ -191,10 +185,6 @@ class ChannelCapabilities:
     # "Withdrawn" card (SeaTalk); only a transport that removes messages can also
     # remove the owner's own ``/del`` message.
     withdraw_removes: bool = False
-    # Whether the reply surface may stream in a GROUP. SeaTalk's cannot: a stream
-    # cannot be rewritten afterwards, so a group reply must be a card the owner can
-    # withdraw ("Send SeaTalk group replies as withdrawable cards").
-    streams_in_groups: bool = True
 
 
 @dataclass(frozen=True)

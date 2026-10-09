@@ -767,12 +767,6 @@ components:
           minimum: 0.0
           title: New Conversation After Idle Hours
           type: number
-        notify_after_seconds:
-          default: 90.0
-          maximum: 3600.0
-          minimum: 0.0
-          title: Notify After Seconds
-          type: number
         require_mention:
           default: true
           title: Require Mention
@@ -807,7 +801,6 @@ components:
       - wait_after_text_seconds
       - wait_after_forward_seconds
       - show_steps
-      - notify_after_seconds
       - new_conversation_after_idle_hours
       - directories
       - runs_on
@@ -879,12 +872,6 @@ components:
           minimum: 0.0
           title: New Conversation After Idle Hours
           type: number
-        notify_after_seconds:
-          default: 90.0
-          maximum: 3600.0
-          minimum: 0.0
-          title: Notify After Seconds
-          type: number
         require_mention:
           default: true
           title: Require Mention
@@ -919,7 +906,6 @@ components:
       - wait_after_text_seconds
       - wait_after_forward_seconds
       - show_steps
-      - notify_after_seconds
       - new_conversation_after_idle_hours
       - directories
       - runs_on

@@ -2,10 +2,11 @@
 
 Split out of ``turn_render`` (at its size budget). ``TurnSurface`` is the only
 code that talks to a ``LiveText`` handle: it opens one lazily (asking the
-transport once per turn, whatever the answer), hands it every snapshot — the
-@mention applied in exactly one place — and closes it with the final body. A
-transport with no surface, or one that refuses to open it, gets no interim
-traffic at all; its final reply is the whole signal.
+transport once per turn, whatever the answer), hands it every snapshot and
+closes it with the final body. A live surface is scaffolding — the finished
+reply is always a new message — so a snapshot carries no @mention. A transport
+with no surface, or one that refuses to open it, gets no interim traffic at
+all; its final reply is the whole signal.
 """
 
 from __future__ import annotations
@@ -13,7 +14,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 
 from coffer.application.channel.ports import ChannelAdapter, LiveText
@@ -25,30 +25,18 @@ _logger = logging.getLogger(__name__)
 
 @dataclass
 class TurnSurface:
-    """One turn's live surface (see "Grow a reply in place on one live surface")."""
+    """One turn's live surface (see "Show a turn's progress on one live surface")."""
 
     adapter: ChannelAdapter
     chat_id: str
     thread_id: str
     chat_kind: str
-    #: Opens a snapshot with the asker's @mention where that is right. Applied to
-    #: every snapshot of a surface that PERSISTS as the reply, because a platform
-    #: decides @ notifications when a message is created (see
-    #: ``turn_text.with_mention``); a scaffolding surface is deleted, so it carries
-    #: none and its snapshots stay plain.
-    mention: Callable[[str], str]
     live: LiveText | None = None
     tried: bool = False
-    #: Whether a surface that persists as the reply was actually opened — the
-    #: reply then lives in a message created when the turn began.
-    persisted: bool = False
 
     @property
     def is_open(self) -> bool:
         return self.live is not None
-
-    def _snapshot(self, text: str) -> str:
-        return self.mention(text) if self.adapter.capabilities.live_text_persists else text
 
     async def show(self, text: str) -> None:
         """Offer one snapshot, opening the surface on the first. No throttle:
@@ -59,18 +47,12 @@ class TurnSurface:
             await self.open(text)
             return
         with contextlib.suppress(Exception):
-            await self.live.update(self._snapshot(text))
+            await self.live.update(text)
 
     @property
     def available(self) -> bool:
-        """Whether this turn may have a live surface at all: the transport has one,
-        and — in a group — it may stream there. SeaTalk's stream cannot be rewritten
-        afterwards, so a group reply there is a card the owner can withdraw instead
-        (spec channels/seatalk "Send group replies as withdrawable cards")."""
-        caps = self.adapter.capabilities
-        if not caps.supports_live_text:
-            return False
-        return not (self.chat_kind == "group" and not caps.streams_in_groups)
+        """Whether this turn may have a live surface at all: the transport has one."""
+        return self.adapter.capabilities.supports_live_text
 
     async def open(self, text: str) -> None:
         if self.tried or not self.available:
@@ -81,16 +63,15 @@ class TurnSurface:
                 self.chat_id, thread_id=self.thread_id, chat_kind=self.chat_kind
             )
         except Exception:
-            # Swallowed so a transport that cannot stream still answers, but
-            # logged: the degraded result — a reply delivered in one piece —
-            # looks exactly like a turn that never tried to stream.
+            # Swallowed so a transport that cannot show progress still answers,
+            # but logged: the degraded result — no progress at all — looks
+            # exactly like a turn that never tried to open a surface.
             _logger.warning("channel.live_text.open_failed", exc_info=True)
             return
         if self.live is None:
             return
-        self.persisted = self.adapter.capabilities.live_text_persists
         with contextlib.suppress(Exception):
-            await self.live.update(self._snapshot(text))
+            await self.live.update(text)
 
     async def close(self, body: str) -> str:
         """Finish the surface with ``body``; return what must still be sent."""

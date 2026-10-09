@@ -31,7 +31,6 @@ from coffer.infrastructure.channel.seatalk_avatar import fetch_avatar
 from coffer.infrastructure.channel.seatalk_caps import SEATALK_CAPABILITIES
 from coffer.infrastructure.channel.seatalk_cards import update_interactive_card
 from coffer.infrastructure.channel.seatalk_history import THREAD_PAGE_MAX, SeaTalkContextReader
-from coffer.infrastructure.channel.seatalk_live import SeaTalkLiveText
 from coffer.infrastructure.channel.seatalk_media import (
     default_media_dir,
     media_attachments,
@@ -292,19 +291,10 @@ class SeaTalkAdapter:
 
     async def open_live_text(
         self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
-    ) -> SeaTalkLiveText:
-        """SeaTalk cannot edit, but it can stream — one message that
-        re-renders from the full snapshot until the stream is finished."""
-        return SeaTalkLiveText(
-            self._post,
-            chat_id,
-            name=self._name,
-            thread_id=thread_id,
-            chat_kind=chat_kind,
-            send=self._send,
-            char_limit=self.capabilities.max_message_chars,
-            byte_limit=_BYTE_LIMIT,
-        )
+    ) -> None:
+        """No live surface (spec channels/seatalk "Show only typing while a turn
+        runs"): the typing heartbeat is the progress, the reply one new message."""
+        del chat_id, thread_id, chat_kind
 
     async def update_card(
         self,

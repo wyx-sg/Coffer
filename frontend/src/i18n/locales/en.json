@@ -3725,8 +3725,6 @@
         "invalid": "Enter a number of seconds from {{min}} to {{max}}."
       },
       "replies": {
-        "notifyAfter": "Long-task ping after",
-        "notifyAfterHint": "A turn that runs this long ends with a short Done message. 0 turns it off.",
         "showSteps": "Show step lines",
         "showStepsHint": "While working, show the last 3 steps under the status line."
       },

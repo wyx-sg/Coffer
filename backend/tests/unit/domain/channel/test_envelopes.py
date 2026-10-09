@@ -44,8 +44,8 @@ def test_channel_capabilities_carries_strategy_fields():
     assert caps.max_message_chars == 4096
     assert caps.supports_buttons is False  # default off; transports opt in
     # supports_live_text is the question the core asks (is there a surface I can
-    # keep updating?) — Telegram edits one, SeaTalk streams one (spec channels
-    # "Grow a reply in place on one live surface").
+    # keep updating?) — Telegram has one, SeaTalk none (spec channels
+    # "Show a turn's progress on one live surface").
     assert caps.supports_live_text is False  # default off; transports opt in
     assert caps.supports_media is False  # default off; media-capable transports opt in
     assert caps.supports_reactions is False  # default off; reaction-capable transports opt in
@@ -65,7 +65,6 @@ def test_channel_capabilities_carries_strategy_fields():
         "supports_card_update",
         "edits_text",
         "supports_live_text",
-        "live_text_persists",
         "supports_media",
         "supports_history_fetch",
         "supports_reactions",
@@ -79,7 +78,6 @@ def test_channel_capabilities_carries_strategy_fields():
         "collapses_details",
         "withdraw_window_hours",
         "withdraw_removes",
-        "streams_in_groups",
     }
 
 

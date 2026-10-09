@@ -364,11 +364,6 @@ export interface components {
              */
             new_conversation_after_idle_hours: number;
             /**
-             * Notify After Seconds
-             * @default 90
-             */
-            notify_after_seconds: number;
-            /**
              * Require Mention
              * @default true
              */
@@ -435,11 +430,6 @@ export interface components {
              * @default 24
              */
             new_conversation_after_idle_hours: number;
-            /**
-             * Notify After Seconds
-             * @default 90
-             */
-            notify_after_seconds: number;
             /**
              * Require Mention
              * @default true

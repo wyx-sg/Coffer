@@ -268,7 +268,7 @@ class ChannelThreadConversationRepoPort(Protocol):
 class ReplyRecord:
     """One bot reply and every platform message it was delivered as (one
     ``channel_replies`` row): a long answer is cut into parts, the files it
-    carried and a details card are messages of their own, and withdrawing the
+    carried are messages of their own, and withdrawing the
     reply takes all of them (spec channels "Withdraw a bot reply on the owner's
     command")."""
 

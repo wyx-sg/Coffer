@@ -70,13 +70,20 @@ def channel_system_context(note: ChannelNote | None) -> str:
     and every instruction that holds regardless stays.
     """
     renders = f" {note.renders}" if note is not None and note.renders else ""
+    # Only a transport that collapses a details section is told to write one;
+    # elsewhere the section would arrive as ordinary text, so it buys nothing.
+    details = (
+        " Put anything longer under a `## Details` heading, which Coffer collapses."
+        if note is not None and note.collapses_details
+        else ""
+    )
     return (
         f"You are replying in {_where(note)}, most likely on the user's phone. Coffer "
-        "already shows that you are working and which tools you run, so do not "
-        "narrate your steps — write only the answer. The first line is the outcome "
-        "in one sentence (it becomes the notification); then at most about 15 lines; "
-        "put anything longer under a `## Details` heading, which Coffer collapses or "
-        f"attaches.{renders} Keep code blocks under 30 lines and attach longer logs "
+        "already shows that you are working, so do not narrate your steps — only what "
+        "you write after your last tool call is sent, so write the whole answer there. "
+        "The first line is the outcome "
+        "in one sentence (it becomes the notification); then at most about 15 lines."
+        f"{details}{renders} Keep code blocks under 30 lines and attach longer logs "
         "or diffs as a file. Draw a diagram or chart as a PNG file and attach it, "
         "never as diagram source. Short never means dropping evidence: quote the few "
         "log lines, errors and IDs that prove a finding verbatim, in code blocks. If "

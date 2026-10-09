@@ -50,18 +50,17 @@ class AdapterCallbacks:
 
 
 class LiveText(Protocol):
-    """A surface the core can keep updating while a turn runs (see "Grow a reply in
-    place on one live surface").
+    """A surface the core can keep updating while a turn runs (see "Show a turn's
+    progress on one live surface").
 
-    One handle == one message that grows in place. ``text`` is ALWAYS the full
-    accumulated snapshot, never a delta: the transport underneath may render
-    the latest snapshot (SeaTalk streaming) or rewrite the message with it
-    (Telegram edit), and neither can reconstruct a text from fragments.
+    One handle == one preview of the turn's progress. ``text`` is ALWAYS the full
+    accumulated snapshot, never a delta: the transport underneath shows the
+    latest snapshot (a Telegram draft) or rewrites a message with it (a Telegram
+    edit), and neither can reconstruct a text from fragments.
 
-    The handle is terminal after ``close``: a finished/failed surface is never
-    reused (a SeaTalk stream id that ended is rejected by the platform), and a
-    handle that gave up simply hands its text back so the ordinary send path
-    delivers the reply.
+    The surface is scaffolding, never the reply, and the handle is terminal after
+    ``close``: a finished/failed surface is never reused, and a handle that gave
+    up simply hands its text back so the ordinary send path delivers the reply.
     """
 
     async def update(self, text: str) -> None:
@@ -77,10 +76,9 @@ class LiveText(Protocol):
         caller must STILL send through the ordinary send path ("" when the
         surface delivered all of it).
 
-        Telegram returns ``text`` unchanged — its status message is deleted and
-        the final reply is sent rendered and chunked. SeaTalk finishes its
-        stream with the text (that streamed message IS the reply) and returns
-        only the overflow past the platform's per-stream budget."""
+        Telegram returns ``text`` unchanged — its status message is deleted (a
+        draft simply expires) and the final reply is sent rendered and chunked as
+        a new message."""
         ...
 
 
@@ -136,11 +134,11 @@ class ChannelAdapter(Protocol):
     async def open_live_text(
         self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
     ) -> LiveText | None:
-        """Open a surface the core can keep updating for this turn (see "Grow a reply in
-        place on one live surface"), or ``None`` when this transport has none — the
-        caller then falls back to sending the finished reply. Only called when the
-        transport declares ``capabilities.supports_live_text``; the mechanism (edit vs
-        streaming) is the adapter's business."""
+        """Open a surface the core can keep updating for this turn (see "Show a turn's
+        progress on one live surface"), or ``None`` when this transport has none — the
+        caller then sends only the finished reply. Only called when the transport
+        declares ``capabilities.supports_live_text``; the mechanism (an edited message,
+        a draft) is the adapter's business."""
         ...
 
     async def update_card(
@@ -255,8 +253,6 @@ class ChannelBinding:
     wait_after_forward_seconds: float = 5.0
     # "Show a turn's working state as one status line": list the step lines.
     show_steps: bool = True
-    # "Ping the asker when a long turn ends": the threshold in seconds, 0 = off.
-    notify_after_seconds: float = 90.0
     # "Open a new conversation after an idle period": a chat idle longer than this
     # many hours opens a new conversation on its next message; 0 never does.
     new_conversation_after_idle_hours: float = 24.0
