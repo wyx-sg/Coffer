@@ -42,6 +42,7 @@ from e2e.installed._common.target import (
     add_common_arguments,
     checked_out_dir,
     read_target,
+    with_executable,
 )
 
 
@@ -108,6 +109,7 @@ async def _open(args: argparse.Namespace, suite: str) -> Run:
     if reply.json.get("pid") != target.pid:
         await client.aclose()
         raise RefusedError("daemon.json names another process than the one answering its port")
+    target = with_executable(target, args, reply.json)
     journal = ResourceJournal(out)
     run = Run(
         suite=suite,

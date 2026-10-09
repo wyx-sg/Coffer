@@ -106,7 +106,6 @@ def boot(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Ho
         port=PORT,
         token=TOKEN,
         started_at=datetime.now(tz=UTC),
-        binary_path="/test",
     )
     client = TestClient(
         app,

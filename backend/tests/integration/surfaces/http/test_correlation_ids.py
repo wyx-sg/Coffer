@@ -86,7 +86,7 @@ class _Api:
 def _cli(c: TestClient, monkeypatch: pytest.MonkeyPatch, *args: str) -> Any:
     """Run ``coffer <args>`` against this same app, as ``in_proc_daemon`` does."""
     api = _Api(c)
-    info = DaemonInfo(version=1, pid=1, port=0, token=_TOKEN, started_at=None, binary_path="")  # type: ignore[arg-type]
+    info = DaemonInfo(version=1, pid=1, port=0, token=_TOKEN, started_at=None)  # type: ignore[arg-type]
     monkeypatch.setattr(cli_client, "client_or_exit", lambda **_kw: (api, info))
     monkeypatch.setattr(cli_client, "daemon_is_running", lambda: True)
     result = _runner.invoke(cli_app, list(args), env={"COLUMNS": "250"})

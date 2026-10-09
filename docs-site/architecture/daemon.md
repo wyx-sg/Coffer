@@ -80,7 +80,7 @@ The daemon reads one file before it binds and writes another once it has bound. 
 | File | Direction | Written by | Contents | Lifetime |
 | --- | --- | --- | --- | --- |
 | `daemon-config.json` | In | CLI, feature switches, sync machine identity, the switches on **Settings** and **Settings › About** | `port` (optional), `proxy_port` (optional), `machine_name`, cached `machine_id`, `features` switches, `update_check` (the release check), `record_call_content`, `skill_update_check`, `price_refresh` | Survives restarts |
-| `daemon.json` | Out | The daemon, at start | `version` (schema, currently `1`), `pid`, `port`, `token`, `started_at`, `binary_path` | Unlinked at exit |
+| `daemon.json` | Out | The daemon, at start | `version` (schema, currently `1`), `pid`, `port`, `token`, `started_at` | Unlinked at exit |
 
 `daemon-config.json` cannot live in SQLite, because the port has to be chosen before the database is opened or migrated. It cannot be an environment variable either: whichever caller spawns the daemon passes on its own environment, and a shell profile only reaches your terminal. The file is read with the standard library alone. An unreadable or malformed file logs a warning and reads as "no setting", so a hand-edited typo never keeps the daemon from starting. Writes merge into the existing object and keep keys this build does not know, so a file written by a newer Coffer survives being touched by an older one.
 
@@ -94,8 +94,7 @@ A sample `daemon.json`:
   "pid": 48213,
   "port": 38470,
   "token": "q3V0…",
-  "started_at": "2026-09-24T08:12:40.118204+00:00",
-  "binary_path": "/Users/you/.coffer/bin/0.1.1/coffer-daemon"
+  "started_at": "2026-09-24T08:12:40.118204+00:00"
 }
 ```
 

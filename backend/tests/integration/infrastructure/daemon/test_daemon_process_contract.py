@@ -96,13 +96,12 @@ def test_the_discovery_file_is_private_complete_and_read_leniently(
     try:
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
         raw = json.loads(path.read_text())
-        assert set(raw) >= {"version", "pid", "port", "token", "started_at", "binary_path"}
+        assert set(raw) == {"version", "pid", "port", "token", "started_at"}
         assert raw["version"] == info.version
         assert raw["pid"] == os.getpid()
         assert raw["port"] == sock.getsockname()[1]
         assert raw["token"] == info.token and raw["token"]
         assert datetime.fromisoformat(raw["started_at"]).tzinfo is not None
-        assert raw["binary_path"] == sys.executable
     finally:
         sock.close()
 
@@ -127,7 +126,6 @@ def _write_daemon_json(home: Path) -> None:
                 "port": 59750,
                 "token": "tok",
                 "started_at": datetime.now(tz=UTC).isoformat(),
-                "binary_path": "/old/coffer-daemon",
             }
         )
     )

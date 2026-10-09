@@ -121,7 +121,7 @@ port 38470 is the port Coffer's daemon binds, but something else is already usin
 
 | 路径 | 说明 |
 | --- | --- |
-| `~/.coffer/daemon.json` | 所有客户端都读的发现文件：`version`（文件的 schema 版本）、`pid`、`port`、`token`、`started_at`、`binary_path`。权限 `0600`，原子写入，守护进程退出时删除。文件缺失或格式错误即视为「没有守护进程」。 |
+| `~/.coffer/daemon.json` | 所有客户端都读的发现文件：`version`（文件的 schema 版本）、`pid`、`port`、`token`、`started_at`。权限 `0600`，原子写入，守护进程退出时删除。文件缺失或格式错误即视为「没有守护进程」。 |
 | `~/.coffer/daemon.lock` | 保证每个保险库只有一个守护进程的锁。它在两次运行之间一直留在磁盘上；锁在于打开的文件，而不在于文件是否存在。 |
 | `~/.coffer/daemon-config.json` | 在其他任何东西打开之前读取的本机设置：`port`、`proxy_port`（本地模型代理的端口）、`features`（本机的实验功能开关）、`machine_id`、`machine_name`，以及本机开关 `price_refresh`、`update_check`、`record_call_content` 和 `skill_update_check`（见[配置](/zh/reference/configuration#daemon-config-json)）。权限 `0600`。从不同步。 |
 | `~/.coffer/vault/`、`local/`、`content/`、`derived/`、`runs.db` | Coffer 的状态，分为五种存储类别；见[持久化](/zh/architecture/persistence)。 |

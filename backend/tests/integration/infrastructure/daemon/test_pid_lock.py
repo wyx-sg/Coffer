@@ -10,7 +10,6 @@ def _info(port: int = 38470) -> DaemonInfo:
         port=port,
         token="tok",
         started_at=datetime(2026, 5, 20, tzinfo=UTC),
-        binary_path="/usr/local/bin/coffer-daemon",
     )
 
 

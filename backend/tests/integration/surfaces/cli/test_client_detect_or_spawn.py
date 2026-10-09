@@ -31,7 +31,6 @@ def _write_daemon_json(home: Path, port: int = 9876, pid: int = 9999) -> None:
                 "port": port,
                 "token": "tok-abc",
                 "started_at": datetime.now(tz=UTC).isoformat(),
-                "binary_path": "/fake/python",
             }
         )
     )

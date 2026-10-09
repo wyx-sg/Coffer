@@ -121,7 +121,7 @@ The login service is macOS only. On any other host the **Start at login** toggle
 
 | Path | What it is |
 | --- | --- |
-| `~/.coffer/daemon.json` | The discovery file every client reads: `version` (the file's schema), `pid`, `port`, `token`, `started_at`, `binary_path`. Mode `0600`, written atomically, removed when the daemon exits. A missing or malformed file means "no daemon". |
+| `~/.coffer/daemon.json` | The discovery file every client reads: `version` (the file's schema), `pid`, `port`, `token`, `started_at`. Mode `0600`, written atomically, removed when the daemon exits. A missing or malformed file means "no daemon". |
 | `~/.coffer/daemon.lock` | The lock that keeps it to one daemon per vault. It stays on disk between runs; the lock lives on the open file, not on its existence. |
 | `~/.coffer/daemon-config.json` | Machine-local settings read before anything else opens: `port`, `proxy_port` (the local model proxy's port), `features` (this machine's experimental-feature switches), `machine_id`, `machine_name`, and the machine-local switches `price_refresh`, `update_check`, `record_call_content` and `skill_update_check` (see [Configuration](/reference/configuration#daemon-config-json)). Mode `0600`. Never synced. |
 | `~/.coffer/vault/`, `local/`, `content/`, `derived/`, `runs.db` | Coffer's state, in five storage classes; see [Persistence](/architecture/persistence). |

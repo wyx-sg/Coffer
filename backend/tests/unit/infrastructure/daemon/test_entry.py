@@ -184,7 +184,6 @@ def test_main_refuses_to_start_when_a_daemon_is_already_live(
         port=59750,
         token="live-tok",
         started_at=datetime.now(tz=UTC),
-        binary_path="/fake/coffer-daemon",
     )
     # acquire_or_existing returns (existing, None, no-op release) under the
     # spawn lock when a daemon is already live — entry.main must treat a None

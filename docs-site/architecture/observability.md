@@ -294,7 +294,7 @@ The realistic reader of these records is often an agent at the moment something 
 | `coffer log audit [--kind] [--name] [--event-type] [--since] [--trace] [--limit] [--json]` | the audit log, newest first |
 | `coffer log mcp [--server] [--status ok\|error] [--since] [--trace] [--limit] [--json]` | the MCP invocation log, newest first |
 | `coffer log daemon [--errors] [--since] [--trace] [--limit] [--json]` | the tail of `daemon.log`, through the same tolerant reader as the Activity page |
-| `coffer daemon status [--json]` | the event-loop lag and the background task counts, beside the daemon's version and port |
+| `coffer daemon status [--tasks] [--json]` | the event-loop lag and the background task counts (by name with `--tasks`), beside the daemon's version and port |
 | `coffer path logs` | the log directory and the `daemon.log` in it, for `grep` or `tail` |
 
 `--since` takes an ISO 8601 instant or an age such as `30m`, `1h` or `2d`. A filter that cannot be resolved — a name without a kind, or a name that no resource of that kind has — is an error rather than being silently ignored, because an unfiltered answer would look like "nothing happened to this resource". Every command is read-only and prints no secret values: audit details are redacted before storage, and log records carry none by construction.
@@ -313,7 +313,7 @@ Everything the daemon does runs on one `asyncio` event loop, and much of it runs
 
 Tasks a function awaits or cancels before it returns — the two sides of an `asyncio.wait` race, a shielded write, a per-request pump — are structured concurrency, not background work, and stay bare. `scripts/check_bare_tasks.py` (run by `make lint`) counts `create_task` and `ensure_future` calls per file and fails on any file that makes more than its allow-list entry, each entry stating why its calls are awaited in place. A new bare task therefore fails lint until it moves onto the supervisor or is argued onto the list.
 
-**A blocked loop looked like general slowness.** One synchronous call on the loop — a large file walk, a subprocess wait — stalls every request, channel and turn at once. `application/runtime/loop_lag.py` sleeps for 0.5 s at a time and records how much later than asked the loop woke it, keeping five minutes of samples.
+**A blocked loop looked like general slowness.** One synchronous call on the loop — a large file walk, a subprocess wait — stalls every request, channel and turn at once. `application/runtime/loop_lag.py` sleeps for 0.5 s at a time and records how much later than asked the loop woke it, keeping five minutes of samples. The lag alone says a stall happened, not what caused it: by the time the probe wakes, the blocking call has returned. So while the probe sleeps, a small thread (`application/runtime/stall_watch.py`) waits for it. If the probe is more than 100 ms late, the loop is still blocked at that moment, and the thread logs one `runtime.loop.stalled` line to `daemon.log` with the loop thread's current stack and the name of the task the loop is running. The blocking call is the stack's innermost Coffer frame. At most one such line is written per 10 s; its `suppressed` field counts the stalls held back since the last one.
 
 `GET /api/v1/daemon/status` carries both in its `runtime` block, and `coffer daemon status` prints them:
 
@@ -324,12 +324,15 @@ Tasks a function awaits or cancels before it returns — the two sides of an `as
   "loop_lag_samples": 600,
   "loop_lag_window_seconds": 300.0,
   "tasks_running": 14,
+  "tasks_by_name": {"reconciler": 1, "telegram-poll": 1, "coffer-mcp-http-upstream": 6, "turn": 1, "loop-lag-probe": 1},
   "task_crashes": 1,
   "last_crash": {"task": "telegram-poll:family", "error": "RuntimeError", "at": "2026-10-01T08:12:03Z", "restarting": true}
 }
 ```
 
 An idle daemon reads a millisecond or two. A p99 in the hundreds means something is blocking the loop; the daemon log around the maximum usually says what. The status route answers without a token, so `last_crash` carries only the exception's class; its message and traceback are in `daemon.log` under `runtime.task.crashed`.
+
+`tasks_by_name` counts the running tasks by the part of their name before the first `:`. The part after it names what a task serves (a channel, an MCP server, a chat), and the route answers without a token, so it is left out. When `tasks_running` grows, this says which kind of task is growing: a session that is never reaped shows as a rising `coffer-mcp-http-upstream` count, a channel loop started twice as `telegram-poll` at 2. `coffer daemon status --tasks` prints the same counts, largest first.
 
 ## Eval capture
 
