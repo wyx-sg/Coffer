@@ -16,9 +16,9 @@ command), otherwise :func:`fallback_handoff` writes one from the item itself,
 so every Overview row can be copied to an agent or opened in a conversation.
 
 A source is added by the kind that owns the signal, registered at the
-composition root. A signal nothing records yet (a provider key the endpoint
-rejected) has no source: a list that reports only what the backend can know is
-the contract, and a new source is the extension point.
+composition root. A signal nothing records has no source: a list that reports
+only what the backend can know is the contract, and a new source is the
+extension point.
 
 **Ignoring.** Any item — an agent the person chose not to connect, a
 server that stays broken on purpose — can be ignored by its stable key

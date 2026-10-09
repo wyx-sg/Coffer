@@ -103,6 +103,8 @@ export const attentionKey = ["attention"] as const;
 
 export const providersKey = ["providers"] as const;
 export const providerKey = (uid: string) => ["providers", uid] as const;
+/** GET /providers/health — under `providersKey`, so a `provider` change refetches it. */
+export const providerHealthKey = ["providers", "health"] as const;
 
 /** The models a connection's endpoint reports. NOT under `providerKey(uid)`:
  *  it changes with the ENDPOINT, not with every connection mutation. */

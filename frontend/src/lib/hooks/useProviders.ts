@@ -14,6 +14,7 @@ import {
   endpointModelsKey,
   localRuntimesKey,
   pendingApprovalsKey,
+  providerHealthKey,
   providerKey,
   providersKey,
   secretsListKey,
@@ -31,6 +32,17 @@ export function useProviders() {
   return useQuery({
     queryKey: providersKey,
     queryFn: async () => (await providersApi.list()).providers,
+  });
+}
+
+/** Every connection's kept health verdict, by uid. Calls no endpoint: the
+ *  daemon checks them itself and keeps the answer. */
+export function useProviderHealth(enabled = true) {
+  return useQuery({
+    queryKey: providerHealthKey,
+    queryFn: async () =>
+      new Map((await providersApi.health()).connections.map((h) => [h.uid, h] as const)),
+    enabled,
   });
 }
 
