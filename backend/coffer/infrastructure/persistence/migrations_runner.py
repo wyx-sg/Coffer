@@ -5,9 +5,11 @@ infrastructure rather than in the HTTP surface. It migrates ``runs.db``, whose
 history starts at one baseline revision; every later revision stacks on it.
 
 Before a migration actually changes the schema, the on-disk database is copied
-aside as ``runs.db.pre-<revision>`` (with its ``-wal``/``-shm`` companions when
-present). A migration that fails half-way, or one whose data rewrite turns out
-wrong, is then a file rename away from recovery instead of a lost history. Only
+aside as ``runs.db.pre-<revision>`` with ``VACUUM INTO``: one self-contained
+file holding a consistent snapshot of the live data (whatever the WAL still
+held included), without the free pages pruning left behind. A migration that
+fails half-way, or one whose data rewrite turns out wrong, is then a file
+rename away from recovery instead of a lost history. Only
 the newest few copies are kept, and nothing is copied when the schema is
 already current — the normal case on every restart but the first after an
 upgrade.
@@ -20,7 +22,7 @@ Alembic config rather than read back out of the environment by ``env.py``, so
 from __future__ import annotations
 
 import pathlib
-import shutil
+import sqlite3
 
 from alembic import command
 from alembic.config import Config as AlembicConfig
@@ -32,7 +34,11 @@ from coffer.domain.errors import DatabaseSchemaTooNew
 #: newer copy lands, so an install that upgrades often does not hoard copies.
 KEEP_PRE_MIGRATION_COPIES = 3
 
+#: Companions a copy taken by an earlier build (a plain file copy) may have
+#: beside it; pruning removes them with their main file.
 _SIDE_FILES = ("-wal", "-shm")
+
+_BUSY_TIMEOUT_SECONDS = 5.0
 
 
 def _alembic_config(db_url: str | None = None) -> AlembicConfig:
@@ -125,13 +131,16 @@ def backup_before_migrate(
     *,
     keep: int = KEEP_PRE_MIGRATION_COPIES,
 ) -> pathlib.Path:
-    """Copy ``db_path`` (and any ``-wal``/``-shm`` companions) to
-    ``<db>.pre-<revision>`` and prune older copies down to ``keep``.
+    """Write a compact copy of ``db_path`` to ``<db>.pre-<revision>`` with
+    ``VACUUM INTO`` and prune older copies down to ``keep``.
 
-    An existing copy for the same revision is never overwritten — it is the
-    state from BEFORE an earlier attempt, which is the more trustworthy one if
-    that attempt left the file half-migrated — so a later attempt lands beside
-    it with a numeric suffix.
+    The copy is one file: ``VACUUM INTO`` reads through the database's WAL, so
+    there are no ``-wal``/``-shm`` companions to copy, and it writes only live
+    pages. An existing copy for the same revision is never overwritten — it is
+    the state from BEFORE an earlier attempt, which is the more trustworthy one
+    if that attempt left the file half-migrated — so a later attempt lands
+    beside it with a numeric suffix. A copy that fails half-way is removed
+    and the error raised: the migration does not run without its backup.
     """
     tag = current_revision or "base"
     dest = db_path.with_name(f"{db_path.name}.pre-{tag}")
@@ -139,11 +148,14 @@ def backup_before_migrate(
     while dest.exists():
         dest = db_path.with_name(f"{db_path.name}.pre-{tag}.{n}")
         n += 1
-    shutil.copy2(db_path, dest)
-    for side in _SIDE_FILES:
-        companion = db_path.with_name(db_path.name + side)
-        if companion.is_file():
-            shutil.copy2(companion, dest.with_name(dest.name + side))
+    conn = sqlite3.connect(db_path, timeout=_BUSY_TIMEOUT_SECONDS, isolation_level=None)
+    try:
+        conn.execute("VACUUM INTO ?", (str(dest),))
+    except sqlite3.Error:
+        dest.unlink(missing_ok=True)
+        raise
+    finally:
+        conn.close()
     _prune_copies(db_path, keep)
     return dest
 

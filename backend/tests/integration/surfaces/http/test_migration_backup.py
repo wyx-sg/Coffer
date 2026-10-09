@@ -3,7 +3,8 @@
 A migration that fails half-way, or whose data rewrite is wrong, used to be
 unrecoverable — the daemon's only copy of the vault was the one being changed.
 ``run_migrations`` now leaves ``runs.db.pre-<revision>`` beside it whenever an
-upgrade is due, keeps the newest three, and does nothing when the schema is
+upgrade is due — one compact file written with ``VACUUM INTO`` — keeps the
+newest three, and does nothing when the schema is
 already current or the URL is not a file.
 """
 
@@ -108,18 +109,53 @@ def test_in_memory_url_is_migrated_without_a_copy(monkeypatch: pytest.MonkeyPatc
     assert _migrate(monkeypatch, "sqlite+aiosqlite:///:memory:") is None
 
 
-def test_backup_copies_wal_and_shm_companions(tmp_path: pathlib.Path) -> None:
+def _db_with(db: pathlib.Path, value: int) -> None:
+    """A real SQLite file holding one marker row, in WAL mode like runs.db."""
+    conn = sqlite3.connect(db)
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("CREATE TABLE IF NOT EXISTS marker (x INTEGER)")
+    conn.execute("DELETE FROM marker")
+    conn.execute("INSERT INTO marker VALUES (?)", (value,))
+    conn.commit()
+    conn.close()
+
+
+def _marker(db: pathlib.Path) -> int:
+    conn = sqlite3.connect(db)
+    try:
+        return int(conn.execute("SELECT x FROM marker").fetchone()[0])
+    finally:
+        conn.close()
+
+
+def test_backup_is_one_compact_file_that_includes_what_the_wal_holds(
+    tmp_path: pathlib.Path,
+) -> None:
+    """``VACUUM INTO`` reads through the WAL and writes live pages only: the
+    copy needs no companions, and the free pages a prune left are not in it."""
     db = tmp_path / "runs.db"
-    db.write_bytes(b"main")
-    (tmp_path / "runs.db-wal").write_bytes(b"wal")
-    (tmp_path / "runs.db-shm").write_bytes(b"shm")
+    conn = sqlite3.connect(db)
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA wal_autocheckpoint = 0")  # keep the rows below in the WAL
+    conn.execute("CREATE TABLE history (body TEXT)")
+    conn.executemany("INSERT INTO history VALUES (?)", [("x" * 4000,)] * 500)
+    conn.execute("DELETE FROM history WHERE rowid > 1")  # what a retention prune does
+    conn.commit()
+    assert (tmp_path / "runs.db-wal").stat().st_size > 0
 
     dest = backup_before_migrate(db, "0042")
+    conn.close()
 
     assert dest == tmp_path / "runs.db.pre-0042"
-    assert dest.read_bytes() == b"main"
-    assert (tmp_path / "runs.db.pre-0042-wal").read_bytes() == b"wal"
-    assert (tmp_path / "runs.db.pre-0042-shm").read_bytes() == b"shm"
+    assert not (tmp_path / "runs.db.pre-0042-wal").exists()
+    assert not (tmp_path / "runs.db.pre-0042-shm").exists()
+    copy = sqlite3.connect(dest)
+    try:
+        assert copy.execute("SELECT COUNT(*) FROM history").fetchone() == (1,)
+        assert copy.execute("PRAGMA freelist_count").fetchone() == (0,)
+    finally:
+        copy.close()
+    assert dest.stat().st_size < 64 * 1024
 
 
 def test_backup_never_overwrites_an_earlier_copy_of_the_same_revision(
@@ -128,23 +164,24 @@ def test_backup_never_overwrites_an_earlier_copy_of_the_same_revision(
     """The earlier copy is the state before the FIRST attempt — the one to keep
     if that attempt left the live file half-migrated."""
     db = tmp_path / "runs.db"
-    db.write_bytes(b"first")
+    _db_with(db, 1)
     first = backup_before_migrate(db, "0042")
-    db.write_bytes(b"second")
+    _db_with(db, 2)
 
     second = backup_before_migrate(db, "0042")
 
-    assert first.read_bytes() == b"first"
+    assert _marker(first) == 1
     assert second == tmp_path / "runs.db.pre-0042.1"
-    assert second.read_bytes() == b"second"
+    assert _marker(second) == 2
 
 
 def test_only_the_newest_copies_are_kept(tmp_path: pathlib.Path) -> None:
     db = tmp_path / "runs.db"
-    db.write_bytes(b"live")
+    _db_with(db, 7)
     for i, rev in enumerate(("0001", "0002", "0003", "0004")):
         stale = tmp_path / f"runs.db.pre-{rev}"
         stale.write_bytes(b"old")
+        # Copies an earlier build took carry companions.
         (tmp_path / f"runs.db.pre-{rev}-wal").write_bytes(b"old")
         os.utime(stale, (1_000_000 + i, 1_000_000 + i))
 
@@ -156,4 +193,14 @@ def test_only_the_newest_copies_are_kept(tmp_path: pathlib.Path) -> None:
     # A pruned copy takes its companions with it; a kept one keeps them.
     assert not (tmp_path / "runs.db.pre-0001-wal").exists()
     assert (tmp_path / "runs.db.pre-0004-wal").exists()
-    assert db.read_bytes() == b"live"
+    assert _marker(db) == 7
+
+
+def test_a_failed_copy_leaves_nothing_behind(tmp_path: pathlib.Path) -> None:
+    db = tmp_path / "runs.db"
+    db.write_bytes(b"not a database at all, and longer than a header" * 4)
+
+    with pytest.raises(sqlite3.DatabaseError):
+        backup_before_migrate(db, "0042")
+
+    assert not (tmp_path / "runs.db.pre-0042").exists()

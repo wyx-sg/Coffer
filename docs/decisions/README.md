@@ -133,6 +133,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`every-vault-file-carries-its-format-version`](every-vault-file-carries-its-format-version.md) | Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades |
 | [`every-vault-write-is-a-validated-commit-naming-its-writer`](every-vault-write-is-a-validated-commit-naming-its-writer.md) | Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer |
 | [`audit-and-retention`](audit-and-retention.md) | Audit Every Change With Its Actor, Log Every Invocation, Prune Per Table |
+| [`runs-db-gives-pruned-space-back`](runs-db-gives-pruned-space-back.md) | `runs.db` Gives Pruned Space Back With a Threshold `VACUUM`, and Copies Itself With `VACUUM INTO` |
 | [`one-level-triggered-reconciler-compares-parameters`](one-level-triggered-reconciler-compares-parameters.md) | One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters |
 | [`wire-contract-generated-from-the-pydantic-models`](wire-contract-generated-from-the-pydantic-models.md) | The Wire Contract Is Generated From the Pydantic Models, and the Frontend Client From the Contract |
 | [`background-work-runs-supervised-and-correlated`](background-work-runs-supervised-and-correlated.md) | Background Work Runs Supervised, and Every Record Carries One Correlation Id |
