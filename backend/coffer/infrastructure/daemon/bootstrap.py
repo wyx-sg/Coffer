@@ -24,7 +24,6 @@ import contextlib
 import os
 import secrets
 import socket
-import sys
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -253,7 +252,6 @@ def acquire() -> tuple[DaemonInfo, socket.socket]:
         port=port,
         token=token,
         started_at=datetime.now(tz=UTC),
-        binary_path=sys.executable,
     )
     write(_daemon_json_path(), info)
     return info, sock

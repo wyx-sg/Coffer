@@ -4,7 +4,7 @@
 // updates in the background (spec skill-manager "Hand a Git-imported skill's
 // update to an agent"). The choice is the daemon's, kept in
 // ~/.coffer/daemon-config.json and in effect at once; "Only when I ask" stops
-// the background fetch, and Check for updates on a skill works whatever it says.
+// the background fetch, and Check again on a skill works whatever it says.
 import { useTranslation } from "react-i18next";
 
 import {

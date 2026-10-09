@@ -12,7 +12,7 @@ Exact facts to look up: every command, tool, setting, path, error and term. For 
 - [CLI](/reference/cli) Every coffer command and option, as --help prints it.
 - [CLI coverage](/reference/cli-coverage) Every web UI and desktop operation beside the coffer command that does it.
 - [MCP tools](/reference/mcp-tools) Coffer’s own tools that agents see, with their input and result.
-- [Channel commands](/reference/channel-commands) The eight commands you type in a channel chat, and where each one works.
+- [Channel commands](/reference/channel-commands) The nine commands you type in a channel chat, and where each one works.
 - [Configuration](/reference/configuration) Where settings live, and every environment variable.
 - [Files and directories](/reference/filesystem) What Coffer keeps under ~/.coffer, and in each agent’s folder.
 - [Error codes](/reference/error-codes) Every error code, what it means and the usual fix.

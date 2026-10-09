@@ -49,7 +49,7 @@ Names are the ones you see, never internal ids. An agent is its display name or 
 | `/del` | ✓ | ✓ | ✓ | ✓ |
 | `/help` | ✓, all nine | ✓ | ✓, the four group commands | ✓, the four group commands |
 
-Sent in a group by the owner, a direct-chat-only command is answered privately to the sender where the platform supports private delivery, with one line, “This command works in a private chat with me.”, and does nothing else: it is not passed to the agent and sets nothing. `/help`, that notice and any "Did you mean" correction are the only private answers in a group; `/new` and `/stop` change something the whole room shares, so they stay visible.
+Sent in a group by the owner, a direct-chat-only command is answered privately to the sender where the platform supports private delivery, with one line, “This command works in a private chat with me.”, and does nothing else: it is not passed to the agent and sets nothing. `/help`, `/del`, that notice and any "Did you mean" correction are the only private answers in a group; `/new` and `/stop` change something the whole room shares, so they stay visible.
 
 ## Withdrawing a reply with /del {#withdrawing-a-reply-with-del}
 
@@ -83,7 +83,7 @@ This is why `/new` is safe to use often: it clears the context, not your choices
 
 A conversation normally runs in the Coffer-managed workspace `~/.coffer/content/workspace`. `/dir` moves the chat to another directory, but only to one the channel allows. The allow-list exists because anyone holding your phone — or a slip of the thumb — should not be able to point an agent with full permissions at an arbitrary folder on your machine; you decide the places in advance, at the computer.
 
-Both live on the channel's **Settings** tab under **Working directories**. **Default** is where new conversations start (none means the Coffer workspace); **Allowed for /dir** lists the folders `/dir` may switch into — add one with **Add directory…**, take one out with **Remove**, and the default's row is marked *default*. With none allowed, `/dir` is off.
+Both live on the channel's **Settings** tab under **Working directories**. One **Directories** list holds the folders `/dir` may switch into — add one with **Add directory…**, take one out with its ✕. Each row has **Set as default**; the default's row reads *default* and has **Unset default**, and new conversations start there. With no default they start in the Coffer workspace, shown at the top of the list as *default · Coffer workspace*. With none allowed, `/dir` is off.
 
 Paths must be absolute; a relative one is refused and nothing is saved. Each allowed directory also admits the directories beneath it.
 
@@ -103,7 +103,7 @@ Only conversations this chat opened are offered — never one from the web page 
 
 `/status` answers in words, not ids, under the title **Status**: the conversation's title (or its `🧵#N` mark); one line with the agent, the model and the directory; then **Running**, **Running · 2 waiting** or **Idle**. In a direct chat it also lists the parallel threads on one line, each with whether it is running, waiting or idle.
 
-In a direct chat `/help` lists the commands on one line, `/new [agent] · /stop · /model [name] [level] · /dir · /status · /resume [n] · /thread · /del · /help`, and says that anything else is a message to the agent. In a group it lists only `/new [agent] · /stop · /del · /help`.
+In a direct chat `/help` lists the commands on one line, `/new [agent] · /stop · /model [name] · /dir [path|name] · /status · /resume [n] · /thread [title] · /del · /help`, and says that anything else is a message to the agent. In a group it lists only `/new [agent] · /stop · /del · /help`.
 
 `/new` answers with one line — "🆕 New conversation · Codex · Default model · ~/src/coffer" — and, on a platform with buttons, **Agent**, **Model** and **Dir** buttons in a direct chat and only the **Agent** button in a group. **Agent** offers the agents this channel may drive; a tap starts a fresh conversation on it, as `/new <agent>` does.
 

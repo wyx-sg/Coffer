@@ -71,7 +71,6 @@ async def test_readable_daemon_json_publishes_its_token(tmp_path: Path, monkeypa
                 "port": 8123,
                 "token": "tok-from-file",
                 "started_at": datetime.now(tz=UTC).isoformat(),
-                "binary_path": "/x",
             }
         )
     )

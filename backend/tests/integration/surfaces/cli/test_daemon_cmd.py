@@ -167,7 +167,6 @@ def _live(monkeypatch: pytest.MonkeyPatch, port: int) -> DaemonInfo:
         port=port,
         token="t",
         started_at=datetime.now(tz=UTC),
-        binary_path="/test",
     )
     monkeypatch.setattr(bootstrap, "live_daemon", lambda: info)
     return info
@@ -255,7 +254,6 @@ def _publish(home: Path, pid: int) -> Path:
             port=1,
             token="t",
             started_at=datetime.now(tz=UTC),
-            binary_path="/x",
         ),
     )
     return path

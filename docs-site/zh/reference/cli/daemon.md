@@ -72,7 +72,7 @@ coffer daemon restart [OPTIONS]
 
 Show whether the daemon is running, and the passes it is running right now.
 
-Reports its version, port and pid, the event loop's lag (p99 and maximum over the last few minutes), how many background tasks are running and how many have crashed, and the long passes in flight (kind, target, start time), oldest first.
+Reports its version, port and pid, the event loop's lag (p99 and maximum over the last few minutes), how many background tasks are running and how many have crashed, and the long passes in flight (kind, target, start time), oldest first. --tasks adds the running tasks counted by name (reconciler, seatalk-ws, coffer-mcp-http-upstream, ...), largest first.
 
 Read-only: when no daemon is running it says so and exits 3 instead of starting one.
 
@@ -87,6 +87,7 @@ coffer daemon status [OPTIONS]
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | JSON output for scripts |
+| `--tasks` <span class="cli-chip">选项</span> | 开关 |  | Also list the running background tasks, counted by name |
 
 ## daemon reload
 

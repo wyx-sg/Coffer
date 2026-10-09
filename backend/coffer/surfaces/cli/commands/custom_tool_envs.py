@@ -175,7 +175,7 @@ def set_header(
         None, "--secret", help="A stored secret's name (its value stays in Coffer)"
     ),
     scheme: str | None = typer.Option(
-        None, "--scheme", help="Sent before the secret: Bearer, Basic, Token…"
+        None, "--scheme", help="Sent before the secret: Bearer or Token"
     ),
     as_json: bool = _io.json_option(),
 ) -> None:

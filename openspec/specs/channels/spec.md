@@ -148,7 +148,10 @@ not bound here. The lifecycle MUST retry on its normal failure interval, so an
 approval given meanwhile starts the adapter with no restart; a pairing and the
 channel's settings are untouched throughout. The Channels page and the Overview
 attention item MUST name the approval (and, for `refused`, that it was refused)
-instead of "not running" or a suggestion to replace the key.
+instead of "not running" or a suggestion to replace the key. For `refused`,
+the Channels page's banner MUST offer Ask again, which asks again on each refused
+request for this channel's secret (see [secret](../secret/spec.md)); in the
+desktop app it is approved on the spot with Touch ID.
 
 #### Scenario: a channel whose secret waits for approval says so and starts once approved
 - **GIVEN** an enabled channel whose secret has not been approved for it

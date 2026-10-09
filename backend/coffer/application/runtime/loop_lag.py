@@ -11,7 +11,10 @@ loop woke it: the lag is the time the loop spent on something else. Samples
 are kept for a rolling window, and ``GET /api/v1/daemon/status`` (and
 ``coffer daemon status``) report the window's p99 and maximum. A healthy idle
 daemon reads a millisecond or two; hundreds of milliseconds means something is
-blocking the loop.
+blocking the loop. While the probe sleeps, a :class:`~.stall_watch.StallWatch`
+thread waits for it; if the loop misses the probe's wake-up by more than
+100 ms, the watch logs the loop thread's stack at that moment, so the call that
+blocked it is named, not guessed.
 """
 
 from __future__ import annotations
@@ -20,6 +23,8 @@ import asyncio
 import math
 from collections import deque
 from dataclasses import dataclass
+
+from coffer.application.runtime.stall_watch import StallWatch
 
 #: Seconds between samples.
 DEFAULT_INTERVAL_SECONDS = 0.5
@@ -52,8 +57,10 @@ class LoopLagProbe:
         *,
         interval: float = DEFAULT_INTERVAL_SECONDS,
         window: int = DEFAULT_WINDOW_SAMPLES,
+        watch: StallWatch | None = None,
     ) -> None:
         self._interval = interval
+        self._watch = watch
         self._window = window
         self._samples: deque[float] = deque(maxlen=window)
 
@@ -64,10 +71,18 @@ class LoopLagProbe:
     async def run(self) -> None:
         """Sample forever; cancel to stop."""
         loop = asyncio.get_running_loop()
-        while True:
-            started = loop.time()
-            await asyncio.sleep(self._interval)
-            self.record(loop.time() - started - self._interval)
+        if self._watch is not None:
+            self._watch.start(loop)
+        try:
+            while True:
+                started = loop.time()
+                if self._watch is not None:
+                    self._watch.arm(self._interval)
+                await asyncio.sleep(self._interval)
+                self.record(loop.time() - started - self._interval)
+        finally:
+            if self._watch is not None:
+                self._watch.stop()
 
     def snapshot(self) -> LoopLag:
         samples = list(self._samples)
@@ -82,7 +97,7 @@ class LoopLagProbe:
         )
 
 
-_PROBE = LoopLagProbe()
+_PROBE = LoopLagProbe(watch=StallWatch())
 
 
 def probe() -> LoopLagProbe:

@@ -42,7 +42,7 @@ Coffer 是一个本地进程，把这些资产只存一份，再通过智能体�
 | --- | --- |
 | 编程智能体 | Claude Code 和 Codex，Coffer 注册的两种智能体。每个智能体通过 Coffer 写进它配置里的一条 MCP 服务器条目连到 Coffer，并读取 Coffer 投递到它技能目录里的技能。 |
 | `coffer-mcp-shim` | 一个很小的 stdio 转 HTTP 转发器，智能体把它当作 MCP 服务器启动。它找到（或启动）守护进程，把 JSON-RPC 转发到 `/mcp`，并在握手里盖上智能体的身份。 |
-| `coffer` CLI | 一个 Typer 应用，命令很少：守护进程的生命周期、日志、`coffer run`，以及少数由程序或智能体交接运行的命令。每条读写状态的命令都是一次对守护进程的 HTTP 调用；CLI 自己从不打开数据库或密钥存储。 |
+| `coffer` CLI | 一个 Typer 应用，界面上的每个操作都有一条对应命令，都从同一个命令注册表登记，另有守护进程的生命周期、`coffer update` 和 `coffer uninstall`、日志和 `coffer run`。每条读写状态的命令都是一次对守护进程的 HTTP 调用；CLI 自己从不打开数据库或密钥存储。 |
 | Web 界面 | 一个 React 单页应用，构建成静态文件，由守护进程在自己的源上提供。 |
 | 桌面壳 | 一个 Tauri 2 应用，在原生窗口里承载同一份构建好的前端，并带一个菜单栏项。它通过 IPC 把守护进程地址和令牌交给页面，在没有守护进程运行时启动一个，并根据签名的发布清单自我更新。 |
 | HTTP API | `/api/v1/*` 下的 FastAPI 路由：所有客户端共用的管理面。 |
@@ -62,11 +62,12 @@ Coffer 以一小组相互协作的进程运行，其中只有一个持有状态�
 
 | 进程 | 生命周期 | 作用 |
 | --- | --- | --- |
-| `coffer-daemon` | 长驻。一直服务到你停掉它或另一个守护进程取代它；从不自行退出。 | 拥有全部状态：保险库唯一的写入者，也是唯一的 SQLite 写入者。绑定 `127.0.0.1` 上你在 `~/.coffer/daemon-config.json` 里固定的端口，没有就用 `38470`；绑不上这个端口就拒绝启动，并报出占用者。 |
+| `coffer-daemon` | 长驻。一直服务到你停掉它或另一个守护进程取代它；从不自行退出。 | 拥有全部状态：保险库唯一的写入者，也是唯一的 SQLite 写入者。绑定 `127.0.0.1` 上你在 `~/.coffer/daemon-config.json` 里固定的端口，没有就用 `38470`；绑不上这个端口就拒绝启动，并报出占用者；占用者是这个保险库自己的守护进程时，这次启动作为重复启动退出。 |
 | `coffer-mcp-shim` | 每个 MCP 客户端会话一个。 | 把 stdio 转发到守护进程的 `/mcp` 端点；探测或拉起守护进程；守护进程重启后自动恢复。 |
 | `coffer` | 每条命令一个。 | 通过回环地址调用守护进程；探测或拉起它；守护进程版本与自己不一致时在 stderr 上警告。 |
 | 桌面壳 | 应用运行期间。 | 承载前端，通过 IPC 提供密钥，探测或拉起并重启守护进程。退出它不会停掉守护进程。 |
 | 上游 MCP 服务器 | 每个客户端会话、每个服务器一个。 | 由网关的会话级 supervisor 拉起，会话关闭时回收。 |
+| `coffer-seatalk-bridge` | 每次 SeaTalk 连接尝试一个。 | 在守护进程之外用运营方提供的 SDK 保持一条 SeaTalk websocket 连接，把事件以 JSON 行写回给守护进程。守护进程关闭它的 stdin 时退出。 |
 | 智能体运行时 | 每个对话轮次或每个对话。 | Claude Agent SDK 和 Codex app-server，由对话平台启动来跑一个轮次。 |
 
 CLI、shim 和桌面壳都通过 `~/.coffer/daemon.json`（pid、端口、令牌；权限 `0600`）找到守护进程，这个文件由守护进程在启动时写入、退出时删除。`~/.coffer/daemon.lock` 上的拉起锁让并发的探测或拉起尝试最终汇聚到同一个守护进程。在 macOS 上，**开机自启动**会把守护进程注册为登录服务。完整生命周期见 [守护进程与进程](/zh/architecture/daemon)。
@@ -159,7 +160,7 @@ Coffer 的大部分形态都来自少数几项决策。下面每一项都在它�
 | API 客户端 | openapi-typescript、openapi-fetch | 由每个规格的 OpenAPI 契约生成的传输类型。 |
 | 国际化 | i18next、react-i18next | 英文和简体中文界面。 |
 | 桌面 | Tauri 2（Rust 2021） | 原生壳、菜单栏项和更新器。 |
-| 打包 | PyInstaller | 冻结的 `coffer-daemon`、`coffer-mcp-shim` 和 `coffer` 二进制。 |
+| 打包 | PyInstaller | 冻结的 `coffer-daemon`、`coffer-mcp-shim`、`coffer` 和 `coffer-seatalk-bridge` 二进制。 |
 
 ## 阅读指引 {#reading-guide}
 

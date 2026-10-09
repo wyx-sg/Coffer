@@ -54,7 +54,6 @@ def _daemon_json(home: Path) -> None:
                 "port": 8123,
                 "token": _TOKEN,
                 "started_at": datetime.now(tz=UTC).isoformat(),
-                "binary_path": "/x",
             }
         )
     )

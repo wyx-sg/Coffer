@@ -171,7 +171,7 @@ No test retries itself. A test that fails only on a loaded machine has a bug, in
 
 | Project | Specs | What it drives |
 | --- | --- | --- |
-| `web` | `e2e/web/specs/*.spec.ts`: `agent_workspace` and the `shell_*` specs for activity, agents, cold start, knowledge, MCP flows, settings and skills | Chromium against the web UI |
+| `web` | `e2e/web/specs/*.spec.ts`: `agent_workspace`, `clis`, `custom-tools`, and the `shell_*` specs for the other pages, cold start, the command palette and MCP flows | Chromium against the web UI |
 | `mcp` | `e2e/mcp/specs/*.spec.ts`: round trips over stdio and HTTP, concurrent clients, capability disable, a mutating upstream, upstream crash recovery | A real MCP client → `coffer-mcp-shim` (stdio) → daemon (`/mcp`) → upstream MCP servers. No browser |
 
 Before the first run:
@@ -238,11 +238,12 @@ Only one integration run happens on a machine at a time. `make verify-integratio
 | `scripts/check_adr_index.py` | Links inside `docs/decisions/` resolve, and the ADR index lists exactly the ADRs that exist |
 | `scripts/check_spec_citations.py` | Every `spec <capability> "<Title>"` citation in any tracked file names a real requirement. Inside `openspec/`, a link relative to the spec (`[x](../skill-manager/spec.md) "<Title>"`) and a `see "<Title>"` of the file's own capability are checked too. A title wrapped across lines is read as one line |
 | `scripts/check_architecture_doc.py` | The code-layout tree in `docs-site/architecture/layering.md` names every package, names nothing that is gone, and the architecture pages name every built-in `coffer__*` tool |
-| `scripts/check_pyinstaller_specs.py` | The three PyInstaller specs point at files that exist and keep the `-X utf8` runtime option. No pull request job runs PyInstaller, so this is the only early warning |
+| `scripts/check_pyinstaller_specs.py` | The four PyInstaller specs point at files that exist and keep the `-X utf8` runtime option. No pull request job runs PyInstaller, so this is the only early warning |
 | `scripts/check_cli_reference.py` | This site's generated CLI reference pages (English and Chinese) match the code. Fix drift with `make docs-reference` |
 | `scripts/check_docs_locales.py` | This site's English and Chinese trees are one to one: pages, sidebar entries, heading anchors, and Chinese pages linking Chinese pages |
 | `scripts/check_error_codes_reference.py` | [Error codes](/reference/error-codes), in English and Chinese, lists every code the daemon maps in `surfaces/http/errors.py`, each at the HTTP status it is sent with, and no code the daemon does not map |
 | `scripts/check_removed_commands.py` | No page under `docs-site/`, repository guide (`README.md`, `README.zh-CN.md`, `AGENTS.md`, `CONTRIBUTING.md`, `.agents/`, `docs/` except the ADRs), spec, desktop shell source file, shipped skill body, web UI source file or e2e spec quotes a `coffer` command, option or `coffer__` tool that has been removed. Each hit names the command to use instead; a line that names one on purpose, such as a scenario asserting it is gone, is listed in the script's `ALLOWED` |
+| `scripts/cli_coverage.py --check` | Every route the web UI calls has a `coffer` command or a listed reason not to, every command shows in `--help` unless allowlisted, and [CLI coverage](/reference/cli-coverage) (English and Chinese) is current. Fix the pages with `.venv/bin/python scripts/cli_coverage.py --write` |
 | `scripts/check_platform_calls.py` | No code outside the platform part of the infrastructure layer asks which operating system it runs on. Tests are exempt. See [Platform port](/architecture/platform) |
 | `scripts/check_coffer_paths.py` | Every `~/.coffer` path is built in `infrastructure/vault/home.py`, the one module that knows the layout and honours `HOME`; any other module that builds one fails. Migrations and the real-home test guard are allowed |
 | `scripts/check_agent_type_branches.py` | No code outside the agent descriptor and its facets branches on an agent type. See [Agent facets](/architecture/agent-facets) |
@@ -257,7 +258,7 @@ Only one integration run happens on a machine at a time. `make verify-integratio
 | `npm run typecheck` | `tsc` over the frontend |
 | `npm run knip` | Dead frontend code: unused files, exports and dependencies |
 
-The four frontend steps are skipped when `frontend/node_modules` is missing. CI always installs it. `lint-imports` runs with `PYTHONPATH=backend` so that in a git worktree it analyses this checkout rather than the one the editable install points at.
+The four frontend steps fail when `frontend/node_modules` is missing; run `make install` first. CI always installs it. `lint-imports` runs with `PYTHONPATH=backend` so that in a git worktree it analyses this checkout rather than the one the editable install points at.
 
 ::: tip Docs-only changes can fail `make lint`
 The citation, ADR-index, architecture-doc, removed-command and reference gates all read Markdown. Run `make lint` after editing docs too.

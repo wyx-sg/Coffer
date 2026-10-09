@@ -22,6 +22,7 @@ def runtime_health() -> RuntimeHealthOut:
         loop_lag_samples=lag.samples,
         loop_lag_window_seconds=lag.window_seconds,
         tasks_running=stats.running,
+        tasks_by_name=tasks().running_by_name(),
         task_crashes=stats.crashes,
         last_crash=(
             TaskCrashOut(task=last.task, error=last.error, at=last.at, restarting=last.restarting)

@@ -419,13 +419,13 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 
 | 界面操作 | 接口 | 命令 | 验收 |
 | --- | --- | --- | --- |
-| Settings · About · Uninstall Coffer (desktop app) | `POST /daemon/uninstall` | `coffer uninstall` | `test_cli_parity.py` |
+| Settings · About · Uninstall Coffer (desktop app) | `POST /daemon/uninstall` | `coffer uninstall` | `test_lifecycle_cli.py` |
 
 ## `coffer update` {#update}
 
 | 界面操作 | 接口 | 命令 | 验收 |
 | --- | --- | --- | --- |
-| Settings · About · Check for updates (installer binaries) | `GET /daemon/upgrade` | `coffer update` | `test_cli_parity.py` |
+| Settings · About · Check for updates (installer binaries) | `GET /daemon/upgrade` | `coffer update` | `test_lifecycle_cli.py` |
 
 ## `coffer usage` {#usage}
 

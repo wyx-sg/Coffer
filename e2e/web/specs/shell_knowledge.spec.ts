@@ -115,7 +115,10 @@ test("a collection is one tree; an uploaded source is read, opened in the editor
   // offered on the current version. The file stays in view.
   await page.getByRole("button", { name: "History", exact: true }).click();
   await expect(page).toHaveURL(/[?&]history=1/);
-  await expect(page.getByText("The first body.")).toBeVisible();
+  // The rendered file, not the drawer's diff of it, which carries the same text.
+  await expect(
+    page.getByRole("paragraph").filter({ hasText: "The first body." }),
+  ).toBeVisible();
   const versions = page.getByRole("list", { name: "Versions" });
   await expect(versions.getByRole("button")).toHaveCount(1);
   await expect(versions.getByRole("button").first()).toContainText("Current");

@@ -174,21 +174,22 @@ The vocabulary is a closed enumeration, defined in the domain layer.
 | Area | Events |
 | --- | --- |
 | Resources | `resource_created`, `resource_updated`, `resource_enabled`, `resource_disabled`, `resource_deleted`, `resource_renamed`, `resource_scope_updated` |
-| MCP capabilities | `capability_enabled`, `capability_disabled` |
-| Daemon | `token_rotated`, `daemon_residency_updated`, `daemon_restarted`, `retention_updated`, `internal_engine_model_set` |
-| Secrets | `secret_set`, `secret_revealed`, `secret_deleted`, `secret_resolved`, `secret_local_access_revoked`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected` |
+| MCP capabilities | `capability_enabled`, `capability_disabled`, `tool_exposure_changed` |
+| Daemon | `token_rotated`, `daemon_residency_updated`, `daemon_restarted`, `retention_updated`, `call_content_recording_updated`, `attention_ignored`, `attention_unignored`, `storage_cache_cleared`, `internal_engine_model_set` |
+| Secrets | `secret_set`, `secret_revealed`, `secret_deleted`, `secret_notes_updated`, `secret_resolved`, `secret_imported`, `secret_plaintext_ignored`, `secret_plaintext_unignored`, `secret_local_access_revoked`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected`, `secret_protection_enabled`, `master_key_relocated` |
 | Agents | `agent_mcp_installed`, `agent_mcp_uninstalled`, `agent_mcp_entry_removed`, `agent_mcp_entry_adopted`, `agent_plugin_toggled`, `agent_plugin_uninstalled` |
 | Skills | `skill_imported`, `skill_updated`, `skill_update_merged`, `skill_bound`, `skill_unbound`, `skill_relinked`, `skill_drift_remediated`, `skill_adopted`, `skill_unmanaged_deleted` |
+| CLIs | `cli_tool_added`, `cli_tool_edited`, `cli_tool_removed` |
 | Knowledge | `knowledge_written`, `knowledge_edited`, `knowledge_deleted` |
 | Memory | `memory_aggregated`, `memory_distilled`, `memory_delivery_installed`, `memory_delivery_removed`, `memory_delivery_fired`, `memory_trigger_added`, `memory_trigger_proposed`, `memory_trigger_armed`, `memory_trigger_disarmed`, `memory_trigger_deleted` |
-| Channels | `channel_pairing_issued`, `channel_paired` |
-| Vault files | `vault_file_edited` (a hand edit committed as `disk`, by a person) |
+| Channels | `channel_pairing_issued`, `channel_paired`, `channel_person_removed`, `channel_reply_withdrawn` |
+| Vault files | `vault_file_edited` (a hand edit committed as `disk`, by a person), `vault_file_restored` |
 | Vault sync | `sync_run`, `sync_confirmed`, `sync_rejected`, `sync_rolled_back`, `sync_machine_removed`, `sync_plaintext_pushed`, `master_key_exported`, `master_key_imported` |
-| Providers | `provider_switched`, `provider_transcribe_default_set`, `provider_projection_refused` |
+| Providers | `provider_switched`, `provider_transcribe_default_set`, `provider_projection_refused`, `provider_projection_repaired` |
 
 No secret event carries a secret value; each records the ref, the standalone secret's name or the destination only.
 
-Three events are no longer recorded, because the web UI no longer edits an agent's config file or a memory note: `agent_config_file_written`, `agent_config_file_deleted` and `memory_note_edited`. Rows already in the log keep their labels in the Activity page, so they still read in plain words. `vault_file_restored` is recorded: restoring a version from a History tab is Coffer's own write. An edit made on disk, or a restore an agent commits itself, is a vault commit naming `Coffer-Writer: disk` or `agent`; the vault's git history answers who changed the file.
+Five events are no longer recorded: `agent_config_file_written`, `agent_config_file_deleted` and `memory_note_edited`, because the web UI does not edit an agent's config file or a memory note, and `knowledge_curated` and `provider_internal_default_set`. Rows already in the log keep their labels in the Activity page, so they still read in plain words. `vault_file_restored` is recorded: restoring a version from a History tab or drawer is Coffer's own write. An edit made on disk, or a restore an agent commits itself, is a vault commit naming `Coffer-Writer: disk` or `agent`; the vault's git history answers who changed the file.
 
 - `secret_revealed` — a person revealed or copied a value in the desktop app, behind a presence check. It is the only way a value is shown, since no route, command or tool returns one.
 - `secret_resolved` — `coffer run` resolved a standalone secret into one child process. The row names the secret, the program and the working directory, never the value or the rest of the command line.
@@ -249,28 +250,38 @@ Recording is on by default and switched per machine by `record_call_content` in 
 
 Everything log-like is bounded by one mechanism.
 
-Every table the retention worker sweeps is described declaratively: its policy key, timestamp column, default window, display name, and an action of `delete` or `archive`. The composition root registers every such description in one registry, and the SQL allowlist the repository accepts is derived from those registrations, so a table cannot be pruned unless it is registered.
+Every table the retention worker sweeps is described declaratively: its policy key, timestamp column, default window, display name and description, and optionally the policy it follows (`policy_name`): a follower has no policy of its own and is pruned with that policy's window. Rows older than the window are deleted; there is no other action. The composition root registers every such description in one registry, and the SQL allowlist the repository accepts is derived from those registrations, so a table cannot be pruned unless it is registered.
 
-| Policy (`name`) | Table | Timestamp column | Default | Action |
-| --- | --- | --- | --- | --- |
-| `audit_log` | `audit_log` | `timestamp` | 365 days | delete |
-| `mcp_invocations` | `mcp_invocations` | `timestamp` | 30 days | delete |
-| `sync_runs` | `sync_runs` | `finished_at` | 90 days | delete |
+| Policy (`name`) | Table | Timestamp column | Default |
+| --- | --- | --- | --- |
+| `audit_log` | `audit_log` | `timestamp` | 365 days |
+| `mcp_invocations` | `mcp_invocations` | `timestamp` | 30 days |
+| `sync_runs` | `sync_runs` | `finished_at` | 90 days |
+| `usage_daily` | `usage_daily` | `day` | 365 days |
+| `usage_requests` | `usage_requests` | `started_at` | follows `mcp_invocations` |
+
+Three **file policies** prune folders the same way, by each file's modification time:
+
+| Policy | Folder | Default |
+| --- | --- | --- |
+| `attachments` | `~/.coffer/content/channel-media` (what channels downloaded) | 30 days |
+| `skill_data` | `~/.coffer/skill-data` (logs, journals and temp files skill scripts write) | 30 days |
+| `config_backups` | `~/.coffer/config-backups` (copies of agent config files made before a rewrite); the newest copy of each file is kept however old | 30 days |
 
 ```mermaid
 flowchart LR
     W["Retention worker (every 6 h)"] --> S["Prune"]
     S --> R["Registered prunable tables"]
     R --> T1["delete rows older than window"]
-    S --> M["sweep channel media dir"]
+    S --> M["file policies: channel media, skill-data, config-backups"]
     W --> F["Log-file pruning: shim and upstream logs older than 7 days"]
     S --> P["local/retention.json: last_pruned_at, rows"]
 ```
 
-- At startup the retention service seeds a policy for each registered table in `~/.coffer/local/retention.json` and never overwrites one you changed. An entry in the file for a policy that is no longer registered, such as the removed conversation policies, is dropped at startup.
+- At startup the retention service seeds a policy for each registered table and file policy in `~/.coffer/local/retention.json` and never overwrites one you changed. An entry in the file for a policy that is no longer registered, such as the removed conversation policies, is dropped at startup.
 - The retention worker runs a prune immediately at startup (catch-up), then every 6 hours. A failing prune is logged and the worker keeps going.
-- A full prune also sweeps the channel media directory, and the worker prunes old shim and upstream log files on the same cadence. `daemon.log` itself is bounded by its own rotation and is never deleted.
-- A window of "none" disables pruning for that table. Changing a window records `retention_updated` in the audit log.
+- A full prune also sweeps the file policies' folders, and the worker prunes old shim and upstream log files on the same cadence. `daemon.log` itself is bounded by its own rotation and is never deleted.
+- A window of "none" disables pruning for that policy. Changing a window records `retention_updated` in the audit log.
 
 You manage policies from **Settings → Data**, or through `/api/v1/retention/policies` and `POST /api/v1/retention/prune`.
 
@@ -283,7 +294,7 @@ The realistic reader of these records is often an agent at the moment something 
 | `coffer log audit [--kind] [--name] [--event-type] [--since] [--trace] [--limit] [--json]` | the audit log, newest first |
 | `coffer log mcp [--server] [--status ok\|error] [--since] [--trace] [--limit] [--json]` | the MCP invocation log, newest first |
 | `coffer log daemon [--errors] [--since] [--trace] [--limit] [--json]` | the tail of `daemon.log`, through the same tolerant reader as the Activity page |
-| `coffer daemon status [--json]` | the event-loop lag and the background task counts, beside the daemon's version and port |
+| `coffer daemon status [--tasks] [--json]` | the event-loop lag and the background task counts (by name with `--tasks`), beside the daemon's version and port |
 | `coffer path logs` | the log directory and the `daemon.log` in it, for `grep` or `tail` |
 
 `--since` takes an ISO 8601 instant or an age such as `30m`, `1h` or `2d`. A filter that cannot be resolved — a name without a kind, or a name that no resource of that kind has — is an error rather than being silently ignored, because an unfiltered answer would look like "nothing happened to this resource". Every command is read-only and prints no secret values: audit details are redacted before storage, and log records carry none by construction.
@@ -302,7 +313,7 @@ Everything the daemon does runs on one `asyncio` event loop, and much of it runs
 
 Tasks a function awaits or cancels before it returns — the two sides of an `asyncio.wait` race, a shielded write, a per-request pump — are structured concurrency, not background work, and stay bare. `scripts/check_bare_tasks.py` (run by `make lint`) counts `create_task` and `ensure_future` calls per file and fails on any file that makes more than its allow-list entry, each entry stating why its calls are awaited in place. A new bare task therefore fails lint until it moves onto the supervisor or is argued onto the list.
 
-**A blocked loop looked like general slowness.** One synchronous call on the loop — a large file walk, a subprocess wait — stalls every request, channel and turn at once. `application/runtime/loop_lag.py` sleeps for 0.5 s at a time and records how much later than asked the loop woke it, keeping five minutes of samples.
+**A blocked loop looked like general slowness.** One synchronous call on the loop — a large file walk, a subprocess wait — stalls every request, channel and turn at once. `application/runtime/loop_lag.py` sleeps for 0.5 s at a time and records how much later than asked the loop woke it, keeping five minutes of samples. The lag alone says a stall happened, not what caused it: by the time the probe wakes, the blocking call has returned. So while the probe sleeps, a small thread (`application/runtime/stall_watch.py`) waits for it. If the probe is more than 100 ms late, the loop is still blocked at that moment, and the thread logs one `runtime.loop.stalled` line to `daemon.log` with the loop thread's current stack and the name of the task the loop is running. The blocking call is the stack's innermost Coffer frame. At most one such line is written per 10 s; its `suppressed` field counts the stalls held back since the last one.
 
 `GET /api/v1/daemon/status` carries both in its `runtime` block, and `coffer daemon status` prints them:
 
@@ -313,12 +324,15 @@ Tasks a function awaits or cancels before it returns — the two sides of an `as
   "loop_lag_samples": 600,
   "loop_lag_window_seconds": 300.0,
   "tasks_running": 14,
+  "tasks_by_name": {"reconciler": 1, "telegram-poll": 1, "coffer-mcp-http-upstream": 6, "turn": 1, "loop-lag-probe": 1},
   "task_crashes": 1,
   "last_crash": {"task": "telegram-poll:family", "error": "RuntimeError", "at": "2026-10-01T08:12:03Z", "restarting": true}
 }
 ```
 
 An idle daemon reads a millisecond or two. A p99 in the hundreds means something is blocking the loop; the daemon log around the maximum usually says what. The status route answers without a token, so `last_crash` carries only the exception's class; its message and traceback are in `daemon.log` under `runtime.task.crashed`.
+
+`tasks_by_name` counts the running tasks by the part of their name before the first `:`. The part after it names what a task serves (a channel, an MCP server, a chat), and the route answers without a token, so it is left out. When `tasks_running` grows, this says which kind of task is growing: a session that is never reaped shows as a rising `coffer-mcp-http-upstream` count, a channel loop started twice as `telegram-poll` at 2. `coffer daemon status --tasks` prints the same counts, largest first.
 
 ## Eval capture
 
