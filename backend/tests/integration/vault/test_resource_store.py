@@ -13,10 +13,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from coffer.application.audit_service import AuditService
-from coffer.application.channel.kind import make_channel_kind
 from coffer.application.resource_service import ResourceService
 from coffer.domain.errors import ResourceAlreadyExists
 from coffer.domain.resource import Kind, Resource
@@ -53,6 +52,21 @@ def _kinds() -> dict[str, Kind]:
             storage=StorageClass.DERIVED,
         ),
     }
+
+
+class _Dirs(BaseModel):
+    """A config whose paths must be absolute, as the kind reads them."""
+
+    model_config = ConfigDict(extra="forbid")
+    directories: list[str] = []
+    default: str | None = None
+
+    @field_validator("directories")
+    @classmethod
+    def _absolute(cls, v: list[str]) -> list[str]:
+        if not all(Path(d).is_absolute() for d in v):
+            raise ValueError("directories must be absolute")
+        return v
 
 
 class _NullAudit:
@@ -421,31 +435,29 @@ async def test_deleting_derived_loses_no_resource() -> None:
     spec="vault-sync", scenario="an absolute path under the home directory passes validation"
 )
 @pytest.mark.parametrize("change", ["add", "remove", "set default"])
-async def test_a_channel_directory_under_home_is_written_and_removed(change: str) -> None:
-    """A channel's working directories (and its default one) under HOME are
-    filed as ``${HOME}/...``; the vault validator judges the config as the kind
-    reads it, so adding, removing or defaulting one is not refused for not
-    being an absolute path (spec channels "Choose the working directory from
-    chat")."""
-    kinds = {"channel": make_channel_kind()}
+async def test_a_directory_under_home_is_written_and_removed(change: str) -> None:
+    """Directories under HOME are filed as ``${HOME}/...``; the vault validator
+    judges the config as the kind reads it, so adding, removing or defaulting
+    one is not refused for not being an absolute path."""
+    kinds = {"workspace": Kind(name="workspace", display_name="W", config_schema=_Dirs)}
     repo = make_resource_repo(kinds)
     home = os.environ["HOME"]
     first, second = f"{home}/WorkEnv/account", f"{home}/WorkEnv/account-bff"
-    config: dict[str, object] = {
-        "channel_type": "telegram",
-        "bot_token_ref": "channel/x/bot-token",
-        "directories": [first],
-    }
-    created = await repo.create(_resource("channel", "tg", config))
+    config: dict[str, object] = {"directories": [first]}
+    created = await repo.create(_resource("workspace", "ws", config))
     after = {
         "add": {**config, "directories": [first, second]},
         "remove": {**config, "directories": []},
-        "set default": {**config, "default_agent_config": {"cwd": first}},
+        "set default": {**config, "default": first},
     }[change]
 
     updated = await repo.update_config(created.uid, after, None)
 
     assert updated.config["directories"] == after["directories"]
-    doc = json.loads(_vault_file("resources/channel/tg.json").read_text())
-    assert all(d.startswith("${HOME}/") for d in doc["config"]["directories"])
-    assert "resources/channel/tg.json" in _head_files()
+    doc = json.loads(_vault_file("resources/workspace/ws.json").read_text())
+    stored = [
+        *doc["config"]["directories"],
+        *([doc["config"]["default"]] if change == "set default" else []),
+    ]
+    assert all(d.startswith("${HOME}/") for d in stored)
+    assert "resources/workspace/ws.json" in _head_files()

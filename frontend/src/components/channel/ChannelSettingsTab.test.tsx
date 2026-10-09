@@ -21,7 +21,7 @@ import { acceptance } from "@/test/acceptance";
 import { mockApiClient, type ApiClientMock } from "@/test/mockApiClient";
 import { ChannelReplaceSecretDialog } from "./ChannelReplaceSecretDialog";
 import { ChannelSettingsTab } from "./ChannelSettingsTab";
-import { AGENT, HERE, REGISTRY, makeChannel, makeSettings } from "@/test/channelKit";
+import { AGENT, makeChannel, makeSettings } from "@/test/channelKit";
 
 const SECRETS = {
   refs: [
@@ -52,10 +52,6 @@ vi.mock("@/lib/hooks/useSecrets", () => ({
 vi.mock("@/lib/api/client", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/client")>()),
   getApiClient: vi.fn(),
-}));
-vi.mock("@/lib/hooks/useMachines", () => ({
-  useMachines: () => ({ data: { machines: REGISTRY } }),
-  useThisMachineId: () => ({ machineId: HERE, isPending: false }),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: () => ({ data: [AGENT] }) }));
 
@@ -133,7 +129,6 @@ describe("message batching", () => {
     expect(config.wait_after_forward_seconds).toBe(10);
     // Every ref and platform field goes back as it was.
     expect(config.app_secret_ref).toBe("channel/0f/app-secret");
-    expect(config.runs_on).toBe(HERE);
   });
 
   test("the secret row shows the secret's name and Replace key", () => {

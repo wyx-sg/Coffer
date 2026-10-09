@@ -1,24 +1,20 @@
-"""Which channels this machine runs — the three gates, and only the gates.
+"""Which channels this machine runs — the two gates, and only the gates.
 
 ``ChannelRuntime`` owns lifecycle: start an adapter, stop it, keep the
 websocket connection in step. This module owns the question
 it asks first, every tick — *which channels are mine to run?* — and the answer
-has three parts, each a different kind of fact:
+has two parts, each a different kind of fact:
 
 1. **enabled** — is this resource live at all, here.
-2. **the machine binding** — is this channel's `runs_on` this machine (spec
-   channels "Bind each channel to the one machine that runs it"). This one is about somebody else's
-   machine, which is why it comes ahead of the third.
-3. **routing** — does this channel name an agent it may actually drive (ADR
+2. **routing** — does this channel name an agent it may actually drive (ADR
    per-agent-resource-scope, read inverted for this kind).
 
-They live together because they are one predicate to the reconciler and three
-separate arguments to a reader, and because the second one is new: a channel
-travels between machines now, so the resource table is no longer a private list
-and "enabled here" stopped being the whole answer.
+A channel is a machine-local resource (ADR channels-are-machine-local-resources):
+every channel in the resource table is this machine's, so there is no question
+of which machine runs it.
 
 The gate keeps a little memory (``Gate``), and it is memory about *reporting*
-rather than about state: a channel bound elsewhere stays bound elsewhere, so
+rather than about state: a channel that cannot route stays unroutable, so
 saying so every two seconds would bury the daemon log under a fact that is not
 changing.
 
@@ -29,7 +25,7 @@ changing.
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -115,23 +111,8 @@ def _scope_as_keys(scope: Scope | None, keys_by_uid: Mapping[str, str]) -> Scope
 
 @dataclass
 class Gate:
-    """The three gates, plus this machine's identity and what it has reported.
+    """The two gates, and what they have reported."""
 
-    ``machine_id`` is resolved once and kept: it is derived from the host and
-    cannot change while the daemon runs, and deriving it may shell out to
-    ``ioreg``.
-
-    ``None`` — no provider wired — means there is no machine to compare a
-    binding against, so the binding gate is skipped and every enabled channel
-    runs. That is a test convenience, not a fallback: the composition root
-    always injects one, so the only runtime that can be ungated is one built by
-    a test that never had a second machine to fight with.
-    """
-
-    machine_id_provider: Callable[[], Awaitable[str]] | None = None
-    _machine_id: str | None = None
-    #: The binding of each channel already reported as not this machine's.
-    _foreign: dict[str, object] = field(default_factory=dict)
     #: Why each channel that has no route was last reported quiet, so the same
     #: reason is said once rather than on every two-second tick.
     _unrouted: dict[str, tuple[str, str | None]] = field(default_factory=dict)
@@ -141,14 +122,6 @@ class Gate:
     #: daemon restart.
     routing: dict[str, Routing] = field(default_factory=dict)
 
-    async def machine_id(self) -> str | None:
-        """This machine's id, or ``None`` when no provider is wired."""
-        if self.machine_id_provider is None:
-            return None
-        if self._machine_id is None:
-            self._machine_id = await self.machine_id_provider()
-        return self._machine_id
-
     def unrouted(self, channel_uid: str) -> bool:
         """Whether the last pass found this channel enabled here but routing
         nowhere — the reason it is not running, decided rather than pending."""
@@ -156,7 +129,6 @@ class Gate:
 
     async def wanted(self, resources: ResourceService) -> Desired:
         """Every channel this machine should be running, right now."""
-        local = await self.machine_id()
         # The agent registry, read once per pass: an agent registered mid-tick
         # is picked up on the next one, two seconds later. It answers the only
         # question a uid cannot answer alone — which key the turn platform
@@ -165,7 +137,7 @@ class Gate:
         live: Desired = {}
         routing: dict[str, Routing] = {}
         for r in await resources.list(kind="channel"):
-            if not r.enabled or not self._bound_here(r, local):
+            if not r.enabled:
                 self._unrouted.pop(r.uid, None)
                 continue
             route = self._routing(r, keys_by_uid)
@@ -176,35 +148,6 @@ class Gate:
             routing[r.uid] = route
         self.routing = routing
         return live
-
-    def _bound_here(self, r: Resource, local: str | None) -> bool:
-        """Whether this machine is the one the channel names.
-
-        Two daemons answering one bot is the failure this prevents, and it is a
-        failure no amount of later checking could undo — the platform has
-        already been answered twice.
-
-        Failing CLOSED covers all three of "not mine": another machine's id, an
-        id no machine in the registry claims any more, and no id at all. None of
-        them says "this machine", and starting on a guess is the one outcome
-        that cannot be walked back. The management surface distinguishes them —
-        it reports the binding and whether it names this machine — so a channel
-        that is dark because it belongs elsewhere never looks like a channel
-        that is dark because it crashed.
-        """
-        binding = r.config.get("runs_on")
-        if local is None or binding == local:
-            # Ours: forget any binding already reported, so a channel handed
-            # away and later handed back reports the second departure too.
-            self._foreign.pop(r.uid, None)
-            return True
-        if self._foreign.get(r.uid) != binding:
-            self._foreign[r.uid] = binding
-            _logger.info(
-                "channel.not_bound_here",
-                extra={"channel": r.name, "runs_on": binding, "machine_id": local},
-            )
-        return False
 
     def _routing(self, r: Resource, keys_by_uid: Mapping[str, str]) -> Routing | None:
         """What this channel routes to, or ``None`` when it can route nowhere.
@@ -227,9 +170,7 @@ class Gate:
            that arrived before the agent list did).
         3. The agent it names is not registered here. New with uids, and the
            honest reading of a reference that resolves to nothing: this vault
-           has no such agent, so there is no key to route a turn by. It is also
-           the ordinary state of a channel that arrived from another machine
-           before that machine's agents did.
+           has no such agent, so there is no key to route a turn by.
         """
         default_agent = r.config.get("default_agent")
         if not isinstance(default_agent, str) or not default_agent:

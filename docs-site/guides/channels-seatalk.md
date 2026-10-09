@@ -5,7 +5,7 @@ description: Set up a SeaTalk channel for Coffer — create a SeaTalk Open Platf
 
 # SeaTalk
 
-This guide sets up a SeaTalk channel: create a bot app on the SeaTalk Open Platform, supply SeaTalk's WebSocket SDK, register the channel in Coffer, switch the app to WebSocket delivery, and pair your account. It then covers groups, threads, quoted messages, cards, limits and troubleshooting. For what every channel shares — commands, scope, machine binding, security — see [Channels](/guides/channels).
+This guide sets up a SeaTalk channel: create a bot app on the SeaTalk Open Platform, supply SeaTalk's WebSocket SDK, register the channel in Coffer, switch the app to WebSocket delivery, and pair your account. It then covers groups, threads, quoted messages, cards, limits and troubleshooting. For what every channel shares — commands, scope, security — see [Channels](/guides/channels).
 
 No agent has an official SeaTalk integration, so everything you do with an agent in SeaTalk goes through this channel.
 
@@ -16,7 +16,7 @@ Coffer receives SeaTalk events over **one outbound WebSocket connection per chan
 Two consequences follow:
 
 - **The WebSocket client is SeaTalk's own SDK, and you supply it.** It is distributed from SeaTalk's portal, is not on public PyPI and carries no public licence, so Coffer cannot ship or depend on it. Without it, a SeaTalk channel can send but receives nothing.
-- **One connection per SeaTalk app.** A second process registering the same app — another machine, a colleague testing — takes the connection away. Bind each channel to one machine.
+- **One connection per SeaTalk app.** A second process registering the same app — another machine, a colleague testing — takes the connection away. Register a SeaTalk app as a channel on one machine only.
 
 ## Prerequisites
 
@@ -61,7 +61,7 @@ Channels → Add channel
   3 Pair:           Pair later (pair in step 5)
 ```
 
-The configuration is the App ID and a reference to the App Secret, plus the fields every channel has. The channel is bound to this machine and starts connecting immediately.
+The configuration is the App ID and a reference to the App Secret, plus the fields every channel has. The channel is held on this machine only and starts connecting immediately.
 
 Check the connection: the channel's header reads *WebSocket connected* when it is up (its state stays **Not paired** until step 5). Wait for it before the next step.
 
@@ -82,7 +82,7 @@ Send the bot a message. A typing indicator appears at once, the answer arrives a
 
 ## Connection states
 
-The channel's header reports the connection: its state word, and the meta line (`SeaTalk app <id> · WebSocket · runs on this Mac`). Over REST, the fields are `status.inbound.websocket_state` and `status.inbound.websocket_error`.
+The channel's header reports the connection: its state word, and the meta line (`SeaTalk app <id> · WebSocket`). Over REST, the fields are `status.inbound.websocket_state` and `status.inbound.websocket_error`.
 
 | State | Shown on the channel's page | Meaning |
 | --- | --- | --- |
@@ -159,7 +159,7 @@ The agent sends a file back with a `MEDIA:/absolute/path` line. It arrives as an
 
 ## Rotate the app secret
 
-On the channel's page choose **Replace secret** in the banner when SeaTalk rejected the old one, or **Replace key…** under **Settings** → **Connection**; paste the secret in **App secret** and choose **Replace and restart**. Coffer checks the App ID and secret with SeaTalk as you paste, and a secret SeaTalk rejects is named under the field. The secret is written under the channel's existing reference, so pairing and machine binding are unchanged. Under **Settings** → **Connection** the App Secret shows as the secret's name, linking to its page, with **Replace key…** beside it; **Use another secret** there points the channel at a different stored secret and restarts the adapter on it. The **App ID** is edited in place under **Settings** → **Connection**.
+On the channel's page choose **Replace secret** in the banner when SeaTalk rejected the old one, or **Replace key…** under **Settings** → **Connection**; paste the secret in **App secret** and choose **Replace and restart**. Coffer checks the App ID and secret with SeaTalk as you paste, and a secret SeaTalk rejects is named under the field. The secret is written under the channel's existing reference, so the pairing is unchanged. Under **Settings** → **Connection** the App Secret shows as the secret's name, linking to its page, with **Replace key…** beside it; **Use another secret** there points the channel at a different stored secret and restarts the adapter on it. The **App ID** is edited in place under **Settings** → **Connection**.
 
 ## Limits
 
@@ -179,7 +179,7 @@ On the channel's page choose **Replace secret** in the banner when SeaTalk rejec
 Check that `~/.coffer/vendor/seatalk_oapi_sdk/` exists (or `$COFFER_SEATALK_SDK_DIR/seatalk_oapi_sdk/`), and that `COFFER_SEATALK_SDK_DIR`, if you use it, is set where the daemon starts — not only in your current shell. The bridge reads it from the daemon's environment. Replies and notifications still work meanwhile.
 
 **The state is `kicked`.**
-Another process holds this app's connection. Common causes: the same app registered as a channel on a second machine, or a test script using the same App ID. Stop the other one; Coffer reconnects within about a minute. To move the channel between machines, change **Runs on** on its **Settings** tab from the machine that currently runs it.
+Another process holds this app's connection. Common causes: the same app registered as a channel on a second machine, or a test script using the same App ID. Stop the other one; Coffer reconnects within about a minute. To move the channel between machines, see [Using the bot on another machine](/guides/channels#using-the-bot-on-another-machine).
 
 **Re-verify fails in the Developer Portal.**
 The channel is not connected yet. Wait until the channel's header reads *WebSocket connected*, then press **Re-verify** again.
@@ -192,7 +192,7 @@ SeaTalk returns only the last 7 days of a thread's replies (see [Groups and thre
 
 ## Related
 
-- [Channels](/guides/channels) — commands, scope, machine binding and security for every channel.
+- [Channels](/guides/channels) — commands, scope and security for every channel.
 - [Telegram](/guides/channels-telegram)
 - [Secret store](/guides/secret-store)
 - [Spec: channels/seatalk](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/seatalk/spec.md)

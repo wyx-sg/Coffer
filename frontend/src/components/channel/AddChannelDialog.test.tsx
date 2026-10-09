@@ -9,10 +9,8 @@
 // registered (registration probes the refs), and a failed registration rolls
 // the just-written secrets back so nothing orphaned stays behind.
 //
-// Registration is still the whole flow — there is no follow-up bind request —
-// but the config it writes now names a machine: `runs_on` is this machine's
-// id, read off `GET /sync/status`, so a channel created here is answered here
-// instead of sitting unbound and never starting.
+// Registration is the whole flow — there is no follow-up bind request: a
+// channel is a resource of this machine and runs here once it is on.
 //
 // It also names an AGENT, and that is why this suite seeds an agent list. The
 // config's `default_agent` used to be a constant every install shared (the
@@ -37,9 +35,6 @@ vi.mock("@/lib/api/client", async (orig) => ({
   ...(await orig<typeof import("@/lib/api/client")>()),
   getApiClient: vi.fn(),
 }));
-// The dialog binds the new channel to this machine, so it reads the daemon's
-// machine id. Stubbed rather than served, since nothing else here needs a daemon.
-vi.mock("@/lib/hooks/useMachines", () => ({ useThisMachineId: vi.fn() }));
 // The agent picker (AgentSelect) reads the registered agents. Stubbed for the
 // same reason: `agentsApi.list` goes out through `call`, not the api client
 // mocked above, and what this suite is about is what the form SENDS.
@@ -71,13 +66,8 @@ vi.mock("react-router-dom", async (orig) => ({
 
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
-const { useThisMachineId } = await import("@/lib/hooks/useMachines");
-const useThisMachineIdMock = vi.mocked(useThisMachineId);
 const { useAgents } = await import("@/lib/hooks/useAgents");
 const useAgentsMock = vi.mocked(useAgents);
-
-/** This machine's id, as the daemon reports it. */
-const HERE = "machine-here";
 
 /** The registered agents — opaque uids, readable names. The form opens on the
  *  first of them, so `CLAUDE.uid` is what an unattended submit sends. */
@@ -86,10 +76,6 @@ const CODEX = { uid: "u-f04a927e", name: "codex" };
 
 /** The uid the daemon mints for the new channel — the dialog navigates to it. */
 const NEW_UID = "u-2e7b5aa1";
-
-function stubMachineId(machineId: string | null) {
-  useThisMachineIdMock.mockReturnValue({ machineId, isPending: false });
-}
 
 function stubAgents(agents: { uid: string; name: string }[]) {
   useAgentsMock.mockReturnValue({ data: agents } as unknown as ReturnType<typeof useAgents>);
@@ -182,7 +168,6 @@ const refFor = () => expect.stringMatching(/^secret\/[0-9a-f]{32}$/);
 
 beforeEach(() => {
   pairing.people = [];
-  stubMachineId(HERE);
   stubAgents([CLAUDE, CODEX]);
 });
 afterEach(() => vi.clearAllMocks());
@@ -212,7 +197,6 @@ acceptance("channels", "register a telegram channel", async () => {
           channel_type: "telegram",
           bot_token_ref: writtenRef(api, 0),
           default_agent: CLAUDE.uid,
-          runs_on: HERE,
         },
       },
     },
@@ -355,7 +339,6 @@ describe("AddChannelDialog", () => {
             app_id: "app-1",
             app_secret_ref: writtenRef(api, 0),
             default_agent: CLAUDE.uid,
-            runs_on: HERE,
           },
         },
       });
@@ -379,19 +362,6 @@ describe("AddChannelDialog", () => {
     expect(screen.getByText(/set event delivery to WebSocket/)).toBeInTheDocument();
     expect(screen.getByText(/the portal checks that a connection exists/)).toBeInTheDocument();
     expect(screen.queryByText(/~\/\.coffer\/vendor/)).not.toBeInTheDocument();
-  });
-
-  test("writes nothing at all while this machine's id is unknown", async () => {
-    // Registering anyway would create a channel bound to nobody — a bot that
-    // never answers on any machine — so the form says why and stays open.
-    stubMachineId(null);
-    const api = registeringApi();
-    renderDialog();
-    fillTelegram();
-    submit();
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(/machine's id/i);
-    expect(api.POST).not.toHaveBeenCalled();
   });
 
   test("a channel list that cannot be read stops the add before any secret is written", async () => {

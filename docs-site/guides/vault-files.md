@@ -5,15 +5,14 @@ description: Coffer's configuration and content are plain files in a git reposit
 
 # Editing the vault by hand
 
-Everything Coffer keeps that you would want on another machine — MCP servers, skills, knowledge, providers, channels, their settings — is a plain file in `~/.coffer/vault`, and that directory is a git repository from the first time Coffer runs. This page is for anyone who wants to change those files directly, with an editor, a shell or an agent's own file tools, and to know what Coffer does with the change and how to undo it.
+Everything Coffer keeps that you would want on another machine — MCP servers, skills, knowledge, providers, their settings — is a plain file in `~/.coffer/vault`, and that directory is a git repository from the first time Coffer runs. This page is for anyone who wants to change those files directly, with an editor, a shell or an agent's own file tools, and to know what Coffer does with the change and how to undo it.
 
 ## What is in the vault
 
 ```text
 ~/.coffer/vault/
-├── resources/<kind>/<name>.json        one file per MCP server, skill, channel, provider, knowledge collection
+├── resources/<kind>/<name>.json        one file per MCP server, skill, provider, knowledge collection
 ├── state/mcp-preferences/<server>.json the tools, prompts and resources you switched off on a server
-├── state/channel-peers/<channel>.json  who is paired with a channel
 ├── state/settings/internal-engine.json speech-to-text model and upkeep settings
 ├── knowledge/<collection>/…            knowledge collections (README.md, sources/, pages/)
 ├── skills/<name>/…                     skill folders (SKILL.md and the rest)
@@ -21,7 +20,7 @@ Everything Coffer keeps that you would want on another machine — MCP servers, 
 └── machines/<id>.json                  one descriptor per machine that syncs
 ```
 
-Agents are not here: an agent's configuration is a fact about one machine, so it lives in `~/.coffer/local/resources/agent/`. Neither is reach (which agents may use a resource on this machine), which is in `~/.coffer/local/reach.json`. See [Files and directories](/reference/filesystem).
+Agents and channels are not here: an agent's configuration and a bot connection are facts about one machine, so they live in `~/.coffer/local/resources/agent/` and `~/.coffer/local/resources/channel/`. Neither is reach (which agents may use a resource on this machine), which is in `~/.coffer/local/reach.json`. See [Files and directories](/reference/filesystem).
 
 ## Edit a file
 

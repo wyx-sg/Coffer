@@ -29,6 +29,7 @@ from coffer.application.vault.state_rules import state_rule
 from coffer.application.vault.validation import VaultValidator
 from coffer.domain.resource import Kind
 from coffer.domain.vault.layout import RESOURCES, STATE
+from coffer.infrastructure.channel.move_to_local import move_channels_to_local
 from coffer.infrastructure.persistence.derived_db import open_derived_db
 from coffer.infrastructure.sync.identity import resolve_identity
 from coffer.infrastructure.sync.local_state import JsonRemoteStore
@@ -78,6 +79,12 @@ async def build_vault_stores(kinds: dict[str, Kind]) -> VaultStores:
         raise RuntimeError(str(exc)) from exc
     machine = _machine_id()
     set_machine(lambda: machine)
+    # ONE-TIME (ADR channels-are-machine-local-resources): before the resource
+    # store first reads, this machine's channels leave the vault for local/.
+    try:
+        move_channels_to_local(machine)
+    except Exception:
+        _log.warning("channel.move_local_failed", exc_info=True)
     resources = FileResourceRepo(kinds)
     validator = VaultValidator()
     validator.register(f"{RESOURCES}/", resource_rule(kinds, resources.head_owners))

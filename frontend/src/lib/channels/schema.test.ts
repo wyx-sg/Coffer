@@ -4,16 +4,9 @@
 // config plus the secret-store writes, with secrets reaching the store by
 // ref only. A channel binds an agent and nothing more — every model that agent
 // offers stays available, and the model is switched in chat with /model.
-//
-// It also binds a MACHINE: `runs_on` is in every config below, because a
-// channel created from this machine and bound to nobody would be a bot no
-// daemon ever starts.
 import { describe, expect, test } from "vitest";
 
 import { addChannelFormSchema, channelSlug, planChannel } from "@/lib/channels/schema";
-
-/** This machine's id, as the dialog reads it off `GET /sync/status`. */
-const HERE = "machine-here";
 
 /**
  * The agent the new channel drives, as the dialog reads it off the picker.
@@ -56,13 +49,12 @@ const telegram = {
 describe("planChannel", () => {
   test("telegram: the config carries the token REF and the bound agent, never the token", () => {
     const parsed = addChannelFormSchema.parse(telegram);
-    const plan = planChannel(parsed, HERE, AGENT_UID);
+    const plan = planChannel(parsed, AGENT_UID);
 
     expect(plan.config).toEqual({
       channel_type: "telegram",
       bot_token_ref: refFor(),
       default_agent: AGENT_UID,
-      runs_on: HERE,
     });
     // The write lands where the config points, and the channel's name is not
     // part of the address.
@@ -79,7 +71,7 @@ describe("planChannel", () => {
       app_id: "app-1",
       app_secret: pasted("s1"),
     });
-    const plan = planChannel(parsed, HERE, AGENT_UID);
+    const plan = planChannel(parsed, AGENT_UID);
 
     // App id and app secret are the whole of SeaTalk's config: the channel
     // dials out over a websocket, so there is no signature, public URL or
@@ -89,7 +81,6 @@ describe("planChannel", () => {
       app_id: "app-1",
       app_secret_ref: refFor(),
       default_agent: AGENT_UID,
-      runs_on: HERE,
     });
     expect(plan.secrets).toEqual([
       { ref: plan.config.app_secret_ref, value: "s1", label: "pasted" },
@@ -101,19 +92,9 @@ describe("planChannel", () => {
       ...telegram,
       bot_token: { kind: "stored", name: "a1".repeat(16) },
     });
-    const plan = planChannel(parsed, HERE, AGENT_UID);
+    const plan = planChannel(parsed, AGENT_UID);
     expect(plan.config.bot_token_ref).toBe(`secret/${"a1".repeat(16)}`);
     expect(plan.secrets).toEqual([]);
-  });
-
-  test("the binding is whatever machine is passed in, never inferred", () => {
-    // Planning is pure: it reaches for no machine id of its own, so binding a
-    // channel to a machine other than the caller's is a matter of the argument
-    // and not of a hidden lookup.
-    const parsed = addChannelFormSchema.parse(telegram);
-    expect(planChannel(parsed, "machine-elsewhere", AGENT_UID).config.runs_on).toBe(
-      "machine-elsewhere",
-    );
   });
 });
 
