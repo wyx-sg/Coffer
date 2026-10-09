@@ -209,43 +209,51 @@ The daemon binds `127.0.0.1:38470`. If another program already holds that port, 
 
 ## Upgrade
 
-::: code-group
+**Desktop app.** The app checks for a new release at launch and every six hours, and **Settings › About** shows it with what's new. **Download and restart** installs it: the app verifies the update's signature, replaces itself, relaunches and restarts the daemon on the new version. **Check for updates** checks now, and you can turn **Check automatically** off. From a terminal, `coffer update` does the same through the app.
 
-```sh [Installer]
-curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
-coffer daemon restart
+**One-line installer or release archive.** Run:
+
+```sh
+coffer update
 ```
 
-```sh [Source]
+It downloads the newest release's archive, checks it against the release's `SHA256SUMS`, replaces the binaries in `~/.coffer/bin` and restarts the daemon on them. An archive that does not match installs nothing. `coffer update --check` only says whether a newer release exists. The daemon also checks once a day, and **Settings › About** shows a newer version with `coffer update` to copy; it never installs anything by itself. Turn the check off there, or with `coffer daemon upgrade-auto-check --set enabled=false`.
+
+**From source.**
+
+```sh
 git pull
 source .venv/bin/activate && pip install -e ./backend
 (cd frontend && npm install && npm run build)
 coffer daemon restart
 ```
 
-:::
-
-In a browser, **Settings › About** offers this upgrade as a prompt for your agent, naming the version running and how this copy was installed.
-
-For the desktop app, quit Coffer, stop the daemon with `coffer daemon stop`, replace `Coffer.app` with the new version and clear its quarantine flag again. The next launch starts the new daemon, which deploys the new binaries.
+**Settings › About** can also hand the upgrade to your agent as a prompt that names the version running and how this copy was installed.
 
 Restarting matters because a daemon that is already running keeps running the old version. When the CLI or the shim finds that the daemon's version differs from its own, it prints a one-line warning on stderr that names the daemon's executable. Before a new build applies its schema migrations, it saves `runs.db.pre-<revision>`.
 
 ## Uninstall
 
-1. On the **Agents** page, choose **Disconnect…** from each agent's **⋯** menu, which removes Coffer's entries from its config. Then, on the **Skills** page, set each skill's reach to **Off**, which removes the skill links Coffer delivered into the agents.
+In the desktop app, open **Settings › About** and choose **Uninstall Coffer…**. Without the app, run:
 
-2. Turn off **Start at login** in **Settings › Daemon** if you turned it on, then stop the daemon:
+```sh
+coffer uninstall
+```
 
-   ```sh
-   coffer daemon stop
-   ```
+Either way Coffer takes back everything it wrote outside `~/.coffer`, then stops:
 
-3. Remove the binaries: `rm -r ~/.coffer/bin`. Delete the `# Added by Coffer installer` line and the `PATH` line after it from your shell profile. For the desktop app, move `Coffer.app` from **Applications** to the Bin.
-4. Optionally, delete the vault itself.
+- Coffer's MCP entry, memory hook and model routing in each agent's config;
+- the skill links it delivered into the agents' skill folders;
+- start at login;
+- the command-line tools in `~/.coffer/bin` and the `PATH` lines the installer added to your shell profile;
+- `Coffer.app`, which moves itself to the Trash.
+
+`~/.coffer` stays: your vault, secrets, skills, knowledge and settings are there when you install Coffer again. Connect your agents again after a reinstall. A source checkout and its `.venv` are yours to remove. Shells that are already open keep the old `PATH` until they restart.
+
+To delete your data as well, tick **Also delete my data** in the dialog; Coffer asks for Touch ID before anything is removed. From a terminal, `coffer uninstall --delete-data` asks you to type `delete my data` and does nothing without a terminal to type it in. Either way the master key's Keychain item goes too, once the daemon has stopped. A vault you moved somewhere else is left in place.
 
 ::: danger Deleting ~/.coffer is permanent
-`~/.coffer` holds your database, knowledge collections, skill library and secret master key. Deleting it destroys every stored secret and every document that exists only there. Copy it somewhere first if you might want it back.
+`~/.coffer` holds your database, knowledge collections, skill library and secret master key. Deleting it destroys every stored secret and every document that exists only there, including skills Coffer adopted from your agents. [Back up the master key](/guides/secrets#the-master-key-and-its-backup) first if you might want them back.
 :::
 
 ## Experimental features

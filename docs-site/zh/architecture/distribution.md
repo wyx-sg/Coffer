@@ -241,6 +241,10 @@ sequenceDiagram
 
 更新器（Tauri 的更新插件）运行在壳的 Rust 进程里；webview 没有它的任何权限，其内容策略仍然只允许回环地址。壳检查其 Tauri 配置中作为更新端点指定的清单，并用编译时带入的公钥校验每个更新包。更新器还要求签名中的版本一致，拒绝签名版本与清单所写版本不同的更新包，所以被篡改的清单无法把新版本号和旧发布配在一起。编译时没有密钥的构建从不检查更新。安装完成后，壳带着环境变量里的一个标记重新启动，重启后的壳在第一次握手时，通过菜单栏用的同一套重启流程替换掉旧版本的守护进程。见[桌面应用 → 更新](/zh/guides/desktop-app#update)。
 
+### 安装脚本装的二进制怎样更新 {#how-the-installer-s-binaries-update}
+
+从 `~/.coffer/bin` 启动的守护进程（一行安装脚本或发布归档）没有壳来更新它。它在启动一分钟后读取 GitHub API 的 `releases/latest`，之后每天一次（`update_check` 关闭或设置了 `COFFER_UPDATE_CHECK=off` 时不读），并在**设置 › 关于**和 `GET /api/v1/daemon/upgrade` 里报告新版本。它从不自行安装。安装由 `coffer update` 完成，步骤与 `install.sh` 相同：下载 `coffer-cli-<triple>.tar.gz` 和 `SHA256SUMS`，SHA-256 与清单不符的归档会被拒绝，解压后把每个二进制经临时文件改名覆盖到 `~/.coffer/bin` 里的公开名字上，再从那里重启守护进程。新守护进程启动时会像任何冻结构建启动一样，把自己部署到带版本号的目录。校验文件和归档来自同一个发布，所以它防的是下载损坏，而不是被篡改的发布；防后者的是桌面应用的签名更新源。
+
 ### 未签名的发布 {#an-unsigned-release}
 
 没有 Developer ID 时，macOS 会隔离下载的压缩包或 `.dmg`。用 `xattr -dr com.apple.quarantine <extracted-directory>` 解除，或者把应用拖进去之后用 `xattr -dr com.apple.quarantine /Applications/Coffer.app`。一行安装脚本下载的内容不会被隔离。发布说明和 `.dmg` 文件名（`Coffer-unsigned-…`）会事先写明这一点。未签名的守护进程还是以 ad-hoc 方式签名、不带 hardened runtime，所以同一用户下的调试器可以附着到它；这一点，加上主密钥文件，就是开发构建所放弃的东西。

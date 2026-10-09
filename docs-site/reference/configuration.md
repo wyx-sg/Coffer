@@ -34,6 +34,7 @@ The daemon is usually spawned detached — by the CLI, by an agent's MCP shim, b
 | `COFFER_WEBUI_DIR` | built-in | Directory holding a built web UI (`index.html`). Without it the daemon serves the UI bundled into the frozen binary, or `frontend/dist` in a source checkout. |
 | `COFFER_PRICE_REFRESH` | unset | `off` pins the daily model price-list refresh off, whatever `price_refresh` says; prices come from the list shipped in the build. The test suite and the e2e daemon set it. |
 | `COFFER_MODEL_PROXY` | unset | `off` keeps the daemon from starting or supervising the [local model proxy](/architecture/model-proxy); any other value, or none, leaves it on. The test suite sets it. |
+| `COFFER_UPDATE_CHECK` | unset | `off` pins the daemon's daily release check off, whatever `update_check` says. The check runs only for a daemon started from the installer's binaries. |
 
 ### MCP gateway
 
@@ -128,6 +129,7 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
 | `machine_id` | string | derived from the host | Cache of the host-derived machine id that names this machine in a synced vault. Deleting it recomputes the same value. | written by the daemon |
 | `features` | object of booleans | `{}` | This machine's experimental-feature switches. Takes effect at once. A key the registry does not declare is ignored. | **Settings → Features** |
 | `price_refresh` | boolean | `true` | Whether the daemon refreshes the model price list from genai-prices once a day. Off, it prices from the list shipped in the build. Read at each refresh. | **Settings › General → Refresh model prices** |
+| `update_check` | boolean | `true` | Whether a daemon running from the installer's binaries checks GitHub for a newer release once a day. It only reports what it finds; `coffer update` installs it. Read at each check. | **Settings › About → Check automatically**, or `coffer daemon upgrade-auto-check --set enabled=false` |
 
 The daemon's runtime state — its pid, port and API token — lives in a different file, `~/.coffer/daemon.json`, which is created on start and removed on exit. See [Files and directories](/reference/filesystem#daemon-files).
 

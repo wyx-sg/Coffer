@@ -159,6 +159,8 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.1 (/Users/you/.coffe
 
 运行 `coffer daemon restart`，警告就会消失。桌面应用会把同样的情况显示为 **守护进程版本过旧** 提示，并附带 **重启守护进程** 按钮。
 
+安装新版本：桌面应用会自我更新，`coffer update` 会升级安装脚本装的二进制，并让守护进程以新版本重启，见[安装 → 升级](/zh/start/install#upgrade)。`coffer uninstall` 会移除 Coffer 并保留 `~/.coffer`，见[安装 → 卸载](/zh/start/install#uninstall)。
+
 回滚到上一个构建：
 
 1. 停止守护进程：`coffer daemon stop`。

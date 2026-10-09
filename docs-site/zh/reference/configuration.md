@@ -34,6 +34,7 @@ Coffer 把配置放在五个地方，每个地方都有其理由：
 | `COFFER_WEBUI_DIR` | 内置 | 存放已构建 Web 界面（`index.html`）的目录。不设置时，守护进程提供冻结二进制中打包的界面，在源码检出中则提供 `frontend/dist`。 |
 | `COFFER_PRICE_REFRESH` | 未设置 | `off` 强制关闭每日模型价格表刷新，无论 `price_refresh` 怎么设；价格取自构建中附带的列表。测试套件和 e2e 守护进程会设置它。 |
 | `COFFER_MODEL_PROXY` | 未设置 | `off` 让守护进程不启动也不监管[本地模型代理](/zh/architecture/model-proxy)；其他任何值或不设置则保持开启。测试套件会设置它。 |
+| `COFFER_UPDATE_CHECK` | 未设置 | `off` 会固定关闭守护进程每天的新版本检查，不管 `update_check` 怎么设。只有从安装脚本装的二进制启动的守护进程才会检查。 |
 
 ### MCP 网关 {#mcp-gateway}
 
@@ -128,6 +129,7 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 | `machine_id` | 字符串 | 由主机派生 | 由主机派生的机器 id 的缓存，在同步的保险库中用来指代本机。删除后会重新算出同一个值。 | 由守护进程写入 |
 | `features` | 布尔值组成的对象 | `{}` | 本机的实验功能开关。立即生效。注册表中没有声明的键会被忽略。 | **设置 → 功能** |
 | `price_refresh` | 布尔值 | `true` | 守护进程是否每天从 genai-prices 刷新一次模型价格表。关闭时使用构建中附带的价格表。每次刷新时读取。 | **设置 › 通用 → 刷新模型价格** |
+| `update_check` | 布尔值 | `true` | 从安装脚本装的二进制运行的守护进程是否每天去 GitHub 检查一次新版本。它只报告结果，由 `coffer update` 安装。每次检查时读取。 | **设置 › 关于 → 自动检查**，或 `coffer daemon upgrade-auto-check --set enabled=false` |
 
 守护进程的运行时状态——它的 pid、端口和 API 令牌——在另一个文件 `~/.coffer/daemon.json` 中，启动时创建、退出时删除。见[文件与目录](/zh/reference/filesystem#daemon-files)。
 

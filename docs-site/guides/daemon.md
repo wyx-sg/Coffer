@@ -159,6 +159,8 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.1 (/Users/you/.coffe
 
 Run `coffer daemon restart` and the warning goes away. The desktop app shows the same situation as a **Daemon out of date** notice with a **Restart daemon** button.
 
+To install a new version: the desktop app updates itself, and `coffer update` upgrades the installer's binaries and restarts the daemon on them. See [Install → Upgrade](/start/install#upgrade). `coffer uninstall` removes Coffer and keeps `~/.coffer`; see [Install → Uninstall](/start/install#uninstall).
+
 To roll back to the previous build:
 
 1. Stop the daemon: `coffer daemon stop`.
