@@ -109,14 +109,17 @@ deadlines the way launchd's leeway does.
 
 Option B, in three steps so each can be measured:
 
-1. **Hot spots** (this change): the invocation writer blocks on its queue and
+1. **Hot spots** (done first): the invocation writer blocks on its queue and
    `stop()` wakes it with a marker; the vault watch runs with a 500 ms step and
    a 60 s native timeout; a periodic reconcile pass that wrote nothing, failed
    no new target and left the same differences open tells no pass listener, so
    the proxy push and attention recompute follow passes that could have changed
    something. Re-measure the idle daemon after this step.
 2. **The loop and the registry**, with each worker's mode, last run, duration
-   and next run on the status.
+   and next run on the status (`runtime.workers`, `coffer daemon status
+   --workers`; change `report-background-worker-schedules`). The reconciler,
+   attention watch and vault scanner move onto the loop in this step with their
+   periods unchanged, since they were the three hand-written copies of it.
 3. **Moving the workers**, with the model proxy started when the first agent is
    routed through it and drained and stopped when the last one leaves, usage
    ingest gated on the proxy and woken by it, the channel runtime woken by

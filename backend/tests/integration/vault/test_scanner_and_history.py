@@ -97,13 +97,15 @@ async def test_a_file_event_wakes_the_scanner_and_a_cancel_stops_the_watch(
     import time
 
     scanner = VaultScanner(writer, interval=3600.0)
+    poked = asyncio.Event()
+    scanner.poke = poked.set  # type: ignore[method-assign]
     watch = asyncio.create_task(scanner._watch_files())
     try:
         await asyncio.sleep(0.5)  # let the native watch start
-        assert not scanner._wake.is_set()
+        assert not poked.is_set()
         (repo.root / "knowledge").mkdir()
         (repo.root / "knowledge" / "a.md").write_bytes(b"typed by hand\n")
-        await asyncio.wait_for(scanner._wake.wait(), timeout=5.0)
+        await asyncio.wait_for(poked.wait(), timeout=5.0)
     finally:
         started = time.monotonic()
         watch.cancel()

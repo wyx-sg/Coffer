@@ -294,7 +294,7 @@ flowchart LR
 | `coffer log audit [--kind] [--name] [--event-type] [--since] [--trace] [--limit] [--json]` | 审计日志，最新的在前 |
 | `coffer log mcp [--server] [--status ok\|error] [--since] [--trace] [--limit] [--json]` | MCP 调用日志，最新的在前 |
 | `coffer log daemon [--errors] [--since] [--trace] [--limit] [--json]` | `daemon.log` 的末尾，经过与「活动」页相同的宽容读取器 |
-| `coffer daemon status [--tasks] [--json]` | 事件循环延迟和后台任务计数（加 `--tasks` 时按名字列出），与守护进程的版本和端口一起 |
+| `coffer daemon status [--tasks] [--workers] [--json]` | 事件循环延迟和后台任务计数（加 `--tasks` 时按名字列出，加 `--workers` 时列出每个后台任务上次和下次运行），与守护进程的版本和端口一起 |
 | `coffer path logs` | 日志目录及其中的 `daemon.log`，供 `grep` 或 `tail` 使用 |
 
 `--since` 接受一个 ISO 8601 时间点，或 `30m`、`1h`、`2d` 这样的时长。解析不了的过滤条件——只给了名字没给类型，或者该类型下没有这个名字的资源——会报错，而不是被悄悄忽略，因为不加过滤的答案看起来就像“这个资源什么都没发生”。每条命令都是只读的，不打印任何密钥值：审计 details 在存储前就已脱敏，日志记录从构造上就不含密钥。
@@ -326,13 +326,27 @@ flowchart LR
   "tasks_running": 14,
   "tasks_by_name": {"reconciler": 1, "telegram-poll": 1, "coffer-mcp-http-upstream": 6, "turn": 1, "loop-lag-probe": 1},
   "task_crashes": 1,
-  "last_crash": {"task": "telegram-poll:family", "error": "RuntimeError", "at": "2026-10-01T08:12:03Z", "restarting": true}
+  "last_crash": {"task": "telegram-poll:family", "error": "RuntimeError", "at": "2026-10-01T08:12:03Z", "restarting": true},
+  "workers": [
+    {"name": "reconciler", "mode": "event+fallback", "state": "waiting", "runs": 41, "failures": 0,
+     "last_started_at": "2026-10-01T08:40:00Z", "last_duration_ms": 18.4, "last_ok": true,
+     "next_run_at": "2026-10-01T08:41:00Z"}
+  ]
 }
 ```
 
 空闲的守护进程读数是一两毫秒。p99 到了几百毫秒，说明有东西在阻塞循环；最大值前后的守护进程日志通常会说明是什么。状态路由不需要令牌就能回答，所以 `last_crash` 只带异常的类名；它的消息和 traceback 在 `daemon.log` 的 `runtime.task.crashed` 下。
 
 `tasks_by_name` 按任务名第一个 `:` 之前的部分统计正在运行的任务。冒号后面的部分是任务服务的对象（一个渠道、一个 MCP server、一个会话），而这个路由不需要令牌，所以不放进来。`tasks_running` 上涨时，它能说明是哪一类任务在涨：一直没被回收的会话表现为 `coffer-mcp-http-upstream` 计数不断上升，启动了两次的渠道循环表现为 `telegram-poll` 等于 2。`coffer daemon status --tasks` 打印同样的计数，从多到少。
+
+`workers` 说明共用的可唤醒循环（`application/runtime/wakeable.py`）上的每个后台任务正在做什么；`tasks_by_name` 只能说明它还活着。后台任务的唤醒方式有三种：`event` 只由事件唤醒；`event+fallback` 由事件唤醒，或者由一个较长的兜底定时器唤醒，用来补上丢失的事件；`on-demand` 在没有需要时停住，不留定时器。每一行带着它的状态（`waiting`、`running` 或 `parked`）、启动以来的运行次数和失败次数、上次运行的开始时间、耗时和结果，以及 `next_run_at`：没有事件唤醒时兜底定时器下次运行它的时间；已经被事件唤醒时，则是它短暂的合并等待结束的时间。某个后台任务超过兜底时间仍没有运行，或者失败次数一直在涨，就该去 `daemon.log` 里查它，每次失败的运行都以该任务自己的事件名记在那里。`coffer daemon status --workers` 每个后台任务打印一行：
+
+```text
+workers:
+         attention-watch  event+fallback  waiting  12 runs  last 3.1 ms ok  next in 24s
+         reconciler       event+fallback  waiting  41 runs  last 18.4 ms ok  next in 52s
+         vault-scanner    event+fallback  waiting  3 runs  last 9.7 ms ok  next in 58s
+```
 
 ## 评测采集 {#eval-capture}
 

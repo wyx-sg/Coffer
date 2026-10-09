@@ -294,6 +294,8 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.0 (/Users/you/.coffe
 | 提供商健康 | 启动时一次，然后每 30 分钟，每次编辑某个连接时也会再查 | 列出每个启用的模型提供商的模型，判断它的接入地址能否应答、是否接受密钥，并据此产生提供商的待处理事项。 |
 | 发布检查 | 60 s 后第一次，然后每天 | 仅限安装脚本装的二进制。向 GitHub 查询最新的 Coffer 发布，有更新的版本时在**设置 › 关于**里报告。`update_check` 关闭或设置了 `COFFER_UPDATE_CHECK=off` 时不运行。见[分发](/zh/architecture/distribution#how-the-installer-s-binaries-update)。 |
 
+保险库扫描器、对账器和提醒检查跑在同一个共用的可唤醒循环上：提示或文件事件会唤醒它（一连串事件只跑一次），没有事件时它的周期就是兜底，一次运行失败会记日志，循环继续。`coffer daemon status --workers` 列出它们每一个的上次运行，以及兜底下次什么时候运行它，见[可观测性](/zh/architecture/observability#background-tasks-and-event-loop-lag)。
+
 聚合和提炼的间隔来自内部引擎设置，并在后台任务等待期间重新读取，所以在**设置**里的改动无需重启就生效。清扫的 60 s 间隔是固定的。
 
 ## 退下 {#standing-down}

@@ -294,6 +294,8 @@ The periodic workers that belong to no single kind start in one place, the HTTP 
 | Provider health | Once at boot, then every 30 min, and again on each edit to a connection | Lists each enabled model provider's models to tell whether its endpoint answers and accepts the key, and feeds the providers' attention items. |
 | Release check | First after 60 s, then daily | Installer binaries only. Asks GitHub for the latest Coffer release and reports a newer one on **Settings › About**. Off when `update_check` is off or `COFFER_UPDATE_CHECK=off`. See [Distribution](/architecture/distribution#how-the-installer-s-binaries-update). |
 
+The vault scanner, the reconciler and the attention watch run on one shared wakeable loop: a hint or file event wakes it (a burst of them is one run), its period is the fallback when nothing does, and a run that fails is logged and the loop carries on. `coffer daemon status --workers` lists each of them with its last run and when its fallback runs it next; see [Observability](/architecture/observability#background-tasks-and-event-loop-lag).
+
 The aggregation and distil intervals come from the internal-engine settings and are re-read while a worker waits, so a change in **Settings** takes effect without a restart. The sweep's 60 s interval is fixed.
 
 ## Standing down

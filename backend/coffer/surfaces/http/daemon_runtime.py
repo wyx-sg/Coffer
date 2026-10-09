@@ -1,6 +1,6 @@
-"""The ``runtime`` block of ``GET /api/v1/daemon/status``: loop lag and task crashes.
+"""The ``runtime`` block of ``GET /api/v1/daemon/status``: loop lag, tasks, workers.
 
-Read from the daemon's one loop-lag probe and one task supervisor
+Read from the daemon's one loop-lag probe, task supervisor and worker registry
 (``application.runtime``); split out of ``daemon_routes`` for the file-size cap.
 """
 
@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from coffer.application.runtime.loop_lag import probe
 from coffer.application.runtime.supervisor import tasks
-from coffer.surfaces.http.daemon_schemas import RuntimeHealthOut, TaskCrashOut
+from coffer.application.runtime.workers import workers
+from coffer.surfaces.http.daemon_schemas import RuntimeHealthOut, TaskCrashOut, WorkerOut
 
 
 def runtime_health() -> RuntimeHealthOut:
@@ -29,4 +30,18 @@ def runtime_health() -> RuntimeHealthOut:
             if last is not None
             else None
         ),
+        workers=[
+            WorkerOut(
+                name=w.name,
+                mode=w.mode.value,
+                state=w.state,
+                runs=w.runs,
+                failures=w.failures,
+                last_started_at=w.last_started_at,
+                last_duration_ms=w.last_duration_ms,
+                last_ok=w.last_ok,
+                next_run_at=w.next_run_at,
+            )
+            for w in workers().snapshot()
+        ],
     )

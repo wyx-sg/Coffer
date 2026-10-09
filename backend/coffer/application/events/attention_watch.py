@@ -17,12 +17,12 @@ baseline. The envelope carries no item: a client refetches the list.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Hashable
 
 from coffer.application.attention import AttentionReport
 from coffer.application.events.broker import EventBroker
+from coffer.application.runtime.wakeable import WakeableLoop
 from coffer.domain.reconcile import Changed, PassReport
 
 _log = logging.getLogger(__name__)
@@ -58,9 +58,14 @@ class AttentionWatcher:
         period_seconds: float = DEFAULT_PERIOD_SECONDS,
     ) -> None:
         self._broker = broker
-        self._settle = settle_seconds
-        self._period = period_seconds
-        self._wake = asyncio.Event()
+        self._loop = WakeableLoop(
+            "attention-watch",
+            self._run_once,
+            fallback=period_seconds,
+            settle=settle_seconds,
+            failure_event="events.attention_check_failed",
+        )
+        self._report: ReportFn | None = None
         self._last: Hashable | None = None
         #: Called on every nudge, so whoever keeps the last report drops it at once.
         self.on_nudge: Callable[[], None] | None = None
@@ -71,7 +76,7 @@ class AttentionWatcher:
         """Recompute soon."""
         if self.on_nudge is not None:
             self.on_nudge()
-        self._wake.set()
+        self._loop.poke()
 
     def on_changed(self, changed: Changed) -> None:
         """A resource write (a ``HintSink``)."""
@@ -102,16 +107,14 @@ class AttentionWatcher:
         """Set the baseline if unset, then recompute on every settled nudge
         and every period until cancelled. A failed recompute is logged and
         the loop carries on."""
+        self._report = report
         if self._last is None:
             await self._check_logged(report)
-        while True:
-            try:
-                await asyncio.wait_for(self._wake.wait(), timeout=self._period)
-                await asyncio.sleep(self._settle)
-            except TimeoutError:
-                pass
-            self._wake.clear()
-            await self._check_logged(report)
+        await self._loop.serve()
+
+    async def _run_once(self, _poked: bool) -> None:
+        if self._report is not None:
+            await self.check(self._report)
 
     async def _check_logged(self, report: ReportFn) -> None:
         try:
