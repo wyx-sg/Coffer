@@ -8,6 +8,7 @@ reads it, the second by two vaults quietly overwriting each other every round.
 
 from __future__ import annotations
 
+import dataclasses
 import pathlib
 import tempfile
 
@@ -16,10 +17,12 @@ import yaml
 
 from coffer.application.knowledge.guide_render import (
     GUIDE_SKILL_NAME,
+    MAX_CATALOGUE_CHARS,
     MAX_DESCRIPTION_CHARS,
     display_memory_root,
     display_root,
     render,
+    render_catalogue,
     render_description,
 )
 from coffer.domain.knowledge.entry import CollectionEntry, FileEntry
@@ -31,15 +34,17 @@ def _collection(name: str, description: str, documents: int = 1):  # type: ignor
         uid=f"uid-{name}",
         name=name,
         description=description,
-        document_count=documents,
+        page_count=documents,
     )
     files = [
         FileEntry(
-            path=f"{name}/doc{i}.md",
+            path=f"{name}/pages/doc{i}.md",
             title=f"Doc {i}",
             description="What it answers.",
             actor="curation",
             updated_at=None,
+            kind="page",
+            page_type="concept",
         )
         for i in range(documents)
     ]
@@ -144,12 +149,12 @@ def test_the_body_carries_both_halves() -> None:
     manual, catalogue = body[:manual_end], body[manual_end:]
     assert "`coffer__search_tools`" in manual
     assert "`coffer__write`" not in manual
-    assert "### Writing something down" in manual  # how an agent adds knowledge
+    assert "### Writing a page" in manual  # how an agent adds knowledge
     assert "### Tidying a collection" in manual
     assert "Everything left out is\nstill callable" in manual  # the tiering contract
     assert "never writes it" in manual
     assert "Nothing here waits on a human" in manual
-    assert "`doc0.md` — **Doc 0**" in catalogue
+    assert "`pages/doc0.md` — **Doc 0**" in catalogue
     assert "~/.coffer/knowledge/shopee/" in catalogue
 
 
@@ -168,7 +173,7 @@ def test_the_manual_names_one_tool_the_memory_root_and_the_log_reader() -> None:
     assert "adds one tool of its own" in text
     # Knowledge is written straight into a collection, tidied there, and never
     # committed through git in the vault.
-    assert "### Writing something down" in text
+    assert "### Writing a page" in text
     assert "never run git inside the vault" in text
     assert "coffer knowledge" not in text
     assert "coffer path knowledge" not in text
@@ -265,8 +270,13 @@ def test_with_knowledge_switched_off_the_manual_documents_no_knowledge_tool_or_r
     """The whole guide, not only its description: the writing and tidying
     instructions and the knowledge root leave with the feature."""
     text = render("~/.coffer/knowledge", None, memory_root=_MEMORY)
-    assert "### Writing something down" not in text
-    assert "### Tidying a collection" not in text
+    for heading in (
+        "Writing a page",
+        "Integrating sources",
+        "Tidying a collection",
+        "Checking a collection",
+    ):
+        assert f"### {heading}" not in text, heading
     assert "~/.coffer/knowledge" not in text
     assert _MEMORY in text
     assert "adds one tool of its own" in text
@@ -279,14 +289,14 @@ def test_with_memory_switched_off_the_guide_names_no_memory_root() -> None:
     assert "<MEMORY_ROOT>" not in text
     assert "~/.coffer/memory" not in text
     assert "## Coffer reads your memory" not in text
-    assert "### Writing something down" in text
+    assert "### Writing a page" in text
     assert "### ops" in text
     assert "adds one tool of its own" in text
     assert "memory notes" not in text.split("---")[1]
 
     both_off = render("~/.coffer/knowledge", None)
     assert "~/.coffer/memory" not in both_off
-    assert "### Writing something down" not in both_off
+    assert "### Writing a page" not in both_off
     assert "adds one tool of its own" in both_off
     assert "`coffer path logs`" in both_off  # the log readers are always there
     assert "<!--" not in both_off
@@ -329,22 +339,31 @@ def _section(text: str, heading: str) -> str:
 )
 def test_the_guide_carries_the_writing_and_tidying_sections() -> None:
     text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY)
-    assert "### Writing something down" in text
-    assert "### Tidying a collection" in text
+    for heading in (
+        "Writing a page",
+        "Integrating sources",
+        "Tidying a collection",
+        "Checking a collection",
+    ):
+        assert f"### {heading}" in text, heading
     description = yaml.safe_load(text.split("---", 2)[1])["description"].lower()
-    assert "writ" in description and "tidy" in description
+    assert "writ" in description and "tidy" in description and "check" in description
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="the writing section states the six rules")
 def test_the_writing_section_states_the_six_rules() -> None:
     text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY)
-    flat = " ".join(_section(text, "Writing something down").split())
-    assert "fold the fact into the" in flat  # 1. the document that owns the subject
+    flat = " ".join(_section(text, "Writing a page").split())
+    assert "fold the fact into the" in flat  # 1. the page that owns the subject
     assert "Lose nothing" in flat
     assert "Organise by subject, never by provenance" in flat
     assert "the newer wins unless the older one is shown to be right" in flat
-    assert "Never name another knowledge file" in flat
-    assert "a `title`" in flat and "`actor: agent`" in flat
+    assert "Link pages by `[[slug]]`, never by path" in flat
+    assert "update the links to it, or keep its old slug in its `aliases`" in flat
+    assert "Never edit a source" in flat
+    for key in ("a `title`", "a `type`", "`description`", "`sources`", "`aliases`"):
+        assert key in flat
+    assert "`actor: agent`" in flat
 
 
 @pytest.mark.acceptance(
@@ -368,3 +387,69 @@ def test_the_memory_tidying_section_is_absent_with_memory_off() -> None:
     text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")])
     assert "Tidying memory" not in text
     assert "retired:" not in text
+
+
+def _file(path: str, title: str, *, kind: str, page_type: str = "", waiting: bool = False):  # type: ignore[no-untyped-def]
+    return FileEntry(
+        path=path,
+        title=title,
+        description=f"What {title} answers.",
+        actor="agent",
+        updated_at="",
+        kind=kind,
+        page_type=page_type,
+        waiting=waiting,
+    )
+
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="the skill body carries the catalogue and the absolute root"
+)
+def test_the_catalogue_groups_pages_by_type_and_names_waiting_sources() -> None:
+    entry = CollectionEntry(uid="u", name="shopee", description="Accounts.", page_count=3)
+    files = [
+        _file("shopee/pages/sessions.md", "Sessions", kind="page", page_type="concept"),
+        _file("shopee/pages/gateway.md", "Gateway", kind="page", page_type="entity"),
+        _file("shopee/pages/tokens.md", "Tokens", kind="page", page_type="concept"),
+        _file("shopee/sources/design.md", "Design doc", kind="source", waiting=True),
+        _file("shopee/sources/old.md", "Old notes", kind="source"),
+        _file("shopee/diagram.png", "diagram.png", kind="file"),
+    ]
+    text = render_catalogue("~/.coffer/vault/knowledge", [(entry, files)])
+    concept = text.index("**Pages: concept**")
+    entity = text.index("**Pages: entity**")
+    assert concept < text.index("`pages/sessions.md` — **Sessions**: What Sessions answers.")
+    assert concept < text.index("`pages/tokens.md` — **Tokens**") < entity
+    assert entity < text.index("`pages/gateway.md` — **Gateway**")
+    waiting = text.split("**Sources waiting to be integrated**")[1]
+    assert "`sources/design.md` — **Design doc**" in waiting
+    assert "old.md" not in text and "diagram.png" not in text
+    assert "`~/.coffer/vault/knowledge/shopee/`" in text
+    assert "_Shortened" not in text
+
+
+@pytest.mark.acceptance(spec="knowledge", scenario="a catalogue past its budget shortens itself")
+def test_a_catalogue_past_its_budget_drops_descriptions_then_lists_counts() -> None:
+    long = "x" * 200
+    entry = CollectionEntry(uid="u", name="big", description="", page_count=400)
+    pages = [
+        dataclasses.replace(
+            _file(f"big/pages/p{i}.md", f"Page {i}", kind="page", page_type="concept"),
+            description=long,
+        )
+        for i in range(400)
+    ]
+    titles = render_catalogue("~/k", [(entry, pages)])
+    assert len(titles) <= MAX_CATALOGUE_CHARS
+    assert "_Shortened: descriptions are left out" in titles
+    assert "`pages/p7.md` — **Page 7**\n" in titles and long not in titles
+
+    many = [
+        _file(f"big/pages/a-much-longer-page-name-{i}.md", f"A long title {i} " * 4, kind="page")
+        for i in range(2000)
+    ]
+    counts = render_catalogue("~/k", [(entry, many)])
+    assert len(counts) <= MAX_CATALOGUE_CHARS
+    assert "_Shortened: only counts are listed" in counts
+    assert "2000 pages under `pages/`, 0 sources under `sources/` (0 waiting)" in counts
+    assert "a-much-longer-page-name-1.md" not in counts

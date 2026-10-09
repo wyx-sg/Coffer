@@ -179,6 +179,7 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | 界面操作 | 接口 | 命令 | 验收 |
 | --- | --- | --- | --- |
 | Knowledge · recent changes | `GET /knowledge/changes` | `coffer knowledge changes` | `test_cli_parity.py` |
+| Knowledge · a collection's Check | `GET /knowledge/collections/{uid}/check` | `coffer knowledge check` | `test_cli_parity.py` |
 | Knowledge · collections | `GET /knowledge/collections` | `coffer knowledge collections` | `test_cli_parity.py` |
 | Knowledge · New collection | `POST /knowledge/collections` | `coffer knowledge create` | `test_cli_parity.py` |
 | Knowledge · Delete | `DELETE /resources/{uid}` | `coffer knowledge delete` | `test_cli_parity.py` |

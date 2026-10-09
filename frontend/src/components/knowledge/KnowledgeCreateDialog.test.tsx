@@ -60,10 +60,14 @@ describe("KnowledgeCreateDialog", () => {
       uid: "kn-9b04",
       name: "team-notes",
       description: "what we know",
-      document_count: 0,
+      page_count: 0,
+      source_count: 0,
+      waiting_source_count: 0,
+      finding_count: 0,
       folder_path: "/home/u/.coffer/knowledge/team-notes",
       updated_at: null,
       tidy_handoff: { prompt: "Tidy the team-notes collection." },
+      check_handoff: { prompt: "Check the team-notes collection." },
     });
     const onOpenChange = renderDialog();
 

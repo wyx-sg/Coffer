@@ -1,7 +1,7 @@
 // frontend/src/components/knowledge/KnowledgeUploadDialog.tsx
 //
 // Upload a document into a collection (boards 5.1.26–5.1.28): Coffer converts it to Markdown and writes it as a
-// document on the spot. The original file is not kept. A file is dropped on
+// source on the spot. Only the Markdown is kept, not the uploaded file. A file is dropped on
 // the zone or chosen; its name, kind and size and the target collection show
 // before anything is sent; converting is its own state, and Cancel stays live
 // in it — it aborts the request. A file that cannot

@@ -1,10 +1,12 @@
 # Data Model — Knowledge Layer
 
 The layer's state is a directory. This document describes what is on disk —
-one tree of documents per collection, the hidden `.inbox/` drop zone, the
-frontmatter contract, the naming rule — plus the one resource file a
-collection has and the in-memory value objects the surfaces answer with. Authority is [`spec.md`](spec.md) and
-[Knowledge Is Plain Files](../../../docs/decisions/knowledge-is-plain-files.md).
+one wiki per collection, its kept `sources/` and edited `pages/`, the hidden
+`.inbox/` drop zone, the frontmatter contract, the naming rule — plus the one
+resource file a collection has and the in-memory value objects the surfaces
+answer with. Authority is [`spec.md`](spec.md),
+[Knowledge Is Plain Files](../../../docs/decisions/knowledge-is-plain-files.md) and
+[Knowledge Is a Wiki of Pages Compiled From Kept Sources](../../../docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md).
 
 ## There is no schema
 
@@ -16,10 +18,13 @@ reindex, and no reconciliation of any kind (see "Store each collection as one
 tree of Markdown files").
 
 The sweep needs no record either. What it adopts is a file in a collection's
-hidden `.inbox/`; what it commits is whatever differs on disk from the vault's
-`HEAD`. Nothing remembers which content any pass last saw, because no pass
-exists: judgement over documents is the agent's, done through its own file
-tools (see "Teach writing and tidying in the guide").
+hidden `.inbox/`; what it files is a Markdown document outside `pages/` and
+`sources/`; what it commits is whatever differs on disk from the vault's
+`HEAD`. Nothing remembers which sources were integrated: a source waits while
+no page cites it, which is read off the pages every time (see "Derive which
+sources wait from the pages that cite them"). Judgement over pages is the
+agent's, done through its own file tools (see "Teach writing and tidying in the
+guide").
 
 Beyond its tree, a collection is one resource file,
 `vault/resources/knowledge/<name>.json` (spec resource-framework), carrying the
@@ -32,15 +37,19 @@ every agent"): the kind is non-toggleable, and it is always enabled.
 ```text
 ~/.coffer/vault/knowledge/
 ├── shopee/                         # a collection = a top-level folder = one Resource
-│   ├── README.md                   # first paragraph = the collection's description; not a document
-│   ├── account/                    # nesting chosen by whoever files a document
-│   │   └── login-sessions.md
-│   ├── gateway-routing.md          # a document: read by agents, edited by people and agents
-│   └── .inbox/                     # hidden drop zone: the next sweep promotes what is dropped here
-│       └── q3-review.md
+│   ├── README.md                   # the schema; first paragraph = the description; not a page
+│   ├── sources/                    # what arrived, kept as Markdown; never edited
+│   │   └── q3-review.md            # a source: converted Markdown + frontmatter
+│   ├── pages/                      # the wiki: read by agents, edited by people and agents
+│   │   ├── account/                # nesting chosen by whoever files a page
+│   │   │   └── login-sessions.md
+│   │   └── gateway-routing.md
+│   └── .inbox/                     # hidden drop zone: the next sweep adopts it into sources/
+│       └── notes.md
 └── coffer/
     ├── README.md
-    └── release-process.md
+    └── pages/
+        └── release-process.md
 ```
 
 - `~/.coffer/vault/knowledge/` is the root, inside the vault repository, so a
@@ -56,31 +65,35 @@ every agent"): the kind is non-toggleable, and it is always enabled.
   deliberately"). There is no `global`, no `project-<ULID>`, no git-root
   resolution and no scope-to-project-root table (see "Derive no boundary from
   the working directory").
-- **A collection is one tree of documents**, co-written by people and
-  agents (see "Store each collection as one tree of Markdown files").
-  There is no directory that means "who may write here": a person edits any
-  document in their own editor and an agent edits one with its own file tools.
-  The nesting is free
-  and the system neither requires nor creates one — whoever files a document
-  chooses where (see "Allow nesting without giving it meaning").
+- **A collection is a wiki**: `sources/` keeps what arrived and `pages/`
+  holds what people and agents write from it (see "Keep sources and pages apart
+  in each collection"). `paths.kind_of` names a Markdown file under `pages/` a
+  **page**, one under `sources/` a **source**, and anything else a plain
+  **file**, listed but neither catalogued nor checked. A person edits any page in
+  their own editor and an agent edits one with its own file tools; nobody edits a
+  source. Below the two folders the nesting is free — whoever files a page
+  chooses where (see "Allow nesting without giving it meaning"). A Markdown
+  document left outside them is filed into `pages/` by the sweep.
 - **Dot-prefixed entries are invisible** (see "Hide every dot-prefixed entry").
   Coffer's own surfaces list none of them and the read route refuses every
   hidden segment, through the path guard rather than by skipping. `.inbox/` is
   one of them: an ordinary hidden entry, a drop zone where an agent, another
   machine or an older guide may leave a Markdown file. The next sweep normalises
-  its frontmatter and promotes it to a document at the collection root (see
+  its frontmatter and keeps it as a source under `sources/` (see
   "Adopt a file dropped into the inbox"), and no surface shows or counts what
   waits there.
 
 ### `README.md`
 
 A collection describes itself in a `README.md` at its own root, which is not a
-document: it is never listed as content or counted (see "Keep the
+page or a source: it is never listed as content or counted (see "Keep the
 collection README out of the corpus"). Its first paragraph is the collection's
 one-line description everywhere one is shown (see "Read a collection's
 description from its README"), read off disk on every listing so it cannot drift
 from what the person browsing the folder reads.
 `POST /api/v1/knowledge/collections` writes one when given a `description`.
+The README is also the collection's **schema**: the page types and conventions
+it names win over the guide's defaults, which the guide tells agents.
 
 That paragraph does more work than it used to: it is also what the delivered
 skill's frontmatter description draws on, which is the only part of this layer
@@ -89,20 +102,35 @@ collection an agent never recognises.
 
 ## The file
 
-Every document carries a `---`-fenced YAML frontmatter
+Every page and source carries a `---`-fenced YAML frontmatter
 block, written and read only by `infrastructure/knowledge/frontmatter.py` (the
-one place PyYAML lives).
+one place PyYAML lives). A page, as the guide tells agents to write it:
 
 ```markdown
 ---
 title: Session ownership
+type: concept
 description: Which service owns a login session, and what reads it.
+sources: [q3-review]
+aliases: [sessions]
 actor: agent
 created_at: '2026-09-12T04:18:33Z'
 updated_at: '2026-09-23T04:18:33Z'
 ---
 
-Login state is owned by `account.session`.
+Login state is owned by `account.session`; see [[gateway-routing]].
+```
+
+A source, as Coffer writes it from an upload:
+
+```markdown
+---
+title: Q3 review
+description: The quarter's incidents and the follow-ups agreed.
+actor: user
+created_at: '2026-09-12T04:18:33Z'
+updated_at: '2026-09-12T04:18:33Z'
+---
 ```
 
 | Key | Type | Notes |
@@ -112,6 +140,16 @@ Login state is owned by `account.session`.
 | `actor` | `agent` \| `user` | Who last wrote it. From the `X-Coffer-Actor` header on a submission, the actor a dropped file reports, or `agent` for a document an agent wrote. |
 | `created_at` | ISO-8601 `str` | Preserved across a rewrite, so a document keeps its own history even though nothing but the file records it. |
 | `updated_at` | ISO-8601 `str` | Set on every write Coffer makes. |
+| `type` | `str` | A page's type: `concept`, `entity`, `how-to`, `decision` or `overview` by default, or one the README defines. Missing → `incomplete_page`. |
+| `sources` | list of `str` | A page's sources, by slug. Empty → `unsourced_page`; a slug no source has → `missing_source`. |
+| `aliases` | list of `str` | More names a page answers to in a `[[link]]`. |
+| `ingest` | `skipped` | Set by an agent on a source with nothing worth keeping, so it stops waiting. |
+
+A page's **slug** is its file stem; so is a source's. A `[[slug]]` or
+`[[slug|text]]` outside code in a page's body resolves case-insensitively, after
+NFKC, against page slugs and aliases first and then source slugs
+(`infrastructure/knowledge/wiki.py`); none is a dead link, two or more an
+ambiguous one (see "Link pages by slug and check every link").
 
 These are the keys **Coffer writes**, not the only keys a document may carry. A
 person who adds `tags:` or `reviewed_by:` in their own editor keeps it: every
@@ -128,24 +166,28 @@ hand-edited file with a stray colon cannot break a whole collection walk.
 
 ### What the sweep does
 
-The knowledge sweep runs on a timer and does three mechanical things, calling no
-model (see "Sweep the knowledge root on three mechanical duties"):
+The knowledge sweep runs on a timer and does four mechanical things, calling no
+model (see "Sweep the knowledge root on its mechanical duties"):
 
-1. **Re-render and re-seed the guide**, so a document added by hand is
-   catalogued.
-2. **Adopt and promote `.inbox/` files**: each Markdown file in a collection's
-   `.inbox/` is normalised and promoted (`inbox.promote`) to a document at the
-   collection root, recorded with one `KNOWLEDGE_WRITTEN` audit event.
+1. **Adopt and promote `.inbox/` files**: each Markdown file in a collection's
+   `.inbox/` is normalised and kept (`inbox.promote`) as a source under
+   `sources/`, recorded with one `KNOWLEDGE_WRITTEN` audit event.
+2. **File loose documents**: a Markdown file outside `pages/`, `sources/` and
+   hidden entries, other than the README, untouched for a minute
+   (`layout.QUIET_SECONDS`), moves to `pages/` at the same relative path,
+   suffixed on a collision — all of a tick's moves as one `daemon` / `layout`
+   commit, with the text unchanged.
 3. **Commit edits found on disk** as `disk` writes, so an edit in any editor is
    a version of its own and is never counted as Coffer's.
+4. **Re-render and re-seed the guide**, so a page added by hand is catalogued.
 
 The sweep takes no lock against a sync round: what it promotes is written
 through the vault's ordinary writer, and it keeps no machine-local record.
 
 `KnowledgeService.submit` promotes at once as well (see "Promote submitted
-material at once"): an upload becomes a document of its own
-at the collection root, with frontmatter filled from its opening prose, and is
-never left waiting.
+material at once"): an upload becomes a source under `sources/`, with
+frontmatter filled from its opening prose. Only the Markdown is kept; the
+uploaded file itself is not stored. It then waits until a page cites it.
 
 ### Naming
 
@@ -185,11 +227,13 @@ of them is persisted and none of them can be stale.
 
 | Type | Fields | What it is |
 | --- | --- | --- |
-| `CollectionEntry` | `uid`, `name`, `description`, `document_count` | One collection. `document_count` is what an agent can read today. |
+| `CollectionEntry` | `uid`, `name`, `description`, `page_count`, `source_count`, `waiting_source_count`, `finding_count`, `findings`, `folder_path`, `updated_at` | One collection, with the counts and findings its wiki graph gives. |
 | `DirectoryEntry` | `path`, `name`, `file_count` | A subdirectory at the level being listed. `path` is relative to the root — pass it back to descend. |
-| `FileEntry` | `path`, `title`, `description`, `actor`, `updated_at` | One file as a listing or a catalogue shows it: enough to judge relevance without reading the body. |
+| `FileEntry` | `path`, `title`, `description`, `actor`, `updated_at`, `kind`, `page_type`, `waiting` | One file as a listing or a catalogue shows it: enough to judge relevance without reading the body. |
 | `CatalogueLevel` | `path`, `directories`, `files` | **One level of one collection**, never the whole tree. |
-| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); Coffer serves a document's bytes only to be shown: no route saves them (see "Treat a direct file edit as a complete change"). |
+| `Finding` | `kind`, `path`, `target`, `others` | One mechanical finding (see "Check a collection mechanically on every read"). |
+| `SourceRef`, `LinkRef`, `PageRef` | `slug`/`target`, `path`, `title`/`ambiguous` | A page's `sources` entry or `[[link]]` with what it resolves to; a page that cites a source. |
+| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `kind`, `page_type`, `aliases`, `sources`, `links`, `cited_by`, `waiting` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); Coffer serves a document's bytes only to be shown: no route saves them (see "Treat a direct file edit as a complete change"). |
 
 Constants: `ACTOR_AGENT = "agent"`, `ACTOR_USER = "user"`.
 
@@ -206,14 +250,17 @@ no `SearchHit`, `SearchOutcome`, `SearchService` or grep value object.
 an uploaded document: the `markdown`, a `title` (the document's first H1,
 falling back to its file name; see "Fill frontmatter on converted material"),
 and which `converter` ran — reported on the upload response and written nowhere
-on disk.
+on disk. Only the Markdown becomes the source; the uploaded file itself is not
+kept, whichever converter ran.
 
 The HTTP wire models in `surfaces/http/knowledge/schemas.py` mirror the domain
 types and add the shapes that describe an answer no domain type does:
 `CollectionCreate`; `MaterialIn` (`collection`, `title`, `description`, `body`);
 `HandoffOut` (`prompt` and the facts it was written from), carried on a
-collection's read as `tidy_handoff`, and answered by `GET /knowledge/tidy-handoff` for
-all collections (see "Hand a tidy to the agent"); and
+collection's read as `tidy_handoff` and `check_handoff`, and answered by
+`GET /knowledge/tidy-handoff` for all collections (see "Hand a tidy to the
+agent", "Hand a check to the agent"); `CheckOut` (`collection`, `findings` of
+`FindingOut`), answered by `GET /knowledge/collections/{uid}/check`; and
 `IngestedDocumentOut` (`path`, `title`, `description`, `converter`). There is no
 write-a-document model: every entrance submits material, which becomes a
 document at once, and a person's own text reaches a document through their
@@ -282,8 +329,8 @@ construction.
 
 | Trailer | Value |
 | --- | --- |
-| `Coffer-Writer` | `user`, `agent`, `sync` or `disk`; `curation` on commits an earlier version of Coffer made |
-| `Coffer-Operation` | `save`, `delete`, `submit`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, `remove`, `baseline`; `pass` and `undo` on commits an earlier version made |
+| `Coffer-Writer` | `user`, `agent`, `sync`, `disk` or `daemon` (filing loose documents); `curation` on commits an earlier version of Coffer made |
+| `Coffer-Operation` | `save`, `delete`, `submit`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, `remove`, `layout`, `baseline`; `pass` and `undo` on commits an earlier version made |
 | `Coffer-Actor` | the audit actor of the operation |
 | `Coffer-Machine` | the machine that made the commit |
 | `Coffer-Agent` | an agent writer's name |

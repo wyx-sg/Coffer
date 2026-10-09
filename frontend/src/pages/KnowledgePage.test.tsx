@@ -1,10 +1,11 @@
 // frontend/src/pages/KnowledgePage.test.tsx
 //
-// The Knowledge page's tree and read-only document pane (spec knowledge "Show a
+// The Knowledge page's tree and read-only file pane (spec knowledge "Show a
 // collection as one tree of read-only documents in the web UI"), mocked only at
-// the network boundary: one tree of collections with their documents; the
-// document pane with its Document and History tabs, Open in editor, reveal and
-// delete (at once, with an Undo toast). A document is never edited here.
+// the network boundary: one tree of collections with their pages and sources,
+// Pages and Sources first and a waiting source marked; the file pane with no
+// tabs — History, Preview / Source, Open in editor, reveal and delete (at
+// once, with an Undo toast). A file is never edited here.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
@@ -22,6 +23,7 @@ vi.mock("@/lib/api/knowledge", () => ({
   listChanges: vi.fn(),
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
+  getCheck: vi.fn(),
 }));
 vi.mock("@/lib/api/fs", () => ({
   fsApi: {
@@ -56,34 +58,48 @@ describe("the collection tree and the document pane", () => {
     expect(screen.queryByRole("button", { name: "Add a document" })).toBeNull();
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.queryByRole("searchbox")).toBeNull();
-    // Both documents — the root one and the one in a folder, opened on the way —
-    // each named by its file, as it is on disk.
+    // The collection's root shows Pages and Sources first, labelled.
+    await within(nav).findByRole("button", { name: "Pages" });
+    const folders = within(nav)
+      .getAllByRole("button", { expanded: false })
+      .map((b) => b.textContent)
+      .filter((name) => name === "Pages" || name === "Sources");
+    expect(folders).toEqual(["Pages", "Sources"]);
+    // Both pages — one at the folder's root, one in a folder — each named by
+    // its file, as it is on disk; and the source with its Waiting mark.
+    fireEvent.click(within(nav).getByRole("button", { name: "Pages" }));
     expect(await within(nav).findByRole("button", { name: "gateway.md" })).toBeInTheDocument();
     fireEvent.click(within(nav).getByRole("button", { name: "account" }));
     expect(await within(nav).findByRole("button", { name: "session.md" })).toBeInTheDocument();
-    // No Inbox node: material becomes a document on arrival.
+    fireEvent.click(within(nav).getByRole("button", { name: "Sources" }));
+    const source = await within(nav).findByRole("button", { name: /^release-notes\.md/ });
+    expect(source).toHaveTextContent("Waiting");
+    expect(within(nav).getByRole("button", { name: "gateway.md" })).not.toHaveTextContent(
+      "Waiting",
+    );
+    // No Inbox node and no hidden entry.
     expect(within(nav).queryByRole("button", { name: /^Inbox/ })).toBeNull();
+    expect(within(nav).queryByText(/^\./)).toBeNull();
 
-    // A document carries Document and History tabs, offers Open in editor, and
-    // Reveal and Delete in its ⋯ menu.
+    // The page's pane carries no tabs, offers History, Preview and Source and
+    // Open in editor, and Reveal in Finder and Delete in its ⋯ menu.
     fireEvent.click(within(nav).getByRole("button", { name: "gateway.md" }));
     expect(await screen.findByRole("button", { name: "Open in editor" })).toBeInTheDocument();
-    const views = screen.getByRole("navigation", { name: "Document views" });
-    expect(
-      within(views)
-        .getAllByRole("link")
-        .map((l) => l.textContent),
-    ).toEqual(["Document", "History"]);
+    expect(screen.queryByRole("navigation", { name: "Document views" })).toBeNull();
+    expect(screen.getByRole("button", { name: "History" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Preview" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Source" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: `More actions for ${GATEWAY.path}` }));
     expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
       "Reveal in Finder",
-      "Delete document",
+      "Delete",
     ]);
   });
 
   test("a collection opened from the list stays open when a document in it is opened", async () => {
     renderKnowledge("/knowledge");
     fireEvent.click(await within(tree()).findByRole("button", { name: `Expand ${NAME}` }));
+    fireEvent.click(await within(tree()).findByRole("button", { name: "Pages" }));
     fireEvent.click(await within(tree()).findByRole("button", { name: "gateway.md" }));
     expect(await screen.findByRole("button", { name: "Open in editor" })).toBeInTheDocument();
     expect(within(tree()).getByRole("button", { name: "gateway.md" })).toHaveAttribute(
@@ -98,9 +114,10 @@ describe("the collection tree and the document pane", () => {
   test("a collection closed on its chevron opens again when a link leads into it", async () => {
     renderKnowledge(`/knowledge/${UID}`);
     fireEvent.click(await within(tree()).findByRole("button", { name: `Collapse ${NAME}` }));
-    expect(within(tree()).queryByRole("button", { name: "gateway.md" })).toBeNull();
+    expect(within(tree()).queryByRole("button", { name: "Pages" })).toBeNull();
     // Leave for the bare address, then come back in through a document address.
     fireEvent.click(within(tree()).getByRole("button", { name: `Expand ${NAME}` }));
+    fireEvent.click(await within(tree()).findByRole("button", { name: "Pages" }));
     fireEvent.click(await within(tree()).findByRole("button", { name: "gateway.md" }));
     expect(await within(tree()).findByRole("button", { name: "gateway.md" })).toBeInTheDocument();
   });
@@ -125,10 +142,11 @@ describe("a document opens in the person's editor", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Reveal in Finder" }));
     await waitFor(() => expect(fsApi.reveal).toHaveBeenCalledWith(GATEWAY.file_path));
 
-    // The pane is read-only: Preview and Source, the created line from the frontmatter, no Edit.
+    // The pane is read-only: Preview and Source, its line from the frontmatter, no Edit.
     expect(screen.getByRole("button", { name: "Preview" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Source" })).toBeInTheDocument();
     expect(screen.getByText(/^Created Sep 12 by/)).toBeInTheDocument();
+    expect(screen.getByTestId("page-type")).toHaveTextContent(GATEWAY.page_type);
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(screen.queryByRole("textbox")).toBeNull();
   });
@@ -156,7 +174,7 @@ describe("delete a document", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: `More actions for ${GATEWAY.path}` }),
     );
-    fireEvent.click(screen.getByRole("menuitem", { name: "Delete document" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
     // No dialog asks: the delete runs, the collection page shows, a toast offers Undo.
     await waitFor(() => expect(api.deleteFile).toHaveBeenCalledWith(GATEWAY.path));
     expect(screen.queryByRole("dialog")).toBeNull();

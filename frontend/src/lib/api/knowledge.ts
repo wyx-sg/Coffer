@@ -28,6 +28,7 @@ import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
 import type {
   ChangeOut,
   ChangesOut,
+  CheckOut,
   CollectionListOut,
   CollectionOut,
   FileOut,
@@ -88,6 +89,14 @@ export function deleteFile(path: string): Promise<void> {
   return unwrapVoid(getApiClient().DELETE("/knowledge/file", { params: { query: { path } } }));
 }
 
+/** A collection's mechanical check (see "Check a collection mechanically on
+ *  every read"): its findings, computed from its files on this read. */
+export function getCheck(uid: string): Promise<CheckOut> {
+  return unwrap(
+    getApiClient().GET("/knowledge/collections/{uid}/check", { params: { path: { uid } } }),
+  );
+}
+
 // --- tidy ---------------------------------------------------------------------
 
 /** The prompt that hands tidying every collection to the person's agent: the
@@ -101,20 +110,25 @@ export function getTidyHandoff(): Promise<HandoffOut> {
 
 /**
  * Recent changes across every collection, or one (`collection` is its NAME),
- * newest first (see "Follow edits across collections in one feed"). The page
- * reads it only to find the delete its Undo restores.
+ * newest first (see "Follow edits across collections in one feed"): a
+ * collection page's Change log, and the delete an Undo restores. `cursor` is
+ * the previous page's `next_cursor`.
  */
 export function listChanges(params: {
   collection?: string | null;
   limit?: number;
+  cursor?: string | null;
+  signal?: AbortSignal;
 }): Promise<ChangesOut> {
   return unwrap(
     getApiClient().GET("/knowledge/changes", {
+      signal: params.signal,
       params: {
         query: {
           // An empty collection or a zero limit is "not given", as before.
           ...(params.collection ? { collection: params.collection } : {}),
           ...(params.limit ? { limit: params.limit } : {}),
+          ...(params.cursor ? { cursor: params.cursor } : {}),
         },
       },
     }),
@@ -149,10 +163,9 @@ export function describeCollection(uid: string, description: string): Promise<Co
 // --- ingestion ----------------------------------------------------------------
 
 /**
- * Convert an uploaded document into a document of a collection, at once
- * (see "Promote submitted material at once"); `path` names it. Neither the
- * original nor the extracted Markdown is kept beyond that — the documents are
- * what the collection holds.
+ * Convert an uploaded file into a source of a collection, at once (see
+ * "Promote submitted material at once"); `path` names it. Only the Markdown
+ * is kept (see "Keep every upload as a Markdown source").
  */
 export function uploadFile(params: {
   /** The collection's NAME: this lands material in its directory. */

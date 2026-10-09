@@ -5,7 +5,8 @@ An agent adds knowledge by writing ``<collection>/.inbox/<name>.md``; so can ano
 machine's sync or an older guide. The sweep runs :func:`adopt_dropped_files`
 *before* it commits what changed on disk, so the file is committed already
 normalised, and one ``knowledge_written`` event names it. :func:`promote_waiting_files`
-then makes each waiting item a document at its collection's root, as one commit.
+then keeps each waiting item as a source under its collection's ``sources/``,
+as one commit.
 
 A file is recognised as written outside Coffer when git has never seen it and
 no open operation owns it — every Coffer surface commits its own writes at once.
@@ -94,9 +95,9 @@ async def adopt_dropped_files(service: KnowledgeService) -> list[str]:
 
 
 async def promote_waiting_files(service: KnowledgeService) -> list[str]:
-    """Make every waiting inbox item a document at its collection's root, one
-    commit per item; returns the new documents' paths. Never raises for one
-    bad item."""
+    """Keep every waiting inbox item as a source under its collection's
+    ``sources/``, one commit per item; returns the new sources' paths. Never
+    raises for one bad item."""
     promoted: list[str] = []
     for row in await service.collection_rows():
         collection = row.name

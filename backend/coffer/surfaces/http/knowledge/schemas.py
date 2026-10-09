@@ -16,10 +16,15 @@ surface no one asked for.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
-from coffer.application.knowledge.tidy_handoff import collection_tidy_prompt
-from coffer.domain.knowledge.entry import CollectionEntry
+from coffer.application.knowledge.tidy_handoff import (
+    collection_check_prompt,
+    collection_tidy_prompt,
+)
+from coffer.domain.knowledge.entry import CollectionEntry, Finding
 from coffer.surfaces.http.handoff_schemas import HandoffOut
 
 
@@ -33,8 +38,16 @@ class CollectionOut(BaseModel):
     #: First paragraph of the collection's ``README.md`` ("Read a collection's
     #: description from its README").
     description: str
-    #: Documents an agent can read.
-    document_count: int = 0
+    #: Pages under ``pages/`` and sources under ``sources/`` ("Keep sources and
+    #: pages apart in each collection").
+    page_count: int = 0
+    source_count: int = 0
+    #: Sources no page cites and none marks skipped ("Derive which sources wait
+    #: from the pages that cite them").
+    waiting_source_count: int = 0
+    #: Mechanical findings, as ``/check`` lists them ("Check a collection
+    #: mechanically on every read").
+    finding_count: int = 0
     #: The collection directory's absolute path — what Reveal folder opens
     #: ("Return absolute paths on reads").
     folder_path: str = ""
@@ -44,6 +57,9 @@ class CollectionOut(BaseModel):
     #: The prompt that hands tidying this collection to the person's agent ("Hand a
     #: tidy to the person's agent").
     tidy_handoff: HandoffOut
+    #: The prompt that hands a report-only check of this collection to the
+    #: person's agent ("Hand a check to the agent").
+    check_handoff: HandoffOut
 
 
 def collection_out(entry: CollectionEntry) -> CollectionOut:
@@ -51,10 +67,61 @@ def collection_out(entry: CollectionEntry) -> CollectionOut:
         uid=entry.uid,
         name=entry.name,
         description=entry.description,
-        document_count=entry.document_count,
+        page_count=entry.page_count,
+        source_count=entry.source_count,
+        waiting_source_count=entry.waiting_source_count,
+        finding_count=entry.finding_count,
         folder_path=entry.folder_path,
         updated_at=entry.updated_at,
         tidy_handoff=HandoffOut(prompt=collection_tidy_prompt(entry)),
+        check_handoff=HandoffOut(prompt=collection_check_prompt(entry)),
+    )
+
+
+FindingKind = Literal[
+    "dead_link",
+    "ambiguous_link",
+    "duplicate_slug",
+    "missing_source",
+    "incomplete_page",
+    "unsourced_page",
+    "orphan_page",
+    "waiting_source",
+]
+
+
+class FindingOut(BaseModel):
+    kind: FindingKind
+    #: The file the finding concerns, knowledge-root-relative.
+    path: str
+    #: The link, slug or source it names; for ``incomplete_page`` the missing
+    #: keys, comma-separated.
+    target: str | None = None
+    #: The other files a duplicate slug or an ambiguous link involves.
+    others: list[str] = Field(default_factory=list)
+
+
+class CheckOut(BaseModel):
+    """One collection's mechanical check ("Check a collection mechanically on
+    every read"): what Coffer found, and the prompt that hands the rest to the
+    agent."""
+
+    collection: CollectionOut
+    findings: list[FindingOut]
+
+
+def finding_out(finding: Finding) -> FindingOut:
+    return FindingOut(
+        kind=finding.kind,  # type: ignore[arg-type]
+        path=finding.path,
+        target=finding.target,
+        others=list(finding.others),
+    )
+
+
+def check_out(entry: CollectionEntry) -> CheckOut:
+    return CheckOut(
+        collection=collection_out(entry), findings=[finding_out(f) for f in entry.findings]
     )
 
 
@@ -73,18 +140,48 @@ class DirectoryOut(BaseModel):
     file_count: int
 
 
+FileKind = Literal["page", "source", "file"]
+
+
 class FileSummaryOut(BaseModel):
     path: str
     title: str
     description: str
     actor: str
     updated_at: str
+    #: ``page`` under ``pages/``, ``source`` under ``sources/``, else ``file``.
+    kind: FileKind = "file"
+    #: A page's ``type``; empty otherwise.
+    page_type: str = ""
+    #: A source no page cites and none marks skipped.
+    waiting: bool = False
 
 
 class TreeOut(BaseModel):
     path: str
     directories: list[DirectoryOut]
     files: list[FileSummaryOut]
+
+
+class SourceRefOut(BaseModel):
+    #: The slug the page's ``sources`` entry names.
+    slug: str
+    #: The source it resolves to; ``null`` when no source has that slug.
+    path: str | None = None
+    title: str = ""
+
+
+class LinkRefOut(BaseModel):
+    #: What the ``[[link]]`` names.
+    target: str
+    #: The page or source it resolves to; ``null`` when dead or ambiguous.
+    path: str | None = None
+    ambiguous: bool = False
+
+
+class PageRefOut(BaseModel):
+    path: str
+    title: str
 
 
 class FileOut(BaseModel):
@@ -99,10 +196,21 @@ class FileOut(BaseModel):
     #: absolute paths on reads").
     file_path: str
     folder_path: str
+    kind: FileKind = "file"
+    #: A page's ``type``, ``aliases``, resolved ``sources`` and ``[[links]]``
+    #: ("Link pages by slug and check every link").
+    page_type: str = ""
+    aliases: list[str] = Field(default_factory=list)
+    sources: list[SourceRefOut] = Field(default_factory=list)
+    links: list[LinkRefOut] = Field(default_factory=list)
+    #: A source's citing pages and whether it waits ("Derive which sources
+    #: wait from the pages that cite them").
+    cited_by: list[PageRefOut] = Field(default_factory=list)
+    waiting: bool = False
 
 
 class IngestedDocumentOut(BaseModel):
-    #: The document the upload became.
+    #: The source the upload became.
     path: str
     title: str
     description: str

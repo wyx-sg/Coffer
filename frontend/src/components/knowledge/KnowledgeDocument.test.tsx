@@ -1,18 +1,21 @@
 // frontend/src/components/knowledge/KnowledgeDocument.test.tsx
 //
-// One open knowledge document (boards 5.1.01, 5.1.29): the read-only reader with
-// its single properties line (read from the frontmatter) and no side rail, the
-// pane bar (full path, the Document and History tabs, Preview / Source, Open in
-// editor, ⋯), the History tab reading the document's path in the vault, and
-// delete at once with an Undo toast. Mocked only at the network boundary, like the
-// Knowledge page tests.
+// One open knowledge file (boards 5.1.01, 5.1.29): the read-only reader with
+// its single line under the title (a page's type and sources, a source's
+// citing pages or Waiting mark) and no side rail, a page's
+// resolved `[[links]]`, the pane bar (full path, no tabs, History, Preview /
+// Source, Open in editor, ⋯), the history drawer beside the file reading its
+// path in the vault, and delete at once with an Undo toast. Mocked only at the
+// network boundary, like the Knowledge page tests.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 
 import { ApiError } from "@/lib/api/errors";
 import { answerFromFixtures, renderKnowledge } from "@/test/knowledgeHarness";
 
-import { GATEWAY, NAME, UID } from "./knowledgeTestData";
+import { acceptance } from "@/test/acceptance";
+
+import { GATEWAY, NAME, RELEASE, UID, file } from "./knowledgeTestData";
 
 vi.mock("@/lib/api/knowledge", () => ({
   listCollections: vi.fn(),
@@ -24,6 +27,7 @@ vi.mock("@/lib/api/knowledge", () => ({
   listChanges: vi.fn(),
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
+  getCheck: vi.fn(),
 }));
 vi.mock("@/lib/api/vault", () => ({
   vaultApi: { history: vi.fn(), diff: vi.fn(), restore: vi.fn() },
@@ -83,17 +87,17 @@ describe("the reader", () => {
     expect(screen.queryByText(/Invalid Date/)).toBeNull();
   });
 
-  test("the bar names the full path, carries Document and History, and offers Preview / Source and Open in editor", async () => {
+  test("the bar names the full path, carries no tabs, and offers History, Preview / Source and Open in editor", async () => {
     renderKnowledge(OPEN);
-    const where = await screen.findByRole("navigation", { name: "Where this document is" });
+    const where = await screen.findByRole("navigation", { name: "Where this file is" });
     expect(where).toHaveTextContent(NAME);
     expect(where).toHaveTextContent("gateway.md");
-    const views = screen.getByRole("navigation", { name: "Document views" });
-    expect(within(views).getByRole("link", { name: "Document" })).toHaveAttribute(
-      "aria-current",
-      "page",
+    expect(screen.queryByRole("navigation", { name: "Document views" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "History" })).toBeNull();
+    expect(await screen.findByRole("button", { name: "History" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
     );
-    expect(within(views).getByRole("link", { name: "History" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Open in editor" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
 
@@ -105,60 +109,186 @@ describe("the reader", () => {
     expect(screen.queryByRole("heading", { name: GATEWAY.title })).toBeNull();
   });
 
-  test("the ⋯ menu holds Reveal in Finder and Delete document after a separator", async () => {
+  test("the ⋯ menu holds Reveal in Finder and Delete after a separator", async () => {
     renderKnowledge(OPEN);
     fireEvent.click(
       await screen.findByRole("button", { name: `More actions for ${GATEWAY.path}` }),
     );
     const items = screen.getAllByRole("menuitem").map((i) => i.textContent);
-    expect(items).toEqual(["Reveal in Finder", "Delete document"]);
+    expect(items).toEqual(["Reveal in Finder", "Delete"]);
   });
 });
 
-describe("the History tab", () => {
-  test("reads the document's path in the vault and lists its versions", async () => {
-    const path = `knowledge/${GATEWAY.path}`;
-    const row = (version: string, display_writer: string, status: string) => ({
-      version,
-      time: "2026-09-20T10:00:00Z",
-      writer: display_writer.split(":")[0],
-      display_writer,
-      actor: null,
-      machine: null,
-      summary: "",
-      operation: "edit",
-      restored_from: null,
-      removed: false,
-      paths: [{ path, status, added: 2, removed: 1 }],
-    });
-    vi.mocked(vaultApi.history).mockResolvedValue({
-      path,
-      versions: [
-        row("b".repeat(40), "agent:claude-code", "modified"),
-        row("a".repeat(40), "user", "added"),
-      ],
-      next_cursor: null,
-    });
-    vi.mocked(vaultApi.diff).mockResolvedValue({
-      path,
-      version: "b".repeat(40),
-      against: "previous",
-      files: [],
-    });
+const VAULT_PATH = `knowledge/${GATEWAY.path}`;
+
+function answerHistory() {
+  const row = (version: string, display_writer: string, status: string) => ({
+    version,
+    time: "2026-09-20T10:00:00Z",
+    writer: display_writer.split(":")[0],
+    display_writer,
+    actor: null,
+    machine: null,
+    summary: "",
+    operation: "edit",
+    restored_from: null,
+    removed: false,
+    paths: [{ path: VAULT_PATH, status, added: 2, removed: 1 }],
+  });
+  vi.mocked(vaultApi.history).mockResolvedValue({
+    path: VAULT_PATH,
+    versions: [
+      row("b".repeat(40), "agent:claude-code", "modified"),
+      row("a".repeat(40), "user", "added"),
+    ],
+    next_cursor: null,
+  });
+  vi.mocked(vaultApi.diff).mockResolvedValue({
+    path: VAULT_PATH,
+    version: "b".repeat(40),
+    against: "previous",
+    files: [],
+  });
+}
+
+describe("the history drawer", () => {
+  acceptance("knowledge", "a document's history opens in a drawer beside it", async () => {
+    answerHistory();
     renderKnowledge(OPEN);
-    const views = await screen.findByRole("navigation", { name: "Document views" });
-    fireEvent.click(within(views).getByRole("link", { name: "History" }));
-    const list = await screen.findByRole("list", { name: "Versions" });
-    expect(vaultApi.history).toHaveBeenCalledWith(path);
+    fireEvent.click(await screen.findByRole("button", { name: "History" }));
+
+    // A drawer with the page's versions, read from its path in the vault.
+    const drawer = await screen.findByRole("complementary", { name: "History of gateway.md" });
+    const list = await within(drawer).findByRole("list", { name: "Versions" });
+    expect(vaultApi.history).toHaveBeenCalledWith(VAULT_PATH);
     expect(
       within(list)
         .getAllByRole("button")
         .map((b) => b.textContent),
     ).toEqual([expect.stringContaining("Claude Code"), expect.stringContaining("You")]);
-    expect(within(views).getByRole("link", { name: "History" })).toHaveAttribute(
-      "aria-current",
-      "page",
+    // The address carries history=1, and the page is still shown beside the drawer.
+    expect(screen.getByTestId("where")).toHaveTextContent("history=1");
+    expect(screen.getByRole("heading", { level: 1, name: GATEWAY.title })).toBeVisible();
+    expect(screen.getByText("The orchestration layer.")).toBeVisible();
+    expect(screen.getByRole("button", { name: "History" })).toHaveAttribute("aria-pressed", "true");
+
+    // Closing it leaves the page as it was and drops history=1.
+    fireEvent.click(within(drawer).getByRole("button", { name: "Close history" }));
+    await waitFor(() => expect(screen.queryByRole("complementary")).toBeNull());
+    expect(screen.getByTestId("where")).not.toHaveTextContent("history=1");
+    expect(screen.getByTestId("where")).toHaveTextContent(
+      `?file=${encodeURIComponent(GATEWAY.path)}`,
     );
+    expect(screen.getByRole("heading", { level: 1, name: GATEWAY.title })).toBeVisible();
+  });
+
+  test("the old History tab address opens the drawer", async () => {
+    answerHistory();
+    renderKnowledge(`/knowledge/${UID}/history?file=${encodeURIComponent(GATEWAY.path)}`);
+    await waitFor(() =>
+      expect(screen.getByTestId("where")).toHaveTextContent(
+        `/knowledge/${UID}?file=${encodeURIComponent(GATEWAY.path)}&history=1`,
+      ),
+    );
+    expect(
+      await screen.findByRole("complementary", { name: "History of gateway.md" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: GATEWAY.title })).toBeVisible();
+  });
+
+  test("Esc closes the drawer", async () => {
+    answerHistory();
+    renderKnowledge(`${OPEN}&history=1`);
+    const drawer = await screen.findByRole("complementary", { name: "History of gateway.md" });
+    fireEvent.keyDown(within(drawer).getByRole("button", { name: "Close history" }), {
+      key: "Escape",
+    });
+    await waitFor(() => expect(screen.queryByRole("complementary")).toBeNull());
+  });
+});
+
+describe("a page's line and links", () => {
+  const CACHE = file(`${NAME}/pages/cache-ttl.md`, { title: "Cache TTL" });
+  const PAGE = file(`${NAME}/pages/session-ownership.md`, {
+    title: "Session ownership",
+    page_type: "decision",
+    body: [
+      "# Session ownership",
+      "",
+      "See [[cache-ttl|the cache]] and [[gone]].",
+      "",
+      "```",
+      "[[cache-ttl]]",
+      "```",
+    ].join("\n"),
+    sources: [
+      { slug: "release-notes", path: RELEASE.path, title: "Release notes" },
+      { slug: "old-spec", path: null, title: "" },
+    ],
+    links: [
+      { target: "cache-ttl", path: CACHE.path, ambiguous: false },
+      { target: "gone", path: null, ambiguous: false },
+    ],
+  });
+
+  acceptance("knowledge", "a page shows its sources and resolves its links", async () => {
+    api.getFile.mockImplementation(async (path: string) =>
+      path === PAGE.path ? PAGE : path === CACHE.path ? CACHE : RELEASE,
+    );
+    renderKnowledge(`/knowledge/${UID}?file=${encodeURIComponent(PAGE.path)}`);
+    expect(await screen.findByRole("heading", { level: 1, name: PAGE.title })).toBeVisible();
+
+    // The line under the title: its type, then both sources — the existing one
+    // opening it, the missing one struck through.
+    const line = screen.getByTestId("file-line");
+    expect(within(line).getByTestId("page-type")).toHaveTextContent("decision");
+    expect(within(line).getByRole("link", { name: "Release notes" })).toHaveAttribute(
+      "href",
+      `/knowledge/${UID}?file=${encodeURIComponent(RELEASE.path)}`,
+    );
+    const missing = within(line).getByText("old-spec");
+    expect(missing.tagName).toBe("S");
+    expect(within(line).queryByRole("link", { name: "old-spec" })).toBeNull();
+
+    // The existing link opens the page it names; the dead one is in the danger tone.
+    const link = screen.getByRole("link", { name: "the cache" });
+    expect(link).toHaveAttribute(
+      "href",
+      `/knowledge/${UID}?file=${encodeURIComponent(CACHE.path)}`,
+    );
+    const dead = screen.getByText("gone");
+    expect(dead.closest("a")).toBeNull();
+    expect(dead).toHaveAttribute("data-link", "dead");
+    expect(dead.className).toMatch(/text-danger/);
+    // The one inside a code block is text, not a link.
+    expect(screen.getByText("[[cache-ttl]]")).toBeInTheDocument();
+
+    fireEvent.click(link);
+    expect(await screen.findByRole("heading", { level: 1, name: CACHE.title })).toBeVisible();
+    expect(screen.getByTestId("where")).toHaveTextContent(encodeURIComponent(CACHE.path));
+  });
+
+  test("a waiting source shows the Waiting mark", async () => {
+    renderKnowledge(`/knowledge/${UID}?file=${encodeURIComponent(RELEASE.path)}`);
+    const line = await screen.findByTestId("file-line");
+    expect(within(line).getByText("Waiting")).toBeInTheDocument();
+    expect(within(line).queryByText(/Cited by/)).toBeNull();
+  });
+
+  test("a cited source names the pages that cite it, each opening the page", async () => {
+    api.getFile.mockResolvedValue({
+      ...RELEASE,
+      waiting: false,
+      cited_by: [{ path: GATEWAY.path, title: GATEWAY.title }],
+    });
+    renderKnowledge(`/knowledge/${UID}?file=${encodeURIComponent(RELEASE.path)}`);
+    const line = await screen.findByTestId("file-line");
+    expect(within(line).getByText(/Cited by 1 page/)).toBeInTheDocument();
+    expect(within(line).getByRole("link", { name: GATEWAY.title })).toHaveAttribute(
+      "href",
+      `/knowledge/${UID}?file=${encodeURIComponent(GATEWAY.path)}`,
+    );
+    expect(within(line).queryByText("Waiting")).toBeNull();
   });
 });
 
@@ -169,7 +299,7 @@ describe("delete a document", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: `More actions for ${GATEWAY.path}` }),
     );
-    fireEvent.click(screen.getByRole("menuitem", { name: "Delete document" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
   }
 
   test("runs at once, with no confirmation, and goes to the collection", async () => {
@@ -209,7 +339,7 @@ describe("delete a document", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: `More actions for ${GATEWAY.path}` }),
     );
-    fireEvent.click(screen.getByRole("menuitem", { name: "Delete document" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
     expect(await screen.findByText("Couldn’t delete gateway.md")).toBeInTheDocument();
     expect(screen.getByTestId("where")).toHaveTextContent("file=");
   });
