@@ -14,9 +14,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ChannelPerson } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import type { ChannelTab } from "@/lib/channels/tabs";
+import { useAskAgainForChannel } from "@/lib/hooks/useChannelAskAgain";
 import {
   CHANNEL_KIND,
-  useAskAgainForChannel,
   useChannelAutoSave,
   useChannelView,
   useRebindChannel,

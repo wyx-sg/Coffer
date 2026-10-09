@@ -177,7 +177,7 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 **Cause.** The header's auth scheme and the stored key disagree. Coffer sends `<scheme> <key>`. If the secret already holds `Bearer …` from an older setup and the row's scheme is also **Bearer**, the server sees `Bearer Bearer …`. If the row's scheme is **None** but the API wants `Authorization: Bearer <key>`, the word `Bearer` is missing. A header like `X-Api-Key` wants **None**.
 
-**Fix.** Open the server's **Edit** dialog (or the custom-tool group's), find the header row and set its scheme to what the API documents. Store only the raw key as the secret: in the secret row's picker choose **Change <name>'s value…** (on the server's page, **Replace key…** › **Enter a new value**) and paste the key without `Bearer`. Save, then press **Test**. See [MCP servers → Auth scheme](/guides/mcp-servers#register-an-http-server).
+**Fix.** Open the server's **Edit** dialog (or the custom-tool group's), find the header row and set its scheme to what the API documents. Store only the raw key as the secret: in the secret row's picker choose **Change &lt;name&gt;'s value…** (on the server's page, **Replace key…** › **Enter a new value**) and paste the key without `Bearer`. Save, then press **Test**. See [MCP servers → Auth scheme](/guides/mcp-servers#register-an-http-server).
 
 ### There is no way to print a secret from the terminal
 

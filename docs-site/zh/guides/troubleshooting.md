@@ -177,7 +177,7 @@ Coffer needs git, and git isn't installed on this machine. The vault keeps its h
 
 **原因。** 请求头的认证方案和已存的密钥对不上。Coffer 发送的是 `<方案> <密钥>`。如果密钥里因为旧的设置已经写着 `Bearer …`，而这一行的方案也是 **Bearer**，服务器收到的就是 `Bearer Bearer …`。如果这一行的方案是 **None**，而 API 要的是 `Authorization: Bearer <key>`，就少了 `Bearer` 这个词。`X-Api-Key` 这类请求头应选 **None**。
 
-**解决。** 打开服务器的**编辑**对话框（或自定义工具分组的），找到那一行请求头，把方案设为 API 文档写的那种。密钥里只存原始密钥：在密钥那一行的选择器里选**修改 <name> 的值…**（在服务器的页面上是**更换密钥…** › **输入新值**），粘贴不带 `Bearer` 的密钥。保存后点**测试**。见 [MCP 服务器 → 认证方案](/zh/guides/mcp-servers#register-an-http-server)。
+**解决。** 打开服务器的**编辑**对话框（或自定义工具分组的），找到那一行请求头，把方案设为 API 文档写的那种。密钥里只存原始密钥：在密钥那一行的选择器里选**修改 &lt;name&gt; 的值…**（在服务器的页面上是**更换密钥…** › **输入新值**），粘贴不带 `Bearer` 的密钥。保存后点**测试**。见 [MCP 服务器 → 认证方案](/zh/guides/mcp-servers#register-an-http-server)。
 
 ### 无法在终端里打印密钥 {#there-is-no-way-to-print-a-secret-from-the-terminal}
 
