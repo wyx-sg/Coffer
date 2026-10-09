@@ -282,7 +282,7 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.0 (/Users/you/.coffe
 | 记忆聚合 | 立即，然后默认每小时 | 把每个智能体的原生记忆读进派生的记忆树。见[记忆](/zh/architecture/memory)。 |
 | 记忆提炼 | 60 s 后第一次，然后默认每 6 h | 把聚合后的记忆里每条新的原始条目变成一篇笔记，并渲染索引。不涉及任何模型。 |
 | 消息渠道运行时 | 每 2 s | 把运行中的适配器（Telegram 轮询、SeaTalk 连接）和绑定到本机的消息渠道资源进行调和。 |
-| MCP 会话回收器 | 每 60 s | 关闭闲置超过 30 分钟的 `/mcp` 会话，连同它们的每会话监管者和上游子进程。可用 `COFFER_MCP_SESSION_IDLE_S` 和 `COFFER_MCP_SESSION_REAPER_INTERVAL_S` 调整。 |
+| MCP 会话回收器 | 每 60 s | 关闭超过 10 分钟没有请求也没有上游通知的 `/mcp` 会话（打开着的通知流不算活动），连同它们的每会话监管者和上游子进程。可用 `COFFER_MCP_SESSION_IDLE_S` 和 `COFFER_MCP_SESSION_REAPER_INTERVAL_S` 调整。 |
 | 调用记录写入器 | 持续 | 在请求路径之外，把 MCP 调用日志行批量写入 SQLite。 |
 | 解包保活 | 启动时立即执行，之后每 6 h | 仅限冻结构建。刷新单文件二进制解包到 `$TMPDIR/_MEI*` 里的文件时间戳，让系统临时文件清理（macOS 会删除约 3 天未使用的文件）无法在长时间运行的守护进程底下删掉 CA 证书包和库文件。它还会删除每个带 `.coffer-pid` 标记（由每个单文件 Coffer 二进制的运行时钩子写入）、且标记里的 pid 已不再运行的 `$TMPDIR/_MEI*` 目录，回收被杀掉的命令行或桥进程留下的东西。没有标记的目录（别的 PyInstaller 程序的）和守护进程自己的目录从不触碰。 |
 | 被取代检查 | 每 30 s，由入口运行 | 当另一个存活的守护进程接管了 `daemon.json` 时，让本守护进程退下（见下文）。 |

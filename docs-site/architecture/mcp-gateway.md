@@ -49,7 +49,7 @@ flowchart LR
   G2 --> U4["jira (http)"]
 ```
 
-Session A and session B each hold their own `github` process. With N connected clients and M enabled servers, the worst case is N × M upstream connections. On a single-user machine N is usually two or three, and only servers that a session actually lists or calls are started.
+Session A and session B each hold their own `github` process. With N connected clients and M enabled servers, the worst case is N × M upstream connections. On a single-user machine N is usually two or three, and only servers that a session actually lists or calls are started. A session that sees no request for 10 minutes is reaped with its upstreams, so N counts clients that are working, not clients that are merely open.
 
 ## The endpoint and the shim
 
@@ -63,9 +63,9 @@ The daemon mounts `/mcp` at its root on `127.0.0.1:<port>`. Every request must c
   - A message with no `id` is a notification. It gets `202` with no body. `notifications/cancelled` cancels that request of the same session (see [Cancellation](#cancellation)).
   - A message with an `id` but no `method` is the client's reply to a request the server initiated (`sampling/createMessage` or `roots/list`). It is matched to the server request that is waiting for it and acknowledged with a bodiless `202`.
   - A batch (a top-level array) is refused with `-32600`.
-- **`GET /mcp`** opens a Server-Sent Events stream for server-to-client messages. It requires the `Mcp-Session-Id` of a live session (`404` otherwise). An open stream keeps its session out of the idle reaper. Messages wait in a per-session queue capped at 1000 entries. When the queue is full, the oldest message is dropped.
+- **`GET /mcp`** opens a Server-Sent Events stream for server-to-client messages. It requires the `Mcp-Session-Id` of a live session (`404` otherwise). An open stream is not activity and does not keep its session out of the idle reaper. Messages wait in a per-session queue capped at 1000 entries. When the queue is full, the oldest message is dropped.
 
-When the SSE stream closes, the session stays open, because the shim reconnects routinely. Sessions end in three ways: the idle reaper, daemon shutdown, or disposal. The reaper wakes every 60 seconds and drops any session that has seen no POST and no upstream traffic for 30 minutes and has no request in flight (a `coffer__ask` waits on the owner for hours). You can change both values with `COFFER_MCP_SESSION_REAPER_INTERVAL_S` and `COFFER_MCP_SESSION_IDLE_S`. Before disposing a session, the reaper waits up to about 5 seconds for in-flight POSTs to finish, so a running request never sees a half-disposed session.
+When the SSE stream closes, the session stays open, because the shim reconnects routinely. Sessions end in three ways: the idle reaper, daemon shutdown, or disposal. The reaper wakes every 60 seconds and drops any session that has seen no POST and no forwarded upstream notification for 10 minutes and has no request in flight (a `coffer__ask` waits on the owner for hours). Holding the SSE stream open is not activity, and neither is its 15-second keepalive wake-up, so a client that only keeps the stream open is reaped like any idle one: the stream ends cleanly and the client's next request gets `404` and handshakes again. You can change both values with `COFFER_MCP_SESSION_REAPER_INTERVAL_S` and `COFFER_MCP_SESSION_IDLE_S`. Before disposing a session, the reaper waits up to about 5 seconds for in-flight POSTs to finish, so a running request never sees a half-disposed session.
 
 ### `coffer-mcp-shim`
 

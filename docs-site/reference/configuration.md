@@ -44,7 +44,7 @@ The daemon is usually spawned detached — by the CLI, by an agent's MCP shim, b
 | `COFFER_TOOL_TIERING_BUDGET` | `50` | How many upstream tools are listed directly before the rest are reachable only through `coffer__search_tools`. Non-positive or malformed values fall back to the default. |
 | `COFFER_TOOL_TIERING_WINDOW_DAYS` | `90` | The trailing window of invocation history used to rank tools for the budget. |
 | `COFFER_MCP_MAX_CONCURRENT_SPAWNS` | `4` | How many upstream MCP servers one session cold-starts at the same time. |
-| `COFFER_MCP_SESSION_IDLE_S` | `1800` | Seconds a `/mcp` session may sit idle before the reaper closes it and its upstream processes. |
+| `COFFER_MCP_SESSION_IDLE_S` | `600` | Seconds a `/mcp` session may go without a request or an upstream notification before the reaper closes it and its upstream processes. An open notification stream does not count. |
 | `COFFER_MCP_SESSION_REAPER_INTERVAL_S` | `60` | Seconds between reaper sweeps. |
 | `COFFER_MCP_SHIM_PATH` | unset | Absolute path to a `coffer-mcp-shim` binary to write into an agent's MCP entry, tried before `PATH` and the bundled copy. Ignored if the file does not exist. |
 

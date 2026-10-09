@@ -107,19 +107,44 @@ What one session forwards:
 
 ## Consequences
 
-- With 3 concurrent clients and 10 registered upstreams, up to 30 upstream
-  processes can exist. Two bounds keep that in check:
-  - **Idle sessions are reaped.** A `/mcp` session that has seen neither a
-    request nor an upstream notification for 30 minutes is disposed, with its
-    upstreams, by the session reaper (`surfaces/http/mcp/protocol_routes.py`);
-    `COFFER_MCP_SESSION_IDLE_S` and `COFFER_MCP_SESSION_REAPER_INTERVAL_S`
-    (default 60 s) tune it. This is what reclaims the upstreams of a client that
-    vanished without closing its session, on a daemon that otherwise never
-    exits ([Daemon Is a Resident Login Service](daemon-is-a-resident-login-service.md)).
+- With N concurrent clients and M registered upstreams, up to N × M upstream
+  processes can exist, but only for sessions that are doing something. Two
+  bounds keep that in check:
+  - **Idle sessions are reaped after 10 minutes.** A `/mcp` session that has
+    seen neither a downstream request nor a forwarded upstream notification for
+    10 minutes is disposed, with its upstreams, by the session reaper
+    (`surfaces/http/mcp/session_registry.py`); `COFFER_MCP_SESSION_IDLE_S` and
+    `COFFER_MCP_SESSION_REAPER_INTERVAL_S` (default 60 s) tune it. A request in
+    flight is never idle. Holding the GET notification stream open is not
+    activity, and neither is its 15 s keepalive wake-up. Reaping ends the open
+    stream cleanly and the client's next request gets `404`, so the shim
+    handshakes again. This is what reclaims the upstreams of a client that
+    vanished or only sits connected, on a daemon that otherwise never exits
+    ([Daemon Is a Resident Login Service](daemon-is-a-resident-login-service.md)).
   - **Cold starts are capped per session.** A listing fan-out over many servers
     would otherwise start them all at once and push every spawn past its
     timeout; a supervisor starts at most 4 upstreams concurrently
     (`COFFER_MCP_MAX_CONCURRENT_SPAWNS`).
+- Measured cost, and the bug behind it. On 2026-10-07 the owner's Mac held 12
+  concurrent agent MCP sessions (6 Claude Code, 6 Codex App), and 4 of the Codex
+  sessions had been alive for more than a day. The cause was the reaper's
+  activity rule, not the model: an open GET stream refreshed its session's idle
+  timer every 15 s, and Codex App keeps its stream open. With the rule fixed,
+  a session lives only as long as its client keeps working, and the residual
+  per-session cost is small: one spawn and handshake per upstream on first use,
+  and the memory of the upstreams a session actually listed or called.
+- Cross-session sharing of stateless HTTP upstreams was reconsidered and
+  rejected again. For: fewer connections and processes, and no cold start for a
+  second client. Against: an upstream's `Mcp-Session-Id` is per connection, so
+  sharing needs the gateway to own one; negotiated capabilities differ per
+  client; upstream notifications would have to fan out to every sharing session;
+  and `sampling/createMessage` and `roots/list` callbacks would have to pick one
+  client. Sharing also needs refcounting so the last session out closes the
+  connection, and a crash or restart of a shared upstream would disturb every
+  session at once. Comparable gateways differ: MetaMCP and IBM ContextForge pool
+  upstream connections, sparfenyuk's mcp-proxy serves all clients from one
+  process, and Docker MCP Gateway starts one per client by default. With the
+  reaper fixed the saving is too small to pay for that bookkeeping.
 - Each session pays an upstream's spawn and handshake once, on first use.
 - A failing upstream is retried at 1 s, 5 s and 30 s, then put in a 60 s
   cooldown during which calls fail fast; this is per session, so one client's

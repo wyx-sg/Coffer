@@ -292,7 +292,6 @@ async def handle_get(
     # ``isinstance``: a direct call (tests) leaves the parameter at its Header default.
     if isinstance(sent, str) and sent != _ACTIVE_SESSIONS[mcp_session_id].protocol_version:
         raise HTTPException(status_code=400, detail=f"unsupported {PROTOCOL_HEADER}: {sent!r}")
-    _touch(mcp_session_id)
     queue = _NOTIFICATION_QUEUES.setdefault(mcp_session_id, asyncio.Queue(maxsize=_QUEUE_MAXSIZE))
 
     stop_event = _stream_stop_event(mcp_session_id)
@@ -324,13 +323,13 @@ async def handle_get(
                         if not task.done():
                             task.cancel()
                 if not done:
-                    # Nothing arrived: an open stream is a live client, so it
-                    # keeps the session out of the idle reaper's hands.
-                    _touch(mcp_session_id)
+                    # Nothing arrived. An open stream is not activity: a client
+                    # that only holds the stream open is idle, and the reaper
+                    # drops it (``_drop_session`` sets the stop event, so this
+                    # generator ends and the client's next call is 404).
                     continue
                 if getter in done:
                     payload = getter.result()
-                    _touch(mcp_session_id)
                     yield {"event": "message", "data": payload}
                 else:
                     # Session is being disposed — end the stream cleanly.
