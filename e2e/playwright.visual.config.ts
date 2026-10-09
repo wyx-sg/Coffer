@@ -72,6 +72,8 @@ export default defineConfig({
         COFFER_E2E_HOME: VISUAL_HOME,
         COFFER_E2E_HOME_FILE: VISUAL_HOME_FILE,
         COFFER_E2E_PORT: String(VISUAL_DAEMON_PORT),
+        // The daemon shuts down once this runner is gone (start_daemon.sh).
+        COFFER_DAEMON_EXIT_WITH_PID: String(process.pid),
         // start_daemon.sh's COFFER_DEV_CORS only allows :5173; this list
         // replaces it with the visual Vite origin.
         COFFER_CORS_ORIGINS: `${VITE_ORIGIN},http://127.0.0.1:${VISUAL_VITE_PORT}`,

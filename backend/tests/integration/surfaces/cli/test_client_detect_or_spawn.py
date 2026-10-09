@@ -8,6 +8,7 @@ absent, rather than printing 'start it with: coffer daemon start' and exiting.
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -199,8 +200,7 @@ def test_client_or_exit_does_not_print_old_start_message(
 def test_spawn_daemon_invokes_popen(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """_spawn_daemon() must call subprocess.Popen with the spawn command,
     DEVNULL stdin, AND the platform's detachment flags — so the daemon
-    survives the short-lived CLI that launched it (ADR daemon-detect-or-spawn). It must also
-    return the Popen handle so the caller can kill it on a boot timeout."""
+    survives the short-lived CLI that launched it (ADR daemon-detect-or-spawn)."""
     import subprocess
 
     home = tmp_path / "home"
@@ -221,7 +221,7 @@ def test_spawn_daemon_invokes_popen(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setattr(daemon_spawn.subprocess, "Popen", _fake_popen)
 
-    proc = cli_client._spawn_daemon()
+    cli_client._spawn_daemon()
 
     assert "cmd" in popen_kwargs, "Popen was not called"
     # Must be a list starting with a string (the executable path).
@@ -241,35 +241,33 @@ def test_spawn_daemon_invokes_popen(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         assert flags & subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
     else:
         assert popen_kwargs["kwargs"].get("start_new_session") is True
-    # Must return the Popen handle (not None) on a successful spawn.
-    assert proc is not None
 
 
-def test_client_or_exit_kills_daemon_on_boot_timeout(
+@pytest.mark.acceptance(
+    spec="daemon", scenario="a client that stops waiting leaves its spawn alone"
+)
+def test_client_or_exit_leaves_its_spawn_alone_on_boot_timeout(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """If the spawned daemon never publishes daemon.json within the timeout,
-    client_or_exit() must kill() the half-started process (so it can't finish
-    booting after we gave up) and raise DaemonNotRunning."""
+    """A spawned daemon that does not answer within the wait is reported, not
+    killed: a slow boot finishes by itself, a stuck one leaves through the
+    bounded spawn-lock wait, and in a one-file build a kill would hit only the
+    bootloader. No signal goes anywhere."""
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
 
-    killed: list[bool] = []
-
-    class _FakeProc:
-        pid = 4321
-
-        def kill(self) -> None:
-            killed.append(True)
-
-    monkeypatch.setattr(cli_client, "_spawn_daemon", lambda: _FakeProc())
+    spawned: list[bool] = []
+    signalled: list[tuple[int, int]] = []
+    monkeypatch.setattr(cli_client, "_spawn_daemon", lambda: spawned.append(True))
     monkeypatch.setattr(cli_client, "_DAEMON_BOOT_TIMEOUT", 0.05)
+    monkeypatch.setattr(os, "kill", lambda pid, sig: signalled.append((pid, sig)))
 
     with pytest.raises((DaemonNotRunning, SystemExit)):
         cli_client.client_or_exit()
 
-    assert killed, "the half-started daemon must be killed on boot timeout"
+    assert spawned == [True]
+    assert signalled == []
 
 
 # --------------------------------------------------------------------------- #
