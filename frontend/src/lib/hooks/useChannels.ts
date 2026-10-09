@@ -4,8 +4,7 @@
 // useChannels delegates to useResources and shares its ["resources", …] cache;
 // enable / disable / delete / reach are the generic mutations. What is
 // channel-specific lives here: live status and the state it puts a channel in,
-// pairing, notify, reconnect, the settings auto-save, and the machine binding
-// (`runs_on`, written through the same config PATCH an edit uses).
+// pairing, notify, reconnect and the settings auto-save.
 import { useCallback, useEffect, useRef } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -27,7 +26,6 @@ import {
 } from "@/lib/channels/editChannel";
 import { createChannel } from "@/lib/channels/registerChannel";
 import type { ChannelEditPlan, ChannelPlan } from "@/lib/channels/schema";
-import { useMachines, useThisMachineId } from "@/lib/hooks/useMachines";
 import { useResources } from "@/lib/hooks/useResources";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -91,9 +89,6 @@ export function useChannelViews(channels: readonly ResourceOut[]): Map<string, C
       staleTime: 15_000,
     })),
   });
-  const { data: machineList } = useMachines();
-  const { machineId: selfId } = useThisMachineId();
-  const known = (machineList?.machines ?? []).map((m) => m.machine_id);
   const views = new Map<string, ChannelView>();
   channels.forEach((c, i) => {
     const q = statuses[i];
@@ -101,11 +96,8 @@ export function useChannelViews(channels: readonly ResourceOut[]): Map<string, C
       c.uid,
       describeChannel({
         enabled: c.enabled,
-        config: c.config,
         status: q?.data,
         statusFailed: q?.isError ?? false,
-        selfId,
-        knownMachines: known,
       }),
     );
   });
@@ -115,17 +107,12 @@ export function useChannelViews(channels: readonly ResourceOut[]): Map<string, C
 /** The open channel's live status (polled) and the state it puts it in. */
 export function useChannelView(channel: ResourceOut) {
   const status = useChannelStatus(channel.uid, { poll: true });
-  const { data: machineList } = useMachines();
-  const { machineId: selfId } = useThisMachineId();
   const view = describeChannel({
     enabled: channel.enabled,
-    config: channel.config,
     status: status.data,
     statusFailed: status.isError,
-    selfId,
-    knownMachines: (machineList?.machines ?? []).map((m) => m.machine_id),
   });
-  return { status, view, selfId };
+  return { status, view };
 }
 
 /**
@@ -225,42 +212,6 @@ export function useUpdateChannel() {
       void qc.invalidateQueries({ queryKey: channelStatusKey(uid) });
       void qc.invalidateQueries({ queryKey: pendingApprovalsKey });
       toast.success(t("channels.edit.saved", { name }));
-    },
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
-}
-
-/** @ui-only What a rebind needs: the channel's CURRENT config (so the PATCH
- *  keeps every ref and platform field) and the machine it should run on. */
-export interface ChannelRebind {
-  config: Record<string, unknown>;
-  runsOn: string;
-  /** Display name of the target machine — the toast's, not the wire's. */
-  machine: string;
-}
-
-/**
- * Move a channel's adapter to another machine (spec channels "Bind each channel
- * to the one machine that runs it"). The binding is an ordinary config field,
- * so this is an ordinary config PATCH — there is no command that reaches
- * across to the other machine and none is needed: each daemon reconciles
- * against the document it holds.
- *
- * Both caches move: the resource list carries `config.runs_on` for the table,
- * and the channel status carries the daemon's own `runs_here` plus the
- * unbound diagnostic this may have just cleared.
- */
-export function useRebindChannel(uid: string, name: string) {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: ({ config, runsOn }: ChannelRebind) =>
-      applyChannelEdit({ uid, name, config: { ...config, runs_on: runsOn }, secrets: [] }),
-    onSuccess: (_written, { machine }) => {
-      void qc.invalidateQueries({ queryKey: resourcesKey });
-      void qc.invalidateQueries({ queryKey: channelStatusKey(uid) });
-      toast.success(t("channels.machine.rebound", { name, machine }));
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });

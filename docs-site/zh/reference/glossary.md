@@ -55,7 +55,7 @@ Coffer 自己提供的 MCP 工具，以保留前缀 `coffer__` 与上游工具�
 
 ### 消息渠道（Channel） {#channel}
 
-一个即时通讯应用机器人（Telegram 或 SeaTalk），你离开电脑时可以通过它和智能体聊天、接收通知。消息渠道是类型为 `channel` 的[资源](#resource)，只供已配对的所有者使用（[所有者配对](#owner-pairing)），并由一台机器运行（[`runs_on`](#runs-on)）。见[消息渠道](/zh/guides/channels)。
+一个即时通讯应用机器人（Telegram 或 SeaTalk），你离开电脑时可以通过它和智能体聊天、接收通知。消息渠道是类型为 `channel` 的[资源](#resource)，只供已配对的所有者使用（[所有者配对](#owner-pairing)），并且和[智能体](#agent)一样只保存在一台机器上。见[消息渠道](/zh/guides/channels)。
 
 ### 知识集（Collection） {#collection}
 
@@ -135,7 +135,7 @@ Coffer 发送密钥明文的地方：MCP 服务器的环境变量或 HTTP 请求
 
 ### 机器 id（Machine id） {#machine-id}
 
-一台机器的稳定标识符，从主机派生，离开机器前先做哈希。[保险库同步](#vault-sync)用它区分机器，消息渠道的 [`runs_on`](#runs-on) 指明其中一台。见[保险库同步](/zh/guides/vault-sync)。
+一台机器的稳定标识符，从主机派生，离开机器前先做哈希。[保险库同步](#vault-sync)用它区分机器。见[保险库同步](/zh/guides/vault-sync)。
 
 ### 主密钥（Master key） {#master-key}
 
@@ -212,10 +212,6 @@ Coffer 在一轮[同步](#sync-round)检出任何内容之前打的 git 标签�
 ### 保留期限（Retention） {#retention}
 
 Coffer 保存日志类数据行（比如审计日志和[调用日志](#invocation-log)）多长时间的逐表限制，由后台清理程序执行。在**设置 → 数据**里管理。见[可观测性](/zh/architecture/observability#retention)。
-
-### `runs_on` {#runs-on}
-
-运行[消息渠道](#channel)适配器的那台机器的[机器 id](#machine-id)。消息渠道的设置同步到每台机器；只有这台机器连接即时通讯平台。在消息渠道的页面上设置。见[消息渠道](/zh/guides/channels)。
 
 ## S {#s}
 

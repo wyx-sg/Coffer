@@ -4,7 +4,7 @@
 **Date**: 2026-09-24
 **Deciders**: Yuxing Wu
 **Related**: spec channels/seatalk ("Receive every event over one outbound websocket connection", "Report the websocket connection as the channel's inbound state", "Load the websocket client library from an operator-supplied directory", "Configure a SeaTalk channel by app id and secret reference");
-spec channels ("Bind each channel to the one machine that runs it", "Process each inbound event once");
+spec channels ("Process each inbound event once"); [Channels Are Machine-Local Resources, Like Agents](channels-are-machine-local-resources.md);
 [Channels Are Thin Transport Adapters](channel-adapter-framework.md), [Telegram Long Polling](telegram-long-polling.md),
 [Daemon Is a Resident Login Service](daemon-is-a-resident-login-service.md);
 change archive `openspec/changes/archive/2026-09-24-remove-seatalk-webhook-delivery/`; PRs #375, #431
@@ -39,8 +39,9 @@ The facts about the websocket path that shape the decision:
 Coffer's own constraints: nothing but the daemon's loopback socket may listen
 ([principles](../../docs-site/architecture/principles.md), "Network
 defaults"); the daemon is always up once started ([Daemon Is a Resident Login
-Service](daemon-is-a-resident-login-service.md)); and a channel runs on exactly
-one machine, named by its `runs_on`.
+Service](daemon-is-a-resident-login-service.md)); and a channel is a machine-local
+resource, so it runs on exactly the machine that holds it
+(see [Channels Are Machine-Local Resources, Like Agents](channels-are-machine-local-resources.md)).
 
 SeaTalk is also the platform where Coffer is the only possible bridge: no
 official or third-party integration connects it to any coding agent.
@@ -60,7 +61,7 @@ official or third-party integration connects it to any coding agent.
   exponentially from 1 s to 30 s. A kick backs off a flat 60 s instead of
   racing the other holder, since two processes fighting over one app starve
   each other. The channel runtime reconciles one connector per enabled SeaTalk
-  channel bound to this machine, keyed by channel uid
+  channel this machine holds, keyed by channel uid
   (`application/channel/runtime_supervision.py`).
 - **Configuration is `app_id` and `app_secret_ref`**, plus the common channel
   fields (`domain/channel/config.py`). Migration `0103` removed the webhook-era
@@ -96,7 +97,8 @@ channel can send to its owner but receives nothing — which is what an outside
 user of this project gets. Events that arrive while the connection is down
 (restart, network drop, back-off) are the platform's to retry or drop; Coffer
 cannot queue them. A second machine registering the same app takes the events
-away, which is why the machine binding matters.
+away, which is why a channel is never synced: the same app on a second machine
+is a second, deliberate channel there, and the first must be switched off.
 
 Wins because it removes every piece of machinery that existed only to
 compensate for Coffer having no public address, for the one installation that

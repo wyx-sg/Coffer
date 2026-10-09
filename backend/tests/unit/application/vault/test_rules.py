@@ -161,10 +161,10 @@ def test_state_documents_are_checked_for_their_shape_and_their_owner() -> None:
         f.code for f in rule([Change("state/mcp-preferences/gh.json", bad, None)], _Tree()).findings
     ]
     assert codes == [FindingCode.INVALID_DOCUMENT]
-    missing = b'{"peers": []}'
+    missing = b'{"disabled": {}}'
     codes = [
         f.code
-        for f in rule([Change("state/channel-peers/c.json", missing, None)], _Tree()).findings
+        for f in rule([Change("state/mcp-preferences/c.json", missing, None)], _Tree()).findings
     ]
     assert codes == [FindingCode.MISSING_FIELD]
     tree = _Tree({"state/mcp-preferences/gh.json": good})

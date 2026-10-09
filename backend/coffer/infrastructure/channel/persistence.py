@@ -1,15 +1,15 @@
-"""Channel pairings as vault documents (spec vault-storage).
+"""Channel pairings, kept on this machine beside the channel they belong to.
 
-Which chats on a platform belong to a channel's owner is the person's, and it
-travels: ``state/channel-peers/<channel name>.json``::
+A channel is a machine-local resource (ADR channels-are-machine-local-resources),
+and so is the record of which chats on its platform are paired to it:
+``local/channel-peers.json``, one entry per channel, keyed by the channel's uid::
 
-    {"channel_uid": "<uid>", "format_version": 1,
-     "peers": [{"chat_id": "...", "sender_id": "...", "display_name": "...",
-                "paired_at": "<iso>"}]}
+    {"<channel uid>": {"peers": [{"chat_id": "...", "sender_id": "...",
+                                  "display_name": "...", "paired_at": "<iso>"}]}}
 
 ``peers`` keeps pairing order, so "the first sender this channel knew" is the
-first entry. The document follows its channel: moved when the channel is
-renamed and deleted with it, in the channel's own commit.
+first entry. Keyed by uid, the entry needs nothing on a rename; it goes when
+the channel is deleted (:meth:`ChannelPeerRepo.forget`).
 
 The thread tables live in ``thread_persistence`` and the outbox in
 ``outbox_persistence`` (this file's size budget); both are re-exported here so
@@ -25,10 +25,15 @@ from pathlib import Path
 from typing import Any
 
 from coffer.application.channel.store_ports import ChannelPeer
-from coffer.infrastructure.vault.state_documents import StateDocuments
+from coffer.infrastructure.vault.home import local_root
+from coffer.infrastructure.vault.json_store import JsonStore
 
-#: ``state/channel-peers/``.
-AREA = "channel-peers"
+#: The file under ``local/``.
+PEERS_FILE = "channel-peers.json"
+
+
+def peers_path(home: Path | None = None) -> Path:
+    return local_root(home) / PEERS_FILE
 
 
 def _time(raw: Any) -> datetime:
@@ -65,7 +70,7 @@ def _entry(peer: ChannelPeer) -> dict[str, Any]:
 
 
 class ChannelPeerRepo:
-    """``ChannelPeerRepoPort`` over ``state/channel-peers/``.
+    """``ChannelPeerRepoPort`` over ``local/channel-peers.json``.
 
     A channel may be paired to several chats — its DM and every group or
     thread it was added to — one entry per chat. ``upsert`` re-pairs one chat
@@ -73,33 +78,48 @@ class ChannelPeerRepo:
     (``get_by_chat``) or says which of several it wants (``owner_peer``,
     ``list_by_resource``): a read that names neither is how a private
     notification ended up in a group chat.
+
+    ``on_change(uid)`` is called after every write that changed a channel's
+    pairings, so the composition root can hint the channel to the event stream.
     """
 
     def __init__(
         self,
         *,
-        name_of: Callable[[str], str | None] = lambda _uid: None,
+        on_change: Callable[[str], None] = lambda _uid: None,
         home: Path | None = None,
     ) -> None:
-        self._name_of = name_of
-        self.documents = StateDocuments(AREA, "channel_uid", home=home)
+        self._on_change = on_change
+        self._store = JsonStore(lambda: peers_path(home))
 
     def _peers(self, uid: str) -> list[ChannelPeer]:
-        raw = (self.documents.get(uid) or {}).get("peers")
+        entry = self._store.read().get(uid)
+        raw = entry.get("peers") if isinstance(entry, dict) else None
         if not isinstance(raw, list):
             return []
         return [p for p in (_peer(uid, r) for r in raw) if p is not None]
 
-    def _save(self, uid: str, peers: list[ChannelPeer], summary: str) -> None:
-        if not peers:
-            self.documents.remove(uid, summary=summary)
-            return
-        name = self._name_of(uid) or uid
-        self.documents.put(uid, name, {"peers": [_entry(p) for p in peers]}, summary=summary)
+    def _save(self, uid: str, peers: list[ChannelPeer]) -> None:
+        def change(doc: dict[str, Any]) -> None:
+            if peers:
+                doc[uid] = {"peers": [_entry(p) for p in peers]}
+            else:
+                doc.pop(uid, None)
+
+        self._store.update(change)
+        self._on_change(uid)
+
+    def forget(self, resource_uid: str) -> None:
+        """Drop a deleted channel's pairings."""
+
+        def change(doc: dict[str, Any]) -> None:
+            doc.pop(resource_uid, None)
+
+        self._store.update(change)
 
     async def owner_peer(self, resource_uid: str) -> ChannelPeer | None:
         """The earliest-paired chat; ``chat_id`` breaks a tie, so the answer is
-        the same on every call and on every machine holding the document."""
+        the same on every call."""
         peers = sorted(self._peers(resource_uid), key=lambda p: (p.paired_at, p.chat_id))
         return peers[0] if peers else None
 
@@ -117,25 +137,24 @@ class ChannelPeerRepo:
         gone = [p.chat_id for p in peers if p.sender_id == sender_id]
         if gone:
             kept = [p for p in peers if p.sender_id != sender_id]
-            self._save(resource_uid, kept, f"Un-paired person {sender_id}")
+            self._save(resource_uid, kept)
         return gone
 
     async def upsert(self, peer: ChannelPeer) -> None:
         await self.upsert_replacing(peer, ())
 
     async def upsert_replacing(self, peer: ChannelPeer, unpair: Sequence[str]) -> None:
-        """One commit: the un-pairs and the save land together."""
+        """One write: the un-pairs and the save land together."""
         drop = {peer.chat_id, *unpair}
         peers = [p for p in self._peers(peer.resource_uid) if p.chat_id not in drop]
-        self._save(peer.resource_uid, [*peers, peer], f"Paired chat {peer.chat_id}")
+        self._save(peer.resource_uid, [*peers, peer])
 
     async def delete_by_chat(self, resource_uid: str, chat_id: str) -> None:
-        """Un-pair one chat. A no-op when it is already gone — two machines
-        un-pairing the same chat is agreement, not a failure."""
+        """Un-pair one chat. A no-op when it is already gone."""
         peers = self._peers(resource_uid)
         kept = [p for p in peers if p.chat_id != chat_id]
         if len(kept) != len(peers):
-            self._save(resource_uid, kept, f"Un-paired chat {chat_id}")
+            self._save(resource_uid, kept)
 
 
 # Re-exported at the end so the models above are defined first; importing this
@@ -159,7 +178,7 @@ from coffer.infrastructure.channel.thread_persistence import (  # noqa: E402
 )
 
 __all__ = [
-    "AREA",
+    "PEERS_FILE",
     "ChannelOutboxModel",
     "ChannelOutboxRepo",
     "ChannelPeerRepo",
@@ -170,4 +189,5 @@ __all__ = [
     "ChannelThreadCursorModel",
     "ChannelThreadCursorRepo",
     "ChannelThreadHistoryModel",
+    "peers_path",
 ]

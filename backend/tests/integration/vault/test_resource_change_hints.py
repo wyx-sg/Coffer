@@ -13,24 +13,22 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from pydantic import BaseModel, ConfigDict
 
 from coffer.application.audit_service import AuditService
-from coffer.application.channel.store_ports import ChannelPeer
 from coffer.application.resource_service import ResourceService
 from coffer.domain.reconcile import Changed
 from coffer.domain.resource import Kind
 from coffer.domain.vault.writers import OP_UPDATE, WRITER_SYNC, CommitMeta
 from coffer.domain.vault.writes import CommitResult
-from coffer.infrastructure.channel.persistence import ChannelPeerRepo
+from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceStore
 from coffer.infrastructure.vault.home import vault_root
 from coffer.infrastructure.vault.instance import vault_repository, vault_writer
 from coffer.infrastructure.vault.resource_store import FileResourceRepo
-from tests.support.vault_stores import make_resource_repo
+from tests.support.vault_stores import derived_db, make_resource_repo
 
 
 class _Config(BaseModel):
@@ -46,7 +44,7 @@ class _NullAudit:
 def _kinds() -> dict[str, Kind]:
     return {
         "widget": Kind(name="widget", display_name="Widget", config_schema=_Config),
-        "channel": Kind(name="channel", display_name="Channel", config_schema=_Config),
+        "mcp_server": Kind(name="mcp_server", display_name="MCP", config_schema=_Config),
     }
 
 
@@ -140,29 +138,33 @@ async def test_a_held_path_is_in_effect_from_disk() -> None:
 
 async def test_a_state_document_changed_by_hand_hints_its_owner() -> None:
     svc, repo, hints = _setup()
-    channel = await svc.register("channel", "tg", {}, actor="user")
-    peers = ChannelPeerRepo(name_of=repo.name_of)
-    peers.documents.add_owner_listener(repo.announce)
-    await peers.upsert(ChannelPeer(channel.uid, "dm", "Owner", datetime.now(tz=UTC)))
-    hints.clear()
-    path = "state/channel-peers/tg.json"
-    doc = json.loads(_file(path).read_text())
-    doc["peers"] = []
-    _file(path).write_text(json.dumps(doc, indent=2) + "\n")
-    vault_writer().settle()
-    assert await peers.list_by_resource(channel.uid) == []
-    assert [(h.kind, h.uid, h.op) for h in hints] == [("channel", channel.uid, "upsert")]
+    server = await svc.register("mcp_server", "gh", {}, actor="user")
+    async with derived_db() as sm:
+        prefs = MCPCapabilityPreferenceStore(sm, name_of=repo.name_of)
+        prefs.documents.add_owner_listener(repo.announce)
+        prefs.documents.put(server.uid, "gh", {"disabled": {"tool": ["x"]}}, summary="t")
+        hints.clear()
+        path = "state/mcp-preferences/gh.json"
+        doc = json.loads(_file(path).read_text())
+        doc["disabled"] = {"tool": ["y"]}
+        _file(path).write_text(json.dumps(doc, indent=2) + "\n")
+        vault_writer().settle()
+        off = {p.capability_key for p in await prefs.list_for(server.uid) if not p.enabled}
+        assert off == {"y"}
+        assert [(h.kind, h.uid, h.op) for h in hints] == [("mcp_server", server.uid, "upsert")]
 
 
 async def test_a_held_state_document_is_read_from_disk() -> None:
     svc, repo, _hints = _setup()
-    channel = await svc.register("channel", "tg", {}, actor="user")
-    peers = ChannelPeerRepo(name_of=repo.name_of)
-    await peers.upsert(ChannelPeer(channel.uid, "dm", "Owner", datetime.now(tz=UTC)))
-    path = "state/channel-peers/tg.json"
-    vault_writer().set_held(lambda: [path])
-    doc = json.loads(_file(path).read_text())
-    doc["peers"] = []
-    _file(path).write_text(json.dumps(doc, indent=2) + "\n")
-    peers.documents.invalidate()
-    assert await peers.list_by_resource(channel.uid) == []
+    server = await svc.register("mcp_server", "gh", {}, actor="user")
+    async with derived_db() as sm:
+        prefs = MCPCapabilityPreferenceStore(sm, name_of=repo.name_of)
+        prefs.documents.put(server.uid, "gh", {"disabled": {"tool": ["x"]}}, summary="t")
+        path = "state/mcp-preferences/gh.json"
+        vault_writer().set_held(lambda: [path])
+        doc = json.loads(_file(path).read_text())
+        doc["disabled"] = {"tool": ["y"]}
+        _file(path).write_text(json.dumps(doc, indent=2) + "\n")
+        prefs.documents.invalidate()
+        off = {p.capability_key for p in await prefs.list_for(server.uid) if not p.enabled}
+        assert off == {"y"}

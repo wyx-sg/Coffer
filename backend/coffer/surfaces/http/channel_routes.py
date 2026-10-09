@@ -160,15 +160,6 @@ class ChannelStatusOut(BaseModel):
     #: Set while the channel's secret waits for the owner's approval (or was
     #: refused): the real reason behind ``running: false``. ``null`` otherwise.
     secret_approval: SecretApprovalOut | None = None
-    # The machine whose daemon runs this channel's adapter (spec channels
-    # "Bind each channel to the one machine that runs it"), and whether that machine is the one
-    # answering this request. Both travel, because ``running: false`` is two
-    # different facts — a channel that failed to start here, and a channel that
-    # was never this machine's to start — and a surface cannot tell them apart
-    # from a single boolean. ``runs_on`` is the raw machine id; the name beside
-    # it comes from `GET /sync/machines`, which is where the registry lives.
-    runs_on: str | None = None
-    runs_here: bool = False
     #: Enabled for this machine and not running only because the daemon has not
     #: reached it yet — it starts within one reconcile tick. ``running: false``
     #: with this set is "starting", never a failed start (spec channels "Report
@@ -355,8 +346,6 @@ async def channel_status(uid: str) -> ChannelStatusOut:
             if status.secret_approval is not None
             else None
         ),
-        runs_on=status.runs_on,
-        runs_here=status.runs_here,
         starting=status.starting,
         settings=status.settings,
         workspace_directory=str(content_root() / "workspace"),

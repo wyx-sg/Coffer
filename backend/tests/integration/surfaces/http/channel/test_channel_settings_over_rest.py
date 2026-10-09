@@ -62,9 +62,6 @@ class _Runtime:
     def adapter(self, name: str) -> None:
         return None
 
-    async def local_machine_id(self) -> str | None:
-        return None
-
 
 @dataclass
 class _Ctx:

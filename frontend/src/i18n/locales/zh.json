@@ -3464,7 +3464,6 @@
       "groups": {
         "attention": "需要处理",
         "connected": "已连接",
-        "elsewhere": "在其他机器",
         "off": "已关闭"
       }
     },
@@ -3476,18 +3475,6 @@
       "unavailable": {
         "word": "状态未知",
         "line": "状态不可用"
-      },
-      "unbound": {
-        "word": "无处运行",
-        "line": "未绑定机器"
-      },
-      "unknownMachine": {
-        "word": "无处运行",
-        "line": "绑定到了未知机器"
-      },
-      "elsewhere": {
-        "word": "运行在 {{machine}}",
-        "line": "运行在 {{machine}}"
       },
       "off": {
         "word": "已关闭",
@@ -3548,23 +3535,16 @@
         "unavailable": "请先重试——Coffer 读不到这个渠道的状态",
         "reconnecting": "请等连接恢复",
         "off": "开启这个渠道后，才能发送测试",
-        "elsewhere": "运行在 {{machine}}——请在那边发送测试",
-        "unbound": "在本机运行后，才能发送测试",
         "notPaired": "请先配对一位所有者——测试会发给所有者"
       }
     },
     "quiet": {
-      "off": "{{name}} 已关闭——开启之前它不会回应任何消息。",
-      "elsewhere": "运行在 {{machine}}。这台 Mac 保持安静，确保只有一台应答。"
+      "off": "{{name}} 已关闭——开启之前它不会回应任何消息。"
     },
     "banner": {
       "unavailable": {
         "title": "读不到这个消息渠道的状态",
         "body": "Coffer 读不到 {{platform}} 的状态。其他消息渠道不受影响。"
-      },
-      "unknownMachine": {
-        "title": "设置为在一台不在你同步组里的 Mac 上运行",
-        "body": "你同步的 Mac 里没有一台接手这个渠道，所以没有 Mac 会启动机器人，它永远不会回话。在本机运行它，或在「设置」里选择应该运行它的 Mac。"
       },
       "unreachable": {
         "title": "连不上 {{platform}}——正在重试",
@@ -3611,10 +3591,7 @@
       "websocket": "WebSocket",
       "websocketConnected": "WebSocket 已连接",
       "longPolling": "长轮询",
-      "runsHere": "运行在这台 Mac 上",
-      "runsOn": "运行在 {{machine}}",
-      "off": "已关闭——设置和配对都会保留",
-      "unknownMachine": "设置为在一台不在你同步组里的 Mac 上运行"
+      "off": "已关闭——设置和配对都会保留"
     },
     "tabs": {
       "overview": "总览",
@@ -3631,8 +3608,6 @@
       "replaceToken": "更换 token",
       "openSecrets": "打开密钥",
       "askAgain": "重新申请",
-      "runHere": "在本机运行",
-      "runHereConfirm": "在本机运行…",
       "turnOn": "开启",
       "delete": "删除消息渠道",
       "menu": {
@@ -3690,10 +3665,6 @@
         "tooLong": "最多 {{max}} 个字符。"
       },
       "unavailable": "这个渠道已保存的设置无效，无法在此显示。请修正 `~/.coffer/vault/resources/channel/` 下这个渠道的文件，或删除这个渠道后重新添加。",
-      "machine": {
-        "runsOn": "运行在",
-        "hint": "只有一台 Mac 持有机器人的连接。"
-      },
       "danger": {
         "body": "停止机器人并移除配对。对话仍保留在「对话」中。",
         "button": "删除…"
@@ -3780,10 +3751,6 @@
       "bodyLast": "{{owner}} 是唯一的主人。移除后，在重新配对之前机器人不会回应任何人。其对话仍保留在「对话」中。",
       "confirm": "移除"
     },
-    "runHere": {
-      "title": "在这台 Mac 上运行 {{name}}？",
-      "body": "{{machine}} 仍在运行这个机器人。如果可以，请先在那边停掉它——否则在 {{machine}} 同步之前（最长 5 分钟），两台 Mac 可能会同时应答。"
-    },
     "delete": {
       "title": "删除 {{name}}？",
       "body": "机器人将停止回应，其配对会被移除；对话仍保留在「对话」中。{{platform}} 那边的应用不受影响。",
@@ -3836,7 +3803,6 @@
       },
       "telegramHint": "BotFather 给你的 token。存入 Coffer 密钥库。",
       "created": "消息渠道 {{name}} 已添加",
-      "machineUnknown": "Coffer 暂时读不到本机的机器 id，这个消息渠道就没有可运行的机器。请稍后重试。",
       "agent": "默认智能体",
       "agentHint": "此渠道中的新会话都会在该智能体上开始。",
       "seatalkDelivery": {
@@ -3887,17 +3853,6 @@
         "add": "添加目录…",
         "tooMany": "最多 {{max}} 个目录。"
       }
-    },
-    "machine": {
-      "pickerLabel": "运行 {{name}} 的机器",
-      "thisMachine": "这台 Mac",
-      "self": "{{name}} · 这台 Mac",
-      "unbound": "未绑定",
-      "unknown": "未知机器（{{id}}）",
-      "handover": "重新绑定不需要重启。失去该渠道的机器会在一两秒内停掉适配器；获得它的机器会在下一轮同步把改动带过去之后启动。从你当前所在的这台机器上「绑出去」交接得最干净——反过来，在另一台机器仍然持有该渠道时把它绑到本机，可能会出现两边同时应答，直到那台机器完成下一轮同步。",
-      "notReach": "这里决定的是「哪台机器运行适配器」。总览里的「可驱动的智能体」决定的是「这个渠道可以驱动哪些智能体」。",
-      "rebound": "{{name}} 现在运行在 {{machine}} 上",
-      "helpLabel": "关于运行机器"
     },
     "credentials": {
       "checking": "正在检查…",

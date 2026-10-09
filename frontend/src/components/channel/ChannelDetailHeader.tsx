@@ -26,9 +26,9 @@ import { PlatformMark } from "./PlatformMark";
 /** What a banner button, the grey box or the header can ask the pane to do. */
 export type ChannelCommand = Exclude<ChannelPrimaryAction, null> | "sendTest";
 
-/** States in which there is nothing to reconnect: the channel is off, runs on
- *  another Mac, or its status is not known yet. */
-const NO_RECONNECT = new Set(["off", "elsewhere", "unbound", "unknownMachine", "loading"]);
+/** States in which there is nothing to reconnect: the channel is off, or its
+ *  status is not known yet. */
+const NO_RECONNECT = new Set(["off", "loading"]);
 
 interface Props {
   channel: ResourceOut;
@@ -51,7 +51,7 @@ export function ChannelDetailHeader({ channel, view, busy, onCommand }: Props) {
     {
       key: "reconnect",
       label: t("channels.actions.menu.reconnect"),
-      disabled: !view.runsHere || NO_RECONNECT.has(view.state) || busy,
+      disabled: NO_RECONNECT.has(view.state) || busy,
       onSelect: () => onCommand("reconnect"),
     },
   ];

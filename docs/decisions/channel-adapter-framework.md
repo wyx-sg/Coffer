@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-24
 **Deciders**: Yuxing Wu
-**Related**: spec channels ("Run the channel lifecycle through the resource framework", "Render replies by the adapter's declared capabilities", "Route the owner's messages into a turn-platform conversation", "Drive every managed agent from one bot", "Bind each channel to the one machine that runs it");
+**Related**: spec channels ("Run the channel lifecycle through the resource framework", "Render replies by the adapter's declared capabilities", "Route the owner's messages into a turn-platform conversation", "Drive every managed agent from one bot"); [Channels Are Machine-Local Resources, Like Agents](channels-are-machine-local-resources.md),
 [Channel Owner Gate](channel-owner-gate.md), [Channel Live Surface Strategy](channel-live-surface-strategy.md),
 [SeaTalk Inbound Over WebSocket](seatalk-websocket-inbound.md), [Telegram Long Polling](telegram-long-polling.md),
 [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), [Resource Framework Designed Upfront](resource-framework-upfront.md),
@@ -52,7 +52,8 @@ The forces:
 
 - **Channels are a resource kind** (`channel`), riding the generic lifecycle,
   audit and secret-reference machinery; secrets live in the secret store
-  and config carries refs, probed at registration.
+  and config carries refs, probed at registration. A channel is
+  machine-local like an agent ([Channels Are Machine-Local Resources, Like Agents](channels-are-machine-local-resources.md)).
 - **An adapter is transport only**: start/stop, outbound send/edit/stream,
   normalising inbound platform payloads into the envelopes in
   `domain/channel/envelopes.py` (`InboundMessage`, `InboundCallback`,
@@ -78,10 +79,10 @@ The forces:
 - **Adapters run in-daemon as supervised asyncio tasks**, managed by
   `ChannelRuntime` (`application/channel/runtime.py`): every 2 s it asks the
   gate in `application/channel/wanted.py` which channels this machine should
-  run and converges. The gate has three parts, in order: **enabled**; **the
-  machine binding** (`runs_on` names this machine — failing closed for another
-  machine, an unknown one or none); **routing** (the channel names a
-  registered default agent inside its own scope). The same gate is the one
+  run and converges. The gate has two parts, in order: **enabled**; **routing**
+  (the channel names a registered default agent inside its own scope). There is
+  no machine part: a channel is a machine-local resource, so every channel this
+  machine holds is this machine's to run. The same gate is the one
   place an agent uid becomes the turn platform's agent key. A running channel
   is rebuilt when its config or its routing changes; a failed start is retried
   after 30 s (`FAILURE_RETRY_SECONDS`). REST, CLI and UI never start or stop an
@@ -201,7 +202,7 @@ queueing and rendering, and selects every strategy from capabilities. The core
 reaches the chat platform only through `enqueue_message` and the conversation
 service, like the web page. Adapters run as asyncio tasks inside the daemon,
 started and stopped only by `ChannelRuntime`'s 2 s reconcile against the
-three-part gate (enabled, bound to this machine, routable). Transports speak
+two-part gate (enabled, routable). Transports speak
 their platforms over `httpx`; a vendor library is used only where no wire
 protocol is published.
 
@@ -230,11 +231,10 @@ Rules a future change must respect:
   address and one relay can serve every webhook-only platform. That design
   gets its own ADR when the first such platform is added.
 - A channel's reported status is what is actually running, because only the
-  reconciler changes it; a channel that is dark because it is bound to another
-  machine or routes nowhere logs why once rather than every tick.
-- Rebinding a channel to another machine, narrowing its scope or editing its
-  config needs no restart: each is a config change, and a config change is a
-  tick.
+  reconciler changes it; a channel that is dark because it routes nowhere logs
+  why once rather than every tick.
+- Narrowing a channel's scope or editing its config needs no restart: each is
+  a config change, and a config change is a tick.
 - Adapters are held in the runtime by channel name, while the SeaTalk
   websocket controller is keyed by uid; a rename therefore rebuilds the
   adapter binding on the next tick but does not re-register the socket.

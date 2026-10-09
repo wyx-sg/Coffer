@@ -9,6 +9,7 @@ from coffer.domain.channel.config import ChannelConfigModel
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import Kind, Resource
 from coffer.domain.scope import Scope, is_active
+from coffer.domain.vault.layout import StorageClass
 
 _REF_FIELDS = ("bot_token_ref", "app_secret_ref")
 
@@ -156,28 +157,8 @@ def _make_scope_validator(
     return _validate
 
 
-def _bound_elsewhere(config: Mapping[str, Any], local_machine_id: str | None) -> bool:
-    """Whether this channel names a machine that is not this one.
-
-    Such a channel is not this machine's to judge. Its adapter starts on the
-    machine it names, its agents are that machine's agents, and the document
-    reached this registry only because the vault converges — refusing it here
-    would hold a perfectly good document out of the vault for failing a
-    precondition it was never meant to satisfy.
-
-    Unbound (``None``) is NOT elsewhere: an unbound channel is one nobody has
-    placed yet, and it is validated like any other so that binding it here is a
-    single click rather than a click and a rejection.
-    """
-    if local_machine_id is None:
-        return False
-    runs_on = config.get("runs_on")
-    return isinstance(runs_on, str) and bool(runs_on) and runs_on != local_machine_id
-
-
 def _make_create_validator(
     agent_names: AgentNames | None,
-    local_machine_id: str | None = None,
 ) -> Callable[[dict[str, Any]], Awaitable[None]]:
     """Registration-time validation (``validate_config``).
 
@@ -201,11 +182,6 @@ def _make_create_validator(
     """
 
     async def _validate_create(config: dict[str, Any]) -> None:
-        if _bound_elsewhere(config, local_machine_id):
-            # A channel handed straight to another machine names that machine's
-            # agents, which are none of this registry's business — the same skip
-            # the edit path makes, for the same reason.
-            return
         names = await agent_names() if agent_names is not None else {}
         _validate_default_agent(config, None, names)
 
@@ -214,7 +190,6 @@ def _make_create_validator(
 
 def _make_update_validator(
     agent_names: AgentNames | None,
-    local_machine_id: str | None = None,
 ) -> Callable[[Resource, dict[str, Any]], Awaitable[None]]:
     """Update-time validation hook (``on_update_config``).
 
@@ -233,11 +208,6 @@ def _make_update_validator(
     """
 
     async def _validate_update(resource: Resource, after: dict[str, Any]) -> None:
-        if _bound_elsewhere(after, local_machine_id):
-            # Including the edit that BINDS it elsewhere: handing a channel to
-            # another machine must not be blocked by this machine's opinion of
-            # an agent the other machine is the one to have.
-            return
         names = await agent_names() if agent_names is not None else {}
         try:
             _validate_default_agent(after, resource.scope, names)
@@ -251,7 +221,6 @@ def make_channel_kind(
     on_delete: Callable[[Resource], Awaitable[None]] | None = None,
     *,
     agent_names: AgentNames | None = None,
-    local_machine_id: str | None = None,
 ) -> Kind:
     """Construct the `channel` Kind.
 
@@ -285,26 +254,26 @@ def make_channel_kind(
     (``validate_scope_for``), so the two paths cannot disagree: a channel's
     ``default_agent`` is inside its scope whichever of the two the user edits.
 
-    ``local_machine_id`` is this machine's id (spec vault-sync "Derive machine
-    identity from the host"). It buys exactly one thing: the agent checks above
-    are skipped for a channel bound to a DIFFERENT machine. Those checks ask
-    "will this channel be able to drive anything when it starts", and a channel
-    this machine never starts has no answer to give — without the skip, a
-    converged channel whose owner machine has an agent this one does not would
-    be refused at the registry door every round, for a fault on nobody's
-    machine.
+    A channel is machine-local (ADR channels-are-machine-local-resources): its
+    file is under ``local/`` like an agent's, never committed, never synced, so
+    the agents its ``default_agent`` and scope name are always this machine's.
     """
     return Kind(
         name="channel",
         display_name="Channel",
         config_schema=ChannelConfigModel,
+        # A bot identity tolerates one consumer, and everything a channel names
+        # — its agents, its directories, its pairings — is this machine's, so
+        # it is filed under ``local/`` and never travels
+        # (ADR channels-are-machine-local-resources).
+        storage=StorageClass.LOCAL,
         on_delete=on_delete,
         secret_ref_extractor=_channel_secret_ref_extractor,
         # Registration and edit run the same check from the two ends of a
         # channel's life, so a ``default_agent`` naming no registered agent is
         # refused wherever it is written rather than only failing at start time.
-        validate_config=_make_create_validator(agent_names, local_machine_id),
-        on_update_config=_make_update_validator(agent_names, local_machine_id),
+        validate_config=_make_create_validator(agent_names),
+        on_update_config=_make_update_validator(agent_names),
         # The scope path's own pre-validation, the mirror of the check
         # ``on_update_config`` runs on the config path, so the invariant holds
         # no matter which of the two paths a write arrives on. It judges a

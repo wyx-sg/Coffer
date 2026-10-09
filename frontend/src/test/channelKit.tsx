@@ -13,14 +13,6 @@ import type { ChannelSettings, ChannelStatus } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import { ChannelsPage } from "@/pages/ChannelsPage";
 
-/** This machine, and the other machine in the registry. */
-export const HERE = "machine-here";
-export const THERE = "machine-there";
-export const REGISTRY = [
-  { machine_id: HERE, name: "Laptop", is_self: true },
-  { machine_id: THERE, name: "Mac mini", is_self: false },
-];
-
 /** The agent channels drive — a uid, like every cross-resource reference. */
 export const AGENT = { uid: "u-6c1d0b83", name: "claude-code", display_name: "Claude Code" };
 
@@ -43,7 +35,6 @@ export function makeChannel(
       app_id: "8231",
       app_secret_ref: "channel/0f/app-secret",
       default_agent: AGENT.uid,
-      runs_on: HERE,
       ...(over.config ?? {}),
     },
   } as unknown as ResourceOut;
@@ -64,7 +55,6 @@ export function makeSettings(channel: ResourceOut): ChannelSettings {
     directories: [],
     direct_system_prompt: "",
     group_system_prompt: "",
-    runs_on: null,
     ...channel.config,
   } as unknown as ChannelSettings;
 }
@@ -111,8 +101,6 @@ export function makeStatus(channel: ResourceOut, over: Partial<ChannelStatus> = 
       },
     ],
     inbound: seatalk ? { websocket_state: "connected", websocket_error: null } : null,
-    runs_on: (channel.config.runs_on as string | undefined) ?? null,
-    runs_here: channel.config.runs_on === HERE,
     diagnostics: [],
     secret_approval: null,
     handoff: null,

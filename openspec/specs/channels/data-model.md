@@ -2,8 +2,9 @@
 
 ## Resource kind: `channel`
 
-A channel is a resource file, `vault/resources/channel/<name>.json`
-(spec resource-framework). Its `config` is validated by a discriminated
+A channel is a machine-local resource file, `local/resources/channel/<name>.json`
+(spec resource-framework; spec channels "Keep each channel on the machine that
+holds it"), never committed or synced. Its `config` is validated by a discriminated
 Pydantic union on `channel_type`. The per-type halves are specified in the children
 ([`channels/telegram`](telegram/spec.md), [`channels/seatalk`](seatalk/spec.md));
 this file is where their storage shape lives, because a child spec carries only
@@ -22,8 +23,7 @@ ChannelConfig (discriminator: channel_type)
 │   ├── new_conversation_after_idle_hours: float = 24.0  # idle hours before a chat's next message opens a new conversation (0–8760; 0 = never)
 │   ├── directories: list[str] = []         # absolute paths `/dir` may switch into (≤32)
 │   ├── direct_system_prompt: str = ""      # owner's prompt for direct chats + their threads (≤4000, trimmed)
-│   ├── group_system_prompt: str = ""       # owner's prompt for group main chats + threads (≤4000, trimmed)
-│   └── runs_on: str | None = None          # machine_id that runs the adapter
+│   └── group_system_prompt: str = ""       # owner's prompt for group main chats + threads (≤4000, trimmed)
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
 │   └── bot_token_ref: str            # secret-store ref, probed at register
@@ -83,21 +83,6 @@ Validation rules:
   runs on the bound agent's own CLI default, and the `/model` card offers that
   agent's whole catalogue and refuses no id. `_CommonChannelFields` forbids
   unknown keys (`extra="forbid"`), so a file carrying either is refused.
-- `runs_on` is the `machine_id` of the one machine whose daemon starts this
-  channel's adapter (see "Bind each channel to the one machine that runs it"). It lives in `config` because it must TRAVEL:
-  config is what the resource file carries between machines, while the
-  channel's `enabled` / scope are reach, in `local/reach.json`, which
-  deliberately stays home. `None` is unbound and runs nowhere — never "runs
-  here", which a document naming nobody would mean on every machine at once.
-  A channel registered on a machine whose machine id cannot be read is left
-  unbound, which the surfaces show plainly rather than papering over with an
-  invented id.
-- A channel bound to a machine OTHER than this one is exempt from the
-  `default_agent` registry check on both write paths. That check asks whether
-  the channel will be able to drive anything when it starts, and a channel this
-  machine never starts has no answer to give; without the exemption a channel
-  synced from an owner machine that has an agent this one lacks would be
-  refused at the registry door.
 - A SeaTalk channel has **one inbound transport**, the outbound websocket
   connection (spec channels/seatalk "Receive every event over one outbound
   websocket connection"), so its configuration carries no transport field and no
@@ -109,50 +94,43 @@ Validation rules:
 - Channel turns run in the Coffer-managed default workspace
   `~/.coffer/content/workspace` (created on first use).
 
-## Pairings — `vault/state/channel-peers/<channel name>.json`
+## Pairings — `local/channel-peers.json`
 
 **The pairings, and nothing else.** One entry per `(channel, chat)`: the paired
 owner's DM, plus one per group or thread the owner has addressed the bot in. It
-answers "may this sender drive turns here". Which chats on a platform belong to
-the channel's owner is the person's, and travels, so it is a vault state
-document (spec vault-storage), one per channel with at least one pairing
-(`ChannelPeerRepo`, `infrastructure/channel/persistence.py`):
+answers "may this sender drive turns here". Like the channel, it is this
+machine's: one file, keyed by channel uid, holding every channel with at least
+one pairing (`ChannelPeerRepo`, `infrastructure/channel/persistence.py`):
 
 ```json
 {
-  "channel_uid": "3f2a9c0e8b1d4c6a9e7f0b2d4c6a8e0f",
-  "format_version": 1,
-  "peers": [
-    {
-      "chat_id": "e12345",
-      "sender_id": "e12345",
-      "display_name": "Ada",
-      "paired_at": "2026-09-30T08:00:00+00:00"
-    }
-  ]
+  "3f2a9c0e8b1d4c6a9e7f0b2d4c6a8e0f": {
+    "peers": [
+      {
+        "chat_id": "e12345",
+        "sender_id": "e12345",
+        "display_name": "Ada",
+        "paired_at": "2026-09-30T08:00:00+00:00"
+      }
+    ]
+  }
 }
 ```
 
 | key | notes |
 | --- | ----- |
-| `channel_uid` | the channel's uid — what the document is found by; the file name only follows the channel's name |
-| `format_version` | the state document's format (1) |
-| `peers[].chat_id` | Telegram chat id / SeaTalk employee_code or group id; unique within the document |
+| `<channel uid>` | the channel's uid; a rename changes nothing here |
+| `peers[].chat_id` | Telegram chat id / SeaTalk employee_code or group id; unique within the channel's entry |
 | `peers[].sender_id` | the paired sender's stable id (Telegram from.id, SeaTalk employee_code); every owner gate compares it, and pairing refuses a message that carries none |
 | `peers[].display_name` | the sender's name at pairing time, for UI/status |
 | `peers[].paired_at` | ISO time (UTC) |
 
 `peers` keeps pairing order, and the owner peer is the earliest-paired entry
-(`chat_id` breaks a tie), so every machine holding the document gives the same
-answer. Re-pairing one chat replaces its entry without touching any other;
-un-pairing the last chat removes the file. The document moves when the channel
-is renamed and is deleted with it, in the channel's own commit.
-
-Everything in it is a fact about the platform, which is why it travels: a
-channel that moved to another machine without its pairings would make the
-owner re-pair from their phone. What a chat's live conversation is — and the
-agent a thread has stuck to — is not in it: those are `runs.db`'s thread tables
-below, because conversations are machine-local.
+(`chat_id` breaks a tie). Re-pairing one chat replaces its entry without
+touching any other; un-pairing the last chat removes the channel's entry, and
+deleting the channel removes it too. What a chat's live conversation is — and
+the agent a thread has stuck to — is not in it: those are `runs.db`'s thread
+tables below.
 
 ## Pictures — `derived/channel-avatars/<channel>/<person>`
 
