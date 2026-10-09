@@ -99,11 +99,7 @@ The desktop app updates itself from **Settings › About**. With the one-line in
 
 ## How do I uninstall Coffer?
 
-<<<<<<< HEAD
 Choose **Uninstall Coffer…** on **Settings › About** in the desktop app, or run `coffer uninstall`. Coffer disconnects your agents, removes the skill links it delivered, start at login, its binaries and `PATH` lines and the app, and keeps `~/.coffer` for a reinstall. Deleting your data too is a separate choice that asks for Touch ID. See [Install → Uninstall](/start/install#uninstall).
-=======
-Remove Coffer's MCP entry and memory hook from each agent, unregister the agents (which removes the skill links Coffer delivered), stop the daemon and its login service, then delete the binaries and, if you want, `~/.coffer`. [Install → Uninstall](/start/install#uninstall) gives the exact commands. Back up `~/.coffer`, and the master key from the desktop app, first if you might want them again.
->>>>>>> origin/main
 
 If you used vault sync, the remote repository is untouched and still holds your vault's documents.
 

@@ -99,11 +99,7 @@ Coffer 免费且开源，采用 GNU AGPL v3.0（或更高版本）许可证。�
 
 ## 怎么卸载 Coffer？ {#how-do-i-uninstall-coffer}
 
-<<<<<<< HEAD
 在桌面应用的**设置 › 关于**里选择**卸载 Coffer…**，或者运行 `coffer uninstall`。Coffer 会断开你的智能体，移除它投递的技能链接、开机自启动、它的二进制和 `PATH` 行以及应用本身，并保留 `~/.coffer` 以便重新安装。是否同时删除数据是单独的选择，需要 Touch ID。见[安装 → 卸载](/zh/start/install#uninstall)。
-=======
-从每个智能体中移除 Coffer 的 MCP 条目和记忆 Hook，注销智能体（这会移除 Coffer 投递的技能链接），停止守护进程及其开机自启服务，然后删除二进制，如果愿意，再删掉 `~/.coffer`。[安装 → 卸载](/zh/start/install#uninstall)给出了具体命令。如果你以后可能还要用，先备份 `~/.coffer`，并在桌面应用中备份主密钥。
->>>>>>> origin/main
 
 如果你用过保险库同步，远端仓库不受影响，仍保存着你保险库里的文档。
 

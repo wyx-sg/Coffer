@@ -253,11 +253,7 @@ coffer uninstall
 如果也要删除数据，在对话框里勾选**同时删除我的数据**；Coffer 会在删除任何东西之前要求 Touch ID。应用还会在守护进程停止后删除主密钥的钥匙串条目。在终端里，`coffer uninstall --delete-data` 会要求你输入 `delete my data`，没有可输入的终端时什么也不做；它会删除 `~/.coffer`，但不碰钥匙串（只有 Coffer 的守护进程会访问钥匙串），请自己在“钥匙串访问”里删除 `coffer` 条目。移到别处的保险库会保留在原处。
 
 ::: danger 删除 ~/.coffer 不可恢复
-<<<<<<< HEAD
-`~/.coffer` 里有你的数据库、知识集、技能库和密钥的主密钥。删除它会销毁所有已保存的密钥，以及只存在于那里的所有文档，包括 Coffer 从智能体那里接管的技能。如果以后可能还要用，先[备份主密钥](/zh/guides/secrets#the-master-key-and-its-backup)。
-=======
-`~/.coffer` 里有你的数据库、知识集、技能库和加密的密钥。删除它会销毁所有已保存的密钥，以及只存在于那里的所有文档。如果以后可能还要用，先把它复制到别处。
->>>>>>> origin/main
+`~/.coffer` 里有你的数据库、知识集、技能库和加密的密钥。删除它会销毁所有已保存的密钥，以及只存在于那里的所有文档，包括 Coffer 从智能体那里接管的技能。如果以后可能还要用，先[备份主密钥](/zh/guides/secrets#the-master-key-and-its-backup)。
 :::
 
 ## 实验功能 {#experimental-features}
