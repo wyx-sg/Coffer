@@ -89,19 +89,19 @@ def test_corpus_drops_the_duplicated_server_token():
         [{"name": "jira__jira_get_issue", "description": "Fetch an issue"}]
     )
 
-    assert corpus == [("jira jira_get_issue", "Fetch an issue")]
+    assert corpus == [("jira jira_get_issue", "Fetch an issue", "")]
 
 
 def test_corpus_handles_a_tool_name_containing_the_separator():
     corpus = gateway_tool_search._search_corpus([{"name": "srv__weird__tool", "description": "d"}])
 
-    assert corpus == [("srv weird__tool", "d")]
+    assert corpus == [("srv weird__tool", "d", "")]
 
 
 def test_corpus_handles_an_unprefixed_name():
     corpus = gateway_tool_search._search_corpus([{"name": "bare", "description": "d"}])
 
-    assert corpus == [("bare", "d")]
+    assert corpus == [("bare", "d", "")]
 
 
 @pytest.mark.asyncio
@@ -123,3 +123,65 @@ async def test_exposure_search_breaks_a_tie_in_favour_of_the_search_only_tool():
 
     assert [t["name"] for t in out["tools"]] == ["beta__fetch", "alpha__fetch"]
     assert out["total_searched"] == 2  # every tool stays searchable
+
+
+def test_corpus_carries_the_input_schema_text():
+    corpus = gateway_tool_search._search_corpus(
+        [
+            {
+                "name": "account__get_account_list",
+                "description": "查询账号列表",
+                "inputSchema": {"type": "object", "properties": {"phone_list": {"type": "array"}}},
+            }
+        ]
+    )
+
+    assert corpus == [("account get_account_list", "查询账号列表", "phone_list")]
+
+
+def _mixed_language_catalogue():
+    return [
+        {
+            "name": "crm__get_user",
+            "description": "Get a user by their id",
+            "inputSchema": {"type": "object", "properties": {"user_id": {"type": "string"}}},
+        },
+        {
+            "name": "account__get_account_list",
+            "description": "查询账号列表 支持批量查询",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "phone_list": {"type": "array", "description": "手机号列表"},
+                    "status": {"type": "string", "enum": ["active", "frozen"]},
+                },
+            },
+        },
+        {
+            "name": "order__get_order_detail",
+            "description": "查询订单详情",
+            "inputSchema": {"type": "object", "properties": {"order_id": {"type": "string"}}},
+        },
+    ]
+
+
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="search the catalogue in Chinese")
+async def test_a_chinese_query_finds_the_tool_described_in_chinese():
+    out = await execute_tool_search({"query": "查询账号列表"}, _mixed_language_catalogue())
+
+    assert out["tools"][0]["name"] == "account__get_account_list"
+
+
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="search reaches a tool through its parameters")
+async def test_a_query_matching_only_a_parameter_finds_the_tool():
+    by_name = await execute_tool_search(
+        {"query": "find a user by phone number"}, _mixed_language_catalogue()
+    )
+    by_enum = await execute_tool_search({"query": "frozen"}, _mixed_language_catalogue())
+    by_param_description = await execute_tool_search(
+        {"query": "按手机号查"}, _mixed_language_catalogue()
+    )
+
+    assert "account__get_account_list" in [t["name"] for t in by_name["tools"]]
+    assert by_enum["tools"][0]["name"] == "account__get_account_list"
+    assert by_param_description["tools"][0]["name"] == "account__get_account_list"

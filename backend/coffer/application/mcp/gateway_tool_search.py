@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from coffer.application.builtin_tools import COFFER_TOOL_PREFIX
-from coffer.domain.mcp.tool_search import rank_tools
+from coffer.domain.mcp.tool_search import rank_tools, schema_text
 from coffer.domain.mcp.tool_tiering import split_prefixed
 
 TOOL_SEARCH_NAME = f"{COFFER_TOOL_PREFIX}search_tools"
@@ -54,8 +54,8 @@ def tool_search_descriptor() -> dict[str, Any]:
 
 def _search_corpus(
     tools: list[dict[str, Any]], about: Mapping[str, str] | None = None
-) -> list[tuple[str, str]]:
-    """Build the (name_text, description) pairs the rankers score.
+) -> list[tuple[str, str, str]]:
+    """Build the (name_text, description, parameters) triples the ranker scores.
 
     The listed name is doubly namespaced — ``jira__jira_get_issue`` tokenizes as
     jira, jira, get, issue — so the server token lands twice at the ranker's
@@ -65,14 +65,19 @@ def _search_corpus(
     A custom-tool group's description (``about``, keyed by group name) joins the
     description text of each of its tools (spec mcp-gateway "Describe a
     custom-tool group").
+
+    The input schema's parameter names, descriptions and enum values are the
+    third, lightest-weighted text: an intent like "find a user by phone" often
+    lives only in a parameter such as ``phone_list``.
     """
-    corpus: list[tuple[str, str]] = []
+    corpus: list[tuple[str, str, str]] = []
     for tool in tools:
         server, bare = split_prefixed(str(tool.get("name", "")))
         text = f"{server} {bare}" if server else bare
         description = str(tool.get("description", ""))
         group = (about or {}).get(server) if server else None
-        corpus.append((text, f"{description}\n{group}" if group else description))
+        parameters = schema_text(tool.get("inputSchema"))
+        corpus.append((text, f"{description}\n{group}" if group else description, parameters))
     return corpus
 
 
