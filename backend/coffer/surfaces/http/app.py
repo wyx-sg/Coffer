@@ -349,6 +349,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 attention_watch_task=attention_watch_task,
                 kinds=kinds,
                 engine=engine,
+                reconciler=reconciler,
             )
         )
         await _best_effort("derived_db", vault.derived_engine.dispose())
