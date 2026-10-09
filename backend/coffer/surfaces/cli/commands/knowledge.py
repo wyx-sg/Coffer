@@ -1,10 +1,10 @@
 """``coffer knowledge`` — the Knowledge page's collections, changes and uploads.
 
 Spec knowledge "Manage knowledge in the web UI and on the command line". A
-collection's documents are plain files under the knowledge root, read, edited
-and deleted with the reader's own tools; creating and describing a collection,
-uploading material for conversion, reading the changes feed and undoing a
-delete are commands.
+collection's pages and sources are plain files under the knowledge root, read,
+edited and deleted with the reader's own tools; creating and describing a
+collection, checking one, uploading sources, reading the changes feed and
+undoing a delete are commands.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ SPECS = [
         "GET",
         "/knowledge/collections",
         _UI + "collections",
-        "Every collection with its description and document count.",
+        "Every collection with its description, page, source, waiting-source and finding counts.",
     ),
     RouteCommand(
         "knowledge create",
@@ -46,6 +46,14 @@ SPECS = [
         "Rewrite a collection's description. Body: description.",
         names=K,
         body=True,
+    ),
+    RouteCommand(
+        "knowledge check",
+        "GET",
+        "/knowledge/collections/{uid}/check",
+        _UI + "a collection's Check",
+        "A collection's mechanical findings: dead links, orphan pages, waiting sources.",
+        names=K,
     ),
     RouteCommand(
         "knowledge tree",
@@ -88,10 +96,10 @@ knowledge = group("knowledge")
 @maps("knowledge upload", ("POST", "/knowledge/upload"), ui=_UI + "Upload")
 def upload(
     collection: str = typer.Argument(..., help="The collection's folder name"),
-    files: list[Path] = typer.Argument(..., help="Files to convert into documents"),
+    files: list[Path] = typer.Argument(..., help="Files to keep as sources"),
     as_json: bool = _io.json_option(),
 ) -> None:
-    """Upload files into a collection; each becomes a Markdown document."""
+    """Upload files into a collection; each becomes a source, its original kept."""
     results = []
     for path in files:
         try:

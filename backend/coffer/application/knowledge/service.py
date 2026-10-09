@@ -16,6 +16,7 @@ leaves an agent's view only by being deleted.
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import logging
 from collections.abc import Awaitable, Callable
@@ -46,7 +47,7 @@ from coffer.domain.knowledge.history import (
 )
 from coffer.domain.resource import Resource
 from coffer.domain.vault.writers import CommitMeta
-from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
+from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths, wiki
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
 
 logger = logging.getLogger(__name__)
@@ -206,7 +207,19 @@ class KnowledgeService:
         """A document, for the human surfaces. A hidden path, the inbox included,
         is refused by the path guard."""
         await self.require_collection(relpath)
-        return fs.read_file(relpath)
+        file = fs.read_file(relpath)
+        return await asyncio.to_thread(wiki.describe, file)
+
+    async def check(self, uid: str) -> CollectionEntry:
+        """One collection's entry with its mechanical findings (spec knowledge
+        "Check a collection mechanically on every read"). Computed on every call
+        from the files; nothing is stored."""
+        row = await self.collection(uid)
+        directory = paths.collection_dir(row.name)
+        if not directory.is_dir():
+            raise CollectionNotFound(row.name)
+        entry = await asyncio.to_thread(catalogue.collection_entry, directory)
+        return dataclasses.replace(entry, uid=row.uid)
 
     async def catalogue(self) -> list[tuple[CollectionEntry, tuple[FileEntry, ...]]]:
         """Every registered collection with every document in it.
@@ -235,12 +248,15 @@ class KnowledgeService:
         body: str,
         actor_kind: str = ACTOR_AGENT,
         actor: str,
+        original: tuple[str, bytes] | None = None,
     ) -> Submission:
-        """Add new knowledge to a collection (see "Promote submitted
+        """Add new material to a collection (see "Promote submitted
         material at once").
 
-        The material becomes a document at the collection root on the spot:
-        knowledge that sits in a hidden directory is knowledge no agent can read.
+        The material becomes a source under the collection's ``sources/`` on the
+        spot, with ``original`` — an upload's own file name and bytes — kept
+        beside it ("Keep every upload as a source with its original"). It waits
+        there until the person's agent compiles it into pages.
         """
         row = await self.require_collection(collection)
         meta = CommitMeta(
@@ -256,8 +272,10 @@ class KnowledgeService:
                 row.name, title=title, description=description, body=body, actor=actor_kind
             )
             tx.touch(f"{row.name}/{paths.INBOX_DIR_NAME}/{name}")
-            document = inbox.promote(row.name, name)
+            document, kept = inbox.promote(row.name, name, original=original)
             tx.touch(document.path)
+            if kept is not None:
+                tx.touch(kept)
         await self._audit.record(
             AuditEventType.KNOWLEDGE_WRITTEN.value,
             resource=row,

@@ -15,10 +15,7 @@ ACTOR_USER = "user"
 
 @dataclass(frozen=True)
 class CollectionEntry:
-    """One collection, as the top level of the catalogue shows it.
-
-    ``document_count`` is the Markdown documents an agent can read.
-    """
+    """One collection, as the top level of the catalogue shows it."""
 
     #: The collection resource's identity. Every route that addresses this
     #: collection takes it, so the catalogue has to carry it — the page cannot
@@ -32,7 +29,16 @@ class CollectionEntry:
     name: str
     #: First paragraph of the collection's ``README.md``; empty when absent.
     description: str
-    document_count: int = 0
+    #: Pages under ``pages/`` and sources under ``sources/`` (spec knowledge
+    #: "Keep sources and pages apart in each collection").
+    page_count: int = 0
+    source_count: int = 0
+    #: Sources no page cites and none marks skipped ("Derive which sources wait
+    #: from the pages that cite them").
+    waiting_source_count: int = 0
+    #: Every mechanical finding ("Check a collection mechanically on every read").
+    finding_count: int = 0
+    findings: tuple[Finding, ...] = ()
     #: The collection directory's absolute path, so a surface can reveal it
     #: ("Return absolute paths on reads"); empty where it was not read.
     folder_path: str = ""
@@ -55,12 +61,18 @@ class DirectoryEntry:
 class FileEntry:
     """A file as the catalogue lists it: enough to choose without reading."""
 
-    #: Path relative to the knowledge root, e.g. ``shopee/account/gateway.md``.
+    #: Path relative to the knowledge root, e.g. ``shopee/pages/gateway.md``.
     path: str
     title: str
     description: str
     actor: str
     updated_at: str
+    #: ``page``, ``source`` or ``file`` (``paths.kind_of``).
+    kind: str = "file"
+    #: A page's ``type``; empty otherwise.
+    page_type: str = ""
+    #: A source no page cites and none marks skipped.
+    waiting: bool = False
 
 
 @dataclass(frozen=True)
@@ -70,6 +82,50 @@ class CatalogueLevel:
     path: str
     directories: tuple[DirectoryEntry, ...] = field(default_factory=tuple)
     files: tuple[FileEntry, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
+class SourceRef:
+    """A page's ``sources`` entry: the slug it names and the source it resolves
+    to, ``path`` ``None`` when it names none."""
+
+    slug: str
+    path: str | None = None
+    title: str = ""
+
+
+@dataclass(frozen=True)
+class LinkRef:
+    """A ``[[target]]`` in a page's body and the one file it resolves to;
+    ``path`` ``None`` when it is dead or ambiguous (``ambiguous`` says which)."""
+
+    target: str
+    path: str | None = None
+    ambiguous: bool = False
+
+
+@dataclass(frozen=True)
+class PageRef:
+    """A page, as a source names the pages that cite it."""
+
+    path: str
+    title: str
+
+
+@dataclass(frozen=True)
+class Finding:
+    """One mechanical finding about a collection (spec knowledge "Check a
+    collection mechanically on every read").
+
+    ``path`` is the file it concerns; ``target`` the link or source it names,
+    where it names one; ``others`` the other files a duplicate or an ambiguous
+    link involves.
+    """
+
+    kind: str
+    path: str
+    target: str | None = None
+    others: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -88,6 +144,19 @@ class KnowledgeFile:
     file_path: str
     #: Absolute path of its containing folder.
     folder_path: str
+    #: ``page``, ``source`` or ``file`` (``paths.kind_of``).
+    kind: str = "file"
+    #: A page's ``type`` and ``aliases``.
+    page_type: str = ""
+    aliases: tuple[str, ...] = ()
+    #: A page's ``sources`` entries, each resolved to the source it names.
+    sources: tuple[SourceRef, ...] = ()
+    #: A page's ``[[links]]``, each resolved to the file it names.
+    links: tuple[LinkRef, ...] = ()
+    #: A source's pages that cite it, whether it waits, and its kept original.
+    cited_by: tuple[PageRef, ...] = ()
+    waiting: bool = False
+    original_path: str | None = None
 
 
 @dataclass(frozen=True)

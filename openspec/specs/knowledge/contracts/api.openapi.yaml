@@ -205,6 +205,49 @@ paths:
       summary: Create Collection
       tags:
       - knowledge
+  /api/v1/knowledge/collections/{uid}/check:
+    get:
+      description: |-
+        One collection's mechanical findings, computed now from its files and
+        fixed by nothing here ("Check a collection mechanically on every read").
+      operationId: check_collection_api_v1_knowledge_collections__uid__check_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Check Collection
+      tags:
+      - knowledge
   /api/v1/knowledge/collections/{uid}/description:
     put:
       description: Rewrite the opening paragraph of the collection's README.
@@ -518,7 +561,7 @@ components:
           description: The item a retired curation pass curated.
           title: Item
         operation:
-          description: '`save`, `delete`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, `remove` or `baseline`; a change a retired curation pass made also reads `pass`, `submit` or `undo`.'
+          description: '`save`, `delete`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, `remove`, `layout` or `baseline`; a change a retired curation pass made also reads `pass`, `submit` or `undo`.'
           title: Operation
           type: string
         restored_from:
@@ -549,13 +592,14 @@ components:
           title: Version
           type: string
         writer:
-          description: '`user` a person; `agent` an agent whose material became a document on arrival; `curation` a change Coffer''s retired curation pass made, kept in the history; `sync` another machine''s change; `disk` an edit made outside Coffer (a person''s editor, an agent''s file tools).'
+          description: '`user` a person; `agent` an agent whose material became a document on arrival; `curation` a change Coffer''s retired curation pass made, kept in the history; `sync` another machine''s change; `disk` an edit made outside Coffer (a person''s editor, an agent''s file tools); `daemon` Coffer filing a loose document into `pages/`.'
           enum:
           - user
           - agent
           - curation
           - sync
           - disk
+          - daemon
           title: Writer
           type: string
       required:
@@ -592,6 +636,24 @@ components:
       - changes
       - next_cursor
       title: ChangesOut
+      type: object
+    CheckOut:
+      description: |-
+        One collection's mechanical check ("Check a collection mechanically on
+        every read"): what Coffer found, and the prompt that hands the rest to the
+        agent.
+      properties:
+        collection:
+          $ref: '#/components/schemas/CollectionOut'
+        findings:
+          items:
+            $ref: '#/components/schemas/FindingOut'
+          title: Findings
+          type: array
+      required:
+      - collection
+      - findings
+      title: CheckOut
       type: object
     CollectionCreate:
       properties:
@@ -634,12 +696,14 @@ components:
       type: object
     CollectionOut:
       properties:
+        check_handoff:
+          $ref: '#/components/schemas/HandoffOut'
         description:
           title: Description
           type: string
-        document_count:
+        finding_count:
           default: 0
-          title: Document Count
+          title: Finding Count
           type: integer
         folder_path:
           default: ''
@@ -648,6 +712,14 @@ components:
         name:
           title: Name
           type: string
+        page_count:
+          default: 0
+          title: Page Count
+          type: integer
+        source_count:
+          default: 0
+          title: Source Count
+          type: integer
         tidy_handoff:
           $ref: '#/components/schemas/HandoffOut'
         uid:
@@ -658,14 +730,22 @@ components:
           - type: string
           - type: 'null'
           title: Updated At
+        waiting_source_count:
+          default: 0
+          title: Waiting Source Count
+          type: integer
       required:
       - uid
       - name
       - description
-      - document_count
+      - page_count
+      - source_count
+      - waiting_source_count
+      - finding_count
       - folder_path
       - updated_at
       - tidy_handoff
+      - check_handoff
       title: CollectionOut
       type: object
     DirectoryOut:
@@ -749,9 +829,19 @@ components:
         actor:
           title: Actor
           type: string
+        aliases:
+          items:
+            type: string
+          title: Aliases
+          type: array
         body:
           title: Body
           type: string
+        cited_by:
+          items:
+            $ref: '#/components/schemas/PageRefOut'
+          title: Cited By
+          type: array
         created_at:
           title: Created At
           type: string
@@ -764,15 +854,46 @@ components:
         folder_path:
           title: Folder Path
           type: string
+        kind:
+          default: file
+          enum:
+          - page
+          - source
+          - file
+          title: Kind
+          type: string
+        links:
+          items:
+            $ref: '#/components/schemas/LinkRefOut'
+          title: Links
+          type: array
+        original_path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Original Path
+        page_type:
+          default: ''
+          title: Page Type
+          type: string
         path:
           title: Path
           type: string
+        sources:
+          items:
+            $ref: '#/components/schemas/SourceRefOut'
+          title: Sources
+          type: array
         title:
           title: Title
           type: string
         updated_at:
           title: Updated At
           type: string
+        waiting:
+          default: false
+          title: Waiting
+          type: boolean
       required:
       - path
       - title
@@ -783,6 +904,14 @@ components:
       - body
       - file_path
       - folder_path
+      - kind
+      - page_type
+      - aliases
+      - sources
+      - links
+      - cited_by
+      - waiting
+      - original_path
       title: FileOut
       type: object
     FileSummaryOut:
@@ -793,6 +922,18 @@ components:
         description:
           title: Description
           type: string
+        kind:
+          default: file
+          enum:
+          - page
+          - source
+          - file
+          title: Kind
+          type: string
+        page_type:
+          default: ''
+          title: Page Type
+          type: string
         path:
           title: Path
           type: string
@@ -802,13 +943,54 @@ components:
         updated_at:
           title: Updated At
           type: string
+        waiting:
+          default: false
+          title: Waiting
+          type: boolean
       required:
       - path
       - title
       - description
       - actor
       - updated_at
+      - kind
+      - page_type
+      - waiting
       title: FileSummaryOut
+      type: object
+    FindingOut:
+      properties:
+        kind:
+          enum:
+          - dead_link
+          - ambiguous_link
+          - duplicate_slug
+          - missing_source
+          - incomplete_page
+          - unsourced_page
+          - orphan_page
+          - waiting_source
+          title: Kind
+          type: string
+        others:
+          items:
+            type: string
+          title: Others
+          type: array
+        path:
+          title: Path
+          type: string
+        target:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Target
+      required:
+      - kind
+      - path
+      - target
+      - others
+      title: FindingOut
       type: object
     HandoffOut:
       description: |-
@@ -842,6 +1024,59 @@ components:
       - description
       - converter
       title: IngestedDocumentOut
+      type: object
+    LinkRefOut:
+      properties:
+        ambiguous:
+          default: false
+          title: Ambiguous
+          type: boolean
+        path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Path
+        target:
+          title: Target
+          type: string
+      required:
+      - target
+      - path
+      - ambiguous
+      title: LinkRefOut
+      type: object
+    PageRefOut:
+      properties:
+        path:
+          title: Path
+          type: string
+        title:
+          title: Title
+          type: string
+      required:
+      - path
+      - title
+      title: PageRefOut
+      type: object
+    SourceRefOut:
+      properties:
+        path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Path
+        slug:
+          title: Slug
+          type: string
+        title:
+          default: ''
+          title: Title
+          type: string
+      required:
+      - slug
+      - path
+      - title
+      title: SourceRefOut
       type: object
     TreeOut:
       properties:

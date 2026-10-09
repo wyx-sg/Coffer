@@ -1,10 +1,12 @@
-"""A collection's inbox: the drop zone where new material lands before it is a document.
+"""A collection's inbox: the drop zone where new material lands before it is a source.
 
 The hidden ``.inbox/`` half of what ``fs.py`` writes (see "Promote submitted
 material at once"). An item is ordinary frontmatter and Markdown;
-:func:`promote` makes it a document of its own and removes it. Coffer's own
-entrances promote at once, and the sweep adopts and promotes whatever an agent
-outside Coffer, another machine or an older guide dropped there.
+:func:`promote` keeps it as a source under ``sources/`` — with the original
+file beside it when an upload brought one ("Keep every upload as a source with
+its original") — and removes it. Coffer's own entrances promote at once, and the
+sweep adopts and promotes whatever an agent outside Coffer, another machine or
+an older guide dropped there.
 """
 
 from __future__ import annotations
@@ -161,23 +163,61 @@ def inbox_items(collection: str) -> tuple[str, ...]:
     return tuple(name for _, name in sorted(found))
 
 
-def promote(collection: str, name: str) -> KnowledgeFile:
-    """Make an inbox item a document of its own, as it stands.
+#: The key naming a source's kept original file, beside it in ``sources/``.
+ORIGINAL_KEY = "original"
 
-    The material is knowledge the moment it arrives, so it must not wait in a
-    hidden directory: it lands at the collection root with its frontmatter, and
-    the inbox file is removed.
+
+def _free_stem(directory: pathlib.Path, slug: str, suffix: str | None) -> str:
+    """``slug``, or ``slug-2``, ``slug-3``… — the first stem whose Markdown and,
+    when there is one, whose original are both free, so the pair shares a name."""
+    for n in range(1, 1000):
+        stem = slug if n == 1 else f"{slug}-{n}"
+        taken = (directory / f"{stem}.md").exists()
+        if suffix is not None:
+            taken = taken or (directory / f"{stem}{suffix}").exists()
+        if not taken:
+            return stem
+    raise ValueError(f"cannot find a free name for {slug!r}")
+
+
+def promote(
+    collection: str, name: str, *, original: tuple[str, bytes] | None = None
+) -> tuple[KnowledgeFile, str | None]:
+    """Keep an inbox item as a source, as it stands; returns the source and the
+    knowledge-root-relative path of the original kept beside it, if any.
+
+    The material must not wait in a hidden directory: it lands under the
+    collection's ``sources/`` with its frontmatter — every key a writer set
+    kept — and the inbox file is removed. ``original`` is the upload's own file
+    name and bytes, kept under the same stem with its own extension.
     """
     path = _inbox_item(collection, name)
     if not path.is_file():
         raise KnowledgeFileNotFound(inbox_path(collection, name))
     fm, body = split_frontmatter(decode(path.read_bytes()))
+    title = str(fm.get("title") or path.stem)
+    directory = paths.sources_dir(collection)
+    directory.mkdir(parents=True, exist_ok=True)
+    suffix = pathlib.Path(original[0]).suffix.lower() if original else None
+    if suffix is not None:
+        paths.check_segment(f"x{suffix}", original[0] if original else "")
+    stem = _free_stem(directory, slugify(title), suffix)
+    extra = dict(fm)
+    kept: str | None = None
+    if original is not None and suffix is not None:
+        target = directory / f"{stem}{suffix}"
+        paths.assert_inside_root(target, paths.relative_of(target))
+        target.write_bytes(original[1])
+        kept = paths.relative_of(target)
+        extra[ORIGINAL_KEY] = target.name
     written = write_file(
-        directory=collection,
-        title=str(fm.get("title") or path.stem),
+        directory=f"{collection}/{paths.SOURCES_DIR_NAME}",
+        relpath=f"{collection}/{paths.SOURCES_DIR_NAME}/{stem}.md",
+        title=title,
         description=str(fm.get("description") or ""),
         body=body,
         actor=str(fm.get("actor") or ACTOR_AGENT),
+        extra=extra,
     )
     path.unlink(missing_ok=True)
-    return written
+    return written, kept
