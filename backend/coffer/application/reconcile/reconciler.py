@@ -46,6 +46,7 @@ from datetime import UTC, datetime
 from coffer.application.audit_service import AuditService
 from coffer.application.reconcile.pass_ops import log_report, plan_target, settle_change
 from coffer.application.reconcile.ports import ReconcileTarget
+from coffer.application.runtime.wakeable import WakeableLoop
 from coffer.domain.reconcile import (
     Changed,
     ItemResult,
@@ -90,10 +91,15 @@ class Reconciler:
     ) -> None:
         self._audit = audit
         self._period = period_seconds
-        self._settle = settle_seconds
         self._targets: dict[str, ReconcileTarget] = {}
         self._lock = asyncio.Lock()
-        self._wake = asyncio.Event()
+        self._loop = WakeableLoop(
+            "reconciler",
+            self._serve_once,
+            fallback=period_seconds,
+            settle=settle_seconds,
+            failure_event="reconcile.pass_failed",
+        )
         #: The (kind, uid) pairs hinted since the last hinted pass.
         self._pending: set[tuple[str, str]] = set()
         #: When each still-open difference was first seen by a writing pass —
@@ -154,7 +160,7 @@ class Reconciler:
         """Bring the next pass forward for the targets that follow
         ``changed.kind``. Never blocks and never raises."""
         self._pending.add((changed.kind, changed.uid))
-        self._wake.set()
+        self._loop.poke()
 
     # --- passes --------------------------------------------------------------
 
@@ -179,7 +185,7 @@ class Reconciler:
             # waiting for the lock would wait on ourselves. Defer to a hint.
             for name in names:
                 self._pending.add(("target", name))
-            self._wake.set()
+            self._loop.poke()
             now = datetime.now(tz=UTC)
             return PassReport(trigger, False, now, now, ())
         return await self._pass(names, trigger, dry_run=False, actor=actor)
@@ -227,21 +233,16 @@ class Reconciler:
         """The periodic loop. The boot pass is the lifespan's to await; this
         waits one period (or a hint) before its first pass. Runs until
         cancelled; a pass that fails is logged and the loop carries on."""
-        while True:
-            hinted = await self._wait()
-            try:
-                if hinted:
-                    await asyncio.sleep(self._settle)
-                    names = self._drain_hinted()
-                    if names:
-                        await self.run(targets=names, trigger=Trigger.HINT)
-                else:
-                    self._pending.clear()
-                    await self.run(trigger=Trigger.PERIOD)
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                _log.exception("reconcile.pass_failed")
+        await self._loop.serve()
+
+    async def _serve_once(self, hinted: bool) -> None:
+        if hinted:
+            names = self._drain_hinted()
+            if names:
+                await self.run(targets=names, trigger=Trigger.HINT)
+        else:
+            self._pending.clear()
+            await self.run(trigger=Trigger.PERIOD)
 
     # --- internals -----------------------------------------------------------
 
@@ -253,15 +254,7 @@ class Reconciler:
             raise KeyError(f"unknown reconcile target(s): {', '.join(sorted(unknown))}")
         return tuple(n for n in self._targets if n in set(targets))
 
-    async def _wait(self) -> bool:
-        try:
-            await asyncio.wait_for(self._wake.wait(), timeout=self._period)
-        except TimeoutError:
-            return False
-        return True
-
     def _drain_hinted(self) -> tuple[str, ...]:
-        self._wake.clear()
         pending, self._pending = self._pending, set()
         names: set[str] = set()
         for kind, uid in pending:

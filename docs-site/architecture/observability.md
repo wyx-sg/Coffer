@@ -294,7 +294,7 @@ The realistic reader of these records is often an agent at the moment something 
 | `coffer log audit [--kind] [--name] [--event-type] [--since] [--trace] [--limit] [--json]` | the audit log, newest first |
 | `coffer log mcp [--server] [--status ok\|error] [--since] [--trace] [--limit] [--json]` | the MCP invocation log, newest first |
 | `coffer log daemon [--errors] [--since] [--trace] [--limit] [--json]` | the tail of `daemon.log`, through the same tolerant reader as the Activity page |
-| `coffer daemon status [--tasks] [--json]` | the event-loop lag and the background task counts (by name with `--tasks`), beside the daemon's version and port |
+| `coffer daemon status [--tasks] [--workers] [--json]` | the event-loop lag and the background task counts (by name with `--tasks`, each worker's last and next run with `--workers`), beside the daemon's version and port |
 | `coffer path logs` | the log directory and the `daemon.log` in it, for `grep` or `tail` |
 
 `--since` takes an ISO 8601 instant or an age such as `30m`, `1h` or `2d`. A filter that cannot be resolved — a name without a kind, or a name that no resource of that kind has — is an error rather than being silently ignored, because an unfiltered answer would look like "nothing happened to this resource". Every command is read-only and prints no secret values: audit details are redacted before storage, and log records carry none by construction.
@@ -326,13 +326,27 @@ Tasks a function awaits or cancels before it returns — the two sides of an `as
   "tasks_running": 14,
   "tasks_by_name": {"reconciler": 1, "telegram-poll": 1, "coffer-mcp-http-upstream": 6, "turn": 1, "loop-lag-probe": 1},
   "task_crashes": 1,
-  "last_crash": {"task": "telegram-poll:family", "error": "RuntimeError", "at": "2026-10-01T08:12:03Z", "restarting": true}
+  "last_crash": {"task": "telegram-poll:family", "error": "RuntimeError", "at": "2026-10-01T08:12:03Z", "restarting": true},
+  "workers": [
+    {"name": "reconciler", "mode": "event+fallback", "state": "waiting", "runs": 41, "failures": 0,
+     "last_started_at": "2026-10-01T08:40:00Z", "last_duration_ms": 18.4, "last_ok": true,
+     "next_run_at": "2026-10-01T08:41:00Z"}
+  ]
 }
 ```
 
 An idle daemon reads a millisecond or two. A p99 in the hundreds means something is blocking the loop; the daemon log around the maximum usually says what. The status route answers without a token, so `last_crash` carries only the exception's class; its message and traceback are in `daemon.log` under `runtime.task.crashed`.
 
 `tasks_by_name` counts the running tasks by the part of their name before the first `:`. The part after it names what a task serves (a channel, an MCP server, a chat), and the route answers without a token, so it is left out. When `tasks_running` grows, this says which kind of task is growing: a session that is never reaped shows as a rising `coffer-mcp-http-upstream` count, a channel loop started twice as `telegram-poll` at 2. `coffer daemon status --tasks` prints the same counts, largest first.
+
+`workers` says what each background worker on the shared wakeable loop (`application/runtime/wakeable.py`) is doing; `tasks_by_name` only says it is alive. A worker is woken by an `event` only, by an `event+fallback` (an event, or a long timer that catches one that was lost), or `on-demand` (parked with no timer while nothing needs it). Each row carries its state (`waiting`, `running` or `parked`), its runs and failures since it started, its last run's start, duration and outcome, and `next_run_at`: when the fallback runs it if nothing wakes it first, or, once an event has woken it, when its short settle ends. A worker that has not run for longer than its fallback, or whose failures keep rising, is the one to look at in `daemon.log`, where each failed run is logged under the worker's own event. `coffer daemon status --workers` prints one line per worker:
+
+```text
+workers:
+         attention-watch  event+fallback  waiting  12 runs  last 3.1 ms ok  next in 24s
+         reconciler       event+fallback  waiting  41 runs  last 18.4 ms ok  next in 52s
+         vault-scanner    event+fallback  waiting  3 runs  last 9.7 ms ok  next in 58s
+```
 
 ## Eval capture
 

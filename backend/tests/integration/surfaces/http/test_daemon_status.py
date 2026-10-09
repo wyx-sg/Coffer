@@ -274,3 +274,26 @@ async def test_status_reports_loop_lag_and_task_crashes(tmp_path, monkeypatch):
     assert last["task"] == "test-broken-worker"
     assert last["error"] == "LookupError"
     assert "no such row" not in str(runtime)  # the message stays in daemon.log
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="the status lists each background worker")
+async def test_status_lists_each_background_worker(tmp_path, monkeypatch):
+    """The workers on the shared wakeable loop, each with how it is woken and
+    when its fallback runs it next."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    app = create_app()
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(transport=ASGITransport(app), base_url="http://t") as c,
+    ):
+        r = await c.get("/api/v1/daemon/status")
+    assert r.status_code == 200
+    by_name = {w["name"]: w for w in r.json()["runtime"]["workers"]}
+    reconciler = by_name["reconciler"]
+    assert reconciler["mode"] == "event+fallback"
+    assert reconciler["state"] in {"waiting", "running"}
+    assert reconciler["failures"] == 0
+    if reconciler["state"] == "waiting":
+        assert reconciler["next_run_at"] is not None
+    assert {"attention-watch", "vault-scanner"} <= set(by_name)

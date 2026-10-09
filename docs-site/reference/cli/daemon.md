@@ -72,7 +72,7 @@ coffer daemon restart [OPTIONS]
 
 Show whether the daemon is running, and the passes it is running right now.
 
-Reports its version, port and pid, the event loop's lag (p99 and maximum over the last few minutes), how many background tasks are running and how many have crashed, and the long passes in flight (kind, target, start time), oldest first. --tasks adds the running tasks counted by name (reconciler, seatalk-ws, coffer-mcp-http-upstream, ...), largest first.
+Reports its version, port and pid, the event loop's lag (p99 and maximum over the last few minutes), how many background tasks are running and how many have crashed, and the long passes in flight (kind, target, start time), oldest first. --tasks adds the running tasks counted by name (reconciler, seatalk-ws, coffer-mcp-http-upstream, ...), largest first. --workers adds one line per background worker: how it is woken (event, event+fallback, on-demand), whether it is waiting, running or parked, its runs and failures, how long its last run took, and when its fallback timer runs it next.
 
 Read-only: when no daemon is running it says so and exits 3 instead of starting one.
 
@@ -88,6 +88,7 @@ coffer daemon status [OPTIONS]
 | --- | --- | --- | --- |
 | `--json` <span class="cli-chip">option</span> | flag |  | JSON output for scripts |
 | `--tasks` <span class="cli-chip">option</span> | flag |  | Also list the running background tasks, counted by name |
+| `--workers` <span class="cli-chip">option</span> | flag |  | Also list each background worker and when it runs next |
 
 ## daemon reload
 

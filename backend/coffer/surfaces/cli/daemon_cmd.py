@@ -11,6 +11,7 @@ import json as _json
 import os
 import signal
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -236,6 +237,9 @@ def status(
     show_tasks: bool = typer.Option(
         False, "--tasks", help="Also list the running background tasks, counted by name"
     ),
+    show_workers: bool = typer.Option(
+        False, "--workers", help="Also list each background worker and when it runs next"
+    ),
 ) -> None:
     """Show whether the daemon is running, and the passes it is running right now.
 
@@ -244,6 +248,10 @@ def status(
     and how many have crashed, and the long passes in flight (kind, target,
     start time), oldest first. --tasks adds the running tasks counted by name
     (reconciler, seatalk-ws, coffer-mcp-http-upstream, ...), largest first.
+    --workers adds one line per background worker: how it is woken (event,
+    event+fallback, on-demand), whether it is waiting, running or parked, its
+    runs and failures, how long its last run took, and when its fallback timer
+    runs it next.
 
     Read-only: when no daemon is running it says so and exits 3 instead of
     starting one.
@@ -306,6 +314,9 @@ def status(
     if show_tasks:
         for line in _task_lines(data.get("runtime")):
             typer.echo(line)
+    if show_workers:
+        for line in _worker_lines(data.get("runtime")):
+            typer.echo(line)
     if setup is not None:
         typer.echo("")
         _cli_client.print_waiting_for_git(setup)
@@ -326,6 +337,31 @@ def _task_lines(runtime: dict[str, Any] | None) -> list[str]:
     width = max(len(name) for name in counts)
     ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
     return [f"         {name:<{width}}  {count}" for name, count in ordered]
+
+
+def _worker_lines(runtime: dict[str, Any] | None) -> list[str]:
+    """One line per worker: mode, state, runs, the last run and the next."""
+    rows: list[dict[str, Any]] = (runtime or {}).get("workers") or []
+    if not rows:
+        return []
+    width = max(len(w["name"]) for w in rows)
+    now = datetime.now(tz=UTC)
+    lines = ["workers:"]
+    for w in rows:
+        failed = f", {w['failures']} failed" if w["failures"] else ""
+        last = ""
+        if w["last_duration_ms"] is not None:
+            last = f"  last {w['last_duration_ms']:g} ms {'ok' if w['last_ok'] else 'failed'}"
+        due = w.get("next_run_at")
+        nxt = ""
+        if due:
+            seconds = max(0, round((datetime.fromisoformat(due) - now).total_seconds()))
+            nxt = f"  next in {seconds}s"
+        lines.append(
+            f"         {w['name']:<{width}}  {w['mode']:<14}  {w['state']:<7}"
+            f"  {w['runs']} runs{failed}{last}{nxt}"
+        )
+    return lines
 
 
 def _runtime_lines(runtime: dict[str, Any] | None) -> list[str]:
