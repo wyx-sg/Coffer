@@ -8,6 +8,10 @@ from coffer.application.mcp.custom_tools import secret_name_of
 from coffer.domain.mcp.namespace import prefix_tool
 from coffer.domain.mcp.openapi_import import DraftOperation
 from coffer.surfaces.http.handoff_schemas import HandoffOut
+from coffer.surfaces.http.mcp.custom_tool_response_schemas import (
+    CustomToolResponse,
+    CustomToolResponseRule,
+)
 from coffer.surfaces.http.mcp.custom_tool_schemas import (
     CustomToolEnvironmentOut,
     CustomToolGroupOut,
@@ -36,6 +40,11 @@ def tool_out(group: str, view: ToolView) -> CustomToolOut:
         changes_data=t.effective_changes_data,
         changes_data_set=t.changes_data is not None,
         operation=t.operation,
+        response_rules=(
+            [CustomToolResponseRule.model_validate(r.model_dump()) for r in t.response_rules]
+            if t.response_rules is not None
+            else None
+        ),
         calls_24h=view.calls,
         failures_24h=view.failures,
     )
@@ -101,6 +110,7 @@ def group_out(view: GroupView) -> CustomToolGroupOut:
         headers=headers,
         environments=[environment_out(ev) for ev in view.environments],
         timeout_seconds=t.timeout_seconds,
+        response=CustomToolResponse.model_validate(t.response.model_dump()),
         scope=r.scope.agents if r.scope is not None else None,
         source=source,
         health=view.health,

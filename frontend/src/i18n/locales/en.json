@@ -4991,7 +4991,11 @@
       "timeout": "Timeout",
       "timeoutValue": "{{seconds}} s per call",
       "spec": "Spec",
-      "fetched": "fetched {{date}}"
+      "fetched": "fetched {{date}}",
+      "diagnosticHeaders": "Diagnostic headers",
+      "responseRules": "Response rules",
+      "statusOnly": "HTTP status only",
+      "none": "None"
     },
     "tools": {
       "switch": "On",
@@ -5077,9 +5081,13 @@
       "hintReadOnly": "read-only",
       "response": {
         "success": "Success",
-        "rule": "A call succeeds when the API answers with a status below 400. A status of 400 or more, or no answer at all, is a failed call: it is counted in the group's errors and the agent gets it as an error.",
+        "rule": "A call fails on HTTP 400 and above, or when no answer comes. The rules below can also fail an answer that says so in a header or a JSON field.",
         "agentGets": "What agents get",
-        "agentGetsBody": "The status line (for example HTTP 200 OK), then the response body, cut at 1 MiB. The secret's value never appears in it."
+        "agentGetsBody": "The status line (for example HTTP 200 OK), the response headers the group names (all of them when the call failed), the failed rule if any, then the body or “(empty body)”, cut at 1 MiB. The secret's value never appears in it.",
+        "follow": "Use the group's rules",
+        "statusOnly": "HTTP status only",
+        "own": "Rules for this tool only",
+        "ownHelp": "Start from the group's rules and change them. With none, this tool fails only on HTTP 400 and above."
       }
     },
     "test": {
@@ -5113,7 +5121,8 @@
         "rejected": "The API rejected {{secret}}. If it has expired, change its value; every tool in {{group}} uses the same secret.",
         "httpError": "The API answered with an error; its response is below. Check the path and the argument values, then run again. Nothing was saved.",
         "rejectedEnv": "The API rejected {{secret}}. If it has expired, change its value; every tool of this group uses it in {{environment}}.",
-        "timeoutEnv": "Coffer stopped waiting after {{environment}}'s own {{seconds}} s timeout. If the API is only slow, raise it under Environments; if it should answer quickly, hand it to an agent to find out why. Nothing was saved."
+        "timeoutEnv": "Coffer stopped waiting after {{environment}}'s own {{seconds}} s timeout. If the API is only slow, raise it under Environments; if it should answer quickly, hand it to an agent to find out why. Nothing was saved.",
+        "ruleFailed": "The API answered, but the answer broke one of the response rules. Check the rules under Response, or the request, then run again. Nothing was saved."
       },
       "cutShort": "Cut short at {{size}}.",
       "cutShortBody": "Agents get the same first {{size}}. Narrow the request with arguments, or return less from the API.",
@@ -5135,7 +5144,9 @@
       },
       "responseHeaders": "Response headers",
       "resultTab": "Result",
-      "requestTab": "Preview"
+      "requestTab": "Preview",
+      "emptyBody": "0 bytes · empty body",
+      "ruleFailed": "Response rule failed"
     },
     "editGroup": {
       "title": "Edit {{name}}",
@@ -5147,7 +5158,16 @@
       "nameHelp": "Fixed — agents call its tools as {{prefix}}.",
       "descriptionHelp": "Agents read it when they search for a tool, so say what this API is for.",
       "descriptionPlaceholder": "e.g. Invoices and payments in the billing system",
-      "environmentsNote": "Base URLs, headers, secrets and variables belong to the environments; edit them from their rows under Environments."
+      "environmentsNote": "Base URLs, headers, secrets and variables belong to the environments; edit them from their rows under Environments.",
+      "diagnosticHeaders": "Diagnostic headers",
+      "diagnosticHeadersHelp": "Comma-separated response header names. Reported in tests and agent results beside the request and trace ids. Credentials and cookies can't be named.",
+      "diagnosticProblem": {
+        "refused": "A header that carries credentials or cookies can't be named.",
+        "invalid": "Use plain header names, separated by commas.",
+        "many": "At most 20 headers."
+      },
+      "responseRules": "Response rules",
+      "responseRulesHelp": "Every rule must hold for a call to succeed. With none, a call fails only on HTTP 400 and above."
     },
     "reimport": {
       "action": "Re-import",
@@ -5244,6 +5264,33 @@
       "timeout": {
         "environment": "Timeout {{seconds}} s ({{environment}}'s own)",
         "group": "Timeout {{seconds}} s (the group's)"
+      }
+    },
+    "responseRules": {
+      "add": "Add rule",
+      "remove": "Remove rule",
+      "read": "Read",
+      "name": "Header or field",
+      "values": "Success values",
+      "missing": "If missing",
+      "message": "Error message from",
+      "messageName": "Message name",
+      "source": {
+        "status": "HTTP status",
+        "header": "Response header",
+        "json": "JSON field"
+      },
+      "missingOk": "Success",
+      "missingError": "Failure",
+      "messageNone": "No error message",
+      "problem": {
+        "name": "Name the header or JSON field to read.",
+        "pointer": "A JSON field starts with / (for example /status/code).",
+        "refused": "A header that carries credentials or cookies can't be read.",
+        "invalid": "That isn't a valid header name.",
+        "noValues": "Add at least one success value, comma-separated.",
+        "status": "Statuses are numbers from 100 to 599.",
+        "long": "At most 20 values of 200 characters each."
       }
     }
   },

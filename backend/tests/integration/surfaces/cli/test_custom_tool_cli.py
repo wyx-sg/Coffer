@@ -23,7 +23,7 @@ from tests.support.boundary_daemon import (
     prepare_home,
     running_daemon,
 )
-from tests.support.fake_http_api import FakeHttpApi, fake_http_api
+from tests.support.fake_http_api import Answer, FakeHttpApi, fake_http_api
 
 _runner = CliRunner()
 
@@ -113,6 +113,52 @@ def test_a_group_is_configured_end_to_end_from_the_command_line(
     assert bad["error"]["code"] == "CUSTOM_TOOL_ARGUMENTS_INVALID"
     assert bad["error"]["details"]["errors"][0]["path"] == "/q"
     assert len(api.seen) == seen
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="a test, the command line and the agent judge an answer alike"
+)
+def test_a_denied_answer_fails_the_test_by_the_groups_rule(
+    daemon: BoundaryDaemon, api: FakeHttpApi
+) -> None:
+    rule = {
+        "source": "header",
+        "name": "x-result-code",
+        "ok_values": ["OK"],
+        "missing": "ok",
+        "message": {"source": "header", "name": "x-result-text"},
+    }
+    coffer(
+        "custom-tool", "group", "create", "quota", "--base-url", api.base_url,
+        "--response", json.dumps({"diagnostic_headers": [], "rules": [rule]}),
+    )  # fmt: skip
+    coffer("custom-tool", "tool", "add", "quota", "--name", "deny", "--path", "/deny")
+    coffer("custom-tool", "group", "reach", "quota", "--all")
+    shown = coffer("custom-tool", "group", "show", "quota").output
+    assert "header x-result-code" in shown and "follows group" in shown
+    api.answers["/deny"] = Answer(
+        200, {"X-Result-Code": "DENIED", "X-Result-Text": "quota exhausted"}, b""
+    )
+    result = as_json("custom-tool", "tool", "test", "quota", "deny", code=7)
+    assert result["ok"] is False and result["body_bytes"] == 0
+    assert result["rule_failure"]["value"] == "DENIED"
+    assert "x-result-code" in result["response_headers"]
+    human = coffer("custom-tool", "tool", "test", "quota", "deny", code=7).output
+    assert "rule failed" in human and "(empty body)" in human
+    # A tool's own rules: none at all, then back to following the group.
+    coffer("custom-tool", "tool", "update", "quota", "deny", "--response-rules", "[]")
+    own = as_json("custom-tool", "group", "show", "quota")["tools"][0]
+    assert own["response_rules"] == []
+    assert as_json("custom-tool", "tool", "test", "quota", "deny")["ok"] is True
+    coffer("custom-tool", "tool", "update", "quota", "deny", "--response-rules", "group")
+    assert as_json("custom-tool", "group", "show", "quota")["tools"][0]["response_rules"] is None
+    # A header that carries cookies can never be named.
+    refused = coffer(
+        "custom-tool", "group", "update", "quota", "--json",
+        "--response", '{"diagnostic_headers": ["Set-Cookie"], "rules": []}',
+        code=6,
+    )  # fmt: skip
+    assert "Set-Cookie" in refused.stderr or "set-cookie" in refused.stderr.lower()
 
 
 @pytest.mark.acceptance(

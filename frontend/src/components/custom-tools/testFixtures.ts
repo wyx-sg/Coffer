@@ -22,6 +22,7 @@ export function makeTool(overrides: Partial<CustomTool> = {}): CustomTool {
     operation: null,
     calls_24h: 0,
     failures_24h: 0,
+    response_rules: null,
     ...overrides,
   };
 }
@@ -62,6 +63,7 @@ export function makeGroup(overrides: Partial<CustomToolGroup> = {}): CustomToolG
       },
     ],
     timeout_seconds: 30,
+    response: { diagnostic_headers: [], rules: [] },
     scope: null,
     source: null,
     health: "healthy",

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 from coffer.domain.mcp.http_api_render import RenderedRequest
 
 if TYPE_CHECKING:
-    from coffer.infrastructure.mcp.http_api_client import HttpCallOutcome
+    from coffer.infrastructure.mcp.http_api_outcome import HttpCallOutcome
 
 
 def _body(text: str | None) -> Any:

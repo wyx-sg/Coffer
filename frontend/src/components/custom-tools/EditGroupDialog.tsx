@@ -15,11 +15,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { translateApiError } from "@/lib/api/errors";
-import type { CustomToolGroup } from "@/lib/api/customTools";
+import type { CustomToolGroup, ResponseRule } from "@/lib/api/customTools";
+import { diagnosticHeadersProblem, rulesValid, splitList } from "@/lib/customTools/responseRules";
 import { agentPrefix } from "@/lib/customTools/groups";
 import { useUpdateCustomToolGroup } from "@/lib/hooks/useCustomTools";
 import { FormField } from "./FormField";
 import { GroupDescriptionField } from "./GroupDescriptionField";
+import { GroupResponseFields } from "./GroupResponseFields";
 
 interface Props {
   group: CustomToolGroup;
@@ -33,24 +35,36 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
   const update = useUpdateCustomToolGroup(group.name);
   const [description, setDescription] = useState("");
   const [timeout, setTimeoutSeconds] = useState("30");
+  const [diagnostic, setDiagnostic] = useState("");
+  const [rules, setRules] = useState<ResponseRule[]>([]);
+  // The rule editor reads its rules once, so it starts over each time the dialog opens.
+  const [opened, setOpened] = useState(0);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setDescription(group.description ?? "");
     setTimeoutSeconds(String(group.timeout_seconds));
+    setDiagnostic((group.response?.diagnostic_headers ?? []).join(", "));
+    setRules(group.response?.rules ?? []);
+    setOpened((n) => n + 1);
     update.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on opening
   }, [open]);
 
   const seconds = Number(timeout.replace(/\s*s$/, ""));
   const timeoutOk = Number.isInteger(seconds) && seconds >= 1 && seconds <= 300;
-  const ready = timeoutOk;
+  const ready =
+    timeoutOk && rulesValid(rules) && diagnosticHeadersProblem(splitList(diagnostic)) === null;
   const error = update.error;
   const onSave = () => {
     setSaving(true);
     update.mutate(
-      { description: description.trim() || null, timeout_seconds: seconds },
+      {
+        description: description.trim() || null,
+        timeout_seconds: seconds,
+        response: { diagnostic_headers: splitList(diagnostic), rules },
+      },
       {
         onSuccess: () => onOpenChange(false),
         onSettled: () => setSaving(false),
@@ -96,6 +110,13 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
               </span>
             </div>
           </FormField>
+          <GroupResponseFields
+            key={opened}
+            headers={diagnostic}
+            onHeaders={setDiagnostic}
+            rules={rules}
+            onRules={setRules}
+          />
           {error ? (
             <div role="alert" className="flex items-start gap-2 text-sm text-danger">
               <AlertCircle className="mt-0.5 size-[15px] shrink-0" aria-hidden />

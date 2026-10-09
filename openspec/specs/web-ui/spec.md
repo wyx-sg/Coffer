@@ -2869,14 +2869,20 @@ Required, where the request uses it — the path, a query key, a header or the
 body — and the description agents read under it; an argument no hole names is
 marked not used with **Add as query parameter** and **Remove argument**, and a
 hole no argument names is listed with **Add argument <name>**; the tab counts
-those problems) and **Response** (when a call counts as failed — a status of 400
-or more, or no answer — and what the agent gets: the status line and the body,
-cut at 1 MiB). A new tool opens on General, a saved one on Request.
+those problems) and **Response** (whether the tool follows its group's response
+rules, shown one per line, or has rules of its own — edited with the same rule
+editor as the group's, where an empty list judges by the HTTP status alone
+([mcp-gateway](../mcp-gateway/spec.md) "Judge a custom tool's answer by its
+group's response rules") — and what the agent gets: the status line, the
+headers the group names, the broken rule if any, and the body or a note that it
+was empty, cut at 1 MiB). A new tool opens on General, a saved one on Request.
 **Try it** takes a sample value per argument, and its Run runs the request as the form
 holds it once and shows the answer — the status and time in a block, the response
 in a viewer under it — the API's error body, a timeout, a failed
 connection (each of these two with the daemon's hand-off and, for a timeout,
-**Change timeout**) or a response cut short, with the response headers that
+**Change timeout**), a response cut short or an answer that broke a response
+rule (the block turns to a failure and names the rule, the value read and the
+API's message), with the body's size and the response headers that
 name the request on the API's side ([mcp-gateway](../mcp-gateway/spec.md)
 "Report what a custom tool's test reached"); a saved group's form previews and
 tests in one environment ("Preview and test a custom tool in one chosen
@@ -2900,7 +2906,8 @@ A group's detail page (`/custom-tools/<group>/<tab>`) MUST carry, under its
 header — its **reach** and a one-line summary of the last 24 hours (calls and
 failures) — two tabs laid out like every other detail page's. **Overview** (the
 default, at the bare `/custom-tools/<group>`) stacks the group's **definition**
-(its description, the name agents see, its timeout and, for an imported group,
+(its description, the name agents see, its timeout, its diagnostic headers and
+response rules — "HTTP status only" when it has none — and, for an imported group,
 its spec), then **Environments** — one row per environment, however many there
 are, each with its switch, base URL, secret state and variables, edited from the
 row — then
@@ -2930,7 +2937,11 @@ a tool opens the tool editor in a 1040-wide **drawer** below the title bar —
 the headers the chosen environment already adds shown as
 "from the group" ("from <environment>" when the group has several),
 no switch, which lives in the table — with **Delete tool**, Cancel and Save
-in its footer. **Edit group** edits only the group's description and timeout:
+in its footer. **Edit group** edits the group's description, timeout and response
+settings — the **diagnostic headers** to report and the **response rules**, one
+card per rule (read the HTTP status, a response header or a JSON field; the
+success values; what a missing value means; where the API's error message is),
+whose mistakes are named under the field and keep Save off:
 base URLs, headers, secrets and variables are the environments', edited from
 their rows, so a group with one environment is edited the same way as one with
 several. Script tools are not offered: they are deferred past 1.0.
@@ -3039,10 +3050,26 @@ the gateway").
 - **THEN** `query` reads as used in `?q=`, `status` as not used with Add as query parameter and Remove argument, and `{org}` is listed with Add argument org, and the tab counts two problems
 - **AND** Add as query parameter adds `status={status}` to the path, which the Request tab's query parameters show as an argument row
 
-#### Scenario: Edit group edits only the description and timeout
+#### Scenario: Edit group edits the description, timeout and response settings
 - **GIVEN** the `billing` group with one environment
 - **WHEN** the user opens Edit group, changes the timeout to 45 s and saves
-- **THEN** the dialog shows no base URL or header rows and says they belong to the environments, and the group is saved with its description and 45 s only
+- **THEN** the dialog shows no base URL or header rows and says they belong to the environments, and the group is saved with its description, 45 s and its response settings as they were
+
+#### Scenario: a response rule is added to a group and a refused header keeps Save off
+- **GIVEN** the `billing` group with no response rules
+- **WHEN** the user opens Edit group, names `X-Trace-Id` as a diagnostic header, adds a rule reading the header `X-Result-Code` with the success values `OK, 0`, and saves; then adds a rule reading `Set-Cookie`
+- **THEN** the group is saved with that diagnostic header and that rule
+- **AND** the rule on `Set-Cookie` is named as a header that carries credentials or cookies, and Save is off
+
+#### Scenario: a tool follows its group's response rules or sets its own
+- **GIVEN** a group whose rule reads `x-result-code`, and one of its tools
+- **WHEN** the user opens the tool's Response tab, picks rules for this tool only, changes the success values, then removes the rule
+- **THEN** the tab first shows the group's rule and the tool follows it; the tool's own rules start as a copy of the group's, and removing the last one leaves the tool judged by its HTTP status alone
+
+#### Scenario: Try it names the response rule an answer broke
+- **GIVEN** a tool whose answer breaks a response rule
+- **WHEN** the user runs it in Try it
+- **THEN** the block reads as a failure, names the rule failed with the value read, the success values and the API's message, and the body's size is shown
 
 ### Requirement: Draw every diff in the web UI with one renderer
 Every diff the web UI shows of a file's changed lines — a change preview of a write Coffer is about to make, a version on a History tab, a skill's copy or folder-in-the-way review, and a custom-tool group's re-import — MUST be drawn by one renderer: old and new line numbers, a sign, additions and deletions on their colour, hunk headers muted, and a long line wrapped at a word boundary with a ↳ on its continuation rows, never cut off. Each file is shown under its path, operation and line counts.

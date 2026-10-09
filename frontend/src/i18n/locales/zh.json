@@ -4991,7 +4991,11 @@
       "timeout": "超时",
       "timeoutValue": "每次调用 {{seconds}} 秒",
       "spec": "规范",
-      "fetched": "获取于 {{date}}"
+      "fetched": "获取于 {{date}}",
+      "diagnosticHeaders": "诊断响应头",
+      "responseRules": "响应规则",
+      "statusOnly": "仅看 HTTP 状态码",
+      "none": "无"
     },
     "tools": {
       "switch": "开关",
@@ -5077,9 +5081,13 @@
       "hintReadOnly": "只读",
       "response": {
         "success": "成功",
-        "rule": "API 返回的状态码小于 400 时调用成功。状态码 400 及以上，或完全没有响应，都算调用失败：计入分组的错误数，智能体收到的是一条错误。",
+        "rule": "HTTP 400 及以上，或完全没有响应，调用就算失败。下面的规则还能让响应头或 JSON 字段里声明了失败的响应失败。",
         "agentGets": "智能体收到的",
-        "agentGetsBody": "先是状态行（例如 HTTP 200 OK），然后是响应正文，最多 1 MiB。密钥的值不会出现在其中。"
+        "agentGetsBody": "状态行（例如 HTTP 200 OK）、分组指定的响应头（调用失败时为全部诊断响应头）、未通过的规则（如果有），然后是响应正文或“(empty body)”，最多 1 MiB。密钥的值不会出现在其中。",
+        "follow": "使用分组的规则",
+        "statusOnly": "仅看 HTTP 状态码",
+        "own": "仅此工具使用的规则",
+        "ownHelp": "从分组的规则开始修改。没有规则时，只有 HTTP 400 及以上才算失败。"
       }
     },
     "test": {
@@ -5113,7 +5121,8 @@
         "rejected": "API 拒绝了 {{secret}}。如果它已过期，请修改它的值；{{group}} 中的每个工具都使用同一个密钥。",
         "httpError": "API 返回了错误，响应见下方。请检查路径和参数的值，然后重试。没有保存任何内容。",
         "rejectedEnv": "API 拒绝了 {{secret}}。如果它已过期，请修改它的值；这个分组的每个工具在 {{environment}} 中都使用它。",
-        "timeoutEnv": "Coffer 在环境 {{environment}} 自己的 {{seconds}} 秒超时后停止了等待。如果只是 API 慢，请在“环境”中调大超时；如果它本该很快响应，请交给智能体查原因。没有保存任何内容。"
+        "timeoutEnv": "Coffer 在环境 {{environment}} 自己的 {{seconds}} 秒超时后停止了等待。如果只是 API 慢，请在“环境”中调大超时；如果它本该很快响应，请交给智能体查原因。没有保存任何内容。",
+        "ruleFailed": "API 有响应，但响应没有通过某条响应规则。请检查「响应」里的规则或请求，然后重试。没有保存任何内容。"
       },
       "cutShort": "已在 {{size}} 处截断。",
       "cutShortBody": "智能体也只会拿到前 {{size}}。请用参数缩小请求范围，或让 API 返回更少内容。",
@@ -5135,7 +5144,9 @@
       },
       "responseHeaders": "响应头",
       "resultTab": "结果",
-      "requestTab": "预览"
+      "requestTab": "预览",
+      "emptyBody": "0 字节 · 响应正文为空",
+      "ruleFailed": "响应规则未通过"
     },
     "editGroup": {
       "title": "编辑 {{name}}",
@@ -5147,7 +5158,16 @@
       "nameHelp": "固定不变——智能体以 {{prefix}} 调用它的工具。",
       "descriptionHelp": "智能体搜索工具时会读到它，写清这组 API 是做什么的。",
       "descriptionPlaceholder": "例如：计费系统的发票和付款",
-      "environmentsNote": "基础 URL、请求头、密钥和变量属于各个环境，在「环境」里对应的行上编辑。"
+      "environmentsNote": "基础 URL、请求头、密钥和变量属于各个环境，在「环境」里对应的行上编辑。",
+      "diagnosticHeaders": "诊断响应头",
+      "diagnosticHeadersHelp": "用逗号分隔的响应头名称。测试和智能体收到的结果里会与请求 id、追踪 id 一起报告。不能指定携带凭据或 Cookie 的响应头。",
+      "diagnosticProblem": {
+        "refused": "不能指定携带凭据或 Cookie 的响应头。",
+        "invalid": "请使用普通的响应头名称，并用逗号分隔。",
+        "many": "最多 20 个响应头。"
+      },
+      "responseRules": "响应规则",
+      "responseRulesHelp": "每条规则都满足，调用才算成功。没有规则时，只有 HTTP 400 及以上才算失败。"
     },
     "reimport": {
       "action": "重新导入",
@@ -5244,6 +5264,33 @@
       "timeout": {
         "environment": "超时 {{seconds}} 秒（环境 {{environment}} 自己的）",
         "group": "超时 {{seconds}} 秒（分组的）"
+      }
+    },
+    "responseRules": {
+      "add": "添加规则",
+      "remove": "删除规则",
+      "read": "读取",
+      "name": "响应头或字段",
+      "values": "成功值",
+      "missing": "缺失时",
+      "message": "错误信息来自",
+      "messageName": "信息名称",
+      "source": {
+        "status": "HTTP 状态码",
+        "header": "响应头",
+        "json": "JSON 字段"
+      },
+      "missingOk": "成功",
+      "missingError": "失败",
+      "messageNone": "不读取错误信息",
+      "problem": {
+        "name": "请填写要读取的响应头或 JSON 字段。",
+        "pointer": "JSON 字段以 / 开头（例如 /status/code）。",
+        "refused": "不能读取携带凭据或 Cookie 的响应头。",
+        "invalid": "这不是有效的响应头名称。",
+        "noValues": "至少填写一个成功值，用逗号分隔。",
+        "status": "状态码是 100 到 599 的数字。",
+        "long": "最多 20 个值，每个最多 200 个字符。"
       }
     }
   },

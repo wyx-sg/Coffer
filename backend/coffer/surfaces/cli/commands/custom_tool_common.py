@@ -3,6 +3,7 @@ and variable flags, and printing a group or a test the way the page shows it."""
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import typer
@@ -74,6 +75,33 @@ def rows_of(env: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
+def _rule_line(rule: dict[str, Any]) -> str:
+    what = rule["source"] if rule["source"] == "status" else f"{rule['source']} {rule['name']}"
+    line = f"{what} ∈ {json.dumps(rule['ok_values'], ensure_ascii=False)}"
+    line += f" (missing: {rule.get('missing', 'ok')})"
+    if rule.get("message"):
+        line += f" message: {rule['message']['source']} {rule['message']['name']}"
+    return line
+
+
+def _show_response(group: dict[str, Any]) -> None:
+    response = group.get("response") or {}
+    headers = response.get("diagnostic_headers") or []
+    rules = response.get("rules") or []
+    typer.echo(f"  response: diagnostic headers: {', '.join(headers) if headers else 'none'}")
+    typer.echo("  response rules:" + ("" if rules else " none"))
+    for rule in rules:
+        typer.echo(f"    {_rule_line(rule)}")
+
+
+def set_rules(body: dict[str, Any], value: str | None, *, as_json: bool) -> None:
+    """``--response-rules``: a JSON array, or ``group``/``null`` to follow the group."""
+    if value is not None:
+        follow = value.strip() in ("group", "null")
+        rules = None if follow else json_arg(value, "--response-rules", as_json=as_json)
+        body["response_rules"] = rules
+
+
 def show_group(group: dict[str, Any]) -> None:
     typer.echo(f"{group['name']}  ({'on' if group.get('enabled') else 'off'}, {group['health']})")
     if group.get("description"):
@@ -89,6 +117,7 @@ def show_group(group: dict[str, Any]) -> None:
             typer.echo(f"      {h['name']}: {what}")
         for k, v in (e.get("variables") or {}).items():
             typer.echo(f"      {{env:{k}}} = {v}")
+    _show_response(group)
     typer.echo("  tools:")
     _io.table(
         [
@@ -97,10 +126,15 @@ def show_group(group: dict[str, Any]) -> None:
                 "on": t["enabled"],
                 "request": f"{t['method']} {t['path']}",
                 "changes_data": t["changes_data"],
+                "own_rules": (
+                    "follows group"
+                    if t.get("response_rules") is None
+                    else f"{len(t['response_rules'])} own"
+                ),
             }
             for t in group.get("tools") or []
         ],
-        ["name", "on", "request", "changes_data"],
+        ["name", "on", "request", "changes_data", "own_rules"],
     )
     if group.get("pending_approvals"):
         typer.echo(f"  waiting for approval: {', '.join(group['pending_approvals'])}")
@@ -113,6 +147,11 @@ def show_test(result: dict[str, Any]) -> None:
     else:
         typer.echo(f"not answered ({result.get('failure')}){where}: {result.get('error')}")
     typer.echo(f"{result.get('duration_ms', 0)} ms")
+    if result.get("status_line"):
+        size = result.get("body_bytes") or 0
+        typer.echo(f"body: {size} bytes" if size else "(empty body)")
+    if result.get("rule_failure"):
+        typer.echo(f"rule failed: {result['rule_failure']['summary']}")
     if result.get("body"):
         typer.echo("")
         typer.echo(result["body"])
@@ -163,6 +202,7 @@ __all__ = [
     "pairs",
     "read_group",
     "rows_of",
+    "set_rules",
     "show_group",
     "show_preview",
     "show_test",
