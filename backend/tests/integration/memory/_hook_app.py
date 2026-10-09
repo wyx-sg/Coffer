@@ -122,7 +122,9 @@ def boot(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Ho
         path = url.split("/api/v1", 1)[1]
         return client.post(path, json=json, headers=headers)
 
-    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (_PersistentClient(client), info))
+    monkeypatch.setattr(
+        _cli_client, "client_or_exit", lambda **_kw: (_PersistentClient(client), info)
+    )
     monkeypatch.setattr(memory_hook_cmd, "live_daemon", lambda: info)
     monkeypatch.setattr(httpx, "post", _post)
     try:

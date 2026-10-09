@@ -67,11 +67,19 @@ export function sectionGroups(
 }
 
 /** What a group's header pill and banner say: its health, with the two secret problems told apart. */
-export type GroupState = "healthy" | "idle" | "failing" | "off" | "secretMissing" | "waiting";
+export type GroupState =
+  | "healthy"
+  | "idle"
+  | "failing"
+  | "off"
+  | "secretMissing"
+  | "waiting"
+  | "refused";
 
 export function groupState(group: Pick<CustomToolGroup, "health" | "secret_state">): GroupState {
   if (group.health !== "attention") return group.health;
-  return group.secret_state === "pending_approval" ? "waiting" : "secretMissing";
+  if (group.secret_state === "pending_approval") return "waiting";
+  return group.secret_state === "rejected" ? "refused" : "secretMissing";
 }
 
 /** The status tone a group's health reads in. */

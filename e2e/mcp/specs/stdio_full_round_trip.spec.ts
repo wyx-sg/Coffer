@@ -15,6 +15,7 @@ import {
   sendEnvelope,
   spawnShim,
   uniqueName,
+  INIT_PARAMS,
 } from "./_helpers";
 
 acceptance("mcp-gateway", "register a stdio MCP server", async () => {
@@ -28,7 +29,7 @@ acceptance("mcp-gateway", "register a stdio MCP server", async () => {
       jsonrpc: "2.0",
       id: 1,
       method: "initialize",
-      params: {},
+      params: INIT_PARAMS,
     });
     const init = await readReply(shim);
     expect(init["id"]).toBe(1);

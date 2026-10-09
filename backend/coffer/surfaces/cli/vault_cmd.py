@@ -14,6 +14,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli import _io
 
 app = typer.Typer(
     help="Hand edits the vault refused",
@@ -32,10 +33,9 @@ def problems(
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
     """List hand edits that were refused: still on disk, not in effect until fixed."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
+    with _io.client(as_json=output_json) as c:
         r = c.get("/vault/problems")
-        _cli_client.check(r, verbose=_verbose(ctx))
+        _cli_client.check(r, verbose=_verbose(ctx), as_json=output_json)
     data = r.json()
     if output_json:
         typer.echo(_json.dumps(data, indent=2))

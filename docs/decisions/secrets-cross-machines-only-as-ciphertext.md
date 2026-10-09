@@ -55,7 +55,8 @@ check, writes a passphrase-protected key backup
 ([The Master Key Lives in a Keychain Access Group](master-key-lives-in-the-macos-keychain.md)),
 **Import a master key** in Settings › Security installs it after showing the
 file's fingerprint beside this machine's, a 12-character SHA-256 prefix to
-compare (`/api/v1/sync/key/import/preview`, `/import`, `/fingerprint`). No command
+compare (`/api/v1/secrets/key/import/preview`, `/import`, `/fingerprint`; the
+secret store's routes, which answer whether or not sync is switched on). No command
 exports the key — an agent could run it
 ([Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)).
 Export and import are audited (`master_key_exported`, `master_key_imported`). An

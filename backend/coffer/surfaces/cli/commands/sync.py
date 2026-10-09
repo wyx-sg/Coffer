@@ -1,8 +1,9 @@
-"""``coffer sync`` — the Sync page: remote, rounds, machines, keys and conflicts.
+"""``coffer sync`` — the Sync page: remote, rounds, machines and conflicts.
 
 Spec vault-sync. A round runs in the daemon; ``sync run`` waits for the one it
 starts, and ``sync wait`` waits for a round already running (a scheduled one,
-or one another surface started) and prints how it ended.
+or one another surface started) and prints how it ended. The master key's
+commands are ``coffer secret key-*``: the key is the secret store's.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import time
 
 import typer
 
+from coffer.domain.sync.stops import Answer
 from coffer.surfaces.cli import _io
 from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli._route_command import Q, RouteCommand, mount
@@ -19,6 +21,8 @@ from coffer.surfaces.cli.registry import maps
 
 _UI = "Sync · "
 _PATH = (Q("path", "A path under the vault"),)
+#: The answers ``POST /sync/stop/files/answer`` accepts, from the domain's enum.
+ANSWERS = " | ".join(a.value for a in Answer)
 
 SPECS = [
     RouteCommand(
@@ -162,7 +166,8 @@ SPECS = [
         "POST",
         "/sync/stop/files/answer",
         _UI + "a conflicting file · keep one",
-        "Answer for one file. Body: path, answer (mine | theirs | merged text).",
+        f"Answer for one file. Body: path, answer ({ANSWERS}); edited keeps the "
+        "copy you resolved in your editor.",
         body=True,
     ),
     RouteCommand(
@@ -250,30 +255,6 @@ SPECS = [
         "/sync/machines/{machine_id}/restore",
         _UI + "Machines · Restore",
         "Bring a retired machine back.",
-    ),
-    RouteCommand(
-        "sync key fingerprint",
-        "GET",
-        "/sync/key/fingerprint",
-        _UI + "Key · fingerprint",
-        "The master key's fingerprint (never the key).",
-    ),
-    RouteCommand(
-        "sync key import-preview",
-        "POST",
-        "/sync/key/import/preview",
-        _UI + "Key · import (review)",
-        "Read a key backup's fingerprint. Body: material (read from a file with "
-        "--data @backup.json).",
-        body=True,
-    ),
-    RouteCommand(
-        "sync key import",
-        "POST",
-        "/sync/key/import",
-        _UI + "Key · import",
-        "Import a key backup. Body: material, passphrase (give both on stdin).",
-        body=True,
     ),
     RouteCommand(
         "sync vault-move",

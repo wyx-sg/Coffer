@@ -280,7 +280,7 @@ def mcp_daemon(tmp_path: Any, monkeypatch: Any) -> Any:
 
     from coffer.surfaces.cli import _client as _cli_client
 
-    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (fake_client, info))
+    monkeypatch.setattr(_cli_client, "client_or_exit", lambda **_kw: (fake_client, info))
 
     yield home
 

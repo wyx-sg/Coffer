@@ -19,6 +19,7 @@ import {
   spawnShim,
   uniqueName,
   waitForCapabilities,
+  INIT_PARAMS,
 } from "./_helpers";
 
 /**
@@ -113,7 +114,7 @@ acceptance(
         jsonrpc: "2.0",
         id: 1,
         method: "initialize",
-        params: {},
+        params: INIT_PARAMS,
       });
       const init = await readReply(shim);
       expect(init["id"]).toBe(1);

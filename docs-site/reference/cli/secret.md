@@ -29,6 +29,9 @@ This page matches what `coffer secret --help` prints. Add `--help` to any comman
 | [`secret import`](#secret-import) | Move found plaintext secrets into the store. |
 | [`secret ignore`](#secret-ignore) | Remember found values as not secrets, so scans stop reporting them. |
 | [`secret unignore`](#secret-unignore) | Forget values remembered as not secrets. |
+| [`secret key-fingerprint`](#secret-key-fingerprint) | This machine's master key fingerprint (never the key). |
+| [`secret key-preview`](#secret-key-preview) | Whose key a key backup holds, beside this machine's; changes nothing. |
+| [`secret key-install`](#secret-key-install) | The request the Coffer app sends to install a key backup. |
 | [`secret local-access`](#secret-local-access) | Hand a standalone secret to programs `coffer run` starts. |
 | [`secret local-access request`](#secret-local-access-request) | Ask to hand a secret to programs coffer run starts; waits for approval. |
 | [`secret local-access revoke`](#secret-local-access-revoke) | Withdraw the grant. |
@@ -39,7 +42,7 @@ Create a secret with `--name "<label>"` (and `--description`), or replace one by
 
 A new secret is given a label by you and an id by Coffer: the command prints its ref and `coffer://secret/<id>`, which is how files cite it. `coffer secret set <ref>` only replaces the value of a secret that exists.
 
-Without --value the secret is read from stdin, or prompted for. --value still stores, but warns that the value lands in your shell history; the value itself is never echoed.
+Without --value the secret is read from stdin, or prompted for. --value still stores, but warns that the value lands in your shell history; the value itself is never echoed. --json prints the ref and its URI (and the --value warning), never the value; a failure is the shared JSON error.
 
 <p class="cli-label">Synopsis</p>
 
@@ -55,6 +58,7 @@ coffer secret set [OPTIONS] [REF]
 | `--name` <span class="cli-chip">option</span> | text |  | Create a new secret with this label; Coffer mints its id |
 | `--description` <span class="cli-chip">option</span> | text |  | With --name: what the new secret is for |
 | `--value` <span class="cli-chip">option</span> | text |  | Provide the secret on the command line (UNSAFE — visible in shell history; prefer stdin) |
+| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## secret list
 
@@ -98,6 +102,8 @@ coffer secret reveal [OPTIONS] REF
 ## secret backup-key
 
 Open the master key backup in the Coffer app; the person checks presence, types the passphrase and picks the folder there.
+
+Waits until the person has written the backup, then prints where (exit 0); closing the dialog, or no backup by --timeout, exits 11 with nothing written. The path is the one the daemon wrote, reported by the app.
 
 <p class="cli-label">Synopsis</p>
 
@@ -226,6 +232,58 @@ Forget values remembered as not secrets. Body: ids.
 
 ```sh
 coffer secret unignore [OPTIONS]
+```
+
+<p class="cli-label">Arguments and options</p>
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## secret key-fingerprint
+
+This machine's master key fingerprint (never the key).
+
+<p class="cli-label">Synopsis</p>
+
+```sh
+coffer secret key-fingerprint [OPTIONS]
+```
+
+<p class="cli-label">Arguments and options</p>
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## secret key-preview
+
+Whose key a key backup holds, beside this machine's; changes nothing. Body: material (read from a file with --data @backup.json).
+
+<p class="cli-label">Synopsis</p>
+
+```sh
+coffer secret key-preview [OPTIONS]
+```
+
+<p class="cli-label">Arguments and options</p>
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## secret key-install
+
+The request the Coffer app sends to install a key backup. Body: material, passphrase, nonce, signature, where nonce and signature are the presence grant the app signs after its own Touch ID check; the command line cannot get one, and without it nothing is installed. To import a key, run `coffer secret import-key`, which opens the import in the app.
+
+<p class="cli-label">Synopsis</p>
+
+```sh
+coffer secret key-install [OPTIONS]
 ```
 
 <p class="cli-label">Arguments and options</p>

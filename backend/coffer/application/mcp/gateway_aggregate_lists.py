@@ -113,6 +113,10 @@ def _tool_entry(t: Any) -> dict[str, Any]:
     annotations = getattr(t, "annotations", None)
     if annotations:
         entry["annotations"] = annotations
+    # So is the schema it declared for the result's structuredContent.
+    output_schema = getattr(t, "output_schema", None)
+    if output_schema:
+        entry["outputSchema"] = output_schema
     return entry
 
 

@@ -88,11 +88,10 @@ class SecretBoundary:
         self._store = store
         self._values = values
         self._clock = clock
-        #: What the switch is when nobody has set it: the build decides (spec
-        #: secret "Default the approval protection by the build"). A signed
-        #: release protects its master key, so approvals mean something and are
-        #: on; an unsigned build cannot, so they are off until a person turns
-        #: them on.
+        #: The switch when nobody has set it: the build decides (spec secret
+        #: "Default the approval protection by the build"). A signed release
+        #: protects its master key, so approvals are on; an unsigned build
+        #: cannot, so they are off until a person turns them on.
         self.default_on = default_on
 
     def _stamp(self) -> str:
@@ -272,13 +271,9 @@ class SecretBoundary:
             raise SecretBindingPending([a.id for a in waiting], [a.describe() for a in waiting])
 
     def _supersede_bind(self, ref: str, kind: str, uid: str, slot: str) -> None:
-        for approval in self._store.pending_of_op("bind", ref):
-            if (approval.destination_kind, approval.destination_uid, approval.slot) == (
-                kind,
-                uid,
-                slot,
-            ):
-                self._store.decide(approval.id, "superseded", by="system", at=self._stamp())
+        for a in self._store.pending_of_op("bind", ref):
+            if (a.destination_kind, a.destination_uid, a.slot) == (kind, uid, slot):
+                self._store.decide(a.id, "superseded", by="system", at=self._stamp())
 
     def refresh(self, current: Destinations) -> list[SecretApproval]:
         """Evaluate every current destination and retire approvals nothing wants.
@@ -362,6 +357,15 @@ class SecretBoundary:
         if not self._store.decide(approval_id, "rejected", by=actor, at=self._stamp()):
             raise ApprovalNotPending(approval_id, approval.status)
         return self.get(approval_id)
+
+    def ask_again(self, approval_id: str, *, actor: str) -> builtins.list[SecretApproval]:
+        """Retire a refused binding and ask it afresh; grants nothing by itself."""
+        a = self.get(approval_id)
+        if a.op != "bind" or not self._store.decide(
+            approval_id, "superseded", by=actor, at=self._stamp(), only_from="rejected"
+        ):
+            raise ApprovalNotPending(approval_id, a.status)
+        return self.check(a.destination(), {a.slot or "": a.ref or ""}, actor=actor)
 
     def list(
         self, *, status: str | None = None, destination_uid: str | None = None

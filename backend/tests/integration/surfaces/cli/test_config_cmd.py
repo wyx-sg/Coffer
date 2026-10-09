@@ -30,7 +30,7 @@ def _run(*args: str) -> Any:
 def no_daemon(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setenv("HOME", str(tmp_path))
 
-    def _refuse() -> Any:
+    def _refuse(**_kw: object) -> Any:
         raise AssertionError("daemon.port must not reach for a daemon")
 
     monkeypatch.setattr(_cli_client, "client_or_exit", _refuse)

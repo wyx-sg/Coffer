@@ -7,8 +7,9 @@ only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.
 
 Three kinds of route live here:
 
-* **Presence-gated** — ``/presence/reveal``, ``/presence/master-key-export`` and
-  ``/approvals/{id}/approve``. Each takes a one-time grant the desktop shell
+* **Presence-gated** — ``/presence/reveal``, ``/presence/master-key-export``,
+  ``/approvals/{id}/approve`` and ``/key/import`` (``secret_key_routes``).
+  Each takes a one-time grant the desktop shell
   signs after its own LocalAuthentication check, bound to the operation and
   its target (``/presence/challenge`` issues it). These are the only routes
   that let plaintext out or widen where a secret goes, and they have no CLI
@@ -64,6 +65,7 @@ from coffer.surfaces.http.secret_composition import (
     get_master_key_manager,
     get_secret_store,
 )
+from coffer.surfaces.http.secret_key_routes import router as key_router
 from coffer.surfaces.http.secret_plaintext_routes import router as plaintext_router
 from coffer.surfaces.http.secret_schemas import (
     LocalAccessIn,
@@ -87,6 +89,7 @@ router = APIRouter(
 router.include_router(approval_router)
 router.include_router(attest_router)
 router.include_router(plaintext_router)
+router.include_router(key_router)
 
 
 # --- presence ------------------------------------------------------------------

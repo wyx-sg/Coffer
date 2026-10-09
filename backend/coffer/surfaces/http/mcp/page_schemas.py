@@ -20,7 +20,7 @@ class McpRequirementOut(BaseModel):
     name: str
     #: A CLI is ``found`` or ``not_found``; a secret is ``set``, ``missing`` on
     #: this machine or ``waiting_approval``.
-    status: Literal["found", "not_found", "set", "missing", "waiting_approval"]
+    status: Literal["found", "not_found", "set", "missing", "waiting_approval", "refused"]
     #: A found CLI's version, when it printed one.
     version: str | None = None
     #: A secret's name on the Secrets page, for "View in Secrets".

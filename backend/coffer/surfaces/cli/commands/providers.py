@@ -138,8 +138,10 @@ SPECS = [
         "POST",
         "/models/test-connection",
         _UI + "Add · Test",
-        "Send one request to a model. Body: provider, base_url, model, secret_ref | secret_value.",
+        "Send one request to a model. Body: provider, base_url, model, secret_ref | secret_value. "
+        "Exits 7 when the answer says ok: false.",
         body=True,
+        outcome="ok",
     ),
 ]
 

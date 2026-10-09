@@ -570,7 +570,7 @@ server's command and settings need from this machine (see mcp-gateway "Show what
 an MCP server requires"): the launcher as a row reading "Found · <version>" or
 "Not found" with a View in CLIs link to `/clis/<launcher>`, and each secret as
 named by the secret's own name (the setting that carries it is its tooltip) as
-Set, Missing or Waiting for approval with a View in Secrets link to
+Set, Missing, Refused or Waiting for approval with a View in Secrets link to
 `/secrets?q=<name>`, the Secrets list searched for it —
 and **Most-called tools**: the busiest four, read-only with no switches, each
 marked when it sits behind search, with the rest one link away ("Show all N in
@@ -681,7 +681,7 @@ naming the secret. A success is a toast that says what was kept or added.
 - **THEN** the dialog says the secret waits for approval before it closes
 
 ### Requirement: Keep the capability tabs uniform
-The Tools, Resources and Prompts tabs MUST be uniform — each carrying a filter box, a per-row enable toggle and a per-row checkbox with a select-all box in the header, with each row's use in the last 24 hours; while rows are ticked a selection bar replaces the filter with Turn on, Turn off and (on Tools, while tiering is on) Exposure for the ticked rows — and MUST keep that chrome even when the upstream exposes none of that kind, saying so inside the tab rather than as a bare card. A tool row opens to its full description, its input parameters and the name agents see it by. The server list likewise carries a search box and a Reach filter (every server, or those reaching one agent) and a client-side pager so a large vault stays navigable; the skills list works the same way.
+The Tools, Resources and Prompts tabs MUST be uniform — each carrying a filter box, a per-row enable toggle and a per-row checkbox with a select-all box in the header, with each row's use in the last 24 hours; while rows are ticked a selection bar replaces the filter with Turn on, Turn off and (on Tools, while tiering is on) Exposure for the ticked rows — and MUST keep that chrome even when the upstream exposes none of that kind, saying so inside the tab rather than as a bare card. A tool row opens to its full description, its input parameters and the name agents see it by. A resource row and a prompt row open the same way, in place under the row and one row at a time: a resource to its description, name, MIME type and the address agents read it by, with **Read content** reading it from the server now (JSON laid out, text past 64 KB cut and said so, a binary body named by its type and size and never shown); a prompt to its description, its arguments as fields (required ones marked, each with its description) and the name agents see, with **Get prompt** showing the messages the server fills it to, offered once every required argument is filled. An error the server answers with reads in place of the content. The server list likewise carries a search box and a Reach filter (every server, or those reaching one agent) and a client-side pager so a large vault stays navigable; the skills list works the same way.
 
 #### Scenario: capability toggle uses the redesigned tab layout
 - **GIVEN** a registered MCP server with at least one tool and one resource
@@ -705,7 +705,19 @@ The Tools, Resources and Prompts tabs MUST be uniform — each carrying a filter
 - **WHEN** the user types a partial name in the capability search box on the Tools tab
 - **THEN** only matching tools remain visible and non-matching tools are hidden
 
-### Requirement: Add MCP servers from one paste box
+#### Scenario: a resource row opens to its details and reads its content
+- **GIVEN** a server offering a JSON resource
+- **WHEN** the user opens its row on the Resources tab and presses Read content
+- **THEN** the details show its MIME type and the address agents read it by, and nothing is read before the press
+- **AND** after the press its content shows laid out as JSON
+
+#### Scenario: a prompt row opens to its arguments and fills the prompt
+- **GIVEN** a server offering a prompt with one required argument
+- **WHEN** the user opens its row on the Prompts tab
+- **THEN** the argument shows as a field marked required, and Get prompt waits until it is filled
+- **AND** once filled, Get prompt shows the messages the server returns, each with its role
+
+### Requirement: Add MCP servers by pasting them into one box
 The MCP servers page MUST carry one **Add server** action, and no separate
 paste-JSON action. It opens a modal whose first step is one paste box that
 recognises what was pasted, so the user can paste whatever an MCP server's
@@ -721,10 +733,11 @@ README gives them:
   host.
 
 One recognised server MUST open the manual form prefilled with it; several MUST
-open the review step. The same dialog carries **Import from agents** as a link,
-which lists the direct MCP entries in the agents' own config files to adopt
-([agent-registry](../agent-registry/spec.md) "Adopt a direct MCP entry into Coffer"); it is not a
-second button on the page. The dialog adds MCP servers only: it offers no
+open the review step. The dialog MUST NOT offer importing the direct MCP
+entries in the agents' own config files: that is done on each agent's MCP
+servers tab ([agent-registry](../agent-registry/spec.md) "Adopt a direct MCP entry into Coffer"). While no
+server is registered, the page's welcome MAY list those entries per agent, each
+row opening that agent's MCP servers tab. The dialog adds MCP servers only: it offers no
 custom tool (an HTTP API imported from an OpenAPI document or defined by hand),
 which is added on the Custom tools page (see "Manage custom tool groups on their
 own page").
@@ -791,10 +804,10 @@ the dialog MUST NOT send that server's registration until the name is shortened.
 - **WHEN** the user pastes a `[mcp_servers.docs]` table with a command, arguments and an `env` table
 - **THEN** the manual form opens prefilled as a stdio server named `docs` with that command, arguments and environment, the secret-looking values offered as secrets
 
-#### Scenario: the add dialog links to importing from agents
-- **GIVEN** the MCP servers page
+#### Scenario: the add dialog offers no import from agents
+- **GIVEN** the MCP servers page, and an agent whose own config file holds a direct MCP entry
 - **WHEN** it renders and the user opens Add server
-- **THEN** the page carries one Add server action and no separate paste-JSON action, and the dialog carries an Import from agents link
+- **THEN** the page carries one Add server action and no separate paste-JSON action, and the dialog carries no Import from agents link
 - **AND** the dialog offers no custom tool, neither an OpenAPI import nor a hand-made HTTP request
 
 ### Requirement: Explain unreadable pasted input in the dialog
@@ -948,9 +961,18 @@ audit log (`GET /api/v1/audit`), `coffer log mcp` reads the invocation log, and
 `--server`, `coffer log mcp` reads the same cross-server log the Tool calls tab
 renders (`GET /api/v1/mcp/invocations`), Coffer's own built-in calls (`coffer`)
 and deleted servers' rows (`deleted:<name>`) included; with `--server <name>`, it
-reads that server's log. Each reader takes `--since`, `--limit` and `--json`,
-plus the filter its record affords: `--status` for invocations, and `--errors`
-for the daemon log.
+reads that server's log. Each reader takes `--since`, `--limit`, `--cursor`
+and `--json`, and MUST offer every filter the page sends for its record: `--q`
+on all three (with repeatable `--q-type` on the audit log), `--status`,
+`--agent-uid` and `--uid` on invocations, and `--errors`, `--level` and
+`--with-total` on the daemon log. A page with more after it ends with the
+`--cursor` value that reads the next one. `coffer log daemon` reads through the
+daemon; the file itself, with no daemon, is the one `coffer path logs` names.
+
+#### Scenario: every filter the Activity page sends has a reader option
+- **GIVEN** the Activity page's search, event-type, agent, server-uid, severity, paging and count filters
+- **WHEN** `coffer log audit`, `coffer log mcp` and `coffer log daemon` are run with the matching options
+- **THEN** each request carries the same query parameters the page sends, and a combination the route cannot serve (`--q-type` without `--q`, `--server` with `--uid` or `--q`) exits 2 before any request
 
 #### Scenario: the command-line readers still read the records
 - **GIVEN** a running daemon that has recorded an audit entry, MCP invocations on
@@ -1388,37 +1410,25 @@ released to the test, which says the server is tested once it is added.
 - **THEN** the app posts the form's config to `/api/v1/resources/mcp_server/test-config` with the typed value in `secret_values`, and shows "Test passed in 1.4 s" with the tools it listed
 - **AND** no resource is registered and no secret is written
 
-### Requirement: Review an import from the agents before it is applied
-Import from your agents MUST open the shared change preview of the daemon's
-import plan ([agent-registry](../agent-registry/spec.md) "Plan an import of
-agents' direct MCP entries") before anything is written: the servers found,
-each ticked, with the agents that hold it and a note when two agents' entries
-merge into one server or an entry duplicates a server Coffer already has;
-what will happen to Coffer and to each agent; and each agent config file the
-import edits, with its diff. A name the daemon cannot register is listed
-unticked. Unticking a server re-plans without it. Import MUST apply the ticked
-entries through the apply route, and the outcome MUST say which entries were
-not imported and why.
-
-#### Scenario: the import review shows each file's diff before it imports
-- **GIVEN** an agent whose config file holds one direct MCP entry
-- **WHEN** the user opens Import from your agents and presses Import 1 server
-- **THEN** the dialog first shows the plan with that agent's file and its diff, and only then posts the ticked entries to `/api/v1/agents/mcp-import/apply`
-- **AND** the entry is not adopted one by one through the agent's adopt route
-
 ### Requirement: Show the built-in coffer server read-only
 The MCP servers list MUST end with a Built-in group holding Coffer's own
 `coffer` server, and its detail MUST be read-only: no Test, Edit, Delete, Turn
 off or ⋯ menu, its reach a fixed "All connected agents", a note that it cannot
 be edited or removed because it is how agents reach the other servers, its
 calls in the last 24 hours, and its tools, always on, with the names agents see
-them by. It is described by the daemon ([mcp-gateway](../mcp-gateway/spec.md)
+them by. On its Tools tab a tool row opens the way a registered server's does, to
+its full description, its input parameters and the name agents see it by. It is described by the daemon ([mcp-gateway](../mcp-gateway/spec.md)
 "Describe the built-in coffer server") and is not a registered resource.
 
 #### Scenario: the built-in coffer server is listed last and opens read-only
 - **GIVEN** the MCP servers page with one registered server
 - **WHEN** it renders and the user opens the Built-in `coffer` row
 - **THEN** the row sits under Built-in after the registered servers and its detail shows its tools with no Test, Edit or ⋯ menu
+
+#### Scenario: a built-in tool row opens to its details
+- **GIVEN** the built-in `coffer` server's Tools tab
+- **WHEN** the user opens the `search_tools` row
+- **THEN** it shows the tool's input parameters and the name `coffer__search_tools`
 
 ### Requirement: Offer a found update in a card above the sidebar footer
 In the desktop shell, when the shell's update check has found a newer version,
@@ -2763,13 +2773,16 @@ gateway as every other MCP server, and carries:
 - a **description** of what its API is for, which agents read when they search
   for a tool ([mcp-gateway](../mcp-gateway/spec.md) "Describe a custom-tool group"),
   shown first in the group's definition;
-- a shared **base URL** its tools' paths are relative to;
-- **header rows** — each a name and a value that is plain text or one stored
+- its **environments** — at least one, each with the **base URL** its tools'
+  paths are relative to, its own header rows, variables and, when it differs
+  from the group's, its own timeout; the tools are the same in each
+  ([mcp-gateway](../mcp-gateway/spec.md) "Keep a custom-tool group's environments in the group");
+- per environment, **header rows** — each a name and a value that is plain text or one stored
   secret holding the credential alone, behind the row's auth scheme (a bearer
   token is stored as `<token>` with the scheme **Bearer**), chosen by its name on the Secrets page
   or pasted to be saved there with the group (see "Choose secrets in one field
   and one set of rows"): Coffer's gateway adds each header when it calls the API,
-  once a person has approved a secret for the group's host
+  once a person has approved a secret for that environment's host
   ([mcp-gateway](../mcp-gateway/spec.md) "Wait for approval before a custom tool
   sends its secret"), and neither a secret header's value nor the secret's
   reference is ever part of what an agent sees or sends;
@@ -2782,12 +2795,14 @@ GET, and editable — which the gateway passes to agents as the tool's MCP
 annotations (`readOnlyHint` false and `destructiveHint` true when it changes
 data, `readOnlyHint` true otherwise), so each agent's own approval prompts apply
 to it. The page MUST list the groups under Needs attention, Healthy and Off, the failing
-ones first, each showing what is wrong in place of its tools, and an Off group
-leaves its reach column empty. Its header MUST carry one action, **Add custom tool**,
+ones first, each showing what is wrong in place of its tools — when nothing is,
+its one environment's host or, with several, how many environments it has and
+its tool count — and an Off group leaves its reach column empty. Its header MUST carry one action, **Add custom tool**,
 whose flow asks first for the group, in a select you can type into that starts
 on **New group** and lists every existing group with its source, tool count and
 description. An existing group MUST only take a request
-added by hand, which uses that group's base URL and secret; only a **new** group
+added by hand, which runs in that group's environments, each with its own base
+URL and secret; only a **new** group
 offers the two ways in:
 
 - **Import an OpenAPI spec** — from a URL or a file, into the new group; the user
@@ -2812,7 +2827,11 @@ Every request form MUST end with a **Test** section, whose Run runs the request 
 holds it once and shows the answer — the status and time in a block, the response
 in a viewer under it — the API's error body, a timeout, a failed
 connection (each of these two with the daemon's hand-off and, for a timeout,
-**Change timeout**) or a response cut short; nothing — neither a new group nor a tool — is
+**Change timeout**) or a response cut short, with the response headers that
+name the request on the API's side ([mcp-gateway](../mcp-gateway/spec.md)
+"Report what a custom tool's test reached"); a saved group's form previews and
+tests in one environment ("Preview and test a custom tool in one chosen
+environment"); nothing — neither a new group nor a tool — is
 saved until the form's **Add** or **Save**. A request of a group that is not saved
 yet is tested without its secret (see [mcp-gateway](../mcp-gateway/spec.md) "Test
 a custom tool request before its group is saved"). With no group yet the page
@@ -2822,20 +2841,24 @@ Off turns the group off), **Edit group** and a **⋯** menu that holds only Dele
 group… — and each problem is answered in a banner under it, never in the header:
 failing calls (with **View calls**, which opens Activity on its calls, and the daemon's hand-off), a group that is
 off (Turn on), a secret missing (Add secret, Choose another, no hand-off) and a
-secret waiting for approval (Open approvals, the only button). Re-import is a
+secret waiting for approval (Open approvals, the only button) and a secret
+whose approval a person refused (Ask again, the only button: in the desktop app
+it asks for Touch ID at once and approves, elsewhere the request goes back on
+the approvals list). Re-import is a
 button in the definition of an imported group.
 
 A group's detail page (`/custom-tools/<group>/<tab>`) MUST carry, under its
 header — its **reach** and a one-line summary of the last 24 hours (calls and
 failures) — two tabs laid out like every other detail page's. **Overview** (the
 default, at the bare `/custom-tools/<group>`) stacks the group's **definition**
-(base URL, and the auth header with the name of the secret it is bound to), then
+(with one environment, its base URL and the auth header with the name of the
+secret it is bound to; with several, each environment under Environments), then
 what an MCP server's Overview shows ("Open an MCP server on its Overview"):
 **Last 24 hours** — the group's calls and errors with a table of the agents that
 made them, and for a group that is on a View in Activity link to Activity's Tool
 calls tab searching the group's name (for a group that is off, only its last
 call and who made it); **Requires** — each secret its headers cite, named by the
-secret's own name, as Set, Missing or Waiting for approval with a View in
+secret's own name, as Set, Missing, Refused or Waiting for approval with a View in
 Secrets link to `/secrets?q=<name>` (a group runs no command, so it has no
 launcher row); and **Most-called tools** — the busiest four, read-only with no
 switches, each marked when it sits behind search, with the rest one link away
@@ -2853,7 +2876,8 @@ per-row checkbox (select-all in the header); while any is ticked a selection bar
 replaces that row with **Turn on**, **Turn off** and, while the exposure column
 shows, **Exposure**, acting on the ticked tools. Choosing
 a tool opens its editor in a 640-wide **drawer** below the title bar, where the
-request is edited — the headers the group already adds shown as "from the group",
+request is edited — the headers the chosen environment already adds shown as
+"from the group" ("from <environment>" when the group has several),
 no switch, which lives in the table — with **Delete tool** and Cancel
 beside it, and its **Test** section under the fields runs the tool with sample
 arguments and shows the response. Script tools are not offered: they are deferred past 1.0.
@@ -2877,7 +2901,7 @@ the gateway").
 #### Scenario: a hand-made request joins an existing group
 - **GIVEN** the `billing` group
 - **WHEN** the user chooses Add custom tool, defines one request by hand and picks `billing` as its group
-- **THEN** the tool is added to `billing`, using its base URL and auth header
+- **THEN** the tool is added to `billing`, using its environments' base URLs and auth headers
 - **AND** the flow offers no Import an OpenAPI spec for `billing`, only for a new group
 
 #### Scenario: a new group made by hand is saved with its first request
@@ -2906,6 +2930,12 @@ the gateway").
 - **GIVEN** one group whose last call failed and two healthy groups
 - **WHEN** the user opens `/custom-tools`
 - **THEN** the failing group is listed first with its tools, and the page header carries one Add custom tool action whose flow asks for the group in a select that starts on New group and narrows the groups as the user types, and offers Import an OpenAPI spec and Add one request by hand, and no Script type
+
+#### Scenario: a refused secret on a group's page offers Ask again
+- **GIVEN** a group whose secret's approval a person refused
+- **WHEN** its page is opened
+- **THEN** a banner says the secret was refused, with Ask again as its only button, and no banner says it waits for approval
+- **AND** pressing Ask again asks again for that approval
 
 #### Scenario: a group's page has Overview and Tools tabs
 - **GIVEN** the `billing` group with three tools and a call in the last 24 hours
@@ -3123,3 +3153,36 @@ A knowledge document and a managed skill MUST each carry a **History** tab (spec
 - **GIVEN** the history read failing
 - **WHEN** the user opens the History tab and chooses Retry once the read works again
 - **THEN** the tab shows one Load error row with Retry, and after Retry it lists the versions
+
+### Requirement: Preview and test a custom tool in one chosen environment
+A saved group's request form — the tool drawer and Add request into an existing
+group — MUST hold ONE chosen environment, starting at the first one that is on,
+and everything the form shows about where the request goes MUST come from it:
+the help under Request names its base URL (and, with several environments, the
+environment), the headers already added are its headers, and the Test section
+shows a **preview** of the request — method and URL with the environment's
+`{env:NAME}` filled and `{argument}` holes left, the merged headers (the
+environment's plain ones, a tool header replacing one of the same name, the
+environment's secret headers last, each by its secret's name and state, never a
+value), its variables and the timeout that applies (its own, else the group's) —
+by the gateway's rules ([mcp-gateway](../mcp-gateway/spec.md) "Make a custom
+tool's request in the gateway"). The note under Test names that environment's
+secret, and none when it has no secret header. Run MUST send the chosen
+environment by name. The Test section's picker lists the environments that are
+on and only changes the choice: it saves nothing and changes no group setting.
+An environment switched off or deleted while the form is open MUST stay chosen
+and be reported — off, deleted, or no environment on — with Run off and no
+preview, until another is picked; the form never runs in another environment in
+its place.
+
+#### Scenario: the tool form previews and tests in the environment it names
+- **GIVEN** a group with environments `test` (a secret header, a plain header, `region=eu-1`, the group's 30 s timeout) and `live` (a different base URL and plain header, no secret header, `region=us-1`, its own 7 s timeout) and a tool `GET /v1/{env:region}/items/{id}`
+- **WHEN** the person opens the tool, reads the preview, picks `live` in Test and runs it
+- **THEN** the help, headers and preview first show `test`'s base URL, headers, secret and 30 s, then `live`'s base URL with `us-1`, its header and 7 s, and no secret of `test` anywhere
+- **AND** the run names `live`, its result shows the allow-listed response headers, and nothing about the group is saved
+
+#### Scenario: a tool form never runs in an environment that is off or gone
+- **GIVEN** a tool drawer open on environment `test`
+- **WHEN** `test` is switched off, then deleted, while the drawer stays open
+- **THEN** Test says `test` is off, then that it was deleted, with Run off and no preview each time
+- **AND** Run comes back only once the person picks another environment

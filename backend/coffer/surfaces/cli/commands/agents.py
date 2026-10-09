@@ -147,7 +147,7 @@ SPECS = [
         "agent mcp-import plan",
         "POST",
         "/agents/mcp-import/plan",
-        "MCP servers · Import from agents · review",
+        "MCP servers · first-run · the agents' own servers",
         "What importing these entries would register. Body: entries[{agent_uid, name, "
         "source, new_name}].",
         body=True,
@@ -156,7 +156,7 @@ SPECS = [
         "agent mcp-import apply",
         "POST",
         "/agents/mcp-import/apply",
-        "MCP servers · Import from agents · Import",
+        "Command line only · import several agents' entries at once",
         "Register the entries as Coffer MCP servers. Body as for plan.",
         body=True,
         pending=True,
@@ -211,7 +211,13 @@ SPECS = [
         "/agent-sessions",
         "Conversations · every agent's sessions",
         "Every agent's sessions in one list.",
-        query=(Q("q"), Q("source"), Q("agent", "An agent uid"), Q("limit", kind=int), Q("cursor")),
+        query=(
+            Q("q"),
+            Q("source"),
+            Q("agent", "Agent keys, comma-separated (e.g. claude_code,codex)"),
+            Q("limit", kind=int),
+            Q("cursor"),
+        ),
     ),
     RouteCommand(
         "agent session rename",

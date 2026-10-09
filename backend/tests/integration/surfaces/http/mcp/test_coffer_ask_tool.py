@@ -24,6 +24,7 @@ from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.turn_ask import ASK_TOOL_NAME, NOT_IN_TURN_TEXT, TURN_HEADER
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from tests.support.mcp_wire import INIT_PARAMS
 
 
 @pytest.fixture(autouse=True)
@@ -41,7 +42,7 @@ def _clean() -> Iterator[None]:
 def _mcp(client: TestClient, headers: dict[str, str], method: str, params: Any = None) -> Any:
     init = client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
         headers=headers,
     )
     sid = init.headers["mcp-session-id"]

@@ -148,7 +148,7 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 | `make verify-benchmark` | 所有标记为 `benchmark` 的性能预算测试，包括慢到进不了 `verify` 的那些 |
 | `make verify-secrets` | 像 CI 的 `secrets-scan` job 那样，用 gitleaks 扫描完整的 git 历史。没装 gitleaks 时跳过 |
 | `make lint` | 所有静态门禁：见[测试](/zh/contributing/testing#what-make-verify-runs) |
-| `make format` | 对 `backend` 和 `evals` 运行 `ruff format` 和 `ruff check --fix`。前端由它自己的 prettier 配置格式化，不归这个目标管 |
+| `make format` | 对 `backend`、`evals` 和 `e2e/installed` 运行 `ruff format` 和 `ruff check --fix`。前端由它自己的 prettier 配置格式化，不归这个目标管 |
 | `make verify-visual` | 截图基线：每个路由、浅色和深色。不属于 `verify` 或 `verify-all` |
 | `make visual-update` | 重新录制当前平台的截图基线 |
 | `make test-durations` | 重新测量测试耗时，用于集成测试分片的均衡（串行，约 15 分钟） |

@@ -36,17 +36,18 @@ class _Secrets:
 
 
 class _Boundary:
-    def __init__(self, waiting_slots: set[str]) -> None:
+    def __init__(self, waiting_slots: set[str], refused_slots: set[str] = frozenset()) -> None:
         self.waiting = waiting_slots
+        self.refused = refused_slots
 
     def check(self, dest: Any, refs: dict[str, str], *, actor: str = "system"):
         return [
             SecretApproval(
-                id="a1", op="bind", status="pending", created_at="", requested_by="x",
-                ref=ref, slot=slot,
+                id="a1", op="bind", status="rejected" if slot in self.refused else "pending",
+                created_at="", requested_by="x", ref=ref, slot=slot,
             )
             for slot, ref in refs.items()
-            if slot in self.waiting
+            if slot in self.waiting | self.refused
         ]  # fmt: skip
 
 
@@ -58,11 +59,11 @@ def _server(transport: dict[str, Any]) -> Resource:
     )  # fmt: skip
 
 
-def _of(server: Resource, probe=None, stored=(), waiting=()):
+def _of(server: Resource, probe=None, stored=(), waiting=(), refused=()):
     reqs = ServerRequirements(
         probe=probe or _Probe({"npx": "10.9.2"}),
         secrets=_Secrets(set(stored)),
-        boundary=lambda: _Boundary(set(waiting)),
+        boundary=lambda: _Boundary(set(waiting), set(refused)),
     )
     return asyncio.run(reqs.of(server))
 
@@ -94,6 +95,12 @@ def test_a_missing_launcher_is_not_found_and_a_waiting_secret_says_so():
         ("uvx", "not_found"),
         ("TOKEN", "waiting_approval"),
     ]
+
+
+def test_a_refused_secret_is_refused_not_waiting():
+    server = _server({"type": "stdio", "command": "npx", "secret_refs": {"A": "secret/a"}})
+    rows = _of(server, stored={"secret/a"}, refused={"A"})
+    assert [(r.name, r.status) for r in rows] == [("npx", "found"), ("A", "refused")]
 
 
 @pytest.mark.acceptance(spec="mcp-gateway", scenario="a server's page lists what it requires")

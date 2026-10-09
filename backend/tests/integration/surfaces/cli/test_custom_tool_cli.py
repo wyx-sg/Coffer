@@ -116,6 +116,63 @@ def test_a_group_is_configured_end_to_end_from_the_command_line(
 
 
 @pytest.mark.acceptance(
+    spec="mcp-gateway",
+    scenario="a dry run on the command line prints the request and sends nothing",
+)
+def test_a_dry_run_prints_the_request_and_sends_nothing(
+    daemon: BoundaryDaemon, api: FakeHttpApi
+) -> None:
+    daemon.store("secret/billing-test-token", "tok-test")
+    coffer("custom-tool", "group", "create", "billing", "--env", f"test={api.base_url}/t")
+    coffer("custom-tool", "env", "add", "billing", "live", "--base-url", f"{api.base_url}/l")
+    coffer(
+        "custom-tool", "env", "set-header", "billing", "test", "Authorization",
+        "--secret", "billing-test-token", "--scheme", "Bearer",
+        code=9,
+    )  # fmt: skip
+    coffer(
+        "custom-tool", "tool", "add", "billing", "--name", "status", "--method", "GET",
+        "--path", "/status", "--header", "X-Client=coffer",
+    )  # fmt: skip
+    preview = as_json(
+        "custom-tool", "tool", "test", "billing", "status", "--env", "test", "--dry-run"
+    )
+    assert preview["url"] == f"{api.base_url}/t/status" and preview["environment"] == "test"
+    auth = next(h for h in preview["headers"] if h["name"] == "Authorization")
+    assert auth["value"] == "Bearer ***"
+    assert auth["secret"]["name"] == "billing-test-token"
+    assert auth["secret"]["state"] == "pending_approval"
+    human = coffer("custom-tool", "tool", "test", "billing", "status", "--env", "live", "--dry-run")
+    assert f"GET {api.base_url}/l/status  [live]" in human.stdout
+    assert "X-Client: coffer" in human.stdout and "nothing was sent" in human.stdout
+    assert "tok-test" not in human.stdout + json.dumps(preview)
+    # A secret made under a label is named by it.
+    minted = _runner.invoke(app, ["secret", "set", "--name", "billing live key"], input="tok-live")
+    ref = minted.stdout.split("stored: ", 1)[1].split()[0]
+    coffer(
+        "custom-tool", "env", "set-header", "billing", "live", "X-Api-Key",
+        "--secret", ref.removeprefix("secret/"),
+        code=9,
+    )  # fmt: skip
+    live = as_json("custom-tool", "tool", "test", "billing", "status", "--env", "live", "--dry-run")
+    key = next(h for h in live["headers"] if h["name"] == "X-Api-Key")
+    assert key["value"] == "***" and key["secret"]["name"] == "billing live key"
+    assert key["secret"]["id"] == ref and "tok-live" not in json.dumps(live)
+    needs_env = json.loads(
+        coffer(
+            "custom-tool", "tool", "test", "billing", "status", "--dry-run", "--json", code=6
+        ).stderr
+    )
+    assert needs_env["error"]["code"] == "CUSTOM_TOOL_ENVIRONMENT_REQUIRED"
+    draft = as_json(
+        "custom-tool", "tool", "test-draft", "billing", "--env", "live", "--dry-run",
+        "--data", '{"name": "probe", "method": "GET", "path": "/probe"}',
+    )  # fmt: skip
+    assert draft["url"] == f"{api.base_url}/l/probe"
+    assert api.seen == []
+
+
+@pytest.mark.acceptance(
     spec="mcp-gateway", scenario="a change made on the page is read back by the command line"
 )
 def test_a_change_made_on_the_page_reads_back(daemon: BoundaryDaemon, api: FakeHttpApi) -> None:

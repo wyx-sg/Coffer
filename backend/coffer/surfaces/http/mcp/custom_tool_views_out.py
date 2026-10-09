@@ -71,6 +71,8 @@ def environment_out(ev: EnvironmentView) -> CustomToolEnvironmentOut:
         secret_state=ev.secret_state,
         pending_approvals=ev.pending_approvals,
         pending_secrets=ev.pending_secrets,
+        rejected_approvals=ev.rejected_approvals,
+        rejected_secrets=ev.rejected_secrets,
     )
 
 
@@ -106,6 +108,8 @@ def group_out(view: GroupView) -> CustomToolGroupOut:
         secret_state=view.secret_state,
         pending_approvals=view.pending_approvals,
         pending_secrets=view.pending_secrets,
+        rejected_approvals=view.rejected_approvals,
+        rejected_secrets=view.rejected_secrets,
         calls_24h=view.calls,
         failures_24h=view.failures,
         last_call_at=view.last_call_at,

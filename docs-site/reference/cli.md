@@ -28,7 +28,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
-| `--verbose, -v` <span class="cli-chip">option</span> | flag |  | Show full tracebacks and HTTP request/response context on error. |
+| `--verbose, -v` <span class="cli-chip">option</span> | flag |  | On an error, also show the request behind it (method, path, status) and, for an unexpected one, the traceback. |
 | `--version` <span class="cli-chip">option</span> | flag |  | Print Coffer's version and exit. |
 | `--install-completion` <span class="cli-chip">option</span> | flag |  | Install completion for the current shell. |
 | `--show-completion` <span class="cli-chip">option</span> | flag |  | Show completion for the current shell, to copy it or customize the installation. |
@@ -45,9 +45,11 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer mcp`](/reference/cli/mcp) | MCP servers: register, change, test, their tools and logs. |
 | [`coffer secret`](/reference/cli/secret) | Secrets: list, store, delete, reveal in the app, import, approvals. |
 | [`coffer cli`](/reference/cli/cli) | Command-line tools Coffer manages for skills. |
+| [`coffer memory`](/reference/cli/memory) | Memory partitions (notes are plain files you edit directly). |
+| [`coffer proxy`](/reference/cli/proxy) | The local model proxy. |
 | [`coffer vault`](/reference/cli/vault) | The vault's history and the hand edits it refused. |
 | [`coffer custom-tool`](/reference/cli/custom-tool) | Custom tools: groups of HTTP API requests served as MCP tools. |
-| [`coffer approval`](/reference/cli/approval) | Secret approvals: list, show, approve with Touch ID, reject. |
+| [`coffer approval`](/reference/cli/approval) | Secret approvals: list, show, approve with Touch ID, reject, ask again. |
 | [`coffer app`](/reference/cli/app) | The Coffer desktop app. |
 | [`coffer resource`](/reference/cli/resource) | Any resource by uid: show, rename, switch on or off, reach, delete. |
 | [`coffer channel`](/reference/cli/channel) | Messaging channels: status, pairing, people, notify, restart. |

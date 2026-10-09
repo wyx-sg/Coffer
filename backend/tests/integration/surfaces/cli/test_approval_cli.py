@@ -44,6 +44,28 @@ class FakeShell:
         self.ops: list[str] = []
         #: Run between the claim and the prompt (to move a target meanwhile).
         self.before_prompt: Any = None
+        #: Where the person picks to write a key backup.
+        self.backup_dir: pathlib.Path | None = None
+        self.result: dict[str, Any] | None = None
+
+    def _backup(self) -> tuple[str, str | None]:
+        """What ``secrets.rs`` does once the person passes the check in the
+        dialog: the daemon writes the file, and the request ends with the path
+        and fingerprint the daemon answered — or the dialog is closed."""
+        if self.answer != "approve" or self.backup_dir is None:
+            return "cancelled", "the backup dialog was closed without writing a backup"
+        target = str(self.backup_dir)
+        r = self.d.client.post(
+            "/api/v1/secrets/presence/master-key-export",
+            json={
+                "directory": target,
+                "passphrase": "qa-cli-passphrase",
+                **self.d.grant("export_master_key", target),
+            },
+        )
+        assert r.status_code == 200, r.text
+        self.result = {"path": r.json()["path"], "fingerprint": r.json()["fingerprint"]}
+        return "done", f"the backup was written to {r.json()['path']}"
 
     def tick(self, _seconds: float = 0) -> None:
         if not self.running:
@@ -53,13 +75,18 @@ class FakeShell:
             return
         request = r.json()
         self.ops.append(request["op"])
+        self.result = None
         status, message = self._handle(request)
         self.d.client.post(
             f"/api/v1/desktop/requests/{request['id']}/finish",
-            json={"status": status, "message": message},
+            json={"status": status, "message": message, "result": self.result},
         )
 
     def _handle(self, request: dict[str, Any]) -> tuple[str, str | None]:
+        if request["op"] == "export_master_key":
+            return self._backup()
+        if request["op"] == "import_master_key":
+            return "done", "opened the master key import in the Coffer app"
         if self.before_prompt is not None:
             self.before_prompt()
         for pin in request["approvals"]:
@@ -270,9 +297,51 @@ def test_reject_needs_no_presence(daemon: BoundaryDaemon, shell: FakeShell) -> N
     assert shell.prompts == []
 
 
-def test_key_backup_and_import_open_in_the_app(daemon: BoundaryDaemon, shell: FakeShell) -> None:
-    backup = coffer("secret", "backup-key")
+def test_ask_again_puts_a_refused_request_back_without_presence(
+    daemon: BoundaryDaemon, shell: FakeShell
+) -> None:
+    (refused,) = _pending(daemon, "second")
+    coffer("approval", "reject", refused)
+    out = coffer("approval", "ask-again", refused, "--json")
+    [asked] = json.loads(out.output)["approvals"]
+    assert _status(daemon, refused) == "superseded"
+    assert _status(daemon, asked["id"]) == "pending"
+    assert shell.prompts == []
+    coffer("approval", "ask-again", asked["id"], code=5)
+
+
+@pytest.mark.acceptance(
+    spec="secret",
+    scenario="a key backup started from the command line reports what was written",
+)
+def test_a_key_backup_reports_the_file_written(
+    daemon: BoundaryDaemon, shell: FakeShell, tmp_path: pathlib.Path
+) -> None:
+    shell.backup_dir = tmp_path / "qa-cli-backup"
+    shell.backup_dir.mkdir()
+    backup = coffer("secret", "backup-key", "--json")
+    answer = json.loads(backup.stdout)
+    written = shell.backup_dir / "coffer-master-key.cfk"
+    assert answer["status"] == "done" and answer["result"]["path"] == str(written)
+    assert written.is_file()
+    assert set(answer["result"]) == {"path", "fingerprint"}
+    assert "qa-cli-passphrase" not in backup.output
+    # Closing the dialog writes nothing, and the command does not say otherwise.
+    shell.answer = "cancel"
+    closed = coffer("secret", "backup-key", code=11)
+    assert "written" not in closed.output.replace("without writing", "")
+    assert sorted(p.name for p in shell.backup_dir.iterdir()) == ["coffer-master-key.cfk"]
+
+
+def test_an_app_that_reports_done_without_a_file_is_not_a_backup(
+    daemon: BoundaryDaemon, shell: FakeShell, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(shell, "_backup", lambda: ("done", "opened the backup"))
+    result = coffer("secret", "backup-key", code=11)
+    assert "did not report a written backup" in result.output
+
+
+def test_key_import_opens_in_the_app(daemon: BoundaryDaemon, shell: FakeShell) -> None:
     imported = coffer("secret", "import-key", "--json")
-    assert shell.ops == ["export_master_key", "import_master_key"]
-    assert "backup" in backup.output
+    assert shell.ops == ["import_master_key"]
     assert json.loads(imported.output)["status"] == "done"

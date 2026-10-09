@@ -17,6 +17,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli import _io
 
 app = typer.Typer(help="Read the command-line tools Coffer manages.")
 _console = Console()
@@ -55,10 +56,9 @@ def list_clis(
     update or log in to one that needs it.
     """
     verbose = (ctx.obj or {}).get("verbose", False)
-    c, _info = _cli_client.client_or_exit()
-    with c:
+    with _io.client(as_json=output_json) as c:
         r = c.get("/clis")
-        _cli_client.check(r, verbose=verbose)
+        _cli_client.check(r, verbose=verbose, as_json=output_json)
         items: list[dict[str, Any]] = r.json().get("items", [])
     if output_json:
         typer.echo(_json.dumps({"items": items}))

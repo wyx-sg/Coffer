@@ -49,7 +49,7 @@ Most of the time you do not run this by hand. The dialogs that ask for a secret 
 | --- | --- |
 | stdio MCP server | An environment variable row set to **Secret** in the **Add server** or **Edit** dialog — becomes an environment variable of the server process |
 | HTTP MCP server | A header row set to **Secret** in the same dialogs — becomes a request header; the secret is the credential only, and the row's auth scheme (Bearer, Token or None) is put in front of it when sent |
-| Adopting an agent's MCP entry | **Import from your agents** in the **Add server** dialog — Coffer stores the entry's current value under a minted `secret/<id>` |
+| Adopting an agent's MCP entry | **Adopt** on the agent's **MCP servers** tab — Coffer stores the entry's current value under a minted `secret/<id>` |
 | Model provider | the **API key** field of **Add provider** |
 | Channel | the channel's token fields (see [Channels](/guides/channels)) |
 | Sync remote | the push secret on the **Sync** page |
@@ -132,7 +132,7 @@ Settings › Security holds what belongs to this Mac only: **Encryption** (where
 
 Open the **desktop app** and back up the master key: choose a passphrase of at least eight characters (typed twice), confirm with Touch ID or your login password, pick a folder, and the app writes `coffer-master-key.cfk` into that folder with mode `0600`. The file holds the key encrypted under a key derived from the passphrase (scrypt), plus the key's fingerprint; without the passphrase it opens nothing, and Coffer cannot recover a forgotten one. It never overwrites an existing file (a second backup is `coffer-master-key-2.cfk`), neither the key nor the passphrase passes through the page's answer, the log or the audit, and the backup is audited as `master_key_exported`. Keep the file and the passphrase somewhere safe, such as your password manager.
 
-No command, REST route or browser page writes a key backup. An agent can run any command you can, so a command that exported the key would hand every secret to it. `coffer secret backup-key` only opens the backup in the desktop app, where you confirm presence, type the passphrase and pick the folder.
+No command, REST route or browser page writes a key backup. An agent can run any command you can, so a command that exported the key would hand every secret to it. `coffer secret backup-key` only opens the backup in the desktop app, where you confirm presence, type the passphrase and pick the folder; it then reports where the app wrote the file, or that the dialog was closed with nothing written.
 
 ## Carry the key to another machine
 
@@ -144,7 +144,7 @@ To let a second machine decrypt them, move the key yourself, over a channel you 
 2. Copy the backup file to machine B.
 3. On machine B, use **Import a master key** on **Settings › Security**, in the desktop app, choose the file and type the passphrase, then confirm with Touch ID or your login password (the prompt names the key's fingerprint); the **Key in the file** must read *same* as the fingerprint of machine A. Then delete the copied file.
 
-Importing needs the desktop app: the daemon installs a key only against a presence grant for that key's fingerprint, because a key that any program could install would let it forge every later grant under a key of its own. A browser tab shows **Open the Coffer app to import a master key**. The running daemon uses the imported key at once. Importing a different key keeps the previous one as a backup beside it, in a second Keychain item. The **Sync** page offers **Import key** as well (it needs the app too), and its machine list shows whether each machine holds the **Same key**.
+Importing needs the desktop app: the daemon installs a key only against a presence grant for that key's fingerprint, because a key that any program could install would let it forge every later grant under a key of its own. A browser tab shows **Open the Coffer app to import a master key**. The key belongs to the secret store, not to sync, so the fingerprint and the import work whether or not [sync](/guides/vault-sync) is switched on. On the command line, `coffer secret key-fingerprint` prints the fingerprint and `coffer secret key-preview --data @coffer-master-key.cfk` names whose key a file holds; the import itself is `coffer secret import-key`, which opens it in the app (`coffer secret key-install` is the app's own request and is refused without the grant only the app can sign). The running daemon uses the imported key at once. Importing a different key keeps the previous one as a backup beside it, in a second Keychain item. The **Sync** page offers **Import key** as well (it needs the app too), and its machine list shows whether each machine holds the **Same key**.
 
 ## What never gets logged
 

@@ -1,6 +1,7 @@
 // src/components/custom-tools/ToolRequestFields.tsx — the fields of one request, which the Add a request
 // step and the tool drawer lay out in their own order: the tool's name, method + path (one compound
-// field), the description agents read, the changes-data flag and the body template.
+// field), the description agents read, the changes-data flag and the body template. The base URL the
+// path is added to is the form's chosen environment's.
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -49,24 +50,30 @@ export function NameField({ form, onChange, group }: FieldProps & { group: strin
 }
 
 /** `adding`: the help names the arguments the path's holes come from. */
+/** `environment`: the group has several, and `baseUrl` is this one's — the help names it. An empty
+ *  `baseUrl` (no environment chosen) says where the path goes instead of naming a URL. */
 export function RequestField({
   form,
   onChange,
   baseUrl,
+  environment = null,
   adding = false,
-}: FieldProps & { baseUrl: string; adding?: boolean }) {
+}: FieldProps & { baseUrl: string; environment?: string | null; adding?: boolean }) {
   const { t } = useTranslation();
   const id = useId();
   const holes = holesOf(form.path).map((h) => `{${h}}`);
-  const help =
-    adding && holes.length > 0
-      ? t("customTools.editor.requestHelpArgs", {
-          url: baseUrl,
-          holes: holes.join(t("customTools.editor.and")),
-        })
-      : adding
-        ? t("customTools.editor.requestHelpAdd", { url: baseUrl })
-        : t("customTools.editor.requestHelp", { url: baseUrl });
+  const help = !baseUrl
+    ? t("customTools.editor.requestHelpNoEnv")
+    : environment
+      ? t("customTools.editor.requestHelpEnv", { url: baseUrl, environment })
+      : adding && holes.length > 0
+        ? t("customTools.editor.requestHelpArgs", {
+            url: baseUrl,
+            holes: holes.join(t("customTools.editor.and")),
+          })
+        : adding
+          ? t("customTools.editor.requestHelpAdd", { url: baseUrl })
+          : t("customTools.editor.requestHelp", { url: baseUrl });
   return (
     <FormField label={t("customTools.editor.request")} htmlFor={id} required help={help}>
       <div className="flex gap-2">

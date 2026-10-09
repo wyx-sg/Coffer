@@ -61,10 +61,21 @@ def _parse_spec(spec: str) -> tuple[str, str]:
 
 
 def _read_env_file(path: pathlib.Path) -> tuple[dict[str, str], dict[str, str]]:
-    """(plain variables, {variable: secret name}) from a KEY=VALUE file."""
+    """(plain variables, {variable: secret name}) from a KEY=VALUE file.
+
+    A file that cannot be read, or is not UTF-8 text, exits 6 before anything
+    is resolved or started."""
+    try:
+        text = path.read_bytes().decode("utf-8")
+    except OSError as e:
+        typer.echo(f"coffer run: cannot read --env-file {path}: {e.strerror or e}", err=True)
+        raise typer.Exit(int(ExitCode.INVALID_INPUT)) from None
+    except UnicodeDecodeError as e:
+        typer.echo(f"coffer run: --env-file {path} is not UTF-8 text (byte {e.start})", err=True)
+        raise typer.Exit(int(ExitCode.INVALID_INPUT)) from None
     plain: dict[str, str] = {}
     cited: dict[str, str] = {}
-    for raw in path.read_text(encoding="utf-8").splitlines():
+    for raw in text.splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -100,7 +111,10 @@ def run(
         help="NAME, ENV=NAME or ENV=coffer://secret/<id> of a standalone secret (repeatable)",
     ),
     env_file: pathlib.Path | None = typer.Option(
-        None, "--env-file", help="KEY=VALUE file; coffer://secret/<name> values are resolved"
+        None,
+        "--env-file",
+        readable=False,
+        help="KEY=VALUE file; coffer://secret/<name> values are resolved",
     ),
     no_masking: bool = typer.Option(
         False, "--no-masking", help="Pass the child's output through unfiltered"

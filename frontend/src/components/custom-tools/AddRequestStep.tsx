@@ -1,6 +1,7 @@
 // src/components/custom-tools/AddRequestStep.tsx — Add a request: one hand-made request into the group
-// picked in the first step, tested at the bottom of the form. Into an existing group it uses that
-// group's base URL and secret; into a new one it saves the group and its first tool together, on Add.
+// picked in the first step, tested at the bottom of the form. Into an existing group it previews and tests in
+// one of that group's environments (its base URL, headers, secret and timeout); into a new one it saves the
+// group and its first tool together, on Add.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle } from "lucide-react";
@@ -23,6 +24,7 @@ import type { GroupDraft } from "./addFlow";
 import { WaySummary } from "./WaySummary";
 import { formOf, formReady, toolOf, type ToolForm } from "./toolForm";
 import { headersIn } from "./headerRows";
+import { useToolEnvironment } from "./useToolEnvironment";
 
 /** The group the request goes into: saved, or the draft the New group step made. */
 export type RequestGroup = { saved: CustomToolGroup } | { draft: GroupDraft };
@@ -41,9 +43,16 @@ export function AddRequestStep({ group, pending, error, onChangeWay, onCancel, o
   const [form, setForm] = useState<ToolForm>(() => formOf(null));
   const saved = "saved" in group ? group.saved : null;
   const name = saved ? saved.name : "draft" in group ? group.draft.name : "";
-  const baseUrl = saved ? saved.base_url : "draft" in group ? group.draft.baseUrl.trim() : "";
+  const environment = useToolEnvironment(saved);
+  const shown = environment.shown;
+  const baseUrl = saved
+    ? (shown?.base_url ?? "")
+    : "draft" in group
+      ? group.draft.baseUrl.trim()
+      : "";
+  const several = (saved?.environments?.length ?? 0) > 1;
   const target: TestTarget = saved
-    ? { group: saved.name }
+    ? { saved, environment }
     : {
         unsaved: {
           name,
@@ -52,7 +61,7 @@ export function AddRequestStep({ group, pending, error, onChangeWay, onCancel, o
         },
       };
   const groupHeaders: CustomToolHeaderOut[] = saved
-    ? saved.headers
+    ? (shown?.headers ?? [])
     : "draft" in group
       ? headersIn(group.draft.headers).map((h) => ({
           name: h.name,
@@ -62,7 +71,6 @@ export function AddRequestStep({ group, pending, error, onChangeWay, onCancel, o
           secret_state: "none",
         }))
       : [];
-  const secret = saved?.headers.find((h) => h.secret)?.secret ?? null;
 
   return (
     <>
@@ -75,19 +83,25 @@ export function AddRequestStep({ group, pending, error, onChangeWay, onCancel, o
         />
         <NameField form={form} onChange={setForm} group={name} />
         <DescriptionField form={form} onChange={setForm} />
-        <RequestField form={form} onChange={setForm} baseUrl={baseUrl} adding />
+        <RequestField
+          form={form}
+          onChange={setForm}
+          baseUrl={baseUrl}
+          environment={several ? (shown?.name ?? null) : null}
+          adding
+        />
         <ChangesDataField form={form} onChange={setForm} short />
         <ToolHeadersField
           groupHeaders={groupHeaders}
           headers={form.headers}
           onChange={(headers) => setForm({ ...form, headers })}
+          environment={several ? (shown?.name ?? null) : null}
         />
         <BodyField form={form} onChange={setForm} />
         <ToolArgumentsField args={form.args} onChange={(args) => setForm({ ...form, args })} />
         <ToolTestSection
           target={target}
-          secret={secret}
-          timeoutSeconds={saved?.timeout_seconds ?? 30}
+          timeoutSeconds={30}
           args={form.args}
           draft={() => toolOf(form)}
           ready={form.path.trim() !== "" && form.name !== ""}

@@ -29,7 +29,9 @@ from __future__ import annotations
 import re
 import sys
 from collections import defaultdict
+from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "backend"))
@@ -42,7 +44,66 @@ PAGES = {
 }
 
 _CALL = re.compile(r"\.(GET|POST|PUT|PATCH|DELETE)\(\s*\"(/[^\"]*)\"", re.DOTALL)
+# A template-literal route, plus the ``as "..." | "..."`` cast that may follow it.
+_TEMPLATE_CALL = re.compile(
+    r"\.(GET|POST|PUT|PATCH|DELETE)\(\s*`(/[^`]*)`"
+    r"(\s+as\s+(?:\|?\s*\"/[^\"]*\"\s*)+)?",
+    re.DOTALL,
+)
+_HOLE = re.compile(r"\$\{([^}]*)\}")
+_QUOTED = re.compile(r"\"([^\"]*)\"")
+# ``fetch(`${base}/events`, { method: "GET" ...})``: the stream the page reads by fetch.
+_FETCH = re.compile(r"\bfetch\(\s*`\$\{[^}]*\}(/[^`$]*)`(.{0,200})", re.DOTALL)
+_METHOD = re.compile(r"method:\s*\"(GET|POST|PUT|PATCH|DELETE)\"")
 _HANDLER = re.compile(r"generate_handler!\[(.*?)\]", re.DOTALL)
+
+
+#: Routes the UI reads outside its typed client, each with why it has no command.
+#: Local to this gate: they are not management operations, so they are not in the
+#: registry's EXEMPT (which feeds the published coverage table).
+STREAM_EXEMPT: dict[tuple[str, str], str] = {
+    ("GET", "/events"): (
+        "the page's live event stream (server-sent events): stream plumbing that "
+        "refreshes views, not a management action"
+    ),
+}
+
+#: Commands that stay hidden on purpose, each with why; every other command must be
+#: reachable from visible help.
+HIDDEN_ALLOWLIST: dict[str, str] = {
+    "memory hook": "run by an agent's hook, never typed by a person (memory_cmd.py)",
+    "proxy token": "run by the agent shim to mint a per-agent token (proxy_cmd.py)",
+}
+
+STATIC_NOTE = (
+    "static route/visibility check only: it compares route identities and help "
+    "visibility; it is not an end-to-end test and does not check option or body semantics"
+)
+
+
+def _expand_template(route: str, cast: str | None) -> set[str]:
+    """Concrete routes for a template-literal route (holes become ``{param}``)."""
+    if cast:
+        return set(_QUOTED.findall(cast))
+    holes = list(_HOLE.finditer(route))
+    options: list[list[str]] = []
+    for hole in holes:
+        words = _QUOTED.findall(hole.group(1))
+        options.append(words if "?" in hole.group(1) and len(words) >= 2 else ["{param}"])
+    routes = {route}
+    for hole, words in zip(holes, options, strict=True):
+        routes = {r.replace(hole.group(0), w, 1) for r in routes for w in words}
+    return routes
+
+
+def scan_routes(text: str) -> set[tuple[str, str]]:
+    """Every ``(method, route)`` one source file's text calls: literal, template, fetch."""
+    found = {(m, r) for m, r in _CALL.findall(text)}
+    for method, route, cast in _TEMPLATE_CALL.findall(text):
+        found |= {(method, r) for r in _expand_template(route, cast or None)}
+    for route, tail in _FETCH.findall(text):
+        found.add(((_METHOD.search(tail) or [None, "GET"])[1], route))
+    return found
 
 
 def frontend_routes() -> set[tuple[str, str]]:
@@ -50,7 +111,7 @@ def frontend_routes() -> set[tuple[str, str]]:
     for path in FRONTEND.rglob("*.ts*"):
         if ".test." in path.name or path.parts[-2] == "generated" or "/test/" in path.as_posix():
             continue
-        found |= {(m, r) for m, r in _CALL.findall(path.read_text(encoding="utf-8"))}
+        found |= scan_routes(path.read_text(encoding="utf-8"))
     return found
 
 
@@ -73,18 +134,72 @@ def _registry():  # type: ignore[no-untyped-def]
     return registry
 
 
+def _command_paths(reg):  # type: ignore[no-untyped-def]
+    from coffer.surfaces.cli.command_reasons import COMMAND_REASONS
+
+    return sorted({o.command for o in reg.OPERATIONS} | set(COMMAND_REASONS))
+
+
+def visibility(
+    root: Any, commands: Iterable[str], allowlist: dict[str, str]
+) -> tuple[list[str], int, int]:
+    """Problems, visible count and allow-listed hidden count for ``commands``.
+
+    A command is visible when neither it nor any group above it is hidden.
+    """
+    out: list[str] = []
+    visible = allowed = 0
+    for command in commands:
+        node, hidden, found = root, False, True
+        for word in command.split(" "):
+            node = (getattr(node, "commands", None) or {}).get(word)
+            if node is None:
+                found = False
+                break
+            hidden = hidden or bool(node.hidden)
+        if not found:
+            out.append(f"command {command}: not in the command tree")
+        elif hidden and command in allowlist:
+            allowed += 1
+        elif hidden:
+            out.append(
+                f"command {command}: hidden from help (a hidden group or command); make it "
+                "visible or add it to HIDDEN_ALLOWLIST with a reason"
+            )
+        elif command in allowlist:
+            out.append(f"command {command}: in HIDDEN_ALLOWLIST but not hidden (drop the entry)")
+        else:
+            visible += 1
+    for command in sorted(set(allowlist) - set(commands)):
+        out.append(f"command {command}: in HIDDEN_ALLOWLIST but not a registered command")
+    return out, visible, allowed
+
+
+def _root_command() -> Any:
+    import typer.main
+
+    from coffer.surfaces.cli.main import app
+
+    return typer.main.get_command(app)
+
+
 def problems() -> list[str]:
+    return _audit()[0]
+
+
+def _audit() -> tuple[list[str], dict[str, int]]:
     reg = _registry()
     covered = {(o.method, o.route) for o in reg.OPERATIONS}
     ui = frontend_routes()
+    exempt = set(reg.EXEMPT) | set(STREAM_EXEMPT)
     out: list[str] = []
-    for method, route in sorted(ui - covered - set(reg.EXEMPT)):
+    for method, route in sorted(ui - covered - exempt):
         out.append(
             f"{method} {route}: the web UI calls it and no command does (add one, or an EXEMPT row)"
         )
-    for method, route in sorted(set(reg.EXEMPT) - ui):
+    for method, route in sorted(exempt - ui):
         out.append(f"{method} {route}: exempt, but the web UI no longer calls it (drop the row)")
-    for method, route in sorted(set(reg.EXEMPT) & covered):
+    for method, route in sorted(exempt & covered):
         out.append(f"{method} {route}: exempt and covered at once (drop the exemption)")
     for name in shell_commands():
         if name not in reg.SHELL_COMMANDS:
@@ -97,7 +212,29 @@ def problems() -> list[str]:
     for name, mapped in reg.SHELL_COMMANDS.items():
         if isinstance(mapped, str) and mapped not in commands:
             out.append(f"desktop command {name}: maps to {mapped!r}, which records no operation")
-    return out
+    commands = _command_paths(reg)
+    seen, visible, allowed = visibility(_root_command(), commands, HIDDEN_ALLOWLIST)
+    out += seen
+    stats = {
+        "ui": len(ui),
+        "mapped": len(ui & covered),
+        "exempt": len(ui & exempt),
+        "missing": len(ui - covered - exempt),
+        "commands": len(commands),
+        "visible": visible,
+        "allowlisted": allowed,
+    }
+    return out, stats
+
+
+def summary(stats: dict[str, int]) -> str:
+    return (
+        f"cli_coverage: frontend route identities {stats['ui']} (typed client incl. dynamic, "
+        f"plus SSE): mapped {stats['mapped']}, exempted {stats['exempt']}, "
+        f"missing {stats['missing']}; registry commands {stats['commands']}: "
+        f"visible {stats['visible']}, hidden-allowlisted {stats['allowlisted']}.\n"
+        f"cli_coverage: {STATIC_NOTE}."
+    )
 
 
 # --- the coverage table ----------------------------------------------------------
@@ -226,7 +363,7 @@ def render(locale: str) -> str:
 
 
 def main(argv: list[str]) -> int:
-    found = problems()
+    found, stats = _audit()
     for line in found:
         print(f"cli_coverage: {line}", file=sys.stderr)
     if "--write" in argv:
@@ -242,6 +379,7 @@ def main(argv: list[str]) -> int:
                     file=sys.stderr,
                 )
                 found.append(str(path))
+    print(summary(stats))
     return 1 if found else 0
 
 

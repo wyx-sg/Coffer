@@ -23,6 +23,10 @@ hidden = (
     + collect_submodules("httpx")
     + collect_submodules("pydantic")
     + collect_submodules("keyring")
+    # `coffer --show-completion` / `--install-completion` ask shellingham which
+    # shell runs them; it imports its platform module (`shellingham.posix`,
+    # `shellingham.nt`) by name at run time, which PyInstaller cannot see.
+    + collect_submodules("shellingham")
     + [
         # Anyio sniffio backend (pulled in by httpx/anyio)
         "anyio._backends._asyncio",

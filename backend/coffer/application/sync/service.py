@@ -31,7 +31,6 @@ from coffer.application.sync import round_answers, round_join, round_resume, rou
 from coffer.application.sync.round_engine import RoundEngine
 from coffer.application.sync.round_paging import page_rounds
 from coffer.application.sync.round_ports import RemoteStorePort, RoundHistoryPort, TokenPort
-from coffer.application.sync.service_key import KeyMixin
 from coffer.application.sync.service_machines import MachinesMixin
 from coffer.application.sync.service_merge import MergeMixin
 from coffer.application.sync.service_move import MoveMixin
@@ -39,7 +38,6 @@ from coffer.application.sync.service_plaintext import PlaintextMixin
 from coffer.application.sync.service_ports import (
     AgentInventoryPort,
     HostMachinePort,
-    MasterKeyPort,
     RemoteProbePort,
     SecretFilesPort,
     VaultMoverPort,
@@ -72,9 +70,7 @@ _QUIET = frozenset(
 )
 
 
-class SyncService(
-    MoveMixin, PlaintextMixin, RemoteMixin, MachinesMixin, StatusMixin, KeyMixin, MergeMixin
-):
+class SyncService(MoveMixin, PlaintextMixin, RemoteMixin, MachinesMixin, StatusMixin, MergeMixin):
     def __init__(
         self,
         *,
@@ -83,7 +79,6 @@ class SyncService(
         history: RoundHistoryPort,
         token: TokenPort,
         machine: HostMachinePort,
-        master_key: MasterKeyPort,
         secrets: SecretFilesPort,
         probe: RemoteProbePort,
         audit: AuditService,
@@ -102,7 +97,6 @@ class SyncService(
         self._history = history
         self._token = token
         self._machine = machine
-        self._master_key = master_key
         self._secrets = secrets
         self._probe = probe
         self._audit = audit

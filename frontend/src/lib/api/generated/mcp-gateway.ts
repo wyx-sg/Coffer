@@ -116,6 +116,26 @@ export interface paths {
         patch: operations["update_environment_api_v1_custom_tools__name__environments__environment__patch"];
         trace?: never;
     };
+    "/api/v1/custom-tools/{name}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Draft Tool
+         * @description The request a draft tool would send; sends nothing and reads no secret value.
+         */
+        post: operations["preview_draft_tool_api_v1_custom_tools__name__preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/custom-tools/{name}/reimport": {
         parameters: {
             query?: never;
@@ -203,6 +223,26 @@ export interface paths {
         head?: never;
         /** Update Tool */
         patch: operations["update_tool_api_v1_custom_tools__name__tools__tool__patch"];
+        trace?: never;
+    };
+    "/api/v1/custom-tools/{name}/tools/{tool}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Saved Tool
+         * @description The request a saved tool would send; sends nothing and reads no secret value.
+         */
+        post: operations["preview_saved_tool_api_v1_custom_tools__name__tools__tool__preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/custom-tools/{name}/tools/{tool}/test": {
@@ -428,6 +468,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/resources/mcp_server/{uid}/prompts/get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Get Prompt Preview
+         * @description Fill one of the server's prompts with the given arguments, for its row's details.
+         */
+        post: operations["get_prompt_preview_api_v1_resources_mcp_server__uid__prompts_get_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/resources/mcp_server/{uid}/refresh": {
         parameters: {
             query?: never;
@@ -444,6 +504,26 @@ export interface paths {
          *     Returns 404 if the uid names no MCP server.
          */
         post: operations["refresh_capabilities_api_v1_resources_mcp_server__uid__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resources/mcp_server/{uid}/resources/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read Resource Preview
+         * @description Read one of the server's resources now, for its row's details.
+         */
+        post: operations["read_resource_preview_api_v1_resources_mcp_server__uid__resources_read_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -573,6 +653,10 @@ export interface components {
         BuiltinToolOut: {
             /** Description */
             description: string;
+            /** Input Schema */
+            input_schema: {
+                [key: string]: unknown;
+            };
             /** Name */
             name: string;
             /** Qualified Name */
@@ -610,6 +694,18 @@ export interface components {
             server_name: string;
             /** Tools */
             tools: components["schemas"]["MCPToolView"][];
+        };
+        /** CapabilityPreviewOut */
+        CapabilityPreviewOut: {
+            /** Contents */
+            contents: components["schemas"]["PreviewContentOut"][];
+            /** Description */
+            description: string | null;
+            /**
+             * Error
+             * @description The error the server answered with.
+             */
+            error: string | null;
         };
         /**
          * CustomToolEnvironmentIn
@@ -656,11 +752,15 @@ export interface components {
             pending_approvals: string[];
             /** Pending Secrets */
             pending_secrets: string[];
+            /** Rejected Approvals */
+            rejected_approvals: string[];
+            /** Rejected Secrets */
+            rejected_secrets: string[];
             /**
              * Secret State
              * @enum {string}
              */
-            secret_state: "none" | "present" | "missing" | "pending_approval";
+            secret_state: "none" | "present" | "missing" | "rejected" | "pending_approval";
             /** Timeout Seconds */
             timeout_seconds: number | null;
             /** Variables */
@@ -760,13 +860,17 @@ export interface components {
             pending_approvals: string[];
             /** Pending Secrets */
             pending_secrets: string[];
+            /** Rejected Approvals */
+            rejected_approvals: string[];
+            /** Rejected Secrets */
+            rejected_secrets: string[];
             /** Scope */
             scope: string[] | null;
             /**
              * Secret State
              * @enum {string}
              */
-            secret_state: "none" | "present" | "missing" | "pending_approval";
+            secret_state: "none" | "present" | "missing" | "rejected" | "pending_approval";
             source: components["schemas"]["OpenApiSourceOut"] | null;
             /** Timeout Seconds */
             timeout_seconds: number;
@@ -823,7 +927,7 @@ export interface components {
              * Secret State
              * @enum {string}
              */
-            secret_state: "none" | "present" | "missing" | "pending_approval";
+            secret_state: "none" | "present" | "missing" | "rejected" | "pending_approval";
             /** Value */
             value: string | null;
         };
@@ -935,6 +1039,31 @@ export interface components {
             /** Path */
             path?: string | null;
         };
+        /** CustomToolPreviewHeaderOut */
+        CustomToolPreviewHeaderOut: {
+            /** Name */
+            name: string;
+            secret: components["schemas"]["CustomToolPreviewSecretOut"] | null;
+            /** Value */
+            value: string;
+        };
+        /**
+         * CustomToolPreviewSecretOut
+         * @description The stored secret a header reads — its reference, never its value.
+         */
+        CustomToolPreviewSecretOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Scheme */
+            scheme: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "none" | "present" | "missing" | "rejected" | "pending_approval";
+        };
         /**
          * CustomToolReimportChangeOut
          * @description A kept tool whose request the spec changed.
@@ -989,6 +1118,33 @@ export interface components {
             warnings: string[];
         };
         /**
+         * CustomToolRequestPreviewOut
+         * @description What one call would send; nothing was sent and no secret was read.
+         */
+        CustomToolRequestPreviewOut: {
+            /** Body */
+            body: string | null;
+            /** Environment */
+            environment: string;
+            /** Headers */
+            headers: components["schemas"]["CustomToolPreviewHeaderOut"][];
+            /** Method */
+            method: string;
+            /** Timeout Seconds */
+            timeout_seconds: number;
+            /**
+             * Timeout Source
+             * @enum {string}
+             */
+            timeout_source: "environment" | "group";
+            /** Url */
+            url: string;
+            /** Variables */
+            variables: {
+                [key: string]: string;
+            };
+        };
+        /**
          * CustomToolSavedTestIn
          * @description A saved tool run once in one environment.
          */
@@ -1027,6 +1183,10 @@ export interface components {
             handoff: components["schemas"]["HandoffOut"] | null;
             /** Ok */
             ok: boolean;
+            /** Response Headers */
+            response_headers: {
+                [key: string]: string;
+            };
             /** Status */
             status: number | null;
             /** Status Line */
@@ -1323,7 +1483,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "found" | "not_found" | "set" | "missing" | "waiting_approval";
+            status: "found" | "not_found" | "set" | "missing" | "waiting_approval" | "refused";
             /** Version */
             version: string | null;
         };
@@ -1621,6 +1781,59 @@ export interface components {
             start_line: number;
             /** Text */
             text: string;
+        };
+        /**
+         * PreviewContentOut
+         * @description One body of a resource, or one message of a prompt.
+         */
+        PreviewContentOut: {
+            /**
+             * Kind
+             * @description text, blob, or a prompt content type such as image.
+             */
+            kind: string;
+            /** Mime Type */
+            mime_type: string | null;
+            /**
+             * Role
+             * @description A prompt message's role: user or assistant.
+             */
+            role: string | null;
+            /**
+             * Size Bytes
+             * @description A binary body's size; its bytes are not sent.
+             */
+            size_bytes: number | null;
+            /** Text */
+            text: string | null;
+            /**
+             * Truncated
+             * @description The text was cut at 64 KiB.
+             * @default false
+             */
+            truncated: boolean;
+            /** Uri */
+            uri: string | null;
+        };
+        /** PromptGetBody */
+        PromptGetBody: {
+            /** Arguments */
+            arguments?: {
+                [key: string]: string;
+            };
+            /**
+             * Name
+             * @description The prompt's name as the server lists it.
+             */
+            name: string;
+        };
+        /** ResourceReadBody */
+        ResourceReadBody: {
+            /**
+             * Uri
+             * @description The resource's URI as the server lists it.
+             */
+            uri: string;
         };
         /** ToolCallCountOut */
         ToolCallCountOut: {
@@ -2162,6 +2375,52 @@ export interface operations {
             };
         };
     };
+    preview_draft_tool_api_v1_custom_tools__name__preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomToolTestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolRequestPreviewOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     apply_reimport_api_v1_custom_tools__name__reimport_post: {
         parameters: {
             query?: never;
@@ -2418,6 +2677,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomToolGroupOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_saved_tool_api_v1_custom_tools__name__tools__tool__preview_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                name: string;
+                tool: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomToolSavedTestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomToolRequestPreviewOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -2903,6 +3209,52 @@ export interface operations {
             };
         };
     };
+    get_prompt_preview_api_v1_resources_mcp_server__uid__prompts_get_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromptGetBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilityPreviewOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     refresh_capabilities_api_v1_resources_mcp_server__uid__refresh_post: {
         parameters: {
             query?: never;
@@ -2923,6 +3275,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CapabilityListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_resource_preview_api_v1_resources_mcp_server__uid__resources_read_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResourceReadBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilityPreviewOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

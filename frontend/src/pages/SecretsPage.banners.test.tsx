@@ -193,6 +193,26 @@ describe("Secrets banners", () => {
     );
   });
 
+  test("× ignores the set waiting now, though it changed after the page read it", async () => {
+    attention = {
+      items: [item("secret_missing_here", "secret:old:secret_missing_here")],
+      ignored: [],
+    };
+    renderPage();
+    const missing = await screen.findByTestId("secrets-missing-banner");
+    const close = await within(missing).findByRole("button", { name: "Ignore" });
+    // Meanwhile the set changed, and with it the item's key.
+    attention = {
+      items: [item("secret_missing_here", "secret:new:secret_missing_here")],
+      ignored: [],
+    };
+    fireEvent.click(close);
+    await waitFor(() =>
+      expect(ignoreAttention).toHaveBeenCalledWith("secret:new:secret_missing_here"),
+    );
+    expect(ignoreAttention).not.toHaveBeenCalledWith("secret:old:secret_missing_here");
+  });
+
   test("a banner ignored on Overview is hidden here, and the row's status stays", async () => {
     attention = {
       items: [],

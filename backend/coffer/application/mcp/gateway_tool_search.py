@@ -83,6 +83,9 @@ def _result_entry(tool: dict[str, Any], score: float, about: Mapping[str, str]) 
         "inputSchema": tool.get("inputSchema", {}),
         "score": round(score, 4),
     }
+    # Each result carries the real upstream definition, schema of the result included.
+    if tool.get("outputSchema"):
+        entry["outputSchema"] = tool["outputSchema"]
     server, _ = split_prefixed(str(entry["name"]))
     if server and server in about:
         entry["group_description"] = about[server]

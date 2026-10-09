@@ -1,4 +1,5 @@
-"""``coffer approval`` — secret approvals: list, show, approve with Touch ID, reject.
+"""``coffer approval`` — secret approvals: list, show, approve with Touch ID, reject,
+ask again.
 
 Spec secret "Approve from the command line with the person's own presence
 check". ``approve`` asks the desktop app to run the operating system's presence
@@ -6,7 +7,8 @@ check (Touch ID or the login password) for exactly the approvals named, each
 pinned to the target it names now; the person confirms in the system prompt,
 and the command reports each approval's state as the daemon then holds it.
 There is no flag that skips the check: a cancelled, failed, timed-out or
-unavailable check leaves every approval pending. Refusing needs nobody.
+unavailable check leaves every approval pending. Refusing needs nobody, and
+neither does asking again after a refusal: that only puts the request back.
 """
 
 from __future__ import annotations
@@ -140,6 +142,22 @@ def reject(
             )
 
     _io.emit(answer, as_json=as_json, human=human)
+
+
+@approvals.command("ask-again")
+@maps(
+    "approval ask-again",
+    ("POST", _BASE + "/{approval_id}/ask-again"),
+    ui=_UI + "Ask again",
+)
+def ask_again(
+    approval_id: str = typer.Argument(..., help="The refused approval to ask for again"),
+    as_json: bool = _io.json_option(),
+) -> None:
+    """Ask again for a refused binding: a new request waits for a person in the
+    desktop app. Needs no presence check: asking grants nothing."""
+    answer = _io.call("POST", f"{_BASE}/{approval_id}/ask-again", as_json=as_json)
+    _io.emit(answer, as_json=as_json, human=_rows)
 
 
 __all__ = ["approvals"]

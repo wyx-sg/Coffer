@@ -15,6 +15,7 @@ import pytest
 from coffer.infrastructure.daemon import config as daemon_config
 from tests.integration.surfaces.http import test_feature_gates as gates
 from tests.integration.surfaces.http import test_feature_kind_gates as kind_gates
+from tests.support.mcp_wire import INIT_PARAMS
 
 home = gates.home
 _client = gates._client
@@ -43,7 +44,7 @@ def test_a_kind_an_experimental_feature_owns_is_out_of_reach_while_it_is_off(
 
 
 def _unknown_call(c: object, name: str) -> bool:
-    session = gates._mcp(c, None, "initialize", {}).headers["mcp-session-id"]  # type: ignore[arg-type]
+    session = gates._mcp(c, None, "initialize", INIT_PARAMS).headers["mcp-session-id"]  # type: ignore[arg-type]
     unknown = gates._mcp(
         c,  # type: ignore[arg-type]
         session,

@@ -1,5 +1,5 @@
 // frontend/src/components/mcp/add/PasteStep.tsx — the Add server dialog's first
-// step (board Mcp-Add-Picker; spec web-ui "Add MCP servers from one paste box",
+// step (board Mcp-Add-Picker; spec web-ui "Add MCP servers by pasting them into one box",
 // "Explain unreadable pasted input in the dialog").
 //
 // One box read as the user types (debounced): an mcpServers block or server
@@ -23,11 +23,8 @@ const DEBOUNCE_MS = 150;
 interface Props {
   text: string;
   onTextChange: (text: string) => void;
-  /** Direct entries in the agents' own config files not yet in Coffer. */
-  agentEntryCount: number;
   onServers: (servers: ParsedServer[]) => void;
   onChooseType: (type: "stdio" | "http") => void;
-  onImportAgents: () => void;
   onCancel: () => void;
 }
 
@@ -54,15 +51,7 @@ function TypeButton(props: {
   );
 }
 
-export function PasteStep({
-  text,
-  onTextChange,
-  agentEntryCount,
-  onServers,
-  onChooseType,
-  onImportAgents,
-  onCancel,
-}: Props) {
+export function PasteStep({ text, onTextChange, onServers, onChooseType, onCancel }: Props) {
   const { t } = useTranslation();
   const [settled, setSettled] = useState(text);
   useEffect(() => {
@@ -123,15 +112,6 @@ export function PasteStep({
             onClick={() => onChooseType("http")}
           />
         </div>
-      </div>
-
-      <div className="flex items-center gap-2 border-t border-border-subtle pt-3 text-xs">
-        <span className="text-text-muted">{t("mcp.add.elsewhere")}</span>
-        <Button variant="link" size="sm" className="h-auto px-0" onClick={onImportAgents}>
-          {agentEntryCount > 0
-            ? t("mcp.add.importFound", { count: agentEntryCount })
-            : t("mcp.add.importAgents")}
-        </Button>
       </div>
 
       <DialogFooter>

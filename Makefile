@@ -24,6 +24,8 @@ PYTEST_XDIST := -n $(PYTEST_WORKERS) --dist loadgroup
 .PHONY: help install install-e2e-browsers hooks \
 	verify verify-all \
 	verify-unit verify-integration verify-contract verify-e2e verify-visual visual-update verify-acceptance openspec-validate verify-benchmark verify-secrets \
+	verify-installed-mcp \
+	verify-installed-cli \
 	test-durations \
 	coverage lock \
 	eval eval-routing eval-curate \
@@ -51,11 +53,16 @@ help:
 	@echo "  make verify-acceptance     openspec validate + audit scenarios vs test markers"
 	@echo "  make verify-benchmark      every perf-budget test, the slow ones too (COFFER_RUN_BENCHMARKS=1)"
 	@echo "  make verify-secrets        gitleaks over the full git history (skips when gitleaks is not installed)"
+	@echo "  make verify-installed-mcp OUT=<dir> [DAEMON_JSON=<path>] [SHIM=<path>]"
+	@echo "                            opt-in: MCP acceptance against an INSTALLED Coffer (not in verify / verify-all);"
+	@echo "                            OUT must be outside the repo, see .agents/testing.md \"Installed-build Acceptance\""
+	@echo "  make verify-installed-cli OUT=<dir> [COFFER=<path>]"
+	@echo "                            opt-in: smoke the INSTALLED frozen coffer binary (no daemon, nothing of yours touched)"
 	@echo "  make test-durations        re-measure backend/.test_durations (CI's integration shard balance)"
 	@echo "  PYTEST_WORKERS=0 make ...  run a backend tier serially (default: auto = one xdist worker per core)"
 	@echo "  make lint                  every static gate: repo checks (scripts/check_*.py, contract freshness),"
 	@echo "                            ruff, mypy, import-linter, then the frontend (i18n keys, codegen, eslint, tsc, knip)"
-	@echo "  make format                ruff format + ruff check --fix over backend/ and evals/ (prettier: run it per file)"
+	@echo "  make format                ruff format + ruff check --fix over backend/, evals/, e2e/installed/ (prettier: per file)"
 	@echo "  make coverage              pytest --cov + vitest --coverage (no threshold gates yet)"
 	@echo "  make eval                  AI eval harness: tool-search suite (local) + baseline gate"
 	@echo "  make eval-routing          + tool-routing suite (needs a local LLM, e.g. ollama)"
@@ -181,13 +188,14 @@ lint:
 	$(PY) scripts/check_agent_type_branches.py
 	$(PY) scripts/check_frontend_colors.py
 	$(PY) scripts/check_ignored_sources.py
-# Both trees are checked under the project's rules. `backend/**` gets them
+# Every Python tree is checked under the project's rules. `backend/**` gets them
 # from backend/pyproject.toml; `evals/**` used to get ruff's built-in defaults
 # (line-length 88, the starter rule set) because nothing above it carried a
-# config — the root ruff.toml now inherits the real one. See the comment in
-# that file for why it is a file and not a `--config` flag here.
-	$(PY) -m ruff check $(BACKEND) evals
-	$(PY) -m ruff format --check $(BACKEND) evals
+# config — the root ruff.toml now inherits the real one, and the installed-build
+# suites under `e2e/installed/` reach it the same way. See the comment in that
+# file for why it is a file and not a `--config` flag here.
+	$(PY) -m ruff check $(BACKEND) evals e2e/installed
+	$(PY) -m ruff format --check $(BACKEND) evals e2e/installed
 	$(PY) -m mypy --config-file $(BACKEND)/pyproject.toml $(BACKEND)/coffer
 # PYTHONPATH is load-bearing, not decorative: lint-imports resolves `coffer`
 # by import, so in a git worktree (whose .venv symlinks to the main
@@ -269,6 +277,30 @@ verify-e2e:
 		cd e2e && npx playwright test; \
 	fi
 
+# Installed-build acceptance (opt-in; deliberately NOT in verify or verify-all):
+# drives an installed Coffer from the outside — its daemon over real HTTP /mcp,
+# its installed coffer-mcp-shim and the official MCP SDK — against synthetic
+# upstreams. It writes only qa- objects (refused if one exists, deleted at the
+# end), refuses a target that syncs to a remote unless ALLOW_SYNC_REMOTE=1, and
+# never restarts the daemon. See .agents/testing.md "Installed-build Acceptance".
+# The installed frozen `coffer` binary, run with an empty HOME and no daemon:
+# what only the PyInstaller build can get wrong (see .agents/testing.md
+# "Installed-build Acceptance"). COFFER defaults to ~/.coffer/bin/coffer.
+verify-installed-cli:
+	@if [ -z "$(OUT)" ]; then \
+		echo "verify-installed-cli: OUT=<an empty or new directory outside the repo> is required"; exit 2; \
+	fi
+	$(PY) -m e2e.installed.cli --out "$(OUT)" $(if $(COFFER),--coffer "$(COFFER)")
+
+verify-installed-mcp:
+	@if [ -z "$(OUT)" ]; then \
+		echo "verify-installed-mcp: OUT=<an empty or new directory outside the repo> is required"; exit 2; \
+	fi
+	$(PY) -m e2e.installed.mcp --out "$(OUT)" \
+		$(if $(DAEMON_JSON),--daemon-json "$(DAEMON_JSON)") \
+		$(if $(SHIM),--shim "$(SHIM)") \
+		$(if $(ALLOW_SYNC_REMOTE),--allow-sync-remote)
+
 # Visual baseline (e2e/playwright.visual.config.ts): its own fresh daemon
 # (:18100) and Vite (:5174), baselines per platform under
 # e2e/visual/specs/__screenshots__/<platform>/. Deliberately outside verify and
@@ -289,12 +321,12 @@ visual-update:
 		cd e2e && $(VISUAL_PW) --update-snapshots; \
 	fi
 
-# Backend and evals only. The frontend tree is not prettier-clean as a whole,
+# The Python trees only (backend, evals, e2e/installed). The frontend tree is not prettier-clean as a whole,
 # so a whole-tree `prettier --write` would reformat files no change touched;
 # run `npx prettier --write <files>` in frontend/ on the files you changed.
 format:
-	$(PY) -m ruff format $(BACKEND) evals
-	$(PY) -m ruff check --fix $(BACKEND) evals
+	$(PY) -m ruff format $(BACKEND) evals e2e/installed
+	$(PY) -m ruff check --fix $(BACKEND) evals e2e/installed
 
 eval:
 	$(PY) -m pytest evals/tests -q

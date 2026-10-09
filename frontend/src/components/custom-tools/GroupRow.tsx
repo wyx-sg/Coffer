@@ -24,12 +24,15 @@ interface Props {
   onCheckedChange: (checked: boolean) => void;
 }
 
-/** The row's second line: the problem for a group that needs attention. */
+/** The row's second line: the problem for a group that needs attention, else where it points — its host, or
+ *  how many environments it has. */
 function useSubline(group: CustomToolGroup): { text: string; tone: "danger" | "warning" | null } {
   const { t } = useTranslation();
   const { displayOf } = useSecretChoices();
   if (group.health === "attention" && group.secret_state === "pending_approval")
     return { text: t("customTools.list.approvalPending"), tone: "warning" };
+  if (group.health === "attention" && group.secret_state === "rejected")
+    return { text: t("customTools.list.approvalRejected"), tone: "warning" };
   if (group.health === "attention")
     return {
       text: t("customTools.list.secretMissing", {
@@ -39,11 +42,16 @@ function useSubline(group: CustomToolGroup): { text: string; tone: "danger" | "w
     };
   if (group.health === "failing")
     return { text: t("customTools.list.lastCallFailed"), tone: "danger" };
+  const envs = group.environments?.length ?? 0;
   return {
-    text: t("customTools.list.hostTools", {
-      host: hostOf(group.base_url),
-      count: group.tools.length,
-    }),
+    // A group with several environments has no one host: the row counts them.
+    text:
+      envs > 1
+        ? t("customTools.list.envsTools", { envs, count: group.tools.length })
+        : t("customTools.list.hostTools", {
+            host: hostOf(group.base_url),
+            count: group.tools.length,
+          }),
     tone: null,
   };
 }

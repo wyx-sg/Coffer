@@ -37,14 +37,18 @@ coffer mcp [OPTIONS] COMMAND [ARGS]...
 | [`mcp server-log`](#mcp-server-log) | The newest lines of the server's own log. |
 | [`mcp builtin`](#mcp-builtin) | Coffer's own built-in tools. |
 | [`mcp tool`](#mcp-tool) | Switch a server's tools, prompts and resources on or off. |
-| [`mcp tool enable`](#mcp-tool-enable) | Switch capabilities on. |
-| [`mcp tool disable`](#mcp-tool-disable) | Switch capabilities off. |
+| [`mcp tool enable`](#mcp-tool-enable) | Switch one capability on. |
+| [`mcp tool disable`](#mcp-tool-disable) | Switch one capability off. |
+| [`mcp resource`](#mcp-resource) | Read one of a server's resources now. |
+| [`mcp resource read`](#mcp-resource-read) | Read one resource now, as its row's details do. |
+| [`mcp prompt`](#mcp-prompt) | Fill one of a server's prompts and show the messages it makes. |
+| [`mcp prompt get`](#mcp-prompt-get) | Fill one prompt now, as its row's details do. |
 
 ## mcp test
 
 Re-query a server's capabilities, then report whether it answers.
 
-Exits 7 when the server does not answer. With ``--prompt``, a failure also prints the hand-off prompt the server's page offers for it: installing a launcher that is not found here, or finding why the server fails.
+Exits 7 when the server does not answer. With ``--prompt``, a failure also prints the hand-off prompt the server's page offers for it: installing a launcher that is not found here, or finding why the server fails. ``--json`` prints the test's answer (``ok``, ``latency_ms``, ``error_message``, ``handoff``) with the refresh's counts under ``capabilities``; a failed test still exits 7.
 
 <p class="cli-label">概要</p>
 
@@ -58,6 +62,7 @@ coffer mcp test [OPTIONS] NAME
 | --- | --- | --- | --- |
 | `NAME` <span class="cli-chip">参数</span> | text | 必填 | Server name |
 | `--prompt` <span class="cli-chip">选项</span> | 开关 |  | On a failure, also print the prompt to give your agent |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## mcp list
 
@@ -201,7 +206,7 @@ coffer mcp add [OPTIONS]
 
 ## mcp test-config
 
-Test a config before adding it; nothing is saved. Body: transport, secret_values, spawn_timeout_seconds, request_timeout_seconds.
+Test a config before adding it; nothing is saved. Body: transport, secret_values, spawn_timeout_seconds, request_timeout_seconds. Exits 7 when the answer says ok: false.
 
 <p class="cli-label">概要</p>
 
@@ -271,7 +276,7 @@ coffer mcp tiering [OPTIONS] UID
 
 ## mcp exposure
 
-Choose how one tool is exposed. Body: mode (auto | always | search).
+Choose how one tool is exposed. Body: {"mode": "listed"}; mode is auto, listed (in the tool list) or search (found with coffer__search_tools).
 
 <p class="cli-label">概要</p>
 
@@ -291,7 +296,7 @@ coffer mcp exposure [OPTIONS] UID TOOL
 
 ## mcp exposure-all
 
-Choose how several tools are exposed. Body: tools, mode.
+Choose how several tools are exposed. Body: {"tools": ["read_file"], "mode": "search"}; mode is auto, listed or search.
 
 <p class="cli-label">概要</p>
 
@@ -374,7 +379,7 @@ coffer mcp tool [OPTIONS] COMMAND [ARGS]...
 
 ## mcp tool enable
 
-Switch capabilities on. Body: capability_key (a list of keys).
+Switch one capability on. Body: {"capability_key": "read_file"} (one key per call).
 
 <p class="cli-label">概要</p>
 
@@ -394,7 +399,7 @@ coffer mcp tool enable [OPTIONS] UID CAPABILITY_TYPE
 
 ## mcp tool disable
 
-Switch capabilities off. Body: capability_key (a list of keys).
+Switch one capability off. Body: {"capability_key": "read_file"} (one key per call).
 
 <p class="cli-label">概要</p>
 
@@ -408,6 +413,68 @@ coffer mcp tool disable [OPTIONS] UID CAPABILITY_TYPE
 | --- | --- | --- | --- |
 | `UID` <span class="cli-chip">参数</span> | text | 必填 | The mcp_server's name or uid |
 | `CAPABILITY_TYPE` <span class="cli-chip">参数</span> | text | 必填 | tool, prompt or resource |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## mcp resource
+
+Read one of a server's resources now.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer mcp resource [OPTIONS] COMMAND [ARGS]...
+```
+
+子命令：`read`。
+
+## mcp resource read
+
+Read one resource now, as its row's details do. Body: uri.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer mcp resource read [OPTIONS] UID
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `UID` <span class="cli-chip">参数</span> | text | 必填 | The mcp_server's name or uid |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## mcp prompt
+
+Fill one of a server's prompts and show the messages it makes.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer mcp prompt [OPTIONS] COMMAND [ARGS]...
+```
+
+子命令：`get`。
+
+## mcp prompt get
+
+Fill one prompt now, as its row's details do. Body: name, arguments.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer mcp prompt get [OPTIONS] UID
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `UID` <span class="cli-chip">参数</span> | text | 必填 | The mcp_server's name or uid |
 | `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
 | `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

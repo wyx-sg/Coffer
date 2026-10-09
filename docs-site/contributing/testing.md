@@ -194,6 +194,28 @@ When another checkout's dev server already holds those ports, move the suite: `C
 
 On a CI failure, the `e2e` job uploads the Playwright report and traces, plus the isolated daemon's log directory and `daemon.json`, as workflow artifacts.
 
+## Testing an installed build
+
+Every tier above tests the source in this checkout. Before a release, or after installing a fix, `make verify-installed-mcp` checks the build you actually installed. It drives the running daemon's `/mcp` over real HTTP, the installed `coffer-mcp-shim`, and the official MCP SDK, against synthetic upstreams that count every call they receive:
+
+```sh
+make verify-installed-mcp OUT=/tmp/coffer-acceptance/mcp-1     # the installed app (~/.coffer/daemon.json)
+make verify-installed-mcp OUT=<dir> DAEMON_JSON=<home>/.coffer/daemon.json SHIM=<path>
+```
+
+It checks only what an installed build alone can show, and leaves every protocol, permission, secret and catalogue rule to the tiers above. That is: the installed shim connects to the frozen daemon and carries a call to an upstream; the official SDK's sessions work over HTTP, over the notification stream and through the shim, including an upstream's sampling and roots requests reaching the right client; the daemon, its handshake and the shim are one build, and the paths a frozen build imports late (the stderr masker, the custom-tool HTTP client) load; and, read-only, whether the shim it tested is the one your agents' configurations point at. A behaviour the source tiers can test belongs there, not here.
+
+It is opt-in. Neither `make verify` nor CI runs it. Because its default target is your own running app, it only creates objects whose names start with `qa-`, and it refuses to start if one of those names already exists. It deletes everything it created when it finishes. It also refuses to write when your vault syncs to a remote, never restarts the daemon, and never approves a secret. `OUT` must be a new or empty directory outside the repository. Results go to `OUT/summary.md` and `OUT/cases.json`, with the daemon token and test secrets redacted. Each case is PASS, FAIL, BLOCKED (with the reason it cannot run there, such as no installed shim or a Touch ID approval) or N/A (a check that does not apply to this run). The run fails only on a FAIL. The full rules are in [`.agents/testing.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/testing.md) under "Installed-build Acceptance".
+
+`make verify-installed-cli` checks the installed `coffer` command the same way, but needs no daemon and touches nothing of yours. It runs a copy of the binary with an empty `HOME` and only commands that finish before they would reach a daemon. It checks what only the frozen build can get wrong: every command group's help renders (a module the build left out fails here), shell completion works for zsh and bash, and unreadable input fails with the same exit-6 error as the source rather than a crash:
+
+```sh
+make verify-installed-cli OUT=/tmp/coffer-acceptance/cli-1      # ~/.coffer/bin/coffer
+make verify-installed-cli OUT=<dir> COFFER=<path>/coffer
+```
+
+Both suites test only what an installed build can get wrong. A behaviour the source tests can check is tested there instead. Run them from a checkout that matches the installed build, because a newer checkout reports its new commands as failures.
+
 ## Frontend tests
 
 Frontend tests use Vitest and Testing Library in a jsdom environment. Each test sits next to the module it covers (`*.test.ts`, `*.test.tsx`), and `make verify-unit` runs them all with `npx vitest run src`. `src/test/setup.ts` loads the real i18n catalogues, so components render real copy. Render with a real `QueryClientProvider` and mock only the network boundary: the `src/lib/api/*` module, or `streamClient` for chat. See [Frontend](/contributing/frontend#testing) for conventions.
@@ -227,7 +249,7 @@ Only one integration run happens on a machine at a time. `make verify-integratio
 | `scripts/check_frontend_colors.py` | No colour literal in the frontend outside `src/index.css`; every colour is a theme token |
 | `scripts/check_ignored_sources.py` | No `.gitignore` rule hides a file in a source tree, and no unanchored pattern names a common source-folder word such as `lib/` or `env/`, which would hide that folder at any depth |
 | `scripts/check_bare_tasks.py` | No module under `backend/coffer/` starts a bare `asyncio.create_task` or `ensure_future` beyond its listed allowance. Background work goes through the supervisor, which names a task, logs its crash and cancels it at shutdown. A task that is awaited in place is listed in the script with its reason |
-| `ruff check`, `ruff format --check` | Lint and formatting over `backend/` and `evals/`, under the rules in `backend/pyproject.toml` |
+| `ruff check`, `ruff format --check` | Lint and formatting over `backend/`, `evals/` and `e2e/installed/`, under the rules in `backend/pyproject.toml` |
 | `mypy` | Type-checks the whole `coffer` package under `backend/pyproject.toml`, which sets `strict = true` |
 | `lint-imports` | Import-linter contracts: the layer direction (`surfaces` → `application` → `domain`), a pure `domain`, `keyring` confined to the secrets code, no cross-kind imports between kinds, and specific libraries confined to their adapters |
 | `scripts/dump_i18n_backend_keys.py --check` | Every backend error code and audit event type has an entry in the fixture that the frontend's locale-coverage test reads, so none ships untranslated |

@@ -16,7 +16,6 @@
 import { setDaemonConnection } from "./auth";
 import { resetApiClient } from "./api/client";
 import type { components } from "./api/generated/secret";
-import type { components as syncComponents } from "./api/generated/vault-sync";
 
 export function isTauri(): boolean {
   // @ts-expect-error — Tauri injects __TAURI_INTERNALS__ in its WebView
@@ -247,7 +246,7 @@ export async function exportMasterKeyBackup(passphrase: string): Promise<MasterK
 }
 
 /** What installing a master key answers (the daemon's `KeyImportOut`). */
-export type MasterKeyImport = syncComponents["schemas"]["KeyImportOut"];
+export type MasterKeyImport = components["schemas"]["KeyImportOut"];
 
 /** Install a master key after a presence check naming its fingerprint; the page never holds the grant. */
 export async function importMasterKey(

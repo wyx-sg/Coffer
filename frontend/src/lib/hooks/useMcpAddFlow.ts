@@ -1,23 +1,17 @@
 // frontend/src/lib/hooks/useMcpAddFlow.ts — the MCP servers page's reads and
 // writes beside the registered servers: test a config before Add server, plan
-// and apply an import from the agents, and Coffer's own built-in `coffer`
-// server (change align-capabilities-with-final-design).
+// an import from the agents (the first-run card shows the files it names), and
+// Coffer's own built-in `coffer` server (change align-capabilities-with-final-design).
 //
-// None of these toast: the Add dialog renders a test result or an import
-// outcome where the person acted, and a toast would repeat it.
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+// None of these toast: the Add dialog renders a test result where the person
+// acted, and a toast would repeat it.
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRef } from "react";
 
 import { mcpBuiltinApi } from "@/lib/api/mcpBuiltin";
 import { mcpImportApi, type McpImportEntryIn } from "@/lib/api/mcpImport";
 import { mcpTestConfigApi, type McpConfigTestIn } from "@/lib/api/mcpTestConfig";
-import {
-  agentMcpEntriesKey,
-  mcpBuiltinKey,
-  mcpImportPlanKey,
-  ownListKeysForKind,
-  resourcesKey,
-} from "@/lib/api/queryKeys";
+import { mcpBuiltinKey, mcpImportPlanKey } from "@/lib/api/queryKeys";
 
 /**
  * Test a config that is not saved (`POST /resources/mcp_server/test-config`).
@@ -45,7 +39,7 @@ export function useMcpConfigTest() {
   };
 }
 
-/** The dry-run plan of importing `entries`; read while the dialog shows it. */
+/** The dry-run plan of importing `entries`; read while the first-run card shows it. */
 export function useMcpImportPlan(entries: McpImportEntryIn[], enabled = true) {
   return useQuery({
     queryKey: mcpImportPlanKey(entries),
@@ -54,28 +48,6 @@ export function useMcpImportPlan(entries: McpImportEntryIn[], enabled = true) {
     // A plan is a snapshot of files that may change under it: read it fresh.
     staleTime: 0,
     retry: false,
-  });
-}
-
-/**
- * Apply the import (`POST /agents/mcp-import/apply`). Resolves with every
- * entry's outcome (`added`, `merged`, `removed_duplicate`, `failed`,
- * `skipped`) — a partial import resolves, it does not reject. Refreshes the
- * agents' entry lists, the resource lists and the MCP servers' statuses.
- */
-export function useApplyMcpImport() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (entries: McpImportEntryIn[]) => mcpImportApi.apply(entries),
-    onSettled: (_r, _e, entries) => {
-      for (const uid of new Set(entries.map((e) => e.agent_uid))) {
-        void qc.invalidateQueries({ queryKey: agentMcpEntriesKey(uid) });
-      }
-      void qc.invalidateQueries({ queryKey: resourcesKey });
-      for (const key of ownListKeysForKind("mcp_server")) {
-        void qc.invalidateQueries({ queryKey: key });
-      }
-    },
   });
 }
 

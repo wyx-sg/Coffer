@@ -101,13 +101,20 @@ EXEMPT: dict[tuple[str, str], tuple[Category, str]] = {
 #: The desktop shell's IPC commands: the command that does the same, or why none.
 SHELL_COMMANDS: dict[str, str | tuple[Category, str]] = {
     "restart_daemon": "daemon restart",
-    "show_daemon_log": "log daemon",
+    # The offline screen opens the file with no daemon; `path logs` names that
+    # file without one. `log daemon` reads through the daemon (and starts it),
+    # so it is the Activity page's counterpart, not this one's.
+    "show_daemon_log": "path logs",
     "get_daemon_info": ("internal", "the page's handshake with the shell"),
     "daemon_version_matches": ("internal", "the page's handshake with the shell"),
     "set_ui_language": ("window", "the window's interface language"),
     "set_attention_count": ("internal", "the menu bar's count, set by the page"),
     "reveal_secret": "secret reveal",
     "export_master_key_backup": "secret backup-key",
+    "master_key_backup_closed": (
+        "internal",
+        "the backup dialog closing ends the command's waiting request",
+    ),
     "import_master_key": "secret import-key",
     "approve_pending": "approval approve",
     "approve_pending_batch": "approval approve",

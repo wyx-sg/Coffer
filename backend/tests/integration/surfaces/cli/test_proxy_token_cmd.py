@@ -44,7 +44,7 @@ class _Client:
 
 @pytest.fixture(autouse=True)
 def served(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(cli_client, "client_or_exit", lambda: (_Client(), None))
+    monkeypatch.setattr(cli_client, "client_or_exit", lambda **_kw: (_Client(), None))
 
 
 @pytest.mark.acceptance(

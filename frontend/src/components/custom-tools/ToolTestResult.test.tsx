@@ -15,6 +15,7 @@ vi.mock("@/lib/api/secret", () => ({
       refs: [
         {
           ref: "secret/deploy-token",
+          label: "deploy-token",
           present: true,
           locked: false,
           cited_by: [],
@@ -38,6 +39,7 @@ function result(patch: Partial<CustomToolTestOut>): CustomToolTestOut {
     body: '{"healthy":true}',
     truncated: false,
     content_type: "application/json",
+    response_headers: {},
     environment: null,
     error: null,
     failure: null,
@@ -101,7 +103,7 @@ describe("ToolTestResult", () => {
 
   test("a rejected secret keeps the hint and opens the secret's Change value, with no hand-off", async () => {
     show(result({ ok: false, status: 401, status_line: "HTTP 401 Unauthorized", body: "" }));
-    expect(screen.getByText(/The API rejected deploy-token/)).toBeInTheDocument();
+    expect(await screen.findByText(/The API rejected deploy-token/)).toBeInTheDocument();
     expect(screen.getByText(/every tool in deploy-api uses the same secret/)).toBeInTheDocument();
     expect(handoff()).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Change value" }));

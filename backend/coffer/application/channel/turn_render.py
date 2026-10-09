@@ -117,6 +117,10 @@ class TurnRenderer:
     _status: TurnStatus = field(init=False)
     _reply: ReplyText = field(init=False)
     _surface: TurnSurface = field(init=False)
+    #: The moment the status header's clock shows. It moves only with a redraw
+    #: (a step, the status tick), never with answer text: text then only APPENDS
+    #: to the snapshot on screen, which the surface may write at its fast cadence.
+    _clock: float = field(init=False, default=0.0)
 
     async def consume(self, queue: asyncio.Queue[Any]) -> TurnOutcome:
         """Render the turn; return how it ended (``done`` / ``failed`` /
@@ -132,7 +136,7 @@ class TurnRenderer:
                     await heartbeat
 
     async def _consume(self, queue: asyncio.Queue[Any]) -> TurnOutcome:
-        started = self.now()
+        started = self._clock = self.now()
         self._status = TurnStatus(
             started=started, show_steps=self.show_steps, chat_kind=self.chat_kind
         )
@@ -273,7 +277,7 @@ class TurnRenderer:
         are the ones being watched), the step lines go before the header does,
         and only a cap too small for even that clips the whole snapshot."""
         limit = self.adapter.capabilities.max_message_chars
-        now = self.now()
+        now = self._clock
         tail = self._reply.tail
         snapshot = ""
         for block in (self._status.block(now), self._status.header(now)):
@@ -287,7 +291,9 @@ class TurnRenderer:
                 return snapshot
         return clip_stream_preview(snapshot, limit)
 
-    async def _refresh(self) -> None:
+    async def _refresh(self, *, clock: bool = True) -> None:
+        if clock:
+            self._clock = self.now()
         await self._surface.show(self._snapshot())
 
     async def _text_update(self) -> None:
@@ -301,7 +307,7 @@ class TurnRenderer:
             return
         if not self._reply.tail:
             return
-        await self._refresh()
+        await self._refresh(clock=False)
 
     async def _tick(self) -> None:
         """Redraw the status on a fixed cadence so its clock moves during a long

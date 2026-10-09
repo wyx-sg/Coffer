@@ -52,6 +52,16 @@ _logger = logging.getLogger(__name__)
 #: backs off, and the refusal is logged; it cannot fail silently.
 MIN_UPDATE_INTERVAL = float(os.environ.get("COFFER_SEATALK_STREAM_INTERVAL", "0.1"))
 
+#: How often a snapshot that is NOT a pure append may be written. The client has
+#: no "append": every update replaces the whole message, and a snapshot that
+#: changes anything already on screen — the step lines shifting up, the clock,
+#: "+N earlier" — redraws the whole bubble. A long tool run offered one of those
+#: per step, so the message redrew several times a second (measured: 50 updates
+#: in 12 s on a status-only stream) and visibly flickered. Text that only grows
+#: at the end keeps the fast cadence above; everything else is folded into one
+#: write at most this often.
+REDRAW_INTERVAL = 2.0
+
 #: Telegram edits a real message, and its flood limits (~one edit a second) are far
 #: tighter than a streaming endpoint's.
 TELEGRAM_UPDATE_INTERVAL = 1.5
@@ -99,17 +109,22 @@ class LiveTextSurface:
 
     A snapshot offered inside the buffer interval is kept, not dropped: it is
     written when the interval ends, so the last words before a pause are shown
-    rather than waiting for the next event.
+    rather than waiting for the next event. The interval depends on the
+    snapshot: one that only appends to what is on screen is due after
+    ``min_interval``, one that rewrites anything already shown (a redraw) after
+    ``redraw_interval``.
     """
 
     def __init__(
         self,
         *,
         min_interval: float = MIN_UPDATE_INTERVAL,
+        redraw_interval: float = REDRAW_INTERVAL,
         keepalive_seconds: float | None = None,
         now: Callable[[], float] = time.monotonic,
     ) -> None:
         self._min_interval = min_interval
+        self._redraw_interval = max(redraw_interval, min_interval)
         self._keepalive_seconds = keepalive_seconds
         self._now = now
         self._last_write = 0.0
@@ -141,7 +156,7 @@ class LiveTextSurface:
             return
         self._latest = text
         busy = self._lock.locked() or (self._trailing is not None and not self._trailing.done())
-        if busy or (self._opened and self._now() - self._last_write < self._min_interval):
+        if busy or (self._opened and self._now() < self._due(text)):
             # A write is in flight or the buffer is not over: the pump sends the
             # newest snapshot when it can, and this caller is not held up by it.
             self._schedule_trailing()
@@ -197,6 +212,12 @@ class LiveTextSurface:
         self._start_keepalive()
         return True
 
+    def _due(self, text: str) -> float:
+        """When ``text`` may be written: an append to what is on screen after
+        the buffer interval, anything else after the redraw interval."""
+        appends = text.startswith(self._snapshot)
+        return self._last_write + (self._min_interval if appends else self._redraw_interval)
+
     def _schedule_trailing(self) -> None:
         """Start the pump unless it is already running: at most one pending
         writer per surface, and it always sends whatever is newest."""
@@ -205,12 +226,15 @@ class LiveTextSurface:
         self._trailing = spawn(self._pump(), name="channel-live-text-flush")
 
     async def _pump(self) -> None:
-        """Write the newest snapshot each time the buffer interval ends, until
-        what is on screen is the newest one offered."""
+        """Write the newest snapshot each time it falls due, until what is on
+        screen is the newest one offered. The due time is re-read after every
+        wait: a redraw offered while an append was waiting pushes it back."""
         try:
             while not self._dead and self._latest != self._snapshot:
-                delay = self._min_interval - (self._now() - self._last_write)
-                await asyncio.sleep(max(delay, 0.0))
+                delay = self._due(self._latest) - self._now()
+                if delay > 0:
+                    await asyncio.sleep(delay)
+                    continue
                 if not await self._flush():
                     return
         finally:

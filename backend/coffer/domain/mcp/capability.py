@@ -31,6 +31,10 @@ class MCPTool(BaseModel):
     #: ``destructiveHint``, …), in their wire spelling; passed to the agent as
     #: they are (spec mcp-gateway "Annotate every tool with whether it changes data").
     annotations: dict[str, Any] | None = None
+    #: The JSON Schema the upstream declared for the tool's ``structuredContent``
+    #: (MCP ``outputSchema``), as declared; None when it declared none (spec
+    #: mcp-gateway "Forward tools, resources and prompts").
+    output_schema: dict[str, Any] | None = None
 
 
 class MCPResource(BaseModel):

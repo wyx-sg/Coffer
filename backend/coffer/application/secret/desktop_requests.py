@@ -16,7 +16,10 @@ approve anything. A request carries no secret, grant or signature, and holds
 nothing the agent did not already know.
 
 In memory only: a request lives two minutes and dies with the daemon, which is
-what a prompt waiting on a person should do.
+what a prompt waiting on a person should do. A key backup lives ten: its
+request stays claimed while the app's backup dialog is open (the person types
+a passphrase, checks presence and picks a folder there), and the shell ends it
+only once the file is written or the dialog is closed.
 """
 
 from __future__ import annotations
@@ -44,6 +47,8 @@ TERMINAL: frozenset[str] = frozenset({"done", "cancelled", "failed", "expired"})
 
 #: How long a request may wait for the shell and the person.
 REQUEST_TTL_SECONDS = 120.0
+#: How long a key backup may take: the dialog asks for more than a prompt does.
+BACKUP_TTL_SECONDS = 600.0
 #: A shell that polled within this long is running.
 SHELL_FRESH_SECONDS = 5.0
 #: Requests kept at once (finished ones included, for their reader).
@@ -102,7 +107,8 @@ class DesktopRequests:
             id=_secrets.token_hex(8),
             op=op,
             created_at=now,
-            expires_at=now + REQUEST_TTL_SECONDS,
+            expires_at=now
+            + (BACKUP_TTL_SECONDS if op == "export_master_key" else REQUEST_TTL_SECONDS),
             approvals=dict(approvals or {}),
             ref=ref,
             enabled=enabled,
@@ -181,6 +187,7 @@ class DesktopRequests:
 
 
 __all__ = [
+    "BACKUP_TTL_SECONDS",
     "REQUEST_TTL_SECONDS",
     "SHELL_FRESH_SECONDS",
     "TERMINAL",

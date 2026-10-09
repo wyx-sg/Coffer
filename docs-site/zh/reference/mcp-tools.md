@@ -171,8 +171,10 @@ Coffer 把会话生效范围内每个已启用的 [MCP 服务器](/zh/guides/mcp
 - 该能力在其服务器上被关闭（在 **MCP 服务器** 下该服务器页面的**工具**标签页），或者
 - 服务器的[生效范围](/zh/architecture/resource-framework#reach)不包含打开该会话的智能体。
 
-Coffer 内部的其他失败是 JSON-RPC 错误 `-32603`。上游工具失败时，它自己的 `isError: true`
-结果原样返回。
+Coffer 不回答的方法是 `-32601`。方法用不了的 params，或没有任何服务器提供的工具名（没有
+`<server>__` 前缀，或没有这个服务器），是 `-32602`。上游回答的 JSON-RPC 错误保留它的错误码，
+消息由 Coffer 自己写。Coffer 内部的其他失败是 JSON-RPC 错误 `-32603`。上游工具失败时，它自己的
+`isError: true` 结果原样返回。
 
 ### 分层 {#tiering}
 

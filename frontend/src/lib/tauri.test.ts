@@ -29,6 +29,7 @@ import {
   APPROVALS_EVENT,
   PresenceUnavailableError,
 } from "./tauri";
+import { masterKeyBackupClosed } from "./masterKeyBackup";
 import { getCofferBaseUrl, getCofferToken } from "./auth";
 import { getApiClient, resetApiClient } from "./api/client";
 import { acceptance } from "@/test/acceptance";
@@ -332,6 +333,7 @@ describe("presence-gated actions", () => {
       await expect(attempt).rejects.toBeInstanceOf(PresenceUnavailableError);
       await expect(attempt).rejects.toThrow(/only available in the Coffer desktop app/i);
     }
+    await expect(masterKeyBackupClosed()).resolves.toBeUndefined();
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
@@ -342,6 +344,10 @@ describe("presence-gated actions", () => {
     expect(invokeMock).toHaveBeenLastCalledWith("reveal_secret", {
       secretRef: "mcp_server/abc/TOKEN",
     });
+
+    invokeMock.mockRejectedValueOnce(new Error("no waiting request"));
+    await expect(masterKeyBackupClosed()).resolves.toBeUndefined();
+    expect(invokeMock).toHaveBeenLastCalledWith("master_key_backup_closed");
 
     const backup = { path: "/Users/me/coffer-master-key.cfk", fingerprint: "ab12" };
     invokeMock.mockResolvedValueOnce(backup);
