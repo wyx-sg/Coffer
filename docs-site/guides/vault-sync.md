@@ -178,7 +178,7 @@ A round that would lose **20 or more** files in one area, or **5 or more** that 
 
 A file that reappears at another path in the same round is a move, not a loss, and a resource file counts by its uid, so reorganising or renaming never asks.
 
-Either answer continues the round. On the web the **Status** tab says who deleted how many files, and **Review deletions** lists every one of them, folder by folder; the chosen file shows its whole text as the lines a delete removes. Its foot has two buttons, **Keep the files** and **Delete N files**. Each acts at once: the page already shows what a delete removes, so no second dialog repeats it, and a safety snapshot is taken before a delete. If this machine was just reinstalled or restored, keep the files: do not delete.
+Either answer continues the round. On the web the **Status** tab says who deleted how many files, and **Review deletions** lists every one of them, folder by folder; the file list and the diff sit side by side at the same height, each scrolling on its own; the chosen file shows its whole text as the lines a delete removes. Its foot has two buttons, **Keep the files** and **Delete N files**. Each acts at once: the page already shows what a delete removes, so no second dialog repeats it, and a safety snapshot is taken before a delete. If this machine was just reinstalled or restored, keep the files: do not delete.
 
 ## When a round finds a plaintext secret
 
