@@ -40,7 +40,14 @@ from coffer.infrastructure.daemon.pid_lock import (
     write,
 )
 from coffer.infrastructure.daemon.port_alloc import bind_fixed_socket, bind_free_socket
-from coffer.infrastructure.vault.home import daemon_json_path, daemon_lock_path
+from coffer.infrastructure.daemon.spawn_lock import (
+    SPAWN_LOCK_TIMEOUT_SECONDS,
+    SpawnLockBusy,
+)
+from coffer.infrastructure.daemon.spawn_lock import acquire_spawn_lock as _acquire_spawn_lock
+from coffer.infrastructure.daemon.spawn_lock import release_spawn_lock as _release_spawn_lock
+from coffer.infrastructure.daemon.spawn_lock import spawn_lock_path as _spawn_lock_path
+from coffer.infrastructure.vault.home import daemon_json_path
 
 _DAEMON_JSON_VERSION = 1
 
@@ -71,51 +78,6 @@ _LIVENESS_PROBE_TIMEOUT: float = 15.0
 
 def _daemon_json_path() -> Path:
     return daemon_json_path()
-
-
-def _spawn_lock_path() -> Path:
-    return daemon_lock_path()
-
-
-def _acquire_spawn_lock() -> int:
-    """Open ``~/.coffer/daemon.lock`` and take an exclusive ``flock``; return fd.
-
-    Detect-or-spawn: this is the lock that serialises the probe+bind+write+announce
-    critical section so two racing auto-spawns can't both bind. The caller MUST
-    eventually free it via :func:`_release_spawn_lock`. On Windows (no
-    ``fcntl``) the lock degrades to a bare open fd — the daemon's own
-    ``live_daemon`` refusal in ``acquire_or_existing`` plus the atomic
-    ``os.replace`` remain as the last line of defence there.
-
-    The lockfile itself is intentionally left on disk between runs — a flock is
-    advisory and tied to the open fd, not the file's existence.
-    """
-    lock_path = _spawn_lock_path()
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
-    try:
-        import fcntl
-    except ImportError:  # pragma: no cover - Windows fallback
-        return fd
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
-    except BaseException:
-        os.close(fd)
-        raise
-    return fd
-
-
-def _release_spawn_lock(fd: int) -> None:
-    """Release the ``flock`` and close ``fd`` (best-effort; safe if already gone)."""
-    try:
-        import fcntl
-    except ImportError:  # pragma: no cover - Windows fallback
-        pass
-    else:
-        with contextlib.suppress(OSError):
-            fcntl.flock(fd, fcntl.LOCK_UN)
-    with contextlib.suppress(OSError):
-        os.close(fd)
 
 
 def live_daemon() -> DaemonInfo | None:
@@ -339,6 +301,19 @@ def acquire_or_existing() -> tuple[DaemonInfo, socket.socket | None, ReleaseSpaw
     return info, sock, _release
 
 
+def release_for(pid: int) -> None:
+    """Remove daemon.json if it still records ``pid`` — for a caller that
+    killed that daemon, which could not remove its own file on the way out."""
+    path = _daemon_json_path()
+    try:
+        info = read(path)
+    except (FileNotFoundError, ValueError, KeyError, OSError):
+        return
+    if info.pid == pid:
+        with contextlib.suppress(OSError):
+            path.unlink(missing_ok=True)
+
+
 def release() -> None:
     """Remove daemon.json on shutdown — but ONLY if it still records our pid.
 
@@ -356,3 +331,20 @@ def release() -> None:
         return  # belongs to another (live) daemon — do not clobber
     with contextlib.suppress(OSError):
         path.unlink(missing_ok=True)
+
+
+__all__ = [
+    "SPAWN_LOCK_TIMEOUT_SECONDS",
+    "SpawnLockBusy",
+    "_acquire_spawn_lock",
+    "_release_spawn_lock",
+    "_spawn_lock_path",
+    "acquire",
+    "acquire_or_existing",
+    "live_daemon",
+    "planned_port",
+    "probe_status",
+    "release",
+    "release_for",
+    "superseded_by",
+]

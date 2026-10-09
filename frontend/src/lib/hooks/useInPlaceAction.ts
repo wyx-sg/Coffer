@@ -16,12 +16,14 @@ import { useToast } from "@/components/ui/toast";
 import { clisApi } from "@/lib/api/clis";
 import { translateApiError } from "@/lib/api/errors";
 import { mcpServersApi } from "@/lib/api/mcpServers";
-import { attentionKey } from "@/lib/api/queryKeys";
+import { providersApi } from "@/lib/api/providers";
+import { attentionKey, providerHealthKey } from "@/lib/api/queryKeys";
 import type { AttentionItem } from "@/lib/hooks/useAttention";
 import { inPlaceVerb } from "@/lib/overview/attention";
 
 async function call(item: AttentionItem): Promise<void> {
   if (item.kind === "mcp_server" && item.uid) await mcpServersApi.test(item.uid);
+  else if (item.kind === "provider" && item.uid) await providersApi.check(item.uid);
   else if (item.kind === "cli" && item.uid) await clisApi.check(item.uid);
 }
 
@@ -44,6 +46,7 @@ export function useInPlaceActions() {
       set(item.key, true);
       try {
         await call(item);
+        if (item.kind === "provider") void qc.invalidateQueries({ queryKey: providerHealthKey });
         // Resolves once the list has been read again.
         await qc.invalidateQueries({ queryKey: attentionKey });
       } catch (e) {

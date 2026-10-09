@@ -25,6 +25,7 @@ from typing import Literal
 
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.orm import defer
 
 from coffer.application.runtime.supervisor import spawn
 from coffer.domain.mcp.capability import MCPInvocation
@@ -34,6 +35,7 @@ from coffer.infrastructure.mcp.invocation_rows import (
     inv_to_domain,
     inv_to_model,
 )
+from coffer.infrastructure.mcp.invocation_scrub import scrub_content
 from coffer.infrastructure.mcp.invocation_summary import InvocationSummary, summarize
 from coffer.infrastructure.persistence.keyset import newest_first_after
 
@@ -163,8 +165,10 @@ class MCPInvocationRepo:
         async with self._sm() as session:
             # Newest first, the id breaking ties, so ``after`` (the previous
             # page's last row) names one place in the order.
-            stmt = select(MCPInvocationModel).order_by(
-                MCPInvocationModel.timestamp.desc(), MCPInvocationModel.id.desc()
+            stmt = (
+                select(MCPInvocationModel)
+                .options(defer(MCPInvocationModel.content_json))
+                .order_by(MCPInvocationModel.timestamp.desc(), MCPInvocationModel.id.desc())
             )
             if after is not None:
                 stmt = stmt.where(
@@ -183,6 +187,13 @@ class MCPInvocationRepo:
             stmt = stmt.limit(limit)
             rows = (await session.execute(stmt)).scalars().all()
             return [inv_to_domain(r) for r in rows]
+
+    async def get(self, invocation_id: int) -> MCPInvocation | None:
+        """One call with its content, or ``None`` for an id the log does not hold."""
+        await self._settle()
+        async with self._sm() as session:
+            row = await session.get(MCPInvocationModel, invocation_id)
+            return inv_to_domain(row, with_content=True) if row is not None else None
 
     async def count(
         self,
@@ -305,6 +316,7 @@ class MCPInvocationRepo:
         async with self._sm() as session:
             stmt = (
                 select(MCPInvocationModel)
+                .options(defer(MCPInvocationModel.content_json))
                 .where(MCPInvocationModel.resource_uid == resource_uid)
                 .where(MCPInvocationModel.capability_type == "tool")
                 .where(MCPInvocationModel.status != "denied")
@@ -316,13 +328,15 @@ class MCPInvocationRepo:
         return inv_to_domain(row) if row is not None else None
 
     async def _commit_one(self, inv: MCPInvocation) -> None:
-        async with self._sm() as session:
-            session.add(inv_to_model(inv))
-            await session.commit()
+        await self._commit_batch([inv])
 
     async def _commit_batch(self, batch: list[MCPInvocation]) -> None:
         if not batch:
             return
+        # The plaintext rules are the last redaction pass over a call's content
+        # (``invocation_scrub``), and slow enough to keep off the event loop.
+        if any(inv.content for inv in batch):
+            await asyncio.to_thread(_scrub, batch)
         async with self._sm() as session:
             session.add_all([inv_to_model(inv) for inv in batch])
             await session.commit()
@@ -362,3 +376,8 @@ class MCPInvocationRepo:
             await self._finished(len(batch))
             if self._stopping and queue.empty():
                 return
+
+
+def _scrub(batch: list[MCPInvocation]) -> None:
+    for inv in batch:
+        inv.content = scrub_content(inv.content)

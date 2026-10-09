@@ -100,7 +100,7 @@ A usage reader consumes a copy of the bytes beside the relay. If the reader fail
 
 A stream cut before its terminal event is recorded with usage **unknown**. It is never dropped and never guessed.
 
-The proxy opens no database. It appends records to spool files under `~/.coffer/proxy-usage/`, and a file is renamed from `.jsonl.part` to `.jsonl` once complete. The daemon, the only database writer, ingests completed files, deletes each only after its rows are committed, and de-duplicates by the upstream's request id, so a repeated ingest writes nothing twice. How the records become the usage report is in [Usage and quota](/guides/usage).
+The proxy opens no database. It appends records to spool files under `~/.coffer/proxy-usage/`, and a file is renamed from `.jsonl.part` to `.jsonl` once complete. The daemon, the only database writer, ingests completed files, deletes each only after its rows are committed, and de-duplicates by the upstream's request id, so a repeated ingest writes nothing twice. The same records tell the daemon a provider's health: a request refused with 401/403 or one that never reached the endpoint marks that provider in the list and on Overview (see [Health](/guides/providers#health)). How the records become the usage report is in [Usage and quota](/guides/usage).
 
 ## What it records, and what it never does
 

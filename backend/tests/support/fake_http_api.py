@@ -77,6 +77,17 @@ def _handler(api: FakeHttpApi) -> type[BaseHTTPRequestHandler]:
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()
                 self.wfile.write(payload)
+            elif path.endswith("/sp-error"):
+                payload = b'{"error": "denied"}'
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("X-Sp-Error", "101")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+            elif path.endswith("/token"):
+                token = "ghp_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"
+                self._send(200, f"minted {token} for you".encode(), "text/plain")
             elif path.endswith("/slow"):
                 time.sleep(3)
                 self._send(200, b'{"ok": true, "slow": true}', "application/json")

@@ -171,7 +171,6 @@ cd frontend && npm install && npm run build && cd ..
 | `~/.coffer/local/` | Settings true of this machine only: agents, reach, retention, the sync remote. |
 | `~/.coffer/runs.db` | The history database: audit log, invocations, conversations, sync rounds, usage. |
 | `~/.coffer/runs.db.pre-<revision>` | A copy taken before each schema migration. The three newest are kept. |
-| `~/.coffer/master.key` | The secret master key (mode `0600`), unless you moved it to the keychain. |
 | `~/.coffer/daemon.json` | Runtime discovery file: PID, port and API token (mode `0600`). Written at start and removed at exit. |
 | `~/.coffer/daemon-config.json` | Settings read before the daemon starts: a fixed port, the machine name, any experimental-feature switches. |
 | `~/.coffer/content/`, `~/.coffer/derived/` | Media and the chat workspace; state Coffer rebuilds, such as the memory tree. |
@@ -253,12 +252,16 @@ Either way Coffer takes back everything it wrote outside `~/.coffer`, then stops
 To delete your data as well, tick **Also delete my data** in the dialog; Coffer asks for Touch ID before anything is removed. The app also deletes the master key's Keychain items once the daemon has stopped. From a terminal, `coffer uninstall --delete-data` asks you to type `delete my data`, does nothing without a terminal to type it in, and deletes `~/.coffer` but not the Keychain, which only Coffer's daemon touches: delete the `coffer` items in Keychain Access yourself. A vault you moved somewhere else is left in place.
 
 ::: danger Deleting ~/.coffer is permanent
+<<<<<<< HEAD
 `~/.coffer` holds your database, knowledge collections, skill library and secret master key. Deleting it destroys every stored secret and every document that exists only there, including skills Coffer adopted from your agents. [Back up the master key](/guides/secrets#the-master-key-and-its-backup) first if you might want them back.
+=======
+`~/.coffer` holds your database, knowledge collections, skill library and encrypted secrets. Deleting it destroys every stored secret and every document that exists only there. Copy it somewhere first if you might want it back.
+>>>>>>> origin/main
 :::
 
 ## Experimental features
 
-Every build carries the same capabilities. Four of them are experimental — Knowledge, Memory, Sync and Model providers — and start switched off, in a stable release and a source build alike. Switch one on from Settings → Features. See [Experimental features](/guides/experimental-features).
+Every build carries the same capabilities. Two of them are experimental — Knowledge and Memory — and start switched off, in a stable release and a source build alike. Sync and Model providers are regular features, always on. Switch one on from Settings → Features. See [Experimental features](/guides/experimental-features).
 
 ## Next steps
 

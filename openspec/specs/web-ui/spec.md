@@ -88,9 +88,9 @@ every CLI a skill requires on the CLIs page". An
 entry whose experimental feature is switched off (spec
 [experimental-features](../experimental-features/spec.md) "Close every surface of a switched-off feature")
 MUST be left out, and MUST appear on the next render after the feature is
-switched on. Model providers, Usage tab included, belongs to `models`, Knowledge to `knowledge`,
-Memory to `memory` and Sync to `sync`; every other entry, Conversations and
-Channels included, is owned by no feature and is always there:
+switched on. Knowledge belongs to `knowledge` and Memory to `memory`; every
+other entry, Model providers, Sync, Conversations and Channels included, is
+owned by no feature and is always there:
 
 ```
   Overview         /                  — the landing page
@@ -129,7 +129,7 @@ Channels included, is owned by no feature and is always there:
 - **WHEN** the app shell is rendered
 - **THEN** the sidebar leaves that entry out and lists every other entry under its heading
 - **AND** with every feature switched on, the sidebar lists all fourteen entries
-- **AND** with the four features switched off, it lists only Overview, Agents, Conversations, Channels, MCP servers, Custom tools, Skills, CLIs, Secrets and Activity
+- **AND** with both features switched off, it lists only Overview, Agents, Model providers, Conversations, Channels, MCP servers, Custom tools, Skills, CLIs, Secrets, Activity and Sync
 
 ### Requirement: Call a surface by one name everywhere
 A surface MUST carry one name in every place it is named — sidebar, page header,
@@ -906,7 +906,13 @@ daemon record's message and traceback — then the records written within five
 minutes of it, ending in its raw underlying record, pretty-printed in a
 monospace, scrollable block, open and foldable. The footer holds
 the next step: **Open** the resource's own detail page beside **Copy details**. A call's drawer
-shows its metadata only, since Coffer stores no call's arguments or results. A
+shows, after its answer, the content the call recorded ([mcp-gateway](../mcp-gateway/spec.md)
+"Record invocations with redacted, bounded content"), read when the drawer opens: **Arguments**,
+**Result** (or **Error**), and for a custom tool **Request** and **Response**, each a foldable
+monospace block — JSON laid out, other text as it is — with **Copy**, and a cut part ending in
+"Cut at 16 KB — the call carried N KB". A call recorded while recording was off says "Content
+was not recorded for this call" with a link to the setting, and the drawer notes that secret
+values are masked before anything is stored. A
 change whose event the page has no sentence for reads through the same facts and
 diff. On the Daemon log a row opens in place under its own line instead, with its
 traceback, **Copy record** and, when the record names a server and tool, **Show
@@ -927,6 +933,12 @@ the tool call**, which opens the Tool calls tab looking for that call.
 - **GIVEN** Everything holding a call by an agent, a change made in the web UI, a change made from the command line and a daemon warning
 - **WHEN** the user chooses the agent and "You" under By, then Tool calls and Changes under Kind
 - **THEN** the list keeps the agent's call and the web UI's change and drops the others, and the Kind pill reads "Kind: Tool calls, Changes"
+
+#### Scenario: a call's drawer shows its arguments and result
+- **GIVEN** a recorded tool call with arguments, a cut result and a call recorded while recording was off
+- **WHEN** the user opens each on the Tool calls tab
+- **THEN** the first drawer shows Arguments and Result as laid-out JSON with Copy, the result ending in its cut note
+- **AND** the second says its content was not recorded and links to Settings › Data
 
 ### Requirement: Query only the visible Activity tab and isolate failures
 Only the visible tab pages through records — Everything through all three
@@ -1006,7 +1018,7 @@ rather than by how Coffer is built, and MUST open on General:
   **Speech-to-text** section: the connection and model that transcribe voice
   messages (spec [internal-engine](../internal-engine/spec.md) "Show the speech-to-text pair in Settings › General").
   It carries no experimental-features card; the switches are on the Features
-  tab. While `models` is off the connection choice for speech-to-text is left out.
+  tab.
 - **Security** (`/settings/security`) — what is about this machine only: where
   the master encryption key lives — in a signed release its Keychain access
   group; in a development build the file `~/.coffer/master.key` or the login
@@ -1019,7 +1031,7 @@ rather than by how Coffer is built, and MUST open on General:
   and Rebuildable cache (see "Group the Data tab by what kind of data it is").
 - **Daemon** (`/settings/daemon`) — the daemon's state and the controls a user
   needs for it (see "Show and manage the daemon on Settings → Daemon").
-- **Features** (`/settings/features`) — the four experimental features, each
+- **Features** (`/settings/features`) — the two experimental features, each
   marked Experimental, with its switch (spec
   [experimental-features](../experimental-features/spec.md) "Show the Features tab in every build").
 - **About** (`/settings/about`) — version, license, source, whether a newer
@@ -1099,7 +1111,10 @@ machine only is a setting shown on the tab it belongs to:
   window deletes.
 - **History** — the retention of each record kind — changes, tool calls,
   **Skill working files** (the logs, journals and temporary files skill scripts write under `~/.coffer/skill-data`, 30 days by default, a row whose confirmation counts files) and **Config backups** (the copies Coffer keeps of an agent's config file before it rewrites it, under `~/.coffer/config-backups`, 30 days by default, with the newest copy of each file always kept; a row whose confirmation counts files) — Keep forever or a number of days, cleaned up by the retention
-  worker's schedule (at daemon start and every six hours), with a
+  worker's schedule (at daemon start and every six hours), and, under the tool
+  calls row, a **Record tool call content** switch (on by default; [mcp-gateway](../mcp-gateway/spec.md)
+  "Switch call content recording per machine") whose help says that arguments and
+  results are kept with secrets masked and that turning it off keeps metadata only, with a
   **Clear expired now** action behind a confirmation, which reports what it
   removed; the last cleanup reads "Last cleared today at 12:00 — 1,284 rows" ("30 Sep at 12:00" for another day); a saved value survives a reload. Shortening a
   window (or turning Keep forever off) MUST ask first, and the confirmation
@@ -1123,7 +1138,7 @@ Edits auto-save, like every settings surface: there is no Save button.
 #### Scenario: the data tab shows four blocks and no this-mac block
 - **GIVEN** a vault with versions, channel media on disk, and memory partitions
 - **WHEN** the user opens `/settings/data`
-- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced, and the Attachments retention row), History (retention for changes, tool calls, skill working files and config backups with Clear expired now) and Rebuildable cache (memory tree with Clear), and no This Mac only block
+- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced, and the Attachments retention row), History (retention for changes, tool calls, skill working files and config backups, the Record tool call content switch, and Clear expired now) and Rebuildable cache (memory tree with Clear), and no This Mac only block
 
 #### Scenario: the attachments retention is set where the attachments are listed
 - **GIVEN** attachments kept for 30 days
@@ -1160,6 +1175,11 @@ Edits auto-save, like every settings surface: there is no Save button.
 - **WHEN** the user opens `/settings/data`
 - **THEN** History has a Config backups row at 30 days, after Skill working files, whose help text says the newest backup of each file is always kept
 - **AND** shortening it asks first and the confirmation counts files, not records
+
+#### Scenario: tool call content recording is switched on the Data tab
+- **GIVEN** recording on, its default
+- **WHEN** the user turns Record tool call content off on `/settings/data` and reloads
+- **THEN** the switch reads off, and calls made from then on open with "Content was not recorded for this call"
 
 ### Requirement: Switch language from the sidebar
 The English / 简体中文 switch MUST be reachable from every screen in Settings ›
@@ -2835,7 +2855,24 @@ offers the two ways in:
   header rows and reach, then its first request: method, path, headers, body template
   and arguments.
 
-Every request form MUST end with a **Test** section, whose Run runs the request as the form
+Every request form — the tool drawer and Add a request alike — MUST be the same
+**tool editor**: tabs on the left and **Try it** on the right, always in view.
+The tabs are **General** (the tool's name — editable while it is being added,
+fixed once it is saved — its description, the changes-data flag and what agents
+see: the full name with its arguments, the description, the read-only or
+changes-data hint and the environments `coffer_environment` takes),
+**Request** (method and path; the path's **query parameters** as key/value rows
+kept in step with the path, a row whose value is an `{argument}` hole marked as
+an argument; the headers; and the body template, which a GET replaces with a
+line saying it sends none), **Arguments** (one row per argument with its type,
+Required, where the request uses it — the path, a query key, a header or the
+body — and the description agents read under it; an argument no hole names is
+marked not used with **Add as query parameter** and **Remove argument**, and a
+hole no argument names is listed with **Add argument <name>**; the tab counts
+those problems) and **Response** (when a call counts as failed — a status of 400
+or more, or no answer — and what the agent gets: the status line and the body,
+cut at 1 MiB). A new tool opens on General, a saved one on Request.
+**Try it** takes a sample value per argument, and its Run runs the request as the form
 holds it once and shows the answer — the status and time in a block, the response
 in a viewer under it — the API's error body, a timeout, a failed
 connection (each of these two with the daemon's hand-off and, for a timeout,
@@ -2863,8 +2900,10 @@ A group's detail page (`/custom-tools/<group>/<tab>`) MUST carry, under its
 header — its **reach** and a one-line summary of the last 24 hours (calls and
 failures) — two tabs laid out like every other detail page's. **Overview** (the
 default, at the bare `/custom-tools/<group>`) stacks the group's **definition**
-(with one environment, its base URL and the auth header with the name of the
-secret it is bound to; with several, each environment under Environments), then
+(its description, the name agents see, its timeout and, for an imported group,
+its spec), then **Environments** — one row per environment, however many there
+are, each with its switch, base URL, secret state and variables, edited from the
+row — then
 what an MCP server's Overview shows ("Open an MCP server on its Overview"):
 **Last 24 hours** — the group's calls and errors with a table of the agents that
 made them, and for a group that is on a View in Activity link to Activity's Tool
@@ -2887,12 +2926,14 @@ adding stays in view however many tools the group has. Tools are ticked with a
 per-row checkbox (select-all in the header); while any is ticked a selection bar
 replaces that row with **Turn on**, **Turn off** and, while the exposure column
 shows, **Exposure**, acting on the ticked tools. Choosing
-a tool opens its editor in a 640-wide **drawer** below the title bar, where the
-request is edited — the headers the chosen environment already adds shown as
+a tool opens the tool editor in a 1040-wide **drawer** below the title bar —
+the headers the chosen environment already adds shown as
 "from the group" ("from <environment>" when the group has several),
-no switch, which lives in the table — with **Delete tool** and Cancel
-beside it, and its **Test** section under the fields runs the tool with sample
-arguments and shows the response. Script tools are not offered: they are deferred past 1.0.
+no switch, which lives in the table — with **Delete tool**, Cancel and Save
+in its footer. **Edit group** edits only the group's description and timeout:
+base URLs, headers, secrets and variables are the environments', edited from
+their rows, so a group with one environment is edited the same way as one with
+several. Script tools are not offered: they are deferred past 1.0.
 How the gateway runs an HTTP API tool is mcp-gateway's ([mcp-gateway](../mcp-gateway/spec.md)
 "Serve an HTTP API as a group of custom tools", "Make a custom tool's request in
 the gateway").
@@ -2918,7 +2959,7 @@ the gateway").
 
 #### Scenario: a new group made by hand is saved with its first request
 - **GIVEN** no group named `search-api`
-- **WHEN** the user chooses Add custom tool, keeps New group and picks By hand, fills in `search-api`, its description and its base URL, chooses Create group, then fills in the first request and tests it
+- **WHEN** the user chooses Add custom tool, keeps New group and picks By hand, fills in `search-api`, its description and its base URL, chooses Create group, then fills in the first tool's name and description on General and its path on Request, and tries it
 - **THEN** nothing is saved until the user chooses Add to search-api, which creates `search-api` with its description and that one tool
 - **AND** the test ran without the group's secret
 
@@ -2952,8 +2993,8 @@ the gateway").
 #### Scenario: a group's page has Overview and Tools tabs
 - **GIVEN** the `billing` group with three tools and a call in the last 24 hours
 - **WHEN** the user opens `/custom-tools/billing`, switches to Tools and chooses one tool
-- **THEN** the page opens on Overview with the definition and the bound secret's name, under a header with the reach and a one-line 24-hour summary, and its tabs are Overview and Tools and no other
-- **AND** Tools, at `/custom-tools/billing/tools`, shows the tools table, and the tool opens in a drawer with its request and Test without changing the address
+- **THEN** the page opens on Overview with the definition and the environment's base URL under Environments, under a header with the reach and a one-line 24-hour summary, and its tabs are Overview and Tools and no other
+- **AND** Tools, at `/custom-tools/billing/tools`, shows the tools table, and the tool opens in a drawer on its Request tab beside Try it, which shows the request it would send, without changing the address
 
 #### Scenario: a group's Overview shows what it requires, its busiest tools and the last 24 hours
 - **GIVEN** the `billing` group, on, whose `Authorization` header is bound to the stored secret `billing-token`, with 31 calls from Claude Code in 24 hours, most of them to `get_invoice`
@@ -2991,6 +3032,17 @@ the gateway").
 - **GIVEN** the `billing` group with the tools `list_invoices`, `refund` and `void_invoice`
 - **WHEN** the user types `invoice` in the search above the tools table
 - **THEN** only `list_invoices` and `void_invoice` are listed, no row carries a reach control, and Add request sits beside the search above the table
+
+#### Scenario: an argument the request never uses is flagged with its fix
+- **GIVEN** a tool `GET /orgs/{org}/search?q={query}` whose arguments are `query` and `status`
+- **WHEN** the user opens its Arguments tab
+- **THEN** `query` reads as used in `?q=`, `status` as not used with Add as query parameter and Remove argument, and `{org}` is listed with Add argument org, and the tab counts two problems
+- **AND** Add as query parameter adds `status={status}` to the path, which the Request tab's query parameters show as an argument row
+
+#### Scenario: Edit group edits only the description and timeout
+- **GIVEN** the `billing` group with one environment
+- **WHEN** the user opens Edit group, changes the timeout to 45 s and saves
+- **THEN** the dialog shows no base URL or header rows and says they belong to the environments, and the group is saved with its description and 45 s only
 
 ### Requirement: Draw every diff in the web UI with one renderer
 Every diff the web UI shows of a file's changed lines — a change preview of a write Coffer is about to make, a version on a History tab, a skill's copy or folder-in-the-way review, and a custom-tool group's re-import — MUST be drawn by one renderer: old and new line numbers, a sign, additions and deletions on their colour, hunk headers muted, and a long line wrapped at a word boundary with a ↳ on its continuation rows, never cut off. Each file is shown under its path, operation and line counts.
@@ -3171,16 +3223,17 @@ A saved group's request form — the tool drawer and Add request into an existin
 group — MUST hold ONE chosen environment, starting at the first one that is on,
 and everything the form shows about where the request goes MUST come from it:
 the help under Request names its base URL (and, with several environments, the
-environment), the headers already added are its headers, and the Test section
-shows a **preview** of the request — method and URL with the environment's
+environment), the headers already added are its headers, and Try it
+shows a **preview** of the request, on its own tab beside the result (the
+preview until the first run, the result after it) — method and URL with the environment's
 `{env:NAME}` filled and `{argument}` holes left, the merged headers (the
 environment's plain ones, a tool header replacing one of the same name, the
 environment's secret headers last, each by its secret's name and state, never a
 value), its variables and the timeout that applies (its own, else the group's) —
 by the gateway's rules ([mcp-gateway](../mcp-gateway/spec.md) "Make a custom
-tool's request in the gateway"). The note under Test names that environment's
+tool's request in the gateway"). The note under Try it names that environment's
 secret, and none when it has no secret header. Run MUST send the chosen
-environment by name. The Test section's picker lists the environments that are
+environment by name. Try it's picker lists the environments that are
 on and only changes the choice: it saves nothing and changes no group setting.
 An environment switched off or deleted while the form is open MUST stay chosen
 and be reported — off, deleted, or no environment on — with Run off and no
@@ -3189,14 +3242,14 @@ its place.
 
 #### Scenario: the tool form previews and tests in the environment it names
 - **GIVEN** a group with environments `test` (a secret header, a plain header, `region=eu-1`, the group's 30 s timeout) and `live` (a different base URL and plain header, no secret header, `region=us-1`, its own 7 s timeout) and a tool `GET /v1/{env:region}/items/{id}`
-- **WHEN** the person opens the tool, reads the preview, picks `live` in Test and runs it
+- **WHEN** the person opens the tool, reads the preview, picks `live` in Try it and runs it
 - **THEN** the help, headers and preview first show `test`'s base URL, headers, secret and 30 s, then `live`'s base URL with `us-1`, its header and 7 s, and no secret of `test` anywhere
 - **AND** the run names `live`, its result shows the allow-listed response headers, and nothing about the group is saved
 
 #### Scenario: a tool form never runs in an environment that is off or gone
 - **GIVEN** a tool drawer open on environment `test`
 - **WHEN** `test` is switched off, then deleted, while the drawer stays open
-- **THEN** Test says `test` is off, then that it was deleted, with Run off and no preview each time
+- **THEN** Try it says `test` is off, then that it was deleted, with Run off and no preview each time
 - **AND** Run comes back only once the person picks another environment
 
 ### Requirement: Offer uninstall on Settings › About

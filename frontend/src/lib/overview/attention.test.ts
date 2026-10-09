@@ -6,6 +6,7 @@ import {
   actionIcon,
   actionLabelKey,
   actionPage,
+  inPlaceVerb,
   itemActionLabelKey,
   itemPage,
   opensApprovals,
@@ -212,4 +213,22 @@ test("every verb that has an icon names one, the others none", () => {
     expect(actionIcon(verb)).toBeDefined();
   }
   expect(actionIcon("open")).toBeUndefined();
+});
+
+test("a provider's endpoint is checked again in place; its rejected key opens its page", () => {
+  const unreachable = item({
+    kind: "provider",
+    uid: "cn-1",
+    reason_code: "provider_unreachable",
+    action: { verb: "check", method: "POST", path: "/api/v1/providers/cn-1/check", body: null },
+  });
+  expect(inPlaceVerb(unreachable)).toBe("check");
+  const rejected = item({
+    kind: "provider",
+    uid: "cn-1",
+    reason_code: "provider_key_rejected",
+    action: { verb: "replace_key", method: "GET", path: "/api/v1/providers/cn-1", body: null },
+  });
+  expect(inPlaceVerb(rejected)).toBeNull();
+  expect(actionPage(rejected)).toBe("/model-providers/cn-1");
 });

@@ -228,3 +228,55 @@ def test_status_prints_loop_lag_and_task_crashes(live_daemon):
     as_json = json.loads(CliRunner().invoke(app, ["daemon", "status", "--json"]).stdout)
     assert as_json["runtime"]["loop_lag_samples"] >= 1
     assert as_json["runtime"]["task_crashes"] == tasks().stats().crashes
+
+
+def _fake_daemon_pair(home):
+    """A process pair that looks like a one-file daemon of ``home``'s vault: a
+    shell parent and a Python child, both naming the daemon entry module."""
+    import os
+    import subprocess
+    import sys
+
+    child = (
+        f"{sys.executable} -c 'import time; print(\"ready\", flush=True); time.sleep(60)' "
+        "coffer.infrastructure.daemon.entry"
+    )
+    proc = subprocess.Popen(
+        ["/bin/sh", "-c", f"{child}; : coffer.infrastructure.daemon.entry"],
+        stdout=subprocess.PIPE,
+        text=True,
+        env={**os.environ, "HOME": str(home)},
+    )
+    assert proc.stdout is not None
+    assert proc.stdout.readline().strip() == "ready"
+    return proc
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="status names other daemon processes of the vault")
+def test_status_names_another_daemon_process_of_the_vault_once(live_daemon, tmp_path):
+    import psutil
+
+    proc = _fake_daemon_pair(tmp_path)
+    try:
+        [child] = psutil.Process(proc.pid).children()
+        as_json = CliRunner().invoke(app, ["daemon", "status", "--json"])
+        table = CliRunner().invoke(app, ["daemon", "status"], env={"COLUMNS": "200"})
+    finally:
+        for p in psutil.Process(proc.pid).children(recursive=True):
+            p.kill()
+        proc.kill()
+        proc.wait()
+
+    assert as_json.exit_code == 0, as_json.output
+    # The pair counts once — the child, never its shell parent — and the
+    # serving daemon (pid 4242 here) is not "other".
+    assert json.loads(as_json.stdout)["other_daemon_pids"] == [child.pid]
+    [line] = [x for x in table.stdout.splitlines() if x.startswith("other daemon processes")]
+    assert str(child.pid) in line
+
+
+def test_status_names_no_other_daemon_when_there_is_none(live_daemon):
+    res = CliRunner().invoke(app, ["daemon", "status", "--json"])
+    assert json.loads(res.stdout)["other_daemon_pids"] == []
+    table = CliRunner().invoke(app, ["daemon", "status"])
+    assert not [x for x in table.stdout.splitlines() if x.startswith("other daemon")]

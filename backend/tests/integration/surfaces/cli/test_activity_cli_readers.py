@@ -181,3 +181,53 @@ def test_coffer_log_mcp_with_a_server_stays_on_that_server(mcp_daemon: Any) -> N
 
     assert result.exit_code == 0, result.output
     assert [r["capability_key"] for r in json.loads(result.output)["invocations"]] == ["read_file"]
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="the command line reads one call with its content"
+)
+def test_coffer_log_call_prints_one_call_with_its_content(mcp_daemon: Any) -> None:  # noqa: F811
+    from coffer.domain.activity_content import capture_parts
+    from coffer.domain.mcp.capability import MCPInvocation
+    from coffer.infrastructure.mcp.persistence import MCPInvocationRepo
+    from coffer.infrastructure.persistence.engine import (
+        create_async_engine_with_pragmas,
+        session_maker,
+    )
+
+    uid = _register_server()
+    engine = create_async_engine_with_pragmas(os.environ["COFFER_DB_URL"])
+    ids: list[int] = []
+
+    async def _seed() -> None:
+        repo = MCPInvocationRepo(session_maker(engine))
+        await repo.insert(
+            MCPInvocation(
+                id=None,
+                timestamp=datetime.now(tz=UTC),
+                resource_uid=uid,
+                capability_type="tool",
+                capability_key="search",
+                duration_ms=4,
+                status="ok",
+                content=capture_parts(
+                    {"arguments": {"query": "coffer"}, "result": {"text": "y" * 20_000}}
+                ),
+            )
+        )
+        ids.extend(r.id or 0 for r in await repo.query(resource_uid=uid))
+        await engine.dispose()
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(_seed())
+    loop.close()
+
+    result = _runner.invoke(app, ["log", "call", str(ids[0])])
+    assert result.exit_code == 0, result.output
+    assert "fs.search" in result.output
+    assert '"query": "coffer"' in result.output
+    assert "[cut at 16 KB" in result.output
+
+    missing = _runner.invoke(app, ["log", "call", "999999"])
+    assert missing.exit_code == 4, missing.output
+    assert "no call with id 999999" in missing.output

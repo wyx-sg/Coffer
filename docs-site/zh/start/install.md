@@ -172,7 +172,6 @@ cd frontend && npm install && npm run build && cd ..
 | `~/.coffer/local/` | 只对本机成立的设置：智能体、生效范围、保留策略、同步远端。 |
 | `~/.coffer/runs.db` | 历史数据库：审计日志、调用记录、对话、同步轮次、用量。 |
 | `~/.coffer/runs.db.pre-<revision>` | 每次 schema 迁移前做的副本。保留最新的三份。 |
-| `~/.coffer/master.key` | 密钥的主密钥（权限 `0600`），除非你把它移到了钥匙串。 |
 | `~/.coffer/daemon.json` | 运行时发现文件：PID、端口和 API 令牌（权限 `0600`）。启动时写入，退出时删除。 |
 | `~/.coffer/daemon-config.json` | 守护进程启动前读取的设置：固定端口、机器名、各实验功能开关。 |
 | `~/.coffer/content/`、`~/.coffer/derived/` | 媒体文件和聊天工作目录；以及 Coffer 可重建的状态，比如记忆树。 |
@@ -254,12 +253,16 @@ coffer uninstall
 如果也要删除数据，在对话框里勾选**同时删除我的数据**；Coffer 会在删除任何东西之前要求 Touch ID。应用还会在守护进程停止后删除主密钥的钥匙串条目。在终端里，`coffer uninstall --delete-data` 会要求你输入 `delete my data`，没有可输入的终端时什么也不做；它会删除 `~/.coffer`，但不碰钥匙串（只有 Coffer 的守护进程会访问钥匙串），请自己在“钥匙串访问”里删除 `coffer` 条目。移到别处的保险库会保留在原处。
 
 ::: danger 删除 ~/.coffer 不可恢复
+<<<<<<< HEAD
 `~/.coffer` 里有你的数据库、知识集、技能库和密钥的主密钥。删除它会销毁所有已保存的密钥，以及只存在于那里的所有文档，包括 Coffer 从智能体那里接管的技能。如果以后可能还要用，先[备份主密钥](/zh/guides/secrets#the-master-key-and-its-backup)。
+=======
+`~/.coffer` 里有你的数据库、知识集、技能库和加密的密钥。删除它会销毁所有已保存的密钥，以及只存在于那里的所有文档。如果以后可能还要用，先把它复制到别处。
+>>>>>>> origin/main
 :::
 
 ## 实验功能 {#experimental-features}
 
-每个构建都带有同样的能力。其中四项属于实验功能——知识、记忆、同步和模型提供商——无论稳定版还是源码构建，一开始都是关闭的。在设置 → 功能中开启。见[实验功能](/zh/guides/experimental-features)。
+每个构建都带有同样的能力。其中两项属于实验功能——知识和记忆——无论稳定版还是源码构建，一开始都是关闭的。同步和模型提供商是常规功能，始终开启。在设置 → 功能中开启。见[实验功能](/zh/guides/experimental-features)。
 
 ## 下一步 {#next-steps}
 

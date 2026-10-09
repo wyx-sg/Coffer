@@ -2,8 +2,9 @@
 
 Every ``qa-`` object a run creates and deletes is a vault change; on a target
 that syncs, both would be committed and pushed to the person's remote. Before
-any write the guard reads the target's own state — the ``sync`` feature from
-``GET /api/v1/daemon/status`` and the remote from ``GET /api/v1/sync/remote`` —
+any write the guard reads the target's own state — the remote from
+``GET /api/v1/sync/remote``, and, on a build from before vault sync graduated,
+the ``sync`` feature from ``GET /api/v1/daemon/status`` —
 and refuses when a remote is configured and enabled, unless the run was given
 ``--allow-sync-remote``. Anything it cannot read is a refusal too: it fails
 closed.

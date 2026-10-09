@@ -92,7 +92,7 @@ Coffer 的[密钥边界](/zh/guides/secrets)把密钥的值、以及把它发往
 **批准会主动找你。** 不管窗口是否打开，应用每 15 秒检查一次守护进程。每出现一个新的待批准请求，它就发一条通知 **Coffer 需要你批准**，正文写明是什么改动，窗口会打开批准面板。在那里你可以批准（需要上面的校验）或拒绝（不需要校验）。等待批准的命令会打印 `waiting for approval in the Coffer app`；什么会触发批准，见[密钥 → 批准](/zh/guides/secrets#approvals)。
 
 ::: warning 开发版构建
-没有用 Coffer 的 Developer ID 签名的构建（所有从源码构建的版本，以及项目有 Developer ID 之前发布的所有版本）都是开发版：主密钥是一个你名下任何程序都能读取的文件，同一用户下的程序可以伪造应用的签名。应用在每个提示上都会标明 **Development build**。在没有 Touch ID 或 LocalAuthentication 的 Mac 上，开发版会改为在自己的窗口里弹一个对话框让你确认。见[安全模型 → 开发版构建](/zh/architecture/security#development-builds)。
+没有用 Coffer 的 Developer ID 签名的构建（所有从源码构建的版本）都是开发版。应用在每个提示上都会标明 **Development build**。在没有 Touch ID 或 LocalAuthentication 的 Mac 上，开发版会改为在自己的窗口里弹一个对话框让你确认。见[安全模型 → 开发版构建](/zh/architecture/security#development-builds)。
 :::
 
 ## 启动 {#launch}

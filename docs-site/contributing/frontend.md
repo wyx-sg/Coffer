@@ -132,7 +132,7 @@ When a token is missing, add it to the Tailwind config in the same pull request 
 | Reach | Three modes everywhere: **Off**, **All agents**, **Chosen agents**. The control saves as you change it and its trigger shows a badge, never "N of M agents". There is no Reach filter on a list: rows show a badge and the list groups by state |
 | Secrets | Only from Coffer. `SecretField` picks a stored secret or takes a pasted value that is saved to Secrets with the form; a header or env row (`KeyValueSecretRows`) is plain text with a 🔑 picker at the end of the field. No Secret/Plain toggle, no Replace button, no Stored badge |
 | Hand-off | One split button, **Hand off to &lt;Agent&gt; ▾** (`AgentHandoff`): the button starts the default hand-off agent in the preferred terminal with the prompt as its first message, the ▾ menu holds the other agent and **Copy prompt**. The prompt always comes from the daemon. Never for what Coffer does itself (Retry, Test, Check again) |
-| Drawer | 640 wide, starts below the title bar |
+| Drawer | 640 wide (an editor with a side panel, such as the custom tool drawer, 1040), starts below the title bar |
 | Toast | A title, and optionally a second line (`description`) saying what was kept or added |
 | `EmptyState` | Every empty list, not-found page and zero-result search: icon, title, description, action |
 | `Skeleton` | Loading states keep the real shape of the surface. Never show a blank screen or a "Loading…" card |

@@ -101,7 +101,7 @@ A daemon it starts MUST be given a readiness budget that is a ceiling rather tha
 - **AND** no second daemon process is started.
 
 ### Requirement: Restart by stopping the running daemon first
-Restart MUST be a true restart: when a daemon is responsive it MUST be asked to shut down over its token-gated shutdown route and the port MUST be observed free before a replacement is spawned. A restart that silently became a no-op would do nothing at exactly the moment a user reaches for it — a wedged-but-listening daemon, whose old process still holds the port — and a failure to free the port MUST be reported rather than followed by a spawn that cannot bind. The same restart MUST run whichever place it was chosen from: the tray, the offline banner or the web UI's Settings → Daemon tab.
+Restart MUST be a true restart: when a daemon is responsive it MUST be asked to shut down over its token-gated shutdown route and the port MUST be observed free before a replacement is spawned. A restart that silently became a no-op would do nothing at exactly the moment a user reaches for it — a wedged-but-listening daemon, whose old process still holds the port — and a failure to free the port MUST be reported rather than followed by a spawn that cannot bind. A daemon that does not answer, or answers the shutdown request but keeps its port, is wedged: the restart MUST force it out — signal the pid `~/.coffer/daemon.json` records once its command line shows a Coffer daemon, and kill it when it does not exit — before spawning (spec [daemon](../daemon/spec.md) "Force out a wedged daemon on an explicit restart"), rather than spawn a replacement beside it. The same restart MUST run whichever place it was chosen from: the tray, the offline banner or the web UI's Settings → Daemon tab.
 
 A restart MUST wait for its replacement to answer and return that daemon's connection with the result — read from the daemon's discovery file while waiting, never carried over from the daemon it stopped, so a restart that moves the daemon to a port saved in Settings → Daemon (spec [daemon](../daemon/spec.md) "Bind a fixed, settable port") reconnects the shell on that port — and the page MUST install what it is handed rather than run a handshake of its own — a page that asked again the instant the restart returned asked before the new daemon had bound anything, and the handshake's cold-start branch answered by spawning a rival for it.
 
@@ -122,6 +122,12 @@ A restart MUST wait for its replacement to answer and return that daemon's conne
 - **WHEN** the replacement starts answering,
 - **THEN** the shell returns its base URL and token alongside the new PID,
 - **AND** the page installs those rather than running a second handshake, so the restart starts exactly one daemon.
+
+#### Scenario: a restart forces out a daemon that will not stop
+- **GIVEN** a daemon that does not answer its status call, or that answers the shutdown request but keeps its port,
+- **WHEN** the user chooses restart from the tray, the offline banner or Settings → Daemon,
+- **THEN** the shell ends the daemon process `~/.coffer/daemon.json` records and waits for the port to free before spawning a replacement,
+- **AND** a discovery file that names no live Coffer daemon is not acted on, and the restart goes straight to spawning.
 
 ### Requirement: Rate-limit restarts from the last success
 Restarts MUST be serialised and rate-limited to at most one every five seconds, measured from the last **successful** restart. A failed spawn MUST NOT consume the window, so the user can retry immediately rather than waiting out a cooldown a failure earned.

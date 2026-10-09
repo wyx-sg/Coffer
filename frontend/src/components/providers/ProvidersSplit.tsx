@@ -7,9 +7,11 @@
 // Usage tab's "unpriced" link) opens that one instead, and `?model=<id>` is
 // handed to the Models search. With none, the page is the first-run state.
 // The page header, tabs and Add dialog belong to ModelProvidersPage. The endpoint probe of the open provider runs here, once, and
-// feeds the header's status, the list row's rejected-key line, the Overview
-// and the Models tab.
+// feeds the header's status, the open row's line and the Models tab. Every
+// other row reads the daemon's kept health verdict (useProviderHealth), which
+// the probe also refreshes: the daemon keeps what it found.
 import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Box } from "lucide-react";
@@ -24,9 +26,10 @@ import type { Provider } from "@/lib/api/providers";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useInternalEngineConfig } from "@/lib/hooks/useInternalEngine";
 import { useEndpointModels } from "@/lib/hooks/useModelIntrospection";
-import { useProvider, useProviders } from "@/lib/hooks/useProviders";
+import { providerHealthKey } from "@/lib/api/queryKeys";
+import { useProvider, useProviderHealth, useProviders } from "@/lib/hooks/useProviders";
 import type { PresetId } from "@/lib/providers/presets";
-import { authStatusOf, probeStatus } from "@/lib/providers/probeStatus";
+import { probeStatus } from "@/lib/providers/probeStatus";
 import { providerUsedBy } from "@/lib/providers/usedBy";
 import { useProbeLatency } from "./useProbeLatency";
 import { ProviderDetail } from "./ProviderDetail";
@@ -46,7 +49,9 @@ export function ProvidersSplit({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const qc = useQueryClient();
   const providers = useProviders();
+  const health = useProviderHealth();
   const agents = useAgents();
   const engine = useInternalEngineConfig();
 
@@ -77,8 +82,11 @@ export function ProvidersSplit({
     pending: endpoint.isPending || endpoint.isFetching,
   });
   const latency = useProbeLatency(provider?.uid, endpoint);
-  const rejected = status === "keyRejected" ? (authStatusOf(endpoint.data?.message) ?? "") : null;
-  const unreachable = status === "unreachable" ? "unreachable" : null;
+  // The daemon kept what the probe found: read the verdicts again.
+  const probedAt = endpoint.dataUpdatedAt;
+  useEffect(() => {
+    if (probedAt) void qc.invalidateQueries({ queryKey: providerHealthKey });
+  }, [probedAt, qc]);
 
   if (!providers.error && !providers.isPending && list.length === 0) {
     return (
@@ -108,7 +116,8 @@ export function ProvidersSplit({
           onRetry={() => void providers.refetch()}
           selectedUid={uid}
           usageOf={usageOf}
-          selectedProblem={rejected !== null ? "keyRejected" : unreachable}
+          health={health.data}
+          selectedStatus={status}
         />
       }
       detail={

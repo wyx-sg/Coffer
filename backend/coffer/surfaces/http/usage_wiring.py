@@ -12,7 +12,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -78,7 +77,6 @@ def wire_usage(
     price_lookup: ConnectionPriceLookup,
     connection_names: ConnectionNames,
     spool_dir: Path | None = None,
-    is_enabled: Callable[[], bool] = lambda: True,
 ) -> UsageWiring:
     """Build the usage services and publish the ``/api/v1/usage`` dependencies."""
     usage_repo = SqlAlchemyUsageRepo(sm)
@@ -86,7 +84,6 @@ def wire_usage(
         repo=usage_repo,
         spool=FileSpoolReader(spool_dir),
         prices=price_lookup,
-        is_enabled=is_enabled,
     )
     query = UsageQueryService(repo=usage_repo, connection_names=connection_names)
     set_usage_query_service(query)
@@ -98,19 +95,14 @@ async def wire_model_usage(
     provider_svc: ProviderService,
     *,
     prices: ProviderPriceResolver,
-    is_enabled: Callable[[], bool] = lambda: True,
 ) -> UsageWiring:
     """The composition the lifespan uses: prices and names from the provider
-    kind, and the ingest loop started.
-    ``is_enabled`` is whether the ``models`` feature is on: the loop skips its
-    passes while it is off (spec experimental-features "Close every surface of
-    a switched-off feature")."""
+    kind, and the ingest loop started."""
     lookup = ProviderUsageLookup(provider_svc, prices)
     wiring = wire_usage(
         sm,
         price_lookup=lookup,
         connection_names=lookup,
-        is_enabled=is_enabled,
     )
     await wiring.start()
     return wiring

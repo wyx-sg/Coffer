@@ -34,7 +34,7 @@ const STATUS = {
   executable: "/Applications/Coffer.app/Contents/MacOS/coffer-daemon",
   machine_id: "m-1",
   machine_name: "work-mac",
-  features: { knowledge: true, memory: false, sync: true },
+  features: { knowledge: true, memory: true },
   upstream_summary: null,
   pid: 4242,
   commit: "3909da95",
@@ -131,7 +131,7 @@ describe("AboutPage", () => {
     expect(text).not.toMatch(/channel/i);
     expect(text).toMatch(/Host: browser/);
     expect(text).toContain("Daemon: running on port 38470");
-    expect(text).toContain("Features: knowledge, sync");
+    expect(text).toContain("Features: knowledge, memory");
     expect(text).not.toContain("tok-must-not-leak");
     expect(text).not.toMatch(/token|secret/i);
     delete injected.__COFFER_TOKEN__;

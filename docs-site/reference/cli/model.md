@@ -23,7 +23,7 @@ This page matches what `coffer model --help` prints. Add `--help` to any command
 
 ## model list
 
-Ask an endpoint which models it serves. Body: provider, base_url, secret_ref | secret_value.
+Ask an endpoint which models it serves. Body: provider, base_url, secret_ref | secret_value, connection_uid.
 
 <p class="cli-label">Synopsis</p>
 

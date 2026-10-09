@@ -18,7 +18,7 @@ Coffer keeps configuration in five places, and each one exists for a reason:
 | Browser `localStorage` | Web UI preferences | Per browser, never sent to the daemon |
 
 ::: warning Environment variables and a detached daemon
-The daemon is usually spawned detached — by the CLI, by an agent's MCP shim, by the desktop app or by the login service — and inherits the environment of whichever process started it, not your shell profile. An environment variable only reaches the daemon if you set it in the environment of the process that starts it, for example `COFFER_FEATURES=run=off,models=off coffer daemon restart`. Settings you want to keep belong in `daemon-config.json` or in **Settings**.
+The daemon is usually spawned detached — by the CLI, by an agent's MCP shim, by the desktop app or by the login service — and inherits the environment of whichever process started it, not your shell profile. An environment variable only reaches the daemon if you set it in the environment of the process that starts it, for example `COFFER_FEATURES=knowledge=on,memory=off coffer daemon restart`. Settings you want to keep belong in `daemon-config.json` or in **Settings**.
 :::
 
 ## Environment variables
@@ -62,7 +62,7 @@ The vault, local state, content and derived state have no per-tree override: eve
 
 | Name | Default | Effect |
 | --- | --- | --- |
-| `COFFER_DB_URL` | `sqlite+aiosqlite:///~/.coffer/runs.db` | SQLAlchemy URL of the history database. The master key file (`master.key`) stays in `~/.coffer` whatever this says. |
+| `COFFER_DB_URL` | `sqlite+aiosqlite:///~/.coffer/runs.db` | SQLAlchemy URL of the history database. The master key stays in the macOS Keychain whatever this says. |
 | `COFFER_PROXY_SPOOL_DIR` | `~/.coffer/proxy-usage` | Directory the model proxy writes its usage spool files to and the daemon ingests them from. Both processes must see the same value. |
 | `COFFER_LOG_DIR` | `~/.coffer/logs` | Directory for `daemon.log`, `proxy.log`, upstream server logs, MCP shim logs and the login service's output. |
 | `HOME` | the user's home | Every `~/.coffer` path is resolved against `$HOME` at the moment it is needed, so an alternate `HOME` gives a fully separate vault. |
@@ -117,7 +117,8 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
   "machine_name": "studio",
   "machine_id": "3f0c9a…",
   "features": {},
-  "price_refresh": true
+  "price_refresh": true,
+  "record_call_content": true
 }
 ```
 
@@ -129,7 +130,11 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
 | `machine_id` | string | derived from the host | Cache of the host-derived machine id that names this machine in a synced vault. Deleting it recomputes the same value. | written by the daemon |
 | `features` | object of booleans | `{}` | This machine's experimental-feature switches. Takes effect at once. A key the registry does not declare is ignored. | **Settings → Features** |
 | `price_refresh` | boolean | `true` | Whether the daemon refreshes the model price list from genai-prices once a day. Off, it prices from the list shipped in the build. Read at each refresh. | **Settings › General → Refresh model prices** |
+<<<<<<< HEAD
 | `update_check` | boolean | `true` | Whether a daemon running from the installer's binaries checks GitHub for a newer release once a day. It only reports what it finds; `coffer update` installs it. Read at each check. | **Settings › About → Check automatically**, or `coffer daemon upgrade-auto-check --set enabled=false` |
+=======
+| `record_call_content` | boolean | `true` | Whether each MCP tool call keeps its arguments and result (and a custom tool's request and response), masked and cut at 16 KB, in the invocation log. Off, new rows keep metadata only. Takes effect at once. | **Settings › Data → History → Record tool call content**, or `coffer settings call-content set` |
+>>>>>>> origin/main
 
 The daemon's runtime state — its pid, port and API token — lives in a different file, `~/.coffer/daemon.json`, which is created on start and removed on exit. See [Files and directories](/reference/filesystem#daemon-files).
 
@@ -137,16 +142,16 @@ The daemon's runtime state — its pid, port and API token — lives in a differ
 
 An experimental feature is a capability that is off until you switch it on, per machine; while it is off it looks absent — its pages, commands and routes are closed — and nothing it holds is deleted. Each registry entry names its key, the routes it owns and the resource kinds it owns.
 
-The registry holds four features, in this order:
+The registry holds two features, in this order:
 
 | Key | Closes | REST prefixes |
 | --- | --- | --- |
 | `knowledge` | Knowledge | `/api/v1/knowledge` |
 | `memory` | Memory | `/api/v1/memory` |
-| `sync` | Vault sync | `/api/v1/sync` |
-| `models` | Model providers (with its Usage tab) and the local model proxy | `/api/v1/providers`, `/api/v1/models`, `/api/v1/proxy`, `/api/v1/usage` |
 
-Everything else is always on, including conversations and channels. Any other key is not a feature: `PUT /api/v1/daemon/features/<key>` answers `FEATURE_UNKNOWN`. A stored setting for a key the registry does not name is ignored.
+Everything else is always on, including vault sync, model providers (with the local model proxy and Usage), conversations and channels. Any other key is not a feature: `PUT /api/v1/daemon/features/<key>` answers `FEATURE_UNKNOWN`. A stored setting for a key the registry does not name is ignored.
+
+`sync` and `models` were experimental features and have graduated. A `COFFER_FEATURES` entry or a stored setting that names either is an unknown key: logged and ignored. At startup the daemon removes their switches from the `features` object of `daemon-config.json`, with one log line per switch removed.
 
 While a feature is off, its routes answer `404` with code `FEATURE_DISABLED`; switch it on in **Settings → Features**. The registry lives in [`domain/features.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/features.py).
 
@@ -158,14 +163,14 @@ Highest precedence first:
 2. **Setting** — this machine's value in `daemon-config.json` under `features`.
 3. **Default** — off, for every feature in every build.
 
-**Settings → Features** lists the four features in every build and the source of each state is reported as `pin`, `setting` or `default`. A pinned feature's switch is disabled.
+**Settings → Features** lists the two features in every build and the source of each state is reported as `pin`, `setting` or `default`. A pinned feature's switch is disabled.
 
 ### COFFER_FEATURES syntax
 
 A comma-separated list of `key=value` entries. `on`, `true` and `1` switch a feature on; `off`, `false` and `0` switch it off. Whitespace around entries is ignored and values are case-insensitive. An unknown key or a malformed entry is logged and skipped; it never stops the daemon.
 
 ```sh
-COFFER_FEATURES="knowledge=on,models=off" coffer daemon restart
+COFFER_FEATURES="knowledge=on,memory=off" coffer daemon restart
 ```
 
 See [Experimental features](/guides/experimental-features) for the task-oriented guide.
@@ -228,14 +233,15 @@ The window is set in **Settings → Data → History**, which shows four policie
 | **Attachments** | `attachments` | 30 days | Deletes files in `~/.coffer/content/channel-media` whose last-modified time is older than the window. Shown under **Local content**. |
 | REST only | `sync_runs` | 90 days | Deletes the history of sync rounds. |
 
+Under **MCP calls**, **Record tool call content** decides whether new calls keep their arguments and result, masked and cut at 16 KB (on by default; `record_call_content` in [daemon-config.json](#daemon-config-json)). See [What a call records](/guides/activity#what-a-call-records).
+
 Conversations have no retention policy: Coffer keeps no conversation text, and the agent's own sessions follow the agent's own clean-up (see [Conversations](/guides/chat#chat-and-the-agent-s-own-sessions)). A `conversations` or `conversations_archive` entry left in `retention.json` by an older version is dropped when the daemon starts. A policy can be set to **Keep forever** (the value `forever`). The same run also deletes aged shim and upstream logs older than 7 days.
 
 ### Settings → Security
 
 | Setting | Default | Effect |
 | --- | --- | --- |
-| **Store master key in OS keychain** | off (file) | Moves the secret master key between `~/.coffer/master.key` and the OS keychain (service `coffer`, entry `master-key`). The key itself never changes, so stored secrets stay readable. The move is audited. Development builds only: a signed release keeps the key in its Keychain access group and refuses to move it. |
-| Approval for new secret destinations (`secrets.require_approval`) | on in a signed release, off in a development build | When on, a secret waits for approval in the desktop app before it goes to a new destination or target. When off, a new destination is approved without asking. Switching it on applies at once; switching it off waits for an approval in the desktop app. See [Secrets](/guides/secrets#switching-the-protection-off). |
+| Approval for new secret destinations (`secrets.require_approval`) | on | When on, a secret waits for approval in the desktop app before it goes to a new destination or target. When off, a new destination is approved without asking. Switching it on applies at once; switching it off waits for an approval in the desktop app. See [Secrets](/guides/secrets#switching-the-protection-off). |
 
 ## Related
 

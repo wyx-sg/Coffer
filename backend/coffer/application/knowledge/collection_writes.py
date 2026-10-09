@@ -26,6 +26,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.recording import recording
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.audit import AuditEventType
+from coffer.domain.audit_diff import text_diff
 from coffer.domain.knowledge.entry import CollectionEntry
 from coffer.domain.knowledge.errors import (
     CollectionExists,
@@ -55,14 +56,24 @@ async def describe_collection(
     meta = CommitMeta(
         WRITER_USER, OP_SAVE, f"Describe collection {row.name}", actor=actor, collection=row.name
     )
+    relpath = f"{row.name}/{paths.README_NAME}"
+    previous = await asyncio.to_thread(catalogue.readme_description, row.name)
+    before = await asyncio.to_thread(_readme_text, row.name)
     async with recording(knowledge.history, meta) as tx:
         await asyncio.to_thread(collection_files.write_description, row.name, description)
-        tx.touch(f"{row.name}/{paths.README_NAME}")
+        tx.touch(relpath)
+    after = await asyncio.to_thread(_readme_text, row.name)
     await audit.record(
         AuditEventType.KNOWLEDGE_EDITED.value,
         resource=row,
         actor=actor,
-        details={"path": f"{row.name}/{paths.README_NAME}", "description": True},
+        details={
+            "path": relpath,
+            "description": True,
+            "from": previous,
+            "to": description,
+            **text_diff(before, after, relpath),
+        },
     )
     await knowledge.catalogue_changed()
     listed = {c.uid: c for c in await knowledge.list_collections()}
@@ -72,6 +83,12 @@ async def describe_collection(
         description=catalogue.readme_description(row.name),
         folder_path=str(paths.collection_dir(row.name)),
     )
+
+
+def _readme_text(collection: str) -> str:
+    """The README as it stands ("" when there is none yet)."""
+    readme = paths.readme_path(collection)
+    return readme.read_text(encoding="utf-8", errors="replace") if readme.is_file() else ""
 
 
 def _removed(change: Change) -> list[str]:
@@ -141,7 +158,13 @@ async def restore_deleted(
         AuditEventType.KNOWLEDGE_EDITED.value,
         resource=row,
         actor=actor,
-        details={"restored_from": change.version, "paths": removed},
+        details={
+            "restored_from": change.version,
+            "paths": removed,
+            "count": len(removed),
+            # A whole collection put back, rather than documents into one.
+            "collection_restored": new_collection,
+        },
     )
     await knowledge.catalogue_changed()
     return tx.version

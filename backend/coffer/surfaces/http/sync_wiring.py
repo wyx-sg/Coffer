@@ -30,7 +30,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 import coffer
 from coffer.application.audit_service import AuditService
-from coffer.application.features import FeatureService
 from coffer.application.platform_port import PlatformPort
 from coffer.application.resource_service import ResourceService
 from coffer.application.secret.master_key_import import MasterKeyService
@@ -41,7 +40,6 @@ from coffer.application.sync.round_engine import RoundEngine
 from coffer.application.sync.service import SyncService
 from coffer.application.sync.token import BoundaryToken
 from coffer.application.sync.worker import SyncWorker
-from coffer.domain.features import SYNC
 from coffer.domain.secrets import SecretDestination, sync_remote_destination
 from coffer.domain.vault.writes import Change, TreeReader, Validator, Verdict
 from coffer.infrastructure.daemon.config import write_machine_name
@@ -200,10 +198,9 @@ def start_sync(
     return wiring
 
 
-def start_sync_worker(wiring: SyncWiring, features: FeatureService) -> SyncWorker:
-    """Rounds on the remote's interval; the first 30 s after start. Nothing
-    runs while the ``sync`` feature is off."""
-    worker = SyncWorker(wiring.service, is_enabled=lambda: features.is_enabled(SYNC))
+def start_sync_worker(wiring: SyncWiring) -> SyncWorker:
+    """Rounds on the remote's interval; the first 30 s after start."""
+    worker = SyncWorker(wiring.service)
     worker.start()
     return worker
 

@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { abbreviateHomePath, agentProgramName, agentTypeLabel } from "@/lib/agents/display";
 import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
 import { useAgentConfigFiles } from "@/lib/hooks/useAgents";
-import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { formatMoment } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -35,7 +34,6 @@ export function ConfigLeftBehindCard({ agent, typeRow }: Props) {
   const { t, i18n } = useTranslation();
   const { checking, check } = useDetectionCheck();
   const configFiles = useAgentConfigFiles(agent.uid);
-  const models = useFeatureEnabled("models") === true;
   const provider = useProviderLabel(agent);
   const files = (configFiles.data ?? []).filter((f) => f.exists).map((f) => baseName(f.path));
   const name = agentTypeLabel(agent.type);
@@ -74,11 +72,9 @@ export function ConfigLeftBehindCard({ agent, typeRow }: Props) {
           <InfoRow label={t("agents.overviewTab.model.model")} mono={!!agent.model}>
             {agent.model ?? t("common.emptyValue")}
           </InfoRow>
-          {models ? (
-            <InfoRow label={t("agents.overviewTab.model.provider")}>
-              {provider ?? t("common.emptyValue")}
-            </InfoRow>
-          ) : null}
+          <InfoRow label={t("agents.overviewTab.model.provider")}>
+            {provider ?? t("common.emptyValue")}
+          </InfoRow>
           <InfoRow label={t(`${K}.lastSeen`)}>
             {formatMoment(agent.updated_at, i18n.language, t)}
           </InfoRow>

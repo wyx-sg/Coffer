@@ -116,6 +116,33 @@ describe("AddCliDialog", () => {
     expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
   });
 
+  test("a login check that does not start with the command name is refused at its field", async () => {
+    api.add.mockRejectedValue(
+      new ApiError("CLI_TOOL_INVALID", "the login check runs '/opt/bin/qa'", {
+        reason: "login_check_command",
+        field: "login_check",
+        command: "qa",
+      }),
+    );
+    const { onOpenChange } = renderDialog();
+    type("Command", "/opt/bin/qa");
+    type("Login check", "/opt/bin/qa --login");
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    const field = await screen.findByRole("alert");
+    expect(field).toHaveTextContent("must start with the command name qa");
+    expect(screen.getByLabelText("Login check")).toHaveAttribute("aria-invalid", "true");
+    // Focus moves to the field that needs fixing.
+    expect(screen.getByLabelText("Login check")).toHaveFocus();
+    expect(screen.getByLabelText("Login check")).toHaveAccessibleDescription(field.textContent!);
+    // Not the generic "can't be added as given".
+    expect(screen.queryByText("That command-line tool can't be added as given")).toBeNull();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    // Fixing the field clears the refusal.
+    type("Login check", "qa --login");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByLabelText("Login check")).not.toHaveAttribute("aria-invalid");
+  });
+
   test("editing keeps the command fixed and sends the fields as a change", async () => {
     api.edit.mockResolvedValue(DEMO_ADDED);
     const { onOpenChange } = renderDialog({

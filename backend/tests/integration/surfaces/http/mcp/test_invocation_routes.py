@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -13,6 +14,7 @@ from httpx import ASGITransport, AsyncClient
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
+from coffer.domain.activity_content import capture_parts
 from coffer.domain.mcp.capability import (
     BUILTIN_SERVER_UID,
     MCPInvocation,
@@ -49,6 +51,7 @@ def _make_invocation(
     offset_seconds: int = 0,
     session_id: str | None = None,
     agent_uid: str | None = None,
+    content: dict[str, Any] | None = None,
 ) -> MCPInvocation:
     return MCPInvocation(
         id=None,
@@ -61,6 +64,7 @@ def _make_invocation(
         error_message="boom" if status == "error" else None,
         session_id=session_id,
         agent_uid=agent_uid,
+        content=content,
     )
 
 
@@ -290,9 +294,6 @@ async def test_since_filter(inv_client: tuple) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(
-    spec="mcp-gateway", scenario="invocation log records calls without arguments"
-)
 @pytest.mark.asyncio
 async def test_invocation_response_shape(inv_client: tuple) -> None:
     client, _engine, repo, _rsvc, uids = inv_client
@@ -313,6 +314,42 @@ async def test_invocation_response_shape(inv_client: tuple) -> None:
     [stored] = await repo.query(resource_uid=uids["fs"])
     assert inv["id"] == stored.id
     assert inv["agent_uid"] is None
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="invocation log records a call's arguments and result"
+)
+@pytest.mark.asyncio
+async def test_a_list_carries_no_content_and_one_call_does(inv_client: tuple) -> None:
+    client, _engine, repo, _rsvc, uids = inv_client
+    content = capture_parts(
+        {"arguments": {"query": "coffer"}, "result": {"content": [{"type": "text", "text": "ok"}]}}
+    )
+    await repo.insert(_make_invocation(uids["fs"], capability_key="search", content=content))
+
+    listed = (await client.get("/api/v1/mcp/invocations")).json()["invocations"][0]
+    assert "content" not in listed
+
+    r = await client.get(f"/api/v1/mcp/invocations/{listed['id']}")
+    assert r.status_code == 200, r.text
+    one = r.json()
+    assert one["capability_key"] == "search" and one["resource_name"] == "fs"
+    assert json.loads(one["content"]["arguments"]["text"]) == {"query": "coffer"}
+    assert one["content"]["arguments"]["truncated"] is False
+    assert json.loads(one["content"]["result"]["text"])["content"][0]["text"] == "ok"
+    assert one["content"]["error"] is None
+
+
+@pytest.mark.asyncio
+async def test_a_call_recorded_without_content_reads_null(inv_client: tuple) -> None:
+    client, _engine, repo, _rsvc, uids = inv_client
+    await repo.insert(_make_invocation(uids["fs"]))
+    [row] = await repo.query(resource_uid=uids["fs"])
+    r = await client.get(f"/api/v1/mcp/invocations/{row.id}")
+    assert r.status_code == 200 and r.json()["content"] is None
+    missing = await client.get("/api/v1/mcp/invocations/999999")
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "INVOCATION_NOT_FOUND"
 
 
 # ---------------------------------------------------------------------------
@@ -472,7 +509,7 @@ async def test_name_resolution_is_one_lookup_for_the_whole_page(
 
 
 # ---------------------------------------------------------------------------
-# Calling agent (spec mcp-gateway "Record invocations without content")
+# Calling agent (spec mcp-gateway "Record invocations with redacted, bounded content")
 # ---------------------------------------------------------------------------
 
 

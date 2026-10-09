@@ -17,7 +17,6 @@ import { cn, formatDateTime } from "@/lib/utils";
 
 import { InfoRow } from "./OverviewParts";
 import { useDetectionCheck } from "./useDetectionCheck";
-import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { useProviderLabel } from "./useProviderLabel";
 
 const K = "agents.overviewTab.problem";
@@ -85,7 +84,6 @@ export function FixWay({
 /** Model, Provider, Coffer and Last seen, as the agent was when Coffer last saw it. */
 export function LastKnownRows({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
-  const models = useFeatureEnabled("models") === true;
   const provider = useProviderLabel(agent);
   const connection = useAgentConnection(agent.uid);
   const word = connection.data ? t(`${K}.connectionWord.${connection.data.state}`) : undefined;
@@ -94,11 +92,9 @@ export function LastKnownRows({ agent }: { agent: AgentOut }) {
       <InfoRow label={t("agents.overviewTab.model.model")} mono={!!agent.model}>
         {agent.model ?? t("common.emptyValue")}
       </InfoRow>
-      {models ? (
-        <InfoRow label={t("agents.overviewTab.model.provider")}>
-          {provider ?? t("common.emptyValue")}
-        </InfoRow>
-      ) : null}
+      <InfoRow label={t("agents.overviewTab.model.provider")}>
+        {provider ?? t("common.emptyValue")}
+      </InfoRow>
       <InfoRow label={t(`${K}.coffer`)}>{word ?? t("common.emptyValue")}</InfoRow>
       <InfoRow label={t(`${K}.lastSeen`)}>{formatDateTime(agent.updated_at).slice(0, 16)}</InfoRow>
     </>

@@ -89,13 +89,14 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
     // (2) True restart: when a daemon is responsive, ask it to shut down
     // (token-gated POST /daemon/shutdown) and wait for the port to free
     // before spawning the replacement. A silent no-op here would mean
-    // "Restart daemon" did nothing exactly when a user reaches for it (a
-    // wedged-but-listening daemon).
+    // "Restart daemon" did nothing exactly when a user reaches for it. A
+    // wedged daemon (no answer, or port kept) is forced out (force_stop.rs).
     if let Some(port) = stop_running_daemon(
         read_daemon_info,
         daemon_responds_ok,
         request_daemon_shutdown,
         |port| wait_for_port_free(port, Duration::from_secs(8)),
+        crate::force_stop::force_stop_recorded_daemon,
     )? {
         log::info!("daemon on port {} stopped for restart", port);
     }

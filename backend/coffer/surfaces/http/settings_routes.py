@@ -63,11 +63,13 @@ async def put_secret_settings(
     keychain write runs off the event loop.
     """
     if body.master_key_storage != manager.location:
+        previous = manager.location
         await asyncio.to_thread(manager.relocate, body.master_key_storage)
         await audit.record(
             AuditEventType.MASTER_KEY_RELOCATED.value,
             actor=actor,
-            details={"to": body.master_key_storage},
+            # Where the key is kept, never the key.
+            details={"from": previous, "to": body.master_key_storage},
         )
     return SecretSettingsOut(master_key_storage=manager.location)
 

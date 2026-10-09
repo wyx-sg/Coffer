@@ -103,6 +103,8 @@ export const attentionKey = ["attention"] as const;
 
 export const providersKey = ["providers"] as const;
 export const providerKey = (uid: string) => ["providers", uid] as const;
+/** GET /providers/health — under `providersKey`, so a `provider` change refetches it. */
+export const providerHealthKey = ["providers", "health"] as const;
 
 /** The models a connection's endpoint reports. NOT under `providerKey(uid)`:
  *  it changes with the ENDPOINT, not with every connection mutation. */
@@ -154,6 +156,8 @@ export const fsTerminalsKey = ["fs", "terminals"] as const;
 export const auditListKey = (filters: Record<string, unknown>) => ["audit", filters] as const;
 /** Whether any of the three Activity logs holds a record (the first-run check). */
 export const activityAnyRecordsKey = ["activity", "any-records"] as const;
+/** One tool call with its recorded content (the call drawer). */
+export const activityCallKey = (id: number) => ["activity", "call", id] as const;
 
 export const retentionKey = ["retention"] as const;
 export const retentionPoliciesKey = ["retention", "policies"] as const;
@@ -221,6 +225,8 @@ export const secretsListKey = ["secrets", "list"] as const;
 
 export const secretSettingsKey = ["settings", "secrets"] as const;
 export const internalEngineKey = ["settings", "internalEngine"] as const;
+/** Whether tool calls record their content (Settings › Data › History). */
+export const callContentSettingKey = ["settings", "callContent"] as const;
 
 // --- cross-kind helpers ----------------------------------------------------
 

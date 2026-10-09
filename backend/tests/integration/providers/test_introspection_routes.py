@@ -169,6 +169,9 @@ async def test_a_stored_ref_is_not_sent_to_a_foreign_url(client) -> None:  # typ
         )
         assert r.status_code == 422, path
         assert r.json()["error"]["code"] == "CONFIG_INVALID"
+        # A typed reason, so a client says "this key can't go there" rather than
+        # "couldn't reach the endpoint".
+        assert r.json()["error"]["details"]["reason"] == "stored_key_destination"
 
 
 @pytest.mark.acceptance(

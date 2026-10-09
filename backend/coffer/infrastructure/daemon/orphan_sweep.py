@@ -14,6 +14,7 @@ from typing import Any
 
 import psutil
 
+from coffer.infrastructure.daemon.pid_lock import pid_is_coffer_daemon
 from coffer.infrastructure.vault.home import coffer_home, upstream_pids_dir
 
 _logger = logging.getLogger(__name__)
@@ -301,6 +302,59 @@ def reap_stale_daemons() -> int:
         except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
             _logger.warning("daemon.reap_stale_failed", extra={"pid": proc.pid, "error": str(e)})
     return killed
+
+
+def serves_our_vault(pid: int) -> bool:
+    """Whether ``pid`` is a Coffer daemon serving the same ``~/.coffer`` as us.
+
+    The question a refused start asks about the process holding its port: a
+    daemon of our own vault there means our vault already has its daemon, and
+    the start is a duplicate, not a failure. Anything that cannot be inspected
+    answers ``False`` — not provably ours.
+    """
+    if not pid_is_coffer_daemon(pid):
+        return False
+    own = _own_coffer_dir()
+    if own is None:
+        return False
+    try:
+        proc = psutil.Process(pid)
+    except psutil.Error:
+        return False
+    return _proc_coffer_dir(proc) == own
+
+
+def other_daemons_of_our_vault(serving_pid: int | None) -> list[int]:
+    """Every Coffer daemon process serving our vault besides ``serving_pid``.
+
+    For ``coffer daemon status``: one serving daemon is the rule, so any other
+    daemon process of the same vault — a start still booting, one queued on
+    the spawn lock, a wedged one that lost its discovery file — is worth
+    naming. Source and frozen runs both count (the daemon's command-line
+    markers, not an executable name); the model proxy never does. A frozen
+    one-file daemon is two processes, the bootloader and its Python child, so
+    a process that is the parent of another match (or of ``serving_pid``) is
+    left out and each daemon is listed once. Best effort: what cannot be
+    inspected is skipped.
+    """
+    own = _own_coffer_dir()
+    if own is None:
+        return []
+    matches: dict[int, int | None] = {}
+    for proc in psutil.process_iter():
+        if proc.pid == os.getpid():
+            continue
+        try:
+            if not pid_is_coffer_daemon(proc.pid) or _proc_coffer_dir(proc) != own:
+                continue
+            matches[proc.pid] = proc.ppid()
+        except psutil.Error:
+            continue
+    parents = {ppid for ppid in matches.values() if ppid is not None}
+    if serving_pid is not None:
+        with contextlib.suppress(psutil.Error):
+            parents.add(psutil.Process(serving_pid).ppid())
+    return sorted(pid for pid in matches if pid != serving_pid and pid not in parents)
 
 
 def startup_sweep() -> tuple[int, int]:

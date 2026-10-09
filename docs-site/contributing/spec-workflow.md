@@ -66,8 +66,8 @@ Every requirement states its rule with **SHALL** or **MUST** and owns at least o
 ```markdown
 ### Requirement: Declare the experimental features in one registry
 Coffer MUST declare its experimental features in one registry, and every
-surface MUST take the list from it. The registry names exactly four features,
-in this order: `knowledge`, `memory`, `sync` and `models`.
+surface MUST take the list from it. The registry names exactly two features,
+in this order: `knowledge` and `memory`.
 
 A stored setting for a key the registry does not name MUST be ignored by every
 read — logged, never listed — and MUST NOT fail anything.

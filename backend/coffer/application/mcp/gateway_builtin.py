@@ -13,6 +13,7 @@ from typing import Any
 
 from coffer.application.builtin_tools import COFFER_TOOL_PREFIX, BuiltinToolRegistry
 from coffer.application.eval_capture import record_tool_search
+from coffer.application.mcp.call_content import call_content
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway_aggregate_lists import EnsureSubscribed, list_tools_across
 from coffer.application.mcp.gateway_handlers import _safe_error_summary
@@ -65,6 +66,7 @@ async def dispatch_builtin_tool(
             error_message=None,
             session_id=session_id,
             agent_uid=session_agent_uid,
+            content=call_content({"arguments": args, "result": result}),
         )
         return _to_call_tool_result(result)
     except Exception as exc:
@@ -83,6 +85,9 @@ async def dispatch_builtin_tool(
             error_message=_safe_error_summary(exc)[:200],
             session_id=session_id,
             agent_uid=session_agent_uid,
+            content=call_content(
+                {"arguments": params.get("arguments"), "error": f"{type(exc).__name__}: {exc}"}
+            ),
         )
         # Per the MCP spec, TOOL-execution failures are in-band ``isError``
         # results the model can read and self-correct from; JSON-RPC errors
@@ -132,6 +137,7 @@ async def _log(
     error_message: str | None,
     session_id: str,
     agent_uid: str | None,
+    content: dict[str, Any] | None = None,
 ) -> None:
     try:
         await invocations.insert(
@@ -147,6 +153,7 @@ async def _log(
                 session_id=session_id,
                 agent_uid=agent_uid,
                 trace_id=correlation.current().trace_id,
+                content=content,
             )
         )
     except Exception:
@@ -294,6 +301,7 @@ async def dispatch_tool_search(
             error_message=None,
             session_id=session_id,
             agent_uid=session_agent_uid,
+            content=call_content({"arguments": args, "result": result}),
         )
         return _to_call_tool_result(result)
     except Exception as exc:
@@ -307,6 +315,9 @@ async def dispatch_tool_search(
             error_message=_safe_error_summary(exc)[:200],
             session_id=session_id,
             agent_uid=session_agent_uid,
+            content=call_content(
+                {"arguments": params.get("arguments"), "error": f"{type(exc).__name__}: {exc}"}
+            ),
         )
         return {"content": [{"type": "text", "text": _tool_error_text(exc)}], "isError": True}
 

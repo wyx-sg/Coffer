@@ -196,6 +196,7 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | 界面操作 | 接口 | 命令 | 验收 |
 | --- | --- | --- | --- |
 | Activity · Audit | `GET /audit` | `coffer log audit` | `test_log_cmd.py` |
+| Activity · tool call drawer | `GET /mcp/invocations/{invocation_id}` | `coffer log call` | `test_log_cmd.py` |
 | Activity · Daemon log | `GET /daemon/logs` | `coffer log daemon` | `test_log_cmd.py` |
 | Activity · MCP calls | `GET /mcp/invocations` | `coffer log mcp` | `test_log_cmd.py` |
 | MCP servers · Calls tab | `GET /resources/mcp_server/{uid}/invocations` | `coffer log mcp` | `test_log_cmd.py` |
@@ -257,9 +258,11 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | 界面操作 | 接口 | 命令 | 验收 |
 | --- | --- | --- | --- |
 | Model providers · Add connection | `POST /providers` | `coffer provider add` | `test_cli_parity.py` |
+| Overview · Needs you · Check | `POST /providers/{uid}/check` | `coffer provider check` | `test_cli_parity.py` |
 | Model providers · Delete | `DELETE /providers/{uid}` | `coffer provider delete` | `test_cli_parity.py` |
 | Model providers · Delete… (what it affects) | `GET /providers/{uid}/delete-preview` | `coffer provider delete-preview` | `test_cli_parity.py` |
 | Model providers · Add · detect a local runtime | `POST /providers/detect-local` | `coffer provider detect-local` | `test_cli_parity.py` |
+| Model providers · the list's health marks | `GET /providers/health` | `coffer provider health` | `test_cli_parity.py` |
 | Model providers · list | `GET /providers` | `coffer provider list` | `test_cli_parity.py` |
 | Settings · Usage · Refresh prices | `PUT /providers/price-list` | `coffer provider price-list refresh` | `test_cli_parity.py` |
 | Settings · Usage · price list | `GET /providers/price-list` | `coffer provider price-list show` | `test_cli_parity.py` |
@@ -319,6 +322,8 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | --- | --- | --- | --- |
 | Settings · Secrets · approvals | `PUT /settings/secret-boundary` | `coffer settings approvals set` | `test_cli_parity.py` |
 | Settings · Secrets · approvals | `GET /settings/secret-boundary` | `coffer settings approvals show` | `test_cli_parity.py` |
+| Settings · Data · History · Record tool call content | `PUT /settings/call-content` | `coffer settings call-content set` | `test_cli_parity.py` |
+| Settings · Data · History · Record tool call content | `GET /settings/call-content` | `coffer settings call-content show` | `test_cli_parity.py` |
 | Settings · Engine | `GET /internal-engine-config` | `coffer settings engine show` | `test_cli_parity.py` |
 | Settings · Engine · transcription | `PUT /internal-engine-config/transcribe-model` | `coffer settings engine transcribe-model` | `test_cli_parity.py` |
 | Settings · Engine · upkeep | `PUT /internal-engine-config/upkeep` | `coffer settings engine upkeep` | `test_cli_parity.py` |

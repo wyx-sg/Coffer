@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-12
 **Deciders**: Yuxing Wu
-**Related**: [Tool Overload: List a Usage-Ranked Slice, Search the Rest](tool-overload-tier-the-list-search-the-rest.md), [Audit and Retention](audit-and-retention.md), spec mcp-gateway "Record invocations without content", spec secret "Hold plaintext only in memory at the moment of use", research note [agent evaluation](../research/agent-evaluation.md), `evals/README.md`, `.agents/harness.md`, PR #75, PR #78, PR #79, PR #81, PR #83, PR #368
+**Related**: [Tool Overload: List a Usage-Ranked Slice, Search the Rest](tool-overload-tier-the-list-search-the-rest.md), [Audit and Retention](audit-and-retention.md), spec mcp-gateway "Record invocations with redacted, bounded content", spec secret "Hold plaintext only in memory at the moment of use", research note [agent evaluation](../research/agent-evaluation.md), `evals/README.md`, `.agents/harness.md`, PR #75, PR #78, PR #79, PR #81, PR #83, PR #368
 
 ## Context
 
@@ -30,10 +30,11 @@ quietly make either worse while every unit test still passes.
 
 The harder question is where new cases come from, and what runs where:
 
-- Real usage is the best source of cases, but the invocation log is
-  deliberately content-free (spec mcp-gateway "Record invocations without
-  content"): it records target, time, duration and outcome, never arguments or
-  results. It also used to be dishonest: an upstream tool that failed in-band
+- Real usage is the best source of cases, but the invocation log was
+  deliberately content-free when this was decided: it recorded target, time,
+  duration and outcome, never arguments or results (since 2026-10-09 it keeps
+  them redacted and bounded, spec mcp-gateway "Record invocations with
+  redacted, bounded content"; capture below stays a separate path). It also used to be dishonest: an upstream tool that failed in-band
   (a well-formed result with `isError: true`) was logged as `ok`.
 - CI must be reproducible and free. A model-bearing suite is neither.
 - A retrieval suite once scored knowledge search. Knowledge became plain files
@@ -76,18 +77,20 @@ relevant, so no model grades itself. Cons: every step after capture is manual,
 so the loop turns only when someone runs it. **So far it has not turned: no
 dataset contains a captured case, and every case in `evals/datasets/` is
 hand-written.** Routing quality has no automatic guard. It wins because each
-piece is cheap and honest, and none of it compromises the payload-free log.
+piece is cheap and honest, and none of it depends on the invocation log.
 
 ### Option B — Capture into the audit and invocation log
 
 Store arguments and results in `mcp_invocations` and curate from there.
 
 Pros: capture is always on, so the dataset grows without anyone opting in.
-Cons: the invocation log and the audit log are content-free by design. Tool
-arguments and results carry secrets, personal data and upstream content, and
-the tables are retained and read from every surface ([Audit and Retention](audit-and-retention.md)).
-Widening them for evals would trade a privacy guarantee for developer
-convenience. It loses on that guarantee.
+Cons: the invocation log keeps content for a person reading their own calls,
+masked and cut at 16 KB
+([Record Tool Call Content](record-tool-call-content-redacted-and-bounded.md)),
+and is retained and read from every surface ([Audit and Retention](audit-and-retention.md)).
+Mining it for development datasets would turn a person's debugging record into
+a developer's corpus, and a cut or masked query is not a clean case. It loses
+on that: eval capture stays its own opt-in path.
 
 ### Option C — LLM-as-judge in CI
 

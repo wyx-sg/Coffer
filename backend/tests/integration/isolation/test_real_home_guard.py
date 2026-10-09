@@ -58,6 +58,8 @@ def test_home_is_redirected_away_from_the_real_one() -> None:
         "COFFER_MODEL_PROXY",
         # ... and from fetching the model price list over the network.
         "COFFER_PRICE_REFRESH",
+        # ... and from checking every provider connection over the network.
+        "COFFER_PROVIDER_HEALTH",
         # ... and every experimental feature is switched on (the features are
         # off until switched on, and almost every test drives one).
         "COFFER_FEATURES",

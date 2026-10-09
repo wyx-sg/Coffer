@@ -44,7 +44,7 @@ give the status each code is actually sent with.
 | `CURSOR_INVALID` | 400 | A `cursor` sent to a paged list (the audit log, the MCP invocation log, an agent's native sessions, the chat conversations) does not decode, or was issued for another list or with other filters. | Drop `cursor` to read the first page again, or send the `next_cursor` the same list and filters returned. |
 | `NOT_FOUND` | 404 | No such route or object, raised by a route rather than a domain error. | Check the path; the daemon serves its live route list at `/api/v1/openapi.json` to a caller with the token. |
 | `FORBIDDEN` | 403 | The route refuses the operation. | Read `message`. |
-| `CONFIG_INVALID` | 422 | The request body or query failed validation, or a resource's config is invalid. The submitted values are not echoed back. | Compare the body with the route's schema at `/api/v1/openapi.json` (send the token). |
+| `CONFIG_INVALID` | 422 | The request body or query failed validation, or a resource's config is invalid. The submitted values are not echoed back. A stored key offered to an endpoint no saved connection holds it for has `details.reason` `stored_key_destination`; nothing was sent. | Compare the body with the route's schema at `/api/v1/openapi.json` (send the token). |
 | `INTERNAL_ERROR` | 500 | An unexpected failure. The full traceback is in the daemon log under the response's trace id. | Run `grep <trace-id> ~/.coffer/logs/daemon.log`, or run `coffer log daemon --errors`. |
 | `HTTP_<status>` | as named | A bare HTTP error with a status that has no named code. | Read `message`. |
 
@@ -53,6 +53,7 @@ give the status each code is actually sent with.
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `RESOURCE_NOT_FOUND` | 404 | Nothing answers to the uid or name you gave. | Check the name on the kind's page; names are unique only within a kind. |
+| `INVOCATION_NOT_FOUND` | 404 | No tool call in the log has that id — it never existed, or retention removed it. | Take the id from `coffer log mcp` or the Activity page. |
 | `RESOURCE_ALREADY_EXISTS` | 409 | A resource of that kind already has that name. | Pick another name, or edit the existing resource. |
 | `UNKNOWN_KIND` | 400 | The kind is not one this daemon registers. | Use a registered kind, such as `mcp_server`, `skill` or `agent`. |
 | `GENERIC_CREATE_NOT_ALLOWED` | 409 | This kind cannot be created or updated through the generic `/resources` endpoints. | Use the kind's own endpoint or its page in the web UI. |
@@ -70,10 +71,10 @@ give the status each code is actually sent with.
 | --- | --- | --- | --- |
 | `SECRET_MISSING` | 400 | No secret is stored under the referenced secret ref. | Store it: `coffer secret set <ref>`, or re-enter it in the resource's form. |
 | `SECRET_IN_USE` | 409 | The secret cannot be deleted while a resource still references it. The message names the resources. | Detach or delete those resources first. |
-| `SECRET_LOCKED` | 503 | The OS keychain is locked or unavailable, or a keychain write could not be verified. | Unlock the keychain (log in to the desktop session) and retry. |
+| `SECRET_LOCKED` | 503 | The macOS Keychain is locked or unavailable, refused to give the daemon the master key, or a keychain write could not be verified. | Unlock the keychain (log in to the desktop session) and retry. |
 | `SECRET_UNREADABLE` | 500 | A stored secret cannot be decrypted with the current master key. | Restore the matching master key, or re-enter the secret. See [Secret store](/guides/secret-store). |
-| `MASTER_KEY_MISSING` | 503 | Encrypted secrets exist but the master key is in neither the key file nor the keychain. Raised while the daemon starts. | Restore `~/.coffer/master.key`, or re-enter your secrets. |
-| `MASTER_KEY_FILE_INVALID` | 422 | A master-key file to import is missing or is not a valid key, or a `.cfk` backup's fingerprint is not its key's. | Point the import at the key backup the desktop app wrote. |
+| `MASTER_KEY_MISSING` | 503 | Encrypted secrets exist but the master key is not in the Keychain. Raised while the daemon starts. | Import your key backup in the desktop app (**Settings › Security › Import a master key**), or re-enter your secrets. |
+| `MASTER_KEY_FILE_INVALID` | 422 | The key backup (`.cfk`) to import is missing or is not a valid backup, or its fingerprint is not its key's. | Point the import at the key backup the desktop app wrote. |
 | `MASTER_KEY_PASSPHRASE_WRONG` | 422 | A passphrase-protected key backup (`.cfk`) was imported with a wrong passphrase, or none. | Type the passphrase set when the key was exported on the other Mac. |
 | `MASTER_KEY_PASSPHRASE_TOO_SHORT` | 422 | A key backup was asked for with a passphrase under eight characters. Nothing was written. | Choose a longer passphrase. |
 | `SECRET_BINDING_PENDING` | 409 | A secret would go to a destination, or a target, no person has approved. Nothing was sent. `details.approval_ids` names the waiting approvals. | Run `coffer approval approve <id>` and confirm in the Coffer desktop app (or approve it there directly), or reject it with `coffer approval reject <id>` or in **Settings › Security** (**Review**). A custom tool's call answers it in band, naming the approval ids and the same command, for the environment that waits only. Also returned by `coffer run` for a standalone secret nobody has allowed it to use; see [Secrets → Allow `coffer run` to use it](/guides/secrets#allow-coffer-run-to-use-it). |
@@ -121,7 +122,7 @@ give the status each code is actually sent with.
 | --- | --- | --- | --- |
 | `CLI_NOT_KNOWN` | 404 | No managed skill requires that command and no command-line tool was added under that name. | List the known commands on the **CLIs** page. |
 | `CLI_TOOL_EXISTS` | 409 | A command-line tool with that name was already added. | Edit it on the **CLIs** page, or remove it first. |
-| `CLI_TOOL_INVALID` | 400 | The command name, minimum version or login check is not valid. | Use a plain command name or an absolute path; read `message` for the field. |
+| `CLI_TOOL_INVALID` | 400 | The command name, minimum version or login check is not valid. A login check that does not start with the command name has `details.reason` `login_check_command`, `details.field` `login_check` and `details.command`, the name it must start with (a path command's file name). | Use a plain command name or an absolute path; start the login check with the command name; read `message` for the field. |
 | `CLI_TOOL_NOT_DECLARED` | 404 | That command-line tool was not added by hand, so it cannot be edited or removed. | A command a skill requires is changed in the skill, not here. |
 
 ## Agents and agent workspaces
@@ -272,7 +273,7 @@ give the status each code is actually sent with.
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `FEATURE_DISABLED` | 404 | The route or resource belongs to an experimental feature that is switched off on this machine. `details.feature` names it. | Switch it on in **Settings → Features**. See [Experimental features](/guides/experimental-features). |
-| `FEATURE_UNKNOWN` | 404 | The key is not an experimental feature. The keys are `knowledge`, `memory`, `sync` and `models`. | Use one of those four keys. |
+| `FEATURE_UNKNOWN` | 404 | The key is not an experimental feature. The keys are `knowledge` and `memory`; `sync` and `models` graduated and are no longer features. | Use one of those two keys. |
 | `FEATURE_PINNED` | 409 | `COFFER_FEATURES` pins this feature for the daemon's lifetime. | Change `COFFER_FEATURES` and restart the daemon. |
 
 ## Startup errors

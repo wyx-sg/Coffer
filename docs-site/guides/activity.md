@@ -39,7 +39,7 @@ The time range offers **Last hour**, **Last 24 h**, **Last 7 days**, **Last 30 d
 
 **By** takes several values at once, and a record is shown when it matches any of them. It lists your agents, then, under "Not an agent", you (the web UI or the Coffer app), the command line, Coffer itself and sync; on Tool calls it lists agents only. **Kind** on Everything is three values: **Tool calls**, **Changes** and **Daemon records**. On Changes it lists the eleven kinds of change: a kind of resource, or secrets, sync, settings and CLIs for a change that names no resource. The filters, the search and the range are all kept in the address (`q`, `range`, `by`, `kind`, `status`, `level`, `logger`), so a link such as `/activity?tab=mcp&q=github` opens already searching, and **View in Activity** on another page uses it. Moving to another tab keeps the search, the range and **By**, and drops the filters only the old tab had.
 
-**Details.** Select a row on Everything, Changes or Tool calls to open it in a drawer 640 pixels wide beside the page; **Esc**, a click outside or the ✕ closes it, and **↑** and **↓** step to the previous or next record. A failed call leads with its error and how its server has been doing (since when it has been failing and how many errors it had in the last 24 hours); a change says who made it and what it touched, then shows the configuration before and after as a diff (secret values are never recorded). Below come the facts, the records written within five minutes of it, and the raw record, folded until you ask for it. A call shows its metadata only: its arguments and results are never stored. The footer holds the next step: **Open** the resource, beside **Copy details**.
+**Details.** Select a row on Everything, Changes or Tool calls to open it in a drawer 640 pixels wide beside the page; **Esc**, a click outside or the ✕ closes it, and **↑** and **↓** step to the previous or next record. A failed call leads with its error and how its server has been doing (since when it has been failing and how many errors it had in the last 24 hours); a change says who made it and what it touched, then shows the configuration before and after as a diff (secret values are never recorded). Below come the facts, the records written within five minutes of it, and the raw record, folded until you ask for it. A call then shows what it carried: its arguments, its result or error, and for a [custom tool](/guides/custom-tools) the HTTP request and response, each in a foldable block with **Copy** (see [What a call records](#what-a-call-records)). The footer holds the next step: **Open** the resource, beside **Copy details**.
 
 On the **Daemon log** a row opens in place instead, under its own line, with its traceback, **Copy record** and, when the record names a server and a tool, **Show the tool call**, which switches to Tool calls searching for that call.
 
@@ -118,7 +118,7 @@ coffer log mcp --agent-uid <agent-uid> --q timeout
 coffer log mcp --uid coffer                 # Coffer's own tools, or a deleted server's uid
 ```
 
-Without `--server` the output includes Coffer's own built-in tool calls (server `coffer`) and rows of servers since deleted (shown by their uid). `--status` takes `ok`, `error`, `timeout`, `denied`, or `failed` for every outcome but `ok`; `--agent-uid` keeps one agent's calls; `--q` searches the tool, error, session, outcome and server name; and `--uid` filters on the server uid the rows were written under, which reaches `coffer` and deleted servers that `--server` cannot name (`--uid` and `--q` read every server, so they do not combine with `--server`). `--limit` accepts 1–500 and `--cursor` reads the next page. A [custom tool](/guides/custom-tools#environments)'s call also names the environment it was made in: the Activity page shows it beside the tool (`@live`) and in the drawer, and `--json` carries it as `environment`. No header, variable or credential is recorded.
+Without `--server` the output includes Coffer's own built-in tool calls (server `coffer`) and rows of servers since deleted (shown by their uid). `--status` takes `ok`, `error`, `timeout`, `denied`, or `failed` for every outcome but `ok`; `--agent-uid` keeps one agent's calls; `--q` searches the tool, error, session, outcome and server name; and `--uid` filters on the server uid the rows were written under, which reaches `coffer` and deleted servers that `--server` cannot name (`--uid` and `--q` read every server, so they do not combine with `--server`). `--limit` accepts 1–500 and `--cursor` reads the next page. A [custom tool](/guides/custom-tools#environments)'s call also names the environment it was made in: the Activity page shows it beside the tool (`@live`) and in the drawer, and `--json` carries it as `environment`. `coffer log mcp` prints each call's id; `coffer log call <id>` prints one call with its content.
 
 An invocation has one of four statuses:
 
@@ -129,9 +129,18 @@ An invocation has one of four statuses:
 | `timeout` | The upstream did not answer within the server's request timeout. |
 | `denied` | Coffer refused before reaching the upstream: the server or the capability is disabled, or the server is outside that agent's reach. |
 
-::: info Arguments and results are never stored
-The invocation log records who called what, when, for how long and with what outcome. It has no column for call arguments or return values. For a tool that reported `isError`, the stored message is Coffer's fixed text `upstream tool returned an error result (isError)`, not the upstream's own message, which may echo the arguments. To see why a tool failed, look at the server's stderr in `~/.coffer/logs/upstream/<server>.log`.
-:::
+### What a call records
+
+Each call keeps its arguments and its result or error. A custom tool's call also keeps the HTTP request it sent (method, URL, headers, body) and the response it got (status, headers, body). Before anything is written, Coffer masks as `••••••`:
+
+- every secret value it injected into that server or custom tool;
+- credential headers whole (`Authorization`, `Cookie`, `X-Api-Key` and other headers whose name says token, secret, key or auth);
+- fields whose name says secret (`password`, `token`, `api_key` and the like);
+- any plaintext key its leak rules recognise, such as a `ghp_…` GitHub token.
+
+Each part is cut at 16 KB; a cut part says how big the original was. The records follow the invocation log's retention (30 days by default). The row's error message stays Coffer's fixed text, for example `upstream tool returned an error result (isError)` for a tool that flagged an error; what the upstream actually said is in the call's **Error** part. Model requests that pass through Coffer's model proxy are not recorded.
+
+Read one call with its content from the CLI with `coffer log call <id>` (`coffer log mcp` prints the ids). To stop recording content on this machine, switch off **Record tool call content** under **Settings › Data › History**, or run `coffer settings call-content set --set enabled=false`. Calls made while it is off keep their metadata only, and their drawer says so.
 
 ## Read the daemon log from the CLI
 
