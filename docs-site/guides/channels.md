@@ -136,7 +136,7 @@ A direct chat is one conversation. To run a second task beside it without mixing
 
 How the thread appears depends on the platform. On SeaTalk it is the thread of your own `/thread` message: the bot answers inside it, and you reply there. On Telegram it is a private-chat topic, which needs the bot's Threaded Mode turned on in BotFather. In a group, every thread is already its own conversation, so `/thread` is not needed there.
 
-Each turn tells the agent it is on a chat channel: keep replies concise but quote the key log lines, errors and IDs behind a finding verbatim, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. The turn's system prompt also carries the [memory](/guides/memory#in-channel-turns) index, and the notes your message names are added after it: Coffer delivers both itself, and on a connected agent Coffer's hook stands aside for them inside the turn, while its triggers still guard the turn's commands.
+Each turn tells the agent it is on a chat channel: keep replies concise but quote the key log lines, errors and IDs behind a finding verbatim, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the channel, the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. The turn's system prompt also carries the [memory](/guides/memory#in-channel-turns) index, and the notes your message names are added after it: Coffer delivers both itself, and on a connected agent Coffer's hook stands aside for them inside the turn, while its triggers still guard the turn's commands.
 
 ## Commands
 
@@ -204,6 +204,7 @@ Add the bot to a group to use it there.
 - Each thread is its own conversation with its own agent, history and queue, so threads run concurrently.
 - A group answer is attached to the message that asked: on Telegram it is sent as a reply to that message; on SeaTalk the thread rooted at that message is the attachment, and the answer @mentions you.
 - When you quote a message, the quoted sender and text are folded into the turn as `> sender: …` lines above your text.
+- On a platform that can read a thread's history (SeaTalk), a turn in a thread carries part of the thread. A conversation's first turn there gets the thread's 20 most recent messages with their images and files; each later turn of that conversation gets only the messages others posted since its previous turn there, or nothing. Where older messages were left out, a note says so, and the agent reads them on demand with `coffer__channel_read_thread`, only in chats you have paired and never a group's main chat. Telegram has no history API, so the tool says so there.
 - A forwarded chat record is flattened into a `[Forwarded chat record]` block.
 
 Two channel settings tune when the bot answers in a group. They change when the bot answers, never who may drive it.

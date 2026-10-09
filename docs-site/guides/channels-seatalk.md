@@ -111,10 +111,10 @@ Before the first attempt there is no connection state: the daemon starts a chann
 Where the answer goes:
 
 - **@mention in the group's main chat** — the bot starts a thread rooted at your message and answers there. It reads no history: the thread holds only your message.
-- **@mention inside a thread** — the bot reads the whole thread, every page of it, oldest first, downloads the images and files earlier messages carry, and answers in that thread.
+- **@mention inside a thread** — the bot reads the thread and answers in it. The first time a conversation answers in a thread, its turn carries the thread's 20 most recent messages, with their images and files. Each later turn of that conversation in the thread carries only what others posted since its previous turn there — nothing when nothing is new — because the agent's session already holds the rest. When older messages are left out, a note at the end of the thread block says how many, and the agent can read them page by page with the `coffer__channel_read_thread` tool. `/new` in the thread starts again from the 20 most recent.
 - **A thread in a direct chat** — read and answered in the same way. A reply-in-thread under any message in your direct chat stays in the direct chat's conversation, with its context; only a thread opened with `/thread` is a separate conversation. `/thread` makes your own `/thread` message the thread's root: the bot answers inside that thread with a message marked `🧵#N title`, and you keep talking in the same thread. (From a `/thread` button, or sent inside a thread, there is no message to root it at, so the bot posts the marked message itself and you reply under that.)
 
-**What the bot can read of a thread is bounded by SeaTalk, not by Coffer.** SeaTalk returns only replies sent in the **last 7 days**; an older thread comes back as its root message plus whatever is recent, however long it looks in the app. Whisper messages and deleted messages are never returned. Replies sent before the bot joined a group are limited by the group's "Chat history for new members" setting at the time it joined. When a thread is older than that window, Coffer says so in the turn's context so the agent tells you what it could not see instead of guessing. Forward or quote the missing messages to bring them in.
+**What the bot can read of a thread is bounded by SeaTalk, not by Coffer.** SeaTalk returns only replies sent in the **last 7 days**; an older thread comes back as its root message plus whatever is recent, however long it looks in the app. Whisper messages and deleted messages are never returned. Replies sent before the bot joined a group are limited by the group's "Chat history for new members" setting at the time it joined. When a thread is older than that window, Coffer says so in the turn's context, and the read tool says it too, so the agent tells you what it could not see instead of guessing. Forward or quote the missing messages to bring them in.
 
 Each group thread is its own conversation, so you can run Claude Code in one thread and Codex in another. A group answer opens by @mentioning you, so SeaTalk notifies you.
 
@@ -186,7 +186,7 @@ The channel is not connected yet. Wait until the **SeaTalk connection** badge re
 Check pairing (`peer: not paired` means the bot answers nobody), and that you @mentioned it in a group. Then check that the portal's delivery is set to WebSocket; with another delivery method, SeaTalk sends events somewhere else.
 
 **The bot says it can only see a few messages of a thread.**
-SeaTalk returns only the last 7 days of a thread's replies (see [Groups and threads](#groups-and-threads)), so an older discussion is invisible to the bot even though you can scroll to it. A thread you started today reads in full. Forward or quote the older messages to give the agent that context.
+SeaTalk returns only the last 7 days of a thread's replies (see [Groups and threads](#groups-and-threads)), so an older discussion is invisible to the bot even though you can scroll to it. Forward or quote the older messages to give the agent that context. Within the window, a turn carries only the thread's latest messages; ask the agent to read further back and it uses `coffer__channel_read_thread`.
 
 ## Related
 

@@ -167,11 +167,11 @@ directory (`FileAvatarStore`, `infrastructure/channel/avatar_store.py`).
 
 ## `runs.db` — the thread tables
 
-The three tables below are history and machine-local: they name
+The tables below are history and machine-local: they name
 conversations, and conversations do not travel. Each names its channel by
 `resource_uid`. No
 foreign key points at the channel — it is a file — so the channel's `on_delete`
-deletes its thread, history and outbox rows (`delete_for_channel`).
+deletes its thread, history, cursor, outbox and reply rows (`delete_for_channel`).
 
 ### `channel_thread_conversations`
 
@@ -240,6 +240,33 @@ earlier conversation from chat") reads.
 | `opened_at`       | DATETIME (UTC)                               |                                           |
 
 Index on `(resource_uid, chat_id, thread_id)`.
+
+### `channel_thread_cursors`
+
+How far each conversation has seen each **platform** thread ("Ground a thread
+turn in a bounded slice of the thread"): the message that triggered the
+conversation's latest turn there. A conversation with no row for a thread gets
+the thread's latest messages on its next turn there; one with a row gets only
+what was posted after that message. Ids and times only — never a message's text.
+
+| column            | type             | notes                                                                                           |
+| ----------------- | ---------------- | ----------------------------------------------------------------------------------------------- |
+| `resource_uid`    | VARCHAR NOT NULL | the channel's uid                                                                               |
+| `chat_id`         | VARCHAR NOT NULL | the chat                                                                                        |
+| `thread_id`       | VARCHAR NOT NULL | the platform thread the messages live in (not the conversation thread)                          |
+| `conversation_id` | VARCHAR NOT NULL | soft reference into `conversations`; `""` while the conversation the turn opens does not exist |
+| `last_message_id` | VARCHAR NOT NULL | the message that triggered that conversation's latest turn in the thread                        |
+| `last_message_at` | DATETIME (UTC)   | when that message was sent — finds the place when the platform no longer returns the message   |
+| `updated_at`      | DATETIME (UTC)   | when the row was written                                                                        |
+
+Primary key `(resource_uid, chat_id, thread_id, conversation_id)`.
+
+A message read before its conversation exists (the thread's first, after `/new`,
+after an idle rollover) writes its row under `conversation_id = ""`; the turn,
+once its conversation is open, renames that row to the conversation's id — or
+drops it, when the conversation already has a row there. A `""` row older than
+ten minutes is not trusted (its turn never opened a conversation). A row is never
+written for a read that failed, so nothing posted in between is skipped.
 
 ### `channel_outbox`
 

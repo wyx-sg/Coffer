@@ -74,8 +74,11 @@ list-changed notifications) between clients and upstream MCP servers.
   resources/prompts set (HTTP 200), not an error.
 - **Built-in tools.** Coffer's own built-in tools under the reserved `coffer__` prefix MUST be exactly
   `coffer__search_tools`, which MUST always be advertised in
-  `tools/list`. A call to any other `coffer__` name MUST be
-  answered as an unknown tool.
+  `tools/list`, plus — only for a session whose requests carry the `X-Coffer-Turn` token of a turn
+  Coffer is running — the turn-scoped `coffer__ask` (see "Let an agent ask the owner a question during a Coffer turn")
+  and `coffer__channel_read_thread` ([channels](../channels/spec.md) "Read a thread's earlier messages on demand").
+  A call to any other `coffer__` name MUST be
+  answered as an unknown tool, and so MUST a call to `coffer__channel_read_thread` outside a turn.
 - **Built-in tool retrieval.** `coffer__search_tools`
   ([Tool Overload](../../../docs/decisions/tool-overload-tier-the-list-search-the-rest.md)) has the contract
   `coffer__search_tools(query: string [required], top_k?: int = 5, max 20) -> { tools: [{ name, description,

@@ -29,6 +29,7 @@ from coffer.domain.channel.envelopes import (
     SentMessage,
 )
 from coffer.domain.channel.rich_content import ForwardedItem
+from coffer.domain.channel.thread_messages import ThreadMessage, ThreadRead
 
 #: The progress marks a reacting fake declares unless a test names others —
 #: Telegram's, so a reacting fake reads like the transport it stands in for.
@@ -144,13 +145,18 @@ class FakeChannelAdapter:
         # routing detail for each upload, kept separate so every existing
         # ``.media`` assertion stays a plain 4-tuple (mirrors ``sent_routed``).
         self.media_routed: list[tuple[str, str, str | None, bool, str, str]] = []
-        # Scriptable ``fetch_thread`` result (Task 7b) — a test sets this to a
-        # list of ``ForwardedItem`` for its scenario; unset yields ``[]``.
+        # Scriptable ``fetch_thread`` result: the thread's messages, oldest
+        # first. ``thread_items`` is the shorthand — one message per item, with
+        # ids ``tm-0``, ``tm-1``, … — for a test that cares only about text.
+        self.thread_messages: list[ThreadMessage] = []
         self.thread_items: list[ForwardedItem] = []
-        # Scriptable thread-history attachments ("Download the media a thread's
-        # messages carry") — the images/files the
-        # thread's own messages carry, already downloaded; unset yields ``()``.
-        self.thread_attachments: tuple[InboundAttachment, ...] = ()
+        self.thread_window_note = ""
+        self.thread_read_fails = False
+        # Scriptable per-message media ("Download the media a thread's messages
+        # carry"): what ``fetch_message_media`` hands back for a message id, and
+        # every id the core asked it to download.
+        self.thread_media: dict[str, tuple[InboundAttachment, ...]] = {}
+        self.media_downloads: list[str] = []
         # (chat_id, thread_id) for every ``fetch_thread`` call the core made,
         # so a test can assert the fetch happened (or, on a non-fetching
         # transport, that it never did).
@@ -301,11 +307,27 @@ class FakeChannelAdapter:
         return SentMessage(message_id=self._new_id())
 
     async def fetch_thread(
-        self, chat_id: str, thread_id: str, *, limit: int = 50, chat_kind: str = "group"
-    ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
+        self, chat_id: str, thread_id: str, *, chat_kind: str = "group"
+    ) -> ThreadRead:
         self.fetch_thread_calls.append((chat_id, thread_id))
         self.fetch_thread_kinds.append(chat_kind)
-        return list(self.thread_items), self.thread_attachments
+        if self.thread_read_fails:
+            return ThreadRead(failed=True)
+        messages = list(self.thread_messages) or [
+            ThreadMessage(
+                message_id=f"tm-{n}",
+                sender=item.sender,
+                sent_at=None,
+                items=(item,),
+                has_media=f"tm-{n}" in self.thread_media,
+            )
+            for n, item in enumerate(self.thread_items)
+        ]
+        return ThreadRead(messages=tuple(messages), window_note=self.thread_window_note)
+
+    async def fetch_message_media(self, message: ThreadMessage) -> tuple[InboundAttachment, ...]:
+        self.media_downloads.append(message.message_id)
+        return self.thread_media.get(message.message_id, ())
 
     async def fetch_quoted(
         self, message_id: str

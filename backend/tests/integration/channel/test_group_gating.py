@@ -219,7 +219,7 @@ async def test_thread_image_reaches_the_turn_as_an_attachment(
 ) -> None:
     """Per "Download the media a thread's messages carry": when the @mention
     lands inside a thread, an image the thread's own messages carry (downloaded
-    by the transport's ``fetch_thread``) is merged into the turn's attachments
+    by the transport's ``fetch_message_media``) is merged into the turn's attachments
     so it reaches the agent — even when the @mention itself carries no text of
     its own, which must still drive a turn."""
     recorder = _AttachmentRecordingAdapter()
@@ -231,9 +231,9 @@ async def test_thread_image_reaches_the_turn_as_an_attachment(
     adapter = env.bind(resource, FakeChannelAdapter(supports_history_fetch=True))
     await env.pair(resource, "owner", sender_id="owner-1")
     adapter.thread_items = [ForwardedItem(sender="Alice", text="see this chart")]
-    adapter.thread_attachments = (
-        InboundAttachment(path=str(image), mime="image/png", filename="chart.png"),
-    )
+    adapter.thread_media = {
+        "tm-0": (InboundAttachment(path=str(image), mime="image/png", filename="chart.png"),)
+    }
 
     await env.processor.on_message(
         inbound(

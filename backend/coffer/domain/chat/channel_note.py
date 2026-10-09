@@ -38,3 +38,6 @@ class ChannelNote:
     #: channel turn"); "" when none is set or the chat kind is unknown. It is
     #: appended after the note, never in its place.
     owner_prompt: str = ""
+    #: The transport can read a thread's earlier messages, so the agent is told
+    #: the tool that does (``coffer__channel_read_thread``).
+    reads_threads: bool = False

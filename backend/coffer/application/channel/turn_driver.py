@@ -38,6 +38,7 @@ from coffer.application.channel.store_ports import (
     ChannelPeerRepoPort,
     ChannelThreadConversationRepoPort,
     ReplyLedgerPort,
+    ThreadCursorPort,
 )
 from coffer.application.channel.turn_finish import TurnOutcome, failure_line
 from coffer.application.channel.turn_render import TurnRenderer
@@ -166,8 +167,10 @@ class TurnDriver:
         safe_send: SafeSend,
         session: SessionAccessor,
         replies: ReplyLedgerPort,
+        cursors: ThreadCursorPort,
     ) -> None:
         self._peers = peers
+        self._cursors = cursors
         self._threads = threads
         self._conversations = conversations
         self._turns = turns
@@ -223,6 +226,12 @@ class TurnDriver:
             # e.g. the default agent is unknown/misconfigured: say so in the chat.
             await _say(explain_conversation_error(e))
             return
+        if item.thread_id:
+            # The thread cursor taken before the conversation existed is its now
+            # (spec channels "Ground a thread turn in a bounded slice of the thread").
+            await self._cursors.claim(
+                binding.resource.uid, peer.chat_id, item.thread_id, conversation_id
+            )
         if len(self._turns.pending(conversation_id)) >= QUEUE_MAX:
             await _say(DROPPED_NOTICE)
             return

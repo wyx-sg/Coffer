@@ -7,6 +7,7 @@ normalization of subscriber messages and approval clicks.
 
 from __future__ import annotations
 
+import dataclasses
 import pathlib
 from datetime import UTC, datetime
 from typing import Any
@@ -889,6 +890,17 @@ def _text_message(email: str, plain_text: str) -> dict:
     return {"sender": {"email": email}, "tag": "text", "text": {"plain_text": plain_text}}
 
 
+async def _read_with_media(adapter: Any, chat_id: str, thread_id: str, **kwargs: Any) -> Any:
+    """Read a thread and download every message's media, as the core does for
+    the messages it keeps: (flattened items, attachments)."""
+    read = await adapter.fetch_thread(chat_id, thread_id, **kwargs)
+    items = [item for message in read.messages for item in message.items]
+    atts: tuple[Any, ...] = ()
+    for message in read.messages:
+        atts += await adapter.fetch_message_media(message)
+    return items, atts
+
+
 async def test_fetch_thread_maps_thread_page_to_forwarded_items(fake_seatalk: FakeSeaTalk) -> None:
     fake_seatalk.thread_response = {
         "code": 0,
@@ -899,7 +911,7 @@ async def test_fetch_thread_maps_thread_page_to_forwarded_items(fake_seatalk: Fa
     }
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
-        items, atts = await adapter.fetch_thread("gid-1", "t1", limit=50)
+        items, atts = await _read_with_media(adapter, "gid-1", "t1")
     finally:
         await adapter.stop()
     assert [(it.sender, it.text) for it in items] == [
@@ -908,7 +920,7 @@ async def test_fetch_thread_maps_thread_page_to_forwarded_items(fake_seatalk: Fa
     ]
     assert atts == ()  # a text-only thread downloads nothing
     [params] = fake_seatalk.thread_calls
-    assert params == {"group_id": "gid-1", "thread_id": "t1", "page_size": "50"}
+    assert params == {"group_id": "gid-1", "thread_id": "t1", "page_size": "100"}
 
 
 async def test_fetch_thread_recurses_forwarded_records_in_the_thread(
@@ -946,7 +958,7 @@ async def test_fetch_thread_recurses_forwarded_records_in_the_thread(
     }
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
-        items, _atts = await adapter.fetch_thread("gid-1", "t1", limit=50)
+        items, _atts = await _read_with_media(adapter, "gid-1", "t1")
     finally:
         await adapter.stop()
     rendered = [(it.sender, it.text) for it in items]
@@ -995,7 +1007,7 @@ async def test_fetch_thread_downloads_thread_images(
     }
     adapter = make_seatalk_adapter(fake_seatalk, media_dir=tmp_path)
     try:
-        items, atts = await adapter.fetch_thread("gid-1", "t1", limit=50)
+        items, atts = await _read_with_media(adapter, "gid-1", "t1")
     finally:
         await adapter.stop()
     # Text still flattens (the leaf image in the forwarded record contributes no text).
@@ -1477,11 +1489,11 @@ async def test_fetch_thread_in_a_dm_reads_the_single_chat_endpoint(
     dm_thread = _route_dm_thread(fake_seatalk)
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
-        fetched = await adapter.fetch_thread("emp-1", "t1", limit=20, chat_kind="direct")
+        fetched = await adapter.fetch_thread("emp-1", "t1", chat_kind="direct")
     finally:
         await adapter.stop()
-    assert fetched == ([], ())
-    assert dm_thread == [{"employee_code": "emp-1", "thread_id": "t1", "page_size": "20"}]
+    assert fetched.messages == ()
+    assert dm_thread == [{"employee_code": "emp-1", "thread_id": "t1", "page_size": "100"}]
     assert fake_seatalk.thread_calls == []  # the group endpoint stayed untouched
 
 
@@ -1489,15 +1501,15 @@ async def test_fetch_thread_degrades_to_empty_list_on_error(
     fake_seatalk: FakeSeaTalk, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Any transport/parse/permission error must never break a group turn —
-    fetch_thread degrades to no fetched context."""
+    fetch_thread reports a failed read, which the turn runs without."""
     adapter = make_seatalk_adapter(fake_seatalk)
 
     async def _boom(*args: object, **kwargs: object) -> Any:
         raise ChannelSendFailed("st", "group_chat/get_thread_by_thread_id: code=103 http=200")
 
-    monkeypatch.setattr(adapter, "_get", _boom)
+    monkeypatch.setattr(adapter, "_context", dataclasses.replace(adapter._context, get=_boom))
     try:
-        assert await adapter.fetch_thread("gid-1", "t1", limit=50) == ([], ())
+        assert (await adapter.fetch_thread("gid-1", "t1")).failed
     finally:
         await adapter.stop()
 

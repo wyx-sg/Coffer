@@ -77,6 +77,12 @@ def channel_system_context(note: ChannelNote | None) -> str:
         if note is not None and note.collapses_details
         else ""
     )
+    threads = (
+        " Earlier thread messages: read them with `coffer__channel_read_thread` "
+        "(ids from [Message origin])."
+        if note is not None and note.reads_threads
+        else ""
+    )
     return (
         f"You are replying in {_where(note)}, most likely on the user's phone. Coffer "
         "already shows that you are working, so do not narrate your steps — only what "
@@ -94,7 +100,7 @@ def channel_system_context(note: ChannelNote | None) -> str:
         "something needs one, say so and do what you can. To send a file or image, "
         "put `MEDIA:/absolute/path` (optionally `| a caption`) on its own line; the "
         "channel uploads that existing file and removes the line — nothing else you "
-        "write is sent as a file."
+        f"write is sent as a file.{threads}"
     ) + owner_prompt_context(note)
 
 

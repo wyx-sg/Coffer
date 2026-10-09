@@ -126,3 +126,23 @@ async def test_an_edited_prompt_is_read_on_the_next_turn_without_a_restart(
     )
     cleared = await reader(resource.uid, conversation_id)
     assert cleared is not None and cleared.owner_prompt == ""
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="the note names the thread-reading tool where threads can be read"
+)
+async def test_a_transport_that_reads_threads_says_so_in_the_note(env: ChannelEnv) -> None:
+    resource = await env.register_channel("st")
+    adapter = env.bind(resource, FakeChannelAdapter(supports_history_fetch=True))
+    await env.pair(resource, "owner")
+    await env.processor.on_message(inbound("st", "owner", "hi"))
+    await wait_until(lambda: bool(adapter.texts()))
+    conversation_id = await env.active_conversation(resource)
+    assert conversation_id is not None
+    reader = ChannelNoteReader(
+        resources=env.resources, threads=env.threads, binding=env.processor.binding
+    )
+
+    note = await reader(resource.uid, conversation_id)
+
+    assert note is not None and note.reads_threads is True

@@ -24,6 +24,7 @@ from coffer.domain.channel.envelopes import (
     SentMessage,
 )
 from coffer.domain.channel.rich_content import ForwardedItem
+from coffer.domain.channel.thread_messages import ThreadMessage, ThreadRead
 from coffer.domain.resource import Resource
 from coffer.domain.scope import Scope
 
@@ -304,20 +305,24 @@ class ContextFetchPort(Protocol):
 
     Threads are no longer a group-@mention-only affair — SeaTalk exposes a DM
     thread endpoint too (``single_chat/get_thread_by_thread_id``, app v3.62.1+),
-    so a DM thread fetches its own context exactly like a group one; ``chat_kind``
-    is what picks the endpoint. Group-MAIN chatter is still never fetched
-    (reading a whole group is undesirable — the group-chat-history permission is
-    intentionally not granted). Platforms without a history-fetch API (Telegram's
-    Bot API) satisfy this by always returning ``([], ())``."""
+    so a DM thread is read exactly like a group one; ``chat_kind`` is what picks
+    the endpoint. Group-MAIN chatter is still never fetched (reading a whole
+    group is undesirable — the group-chat-history permission is intentionally
+    not granted). Platforms without a history-fetch API (Telegram's Bot API)
+    satisfy this with empty reads."""
 
     async def fetch_thread(
-        self, chat_id: str, thread_id: str, *, limit: int = 100, chat_kind: str = "group"
-    ) -> FetchedContext:
-        """Return EVERY message of the thread (all pages; ``limit`` is the page
-        size) with the images/files they carry (see "Download the media a thread's
-        messages carry"), so an in-thread @mention reaches the turn with the whole
-        conversation and the real pictures, not dead file links. Degrades to
-        ``([], ())`` on any error."""
+        self, chat_id: str, thread_id: str, *, chat_kind: str = "group"
+    ) -> ThreadRead:
+        """Every message of the thread the platform returns (all pages), oldest
+        first, with NO media downloaded: the core picks which messages reach a
+        turn or a tool result and downloads only theirs. A failed read is
+        ``ThreadRead(failed=True)``, never an exception."""
+        ...
+
+    async def fetch_message_media(self, message: ThreadMessage) -> tuple[InboundAttachment, ...]:
+        """Download the images/files ``message`` carries (see "Download the media
+        a thread's messages carry"). A failed download is skipped, never raised."""
         ...
 
     async def fetch_quoted(self, message_id: str) -> FetchedContext:

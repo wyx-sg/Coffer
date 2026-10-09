@@ -79,4 +79,6 @@ class ChannelNoteReader:
             collapses_details=(
                 binding.adapter.capabilities.collapses_details if binding is not None else False
             ),
+            reads_threads=binding is not None
+            and binding.adapter.capabilities.supports_history_fetch,
         )

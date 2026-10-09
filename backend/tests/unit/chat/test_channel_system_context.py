@@ -129,3 +129,41 @@ def test_an_empty_or_blank_owner_prompt_appends_nothing(prompt: str) -> None:
 
 def test_a_deleted_channel_has_no_owner_prompt() -> None:
     assert owner_prompt_context(None) == ""
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="the note names the thread-reading tool where threads can be read"
+)
+def test_a_platform_that_reads_threads_names_the_tool() -> None:
+    reads = ChannelNote(
+        name="ops",
+        platform="SeaTalk",
+        chat_kind="group",
+        in_thread=True,
+        renders=SEATALK_RENDER_NOTES,
+        reads_threads=True,
+    )
+    text = channel_system_context(reads)
+
+    assert "`coffer__channel_read_thread`" in text
+    assert "[Message origin]" in text
+    assert "coffer__channel_read_thread" not in channel_system_context(_SEATALK_GROUP_THREAD)
+    assert len(text.split()) < 260
+
+
+def test_the_owner_prompt_stays_last_after_the_thread_tool_line() -> None:
+    note = ChannelNote(
+        name="ops",
+        platform="SeaTalk",
+        chat_kind="group",
+        in_thread=True,
+        reads_threads=True,
+        owner_prompt="Name the ticket number first.",
+    )
+
+    text = channel_system_context(note)
+
+    assert text.index("coffer__channel_read_thread") < text.index(
+        "Instructions from the channel's owner:"
+    )
+    assert text.endswith("\nName the ticket number first.")

@@ -310,3 +310,50 @@ class ReplyLedgerPort(Protocol):
         ...
 
     async def delete_for_channel(self, resource_uid: str) -> None: ...
+
+
+#: The ``conversation_id`` of a cursor taken for a conversation that does not
+#: exist yet — the one the turn now being built will open. The turn claims it
+#: once its conversation is open (``ThreadCursorPort.claim``).
+PENDING_CONVERSATION = ""
+
+
+@dataclass(frozen=True)
+class ThreadCursor:
+    """How far one conversation has seen one platform thread (one
+    ``channel_thread_cursors`` row): the message that triggered its latest turn
+    there (spec channels "Ground a thread turn in a bounded slice of the
+    thread")."""
+
+    resource_uid: str
+    chat_id: str
+    #: The PLATFORM thread id the messages live in, not the conversation thread.
+    thread_id: str
+    conversation_id: str
+    last_message_id: str
+    #: When that message was sent; finds the place again when the platform no
+    #: longer returns the message itself.
+    last_message_at: datetime
+    updated_at: datetime
+
+
+class ThreadCursorPort(Protocol):
+    """Per-conversation cursors into platform threads, kept across restarts."""
+
+    async def get(
+        self, resource_uid: str, chat_id: str, thread_id: str, conversation_id: str
+    ) -> ThreadCursor | None: ...
+
+    async def put(self, cursor: ThreadCursor) -> None:
+        """Insert or replace the cursor for its (channel, chat, thread, conversation)."""
+        ...
+
+    async def claim(
+        self, resource_uid: str, chat_id: str, thread_id: str, conversation_id: str
+    ) -> None:
+        """Hand the thread's pending cursor to ``conversation_id`` — the
+        conversation the turn opened. A conversation that already holds a cursor
+        there keeps its own and the pending one is dropped. No-op without one."""
+        ...
+
+    async def delete_for_channel(self, resource_uid: str) -> None: ...
