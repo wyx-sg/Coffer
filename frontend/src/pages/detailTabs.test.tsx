@@ -38,7 +38,7 @@ vi.mock("@/lib/hooks/useScope", () => ({
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn(() => ({ data: [] })) }));
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
-  useSetResourceTitle: vi.fn(() => ({
+  useRenameResource: vi.fn(() => ({
     mutate: vi.fn(),
     mutateAsync: vi.fn().mockResolvedValue({}),
     reset: vi.fn(),

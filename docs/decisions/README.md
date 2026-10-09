@@ -124,6 +124,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`kind-plugin-contract`](kind-plugin-contract.md) | A Kind Plugs In as One Frozen Record of Optional Hooks: Validators Before the Write, Reactions After |
 | [`identity-is-the-uid-inside-the-file`](identity-is-the-uid-inside-the-file.md) | A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label |
 | [`names-visible-to-agents-are-fixed`](names-visible-to-agents-are-fixed.md) | Names Visible to Agents Are Fixed |
+| [`provider-and-channel-names-are-free-text`](provider-and-channel-names-are-free-text.md) | A Provider's and a Channel's Name Is Free Text, and Their Files Are Named by uid |
 | [`per-agent-resource-scope`](per-agent-resource-scope.md) | Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind |
 | [`reach-is-machine-local-stored-by-uid-never-synced`](reach-is-machine-local-stored-by-uid-never-synced.md) | Reach Is Machine-Local: Stored by uid in `local/reach.json`, Never Synced |
 | [`code-layout-layer-first`](code-layout-layer-first.md) | Code Layout Is Layer-First, With One Subdirectory per Kind |

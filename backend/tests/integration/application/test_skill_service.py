@@ -790,7 +790,7 @@ async def test_boot_heal_repairs_missing_link_and_leaves_foreign_dir(tmp_path):
     await graph.dispose()
 
 
-# ----- a fixed name, and a title (ADR names-visible-to-agents-are-fixed) -----
+# ----- a fixed name (ADR names-visible-to-agents-are-fixed) -----
 
 
 def _resource_client(skill_svc: SkillService):
@@ -895,49 +895,19 @@ async def test_a_skill_name_change_is_refused_and_moves_nothing(tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="skill-manager", scenario="a skill takes no title")
-async def test_a_skill_takes_no_title(tmp_path):
-    """A skill carries no title: one submitted is refused and disk is untouched."""
-    skill_svc, audit, store, graph, _agent, skill_dir, skill = await _deliver_before(tmp_path)
-    disk_before = _disk_state(store, skill_dir, "before")
-    hash_before = skill.config["version_hash"]
-    trail_before = await audit.query(resource=skill)
-
-    async with _resource_client(skill_svc) as c:
-        r = await c.patch(f"/api/v1/resources/{skill.uid}", json={"title": "Release checklist"})
-        assert r.status_code == 422, r.text
-        assert r.json()["error"]["code"] == "CONFIG_INVALID"
-        listed = (await c.get("/api/v1/resources", params={"kind": "skill"})).json()
-    assert [(row["name"], row["title"]) for row in listed["resources"]] == [("before", None)]
-
-    # Nothing was stored or audited, and the request went nowhere near disk.
-    row = await skill_svc.get_skill(skill.uid)
-    assert (row.name, row.title) == ("before", None)
-    assert row.config["version_hash"] == hash_before
-    assert await audit.query(resource=skill) == trail_before
-    assert _disk_state(store, skill_dir, "before") == disk_before
-    assert "Release checklist" not in store.paths_for("before").skill_md.read_text(encoding="utf-8")
-    assert (await _verify(graph)).entries == []
-    await graph.dispose()
-
-
-@pytest.mark.asyncio
 @pytest.mark.acceptance(
     spec="skill-manager",
     scenario="a refused name change leaves the master folder where it is",
 )
-async def test_a_refused_name_change_then_a_refused_title_leave_the_master_folder(tmp_path):
+async def test_a_refused_name_change_leaves_the_master_folder(tmp_path):
     skill_svc, _audit, store, graph, agent, skill_dir, skill = await _deliver_before(tmp_path)
     skill_md_before = store.paths_for("before").skill_md.read_bytes()
     binding_before = (await skill_svc.bindings_for(skill.uid))[0]
 
     async with _resource_client(skill_svc) as c:
         refused = await c.patch(f"/api/v1/resources/{skill.uid}", json={"name": "after"})
-        titled = await c.patch(f"/api/v1/resources/{skill.uid}", json={"title": "After"})
     assert refused.status_code == 409
     assert refused.json()["error"]["code"] == "NAME_IMMUTABLE"
-    assert titled.status_code == 422, titled.text
-    assert (await skill_svc.get_skill(skill.uid)).title is None
 
     master = store.paths_for("before").folder
     link = skill_dir / "before"

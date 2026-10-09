@@ -8,12 +8,11 @@ import { useTranslation } from "react-i18next";
 import type { AgentOut } from "@/lib/api/agents";
 import { useProviders } from "@/lib/hooks/useProviders";
 import { activeProviderFor } from "@/lib/providers/usedBy";
-import { displayName } from "@/lib/resourceTitle";
 
 export function useProviderLabel(agent: AgentOut): string | undefined {
   const { t } = useTranslation();
   const providers = useProviders();
   if (!providers.data) return providers.isError ? t("common.emptyValue") : undefined;
   const active = activeProviderFor(agent, providers.data);
-  return active ? displayName(active) : t(`agents.overviewTab.model.builtin.${agent.type}`);
+  return active ? active.name : t(`agents.overviewTab.model.builtin.${agent.type}`);
 }

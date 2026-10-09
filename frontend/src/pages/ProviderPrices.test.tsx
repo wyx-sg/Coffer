@@ -51,7 +51,6 @@ const api = providersApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 const provider = (uid: string, over: Partial<Provider> = {}): Provider => ({
   uid,
   name: uid,
-  title: null,
   protocol: "openai",
   base_url: "https://openrouter.ai/api/v1",
   anthropic_base_url: null,

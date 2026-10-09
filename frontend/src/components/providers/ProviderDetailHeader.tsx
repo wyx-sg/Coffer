@@ -16,7 +16,6 @@ import { ActionMenu } from "@/components/ui/menu";
 import type { Provider } from "@/lib/api/providers";
 import { agentTypeLabel } from "@/lib/agents/display";
 import type { ProbeStatus } from "@/lib/providers/probeStatus";
-import { displayName } from "@/lib/resourceTitle";
 import { ProviderMark } from "./ProviderMark";
 
 const TONE: Record<ProbeStatus, StatusTone> = {
@@ -54,7 +53,7 @@ export function ProviderDetailHeader({
   onDelete,
 }: Props) {
   const { t } = useTranslation();
-  const name = displayName(provider);
+  const name = provider.name;
   const answered = status === "reachable" || status === "keyRejected";
   // Which agents can use it follows from its addresses; there is no switch or
   // scope to set (ADR provider-reach-is-what-its-addresses-serve).

@@ -13,10 +13,6 @@ almost all default. The fields that are not:
   pointing at nothing (ADR identity-is-the-uid-inside-the-file: "the three
   file-backed kinds get an ``on_rename`` hook ... that hook is the whole of
   what rename costs anywhere").
-- ``titled`` is False: a collection has no display title. Its heading is
-  its folder name — the one name an agent sees in the guide skill and a
-  person sees in their file manager — and what it is about is the
-  description its README opens with, editable in place.
 - ``toggleable`` is False: every collection is served to every agent, and the
   kind-agnostic enable/disable route refuses one with
   ``RESOURCE_NOT_TOGGLEABLE`` (see "Serve every collection to every agent").
@@ -101,8 +97,4 @@ def make_knowledge_kind(service: KnowledgeService) -> Kind:
         # to every agent"), so there is no ``on_enabled_changed`` either.
         toggleable=False,
         generic_create_allowed=False,
-        # No title: a collection is shown by its folder name, with the
-        # description its README opens with (spec resource-framework "Carry an
-        # optional editable title on the kinds that have one").
-        titled=False,
     )

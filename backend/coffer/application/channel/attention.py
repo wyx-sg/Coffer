@@ -110,7 +110,7 @@ class ChannelAttentionSource:
         return AttentionItem(
             kind=KIND,
             uid=status.uid,
-            title=status.title or status.name,
+            title=status.name,
             reason_code=code,
             reason=reason,
             severity=severity,

@@ -54,7 +54,7 @@ class _Boundary:
 def _server(transport: dict[str, Any]) -> Resource:
     now = datetime.now(tz=UTC)
     return Resource(
-        uid="u" * 32, kind="mcp_server", name="notion", description=None, title=None,
+        uid="u" * 32, kind="mcp_server", name="notion", description=None,
         config={"transport": transport}, enabled=True, created_at=now, updated_at=now,
     )  # fmt: skip
 

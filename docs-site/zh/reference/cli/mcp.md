@@ -99,7 +99,7 @@ coffer mcp show [OPTIONS] UID
 
 ## mcp update
 
-Change a server. Body: name, title, description, config.
+Change a server. Body: name, description, config.
 
 <p class="cli-label">概要</p>
 

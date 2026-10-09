@@ -265,10 +265,6 @@ Coffer 保存的五类状态之一，每类在 `~/.coffer` 下有自己的位置
 
 网关的列表预算：上游工具数量超过预算时，`tools/list` 携带最常用的工具（每个服务器至少一个），其余每个工具仍可按名称调用，并能通过 `coffer__search_tools` 找到。见 [MCP 工具](/zh/reference/mcp-tools#tiering)。
 
-### 标题（Title） {#title}
-
-可选的显示标签，最多 80 个字符，由具备它的类型携带——模型提供商、消息渠道、知识集和记忆分区。Web 界面用它代替名称显示。智能体、MCP 服务器和技能没有标题：智能体以其类型命名，MCP 服务器或技能的固定名称显示在其描述旁边。见[资源框架](/zh/architecture/resource-framework#identity)。
-
 ### Trace id {#trace-id}
 
 守护进程在 `X-Coffer-Trace` 响应头中返回、并打在该请求产生的每一行日志上的逐请求标识符，这样失败的响应能与它的日志记录对上。见[可观测性](/zh/architecture/observability#trace-ids)。

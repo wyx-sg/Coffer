@@ -86,7 +86,7 @@ async def _turns(env: ChannelEnv, count: int) -> list[str]:
     spec="channels", scenario="a fold that leaves out older messages says how to read them"
 )
 async def test_the_first_turn_folds_the_latest_twenty_and_names_the_tool(env: ChannelEnv) -> None:
-    _resource, adapter = await _setup(env)
+    resource, adapter = await _setup(env)
     adapter.thread_messages = [_message(n) for n in range(25)] + [_trigger(25)]
 
     await _mention(env, "@bot sum it up", "m-25")
@@ -103,7 +103,11 @@ async def test_the_first_turn_folds_the_latest_twenty_and_names_the_tool(env: Ch
     note = next(line for line in text.splitlines() if line.startswith("note:"))
     assert "5 earlier messages in this thread are not shown" in note
     assert READ_THREAD_TOOL in note
-    assert 'channel "st"' in note and 'thread_id "th-1"' in note and 'before "m-5"' in note
+    assert (
+        f'channel "{resource.uid}"' in note
+        and 'thread_id "th-1"' in note
+        and 'before "m-5"' in note
+    )
     assert text.endswith("@bot sum it up")
 
 

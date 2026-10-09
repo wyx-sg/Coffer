@@ -26,7 +26,7 @@ from coffer.infrastructure.channel.persistence import (
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas, session_maker
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
-from coffer.infrastructure.vault.home import content_root
+from coffer.infrastructure.vault.home import content_root, local_root
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.channel_routes import router as channel_router
@@ -78,9 +78,8 @@ async def ctx(tmp_path) -> AsyncIterator[_Ctx]:
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
-    resources = ResourceService(
-        kinds={"channel": make_channel_kind()}, repo=make_resource_repo(), audit=audit
-    )
+    kinds = {"channel": make_channel_kind()}
+    resources = ResourceService(kinds=kinds, repo=make_resource_repo(kinds), audit=audit)
     runtime = _Runtime()
     service = ChannelService(
         resources=resources,
@@ -161,13 +160,13 @@ async def test_gating_switches_change_and_nothing_else_does(ctx: _Ctx) -> None:
 @pytest.mark.acceptance(
     spec="channels", scenario="a channel's lifecycle and reach run through the resource routes"
 )
-async def test_title_scope_disable_and_delete_are_resource_operations(ctx: _Ctx) -> None:
+async def test_rename_scope_disable_and_delete_are_resource_operations(ctx: _Ctx) -> None:
     uid = (await _register(ctx))["uid"]
     before = await _config(ctx, uid)
 
-    titled = await ctx.http.patch(f"/api/v1/resources/{uid}", json={"title": "Phone bot"})
-    assert titled.status_code == 200, titled.text
-    assert titled.json()["title"] == "Phone bot"
+    renamed = await ctx.http.patch(f"/api/v1/resources/{uid}", json={"name": "Phone bot"})
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["name"] == "Phone bot"
     assert await _config(ctx, uid) == before
 
     scoped = await ctx.http.put(
@@ -188,12 +187,49 @@ async def test_title_scope_disable_and_delete_are_resource_operations(ctx: _Ctx)
     events = [e.event_type for e in await ctx.audit.query(kind="channel", limit=50)]
     for expected in (
         "resource_created",
-        "resource_updated",
+        "resource_renamed",
         "resource_scope_updated",
         "resource_disabled",
         "resource_deleted",
     ):
         assert expected in events, (expected, events)
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a channel is renamed from its Settings tab")
+async def test_a_channel_is_renamed_keeping_its_uid_and_its_file(ctx: _Ctx) -> None:
+    created = await _register(ctx, "Team bot!")
+    uid = created["uid"]
+    before = await _config(ctx, uid)
+    file = local_root() / "resources" / "channel" / f"{uid}.json"
+    assert file.is_file()
+
+    r = await ctx.http.patch(f"/api/v1/resources/{uid}", json={"name": "Office bot"})
+    assert r.status_code == 200, r.text
+    assert (r.json()["uid"], r.json()["name"]) == (uid, "Office bot")
+    status = (await ctx.http.get(f"/api/v1/channels/{uid}/status")).json()
+    assert (status["uid"], status["name"]) == (uid, "Office bot")
+    listed = (await ctx.http.get("/api/v1/resources", params={"kind": "channel"})).json()
+    assert [row["name"] for row in listed["resources"]] == ["Office bot"]
+    assert await _config(ctx, uid) == before
+    assert file.is_file()  # a rename does not move the file
+
+    [row] = await ctx.audit.query(kind="channel", event_type="resource_renamed")
+    assert (row.details["from"], row.details["to"]) == ("Team bot!", "Office bot")
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a second channel cannot take a name ignoring case"
+)
+async def test_a_second_channel_cannot_take_a_name_ignoring_case(ctx: _Ctx) -> None:
+    await _register(ctx, "Team bot!")
+
+    r = await ctx.http.post(
+        "/api/v1/resources", json={"kind": "channel", "name": "team BOT!", "config": _TG}
+    )
+    assert r.status_code == 409, r.text
+    assert r.json()["error"]["code"] == "RESOURCE_ALREADY_EXISTS"
+    listed = (await ctx.http.get("/api/v1/resources", params={"kind": "channel"})).json()
+    assert [row["name"] for row in listed["resources"]] == ["Team bot!"]
 
 
 @pytest.mark.acceptance(

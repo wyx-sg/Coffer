@@ -30,11 +30,7 @@ from coffer.application.channel.inbound_events import InboundEvents
 from coffer.application.channel.inbound_gate import group_peer
 from coffer.application.channel.pairing import PairingManager, claim_pairing
 from coffer.application.channel.parallel_threads import resolve_conversation_thread_id
-from coffer.application.channel.ports import (
-    AgentCatalogPort,
-    ChannelBinding,
-    ModelSuggestionPort,
-)
+from coffer.application.channel.ports import AgentCatalogPort, ChannelBinding, ModelSuggestionPort
 from coffer.application.channel.question_flow import QuestionPort, answer_message
 from coffer.application.channel.store_ports import (
     ChannelPeerRepoPort,
@@ -49,9 +45,7 @@ from coffer.application.channel.turn_driver import (
     TurnDriver,
     TurnPort,
 )
-from coffer.application.channel.turn_driver import (
-    Session as _Session,
-)
+from coffer.application.channel.turn_driver import Session as _Session
 from coffer.application.channel.turn_media import conversation_title_hint
 from coffer.application.channel.withdraw import ReplyWithdrawal
 from coffer.domain.channel.envelopes import (
@@ -291,7 +285,10 @@ class InboundProcessor:
             (binding, peer),
             BurstPart(
                 origin=format_origin(
-                    msg, platform=binding.channel_type, channel=binding.resource.name
+                    msg,
+                    platform=binding.channel_type,
+                    channel=binding.resource.name,
+                    channel_id=binding.resource.uid,
                 ),
                 body=text or attachment_note(attachments),
                 item=item,

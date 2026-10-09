@@ -77,7 +77,6 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => {
     local_runtime: null,
     compatible_agents: ["claude_code"],
     served_agents: ["claude_code"],
-    title: null,
     transcribe_default: false,
     models: [],
     enabled: true,

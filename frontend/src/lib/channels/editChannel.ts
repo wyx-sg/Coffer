@@ -3,8 +3,7 @@
 // the Replace secret dialog): rotated secrets are written to their
 // existing secret refs FIRST (so the channel keeps working off the same
 // refs), then the resource config is PATCHed (bound agent / SeaTalk app id /
-// group gating / message batching / replies / system prompts / /dir directories), with the
-// title when it changed.
+// group gating / message batching / replies / system prompts / /dir directories).
 // Unlike registration there is nothing to roll back — overwriting a ref's
 // value and PATCHing a live resource are both in-place updates.
 import { resourcesApi } from "@/lib/api/resources";
@@ -12,13 +11,8 @@ import { writeSecret } from "@/lib/secretWrite";
 
 import type { ChannelEditPlan } from "@/lib/channels/schema";
 
-async function patchConfig(
-  uid: string,
-  config: Record<string, unknown>,
-  title: string | null | undefined,
-): Promise<void> {
-  // The title rides the same PATCH only when it moved.
-  await resourcesApi.update(uid, title === undefined ? { config } : { config, title });
+async function patchConfig(uid: string, config: Record<string, unknown>): Promise<void> {
+  await resourcesApi.update(uid, { config });
 }
 
 /**
@@ -33,7 +27,7 @@ export async function applyChannelEdit(
   for (const s of plan.secrets) {
     await writeSecret(s.ref, s.value);
   }
-  await patchConfig(plan.uid, plan.config, plan.title);
+  await patchConfig(plan.uid, plan.config);
   return { uid: plan.uid, name: plan.name };
 }
 
@@ -136,8 +130,6 @@ export interface ChannelEditInput {
   /** Its label. Used only to name the channel in the toast — never to address
    *  it, and (since refs became opaque) never to mint one either. */
   name: string;
-  /** The title to set (`null` clears it), or undefined to leave it alone. */
-  title?: string | null;
   /** The channel's current resource config (the source of truth for refs). */
   config: Record<string, unknown>;
   values: ChannelEditValues;
@@ -243,7 +235,5 @@ export function planChannelEdit(input: ChannelEditInput): ChannelEditPlan {
     }
   }
 
-  const plan: ChannelEditPlan = { uid: input.uid, name: input.name, config: nextConfig, secrets };
-  if (input.title !== undefined) plan.title = input.title;
-  return plan;
+  return { uid: input.uid, name: input.name, config: nextConfig, secrets };
 }

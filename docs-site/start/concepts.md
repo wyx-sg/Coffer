@@ -59,7 +59,7 @@ Architecture: [Resource framework](/architecture/resource-framework).
 
 ## uid and name
 
-Each resource has an immutable **uid**: an opaque 32-character hex string, created once, never reused, and identical on every machine that holds the resource. Its **name** is a label, unique within a kind, and it is what you see in the web UI. You can rename it from the resource's page, except for an MCP server's or a skill's name, which is fixed because agents quote it, and an agent's, which is its type. Providers, channels and memory partitions can also carry a **title**, up to 80 characters, that Coffer's pages show in place of the name; agents, MCP servers, skills and knowledge collections (shown by their folder name) have none. Anything that must survive a rename refers to the uid. For example, the `--agent-uid` in an agent's MCP entry and the agent list in a resource's scope both store uids.
+Each resource has an immutable **uid**: an opaque 32-character hex string, created once, never reused, and identical on every machine that holds the resource. Its **name** is a label, unique within a kind, and it is what you see in the web UI. You can rename it from the resource's page, except for an MCP server's or a skill's name, which is fixed because agents quote it, and an agent's, which is its type. A provider's or a channel's name is free text: anything you type, up to 80 characters, in any language, and unique among its kind ignoring case (`Work` and `work` cannot both exist). No resource carries a second display label. Anything that must survive a rename refers to the uid. For example, the `--agent-uid` in an agent's MCP entry and the agent list in a resource's scope both store uids.
 
 Architecture: [Resource framework](/architecture/resource-framework).
 

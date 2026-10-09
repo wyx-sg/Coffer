@@ -2,7 +2,7 @@
 
 ## Resource kind: `channel`
 
-A channel is a machine-local resource file, `local/resources/channel/<name>.json`
+A channel is a machine-local resource file, `local/resources/channel/<uid>.json`
 (spec resource-framework; spec channels "Keep each channel on the machine that
 holds it"), never committed or synced. Its `config` is validated by a discriminated
 Pydantic union on `channel_type`. The per-type halves are specified in the children

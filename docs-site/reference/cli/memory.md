@@ -66,7 +66,7 @@ coffer memory show [OPTIONS] UID
 
 ## memory update
 
-Change a partition. Body: name, title, description, config.
+Change a partition. Body: name, description, config.
 
 <p class="cli-label">Synopsis</p>
 

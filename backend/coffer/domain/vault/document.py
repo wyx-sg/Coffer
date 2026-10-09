@@ -11,9 +11,10 @@ and a person to share:
   same bytes, so a write that changes nothing makes no commit and two machines
   writing the same value do not conflict.
 
-A **resource document** (``resources/<kind>/<name>.json``) holds what the
-resource *is* — ``uid``, ``kind``, ``format_version``, ``name``, an optional
-``title``, ``description``, ``config``, ``created_at`` — and nothing about
+A **resource document** (``resources/<kind>/<name>.json``, or
+``<uid>.json`` for a kind whose name is free text) holds what the resource
+*is* — ``uid``, ``kind``, ``format_version``, ``name``, ``description``,
+``config``, ``created_at`` — and nothing about
 where it reaches: ``enabled`` and ``scope`` are machine-local and live in
 ``local/`` (ADR reach-is-machine-local-stored-by-uid-never-synced). There is
 no ``updated_at``: two machines stamping it would conflict on every edit, and
@@ -37,7 +38,6 @@ RESOURCE_FIELDS = (
     FORMAT_VERSION_KEY,
     FORMAT_COMPAT_KEY,
     "name",
-    "title",
     "description",
     "config",
     "created_at",
@@ -127,7 +127,6 @@ class ResourceDocument:
     config: dict[str, Any]
     uid: str | None = None
     description: str | None = None
-    title: str | None = None
     created_at: str | None = None
     format_version: int = 1
     raw: dict[str, Any] = field(default_factory=dict)
@@ -145,7 +144,6 @@ class ResourceDocument:
             "kind": self.kind,
             FORMAT_VERSION_KEY: format_version or self.format_version,
             "name": self.name,
-            "title": self.title,
             "description": self.description,
             "config": self.config,
             "created_at": self.created_at,
@@ -170,7 +168,7 @@ def parse_resource(data: bytes) -> ResourceDocument:
     uid = raw.get("uid")
     if uid is not None and (not isinstance(uid, str) or not _is_uid(uid)):
         raise DocumentInvalid("uid must be an opaque id (letters, digits, - and _), or absent")
-    for key in ("description", "title", "created_at"):
+    for key in ("description", "created_at"):
         if raw.get(key) is not None and not isinstance(raw[key], str):
             raise DocumentInvalid(f"{key} must be a string or null")
     version = raw.get(FORMAT_VERSION_KEY, 1)
@@ -182,7 +180,6 @@ def parse_resource(data: bytes) -> ResourceDocument:
         config=config,
         uid=uid,
         description=raw.get("description"),
-        title=raw.get("title"),
         created_at=raw.get("created_at"),
         format_version=version,
         raw=raw,

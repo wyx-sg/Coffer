@@ -501,11 +501,6 @@ components:
           default: false
           title: Starting
           type: boolean
-        title:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Title
         uid:
           title: Uid
           type: string
@@ -525,7 +520,6 @@ components:
       - diagnostics
       - secret_approval
       - starting
-      - title
       - handoff
       - settings
       - commands

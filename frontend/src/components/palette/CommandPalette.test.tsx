@@ -23,11 +23,11 @@ vi.mock("@/lib/api/client", async (orig) => ({
 /** Every list route the palette reads through the client, by path (see `callAnswers`). */
 const call = vi.fn();
 
-type Row = { uid: string; name: string; title: string | null };
+type Row = { uid: string; name: string };
 
-const MCP: Row[] = [{ uid: "u-gh", name: "github-mcp", title: "Octo bridge" }];
-const SKILLS = [{ uid: "s-pdf", name: "pdf", title: null, bindings: [] }];
-const COLLECTIONS: Row[] = [{ uid: "k-notes", name: "team-notes", title: null }];
+const MCP: Row[] = [{ uid: "u-gh", name: "octo-bridge" }];
+const SKILLS = [{ uid: "s-pdf", name: "pdf", bindings: [] }];
+const COLLECTIONS: Row[] = [{ uid: "k-notes", name: "team-notes" }];
 
 const ALL_ON = { knowledge: true, memory: true };
 const ALL_OFF = { knowledge: false, memory: false };
@@ -141,14 +141,12 @@ describe("CommandPalette", () => {
   acceptance("web-ui", "the palette jumps to an object", async () => {
     renderPalette();
     await settled();
-    type("github");
-    expect(within(group("Best match")).getByRole("option")).toHaveTextContent("Octo bridge");
     type("octo");
     const row = within(group("Best match")).getByRole("option");
-    expect(row).toHaveTextContent("github-mcp");
+    expect(row).toHaveTextContent("octo-bridge");
     expect(row).toHaveTextContent("MCP server");
     fireEvent.click(row);
-    expect(screen.getByTestId("location")).toHaveTextContent("/mcp-servers/github-mcp");
+    expect(screen.getByTestId("location")).toHaveTextContent("/mcp-servers/octo-bridge");
     expect(screen.getByTestId("open")).toHaveTextContent("false");
   });
 
@@ -168,7 +166,7 @@ describe("CommandPalette", () => {
     }
     // Objects are listed under a query: each one opens its detail page.
     for (const [query, label] of [
-      ["github-mcp", "Octo bridge"],
+      ["octo-bridge", "octo-bridge"],
       ["pdf", "pdf"],
       ["team-notes", "team-notes"],
     ]) {
@@ -240,9 +238,9 @@ describe("CommandPalette", () => {
     expect(within(group("Skills")).getByText("Skill: couldn't load the list")).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /pdf/ })).not.toBeInTheDocument();
     type("octo");
-    const server = screen.getByRole("option", { name: /Octo bridge/ });
+    const server = screen.getByRole("option", { name: /octo\s*-bridge/ });
     fireEvent.click(server);
-    expect(screen.getByTestId("location")).toHaveTextContent("/mcp-servers/github-mcp");
+    expect(screen.getByTestId("location")).toHaveTextContent("/mcp-servers/octo-bridge");
   });
 
   acceptance("web-ui", "the palette with the daemon offline", async () => {
@@ -301,7 +299,7 @@ describe("CommandPalette", () => {
     const recent = within(group("Recent")).getAllByRole("option");
     expect(recent.map((r) => within(r).getByTestId("palette-row-label").textContent)).toEqual([
       "Secrets",
-      "Octo bridge",
+      "octo-bridge",
     ]);
     expect(within(group("Pages")).getAllByRole("option")).toHaveLength(20);
   });
@@ -318,7 +316,6 @@ describe("CommandPalette", () => {
         {
           uid: "s-tri",
           name: "issue-triage",
-          title: null,
           enabled: true,
           bindings: [
             { agent_uid: "a-cc", agent_name: "claude-code" },
@@ -347,7 +344,7 @@ describe("CommandPalette", () => {
     type("secrets");
     expect(screen.queryByRole("group", { name: "Recent" })).not.toBeInTheDocument();
     expect(options()).toEqual(expect.arrayContaining(["Secrets"]));
-    expect(options()).not.toContain("Octo bridge");
+    expect(options()).not.toContain("octo-bridge");
   });
 
   test("Escape closes the palette and focus returns where it was", async () => {

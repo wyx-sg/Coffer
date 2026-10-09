@@ -54,10 +54,9 @@ async def test_every_write_is_hinted(tmp_path: pathlib.Path) -> None:
     r = await svc.register(kind="thing", name="a", config={"foo": 1}, actor="cli")
     await svc.update_config(r.uid, {"foo": 2}, actor="cli")
     await svc.set_enabled(r.uid, False, actor="cli")
-    await svc.set_title(r.uid, "Shown", actor="cli")
     await svc.update_scope(r.uid, Scope(agents=["u1"]), actor="cli")
     await svc.rename(r.uid, "b", actor="cli")
-    assert hints == [Changed("thing", r.uid)] * 6
+    assert hints == [Changed("thing", r.uid)] * 5
 
     await svc.delete(r.uid, actor="cli")
     assert hints[-1] == Changed("thing", r.uid, "delete")

@@ -21,17 +21,18 @@ daemon write, a merge — is judged here before it may be committed:
   every-vault-file-carries-its-format-version: a newer build of the same
   format may add one), and so is a kind this build does not know at all (a
   newer build's kind: kept, inert);
-- its name passes the kind's own ``validate_name`` (``mcp_server``'s
-  24-character cap and ``__`` separator, a skill's hyphen-only charset), on
-  every change, so a merge or a hand rename is judged as a register is, and a
-  ``title`` on a kind that has none (``Kind.titled`` false) is refused;
+- its name passes the framework's rule for the kind — free text for a
+  provider or a channel (``Kind.free_name``), a fixed slug for the rest — and
+  the kind's own ``validate_name`` (``mcp_server``'s 24-character cap and
+  ``__`` separator, a skill's hyphen-only charset), on every change, so a
+  merge or a hand rename is judged as a register is;
 - a file with no ``uid`` is a new resource: the rule asks for a fix that
   mints one, which the writer commits as the daemon's own right after the
   person's commit;
 - a uid another path held at ``HEAD`` makes the newcomer ``DUPLICATE_UID``
   (a copied file) — unless that path is going away in the same change, which
-  is a move — and a name another resource of the kind already has is
-  ``NAME_TAKEN``;
+  is a move — and a name another resource of the kind already has (ignoring
+  case, for a free-text name) is ``NAME_TAKEN``;
 - a config flag the kind lets only one resource hold (``Kind.exclusive_flags``:
   ``provider``'s ``transcribe_default``) set while another resource holds it —
   at ``HEAD`` or in the same change — is ``CONFIG_INVALID`` on the file that
@@ -51,7 +52,12 @@ from datetime import UTC, datetime
 
 from pydantic import ValidationError
 
-from coffer.domain.resource import InvalidResourceNameError, Kind, validate_resource_name
+from coffer.domain.resource import (
+    InvalidResourceNameError,
+    Kind,
+    normalise_free_name,
+    validate_resource_name,
+)
 from coffer.domain.vault.config_keys import known_keys
 from coffer.domain.vault.document import DocumentInvalid, ResourceDocument, parse_resource
 from coffer.domain.vault.findings import Finding, FindingCode
@@ -106,7 +112,10 @@ def _config_findings(
         where = ".".join(str(p) for p in first.get("loc", ())) or "config"
         out.append(Finding(path, FindingCode.CONFIG_INVALID, f"{where}: {first.get('msg')}", uid))
     try:
-        validate_resource_name(doc.name)
+        if kind_def.free_name:
+            normalise_free_name(doc.name)
+        else:
+            validate_resource_name(doc.name)
         if kind_def.validate_name is not None:
             kind_def.validate_name(doc.name)
     except (InvalidResourceNameError, ValueError) as exc:
@@ -160,7 +169,9 @@ def resource_rule(kinds: Mapping[str, Kind], head_owners: HeadOwners) -> Validat
         removed = {c.path for c in changes if c.data is None}
         claimed: dict[str, str] = {}
         names: dict[tuple[str, str], str] = {
-            (kind, name): uid for uid, (path, kind, name) in owners.items() if path not in touched
+            _name_key(kinds, kind, name): uid
+            for uid, (path, kind, name) in owners.items()
+            if path not in touched
         }
         for change in sorted(changes, key=lambda c: c.path):
             if change.data is None:
@@ -248,9 +259,6 @@ def _judge(
         findings.append(Finding(path, FindingCode.UNKNOWN_FIELD, message, uid))
     else:
         findings.extend(_config_findings(path, doc, kind_def, uid))
-        if doc.title is not None and not kind_def.titled:
-            message = f"a {doc.kind} has no title; its name is what is shown"
-            findings.append(Finding(path, FindingCode.INVALID_DOCUMENT, message, uid))
     fixes: list[Fix] = []
     if uid is None:
         uid = uuid.uuid4().hex
@@ -265,13 +273,21 @@ def _judge(
             findings.append(Finding(path, FindingCode.DUPLICATE_UID, message, uid))
             return Verdict(findings=findings)
         claimed[uid] = path
-    holder = names.get((doc.kind, doc.name))
+    name_key = _name_key(kinds, doc.kind, doc.name)
+    holder = names.get(name_key)
     if holder is not None and holder != uid:
         message = f"another {doc.kind} is already named {doc.name!r}"
         findings.append(Finding(path, FindingCode.NAME_TAKEN, message, uid))
     else:
-        names[(doc.kind, doc.name)] = uid
+        names[name_key] = uid
     return Verdict(findings=findings, fixes=fixes)
+
+
+def _name_key(kinds: Mapping[str, Kind], kind: str, name: str) -> tuple[str, str]:
+    """What two names of ``kind`` collide on: a free-text name ignoring case,
+    a fixed one exactly."""
+    kind_def = kinds.get(kind)
+    return (kind, name.casefold() if kind_def is not None and kind_def.free_name else name)
 
 
 __all__ = ["RESOURCE_FORMAT", "HeadOwners", "resource_rule"]

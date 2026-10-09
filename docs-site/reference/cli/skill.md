@@ -55,7 +55,7 @@ This page matches what `coffer skill --help` prints. Add `--help` to any command
 
 ## skill update
 
-Change a skill. Body: name, title, description, config.
+Change a skill. Body: name, description, config.
 
 <p class="cli-label">Synopsis</p>
 

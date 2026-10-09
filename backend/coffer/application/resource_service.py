@@ -14,7 +14,7 @@ BEFORE persistence; a hook that raises aborts the deletion.
 Sibling ops modules keep this file under the 400-LOC ceiling (mirroring
 `skill/service.py` + its `*_ops.py` satellites): `update_scope`'s body lives in
 `resource_scope_ops`, `set_enabled`'s in `resource_enable_ops`, `rename`'s in
-`resource_rename_ops`, `set_title`'s in `resource_title_ops`, `delete`'s
+`resource_rename_ops`, `delete`'s
 secret-release step in `resource_delete_ops`, the registration secret probe in
 `resource_secret_ops`, and every question about what
 a kind *declares* — where it is stored, what redacts, what cites a secret, what
@@ -139,7 +139,6 @@ class ResourceService:
         description: str | None = None,
         *,
         allow_lifecycle_kind: bool = False,
-        title: str | None = None,
     ) -> Resource:
         """Create a resource and mint its identity: a fresh random uid, because
         minting one from anything a user can change is what this whole design
@@ -153,8 +152,7 @@ class ResourceService:
         # kind's dedicated service opts in with ``allow_lifecycle_kind``.
         if not kind_def.generic_create_allowed and not allow_lifecycle_kind:
             raise GenericCreateNotAllowed(kind)
-        resource_kind_ops.check_name(kind_def, name)
-        title = resource_kind_ops.checked_title(kind_def, title)
+        name = resource_kind_ops.check_name(kind_def, name)
         validated = self._validate_config(kind_def, config)
         resource_kind_ops.check_derived_name(kind_def, name, validated)
         # Kind-supplied semantic validation beyond shape, at REGISTRATION only
@@ -189,7 +187,6 @@ class ResourceService:
                     enabled=True,
                     created_at=now,
                     updated_at=now,
-                    title=title,
                     # A freshly registered resource is unscoped (ADR per-agent-resource-scope) —
                     # active for every agent until the user narrows it.
                     scope=None,
@@ -333,13 +330,6 @@ class ResourceService:
         from coffer.application.resource_rename_ops import refuse_fixed_name
 
         refuse_fixed_name(self._require_kind(resource.kind), resource, new_name)
-
-    async def set_title(self, uid: str, title: str | None, actor: str) -> Resource:
-        """Set a resource's display title; ``None`` or blank clears it. Every
-        kind, fixed name or not; see ``resource_title_ops``."""
-        from coffer.application.resource_title_ops import set_title as _set_title
-
-        return await _set_title(self, uid, title, actor)
 
     async def delete(self, uid: str, actor: str) -> None:
         # Secret release (on successful delete) delegates to

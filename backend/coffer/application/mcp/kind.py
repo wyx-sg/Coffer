@@ -180,7 +180,6 @@ def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
         # registering the server again; there is no display title beside it.
         name_fixed=True,
         name_fixed_resets="its capability toggles and its reach (enabled and scope)",
-        titled=False,
         audit_redactor=_mcp_audit_redactor,
         secret_ref_extractor=_mcp_secret_ref_extractor,
         # Per-agent scope: the gateway filters a scoped server's tools by the

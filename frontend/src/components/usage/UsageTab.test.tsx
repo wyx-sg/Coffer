@@ -305,8 +305,7 @@ describe("API-key usage", () => {
     providerList.current = [
       {
         uid: "conn-1",
-        name: "anthropic",
-        title: "Anthropic API",
+        name: "Anthropic API",
         base_url: "https://api.anthropic.com",
         enabled: true,
         local_runtime: false,

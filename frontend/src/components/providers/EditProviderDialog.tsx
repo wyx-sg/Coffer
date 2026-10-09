@@ -30,7 +30,6 @@ import { useUpdateProvider } from "@/lib/hooks/useProviders";
 import { useRenameResource } from "@/lib/hooks/useResourceMutations";
 import { addressesOf, endpointOf, fieldsOf } from "@/lib/providers/addresses";
 import type { ProviderUse } from "@/lib/providers/usedBy";
-import { displayName } from "@/lib/resourceTitle";
 import { AddressInputs } from "./AddressInputs";
 import { FieldError } from "./FieldError";
 import { KeyRefField } from "./KeyRefField";
@@ -109,7 +108,7 @@ export function EditProviderDialog({ open, provider, use, onClose, onSaved }: Pr
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent aria-describedby={undefined} className="max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>{t("providers.edit.title", { name: displayName(provider) })}</DialogTitle>
+          <DialogTitle>{t("providers.edit.title", { name: provider.name })}</DialogTitle>
         </DialogHeader>
         <form className="flex flex-col gap-4" onSubmit={save} noValidate>
           <div className="flex flex-col gap-1.5">
@@ -118,7 +117,7 @@ export function EditProviderDialog({ open, provider, use, onClose, onSaved }: Pr
             </Label>
             <Input id="pe-name" aria-describedby="pe-name-error" {...register("name")} />
             <FieldError id="pe-name-error" message={formState.errors.name?.message} />
-            <p className="text-xs text-text-muted">{t("providers.edit.renameHint")}</p>
+            <p className="text-xs text-text-muted">{t("resources.freeName.hint")}</p>
           </div>
           <AddressInputs
             idPrefix="pe"

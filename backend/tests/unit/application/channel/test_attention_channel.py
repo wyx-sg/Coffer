@@ -19,7 +19,6 @@ def _status(
     running: bool = True,
     ws: tuple[str, str | None] | None = None,
     seatalk: bool = True,
-    title: str | None = None,
     approval: str | None = None,
 ) -> ChannelStatus:
     inbound = (
@@ -36,7 +35,6 @@ def _status(
         pending_pairing=False,
         people=(),
         inbound=inbound,
-        title=title,
         secret_approval=SecretApproval(state=approval, secret_ref="coffer://secret/x")
         if approval
         else None,
@@ -66,8 +64,8 @@ def _check(uid: str) -> AttentionAction:
 
 
 async def test_connecting_websocket_is_a_reconnecting_warning() -> None:
-    [item] = await _source(_status("c1", ws=("connecting", None), title="Team bot")).items()
-    assert (item.kind, item.uid, item.title) == ("channel", "c1", "Team bot")
+    [item] = await _source(_status("c1", ws=("connecting", None))).items()
+    assert (item.kind, item.uid, item.title) == ("channel", "c1", "bot-c1")
     assert item.reason_code == "channel_reconnecting"
     assert item.severity is Severity.WARNING
     assert item.action == _check("c1")

@@ -67,7 +67,7 @@ coffer knowledge show [OPTIONS] UID
 
 ## knowledge update
 
-Change a collection. Body: name, title, description, config.
+Change a collection. Body: name, description, config.
 
 <p class="cli-label">概要</p>
 

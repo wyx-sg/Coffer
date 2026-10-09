@@ -736,7 +736,7 @@ async def test_a_second_transcribe_default_cannot_be_written_behind_the_service(
     app = _app(tmp_path, monkeypatch, 59872)
     with _client(app) as c:
         first = _new(c, _anthropic_body(name="first"))
-        _new(
+        second = _new(
             c,
             {
                 "name": "second",
@@ -747,7 +747,7 @@ async def test_a_second_transcribe_default_cannot_be_written_behind_the_service(
         )
         c.post(f"/api/v1/providers/{first}/transcribe-default")
 
-        path = "resources/provider/second.json"
+        path = f"resources/provider/{second}.json"
         doc = json.loads((vault_root() / path).read_text())
         doc["config"]["transcribe_default"] = True
         (vault_root() / path).write_text(json.dumps(doc, indent=2) + "\n")
@@ -1161,24 +1161,38 @@ async def _flag(uid: str) -> bool:
     return cfg.transcribe_default
 
 
-def test_provider_out_carries_the_resource_title(tmp_path, monkeypatch):
-    """spec resource-framework "Carry an optional editable title on the kinds that have one":
-    the connection's own read carries the title set through the kind-agnostic
-    update, and an empty one clears it back to null."""
+@pytest.mark.acceptance(spec="provider-switching", scenario="rename a connection to free text")
+def test_a_connection_is_renamed_to_free_text(tmp_path, monkeypatch):
+    from coffer.infrastructure.vault.home import vault_root
+
     app = _app(tmp_path, monkeypatch, 59795)
     with _client(app) as c:
         uid = _new(c, _anthropic_body())
-        assert c.get(f"/api/v1/providers/{uid}").json()["title"] is None
+        ref = _ref_of(c, uid)
+        path = vault_root() / "resources" / "provider" / f"{uid}.json"
+        assert path.is_file()
 
-        r = c.patch(f"/api/v1/resources/{uid}", json={"title": "Team gateway"})
-        assert r.status_code == 200, r.text
-        assert c.get(f"/api/v1/providers/{uid}").json()["title"] == "Team gateway"
-        listed = {p["uid"]: p for p in c.get("/api/v1/providers").json()["providers"]}
-        assert listed[uid]["title"] == "Team gateway"
-        assert listed[uid]["name"] == "acme"
+        for name in ("Acme (EU) 生产", "acme (eu) 生产"):
+            r = c.patch(f"/api/v1/resources/{uid}", json={"name": name})
+            assert r.status_code == 200, r.text
+            assert (r.json()["uid"], r.json()["name"]) == (uid, name)
+            assert c.get(f"/api/v1/providers/{uid}").json()["name"] == name
+            assert _ref_of(c, uid) == ref
+            assert path.is_file()  # a rename does not move the file
+        # Only the case differs on the second step, and it is still accepted.
 
-        assert c.patch(f"/api/v1/resources/{uid}", json={"title": ""}).status_code == 200
-        assert c.get(f"/api/v1/providers/{uid}").json()["title"] is None
+        entries = c.get(
+            "/api/v1/audit", params={"resource_uid": uid, "event_type": "resource_renamed"}
+        ).json()["entries"]
+        assert sorted((e["details"]["from"], e["details"]["to"]) for e in entries) == [
+            ("Acme (EU) 生产", "acme (eu) 生产"),
+            ("acme", "Acme (EU) 生产"),
+        ]
+
+        for bad in ("two\nlines", "x" * 81, "-leading"):
+            refused = c.patch(f"/api/v1/resources/{uid}", json={"name": bad})
+            assert refused.status_code == 422, (bad, refused.text)
+        assert c.get(f"/api/v1/providers/{uid}").json()["name"] == "acme (eu) 生产"
 
 
 @pytest.mark.acceptance(

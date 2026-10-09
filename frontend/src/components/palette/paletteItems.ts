@@ -8,7 +8,6 @@
 // Every entry is a place to go. There is deliberately no "action" variant: the
 // palette only navigates (change revise-web-ui-ia, design decision 6), so the
 // only two targets are a route and a Settings tab.
-import { displayName, titleOf, type Titled } from "@/lib/resourceTitle";
 import type { SettingsTabId } from "@/lib/navigation";
 
 /** The object kinds the palette lists, in sidebar order — the order their
@@ -81,11 +80,12 @@ export const KIND_PAGE: Record<ObjectKind, string> = {
   secret: "/secrets",
 };
 
-/** Every listed object carries a uid, a name and an optional title; an agent
+/** Every listed object carries a uid and a name; an agent
  *  also its type. `status` and `note` come from the list row when it carries
  *  them at no extra cost. */
-export interface PaletteObject extends Titled {
+export interface PaletteObject {
   uid: string;
+  name: string;
   type?: string;
   status?: PaletteStatus;
   note?: string;
@@ -109,18 +109,15 @@ export function objectPath(kind: ObjectKind, obj: PaletteObject): string {
   return `${KIND_PAGE[kind]}/${encodeURIComponent(id)}`;
 }
 
-/** One object as a palette entry: shown by its title when set (with its name
- *  after it), matched by both. */
+/** One object as a palette entry: shown and matched by its name. */
 export function objectItem(kind: ObjectKind, obj: PaletteObject): PaletteItem {
-  const title = titleOf(obj);
   return {
     id: `${kind}-${obj.uid}`,
     kind,
-    label: displayName(obj),
-    detail: title ? obj.name : undefined,
+    label: obj.name,
     note: obj.note,
     status: obj.status,
-    haystack: title ? [title, obj.name] : [obj.name],
+    haystack: [obj.name],
     target: { type: "route", to: objectPath(kind, obj) },
   };
 }

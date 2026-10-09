@@ -187,7 +187,7 @@ export function UsageTab({ onOpenProviders }: Props) {
         <FilterPill
           mode="single"
           label={t("usage.filters.provider")}
-          options={proxied.map((p) => ({ value: p.uid, label: p.title || p.name }))}
+          options={proxied.map((p) => ({ value: p.uid, label: p.name }))}
           value={query.connection_uid ?? null}
           onChange={(p) => setQuery({ ...query, connection_uid: p ?? undefined })}
           searchPlaceholder={t("usage.filters.findProvider")}

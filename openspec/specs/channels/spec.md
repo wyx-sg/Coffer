@@ -494,7 +494,7 @@ that fails says so in a toast and the field keeps what was typed. The one
 exception is the channel's two system prompts (see "Append the owner's system
 prompt to a channel turn"): they are prose, so their **System prompts** section
 shows them as written and edits them through an **Edit** button and a dialog
-with Cancel and Save. They cover the channel's title, its type's plain settings (a
+with Cancel and Save. They cover the channel's name, its type's plain settings (a
 SeaTalk app id), its two group-gating switches, `require_mention` and
 `ignore_other_mentions` (see "Configure when the bot answers in a group"), and
 the rest of what this requirement and the others in this spec name as a channel
@@ -559,8 +559,8 @@ and `PATCH /api/v1/resources/{uid}`.
 
 #### Scenario: a channel's lifecycle and reach run through the resource routes
 - **GIVEN** a registered, enabled channel named `tg`
-- **WHEN** the user, on the Channels page or over `/api/v1/resources`, sets its title to "Phone bot", scopes it to `codex` only, disables it and then deletes it
-- **THEN** the title is saved with every ref unchanged, the channel's scope names only `codex`, and the adapter stops when it is disabled
+- **WHEN** the user, on the Channels page or over `/api/v1/resources`, renames it to "Phone bot", scopes it to `codex` only, disables it and then deletes it
+- **THEN** the name is saved with every ref unchanged, the channel's scope names only `codex`, and the adapter stops when it is disabled
 - **AND** the removal deletes the channel and its peer binding, and each step is audited
 
 #### Scenario: a channel's detail opens on Overview and keeps Settings on its own tab
@@ -1255,8 +1255,9 @@ the channel's status reports it.
 
 ### Requirement: Open every turn with its message origin
 Every turn MUST carry its own origin. The turn text opens with a
-`[Message origin]` block naming the platform, the channel (its current name,
-which `coffer__channel_read_thread` takes), the chat (kind, the chat title where
+`[Message origin]` block naming the platform, the channel (as
+`channel: "<name>" (id: <uid>)`: its current name, and the id that
+`coffer__channel_read_thread` takes), the chat (kind, the chat title where
 the platform supplies one, and always the chat id), the thread, and the sender
 (display name **and** the stable platform id, which a platform tool call takes
 and which, in a group, appears nowhere else because `chat_id` is the group's) —
@@ -1278,13 +1279,19 @@ resolve to a name through the platform's own tools.
 - **GIVEN** a paired channel whose owner @mentions the bot in a group thread
 - **WHEN** the turn is driven
 - **THEN** the turn text opens with a `[Message origin]` block naming the platform,
-  the channel, the chat kind and title, the chat id, the thread id, and the sender
+  the channel's name and id, the chat kind and title, the chat id, the thread id, and the sender
 
 #### Scenario: a DM turn names its own chat
 - **GIVEN** a paired channel and a DM from its owner
 - **WHEN** the turn is driven
 - **THEN** the origin block names the platform, the channel and the direct chat by
   id, omitting the thread line a DM has no value for
+
+#### Scenario: the origin block carries the channel's id and the tool takes it
+- **GIVEN** a channel named "Team bot!" with uid `U`
+- **WHEN** a turn is driven and the agent calls `coffer__channel_read_thread` with `channel` set to `U`
+- **THEN** the origin block's channel line reads `channel: "Team bot!" (id: U)` and the call reads that channel's thread
+- **AND** the same call with `channel` set to "Team bot!" reads it too, and a rename of the channel never breaks a call that names its id
 
 #### Scenario: every turn carries its origin
 - **GIVEN** a paired channel that has already run one turn
@@ -2158,23 +2165,30 @@ driven by the transport's declared capabilities, never its type:
 
 ### Requirement: Name a channel by any display name
 A channel's name MUST be any display name a person types — spaces, capitals and
-any script included, up to 80 characters — and MUST be renamable. Channels are
-told apart by their `uid`, so two channels may share a display name. The
-display name is the channel's title (resource-framework "Carry an optional
-editable title on the kinds that have one"): the Channels page's Add dialog
-registers what was typed as the title and derives the resource's name from it —
-lowercased, every run of characters the name rules refuse turned into one `-`,
-`channel` when nothing is left — stepping to `-2`, `-3`, … past a name another
-channel already holds, so adding a channel never fails on a name the person did
-not type. The channel's Settings show the display name as its Name and edit it
-as the title. REST keeps addressing a channel by its `uid`, and the display name is
-its `title`.
+any script included — under the free-text rule of [resource-framework](../resource-framework/spec.md)
+"Name a provider or a channel with free text": trimmed and NFC-normalised, 1 to 80 characters, no line
+break or other control character, not starting with `-`, and unique among channels ignoring case. A
+channel is registered under exactly the name typed, with no name derived from it, and carries no
+separate title. A name that breaks the rule is refused as a validation error and one another channel
+holds is refused with `RESOURCE_ALREADY_EXISTS` (409), in both cases with nothing registered or changed.
+The name is renamable through the ordinary update (`PATCH /api/v1/resources/{uid}` with `name`): the
+channel's Settings tab edits it as its Name, and every surface shows it. REST keeps addressing a
+channel by its `uid`.
 
 #### Scenario: a channel is named by any display name
 - **GIVEN** the Add channel dialog on the Channels page
 - **WHEN** the owner names a new Telegram channel "Team bot!" and connects it
-- **THEN** the channel is registered with the title "Team bot!" and the name `team-bot`
-- **AND** a second channel named "Team bot!" is registered as `team-bot-2` rather than refused
+- **THEN** the channel is registered with the name "Team bot!" exactly as typed, and its file is `local/resources/channel/<uid>.json`
+
+#### Scenario: a second channel cannot take a name ignoring case
+- **GIVEN** a channel named "Team bot!"
+- **WHEN** the owner adds another channel named "team BOT!"
+- **THEN** the registration is refused with `RESOURCE_ALREADY_EXISTS` (409) and no second channel exists
+
+#### Scenario: a channel is renamed from its Settings tab
+- **GIVEN** a channel named "Team bot!" with a paired owner
+- **WHEN** the owner changes its Name to "Office bot" on the Settings tab
+- **THEN** the channel is named "Office bot" everywhere, keeps its uid, pairing and file, and the rename is audited
 
 ### Requirement: Check credentials before they are saved
 The daemon MUST offer `POST /api/v1/channels/validate-credentials`, which asks a
@@ -2687,7 +2701,7 @@ page for where the cursor is taken and claimed.
 ### Requirement: Read a thread's earlier messages on demand
 Coffer MUST give an agent in a channel turn the built-in tool
 `coffer__channel_read_thread`, which reads a thread's messages page by page,
-newest page first. It takes the `channel` (name or uid), `chat_id`, `chat_kind`
+newest page first. It takes the `channel` — the channel's id (the `id:` of the origin block's channel line; its name is accepted too) — `chat_id`, `chat_kind`
 and `thread_id` the turn's origin block names, an optional `before` (a message
 id: return messages older than it) and a `limit` (1–100, default 20). It returns
 the page oldest first — each message's id, sender, time, text, whether the bot
@@ -2736,7 +2750,7 @@ Every place a channel shows its no-override model choice — `Default model` in 
 - **AND** for an agent whose default Coffer cannot know, the same replies read plain `Default model`
 
 ### Requirement: Commit a typed channel setting when its field is finished
-On a channel's Settings tab, a value typed into a field (the title, a SeaTalk app id,
+On a channel's Settings tab, a value typed into a field (the name, a SeaTalk app id,
 the two quiet windows, the idle period) MUST be saved when the person finishes the field,
 on blur or Enter, never while they are still typing: a value passed on the way to another
 ("3" on the way to "32") MUST NOT be saved, so it never takes effect on the running channel

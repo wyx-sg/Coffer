@@ -253,12 +253,18 @@
     "title": "MCP 服务器",
     "subtitle": "Coffer 运行的 MCP 服务器，通过同一个端点提供给你的智能体。",
     "addServer": "添加服务器",
-    "titleField": {
-      "hint": "在列出它的地方代替名称显示。留空则显示名称。"
-    },
     "fixedName": {
       "label": "名称",
       "cannotChange": "添加后不能修改。"
+    },
+    "freeName": {
+      "hint": "会显示在 Coffer 的各处；随时可以修改。",
+      "errors": {
+        "required": "请输入名称。",
+        "tooLong": "最多 80 个字符。",
+        "lineBreak": "请写成一行，不要包含换行或控制字符。",
+        "leadingDash": "名称不能以“-”开头。"
+      }
     }
   },
   "mcp": {
@@ -3794,8 +3800,6 @@
       "appSecret": "App Secret",
       "appSecretName": "{{name}} App Secret",
       "errors": {
-        "name": "请输入名称。",
-        "nameTooLong": "最多 80 个字符。",
         "botToken": "请选择已存的密钥，或粘贴 bot token。",
         "appId": "请输入 App ID。",
         "appSecret": "请选择已存的密钥，或粘贴 App Secret。",
@@ -3809,7 +3813,6 @@
         "title": "在 SeaTalk 开放平台把事件投递方式设为 WebSocket",
         "body": "请在这里连接之后再设置——后台会检查连接是否已存在。"
       },
-      "nameHint": "名称随意；消息渠道靠 ID 区分，之后可以改名。",
       "telegramFound": "找到 @{{handle}}",
       "telegramFoundPlain": "Token 可用",
       "telegramFoundBody": "Token 可用。它将在这台 Mac（{{machine}}）上运行。"
@@ -6019,7 +6022,6 @@
       "apiKey": "API Key"
     },
     "errors": {
-      "nameRequired": "请输入名称。",
       "baseUrl": "请输入完整 URL，例如 https://api.openai.com/v1",
       "secretRequired": "请输入 API Key。",
       "loopback": "本地运行时必须在这台 Mac 上——请用 localhost 或 127.0.0.1。",
@@ -6156,7 +6158,6 @@
     },
     "edit": {
       "title": "编辑 {{name}}",
-      "renameHint": "重命名只改名称——密钥、历史记录和智能体都保持不变。",
       "locked": "{{agents}} 正在使用，换到别的服务商之前不能添加或删除 OpenAI 兼容地址。",
       "keyHint": "密钥只写不读。要更改值，请用「更换密钥」。"
     },

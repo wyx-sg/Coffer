@@ -178,7 +178,7 @@ platform that can read threads tells the agent about it.
 
 | Property | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `channel` | string | yes | | The channel's name (the origin block's `channel:` line), or its uid. |
+| `channel` | string | yes | | The channel's id: the `id:` on the origin block's `channel:` line (`channel: "<name>" (id: <uid>)`). The channel's name is accepted too. |
 | `chat_id` | string | yes | | The chat id from the origin block. |
 | `chat_kind` | string | yes | | `direct` or `group`, from the origin block. |
 | `thread_id` | string | yes | | The thread id from the origin block. |

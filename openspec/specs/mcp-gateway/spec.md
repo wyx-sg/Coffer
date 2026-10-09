@@ -201,8 +201,7 @@ through is that spec's too.
 A server's `name` is the prefix of every capability name an agent sees, so `mcp_server` declares its name
 fixed: once registered it MUST NOT change, and a changed name MUST be refused with `NAME_IMMUTABLE`
 ([resource-framework](../resource-framework/spec.md) "Treat a resource's name as a mutable label"). A server
-carries no title: its fixed name and its description — a note the user keeps for themselves — are all it has
-([resource-framework](../resource-framework/spec.md) "Carry an optional editable title on the kinds that have one"),
+carries no title: its fixed name and its description — a note the user keeps for themselves — are all it has,
 and the Add and Edit dialogs offer no title field.
 The name MUST be at most 24 characters and MUST NOT be `coffer` (the name of Coffer's own gateway), in addition to
 the existing name pattern and the ban on `__`, wherever the framework validates it — registration here and a server arriving from another machine alike.
@@ -267,8 +266,7 @@ the existing name pattern and the ban on `__`, wherever the framework validates 
 #### Scenario: an MCP server is shown by its name
 - **GIVEN** the daemon is running
 - **WHEN** the user registers a server named `fs` with a stdio command and the description "Local files" through the Add dialog (`POST /api/v1/resources/mcp_server`) and then lists servers
-- **THEN** the list shows it as `fs` with that description, and reading it back carries a `null` title
-- **AND** a title submitted for it through the kind-agnostic update route is refused as a validation error
+- **THEN** the list shows it as `fs` with that description, and reading it back carries no `title` field
 
 Deleting a server MUST leave no upstream process or connection for it in any session, the process-wide one
 included: a spawn already under way when the delete begins, one a listing or call starts while the delete

@@ -221,8 +221,6 @@ export interface components {
              * @default false
              */
             starting: boolean;
-            /** Title */
-            title: string | null;
             /** Uid */
             uid: string;
             /**

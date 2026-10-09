@@ -33,6 +33,7 @@ from coffer.infrastructure.channel.move_to_local import move_channels_to_local
 from coffer.infrastructure.persistence.derived_db import open_derived_db
 from coffer.infrastructure.sync.identity import resolve_identity
 from coffer.infrastructure.sync.local_state import JsonRemoteStore
+from coffer.infrastructure.vault.free_name_migration import name_by_title
 from coffer.infrastructure.vault.git import GitMissing
 from coffer.infrastructure.vault.instance import set_machine, vault_repository, vault_writer
 from coffer.infrastructure.vault.resource_store import FileResourceRepo
@@ -85,6 +86,9 @@ async def build_vault_stores(kinds: dict[str, Kind]) -> VaultStores:
         move_channels_to_local(machine)
     except Exception:
         _log.warning("channel.move_local_failed", exc_info=True)
+    # ONE-TIME (ADR provider-and-channel-names-are-free-text): a provider's or a
+    # channel's title becomes its name, and its file is named by its uid.
+    name_by_title()
     resources = FileResourceRepo(kinds)
     validator = VaultValidator()
     validator.register(f"{RESOURCES}/", resource_rule(kinds, resources.head_owners))

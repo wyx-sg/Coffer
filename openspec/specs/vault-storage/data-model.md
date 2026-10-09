@@ -29,7 +29,7 @@ with no per-tree override, and `coffer path logs` prints the log directory).
 ~/.coffer/
   vault/
     manifest.json                          {"schema_version": 3}
-    resources/<kind>/<name>.json           mcp_server, skill, provider, knowledge
+    resources/<kind>/<name>.json           mcp_server, skill, knowledge  (provider: <uid>.json)
     state/mcp-preferences/<server>.json
     state/settings/internal-engine.json
     knowledge/<collection>/...
@@ -38,7 +38,7 @@ with no per-tree override, and `coffer path logs` prints the log directory).
     machines/<machine id>.json             one descriptor per machine
     .git/                                  info/exclude, tags coffer/pre-apply/<time>
   local/
-    resources/agent/<name>.json  resources/channel/<name>.json
+    resources/agent/<name>.json  resources/channel/<uid>.json
     channel-peers.json                     {channel uid: {peers: [...]}}
     reach.json  engine.json  retention.json  curation.json
     skill-source-status.json
@@ -113,14 +113,14 @@ are carried as bytes, not parsed as vault documents.
   vault's resource rule does the same for a file: one `config_invalid` finding
   per unknown key, whether the file was edited by hand or brought by a sync
   merge. The kind's name rule (`validate_name`) is applied to every change of
-  the file as well, and a `title` on a kind with `titled` false is refused.
+  the file as well: free text for `provider` and `channel` (the same rule as a registration, and a name taken ignoring case is `NAME_TAKEN`), the slug rule for every other kind.
 - **The encoding is deterministic.** The same document always encodes to the
   same bytes, so a write that changes nothing makes no commit and two machines
   writing the same value do not conflict.
 - **No `updated_at`.** Two machines stamping it would conflict on every edit;
   git knows when a file changed.
 
-### Resource document — `resources/<kind>/<name>.json`
+### Resource document — `resources/<kind>/<name>.json`, or `<uid>.json` for a provider and a channel
 
 | Key | Required | Notes |
 | --- | --- | --- |
@@ -128,8 +128,7 @@ are carried as bytes, not parsed as vault documents.
 | `kind` | yes | non-empty; must match the directory it sits in |
 | `format_version` | — | positive integer; absent reads as `1` |
 | `format_compat` | — | written only when the file's format is newer than the oldest version that can read it |
-| `name` | yes | non-empty; unique within its kind |
-| `title` | — | written only when set |
+| `name` | yes | non-empty; unique within its kind (ignoring case for `provider` and `channel`, whose names are free text) |
 | `description` | — | always written, `null` when empty |
 | `config` | yes | an object; the kind's own schema. Strings under the writing machine's home are `${HOME}/...` |
 | `created_at` | — | ISO time |

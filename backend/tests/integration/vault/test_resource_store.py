@@ -130,8 +130,6 @@ async def test_crud_round_trip_and_ordering() -> None:
     assert [r.name for r in await svc.list(kind="widget")] == ["a", "b"]
     updated = await svc.update_config(b.uid, {"colour": "pink"}, actor="user", description="bee")
     assert updated.config == {"colour": "pink", "path": ""}
-    titled = await svc.set_title(a.uid, "Aye", actor="user")
-    assert titled.title == "Aye"
     with pytest.raises(ResourceAlreadyExists):
         await svc.register("widget", "a", {"colour": "x"}, actor="user")
     await svc.delete(a.uid, actor="user")

@@ -22,7 +22,6 @@ import { translateApiError } from "@/lib/api/errors";
 import type { Provider } from "@/lib/api/providers";
 import { useDeleteProvider } from "@/lib/hooks/useProviders";
 import { isInUse, type ProviderUse } from "@/lib/providers/usedBy";
-import { displayName } from "@/lib/resourceTitle";
 import { previewItems, useDeletePreview } from "./useDeletePreview";
 
 interface Props {
@@ -104,7 +103,7 @@ export function DeleteProviderDialog({ open, provider, use, onClose }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const del = useDeleteProvider();
-  const name = displayName(provider);
+  const name = provider.name;
   const secretName = useSecretName(provider.secret_ref ?? "");
   const inUse = isInUse(use);
   const preview = useDeletePreview(provider.uid, open && inUse);

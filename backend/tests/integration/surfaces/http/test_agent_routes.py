@@ -462,22 +462,3 @@ def test_error_422_unprocessable_body(tmp_path, monkeypatch):
                 json={"type": bad_type, "config_dir": str(config_dir)},
             )
             assert r.status_code == 422, f"{bad_type}: {r.text}"
-
-
-def test_agent_out_carries_no_title(tmp_path, monkeypatch):
-    """spec resource-framework "Carry an optional editable title on the kinds
-    that have one": an agent is not one of them — its reads carry no title, a
-    title through the kind-agnostic update is refused (422), and the generic
-    resource read keeps ``title`` null."""
-    app = _app(tmp_path, monkeypatch, 59796)
-    config_dir = tmp_path / "cfg"
-    config_dir.mkdir()
-    with _client(app) as c:
-        uid = _codex_uid(c, config_dir)
-        assert "title" not in c.get(f"/api/v1/agents/{uid}").json()
-
-        r = c.patch(f"/api/v1/resources/{uid}", json={"title": "Work Codex"})
-        assert r.status_code == 422, r.text
-        assert c.get(f"/api/v1/resources/{uid}").json()["title"] is None
-        items = {a["uid"]: a for a in c.get("/api/v1/agents").json()["items"]}
-        assert "title" not in items[uid]

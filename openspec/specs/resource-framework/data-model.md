@@ -30,10 +30,13 @@ for the next reader to reach for the wrong one
 single helper, because while rename lived in one kind's service the two had
 already drifted apart.
 
-`normalise_title(title)` is the title rule: surrounding whitespace is dropped,
-an empty title becomes `None` (which is how a title is cleared), and one longer
-than `TITLE_MAX_LEN` (80) raises `ValueError`, which the service reports as
-`CONFIG_INVALID`.
+`normalise_free_name(name)` is the free-text name rule of a kind with
+`Kind.free_name` (`provider`, `channel`): surrounding whitespace is dropped, the
+text is NFC-normalised, and a name that is empty, longer than `FREE_NAME_MAX_LEN`
+(80), holds a control character (a line break included) or starts with `-` raises
+`InvalidResourceNameError`. `same_free_name(a, b)` compares two such names
+ignoring case, which is how a kind's uniqueness and a case-only rename are
+decided. No resource carries a title.
 
 ### `Resource` (`domain/resource.py`)
 
@@ -43,13 +46,12 @@ Plain Python dataclass; **not** a Pydantic model (domain stays pure).
 | ------------- | ---------------- | -------------------------------------------------------------------------- |
 | `uid`         | `str`            | **the identity**: `uuid4().hex`, minted once, never reused, the same value on every machine holding this resource. Stored inside the resource file (`uid` key), never derived from its path: every route, every cross-resource reference and every `runs.db` row that names a resource (`resource_uid`) address this. A file a person wrote without one is given one by a `daemon` commit; a second file claiming a uid another file already holds is refused and flagged |
 | `kind`        | `str`            | matches `Kind.name`                                                        |
-| `name`        | `str`            | a **label**, unique within its kind; mutable unless the kind declares it fixed (`Kind.name_fixed`) |
+| `name`        | `str`            | a **label**, unique within its kind; mutable unless the kind declares it fixed (`Kind.name_fixed`). A slug (`^[a-zA-Z0-9_.-]+$`, at most 64 characters) except for a kind with `Kind.free_name`, where it is free text (see `normalise_free_name`) unique ignoring case |
 | `description` | `str \| None`    | optional free text                                                         |
 | `config`      | `dict[str, Any]` | kind-specific config, already validated against the kind's `config_schema` |
 | `enabled`     | `bool`           | user-controlled enable/disable flag. Reach, so machine-local: `local/reach.json`, never in the file; a resource with no record there is enabled |
 | `created_at`  | `datetime`       | UTC, the file's `created_at` key, written at creation and never updated; a file without one reads as the file's modification time |
 | `updated_at`  | `datetime`       | UTC, the modification time of the file on this machine; not in the file |
-| `title`       | `str \| None`    | optional display text, at most 80 characters, that surfaces show in place of `name`; `None` = none. Editable through `ResourceService.set_title` on a kind that carries one (`Kind.titled`); always `None` for `agent`, `mcp_server`, `skill` and `knowledge` (a collection is named by its folder); the file's `title` key, present only when set (spec resource-framework "Carry an optional editable title on the kinds that have one") |
 | `scope`       | `Scope \| None`  | framework-level per-agent activation scope ([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)); `None` = unscoped (active for every agent). Interpreted via `domain/scope.py`; only kinds whose `Kind.supports_scope` is True may set it. Machine-local: the `agents` of the resource's record in `local/reach.json`, never in the file. A resource with no record is unscoped |
 
 There is no derived `ref`: a resource carries its `uid`, its `kind` and its
@@ -70,7 +72,7 @@ any framework-level adapter.
 | `name_fixed`                | `bool`                                                                     | whether a registered row's name is fixed because it is quoted outside Coffer; `rename` refuses a changed name with `NAME_IMMUTABLE` (409) before any hook or write, and nothing is audited. True for `mcp_server` (its name prefixes every tool name an agent sees), `skill` (its name is the folder an agent loads it from) and `agent` (its name is its type's) |
 | `name_fixed_resets`         | `str`                                                                      | for a `name_fixed` kind, what deleting and registering again resets, quoted in the refusal message      |
 | `name_from_config`          | `Callable[[dict], str] \| None`                                            | the one name a row may carry, derived from its config; `register` refuses any other (422). `agent` derives it from its type (`claude_code` → `claude-code`) |
-| `titled`                    | `bool`                                                                     | whether rows carry the optional `title`; False for `agent`, `mcp_server`, `skill` and `knowledge`, where a non-empty title is refused (422) on register and on `set_title` |
+| `free_name`                 | `bool`                                                                     | whether the kind's name is free text (`normalise_free_name`: trimmed, NFC, 1–80 characters, no control character, not starting with `-`), unique within the kind ignoring case, and its file is `<uid>.json`, so a rename never moves it. True for `provider` and `channel`; every other kind keeps the slug rule (spec resource-framework "Name a provider or a channel with free text") |
 | `supports_scope`            | `bool`                                                                     | whether the kind takes a per-agent scope at all; False (the default) makes `update_scope` reject a non-null payload with 422. True for `mcp_server`, `skill`, `provider` and `channel`; False for `agent`, `knowledge` and `memory` |
 | **Pre-write validators**    |                                                                            | run BEFORE persistence; raising rejects the write                                                       |
 | `validate_name`             | `Callable[[str], None] \| None`                                            | kind-specific name rule, run on register, rename and every change to its file (`mcp_server` reserves the `__` namespace separator and caps names at 24 characters)                     |
@@ -130,7 +132,7 @@ String-valued enum (`StrEnum`). The rows this spec writes:
 | Value                      | When emitted                                               |
 | -------------------------- | ---------------------------------------------------------- |
 | `"resource_created"`       | After `ResourceService.register`                           |
-| `"resource_updated"`       | After a config, description or title change (a title change records `details.title.before`/`after`) |
+| `"resource_updated"`       | After a config or description change |
 | `"resource_enabled"`       | After `set_enabled(True)` when state flipped               |
 | `"resource_disabled"`      | After `set_enabled(False)` when state flipped              |
 | `"resource_deleted"`       | After `delete` (includes pre-delete snapshot in `details`)  |
@@ -196,12 +198,12 @@ no runner left to release it.
 
 A resource is one JSON document (2-space indent, key order kept, trailing
 newline, unknown keys kept in place; spec vault-storage) at
-`resources/<kind>/<name>.json` under its class's directory:
+`resources/<kind>/<name>.json` (`resources/<kind>/<uid>.json` for `provider` and `channel`) under its class's directory:
 
 | Class   | Directory                            | Kinds                                                     | Written                                                               |
 | ------- | ------------------------------------ | --------------------------------------------------------- | --------------------------------------------------------------------- |
-| vault   | `~/.coffer/vault/resources/<kind>/`   | `mcp_server`, `skill`, `channel`, `provider`, `knowledge` | through the vault's one writer, one commit per operation; read at `HEAD` |
-| local   | `~/.coffer/local/resources/<kind>/`   | `agent`                                                   | atomically, no history                                                |
+| vault   | `~/.coffer/vault/resources/<kind>/`   | `mcp_server`, `skill`, `provider`, `knowledge`            | through the vault's one writer, one commit per operation; read at `HEAD` |
+| local   | `~/.coffer/local/resources/<kind>/`   | `agent`, `channel`                                        | atomically, no history                                                |
 | derived | `~/.coffer/derived/resources/<kind>/` | `memory`, and the builtin skill `coffer-guide`            | atomically, no history; rebuilt                                       |
 
 ```json
@@ -221,16 +223,19 @@ newline, unknown keys kept in place; spec vault-storage) at
 | `uid`            | the identity (`uuid4().hex`; any opaque id of letters, digits, `-` and `_`, at most 64 characters, is kept). Absent only on a hand-made file, until the `daemon` commit that mints one |
 | `kind`           | required; the `Kind.name`                                                                                                                                    |
 | `format_version` | the resource document's format, 1 today; `format_compat` appears only on a file a newer build wrote additively                                             |
-| `name`           | required; the label, unique within its kind across every class                                                                                              |
-| `title`          | written only when set                                                                                                                                        |
+| `name`           | required; the label, unique within its kind across every class (ignoring case for `provider` and `channel`, whose names are free text)                       |
 | `description`    | always written, `null` when empty, so a person editing the file sees where it goes                                                                           |
 | `config`         | required; the kind's config. A string under this machine's home is written as `${HOME}/...` and expanded on read; top-level keys the kind's schema does not declare are put back from the file on every write |
 | `created_at`     | ISO time, written at creation                                                                                                                                |
 
 `enabled`, `scope` and `updated_at` are not in the file. The file name
-only follows the name: nothing keys on the path, a person may move the file,
-and a rename writes `<new name>.json` (or `<name>-<uid[:8]>.json` when that
-name is taken by an unrelated file) and removes the old one in the same commit.
+only follows the name for the slug kinds: nothing keys on the path, a person may
+move the file, and a rename writes `<new name>.json` (or `<name>-<uid[:8]>.json`
+when that name is taken by an unrelated file) and removes the old one in the same
+commit. A `provider`'s and a `channel`'s file is `<uid>.json` for life and a
+rename rewrites only its `name` key. Before the store first reads, a one-time
+migration (`infrastructure/vault/free_name_migration.py`) turns an old-shape file's
+`title` into its name, drops the key and moves the file to `<uid>.json`.
 
 ### Reach — `~/.coffer/local/reach.json`
 

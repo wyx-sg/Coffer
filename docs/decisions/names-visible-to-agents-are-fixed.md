@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-30
 **Deciders**: Yuxing Wu
-**Related**: [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Kind Plug-in Contract](kind-plugin-contract.md), [Tool Overload: List a Usage-Ranked Slice, Search the Rest](tool-overload-tier-the-list-search-the-rest.md), [Skills Reach an Agent as a Directory Link](cross-platform-skill-delivery.md), research note [MCP gateways](../research/mcp-gateways.md), spec resource-framework "Treat a resource's name as a mutable label", spec resource-framework "Carry an optional editable title on the kinds that have one", spec agent-registry "Keep one agent per type, named by it", spec mcp-gateway "Manage MCP servers as resources", spec mcp-gateway "Flag tools whose client-visible name is too long", spec skill-manager "Keep one master folder per skill", OpenSpec changes `reshape-cli-and-mcp-surface` and `one-agent-per-type-and-no-titles`
+**Related**: [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Kind Plug-in Contract](kind-plugin-contract.md), [Tool Overload: List a Usage-Ranked Slice, Search the Rest](tool-overload-tier-the-list-search-the-rest.md), [Skills Reach an Agent as a Directory Link](cross-platform-skill-delivery.md), research note [MCP gateways](../research/mcp-gateways.md), spec resource-framework "Treat a resource's name as a mutable label", [A Provider's and a Channel's Name Is Free Text, and Their Files Are Named by uid](provider-and-channel-names-are-free-text.md), spec agent-registry "Keep one agent per type, named by it", spec mcp-gateway "Manage MCP servers as resources", spec mcp-gateway "Flag tools whose client-visible name is too long", spec skill-manager "Keep one master folder per skill", OpenSpec changes `reshape-cli-and-mcp-surface` and `one-agent-per-type-and-no-titles`
 
 ## Context
 
@@ -84,16 +84,17 @@ reach, a skill's enabled flag, scope and deliveries.
 and its name is derived from the type (`claude_code` → `claude-code`, `codex`)
 through `Kind.name_from_config`, so there is no other name it could have.
 
-None of the three carries a display title (`Kind.titled = False`): an MCP
+None of the three carries a display title: an MCP
 server is its fixed name plus its description, the user's own note; a skill is
 its fixed name plus its `SKILL.md` description, the text agents choose it by;
-an agent is its type. A non-empty title on these kinds is refused as a
-validation error on every surface. `provider`, `channel`, `knowledge` and
+an agent is its type. `provider`, `channel`, `knowledge` and
 `memory` keep renamable names, because their names appear only on Coffer's own
 surfaces (or, for knowledge and memory, in a directory Coffer moves itself
-through the kind's `on_rename` hook). `provider`, `channel` and `memory` keep
-the optional `title`; a knowledge collection is shown by its folder name beside
-a description its README opens with, so it carries none.
+through the kind's `on_rename` hook). No kind carries a title any more: a
+provider's and a channel's name is itself free text ([A Provider's and a
+Channel's Name Is Free Text, and Their Files Are Named by uid](provider-and-channel-names-are-free-text.md)),
+and a knowledge collection is shown by its folder name beside a description its
+README opens with.
 
 - **Pros.** Nothing an agent or a user has written down can go stale because of
   Coffer. Every surface shows the one name the user types and the agent quotes,
@@ -189,11 +190,11 @@ name is derived from its type and so cannot change either. The `uid` is still th
 identity ([A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md));
 this decision narrows which labels may move, not what identifies a resource.
 
-These three kinds, and `knowledge`, carry no display title: surfaces show the
-name, beside an MCP server's description or a skill's `SKILL.md` description.
-The optional `title` (at most 80 characters, a key in the resource's own file
-so it travels with it, shown in place of the name when set) stays on the kinds
-whose name is Coffer's own label: `provider`, `channel` and `memory`.
+These three kinds carry no display title: surfaces show the name, beside an
+MCP server's description or a skill's `SKILL.md` description. Neither does any
+other kind: where a name is Coffer's own label and a person wants it to read
+well (`provider`, `channel`), the name itself is free text ([A Provider's and a
+Channel's Name Is Free Text, and Their Files Are Named by uid](provider-and-channel-names-are-free-text.md)).
 
 A new MCP server's name is capped at 24 characters at registration
 (`MCP_SERVER_NAME_MAX_LEN` in `application/mcp/kind.py`): 13 + 24 + 2 leaves 25
@@ -220,12 +221,10 @@ reads, an identifier it calls — must set `name_fixed` in the same change.
   and its description is changed by editing `SKILL.md`.
 - Migration 0109 clears the titles stored on agents, MCP servers and skills,
   and collapses agents to one per type named by it.
-- The `title` stays a key of the resource file for the kinds that carry it,
-  left out while empty; a file without it leaves the title empty.
 - An existing MCP server with a name longer than 24 characters keeps working;
   the only visible effect is the long-tool-name flag on its capabilities.
 - Enforced in `application/resource_rename_ops.py` (the refusal), the kinds'
   descriptors (`application/mcp/kind.py`, `application/skill/kind.py`,
-  `application/agent/kind.py`, `application/knowledge/kind.py`), the title rule in
+  `application/agent/kind.py`), the name rule in
   `application/resource_kind_ops.py`, and the resource-framework,
   agent-registry, mcp-gateway and skill-manager specs.

@@ -152,7 +152,7 @@ BM25，依据每个工具的服务器、名称、描述和参数；用中文、�
 
 | 属性 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `channel` | string | 是 | | 消息渠道的名称（来源块里的 `channel:` 行），或它的 uid。 |
+| `channel` | string | 是 | | 消息渠道的 id：来源块 `channel:` 行里的 `id:`（`channel: "<name>" (id: <uid>)`）。也接受消息渠道的名称。 |
 | `chat_id` | string | 是 | | 来源块里的聊天 ID。 |
 | `chat_kind` | string | 是 | | `direct` 或 `group`，取自来源块。 |
 | `thread_id` | string | 是 | | 来源块里的会话串 ID。 |

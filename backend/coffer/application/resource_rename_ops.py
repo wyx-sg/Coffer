@@ -70,10 +70,15 @@ async def rename(
     # refused whatever it would have been changed to, and before any hook runs
     # or anything is written or audited.
     refuse_fixed_name(kind_def, before, new_name)
-    check_name(kind_def, new_name)
+    new_name = check_name(kind_def, new_name)
+    if new_name == before.name:
+        return before  # only surrounding whitespace differed
     # Checked explicitly, before any write, so a collision is a clean 409 that
     # has moved nothing — neither the resource's file nor a kind's directory.
-    if await service._repo.find_by_name(before.kind, new_name) is not None:
+    # A free-text name may change only its case: the one it collides with is
+    # its own.
+    holder = await service._repo.find_by_name(before.kind, new_name)
+    if holder is not None and holder.uid != uid:
         raise ResourceAlreadyExists(before.kind, new_name)
     # A file that cannot be written now (read-only, or an unsettled edit) is
     # refused before the hook moves the kind's directory.
@@ -97,8 +102,6 @@ async def rename(
         details={
             "from": before.name,
             "to": new_name,
-            # The display title, which the UI shows in place of the name.
-            "title": before.title,
             # Whether the kind moved an on-disk folder named after it (a
             # knowledge collection, a skill) along with the label.
             "moved_folder": kind_def.on_rename is not None,

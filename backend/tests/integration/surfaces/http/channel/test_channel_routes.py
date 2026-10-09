@@ -259,7 +259,6 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
         "diagnostics": [],  # nothing contradicts the configuration
         "secret_approval": None,  # its secret is not waiting on anyone
         "starting": False,
-        "title": None,  # none set, so a surface shows the name
         "handoff": None,  # nothing to hand to an agent
         # Where new conversations start while the channel marks no default.
         "workspace_directory": str(content_root() / "workspace"),
@@ -479,18 +478,6 @@ async def test_ingest_hands_a_pushed_event_to_the_adapter(ctx: _Ctx) -> None:
 async def test_ingest_with_the_adapter_down_is_refused(ctx: _Ctx) -> None:
     with pytest.raises(ChannelNotRunning):
         await get_channel_service().ingest_event(ctx.st_uid, {"event_type": "x", "event": {}})
-
-
-async def test_channel_status_carries_the_resource_title(ctx: _Ctx) -> None:
-    """spec resource-framework "Carry an optional editable title on the kinds that have one":
-    the status read carries the channel's title beside its unchanged name."""
-    async with _client(ctx.app) as c:
-        r = await c.get(f"/api/v1/channels/{ctx.tg_uid}/status")
-        assert r.json()["title"] is None
-        await ctx.resources.set_title(ctx.tg_uid, "Team bot", actor="test")
-        r = await c.get(f"/api/v1/channels/{ctx.tg_uid}/status")
-    assert r.status_code == 200, r.text
-    assert (r.json()["name"], r.json()["title"]) == ("tg", "Team bot")
 
 
 @pytest.mark.acceptance(

@@ -343,7 +343,7 @@ that item. A switch MUST keep reconcile passes out until its file and its record
 
 ### Requirement: Converge connections across machines
 The `provider` kind MUST be registered into the composition root's kind table like every kind, so each
-connection is one vault file, `resources/provider/<name>.json`, that a sync round merges and checks out
+connection is one vault file, `resources/provider/<uid>.json`, that a sync round merges and checks out
 like every resource file ([vault-sync](../vault-sync/spec.md) "Converge resources as their own files"). A connection's reach
 (`enabled` / `scope`) MUST NOT travel: it is this machine's reach record, one decision the user makes
 per machine, so a connection that already exists keeps the reach it has, and one that has just arrived
@@ -547,11 +547,12 @@ MUST be left where it is (the ref is an opaque address, never derived from the n
 each event carried when it happened — and a connection an agent runs on MUST NOT be re-projected, because the
 projected `apiKeyHelper` cites the agent's uid. Codex's provider label (`Coffer (<name>)`) is cosmetic and
 goes stale until the next projection rewrites it. It MUST record a `resource_renamed` audit event
-naming both names. A name another connection already holds MUST be refused with
+naming both names. A name another connection already holds, in any casing, MUST be refused with
 `RESOURCE_ALREADY_EXISTS` (409) BEFORE anything is written; an absent connection MUST be a 404;
-renaming to the current name MUST be a no-op and MUST record nothing. The optional display title
-every resource carries ([resource-framework](../resource-framework/spec.md), set
-through the same `PATCH /api/v1/resources/{uid}`) is not a rename and leaves the name alone. On the web, the edit dialog's
+renaming to the current name MUST be a no-op and MUST record nothing. A connection's name is free text
+([resource-framework](../resource-framework/spec.md) "Name a provider or a channel with free text"), so a rename
+that only changes the case of its own name is allowed, and the connection's file, `resources/provider/<uid>.json`,
+stays where it is. A connection carries no separate title. On the web, the edit dialog's
 Name field submits this rename ahead of the patch, and the page stays where it is, because its route
 is the uid.
 
@@ -563,6 +564,12 @@ is the uid.
 - **GIVEN** two connections `acme` and `taken`,
 - **WHEN** `acme` is renamed to `taken`,
 - **THEN** the response is 409 `RESOURCE_ALREADY_EXISTS` and both connections still carry their original labels, each still reachable at its own uid with its secret intact.
+#### Scenario: rename a connection to free text
+- **GIVEN** a connection `acme`
+- **WHEN** a client patches its `name` to "Acme (EU) 生产", and then to "acme (eu) 生产"
+- **THEN** both are accepted, the connection keeps its `uid`, its `secret_ref` and its file `resources/provider/<uid>.json`, and each rename records a `resource_renamed` entry naming both names
+- **AND** a name with a line break, a name over 80 characters and a name starting with `-` are each refused as a validation error
+
 #### Scenario: rename a connection over REST
 - **GIVEN** the daemon is running with a connection `acme`,
 - **WHEN** a client patches the connection's `name` to `acme-eu` through `PATCH /api/v1/resources/<uid>`, and then patches it to `taken` while another connection is named `taken`,
@@ -1347,7 +1354,7 @@ The web surfaces:
   one page under one header — the title, an Experimental tag, a one-line description and the page's one primary button, **Add provider** — over two tabs, **Providers** and **Usage** ("Show metered usage on a Usage tab of Model providers"). Providers is the connection library: a list of connections beside the open one. It has no view of which agent runs on what and no Coffer's model tab, because an agent's connection is shown and changed in that agent's Overview › Model and the speech-to-text connection is chosen in Settings › General. The page opens on the first connection, and with none it is a welcome panel. Each row shows
   the connection's vendor mark, its name, its protocol and what it offers (its curated model count,
   or all models), and the marks of the agents running on it, read from the agents' `connection_uid`; a filter narrows the list over name,
-  title, endpoint and description, and the list is sorted by name, with no order heading and no drag handle on a row. It has no per-row switch, because activation is per agent, and no
+  endpoint and description, and the list is sorted by name, with no order heading and no drag handle on a row. It has no per-row switch, because activation is per agent, and no
   per-row delete: it is on the open connection's header. A row MUST say what Coffer
   ITSELF uses the connection for: the `transcribe_default` connection carries a "Coffer · speech to
   text" badge with a hint naming Settings › General as where it is changed, and the connection's Used by repeats

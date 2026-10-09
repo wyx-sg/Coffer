@@ -60,7 +60,7 @@ calls it:
 | `exclusive_flags` | Config flags at most one resource of the kind may hold; the vault validator refuses a commit that leaves two | `provider` (`transcribe_default`) |
 | `name_fixed`, `name_fixed_resets` | The name cannot change once registered, because it is quoted outside Coffer; a rename is refused with `NAME_IMMUTABLE` before any hook runs | `mcp_server`, `skill`, `agent` |
 | `name_from_config(config)` | The one name a row may carry, derived from its config | `agent` |
-| `titled` | Whether rows carry the optional display `title` | `False` for `agent`, `mcp_server`, `skill`, `knowledge` |
+| `free_name` | The name is free display text (trimmed, 1–80 characters, unique ignoring case) rather than a slug, and the file is named by uid ([A Provider's and a Channel's Name Is Free Text, and Their Files Are Named by uid](provider-and-channel-names-are-free-text.md)) | `provider`, `channel` |
 
 **Pure functions of the config** — consulted while building a write, never
 reject it:

@@ -170,7 +170,7 @@ export interface paths {
         head?: never;
         /**
          * Update Resource
-         * @description Edit a resource's label, title, description or config.
+         * @description Edit a resource's label, description or config.
          *
          *     ``name`` is an ordinary field here, at the same level as ``description``,
          *     which is the whole user-facing point of the identity change: while the name
@@ -707,8 +707,6 @@ export interface components {
             kind: string;
             /** Name */
             name: string;
-            /** Title */
-            title?: string | null;
         };
         /** ResourceListOut */
         ResourceListOut: {
@@ -742,8 +740,6 @@ export interface components {
              * @default false
              */
             secrets_readable_by_local_processes: boolean;
-            /** Title */
-            title: string | null;
             /** Toggleable */
             toggleable: boolean;
             /**
@@ -794,8 +790,6 @@ export interface components {
             description?: string | null;
             /** Name */
             name?: string | null;
-            /** Title */
-            title?: string | null;
         };
         /**
          * ResyncEventOut

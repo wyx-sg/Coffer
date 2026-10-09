@@ -1,6 +1,6 @@
-"""A title on the kinds that carry one, and a name that some kinds fix.
+"""A free-text name on the kinds that take one, and a name that some kinds fix.
 
-spec resource-framework "Carry an optional editable title on the kinds that have one" and
+spec resource-framework "Name a provider or a channel with free text" and
 "Treat a resource's name as a mutable label"; spec mcp-gateway "Manage MCP
 servers as resources" for the 24-character cap on a new server name.
 
@@ -8,11 +8,13 @@ The kinds are real where the rule belongs to the kind: ``mcp_server`` is built b
 its own ``make_mcp_kind`` (with no live session to evict), so the fixed name and
 the name cap tested here are the production declarations, not a restatement.
 ``plain`` is a synthetic renamable kind with a reach, standing for every kind
-whose name is not fixed.
+whose name is not fixed; ``named`` is one whose name is free text, as a
+provider's and a channel's are.
 """
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from typing import Any
 
@@ -31,6 +33,8 @@ from coffer.infrastructure.persistence.engine import (
     session_maker,
 )
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+from coffer.infrastructure.vault.home import vault_root
+from coffer.infrastructure.vault.instance import vault_repository
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_resource_service
@@ -56,12 +60,15 @@ async def _app(tmp_path, extra_kinds: dict[str, Kind] | None = None):
         "plain": Kind(
             name="plain", display_name="Plain", config_schema=_PlainConfig, supports_scope=True
         ),
+        "named": Kind(
+            name="named", display_name="Named", config_schema=_PlainConfig, free_name=True
+        ),
         "mcp_server": make_mcp_kind({}),
         **(extra_kinds or {}),
     }
     svc = ResourceService(
         kinds=kinds,
-        repo=make_resource_repo(),
+        repo=make_resource_repo(kinds),
         audit=AuditService(SqlAlchemyAuditRepo(sm)),
     )
     app = FastAPI()
@@ -81,113 +88,126 @@ def _audit(tmp_path) -> list[tuple[str, str]]:
         return list(db.execute("SELECT event_type, resource_name FROM audit_log ORDER BY id"))
 
 
-def _updates(tmp_path) -> list[str]:
-    with sqlite3.connect(tmp_path / "c.db") as db:
-        return [
-            row[0]
-            for row in db.execute(
-                "SELECT details_json FROM audit_log WHERE event_type = 'resource_updated'"
-            )
-        ]
+# --- a free-text name ------------------------------------------------------------
 
 
-# --- title ---------------------------------------------------------------------
+def _file_of(uid: str) -> str | None:
+    found = [p for p in vault_repository().tree("HEAD", "resources/named") if uid in p]
+    return found[0] if found else None
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="resource-framework", scenario="a title is shown in place of the name")
-async def test_a_title_is_carried_beside_the_name_and_changes_nothing_else(tmp_path):
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="a free-text name is stored as typed and renamed in place"
+)
+async def test_a_free_text_name_is_stored_trimmed_and_renamed_without_moving_its_file(tmp_path):
     c, _svc, engine = await _app(tmp_path)
     async with c:
-        created = (
-            await c.post(
-                "/api/v1/resources",
-                json={"kind": "plain", "name": "search", "config": {"foo": 1}},
-            )
-        ).json()
-        uid = created["uid"]
-        assert created["title"] is None
-        await c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": ["a1"]}})
-        await c.post(f"/api/v1/resources/{uid}/disable")
-        before = (await c.get(f"/api/v1/resources/{uid}")).json()
+        created = await c.post(
+            "/api/v1/resources", json={"kind": "named", "name": "  团队 Search ✨ ", "config": {}}
+        )
+        assert created.status_code == 201, created.text
+        uid = created.json()["uid"]
+        assert created.json()["name"] == "团队 Search ✨"
+        assert "title" not in created.json()
+        assert _file_of(uid) == f"resources/named/{uid}.json"
 
-        r = await c.patch(f"/api/v1/resources/{uid}", json={"title": "Team search"})
+        renamed = await c.patch(f"/api/v1/resources/{uid}", json={"name": "Team search"})
+        assert renamed.status_code == 200, renamed.text
+        assert (await c.get(f"/api/v1/resources/{uid}")).json()["name"] == "Team search"
+        assert _file_of(uid) == f"resources/named/{uid}.json"
+    assert _audit(tmp_path)[-1] == ("resource_renamed", "Team search")
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="a name that breaks the rule is refused"
+)
+async def test_a_free_name_outside_the_rule_and_display_text_on_a_slug_kind_are_refused(tmp_path):
+    c, _svc, engine = await _app(tmp_path)
+    async with c:
+        for name in ("x" * 81, "two\nlines", "-flag", "   "):
+            r = await c.post(
+                "/api/v1/resources", json={"kind": "named", "name": name, "config": {}}
+            )
+            assert r.status_code == 422, (name, r.text)
+        slug = await c.post(
+            "/api/v1/resources", json={"kind": "plain", "name": "Team search", "config": {}}
+        )
+        assert slug.status_code == 422, slug.text
+        listed = (await c.get("/api/v1/resources")).json()["resources"]
+        assert listed == []
+    assert _audit(tmp_path) == []
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="a kind that is not free-text refuses a name with a space"
+)
+async def test_a_kind_that_is_not_free_text_refuses_a_name_with_a_space(tmp_path):
+    c, _svc, engine = await _app(tmp_path)
+    async with c:
+        for kind in ("mcp_server", "plain"):
+            config = _SERVER_CONFIG if kind == "mcp_server" else {}
+            r = await c.post(
+                "/api/v1/resources", json={"kind": kind, "name": "My Server", "config": config}
+            )
+            assert r.status_code == 422, (kind, r.text)
+            assert r.json()["error"]["code"] == "CONFIG_INVALID"
+        assert (await c.get("/api/v1/resources")).json()["resources"] == []
+    assert _audit(tmp_path) == []
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="a rename that only changes case is allowed"
+)
+@pytest.mark.acceptance(spec="resource-framework", scenario="a rename does not move the file")
+async def test_a_case_only_rename_is_audited_and_leaves_the_file_where_it_is(tmp_path):
+    c, _svc, engine = await _app(tmp_path)
+    async with c:
+        created = await c.post(
+            "/api/v1/resources", json={"kind": "named", "name": "work", "config": {}}
+        )
+        uid = created.json()["uid"]
+        assert _file_of(uid) == f"resources/named/{uid}.json"
+
+        r = await c.patch(f"/api/v1/resources/{uid}", json={"name": "Work"})
         assert r.status_code == 200, r.text
-
-        # The list and the single read carry both the name and the title, so a
-        # surface can show the title where it showed the name.
-        listed = (await c.get("/api/v1/resources", params={"kind": "plain"})).json()["resources"]
-        assert [(row["name"], row["title"]) for row in listed] == [("search", "Team search")]
-        shown = (await c.get(f"/api/v1/resources/{uid}")).json()
-        assert (shown["name"], shown["title"]) == ("search", "Team search")
-        # Name, uid, reach and enabled state are unchanged.
-        for field in ("uid", "name", "scope", "enabled", "config", "description"):
-            assert shown[field] == before[field], field
-
-    # Audited as an update, naming what moved.
-    assert _audit(tmp_path)[-1] == ("resource_updated", "search")
-    assert '"title"' in _updates(tmp_path)[-1] and "Team search" in _updates(tmp_path)[-1]
+        assert (r.json()["uid"], r.json()["name"]) == (uid, "Work")
+        assert _file_of(uid) == f"resources/named/{uid}.json"
+        doc = json.loads((vault_root() / f"resources/named/{uid}.json").read_text())
+        assert doc["name"] == "Work"
+    assert _audit(tmp_path)[-1] == ("resource_renamed", "Work")
     await engine.dispose()
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="resource-framework", scenario="an over-long title is refused")
-async def test_an_over_long_title_is_refused_and_an_empty_one_clears(tmp_path):
-    c, svc, engine = await _app(tmp_path)
-    async with c:
-        uid = (
-            await c.post(
-                "/api/v1/resources",
-                json={"kind": "plain", "name": "search", "config": {}, "title": "Team search"},
-            )
-        ).json()["uid"]
-        events_before = len(_audit(tmp_path))
-
-        too_long = await c.patch(f"/api/v1/resources/{uid}", json={"title": "x" * 81})
-        assert too_long.status_code == 422, too_long.text
-        assert (await c.get(f"/api/v1/resources/{uid}")).json()["title"] == "Team search"
-        assert len(_audit(tmp_path)) == events_before
-
-        # Exactly 80 is allowed.
-        assert (
-            await c.patch(f"/api/v1/resources/{uid}", json={"title": "y" * 80})
-        ).status_code == 200
-
-        cleared = await c.patch(f"/api/v1/resources/{uid}", json={"title": ""})
-        assert cleared.status_code == 200, cleared.text
-        assert cleared.json()["title"] is None
-        assert (await c.get(f"/api/v1/resources/{uid}")).json()["title"] is None
-
-    # The same cap holds for a caller that is not the HTTP body model — the
-    # sync applier, the CLI — because the service checks it too.
-    from coffer.domain.errors import ConfigValidationError
-
-    with pytest.raises(ConfigValidationError, match="80"):
-        await svc.set_title(uid, "z" * 81, "test")
-    assert (await svc.get(uid)).title is None
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_a_title_edit_alone_does_not_rewrite_the_config(tmp_path):
-    """A title-only PATCH writes one column: no config re-validation, no config
-    audit entry with identical before and after, no rename."""
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="two free-text names clash ignoring case"
+)
+async def test_free_text_names_clash_ignoring_case_but_a_resource_may_recase_its_own(tmp_path):
     c, _svc, engine = await _app(tmp_path)
     async with c:
-        uid = (
-            await c.post("/api/v1/resources", json={"kind": "plain", "name": "s", "config": {}})
-        ).json()["uid"]
-        await c.patch(f"/api/v1/resources/{uid}", json={"title": "T"})
-        # Re-sending the same title records nothing.
-        await c.patch(f"/api/v1/resources/{uid}", json={"title": "T"})
-    updates = _updates(tmp_path)
-    assert len(updates) == 1
-    assert '"before"' in updates[0] and '"config"' not in updates[0]
-    assert all(event != "resource_renamed" for event, _ in _audit(tmp_path))
+        work = await c.post(
+            "/api/v1/resources", json={"kind": "named", "name": "Work", "config": {}}
+        )
+        home = await c.post(
+            "/api/v1/resources", json={"kind": "named", "name": "Home", "config": {}}
+        )
+        clash = await c.post(
+            "/api/v1/resources", json={"kind": "named", "name": "work", "config": {}}
+        )
+        assert clash.status_code == 409, clash.text
+        taken = await c.patch(f"/api/v1/resources/{home.json()['uid']}", json={"name": "WORK"})
+        assert taken.status_code == 409, taken.text
+        recased = await c.patch(f"/api/v1/resources/{work.json()['uid']}", json={"name": "WORK"})
+        assert recased.status_code == 200, recased.text
+        assert recased.json()["name"] == "WORK"
     await engine.dispose()
-
-
-# --- a fixed name --------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -224,81 +244,11 @@ async def test_an_mcp_server_name_change_is_refused_before_anything_is_written(t
         after = (await c.get(f"/api/v1/resources/{uid}")).json()
         assert after["name"] == "search"
         assert after["description"] == "as registered"
-        assert after["title"] is None
         assert _audit(tmp_path) == trail_before, "a refused rename audits nothing"
 
         # Submitting the name it already has is not a change.
         same = await c.patch(f"/api/v1/resources/{uid}", json={"name": "search"})
         assert same.status_code == 200, same.text
-    await engine.dispose()
-
-
-# --- a kind without a title ----------------------------------------------------
-
-
-async def _noop_cleanup(_skill: Any) -> None:
-    return None
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(spec="resource-framework", scenario="a kind without a title refuses one")
-async def test_a_kind_without_a_title_refuses_one(tmp_path):
-    """``mcp_server``, ``skill`` and ``agent`` — each built by its own production
-    kind factory — carry no title: one submitted through the kind-agnostic
-    update, or with an MCP server's registration, is a 422 and nothing is
-    stored. (The CLI half — no ``--title`` on ``coffer mcp add``/``edit`` and no
-    ``coffer skill edit`` — is in ``cli/test_mcp_cmd.py`` and
-    ``cli/test_skill_cmd.py``.)"""
-    from coffer.application.agent.kind import make_agent_kind
-    from coffer.application.skill.kind import make_skill_kind
-
-    c, svc, engine = await _app(
-        tmp_path,
-        extra_kinds={"skill": make_skill_kind(_noop_cleanup), "agent": make_agent_kind()},
-    )
-    server = await svc.register("mcp_server", "search", _SERVER_CONFIG, "test")
-    skill = await svc.register(
-        "skill",
-        "release",
-        {
-            "source": {"type": "builtin"},
-            "skill_md_description": "A skill.",
-            "version_hash": "h1",
-        },
-        "test",
-        allow_lifecycle_kind=True,
-    )
-    agent = await svc.register(
-        "agent", "claude-code", {"type": "claude_code"}, "test", allow_lifecycle_kind=True
-    )
-    trail_before = _audit(tmp_path)
-    async with c:
-        for resource in (server, skill, agent):
-            r = await c.patch(f"/api/v1/resources/{resource.uid}", json={"title": "Team"})
-            assert r.status_code == 422, (resource.kind, r.text)
-            assert r.json()["error"]["code"] == "CONFIG_INVALID"
-            shown = (await c.get(f"/api/v1/resources/{resource.uid}")).json()
-            assert (shown["name"], shown["title"]) == (resource.name, None)
-
-        refused = await c.post(
-            "/api/v1/resources",
-            json={
-                "kind": "mcp_server",
-                "name": "titled",
-                "config": _SERVER_CONFIG,
-                "title": "Titled",
-            },
-        )
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["error"]["code"] == "CONFIG_INVALID"
-        names = [
-            row["name"]
-            for row in (await c.get("/api/v1/resources", params={"kind": "mcp_server"})).json()[
-                "resources"
-            ]
-        ]
-        assert names == ["search"]
-    assert _audit(tmp_path) == trail_before, "a refused title stores and audits nothing"
     await engine.dispose()
 
 

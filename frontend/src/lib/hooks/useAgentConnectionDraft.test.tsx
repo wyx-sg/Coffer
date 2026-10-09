@@ -42,7 +42,6 @@ function conn(name: string, over: Partial<Provider> = {}): Provider {
     base_url: "https://api.example.com",
     anthropic_base_url: null,
     secret_ref: "ref",
-    title: null,
     transcribe_default: false,
     models: [],
     enabled: true,

@@ -79,7 +79,7 @@ class ProviderAttentionSource:
 
 
 def _item(connection: Resource, verdict: ProviderHealth) -> AttentionItem:
-    title = connection.title or connection.name
+    title = connection.name
     if verdict.status is HealthStatus.KEY_REJECTED:
         return AttentionItem(
             kind=KIND,

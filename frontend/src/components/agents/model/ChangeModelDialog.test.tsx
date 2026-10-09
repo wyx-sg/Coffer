@@ -34,7 +34,6 @@ const AGENT: AgentOut = {
 const PROVIDER = {
   uid: "u-gw",
   name: "gw",
-  title: null,
   protocol: "anthropic",
   base_url: "https://gw.example",
   secret_ref: "ref",

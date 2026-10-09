@@ -106,8 +106,6 @@ function registeringApi(overrides: Partial<ApiClientMock> = {}) {
             }
           : { data: undefined, error: undefined },
       ) as ApiClientMock["POST"],
-      // The free-name scan: no channel exists yet.
-      GET: vi.fn(async () => ({ data: { resources: [] } })) as ApiClientMock["GET"],
       ...overrides,
     }),
   );
@@ -192,7 +190,6 @@ acceptance("channels", "register a telegram channel", async () => {
       body: {
         kind: "channel",
         name: "tg",
-        title: "tg",
         config: {
           channel_type: "telegram",
           bot_token_ref: writtenRef(api, 0),
@@ -274,40 +271,30 @@ describe("AddChannelDialog", () => {
   acceptance("channels", "a channel is named by any display name", async () => {
     const api = registeringApi();
     renderDialog();
-    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Team bot!" } });
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "  团队 bot 🚀  " } });
     fireEvent.change(screen.getByRole("textbox", { name: /bot token/i }), {
       target: { value: "123:abc" },
     });
     submit();
 
-    // The display name is the title; the resource's name is derived from it.
+    // The trimmed text is the channel's name as typed: no slug, no title.
     await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
     const body = (api.POST.mock.calls[1][1] as { body: Record<string, unknown> }).body;
-    expect(body.title).toBe("Team bot!");
-    expect(body.name).toBe("team-bot");
+    expect(body.name).toBe("团队 bot 🚀");
+    expect(body).not.toHaveProperty("title");
   });
 
-  acceptance("channels", "a channel is named by any display name", async () => {
-    // The second half of the scenario: the name `team-bot` is already taken, so the
-    // same display name registers as `team-bot-2` instead of being refused.
-    const api = registeringApi({
-      GET: vi.fn(async (path: string) =>
-        path === "/resources"
-          ? { data: { resources: [{ name: "team-bot" }] } }
-          : { data: undefined, error: undefined },
-      ) as ApiClientMock["GET"],
-    });
+  test("a name starting with a dash is refused before anything is written", async () => {
+    const api = registeringApi();
     renderDialog();
-    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Team bot!" } });
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "-bot" } });
     fireEvent.change(screen.getByRole("textbox", { name: /bot token/i }), {
       target: { value: "123:abc" },
     });
     submit();
 
-    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
-    const body = (api.POST.mock.calls[1][1] as { body: Record<string, unknown> }).body;
-    expect(body.title).toBe("Team bot!");
-    expect(body.name).toBe("team-bot-2");
+    expect(await screen.findByText(/can.t start with/i)).toBeInTheDocument();
+    expect(api.POST).not.toHaveBeenCalled();
   });
 
   acceptance(
@@ -333,7 +320,6 @@ describe("AddChannelDialog", () => {
         body: {
           kind: "channel",
           name: "st",
-          title: "st",
           config: {
             channel_type: "seatalk",
             app_id: "app-1",
@@ -364,19 +350,20 @@ describe("AddChannelDialog", () => {
     expect(screen.queryByText(/~\/\.coffer\/vendor/)).not.toBeInTheDocument();
   });
 
-  test("a channel list that cannot be read stops the add before any secret is written", async () => {
-    // Picking a free name against a list that failed to load would collide
-    // after the secret was stored; the read has to fail the add up front.
+  test("a name already taken is the daemon's refusal, and the written secret is rolled back", async () => {
     const api = registeringApi({
-      GET: vi.fn(async () => failure("INTERNAL_ERROR", "list failed")) as ApiClientMock["GET"],
+      POST: vi.fn(async (path: string) =>
+        path === "/resources"
+          ? failure("RESOURCE_ALREADY_EXISTS", "taken")
+          : { data: undefined, error: undefined },
+      ) as ApiClientMock["POST"],
     });
     renderDialog();
     fillTelegram();
     submit();
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
-    expect(api.POST).not.toHaveBeenCalled();
-    expect(api.DELETE).not.toHaveBeenCalled();
+    await waitFor(() => expect(api.DELETE).toHaveBeenCalledTimes(1));
   });
 
   test("a rollback delete the daemon refuses is logged, and the registration error still shows", async () => {
@@ -484,9 +471,7 @@ describe("step 2 checks as it asks", () => {
     ]);
     expect(api.POST).not.toHaveBeenCalled();
     expect(
-      screen.getByText(
-        "Any name; channels are told apart by their ID, so you can rename it later.",
-      ),
+      screen.getByText("Shown everywhere in Coffer; you can change it any time."),
     ).toBeVisible();
   });
 });

@@ -41,7 +41,6 @@ def _to_out(r: Resource, svc: ResourceService) -> ResourceOut:
         uid=r.uid,
         kind=r.kind,
         name=r.name,
-        title=r.title,
         description=r.description,
         config=r.config,
         scope=ScopeOut.of(r.scope),
@@ -117,7 +116,6 @@ async def register_resource(
         config=body.config,
         description=body.description,
         actor=actor,
-        title=body.title,
     )
     return _to_out(r, svc)
 
@@ -137,7 +135,7 @@ async def update_resource(
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> ResourceOut:
-    """Edit a resource's label, title, description or config.
+    """Edit a resource's label, description or config.
 
     ``name`` is an ordinary field here, at the same level as ``description``,
     which is the whole user-facing point of the identity change: while the name
@@ -158,7 +156,6 @@ async def update_resource(
     sent = body.model_fields_set
     edits_config = "config" in sent and body.config is not None
     edits_description = "description" in sent
-    edits_title = "title" in sent
 
     # A rename ALONE touches no config, so it runs no config write. Rewriting
     # the stored config back over itself is not a no-op: it re-validates, it
@@ -179,11 +176,6 @@ async def update_resource(
             actor=actor,
             description=body.description if edits_description else r.description,
         )
-    # The title is its own write, on every kind: it passes no config seam, so
-    # it is not refused for a kind that owns its lifecycle (``skill``). "" and
-    # null both clear it.
-    if edits_title:
-        r = await svc.set_title(uid, body.title, actor=actor)
     # The rename comes LAST, so a refused config leaves the name alone: one
     # PATCH that renamed a resource and then rejected its config would have
     # moved the thing the caller was about to retry against.

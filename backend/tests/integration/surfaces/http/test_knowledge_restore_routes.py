@@ -199,7 +199,4 @@ def test_a_collection_has_no_title_on_any_route(client) -> None:  # type: ignore
     _create_collection(client, "team")
     row = client.get("/api/v1/knowledge/collections").json()["collections"][0]
     assert "title" not in row
-
-    refused = client.patch(f"/api/v1/resources/{row['uid']}", json={"title": "Team notes"})
-    assert refused.status_code == 422, refused.text
-    assert client.get(f"/api/v1/resources/{row['uid']}").json()["title"] is None
+    assert "title" not in client.get(f"/api/v1/resources/{row['uid']}").json()

@@ -16,7 +16,6 @@ import type { ResourceOut } from "@/lib/api/resources";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useIssuePairingCode } from "@/lib/hooks/useChannelPairing";
 import { useChannelStatus } from "@/lib/hooks/useChannels";
-import { displayName } from "@/lib/resourceTitle";
 import { channelPlatform } from "@/lib/channels/channelState";
 import { ChannelPairingCode } from "./ChannelPairingCode";
 import { botHandleOf, usePairingExpired } from "./pairingCode";
@@ -69,14 +68,14 @@ export function AddChannelPairStep({ channel, onDone }: Props) {
               {t("channels.add.paired.title", { owner: peer.display_name })}
             </p>
             <p className="text-xs leading-normal text-text-muted">
-              {t("channels.add.paired.body", { name: displayName(channel) })}
+              {t("channels.add.paired.body", { name: channel.name })}
             </p>
           </div>
         </div>
         <p className="text-sm text-text-muted">
           {t("channels.add.paired.tryIt", {
-            bot: bot ? `@${bot}` : displayName(channel),
-            agent: agent ? displayName(agent) : t("channels.add.paired.yourAgent"),
+            bot: bot ? `@${bot}` : channel.name,
+            agent: agent ? agent.name : t("channels.add.paired.yourAgent"),
           })}
         </p>
         <DialogFooter>
@@ -90,7 +89,7 @@ export function AddChannelPairStep({ channel, onDone }: Props) {
     <div className="space-y-3.5">
       <ChannelPairingCode
         platform={platform}
-        channelName={displayName(channel)}
+        channelName={channel.name}
         code={code}
         expired={expired}
         isPending={issuing}

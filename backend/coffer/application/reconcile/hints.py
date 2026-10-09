@@ -87,11 +87,6 @@ class HintingResourceRepo:
         self._emit(renamed)
         return renamed
 
-    async def set_title(self, uid: str, title: str | None) -> Resource:
-        updated = await self._inner.set_title(uid, title)
-        self._emit(updated)
-        return updated
-
     async def delete(self, uid: str) -> None:
         before = await self._inner.find(uid)
         await self._inner.delete(uid)

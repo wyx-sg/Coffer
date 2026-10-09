@@ -13,7 +13,7 @@ import sqlite3
 import pytest
 
 from coffer.domain.resource import Kind
-from tests.integration.surfaces.http.test_resource_title_and_fixed_name import (
+from tests.integration.surfaces.http.test_resource_free_name_and_fixed_name import (
     _app,
     _audit,
     _PlainConfig,
@@ -22,14 +22,13 @@ from tests.integration.surfaces.http.test_retention_routes import _client as _re
 
 
 def _bare_kind() -> Kind:
-    """A kind that can be disabled by nobody, reaches no agent, carries no title."""
+    """A kind that can be disabled by nobody, reaches no agent."""
     return Kind(
         name="bare",
         display_name="Bare",
         config_schema=_PlainConfig,
         supports_scope=False,
         toggleable=False,
-        titled=False,
     )
 
 
@@ -54,24 +53,19 @@ async def test_every_kind_answers_the_same_lifecycle_routes(tmp_path):
             assert patched.status_code == 200, patched.text
             assert patched.json()["description"] == "d"
 
-        # The kind that supports none of reach, title or disabling refuses each.
+        # The kind that supports none of reach or disabling refuses each.
         trail = _audit(tmp_path)
         scoped = await c.put(f"/api/v1/resources/{bare}/scope", json={"scope": {"agents": ["a1"]}})
-        titled = await c.patch(f"/api/v1/resources/{bare}", json={"title": "T"})
         disabled = await c.post(f"/api/v1/resources/{bare}/disable")
         assert scoped.status_code >= 400, scoped.text
-        assert titled.status_code == 422, titled.text
         assert disabled.status_code == 409, disabled.text
         shown = (await c.get(f"/api/v1/resources/{bare}")).json()
-        assert (shown["scope"], shown["title"], shown["enabled"]) == (None, None, True)
+        assert (shown["scope"], shown["enabled"]) == (None, True)
         assert _audit(tmp_path) == trail
 
-        # The first kind takes all three through the same routes, each audited.
+        # The first kind takes both through the same routes, each audited.
         assert (
             await c.put(f"/api/v1/resources/{full}/scope", json={"scope": {"agents": ["a1"]}})
-        ).status_code == 200
-        assert (
-            await c.patch(f"/api/v1/resources/{full}", json={"title": "Title"})
         ).status_code == 200
         off = await c.post(f"/api/v1/resources/{full}/disable")
         assert off.status_code == 200 and off.json()["enabled"] is False

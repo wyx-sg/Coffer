@@ -1069,8 +1069,6 @@ export interface components {
             secret_ref: string | null;
             /** Served Agents */
             served_agents: components["schemas"]["AgentType"][];
-            /** Title */
-            title: string | null;
             /** Transcribe Default */
             transcribe_default: boolean;
             /** Uid */

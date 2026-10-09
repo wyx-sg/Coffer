@@ -6,7 +6,7 @@ Through the full app: the type stands in for the uid on every
 ``/api/v1/agents/{uid}/...`` route — which ``resolve_agent_path``, a
 router-level dependency, does by rewriting the path parameter before the route
 reads it, so the sub-routes are exercised as well as the record itself — the
-name, title and description cannot be set, every supported type is listed
+name and description cannot be set, every supported type is listed
 whether added or not, and a moved directory keeps the uid.
 """
 
@@ -105,9 +105,9 @@ def test_address_an_agent_by_its_type(home: pathlib.Path) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="agent-registry", scenario="an agent's name, title and description cannot be set"
+    spec="agent-registry", scenario="an agent's name and description cannot be set"
 )
-def test_an_agents_name_title_and_description_cannot_be_set(home: pathlib.Path) -> None:
+def test_an_agents_name_and_description_cannot_be_set(home: pathlib.Path) -> None:
     with _client() as c:
         uid = _register(c, "claude_code", home / ".claude")
 
@@ -117,16 +117,12 @@ def test_an_agents_name_title_and_description_cannot_be_set(home: pathlib.Path) 
         assert error["code"] == "NAME_IMMUTABLE"
         assert "is its type" in error["message"]
 
-        titled = c.patch(f"/api/v1/resources/{uid}", json={"title": "Work laptop Claude"})
-        assert titled.status_code == 422, titled.text
-
         # A description has no field to travel in on the agent's own update.
         c.patch(f"/api/v1/agents/{uid}", json={"description": "work box"})
         after = c.get(f"/api/v1/agents/{uid}").json()
         assert "description" not in after
-        assert "title" not in after
         resource = c.get(f"/api/v1/resources/{uid}").json()
-        assert (resource["name"], resource["title"]) == ("claude-code", None)
+        assert resource["name"] == "claude-code"
         assert not resource.get("description")
 
         # The generic create route never makes an agent at all (a lifecycle
@@ -140,12 +136,12 @@ def test_an_agents_name_title_and_description_cannot_be_set(home: pathlib.Path) 
 
 
 @pytest.mark.acceptance(
-    spec="agent-registry", scenario="an agent's name, title and description cannot be set"
+    spec="agent-registry", scenario="an agent's name and description cannot be set"
 )
 async def test_registering_an_agent_under_another_name_is_refused(tmp_path) -> None:
     """The real agent kind derives the name from the type: registering it under
     any other name — even through the lifecycle path its own service uses — is
-    a validation error, and so is a title."""
+    a validation error."""
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -162,20 +158,11 @@ async def test_registering_an_agent_under_another_name_is_refused(tmp_path) -> N
             await svc.register(
                 kind="agent", name="work", config=config, actor="api", allow_lifecycle_kind=True
             )
-        with pytest.raises(ConfigValidationError):
-            await svc.register(
-                kind="agent",
-                name="codex",
-                config=config,
-                actor="api",
-                allow_lifecycle_kind=True,
-                title="Work Codex",
-            )
         assert await svc.list(kind="agent") == []
         created = await svc.register(
             kind="agent", name="codex", config=config, actor="api", allow_lifecycle_kind=True
         )
-        assert (created.name, created.title) == ("codex", None)
+        assert created.name == "codex"
     finally:
         await engine.dispose()
 

@@ -134,10 +134,6 @@ class ProviderOut(BaseModel):
 
     uid: str
     name: str
-    #: The display title a person chose (spec resource-framework "Carry an optional
-    #: editable title on the kinds that have one"); ``None`` when unset, and a surface shows
-    #: the name in its place.
-    title: str | None = None
     protocol: Protocol
     base_url: str
     #: Where Claude Code reaches an ``openai`` connection; ``None``: nowhere.

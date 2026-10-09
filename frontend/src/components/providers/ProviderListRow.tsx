@@ -11,7 +11,6 @@ import { AgentBadge } from "@/components/agent/AgentBadge";
 import type { Provider } from "@/lib/api/providers";
 import { PROTOCOL_LABEL_KEY } from "@/lib/providers/presets";
 import type { ProviderUse } from "@/lib/providers/usedBy";
-import { displayName } from "@/lib/resourceTitle";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import { toneTextClass } from "@/lib/statusColors";
 import { cn } from "@/lib/utils";
@@ -58,7 +57,7 @@ export function ProviderListRow({ provider, use, selected, problem }: Props) {
     >
       <ProviderMark provider={provider} size="md" withWord={false} />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <TruncatedText text={displayName(provider)} className="text-sm font-label" />
+        <TruncatedText text={provider.name} className="text-sm font-label" />
         <TruncatedText
           text={sub}
           className={cn("text-xs", problem ? toneTextClass("error") : "text-text-muted")}
