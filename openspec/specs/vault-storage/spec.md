@@ -82,8 +82,7 @@ SHALL validate the fields it knows and keep every other top-level field
 verbatim, in place, on every write; an unknown top-level field MUST be
 reported as a warning and MUST NOT be refused. A resource file's `config` is
 its kind's and SHALL hold only the keys the kind's schema declares: a file
-whose config holds any other key, a name the kind's name rule refuses, and a
-`title` on a kind that has no titles, MUST be refused with a finding naming it — the same rules a registration
+whose config holds any other key, and a name the kind's name rule refuses (free text for a provider or a channel, a slug for every other kind), MUST be refused with a finding naming it — the same rules a registration
 through the API meets — whether a person wrote the file or a sync merge
 brought it.
 
@@ -105,9 +104,9 @@ brought it.
 
 ### Requirement: Identify a resource by the uid inside its file
 A resource file SHALL carry its `uid`, `kind`, `format_version`, `name`,
-`description` and `config` (and `title`, `created_at` where set); the path is
-where Coffer filed it (`resources/<kind>/<name>.json`) and nothing SHALL key
-on the path. A file without a `uid` SHALL be taken as a new resource and given
+`description` and `config` (and `created_at` where set); the path is
+where Coffer filed it (`resources/<kind>/<name>.json`, or `resources/<kind>/<uid>.json` for a provider and a
+channel, whose names are free text) and nothing SHALL key on the path. A file without a `uid` SHALL be taken as a new resource and given
 one by a daemon commit. When two paths claim one uid, the path that did not
 hold it at `HEAD` MUST be refused and flagged, and the original MUST stay in
 effect. The reasoning is

@@ -2263,11 +2263,6 @@ components:
             $ref: '#/components/schemas/AgentType'
           title: Served Agents
           type: array
-        title:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Title
         transcribe_default:
           title: Transcribe Default
           type: boolean
@@ -2281,7 +2276,6 @@ components:
       required:
       - uid
       - name
-      - title
       - protocol
       - base_url
       - anthropic_base_url

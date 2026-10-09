@@ -72,7 +72,10 @@ unique index used to enforce have to be stated.
   file, which names the directory; the agent-facing files (`SKILL.md`, the
   Markdown documents) carry no Coffer identity.
 - **The path is chosen for people.** Coffer files a new resource at
-  `vault/resources/<kind>/<name>.json`; resources that are machine-local or
+  `vault/resources/<kind>/<name>.json` — or `<uid>.json` for a kind whose
+  name is free text ([A Provider's and a Channel's Name Is Free Text, and
+  Their Files Are Named by uid](provider-and-channel-names-are-free-text.md));
+  resources that are machine-local or
   derived are filed under `local/` or `derived/` by the same layout
   ([Storage Is Five Classes by Nature](storage-is-five-classes-by-nature.md)).
   When the name is taken by an unrelated file, the file falls back to
@@ -82,8 +85,7 @@ unique index used to enforce have to be stated.
   commit, so paths stay readable; it never has to.
 - **Files are JSON.** Every other vault document Coffer parses is JSON, JSON has
   one canonical serialisation for a deterministic writer, and a person editing
-  by hand gets a precise parse error. A file may carry an optional `title`
-  beside the name, for the label pages show.
+  by hand gets a precise parse error.
 - **A file with no uid is a new resource.** Validation asks for a fix that
   mints a `uuid4().hex`, which the writer commits as a daemon write right after
   the person's own commit, the way a person creates a resource by hand.

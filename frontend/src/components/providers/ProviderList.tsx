@@ -14,7 +14,6 @@ import { SearchInput } from "@/components/SearchInput";
 import type { Provider, ProviderHealth } from "@/lib/api/providers";
 import type { ProbeStatus } from "@/lib/providers/probeStatus";
 import type { ProviderUse } from "@/lib/providers/usedBy";
-import { searchableName } from "@/lib/resourceTitle";
 import { ProviderListRow } from "./ProviderListRow";
 
 interface Props {
@@ -66,9 +65,7 @@ export function ProviderList({
   const { t } = useTranslation();
   const [filter, setFilter] = useState("");
   const needle = filter.trim().toLowerCase();
-  const rows = needle
-    ? providers.filter((p) => searchableName(p).toLowerCase().includes(needle))
-    : providers;
+  const rows = needle ? providers.filter((p) => p.name.toLowerCase().includes(needle)) : providers;
 
   return (
     <div className="flex min-h-0 flex-col gap-3.5 px-2 py-3">

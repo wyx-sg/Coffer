@@ -40,7 +40,7 @@ MAX_PAGE = 100
 
 _DESCRIPTION = (
     "Read earlier messages of a chat thread the current channel turn came from "
-    "(newest page first). Pass the channel, chat_id, chat_kind and thread_id from "
+    "(newest page first). Pass the channel id, chat_id, chat_kind and thread_id from "
     "the turn's [Message origin] block; pass `before` (a message_id, e.g. the "
     "next_before of the previous page or the id a thread note names) to page back. "
     "Returns each message's sender, time and text, and local paths of the images "
@@ -52,7 +52,7 @@ _INPUT_SCHEMA: dict[str, Any] = {
     "properties": {
         "channel": {
             "type": "string",
-            "description": "The channel's name (the origin block's `channel:` line).",
+            "description": "The channel's id (the `id:` on the origin block's `channel:` line).",
         },
         "chat_id": {"type": "string", "description": "The chat id from the origin block."},
         "chat_kind": {

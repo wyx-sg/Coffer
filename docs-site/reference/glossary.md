@@ -410,15 +410,6 @@ The gateway's listing budget: when upstream tools outnumber it, `tools/list` car
 most-used tools (at least one per server) and every other tool stays callable by name and
 findable with `coffer__search_tools`. See [MCP tools](/reference/mcp-tools#tiering).
 
-### Title
-
-An optional display label, at most 80 characters, carried by the kinds that have one —
-model providers and channels. The web UI shows
-it in place of the name. Agents, MCP servers,
-skills and knowledge collections have no title: an agent is named by its type, an MCP server's or skill's fixed
-name is shown beside its description, and a collection is shown by its name. See
-[Resource framework](/architecture/resource-framework#identity).
-
 ### Trace id
 
 A per-request identifier the daemon returns in the `X-Coffer-Trace` header and stamps on

@@ -22,7 +22,6 @@ import type { ChannelType } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import { channelPlatform } from "@/lib/channels/channelState";
 import { channelPath } from "@/lib/channels/tabs";
-import { displayName } from "@/lib/resourceTitle";
 import { AddChannelConnectStep } from "./AddChannelConnectStep";
 import { AddChannelPairStep } from "./AddChannelPairStep";
 import type { AddStep } from "./addChannel";
@@ -60,7 +59,7 @@ export function AddChannelDialog({ open, onOpenChange, initialPlatform = null }:
     step === "pair" && created
       ? t("channels.add.pairTitle", {
           platform: platformLabel(channelPlatform(created.config)),
-          name: displayName(created),
+          name: created.name,
         })
       : step === "connect" && platform
         ? t("channels.add.connectTitle", { platform: platformLabel(platform) })
@@ -95,7 +94,7 @@ export function AddChannelDialog({ open, onOpenChange, initialPlatform = null }:
             onBack={() => setStep("platform")}
             onCancel={close}
             onCreated={(channel) => {
-              toast.success(t("channels.dialog.created", { name: displayName(channel) }));
+              toast.success(t("channels.dialog.created", { name: channel.name }));
               setCreated(channel);
               setStep("pair");
             }}

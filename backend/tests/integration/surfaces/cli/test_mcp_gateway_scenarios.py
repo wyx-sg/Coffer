@@ -125,9 +125,4 @@ def test_an_mcp_server_is_shown_by_its_name(mcp_daemon: Any) -> None:  # noqa: F
     [row] = c.get("/resources", params={"kind": "mcp_server"}).json()["resources"]
     assert (row["name"], row["description"]) == ("fs", "Local files")
     shown = c.get(f"/resources/{uid}").json()
-    assert shown["name"] == "fs" and shown["title"] is None
-
-    refused = c.patch(f"/resources/{uid}", json={"title": "Files"})
-    assert refused.status_code == 422, refused.text
-    assert refused.json()["error"]["code"] == "CONFIG_INVALID"
-    assert c.get(f"/resources/{uid}").json()["title"] is None
+    assert shown["name"] == "fs" and "title" not in shown

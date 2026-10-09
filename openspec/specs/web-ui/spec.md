@@ -1822,9 +1822,7 @@ It lists two kinds of entry, filtered together by what the user types:
   Settings tab opens in the Settings modal over the current page.
 - **Objects** — the agents, the resources of every kind
   with a list surface (custom tools included), the CLIs and the stored secrets
-  (by ref, never a value), matched by name — and also by title on the kinds
-  that carry one ([resource-framework](../resource-framework/spec.md)
-  "Carry an optional editable title on the kinds that have one") — each
+  (by ref, never a value), matched by name — each
   opening its detail page; a secret, which has none, opens the Secrets page.
 
 With an empty query it MUST show **Recent** — the last few entries chosen in
@@ -1855,9 +1853,9 @@ searches, rather than show an empty panel.
 - **THEN** the app navigates to `/activity` and the palette closes
 
 #### Scenario: the palette jumps to an object
-- **GIVEN** a registered provider whose title differs from its name
-- **WHEN** the user opens the palette and types part of the provider's name, then part of its title
-- **THEN** each query lists the provider as the best match, named by its title and marked as a provider
+- **GIVEN** a registered provider named "Team search (EU)"
+- **WHEN** the user opens the palette and types part of the provider's name
+- **THEN** the query lists the provider as the best match, named "Team search (EU)" and marked as a provider
 - **AND** choosing it opens that provider's page and closes the palette
 
 #### Scenario: the palette offers no actions

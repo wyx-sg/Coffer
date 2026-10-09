@@ -17,7 +17,6 @@ import { AgentReachFilter } from "@/components/reach/AgentReachFilter";
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { ListSelectAll } from "@/components/ListSelectAll";
 import type { ResourceOut } from "@/lib/api/resources";
-import { searchableName } from "@/lib/resourceTitle";
 import { useAgentFilter } from "@/lib/agents/agentFilter";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useBuiltinMcpServer } from "@/lib/hooks/useMcpAddFlow";
@@ -69,7 +68,7 @@ export function McpServerList({
     const q = query.trim().toLowerCase();
     const out = new Map<ServerGroup, number[]>(GROUP_ORDER.map((g) => [g, []]));
     servers.forEach((s, i) => {
-      const haystack = searchableName(s).toLowerCase();
+      const haystack = s.name.toLowerCase();
       if (q && !haystack.includes(q)) return;
       if (agentFilter && !agentFilter.matches(s)) return;
       out.get(serverState(s, detailOf(i)).group)?.push(i);

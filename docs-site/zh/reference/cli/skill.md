@@ -55,7 +55,7 @@ coffer skill [OPTIONS] COMMAND [ARGS]...
 
 ## skill update
 
-Change a skill. Body: name, title, description, config.
+Change a skill. Body: name, description, config.
 
 <p class="cli-label">概要</p>
 

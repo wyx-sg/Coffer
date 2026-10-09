@@ -43,14 +43,6 @@ export const resourcesApi = {
     unwrapVoid(getApiClient().POST("/resources/{uid}/disable", { params: { path: { uid } } })),
   remove: (uid: string): Promise<void> =>
     unwrapVoid(getApiClient().DELETE("/resources/{uid}", { params: { path: { uid } } })),
-  /** Set or clear (null) a resource's display title. Titles exist only on the
-   *  kinds that carry one — not agent, mcp_server or skill, which the daemon
-   *  refuses with 422 (spec resource-framework "Carry an optional editable
-   *  title on the kinds that have one"). */
-  setTitle: (uid: string, title: string | null): Promise<ResourceOut> =>
-    unwrap(
-      getApiClient().PATCH("/resources/{uid}", { params: { path: { uid } }, body: { title } }),
-    ),
   /**
    * Rename a resource of ANY kind.
    *

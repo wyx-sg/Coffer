@@ -188,10 +188,6 @@ def _build_mcp_app(tmp_path: Any) -> tuple[FastAPI, Any]:
         name="mcp_server",
         display_name="MCP Server",
         config_schema=MCPServerConfig,
-        # As production declares it: a server is shown by its fixed name and
-        # carries no title (spec resource-framework "Carry an optional
-        # editable title on the kinds that have one").
-        titled=False,
     )
     kinds = {"mcp_server": mcp_kind}
 

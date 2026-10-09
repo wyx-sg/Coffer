@@ -93,6 +93,7 @@ export function AddEndpointStep({
           </Label>
           <Input id="pa-name" aria-describedby="pa-name-error" {...register("name")} />
           <FieldError id="pa-name-error" message={errors.name?.message} />
+          <p className="text-xs text-text-muted">{t("resources.freeName.hint")}</p>
         </div>
       ) : null}
       {!local && preset.cn ? <RegionChoice value={region} onChange={pickRegion} /> : null}

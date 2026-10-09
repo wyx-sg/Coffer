@@ -54,7 +54,7 @@ A removed agent MUST re-appear as a discovery candidate on subsequent scans whil
 - **THEN** that agent is offered as a candidate again (removal is not permanent; no suppression list)
 
 ### Requirement: Manage the agent lifecycle
-Users MUST be able to register, list, view, update (its config directory and the model binding of "Carry the model binding on the agent record") and remove agents. An agent cannot be switched off: its kind is non-toggleable, so the generic `POST /api/v1/resources/{uid}/enable|disable` routes refuse it with `RESOURCE_NOT_TOGGLEABLE` and its resource always reads enabled. Registration takes the type and, optionally, a config directory — the type's standard one when omitted — and the name is the type's ("Keep one agent per type, named by it"); there is no name, title or description to supply or edit. Skill bindings between an agent and a skill belong to skill-manager; this registry defines no skill operations beyond exposing an `on_delete` hook for cascade cleanup.
+Users MUST be able to register, list, view, update (its config directory and the model binding of "Carry the model binding on the agent record") and remove agents. An agent cannot be switched off: its kind is non-toggleable, so the generic `POST /api/v1/resources/{uid}/enable|disable` routes refuse it with `RESOURCE_NOT_TOGGLEABLE` and its resource always reads enabled. Registration takes the type and, optionally, a config directory — the type's standard one when omitted — and the name is the type's ("Keep one agent per type, named by it"); there is no name or description to supply or edit. Skill bindings between an agent and a skill belong to skill-manager; this registry defines no skill operations beyond exposing an `on_delete` hook for cascade cleanup.
 
 Over REST the lifecycle is `POST /api/v1/agents` (the type and, optionally, `config_dir`), `GET /api/v1/agents` and `GET /api/v1/agents/{uid}`, `PATCH /api/v1/agents/{uid}` (with `config_dir` and the model fields of "Carry the model binding on the agent record") and `DELETE /api/v1/agents/{uid}`, where `{uid}` is the agent's uid or the type it is named by ("Keep one agent per type, named by it"); the Agents page reaches the same operations through each row's Connect and ⋯ menu. The `agent` kind has no scope, because it declares none. The agent's Coffer connection, part by part ("Report an agent's Coffer connection part by part"), is read from `GET /api/v1/agents/{uid}/coffer-connection`: its state and, for its one part (the gateway MCP entry), whether it is installed.
 
@@ -77,13 +77,7 @@ Over REST the lifecycle is `POST /api/v1/agents` (the type and, optionally, `con
 - **GIVEN** a registered agent `claude-code` at `~/.claude` and another writable directory
 - **WHEN** the user sends `PATCH /api/v1/agents/claude-code` with `config_dir` set to `<dir>`
 - **THEN** `GET /api/v1/agents/claude-code` reports `<dir>` as its config directory, with the same uid and name
-- **AND** the update route offers no way to change the name, title or description
-
-#### Scenario: refuse a title on the update route
-- **GIVEN** a registered agent named `claude-code`
-- **WHEN** the user submits the title `Work laptop Claude` through the kind-agnostic update route
-- **THEN** the route refuses the title as a validation error (422)
-- **AND** `GET /api/v1/agents/claude-code` still shows the agent as `claude-code`, with its uid and no title
+- **AND** the update route offers no way to change the name or description
 
 ### Requirement: Validate the config directory at registration
 At registration the system MUST auto-create the `<config_dir>/skills` subdirectory, then validate that the resolved `config_dir` exists — or, for the standard config directory of a type in state `installed_never_run`, create it first, holding only the entries Coffer needs — is a directory, is writable, and is not a privileged system path before accepting the value. The privileged locations are `/etc`, `/bin`, `/sbin`, `/usr`, `/var`, `/sys`, `/proc`, `/root`, `/boot`, `/dev`, `/System` and `/Library/Application Support/Apple` on POSIX hosts — matched at a path-component boundary, after resolving symlinks and stripping macOS's `/private` firmlink prefix, with the user temp area under `/var/folders/` carved out as usable — and `C:\Windows`, `C:\Program Files` and `C:\Program Files (x86)` on Windows. A rejected registration leaves no partial state, and no `config_dir` value may permit writing outside the directory itself.
@@ -566,7 +560,7 @@ Over REST, candidates are the rows of `GET /api/v1/agents/candidates`. Each row 
 - **AND** the registration creates `~/.codex` with only the entries Coffer needs and registers the agent, audited as `resource_created`
 
 ### Requirement: Keep one agent per type, named by it
-A machine MUST hold at most one agent of each supported type, and that agent's `name` MUST be its type's name — `claude-code` for `claude_code`, `codex` for `codex` — derived from the type at registration, never chosen by a person. The name is fixed: a changed name MUST be refused with `NAME_IMMUTABLE` (409) whose message says the name is the agent's type. An agent MUST carry no `title` and no `description`: a non-empty title is refused as a validation error (422) on every surface, and neither registration nor update takes a description. Its config directory is the one per-agent setting besides the type and the model binding of "Carry the model binding on the agent record". Registering a type that already has an agent MUST be refused with `AGENT_TYPE_REGISTERED` (409) and nothing persisted; using a different directory is an edit of the one agent.
+A machine MUST hold at most one agent of each supported type, and that agent's `name` MUST be its type's name — `claude-code` for `claude_code`, `codex` for `codex` — derived from the type at registration, never chosen by a person. The name is fixed: a changed name MUST be refused with `NAME_IMMUTABLE` (409) whose message says the name is the agent's type. An agent MUST carry no `title` and no `description`: neither registration nor update takes a description, and no surface shows a title for one. Its config directory is the one per-agent setting besides the type and the model binding of "Carry the model binding on the agent record". Registering a type that already has an agent MUST be refused with `AGENT_TYPE_REGISTERED` (409) and nothing persisted; using a different directory is an edit of the one agent.
 
 Because a type names exactly one agent, every `/api/v1/agents/{uid}/…` route MUST also accept the type — its name (`claude-code`) or its value (`claude_code`) — in place of the uid, and answer exactly as it does for the uid; a type with no agent registered reads as not found.
 
@@ -582,10 +576,10 @@ Because a type names exactly one agent, every `/api/v1/agents/{uid}/…` route M
 - **THEN** each answers for the same agent, with name `claude-code` and uid `U`
 - **AND** `/api/v1/agents/codex` answers not found while no `codex` agent is registered
 
-#### Scenario: an agent's name, title and description cannot be set
+#### Scenario: an agent's name and description cannot be set
 - **GIVEN** a registered `claude-code` agent
-- **WHEN** the user submits a new name, then a title, through the kind-agnostic update route
-- **THEN** the name is refused with `NAME_IMMUTABLE` (409) saying the name is the agent's type, and the title is refused as a validation error (422)
+- **WHEN** the user submits a new name through the kind-agnostic update route
+- **THEN** the name is refused with `NAME_IMMUTABLE` (409) saying the name is the agent's type
 - **AND** registering an agent under any name other than its type's is refused as a validation error
 
 ### Requirement: Report every supported type's detection state
@@ -685,7 +679,7 @@ While an agent type's program is not found on the agent's real `PATH` — detect
 - **AND** the Codex row carries `install_handoff` null
 
 ### Requirement: List the supported agents as fixed rows on the Agents page
-The Agents page MUST list exactly one row per supported agent type — today two, Claude Code and Codex — whether or not each is installed or added, in that order, so the page reads the same on every machine and a first-time user sees at once what Coffer can manage. Each row is found automatically from the detection state of "Detect an agent by its program and its config directory": an `installed_active` type's row reads as its Coffer state ("Show the Coffer connection on the agent pages") with its config directory and version; an `installed_never_run` type reads Not connected too, with its config directory marked as not created, and offers Connect, whose review names the directory it creates and the only entries Coffer needs in it; a `config_only` type reads as config left behind — program not found — and a `missing` type as not installed, each with no Connect and the daemon's prompt that hands reinstalling or installing it to an agent (see "Hand installing an agent's program to an agent") as the split button **Ask an agent ▾** beside its ⋯ menu — Copy prompt behind the chevron, and Copy prompt alone while no other agent can run it. A row whose program is missing shows no version, and its second line says "Not on this Mac" or what is left in the directory. The page MUST NOT show an install command, and carries no Remove action. On first run, with neither agent connected and both connectable, the page MUST offer **Connect both**, which reviews and connects every connectable agent in one confirmation. An agent is named by its type everywhere in the web UI; the page offers no field to name or title one.
+The Agents page MUST list exactly one row per supported agent type — today two, Claude Code and Codex — whether or not each is installed or added, in that order, so the page reads the same on every machine and a first-time user sees at once what Coffer can manage. Each row is found automatically from the detection state of "Detect an agent by its program and its config directory": an `installed_active` type's row reads as its Coffer state ("Show the Coffer connection on the agent pages") with its config directory and version; an `installed_never_run` type reads Not connected too, with its config directory marked as not created, and offers Connect, whose review names the directory it creates and the only entries Coffer needs in it; a `config_only` type reads as config left behind — program not found — and a `missing` type as not installed, each with no Connect and the daemon's prompt that hands reinstalling or installing it to an agent (see "Hand installing an agent's program to an agent") as the split button **Ask an agent ▾** beside its ⋯ menu — Copy prompt behind the chevron, and Copy prompt alone while no other agent can run it. A row whose program is missing shows no version, and its second line says "Not on this Mac" or what is left in the directory. The page MUST NOT show an install command, and carries no Remove action. On first run, with neither agent connected and both connectable, the page MUST offer **Connect both**, which reviews and connects every connectable agent in one confirmation. An agent is named by its type everywhere in the web UI; the page offers no field to name one.
 
 Overview's Needs you lists only agents that need the person: an agent that needs repair and one whose config directory is left behind. Not installed, Not connected and a first run raise none.
 
@@ -716,7 +710,7 @@ Overview's Needs you lists only agents that need the person: an agent that needs
 #### Scenario: a row's menu offers a different config directory
 - **GIVEN** a Claude Code row on the Agents page
 - **WHEN** the user opens the row's menu
-- **THEN** it offers Use a different config directory…, and the page carries no Add agent dialog, no Remove action and no name or title field
+- **THEN** it offers Use a different config directory…, and the page carries no Add agent dialog, no Remove action and no name field
 
 ### Requirement: Show what Coffer manages for an agent in one row
 The agent's Skills and MCP servers tabs MUST each hold two parts in the same order: what Coffer manages for the agent first, then what the agent has of its own. There is no owner column, no owner mark on a row, and no filter that switches between the two.

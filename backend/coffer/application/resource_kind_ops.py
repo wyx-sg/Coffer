@@ -23,7 +23,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from coffer.domain.errors import ConfigValidationError
-from coffer.domain.resource import Kind, normalise_title, validate_resource_name
+from coffer.domain.resource import Kind, normalise_free_name, validate_resource_name
 from coffer.domain.vault.layout import StorageClass
 
 Registry = Mapping[str, Kind]
@@ -87,20 +87,30 @@ def storage_of(kinds: Registry, kind: str, config: Mapping[str, Any]) -> Storage
     return kind_def.storage
 
 
-def check_name(kind_def: Kind, name: str) -> None:
-    """Framework rule then kind rule, BEFORE any write.
+def check_name(kind_def: Kind, name: str) -> str:
+    """Framework rule then kind rule, BEFORE any write; returns the name to
+    store.
 
     One helper because registration and rename must apply the same rules;
     while rename lived in one kind's service the two had already drifted —
     ``provider`` checked a length the framework did not and skipped the
     pattern the framework did.
 
+    A kind whose name is free text (``Kind.free_name``: a provider, a channel)
+    takes any display name and stores it trimmed and NFC-normalised (ADR
+    provider-and-channel-names-are-free-text); every other kind takes a fixed
+    slug and stores it as given.
+
     The one question here that can raise. It still asks only what the kind
     *declares*, and still never touches a row: what it refuses is the argument
     a caller is about to write, not the state of the vault.
     """
+    wanted = name
     try:
-        validate_resource_name(name)
+        if kind_def.free_name:
+            wanted = normalise_free_name(name)
+        else:
+            validate_resource_name(name)
     except ValueError as e:
         raise ConfigValidationError(str(e)) from e
     # Kind-specific name validation (e.g. mcp_server reserves '__'
@@ -108,23 +118,9 @@ def check_name(kind_def: Kind, name: str) -> None:
     # frontmatter charset, which is stricter than the framework's).
     if kind_def.validate_name is not None:
         try:
-            kind_def.validate_name(name)
+            kind_def.validate_name(wanted)
         except ValueError as e:
             raise ConfigValidationError(str(e)) from e
-
-
-def checked_title(kind_def: Kind, title: str | None) -> str | None:
-    """The title to store — ``None`` for a blank one — or ``ConfigValidationError``
-    for one over the cap, or for any title on a kind that carries none
-    (``Kind.titled``), before any write."""
-    try:
-        wanted = normalise_title(title)
-    except ValueError as e:
-        raise ConfigValidationError(str(e)) from e
-    if wanted is not None and not kind_def.titled:
-        raise ConfigValidationError(
-            f"the {kind_def.name} kind carries no title: it is shown by its name, which is fixed"
-        )
     return wanted
 
 
@@ -146,7 +142,6 @@ __all__ = [
     "audit_safe_config",
     "check_derived_name",
     "check_name",
-    "checked_title",
     "secret_refs",
     "storage_of",
 ]

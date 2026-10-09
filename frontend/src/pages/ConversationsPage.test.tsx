@@ -43,8 +43,8 @@ vi.mock("@/lib/api/fs", () => ({ fsApi: { listTerminals: vi.fn(), openTerminal: 
 vi.mock("@/lib/hooks/useChannels", () => ({
   useChannels: () => ({
     data: [
-      { uid: "ch-1", name: "team-bot", title: "Team bot", config: { channel_type: "seatalk" } },
-      { uid: "ch-2", name: "personal", title: "Personal", config: { channel_type: "telegram" } },
+      { uid: "ch-1", name: "Team bot", config: { channel_type: "seatalk" } },
+      { uid: "ch-2", name: "Personal", config: { channel_type: "telegram" } },
     ],
   }),
 }));

@@ -20,7 +20,6 @@ import type { ChannelStatus } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import type { ChannelStateKey, ChannelView } from "@/lib/channels/channelState";
 import { channelPlatform } from "@/lib/channels/channelState";
-import { displayName } from "@/lib/resourceTitle";
 import type { ChannelCommand } from "./ChannelDetailHeader";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { platformLabel } from "./PlatformMark";
@@ -70,7 +69,7 @@ export function ChannelStatusBanner({ channel, view, status, onCommand, onPair, 
   const vars = {
     platform: platformLabel(platformKey),
     appId: typeof channel.config.app_id === "string" ? channel.config.app_id : "",
-    name: displayName(channel),
+    name: channel.name,
   };
   const variant = VARIANT[view.state];
   const Icon = variant ? ICON[variant] : null;

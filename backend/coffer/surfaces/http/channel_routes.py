@@ -165,10 +165,6 @@ class ChannelStatusOut(BaseModel):
     #: with this set is "starting", never a failed start (spec channels "Report
     #: a channel that is starting apart from one that failed to start").
     starting: bool = False
-    #: The display title a person chose (spec resource-framework "Carry an optional
-    #: editable title on the kinds that have one"); ``None`` when unset, and a surface shows
-    #: the name in its place.
-    title: str | None = None
     #: While the websocket reports ``sdk_missing``: the prompt that has the
     #: person's agent put SeaTalk's SDK where the daemon loads it from (spec
     #: channels/seatalk "Load the websocket client library from an
@@ -328,7 +324,6 @@ async def channel_status(uid: str) -> ChannelStatusOut:
     return ChannelStatusOut(
         uid=status.uid,
         name=status.name,
-        title=status.title,
         channel_type=status.channel_type,  # type: ignore[arg-type]
         enabled=status.enabled,
         running=status.running,

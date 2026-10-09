@@ -8,7 +8,6 @@ import { activeProviderFor, isInUse, providerUsedBy } from "./usedBy";
 const provider = (uid: string, over: Partial<Provider> = {}): Provider => ({
   uid,
   name: uid,
-  title: null,
   protocol: "openai",
   base_url: "https://gw/v1",
   anthropic_base_url: null,

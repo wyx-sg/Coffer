@@ -87,7 +87,6 @@ describe("useChannels hooks", () => {
   test("useChannelStatus fetches /channels/{uid}/status", async () => {
     const status: ChannelStatus = {
       ...TG,
-      title: null,
       channel_type: "telegram",
       diagnostics: [],
       secret_approval: null,
@@ -203,11 +202,7 @@ describe("useCreateChannel", () => {
       created = await result.current.mutateAsync(plan);
     });
 
-    // The free-name check first — a scan of the list, because a resource has no
-    // by-name lookup route any more — then the secret, then the resource.
-    expect(api.GET).toHaveBeenCalledWith("/resources", {
-      params: { query: { kind: "channel" } },
-    });
+    // The secret first, then the resource.
     expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/secrets", "/resources"]);
     expect(created).toMatchObject({ uid: TG.uid, name: TG.name });
     await waitFor(() =>
@@ -215,28 +210,6 @@ describe("useCreateChannel", () => {
         expect.objectContaining({ queryKey: resourcesKey }),
       ),
     );
-  });
-
-  test("a name another channel already holds is stepped past, never refused", async () => {
-    // The person typed a display name; the resource name is Coffer's to pick,
-    // so a clash with another channel's name moves to the next free one rather
-    // than failing the add.
-    const api = registeringApi();
-    api.GET.mockResolvedValue({
-      data: { resources: [{ uid: "u-someone-else", kind: "channel", name: TG.name }] },
-      error: undefined,
-    });
-    getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
-    const { result } = renderHook(() => useCreateChannel(), { wrapper: makeWrapper() });
-
-    await act(async () => {
-      await result.current.mutateAsync(plan);
-    });
-
-    const register = api.POST.mock.calls.find((c) => c[0] === "/resources");
-    const body = (register?.[1] as { body: Record<string, unknown> }).body;
-    expect(body.name).toBe(`${TG.name}-2`);
-    expect(body.title).toBe(plan.name);
   });
 
   test("toasts when registration fails", async () => {

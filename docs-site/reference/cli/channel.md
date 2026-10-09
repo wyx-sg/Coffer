@@ -71,7 +71,7 @@ coffer channel show [OPTIONS] UID
 
 ## channel update
 
-Change a channel. Body: name, title, description, config.
+Change a channel. Body: name, description, config.
 
 <p class="cli-label">Synopsis</p>
 

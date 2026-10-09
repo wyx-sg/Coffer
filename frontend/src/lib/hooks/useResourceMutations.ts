@@ -87,22 +87,6 @@ export function useRenameResource() {
   });
 }
 
-/**
- * Set or clear a resource's display title, on any kind — the MCP server and
- * skill kinds, whose names are fixed, included. A blank title clears it.
- *
- * No `onError` toast, for the same reason as `useRenameResource`: the only way
- * to set a title is an edit form, which renders the failure beside the field.
- */
-export function useSetResourceTitle() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ uid, title }: ResourceWriteInput & { title: string | null }) =>
-      resourcesApi.setTitle(uid, title),
-    onSuccess: (_data, { kind }) => invalidateFor(qc, kind),
-  });
-}
-
 /** Delete every row of a selection: each delete is attempted, one summary toast
  *  says how many landed (see `useBulkMutate`), and the generic list refreshes
  *  once. */

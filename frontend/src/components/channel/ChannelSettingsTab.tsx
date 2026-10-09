@@ -1,7 +1,7 @@
 // frontend/src/components/channel/ChannelSettingsTab.tsx
 // A channel's Settings, saved as they change — there is no Save button and no
 // Saved line; a failed save is a toast. The sections: Connection (its name —
-// any display name, kept as the resource's title — SeaTalk's App ID, the
+// its display name, renamed in place — SeaTalk's App ID, the
 // secret shown masked and replaced through a dialog), Receiving messages (group rules and batching), Replies and
 // conversations, System prompts (edited through a dialog), and Working
 // directories; the one destructive action, Delete,
@@ -14,11 +14,11 @@ import { SecretRefControl } from "@/components/secret/SecretRefControl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { translateApiError } from "@/lib/api/errors";
+import { freeNameErrorKey, freeNameProblem } from "@/lib/freeName";
 import type { ChannelSettings } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import { useChannelAutoSave, CHANNEL_KIND } from "@/lib/hooks/useChannels";
-import { useSetResourceTitle } from "@/lib/hooks/useResourceMutations";
-import { TITLE_MAX_LENGTH, titlePatchValue } from "@/lib/resourceTitle";
+import { useRenameResource } from "@/lib/hooks/useResourceMutations";
 import {
   ChannelDirectoryFields,
   ChannelReceivingFields,
@@ -50,20 +50,24 @@ export function ChannelSettingsTab({
   const { t } = useTranslation();
   const id = useId();
   const { save } = useChannelAutoSave(channel);
-  const setTitle = useSetResourceTitle();
+  const rename = useRenameResource();
   const config = channel.config;
   const seatalk = config.channel_type === "seatalk";
   const secretRef = seatalk ? config.app_secret_ref : config.bot_token_ref;
 
-  const title = useSettingDraft(
-    channel.title ?? "",
-    (text) => ({ title: titlePatchValue(text) }),
-    ({ title: next }) => {
-      if (next !== (channel.title ?? null)) {
-        setTitle.mutate({ kind: CHANNEL_KIND, uid: channel.uid, title: next });
+  // The name is the channel's `name`: a rename is the kind-agnostic PATCH. A
+  // text the free-name rule refuses is never sent; the daemon's refusal of a
+  // name already taken shows beside the field.
+  const name = useSettingDraft(
+    channel.name,
+    (text) => (freeNameProblem(text) === null ? text.trim() : null),
+    (next) => {
+      if (next !== channel.name) {
+        rename.mutate({ kind: CHANNEL_KIND, uid: channel.uid, name: next });
       }
     },
   );
+  const nameProblem = freeNameProblem(name.text);
   const appId = useSettingDraft(
     typeof config.app_id === "string" ? config.app_id : "",
     nonEmpty,
@@ -76,27 +80,35 @@ export function ChannelSettingsTab({
         title={t("channels.settings.connection.title")}
         description={t("channels.settings.secrets.hint")}
       >
-        <div {...title.commitProps}>
+        <div {...name.commitProps}>
           <SettingRow
             label={t("channels.dialog.name")}
-            labelFor={`${id}-title`}
-            description={t("resources.titleField.hint")}
-            descriptionId={`${id}-title-hint`}
+            labelFor={`${id}-name`}
+            description={t("resources.freeName.hint")}
+            descriptionId={`${id}-name-hint`}
             status={
               <FieldError
-                id={`${id}-title-error`}
-                message={setTitle.error ? translateApiError(t, setTitle.error) : undefined}
+                id={`${id}-name-error`}
+                message={
+                  nameProblem
+                    ? t(freeNameErrorKey(nameProblem))
+                    : rename.error
+                      ? translateApiError(t, rename.error)
+                      : undefined
+                }
               />
             }
           >
             <Input
-              id={`${id}-title`}
+              id={`${id}-name`}
               className="w-64"
-              value={title.text}
-              maxLength={TITLE_MAX_LENGTH}
-              placeholder={channel.name}
-              aria-describedby={`${id}-title-hint`}
-              onChange={(e) => title.change(e.target.value)}
+              value={name.text}
+              aria-invalid={nameProblem ? true : undefined}
+              aria-describedby={`${id}-name-hint`}
+              onChange={(e) => {
+                rename.reset();
+                name.change(e.target.value);
+              }}
             />
           </SettingRow>
         </div>

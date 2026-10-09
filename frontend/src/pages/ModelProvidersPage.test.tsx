@@ -80,7 +80,6 @@ const makeProvider = (over: Partial<Provider> = {}): Provider => {
   return {
     uid: UIDS[name] ?? `cn-${name}`,
     name,
-    title: null,
     protocol: "anthropic",
     base_url: "https://gw/anthropic",
     secret_ref: `provider/${name}/key`,

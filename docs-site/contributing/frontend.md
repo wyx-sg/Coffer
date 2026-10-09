@@ -140,7 +140,7 @@ When a token is missing, add it to the Tailwind config in the same pull request 
 | `Alert` (`warning` variant) | A non-fatal caution, such as an unusual but working configuration. Not a toast, and not a destructive alert |
 | Save on change | Settings, reach and providers write as the control changes and report a failed write under the control; there are no Save buttons and no unsaved-changes guard, because the web UI has no document editor: a file is shown read-only with Open in editor and Reveal in Finder. A dialog's Cancel is a ghost button |
 | Tabs in the URL | Detail pages keep their tab in the path, `/<kind>/<id>/<tab>` |
-| Title over name | A resource of a kind that carries a title (provider, channel) shows its `title` when set and its `name` otherwise. Agents, MCP servers, skills and knowledge collections carry no title and always show their name: an MCP server's and a skill's name is fixed once registered (`409 NAME_IMMUTABLE`), and an agent's is its type, so their edit forms offer neither a rename nor a title |
+| One name | A resource shows its `name` everywhere it is listed or shown: no kind carries a second display label. A provider's or a channel's name is free text (any characters you type, up to 80, unique ignoring case) and is renamed from its page or Settings; an MCP server's and a skill's name is fixed once registered (`409 NAME_IMMUTABLE`) and an agent's is its type, so their edit forms offer no rename |
 
 Code style: named exports only, and one component per file. The first line of each file is a comment with its path and purpose, such as `// src/components/EmptyState.tsx — …`. Props are declared as a local `interface Props`. Type-only imports use `import type`. There is no `any` in `src`. Use `unknown` and narrow it.
 

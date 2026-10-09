@@ -22,7 +22,6 @@ import { translateApiError } from "@/lib/api/errors";
 import type { ModelSwitchFile } from "@/lib/api/modelSwitch";
 import type { ConnectionDraft } from "@/lib/hooks/useAgentConnectionDraft";
 import { useModelSwitchReview } from "@/lib/hooks/useModelSwitch";
-import { displayName } from "@/lib/resourceTitle";
 
 const K = "agents.changeModel.review";
 
@@ -67,7 +66,7 @@ export function ChangeModelReview({ agent, draft, open, onOpenChange, onApplied 
     if (applied) toast.info(t("agents.changeModel.restartNotice", { agent: name }));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per successful apply
   }, [applied]);
-  const target = draft.draftConnObj ? displayName(draft.draftConnObj) : null;
+  const target = draft.draftConnObj ? draft.draftConnObj.name : null;
 
   let state: ChangePreviewState;
   let status: ChangeItem["status"];

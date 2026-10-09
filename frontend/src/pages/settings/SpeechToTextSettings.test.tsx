@@ -67,7 +67,6 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => {
     local_runtime: null,
     compatible_agents: ["codex"],
     served_agents: ["codex"],
-    title: null,
     transcribe_default: false,
     models: [],
     enabled: true,

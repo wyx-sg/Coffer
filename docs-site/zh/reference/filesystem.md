@@ -61,7 +61,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | --- | --- | --- | --- | --- |
 | 整个 `vault/` | 你的配置和亲手编写的内容，以及 `.git/` 里的完整历史。 | 你、守护进程、同步 | 是，开启[保险库同步](/zh/guides/vault-sync)时 | **不能。** 这是唯一一份。复制前先停掉守护进程。 |
 | `manifest.json` | 保险库的布局版本号 `schema_version`，每轮同步合并任何东西之前先读它。 | 守护进程 | 是 | 不能 |
-| `resources/<kind>/<name>.json` | 每个资源一个 JSON 文件：`uid`、`kind`、`format_version`、`name`、可选的 `title`、`description`、`config`。身份以文件里的 `uid` 为准，而不是路径。 | 你、守护进程 | 是 | 不能：所有同步的机器上这个资源都会消失。 |
+| `resources/<kind>/<name>.json` | 每个资源一个 JSON 文件：`uid`、`kind`、`format_version`、`name`、`description`、`config`。身份以文件里的 `uid` 为准，而不是路径。提供商的文件名是 `<uid>.json`。 | 你、守护进程 | 是 | 不能：所有同步的机器上这个资源都会消失。 |
 | `state/mcp-preferences/<server>.json` | 你在某个 MCP 服务器上关掉的工具、提示词和资源，附带该服务器的 uid。 | 你、守护进程 | 是 | 可以：该服务器上的一切都会重新打开。 |
 | `state/settings/internal-engine.json` | 语音转文字模型，以及记忆同步的开关和间隔。不存在时用默认值。 | 你、守护进程 | 是 | 可以：设置恢复默认。 |
 | `state/secret-notes/notes.json` | 每个密钥的标签和描述（从不含值）。 | 你、守护进程 | 是 | 标签和描述会丢失，值还在。 |
@@ -81,7 +81,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | 路径 | 用途 | 所有者 | 是否同步 | 能否安全删除 |
 | --- | --- | --- | --- | --- |
 | `local/resources/agent/<name>.json` | 本机的智能体，每个一个资源文件。 | 守护进程 | 从不 | 该智能体在本机被取消注册。 |
-| `local/resources/channel/<name>.json` | 本机的消息渠道（Telegram 机器人和 SeaTalk 应用），每个一个资源文件。 | 你、守护进程 | 从不 | 该消息渠道在本机消失；重新创建并重新配对。 |
+| `local/resources/channel/<uid>.json` | 本机的消息渠道（Telegram 机器人和 SeaTalk 应用），每个一个资源文件。 | 你、守护进程 | 从不 | 该消息渠道在本机消失；重新创建并重新配对。 |
 | `local/channel-peers.json` | 与每个消息渠道配对的身份（包括所有者），以消息渠道 uid 为键。 | 守护进程 | 从不 | 配对关系会丢失；重新配对。 |
 | `local/reach.json` | 每个资源在本机的生效范围：是否启用，对哪些智能体生效。 | 守护进程 | 从不 | 每个资源恢复为所属类型的默认生效范围。 |
 | `local/engine.json` | 本机上次修改 Coffer 设置文档（语音转文字、维护任务）的时间。 | 守护进程 | 从不 | 可以。 |

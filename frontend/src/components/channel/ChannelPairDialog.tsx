@@ -96,7 +96,7 @@ function PairDialogBody({
         ) : (
           <ChannelPairingCode
             platform={platform}
-            channelName={status ? (status.title ?? status.name) : ""}
+            channelName={status ? status.name : ""}
             code={code}
             expired={expired}
             isPending={issuing}

@@ -9,7 +9,6 @@ import { useTranslation } from "react-i18next";
 import { ListLoadError, ListLoadingRows, ListNoMatch } from "@/components/ListPaneStates";
 import { SearchInput } from "@/components/SearchInput";
 import type { ResourceOut } from "@/lib/api/resources";
-import { searchableName } from "@/lib/resourceTitle";
 import { ChannelListRow } from "./ChannelListRow";
 import { CHANNEL_GROUPS, type ChannelView } from "@/lib/channels/channelState";
 
@@ -39,7 +38,7 @@ export function ChannelList({
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return channels;
-    return channels.filter((c) => searchableName(c).toLowerCase().includes(q));
+    return channels.filter((c) => c.name.toLowerCase().includes(q));
   }, [channels, query]);
 
   return (

@@ -17,7 +17,6 @@ def resource(
     *,
     name: str | None = None,
     enabled: bool = True,
-    title: str | None = None,
 ) -> Resource:
     return Resource(
         uid=uid,
@@ -28,7 +27,6 @@ def resource(
         enabled=enabled,
         created_at=T0,
         updated_at=T0,
-        title=title,
     )
 
 

@@ -94,10 +94,6 @@ class ChannelStatus:
     secret_approval: SecretApproval | None = None
     #: Enabled here and not yet reached by the reconciler (``start_pending``).
     starting: bool = False
-    #: The display title a person chose (spec resource-framework "Carry an optional
-    #: editable title on the kinds that have one"); ``None`` when unset, and a surface shows
-    #: the name in its place.
-    title: str | None = None
     #: The channel's settings with every default filled in — the typed reading of
     #: its stored configuration. ``None`` for a stored configuration that no longer
     #: validates, which the surfaces report as a fault rather than guess at.
@@ -256,7 +252,6 @@ class ChannelService:
             diagnostics=self._privacy_mode_diagnostics(resource),
             uid=resource.uid,
             name=name,
-            title=resource.title,
             settings=settings,
             channel_type=channel_type,
             enabled=resource.enabled,

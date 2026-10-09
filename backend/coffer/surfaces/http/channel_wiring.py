@@ -263,7 +263,8 @@ def wire_channel_kind(
     set_channel_service(service)
 
     async def running_channel(ref: str) -> ChannelBinding | None:
-        """The running binding of the channel named (or uid'd) ``ref``."""
+        """The running binding of the channel ``ref`` names: its uid, which the
+        origin block gives, or its name."""
         for channel in await resource_svc.list(kind="channel"):
             if ref in (channel.uid, channel.name):
                 return processor.binding(channel.uid)

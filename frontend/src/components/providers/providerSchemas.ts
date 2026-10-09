@@ -9,6 +9,7 @@ import type { SecretFieldValue } from "@/lib/secretValue";
 import type { TFunction } from "i18next";
 import { z } from "zod";
 
+import { freeNameErrorKey, freeNameSchema } from "@/lib/freeName";
 import { isLoopbackUrl } from "@/lib/providers/presets";
 
 const PROTOCOLS = ["anthropic", "openai", "ollama", "unknown"] as const;
@@ -34,7 +35,7 @@ function checkAddresses(
 export function editSchema(t: TFunction) {
   return z
     .object({
-      name: z.string().trim().min(1, t("providers.errors.nameRequired")),
+      name: freeNameSchema((problem) => t(freeNameErrorKey(problem))),
       openaiUrl: z.string(),
       anthropicUrl: z.string(),
     })
@@ -48,7 +49,7 @@ export function endpointSchema(t: TFunction) {
     .object({
       /** The local-runtime path: keyless, a loopback address found by detection. */
       local: z.boolean(),
-      name: z.string().trim().min(1, t("providers.errors.nameRequired")),
+      name: freeNameSchema((problem) => t(freeNameErrorKey(problem))),
       protocol: z.enum(PROTOCOLS),
       // Local: blank means "look on each runtime's default port".
       baseUrl: z.string().trim(),

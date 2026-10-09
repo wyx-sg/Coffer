@@ -641,7 +641,7 @@ paths:
       - resources
     patch:
       description: |-
-        Edit a resource's label, title, description or config.
+        Edit a resource's label, description or config.
 
         ``name`` is an ordinary field here, at the same level as ``description``,
         which is the whole user-facing point of the identity change: while the name
@@ -1731,17 +1731,10 @@ components:
           title: Kind
           type: string
         name:
-          maxLength: 64
+          maxLength: 80
           minLength: 1
-          pattern: ^[a-zA-Z0-9_.\-]+$
           title: Name
           type: string
-        title:
-          anyOf:
-          - maxLength: 80
-            type: string
-          - type: 'null'
-          title: Title
       required:
       - kind
       - name
@@ -1798,11 +1791,6 @@ components:
           default: false
           title: Secrets Readable By Local Processes
           type: boolean
-        title:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Title
         toggleable:
           title: Toggleable
           type: boolean
@@ -1819,7 +1807,6 @@ components:
       - uid
       - kind
       - name
-      - title
       - description
       - config
       - scope
@@ -1881,18 +1868,11 @@ components:
           title: Description
         name:
           anyOf:
-          - maxLength: 64
+          - maxLength: 80
             minLength: 1
-            pattern: ^[a-zA-Z0-9_.\-]+$
             type: string
           - type: 'null'
           title: Name
-        title:
-          anyOf:
-          - maxLength: 80
-            type: string
-          - type: 'null'
-          title: Title
       title: ResourceUpdate
       type: object
     ResyncEventOut:

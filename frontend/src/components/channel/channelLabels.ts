@@ -6,14 +6,13 @@
 import { useTranslation } from "react-i18next";
 
 import type { ResourceOut } from "@/lib/api/resources";
-import { displayName } from "@/lib/resourceTitle";
 import type { ChannelView } from "@/lib/channels/channelState";
 import { channelPlatform } from "@/lib/channels/channelState";
 import { platformLabel } from "./PlatformMark";
 
 /** "SeaTalk · Team bot" — the platform, then the name the person chose. */
 export function channelHeading(channel: ResourceOut): string {
-  return `${platformLabel(channelPlatform(channel.config))} · ${displayName(channel)}`;
+  return `${platformLabel(channelPlatform(channel.config))} · ${channel.name}`;
 }
 
 /** The state's status word and its list line. */

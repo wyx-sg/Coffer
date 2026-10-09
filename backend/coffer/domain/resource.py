@@ -16,6 +16,7 @@ uid (ADR identity-is-the-uid-inside-the-file).
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -30,6 +31,9 @@ from coffer.domain.vault.layout import StorageClass
 #: into a directory, so the rule survives as a label rule.
 _NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_.\-]+$")
 _NAME_MAX_LEN = 64
+#: The longest free-text name (``Kind.free_name``): what a person types to tell
+#: one provider or channel from another, shown wherever the resource is listed.
+FREE_NAME_MAX_LEN = 80
 
 
 class InvalidResourceNameError(ValueError):
@@ -53,27 +57,36 @@ def validate_resource_name(name: str) -> None:
         raise InvalidResourceNameError(f"invalid name {name!r}: must match ^[a-zA-Z0-9_.-]+$")
 
 
-#: The longest title a resource may carry (spec resource-framework "Carry an
-#: optional editable title on the kinds that have one").
-TITLE_MAX_LEN = 80
+def normalise_free_name(name: str) -> str:
+    """The free-text name to store for ``name`` (ADR
+    provider-and-channel-names-are-free-text): NFC, without surrounding
+    whitespace, or :class:`InvalidResourceNameError`.
 
-
-def normalise_title(title: str | None) -> str | None:
-    """The title to store for ``title``: ``None`` for an empty one, which is
-    how a title is cleared; ``ValueError`` for one longer than the cap.
-
-    A title is free text a person chose for display, so nothing about its
-    characters is checked — only that it is short enough to show where a name
-    was shown, and surrounding whitespace, which no one means to keep.
+    Anything a person can type is allowed — spaces, any script — except what
+    breaks the places a name is shown or typed: control characters (a newline
+    splits a log line or a chat message), a leading ``-`` (the CLI would read
+    it as an option), and more than :data:`FREE_NAME_MAX_LEN` characters.
     """
-    if title is None:
-        return None
-    stripped = title.strip()
-    if not stripped:
-        return None
-    if len(stripped) > TITLE_MAX_LEN:
-        raise ValueError(f"title too long ({len(stripped)} chars, max {TITLE_MAX_LEN})")
-    return stripped
+    wanted = unicodedata.normalize("NFC", name).strip()
+    if not wanted:
+        raise InvalidResourceNameError("name must not be empty")
+    if len(wanted) > FREE_NAME_MAX_LEN:
+        raise InvalidResourceNameError(
+            f"name too long ({len(wanted)} chars, max {FREE_NAME_MAX_LEN}): {wanted!r}"
+        )
+    if any(unicodedata.category(c) == "Cc" for c in wanted):
+        raise InvalidResourceNameError(
+            f"invalid name {wanted!r}: no line breaks or control characters"
+        )
+    if wanted.startswith("-"):
+        raise InvalidResourceNameError(f"invalid name {wanted!r}: must not start with '-'")
+    return wanted
+
+
+def same_free_name(a: str, b: str) -> bool:
+    """Whether two free-text names would read as the same one: names of a
+    free-name kind are unique regardless of case."""
+    return a.casefold() == b.casefold()
 
 
 @dataclass
@@ -103,11 +116,6 @@ class Resource:
     # machine-local"). Interpreted via coffer.domain.scope; only kinds whose
     # Kind.supports_scope is True may set it (validate_scope).
     scope: Scope | None = None
-    #: Optional display text (at most ``TITLE_MAX_LEN`` characters) that
-    #: surfaces show in place of ``name`` when it is set — only on a kind that
-    #: carries one (``Kind.titled``). It travels with the synced document;
-    #: reach does not.
-    title: str | None = None
 
 
 @dataclass(frozen=True)
@@ -196,12 +204,12 @@ class Kind:
     # registration refuses any other name rather than storing a label a person
     # chose. ``None`` leaves the name to the caller.
     name_from_config: Callable[[dict[str, Any]], str] | None = None
-    # Whether rows of this kind carry the optional display ``title`` (spec
-    # resource-framework "Carry an optional editable title on the kinds that
-    # have one"). False for `agent`, `knowledge`, `mcp_server` and `skill`: each
-    # has a fixed name and nothing else to be called — a non-empty title is
-    # refused on register and on edit.
-    titled: bool = True
+    # Whether a name of this kind is free text (``normalise_free_name``) rather
+    # than one safe path segment (ADR provider-and-channel-names-are-free-text).
+    # True for `provider` and `channel`: nothing turns their name into a path,
+    # their files are named by uid, and a person tells them apart by what they
+    # call them. Every other kind keeps the path-segment rule.
+    free_name: bool = False
 
     # --- Pre-write validators: run BEFORE persistence; raising rejects the write ---
 

@@ -109,7 +109,6 @@ const UID = "cn-31f0";
 const makeProvider = (over: Partial<Provider> = {}): Provider => ({
   uid: UID,
   name: "acme",
-  title: null,
   protocol: "openai",
   base_url: "https://gw/v1",
   secret_ref: "secret/b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",

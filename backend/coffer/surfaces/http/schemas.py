@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from coffer.domain.resource import TITLE_MAX_LEN
+from coffer.domain.resource import FREE_NAME_MAX_LEN
 from coffer.domain.scope import Scope
 
 # --- Error envelope ---
@@ -83,9 +83,8 @@ class ResourceOut(BaseModel):
     kind: str
     #: A label, unique within ``kind``. Editable through PATCH unless the kind
     #: declares its name fixed (``mcp_server``, ``skill``): 409 NAME_IMMUTABLE.
+    #: Free display text for a provider or a channel; a slug for the rest.
     name: str
-    #: Optional display text surfaces show in place of ``name``; null = none.
-    title: str | None = None
     description: str | None = None
     config: dict[str, Any]
     # Framework-level activation scope (ADR per-agent-resource-scope). None =
@@ -108,8 +107,9 @@ class ResourceOut(BaseModel):
 
 class ResourceCreate(BaseModel):
     kind: str
-    name: str = Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.\-]+$")
-    title: str | None = Field(default=None, max_length=TITLE_MAX_LEN)
+    #: Checked against the kind's rule by the service: free text up to 80
+    #: characters for a provider or a channel, a slug for the rest.
+    name: str = Field(min_length=1, max_length=FREE_NAME_MAX_LEN)
     description: str | None = None
     config: dict[str, Any]
 
@@ -117,11 +117,7 @@ class ResourceCreate(BaseModel):
 class ResourceUpdate(BaseModel):
     #: Renaming is a field. Absent leaves the label alone; a name taken within
     #: the kind is a 409, as is any change to a fixed name (NAME_IMMUTABLE).
-    name: str | None = Field(
-        default=None, min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.\-]+$"
-    )
-    #: Display text on every kind: absent leaves it, "" or null clears it.
-    title: str | None = Field(default=None, max_length=TITLE_MAX_LEN)
+    name: str | None = Field(default=None, min_length=1, max_length=FREE_NAME_MAX_LEN)
     description: str | None = None
     config: dict[str, Any] | None = None
 

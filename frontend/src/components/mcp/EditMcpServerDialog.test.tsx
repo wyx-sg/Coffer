@@ -34,7 +34,6 @@ const stdioResource: ResourceOut = {
   uid: "u-github",
   kind: "mcp_server",
   name: "gh",
-  title: null,
   scope: null,
   description: "GitHub MCP",
   config: {

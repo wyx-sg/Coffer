@@ -62,7 +62,7 @@ def older_messages_note(
     noun = "message" if omitted == 1 else "messages"
     return (
         f"{omitted} earlier {noun} in this thread are not shown. To read them, call "
-        f'{READ_THREAD_TOOL} with channel "{binding.resource.name}", chat_id '
+        f'{READ_THREAD_TOOL} with channel "{binding.resource.uid}", chat_id '
         f'"{msg.chat_id}", chat_kind "{msg.chat_kind}", thread_id "{msg.thread_id}" '
         f'and before "{before}".'
     )

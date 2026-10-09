@@ -253,12 +253,18 @@
     "title": "MCP servers",
     "subtitle": "MCP servers Coffer runs and serves to your agents through one endpoint.",
     "addServer": "Add server",
-    "titleField": {
-      "hint": "Shown in place of the name wherever this is listed. Leave empty to show the name."
-    },
     "fixedName": {
       "label": "Name",
       "cannotChange": "It cannot change after it is added."
+    },
+    "freeName": {
+      "hint": "Shown everywhere in Coffer; you can change it any time.",
+      "errors": {
+        "required": "Enter a name.",
+        "tooLong": "At most 80 characters.",
+        "lineBreak": "Use one line, with no line breaks or control characters.",
+        "leadingDash": "A name can’t start with “-”."
+      }
     }
   },
   "mcp": {
@@ -3788,8 +3794,6 @@
       "appSecret": "App secret",
       "appSecretName": "{{name}} app secret",
       "errors": {
-        "name": "Enter a name.",
-        "nameTooLong": "At most 80 characters.",
         "botToken": "Choose a stored secret or paste the bot token.",
         "appId": "Enter the App ID.",
         "appSecret": "Choose a stored secret or paste the App secret.",
@@ -3803,7 +3807,6 @@
         "title": "In the SeaTalk Open Platform, set event delivery to WebSocket",
         "body": "Do it after connecting here — the portal checks that a connection exists."
       },
-      "nameHint": "Any name; channels are told apart by their ID, so you can rename it later.",
       "telegramFound": "Found @{{handle}}",
       "telegramFoundPlain": "The token works",
       "telegramFoundBody": "The token works. It will run on this Mac ({{machine}})."
@@ -6011,7 +6014,6 @@
       "apiKey": "API key"
     },
     "errors": {
-      "nameRequired": "Enter a name.",
       "baseUrl": "Enter a full URL, e.g. https://api.openai.com/v1",
       "secretRequired": "Enter the API key.",
       "loopback": "A local runtime must be on this Mac — use localhost or 127.0.0.1.",
@@ -6148,7 +6150,6 @@
     },
     "edit": {
       "title": "Edit {{name}}",
-      "renameHint": "Renaming changes only the label — the key, history and agents stay put.",
       "locked": "{{agents}} runs on it, so the OpenAI address can't be added or removed until it moves to another provider.",
       "keyHint": "Keys are write-only. Use Replace key to change the value."
     },

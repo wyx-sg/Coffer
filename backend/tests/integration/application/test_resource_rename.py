@@ -127,7 +127,6 @@ async def test_rename_moves_the_label_and_nothing_else(tmp_path):
         assert renamed_row.details["from"] == "before"
         assert renamed_row.details["to"] == "after"
         assert renamed_row.details["moved_folder"] is False
-        assert "title" in renamed_row.details
         created_row = next(
             e for e in trail if e.event_type == AuditEventType.RESOURCE_CREATED.value
         )

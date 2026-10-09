@@ -6,7 +6,7 @@
 // offers stays available, and the model is switched in chat with /model.
 import { describe, expect, test } from "vitest";
 
-import { addChannelFormSchema, channelSlug, planChannel } from "@/lib/channels/schema";
+import { addChannelFormSchema, planChannel } from "@/lib/channels/schema";
 
 /**
  * The agent the new channel drives, as the dialog reads it off the picker.
@@ -120,14 +120,32 @@ describe("addChannelFormSchema", () => {
   });
 });
 
-describe("channelSlug", () => {
-  test("derives a resource name from any display name", () => {
-    expect(channelSlug("Team bot")).toBe("team-bot");
-    expect(channelSlug("  Ops · alerts!  ")).toBe("ops-alerts");
-    expect(channelSlug("团队")).toBe("channel");
+describe("channel name", () => {
+  const telegram = { channel_type: "telegram" as const, bot_token: pasted("t1") };
+  const messageOf = (name: string) =>
+    addChannelFormSchema.safeParse({ ...telegram, name }).error?.issues[0]?.message;
+
+  test("accepts any display text and trims it", () => {
+    for (const name of ["Team bot", "  Ops · alerts!  ", "团队机器人 🚀", "a-b"]) {
+      const parsed = addChannelFormSchema.safeParse({ ...telegram, name });
+      expect(parsed.success, name).toBe(true);
+      if (parsed.success) expect(parsed.data.name).toBe(name.trim());
+    }
+    expect(addChannelFormSchema.safeParse({ ...telegram, name: "x".repeat(80) }).success).toBe(
+      true,
+    );
   });
 
-  test("steps past names already taken", () => {
-    expect(channelSlug("Team bot", ["team-bot", "team-bot-2"])).toBe("team-bot-3");
+  test("refuses a blank, over-long, multi-line or dash-leading name", () => {
+    expect(messageOf("   ")).toBe("resources.freeName.errors.required");
+    expect(messageOf("x".repeat(81))).toBe("resources.freeName.errors.tooLong");
+    expect(messageOf("two\nlines")).toBe("resources.freeName.errors.lineBreak");
+    expect(messageOf("tab\there")).toBe("resources.freeName.errors.lineBreak");
+    expect(messageOf("-bot")).toBe("resources.freeName.errors.leadingDash");
+  });
+
+  test("the plan carries the typed name as it is", () => {
+    const parsed = addChannelFormSchema.parse({ ...telegram, name: " Team bot " });
+    expect(planChannel(parsed, AGENT_UID).name).toBe("Team bot");
   });
 });

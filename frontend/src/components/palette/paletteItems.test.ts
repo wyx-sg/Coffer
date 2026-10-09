@@ -27,8 +27,8 @@ describe("matchRank", () => {
   });
 
   test("any haystack text may carry the match", () => {
-    const item = objectItem("mcpServer", { uid: "u1", name: "gh-server", title: "GitHub" });
-    expect(matchRank(item, "git")).toBe(0);
+    const item = objectItem("mcpServer", { uid: "u1", name: "gh-server" });
+    expect(matchRank(item, "gh")).toBe(0);
     expect(matchRank(item, "server")).toBe(1);
   });
 });
@@ -45,17 +45,21 @@ describe("filterItems", () => {
 });
 
 describe("objectItem", () => {
-  test("shows the title with the name after it and opens a skill by its fixed name", () => {
-    const item = objectItem("skill", { uid: "u1", name: "pdf tools", title: "PDF tools" });
-    expect(item.label).toBe("PDF tools");
-    expect(item.detail).toBe("pdf tools");
+  test("shows the name and opens a skill by its fixed name", () => {
+    const item = objectItem("skill", { uid: "u1", name: "pdf tools" });
+    expect(item.label).toBe("pdf tools");
     expect(item.target).toEqual({ type: "route", to: "/skills/pdf%20tools" });
   });
 
-  test("an object without a title shows its name alone", () => {
-    const item = objectItem("agent", { uid: "a1", name: "claude", title: "  " });
+  test("a provider with a free-text name is shown and matched by it", () => {
+    const item = objectItem("provider", { uid: "p1", name: "团队 API 🚀" });
+    expect(item.label).toBe("团队 API 🚀");
+    expect(item.haystack).toEqual(["团队 API 🚀"]);
+  });
+
+  test("an object shows its name alone", () => {
+    const item = objectItem("agent", { uid: "a1", name: "claude" });
     expect(item.label).toBe("claude");
-    expect(item.detail).toBeUndefined();
     expect(item.haystack).toEqual(["claude"]);
   });
 
@@ -72,10 +76,10 @@ describe("objectItem", () => {
     expect(objectPath("agent", { ...o("a"), type: "claude_code" })).toBe("/agents/claude_code");
   });
 
-  test("a CLI opens its page by its command, and is found by its title too", () => {
-    const item = objectItem("cli", { uid: "gh", name: "gh", title: "GitHub CLI" });
+  test("a CLI opens its page by its command, ", () => {
+    const item = objectItem("cli", { uid: "gh", name: "gh" });
     expect(item.target).toEqual({ type: "route", to: "/clis/gh" });
-    expect(item.haystack).toEqual(["GitHub CLI", "gh"]);
+    expect(item.haystack).toEqual(["gh"]);
   });
 });
 

@@ -259,6 +259,7 @@ def make_channel_kind(
     the agents its ``default_agent`` and scope name are always this machine's.
     """
     return Kind(
+        free_name=True,
         name="channel",
         display_name="Channel",
         config_schema=ChannelConfigModel,

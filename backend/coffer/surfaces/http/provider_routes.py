@@ -120,7 +120,6 @@ def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
     return ProviderOut(
         uid=resource.uid,
         name=resource.name,
-        title=resource.title,
         protocol=cfg.protocol,
         base_url=cfg.base_url,
         anthropic_base_url=cfg.anthropic_base_url,

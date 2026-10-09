@@ -114,22 +114,8 @@ def test_move_an_agent_to_a_different_config_directory(home: pathlib.Path) -> No
         after = c.get("/api/v1/agents/claude-code").json()
         assert after["config_dir"] == str(other)
         assert (after["uid"], after["name"]) == (uid, "claude-code")
-        # The route carries no name, title or description to change.
+        # The route carries no name or description to change.
         assert not {"title", "description"} & set(after)
-
-
-@pytest.mark.acceptance(spec="agent-registry", scenario="refuse a title on the update route")
-def test_refuse_a_title_on_the_update_route(home: pathlib.Path) -> None:
-    with _client() as c:
-        uid = _register(c)
-
-        r = c.patch(f"/api/v1/resources/{uid}", json={"title": "Work laptop Claude"})
-        assert r.status_code == 422, r.text
-
-        shown = c.get("/api/v1/agents/claude-code").json()
-        assert (shown["uid"], shown["name"]) == (uid, "claude-code")
-        assert "title" not in shown
-        assert c.get(f"/api/v1/resources/{uid}").json()["title"] is None
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="bind a model to an agent over REST")

@@ -61,7 +61,6 @@ def make_agent_kind(on_delete: OnDeleteHook | None = None) -> Kind:
         # named by it").
         name_from_config=agent_name_for,
         name_fixed=True,
-        titled=False,
         # An agent names a config directory on THIS disk: it is true of this
         # machine only, so it is filed under ``local/`` and never travels
         # (ADR storage-is-five-classes-by-nature).

@@ -66,7 +66,7 @@ coffer resource show [OPTIONS] UID
 
 ## resource add
 
-Register a resource. Body: kind, name, config, description, title.
+Register a resource. Body: kind, name, config, description.
 
 <p class="cli-label">概要</p>
 
@@ -84,7 +84,7 @@ coffer resource add [OPTIONS]
 
 ## resource update
 
-Change a resource. Body: name, title, description, config.
+Change a resource. Body: name, description, config.
 
 <p class="cli-label">概要</p>
 

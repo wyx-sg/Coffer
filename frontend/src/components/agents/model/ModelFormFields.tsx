@@ -19,7 +19,6 @@ import type { AgentType } from "@/lib/api/agents";
 import { BUILTIN, type ConnectionDraft } from "@/lib/hooks/useAgentConnectionDraft";
 import { useAgentBuiltinDefault } from "@/lib/hooks/useAgentModels";
 import { agentTypeLabel } from "@/lib/agents/display";
-import { displayName } from "@/lib/resourceTitle";
 import { ModelTestStatus } from "./ModelTestStatus";
 import type { useModelSwitchTest } from "@/lib/hooks/useModelSwitchTest";
 
@@ -77,7 +76,7 @@ export function ModelFormFields({
             <SelectItem value={BUILTIN}>{builtin}</SelectItem>
             {c.compatible.map((p) => (
               <SelectItem key={p.uid} value={p.uid}>
-                {displayName(p)}
+                {p.name}
               </SelectItem>
             ))}
           </SelectContent>

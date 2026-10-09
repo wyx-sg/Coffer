@@ -44,7 +44,7 @@ from typing import Any
 
 from coffer.domain.errors import ConfigValidationError, ResourceAlreadyExists, ResourceNotFound
 from coffer.domain.reconcile import Changed
-from coffer.domain.resource import Kind, Resource
+from coffer.domain.resource import Kind, Resource, same_free_name
 from coffer.domain.scope import Scope
 from coffer.domain.vault.document import ResourceDocument
 from coffer.domain.vault.layout import StorageClass
@@ -175,7 +175,6 @@ class FileResourceRepo:
             created_at=created,
             updated_at=modified or created,
             scope=reach.scope,
-            title=doc.title,
         )
 
     async def find(self, uid: str) -> Resource | None:
@@ -183,7 +182,7 @@ class FileResourceRepo:
 
     async def find_by_name(self, kind: str, name: str) -> Resource | None:
         for r in self._snapshot().values():
-            if r.kind == kind and r.name == name:
+            if r.kind == kind and self._same_name(kind, r.name, name):
                 return r
         return None
 
@@ -221,6 +220,20 @@ class FileResourceRepo:
                 f"{entry.path} was written by a newer Coffer; it is read-only on this machine"
             )
         return entry
+
+    def _free_name(self, kind: str) -> bool:
+        return bool(getattr(self._kinds.get(kind), "free_name", False))
+
+    def _same_name(self, kind: str, a: str, b: str) -> bool:
+        """Whether two names collide: a free-text name ignoring case (ADR
+        provider-and-channel-names-are-free-text), a fixed one exactly."""
+        return same_free_name(a, b) if self._free_name(kind) else a == b
+
+    def _path_for(self, storage: StorageClass, kind: str, name: str, uid: str) -> str:
+        """Where a resource is filed: by its uid when its name is free text, so
+        a rename never moves the file; by its name otherwise."""
+        stem = uid if self._free_name(kind) else name
+        return self.files.free_path(storage, kind, stem, uid)
 
     def _storage_for(self, kind: str, config: dict[str, Any]) -> StorageClass:
         kind_def = self._kinds.get(kind)
@@ -261,7 +274,9 @@ class FileResourceRepo:
     def _create(self, resource: Resource) -> None:
         current = self.files.by_uid()
         if resource.uid in current or any(
-            e.doc.kind == resource.kind and e.doc.name == resource.name for e in current.values()
+            e.doc.kind == resource.kind
+            and self._same_name(resource.kind, e.doc.name, resource.name)
+            for e in current.values()
         ):
             raise ResourceAlreadyExists(resource.kind, resource.name)
         storage = self._storage_for(resource.kind, resource.config)
@@ -270,11 +285,10 @@ class FileResourceRepo:
             kind=resource.kind,
             name=resource.name,
             description=resource.description,
-            title=resource.title,
             config=for_file(resource.config),
             created_at=resource.created_at.astimezone(UTC).isoformat(),
         )
-        path = self.files.free_path(storage, resource.kind, resource.name, resource.uid)
+        path = self._path_for(storage, resource.kind, resource.name, resource.uid)
         summary = f"Registered {resource.kind} {resource.name}"
         if storage is StorageClass.VAULT:
             self._commit(OP_CREATE, summary, lambda t: t.write(path, doc.to_bytes(), Expect.ABSENT))
@@ -311,13 +325,6 @@ class FileResourceRepo:
         await asyncio.to_thread(self._rewrite, uid, f"Updated {name}", change)
         return await self._require(uid)
 
-    async def set_title(self, uid: str, title: str | None) -> Resource:
-        name = self.name_of(uid) or uid
-        await asyncio.to_thread(
-            self._rewrite, uid, f"Titled {name}", lambda e: e.doc.replace(title=title)
-        )
-        return await self._require(uid)
-
     def _set_reach(self, uid: str, change: Callable[[Reach], Reach]) -> None:
         entry = self.files.by_uid().get(uid)
         if entry is None:
@@ -348,13 +355,13 @@ class FileResourceRepo:
         entry = self._entry(uid)
         kind = entry.doc.kind
         if any(
-            e.doc.kind == kind and e.doc.name == new_name and e.uid != uid
+            e.doc.kind == kind and self._same_name(kind, e.doc.name, new_name) and e.uid != uid
             for e in self.files.by_uid().values()
         ):
             raise ResourceAlreadyExists(kind, new_name)
         before = self._snapshot()[uid]
         doc = entry.doc.replace(name=new_name)
-        new_path = self.files.free_path(entry.storage, kind, new_name, uid)
+        new_path = self._path_for(entry.storage, kind, new_name, uid)
 
         def work(txn: Transaction) -> None:
             if new_path != entry.path:

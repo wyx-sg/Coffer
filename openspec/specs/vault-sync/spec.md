@@ -1151,13 +1151,13 @@ import pass and undo what another machine changed (a provider switch).
 
 ### Requirement: Converge resources as their own files
 `mcp_server`, `skill`, `provider` and `knowledge` resources MUST
-converge as their files, `vault/resources/<kind>/<name>.json` — the file is the
+converge as their files, `vault/resources/<kind>/<name>.json` (`<uid>.json` for a provider) — the file is the
 resource, not a serialization of a row kept elsewhere ([vault-storage](../vault-storage/spec.md)
 "Identify a resource by the uid inside its file"). A resource file is identity,
-title, description and config — what the resource *is*; what it reaches is not
+name, description and config — what the resource *is*; what it reaches is not
 in it (see "Keep reach machine-local"). Agents and channels are machine-local
 and never converge: a channel's file, like an agent's, is under `local/`
-([channels](../channels/spec.md) "Keep each channel on the machine that holds it"). The `title` is optional: a resource with no title has no `title` key.
+([channels](../channels/spec.md) "Keep each channel on the machine that holds it").
 
 #### Scenario: a resource document is identity, description and config
 - **GIVEN** a registered resource with a description, a config and a reach of its own

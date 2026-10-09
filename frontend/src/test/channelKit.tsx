@@ -23,7 +23,6 @@ export function makeChannel(
     uid: "u-c0be4512",
     kind: "channel",
     name: "team-bot",
-    title: null,
     description: null,
     scope: null,
     enabled: true,
@@ -64,7 +63,6 @@ export function makeStatus(channel: ResourceOut, over: Partial<ChannelStatus> = 
   return {
     uid: channel.uid,
     name: channel.name,
-    title: null,
     channel_type: seatalk ? "seatalk" : "telegram",
     enabled: channel.enabled,
     running: true,

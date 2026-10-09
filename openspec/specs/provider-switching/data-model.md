@@ -10,7 +10,7 @@ secret, and on the kind-agnostic Resource framework.
 ### `ProviderConfig` (`domain/provider/config.py`)
 
 Pydantic v2 `BaseModel`, `extra="forbid"`. This is the `config` of the
-connection's resource file, `vault/resources/provider/<name>.json`. It MUST NOT hold the raw secret, and it holds no
+connection's resource file, `vault/resources/provider/<uid>.json`. It MUST NOT hold the raw secret, and it holds no
 model the connection runs: a connection is a credentialed endpoint, and the
 model is chosen at the point of use.
 
@@ -267,7 +267,7 @@ carries it by merging commits; nothing in this kind serialises or applies it.
 
 ## Storage
 
-A connection is a resource file, `vault/resources/provider/<name>.json`, whose
+A connection is a resource file, `vault/resources/provider/<uid>.json`, whose
 `config` is `ProviderConfig`; its reach is `local/reach.json` (spec
 resource-framework). **No tables.**
 
@@ -344,8 +344,8 @@ No new directories. Connections are vault files:
 ~/.coffer/vault/
   resources/
     provider/
-      <name>.json          # one JSON document per connection (no secret);
-                           # the uid inside is the identity, so a rename is one file's move
+      <uid>.json           # one JSON document per connection (no secret);
+                           # the uid inside is the identity and names the file, so a rename never moves it
   secret/
     <secret_ref>.enc   # e.g. secret/provider/<uuid4>/key.enc — Fernet
                            # ciphertext of the raw API key

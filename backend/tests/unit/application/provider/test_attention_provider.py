@@ -24,9 +24,7 @@ def _connection(uid: str, *, transcribe: bool = False, enabled: bool = True) -> 
         secret_ref=f"ref-{uid}",
         transcribe_default=transcribe,
     )
-    return resource(
-        uid, "provider", cfg.model_dump(mode="json"), title=f"{uid} title", enabled=enabled
-    )
+    return resource(uid, "provider", cfg.model_dump(mode="json"), enabled=enabled)
 
 
 def _agent(uid: str, connection_uid: str | None) -> Resource:
@@ -66,7 +64,7 @@ async def test_only_a_failing_connection_in_use_is_listed() -> None:
         },
     )
     [item] = await source.items()
-    assert (item.kind, item.uid, item.title) == ("provider", "a", "a title")
+    assert (item.kind, item.uid, item.title) == ("provider", "a", "a")
     assert item.reason_code == "provider_unreachable"
     assert item.reason == "Its endpoint does not answer: Connection error."
     assert item.severity is Severity.ERROR

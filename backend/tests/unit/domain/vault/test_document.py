@@ -62,16 +62,18 @@ def test_unknown_fields_are_kept_in_place_on_a_write() -> None:
 def test_an_optional_field_is_not_written_as_null_by_default() -> None:
     doc = ResourceDocument(kind="skill", name="pdf", config={}, uid="a" * 32)
     out = json.loads(doc.to_bytes())
-    assert "title" not in out and "created_at" not in out
+    assert "created_at" not in out
     assert out["description"] is None
     assert list(out)[:4] == ["uid", "kind", "format_version", "name"]
 
 
 def test_a_new_known_field_lands_in_its_canonical_place() -> None:
-    parsed = parse_resource(_raw())
-    out = json.loads(parsed.replace(title="Linear").to_bytes())
+    raw = json.loads(_raw())
+    del raw["description"]
+    parsed = parse_resource(encode(raw))
+    out = json.loads(parsed.replace(description="Linear").to_bytes())
     keys = list(out)
-    assert keys.index("title") == keys.index("name") + 1
+    assert keys.index("description") == keys.index("name") + 1
 
 
 def test_a_file_without_a_uid_parses_as_a_new_resource() -> None:

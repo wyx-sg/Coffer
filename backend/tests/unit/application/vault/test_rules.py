@@ -283,12 +283,29 @@ def test_a_file_is_held_to_the_kinds_own_name_rules() -> None:
     assert rule([Change(f"resources/mcp_server/{'a' * 24}.json", ok, None)], _Tree()).findings == []
 
 
-def test_a_title_on_a_kind_without_titles_is_refused() -> None:
+def test_a_free_name_kind_takes_display_text_and_its_clashes_ignore_case() -> None:
     kinds = {
-        "widget": Kind(name="widget", display_name="Widget", config_schema=_Config, titled=False)
+        "widget": Kind(name="widget", display_name="Widget", config_schema=_Config, free_name=True)
     }
+    owners = {"u0": ("resources/widget/u0.json", "widget", "Team Bot")}
+    rule = resource_rule(kinds, lambda: owners)
+    spaced = Change("resources/widget/u1.json", _doc(name="团队 bot ✨"), None)
+    assert rule([spaced], _Tree()).findings == []
+    broken = Change("resources/widget/u1.json", _doc(name="two\nlines"), None)
+    [finding] = rule([broken], _Tree()).findings
+    assert finding.code is FindingCode.INVALID_DOCUMENT
+    clash = Change("resources/widget/u1.json", _doc(name="team bot"), None)
+    [finding] = rule([clash], _Tree()).findings
+    assert finding.code is FindingCode.NAME_TAKEN
+
+
+def test_a_slug_kind_still_refuses_display_text_and_a_title_is_an_unknown_field() -> None:
+    kinds = {"widget": Kind(name="widget", display_name="Widget", config_schema=_Config)}
     rule = resource_rule(kinds, dict)
+    [finding] = rule(
+        [Change("resources/widget/w.json", _doc(name="Team Bot"), None)], _Tree()
+    ).findings
+    assert finding.code is FindingCode.INVALID_DOCUMENT
     titled = Change("resources/widget/w.json", _doc(title="Pretty"), None)
     [finding] = rule([titled], _Tree()).findings
-    assert finding.code is FindingCode.INVALID_DOCUMENT and "no title" in finding.message
-    assert rule([Change("resources/widget/w.json", _doc(), None)], _Tree()).findings == []
+    assert finding.code is FindingCode.UNKNOWN_FIELD and not finding.blocking

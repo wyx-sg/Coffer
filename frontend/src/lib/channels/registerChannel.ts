@@ -6,14 +6,13 @@
 // back so nothing orphaned stays behind.
 //
 // The name the person typed is a display name (spec channels "Name a channel by
-// any display name"): it is registered as the channel's title, and the
-// resource's name is derived from it, made unique among the channels that
-// exist, so the add never fails on a label the person never saw.
+// any display name") and is registered as the channel's `name` as typed; a name
+// already taken is the daemon's 409 RESOURCE_ALREADY_EXISTS, shown on the form.
 import { secretsApi } from "@/lib/api/secret";
 import { resourcesApi, type ResourceOut } from "@/lib/api/resources";
 import { writeSecret } from "@/lib/secretWrite";
 
-import { channelSlug, type ChannelPlan } from "@/lib/channels/schema";
+import type { ChannelPlan } from "@/lib/channels/schema";
 
 /** Best-effort rollback of secrets written before a failed registration. A
  *  delete the daemon refuses is logged and the rest still go: the registration
@@ -39,30 +38,12 @@ async function labelSecret(ref: string, label: string): Promise<void> {
 }
 
 /**
- * The resource name for this display name, clear of every channel's name.
- *
- * Chosen BEFORE any secret write: registering under a taken name would fail
- * after the secrets were written. A resource is not addressable by name, so
- * the check is a scan of the channel list — the question is "which labels are
- * taken", a question about the set. A list that cannot be read throws: a name
- * picked against an empty list would collide after the secrets were stored.
- */
-async function freeName(displayName: string): Promise<string> {
-  const { resources } = await resourcesApi.list("channel");
-  return channelSlug(
-    displayName,
-    resources.map((r) => r.name),
-  );
-}
-
-/**
  * Secrets-then-resource registration with rollback.
  *
  * Returns the registered resource, not its name: the caller navigates to the
  * new channel's page, and that URL is built from the uid.
  */
 export async function createChannel(plan: ChannelPlan): Promise<ResourceOut> {
-  const name = await freeName(plan.name);
   const written: string[] = [];
   try {
     for (const s of plan.secrets) {
@@ -71,8 +52,7 @@ export async function createChannel(plan: ChannelPlan): Promise<ResourceOut> {
     }
     const created = await resourcesApi.create({
       kind: "channel",
-      name,
-      title: plan.name,
+      name: plan.name,
       config: plan.config,
     });
     for (const s of plan.secrets) if (s.label?.trim()) await labelSecret(s.ref, s.label.trim());

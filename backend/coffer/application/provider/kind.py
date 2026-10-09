@@ -42,6 +42,7 @@ def make_provider_kind(rows: _Rows | None = None) -> Kind:
     """
     on_register, on_update = refusing_hooks(rows) if rows is not None else (None, None)
     return Kind(
+        free_name=True,
         name="provider",
         display_name="Provider",
         config_schema=ProviderConfig,
