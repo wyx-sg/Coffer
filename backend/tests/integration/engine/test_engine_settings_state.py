@@ -23,7 +23,7 @@ from coffer.application.internal_engine_config_service import InternalEngineConf
 from coffer.application.memory import aggregate_worker
 from coffer.application.memory.aggregate_worker import AggregateWorker
 from coffer.application.upkeep_schedule import wait_for_next_pass
-from coffer.domain.internal_engine_config import AGGREGATE, DISTIL, UpkeepSetting
+from coffer.domain.internal_engine_config import AGGREGATE, DISTIL, MEMORY_SYNC, UpkeepSetting
 from coffer.domain.vault.writers import WRITER_SYNC, CommitMeta
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
@@ -111,7 +111,7 @@ async def test_keys_an_older_build_wrote_are_ignored_and_dropped_on_the_next_wri
     assert "model" not in stored
     assert "curate_owner_machine_id" not in stored
     assert "model_timeout_s" not in stored
-    assert set(stored["upkeep"]) == {AGGREGATE, DISTIL}
+    assert set(stored["upkeep"]) == {AGGREGATE, DISTIL, MEMORY_SYNC}
     assert stored["transcribe_model"] == "hears-2"
     assert stored["written_by_a_newer_build"] == {"kept": True}
 
