@@ -62,6 +62,8 @@ export function makeSettings(channel: ResourceOut): ChannelSettings {
     show_steps: true,
     new_conversation_after_idle_hours: 24,
     directories: [],
+    direct_system_prompt: "",
+    group_system_prompt: "",
     runs_on: null,
     ...channel.config,
   } as unknown as ChannelSettings;

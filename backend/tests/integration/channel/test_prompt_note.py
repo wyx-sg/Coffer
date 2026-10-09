@@ -45,3 +45,84 @@ async def test_a_deleted_channel_has_no_facts(env: ChannelEnv) -> None:
         resources=env.resources, threads=env.threads, binding=env.processor.binding
     )
     assert await reader("00000000000000000000000000", "c1") is None
+
+
+_PROMPTS = {
+    "channel_type": "telegram",
+    "bot_token_ref": "channel/tg/bot-token",
+    "direct_system_prompt": "Answer in Chinese.",
+    "group_system_prompt": "Name the ticket number first.",
+}
+
+
+def _group(text: str, thread_id: str, *, main: bool = False) -> object:
+    return inbound(
+        "tg",
+        "grp-1",
+        text,
+        chat_kind="group",
+        sender_id="owner",
+        thread_id=thread_id,
+        platform_message_id=thread_id if main else "pm-1",
+        group_main=main,
+    )
+
+
+@pytest.mark.acceptance(spec="channels", scenario="each chat kind reads its own system prompt")
+async def test_each_chat_kind_reads_its_own_prompt(env: ChannelEnv) -> None:
+    resource = await env.register_channel(config=dict(_PROMPTS))
+    adapter = env.bind(resource)
+    await env.pair(resource, "owner")
+    reader = ChannelNoteReader(
+        resources=env.resources, threads=env.threads, binding=env.processor.binding
+    )
+
+    await env.processor.on_message(inbound("tg", "owner", "hi"))
+    # A group's main chat roots a thread at the message; a reply inside a
+    # thread continues that thread's own conversation.
+    await env.processor.on_message(_group("hi", "m-1", main=True))  # type: ignore[arg-type]
+    await env.processor.on_message(_group("hi", "t-1"))  # type: ignore[arg-type]
+    await wait_until(lambda: len(adapter.texts()) >= 3)
+
+    direct = await env.active_conversation(resource)
+    main = await env.active_conversation(resource, "grp-1", "m-1")
+    thread = await env.active_conversation(resource, "grp-1", "t-1")
+    assert direct and main and thread
+
+    assert (await reader(resource.uid, direct)).owner_prompt == "Answer in Chinese."  # type: ignore[union-attr]
+    for conversation_id in (main, thread):
+        note = await reader(resource.uid, conversation_id)
+        assert note is not None
+        assert note.chat_kind == "group"
+        assert note.owner_prompt == "Name the ticket number first."
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="an edited system prompt applies from the next turn"
+)
+async def test_an_edited_prompt_is_read_on_the_next_turn_without_a_restart(
+    env: ChannelEnv,
+) -> None:
+    resource = await env.register_channel(config=dict(_PROMPTS))
+    adapter = env.bind(resource)
+    await env.pair(resource, "owner")
+    await env.processor.on_message(inbound("tg", "owner", "hi"))
+    await wait_until(lambda: bool(adapter.texts()))
+    conversation_id = await env.active_conversation(resource)
+    assert conversation_id is not None
+    reader = ChannelNoteReader(
+        resources=env.resources, threads=env.threads, binding=env.processor.binding
+    )
+
+    stored = (await env.resources.get(resource.uid)).config
+    await env.resources.update_config(
+        resource.uid, {**stored, "direct_system_prompt": "Answer in English."}, actor="test"
+    )
+    note = await reader(resource.uid, conversation_id)
+    assert note is not None and note.owner_prompt == "Answer in English."
+
+    await env.resources.update_config(
+        resource.uid, {**stored, "direct_system_prompt": ""}, actor="test"
+    )
+    cleared = await reader(resource.uid, conversation_id)
+    assert cleared is not None and cleared.owner_prompt == ""

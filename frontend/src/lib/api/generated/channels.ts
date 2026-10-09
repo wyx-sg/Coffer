@@ -351,8 +351,18 @@ export interface components {
             default_agent_config: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Direct System Prompt
+             * @default
+             */
+            direct_system_prompt: string;
             /** Directories */
             directories: string[];
+            /**
+             * Group System Prompt
+             * @default
+             */
+            group_system_prompt: string;
             /**
              * Ignore Other Mentions
              * @default false
@@ -418,8 +428,18 @@ export interface components {
             default_agent_config: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Direct System Prompt
+             * @default
+             */
+            direct_system_prompt: string;
             /** Directories */
             directories: string[];
+            /**
+             * Group System Prompt
+             * @default
+             */
+            group_system_prompt: string;
             /**
              * Ignore Other Mentions
              * @default false

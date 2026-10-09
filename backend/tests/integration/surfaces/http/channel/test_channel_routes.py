@@ -288,6 +288,8 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
             "show_steps": True,
             "new_conversation_after_idle_hours": 24.0,
             "directories": [],
+            "direct_system_prompt": "",
+            "group_system_prompt": "",
             "runs_on": None,
         },
     }

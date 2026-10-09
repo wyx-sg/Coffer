@@ -50,6 +50,11 @@ def _reject_raw_secret(field: str, value: str) -> str:
 #: upgrade never stops a channel from starting.
 _RETIRED_KEYS = frozenset({"notify_after_seconds"})
 
+#: The longest system prompt a channel keeps per chat kind (spec channels "Append
+#: the owner's system prompt to a channel turn"). It rides on every turn, so it is
+#: capped well below anything that would crowd the agent's own context.
+SYSTEM_PROMPT_MAX_LENGTH = 4000
+
 
 class _CommonChannelFields(BaseModel):
     """Fields shared by every channel type: the agent it routes to by default."""
@@ -102,6 +107,12 @@ class _CommonChannelFields(BaseModel):
     # default directory is the only one — a chat cannot point an agent at an
     # arbitrary folder on this machine.
     directories: list[str] = Field(default_factory=list, max_length=32)
+    # The owner's own system prompts (spec channels "Append the owner's system
+    # prompt to a channel turn"): appended after Coffer's channel note on every
+    # turn of a direct chat (and its threads), or of a group's main chat and its
+    # threads. Empty appends nothing; they never replace Coffer's note.
+    direct_system_prompt: str = Field(default="", max_length=SYSTEM_PROMPT_MAX_LENGTH)
+    group_system_prompt: str = Field(default="", max_length=SYSTEM_PROMPT_MAX_LENGTH)
     # NOTE: a channel curates no MODELS. A new conversation opens on the bound
     # agent's own CLI default and ``/model`` offers that agent's whole
     # catalogue, refusing nothing — picking a model is the agent's business,
@@ -151,6 +162,13 @@ class _CommonChannelFields(BaseModel):
         if cwd is not None and (not isinstance(cwd, str) or not cwd.startswith("/")):
             raise ValueError(f"the default directory must be an absolute path; got {cwd!r}")
         return v
+
+    @field_validator("direct_system_prompt", "group_system_prompt")
+    @classmethod
+    def _trim_system_prompt(cls, v: str) -> str:
+        # Surrounding blank lines and spaces carry nothing; a prompt of only
+        # whitespace is no prompt. The text inside is kept as written.
+        return v.strip()
 
     @field_validator("directories")
     @classmethod

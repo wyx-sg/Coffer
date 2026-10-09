@@ -354,3 +354,100 @@ test("picking another stored secret re-points the channel and writes no value", 
   expect(config.default_agent).toBe(AGENT.uid);
   expect(api.POST).not.toHaveBeenCalled();
 });
+
+describe("system prompts", () => {
+  const section = () => screen.getByTestId("channel-system-prompts");
+  const openDialog = () =>
+    fireEvent.click(within(section()).getByRole("button", { name: /edit system prompts/i }));
+
+  acceptance(
+    "channels",
+    "the system prompts are edited through a dialog on the Settings tab",
+    async () => {
+      const api = installApi();
+      renderSettings(
+        makeChannel({ config: { group_system_prompt: "Name the ticket first.\nBe brief." } }),
+      );
+
+      // Shown as written; an empty prompt is a blank row, with no placeholder.
+      expect(within(section()).getByText(/Name the ticket first\./)).toBeInTheDocument();
+      expect(within(section()).queryByRole("textbox")).toBeNull();
+
+      openDialog();
+      const dialog = screen.getByRole("dialog");
+      const direct = within(dialog).getByLabelText("Direct chats");
+      const group = within(dialog).getByLabelText("Group chats");
+      expect(direct).toHaveValue("");
+      expect(direct).not.toHaveAttribute("placeholder");
+      expect(group).toHaveValue("Name the ticket first.\nBe brief.");
+
+      fireEvent.change(direct, { target: { value: "  Answer in Chinese.\n" } });
+      fireEvent.change(group, { target: { value: "" } });
+      expect(api.PATCH).not.toHaveBeenCalled(); // nothing is saved until Save
+      fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+      expect(patched(api)).toMatchObject({
+        direct_system_prompt: "Answer in Chinese.",
+        group_system_prompt: "",
+        app_secret_ref: "channel/0f/app-secret", // every ref goes back as it was
+      });
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    },
+  );
+
+  test("Cancel discards the draft and saves nothing", async () => {
+    const api = installApi();
+    renderSettings(TG);
+    openDialog();
+    fireEvent.change(within(screen.getByRole("dialog")).getByLabelText("Direct chats"), {
+      target: { value: "Answer in Chinese." },
+    });
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(api.PATCH).not.toHaveBeenCalled();
+    openDialog();
+    expect(within(screen.getByRole("dialog")).getByLabelText("Direct chats")).toHaveValue("");
+  });
+
+  acceptance("channels", "a system prompt longer than 4,000 characters is refused", async () => {
+    const api = installApi();
+    renderSettings(TG);
+    openDialog();
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Group chats"), {
+      target: { value: "x".repeat(4001) },
+    });
+
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("At most 4000 characters.");
+    expect(within(dialog).getByText("4001 / 4000")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(api.PATCH).not.toHaveBeenCalled();
+  });
+
+  test("a refused save keeps the dialog open with what was typed", async () => {
+    const api = installApi(
+      mockApiClient({
+        PATCH: vi.fn().mockResolvedValue({
+          error: { error: { code: "VALIDATION_ERROR", message: "too long" } },
+          response: new Response(null, { status: 422 }),
+        }),
+      }),
+    );
+    renderSettings(TG);
+    openDialog();
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Direct chats"), {
+      target: { value: "Answer in Chinese." },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(within(dialog).getByRole("button", { name: "Save" })).not.toBeDisabled(),
+    );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Direct chats")).toHaveValue("Answer in Chinese.");
+  });
+});

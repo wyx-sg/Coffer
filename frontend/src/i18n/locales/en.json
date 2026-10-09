@@ -3546,6 +3546,19 @@
       "replying": {
         "title": "Replies and conversations"
       },
+      "prompts": {
+        "title": "System prompts",
+        "description": "Your own instructions for the agent, added after Coffer's note about the chat on every turn. A change applies from the next message.",
+        "direct": "Direct chats",
+        "directHint": "Direct chats with the bot, and the threads opened in them.",
+        "group": "Group chats",
+        "groupHint": "A group's main chat and its threads.",
+        "editAria": "Edit system prompts",
+        "dialogTitle": "Edit system prompts",
+        "dialogDescription": "For example, the language to answer in or what to always include. Leave one empty to add nothing.",
+        "count": "{{count}} / {{max}}",
+        "tooLong": "At most {{max}} characters."
+      },
       "directories": {
         "description": "/dir may switch to these and the folders under them; new conversations start in the default. With no default they start in Coffer's workspace; with no directories /dir is off."
       },

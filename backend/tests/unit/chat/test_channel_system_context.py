@@ -15,7 +15,10 @@ import pytest
 from coffer.domain.chat.channel_note import ChannelNote
 from coffer.infrastructure.channel.seatalk_caps import SEATALK_RENDER_NOTES
 from coffer.infrastructure.channel.telegram_caps import RICH_RENDER_NOTES
-from coffer.infrastructure.chat.adapter_support import channel_system_context
+from coffer.infrastructure.chat.adapter_support import (
+    channel_system_context,
+    owner_prompt_context,
+)
 
 _SEATALK_GROUP_THREAD = ChannelNote(
     name="ops", platform="SeaTalk", chat_kind="group", in_thread=True, renders=SEATALK_RENDER_NOTES
@@ -94,3 +97,35 @@ def test_an_unresolvable_channel_keeps_the_guidance() -> None:
     assert text.startswith("You are replying in a chat channel")
     assert "Short never means dropping evidence" in text
     assert "`coffer__ask`" in text
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="the owner's prompt follows Coffer's note under its own heading"
+)
+def test_the_owner_prompt_follows_the_note_under_its_heading() -> None:
+    prompt = "Answer in Chinese.\n\nAlways name the ticket number."
+    note = ChannelNote(name="tg", platform="Telegram", chat_kind="direct", owner_prompt=prompt)
+
+    text = channel_system_context(note)
+    builtin = channel_system_context(
+        ChannelNote(name="tg", platform="Telegram", chat_kind="direct")
+    )
+
+    # Coffer's note is kept whole and comes first; the owner's text follows it
+    # under the heading, exactly as written.
+    assert text == f"{builtin}\n\nInstructions from the channel's owner:\n{prompt}"
+
+
+@pytest.mark.acceptance(spec="channels", scenario="an empty system prompt appends nothing")
+@pytest.mark.parametrize("prompt", ["", "   \n\t "])
+def test_an_empty_or_blank_owner_prompt_appends_nothing(prompt: str) -> None:
+    note = ChannelNote(platform="SeaTalk", chat_kind="group", owner_prompt=prompt)
+
+    text = channel_system_context(note)
+
+    assert "Instructions from the channel's owner" not in text
+    assert text == channel_system_context(ChannelNote(platform="SeaTalk", chat_kind="group"))
+
+
+def test_a_deleted_channel_has_no_owner_prompt() -> None:
+    assert owner_prompt_context(None) == ""

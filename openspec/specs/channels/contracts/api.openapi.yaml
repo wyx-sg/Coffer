@@ -751,12 +751,22 @@ components:
             type: object
           - type: 'null'
           title: Default Agent Config
+        direct_system_prompt:
+          default: ''
+          maxLength: 4000
+          title: Direct System Prompt
+          type: string
         directories:
           items:
             type: string
           maxItems: 32
           title: Directories
           type: array
+        group_system_prompt:
+          default: ''
+          maxLength: 4000
+          title: Group System Prompt
+          type: string
         ignore_other_mentions:
           default: false
           title: Ignore Other Mentions
@@ -803,6 +813,8 @@ components:
       - show_steps
       - new_conversation_after_idle_hours
       - directories
+      - direct_system_prompt
+      - group_system_prompt
       - runs_on
       - channel_type
       - app_id
@@ -856,12 +868,22 @@ components:
             type: object
           - type: 'null'
           title: Default Agent Config
+        direct_system_prompt:
+          default: ''
+          maxLength: 4000
+          title: Direct System Prompt
+          type: string
         directories:
           items:
             type: string
           maxItems: 32
           title: Directories
           type: array
+        group_system_prompt:
+          default: ''
+          maxLength: 4000
+          title: Group System Prompt
+          type: string
         ignore_other_mentions:
           default: false
           title: Ignore Other Mentions
@@ -908,6 +930,8 @@ components:
       - show_steps
       - new_conversation_after_idle_hours
       - directories
+      - direct_system_prompt
+      - group_system_prompt
       - runs_on
       - channel_type
       - bot_token_ref

@@ -491,7 +491,11 @@ machine that runs it") and its secrets, and the channel's deletion. Choosing a t
 changes the address and nothing else.
 
 Settings are saved as they change, with no save button and no saved line; a save
-that fails says so in a toast and the field keeps what was typed. They cover the channel's title, its type's plain settings (a
+that fails says so in a toast and the field keeps what was typed. The one
+exception is the channel's two system prompts (see "Append the owner's system
+prompt to a channel turn"): they are prose, so their **System prompts** section
+shows them as written and edits them through an **Edit** button and a dialog
+with Cancel and Save. They cover the channel's title, its type's plain settings (a
 SeaTalk app id), its two group-gating switches, `require_mention` and
 `ignore_other_mentions` (see "Configure when the bot answers in a group"), and
 the rest of what this requirement and the others in this spec name as a channel
@@ -537,7 +541,7 @@ and `PATCH /api/v1/resources/{uid}`.
 #### Scenario: a channel's settings arrive with their defaults filled in
 - **GIVEN** a channel whose stored configuration names none of the optional settings
 - **WHEN** its status is read
-- **THEN** the settings carry every default (group gating, quiet windows, replies, idle period, directories)
+- **THEN** the settings carry every default (group gating, quiet windows, replies, idle period, directories, system prompts)
 - **AND** the Channels page shows them without a default of its own
 
 #### Scenario: rotating a channel secret keeps its refs and pairing
@@ -719,6 +723,75 @@ has been deleted, or is not running, still gets the note, saying less.
 - **WHEN** each turn's note is composed
 - **THEN** the Telegram note asks for long content under a `## Details` heading
   Coffer collapses, and the SeaTalk note does not mention one
+
+### Requirement: Append the owner's system prompt to a channel turn
+A channel MUST carry two optional system prompts of the owner's own, stored in
+its configuration beside its other settings: `direct_system_prompt`, for direct
+chats and the threads opened in them, and `group_system_prompt`, for a group's
+main chat and its threads. Each is plain multi-line text of at most 4,000
+characters, trimmed of surrounding whitespace, and empty by default; a longer
+one MUST be refused and leave the stored value as it was.
+
+A channel turn MUST append the prompt for its conversation's chat kind after the
+note of "Tell a channel-driven agent it is on a chat channel", under its own
+heading line, `Instructions from the channel's owner:`, followed by the text as
+written. It never replaces or shortens that note, and an empty prompt appends
+nothing. A conversation whose chat cannot be located gets neither prompt.
+
+The prompt MUST be read from the channel's stored configuration each time a
+turn's system prompt is composed, so a change applies from the next turn of
+every conversation — with no restart, and also when the turn resumes the agent's
+existing session: Coffer sends its system context with every turn (Claude Code's
+appended system prompt, Codex's `developerInstructions` on `thread/resume` as on
+`thread/start`). See [Chat and turns](../../../docs-site/architecture/chat.md).
+
+On the Channels page the prompts are a **System prompts** section of the
+channel's Settings tab, after Replies and conversations: a **Direct chats** row
+and a **Group chats** row, each showing its prompt as written and blank when
+there is none, and an **Edit** button that opens a dialog with one text area for
+each, a character count, Cancel and Save. Nothing is saved until Save, the
+dialog closes only once the save has landed, and Save is unavailable while a
+prompt is over the limit. Over REST they are fields of the channel's config
+(`PATCH /api/v1/resources/{uid}`, `coffer channel update`) and are reported in
+the channel's status settings.
+
+#### Scenario: the owner's prompt follows Coffer's note under its own heading
+- **GIVEN** a channel whose direct-chat prompt is "Answer in Chinese."
+- **WHEN** a direct-chat turn's system prompt is composed
+- **THEN** it holds Coffer's channel note in full, then the line
+  `Instructions from the channel's owner:` and the prompt as written
+
+#### Scenario: each chat kind reads its own system prompt
+- **GIVEN** a channel with a direct-chat prompt and a different group-chat prompt
+- **WHEN** a turn runs in its direct chat, in a group's main chat and in a group thread
+- **THEN** the direct-chat turn carries the direct-chat prompt, and both group
+  turns carry the group-chat prompt
+
+#### Scenario: an empty system prompt appends nothing
+- **GIVEN** a channel whose group-chat prompt is empty or only whitespace
+- **WHEN** a group turn's system prompt is composed
+- **THEN** it is Coffer's channel note alone, with no owner heading
+
+#### Scenario: an edited system prompt applies from the next turn
+- **GIVEN** a direct-chat conversation that has already run a turn, so its next
+  turn resumes the agent's session
+- **WHEN** the owner changes the direct-chat prompt and sends another message
+- **THEN** that turn's system prompt carries the new text and not the old one,
+  with no restart of the channel
+
+#### Scenario: a system prompt longer than 4,000 characters is refused
+- **GIVEN** a channel
+- **WHEN** a prompt of 4,001 characters is saved, over REST or in the dialog
+- **THEN** the REST save is refused with 422 and the stored prompt is unchanged,
+  and the dialog states the limit with Save disabled
+
+#### Scenario: the system prompts are edited through a dialog on the Settings tab
+- **GIVEN** a channel with a group-chat prompt and no direct-chat prompt
+- **WHEN** the owner opens its Settings tab, chooses Edit under System prompts,
+  types a direct-chat prompt, clears the group one and saves
+- **THEN** the section showed the group prompt as written and the direct row
+  blank, nothing was saved before Save, and the saved configuration carries both
+  changes with every other setting and ref as it was
 
 ### Requirement: Hand inbound photos and files to the agent
 Inbound photos and files MUST drive a turn. The transport downloads each

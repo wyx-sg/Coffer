@@ -274,6 +274,45 @@ describe("planChannelEdit", () => {
     });
   });
 
+  describe("system prompts", () => {
+    const config = { channel_type: "telegram", bot_token_ref: "channel/tg/bot-token" };
+
+    test("an empty prompt over a config that holds none writes nothing", () => {
+      const plan = planChannelEdit({
+        ...TG,
+        config,
+        values: { default_agent: AGENT_A, direct_system_prompt: "", group_system_prompt: "" },
+      });
+
+      expect(plan.config).toEqual({ ...config, default_agent: AGENT_A });
+    });
+
+    test("a changed prompt writes its key and leaves the other alone", () => {
+      const plan = planChannelEdit({
+        ...TG,
+        config: { ...config, group_system_prompt: "Be brief." },
+        values: {
+          default_agent: AGENT_A,
+          direct_system_prompt: "Answer in Chinese.",
+          group_system_prompt: "Be brief.",
+        },
+      });
+
+      expect(plan.config.direct_system_prompt).toBe("Answer in Chinese.");
+      expect(plan.config.group_system_prompt).toBe("Be brief.");
+    });
+
+    test("clearing a prompt writes it empty", () => {
+      const plan = planChannelEdit({
+        ...TG,
+        config: { ...config, direct_system_prompt: "Answer in Chinese." },
+        values: { default_agent: AGENT_A, direct_system_prompt: "" },
+      });
+
+      expect(plan.config.direct_system_prompt).toBe("");
+    });
+  });
+
   describe("idle period", () => {
     // spec channels "Open a new conversation after an idle period": hours of
     // quiet before a chat's next message opens a new conversation; 0 = never.

@@ -21,6 +21,8 @@ ChannelConfig (discriminator: channel_type)
 │   ├── show_steps: bool = True             # step lines under the live status line
 │   ├── new_conversation_after_idle_hours: float = 24.0  # idle hours before a chat's next message opens a new conversation (0–8760; 0 = never)
 │   ├── directories: list[str] = []         # absolute paths `/dir` may switch into (≤32)
+│   ├── direct_system_prompt: str = ""      # owner's prompt for direct chats + their threads (≤4000, trimmed)
+│   ├── group_system_prompt: str = ""       # owner's prompt for group main chats + threads (≤4000, trimmed)
 │   └── runs_on: str | None = None          # machine_id that runs the adapter
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
@@ -33,6 +35,11 @@ ChannelConfig (discriminator: channel_type)
 
 Validation rules:
 
+- `direct_system_prompt` and `group_system_prompt` are plain text of at most
+  4,000 characters (`SYSTEM_PROMPT_MAX_LENGTH`), stripped of surrounding
+  whitespace; empty means none. They are read from the stored config each time a
+  turn's system prompt is composed (`ChannelNoteReader` → `ChannelNote.owner_prompt`),
+  never copied onto the live binding, so an edit applies from the next turn.
 - `*_ref` fields must not look like raw secrets (a Telegram token pattern or
   a long high-entropy string is rejected with a pointer to the secret
   store) — same posture as `mcp_server`'s static-value secret rejection.

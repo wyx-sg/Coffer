@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from coffer.domain.channel.config import (
+    SYSTEM_PROMPT_MAX_LENGTH,
     ChannelConfigModel,
     SeaTalkChannelConfig,
     TelegramChannelConfig,
@@ -249,6 +250,8 @@ def test_root_model_round_trips_flat_dict():
         "show_steps": True,
         "new_conversation_after_idle_hours": 24.0,
         "directories": [],
+        "direct_system_prompt": "",
+        "group_system_prompt": "",
         "runs_on": None,
     }
 
@@ -267,6 +270,8 @@ def test_root_model_round_trips_seatalk_dict():
         "show_steps": True,
         "new_conversation_after_idle_hours": 24.0,
         "directories": [],
+        "direct_system_prompt": "",
+        "group_system_prompt": "",
         "runs_on": None,
     }
 
@@ -316,3 +321,24 @@ def test_the_default_directory_must_be_absolute() -> None:
     assert parsed.default_agent_config == {"cwd": "/src/app"}
     with pytest.raises(ValidationError, match="absolute"):
         parse_channel_config({**base, "default_agent_config": {"cwd": "src/app"}})
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a system prompt longer than 4,000 characters is refused"
+)
+@pytest.mark.parametrize("field", ["direct_system_prompt", "group_system_prompt"])
+def test_a_system_prompt_is_capped_at_4000_characters(field: str) -> None:
+    at_limit = parse_channel_config({**TELEGRAM_CONFIG, field: "x" * SYSTEM_PROMPT_MAX_LENGTH})
+    assert len(getattr(at_limit, field)) == SYSTEM_PROMPT_MAX_LENGTH == 4000
+    with pytest.raises(ValidationError):
+        parse_channel_config({**TELEGRAM_CONFIG, field: "x" * (SYSTEM_PROMPT_MAX_LENGTH + 1)})
+
+
+def test_system_prompts_default_to_empty_and_are_trimmed_but_kept_inside() -> None:
+    parsed = parse_channel_config(
+        {**SEATALK_CONFIG, "group_system_prompt": "\n  Reply in English.\n\n- Be brief.  \n"}
+    )
+    assert parsed.direct_system_prompt == ""
+    assert parsed.group_system_prompt == "Reply in English.\n\n- Be brief."
+    blank = parse_channel_config({**TELEGRAM_CONFIG, "direct_system_prompt": " \n\t"})
+    assert blank.direct_system_prompt == ""

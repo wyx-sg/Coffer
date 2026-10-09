@@ -33,3 +33,8 @@ class ChannelNote:
     #: The transport collapses a ``## Details`` section itself
     #: (``ChannelCapabilities.collapses_details``), so the agent may use one.
     collapses_details: bool = False
+    #: The owner's own system prompt for this chat kind — the channel's direct-chat
+    #: or group-chat prompt (spec channels "Append the owner's system prompt to a
+    #: channel turn"); "" when none is set or the chat kind is unknown. It is
+    #: appended after the note, never in its place.
+    owner_prompt: str = ""

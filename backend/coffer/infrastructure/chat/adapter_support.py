@@ -95,7 +95,20 @@ def channel_system_context(note: ChannelNote | None) -> str:
         "put `MEDIA:/absolute/path` (optionally `| a caption`) on its own line; the "
         "channel uploads that existing file and removes the line — nothing else you "
         "write is sent as a file."
-    )
+    ) + owner_prompt_context(note)
+
+
+#: The heading that sets the owner's own prompt apart from Coffer's note above it.
+OWNER_PROMPT_HEADING = "Instructions from the channel's owner:"
+
+
+def owner_prompt_context(note: ChannelNote | None) -> str:
+    """The channel owner's own system prompt for this chat kind, under its own
+    heading after Coffer's note (spec channels "Append the owner's system prompt
+    to a channel turn"); "" when there is none. It follows the note and never
+    replaces it, so the reply-shaping contract above it always holds."""
+    prompt = note.owner_prompt.strip() if note is not None else ""
+    return f"\n\n{OWNER_PROMPT_HEADING}\n{prompt}" if prompt else ""
 
 
 #: How many ids the per-turn model note names before deferring to the picker.
@@ -143,6 +156,7 @@ __all__ = [
     "SessionSink",
     "channel_system_context",
     "model_system_context",
+    "owner_prompt_context",
 ]
 
 
