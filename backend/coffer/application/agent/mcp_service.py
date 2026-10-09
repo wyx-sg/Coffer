@@ -68,10 +68,14 @@ def _stable_path(candidate: pathlib.Path) -> str:
 def default_shim_resolver() -> str:
     """Resolve an absolute path to the ``coffer-mcp-shim`` binary.
 
-    A desktop- or venv-launched daemon does not inherit the shell ``PATH``, so
-    we try, in order: an explicit ``COFFER_MCP_SHIM_PATH`` override, a ``PATH``
-    lookup, the running interpreter's own scripts directory (where pip / uv
-    place console scripts — found via ``sysconfig`` even when the venv's bin is
+    An explicit ``COFFER_MCP_SHIM_PATH`` override wins. An installed (frozen)
+    build then answers the deployed ``~/.coffer/bin/coffer-mcp-shim`` whenever
+    it exists, so the app's daemon, a terminal's and launchd's all write the
+    same entry. Otherwise -- a source install, or a build that has not deployed
+    -- a desktop- or venv-launched daemon does not inherit the shell ``PATH``,
+    so we try, in order: a ``PATH`` lookup, the running interpreter's own
+    scripts directory (where pip / uv place console scripts — found via
+    ``sysconfig`` even when the venv's bin is
     off ``PATH`` and ``sys.executable`` is a symlink to the base interpreter),
     then the bundled binary next to the running executable (PyInstaller dist),
     then the deployed ``~/.coffer/bin/coffer-mcp-shim``. Whichever branch
@@ -87,6 +91,14 @@ def default_shim_resolver() -> str:
         if pathlib.Path(override).exists():
             return _stable_path(pathlib.Path(override))
         looked_in.append(f"{override} (named by COFFER_MCP_SHIM_PATH)")
+    deployed = user_bin_dir() / _SHIM_BINARY
+    # An installed build names the shim it deployed, however it was started:
+    # the app's daemon has no PATH, a terminal's or launchd's may find some
+    # other shim first, and the reconciler compares the entry by its command,
+    # so two daemons that answered differently would rewrite each other's
+    # entries (ADR "An Installed Daemon Names the Deployed Shim").
+    if getattr(sys, "frozen", False) and deployed.exists():
+        return str(deployed)
     found = shutil.which(_SHIM_BINARY)
     if found:
         return _stable_path(pathlib.Path(found))
@@ -101,14 +113,11 @@ def default_shim_resolver() -> str:
     if bundled.exists():
         return _stable_path(bundled)
     looked_in.append(str(bundled.parent))
-    # The macOS app's daemon has no shim beside it -- the app keeps the
-    # one-folder shim in Contents/Resources -- and has deployed it here.
-    deployed = user_bin_dir() / _SHIM_BINARY
+    # A source install that has also deployed a build finds it here last.
     if deployed.exists():
         return str(deployed)
-    public = str(deployed)
     raise ShimNotFound(
-        _SHIM_BINARY, handoff=shim_handoff(_SHIM_BINARY, public=public, looked_in=looked_in)
+        _SHIM_BINARY, handoff=shim_handoff(_SHIM_BINARY, public=str(deployed), looked_in=looked_in)
     )
 
 

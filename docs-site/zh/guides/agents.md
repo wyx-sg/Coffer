@@ -144,12 +144,13 @@ args = ["--agent-uid", "9a006a32d0bf5787955c43d54e4b44e9"]
 守护进程可能从桌面应用、登录服务或虚拟环境里运行，它们都不继承你 shell 的 `PATH`，智能体也可能不继承。所以 Coffer 写的是完整路径。它按以下顺序解析 shim：
 
 1. `COFFER_MCP_SHIM_PATH`，如果设置了且文件存在；
-2. 守护进程 `PATH` 上的 `coffer-mcp-shim`；
-3. 运行守护进程的 Python 解释器的 scripts 目录（`pip` 和 `uv` 放置控制台脚本的地方）；
-4. 与正在运行的可执行文件打包在一起的二进制；
-5. 已部署的 `~/.coffer/bin/coffer-mcp-shim`。
+2. 安装版 Coffer 中已部署的 `~/.coffer/bin/coffer-mcp-shim`，如果存在；
+3. 守护进程 `PATH` 上的 `coffer-mcp-shim`；
+4. 运行守护进程的 Python 解释器的 scripts 目录（`pip` 和 `uv` 放置控制台脚本的地方）；
+5. 与正在运行的可执行文件打包在一起的二进制；
+6. 已部署的 `~/.coffer/bin/coffer-mcp-shim`。
 
-当结果是安装版时，Coffer 写入稳定的 `~/.coffer/bin/coffer-mcp-shim` 链接，而不是带版本号的目录，这样条目在升级后依然有效。如果找不到任何 shim，安装会以 `SHIM_NOT_FOUND` 失败，指出缺失的二进制，且不写入任何东西。这个拒绝会附带一段交接提示词：列出 Coffer 查找过的每个位置，并请一个智能体找到或重装 shim，使其能在 `~/.coffer/bin/coffer-mcp-shim` 解析到。接入的审阅界面会在**重试**旁提供**复制提示词**。
+安装版 Coffer 在第 2 步就会停下，所以无论守护进程是由桌面应用、终端还是登录服务启动的，写入的条目都一样；应用被移走或删除后条目也依然有效。第 3 到第 6 步用于从源码运行的 Coffer。当结果是安装版时，Coffer 写入稳定的 `~/.coffer/bin/coffer-mcp-shim` 链接，而不是带版本号的目录，这样条目在升级后依然有效。如果找不到任何 shim，安装会以 `SHIM_NOT_FOUND` 失败，指出缺失的二进制，且不写入任何东西。这个拒绝会附带一段交接提示词：列出 Coffer 查找过的每个位置，并请一个智能体找到或重装 shim，使其能在 `~/.coffer/bin/coffer-mcp-shim` 解析到。接入的审阅界面会在**重试**旁提供**复制提示词**。
 
 ### 智能体 uid 与生效范围 {#the-agent-uid-and-reach}
 

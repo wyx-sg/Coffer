@@ -148,6 +148,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`daemon-is-a-resident-login-service`](daemon-is-a-resident-login-service.md) | The Daemon Is Resident: It Never Idles Out, and a Login Service Restarts Only a Crash |
 | [`daemon-auth-and-origin-guard`](daemon-auth-and-origin-guard.md) | A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard |
 | [`stdio-shim-bridge`](stdio-shim-bridge.md) | Agents Reach the Gateway Through a stdio Shim, Not a Native HTTP Entry |
+| [`an-installed-daemon-names-the-deployed-shim`](an-installed-daemon-names-the-deployed-shim.md) | An Installed Daemon Names the Deployed Shim |
 | [`desktop-shell-over-a-shared-frontend`](desktop-shell-over-a-shared-frontend.md) | The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do |
 | [`daemon-proxies-os-file-actions`](daemon-proxies-os-file-actions.md) | The Loopback Daemon Performs OS File Actions for the UI |
 | [`distribution-pyinstaller`](distribution-pyinstaller.md) | Distribution — Four PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App |
