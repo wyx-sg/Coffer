@@ -160,7 +160,7 @@ Vite 总是在 5173 端口提供服务（`strictPort`）。如果另一个检出
 | `make contracts` | 从后端模型重新生成每项能力的传输契约，再从这些契约生成前端类型 |
 | `make frontend-codegen` | 只从签入的契约重新生成前端的 TypeScript API 类型 |
 | `make docs-reference` | 重新生成本站的 CLI 参考页面（英文和中文） |
-| `make docs-build` | 按 Pages 工作流的方式构建本站；有失效的内部链接就会失败。它是 `make verify` 的第二个阶段 |
+| `make docs-build` | 按 Pages 工作流的方式构建本站；有解析不了的 Mermaid 图或失效的内部链接就会失败。它是 `make verify` 的第二个阶段 |
 | `make refresh-prices` | 刷新内置的模型价格表（需要联网；不在 `verify` 中） |
 | `make refresh-secret-rules` | 发版前刷新内置的 gitleaks 检测规则（需要联网；不在 `verify` 中） |
 | `make bundle-binaries` | 用 PyInstaller 把 `coffer`、`coffer-daemon` 和 `coffer-mcp-shim` 冻结到 `dist/` |

@@ -171,7 +171,6 @@ cd frontend && npm install && npm run build && cd ..
 | `~/.coffer/local/` | Settings true of this machine only: agents, reach, retention, the sync remote. |
 | `~/.coffer/runs.db` | The history database: audit log, invocations, conversations, sync rounds, usage. |
 | `~/.coffer/runs.db.pre-<revision>` | A copy taken before each schema migration. The three newest are kept. |
-| `~/.coffer/master.key` | The secret master key (mode `0600`), unless you moved it to the keychain. |
 | `~/.coffer/daemon.json` | Runtime discovery file: PID, port and API token (mode `0600`). Written at start and removed at exit. |
 | `~/.coffer/daemon-config.json` | Settings read before the daemon starts: a fixed port, the machine name, any experimental-feature switches. |
 | `~/.coffer/content/`, `~/.coffer/derived/` | Media and the chat workspace; state Coffer rebuilds, such as the memory tree. |
@@ -245,7 +244,7 @@ Restarting matters because a daemon that is already running keeps running the ol
 4. Optionally, delete the vault itself.
 
 ::: danger Deleting ~/.coffer is permanent
-`~/.coffer` holds your database, knowledge collections, skill library and secret master key. Deleting it destroys every stored secret and every document that exists only there. Copy it somewhere first if you might want it back.
+`~/.coffer` holds your database, knowledge collections, skill library and encrypted secrets. Deleting it destroys every stored secret and every document that exists only there. Copy it somewhere first if you might want it back.
 :::
 
 ## Experimental features

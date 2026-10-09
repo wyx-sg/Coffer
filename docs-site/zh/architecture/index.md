@@ -121,7 +121,7 @@ Coffer 的大部分形态都来自少数几项决策。下面每一项都在它�
 - **知识是不带索引的纯 Markdown；它的目录以技能的形式到达智能体。** 智能体整天都在读文件，却很少调用检索工具。没有派生物，就不会有东西和文件不一致。 [知识](/zh/architecture/knowledge)
 - **记忆从每个智能体自己的文件只读聚合，从不回写。** 每个智能体自己的记忆回路保持原样，Coffer 派生出的一切都可以删掉重建。 [记忆](/zh/architecture/memory)
 - **保险库是一个 git 仓库；同步 pull 和 push 它，应用干净的合并，遇到任何冲突就停。** 只有共同的基线才能区分「从来没有」和「删掉了」，而且 Coffer 自己做的任何事都不需要撤销。你的远端始终是一个你可以查看的普通仓库。 [保险库同步](/zh/architecture/vault-sync)
-- **密钥是用一个主密钥加密的 Fernet 密文，主密钥默认存在一个 `0600` 文件里。** Coffer 的构建没有签名，macOS 会对新构建碰到的每个钥匙串条目重新弹窗。一个文件里放一把密钥就没有弹窗了；钥匙串作为可选项保留。 [安全模型](/zh/architecture/security#the-secret-store)
+- **密钥是用一个主密钥加密的 Fernet 密文，主密钥存放在 macOS 钥匙串里。** 主密钥是一个只有 Coffer 签名二进制能读取的访问组里的条目，所以别的程序拿不到它，`~/.coffer/` 的副本只是没有密钥的密文。 [安全模型](/zh/architecture/security#the-secret-store)
 - **未完成的功能随每个构建发布，在你开启之前一直关闭，而不是放在分支上。** 只有一条开发线，所有者测的正是用户在跑的东西。关闭一个功能只是隐藏它，数据保留。 [分发与发布](/zh/architecture/distribution#experimental-features)
 
 </DecisionList>
@@ -148,7 +148,7 @@ Coffer 的大部分形态都来自少数几项决策。下面每一项都在它�
 | HTTP | FastAPI 0.141、Uvicorn 0.52 | REST API、`/mcp` 端点、提供 Web 界面。 |
 | 校验 | Pydantic 2.13 | 所有配置 schema 和传输模型；JSON 列在进出时都经过校验。 |
 | 持久化 | git；SQLAlchemy 2.0（async）基于 aiosqlite，Alembic 1.18 | 保险库仓库；历史数据库及其迁移。 |
-| 密钥 | `cryptography`（Fernet）、`keyring` 25 | 信封加密；`keyring` 只用于可选的钥匙串主密钥。 |
+| 密钥 | `cryptography`（Fernet）、`keyring` 25 | 信封加密；主密钥是一个钥匙串条目，只有密钥模块接触钥匙串。 |
 | MCP | `mcp` SDK 2.2 | 网关既作为 MCP 服务器，又作为上游服务器的客户端。 |
 | 智能体轮次 | Claude Agent SDK 0.2、Codex app-server | 在 Claude Code 或 Codex 里跑一个对话轮次。 |
 | 文档 | MarkItDown 0.1 | 把上传的文档和消息渠道附件转成 Markdown 或文本。 |
