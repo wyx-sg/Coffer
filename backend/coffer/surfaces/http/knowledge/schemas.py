@@ -16,9 +16,9 @@ surface no one asked for.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
-
 from typing import Literal
+
+from pydantic import BaseModel, Field
 
 from coffer.application.knowledge.tidy_handoff import (
     collection_check_prompt,

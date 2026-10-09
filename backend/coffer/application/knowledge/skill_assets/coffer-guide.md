@@ -107,9 +107,9 @@ actor: agent
 The collection must already exist: only the developer creates one. A Markdown
 file you leave outside `pages/` and `sources/` is moved into `pages/` by Coffer
 within a minute. Coffer commits every change it finds on disk to the vault's
-git history, so a bad edit can be brought back from it; never run git inside
-the vault on your own initiative, because a commit of your own would be
-attributed to nobody. The developer reads a file's versions and restores an
+git history, so a bad edit can be brought back from it;
+never run git inside the vault on your own initiative, because a commit of your
+own would be attributed to nobody. The developer reads a file's versions and restores an
 earlier one from its history in Coffer.
 
 ### Integrating sources

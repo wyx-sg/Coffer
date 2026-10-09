@@ -22,14 +22,15 @@ coffer knowledge [OPTIONS] COMMAND [ARGS]...
 | [`knowledge show`](#knowledge-show) | One collection: its config, reach and state. |
 | [`knowledge update`](#knowledge-update) | Change a collection. |
 | [`knowledge delete`](#knowledge-delete) | Delete a collection. |
-| [`knowledge collections`](#knowledge-collections) | Every collection with its description and document count. |
+| [`knowledge collections`](#knowledge-collections) | Every collection with its description, page, source, waiting-source and finding counts. |
 | [`knowledge create`](#knowledge-create) | Create a collection. |
 | [`knowledge describe`](#knowledge-describe) | Rewrite a collection's description. |
+| [`knowledge check`](#knowledge-check) | A collection's mechanical findings: dead links, orphan pages, waiting sources. |
 | [`knowledge tree`](#knowledge-tree) | One level of the knowledge tree. |
 | [`knowledge changes`](#knowledge-changes) | Recent changes across collections, newest first. |
 | [`knowledge restore`](#knowledge-restore) | Restore what a delete removed (from the changes feed). |
 | [`knowledge tidy-handoff`](#knowledge-tidy-handoff) | The prompt that hands tidying knowledge to an agent. |
-| [`knowledge upload`](#knowledge-upload) | Upload files into a collection; each becomes a Markdown document. |
+| [`knowledge upload`](#knowledge-upload) | Upload files into a collection; each becomes a source, its original kept. |
 
 ## knowledge list
 
@@ -102,7 +103,7 @@ coffer knowledge delete [OPTIONS] UID
 
 ## knowledge collections
 
-Every collection with its description and document count.
+Every collection with its description, page, source, waiting-source and finding counts.
 
 <p class="cli-label">概要</p>
 
@@ -151,6 +152,23 @@ coffer knowledge describe [OPTIONS] UID
 | `UID` <span class="cli-chip">参数</span> | text | 必填 | The knowledge's name or uid |
 | `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
 | `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## knowledge check
+
+A collection's mechanical findings: dead links, orphan pages, waiting sources.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer knowledge check [OPTIONS] UID
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `UID` <span class="cli-chip">参数</span> | text | 必填 | The knowledge's name or uid |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## knowledge tree
@@ -224,7 +242,7 @@ coffer knowledge tidy-handoff [OPTIONS]
 
 ## knowledge upload
 
-Upload files into a collection; each becomes a Markdown document.
+Upload files into a collection; each becomes a source, its original kept.
 
 <p class="cli-label">概要</p>
 
@@ -237,5 +255,5 @@ coffer knowledge upload [OPTIONS] COLLECTION FILES...
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `COLLECTION` <span class="cli-chip">参数</span> | text | 必填 | The collection's folder name |
-| `FILES` <span class="cli-chip">参数</span> | path（可变个数） | 必填 | Files to convert into documents |
+| `FILES` <span class="cli-chip">参数</span> | path（可变个数） | 必填 | Files to keep as sources |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

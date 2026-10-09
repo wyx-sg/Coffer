@@ -164,9 +164,7 @@ def render_description(catalogue: Catalogue | None, *, memory: bool = False) -> 
         lead = _lead(knowledge=False, memory=memory)
         return f"{lead}. {_TAIL}"[:MAX_DESCRIPTION_CHARS]
     lead = _lead(knowledge=True, memory=memory)
-    subjects = [
-        _subject(entry) for entry, _ in catalogue if entry.page_count or entry.source_count
-    ]
+    subjects = [_subject(entry) for entry, _ in catalogue if entry.page_count or entry.source_count]
     while subjects:
         joined = "; ".join(subjects)
         candidate = f"{lead}, covering {joined}. {_TAIL}"

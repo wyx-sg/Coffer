@@ -51,7 +51,7 @@ def test_an_upload_and_an_agents_file_both_become_documents(client, tmp_path) ->
         files={"file": ("notes.md", b"# Notes\n\nFrom a phone.\n")},
     )
     assert uploaded.status_code == 201, uploaded.text
-    assert uploaded.json()["path"] == "shopee/notes.md"
+    assert uploaded.json()["path"] == "shopee/sources/notes.md"
     assert "pending" not in uploaded.json()
 
     # An agent writes with its own file tool; the next sweep promotes the file.
@@ -62,8 +62,11 @@ def test_an_upload_and_an_agents_file_both_become_documents(client, tmp_path) ->
     client.portal.call(sweep_once, service, _no_refresh)  # type: ignore[union-attr]
 
     assert inbox.inbox_items("shopee") == ()
-    level = client.get("/api/v1/knowledge/tree", params={"path": "shopee"}).json()
-    assert [f["path"] for f in level["files"]] == ["shopee/agent-note.md", "shopee/notes.md"]
+    level = client.get("/api/v1/knowledge/tree", params={"path": "shopee/sources"}).json()
+    assert [f["path"] for f in level["files"]] == [
+        "shopee/sources/agent-note.md",
+        "shopee/sources/notes.md",
+    ]
 
 
 async def _no_refresh() -> None:

@@ -97,8 +97,7 @@ def collection_check_prompt(entry: CollectionEntry) -> str:
     if findings:
         facts.append(f"Mechanical findings: {len(findings)}")
         facts += [
-            _finding_line(f.kind, f.path, f.target, f.others)
-            for f in findings[:MAX_FINDING_LINES]
+            _finding_line(f.kind, f.path, f.target, f.others) for f in findings[:MAX_FINDING_LINES]
         ]
         if len(findings) > MAX_FINDING_LINES:
             facts.append(f"… and {len(findings) - MAX_FINDING_LINES} more")

@@ -22,6 +22,7 @@ from __future__ import annotations
 import dataclasses
 import os
 import pathlib
+from typing import Any
 import re
 import unicodedata
 from collections.abc import Iterable
@@ -198,11 +199,13 @@ class WikiGraph:
             if not page.sources:
                 found.append(Finding(UNSOURCED_PAGE, page.path))
         seen: set[tuple[str, ...]] = set()
-        for name, hits in sorted(self.names.items()):
-            pages_named = sorted(h for h in hits if h in page_paths)
+        for alias, named in sorted(self.names.items()):
+            pages_named = sorted(h for h in named if h in page_paths)
             if len(pages_named) > 1 and tuple(pages_named) not in seen:
                 seen.add(tuple(pages_named))
-                found.append(Finding(DUPLICATE_SLUG, pages_named[0], name, tuple(pages_named[1:])))
+                found.append(
+                    Finding(DUPLICATE_SLUG, pages_named[0], alias, tuple(pages_named[1:]))
+                )
         if len(self.pages) > 1:
             for page in self.pages:
                 if inbound[page.path] == 0 and page.page_type.lower() != OVERVIEW_TYPE:
@@ -227,7 +230,7 @@ def _markdown_under(directory: pathlib.Path) -> list[pathlib.Path]:
     return found
 
 
-def _read(path: pathlib.Path) -> tuple[dict, str]:
+def _read(path: pathlib.Path) -> tuple[dict[str, Any], str]:
     text = path.read_bytes().decode("utf-8", errors="replace")
     return split_frontmatter(text.replace("\r\n", "\n"))
 
@@ -320,7 +323,6 @@ def describe(file: KnowledgeFile) -> KnowledgeFile:
 
 
 __all__ = [
-    "describe",
     "AMBIGUOUS_LINK",
     "DEAD_LINK",
     "DUPLICATE_SLUG",
@@ -337,6 +339,7 @@ __all__ = [
     "Source",
     "WikiGraph",
     "build",
+    "describe",
     "links_in",
     "normalise",
 ]

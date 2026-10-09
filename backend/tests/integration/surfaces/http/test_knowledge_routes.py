@@ -29,19 +29,38 @@ import os
 import pathlib
 
 import pytest
+import yaml
 from starlette.testclient import TestClient
 
-from coffer.infrastructure.knowledge import fs, paths
+from coffer.infrastructure.knowledge import catalogue, fs, paths
 
 from .conftest import _create_collection, _submit, _submit_material
 
 
 def _document(client: TestClient, collection: str, title: str, body: str = "b") -> str:
-    """A document written straight into the tree — what a person's editor or an
-    agent leaves there. New knowledge reaches a collection as material
-    ("Promote submitted material at once"); the one route that writes a
-    document only replaces the body of one that exists."""
-    return fs.write_file(directory=collection, title=title, description="written", body=body).path
+    """A page written straight into the collection's ``pages/`` — what a
+    person's editor or an agent leaves there. ``collection`` may name a folder
+    inside it (``shopee/runbooks`` is ``shopee/pages/runbooks``). New knowledge
+    reaches a collection as material ("Promote submitted material at once");
+    no route writes a page."""
+    name, _, folder = collection.partition("/")
+    directory = f"{name}/pages" + (f"/{folder}" if folder else "")
+    return fs.write_file(directory=directory, title=title, description="written", body=body).path
+
+
+def _page(collection: str, slug: str, body: str = "", **front: object) -> str:
+    """A page with the frontmatter the guide asks for, ``front`` overriding it."""
+    fields: dict[str, object] = {
+        "title": slug,
+        "type": "concept",
+        "description": "d",
+        "sources": [],
+    }
+    fields.update(front)
+    path = paths.pages_dir(collection) / f"{slug}.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"---\n{yaml.safe_dump(fields)}---\n\n{body}\n", encoding="utf-8")
+    return paths.relative_of(path)
 
 
 # ----- collections ---------------------------------------------------------
@@ -57,9 +76,8 @@ def test_creating_a_collection_creates_one_tree_and_a_readme(client, tmp_path) -
 
     collection = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee"
     assert collection.is_dir()
-    # No lanes: a collection is one tree the person and the agents share.
-    assert not (collection / "sources").exists()
-    assert not (collection / "topics").exists()
+    # `pages/` and `sources/` appear with their first file; nothing else is made.
+    assert sorted(p.name for p in collection.iterdir()) == ["README.md"]
     # The description a caller gave becomes the README, which is where every
     # later read of it comes from ("Read a collection's description from its README").
     assert "Internal systems." in (collection / "README.md").read_text(encoding="utf-8")
@@ -73,24 +91,29 @@ def test_creating_the_same_collection_twice_is_a_conflict(client) -> None:  # ty
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="a collection read carries its tidy hand-off")
-def test_the_listing_counts_documents_and_carries_the_tidy_handoff(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
+def test_the_listing_counts_pages_and_sources_and_carries_the_tidy_handoff(
+    client, tmp_path
+) -> None:  # type: ignore[no-untyped-def]
     _create_collection(client, "shopee")
     _submit(client, collection="shopee", title="One", description="d", body="b")
     _document(client, "shopee", "Written")
+    _document(client, "shopee", "Second")
 
     listed = client.get("/api/v1/knowledge/collections")
     assert listed.status_code == 200, listed.text
     [entry] = listed.json()["collections"]
-    assert entry["document_count"] == 2
-    assert "pending_count" not in entry
+    counts = ("page_count", "source_count", "waiting_source_count")
+    assert tuple(entry[k] for k in counts) == (2, 1, 1)
+    assert "document_count" not in entry and "pending_count" not in entry
     prompt = entry["tidy_handoff"]["prompt"]
     folder = str(tmp_path / ".coffer" / "vault" / "knowledge" / "shopee")
     assert prompt.startswith(
-        "Tidy the knowledge collection `shopee` by following the "
-        '"Tidying a collection" section of the coffer-guide skill.'
+        "Tidy the knowledge collection `shopee`: integrate its waiting sources"
     )
-    assert folder in prompt
-    assert "2" in prompt
+    assert '"Integrating sources"' in prompt and '"Tidying a collection"' in prompt
+    assert f"- Path: {folder}" in prompt
+    assert "- Pages: 2" in prompt
+    assert "- Waiting sources: 1" in prompt
 
 
 @pytest.mark.acceptance(
@@ -100,20 +123,20 @@ def test_the_page_level_tidy_handoff_names_every_collection(client, tmp_path) ->
     _create_collection(client, "shopee")
     _create_collection(client, "personal")
     _submit(client, collection="shopee", title="One", description="d", body="b")
+    for title in ("A", "B", "C"):
+        _document(client, "shopee", title)
+    _document(client, "personal", "Mine")
 
     resp = client.get("/api/v1/knowledge/tidy-handoff")
 
     assert resp.status_code == 200, resp.text
     prompt = resp.json()["prompt"]
     root = tmp_path / ".coffer" / "vault" / "knowledge"
-    assert prompt.startswith(
-        'Tidy every knowledge collection by following the "Tidying a collection" section '
-        "of the coffer-guide skill, one collection at a time."
-    )
+    assert prompt.startswith("Tidy every knowledge collection, one collection at a time:")
+    assert '"Integrating sources"' in prompt and '"Tidying a collection"' in prompt
     assert f"- Knowledge root: {root}" in prompt
-    assert f"- shopee: {root / 'shopee'} (1 document)" in prompt
-    assert f"- personal: {root / 'personal'} (0 documents)" in prompt
-    assert 'Read the "Tidying a collection" section of the coffer-guide skill first.' in prompt
+    assert f"- shopee: {root / 'shopee'} (3 pages, 1 waiting source)" in prompt
+    assert f"- personal: {root / 'personal'} (1 page, 0 waiting sources)" in prompt
 
 
 def _listed(client: TestClient) -> dict[str, dict]:  # type: ignore[type-arg]
@@ -167,17 +190,23 @@ def test_the_tree_lists_documents_but_neither_the_readme_nor_the_inbox(client) -
 
     level = client.get("/api/v1/knowledge/tree", params={"path": "shopee"})
     assert level.status_code == 200, level.text
-    assert [f["path"] for f in level.json()["files"]] == [document]
-    assert level.json()["directories"] == []
+    assert level.json()["files"] == []
+    assert [d["path"] for d in level.json()["directories"]] == ["shopee/sources"]
+    sources = client.get("/api/v1/knowledge/tree", params={"path": "shopee/sources"}).json()
+    assert [(f["path"], f["kind"], f["waiting"]) for f in sources["files"]] == [
+        (document, "source", True)
+    ]
 
 
 def test_a_folder_in_the_collection_is_a_directory_the_tree_offers(client) -> None:  # type: ignore[no-untyped-def]
     _create_collection(client, "shopee")
     _document(client, "shopee/runbooks", "Note")
 
-    level = client.get("/api/v1/knowledge/tree", params={"path": "shopee"}).json()
+    level = client.get("/api/v1/knowledge/tree", params={"path": "shopee/pages"}).json()
     assert level["files"] == []
-    assert [(d["path"], d["file_count"]) for d in level["directories"]] == [("shopee/runbooks", 1)]
+    assert [(d["path"], d["file_count"]) for d in level["directories"]] == [
+        ("shopee/pages/runbooks", 1)
+    ]
 
 
 def test_the_tree_of_an_unknown_collection_is_not_found_and_creates_nothing(  # type: ignore[no-untyped-def]
@@ -237,10 +266,10 @@ def test_reading_carries_the_absolute_paths_the_ui_opens_with(client, tmp_path) 
     resp = client.get("/api/v1/knowledge/file", params={"path": path})
     assert resp.status_code == 200, resp.text
     out = resp.json()
-    assert out["file_path"] == str(
-        tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / "session.md"
-    )
-    assert out["folder_path"] == str(tmp_path / ".coffer" / "vault" / "knowledge" / "shopee")
+    sources = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / "sources"
+    assert out["file_path"] == str(sources / "session.md")
+    assert out["folder_path"] == str(sources)
+    assert (out["kind"], out["waiting"], out["original_path"]) == ("source", True, None)
     assert out["body"].strip() == "account.session"
     assert out["actor"] == "user"
 
@@ -267,7 +296,7 @@ def test_material_becomes_a_document_on_arrival(client, tmp_path) -> None:  # ty
     )
     # Nothing waits: the material is a document the moment it arrives ("Promote submitted
     # material at once").
-    assert out.document.path == "shopee/account-gateway.md"
+    assert out.document.path == "shopee/sources/account-gateway.md"
     inbox = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / ".inbox"
     assert list(inbox.iterdir()) == []
 
@@ -398,3 +427,116 @@ def test_collection_list_carries_no_title(client) -> None:  # type: ignore[no-un
 
     resp = client.patch(f"/api/v1/resources/{row['uid']}", json={"title": "Team notes"})
     assert resp.status_code == 422, resp.text
+
+
+# ----- the wiki: links, sources and the check -------------------------------
+
+
+def _uid(client: TestClient, name: str) -> str:
+    return client.get("/api/v1/resources", params={"kind": "knowledge", "name": name}).json()[
+        "resources"
+    ][0]["uid"]
+
+
+@pytest.mark.acceptance(spec="knowledge", scenario="a page's links resolve by slug and alias")
+def test_reading_a_page_resolves_its_sources_and_links(client) -> None:  # type: ignore[no-untyped-def]
+    _create_collection(client, "shopee")
+    source = _submit(client, collection="shopee", title="Design", description="d", body="b")
+    _page("shopee", "session-ownership", aliases=["sessions"])
+    page = _page(
+        "shopee",
+        "overview",
+        "[[sessions|the session service]] and [[gone]]",
+        sources=["design", "missing"],
+    )
+
+    out = client.get("/api/v1/knowledge/file", params={"path": page}).json()
+
+    assert (out["kind"], out["page_type"]) == ("page", "concept")
+    assert out["sources"] == [
+        {"slug": "design", "path": source, "title": "Design"},
+        {"slug": "missing", "path": None, "title": ""},
+    ]
+    assert out["links"] == [
+        {"target": "sessions", "path": "shopee/pages/session-ownership.md", "ambiguous": False},
+        {"target": "gone", "path": None, "ambiguous": False},
+    ]
+    cited = client.get("/api/v1/knowledge/file", params={"path": source}).json()
+    assert (cited["waiting"], cited["cited_by"]) == (False, [{"path": page, "title": "overview"}])
+
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="a collection's check lists its mechanical findings"
+)
+def test_the_check_route_lists_findings_and_changes_nothing(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    _create_collection(client, "shopee")
+    waiting = _submit(client, collection="shopee", title="Waiting", description="d", body="b")
+    _page("shopee", "a", "[[nowhere]] [[b]]", type="")
+    _page("shopee", "b", "[[a]]")
+    _page("shopee", "lonely", "[[a]]", sources=["no-such-source"])
+    root = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee"
+    before = {p: p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+    resp = client.get(f"/api/v1/knowledge/collections/{_uid(client, 'shopee')}/check")
+
+    assert resp.status_code == 200, resp.text
+    found = {(f["kind"], f["path"], f["target"]) for f in resp.json()["findings"]}
+    assert ("dead_link", "shopee/pages/a.md", "nowhere") in found
+    assert ("incomplete_page", "shopee/pages/a.md", "type") in found
+    assert ("orphan_page", "shopee/pages/lonely.md", None) in found
+    assert ("missing_source", "shopee/pages/lonely.md", "no-such-source") in found
+    assert ("waiting_source", waiting, None) in found
+    assert {p: p.read_bytes() for p in root.rglob("*") if p.is_file()} == before
+    [listed] = client.get("/api/v1/knowledge/collections").json()["collections"]
+    assert listed["finding_count"] == len(resp.json()["findings"])
+    assert resp.json()["collection"]["finding_count"] == listed["finding_count"]
+
+
+def test_the_check_of_an_unknown_uid_is_not_found(client) -> None:  # type: ignore[no-untyped-def]
+    resp = client.get("/api/v1/knowledge/collections/no-such-uid/check")
+    assert resp.status_code == 404, resp.text
+
+
+@pytest.mark.acceptance(spec="knowledge", scenario="a collection read carries its check hand-off")
+def test_a_collection_read_carries_its_check_handoff(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    _create_collection(client, "shopee")
+    _page("shopee", "a", "[[gone]]")
+
+    [entry] = client.get("/api/v1/knowledge/collections").json()["collections"]
+    prompt = entry["check_handoff"]["prompt"]
+
+    folder = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee"
+    assert prompt.startswith("Check the knowledge collection `shopee`")
+    assert f"- Path: {folder}" in prompt
+    assert "- dead_link: shopee/pages/a.md → gone" in prompt
+    assert '"Checking a collection" section of the coffer-guide skill' in prompt
+    assert "Change nothing" in prompt
+
+
+@pytest.mark.acceptance(spec="knowledge", scenario="a collection keeps sources and pages apart")
+def test_an_upload_is_a_source_and_an_agents_page_is_a_page(client) -> None:  # type: ignore[no-untyped-def]
+    from coffer.application.knowledge.guide_render import render_catalogue
+
+    _create_collection(client, "shopee")
+    source = _submit(client, collection="shopee", title="Notes", description="d", body="b")
+    page = _page("shopee", "gateway", sources=["notes"])
+
+    assert source.startswith("shopee/sources/") and page.startswith("shopee/pages/")
+    level = client.get("/api/v1/knowledge/tree", params={"path": "shopee"}).json()
+    assert [d["path"] for d in level["directories"]] == ["shopee/pages", "shopee/sources"]
+    kinds = {
+        p: client.get("/api/v1/knowledge/file", params={"path": p}).json()["kind"]
+        for p in (source, page)
+    }
+    assert kinds == {source: "source", page: "page"}
+
+    entry = client.get("/api/v1/knowledge/collections").json()["collections"][0]
+    from coffer.domain.knowledge.entry import CollectionEntry
+
+    files = catalogue.walk_files(paths.collection_dir("shopee"))
+    text = render_catalogue(
+        "~/k",
+        [(CollectionEntry(uid=entry["uid"], name="shopee", description=""), files)],
+    )
+    assert "**Pages: concept**" in text and "`pages/gateway.md`" in text
+    assert {(f.path, f.kind) for f in files} == {(source, "source"), (page, "page")}
