@@ -322,6 +322,16 @@ visual-update:
 		cd e2e && $(VISUAL_PW) --update-snapshots; \
 	fi
 
+# Docs images (e2e/playwright.docs.config.ts): its own seeded daemon (:18200) and
+# Vite (:5175); writes docs-site/public/shots/<lang>/<theme>/<name>.webp. Not part
+# of verify: a run changes files, and a person reviews the image diff.
+docs-shots:
+	@if [ ! -d e2e/node_modules ]; then \
+		echo "docs-shots: e2e/node_modules missing — run 'make install' first"; exit 1; \
+	else \
+		cd e2e && npx playwright test -c playwright.docs.config.ts; \
+	fi
+
 # The Python trees only (backend, evals, e2e/installed). The frontend tree is not prettier-clean as a whole,
 # so a whole-tree `prettier --write` would reformat files no change touched;
 # run `npx prettier --write <files>` in frontend/ on the files you changed.
