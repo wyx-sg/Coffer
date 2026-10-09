@@ -62,6 +62,7 @@ mod tray_locale;
 mod tray_nav;
 mod tray_state;
 mod tray_watch;
+mod uninstall;
 mod update_relaunch;
 mod update_state;
 mod updater;
@@ -132,6 +133,7 @@ pub fn run() {
             updater::check_for_updates,
             updater::install_update,
             updater::set_update_auto_check,
+            uninstall::uninstall_coffer,
         ])
         .setup(|app| {
             // The window is configured hidden and revealed by the handshake

@@ -169,7 +169,10 @@ mod tests {
 
     #[test]
     fn parse_daemon_port_reads_well_formed_value() {
-        assert_eq!(parse_daemon_port(r#"{"port": 38470, "pid": 1}"#), Some(38470));
+        assert_eq!(
+            parse_daemon_port(r#"{"port": 38470, "pid": 1}"#),
+            Some(38470)
+        );
     }
 
     #[test]
