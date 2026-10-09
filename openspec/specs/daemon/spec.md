@@ -100,7 +100,7 @@ or `setup` while it waits for git, with what it waits for, as "Wait in a setup s
 missing or too old" describes), the
 bound port, the start time, the build's version and the executable answering. It MUST also report
 the on/off state of every registered experimental feature as a `features` map — one
-entry each for `knowledge`, `memory`, `sync` and `models` (spec
+entry each for `knowledge` and `memory` (spec
 [experimental-features](../experimental-features/spec.md) "Decide a feature's state per machine") —
 and this machine's id and name, the identity a channel is bound to, which is on the status because
 it belongs to the machine rather than to sync. It MAY carry a count of registered,
@@ -123,7 +123,7 @@ are not.
 #### Scenario: daemon status names this machine and its features
 - **GIVEN** a running daemon
 - **WHEN** `GET /api/v1/daemon/status` is called with no token
-- **THEN** the response carries a `features` map with one entry per registered experimental feature (`knowledge`, `memory`, `sync` and `models`), and this machine's `machine_id` and `machine_name`
+- **THEN** the response carries a `features` map with one entry per registered experimental feature (`knowledge` and `memory`), and this machine's `machine_id` and `machine_name`
 
 ### Requirement: Decide liveness by the status call
 Liveness MUST be decided by that status call against the recorded port — never by a bare TCP

@@ -14,19 +14,18 @@ is recorded in
 
 ### Requirement: Declare the experimental features in one registry
 Coffer MUST declare its experimental features in one registry, and every
-surface MUST take the list from it. The registry names exactly four features,
+surface MUST take the list from it. The registry names exactly two features,
 in this order:
 
 | Key | What it closes | REST prefixes | Kinds |
 | --- | --- | --- | --- |
 | `knowledge` | Knowledge | `/api/v1/knowledge` | `knowledge` |
 | `memory` | Memory | `/api/v1/memory` | `memory` |
-| `sync` | Vault sync | `/api/v1/sync` | none |
-| `models` | Model providers (with its Usage tab) and the local model proxy | `/api/v1/providers`, `/api/v1/models`, `/api/v1/proxy`, `/api/v1/usage` | `provider` |
 
 Everything else is always on: the shell, the Overview, Agents, the MCP gateway
-and its custom tools, Skills, Secrets, Activity, Settings, Conversations and
-Channels, the agent list and model catalogue routes (`/api/v1/agent-providers`),
+and its custom tools, Skills, Secrets, Activity, Settings, Conversations,
+Channels, vault sync, Model providers (with its Usage tab) and the local model
+proxy, the agent list and model catalogue routes (`/api/v1/agent-providers`),
 the internal engine's settings, the vault's own routes and an agent's own
 transcripts and native memory files. A capability outside the registry is
 always on.
@@ -45,8 +44,8 @@ person already holds is kept as it is.
 #### Scenario: the registry names the two experimental features
 - **GIVEN** a running daemon
 - **WHEN** `GET /api/v1/daemon/features` is requested
-- **THEN** the route lists exactly `knowledge`, `memory`, `sync` and `models`, in that order, each with its state and what decided it
-- **AND** the daemon status `features` map names the same four keys
+- **THEN** the route lists exactly `knowledge` and `memory`, in that order, each with its state and what decided it
+- **AND** the daemon status `features` map names the same two keys
 
 #### Scenario: a stored setting for a feature the registry does not name is ignored
 - **GIVEN** a daemon config whose `features` object holds a key the registry does not name
@@ -73,6 +72,10 @@ kept. The file MUST be rewritten atomically and only when something changed, and
 one log line MUST be written per key moved or removed. A key may be in the
 registry or in a table, never both.
 
+`sync` (vault sync) and `models` (Model providers, the local model proxy and
+Usage) have graduated: both are in the table of graduated features, neither
+moves a setting, and both are always on.
+
 #### Scenario: a graduated feature's switch is removed and its settings carry over at startup
 - **GIVEN** a feature in the graduated table that maps old key `a` to `b`, and a daemon config holding its switch, `a` and another feature's switch
 - **WHEN** the daemon starts
@@ -89,6 +92,12 @@ registry or in a table, never both.
 - **GIVEN** the registry and both tables
 - **WHEN** their keys are compared
 - **THEN** no key is in the registry and a table, and no key is in both tables
+
+#### Scenario: sync and models graduated and their switches are removed at startup
+- **GIVEN** a daemon config whose `features` object switches `sync` and `models` off and `knowledge` on, and `COFFER_FEATURES=sync=off,models=off`
+- **WHEN** the daemon starts
+- **THEN** the config no longer holds a `sync` or `models` switch and still holds `knowledge: true`
+- **AND** the features listing names neither, the pin's two entries are logged and ignored, and the sync and provider routes answer as usual
 
 ### Requirement: Decide a feature's state per machine
 A feature's state MUST be decided in this order: a pin in `COFFER_FEATURES`,
@@ -174,9 +183,7 @@ objects in the command palette, its Overview tiles and first-run cards, its
 kind in object-kind lists, and every section of another page that exists only
 for it. A link to one of its pages MUST show the standard not-found page. The UI
 MUST NOT show a notice that a feature is switched off or needs another, and MUST
-NOT offer a switch-on button outside Settings → Features. An agent's
-Overview › Model section and the Speech-to-text section of Settings › General MUST omit what depends on `models`:
-the Model section is read-only, with no Provider row and no Change…, and Speech-to-text offers no connection choice.
+NOT offer a switch-on button outside Settings → Features.
 
 #### Scenario: a switched-off feature's page is not found
 - **GIVEN** a registered feature `f` whose sidebar entry opens a page, and `f` off
@@ -287,63 +294,6 @@ index or retrieval.
 - **WHEN** a turn runs
 - **THEN** the turn carries no memory index or retrieval
 
-### Requirement: Close the sync feature's surfaces
-While `sync` is off, `/api/v1/sync` MUST answer 404 `FEATURE_DISABLED`, the
-convergence worker MUST skip its rounds, and the sync attention source MUST be
-tagged `sync` and not asked. The configured remote and the
-history stay untouched. The master key's routes are the secret store's, under
-`/api/v1/secrets/key`, and stay open ([secret](../secret/spec.md)
-"Import a master key after showing whose key it is").
-
-#### Scenario: sync off closes the sync routes
-- **GIVEN** `sync` off
-- **WHEN** a route under `/api/v1/sync` is requested
-- **THEN** it answers 404 `FEATURE_DISABLED` naming `sync`
-
-#### Scenario: sync off skips convergence rounds and keeps the remote
-- **GIVEN** `sync` on with a configured remote
-- **WHEN** `sync` is switched off and the convergence worker comes due
-- **THEN** it skips the round, the remote and the history are unchanged, and the sync attention source is not asked
-
-### Requirement: Close the models feature's surfaces
-While `models` is off, `/api/v1/providers` (including the price list),
-`/api/v1/models`, `/api/v1/proxy` and `/api/v1/usage` MUST answer 404
-`FEATURE_DISABLED` and the `provider` kind MUST be out of reach of the resource
-routes. The local model proxy MUST be given an empty state and serve no agent.
-The projection of provider connections into agents' own configuration MUST be
-withdrawn: Coffer's keys MUST be removed from each agent's config files while
-each agent record keeps its connection choice, and switching `models` on MUST
-project them again. Usage ingest and the price-list refresh MUST skip their
-rounds. The routes of `/api/v1/agent-providers` and
-`/api/v1/internal-engine-config` stay available.
-
-#### Scenario: models off closes the provider, model, proxy and usage routes
-- **GIVEN** `models` off
-- **WHEN** a route under `/api/v1/providers`, `/api/v1/models`, `/api/v1/proxy` or `/api/v1/usage` is requested
-- **THEN** each answers 404 `FEATURE_DISABLED` naming `models`
-- **AND** `/api/v1/agent-providers` still answers
-
-#### Scenario: models off serves no agent through the model proxy
-- **GIVEN** `models` on with a connection the model proxy serves to an agent
-- **WHEN** `models` is switched off
-- **THEN** the proxy holds an empty state and a request through it is refused as for an agent with no connection
-
-#### Scenario: models off withdraws the provider projection from agents
-- **GIVEN** `models` on and an agent whose config files carry Coffer's projection of its chosen connection
-- **WHEN** `models` is switched off
-- **THEN** Coffer's keys are gone from the agent's config files and the agent falls back to its own login
-- **AND** the agent record still names its connection choice
-
-#### Scenario: switching models on projects the connection again
-- **GIVEN** `models` off and an agent record that names a connection
-- **WHEN** `models` is switched on
-- **THEN** the connection is projected into the agent's config files again, with no daemon restart
-
-#### Scenario: models off skips usage ingest and the price-list refresh
-- **GIVEN** `models` off
-- **WHEN** the usage ingest and the price-list refresh come due
-- **THEN** each skips its round
-
 ### Requirement: Keep dependencies between features soft
 No feature MUST hard-depend on another. Every link from one feature to another
 MUST degrade when the other is off and MUST NOT fail: a surface that would
@@ -373,7 +323,7 @@ card.
 #### Scenario: settings carry the Features tab
 - **GIVEN** a running daemon
 - **WHEN** the user opens Settings → Features
-- **THEN** the tab lists `knowledge`, `memory`, `sync` and `models` with name, Experimental mark, description, state and what decided it
+- **THEN** the tab lists `knowledge` and `memory` with name, Experimental mark, description, state and what decided it
 - **AND** the Settings tab list is General, Security, Data, Daemon, Features and About
 
 #### Scenario: the features tab switches a feature
@@ -392,8 +342,7 @@ feature is experimental in the tooltip of the collapsed rail ("Knowledge ·
 Experimental"). The expanded row carries no tag beside its label — the
 Experimental tag stays on the feature's page title and in Settings › Features —
 and an entry no registered feature owns MUST NOT say it at all. The entries owned
-by a feature are Knowledge (`knowledge`), Memory (`memory`), Sync (`sync`), and
-Model providers (`models`), whose page carries Usage as a tab.
+by a feature are Knowledge (`knowledge`) and Memory (`memory`).
 
 #### Scenario: a collapsed rail's tooltip says a feature's entry is experimental
 - **GIVEN** a sidebar entry owned by a registered feature that is switched on

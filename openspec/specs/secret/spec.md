@@ -1379,8 +1379,9 @@ returns only fingerprints. The audit event records the actor as the desktop app.
 
 The key is the secret store's, not sync's: `GET /api/v1/secrets/key/fingerprint`
 (this machine's fingerprint, never the key), the preview and the import MUST
-answer the same whether or not the experimental `sync` feature is on, because
-Settings › Security shows the fingerprint and offers the import either way. On
+answer from the secret store, never from sync, because Settings › Security
+shows the fingerprint and offers the import whether or not a sync remote is
+configured. On
 the command line, `coffer secret key-fingerprint` and `coffer secret key-preview`
 call the first two; `coffer secret key-install` sends the import request and its
 help MUST say that the request needs the presence grant only the desktop app
