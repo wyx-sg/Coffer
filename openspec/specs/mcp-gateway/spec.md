@@ -449,7 +449,10 @@ used for every subsequent list and call.
   answered `404` for every method but `initialize` (and for a notification stream), never silently rebuilt as
   a session that lost the handshake's identity and scope; the shim MUST then replay its cached `initialize` and
   resend the call. A session id that starts with `__` MUST NOT be taken as a client's session id. An open
-  notification stream MUST keep its session from being reaped as idle.
+  notification stream is not activity: a session is idle when it has seen no downstream request and no forwarded
+  upstream notification for 10 minutes (`COFFER_MCP_SESSION_IDLE_S` changes the window), a request in flight keeps it
+  alive, and the keepalive wake-ups of an open stream do not. Reaping a session ends its open stream cleanly, and
+  the client's next request on that id is answered `404`.
 - The handshake happens once per session: a second `initialize` on a session that already completed one MUST
   be refused with JSON-RPC `-32600` and change nothing — not the identity, the client's capabilities or the
   cwd. A new session may report any identity, as before.
@@ -472,6 +475,12 @@ used for every subsequent list and call.
 - **GIVEN** a session whose handshake reported an agent's uid and that the idle reaper has since dropped,
 - **WHEN** the client sends `tools/list` on its old session id,
 - **THEN** the answer is `404` and no session is created; an `initialize` carrying the identity then opens a new one, and the shim does both and resends the call
+
+#### Scenario: an open notification stream with no requests does not keep a session alive
+- **GIVEN** a session whose client holds its notification stream open and sends no request,
+- **WHEN** the session has been idle past the idle window,
+- **THEN** the reaper drops it and its stream ends cleanly,
+- **AND** the client's next request on that session id is answered `404`
 
 #### Scenario: a name-only handshake is treated as unidentified
 - **GIVEN** one server scoped to a single agent's uid and one unscoped server,

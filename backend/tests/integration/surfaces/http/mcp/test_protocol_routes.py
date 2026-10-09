@@ -590,6 +590,50 @@ async def test_sse_client_disconnect_does_not_dispose_session(
     assert session_id not in _ACTIVE_SESSIONS
 
 
+@pytest.mark.acceptance(
+    spec="mcp-gateway",
+    scenario="an open notification stream with no requests does not keep a session alive",
+)
+@pytest.mark.asyncio
+async def test_an_open_stream_with_no_requests_is_reaped_and_ends_cleanly(
+    http_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A client that only holds its GET stream open is idle: the keepalive
+    wake-ups do not refresh the session, the reaper drops it, the stream ends
+    without error, and the next request on that id is 404."""
+    import asyncio
+
+    from coffer.surfaces.http.mcp import protocol_routes
+    from coffer.surfaces.http.mcp.dependencies import get_mcp_session_factory
+
+    monkeypatch.setattr(protocol_routes, "_STREAM_KEEPALIVE_S", 0.05)
+    init = await http_client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": INIT_PARAMS},
+    )
+    session_id = init.headers["mcp-session-id"]
+    resp = await protocol_routes.handle_get(
+        mcp_session_id=session_id, factory=get_mcp_session_factory()
+    )
+    gen = resp.body_iterator
+    await gen.__anext__()  # "connected" comment
+    parked = asyncio.ensure_future(gen.__anext__())
+
+    await asyncio.sleep(0.3)  # several keepalive wake-ups, no POST
+    assert not parked.done()
+    assert await reap_idle_sessions(max_idle_seconds=0.2) == [session_id]
+
+    with pytest.raises(StopAsyncIteration):
+        await asyncio.wait_for(parked, timeout=2)
+    assert session_id not in _ACTIVE_SESSIONS
+    r = await http_client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        headers={"Mcp-Session-Id": session_id},
+    )
+    assert r.status_code == 404
+
+
 @pytest.mark.asyncio
 async def test_sse_client_disconnect_leaves_no_pending_queue_getter(
     http_client: AsyncClient,
