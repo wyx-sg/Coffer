@@ -67,6 +67,8 @@ Which class a resource belongs to is declared by its kind, with a per-row refine
 ├── state/mcp-preferences/<server>.json the capabilities you switched off
 ├── state/channel-peers/<channel>.json  paired identities per channel
 ├── state/settings/internal-engine.json upkeep and speech-to-text model settings (absent = defaults)
+├── state/secret-notes/notes.json       each secret's label and description
+├── state/cli-tools/tools.json          the command-line tools you added by hand, and your edits to required ones
 ├── knowledge/<collection>/…            Markdown documents, hidden .inbox/ for new material
 ├── skills/<name>/…                     skill master folders
 ├── secret/<ref>.enc                    Fernet ciphertext, one file per secret
@@ -110,10 +112,11 @@ What Coffer ignores in the repository is written into `.git/info/exclude`, never
 ├── engine.json                   when this machine last changed engine settings
 ├── retention.json                retention policy per prunable table
 ├── skill-source-status.json      what this machine last found at a Git-imported skill's source
-├── secret/                       machine-local ciphertext (proxy tokens)
+├── secret/                       machine-local ciphertext (proxy tokens), the not-a-secret list (plaintext-ignored.json)
 ├── secret-boundary/              bindings, approvals, switches, first-stored times
 ├── sync/remote.json              the one sync remote
-└── sync/round.json               a stopped round, a hold, a join's pending choices
+├── sync/round.json               a stopped round, a hold, a join's pending choices
+└── sync/removed-remote.json       the remote Stop syncing removed, kept for its Undo
 ```
 
 Each file is one JSON object, read whole, changed under a per-file lock and written back atomically (a sibling temp file, then a rename). A missing file reads as empty. A file that does not parse is moved aside as `<name>.unreadable-<n>`, logged, and read as empty: local state can be set again, and a daemon that refuses to start over a settings file is worse than one that forgets them.
@@ -133,6 +136,8 @@ Each file is one JSON object, read whole, changed under a per-file lock and writ
 | `conversations` | The conversation index: title, agent, directory, the agent's session id and the channel thread that owns it. No conversation text: that stays in the agent's own session. Deleted with the conversation (or its session); there is no retention policy. |
 | `channel_thread_conversations`, `channel_thread_history` | Which conversation an IM thread maps to, and every conversation a thread has opened. |
 | `channel_outbox` | Replies Coffer owes a chat and has not delivered yet. |
+| `channel_replies` | The platform message ids that make up each reply Coffer sent, so the owner can withdraw it (`/del`). Ids and times only, never the text. |
+| `channel_thread_cursors` | How far each conversation has read each platform thread, so a later turn folds in only what is new. Ids and times only. |
 | `sync_runs` | Every sync round this machine has run. Pruned after 90 days by default. |
 | `usage_requests`, `usage_daily` | Upstream attempts the model proxy spooled, and the per-day rollup the Usage tab reads. |
 | `attention_ignores` | The "needs you" items a person ignored on this machine, by item key, with when. The attention list leaves them out of its items and counts. |
@@ -158,6 +163,9 @@ Every connection runs this pragma suite:
 ~/.coffer/derived/
 ├── channel-avatars/            paired people's pictures, as each channel's adapter fetched them
 ├── derived.db                   MCP server and model provider health, skill deliveries, capability first/last seen
+├── genai-prices.json            the refreshed model price list
+├── reported-prices.json         prices a provider reported for its own models
+├── secret-citations.json        which resources cite which secret, rebuilt on change
 ├── memory/<partition>/          the memory tree (MEMORY.md, notes/, RETIRED.md, .raw/)
 ├── resources/                   derived resource files (memory partitions, coffer-guide)
 ├── skills/coffer-guide/         Coffer's own guide skill, rendered from the build
@@ -187,13 +195,13 @@ flowchart LR
 
 A hand edit is found, not intercepted. File events are a hint (debounced until the path has been quiet for a second), a scan every 60 seconds and at boot is the truth. A valid edit is committed as a `disk` write and audited as `vault_file_edited` by a human. An invalid one stays in the working tree, uncommitted, and is flagged on the attention list and in `coffer vault problems`, while `HEAD` stays in effect. The effective state is always `HEAD`: the stores read documents from a cache loaded from `HEAD` and refreshed after each commit.
 
-Every file and folder in the vault has a history you read from the **History** tab of a knowledge document or a skill, or with `git log -p`. The tab is served by `GET /api/v1/vault/history?path=` (a file, or a folder ending in `/`), `GET /api/v1/vault/diff?path&version&against=previous|current` and `POST /api/v1/vault/restore {path, version, expected_current}`. Paths under `secret/` and outside the vault are refused `VAULT_PATH_INVALID`, and an unknown version is `404 VAULT_VERSION_NOT_FOUND`. Reading the history first commits any edit made on disk as its own version, so the newest version is the file as it is. A restore is Coffer's own write: one new commit by the user that carries `Coffer-Operation: restore` and `Coffer-Restored-From`, put through the same compare-and-commit as any other write, so a file that changed since the history was read is refused with `VAULT_FILE_STALE`. History is never rewritten. See [Edit the vault by hand](/guides/vault-files).
+Every file and folder in the vault has a history you read from the **History** drawer of a knowledge file, the **History** tab of a skill, or with `git log -p`. The history is served by `GET /api/v1/vault/history?path=` (a file, or a folder ending in `/`), `GET /api/v1/vault/diff?path&version&against=previous|current` and `POST /api/v1/vault/restore {path, version, expected_current}`. Paths under `secret/` and outside the vault are refused `VAULT_PATH_INVALID`, and an unknown version is `404 VAULT_VERSION_NOT_FOUND`. Reading the history first commits any edit made on disk as its own version, so the newest version is the file as it is. A restore is Coffer's own write: one new commit by the user that carries `Coffer-Operation: restore` and `Coffer-Restored-From`, put through the same compare-and-commit as any other write, so a file that changed since the history was read is refused with `VAULT_FILE_STALE`. History is never rewritten. See [Edit the vault by hand](/guides/vault-files).
 
 The vault needs `git` 2.40 or later. Without one the daemon starts but [waits for git](/architecture/daemon#waiting-for-git), saying why on every surface. How git is installed depends on the machine, so the `GIT_MISSING` error names no installer. It carries the install hand-off for the person's agent in `details.handoff`, and the Sync status reports the problem `git_missing` with the same prompt.
 
 ## Migrations of runs.db
 
-`runs.db`'s Alembic history starts at one baseline revision, `0146`, which creates the whole schema in a single step. Every later schema change is a new revision stacked on it, kept in the persistence package, one file per revision named `YYYYMMDD_NNNN_<slug>` (the next one is `0147`) and carrying a working `downgrade()`. A schema change is always a revision, never tables created implicitly from the models.
+`runs.db`'s Alembic history starts at one baseline revision, `0146`, which creates the whole schema in a single step. Every later schema change is a new revision stacked on it, kept in the persistence package, one file per revision named `YYYYMMDD_NNNN_<slug>` and carrying a working `downgrade()`. A schema change is always a revision, never tables created implicitly from the models.
 
 Migrations run in the daemon's lifespan, before any service is built:
 
@@ -218,7 +226,7 @@ A secret's ciphertext is a file, `vault/secret/<ref>.enc`: the Fernet token and 
 
 ## Settings that live outside every class
 
-Two small JSON files sit directly under `~/.coffer`. `daemon.json` is runtime state the daemon writes at start and removes at exit (pid, port, token): the rendezvous every surface reads to find the daemon. `daemon-config.json` is configuration the daemon reads before it binds: the fixed port, the model proxy's port, the machine name and id, and the experimental-feature switches. It must be readable before any upgrade runs, so it is neither vault nor local state. Both are written atomically at mode `0600`. Their contents are described in [Daemon and processes](/architecture/daemon#two-files-configuration-in-runtime-state-out) and, key by key, in [Configuration](/reference/configuration#daemon-config-json).
+Two small JSON files sit directly under `~/.coffer`. `daemon.json` is runtime state the daemon writes at start and removes at exit (pid, port, token): the rendezvous every surface reads to find the daemon. `daemon-config.json` is configuration the daemon reads before it binds: the fixed port, the model proxy's port, the machine name and id, the experimental-feature switches, the switches for the release check, the skill-update check and the price-list refresh, and whether call content is recorded. It must be readable before any upgrade runs, so it is neither vault nor local state. Both are written atomically at mode `0600`. Beside them, `daemon.lock` is the spawn lock: every daemon start takes an exclusive lock on it, so one vault has one daemon. Their contents are described in [Daemon and processes](/architecture/daemon#two-files-configuration-in-runtime-state-out) and, key by key, in [Configuration](/reference/configuration#daemon-config-json).
 
 One short-lived directory sits outside the classes too: `~/.coffer/tmp/handoff/` holds the prompt of a session started in a terminal from Coffer, one `0600` file per start, removed by the command that reads it (see [Native sessions and the terminal](/architecture/chat#native-sessions)). Nothing there needs a backup.
 

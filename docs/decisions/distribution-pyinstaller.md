@@ -1,4 +1,4 @@
-# Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App
+# Distribution — Four PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App
 
 **Status**: Accepted
 **Date**: 2026-09-12
@@ -32,9 +32,10 @@ Three more forces shape the answer:
 
 #### Option A — PyInstaller single-file executables (chosen)
 
-`backend/coffer-daemon.spec`, `backend/coffer-mcp-shim.spec` and
-`backend/coffer.spec` each freeze one entry point into a single-file binary;
-`scripts/build_binaries.sh` (`make bundle-binaries`) runs all three of those into `dist/`; the SeaTalk bridge is a fourth, shipped beside them.
+`backend/coffer-daemon.spec`, `backend/coffer-mcp-shim.spec`, `backend/coffer.spec`
+and `backend/coffer-seatalk-bridge.spec` each freeze one entry point into a
+single-file binary; `scripts/build_binaries.sh` (`make bundle-binaries`) runs
+all four into `dist/`.
 The daemon spec carries its Alembic migrations and the built web UI
 (`frontend/dist`, shipped as `webui/`) as data files, and pins the modules
 imported lazily inside functions — `markitdown` and its document parsers,
@@ -115,8 +116,10 @@ Per `v*` tag, `.github/workflows/release.yml` (one leg, `macos-14`,
   `~/.coffer/bin`, which it adds to `PATH` (overridable with
   `COFFER_INSTALL_DIR`, `COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`);
 - `Coffer-unsigned-aarch64-apple-darwin.dmg`, the Tauri app with the **same
-  four files** copied from `dist/` into `desktop/binaries/` as `externalBin` —
-  a copy, not a second PyInstaller run.
+  four files** copied from `dist/` into `desktop/binaries/` — three as
+  `externalBin`, the SeaTalk bridge through `bundle.macOS.files`, since Tauri
+  re-signs an `externalBin` with the app's keychain entitlement — a copy, not
+  a second PyInstaller run.
 
 One aggregated `SHA256SUMS` covers both (spec daemon "Publish one aggregated
 checksum file"). The `.dmg` needs nothing installed beforehand, and installing
@@ -170,8 +173,8 @@ create.
 
 ## Decision
 
-**Coffer freezes `coffer`, `coffer-daemon` and `coffer-mcp-shim` with
-PyInstaller once per release on macOS arm64, and publishes them twice: as
+**Coffer freezes `coffer`, `coffer-daemon`, `coffer-mcp-shim` and
+`coffer-seatalk-bridge` with PyInstaller once per release on macOS arm64, and publishes them twice: as
 `coffer-cli-<triple>.tar.gz` and inside the unsigned `Coffer-unsigned-<triple>.dmg`,
 under one `SHA256SUMS`.** Rules that follow:
 

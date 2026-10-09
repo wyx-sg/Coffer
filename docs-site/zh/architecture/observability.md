@@ -174,21 +174,22 @@ sequenceDiagram
 | 领域 | 事件 |
 | --- | --- |
 | 资源 | `resource_created`、`resource_updated`、`resource_enabled`、`resource_disabled`、`resource_deleted`、`resource_renamed`、`resource_scope_updated` |
-| MCP 能力 | `capability_enabled`、`capability_disabled` |
-| 守护进程 | `token_rotated`、`daemon_residency_updated`、`daemon_restarted`、`retention_updated`、`internal_engine_model_set` |
-| 密钥 | `secret_set`、`secret_revealed`、`secret_deleted`、`secret_resolved`、`secret_local_access_revoked`、`secret_approval_requested`、`secret_approval_approved`、`secret_approval_rejected` |
+| MCP 能力 | `capability_enabled`、`capability_disabled`、`tool_exposure_changed` |
+| 守护进程 | `token_rotated`、`daemon_residency_updated`、`daemon_restarted`、`retention_updated`、`call_content_recording_updated`、`attention_ignored`、`attention_unignored`、`storage_cache_cleared`、`internal_engine_model_set` |
+| 密钥 | `secret_set`、`secret_revealed`、`secret_deleted`、`secret_notes_updated`、`secret_resolved`、`secret_imported`、`secret_plaintext_ignored`、`secret_plaintext_unignored`、`secret_local_access_revoked`、`secret_approval_requested`、`secret_approval_approved`、`secret_approval_rejected`、`secret_protection_enabled`、`master_key_relocated` |
 | 智能体 | `agent_mcp_installed`、`agent_mcp_uninstalled`、`agent_mcp_entry_removed`、`agent_mcp_entry_adopted`、`agent_plugin_toggled`、`agent_plugin_uninstalled` |
 | 技能 | `skill_imported`、`skill_updated`、`skill_update_merged`、`skill_bound`、`skill_unbound`、`skill_relinked`、`skill_drift_remediated`、`skill_adopted`、`skill_unmanaged_deleted` |
+| 命令行工具 | `cli_tool_added`、`cli_tool_edited`、`cli_tool_removed` |
 | 知识 | `knowledge_written`、`knowledge_edited`、`knowledge_deleted` |
 | 记忆 | `memory_aggregated`、`memory_distilled`、`memory_delivery_installed`、`memory_delivery_removed`、`memory_delivery_fired`、`memory_trigger_added`、`memory_trigger_proposed`、`memory_trigger_armed`、`memory_trigger_disarmed`、`memory_trigger_deleted` |
-| 消息渠道 | `channel_pairing_issued`、`channel_paired` |
-| 保险库文件 | `vault_file_edited`（人手动编辑、以 `disk` 提交） |
+| 消息渠道 | `channel_pairing_issued`、`channel_paired`、`channel_person_removed`、`channel_reply_withdrawn` |
+| 保险库文件 | `vault_file_edited`（人手动编辑、以 `disk` 提交）、`vault_file_restored` |
 | 保险库同步 | `sync_run`、`sync_confirmed`、`sync_rejected`、`sync_rolled_back`、`sync_machine_removed`、`sync_plaintext_pushed`、`master_key_exported`、`master_key_imported` |
-| 提供商 | `provider_switched`、`provider_transcribe_default_set`、`provider_projection_refused` |
+| 提供商 | `provider_switched`、`provider_transcribe_default_set`、`provider_projection_refused`、`provider_projection_repaired` |
 
 没有任何密钥事件携带密钥值；每条只记录 ref、独立密钥的名字或目的地。
 
-有三个事件不再被记录，因为 Web 界面不再编辑智能体的配置文件或记忆笔记：`agent_config_file_written`、`agent_config_file_deleted` 和 `memory_note_edited`。日志里已有的行在活动页面里仍保留它们的标签，所以依然能用平实的话读出来。`vault_file_restored` 会被记录：从历史标签恢复一个版本是 Coffer 自己的写入。在磁盘上做的编辑，或智能体自己提交的恢复，是写明 `Coffer-Writer: disk` 或 `agent` 的保险库提交；保险库的 git 历史能回答是谁改了这个文件。
+有五个事件不再被记录：`agent_config_file_written`、`agent_config_file_deleted` 和 `memory_note_edited`，因为 Web 界面不编辑智能体的配置文件或记忆笔记；以及 `knowledge_curated` 和 `provider_internal_default_set`。日志里已有的行在活动页面里仍保留它们的标签，所以依然能用平实的话读出来。`vault_file_restored` 会被记录：从历史标签或抽屉恢复一个版本是 Coffer 自己的写入。在磁盘上做的编辑，或智能体自己提交的恢复，是写明 `Coffer-Writer: disk` 或 `agent` 的保险库提交；保险库的 git 历史能回答是谁改了这个文件。
 
 - `secret_revealed`——有人在桌面应用里经过在场验证后显示或复制了一个值。这是值被展示的唯一途径，因为没有任何路由、命令或工具会返回它。
 - `secret_resolved`——`coffer run` 把一个独立密钥解析进一个子进程。记录写明密钥、程序和工作目录，从不记录值或命令行的其余部分。
@@ -249,28 +250,38 @@ sequenceDiagram
 
 所有类似日志的东西都由同一套机制限定大小。
 
-保留 worker 所清扫的每张表都有一份声明式描述：策略键、时间戳列、默认窗口、显示名，以及 `delete` 或 `archive` 之一的动作。组合根把每份这样的描述注册到同一个注册表里，仓储层接受的 SQL 白名单也由这些注册推导，所以没注册的表无法被清理。
+保留 worker 所清扫的每张表都有一份声明式描述：策略键、时间戳列、默认窗口、显示名和描述，以及可选的它所跟随的策略（`policy_name`）：跟随者没有自己的策略，按所跟随策略的窗口清理。超出窗口的行会被删除；没有别的动作。组合根把每份这样的描述注册到同一个注册表里，仓储层接受的 SQL 白名单也由这些注册推导，所以没注册的表无法被清理。
 
-| 策略（`name`） | 表 | 时间戳列 | 默认 | 动作 |
-| --- | --- | --- | --- | --- |
-| `audit_log` | `audit_log` | `timestamp` | 365 天 | delete |
-| `mcp_invocations` | `mcp_invocations` | `timestamp` | 30 天 | delete |
-| `sync_runs` | `sync_runs` | `finished_at` | 90 天 | delete |
+| 策略（`name`） | 表 | 时间戳列 | 默认 |
+| --- | --- | --- | --- |
+| `audit_log` | `audit_log` | `timestamp` | 365 天 |
+| `mcp_invocations` | `mcp_invocations` | `timestamp` | 30 天 |
+| `sync_runs` | `sync_runs` | `finished_at` | 90 天 |
+| `usage_daily` | `usage_daily` | `day` | 365 天 |
+| `usage_requests` | `usage_requests` | `started_at` | 跟随 `mcp_invocations` |
+
+三个**文件策略**以同样的方式按每个文件的修改时间清理文件夹：
+
+| 策略 | 文件夹 | 默认 |
+| --- | --- | --- |
+| `attachments` | `~/.coffer/content/channel-media`（消息渠道下载的内容） | 30 天 |
+| `skill_data` | `~/.coffer/skill-data`（技能脚本写的日志、操作记录和临时文件） | 30 天 |
+| `config_backups` | `~/.coffer/config-backups`（改写前留下的智能体配置文件副本）；每个文件最新的一份副本不论多旧都会保留 | 30 天 |
 
 ```mermaid
 flowchart LR
     W["保留 worker（每 6 小时）"] --> S["清理"]
     S --> R["已注册的可清理表"]
     R --> T1["删除超出窗口的行"]
-    S --> M["清扫消息渠道媒体目录"]
+    S --> M["文件策略：消息渠道媒体、skill-data、config-backups"]
     W --> F["日志文件清理：超过 7 天的 shim 和上游日志"]
     S --> P["local/retention.json：last_pruned_at、rows"]
 ```
 
-- 保留服务在启动时为每张已注册的表在 `~/.coffer/local/retention.json` 里写入默认策略，从不覆盖你改过的策略。文件里属于已不再注册的策略的条目，例如已移除的对话策略，会在启动时被丢弃。
+- 保留服务在启动时为每张已注册的表和每个文件策略在 `~/.coffer/local/retention.json` 里写入默认策略，从不覆盖你改过的策略。文件里属于已不再注册的策略的条目，例如已移除的对话策略，会在启动时被丢弃。
 - 保留 worker 在启动时立即执行一次清理（补跑），之后每 6 小时一次。清理失败会记日志，worker 继续运行。
-- 完整的清理还会清扫消息渠道的媒体目录，worker 也按同样的节奏清理旧的 shim 和上游日志文件。`daemon.log` 本身由自己的滚动限定大小，从不被删除。
-- 窗口设为 “none” 会关闭该表的清理。修改窗口会在审计日志里记一条 `retention_updated`。
+- 完整的清理还会清扫各文件策略的文件夹，worker 也按同样的节奏清理旧的 shim 和上游日志文件。`daemon.log` 本身由自己的滚动限定大小，从不被删除。
+- 窗口设为 “none” 会关闭该策略的清理。修改窗口会在审计日志里记一条 `retention_updated`。
 
 你可以在**设置 → 数据**里管理策略，或者通过 `/api/v1/retention/policies` 和 `POST /api/v1/retention/prune`。
 

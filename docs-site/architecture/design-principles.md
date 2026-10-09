@@ -45,7 +45,7 @@ Coffer is a **custodian, not an owner**. It holds your assets on your machine, h
 
 Sync is bidirectional but only under the sync spec's safety rules: git computes the merge outside the vault, only a clean merge is applied, any conflict stops the round for you with nothing changed, a round that would lose too much stops and asks, and every round can be rolled back from its snapshot.
 
-**In the code.** The daemon binds `127.0.0.1` when it allocates its port. Channels reach Telegram and SeaTalk only over connections the daemon opens, so the loopback socket is the only one Coffer listens on. The sync remote defaults to absent, and secret ciphertext is carried only when you set `--with-secrets`.
+**In the code.** The daemon binds `127.0.0.1` when it allocates its port. Channels reach Telegram and SeaTalk only over connections the daemon opens, so the loopback socket is the only one Coffer listens on. The sync remote defaults to absent, and secret ciphertext is carried only when you turn on `include_secret` for the remote.
 
 **Rules out.** A hosted Coffer endpoint; a "Coffer cloud" account; any design where losing the remote loses data; a sync that overwrites a vault wholesale; replicating vault state to a vendor-controlled service.
 
