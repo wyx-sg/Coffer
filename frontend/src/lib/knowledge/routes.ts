@@ -1,24 +1,24 @@
 // frontend/src/lib/knowledge/routes.ts
 //
 // The addresses of the one Knowledge page (router.tsx). The tree stays on the
-// left whatever the right pane shows, and what it shows is always in the URL
+// left whatever the right pane shows (a file's history aside, which takes the
+// whole area), and what it shows is always in the URL
 // (.agents/frontend.md §3):
 //
 //   /knowledge                               every collection, nothing chosen
 //   /knowledge/<uid>                         a collection; `?file=` opens a file
-//   /knowledge/<uid>?file=<path>&history=1   that file with its history drawer
+//   /knowledge/<uid>?file=<path>&history=1   that file's history, over the whole area
 //
 // A collection is addressed by its immutable uid (spec web-ui "Lay out every
 // detail page's tabs alike"); a file by its knowledge-root-relative path,
 // which starts with the collection's directory NAME. A file's pane has no
-// tabs: its history is a drawer beside it, named by `history=1`. The address a
-// History tab once had (`/knowledge/<uid>/history?file=`) is sent to the
-// drawer, and any other trailing segment to the bare address
+// tabs: its history is named by `history=1`. The address a History tab once
+// had (`/knowledge/<uid>/history?file=`) is sent to the history, and any other trailing segment to the bare address
 // (`legacyRedirect`).
 
 export const KNOWLEDGE_ROOT = "/knowledge";
 
-/** The search parameter that opens a file's history drawer. */
+/** The search parameter that opens a file's history. */
 export const HISTORY_PARAM = "history";
 
 /** A collection's base address. */
@@ -26,19 +26,19 @@ function collectionBasePath(uid: string): string {
   return `${KNOWLEDGE_ROOT}/${encodeURIComponent(uid)}`;
 }
 
-/** A collection's address, with an optional open file, and its history drawer. */
+/** A collection's address, with an optional open file, and its history. */
 export function collectionPath(
   uid: string,
   file?: string | null,
   { history = false }: { history?: boolean } = {},
 ): string {
   if (!file) return collectionBasePath(uid);
-  const drawer = history ? `&${HISTORY_PARAM}=1` : "";
-  return `${collectionBasePath(uid)}?file=${encodeURIComponent(file)}${drawer}`;
+  const open = history ? `&${HISTORY_PARAM}=1` : "";
+  return `${collectionBasePath(uid)}?file=${encodeURIComponent(file)}${open}`;
 }
 
 /** Where an address with a trailing path segment goes: `/history` opens the
- *  file's history drawer, any other segment the bare address. */
+ *  file's history, any other segment the bare address. */
 export function legacyRedirect(uid: string, segment: string, search: string): string {
   const file = new URLSearchParams(search).get("file");
   return collectionPath(uid, file, { history: segment === "history" });

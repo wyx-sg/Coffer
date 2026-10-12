@@ -4,7 +4,8 @@
 // documents in the web UI"): the tree of every collection on the left, each
 // with its pages and sources, and whatever the address names on the right
 // (lib/knowledge/routes.ts): a line to pick a collection, a collection, or an
-// open file, read-only, with its history drawer when the address names it. Every collection is served to every agent, so
+// open file, read-only. A file's history, when the address names it, takes the
+// whole area: the tree makes way for it. Every collection is served to every agent, so
 // there is no per-collection switch and no reach control; and the layer has no
 // retrieval, so there is no search box — ⌘K jumps to a collection by name.
 //
@@ -38,7 +39,7 @@ import { getTidyHandoff } from "@/lib/api/knowledge";
 import { knowledgeKey } from "@/lib/api/queryKeys";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
 import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
-import { legacyRedirect } from "@/lib/knowledge/routes";
+import { HISTORY_PARAM, legacyRedirect } from "@/lib/knowledge/routes";
 import { PAGE_BLEED, PAGE_BLEED_HEAD } from "@/components/shell/pageFrame";
 import { cn } from "@/lib/utils";
 
@@ -62,11 +63,13 @@ export function KnowledgePage() {
   const { search } = useLocation();
   const [params] = useSearchParams();
   const file = params.get("file");
+  // A file's history fills the whole area, so the tree makes way for it.
+  const historyOpen = Boolean(file) && params.get(HISTORY_PARAM) === "1";
   const collections = useKnowledgeCollections();
   const [dialog, setDialog] = useState<KnowledgeDialog>(null);
 
   // A file's pane has no tabs: the History tab's old address
-  // (`/<uid>/history?file=`) opens its history drawer, any other segment the
+  // (`/<uid>/history?file=`) opens its history, any other segment the
   // bare address.
   if (uid && tab) {
     return <Navigate to={legacyRedirect(uid, tab, search)} replace />;
@@ -131,6 +134,7 @@ export function KnowledgePage() {
         storageKey="knowledge"
         label={t("splitView.resizeList")}
         defaultListWidth={260}
+        listHidden={historyOpen}
         className="min-h-0 flex-1"
         listClassName="flex min-h-0 flex-col bg-surface-sidebar"
         detailClassName="flex min-h-0 min-w-0 flex-col"

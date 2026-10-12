@@ -1,8 +1,8 @@
 // frontend/src/components/knowledge/KnowledgeDocumentActions.tsx
 //
 // The right side of a file's pane bar (boards 5.1.01, 0.6.03): **History**, a
-// clock icon button that opens the file's history drawer beside it and is
-// pressed while the drawer is open; the Preview / Source toggle (Markdown files
+// clock icon button that opens the file's history over the whole Knowledge
+// area; the Preview / Source toggle (Markdown files
 // only); **Open in editor** as a visible button — a file is changed in the
 // person's own editor — and the ⋯ menu: Reveal in Finder · (separator) Delete
 // in danger (spec knowledge "Show a collection as one tree of read-only
@@ -15,7 +15,6 @@ import { ActionMenu } from "@/components/ui/menu";
 import { Segmented } from "@/components/ui/segmented";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { useFileActionItems } from "@/lib/fileActionItems";
-import { cn } from "@/lib/utils";
 
 export type DocumentView = "preview" | "source";
 
@@ -27,8 +26,6 @@ interface ReadingProps {
   onView: (view: DocumentView) => void;
   fileActions: ReturnType<typeof useFileActionItems>;
   onDelete: () => void;
-  /** The history drawer is open. */
-  historyOpen: boolean;
   onHistory: () => void;
 }
 
@@ -39,7 +36,6 @@ export function ReadingActions({
   onView,
   fileActions: [openItem, revealItem],
   onDelete,
-  historyOpen,
   onHistory,
 }: ReadingProps) {
   const { t } = useTranslation();
@@ -50,9 +46,7 @@ export function ReadingActions({
           <Button
             variant="ghost"
             size="icon-md"
-            className={cn(historyOpen && "bg-surface-selected text-text")}
             aria-label={t("knowledge.history.title")}
-            aria-pressed={historyOpen}
             onClick={onHistory}
           >
             <History aria-hidden />

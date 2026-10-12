@@ -4,7 +4,7 @@
 // read-only documents in the web UI", "Follow edits across collections in one
 // feed"): the changes feed for this collection, newest first, one row per
 // change — what it did, its writer and time, and the files it touched, each
-// opening that file with its history drawer (`history=1`), where the change's
+// opening that file with its history (`history=1`), where the change's
 // diff and Restore are. Show more reads the next page while more are left.
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";

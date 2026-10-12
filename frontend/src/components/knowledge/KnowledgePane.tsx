@@ -1,7 +1,7 @@
 // frontend/src/components/knowledge/KnowledgePane.tsx
 //
 // The right side of the Knowledge page: which view the address names
-// (lib/knowledge/routes.ts). An open file, read-only, with its history drawer
+// (lib/knowledge/routes.ts). An open file, read-only, with its history
 // when the address names it; a collection with no file open → its overview;
 // nothing chosen → a line saying to pick one.
 import { Book } from "lucide-react";

@@ -52,8 +52,12 @@ export function renderKnowledge(path: string) {
   return qc;
 }
 
-/** The mocked module's default answers: the fixtures. */
+/** The mocked module's default answers: the fixtures. Each test also starts
+ *  with the tree as a first visit finds it, everything closed. */
 export function answerFromFixtures() {
+  for (const kind of ["collections", "folders"]) {
+    localStorage.removeItem(`coffer.knowledge.tree.${kind}`);
+  }
   const api = vi.mocked(knowledgeApi);
   api.listCollections.mockResolvedValue({ collections: [COLLECTION, OTHER] });
   api.getTree.mockImplementation(
