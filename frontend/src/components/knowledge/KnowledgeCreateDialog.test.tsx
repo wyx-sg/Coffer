@@ -68,6 +68,9 @@ describe("KnowledgeCreateDialog", () => {
       updated_at: null,
       tidy_handoff: { prompt: "Tidy the team-notes collection." },
       tidy_running: false,
+      linked: false,
+      note_count: 0,
+      rules_file: "",
     });
     const onOpenChange = renderDialog();
 

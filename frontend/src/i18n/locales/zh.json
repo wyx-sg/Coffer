@@ -1885,7 +1885,9 @@
     "MEMORY_SYNC_RUNNING": "已有一次记忆同步在运行",
     "MEMORY_SYNC_NO_PREVIEW": "没有等待写入的记忆同步预览",
     "KNOWLEDGE_UNDO_CONFLICT": "没有撤销：之后有文件被编辑过。选择“仍然撤销”会丢掉那些编辑。",
-    "KNOWLEDGE_NOT_A_CHANGE": "这次改动没有涉及任何知识文件，没有可撤销的内容。"
+    "KNOWLEDGE_NOT_A_CHANGE": "这次改动没有涉及任何知识文件，没有可撤销的内容。",
+    "KNOWLEDGE_COLLECTION_LINKED": "这是接入的外部文件夹。Coffer 只把它共享给智能体，不会修改它。",
+    "KNOWLEDGE_FOLDER_REFUSED": "无法接入这个文件夹。请选一个已存在、且不在 Coffer 自己目录里的文件夹。"
   },
   "pagination": {
     "showing": "显示 {{shown}} / {{total}} 条",
@@ -3056,7 +3058,8 @@
       "title": "重命名 {{name}}",
       "body": "它的文件夹会随之改名，智能体会按新名字找到它。",
       "submit": "重命名",
-      "renamed": "已重命名为 {{name}}"
+      "renamed": "已重命名为 {{name}}",
+      "linkedBody": "这只是一个名称，磁盘上的文件夹不会改名。"
     },
     "deleteCollection": {
       "menu": "删除知识集…",
@@ -3247,10 +3250,46 @@
       "upload": "上传文档…",
       "uploadHint": "转换成 Markdown，保存在你选的知识集里，随它一起同步。",
       "create": "新建知识集…",
-      "createHint": "保存在 Coffer 里：同步到你的其他 Mac，有历史记录，由你的智能体整理。"
+      "createHint": "保存在 Coffer 里：同步到你的其他 Mac，有历史记录，由你的智能体整理。",
+      "link": "接入外部文件夹…",
+      "linkHint": "文件留在原处，只共享给智能体。不会复制进 Coffer，也不同步、不整理。"
     },
     "obsidian": {
       "open": "在 Obsidian 中打开"
+    },
+    "linkFolder": {
+      "title": "接入外部文件夹",
+      "body": "把你自己维护的文件夹（比如 Obsidian 库）共享给所有智能体。",
+      "folder": "文件夹",
+      "folderHint": "/Users/you/Obsidian/Work",
+      "name": "名称",
+      "nameHint": "Coffer 和智能体用这个名字称呼它，文件夹本身不改名。",
+      "stays": "文件留在原处，不会复制进 Coffer。",
+      "notManaged": "Coffer 不同步、不整理、不记录历史，也不能往里上传。",
+      "ownRules": "智能体读取它，并遵守它根目录下自己的规则文件。",
+      "submit": "接入文件夹",
+      "linked": "已接入 {{name}}，智能体现在可以读取它。"
+    },
+    "linked": {
+      "tag": "外部",
+      "facts": "关于这个文件夹",
+      "location": "位置",
+      "notes": "笔记",
+      "noteCount_one": "{{count}} 篇 Markdown 笔记",
+      "noteCount_other": "{{count}} 篇 Markdown 笔记",
+      "rules": "规则文件",
+      "noRules": "无",
+      "managed": "管理方式",
+      "managedBy": "由它自己的工具维护。Coffer 只把它共享给智能体，不复制、不同步、不整理，也不记录历史。"
+    },
+    "disconnect": {
+      "menu": "断开接入…",
+      "title": "断开 {{name}}？",
+      "body": "智能体将不再看到它。{{path}} 里的文件保持不动。",
+      "confirm": "断开",
+      "pending": "正在断开…",
+      "failed": "无法断开 {{name}}",
+      "done": "已断开 {{name}}，文件没有改动。"
     }
   },
   "memory": {
@@ -4514,7 +4553,8 @@
       "definitions_other": "{{count}} 个 MCP 服务器和工具定义",
       "synced": "密钥已同步",
       "notSynced": "密钥未同步",
-      "line": "同步 {{documents}} · {{skills}} · {{definitions}} · {{secrets}}"
+      "line": "同步 {{documents}} · {{skills}} · {{definitions}} · {{secrets}} · {{linked}}",
+      "linkedNotSynced": "外部知识文件夹不同步"
     },
     "rounds": {
       "loadedCount": "已加载 {{loaded}} 轮",

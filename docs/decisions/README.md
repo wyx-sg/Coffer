@@ -216,6 +216,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`knowledge-is-plain-files`](knowledge-is-plain-files.md) | Knowledge Is a Directory of Markdown Files, Not an Index |
 | [`tidying-knowledge-is-the-agents-job`](tidying-knowledge-is-the-agents-job.md) | Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change |
 | [`knowledge-is-a-wiki-of-pages-compiled-from-kept-sources`](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md) | Knowledge Is a Wiki of Pages Compiled From Kept Sources |
+| [`linked-knowledge-folders-are-read-only-and-machine-local`](linked-knowledge-folders-are-read-only-and-machine-local.md) | A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local |
 | [`sync-memory-into-each-agents-own-memory`](sync-memory-into-each-agents-own-memory.md) | Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault |
 | [`memory-page-lists-memories-by-scope`](memory-page-lists-memories-by-scope.md) | The Memory Page Lists the Memories by Scope; the Sync Shows Only When It Needs the Person |
 

@@ -263,6 +263,57 @@ paths:
       summary: Create Collection
       tags:
       - knowledge
+  /api/v1/knowledge/collections/link:
+    post:
+      description: |-
+        Share a folder the person keeps themselves with every agent; nothing is
+        copied into Coffer ("Link a folder the person keeps themselves").
+      operationId: link_collection_api_v1_knowledge_collections_link_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionLink'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Link Collection
+      tags:
+      - knowledge
   /api/v1/knowledge/collections/{uid}/check:
     get:
       description: |-
@@ -906,6 +957,24 @@ components:
       - files
       title: CollectionFilesOut
       type: object
+    CollectionLink:
+      properties:
+        folder:
+          maxLength: 4096
+          minLength: 1
+          title: Folder
+          type: string
+        name:
+          anyOf:
+          - maxLength: 64
+            minLength: 1
+            type: string
+          - type: 'null'
+          title: Name
+      required:
+      - folder
+      title: CollectionLink
+      type: object
     CollectionListOut:
       properties:
         collections:
@@ -930,13 +999,25 @@ components:
           default: ''
           title: Folder Path
           type: string
+        linked:
+          default: false
+          title: Linked
+          type: boolean
         name:
           title: Name
           type: string
+        note_count:
+          default: 0
+          title: Note Count
+          type: integer
         page_count:
           default: 0
           title: Page Count
           type: integer
+        rules_file:
+          default: ''
+          title: Rules File
+          type: string
         source_count:
           default: 0
           title: Source Count
@@ -971,6 +1052,9 @@ components:
       - updated_at
       - tidy_handoff
       - tidy_running
+      - linked
+      - note_count
+      - rules_file
       title: CollectionOut
       type: object
     DirectoryOut:

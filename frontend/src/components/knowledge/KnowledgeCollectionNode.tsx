@@ -2,10 +2,11 @@
 //
 // One collection in the Knowledge tree: its row (chevron, folder, its folder
 // name — no count), and while expanded its files, Pages and Sources first. A collection
-// has no title — the tree names it by its folder.
+// has no title — the tree names it by its folder. A linked folder, which Coffer
+// only shares, shows a linked-folder icon.
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, FolderOpen, FolderSymlink } from "lucide-react";
 
 import {
   NAV_CHEVRON,
@@ -36,7 +37,7 @@ export function KnowledgeCollectionNode({ collection, expanded, onToggle, curren
   const name = collection.name;
   const onOverview = current && !file;
   const Chevron = expanded ? ChevronDown : ChevronRight;
-  const FolderIcon = expanded ? FolderOpen : Folder;
+  const FolderIcon = collection.linked ? FolderSymlink : expanded ? FolderOpen : Folder;
 
   return (
     <li>
@@ -59,7 +60,11 @@ export function KnowledgeCollectionNode({ collection, expanded, onToggle, curren
           aria-current={onOverview ? "page" : undefined}
           className="flex h-full min-w-0 flex-1 items-center gap-1.5 pl-1.5 text-left"
         >
-          <FolderIcon className={NAV_ICON} aria-hidden />
+          <FolderIcon
+            className={NAV_ICON}
+            aria-hidden
+            data-icon={collection.linked ? "linked" : "collection"}
+          />
           <span className={cn(NAV_FOLDER, onOverview && "font-label")}>{name}</span>
         </button>
       </div>

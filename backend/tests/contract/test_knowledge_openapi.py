@@ -29,6 +29,7 @@ from coffer.surfaces.http.knowledge import schemas
 _EXPECTED_ROUTES = {
     ("GET", "/api/v1/knowledge/collections"),
     ("POST", "/api/v1/knowledge/collections"),
+    ("POST", "/api/v1/knowledge/collections/link"),
     # A collection's mechanical findings (see "Check a collection mechanically
     # on every read"); nothing here fixes one.
     ("GET", "/api/v1/knowledge/collections/{uid}/check"),

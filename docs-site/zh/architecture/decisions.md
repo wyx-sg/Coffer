@@ -128,6 +128,7 @@ Coffer 保留三类设计文本，各司其职：
 | 知识是一个 Markdown 文件目录，而不是索引 | [`knowledge-is-plain-files`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) |
 | 整理知识是智能体的工作：一次交接，记成一次改动 | [`tidying-knowledge-is-the-agents-job`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md) |
 | 知识是一个由保留下来的来源编译出页面的 wiki | [`knowledge-is-a-wiki-of-pages-compiled-from-kept-sources`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md) |
+| 接入的外部知识文件夹原地共享，对 Coffer 只读，记录只留在本机 | [`linked-knowledge-folders-are-read-only-and-machine-local`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md) |
 | 通过保险库里的中心库，把记忆同步进每个智能体自己的记忆 | [`sync-memory-into-each-agents-own-memory`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-memory-into-each-agents-own-memory.md) |
 
 ## 同步与密钥 {#sync-secrets}

@@ -11,7 +11,8 @@ hidden ``.inbox/`` is promoted the same way by the next sweep.
 What it does *not* add is a gate of any kind on the corpus. Every registered
 collection is served to every caller, agent or person alike (see "Serve every
 collection to every agent"): the kind cannot be switched off, so a collection
-leaves an agent's view only by being deleted.
+leaves an agent's view only by being deleted. A **linked folder** is served the same
+way but only read (``infrastructure/knowledge/linked.py``): Coffer writes nothing into it.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.recording import recording, writer_of
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
+from coffer.domain.knowledge.config import linked_folder
 from coffer.domain.knowledge.entry import (
     ACTOR_AGENT,
     CatalogueLevel,
@@ -35,6 +37,7 @@ from coffer.domain.knowledge.entry import (
 )
 from coffer.domain.knowledge.errors import (
     CollectionExists,
+    CollectionIsLinked,
     CollectionNotFound,
 )
 from coffer.domain.knowledge.history import (
@@ -47,7 +50,7 @@ from coffer.domain.knowledge.history import (
 )
 from coffer.domain.resource import Resource
 from coffer.domain.vault.writers import CommitMeta
-from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths, wiki
+from coffer.infrastructure.knowledge import catalogue, fs, inbox, linked, paths, wiki
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
 
 logger = logging.getLogger(__name__)
@@ -96,16 +99,30 @@ class KnowledgeService:
     # ----- collections -------------------------------------------------
 
     async def collection_names(self) -> list[str]:
-        """Every registered collection, in name order.
+        """Every registered collection, linked folders included, in name order: the
+        registry is the authority, not the directory ("Create collections only deliberately")."""
+        return sorted(r.name for r in await self.all_rows())
 
-        The registry is the authority, not the directory: a folder nobody registered is
-        not a collection (see "Create collections only deliberately"), and every one is
-        served whether or not its row is enabled (see "Serve every collection to every agent").
-        """
-        return sorted(r.name for r in await self.collection_rows())
+    async def all_rows(self) -> list[Resource]:
+        """Every collection, the linked folders included."""
+        return await self._resources.list(kind=KIND_KNOWLEDGE)
 
     async def collection_rows(self) -> list[Resource]:  # the sweep walks these directories
-        return await self._resources.list(kind=KIND_KNOWLEDGE)
+        """The collections Coffer keeps, under the knowledge root. A linked
+        folder is left out: nothing Coffer runs may write into it (ADR
+        linked-knowledge-folders-are-read-only-and-machine-local)."""
+        return [r for r in await self.all_rows() if linked_folder(r.config) is None]
+
+    async def linked_rows(self) -> list[Resource]:
+        return [r for r in await self.all_rows() if linked_folder(r.config) is not None]
+
+    async def owned_collection(self, uid: str) -> Resource:
+        """:meth:`collection`, refused for a linked folder: what a write, a
+        tidy, a check or the history asks for."""
+        row = await self.collection(uid)
+        if linked_folder(row.config) is not None:
+            raise CollectionIsLinked(row.name)
+        return row
 
     async def collection(self, uid: str) -> Resource:
         """One collection's row, by the identity that survives a rename.
@@ -129,11 +146,20 @@ class KnowledgeService:
         the audit trail tied to an identity a rename cannot move, without every
         write path repeating the lookup.
         """
+        row = await self.find_collection(relpath)
+        if linked_folder(row.config) is not None:
+            raise CollectionIsLinked(row.name)
+        return row
+
+    async def find_collection(self, relpath: str) -> Resource:
+        """The collection ``relpath`` names, a linked folder included: what a read asks
+        for. A collection Coffer keeps wins a name both hold (only a sync does that)."""
         name = paths.collection_of(relpath)
-        for row in await self.collection_rows():
-            if row.name == name:
-                return row
-        raise CollectionNotFound(name)
+        rows = [r for r in await self.all_rows() if r.name == name]
+        rows.sort(key=lambda r: linked_folder(r.config) is not None)
+        if not rows:
+            raise CollectionNotFound(name)
+        return rows[0]
 
     async def create_collection(
         self,
@@ -149,7 +175,7 @@ class KnowledgeService:
         cannot conjure a collection.
         """
         directory = paths.collection_dir(name)
-        if directory.exists():
+        if directory.exists() or name in await self.collection_names():
             raise CollectionExists(name)
         registered = await self.register_row(name, actor=actor)
         meta = CommitMeta(WRITER_USER, OP_CREATE, f"Create collection {name}", actor=actor)
@@ -167,11 +193,18 @@ class KnowledgeService:
             folder_path=str(paths.collection_dir(name)),
         )
 
-    async def register_row(self, name: str, *, actor: str) -> Resource:
+    async def register_row(
+        self, name: str, *, actor: str, config: dict[str, object] | None = None
+    ) -> Resource:
         """The collection's ``resources`` row — without its description, which
-        lives in the README (see "Read a collection's description from its README")."""
+        lives in the README (see "Read a collection's description from its README").
+        ``config`` names a linked folder (``linking.py``)."""
         return await self._resources.register(
-            kind=KIND_KNOWLEDGE, name=name, config={}, actor=actor, allow_lifecycle_kind=True
+            kind=KIND_KNOWLEDGE,
+            name=name,
+            config=config or {},
+            actor=actor,
+            allow_lifecycle_kind=True,
         )
 
     async def catalogue_changed(self) -> None:
@@ -189,32 +222,54 @@ class KnowledgeService:
         """The registered collections joined with the catalogue walk, each carrying
         the uid its routes address; a folder nobody registered is left out."""
         row_by_name = {r.name: r for r in await self.collection_rows()}
-        return [
+        owned = [
             dataclasses.replace(c, uid=row_by_name[c.name].uid)
             for c in catalogue.list_collections()
             if c.name in row_by_name
         ]
+        return owned + await self._linked_entries()
+
+    async def _linked_entries(self) -> list[CollectionEntry]:
+        owned = await self._owned_names()
+        rows = sorted(await self.linked_rows(), key=lambda r: r.name)
+        return [
+            await asyncio.to_thread(
+                linked.collection_entry, r.uid, r.name, linked_folder(r.config) or ""
+            )
+            for r in rows
+            if r.name not in owned
+        ]
+
+    async def _owned_names(self) -> set[str]:
+        return {r.name for r in await self.collection_rows()}
 
     # ----- reading, for the human surfaces -----------------------------
 
     async def list_level(self, relpath: str) -> CatalogueLevel:
         """One level of one collection, for the page and the CLI — never an agent's
         retrieval path (see "Expose exactly one knowledge tool")."""
-        await self.require_collection(relpath)
+        row = await self.find_collection(relpath)
+        folder = linked_folder(row.config)
+        if folder is not None:
+            return await asyncio.to_thread(linked.list_level, row.name, folder, relpath)
         return catalogue.list_level(relpath)
 
     async def read(self, relpath: str) -> KnowledgeFile:
         """A document, for the human surfaces. A hidden path, the inbox included,
         is refused by the path guard."""
-        await self.require_collection(relpath)
+        row = await self.find_collection(relpath)
+        folder = linked_folder(row.config)
+        if folder is not None:
+            return await asyncio.to_thread(linked.read_file, row.name, folder, relpath)
         file = fs.read_file(relpath)
         return await asyncio.to_thread(wiki.describe, file)
 
     async def check(self, uid: str) -> CollectionEntry:
         """One collection's entry with its mechanical findings (spec knowledge
         "Check a collection mechanically on every read"). Computed on every call
-        from the files; nothing is stored."""
-        row = await self.collection(uid)
+        from the files; nothing is stored. A linked folder has no wiki rules
+        to check, so it is refused."""
+        row = await self.owned_collection(uid)
         directory = paths.collection_dir(row.name)
         if not directory.is_dir():
             raise CollectionNotFound(row.name)
@@ -224,28 +279,36 @@ class KnowledgeService:
     async def files(self, uid: str) -> tuple[FileEntry, ...]:
         """Every file of one collection with its title, type and waiting mark,
         for the collection page's Contents (spec knowledge "Show a collection's
-        contents by page type"). Read off disk on every call."""
+        contents by page type"). Read off disk on every call; a linked
+        folder's Markdown files, each with its title."""
         row = await self.collection(uid)
+        folder = linked_folder(row.config)
+        if folder is not None:
+            return await asyncio.to_thread(linked.walk_files, row.name, folder)
         directory = paths.collection_dir(row.name)
         if not directory.is_dir():
             raise CollectionNotFound(row.name)
         return await asyncio.to_thread(catalogue.walk_files, directory)
 
     async def catalogue(self) -> list[tuple[CollectionEntry, tuple[FileEntry, ...]]]:
-        """Every registered collection with every document in it.
+        """Every registered collection with every document in it, linked
+        folders after the collections Coffer keeps.
 
-        The one place the corpus is read all at once. It exists for skill rendering (see
-        "Merge the manual and the catalogue in the skill body"), where handing the agent
-        the entire catalogue is the point — the alternative, a level at a time through a
-        tool, is what 448 sessions demonstrated an agent never reaches for. One reading
+        The one place the corpus is read all at once, for skill rendering (see
+        "Merge the manual and the catalogue in the skill body"): one reading
         serves every agent, because every agent is told the same thing.
         """
-        registered = set(await self.collection_names())
-        return [
+        registered = await self._owned_names()
+        owned = [
             (entry, catalogue.walk_files(paths.collection_dir(entry.name)))
             for entry in catalogue.list_collections()
             if entry.name in registered
         ]
+        shared = [
+            (entry, linked.walk_files(entry.name, entry.folder_path))
+            for entry in await self._linked_entries()
+        ]
+        return owned + shared
 
     # ----- new knowledge arriving ---------------------------------------
 
@@ -317,6 +380,8 @@ class KnowledgeService:
     # ----- lifecycle ---------------------------------------------------
 
     async def cleanup_collection(self, name: str) -> None:
+        # Only ever handed a collection Coffer keeps: ``kind.py`` leaves a
+        # linked folder's files alone when its row is deleted.
         """Remove a collection's directory when its Resource is deleted."""
         async with recording(
             self.history,

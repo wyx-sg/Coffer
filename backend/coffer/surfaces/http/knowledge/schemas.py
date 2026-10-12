@@ -58,6 +58,14 @@ class CollectionOut(BaseModel):
     #: Whether an agent has a tidy of this collection open ("Record a tidy as
     #: one change"): its edits are committed as one change when it finishes.
     tidy_running: bool = False
+    #: A linked folder the person keeps with their own tools ("Link a folder
+    #: the person keeps themselves"): Coffer only shares it with the agents,
+    #: so it has no tidy, check, history, upload or sync.
+    linked: bool = False
+    #: A linked folder's Markdown files; 0 for a collection Coffer keeps.
+    note_count: int = 0
+    #: A linked folder's own rules file at its root, empty when none.
+    rules_file: str = ""
 
 
 def collection_out(entry: CollectionEntry) -> CollectionOut:
@@ -73,6 +81,9 @@ def collection_out(entry: CollectionEntry) -> CollectionOut:
         updated_at=entry.updated_at,
         tidy_handoff=HandoffOut(prompt=collection_tidy_prompt(entry)),
         tidy_running=TIDY_RUNS.get(entry.name) is not None,
+        linked=entry.linked,
+        note_count=entry.note_count,
+        rules_file=entry.rules_file,
     )
 
 
@@ -130,6 +141,13 @@ class CollectionListOut(BaseModel):
 class CollectionCreate(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     description: str | None = None
+
+
+class CollectionLink(BaseModel):
+    #: The folder's absolute path on this machine.
+    folder: str = Field(min_length=1, max_length=4096)
+    #: The collection's label; the folder's own name when absent.
+    name: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class DirectoryOut(BaseModel):
