@@ -227,9 +227,8 @@ export function McpServerPane({ resource, basePath, onDeleted }: Props) {
         />
       ) : null}
       <ReplaceSecretDialog
-        row={secretRow}
-        onOpenChange={(open) => {
-          if (open) return;
+        secretRef={secretRow?.ref ?? null}
+        onClose={() => {
           setSecretRow(null);
           refresh();
         }}

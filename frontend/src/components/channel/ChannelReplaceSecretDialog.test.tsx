@@ -12,7 +12,24 @@ import { ToastProvider } from "@/components/ui/toast";
 import { makeChannel } from "@/test/channelKit";
 import { ChannelReplaceSecretDialog } from "./ChannelReplaceSecretDialog";
 
-vi.mock("@/lib/hooks/useSecrets", () => ({ useSecrets: () => ({ data: { refs: [] } }) }));
+vi.mock("@/lib/hooks/useSecrets", () => ({
+  useSecrets: () => ({
+    data: {
+      refs: [
+        {
+          ref: "channel/x/bot-token",
+          label: "Telegram token",
+          present: true,
+          locked: false,
+          cited_by: [],
+          bindings: [],
+          mentioned_by_skills: [],
+        },
+      ],
+    },
+  }),
+  useSetSecret: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
 
 const h = vi.hoisted(() => ({ check: {} as Record<string, unknown> }));
 
@@ -51,7 +68,7 @@ function setup() {
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  fireEvent.change(screen.getByLabelText(/^bot token/i), { target: { value: "7314:AAHnewtoken" } });
+  fireEvent.change(screen.getByLabelText(/^new value/i), { target: { value: "7314:AAHnewtoken" } });
 }
 
 afterEach(() => vi.clearAllMocks());
@@ -79,7 +96,7 @@ describe("replace token", () => {
       channel_uid: CH.uid,
       bot_token: "7314:AAHnewtoken",
     });
-    expect(screen.getByRole("button", { name: "Replace and restart" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Replace key" })).toBeEnabled();
   });
 
   test("a rejected token is named under the field and blocks the replace", async () => {
@@ -95,7 +112,7 @@ describe("replace token", () => {
     expect(
       await screen.findByText("The platform rejected these credentials.", {}, { timeout: 3000 }),
     ).toBeVisible();
-    expect(screen.getByRole("button", { name: "Replace and restart" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Replace key" })).toBeDisabled();
   });
 
   test("a different bot is said to lose the pairing", async () => {

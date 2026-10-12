@@ -68,7 +68,10 @@ export function SecretPane({ row, onDeleted }: Props) {
         <div className="flex min-w-[12rem] flex-1 flex-col gap-0.5 pt-0.5">
           <h2 className="min-w-0 break-words text-lg font-semibold text-text">{name}</h2>
           {row.description ? (
-            <p className="min-w-0 break-words text-xs text-text-muted" data-testid="secret-description">
+            <p
+              className="min-w-0 break-words text-xs text-text-muted"
+              data-testid="secret-description"
+            >
               {row.description}
             </p>
           ) : null}

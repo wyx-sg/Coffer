@@ -3797,8 +3797,6 @@
         "body": "粘贴 SeaTalk 开放平台上的新密钥。配对和设置都会保留；机器人会用新密钥重启。",
         "label": "App Secret"
       },
-      "hint": "存入 Coffer 密钥库；旧值会被覆盖。",
-      "submit": "更换并重启",
       "works": "可用——这是 @{{handle}}",
       "worksPlain": "可用",
       "worksSeatalk": "可用——App ID 和 Secret 有效。",
@@ -5557,7 +5555,6 @@
       "skippedWaiting_other": "{{names}} 正在等待批准，将被跳过。"
     },
     "cols": {
-      "usedBy": "使用方",
       "lastUsed": "上次使用",
       "created": "创建于"
     },
@@ -5625,12 +5622,6 @@
       "saved": "已保存 {{name}}"
     },
     "replace": {
-      "title": "替换 {{name}} 的值",
-      "storeTitle": "为 {{name}} 添加值",
-      "value": "新值",
-      "hint": "旧值会被销毁，所有使用处都会拿到新值。",
-      "submit": "替换值",
-      "storeSubmit": "添加值",
       "submitting": "正在保存…",
       "replaced": "已替换 {{name}} 的值",
       "stored": "已为 {{name}} 添加值"
@@ -6181,13 +6172,8 @@
     "edit": {
       "title": "编辑 {{name}}",
       "locked": "{{agents}} 正在使用，换到别的服务商之前不能添加或删除 OpenAI 兼容地址。",
-      "keyHint": "密钥只写不读。要更改值，请用「更换密钥」。"
-    },
-    "replace": {
-      "title": "更换 API Key",
-      "secret": "密钥",
-      "newKey": "新密钥",
-      "hint": "只写不读。Coffer 会覆盖钥匙串加密存储中这个密钥的值，之后不再显示。"
+      "keyHint": "密钥只写不读。点「更换」可以输入新值或改用其他密钥。",
+      "replaceHint": "只写不读。和表单其他内容一起保存；留空则不更换。"
     },
     "delete": {
       "title": "删除 {{name}}？",
@@ -6465,6 +6451,17 @@
     "existingHint": "只有这里改用所选密钥；当前密钥和它的值保持不变。",
     "title": "更换 {{field}}",
     "current": "当前密钥",
-    "useSubmit": "改用此密钥"
+    "useSubmit": "改用此密钥",
+    "addTitle": "添加 {{field}}",
+    "valueLabel": "新值",
+    "valueHint": "只写不读。Coffer 会覆盖这个密钥的值，之后不再显示。",
+    "shared": "{{users}} 也在用这个密钥，输入新值后它们会一起更新。",
+    "pickLabel": "要用的密钥",
+    "submit": "更换密钥",
+    "addSubmit": "添加密钥",
+    "replaced": "已更换 {{name}}",
+    "added": "已为 {{name}} 添加值",
+    "replace": "更换",
+    "keep": "不更换"
   }
 }

@@ -47,6 +47,8 @@ const SECRETS = {
 };
 vi.mock("@/lib/hooks/useSecrets", () => ({
   useSecrets: () => ({ data: SECRETS }),
+  useSetSecret: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useAddSecret: () => ({ mutateAsync: vi.fn(), isPending: false, reset: vi.fn() }),
 }));
 
 vi.mock("@/lib/api/client", async (orig) => ({
@@ -149,24 +151,28 @@ describe("message batching", () => {
     expect(api.PATCH).not.toHaveBeenCalled();
   });
 
-  acceptance("channels", "a value half typed into a channel setting never takes effect", async () => {
-    const api = installApi();
-    renderSettings(makeChannel({ config: { wait_after_text_seconds: 1.5 } }));
+  acceptance(
+    "channels",
+    "a value half typed into a channel setting never takes effect",
+    async () => {
+      const api = installApi();
+      renderSettings(makeChannel({ config: { wait_after_text_seconds: 1.5 } }));
 
-    // Typing "32" passes through "3", a valid window, and pauses there.
-    fireEvent.change(textField(), { target: { value: "3" } });
-    await new Promise((r) => setTimeout(r, 900));
-    expect(api.PATCH).not.toHaveBeenCalled();
-    fireEvent.change(textField(), { target: { value: "32" } });
-    fireEvent.keyDown(textField(), { key: "Enter" });
+      // Typing "32" passes through "3", a valid window, and pauses there.
+      fireEvent.change(textField(), { target: { value: "3" } });
+      await new Promise((r) => setTimeout(r, 900));
+      expect(api.PATCH).not.toHaveBeenCalled();
+      fireEvent.change(textField(), { target: { value: "32" } });
+      fireEvent.keyDown(textField(), { key: "Enter" });
 
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
-    expect(patched(api).wait_after_text_seconds).toBe(32);
-    // Leaving the field afterwards sends nothing more: the value is saved.
-    fireEvent.blur(textField());
-    await new Promise((r) => setTimeout(r, 50));
-    expect(api.PATCH).toHaveBeenCalledTimes(1);
-  });
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+      expect(patched(api).wait_after_text_seconds).toBe(32);
+      // Leaving the field afterwards sends nothing more: the value is saved.
+      fireEvent.blur(textField());
+      await new Promise((r) => setTimeout(r, 50));
+      expect(api.PATCH).toHaveBeenCalledTimes(1);
+    },
+  );
 });
 
 describe("replies", () => {
@@ -336,10 +342,10 @@ acceptance("channels", "rotating a channel secret keeps its refs and pairing", a
   wrap(<ChannelReplaceSecretDialog channel={TG} open onOpenChange={() => {}} />);
 
   const dialog = screen.getByRole("dialog");
-  fireEvent.change(within(dialog).getByLabelText(/bot token/i), {
+  fireEvent.change(within(dialog).getByLabelText(/new value/i), {
     target: { value: "999:rotated" },
   });
-  fireEvent.click(within(dialog).getByRole("button", { name: /replace and restart/i }));
+  fireEvent.click(within(dialog).getByRole("button", { name: /^replace key$/i }));
 
   await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
   expect(api.POST.mock.calls[0]).toEqual([
