@@ -40,12 +40,8 @@ description: 把你和智能体对工作环境的了解，存成一个由保留�
 ```
 
 - 知识集根目录的 **`README.md`** 是这个知识集的**纲要**。它在第一个 `##` 小节之前的第一段，就是 Coffer 所有显示知识集描述的地方用的描述，也是 `coffer-guide` 技能告诉智能体这个知识集讲什么的依据。它的**页面类型**和**规则**两节，以及它关于本知识集约定的其他内容，优先于指南的默认规则。frontmatter 里的 `verify_after_days` 决定一次核对管多久（见[需要重新核对的页面](#pages-due-a-recheck)）。它从不作为页面或来源列出，也不计数。
-<<<<<<< HEAD
 - **`sources/`** 保留到达的素材：每次上传和每个放进收件箱的文件，转换成 Markdown。你上传的文件本身不放进知识集：Coffer 把它留在你上传它的那台 Mac 上（见[图片和原文件](#pictures-and-the-original-file)）。智能体读来源，从不编辑来源。
 - **`assets/`** 放 Coffer 从上传的文档里取出的图片，每次上传一个文件夹。来源会链接它自己的图片，所以你读来源时能看到它们，智能体也能打开它们。它们和 Markdown 一样随知识集同步，也有历史。
-=======
-- **`sources/`** 保留到达的素材：每次上传和每个放进收件箱的文件，转换成 Markdown。只保留 Markdown，不保留你上传的文件，所以知识集始终是一棵每个智能体都能读的 Markdown 树。智能体读来源，从不编辑来源。
->>>>>>> origin/claude/project-thread-6qp5yc
 - **`pages/`** 放 wiki 本身：你和你的智能体编写并保持更新的页面。智能体首先读的就是这里。
 - `pages/` 和 `sources/` 里的**文件夹**是可选的，不代表任何含义。你或你的智能体都可以创建、移动、删除它们。只有 `pages/`、`sources/` 和 `assets/` 这几个文件夹本身有含义。
 - 知识集里的**其他文件**会在树里列出，但既不进目录，也不参与检查。留在 `pages/`、`sources/` 和 `assets/` 之外的 Markdown 文件会被扫描移进 `pages/`（见[自己在运行的是什么](#what-runs-on-its-own)）。
@@ -88,11 +84,7 @@ The `account-session` service owns ... see [[rate-limits|the gateway's limits]].
 
 Coffer 自己不写页面：谁写页面，谁就给它这些键，`coffer-guide` 技能就是这样教智能体的。缺少 `title`、`type` 或 `description`、没有列出任何 `sources` 或者没有 `verified` 的页面照样能用；[检查](#check-a-collection)知识集时它会作为一条发现出现。
 
-<<<<<<< HEAD
 来源带着 Coffer 保留它时写入的键：`title`、`description`、`actor`、`created_at`、`updated_at`；从上传的文件转换来的来源还带有 `original`（文件名）和 `original_sha256`（它的指纹）。这两个键请保持原样。智能体或你还可以再加三个键，它们只描述这个来源，不改动它的内容：
-=======
-来源带着 Coffer 保留它时写入的键：`title`、`description`、`actor`、`created_at`、`updated_at`。智能体或你还可以再加三个键，它们只描述这个来源，不改动它的内容：
->>>>>>> origin/claude/project-thread-6qp5yc
 
 | 键 | 含义 |
 | --- | --- |
@@ -405,13 +397,9 @@ Coffer **没有读取、列出或搜索知识的工具**。智能体用它已有
 **页面或来源。** 选中一个文件会只读地显示它。它的窗格栏先写明文件在哪里，然后是**历史**（见[历史与恢复](#history-and-restore)）、Markdown 的**预览 / 源码**切换、作为按钮的**在编辑器中打开**（见[自己编辑文件](#edit-a-file-yourself)），以及 **⋯** 菜单（**在访达中显示**、装了 Obsidian 时的**在 Obsidian 中打开**，以及**删除**）。标题下面一行描述这个文件，读自它的 frontmatter：
 
 - **页面**：它的类型、谁写的、什么时候创建的、页面带有 `verified` 时的**核对过**及日期，[需要重新核对](#pages-due-a-recheck)时的**需要重新核对**（没有日期时还会显示*从未核对*），以及它的来源，点开每个都会打开对应来源；页面写了但并不存在的来源会被划掉。正文里，每个 `[[链接]]` 都是指向它所指页面或来源的链接；失效的链接标成红色，悬停提示说没有叫这个名字的东西。行内代码比代码块更淡，长路径在 `/` 处换行。
-<<<<<<< HEAD
 - **来源**：有来源替换它时，显示**已被替换为**和指向替换者的链接；**被 N 个页面引用**，点开每个都会打开对应页面；还没有页面引用时显示**待整理**；上传来的来源还会显示**原文件**和文件名，在上传它的那台 Mac 上点它会打开这个文件（见[图片和原文件](#pictures-and-the-original-file)）。
 
 页面或来源用相对路径链接的图片会在预览里直接显示。在树里选中一个图片文件（比如 `assets/` 下的），会显示这张图片。
-=======
-- **来源**：有来源替换它时，显示**已被替换为**和指向替换者的链接；**被 N 个页面引用**，点开每个都会打开对应页面；还没有页面引用时显示**待整理**。
->>>>>>> origin/claude/project-thread-6qp5yc
 
 页面没有搜索框，也没有按知识集的开关：⌘K 按名字跳到知识集，每个知识集都到达每个智能体。知识页面上没有手工输入页面的表单：你在自己的编辑器里写，智能体则通过写文件来写。
 
@@ -548,8 +536,4 @@ Coffer 会跳过 `.obsidian/`、`.git/` 这类隐藏文件夹和 `node_modules`�
 - [`coffer knowledge` 命令参考](/zh/reference/cli/knowledge)
 - [MCP 工具参考](/zh/reference/mcp-tools)
 - [知识规格](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md)
-<<<<<<< HEAD
 - [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md)、[Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) 、[Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md)、[Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-stays-current-through-flags-coffer-computes.md)、[A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md) 和 [Knowledge Sources Keep Their Images; Originals Stay on This Mac](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md)
-=======
-- [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md)、[Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) 、[Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md)、[Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-stays-current-through-flags-coffer-computes.md) 和 [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md)
->>>>>>> origin/claude/project-thread-6qp5yc

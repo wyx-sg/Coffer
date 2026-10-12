@@ -3307,14 +3307,10 @@
       "verified": "{{date}} 核对过",
       "stale": "需要重新核对",
       "neverVerified": "从未核对",
-<<<<<<< HEAD
       "supersededBy": "已被替换为",
       "original": "原文件",
       "originalFailed": "无法打开原文件。",
       "originalElsewhere": "原文件 {{name}} 在上传的那台 Mac 上"
-=======
-      "supersededBy": "已被替换为"
->>>>>>> origin/claude/project-thread-6qp5yc
     },
     "deleteDocument": {
       "menu": "删除",

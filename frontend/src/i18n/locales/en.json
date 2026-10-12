@@ -3307,14 +3307,10 @@
       "verified": "verified {{date}}",
       "stale": "Needs rechecking",
       "neverVerified": "never checked",
-<<<<<<< HEAD
       "supersededBy": "Superseded by",
       "original": "Original",
       "originalFailed": "Couldn't open the original file.",
       "originalElsewhere": "Original {{name}} is on the Mac it was uploaded from"
-=======
-      "supersededBy": "Superseded by"
->>>>>>> origin/claude/project-thread-6qp5yc
     },
     "deleteDocument": {
       "menu": "Delete",

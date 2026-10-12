@@ -130,10 +130,7 @@ Coffer 保留三类设计文本，各司其职：
 | 整理知识是智能体的工作：一次交接，记成一次改动 | [`tidying-knowledge-is-the-agents-job`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md) |
 | 知识是一个由保留下来的来源编译出页面的 wiki | [`knowledge-is-a-wiki-of-pages-compiled-from-kept-sources`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md) |
 | 知识靠 Coffer 算出的标记保持更新，由智能体清掉 | [`knowledge-stays-current-through-flags-coffer-computes`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-stays-current-through-flags-coffer-computes.md) |
-<<<<<<< HEAD
 | 知识来源保留其中的图片，原文件留在这台 Mac 上 | [`knowledge-sources-keep-their-images-and-originals-stay-on-this-mac`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md) |
-=======
->>>>>>> origin/claude/project-thread-6qp5yc
 | 接入的外部知识文件夹原地共享，对 Coffer 只读，记录只留在本机 | [`linked-knowledge-folders-are-read-only-and-machine-local`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md) |
 | 通过保险库里的中心库，把记忆同步进每个智能体自己的记忆 | [`sync-memory-into-each-agents-own-memory`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-memory-into-each-agents-own-memory.md) |
 

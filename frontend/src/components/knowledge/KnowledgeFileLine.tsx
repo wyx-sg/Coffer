@@ -8,13 +8,9 @@
 // rechecking mark once that is too old or missing, and its sources — each
 // opening that source, one that names no source struck through. A source:
 // when it was created and by whom, what supersedes it, the pages that cite
-<<<<<<< HEAD
 // it (each opening the page) or the Waiting or Skipped mark, and the file an
 // upload came from: opened from here on the Mac that uploaded it, named with
 // where it is on any other.
-=======
-// it (each opening the page) or the Waiting or Skipped mark.
->>>>>>> origin/claude/project-thread-6qp5yc
 // Any other file: when it was created and by whom.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
