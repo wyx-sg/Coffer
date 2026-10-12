@@ -1,15 +1,14 @@
-// src/components/custom-tools/ToolHeadersField.tsx — a request's headers: the chosen environment's headers shown
-// read-only ("Authorization ← 🔑 deploy-token · from the group", or "· from test" when the group has several
-// environments), then this request's own key/value rows. A request's own header is a plain value: secrets belong to
-// the environment's headers.
+// src/components/custom-tools/ToolHeadersField.tsx — a request's headers as one table (HeaderTable): the chosen
+// environment's headers first, read-only, with where they come from ("Environment test", or "Group" when it has one
+// environment) and a secret by its name; then this request's own rows, edited in place. A request's own header is a
+// plain value: secrets belong to the environment's headers.
 import { useTranslation } from "react-i18next";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { CustomToolHeaderOut } from "@/lib/api/customTools";
-import { AuthLine } from "./AuthLine";
+import { HeaderTable, type HeaderTableRow } from "./HeaderTable";
 import type { HeaderRow } from "./toolForm";
 
 interface Props {
@@ -33,65 +32,50 @@ export function ToolHeadersField({
   const { t } = useTranslation();
   const set = (i: number, row: HeaderRow) =>
     onChange(headers.map((existing, j) => (j === i ? row : existing)));
-  const fromGroup = (
-    <span className="text-xs text-text-muted">
-      {environment
-        ? t("customTools.editor.fromEnvironment", { environment })
-        : t("customTools.editor.fromGroup")}
-    </span>
-  );
+  const inherited = environment
+    ? t("customTools.editor.fromEnvironment", { environment })
+    : t("customTools.editor.fromGroup");
+  const rows: HeaderTableRow[] = [
+    ...groupHeaders.map((h) => ({
+      name: h.name,
+      value: h.value,
+      secret: h.secret,
+      source: inherited,
+    })),
+    ...headers.map((row, i) => ({
+      name: row.key,
+      value: row.value,
+      source: t("customTools.editor.fromTool"),
+      edit: {
+        onName: (key: string) => set(i, { ...row, key }),
+        onValue: (value: string) => set(i, { ...row, value }),
+        onRemove: () => onChange(headers.filter((_, j) => j !== i)),
+      },
+    })),
+  ];
   return (
     <div className="flex flex-col gap-1.5">
       <Label>{t("customTools.editor.headers")}</Label>
-      {groupHeaders.map((h) =>
-        h.secret ? (
-          <AuthLine key={h.name} header={h.name} secret={h.secret} trailing={fromGroup} plain />
-        ) : (
-          <span key={h.name} className="inline-flex items-center gap-2">
-            <span className="font-mono text-xs">
-              {h.name}: {h.value}
-            </span>
-            {fromGroup}
-          </span>
-        ),
-      )}
-      {headers.map((row, i) => (
-        <div key={i} className="flex gap-2">
-          <Input
-            className="w-44 font-mono"
-            value={row.key}
-            placeholder={t("customTools.editor.headerKey")}
-            aria-label={t("customTools.editor.headerKey")}
-            onChange={(e) => set(i, { ...row, key: e.target.value })}
-          />
-          <Input
-            className="flex-1 font-mono"
-            value={row.value}
-            placeholder={t("customTools.editor.headerValue")}
-            aria-label={t("customTools.editor.headerValue")}
-            onChange={(e) => set(i, { ...row, value: e.target.value })}
-          />
+      <HeaderTable
+        rows={rows}
+        sources
+        ariaLabel={t("customTools.editor.headers")}
+        empty={t("customTools.editor.noHeaders")}
+        footer={
           <Button
             type="button"
-            variant="ghost"
-            size="icon-md"
-            aria-label={t("customTools.editor.removeHeader")}
-            onClick={() => onChange(headers.filter((_, j) => j !== i))}
+            variant="link"
+            size="sm"
+            className="h-auto w-fit px-0 py-0.5"
+            onClick={() => onChange([...headers, { key: "", value: "" }])}
           >
-            <Trash2 aria-hidden />
+            <Plus aria-hidden />
+            {t(
+              forThisRequest ? "customTools.editor.addHeaderThis" : "customTools.editor.addHeader",
+            )}
           </Button>
-        </div>
-      ))}
-      <Button
-        type="button"
-        variant="link"
-        size="sm"
-        className="h-auto w-fit px-0 py-0.5"
-        onClick={() => onChange([...headers, { key: "", value: "" }])}
-      >
-        <Plus aria-hidden />
-        {t(forThisRequest ? "customTools.editor.addHeaderThis" : "customTools.editor.addHeader")}
-      </Button>
+        }
+      />
     </div>
   );
 }

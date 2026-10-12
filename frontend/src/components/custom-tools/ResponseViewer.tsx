@@ -76,7 +76,7 @@ export function ResponseViewer({ body, contentType, cutAt }: Props) {
       <CodeView
         value={shown(body, language)}
         language={language}
-        maxHeight="16rem"
+        maxHeight="28rem"
         ariaLabel={t("customTools.test.response")}
         className="rounded-none border-0"
       />

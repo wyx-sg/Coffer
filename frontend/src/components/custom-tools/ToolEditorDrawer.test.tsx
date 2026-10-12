@@ -121,6 +121,14 @@ function drawer(group: CustomToolGroup) {
 
 const preview = () => screen.getByTestId("custom-tool-request-preview");
 
+/** The text of the preview's header row named `name`: "X-Tenanttenant-testEnvironment test". */
+function headerRow(name: string): string {
+  const row = within(preview())
+    .getAllByRole("row")
+    .find((r) => within(r).queryAllByRole("cell")[0]?.textContent === name);
+  return row?.textContent ?? "";
+}
+
 async function pick(name: string) {
   const select = screen.getByRole("combobox", { name: "Environment" });
   fireEvent.keyDown(select, { key: "ArrowDown" });
@@ -154,8 +162,8 @@ describe("ToolEditorDrawer environment", () => {
     expect(
       within(preview()).getByText("https://test.example/api/v1/eu-1/items/{id}"),
     ).toBeVisible();
-    expect(within(preview()).getByText("X-Tenant: tenant-test")).toBeVisible();
-    expect(within(preview()).getByText("X-Client: c-eu-1")).toBeVisible();
+    expect(headerRow("X-Tenant")).toContain("tenant-test");
+    expect(headerRow("X-Client")).toContain("c-eu-1");
     expect(await within(preview()).findByText("test-key")).toBeVisible();
     expect(within(preview()).getByText("Timeout 30 s (the group's)")).toBeVisible();
 
@@ -165,7 +173,7 @@ describe("ToolEditorDrawer environment", () => {
     expect(
       within(preview()).getByText("https://live.example/api/v1/us-1/items/{id}"),
     ).toBeVisible();
-    expect(within(preview()).getByText("X-Tenant: tenant-live")).toBeVisible();
+    expect(headerRow("X-Tenant")).toContain("tenant-live");
     expect(within(preview()).getByText("Timeout 7 s (live's own)")).toBeVisible();
     // live has no secret header: no other environment's secret shows anywhere in the form.
     expect(screen.queryByText("test-key")).toBeNull();
@@ -176,7 +184,8 @@ describe("ToolEditorDrawer environment", () => {
     await waitFor(() => expect(api.test).toHaveBeenCalledTimes(1));
     expect(api.test.mock.calls[0][0]).toBe("billing");
     expect(api.test.mock.calls[0][3]).toBe("live");
-    expect(await screen.findByText("x-request-id: req-9")).toBeVisible();
+    fireEvent.mouseDown(await screen.findByRole("tab", { name: /Response headers/ }));
+    expect(await screen.findByText("req-9")).toBeVisible();
     // Picking and running changed nothing saved.
     for (const write of ["update", "updateTool", "updateEnvironment", "deleteTool"])
       expect(api[write]).not.toHaveBeenCalled();

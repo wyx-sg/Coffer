@@ -80,13 +80,14 @@ beforeEach(() => {
 });
 
 describe("custom-tool environments", () => {
-  test("the Overview lists every environment with its state, and a switch turns one off", async () => {
-    renderAt("/custom-tools/billing");
+  test("the Environments tab lists every environment with its state, and a switch turns one off", async () => {
+    renderAt("/custom-tools/billing/environments");
     const section = await screen.findByRole("region", { name: "Environments" });
     const test_ = within(section).getByTestId("environment-test");
     const live = within(section).getByTestId("environment-live");
     expect(within(test_).getByText("https://test.billing.example/v2")).toBeInTheDocument();
-    expect(within(test_).getByText("region=eu-1")).toBeInTheDocument();
+    expect(within(test_).getByText("{env:region}")).toBeInTheDocument();
+    expect(within(test_).getByText("eu-1")).toBeInTheDocument();
     expect(within(live).getByText("Waiting for approval")).toBeInTheDocument();
 
     fireEvent.click(within(live).getByRole("switch", { name: "Environment live on" }));
@@ -96,7 +97,7 @@ describe("custom-tool environments", () => {
   });
 
   test("adding an environment sends its name, base URL and variables", async () => {
-    renderAt("/custom-tools/billing");
+    renderAt("/custom-tools/billing/environments");
     const section = await screen.findByRole("region", { name: "Environments" });
     fireEvent.click(within(section).getByRole("button", { name: "Add environment" }));
     const dialog = await screen.findByRole("dialog", { name: "Add an environment to billing" });
@@ -114,9 +115,10 @@ describe("custom-tool environments", () => {
   });
 
   test("deleting an environment asks first", async () => {
-    renderAt("/custom-tools/billing");
+    renderAt("/custom-tools/billing/environments");
     const section = await screen.findByRole("region", { name: "Environments" });
-    fireEvent.click(within(section).getByRole("button", { name: "Delete test" }));
+    fireEvent.click(within(section).getByRole("button", { name: "More for test" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Delete environment/ }));
     const confirm = await screen.findByRole("dialog", { name: "Delete environment test?" });
     fireEvent.click(within(confirm).getByRole("button", { name: "Delete environment" }));
     await waitFor(() => expect(api.removeEnvironment).toHaveBeenCalledWith("billing", "test"));
@@ -126,9 +128,10 @@ describe("custom-tool environments", () => {
     const single = { ...group, environments: [environment("default")] };
     api.list.mockResolvedValue([single]);
     api.get.mockResolvedValue(single);
-    renderAt("/custom-tools/billing");
+    renderAt("/custom-tools/billing/environments");
     const section = await screen.findByRole("region", { name: "Environments" });
-    expect(within(section).getByRole("button", { name: "Delete default" })).toBeDisabled();
+    fireEvent.click(within(section).getByRole("button", { name: "More for default" }));
+    expect(await screen.findByRole("menuitem", { name: /Delete environment/ })).toBeDisabled();
   });
 
   test("the Test panel names the environment it runs in, and the result says where it ran", async () => {

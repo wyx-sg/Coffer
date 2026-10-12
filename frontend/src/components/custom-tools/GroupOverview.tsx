@@ -1,6 +1,7 @@
-// src/components/custom-tools/GroupOverview.tsx — a group's Overview tab: its definition, then what an MCP server's
-// Overview shows (spec web-ui "Manage custom tool groups on their own page") — Last 24 hours with View in Activity,
-// Requires (the secrets its headers cite; nothing is launched, so no CLI row) and the most-called tools.
+// src/components/custom-tools/GroupOverview.tsx — a group's Overview tab: its definition (the environments have
+// their own tab), then what an MCP server's Overview shows (spec web-ui "Manage custom tool groups on their own
+// page") — Last 24 hours with View in Activity, Requires (the secrets its headers cite; nothing is launched, so no
+// CLI row) and the most-called tools.
 import { SectionStack } from "@/components/Section";
 import { McpLast24h } from "@/components/mcp/server/McpLast24h";
 import { McpRequires } from "@/components/mcp/server/McpRequires";
@@ -11,7 +12,6 @@ import type { InvocationSummary } from "@/lib/hooks/useMcpServerPage";
 import { useSaveCustomToolEnvironment } from "@/lib/hooks/useCustomToolEnvironments";
 import { useUpdateCustomToolGroup } from "@/lib/hooks/useCustomTools";
 import { GroupDefinition } from "./GroupDefinition";
-import { GroupEnvironments } from "./GroupEnvironments";
 import { GroupTopTools } from "./GroupTopTools";
 import { headersWithSecret } from "./headerRows";
 import { groupRequires } from "./overviewRows";
@@ -56,7 +56,6 @@ export function GroupOverview({
   return (
     <div className="flex flex-col gap-6">
       <GroupDefinition group={group} onReimport={onReimport} />
-      <GroupEnvironments group={group} />
       <SectionStack>
         <McpLast24h
           name={group.name}

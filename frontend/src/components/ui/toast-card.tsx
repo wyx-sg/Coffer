@@ -128,10 +128,7 @@ function ToastCard({ toast, onDismiss, onPause, onResume }: CardProps) {
         />
         <div className="min-w-0 flex-1">
           <p
-            className={cn(
-              expanded ? "break-words" : "truncate",
-              toast.description && "font-[550]",
-            )}
+            className={cn(expanded ? "break-words" : "truncate", toast.description && "font-[550]")}
           >
             {toast.message}
           </p>

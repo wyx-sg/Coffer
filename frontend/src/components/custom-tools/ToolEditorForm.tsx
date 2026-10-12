@@ -1,7 +1,7 @@
 // src/components/custom-tools/ToolEditorForm.tsx — one tool's editor (4.2.30–33), shared by the tool drawer and Add
-// a request: tabs on the left — General (name, description, changes data, what agents see), Request (method and
-// path, query parameters, headers, body), Arguments (each with where the request uses it) and Response (when a
-// call counts as failed, and what the agent gets) — and Try it on the right, always in view, which runs the form
+// a request, five tabs at the full width: General (name, description, changes data, what agents see), Request
+// (method and path, query parameters, headers, body), Inputs (the arguments agents fill, each with where the
+// request uses it), Response (when a call counts as failed, and what the agent gets) and Test, which runs the form
 // as it holds it now. Nothing is saved here: the drawer's Save and the dialog's Add do that.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -30,7 +30,7 @@ import { ToolResponseTab } from "./ToolResponseTab";
 import { ToolTestSection, type TestTarget } from "./ToolTestSection";
 import { toolOf, type ToolForm } from "./toolForm";
 
-export type EditorTab = "general" | "request" | "arguments" | "response";
+export type EditorTab = "general" | "request" | "arguments" | "response" | "test";
 
 interface Props {
   form: ToolForm;
@@ -60,6 +60,12 @@ export function ToolEditorForm(props: Props) {
   const { form, onChange, group } = props;
   const { t } = useTranslation();
   const [tab, setTab] = useState<EditorTab>(props.initialTab);
+  // The input a query chip on the Request tab opened.
+  const [focusInput, setFocusInput] = useState<string | null>(null);
+  const showInput = (name: string) => {
+    setFocusInput(name);
+    setTab("arguments");
+  };
   const uses = argumentUses({
     path: form.path,
     headers: form.headers,
@@ -77,78 +83,83 @@ export function ToolEditorForm(props: Props) {
   };
 
   return (
-    <div className={cn("grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_400px]", props.className)}>
-      <Tabs
-        value={tab}
-        onValueChange={(v) => setTab(v as EditorTab)}
-        className="flex min-h-0 flex-col"
-      >
-        <TabsList className="shrink-0 px-5">
-          <TabsTrigger value="general">{t("customTools.editor.tabs.general")}</TabsTrigger>
-          <TabsTrigger value="request">{t("customTools.editor.tabs.request")}</TabsTrigger>
-          <TabsTrigger value="arguments">
-            {t("customTools.editor.tabs.arguments")}
-            {problemCount > 0 ? (
-              <Badge variant="warning">{problemCount}</Badge>
-            ) : form.args.length > 0 ? (
-              <Badge variant="secondary">{form.args.length}</Badge>
-            ) : null}
-          </TabsTrigger>
-          <TabsTrigger value="response">{t("customTools.editor.tabs.response")}</TabsTrigger>
-        </TabsList>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
-          <TabsContent value="general" className="flex flex-col gap-5">
-            <NameField form={form} onChange={onChange} group={group} locked={props.nameLocked} />
-            <DescriptionField form={form} onChange={onChange} />
-            <ChangesDataField form={form} onChange={onChange} />
-            <AgentPreview form={form} group={group} environments={props.environments} />
-          </TabsContent>
-          <TabsContent value="request" className="flex flex-col gap-5">
-            <RequestField
-              form={form}
-              onChange={onChange}
-              baseUrl={props.baseUrl}
-              environment={props.environment}
-              adding={props.saveWord === "add"}
-            />
-            <ToolQueryField path={form.path} onChange={(path) => onChange({ ...form, path })} />
-            <ToolHeadersField
-              groupHeaders={props.groupHeaders}
-              headers={form.headers}
-              onChange={(headers) => onChange({ ...form, headers })}
-              environment={props.environment}
-              forThisRequest
-            />
-            <BodyField form={form} onChange={onChange} />
-          </TabsContent>
-          <TabsContent value="arguments">
-            <ToolArgumentsField
-              args={form.args}
-              onChange={(args) => onChange({ ...form, args })}
-              uses={uses}
-              onAddToQuery={addToQuery}
-            />
-          </TabsContent>
-          <TabsContent value="response" className="flex flex-col gap-4">
-            <ToolResponseTab form={form} onChange={onChange} groupRules={props.groupRules} />
-          </TabsContent>
-        </div>
-      </Tabs>
-      <aside
-        aria-label={t("customTools.test.title")}
-        className="min-h-0 overflow-y-auto border-l border-border-subtle bg-surface-sunken/40 px-5 py-4"
-      >
-        <ToolTestSection
-          target={props.test}
-          timeoutSeconds={props.timeoutSeconds}
-          args={form.args}
-          draft={() => toolOf(form)}
-          ready={form.path.trim() !== "" && form.name !== ""}
-          saveWord={props.saveWord}
-          onChangeTimeout={props.onChangeTimeout}
-        />
-      </aside>
-    </div>
+    <Tabs
+      value={tab}
+      onValueChange={(v) => {
+        setTab(v as EditorTab);
+        if (v !== "arguments") setFocusInput(null);
+      }}
+      className={cn("flex min-h-0 flex-1 flex-col", props.className)}
+    >
+      <TabsList className="shrink-0 px-5">
+        <TabsTrigger value="general">{t("customTools.editor.tabs.general")}</TabsTrigger>
+        <TabsTrigger value="request">{t("customTools.editor.tabs.request")}</TabsTrigger>
+        <TabsTrigger value="arguments">
+          {t("customTools.editor.tabs.arguments")}
+          {problemCount > 0 ? (
+            <Badge variant="warning">{problemCount}</Badge>
+          ) : form.args.length > 0 ? (
+            <Badge variant="secondary">{form.args.length}</Badge>
+          ) : null}
+        </TabsTrigger>
+        <TabsTrigger value="response">{t("customTools.editor.tabs.response")}</TabsTrigger>
+        <TabsTrigger value="test">{t("customTools.editor.tabs.test")}</TabsTrigger>
+      </TabsList>
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+        <TabsContent value="general" className="flex flex-col gap-5">
+          <NameField form={form} onChange={onChange} group={group} locked={props.nameLocked} />
+          <DescriptionField form={form} onChange={onChange} />
+          <ChangesDataField form={form} onChange={onChange} />
+          <AgentPreview form={form} group={group} environments={props.environments} />
+        </TabsContent>
+        <TabsContent value="request" className="flex flex-col gap-5">
+          <RequestField
+            form={form}
+            onChange={onChange}
+            baseUrl={props.baseUrl}
+            environment={props.environment}
+            adding={props.saveWord === "add"}
+          />
+          <ToolQueryField
+            path={form.path}
+            onChange={(path) => onChange({ ...form, path })}
+            onShowInput={showInput}
+          />
+          <ToolHeadersField
+            groupHeaders={props.groupHeaders}
+            headers={form.headers}
+            onChange={(headers) => onChange({ ...form, headers })}
+            environment={props.environment}
+            forThisRequest
+          />
+          <BodyField form={form} onChange={onChange} />
+        </TabsContent>
+        <TabsContent value="arguments">
+          <ToolArgumentsField
+            args={form.args}
+            onChange={(args) => onChange({ ...form, args })}
+            uses={uses}
+            onAddToQuery={addToQuery}
+            focus={focusInput}
+          />
+        </TabsContent>
+        <TabsContent value="response" className="flex flex-col gap-4">
+          <ToolResponseTab form={form} onChange={onChange} groupRules={props.groupRules} />
+        </TabsContent>
+        {/* Kept mounted: the sample values and the last result survive a trip to another tab. */}
+        <TabsContent value="test" forceMount>
+          <ToolTestSection
+            target={props.test}
+            timeoutSeconds={props.timeoutSeconds}
+            args={form.args}
+            draft={() => toolOf(form)}
+            ready={form.path.trim() !== "" && form.name !== ""}
+            saveWord={props.saveWord}
+            onChangeTimeout={props.onChangeTimeout}
+          />
+        </TabsContent>
+      </div>
+    </Tabs>
   );
 }
 

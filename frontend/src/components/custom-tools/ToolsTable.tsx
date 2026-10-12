@@ -28,6 +28,7 @@ import type { ToolExposureMode } from "@/lib/api/mcpServers";
 import { useSetToolExposure } from "@/lib/hooks/useMcpToolExposure";
 import { useSetAllCustomTools, useToggleCustomTool } from "@/lib/hooks/useCustomTools";
 import { cn } from "@/lib/utils";
+import { MethodChip } from "./MethodChip";
 import { Count, ExposureCell } from "./ToolCells";
 
 interface Props {
@@ -198,9 +199,10 @@ export function ToolsTable({ group, rows, showExposure, onOpenTool, onAddRequest
               >
                 {tool.name}
               </span>
-              <span className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate text-xs text-text-muted">
-                  {tool.method} {tool.path}
+              <span className="mt-0.5 flex min-w-0 items-center gap-1.5">
+                <MethodChip method={tool.method} />
+                <span className="truncate font-mono text-xs text-text-muted" title={tool.path}>
+                  {tool.path}
                 </span>
                 {tool.changes_data ? (
                   <Badge variant="warning">{t("customTools.tools.changesData")}</Badge>

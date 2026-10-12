@@ -30,7 +30,9 @@ export function Spinner({ delayed = false, label, className }: SpinnerProps) {
         "size-3.5 shrink-0 stroke-2",
         // Reduced motion: the plain spinner stops; the delayed one keeps its
         // show step (index.css caps it to one short run, so it still appears).
-        delayed ? "animate-spinner-delayed opacity-0" : "animate-spinner motion-reduce:animate-none",
+        delayed
+          ? "animate-spinner-delayed opacity-0"
+          : "animate-spinner motion-reduce:animate-none",
         className,
       )}
     />

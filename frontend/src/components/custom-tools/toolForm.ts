@@ -1,5 +1,6 @@
 // src/components/custom-tools/toolForm.ts — what the tool drawer edits, and the request it sends.
 import type { CustomTool, CustomToolIn, HttpMethod, ResponseRule } from "@/lib/api/customTools";
+import { bodyTemplateShown } from "@/lib/customTools/bodyTemplate";
 import { draftOf, emptyDraft } from "@/lib/customTools/drafts";
 import { changesDataByDefault } from "@/lib/customTools/groups";
 import { rulesValid } from "@/lib/customTools/responseRules";
@@ -38,7 +39,8 @@ export function formOf(tool: CustomTool | null): ToolForm {
     method,
     path: draft.path,
     headers: Object.entries(draft.headers ?? {}).map(([key, value]) => ({ key, value })),
-    body: draft.body_template ?? "",
+    // A body saved on one line is laid out to read; saving keeps the layout, which the gateway ignores.
+    body: bodyTemplateShown(draft.body_template ?? ""),
     args: argsFromSchema(draft.input_schema ?? {}),
     schema: draft.input_schema ?? { type: "object", properties: {} },
     enabled: draft.enabled ?? true,

@@ -71,7 +71,7 @@ function fillEnv(
   });
 }
 
-interface PreviewHeaderLine {
+export interface PreviewHeaderLine {
   name: string;
   /** A plain value, or null for a secret header. */
   value: string | null;

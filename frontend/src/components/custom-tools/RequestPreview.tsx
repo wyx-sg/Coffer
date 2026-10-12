@@ -1,85 +1,105 @@
-// src/components/custom-tools/RequestPreview.tsx — what Run would send from a saved group's tool form, in the one
-// environment the form has chosen: method and URL, the merged headers (a secret header by its secret's name and
-// state, never a value), the environment's variables and the timeout that applies. Built by the daemon's rules
-// (lib/customTools/environmentContext.ts); `{argument}` holes stay until the request runs.
+// src/components/custom-tools/RequestPreview.tsx — the Test tab's "Request to send": what one run sends with the
+// sample values typed so far (lib/customTools/sentRequest.ts), in the environment the tab names — the method and the
+// full URL, the merged headers in the shared table (a secret header by its secret's name and state, never a value),
+// the body laid out as JSON, then the environment's variables and the timeout that applies.
 import { useTranslation } from "react-i18next";
 
-import type { CustomToolEnvironment, CustomToolGroup } from "@/lib/api/customTools";
-import { effectiveTimeout, requestPreview } from "@/lib/customTools/environmentContext";
-import { cn } from "@/lib/utils";
-import { AuthLine } from "./AuthLine";
+import { CodeView } from "@/components/preview/CodeView";
+import type { SentRequest } from "@/lib/customTools/sentRequest";
+import { CopyUrlLine } from "./CopyUrlLine";
+import { HeaderTable } from "./HeaderTable";
 
 interface Props {
-  group: CustomToolGroup;
-  environment: CustomToolEnvironment;
   method: string;
-  tool: { path: string; headers?: Record<string, string> | null };
+  sent: SentRequest;
+  /** The environment it runs in; null before the group exists. */
+  environment: string | null;
+  variables: Record<string, string>;
+  missingVariables: string[];
+  /** "Timeout 30 s (the group's)". */
+  timeoutLine: string;
 }
 
-export function RequestPreview({ group, environment, method, tool }: Props) {
+export function RequestPreview({
+  method,
+  sent,
+  environment,
+  variables,
+  missingVariables,
+  timeoutLine,
+}: Props) {
   const { t } = useTranslation();
-  const preview = requestPreview(environment, tool);
-  const timeout = effectiveTimeout(group, environment);
-  const variables = Object.entries(environment.variables ?? {});
+  const vars = Object.entries(variables);
   return (
-    <div
-      role="group"
-      aria-label={t("customTools.preview.title", { environment: environment.name })}
+    <section
+      aria-label={t("customTools.test.requestTitle")}
       data-testid="custom-tool-request-preview"
-      className="flex flex-col gap-1 rounded-lg border border-border-subtle bg-surface-sunken px-3 py-2"
+      className="flex flex-col gap-3"
     >
-      <p className="flex min-w-0 items-center gap-2">
-        <span className="shrink-0 rounded-sm bg-chip px-1.5 font-mono text-2xs text-text-muted">
-          {method}
-        </span>
-        <span className="min-w-0 break-all font-mono text-xs text-text" title={preview.url}>
-          {preview.url}
-        </span>
-      </p>
-      {preview.headers.map((h) =>
-        h.secret?.secret ? (
-          <AuthLine
-            key={h.name}
-            header={h.name}
-            secret={h.secret.secret}
-            plain
-            trailing={
-              <span
-                className={cn(
-                  "text-xs",
-                  h.secret.secret_state === "present" ? "text-text-muted" : "text-warning",
-                )}
-              >
-                {t(`customTools.preview.secretState.${h.secret.secret_state}`)}
-              </span>
-            }
-          />
-        ) : (
-          <p key={h.name} className="break-all font-mono text-xs text-text-muted">
-            {h.name}: {h.value}
-          </p>
-        ),
-      )}
-      {variables.length > 0 ? (
-        <p className="break-all text-xs text-text-muted">
-          {t("customTools.preview.variables")}{" "}
-          <span className="font-mono">{variables.map(([k, v]) => `${k}=${v}`).join(" · ")}</span>
-        </p>
-      ) : null}
-      {preview.missingVariables.length > 0 ? (
-        <p role="alert" className="text-xs text-danger">
-          {t("customTools.preview.missingVariables", {
-            names: preview.missingVariables.map((n) => `{env:${n}}`).join(", "),
-            environment: environment.name,
+      <h3 className="flex items-baseline gap-2 text-sm font-label">
+        {t("customTools.test.requestTitle")}
+        {environment ? (
+          <span className="text-xs font-normal text-text-muted">
+            {t("customTools.test.inEnvironment", { environment })}
+          </span>
+        ) : null}
+      </h3>
+      <div className="rounded-lg border border-border-subtle bg-surface-sunken px-3 py-2">
+        <CopyUrlLine method={method} url={sent.url} wrap />
+      </div>
+      {sent.missingPath.length > 0 ? (
+        <p role="alert" className="text-xs text-warning">
+          {t("customTools.test.missingPath", {
+            names: sent.missingPath.map((n) => `{${n}}`).join(", "),
           })}
         </p>
       ) : null}
-      <p className="text-xs text-text-muted">
-        {t(`customTools.preview.timeout.${timeout.source}`, {
-          seconds: timeout.seconds,
-          environment: environment.name,
-        })}
-      </p>
-    </div>
+      <HeaderTable
+        ariaLabel={t("customTools.editor.headers")}
+        sources
+        empty={t("customTools.editor.noHeaders")}
+        rows={sent.headers.map((h) => ({
+          name: h.name,
+          value: h.value,
+          secret: h.secret?.secret ?? null,
+          secretState: h.secret?.secret_state ?? null,
+          source:
+            h.from === "environment"
+              ? environment
+                ? t("customTools.editor.fromEnvironment", { environment })
+                : t("customTools.editor.fromGroup")
+              : t("customTools.editor.fromTool"),
+        }))}
+      />
+      {sent.body !== null ? (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-label text-text-muted">
+            {t("customTools.test.bodyLabel")}
+          </span>
+          <CodeView
+            value={sent.body}
+            language="json"
+            maxHeight="20rem"
+            wrap
+            ariaLabel={t("customTools.test.bodyLabel")}
+          />
+        </div>
+      ) : null}
+      {vars.length > 0 ? (
+        <p className="break-all text-xs text-text-muted">
+          {t("customTools.preview.variables")}{" "}
+          <span className="font-mono">{vars.map(([k, v]) => `${k}=${v}`).join(" · ")}</span>
+        </p>
+      ) : null}
+      {missingVariables.length > 0 && environment ? (
+        <p role="alert" className="text-xs text-danger">
+          {t("customTools.preview.missingVariables", {
+            names: missingVariables.map((n) => `{env:${n}}`).join(", "),
+            environment,
+          })}
+        </p>
+      ) : null}
+      <p className="text-xs text-text-muted">{timeoutLine}</p>
+    </section>
   );
 }

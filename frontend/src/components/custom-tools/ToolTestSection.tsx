@@ -1,12 +1,12 @@
-// src/components/custom-tools/ToolTestSection.tsx — Try it, the right-hand column of every tool editor: a sample
-// value per argument, one run of the request as the form holds it (nothing is saved), and the result — beside it,
-// on its own tab, the request the run sends.
-// A saved group's request runs in the environment the form has chosen — the same one its preview, secret
-// and timeout come from; the picker only changes that choice, never the group. A group not saved yet runs
-// without a secret.
-import { useState } from "react";
+// src/components/custom-tools/ToolTestSection.tsx — Test, the editor's last tab (and Import's Try an operation): the
+// full width, top to bottom — where it runs and Run; a sample value per input; the request a run sends with those
+// values (RequestPreview); the response once it has run (ToolTestResult). One run sends the request as the form
+// holds it now; nothing is saved.
+// A saved group's request runs in the environment the tab has chosen — the same one the Request tab's help and
+// headers read; the picker only changes that choice, never the group. A group not saved yet runs without a secret.
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RotateCw } from "lucide-react";
+import { Play } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -16,18 +16,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateApiError } from "@/lib/api/errors";
-import type { CustomToolGroup, CustomToolHeaderIn, CustomToolIn } from "@/lib/api/customTools";
+import type {
+  CustomToolGroup,
+  CustomToolHeaderIn,
+  CustomToolHeaderOut,
+  CustomToolIn,
+} from "@/lib/api/customTools";
 import {
   effectiveTimeout,
   enabledEnvironments,
   environmentSecret,
+  requestPreview,
 } from "@/lib/customTools/environmentContext";
 import { testArguments, type ArgRow } from "@/lib/customTools/schemaArgs";
+import { sentRequest } from "@/lib/customTools/sentRequest";
 import { useTestCustomTool, useTestUnsavedCustomTool } from "@/lib/hooks/useCustomTools";
 import { useSecretChoices } from "@/components/secret/useSecretChoices";
 import { RequestPreview } from "./RequestPreview";
+import { TestValues } from "./TestValues";
 import { ToolTestResult } from "./ToolTestResult";
 import type { ToolEnvironment } from "./useToolEnvironment";
 
@@ -50,6 +57,17 @@ interface Props {
   onChangeTimeout?: () => void;
 }
 
+/** An unsaved group's header rows as the preview reads a saved environment's. */
+function headersOut(headers: readonly CustomToolHeaderIn[]): CustomToolHeaderOut[] {
+  return headers.map((h) => ({
+    name: h.name,
+    value: h.value ?? null,
+    secret: h.secret ?? null,
+    scheme: h.scheme ?? null,
+    secret_state: "none",
+  }));
+}
+
 export function ToolTestSection(props: Props) {
   const { target, args, draft, ready } = props;
   const { displayOf } = useSecretChoices();
@@ -60,8 +78,7 @@ export function ToolTestSection(props: Props) {
   const unsaved = useTestUnsavedCustomTool();
   const test = group ? saved : unsaved;
   const [values, setValues] = useState<Record<string, string>>({});
-  // Try it shows the request a run would send (the preview) until a run, then its result; one at a time.
-  const [view, setView] = useState<"result" | "request">("request");
+  const responseRef = useRef<HTMLElement | null>(null);
   const enabled = group ? enabledEnvironments(group) : [];
   const env = choice?.env ?? null;
   const named = args.filter((row) => row.name);
@@ -73,15 +90,20 @@ export function ToolTestSection(props: Props) {
       : { seconds: group?.timeout_seconds ?? props.timeoutSeconds ?? 30, source: "group" as const };
   const blocked = choice !== null && choice.choice.state !== "ok";
   const showPicker = group !== null && (enabled.length > 1 || (blocked && enabled.length > 0));
+  const tool = draft();
+  const method = tool.method ?? "GET";
+  const argValues = testArguments(args, values);
 
   const pick = (name: string) => {
     choice?.setName(name);
     saved.reset();
   };
+  // A run's answer is below the request: bring it into view when it arrives.
+  useEffect(() => {
+    if (test.data || test.error)
+      responseRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [test.data, test.error]);
   const run = () => {
-    const tool = draft();
-    const argValues = testArguments(args, values);
-    setView("result");
     if (group) {
       if (env) saved.mutate({ tool, args: argValues, environment: env.name });
       return;
@@ -109,10 +131,35 @@ export function ToolTestSection(props: Props) {
         ? t(`customTools.test.env.${state.state}`, { environment: state.name })
         : null;
 
-  const preview =
-    group && env ? (
-      <RequestPreview group={group} environment={env} method={draft().method ?? "GET"} tool={draft()} />
-    ) : null;
+  // The environment the request is built in: the chosen one, or an unsaved group's settings.
+  const previewEnv = env
+    ? env
+    : "unsaved" in target && target.unsaved.base_url
+      ? {
+          base_url: target.unsaved.base_url,
+          headers: headersOut(target.unsaved.headers),
+          variables: {},
+        }
+      : null;
+  const variables = previewEnv?.variables ?? {};
+  const lines = previewEnv ? requestPreview(previewEnv, tool) : null;
+  const preview = lines ? (
+    <RequestPreview
+      method={method}
+      sent={sentRequest(lines, { ...tool, method }, argValues, variables)}
+      environment={group && env ? env.name : null}
+      variables={variables}
+      missingVariables={lines.missingVariables}
+      timeoutLine={
+        group && env
+          ? t(`customTools.preview.timeout.${timeout.source}`, {
+              seconds: timeout.seconds,
+              environment: env.name,
+            })
+          : t("customTools.preview.timeout.group", { seconds: timeout.seconds })
+      }
+    />
+  ) : null;
   const result = test.error ? (
     <p role="alert" className="text-xs text-danger">
       {translateApiError(t, test.error)}
@@ -120,7 +167,7 @@ export function ToolTestSection(props: Props) {
   ) : test.data ? (
     <ToolTestResult
       result={test.data}
-      method={draft().method ?? "GET"}
+      method={method}
       group={groupName}
       secret={group ? secret : null}
       timeoutSeconds={timeout.seconds}
@@ -129,88 +176,60 @@ export function ToolTestSection(props: Props) {
     />
   ) : (
     <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-text-muted">
-      {t("customTools.test.notRun")}
+      {t(test.isPending ? "customTools.test.running" : "customTools.test.notRun")}
     </p>
   );
 
   return (
-    <section aria-label={t("customTools.test.title")} className="flex flex-col gap-3">
-      <div className="flex min-h-control-sm items-center gap-2">
-        <span className="text-xs font-label">{t("customTools.test.title")}</span>
-        {showPicker ? (
-          <Select value={env?.name ?? ""} onValueChange={pick}>
-            <SelectTrigger
-              className="ml-auto h-control-sm w-auto min-w-[120px] font-mono text-xs"
-              aria-label={t("customTools.test.environment")}
-            >
-              <SelectValue placeholder={t("customTools.test.pickEnvironment")} />
-            </SelectTrigger>
-            <SelectContent>
-              {enabled.map((e) => (
-                <SelectItem key={e.name} value={e.name} className="font-mono text-xs">
-                  {e.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : null}
-      </div>
-      {named.length > 0 ? (
-        <div className="flex flex-col gap-1.5">
-          {named.map((row) => (
-            <label
-              key={row.name}
-              className="grid grid-cols-[8rem_minmax(0,1fr)] items-center gap-2 font-mono text-xs"
-            >
-              <span className="truncate">
-                {row.name}
-                {row.required ? <span className="text-danger">*</span> : null}{" "}
-                <span className="text-2xs text-text-muted">
-                  {row.type === "other" ? row.rawType : row.type}
-                </span>
-              </span>
-              <input
-                className="h-control-sm min-w-0 rounded-sm border border-border-subtle bg-surface-raised px-2 font-mono text-xs text-text focus-visible:border-accent focus-visible:outline-none"
-                aria-label={t("customTools.test.valueFor", { name: row.name })}
-                value={values[row.name] ?? ""}
-                onChange={(e) => setValues({ ...values, [row.name]: e.target.value })}
-              />
-            </label>
-          ))}
+    <section aria-label={t("customTools.test.title")} className="flex flex-col gap-6">
+      <div className="flex flex-col gap-3">
+        <div className="flex min-h-control-md flex-wrap items-center gap-2">
+          <h3 className="text-sm font-label">{t("customTools.test.valuesTitle")}</h3>
+          <span className="ml-auto inline-flex items-center gap-2">
+            {showPicker ? (
+              <Select value={env?.name ?? ""} onValueChange={pick}>
+                <SelectTrigger
+                  className="h-control-md w-auto min-w-[120px] font-mono text-xs"
+                  aria-label={t("customTools.test.environment")}
+                >
+                  <SelectValue placeholder={t("customTools.test.pickEnvironment")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {enabled.map((e) => (
+                    <SelectItem key={e.name} value={e.name} className="font-mono text-xs">
+                      {e.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+            <Button disabled={!ready || blocked || test.isPending} onClick={run}>
+              <Play aria-hidden />
+              {test.isPending
+                ? t("customTools.test.running")
+                : test.data
+                  ? t("customTools.test.runAgain")
+                  : t("customTools.test.run")}
+            </Button>
+          </span>
         </div>
-      ) : null}
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" disabled={!ready || blocked || test.isPending} onClick={run}>
-          <RotateCw aria-hidden />
-          {test.isPending
-            ? t("customTools.test.running")
-            : test.data
-              ? t("customTools.test.runAgain")
-              : t("customTools.test.run")}
-        </Button>
+        {unavailable ? (
+          <p role="alert" className="text-xs text-warning">
+            {unavailable}
+          </p>
+        ) : null}
+        <TestValues inputs={named} values={values} onChange={setValues} />
+        <p className="text-xs text-text-muted">{note}</p>
       </div>
-      {unavailable ? (
-        <p role="alert" className="text-xs text-warning">
-          {unavailable}
-        </p>
-      ) : null}
-      {preview ? (
-        <Tabs value={view} onValueChange={(v) => setView(v as "result" | "request")}>
-          <TabsList className="h-8">
-            <TabsTrigger value="result">{t("customTools.test.resultTab")}</TabsTrigger>
-            <TabsTrigger value="request">{t("customTools.test.requestTab")}</TabsTrigger>
-          </TabsList>
-          <TabsContent value="result" className="mt-3">
-            {result}
-          </TabsContent>
-          <TabsContent value="request" className="mt-3">
-            {preview}
-          </TabsContent>
-        </Tabs>
-      ) : (
-        result
-      )}
-      <p className="text-xs text-text-muted">{note}</p>
+      {preview}
+      <section
+        ref={responseRef}
+        aria-label={t("customTools.test.responseTitle")}
+        className="flex scroll-mt-4 flex-col gap-3"
+      >
+        <h3 className="text-sm font-label">{t("customTools.test.responseTitle")}</h3>
+        {result}
+      </section>
     </section>
   );
 }
