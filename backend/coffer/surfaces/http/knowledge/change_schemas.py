@@ -9,11 +9,12 @@ and by the writer its trailers record.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from coffer.application.knowledge.tidy_service import TidyStatus
 from coffer.domain.knowledge.history import WRITER_DISK, WRITERS, Change
 
 Writer = Literal["user", "agent", "curation", "sync", "disk", "daemon"]
@@ -45,8 +46,8 @@ class ChangeOut(BaseModel):
     )
     operation: str = Field(
         description="`save`, `delete`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, "
-        "`remove`, `layout` or `baseline`; a change a retired curation pass made also reads "
-        "`pass`, `submit` or `undo`."
+        "`remove`, `layout`, `baseline` or `tidy` (one tidy an agent did, its report the "
+        "summary); a change a retired curation pass made also reads `pass`, `submit` or `undo`."
     )
     summary: str
     actor: str | None = Field(default=None, description="The audit actor of the operation.")
@@ -57,7 +58,10 @@ class ChangeOut(BaseModel):
     collections: list[str] = Field(description="The collections the change touched.")
     item: str | None = Field(default=None, description="The item a retired curation pass curated.")
     status: str | None = Field(
-        default=None, description="A retired curation pass's outcome status."
+        default=None,
+        description="A tidy's `reported` (its agent finished it with a report) or `expired` "
+        "(Coffer closed it after its collection sat unchanged); a retired curation pass's "
+        "outcome status.",
     )
     restored_from: str | None = None
     undoes: str | None = None
@@ -102,4 +106,49 @@ class ChangesOut(BaseModel):
     changes: list[ChangeOut]
     next_cursor: str | None = Field(
         default=None, description="Pass back as `cursor` for the next page; null on the last."
+    )
+
+
+class TidyStatusOut(BaseModel):
+    """Where a collection's tidy stands ("Record a tidy as one change")."""
+
+    collection: str
+    running: bool
+    started_at: str | None = Field(
+        default=None, description="When the open tidy started (ISO 8601, UTC); null when none is."
+    )
+
+
+def tidy_status_out(status: TidyStatus) -> TidyStatusOut:
+    started = (
+        datetime.fromtimestamp(status.started_at, tz=UTC).isoformat()
+        if status.started_at is not None
+        else None
+    )
+    return TidyStatusOut(collection=status.collection, running=status.running, started_at=started)
+
+
+class TidyFinishIn(BaseModel):
+    """The agent's report on the tidy it finished."""
+
+    summary: str = Field(
+        default="",
+        max_length=20000,
+        description="Which sources it integrated or skipped, what it merged, split, corrected "
+        "and deleted, and what it left for the person to decide.",
+    )
+
+
+class TidyFinishOut(BaseModel):
+    change: ChangeOut | None = Field(
+        default=None, description="The tidy's one change; null when it changed nothing."
+    )
+
+
+class UndoIn(BaseModel):
+    """Undo a change ("Undo a tidy")."""
+
+    force: bool = Field(
+        default=False,
+        description="Undo even when a file was edited after the change, discarding those edits.",
     )

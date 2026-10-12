@@ -5,7 +5,7 @@
 **Deciders**: Yuxing Wu
 **Related**: spec channels ("Switch the agent with /new", "Switch the model from chat", "Keep a chat's agent, model and directory across its conversations", "Choose the working directory from chat", "Drive every managed agent from one bot", "Key conversation identity by channel, chat and thread", "Offer choices and actions as owner-gated cards");
 spec chat ("Record the agent on each conversation", "Let the owner set agent and model");
-[Channel Conversation Identity and Context](channel-conversation-identity-and-context.md), [Channel Owner Gate](channel-owner-gate.md),
+[Channel Conversation Identity](channel-conversation-identity.md), [Channel Owner Gate](channel-owner-gate.md),
 [Driving Agents Through the SDK and App-Server](driving-agents-through-sdk-and-app-server.md), [Model Catalogue Read From the Agent](model-catalogue-read-from-the-agent.md);
 PRs #245, #385
 
@@ -134,8 +134,8 @@ on the peer row.
 Pros: simpler storage; the choice follows the owner everywhere in that chat.
 
 Cons: a group's threads are separate conversations
-([Channel Conversation Identity and
-Context](channel-conversation-identity-and-context.md)), and a per-chat
+([Channel Conversation
+Identity](channel-conversation-identity.md)), and a per-chat
 preference makes switching in one thread silently change the agent of every
 other thread's next conversation. 
 Loses because the preference must live at the same grain as the conversation

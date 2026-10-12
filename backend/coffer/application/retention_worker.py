@@ -7,6 +7,8 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from coffer.application.runtime.cancellation import raise_if_stopping
+
 if TYPE_CHECKING:
     from coffer.application.retention_service import RetentionService
 
@@ -67,5 +69,6 @@ class RetentionWorker:
             if self._reclaim_space is not None:
                 result = {**result, "reclaimed_bytes": await asyncio.to_thread(self._reclaim_space)}
             _logger.info("retention.prune.done", extra={"result": result})
-        except Exception:
+        except Exception as exc:
+            raise_if_stopping(exc)
             _logger.exception("retention.prune.failed")

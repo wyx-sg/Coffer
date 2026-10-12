@@ -135,8 +135,8 @@ def test_the_page_level_tidy_handoff_names_every_collection(client, tmp_path) ->
     assert prompt.startswith("Tidy every knowledge collection, one collection at a time:")
     assert '"Integrating sources"' in prompt and '"Tidying a collection"' in prompt
     assert f"- Knowledge root: {root}" in prompt
-    assert f"- shopee: {root / 'shopee'} (3 pages, 1 waiting source)" in prompt
-    assert f"- personal: {root / 'personal'} (1 page, 0 waiting sources)" in prompt
+    assert f"- shopee: {root / 'shopee'} (3 pages, 1 waiting source, " in prompt
+    assert f"- personal: {root / 'personal'} (1 page, 0 waiting sources, " in prompt
 
 
 def _listed(client: TestClient) -> dict[str, dict]:  # type: ignore[type-arg]
@@ -493,20 +493,22 @@ def test_the_check_of_an_unknown_uid_is_not_found(client) -> None:  # type: igno
     assert resp.status_code == 404, resp.text
 
 
-@pytest.mark.acceptance(spec="knowledge", scenario="a collection read carries its check hand-off")
-def test_a_collection_read_carries_its_check_handoff(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="the tidy hand-off carries the findings and the tidy commands"
+)
+def test_the_tidy_handoff_carries_the_findings_and_the_tidy_commands(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
     _create_collection(client, "shopee")
     _page("shopee", "a", "[[gone]]")
 
     [entry] = client.get("/api/v1/knowledge/collections").json()["collections"]
-    prompt = entry["check_handoff"]["prompt"]
+    prompt = entry["tidy_handoff"]["prompt"]
 
     folder = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee"
-    assert prompt.startswith("Check the knowledge collection `shopee`")
     assert f"- Path: {folder}" in prompt
     assert "- dead_link: shopee/pages/a.md → gone" in prompt
-    assert '"Checking a collection" section of the coffer-guide skill' in prompt
-    assert "Change nothing" in prompt
+    assert "`coffer knowledge tidy-start <collection>`" in prompt
+    assert "`coffer knowledge tidy-finish <collection>" in prompt
+    assert "check_handoff" not in entry
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="a collection keeps sources and pages apart")

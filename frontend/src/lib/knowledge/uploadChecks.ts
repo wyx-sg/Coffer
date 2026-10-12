@@ -33,7 +33,7 @@ export function extensionOf(name: string): string {
   return i < 0 ? "" : name.slice(i + 1).toLowerCase();
 }
 
-interface Refusal {
+export interface Refusal {
   title: string;
   body: string;
 }

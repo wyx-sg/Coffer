@@ -25,14 +25,17 @@ export type FileOut = Schemas["FileOut"];
 
 /** One collection: a top-level folder, described by its own `README.md`. It
  *  has no title — it is shown by its folder name. It carries its page, source,
- *  waiting-source and finding counts; `tidy_handoff` and `check_handoff` are
- *  the prompts that hand its tidying and its check to an agent. */
+ *  waiting-source and finding counts; `tidy_handoff` is the prompt that hands
+ *  its tidy to an agent, and `tidy_running` says an agent has one open. */
 export type CollectionOut = Schemas["CollectionOut"];
 
 export type CollectionListOut = Schemas["CollectionListOut"];
 
 /** One file in a tree level: its kind, and for a source whether it waits. */
 export type FileSummaryOut = Schemas["FileSummaryOut"];
+
+/** Every page and source of one collection: its page's Contents. */
+export type CollectionFilesOut = Schemas["CollectionFilesOut"];
 
 /** One level of a collection's tree — it descends a level per request. */
 export type TreeOut = Schemas["TreeOut"];

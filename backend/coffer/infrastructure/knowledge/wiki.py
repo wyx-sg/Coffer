@@ -125,6 +125,8 @@ class Page:
     aliases: tuple[str, ...]
     links: tuple[str, ...]
     missing_keys: tuple[str, ...]
+    #: When the page was last checked against its sources or the code.
+    verified: str = ""
 
 
 @dataclass(frozen=True)
@@ -257,6 +259,7 @@ def build(collection: str) -> WikiGraph:
             aliases=_as_list(fm.get("aliases")),
             links=links_in(body),
             missing_keys=tuple(k for k in _REQUIRED_PAGE_KEYS if not str(fm.get(k) or "").strip()),
+            verified=str(fm.get("verified") or "").strip(),
         )
         graph.pages.append(page)
         for name in (page.slug, *page.aliases):
@@ -298,6 +301,7 @@ def describe(file: KnowledgeFile) -> KnowledgeFile:
             kind=kind,
             page_type=page.page_type,
             aliases=page.aliases,
+            verified=page.verified,
             sources=tuple(sources),
             links=tuple(links),
         )

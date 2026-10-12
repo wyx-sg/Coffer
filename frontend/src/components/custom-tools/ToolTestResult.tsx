@@ -211,8 +211,8 @@ export function ToolTestResult({
         />
       ) : null}
       <ReplaceSecretDialog
-        row={changing && secret ? (rowOf(secret) ?? null) : null}
-        onOpenChange={setChanging}
+        secretRef={changing && secret ? (rowOf(secret)?.ref ?? null) : null}
+        onClose={() => setChanging(false)}
       />
     </div>
   );

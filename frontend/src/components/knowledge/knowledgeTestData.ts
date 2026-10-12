@@ -28,7 +28,7 @@ export const COLLECTION: CollectionOut = {
   folder_path: `/home/u/.coffer/knowledge/${NAME}`,
   updated_at: "2026-09-30T13:30:00Z",
   tidy_handoff: { prompt: `Tidy the ${NAME} collection.` },
-  check_handoff: { prompt: `Check the ${NAME} collection.` },
+  tidy_running: false,
 };
 
 export const OTHER: CollectionOut = {
@@ -42,7 +42,7 @@ export const OTHER: CollectionOut = {
   folder_path: "/home/u/.coffer/knowledge/runbooks",
   updated_at: null,
   tidy_handoff: { prompt: "Tidy the runbooks collection." },
-  check_handoff: { prompt: "Check the runbooks collection." },
+  tidy_running: false,
 };
 
 export function file(path: string, over: Partial<FileOut> = {}): FileOut {
@@ -53,6 +53,7 @@ export function file(path: string, over: Partial<FileOut> = {}): FileOut {
     description: "a page",
     page_type: "concept",
     aliases: [],
+    verified: "",
     sources: [],
     links: [],
     cited_by: [],
@@ -93,7 +94,7 @@ export const FILES: Record<string, FileOut> = {
   [RELEASE.path]: RELEASE,
 };
 
-function summary(f: FileOut): FileSummaryOut {
+export function summary(f: FileOut): FileSummaryOut {
   return {
     path: f.path,
     kind: f.kind,

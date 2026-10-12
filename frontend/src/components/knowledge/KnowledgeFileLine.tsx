@@ -3,7 +3,8 @@
 // The one quiet line under an open file's title (spec knowledge "Show a
 // collection as one tree of read-only documents in the web UI"), read from the
 // file's frontmatter and the daemon's resolution of it; a part with no data is
-// left out. A page: its type, when it was created and by whom, and its sources
+// left out. A page: its type, when it was created and by whom, when it was
+// last verified against its sources (its `verified` date), and its sources
 // — each opening that source, one that names no source struck through. A
 // source: when it was created and by whom, the pages that cite it (each
 // opening the page) or the Waiting mark.
@@ -68,6 +69,24 @@ export function KnowledgeFileLine({ file, collectionUid }: Props) {
           date,
           who: who === t("knowledge.writer.user") ? t("knowledge.document.you") : who,
         })}
+      </span>,
+    );
+  }
+
+  // Verified: the date as written; a page that carries none leaves it out.
+  if (file.kind === "page" && file.verified) {
+    const at = Date.parse(file.verified);
+    const date = Number.isNaN(at)
+      ? file.verified
+      : new Date(at).toLocaleDateString(i18n.language, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          timeZone: "UTC",
+        });
+    parts.push(
+      <span key="verified" data-testid="page-verified">
+        {t("knowledge.document.verified", { date })}
       </span>,
     );
   }

@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import type { DaemonConnection } from "@/components/shell/daemonConnection";
 import { ApiError } from "@/lib/api/errors";
 import { useDaemonOutOfDate, useDaemonStatus, useRestartDaemon } from "@/lib/hooks/useDaemon";
-import { isTauri, shellInvoke } from "@/lib/tauri";
+import { inDesktopShell, shellInvoke } from "@/lib/tauri";
 
 /** A reply time as the clock reads it ("14:02"). */
 function clockTime(ms: number): string {
@@ -118,7 +118,7 @@ export function DaemonStatusBar({ connection, onRetry }: Props) {
         <span className="min-w-0 flex-1 text-xs text-text-muted">
           {t("daemon.offline.outOfDateBody")}
         </span>
-        {isTauri() ? (
+        {inDesktopShell() ? (
           <Button
             size="sm"
             variant="outline"
@@ -147,7 +147,7 @@ export function DaemonOfflineState({ connection, onRetry }: Props) {
   const restart = useRestartDaemon();
   const [logError, setLogError] = useState<string | null>(null);
   const seconds = useSecondsUntil(connection.nextRetryAt);
-  const inShell = isTauri();
+  const inShell = inDesktopShell();
 
   const code = status.error instanceof ApiError ? status.error.code : "DAEMON_OFFLINE";
   // The last port the daemon answered on, else the one this page was served from.

@@ -99,6 +99,8 @@ The row is re-encrypted in place and keeps its creation time. Everything that ci
 
 A resource's own page shows the secret it uses the same way: the secret's name, linking to its page on the Secrets page, with **Replace key…** beside it. **Enter a new value** rotates the value, for every resource that uses the secret; **Use another secret** points only that resource at another stored secret, and the old secret and its value stay as they are.
 
+Every place that replaces a secret uses this one **Replace** dialog — a provider's API key, a channel's token, an MCP server's variable or header, a custom-tool group's header, a secret menu's **Change value…** and the banners for a missing or rejected secret. It names the current secret, says which other resources use it (a new value reaches them too), and takes the new value in an empty, write-only field; **Use another secret** lists the other stored secrets and offers **New secret…** to make one for this resource alone. A secret this Mac holds no value for reads **Add** instead of **Replace**. A resource's **Edit** dialog shows the same fields in place: **Replace** on its key row opens them, they are saved with the rest of the form, and **Keep current key** folds them away with nothing changed. A Replace that checks the key, for a provider or a channel, checks it as you paste. The [Secrets page](/guides/secrets#the-secrets-page)'s own **Edit** changes the secret itself — its name, description and value — so it has no **Use another secret**.
+
 A replacement is stored at once and needs no approval, like any write: whoever supplies a value already has it. It is audited as a replacement, never with a value.
 
 ## Delete a secret

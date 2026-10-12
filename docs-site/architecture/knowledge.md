@@ -1,11 +1,11 @@
 ---
 title: Knowledge
-description: How Coffer's knowledge layer works — each collection a wiki of Markdown pages compiled from kept sources, links by slug resolved on read, a mechanical check, a sweep that keeps the layout, tidying and checking handed to the agent, a git history of every write, and a generated skill that hands agents the catalogue.
+description: How Coffer's knowledge layer works — each collection a wiki of Markdown pages compiled from kept sources, links by slug resolved on read, a mechanical check, a sweep that keeps the layout, tidying handed to the agent and recorded as one change, a git history of every write, and a generated skill that hands agents the catalogue.
 ---
 
 # Knowledge
 
-This page explains how Coffer's knowledge layer is built: why it is plain files with no index, how a collection is a wiki of pages compiled from kept sources, how new material becomes a source at once, how pages link and how Coffer checks them, how an agent writes, integrates, tidies and checks by rules the `coffer-guide` skill teaches, how every write is kept as a version git can show and an agent can bring back, how the catalogue reaches agents through that skill, and how it coexists with vault sync. It is for engineers who want the mechanism and the reasoning. For day-to-day use, see the [Knowledge guide](/guides/knowledge).
+This page explains how Coffer's knowledge layer is built: why it is plain files with no index, how a collection is a wiki of pages compiled from kept sources, how new material becomes a source at once, how pages link and how Coffer checks them, how an agent writes, integrates and tidies by rules the `coffer-guide` skill teaches, how a tidy becomes one change that can be undone, how every write is kept as a version git can show and an agent can bring back, how the catalogue reaches agents through that skill, and how it coexists with vault sync. It is for engineers who want the mechanism and the reasoning. For day-to-day use, see the [Knowledge guide](/guides/knowledge).
 
 ## The problem
 
@@ -31,9 +31,10 @@ Knowledge is also distinct from [memory](/architecture/memory). Knowledge is abo
 | Material becomes a source at once. An upload is kept as it arrives, and a file dropped into a hidden `.inbox/` is kept by the next sweep. | Nothing waits for a model connection or a pass. What was submitted is readable by every agent within the minute. |
 | Which sources wait is derived from the pages' `sources:` lists. | A manifest of what was ingested would be a second record that can disagree with the pages. |
 | Pages link by `[[slug]]`, never by path, and Coffer resolves every link on read. | Paths move as the corpus is reorganised; a slug moves only with a rename, and a link a rename breaks is reported at once instead of rotting silently. |
-| Coffer computes mechanical findings on every read and fixes none of them. Judgement is handed to the agent's **Check**, which reports and changes nothing. | Dead links and missing frontmatter are facts a walk can find; contradictions and staleness are judgements. Separate unattended maintenance passes were seen to undo each other. |
+| Coffer computes mechanical findings on every read and fixes none of them. Fixing them, and the judgement beyond them, is the agent's inside the one **Tidy** hand-off, whose prompt carries the findings: it fixes what is certain and reports what is not. | Dead links and missing frontmatter are facts a walk can find; contradictions and staleness are judgements. A separate report-only hand-off duplicated Tidy, and "don't change anything yet" is one sentence in the session Tidy opens. |
 | Coffer runs no model over knowledge. Where a fact belongs, which pages answer the same question and which statement is stale are judged by the agent, by rules the `coffer-guide` skill teaches. | The agent a person already uses has file tools, a stronger model and the person watching. A second, unattended model of Coffer's own needed its own connection, and without one its work did not happen. |
-| Tidying and checking start only when a person presses **Tidy** or **Check with agent**. Coffer starts no agent run of its own. | An unattended agent run would spend the person's quota without their knowledge and leave conversations nobody started. |
+| Tidying starts only when a person presses **Tidy** or **Tidy all**. Coffer starts no agent run of its own. | An unattended agent run would spend the person's quota without their knowledge and leave conversations nobody started. |
+| A tidy is one commit: while the agent works, the collection is paused in the vault writer, and finishing commits every edit at once with the agent's report. A tidy can be undone as one new commit. | The history itself holds the boundary, so the change log, a file's history and sync see one unit, and undo is the inverse of one commit. A grouping kept anywhere else would be a second record of the history. |
 | Coffer moves a file only to keep the layout. | A Markdown document left outside `pages/` and `sources/` is a page in the wrong place; filing it is mechanical, one commit, and rewrites no content. |
 | Every accepted write is one git commit naming its writer. | Agents rewrite the only copy. A history of who changed what makes every change inspectable and every version one `git` or one hand-off to an agent away, and it is the collection's change log. |
 | The newer statement wins unless the older one is shown to be right. No writer is exempt. | A statement is judged by when it was made and the evidence behind it, never by who wrote it: a person's edit and an agent's can both be stale or wrong. The vault's history and a restore from a file's history are the recovery path. |
@@ -64,7 +65,7 @@ Knowledge is also distinct from [memory](/architecture/memory). Knowledge is abo
 - **The README** sits at the collection root and is the collection's schema. Its first paragraph is the collection's description. It is read from disk on every listing and never copied into the resource file, because a copy would be wrong the first time a person edited the README. What it says about page types and conventions takes precedence over the guide's defaults, as the guide tells agents. The README is never listed as a page or a source, or counted. A collection has no title of its own: every surface shows it by its folder name, and the resource update refuses a title. Editing the description in the web UI rewrites exactly that first paragraph and leaves the rest of the README alone, as one commit naming the user; the guide skill is re-rendered afterwards, because the description is how an agent recognises the collection.
 - **What a file is** follows from where it is. The path module's `kind_of` says `page` for a Markdown file under `pages/`, `source` for one under `sources/`, and `file` for anything else, which is listed but neither catalogued nor checked.
 - **Nesting** inside `pages/` and `sources/` is chosen by whoever files a page, a person or an agent. Coffer assigns those folders no meaning; `pages/` and `sources/` are the only directories that mean anything.
-- **Hidden entries** (dot-prefixed) are excluded from every count, from the catalogue and from the check, and no surface lists or reads one. Inside a collection the one Coffer reads is `.inbox/`, a drop zone: a Markdown file left there is adopted as a source by the next sweep. The vault repository's `.git/info/exclude` ignores every other hidden entry inside a collection, so it is neither committed nor synced. `.history/` and `.raw/` do not exist: replaced text is in the git history, and an upload is kept only as its Markdown source in `sources/`.
+- **Hidden entries** (dot-prefixed) are excluded from every count, from the catalogue and from the check, and no surface lists or reads one. Inside a collection the one Coffer reads is `.inbox/`, a drop zone: a Markdown file left there is adopted as a source by the next sweep. The vault repository's `.git/info/exclude` ignores every other hidden entry inside a collection, so it is neither committed nor synced. That includes `.obsidian/`, so a collection folder opened as an Obsidian vault keeps Obsidian's settings out of the history (see [Opening a collection in Obsidian](#opening-a-collection-in-obsidian)). `.history/` and `.raw/` do not exist: replaced text is in the git history, and an upload is kept only as its Markdown source in `sources/`.
 
 ### Path and slug
 
@@ -88,6 +89,7 @@ type: concept
 description: Which team owns the session service and how to reach them.
 sources: [q3-review, oncall-notes]
 aliases: [sessions]
+verified: '2026-10-12'      # when the page was last checked against its sources or the code
 actor: agent
 created_at: '2026-09-20T08:14:03.512+00:00'
 updated_at: '2026-09-22T10:02:41.107+00:00'
@@ -107,7 +109,7 @@ updated_at: '2026-10-01T09:00:00.000+00:00'
 ---
 ```
 
-Coffer writes a source's keys, in a fixed order: `title`, `description`, `actor` (`agent` or `user`), `created_at` and `updated_at`. The one key an agent may add to a source is `ingest: skipped`. Coffer writes no page: a page's `title`, `type`, `description`, `sources` (source slugs), `aliases`, `actor` and timestamps are written by whoever writes the page, as the guide teaches. The default page types are `concept`, `entity`, `how-to`, `decision` and `overview`; Coffer accepts any non-empty string, so a README that defines its own types wins. Any other key a person added is kept, with its parsed value unchanged, whenever Coffer rewrites a file. This matters because dropping an unknown key would quietly delete a person's `tags:`.
+Coffer writes a source's keys, in a fixed order: `title`, `description`, `actor` (`agent` or `user`), `created_at` and `updated_at`. The one key an agent may add to a source is `ingest: skipped`. Coffer writes no page: a page's `title`, `type`, `description`, `sources` (source slugs), `aliases`, `verified`, `actor` and timestamps are written by whoever writes the page, as the guide teaches. `verified` is optional and returned on a page's read as written; Coffer derives no finding from it. The default page types are `concept`, `entity`, `how-to`, `decision` and `overview`; Coffer accepts any non-empty string, so a README that defines its own types wins. Any other key a person added is kept, with its parsed value unchanged, whenever Coffer rewrites a file. This matters because dropping an unknown key would quietly delete a person's `tags:`.
 
 Frontmatter parsing degrades rather than raising: a file with no fence, or with malformed YAML inside one, yields empty frontmatter and its body, so one hand-edited file with a stray colon cannot break a whole collection walk.
 
@@ -211,15 +213,17 @@ From the graph Coffer computes a collection's findings on every read, keeps none
 | `orphan_page` | A page no other page links to, when the collection holds two or more pages. Pages whose `type` is `overview` are exempt: an overview is an entry point. |
 | `waiting_source` | A waiting source. |
 
-`GET /api/v1/knowledge/collections/{uid}/check` returns the findings and the check hand-off, and `coffer knowledge check` prints them. The collection listing carries `page_count`, `source_count`, `waiting_source_count` and `finding_count`, computed per collection with one walk each, and both hand-offs. No route fixes a finding.
+`GET /api/v1/knowledge/collections/{uid}/check` returns the collection and its findings, and `coffer knowledge check` prints them. The collection listing carries `page_count`, `source_count`, `waiting_source_count` and `finding_count`, computed per collection with one walk each, the tidy hand-off and `tidy_running`. No route fixes a finding.
+
+`GET /api/v1/knowledge/collections/{uid}/files` (`coffer knowledge files`) returns every page and source of one collection with its title, description, writer, time, kind, page type and waiting mark, from the same walk the tree uses. The collection page's **Contents** groups it by page type; it is a separate route so the listing stays cheap.
 
 ## Tidying is the agent's job
 
-Compiling a source into pages, putting a fact where it belongs, folding pages that answer the same question into one, splitting one that answers several, and correcting what is wrong are judgements. Coffer makes none of them. The agent the person already works with has file tools and the person watching, so the judgement lives in the `coffer-guide` skill it loads, and the person starts it with one button. See the decision [Tidying Knowledge Is the Agent's Job](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md).
+Compiling a source into pages, putting a fact where it belongs, folding pages that answer the same question into one, splitting one that answers several, and correcting what is wrong are judgements. Coffer makes none of them. The agent the person already works with has file tools and the person watching, so the judgement lives in the `coffer-guide` skill it loads, and the person starts it with one button. See the decision [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md).
 
 ### What the guide teaches
 
-While the knowledge feature is on, the guide's knowledge sections describe the layout — the README as the schema whose page types and conventions win over the guide's defaults, kept `sources/` and edited `pages/` — and carry four instructions.
+While the knowledge feature is on, the guide's knowledge sections describe the layout — the README as the schema whose page types and conventions win over the guide's defaults, kept `sources/` and edited `pages/` — and carry three instructions.
 
 **Writing a page.** When an agent learns something durable, it puts the fact straight into the collection's pages with its own file tools, by seven rules:
 
@@ -229,29 +233,59 @@ While the knowledge feature is on, the guide's knowledge sections describe the l
 4. **The newer statement wins unless the older one is shown to be right** by a source, a date, a command's output or the code, whoever wrote either. The superseded statement stays legible, with the date it was corrected.
 5. **Link pages by `[[slug]]`, never by path.** When renaming a page, update the links to it or keep its old slug in `aliases`.
 6. **Never edit a source**, except to add `ingest: skipped`.
-7. **Give every page frontmatter**: a `title`, a `type`, a one-line `description` saying what question the page answers, its `sources`, any `aliases`, and `actor: agent`. Keys a person added are left alone.
+7. **Give every page frontmatter**: a `title`, a `type`, a one-line `description` saying what question the page answers, its `sources`, any `aliases`, when it was last checked against its sources or the code as `verified: YYYY-MM-DD`, and `actor: agent`. Keys a person added are left alone. Provenance belongs in `sources` and `verified`, never in a body paragraph listing what was read.
 
 **Integrating sources.** Read each waiting source in full, oldest first, and the README; fold what it says into the pages that own its subjects, create pages for subjects with none, add the source's slug to the `sources` of every page changed with it, and mark a source with nothing worth keeping `ingest: skipped`.
 
-**Tidying a collection.** One collection at a time: integrate its waiting sources first; read the README and every page's title and description, then the pages in full; merge pages that answer the same question, keeping every fact and every source and the merged-away slug in the survivor's `aliases`; split one that answers several, linking the parts; fix what is wrong or contradictory, the dead links Coffer reports, and a description that does not say what question its page answers; then report which sources were integrated or skipped, and what was merged, split, corrected and deleted.
-
-**Checking a collection.** Change nothing; read the README, the pages and, where a claim needs it, the sources they cite; report contradictions, stale statements, subjects covered twice and subjects that deserve a page of their own, and Coffer's mechanical findings with what to do about each.
+**Tidying a collection.** One collection at a time: run `coffer knowledge tidy-start <collection>` before changing anything; integrate its waiting sources; fix the mechanical findings the prompt lists or `coffer knowledge check` prints; read the README and every page's title and description, then the pages in full; merge pages that answer the same question, keeping every fact and every source and the merged-away slug in the survivor's `aliases`; split one that answers several, linking the parts; correct what is wrong, stale or contradictory and a description that does not say what question its page answers, and give a subject owned by no page a page of its own; leave alone what it is not sure about — two pages that disagree with nothing to tell which is right, a deletion of much text, a change to the README's page types — and list it in the report; then run `coffer knowledge tidy-finish <collection> --set summary="<report>"`, the report naming the sources integrated or skipped, what was merged, split, corrected and deleted, and what is left for the person. Asked only for a check or a review, the agent reports and changes nothing.
 
 Code enforces none of these rules. They are prose in the skill, and the guard against a bad edit is the history and the mechanical check, not a refusal at a write.
 
 ### The Tidy hand-off
 
-The daemon writes the prompt, from the same hand-off module every other hand-off uses (`application/knowledge/tidy_handoff.py`, rendered by `domain/handoff`). Reading a collection carries `tidy_handoff`, which names the collection, gives its absolute path, its page count and its waiting-source count, and tells the agent to integrate the waiting sources by the guide's "Integrating sources" section and then to follow "Tidying a collection". `GET /api/v1/knowledge/tidy-handoff` returns the same kind of prompt for every collection at once: it names the knowledge root and each collection with its path and counts, and asks the agent to work through them one at a time by the same two sections.
+The daemon writes the prompt, from the same hand-off module every other hand-off uses (`application/knowledge/tidy_handoff.py`, rendered by `domain/handoff`). Reading a collection carries `tidy_handoff`, which names the collection, gives its absolute path, its page count, its waiting-source count and its mechanical findings grouped by kind with their paths (at most 40 lines, then how many were left out), and lists the steps: `tidy-start`, integrate the waiting sources, fix the findings, merge, split and correct, leave what is uncertain to the report, `tidy-finish`. `GET /api/v1/knowledge/tidy-handoff` returns the same kind of prompt for every collection at once: it names the knowledge root and each collection with its path and its page, waiting-source and finding counts, asks the agent to work through them one at a time by the same steps, and tells it to read each collection's findings with `coffer knowledge check <collection>`.
 
-The web UI offers **Tidy** on a collection's page and **Tidy all** in the Knowledge page's header. Pressing either starts the default hand-off agent in the preferred terminal with that prompt as its first message, through the same path as every other hand-off. With no managed agent available the button offers **Copy prompt** only. The person pressed a button named for the job, the prompt only edits Coffer's own files, and the tree is recoverable from its history.
+The web UI offers **Tidy** on a collection's page and **Tidy all** in the Knowledge page's header. Pressing either starts the default hand-off agent in the preferred terminal with that prompt as its first message, through the same path as every other hand-off. With no managed agent available the button offers **Copy prompt** only. The person pressed a button named for the job, the prompt only edits Coffer's own files, and the tidy can be undone as a whole.
 
-### The Check hand-off
+There is no second, report-only hand-off. A check that changed nothing duplicated Tidy's own steps; a person who wants a review asks for one in the session Tidy opened, and the guide tells the agent to change nothing then.
 
-Reading a collection also carries `check_handoff`, from the same module. It names the collection and its absolute path, carries its mechanical findings grouped by kind with their paths (at most 40 lines, then how many were left out), and tells the agent to follow "Checking a collection" and to change nothing: no file is written, moved or deleted. The collection page offers **Check with agent** beside **Tidy** and sends the prompt the same way. A check is a report for the person, who then decides what to fix and may press Tidy.
+### A tidy is one change
+
+The agent edits files with its own tools, and an edit found on disk is normally committed as a `disk` write once it is quiet. A tidy would then be a run of `disk` commits with no boundary and no report. Instead, the agent brackets its work with two commands the prompt names:
+
+```mermaid
+sequenceDiagram
+  participant A as Agent
+  participant D as Daemon
+  participant W as Vault writer
+  A->>D: coffer knowledge tidy-start payments
+  D->>W: settle pending edits as disk
+  D->>D: open run in TIDY_RUNS
+  D->>W: pause knowledge/payments/
+  A->>A: edit pages with its own file tools
+  Note over W: scanner, sweep and sync settle skip the paused prefix
+  A->>D: coffer knowledge tidy-finish payments --set summary=...
+  D->>D: close run (prefix no longer paused)
+  D->>W: settle knowledge/payments/ as one commit (agent, tidy, report)
+```
+
+- **Start** (`POST /api/v1/knowledge/collections/{uid}/tidy/start`) first commits whatever already changed in the collection as `disk`, so the tidy holds only the agent's work, then opens a run in `TIDY_RUNS` (`infrastructure/knowledge/tidy_runs.py`). Starting an open tidy again keeps it.
+- **While open**, `VaultWriter.set_paused` gives the writer the collection's path prefix, read from the registry on every call. `pending()` and `settle()` skip paused paths, so neither the vault's scanner, the sweep, another Coffer write nor a sync round commits them. A sync round whose incoming changes touch a paused file waits, as it does for any uncommitted edit. Reads see the files as they are on disk.
+- **Finish** (`POST .../tidy/finish`, body `{summary}`) closes the run and then settles the collection's pending paths as one commit: writer `agent`, operation `tidy`, the report (whitespace folded, cut at 4,000 characters) as its summary, `Coffer-Status: reported`. It answers the change, or `change: null` when nothing changed. Finishing with no tidy open still commits the collection's pending edits as a tidy.
+- **Idle expiry.** Each run keeps a fingerprint — the collection's pending paths and their digests. On every tick the sweep compares it; a change resets the run's idle clock, and a run idle for 30 minutes is closed with no report and `Coffer-Status: expired`. So no collection stays paused because an agent stopped.
+- **Memory only.** The registry is bookkeeping about a session in progress, not knowledge, so it is neither stored nor synced. A daemon restart forgets an open run; the next settle commits its edits as ordinary `disk` writes, losing only the grouping.
+
+The collection read carries `tidy_running`, and the collection page says a tidy is in progress. Start and finish are each audited as `knowledge_edited` (`tidy: started`, `tidy: finished` with the version and file count). The decision and the alternatives — trailers on each disk commit grouped at read time, grouping by time in the UI, a separate store of runs — are in [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md).
+
+### Undoing a tidy
+
+`POST /api/v1/knowledge/changes/{version}/undo` (`coffer knowledge undo`, body `{force}`) puts every knowledge file the change touched back as it was just before it (`collection_writes.undo_change`). For each path it reads three versions: the bytes at the change, the bytes on disk now and the bytes at the change's parent. If now differs from the change for any path, a later edit exists, and the undo is refused with `409 KNOWLEDGE_UNDO_CONFLICT` whose `details.documents` lists those paths, writing nothing, unless `force` is set. Otherwise each path gets its parent's bytes, or is removed when it did not exist before, all in one recording transaction: one commit by the user, operation `restore`, `Coffer-Undoes: <version>`. A version that touched no knowledge file, or whose files already match their parent, is refused with `400 KNOWLEDGE_NOT_A_CHANGE`. The undo is audited as `knowledge_edited` with `undoes`, the paths and the later edits it discarded. The tidy stays in the history before its undo; discarded edits stay in it too.
+
+The route works on any change that touched knowledge files; the web UI offers it as **Undo this tidy…** on a tidy's Change log entry, and the confirmation lists the files edited since by title before it sends `force`.
 
 ### Nothing tidies unattended
 
-Tidy and Check run only when a person presses them or asks their own agent. Scheduling agent runs would spend the person's quota without their knowledge, and would leave conversations nobody started. The mechanical sweep and the mechanical check stay Coffer's; judgement does not.
+Tidy runs only when a person presses it or asks their own agent. Scheduling agent runs would spend the person's quota without their knowledge, and would leave conversations nobody started. The mechanical sweep and the mechanical check stay Coffer's; judgement does not.
 
 ### Precedence
 
@@ -262,26 +296,32 @@ Two rules are about judgement and so live in the guide, not in code:
 
 What protects the data is mechanical. Coffer saves no text of a person's on the page, so a stale copy in the browser cannot revert an agent's edit. A rewrite that Coffer itself makes keeps every frontmatter key it did not set. Every agent edit is a version in the history, and a version can be restored from the file's history.
 
+## Opening a collection in Obsidian
+
+A collection's layout is what Obsidian reads natively: plain Markdown, `[[slug]]` links that resolve by file name, and `aliases` frontmatter. Obsidian is in the daemon's list of detected editors (`application/fs/editor_service.py`), and the web UI offers **Open in Obsidian** in a collection's and a file's ⋯ menu only when `GET /api/v1/fs/editors` lists it, opening the path with it through `POST /api/v1/fs/open`. Obsidian keeps its settings in `.obsidian/`, a hidden entry the vault ignores. An Obsidian save is an edit on disk like any editor's; a note Obsidian creates outside `pages/` and `sources/` is filed into `pages/` by the sweep, so the guide tells people to point Obsidian's default location for new notes at `pages/`.
+
 ## The sweep
 
-The sweep is a background asyncio task in the daemon. It follows the same shape as the retention worker, and it calls no model.
+The sweep is a background worker in the daemon on the shared wakeable loop, and it calls no model. It runs when a file under `knowledge/` changes (it borrows the vault scanner's file watch, and a burst of events is one run), when the `knowledge` feature is switched on, and otherwise every 10 minutes. A loose document still inside its quiet minute brings one more run once that minute is over, because no file event announces it.
 
 ```mermaid
 stateDiagram-v2
   [*] --> Waiting: start
-  Waiting --> Intake: tick
+  Waiting --> Intake: file event or 10 min
   Intake --> Layout: adopt .inbox/ files as sources
   Layout --> Record: file loose documents into pages/
-  Record --> Refresh: commit edits on disk
+  Record --> Expire: commit edits on disk
+  Expire --> Refresh: close idle tidies
   Refresh --> Waiting: re-render coffer-guide
 ```
 
-On each tick, once a minute, the worker does exactly four things:
+On each run the worker does exactly five things:
 
 1. **Adopts `.inbox/` files.** Each new Markdown file in a collection's inbox is normalised and kept as a source under `sources/` (see [A file dropped into the inbox](#a-file-dropped-into-the-inbox)). Whatever it promotes, it announces as a `knowledge` event.
 2. **Files loose documents.** A Markdown file in a collection outside `pages/`, `sources/` and hidden entries, other than the root `README.md`, untouched for 60 seconds, is moved to `pages/<same relative path>`, suffixed on a collision. All of a tick's moves for one collection are one commit by the `daemon` writer with the `layout` operation, and the text is never rewritten. The quiet minute keeps a file an agent is still writing from being moved from under it. This is how a collection made before pages and sources existed converges on the first sweep after an upgrade, and how an agent that writes to the wrong place is corrected within a minute. `infrastructure/knowledge/layout.py` finds and moves the files; `application/knowledge/layout.py` makes the commit.
-3. **Commits edits on disk.** Anything changed in the tree since the last commit, such as a person's editor or an agent's file tools, is committed as an edit on disk through the vault writer, so the history stays current and nothing an agent wrote is counted as Coffer's.
-4. **Re-renders the guide skill**, so a page added by hand is catalogued. A render that produces the same bytes writes nothing.
+3. **Commits edits on disk.** Anything changed in the tree since the last commit, such as a person's editor or an agent's file tools, is committed as an edit on disk through the vault writer, so the history stays current and nothing an agent wrote is counted as Coffer's. A collection with an open tidy is paused and left alone (see [A tidy is one change](#a-tidy-is-one-change)).
+4. **Closes idle tidies.** A tidy whose collection has not changed for 30 minutes is committed, at the first run after that, as one change with no report and status `expired`.
+5. **Re-renders the guide skill**, so a page added by hand is catalogued. A render that produces the same bytes writes nothing.
 
 A failed duty is logged and never ends the loop; one file that cannot be moved is logged and skipped. While the `knowledge` feature is switched off the sweep skips its rounds, and the collections stay on disk untouched. Shutdown cancels the task without waiting.
 
@@ -295,20 +335,20 @@ Every accepted write to a collection is one git commit naming its **writer**, fo
 
 | Writer | What it covers |
 | --- | --- |
-| `user` | A person's upload, delete or undo of a delete, a collection's description edit, and collection create, rename and remove. |
-| `agent` | An agent's submission promoted on arrival, naming the agent, such as a file it dropped into the inbox. |
+| `user` | A person's upload, delete, undo of a delete or undo of a tidy, a collection's description edit, and collection create, rename and remove. |
+| `agent` | A tidy (operation `tidy`, the agent's report as its summary), and an agent's submission promoted on arrival, naming the agent, such as a file it dropped into the inbox. |
 | `daemon` | The sweep filing loose documents into `pages/` (operation `layout`). The web UI shows it as **Coffer**. |
 | `curation` | A commit an earlier version of Coffer made as a curation pass. It stays in the history under this label. |
 | `sync` | Paths that vault sync applied. |
 | `disk` | Anything else found changed in the tree: a person's own editor, an agent's own file tools. |
 
-Changes made outside Coffer are never counted as Coffer's. The vault's scanner commits whatever a person or an agent's own tools changed as **Edited on disk** once the file has been quiet, and it does the same at every sweep tick and before every read of the changes feed.
+Changes made outside Coffer are never counted as Coffer's. The vault's scanner commits whatever a person or an agent's own tools changed as **Edited on disk** once the file has been quiet, and it does the same at every sweep tick and before every read of the changes feed, except in a collection paused by an open tidy.
 
 ### Where it lives
 
-The history is the vault repository's own: collections sit under `knowledge/` in `~/.coffer/vault`, so a file's history is that file's history in the one repository, read with `git -C ~/.coffer/vault log -p -- knowledge/<collection>/<path>`. Coffer's knowledge routes read it for the changes feed (`GET /api/v1/knowledge/changes`, filterable to one collection), which a collection page's **Change log** lists and a delete's undo reads.
+The history is the vault repository's own: collections sit under `knowledge/` in `~/.coffer/vault`, so a file's history is that file's history in the one repository, read with `git -C ~/.coffer/vault log -p -- knowledge/<collection>/<path>`. Coffer's knowledge routes read it for the changes feed (`GET /api/v1/knowledge/changes`, filterable to one collection), which a collection page's **Change log** lists and a delete's undo reads. The Change log shows a tidy as one entry with its report, and groups `disk` changes that follow each other within 10 minutes into one entry for reading; that grouping is the page's, and nothing in the history changes.
 
-Knowledge commits carry the vault's trailers plus the knowledge ones (`Coffer-Writer`, `Coffer-Operation`, `Coffer-Actor`, `Coffer-Agent`, `Coffer-Collection`, `Coffer-Item`, `Coffer-Status`, `Coffer-Restored-From`). Git runs with the user's global and system configuration pinned to `/dev/null`, so a personal hook, signing rule or alias cannot change what is recorded. The vault needs git: without it the daemon [waits for git](/architecture/daemon#waiting-for-git) and hands the install to an agent.
+Knowledge commits carry the vault's trailers plus the knowledge ones (`Coffer-Writer`, `Coffer-Operation`, `Coffer-Actor`, `Coffer-Agent`, `Coffer-Collection`, `Coffer-Item`, `Coffer-Status`, `Coffer-Restored-From`, `Coffer-Undoes`); a tidy's `Coffer-Status` is `reported` or `expired`. Git runs with the user's global and system configuration pinned to `/dev/null`, so a personal hook, signing rule or alias cannot change what is recorded. The vault needs git: without it the daemon [waits for git](/architecture/daemon#waiting-for-git) and hands the install to an agent.
 
 ### Undoing a delete, and older versions
 
@@ -325,7 +365,7 @@ The catalogue reaches agents through `coffer-guide`, Coffer's own skill. It is a
 The renderer (`application/knowledge/guide_render.py`) is pure: text in, text out, with no port and no filesystem access beyond its own package asset. It renders:
 
 - **The frontmatter description.** This is the only part that is always in a model's context. It names Coffer and its builtin tools, the subjects the collections cover, each taken from the first sentence of the collection's README, and, while knowledge is on, that the skill teaches how to write, tidy and check knowledge, so an agent asked to organise it recognises it. It is capped at 1024 characters, the tightest limit among skill importers, by dropping whole subjects from the tail rather than cutting a sentence. It is emitted through a YAML dumper with unlimited width, so a README containing `: ` or ` #` cannot break or silently truncate the block.
-- **The body.** First comes the hand-written manual shipped as package data. It covers the built-in tool, the tool-tiering contract, the knowledge root, and that no Coffer tool waits on an approval. While the knowledge feature is on it also carries the layout and the four instructions of [Tidying is the agent's job](#tidying-is-the-agent-s-job). The generated catalogue follows: the knowledge root, and for each collection its README's path, its pages grouped by `type` (an untyped page under "untyped") with each page's collection-relative path, title and description, its sources waiting to be integrated with their paths and titles, and how many sources it holds in all. The manual tells the agent to read files with its own tools, to grep `sources/` for an exact fact a page does not carry, and to write what it learns straight into the collection's pages.
+- **The body.** First comes the hand-written manual shipped as package data. It covers the built-in tool, the tool-tiering contract, the knowledge root, and that no Coffer tool waits on an approval. While the knowledge feature is on it also carries the layout and the three instructions of [Tidying is the agent's job](#tidying-is-the-agent-s-job). The generated catalogue follows: the knowledge root, and for each collection its README's path, its pages grouped by `type` (an untyped page under "untyped") with each page's collection-relative path, title and description, its sources waiting to be integrated with their paths and titles, and how many sources it holds in all. The manual tells the agent to read files with its own tools, to grep `sources/` for an exact fact a page does not carry, and to write what it learns straight into the collection's pages.
 
 A body is paid for only when a model opens it; a description is resident in every session. That is why Coffer ships one skill rather than a set. A catalogue entry costs roughly 40 tokens; one measured catalogue of 58 documents came to about 5.2K tokens. The catalogue has a budget of 60,000 characters: past it, the whole catalogue drops every description; past it again, it lists only each collection's page, source and waiting counts and the directories to search. Either way it says it was shortened.
 
@@ -356,13 +396,14 @@ Coffer embeds nothing. It has no vector store, no embedding model and no FTS ind
 
 ## Trade-offs
 
-- **Agents rewrite pages, and Coffer reviews nothing before they do.** The safeguards are the ones any file edit has, plus the check: every change is a version naming its writer, any file can be brought back to any version from its history or through git, the mechanical check reports a broken link or a page missing its sources at once, and a tidy ends with the agent's own report of what it integrated, merged, split, corrected and deleted. A tidy that went wrong is repaired by restoring a version from before it.
+- **Agents rewrite pages, and Coffer reviews nothing before they do.** The safeguards are the ones any file edit has, plus the check: every change is a version naming its writer, any file can be brought back to any version from its history or through git, the mechanical check reports a broken link or a page missing its sources at once, and a tidy ends with the agent's own report of what it integrated, merged, split, corrected and deleted and what it left for the person. A tidy that went wrong is undone as a whole, or one file is restored from before it.
 - **Sources wait until someone tidies.** An upload or a dropped file stands as a source until the agent integrates it. The person sees the waiting count and the **Tidy** button, and nothing compiles pages behind their back.
 - **Compiling costs agent tokens.** An ingest is expensive compared with retrieving from raw sources, so the guide keeps grep over `sources/` as the fallback for an exact fact.
 - **A bad conversion cannot be checked against the uploaded file.** Coffer keeps only the Markdown; the person keeps the file they uploaded.
+- **A tidy holds its collection's edits uncommitted.** Until the agent finishes, or the collection sits unchanged for 30 minutes, its edits are only on disk, and a sync round that would change one of them waits. A restart loses the grouping, never an edit.
 - **The sweep moves files.** Filing a loose document changes its path. Links use slugs, not paths, and the catalogue is regenerated, so nothing refers to the old path but a person's memory; the move is one commit and can be restored.
 - **The history grows with every write.** Nothing prunes it. It sits beside the files and holds text that was later folded away or deleted.
-- **User content can leave the machine only through the agent the person chose.** Coffer sends no knowledge to any model. Tidy and Check send it to the agent's own provider, as every conversation does.
+- **User content can leave the machine only through the agent the person chose.** Coffer sends no knowledge to any model. Tidy sends it to the agent's own provider, as every conversation does.
 - **Nothing here is access control.** An agent with shell tools can read any file under the knowledge root. Every collection is named to every agent; the only way to keep a collection from agents is to delete it.
 - **Agents' own file tools leave no read telemetry.** Coffer sees neither the reads nor the writes an agent makes with its own tools. The agents' own transcripts are the retroactive measure of reads, and the vault history names what changed on disk.
 - **A filed item's actor is self-reported.** The sweep keeps the `actor` an agent wrote; nothing verifies it. Frontmatter on a page is advisory: a page with no sources is a finding, not an error.
@@ -371,16 +412,16 @@ Coffer embeds nothing. It has no vector store, no embedding model and no FTS ind
 
 | Package | Responsibility |
 | --- | --- |
-| `application/knowledge/` | Collections, submission and promotion into `sources/`, normalising a dropped inbox file, uploads, the sweep and its layout duty (`layout.py`), the tidy and check prompts (`tidy_handoff.py`), the changes feed, undoing a delete, and the `coffer-guide` text and catalogue (`guide_render.py`) |
-| `infrastructure/knowledge/` | Paths, their guards and what kind a file is, file reads and writes, frontmatter, naming, the catalogue, the wiki graph, links and findings (`wiki.py`), finding and moving loose documents (`layout.py`), the history repository, converters |
-| `domain/handoff` | The one place every hand-off prompt, Tidy and Check included, is rendered |
-| `surfaces/http/` | Sweep wiring and start; the renderer-to-skill-seed join; the web UI's knowledge routes, the check route and the history hand-off |
+| `application/knowledge/` | Collections, submission and promotion into `sources/`, normalising a dropped inbox file, uploads, the sweep and its layout duty (`layout.py`), the tidy prompts (`tidy_handoff.py`), a tidy's start, finish and expiry (`tidy_service.py`), the changes feed, undoing a delete or a tidy (`collection_writes.py`), and the `coffer-guide` text and catalogue (`guide_render.py`) |
+| `infrastructure/knowledge/` | Paths, their guards and what kind a file is, file reads and writes, frontmatter, naming, the catalogue, the wiki graph, links and findings (`wiki.py`), finding and moving loose documents (`layout.py`), the history repository and its paused collections (`history.py`), the open tidies (`tidy_runs.py`), converters |
+| `domain/handoff` | The one place every hand-off prompt, Tidy included, is rendered |
+| `surfaces/http/` | Sweep wiring and start; the renderer-to-skill-seed join; the web UI's knowledge routes, the check and contents routes, the tidy start, finish and undo routes, and the history hand-off |
 
 All paths are under `backend/coffer/`.
 
 ## Related
 
 - Spec: [knowledge](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md), [knowledge data model](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/data-model.md), [skill-manager](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/skill-manager/spec.md)
-- Decisions: [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md), [Knowledge Is a Directory of Markdown Files, Not an Index](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md), [Tidying Knowledge Is the Agent's Job](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-write-is-a-validated-commit-naming-its-writer.md), [Coffer Ships Its Own Skill](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md), [Principles → Governance](/architecture/principles#governance)
+- Decisions: [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md), [Knowledge Is a Directory of Markdown Files, Not an Index](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md), [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-write-is-a-validated-commit-naming-its-writer.md), [Coffer Ships Its Own Skill](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md), [Principles → Governance](/architecture/principles#governance)
 - Research: [Knowledge structures](https://github.com/wyx-sg/Coffer/blob/main/docs/research/knowledge-structures.md)
 - Pages: [Knowledge guide](/guides/knowledge), [Memory](/architecture/memory), [Vault sync](/architecture/vault-sync), [MCP gateway](/architecture/mcp-gateway), [Resource framework](/architecture/resource-framework), [MCP tools reference](/reference/mcp-tools), [`coffer knowledge`](/reference/cli/knowledge)

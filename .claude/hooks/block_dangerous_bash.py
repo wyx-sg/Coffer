@@ -35,6 +35,15 @@ RULES: list[tuple[str, str]] = [
         r"""\bdd\b[^|;&\n]*\bof=["']?/dev/(disk|rdisk|sd[a-z]|nvme)""",
         "raw write to a block device (dd)",
     ),
+    # Killing by name reaches every session on this shared machine, not just the
+    # caller's own run. Kill the exact PID instead.
+    (
+        r"\b(pkill|killall)\b[^|;&\n]*\b(make|pytest|verify)\b",
+        (
+            "broad kill of make/pytest/verify by name (it reaches other sessions' runs "
+            "on this shared machine; kill the exact PID with `kill <pid>`)"
+        ),
+    ),
     (
         r"""(>>?)\s*["']?/dev/(sd[a-z]|nvme\d|r?disk\d)""",
         "raw write to a block device",

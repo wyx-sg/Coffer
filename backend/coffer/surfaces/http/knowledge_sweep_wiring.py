@@ -23,11 +23,13 @@ from coffer.application.knowledge.layout import loose_documents_waiting
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.application.knowledge.sweep import sweep_once
 from coffer.application.resource_service import ResourceService
+from coffer.application.runtime.cancellation import raise_if_stopping
 from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.application.runtime.wakeable import WakeableLoop
 from coffer.domain.features import KNOWLEDGE
 from coffer.infrastructure.knowledge.layout import QUIET_SECONDS
 from coffer.surfaces.http.guide_wiring import BuiltinGuide
+from coffer.surfaces.http.knowledge.dependencies import get_tidy_service
 
 _log = logging.getLogger(__name__)
 
@@ -81,6 +83,9 @@ class KnowledgeSweep:
         if not self._features.is_enabled(KNOWLEDGE):
             return
         await sweep_once(self._service, self._guide.refresh)
+        # A tidy whose agent went quiet is closed, so no collection stays
+        # paused (spec knowledge "Record a tidy as one change").
+        await get_tidy_service().expire()
         await self._schedule_quiet_retry()
 
     async def _schedule_quiet_retry(self) -> None:
@@ -91,7 +96,8 @@ class KnowledgeSweep:
             self._retry = None
         try:
             waiting = await loose_documents_waiting(self._service)
-        except Exception:
+        except Exception as exc:
+            raise_if_stopping(exc)
             _log.warning("knowledge.sweep.quiet_check_failed", exc_info=True)
             return
         if waiting:

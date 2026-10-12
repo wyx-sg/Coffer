@@ -1,6 +1,9 @@
 {
   "name": "coffer-repo-tools",
   "private": true,
+  "engines": {
+    "node": ">=20 <21"
+  },
   "description": "Repository-level tooling. The OpenSpec CLI validates and archives the spec tree under openspec/.",
   "scripts": {
     "openspec": "openspec"

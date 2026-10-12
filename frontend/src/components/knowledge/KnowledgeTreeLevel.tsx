@@ -2,7 +2,8 @@
 //
 // ONE level of a collection's documents, and the recursion that walks it. The
 // rows are the Knowledge tree's rows (navRow.ts, boards 5.1.01, 5.1.09):
-// chevron, folder / open-folder or file icon, a folder's name in the sans face
+// chevron, folder / open-folder icon or the file's own — a page's type's
+// icon, a source's (lib/knowledge/pageTypes.ts) — a folder's name in the sans face
 // and a file's in the mono face — `port-and-handshake.md`, as it is on disk and
 // as an agent reads it — a 16px indent a level, and the open document filled
 // `surface-selected`.
@@ -19,7 +20,7 @@
 // Waiting (spec knowledge "Show a collection as one tree of read-only documents
 // in the web UI").
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react";
 
 import {
   NAV_CHEVRON,
@@ -35,6 +36,7 @@ import { StatusDot } from "@/components/status/StatusDot";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import { useKnowledgeTree } from "@/lib/hooks/useKnowledge";
+import { fileIcon } from "@/lib/knowledge/pageTypes";
 import { useTreeState } from "@/lib/knowledge/treeState";
 import { cn } from "@/lib/utils";
 
@@ -153,6 +155,7 @@ export function KnowledgeTreeLevel({
 
       {data.files.map((file) => {
         const active = selectedPath === file.path;
+        const Icon = fileIcon(file);
         return (
           <li key={file.path}>
             <button
@@ -165,7 +168,11 @@ export function KnowledgeTreeLevel({
             >
               {/* The chevron's width, blank, so file rows line up with folders. */}
               <span className={NAV_CHEVRON} />
-              <FileText className={NAV_ICON} aria-hidden />
+              <Icon
+                className={NAV_ICON}
+                aria-hidden
+                data-icon={file.kind === "page" ? file.page_type || "untyped" : file.kind}
+              />
               <span className={cn(NAV_NAME, active && "font-label")}>
                 {file.path.split("/").pop()}
               </span>

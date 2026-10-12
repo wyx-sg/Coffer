@@ -20,11 +20,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from coffer.application.knowledge.tidy_handoff import (
-    collection_check_prompt,
-    collection_tidy_prompt,
-)
-from coffer.domain.knowledge.entry import CollectionEntry, Finding
+from coffer.application.knowledge.tidy_handoff import collection_tidy_prompt
+from coffer.domain.knowledge.entry import CollectionEntry, FileEntry, Finding
+from coffer.infrastructure.knowledge.tidy_runs import TIDY_RUNS
 from coffer.surfaces.http.handoff_schemas import HandoffOut
 
 
@@ -55,11 +53,11 @@ class CollectionOut(BaseModel):
     #: ``null`` when it holds none — the Overview's "edited today 13:30".
     updated_at: str | None = None
     #: The prompt that hands tidying this collection to the person's agent ("Hand a
-    #: tidy to the person's agent").
+    #: tidy to the agent"); it carries the collection's mechanical findings.
     tidy_handoff: HandoffOut
-    #: The prompt that hands a report-only check of this collection to the
-    #: person's agent ("Hand a check to the agent").
-    check_handoff: HandoffOut
+    #: Whether an agent has a tidy of this collection open ("Record a tidy as
+    #: one change"): its edits are committed as one change when it finishes.
+    tidy_running: bool = False
 
 
 def collection_out(entry: CollectionEntry) -> CollectionOut:
@@ -74,7 +72,7 @@ def collection_out(entry: CollectionEntry) -> CollectionOut:
         folder_path=entry.folder_path,
         updated_at=entry.updated_at,
         tidy_handoff=HandoffOut(prompt=collection_tidy_prompt(entry)),
-        check_handoff=HandoffOut(prompt=collection_check_prompt(entry)),
+        tidy_running=TIDY_RUNS.get(entry.name) is not None,
     )
 
 
@@ -157,6 +155,17 @@ class FileSummaryOut(BaseModel):
     waiting: bool = False
 
 
+def file_summary_out(entry: FileEntry) -> FileSummaryOut:
+    return FileSummaryOut.model_validate(entry, from_attributes=True)
+
+
+class CollectionFilesOut(BaseModel):
+    """Every page and source of one collection, for its page's Contents
+    ("Show a collection's contents by page type")."""
+
+    files: list[FileSummaryOut]
+
+
 class TreeOut(BaseModel):
     path: str
     directories: list[DirectoryOut]
@@ -201,6 +210,8 @@ class FileOut(BaseModel):
     #: ("Link pages by slug and check every link").
     page_type: str = ""
     aliases: list[str] = Field(default_factory=list)
+    #: A page's ``verified`` date, as written; empty when it carries none.
+    verified: str = ""
     sources: list[SourceRefOut] = Field(default_factory=list)
     links: list[LinkRefOut] = Field(default_factory=list)
     #: A source's citing pages and whether it waits ("Derive which sources

@@ -10,14 +10,20 @@ exactly: the desktop shell compares its Cargo crate version with the one
 "daemon out of date" banner a single missed file produces, so this script
 rewrites all of them (and
 `backend/tests/integration/distribution/test_packaging_specs.py` pins that they
-agree). Stdlib only; edits are textual and anchored so formatting elsewhere in
-each file is left alone.
+agree). The script then refreshes `backend/uv.lock` (`uv lock`) and re-syncs the
+repo `.venv` exactly as `make install` does, because `coffer.__version__` is
+read from the venv's installed metadata and a frozen binary built from a stale
+venv reports the old version; `--no-sync` skips that step. Stdlib only;
+edits are textual and anchored so formatting elsewhere in each file is left alone.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -128,13 +134,48 @@ def bump(version: str, root: Path = _REPO_ROOT) -> list[Path]:
     return [p for p, _ in pending]
 
 
+def _require_uv() -> str:
+    uv = shutil.which("uv")
+    if uv is None:
+        raise SystemExit(
+            "bump_version: uv not found; install it (https://docs.astral.sh/uv/) "
+            "and run `uv lock --project backend` then `make install`, "
+            "or pass --no-sync to skip the venv refresh"
+        )
+    return uv
+
+
+def refresh_environment(root: Path = _REPO_ROOT) -> None:
+    """Re-lock the backend and re-sync ``root/.venv`` so installed metadata
+    carries the new version (the same sync ``make install`` runs)."""
+    uv = _require_uv()
+    env = {**os.environ, "UV_PROJECT_ENVIRONMENT": str(root / ".venv")}
+    steps = [
+        [uv, "lock", "--project", "backend"],
+        [uv, "sync", "--frozen", "--extra", "dev", "--project", "backend", "--python", "3.12"],
+    ]
+    for cmd in steps:
+        if subprocess.run(cmd, cwd=root, env=env, check=False).returncode != 0:
+            raise SystemExit(
+                f"bump_version: `{' '.join(cmd[1:])}` failed; files are bumped, fix and re-run it"
+            )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("version", help="the new version, e.g. 0.2.0")
     parser.add_argument("--root", type=Path, default=_REPO_ROOT, help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--no-sync", action="store_true", help="do not refresh backend/uv.lock and the .venv"
+    )
     args = parser.parse_args(argv)
+    if not args.no_sync:
+        _require_uv()  # fail before touching any file, not after half the work
     for path in bump(args.version, args.root):
         print(f"bumped {path.relative_to(args.root)}")
+    if not args.no_sync:
+        refresh_environment(args.root)
+        print("refreshed backend/uv.lock and .venv")
     return 0
 
 

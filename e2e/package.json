@@ -1,6 +1,9 @@
 {
   "name": "coffer-e2e",
   "private": true,
+  "engines": {
+    "node": ">=20 <21"
+  },
   "version": "0.1.0",
   "type": "module",
   "scripts": {

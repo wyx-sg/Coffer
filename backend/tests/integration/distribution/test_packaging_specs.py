@@ -823,9 +823,16 @@ def _copy_version_files(dest: Path) -> None:
         target.write_text((_REPO / rel).read_text(encoding="utf-8"), encoding="utf-8")
 
 
-def _run_bump(root: Path, version: str) -> subprocess.CompletedProcess[str]:
+def _run_bump(root: Path, version: str, *extra: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(_REPO / "scripts" / "bump_version.py"), version, "--root", str(root)],
+        [
+            sys.executable,
+            str(_REPO / "scripts" / "bump_version.py"),
+            version,
+            "--root",
+            str(root),
+            *extra,
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -838,7 +845,7 @@ def test_bump_version_moves_every_copy_together(tmp_path: Path) -> None:
     _copy_version_files(tmp_path)
     before = {rel: (tmp_path / rel).read_text(encoding="utf-8") for rel in _BUMP_TARGETS}
 
-    result = _run_bump(tmp_path, "9.8.7")
+    result = _run_bump(tmp_path, "9.8.7", "--no-sync")
     assert result.returncode == 0, result.stderr
 
     patterns = {
@@ -870,7 +877,7 @@ def test_bump_version_rejects_a_malformed_version_and_writes_nothing(tmp_path: P
     _copy_version_files(tmp_path)
     before = {rel: (tmp_path / rel).read_text(encoding="utf-8") for rel in _BUMP_TARGETS}
 
-    result = _run_bump(tmp_path, "not-a-version")
+    result = _run_bump(tmp_path, "not-a-version", "--no-sync")
 
     assert result.returncode != 0
     assert "not a version" in result.stderr
@@ -885,10 +892,35 @@ def test_bump_version_leaves_all_files_untouched_when_one_anchor_is_missing(
     (tmp_path / "desktop/Cargo.lock").write_text("# no package entries\n", encoding="utf-8")
     before = {rel: (tmp_path / rel).read_text(encoding="utf-8") for rel in _BUMP_TARGETS}
 
-    result = _run_bump(tmp_path, "9.8.7")
+    result = _run_bump(tmp_path, "9.8.7", "--no-sync")
 
     assert result.returncode != 0
     assert "Cargo.lock" in result.stderr
+    assert {rel: (tmp_path / rel).read_text(encoding="utf-8") for rel in _BUMP_TARGETS} == before
+
+
+def test_bump_version_without_uv_fails_before_writing_anything(tmp_path: Path) -> None:
+    """The venv refresh is part of the bump: no uv means a precise error and no
+    half-bumped tree (the files are only written once uv is known to exist)."""
+    _copy_version_files(tmp_path)
+    before = {rel: (tmp_path / rel).read_text(encoding="utf-8") for rel in _BUMP_TARGETS}
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(_REPO / "scripts" / "bump_version.py"),
+            "9.8.7",
+            "--root",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "PATH": ""},
+    )
+
+    assert result.returncode != 0
+    assert "uv not found" in result.stderr
     assert {rel: (tmp_path / rel).read_text(encoding="utf-8") for rel in _BUMP_TARGETS} == before
 
 

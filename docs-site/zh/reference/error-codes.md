@@ -179,6 +179,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `KNOWLEDGE_HISTORY_UNAVAILABLE` | 503 | 本机不记录知识历史，通常是因为没装 git。写入仍然可用。 | 安装 git；历史从下一次写入开始记录。 |
 | `KNOWLEDGE_NOT_A_DELETE` | 400 | 你要恢复的改动没有删除任何文档或知识集。 | 撤销只能恢复一次删除；要恢复文档的早期版本，请改用它的**历史**标签。 |
 | `KNOWLEDGE_RESTORE_CONFLICT` | 409 | 放回被删除的文档会覆盖该路径上现在的文件。`details` 给出版本和文档；什么都没写。 | 先移走或重命名该路径上的文件，再恢复。 |
+| `KNOWLEDGE_NOT_A_CHANGE` | 400 | 你要撤销的改动没有动过任何知识文件，或者它动过的文件已经是改动之前的样子。 | 从知识集的**改动记录**里选一条改动。 |
+| `KNOWLEDGE_UNDO_CONFLICT` | 409 | 撤销这次改动会丢掉之后对它的文件所做的修改。`details.documents` 列出这些文件；什么都没写。 | 带 `force: true` 再撤销一次（对话框里的**仍然撤销**）丢掉这些修改，或者保留这次改动。 |
 | `KNOWLEDGE_ERROR` | 400 | 知识层的其他拒绝。 | 阅读 `message`。 |
 | `ENGINE_UNAVAILABLE` | 503 | 操作所需的某个二进制或转换器（ripgrep，或文档转换后端）不可用。 | 重新安装 Coffer；打包附带的二进制中包含它们。 |
 

@@ -14,6 +14,7 @@ import { KnowledgePaneBar } from "@/components/knowledge/KnowledgePaneBar";
 import type { CollectionOut, FileOut } from "@/lib/api/knowledge";
 import { useFileActionItems } from "@/lib/fileActionItems";
 import { crumbsOf } from "@/lib/knowledge/crumbs";
+import { useOpenInObsidian } from "@/lib/knowledge/obsidian";
 
 interface LoadedProps {
   collection: CollectionOut;
@@ -24,6 +25,7 @@ interface LoadedProps {
 export function KnowledgeLoadedDocument({ collection, file, onHistory }: LoadedProps) {
   const removeDocument = useDeleteDocument(collection.uid);
   const fileActions = useFileActionItems(file.file_path);
+  const obsidian = useOpenInObsidian(file.file_path);
   const [view, setView] = useState<DocumentView>("preview");
   const markdown = /\.(md|markdown)$/i.test(file.path);
 
@@ -40,6 +42,7 @@ export function KnowledgeLoadedDocument({ collection, file, onHistory }: LoadedP
             fileActions={fileActions}
             onDelete={() => removeDocument(file.path)}
             onHistory={onHistory}
+            obsidian={obsidian}
           />
         }
       />

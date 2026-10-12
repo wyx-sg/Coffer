@@ -53,6 +53,9 @@ WRITERS = (WRITER_USER, WRITER_AGENT, WRITER_CURATION, WRITER_SYNC, WRITER_DISK,
 #: web UI) is ``save``; material promoted to a document on arrival ``promote``;
 #: the rest name themselves.
 OP_SAVE = "save"
+#: One tidy an agent did, all its edits in one commit carrying its report
+#: (spec knowledge "Record a tidy as one change").
+OP_TIDY = "tidy"
 OP_PROMOTE = "promote"
 OP_REMOVE = "remove"
 
@@ -110,6 +113,7 @@ __all__ = [
     "OP_RESTORE",
     "OP_SAVE",
     "OP_SYNC",
+    "OP_TIDY",
     "REMOVED",
     "WRITERS",
     "WRITER_AGENT",

@@ -1,7 +1,7 @@
 # Credentials and secrets for agents: how other products do it
 
-**Feature**: hold secrets (API keys, tokens, OAuth grants) for AI agents and MCP servers on the local machine, hand each one to the process that needs it without exposing plaintext elsewhere, and move them between machines · **Coffer spec**: [credentials](../../openspec/specs/secret/spec.md) · **Related ADRs**: [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](../decisions/master-key-lives-in-the-macos-keychain.md), [credential-references](../decisions/credential-references.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](../decisions/secrets-cross-machines-only-as-ciphertext.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](../decisions/api-key-providers-are-reached-through-a-separate-local-model-proxy.md)
-**Researched**: 2026-09 · **Method**: web research, primary sources
+**Feature**: hold secrets (API keys, tokens, OAuth grants) for AI agents and MCP servers on the local machine, hand each one to the process that needs it without exposing plaintext elsewhere, and move them between machines · **Coffer spec**: [credentials](../../openspec/specs/secret/spec.md) · **Related ADRs**: [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](../decisions/master-key-lives-in-the-macos-keychain.md), [credential-references](../decisions/credential-references.md), [Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](../decisions/secrets-cross-machines-only-as-ciphertext.md), [API-Key Providers Are Reached Through a Separate Local Model Proxy That Relays Bytes Unchanged](../decisions/api-key-providers-are-reached-through-a-separate-local-model-proxy.md), [A Secret Header Stores the Credential Alone, and Its Slot Names the Auth Scheme](../decisions/a-secret-header-stores-the-credential-and-its-slot-names-the-scheme.md)
+**Researched**: 2026-09 (§8: 2026-10) · **Method**: web research, primary sources
 
 Every product below is described along the same five axes:
 
@@ -360,6 +360,15 @@ Token rules:
 - Its issue tracker shows the side effect of owning another tool's config file: overwrites clobber user settings ([#1570](https://github.com/farion1231/cc-switch/issues/1570)), and preset writes fill the wrong field ([#2525](https://github.com/farion1231/cc-switch/issues/2525)).
 
 ---
+
+## 8. How a header's auth scheme is stored beside the credential
+
+A provider hands out a bare key; HTTP sends it as `Authorization: Bearer <key>`, as `Authorization: Token <key>`, or alone in a header such as `X-Api-Key`. Products split into two camps on what they store:
+
+- **Store the bare credential, add the scheme at send time.** Postman's *Bearer Token* auth type takes only the token in its **Token** field and itself prefixes `Bearer` in the `Authorization` header; its *API Key* type takes a header name and the bare value ([authorization types](https://learning.postman.com/docs/sending-requests/authorization/authorization-types/)). Codex's MCP config has `bearer_token_env_var`, which names an environment variable holding the bare token and sends it as a bearer token, beside `env_http_headers` for other headers ([Codex MCP docs](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)). OpenAPI describes auth the same way: a `securitySchemes` entry of `type: http, scheme: bearer` declares the scheme, and the client supplies only the token ([bearer authentication](https://swagger.io/docs/specification/v3_0/authentication/bearer-authentication/)).
+- **Store the whole header value.** Claude Code's `.mcp.json` `headers` map holds the literal value, with `${VAR}` expansion, so a user writes `"Authorization": "Bearer ${TOKEN}"` ([docs](https://code.claude.com/docs/en/mcp)); ContextForge stores upstream auth headers AES-encrypted as whole values (see the [MCP gateways](mcp-gateways.md) note).
+
+The first camp lets one secret serve any header format and makes a pasted `Bearer …` value something to split rather than a second, subtly different secret; the second needs no per-header field but binds the stored secret to one header's syntax, so the same key pasted bare into an `Authorization` header fails at the upstream with a 401.
 
 ## Comparison (summary)
 
