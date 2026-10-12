@@ -86,6 +86,25 @@ export function getFile(path: string): Promise<FileOut> {
 }
 
 /**
+ * One picture a document shows (an upload's, under `assets/`), as a data URL
+ * an `<img>` can show: the route needs the session token, which an `<img src>`
+ * cannot send. `null` when it is not a picture or is gone.
+ */
+export async function getAsset(path: string): Promise<string | null> {
+  const { data, response } = await getApiClient().GET("/knowledge/asset", {
+    params: { query: { path } },
+    parseAs: "blob",
+  });
+  if (response.status !== 200 || !(data instanceof Blob) || data.size === 0) return null;
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : null);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(data);
+  });
+}
+
+/**
  * Remove ONE document — any of them (see "Let only a person delete a document"). `path` is relative to the knowledge
  * root, the same string the tree and `getFile` use, and the daemon refuses anything that
  * escapes it.

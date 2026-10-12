@@ -49,7 +49,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 ├── state/settings/internal-engine.json
 ├── state/secret-notes/notes.json
 ├── state/cli-tools/tools.json
-├── knowledge/<collection>/             # README.md, pages/, sources/, hidden .inbox/
+├── knowledge/<collection>/             # README.md, pages/, sources/, assets/, hidden .inbox/
 ├── skills/<name>/                      # skill master folders
 ├── memory/                             # the memory hub: global/ and projects/<project>/
 ├── secret/<ref>.enc
@@ -66,9 +66,10 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `state/settings/internal-engine.json` | 语音转文字模型，以及记忆同步的开关和间隔。不存在时用默认值。 | 你、守护进程 | 是 | 可以：设置恢复默认。 |
 | `state/secret-notes/notes.json` | 每个密钥的标签和描述（从不含值）。 | 你、守护进程 | 是 | 标签和描述会丢失，值还在。 |
 | `state/cli-tools/tools.json` | 你手动添加的命令行工具，以及你对技能所需工具的修改。 | 你、守护进程 | 是 | 可以：手动添加的工具和你的修改会丢失。 |
-| `knowledge/<collection>/` | 一个知识集：一个描述它的 `README.md`，加上 `pages/` 和 `sources/`。放在其他位置的 Markdown 文档会被扫描移进 `pages/`。整理则由智能体来合并和纠正。 | 你、守护进程 | 是 | **不能。** 这是写下来的知识。 |
+| `knowledge/<collection>/` | 一个知识集：一个描述它的 `README.md`，加上 `pages/`、`sources/` 和 `assets/`。放在其他位置的 Markdown 文档会被扫描移进 `pages/`。整理则由智能体来合并和纠正。 | 你、守护进程 | 是 | **不能。** 这是写下来的知识。 |
 | `knowledge/<collection>/pages/` | wiki 本身：任意层级嵌套的 Markdown 页面，由你和你的智能体编写并保持更新。 | 你、你的智能体、守护进程 | 是 | **不能。** 这是写下来的知识。 |
 | `knowledge/<collection>/sources/` | 到达的素材——每次上传和每个收件箱文件——按原样以 Markdown 保留。智能体读来源，从不编辑来源。 | 守护进程 | 是 | **不能。** 页面引用这些来源。 |
+| `knowledge/<collection>/assets/` | 从上传的文档里取出的图片，每次上传一个文件夹，由对应的来源链接。 | 守护进程 | 是 | **不能。** 来源要显示这些图片。 |
 | `knowledge/<collection>/.inbox/` | 投放区：智能体或另一台机器放在这里的 Markdown 文件，会被下一次扫描（一分钟内）收编并作为来源保留到 `sources/` 下，之后这个文件就不在了。 | 你、你的智能体、守护进程 | 是 | 不能：尚未收编的文件会丢失。 |
 | `skills/<name>/` | 托管技能的主副本：`SKILL.md`、其他文件，以及 `.coffer.meta.json`（Coffer 的元数据）。智能体拿到的是指向这个目录的符号链接。 | 你、守护进程 | 是 | **不能。** 删掉目录会让投递给智能体的链接失效。 |
 | `memory/` | [记忆](/zh/guides/memory)中心库：你任意一台机器上的智能体为自己写下的每条记忆一个 Markdown 文件，放在 `global/` 或 `projects/<project>/` 下（项目是仓库的远端，`[A-Za-z0-9._-]` 之外的字符都换成 `-`）。Frontmatter 写明来源机器、智能体和来源文件；文本里的路径存为 `<repo>` 和 `~`。只有条目来源的那台机器会修改它。 | 记忆同步 | 是 | 每台机器会在下次同步时重新发布自己智能体的记忆；另一台机器的记忆只能由那台机器重新发布。 |
@@ -92,6 +93,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `local/secret/plaintext-ignored.json` | 你说过不是密钥的值的指纹，这样它们不会再被标出来。不保存值本身。 | 守护进程 | 从不 | 这些值会再次被标出来。 |
 | `local/secret-boundary/` | `bindings.json`、`approvals.json`、`settings.json`、`times.json`、`last-used.json`：每个密钥被批准发往哪个目的地、待处理的审批、密钥边界的开关、每个密钥首次存到本机的时间和最近一次被使用的时间。 | 守护进程 | 从不 | 每个密钥都要重新等待审批。 |
 | `local/memory-sync.json` | 记忆同步的账本：每个来源的摘要、Coffer 写进本机智能体的每份副本及其状态（已写入、被智能体修改或移除）、交付内容的指纹、Codex 导入开关、本机是否确认过预览、上次同步及其报告。 | 守护进程 | 从不 | 可以：下次同步会根据 `coffer_` 文件重新推出它，并先给出预览。 |
+| `local/knowledge-originals/` | 你在这台 Mac 上传到知识里的文件，同样的内容只存一份，以 SHA-256 命名。来源会记下它的原文件；只有这台 Mac 上有这个文件。 | 守护进程 | 从不 | 原文件没了；来源和它的图片仍在保险库里。 |
 | `local/memory-sync-preview.json` | 一次首次或大量的记忆同步，正在记忆页上等待**写入**或**取消**。 | 守护进程 | 从不 | 可以：下次同步会重新规划。 |
 | `local/sync/remote.json` | 唯一的同步远端：URL、分支、推送用密钥引用、是否携带密钥、间隔、是否暂停。 | 守护进程 | 从不 | 本机忘掉这个远端。 |
 | `local/sync/round.json` | 一轮停下的同步、一次保留，或一次加入尚待选择的项目，以及你目前的回答。 | 守护进程 | 从不 | 下一轮会重新提问。 |

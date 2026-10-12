@@ -2,9 +2,8 @@
 
 The hidden ``.inbox/`` half of what ``fs.py`` writes (see "Promote submitted
 material at once"). An item is ordinary frontmatter and Markdown;
-:func:`promote` keeps it as a source under ``sources/`` — with the original
-Markdown and frontmatter only ("Keep every upload as a Markdown source") — and
-removes it. Coffer's own entrances promote at once, and the
+:func:`promote` keeps it as a source under ``sources/`` with its Markdown and
+frontmatter ("Keep every upload as a Markdown source") and removes it. Coffer's own entrances promote at once, and the
 sweep adopts and promotes whatever an agent outside Coffer, another machine or
 an older guide dropped there.
 """
@@ -12,6 +11,7 @@ an older guide dropped there.
 from __future__ import annotations
 
 import pathlib
+from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from coffer.domain.knowledge.entry import ACTOR_AGENT, KnowledgeFile
@@ -50,12 +50,14 @@ def submit_material(
     description: str,
     body: str,
     actor: str = ACTOR_AGENT,
+    extra: Mapping[str, str] | None = None,
 ) -> str:
     """Put new material in the collection's inbox. Returns the item's name.
 
-    The item is ordinary frontmatter and Markdown. It is written under a name of its
-    own — never onto an existing item — because two submissions of the same
-    title are two pieces of material.
+    The item is ordinary frontmatter and Markdown, ``extra`` keys after the
+    submitted ones. It is written under a name of its own — never onto an
+    existing item — because two submissions of the same title are two pieces
+    of material.
     """
     directory = paths.inbox_dir(collection)
     directory.mkdir(parents=True, exist_ok=True)
@@ -70,6 +72,7 @@ def submit_material(
                 "actor": actor,
                 "created_at": now,
                 "updated_at": now,
+                **{k: v for k, v in (extra or {}).items() if k not in _SUBMITTED_KEYS},
             },
             body,
         ),
@@ -168,8 +171,8 @@ def promote(collection: str, name: str) -> KnowledgeFile:
 
     The material must not wait in a hidden directory: it lands under the
     collection's ``sources/`` with its frontmatter — every key a writer set
-    kept — and the inbox file is removed. Only the Markdown is kept: an
-    upload's own file stays wherever it came from.
+    kept — and the inbox file is removed. An upload's pictures are already
+    under ``assets/``; its own file is kept on the Mac it came from only.
     """
     path = _inbox_item(collection, name)
     if not path.is_file():

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-10-12
 **Deciders**: Yuxing Wu
-**Related**: [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md) (amended by this decision); [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md); [Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](knowledge-stays-current-through-flags-coffer-computes.md); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md); research notes [knowledge curation](../research/knowledge-curation.md) and [knowledge structures](../research/knowledge-structures.md); spec knowledge; OpenSpec change `restructure-knowledge-as-a-wiki`
+**Related**: [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md) (amended by this decision); [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md); [Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](knowledge-stays-current-through-flags-coffer-computes.md); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Knowledge Sources Keep Their Images; Originals Stay on This Mac](knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md); [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md); research notes [knowledge curation](../research/knowledge-curation.md) and [knowledge structures](../research/knowledge-structures.md); spec knowledge; OpenSpec change `restructure-knowledge-as-a-wiki`
 
 ## Context
 
@@ -84,14 +84,16 @@ Each collection holds three things:
 <collection>/
 ├── README.md     the schema: what the collection is for, its page types, its rules, verify_after_days
 ├── sources/      kept material: each upload's converted Markdown
+├── assets/       the pictures taken out of uploads, one folder per upload
 └── pages/        the wiki: pages people and agents both edit, linked by [[slug]]
 ```
 
 - **Sources are kept and do not change.** An upload, or a file dropped into
-  `.inbox/`, becomes a source: its converted Markdown with frontmatter. Only the Markdown
-  is kept, not the uploaded file, so the collection stays one tree of Markdown
-  and the sync repository carries no binaries. Agents read sources and never
-  edit them.
+  `.inbox/`, becomes a source: its converted Markdown with frontmatter, plus
+  the pictures taken out of it under `assets/`, linked from the source by
+  relative path. The uploaded file itself is not put in the collection: it is
+  kept on the Mac that uploaded it only, so the sync repository carries no
+  large binaries ([Knowledge Sources Keep Their Images; Originals Stay on This Mac](knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md)). Agents read sources and never edit them.
 - **Pages are compiled from sources by the agent**, when the person presses
   **Tidy** (an ingest plus a tidy), or as the agent learns something durable.
   A page names the sources it draws on in its `sources:` frontmatter, so which
@@ -124,8 +126,8 @@ Each collection holds three things:
   traces back to kept sources, and pages relate through links that are checked.
   Keeps every constraint of the earlier decision: no derived store, no
   retrieval tool, no model run by Coffer, one undivided store, pull not push.
-- **Cons.** A bad conversion cannot be checked against the uploaded file,
-  because Coffer does not keep it; the person keeps that file themselves. An
+- **Cons.** A bad conversion can be checked against the uploaded file only on
+  the Mac that uploaded it, the one place the original is kept. An
   ingest costs agent tokens, and a compiled wiki is expensive to build compared
   with retrieving from raw sources (one preregistered study measured about 100×
   the build cost, with better cross-document answers and worse single-fact
@@ -146,10 +148,13 @@ generated, the git history stays the log, and judgement stays the agent's.**
 Rules a future change must respect:
 
 - **Sources are kept and immutable.** An upload is kept as its converted
-  Markdown only; the uploaded file is not stored. No agent instruction may tell an agent to edit a
+  Markdown, with its pictures beside it under `assets/`; the uploaded file is
+  never stored in the collection, only on the Mac that uploaded it, which the
+  source names in `original` ([Knowledge Sources Keep Their Images; Originals Stay on This Mac](knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md)). No agent instruction may tell an agent to edit a
   source, except to add the few keys that describe it rather than change it:
   `ingest: skipped` when it holds nothing worth a page, `superseded_by` when a
-  newer source replaces it, and a `summary` of what it says
+  newer source replaces it, and a `summary` of what it says; `original` and
+  `original_sha256` are Coffer's and stay as written
   ([Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](knowledge-stays-current-through-flags-coffer-computes.md)).
 - **A page's identity is its slug.** File names are slugs; a page's `aliases`
   are extra names a link may use; a link names a slug or an alias, never a path.
@@ -161,7 +166,7 @@ Rules a future change must respect:
   read and fixes nothing; fixing them is the agent's, when the person presses
   Tidy.
 - **Coffer moves a file only to keep the layout.** The sweep files a Markdown
-  document left outside `pages/` and `sources/` into `pages/` at the same
+  document left outside `pages/`, `sources/` and `assets/` into `pages/` at the same
   relative path, so older collections and agents writing to the wrong place
   converge, as one commit. It rewrites no content.
 - **Everything else in [Knowledge Is a Directory of Markdown Files](knowledge-is-plain-files.md)
@@ -184,7 +189,7 @@ there. Three options were weighed:
   sees the word. Pros: no new storage, no new code path for edits — an
   Obsidian save is an edit on disk like any editor's — and the person keeps
   Coffer's history, sync, check and Tidy. Cons: a Markdown file Obsidian
-  creates outside `pages/` and `sources/` is filed into `pages/` by the sweep
+  creates outside `pages/`, `sources/` and `assets/` is filed into `pages/` by the sweep
   within a minute, so people should point Obsidian's default location for new
   notes at the collection's `pages/` folder.
 - **Replace the knowledge UI with Obsidian.** Pros: a mature editor, graph view
@@ -216,8 +221,10 @@ the page
 
 - The earlier decision's rule "no document may name another knowledge file"
   becomes "a page links by slug, never by path"; its "no directory carries
-  meaning" is reversed for `sources/` and `pages/`. Its "no kept originals"
-  stands: a source is the converted Markdown alone.
+  meaning" is reversed for `sources/`, `pages/` and `assets/`. Its "no kept
+  originals" holds for the vault: a source is the converted Markdown and its
+  pictures, and the uploaded file stays on the Mac that uploaded it
+  ([Knowledge Sources Keep Their Images; Originals Stay on This Mac](knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md)).
 - Tidy means: compile the waiting sources into pages, fix the mechanical
   findings, recheck the pages due a recheck, then tidy the pages, reporting
   what is left for the person and the gaps it found.
@@ -227,6 +234,7 @@ the page
 - A page's author can still be a person in their editor: frontmatter is
   advisory, and a page with no sources is a finding, not an error.
 - Enforcement: spec knowledge "Keep sources and pages apart in each collection",
-  "Keep every upload as a Markdown source", "Link pages by slug and
-  check every link", "Check a collection mechanically on every read", "Hand a
+  "Keep every upload as a Markdown source", "Keep the pictures of an upload
+  beside its source", "Keep an upload's original on this Mac only", "Link
+  pages by slug and check every link", "Check a collection mechanically on every read", "Hand a
   tidy to the agent", "Open a collection in Obsidian when it is installed".

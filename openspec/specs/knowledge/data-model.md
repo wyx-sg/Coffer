@@ -1,12 +1,14 @@
 # Data Model — Knowledge Layer
 
 The layer's state is a directory. This document describes what is on disk —
-one wiki per collection, its kept `sources/` and edited `pages/`, the hidden
-`.inbox/` drop zone, the frontmatter contract, the naming rule — plus the one
-resource file a collection has and the in-memory value objects the surfaces
-answer with. Authority is [`spec.md`](spec.md),
+one wiki per collection, its kept `sources/`, edited `pages/` and the
+`assets/` an upload's pictures land in, the hidden `.inbox/` drop zone, the
+frontmatter contract, the naming rule — plus the one resource file a
+collection has, the machine-local store of uploaded originals, and the
+in-memory value objects the surfaces answer with. Authority is [`spec.md`](spec.md),
 [Knowledge Is Plain Files](../../../docs/decisions/knowledge-is-plain-files.md) and
-[Knowledge Is a Wiki of Pages Compiled From Kept Sources](../../../docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md).
+[Knowledge Is a Wiki of Pages Compiled From Kept Sources](../../../docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md) and
+[Knowledge Sources Keep Their Images; Originals Stay on This Mac](../../../docs/decisions/knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md).
 
 ## There is no schema
 
@@ -18,8 +20,8 @@ reindex, and no reconciliation of any kind (see "Store each collection as one
 tree of Markdown files").
 
 The sweep needs no record either. What it adopts is a file in a collection's
-hidden `.inbox/`; what it files is a Markdown document outside `pages/` and
-`sources/`; what it commits is whatever differs on disk from the vault's
+hidden `.inbox/`; what it files is a Markdown document outside `pages/`,
+`sources/` and `assets/`; what it commits is whatever differs on disk from the vault's
 `HEAD`. Nothing remembers which sources were integrated: a source waits while
 no page cites it, which is read off the pages every time (see "Derive which
 sources wait from the pages that cite them"). Judgement over pages is the
@@ -49,6 +51,10 @@ Coffer's (see "Leave a linked folder to its own tools").
 │   ├── README.md                   # the schema: verify_after_days, the description, page types, rules; not a page
 │   ├── sources/                    # what arrived, kept as Markdown; never edited
 │   │   └── q3-review.md            # a source: converted Markdown + frontmatter
+│   ├── assets/                     # pictures taken out of uploads; visible, so they sync
+│   │   └── q3-review-1a2b3c4d/     # one folder per upload: <title-slug>-<first 8 hex of its sha256>
+│   │       ├── image-1.png         # linked from the source as ../assets/q3-review-1a2b3c4d/image-1.png
+│   │       └── image-2.jpg
 │   ├── pages/                      # the wiki: read by agents, edited by people and agents
 │   │   ├── account/                # nesting chosen by whoever files a page
 │   │   │   └── login-sessions.md
@@ -78,11 +84,25 @@ Coffer's (see "Leave a linked folder to its own tools").
   holds what people and agents write from it (see "Keep sources and pages apart
   in each collection"). `paths.kind_of` names a Markdown file under `pages/` a
   **page**, one under `sources/` a **source**, and anything else a plain
-  **file**, listed but neither catalogued nor checked. A person edits any page in
+  **file**, listed but neither catalogued nor checked — the pictures under
+  `assets/` among them. A person edits any page in
   their own editor and an agent edits one with its own file tools; nobody edits a
   source. Below the two folders the nesting is free — whoever files a page
   chooses where (see "Allow nesting without giving it meaning"). A Markdown
-  document left outside them is filed into `pages/` by the sweep.
+  document left outside them and `assets/` is filed into `pages/` by the sweep.
+- **`assets/` holds an upload's pictures** (see "Keep the pictures of an
+  upload beside its source"): one folder per upload,
+  `assets/<title-slug>-<first 8 hex of the upload's SHA-256>/`, holding
+  `image-1.<ext>`, `image-2.<ext>` … in the order the Markdown first shows
+  them, written in the same commit as the source. The source links each by
+  relative path, `../assets/<folder>/image-N.<ext>`. The folder is visible on
+  purpose: the vault's `.git/info/exclude` leaves every hidden entry under
+  `knowledge/` out of git, and the pictures must sync and keep history like
+  the source. Nothing deletes a folder when its source is deleted.
+  `assets.py` owns the layout, the links and the read route's guard;
+  `converters/images.py` owns extraction and its bounds (48 px minimum side,
+  5 MB per picture, repeats kept once, 40 per upload, non-web formats
+  re-encoded as PNG).
 - **Dot-prefixed entries are invisible** (see "Hide every dot-prefixed entry").
   Coffer's own surfaces list none of them and the read route refuses every
   hidden segment, through the path guard rather than by skipping. `.inbox/` is
@@ -154,7 +174,7 @@ updated_at: '2026-09-23T04:18:33Z'
 Login state is owned by `account.session`; see [[gateway-routing]].
 ```
 
-A source, as Coffer writes it from an upload:
+A source, as Coffer writes it from an uploaded PDF:
 
 ```markdown
 ---
@@ -163,7 +183,17 @@ description: The quarter's incidents and the follow-ups agreed.
 actor: user
 created_at: '2026-09-12T04:18:33Z'
 updated_at: '2026-09-12T04:18:33Z'
+original: q3-review.pdf
+original_sha256: 1a2b3c4d…
 ---
+
+…the text…
+
+## Images
+
+Page 2:
+
+![Page 2](../assets/q3-review-1a2b3c4d/image-1.png)
 ```
 
 | Key | Type | Notes |
@@ -180,6 +210,8 @@ updated_at: '2026-09-12T04:18:33Z'
 | `ingest` | `skipped` | Set by an agent on a source with nothing worth keeping, so it stops waiting. |
 | `superseded_by` | `str` | A source's replacement, by slug, set by an agent or a person (see "Mark a source superseded by the one that replaces it"). The source stops waiting; a page citing it and no later source in the chain → `superseded_source`; a slug no source has → `missing_source` on the source. |
 | `summary` | `str` | A source's one or two sentences on what it says, written by an agent as it integrates or tidies; shown in the catalogue and in Contents. |
+| `original` | `str` | The name of the file an upload was converted from, written by Coffer (see "Keep an upload's original on this Mac only"). Absent on a Markdown or text upload, which is its own source. |
+| `original_sha256` | hex `str` | The SHA-256 of that file, written by Coffer; it names the copy kept in `~/.coffer/local/knowledge-originals/` on the Mac that uploaded it. |
 
 A page's **slug** is its file stem; so is a source's. A `[[slug]]` or
 `[[slug|text]]` outside code in a page's body resolves case-insensitively, after
@@ -208,8 +240,8 @@ model (see "Sweep the knowledge root on its mechanical duties"):
 1. **Adopt and promote `.inbox/` files**: each Markdown file in a collection's
    `.inbox/` is normalised and kept (`inbox.promote`) as a source under
    `sources/`, recorded with one `KNOWLEDGE_WRITTEN` audit event.
-2. **File loose documents**: a Markdown file outside `pages/`, `sources/` and
-   hidden entries, other than the README, untouched for a minute
+2. **File loose documents**: a Markdown file outside `pages/`, `sources/`,
+   `assets/` and hidden entries, other than the README, untouched for a minute
    (`layout.QUIET_SECONDS`), moves to `pages/` at the same relative path,
    suffixed on a collision — all of a tick's moves as one `daemon` / `layout`
    commit, with the text unchanged.
@@ -222,8 +254,10 @@ through the vault's ordinary writer, and it keeps no machine-local record.
 
 `KnowledgeService.submit` promotes at once as well (see "Promote submitted
 material at once"): an upload becomes a source under `sources/`, with
-frontmatter filled from its opening prose. Only the Markdown is kept; the
-uploaded file itself is not stored. It then waits until a page cites it.
+frontmatter filled from its opening prose, and its pictures land under
+`assets/` in the same commit. The uploaded file itself is not stored in the
+collection; it is kept on this Mac only (below). The source then waits until a
+page cites it.
 
 ### Naming
 
@@ -269,7 +303,7 @@ of them is persisted and none of them can be stale.
 | `CatalogueLevel` | `path`, `directories`, `files` | **One level of one collection**, never the whole tree. |
 | `Finding` | `kind`, `path`, `target`, `others` | One mechanical finding (see "Check a collection mechanically on every read"): `dead_link`, `ambiguous_link`, `duplicate_slug`, `missing_source`, `superseded_source` (`others` = the newest replacement), `incomplete_page`, `unsourced_page`, `stale_page` (`target` = `verified` as written, none when missing), `orphan_page` or `waiting_source`. |
 | `SourceRef`, `LinkRef`, `PageRef` | `slug`/`target`, `path`, `title`/`ambiguous` | A page's `sources` entry or `[[link]]` with what it resolves to; a page that cites a source. |
-| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `kind`, `page_type`, `aliases`, `verified`, `stale`, `sources`, `links`, `cited_by`, `waiting`, `superseded_by`, `summary` | A file in full; a source's `superseded_by` is a `SourceRef`, `None` when it is current. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); Coffer serves a document's bytes only to be shown: no route saves them (see "Treat a direct file edit as a complete change"). |
+| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `kind`, `page_type`, `aliases`, `verified`, `stale`, `sources`, `links`, `cited_by`, `waiting`, `superseded_by`, `summary`, `original`, `original_path` | A file in full; a source's `superseded_by` is a `SourceRef`, `None` when it is current. `original` is the source's `original` (empty when none) and `original_path` the absolute path of that file on this Mac, `None` when it is not here. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); Coffer serves a document's bytes only to be shown: no route saves them (see "Treat a direct file edit as a complete change"). |
 
 Constants: `ACTOR_AGENT = "agent"`, `ACTOR_USER = "user"`.
 
@@ -285,9 +319,13 @@ no `SearchHit`, `SearchOutcome`, `SearchService` or grep value object.
 `Conversion` (`domain/knowledge/converter.py`) is what a converter returns for
 an uploaded document: the `markdown`, a `title` (the document's first H1,
 falling back to its file name; see "Fill frontmatter on converted material"),
-and which `converter` ran — reported on the upload response and written nowhere
-on disk. Only the Markdown becomes the source; the uploaded file itself is not
-kept, whichever converter ran.
+which `converter` ran — reported on the upload response and written nowhere
+on disk — and the `images` it took out (`ConvertedImage`: a `name` such as
+`image-1.png`, which the Markdown links until the source is written, and the
+`data`). The Markdown becomes the source and the images its `assets/` folder;
+the uploaded file itself is kept on this Mac only, unless the `passthrough`
+converter ran, which keeps a Markdown or text upload as it stands and keeps no
+original.
 
 The HTTP wire models in `surfaces/http/knowledge/schemas.py` mirror the domain
 types and add the shapes that describe an answer no domain type does:
@@ -308,13 +346,40 @@ a tidy of it open (see "Record a tidy as one change"), and `linked`,
 (`summary`, the agent's report) and `TidyFinishOut` (`change`, null when the
 tidy changed nothing) for `POST .../tidy/finish`; `UndoIn` (`force`) for
 `POST /knowledge/changes/{version}/undo` (see "Undo a tidy"); and
-`IngestedDocumentOut` (`path`, `title`, `description`, `converter`). There is no
+`IngestedDocumentOut` (`path`, `title`, `description`, `converter`); and
+`FileOut`, a file's read, which carries the `KnowledgeFile` fields, `original`
+and `original_path` among them. `GET /knowledge/asset?path=` answers a
+picture's bytes with its media type (`png`, `jpg`, `jpeg`, `gif`, `webp`,
+`svg`, up to 10 MB) rather than a wire model, and 404 for anything else. There is no
 write-a-document model: every entrance submits material, which becomes a
 document at once, and a person's own text reaches a document through their
 editor. The mirroring is
 deliberate rather than redundant: the domain types describe what is on disk and
 the wire models describe what a client is promised, so removing a field from the
 wire never means hiding one from the layer.
+
+## Uploaded originals (machine-local)
+
+The file a person uploads is kept on the Mac that uploaded it only (see "Keep
+an upload's original on this Mac only"), outside the vault and never synced:
+
+```text
+~/.coffer/local/knowledge-originals/
+└── <sha256><.ext>      # mode 0600; one file per content, however often it is uploaded
+```
+
+- The name is the upload's SHA-256 plus its lower-cased extension, so keeping
+  is idempotent and the source's `original_sha256` finds the copy again.
+- It is written after the source is committed: a failure to keep it loses the
+  local copy, never the upload.
+- A Markdown or text upload keeps none.
+- Nothing deletes an original when its source goes; a source brought back by
+  Undo or a history restore finds its original again. Losing the Mac loses its
+  originals, while the source and its pictures survive in the vault.
+- `infrastructure/knowledge/originals.py` owns the store. A read resolves
+  `original_path` from the source's `original` and `original_sha256`; on a Mac
+  without the copy it is `None`, and the Knowledge page says the original is on
+  the Mac it was uploaded from.
 
 ## The `knowledge` Resource
 

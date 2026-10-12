@@ -1,7 +1,7 @@
 """``/api/v1/knowledge/*`` — the human's side of the knowledge directory.
 
 Create a collection, list them, check one, walk one level of a collection,
-read a file, upload a source, delete a file and fetch the prompt that hands a
+read a file or a picture, upload a source, delete a file and fetch the prompt that hands a
 tidy to the person's agent (spec knowledge
 "Manage knowledge in the web UI and on the command line"). These routes
 are the web UI's own: one the page does not call does not exist. Deleting a
@@ -49,6 +49,7 @@ plain-Python layer below the domain, so it is not a ``CofferError``.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, UploadFile, status
@@ -57,9 +58,10 @@ from coffer.application.knowledge.ingest import IngestService
 from coffer.application.knowledge.linking import link_folder
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.application.knowledge.tidy_handoff import all_tidy_prompt
+from coffer.domain.knowledge.config import linked_folder
 from coffer.domain.knowledge.converter import EmptyConversion, UnsupportedDocument
 from coffer.domain.knowledge.entry import ACTOR_AGENT, ACTOR_USER
-from coffer.infrastructure.knowledge import paths
+from coffer.infrastructure.knowledge import assets, paths
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.errors import error_response
 from coffer.surfaces.http.handoff_schemas import HandoffOut
@@ -195,6 +197,23 @@ async def read_file(
     # reads"), which is what the
     # page's open-in-editor and reveal actions hand back to the daemon.
     return _file_out(await svc.read(path))
+
+
+@router.get(
+    "/asset",
+    response_class=Response,
+    responses={200: {"content": {"image/*": {}}, "description": "The picture's bytes."}},
+)
+async def read_asset(
+    # A filesystem path, name-led like ``file``'s above.
+    path: str = Query(min_length=1),
+    svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
+) -> Response:
+    # A picture a document shows (spec knowledge "Keep the pictures of an
+    # upload beside its source"); anything that is not a picture is not found.
+    row = await svc.find_collection(path)
+    data, media = await asyncio.to_thread(assets.picture_at, path, linked_folder(row.config))
+    return Response(content=data, media_type=media, headers={"Cache-Control": "private"})
 
 
 @router.delete("/file", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

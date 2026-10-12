@@ -3264,7 +3264,7 @@
     "upload": {
       "button": "Upload",
       "title": "Upload documents",
-      "body": "Coffer converts each to Markdown and keeps it as a source of the collection. The uploaded files themselves are not stored.",
+      "body": "Coffer converts each to Markdown and keeps it, with its pictures, as a source of the collection. The uploaded file itself stays on this Mac only.",
       "choose": "Drop files here, or choose them",
       "types": "PDF, Word, PowerPoint, Excel, HTML, CSV, Markdown or text · up to 20 MB",
       "into": "Into collection",
@@ -3307,7 +3307,10 @@
       "verified": "verified {{date}}",
       "stale": "Needs rechecking",
       "neverVerified": "never checked",
-      "supersededBy": "Superseded by"
+      "supersededBy": "Superseded by",
+      "original": "Original",
+      "originalFailed": "Couldn't open the original file.",
+      "originalElsewhere": "Original {{name}} is on the Mac it was uploaded from"
     },
     "deleteDocument": {
       "menu": "Delete",

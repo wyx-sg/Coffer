@@ -21,6 +21,12 @@ from typing import Any
 
 from coffer.domain.errors import EngineUnavailable
 from coffer.domain.knowledge.converter import Conversion, derive_title
+from coffer.infrastructure.knowledge.converters.images import (
+    Pictures,
+    pdf_pictures,
+    take_data_uris,
+    with_pdf_pictures,
+)
 
 # Formats MarkItDown actually has a converter for (pdf, modern Office, html,
 # epub). The passthrough/csv converters claim text/csv first in the registry,
@@ -71,14 +77,23 @@ class MarkItDownConverter:
         engine = self._engine()
         ext = pathlib.Path(filename).suffix.lstrip(".").lower()
 
+        pictures = Pictures()
+
         def _run() -> str:
             # MarkItDown reads from a path; write the bytes to a temp file with
-            # the right suffix so its sniffer dispatches correctly.
+            # the right suffix so its sniffer dispatches correctly. Office and
+            # HTML pictures come back inlined, a PDF's are read from the file.
             with tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=True) as tmp:
                 tmp.write(data)
                 tmp.flush()
-                result = engine.convert(tmp.name)
-                return str(getattr(result, "text_content", "") or "")
+                if ext == "pdf":
+                    result = engine.convert(tmp.name)
+                    text = str(getattr(result, "text_content", "") or "")
+                    if not text.strip():
+                        return text
+                    return with_pdf_pictures(text, pdf_pictures(pathlib.Path(tmp.name), pictures))
+                result = engine.convert(tmp.name, keep_data_uris=True)
+                return take_data_uris(str(getattr(result, "text_content", "") or ""), pictures)
 
         try:
             markdown = await asyncio.to_thread(_run)
@@ -87,5 +102,8 @@ class MarkItDownConverter:
         except Exception as exc:
             raise EngineUnavailable("markitdown", f"conversion failed: {exc}") from exc
         return Conversion(
-            markdown=markdown, title=derive_title(markdown, filename), converter="markitdown"
+            markdown=markdown,
+            title=derive_title(markdown, filename),
+            converter="markitdown",
+            images=tuple(pictures.kept),
         )

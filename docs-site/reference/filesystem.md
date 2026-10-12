@@ -49,7 +49,7 @@ State is kept in five [storage classes](/architecture/persistence), one director
 ├── state/settings/internal-engine.json
 ├── state/secret-notes/notes.json
 ├── state/cli-tools/tools.json
-├── knowledge/<collection>/             # README.md, pages/, sources/, hidden .inbox/
+├── knowledge/<collection>/             # README.md, pages/, sources/, assets/, hidden .inbox/
 ├── skills/<name>/                      # skill master folders
 ├── memory/                             # the memory hub: global/ and projects/<project>/
 ├── secret/<ref>.enc
@@ -66,9 +66,10 @@ State is kept in five [storage classes](/architecture/persistence), one director
 | `state/settings/internal-engine.json` | The speech-to-text model, and the memory sync's switch and interval. Absent means defaults. | you, daemon | Yes | Yes: the settings return to their defaults. |
 | `state/secret-notes/notes.json` | Each secret's label and description (never its value). | you, daemon | Yes | The labels and descriptions are lost; the values stay. |
 | `state/cli-tools/tools.json` | The command-line tools you added by hand, and your edits to ones a skill requires. | you, daemon | Yes | Yes: hand-added tools and your edits are gone. |
-| `knowledge/<collection>/` | A collection: a `README.md` describing it, plus `pages/` and `sources/`. A Markdown document left anywhere else in it is moved into `pages/` by the sweep. A Tidy hands the merging and correcting to an agent. | you, daemon | Yes | **No.** This is written knowledge. |
+| `knowledge/<collection>/` | A collection: a `README.md` describing it, plus `pages/`, `sources/` and `assets/`. A Markdown document left anywhere else in it is moved into `pages/` by the sweep. A Tidy hands the merging and correcting to an agent. | you, daemon | Yes | **No.** This is written knowledge. |
 | `knowledge/<collection>/pages/` | The wiki: Markdown pages in any nesting, written and kept current by you and your agents. | you, your agents, daemon | Yes | **No.** This is written knowledge. |
 | `knowledge/<collection>/sources/` | The material that arrived — each upload and each inbox file — kept as Markdown, as it came. Agents read sources and never edit them. | daemon | Yes | **No.** Pages cite these sources. |
+| `knowledge/<collection>/assets/` | The pictures taken out of uploaded documents, one folder per upload, linked from their source. | daemon | Yes | **No.** The sources show these pictures. |
 | `knowledge/<collection>/.inbox/` | A drop zone: a Markdown file an agent or another machine leaves here is adopted and kept as a source under `sources/` by the next sweep (within a minute), then the file is gone. | you, your agents, daemon | Yes | No: a file not yet adopted is lost. |
 | `skills/<name>/` | The master copy of a managed skill: `SKILL.md`, its other files, and `.coffer.meta.json` (Coffer's metadata). Agents receive a symlink to this folder. | you, daemon | Yes | **No.** Deleting a folder breaks the links delivered to agents. |
 | `memory/` | The [memory](/guides/memory) hub: one Markdown file per memory an agent on any of your machines wrote for itself, under `global/` or `projects/<project>/` (the project's repository remote, with every character outside `[A-Za-z0-9._-]` turned into `-`). Frontmatter names the origin machine, agent and source; paths in the text are stored as `<repo>` and `~`. Only the machine an entry came from changes it. | memory sync | Yes | Each machine publishes its own agents' memories again at the next sync; another machine's memories come back only from that machine. |
@@ -92,6 +93,7 @@ State is kept in five [storage classes](/architecture/persistence), one director
 | `local/secret/plaintext-ignored.json` | Fingerprints of the values you said are not secrets, so they are not flagged again. Holds no value. | daemon | Never | Those values are flagged again. |
 | `local/secret-boundary/` | `bindings.json`, `approvals.json`, `settings.json`, `times.json`, `last-used.json`: which destination each secret is approved for, pending approvals, the boundary's switches, when each secret was first stored here and when it was last used. | daemon | Never | Every secret waits for approval again. |
 | `local/memory-sync.json` | The memory sync's ledger: each source's digest, every copy Coffer wrote into this machine's agents and its state (written, edited or removed by the agent), fingerprints of what was delivered, the Codex-import switch, whether this machine confirmed a preview, the last sync and its report. | daemon | Never | Yes: the next sync re-derives it from the `coffer_` files and shows a preview first. |
+| `local/knowledge-originals/` | The files you uploaded to knowledge on this Mac, one per content, named by their SHA-256. A source names its original; only this Mac has the file. | daemon | Never | The originals are gone; the sources and their pictures are still in the vault. |
 | `local/memory-sync-preview.json` | A first or large memory sync waiting for **Write** or **Cancel** on the Memory page. | daemon | Never | Yes: the next sync plans again. |
 | `local/sync/remote.json` | The one sync remote: URL, branch, push secret ref, whether secrets travel, interval, paused. | daemon | Never | This machine forgets the remote. |
 | `local/sync/round.json` | A stopped round, a hold, or a join's pending choices, with your answers so far. | daemon | Never | The question is asked again on the next round. |

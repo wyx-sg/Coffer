@@ -47,6 +47,11 @@ wiki per collection, which the developer and agents like you write together:
   beyond the few keys rule 6 allows.
 - `pages/` holds the **pages**: the wiki itself, compiled from the sources and
   kept up to date. This is what you read first and what you write.
+- `assets/` holds the pictures Coffer took out of uploaded documents, one
+  folder per upload. A source links its own (`../assets/<folder>/image-1.png`);
+  open one when the text around it is not enough, and link it the same way from
+  a page that needs the picture. An uploaded source's `original` names the file
+  it came from, which stays on the developer's Mac and is not in the collection.
 
 **There is no Coffer tool for reading, listing, searching or grepping it.** Use
 your own file tools on those paths. The catalogue at the bottom of this file
@@ -102,7 +107,8 @@ guess, an opinion, or something true only of this conversation.
 6. **Never edit a source.** A source is the record of what arrived. The only
    keys you may add to one are `ingest: skipped`, `superseded_by: <slug>` when
    a newer source replaces it, and `summary`, one or two sentences on what it
-   says (see "Integrating sources").
+   says (see "Integrating sources"). Coffer writes `original` and
+   `original_sha256` on an upload; leave them as they are.
 7. **Give every page frontmatter**: a `title`; a `type` — `concept`, `entity`,
    `how-to`, `decision` or `overview` unless the README defines its own; a
    one-line `description` saying what *question* the page answers (it is the

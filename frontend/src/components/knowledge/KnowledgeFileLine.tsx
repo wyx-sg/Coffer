@@ -8,14 +8,18 @@
 // rechecking mark once that is too old or missing, and its sources — each
 // opening that source, one that names no source struck through. A source:
 // when it was created and by whom, what supersedes it, the pages that cite
-// it (each opening the page) or the Waiting or Skipped mark.
+// it (each opening the page) or the Waiting or Skipped mark, and the file an
+// upload came from: opened from here on the Mac that uploaded it, named with
+// where it is on any other.
 // Any other file: when it was created and by whom.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import { StatusPill } from "@/components/status/StatusPill";
+import { useToast } from "@/components/ui/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { fsApi } from "@/lib/api/fs";
 import type { FileOut } from "@/lib/api/knowledge";
 import { agentLabel } from "@/lib/knowledge/changes";
 import { collectionPath } from "@/lib/knowledge/routes";
@@ -43,6 +47,7 @@ function Joined({ children }: { children: ReactNode[] }) {
 
 export function KnowledgeFileLine({ file, collectionUid }: Props) {
   const { t, i18n } = useTranslation();
+  const { toast } = useToast();
   const parts: ReactNode[] = [];
 
   if (file.kind === "page" && file.page_type) {
@@ -168,6 +173,32 @@ export function KnowledgeFileLine({ file, collectionUid }: Props) {
           ))}
         </Joined>
       </span>,
+    );
+  }
+
+  if (file.kind === "source" && file.original) {
+    const local = file.original_path;
+    parts.push(
+      local ? (
+        <span key="original" className="inline-flex flex-wrap items-center gap-x-1">
+          {t("knowledge.document.original")}
+          <button
+            type="button"
+            className={LINK}
+            onClick={() =>
+              void fsApi
+                .open(local)
+                .catch(() => toast.error(t("knowledge.document.originalFailed")))
+            }
+          >
+            {file.original}
+          </button>
+        </span>
+      ) : (
+        <span key="original" data-testid="original-elsewhere" className="text-text-subtle">
+          {t("knowledge.document.originalElsewhere", { name: file.original })}
+        </span>
+      ),
     );
   }
 

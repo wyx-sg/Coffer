@@ -7,7 +7,8 @@
 // Waiting mark, who created it and when), then the body.
 // Preview renders the Markdown, a page's `[[links]]` opening the file each
 // resolves to (KnowledgeWikiLink); Source shows the raw text in the code
-// viewer. Every file is the same here, whoever wrote it last (spec knowledge
+// viewer. A picture the Markdown links by a relative path (an upload's,
+// under `assets/`) shows inline (KnowledgeImage). Every file is the same here, whoever wrote it last (spec knowledge
 // "Let only a person delete a document"); its file actions live in the pane
 // bar, not beside the text.
 //
@@ -19,10 +20,12 @@ import { Fragment, useMemo, type ReactNode } from "react";
 import type { Components } from "react-markdown";
 
 import { KnowledgeFileLine } from "@/components/knowledge/KnowledgeFileLine";
+import { KnowledgeImage } from "@/components/knowledge/KnowledgeImage";
 import { KnowledgeWikiLink } from "@/components/knowledge/KnowledgeWikiLink";
 import { CodeView } from "@/components/preview/CodeView";
 import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
 import type { FileOut } from "@/lib/api/knowledge";
+import { resolveAsset } from "@/lib/knowledge/assets";
 import { splitTitleHeading } from "@/lib/knowledge/titleHeading";
 import { markWikiLinks, wikiTargetOf } from "@/lib/knowledge/wikiLinks";
 
@@ -74,33 +77,44 @@ export function KnowledgeDocumentReader({ file, collectionUid, source }: Props) 
   );
   const page = file.kind === "page";
   const rendered = useMemo(() => (page ? markWikiLinks(body) : body), [page, body]);
-  const components = useMemo<Components>(
-    () =>
-      page
-        ? {
-            code,
-            a: ({ href, title: hint, children }) => {
-              const target = wikiTargetOf(href);
-              return target === null ? (
-                <a
-                  className="text-accent-text underline underline-offset-2"
-                  target="_blank"
-                  rel="noreferrer"
-                  href={href}
-                  title={hint}
-                >
-                  {children}
-                </a>
-              ) : (
-                <KnowledgeWikiLink collectionUid={collectionUid} links={file.links} target={target}>
-                  {children}
-                </KnowledgeWikiLink>
-              );
-            },
-          }
-        : { code },
-    [page, collectionUid, file.links],
-  );
+  const components = useMemo<Components>(() => {
+    const img: Components["img"] = ({ src, alt }) => {
+      const path = resolveAsset(file.path, typeof src === "string" ? src : undefined);
+      return path ? (
+        <KnowledgeImage path={path} alt={alt} />
+      ) : (
+        <img
+          src={typeof src === "string" ? src : undefined}
+          alt={alt ?? ""}
+          className="max-w-full"
+        />
+      );
+    };
+    return page
+      ? {
+          code,
+          img,
+          a: ({ href, title: hint, children }) => {
+            const target = wikiTargetOf(href);
+            return target === null ? (
+              <a
+                className="text-accent-text underline underline-offset-2"
+                target="_blank"
+                rel="noreferrer"
+                href={href}
+                title={hint}
+              >
+                {children}
+              </a>
+            ) : (
+              <KnowledgeWikiLink collectionUid={collectionUid} links={file.links} target={target}>
+                {children}
+              </KnowledgeWikiLink>
+            );
+          },
+        }
+      : { code, img };
+  }, [page, collectionUid, file.links, file.path]);
 
   if (source) {
     return (

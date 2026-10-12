@@ -27,7 +27,7 @@ description: Coffer 的知识层如何工作：每个知识集是一个由保留
 | 不要任何索引：没有表、没有 FTS、没有向量、没有缓存。链接图和检查在每次读取时从文件重建。 | 没有派生物，就不会有东西和文件不一致。没什么需要重建或调和。 |
 | 文件的路径就是它所在的位置；页面或来源的 slug（它的文件名）是链接用的名字。 | 可读的 slug 就是人在文件管理器里看到的、智能体在 grep 结果里看到的东西，而且它不受整理时文件夹移动的影响。 |
 | 元数据放在 YAML frontmatter 里。 | 只有文件本身是每个写入者（人、智能体和 Coffer）都看得到的。 |
-| 上传只保留转换出的 Markdown，不存储上传的文件本身。来源从不编辑。 | 知识集始终是一棵每个智能体都能读的 Markdown 树，同步仓库里没有二进制文件，页面里的一句话也能追溯到它引用的来源。 |
+| 上传保留转换出的 Markdown，图片放在 `assets/` 下；上传的文件本身留在上传它的那台 Mac 上，在保险库之外。来源从不编辑。 | 示意图和截图承载着智能体和人都需要的含义，去掉装饰和重复之后体积很小；原文件是 git 会永远背着的大二进制文件，而智能体读 Markdown 并不差。页面里的一句话也能追溯到它引用的来源。见 [Knowledge Sources Keep Their Images; Originals Stay on This Mac](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md)。 |
 | 素材立即变成来源。上传一到就保留下来，放进隐藏 `.inbox/` 的文件由下一次扫描保留。 | 没有任何东西要等模型连接或某一轮。提交的东西一分钟之内每个智能体都读得到。 |
 | 哪些来源在等待，由页面的 `sources:` 列表推导出来。 | 一份记录已摄入内容的清单，会是第二份可能与页面不一致的记录。 |
 | 页面用 `[[slug]]` 链接，从不用路径，Coffer 在读取时解析每个链接。 | 语料重组时路径会变；slug 只随改名而变，而改名弄坏的链接会立刻被报告出来，而不是悄悄腐烂。 |
@@ -36,7 +36,7 @@ description: Coffer 的知识层如何工作：每个知识集是一个由保留
 | Coffer 不在知识上运行任何模型。一条事实该放在哪里、哪些页面回答的是同一个问题、哪句话已经过时，由智能体按 `coffer-guide` 技能教的规则来判断。 | 人本来就在用的智能体有文件工具、更强的模型，还有人在看着。Coffer 自己另带一个无人值守的模型，需要它自己的连接，没配置时它的活就没人做。 |
 | 只有人按下**整理**或**整理全部**时，才开始整理。Coffer 不会自己启动智能体运行。 | 无人值守的智能体运行会在人不知情时消耗他的额度，还会留下没人开过的对话。 |
 | 一次整理就是一次提交：智能体工作期间，知识集在保险库写入者里被暂停，结束时把所有编辑连同智能体的汇报一次提交。一次整理可以作为一次新提交整体撤销。 | 分界就在历史本身里，所以改动记录、文件历史和同步看到的是同一个单位，撤销就是一次提交的逆操作。放在别处的分组，就成了历史的第二份记录。 |
-| Coffer 只为维持结构而移动文件。 | 留在 `pages/` 和 `sources/` 之外的 Markdown 文档是放错了位置的页面；把它归位是机械的事，一次提交，不改写内容。 |
+| Coffer 只为维持结构而移动文件。 | 留在 `pages/`、`sources/` 和 `assets/` 之外的 Markdown 文档是放错了位置的页面；把它归位是机械的事，一次提交，不改写内容。 |
 | 每一次被接受的写入都是一次写明写入者的 git 提交。 | 智能体改写的是唯一的那份副本。有了谁改了什么的历史，每次改动都可查看，每个版本都只隔着一次 `git` 或一次交给智能体的操作，而它也就是知识集的改动记录。 |
 | 新的说法胜出，除非旧的说法被证明是对的。没有哪个写入者可以例外。 | 一句话可信与否，看它是什么时候说的、背后有什么证据，而不是谁写的：人的修改和智能体的修改都可能过时或出错。保险库的历史和从文件历史做的恢复是补救途径。 |
 | 没有检索工具，目录搭在 Coffer 自己的技能里。 | 智能体用它们已经在用的工具读文件。知识层的任务是把正确的绝对路径摆到模型面前。 |
@@ -52,6 +52,9 @@ description: Coffer 的知识层如何工作：每个知识集是一个由保留
 │   ├── sources/
 │   │   ├── q3-review.md             # a source: converted Markdown + frontmatter
 │   │   └── oncall-notes.md          # a source from a Markdown upload
+│   ├── assets/
+│   │   └── q3-review-1a2b3c4d/      # an upload's pictures: <title-slug>-<first 8 hex of its sha256>
+│   │       └── image-1.png          # linked from the source as ../assets/q3-review-1a2b3c4d/image-1.png
 │   ├── pages/
 │   │   ├── session-ownership.md     # a page
 │   │   └── infra/
@@ -65,8 +68,9 @@ description: Coffer 的知识层如何工作：每个知识集是一个由保留
 - **知识集** 是一个顶层目录，也是一个 `knowledge` 类型的资源，存为 `vault/resources/knowledge/<name>.json`。由人有意地在 Web 界面里创建它。读取、写入、智能体放到别处的文件和工作目录都不会自动创建知识集，也没有任何东西会从智能体的 cwd 推导出边界。知识层在任何地方都没有加表。
 - **README** 位于知识集根目录，是这个知识集的纲要。它在第一个 `##` 小节之前的第一段就是这个知识集的描述；后面的小节是这个知识集的规则。新知识集的 README 会把默认值写出来（`collection_files.default_readme`）：frontmatter `verify_after_days: 90`、标题、描述、列出 `overview`、`concept`、`entity`、`how-to` 和 `decision` 的**页面类型**一节，以及**规则**一节，让人看到自己可以改什么。每次列出时都从磁盘读取，从不复制进资源文件，因为一旦有人编辑了 README，副本就错了。它关于页面类型和规则的内容优先于指南的默认规则，指南也是这样告诉智能体的。README 从不作为页面或来源列出，也不计数。知识集没有自己的标题：每个界面都用文件夹名展示它，资源更新也会拒绝标题。在 Web 界面里编辑描述只改写第一段（没有描述时插在第一个小节之上），README 其余部分保持不动，作为一次写明用户的提交；之后会重新渲染指南技能，因为智能体正是靠描述来认出这个知识集的。
 - **文件是什么** 由它所在的位置决定。路径模块的 `kind_of` 对 `pages/` 下的 Markdown 文件返回 `page`，对 `sources/` 下的返回 `source`，其他一律返回 `file`，这类文件会被列出，但既不进目录，也不参与检查。
-- `pages/` 和 `sources/` 里的**嵌套** 由归档页面的一方决定，可能是人，也可能是智能体。Coffer 不赋予这些文件夹任何含义；只有 `pages/` 和 `sources/` 这两个目录本身有含义。
-- **隐藏条目**（以点开头）不计入任何计数，也不进目录和检查，没有任何界面会列出或读取它们。在知识集内部，Coffer 会读的是 `.inbox/`，它是一个投放区：留在那里的 Markdown 文件会被下一次扫描接收为来源。保险库仓库的 `.git/info/exclude` 忽略知识集里其他所有隐藏条目，所以它们既不会被提交，也不会被同步。这包括 `.obsidian/`，所以作为 Obsidian 库打开的知识集文件夹，不会把 Obsidian 的设置带进历史（见[在 Obsidian 中打开知识集](#opening-a-collection-in-obsidian)）。`.history/` 和 `.raw/` 并不存在：被替换的文字在 git 历史里，上传只以 `sources/` 里的 Markdown 来源保留。
+- `pages/` 和 `sources/` 里的**嵌套** 由归档页面的一方决定，可能是人，也可能是智能体。Coffer 不赋予这些文件夹任何含义；只有 `pages/`、`sources/` 和 `assets/` 这几个目录本身有含义。
+- **`assets/`** 放从上传里取出的图片，每次上传一个文件夹（见[图片和原文件](#pictures-and-originals)）。它特意是可见的：保险库忽略隐藏条目，而图片必须和链接它们的来源一起提交、一起同步。图片是普通的 `file`。
+- **隐藏条目**（以点开头）不计入任何计数，也不进目录和检查，没有任何界面会列出或读取它们。在知识集内部，Coffer 会读的是 `.inbox/`，它是一个投放区：留在那里的 Markdown 文件会被下一次扫描接收为来源。保险库仓库的 `.git/info/exclude` 忽略知识集里其他所有隐藏条目，所以它们既不会被提交，也不会被同步。这包括 `.obsidian/`，所以作为 Obsidian 库打开的知识集文件夹，不会把 Obsidian 的设置带进历史（见[在 Obsidian 中打开知识集](#opening-a-collection-in-obsidian)）。`.history/` 和 `.raw/` 并不存在：被替换的文字在 git 历史里，上传在知识集里保留为 `sources/` 里的 Markdown 来源和 `assets/` 里的图片。
 
 ### 路径与 slug {#path-and-slug}
 
@@ -107,16 +111,18 @@ description: The quarterly review of the payments gateway.
 actor: user
 created_at: '2026-10-01T09:00:00.000+00:00'
 updated_at: '2026-10-01T09:00:00.000+00:00'
+original: q3-review.pdf     # the uploaded file, kept on the Mac that uploaded it
+original_sha256: 1a2b3c4d…  # names that copy
 ---
 ```
 
-Coffer 按固定顺序写来源的键：`title`、`description`、`actor`（`agent` 或 `user`）、`created_at`、`updated_at`。智能体可以给来源加三个键，它们只描述来源，不改动它的内容：`ingest: skipped`、写明替换它的新来源的 `superseded_by: <slug>`，以及用一两句话说明它讲什么的 `summary`。Coffer 不写页面：页面的 `title`、`type`、`description`、`sources`（来源的 slug）、`aliases`、`verified`、`actor` 和时间戳，由写页面的一方按指南所教来写。`verified` 在读取页面时原样返回，并与 README 的 `verify_after_days` 比较（见[机械检查](#the-mechanical-check)）。默认的页面类型是 `concept`、`entity`、`how-to`、`decision` 和 `overview`；Coffer 接受任何非空字符串，所以定义了自己类型的 README 说了算。人加的任何其他键，在 Coffer 改写文件时都会保留，解析出的值不变。这一点很重要，因为丢掉一个不认识的键，就等于悄悄删掉了人写的 `tags:`。
+Coffer 按固定顺序写来源的键：`title`、`description`、`actor`（`agent` 或 `user`）、`created_at`、`updated_at`，从上传文件转换来的来源再加上 `original` 和 `original_sha256`。智能体可以给来源加三个键，它们只描述来源，不改动它的内容：`ingest: skipped`、写明替换它的新来源的 `superseded_by: <slug>`，以及用一两句话说明它讲什么的 `summary`。Coffer 不写页面：页面的 `title`、`type`、`description`、`sources`（来源的 slug）、`aliases`、`verified`、`actor` 和时间戳，由写页面的一方按指南所教来写。`verified` 在读取页面时原样返回，并与 README 的 `verify_after_days` 比较（见[机械检查](#the-mechanical-check)）。默认的页面类型是 `concept`、`entity`、`how-to`、`decision` 和 `overview`；Coffer 接受任何非空字符串，所以定义了自己类型的 README 说了算。人加的任何其他键，在 Coffer 改写文件时都会保留，解析出的值不变。这一点很重要，因为丢掉一个不认识的键，就等于悄悄删掉了人写的 `tags:`。
 
 frontmatter 的解析会降级而不是抛错：没有围栏的文件，或者围栏里的 YAML 格式不对的文件，会得到空的 frontmatter 和它的正文，所以一个手工编辑时多了个冒号的文件，不会弄坏整个知识集的遍历。
 
 ### 所有路径由一个模块负责 {#one-module-owns-every-path}
 
-知识基础设施里有一个模块（`infrastructure/knowledge/paths.py`）负责构建所有路径，并命名 `pages/` 和 `sources/`，别处都不构建路径。每一段都要经过一个守卫，它拒绝空段、全是点的段、以点开头的段以及不在白名单里的段，所以 `payments/.inbox/x.md` 从任何界面都无法寻址。解析后的路径还会在它最近的已存在祖先上与知识根目录比对，所以根目录里的一个符号链接目录没法把写入带到外面去。写入先写到一个用 `O_EXCL | O_NOFOLLOW` 打开的同级临时文件，再做一次原子重命名，并通过保险库唯一的写入者提交。根目录永远是 `~/.coffer/vault/knowledge`，不能覆盖。
+知识基础设施里有一个模块（`infrastructure/knowledge/paths.py`）负责构建所有路径，并命名 `pages/`、`sources/` 和 `assets/`，别处都不构建路径。每一段都要经过一个守卫，它拒绝空段、全是点的段、以点开头的段以及不在白名单里的段，所以 `payments/.inbox/x.md` 从任何界面都无法寻址。解析后的路径还会在它最近的已存在祖先上与知识根目录比对，所以根目录里的一个符号链接目录没法把写入带到外面去。写入先写到一个用 `O_EXCL | O_NOFOLLOW` 打开的同级临时文件，再做一次原子重命名，并通过保险库唯一的写入者提交。根目录永远是 `~/.coffer/vault/knowledge`，不能覆盖。
 
 ## 从素材到来源 {#from-material-to-source}
 
@@ -124,7 +130,7 @@ Coffer 提供的每个入口都以一个来源结束。没有哪个需要等。�
 
 | 入口 | 界面 | 结果 |
 | --- | --- | --- |
-| 上传，先转换为 Markdown | 知识页面、`coffer knowledge upload` | 一个来源（只有 Markdown） |
+| 上传，先转换为 Markdown | 知识页面、`coffer knowledge upload` | 一个来源、`assets/` 下它的图片，以及留在这台 Mac 上的原文件 |
 | 放进 `<collection>/.inbox/` 的 Markdown 文件 | Coffer 之外的智能体、另一台机器，或旧版指南；由扫描接收 | 一个来源 |
 | 直接写进 `pages/` 的页面 | 智能体自己的文件工具，或人的编辑器 | 一个页面，作为在磁盘上编辑提交 |
 
@@ -140,7 +146,7 @@ flowchart TD
   S --> SRC["Source under sources/, waiting"]
   SRC -->|Tidy: the agent integrates it| P["Pages under pages/ cite it in sources:"]
   E["Agent or person writes a page directly"] --> DISK["Sweep commits it as an edit on disk"]
-  L["Markdown left outside pages/ and sources/"] --> M["Sweep files it into pages/"]
+  L["Markdown left outside pages/, sources/ and assets/"] --> M["Sweep files it into pages/"]
   SRC --> G["Re-render coffer-guide"]
   DISK --> G
   M --> G
@@ -171,11 +177,21 @@ Coffer 从不把任何东西合并进页面。把来源编译进页面，是人�
 上传按顺序经过四个步骤：
 
 1. **限定上传。** 每次调用一个文件，最大 20 MiB，不选文件夹。在花力气转换之前，先拒绝未知的知识集。
-2. **转换。** 转换器注册表按扩展名分派。先走透传（Markdown、文本和源码文件），然后是 CSV，其余都交给 MarkItDown。不支持的类型会以 `INGEST_REJECTED` 和 `reason: unsupported_type` 拒绝。转换后没有文本的（比如纯图片 PDF）也会拒绝。两种情况下都不写任何东西：没有来源，也没有收件箱文件。
+2. **转换。** 转换器注册表按扩展名分派。先走透传（Markdown、文本和源码文件），然后是 CSV，其余都交给 MarkItDown，它同时取出图片（见[图片和原文件](#pictures-and-originals)）。不支持的类型会以 `INGEST_REJECTED` 和 `reason: unsupported_type` 拒绝。转换后没有文本的（比如纯图片 PDF）也会拒绝。两种情况下都不写任何东西：没有来源、没有图片、没有原文件，也没有收件箱文件。
 3. **描述。** 描述取来源的第一段正文，再没有就取标题。它从不为空。没有任何模型来写它。
-4. **提升这份 Markdown**，`actor: user`，存为 `sources/<slug>.md`。重名时给来源的名字加上后缀（`-2`）。
+4. **提升这份 Markdown**，`actor: user`，存为 `sources/<slug>.md`，它的图片在同一次提交里放进 `assets/`；除非走的是透传转换器，frontmatter 里还会写上 `original` 和 `original_sha256`。重名时给来源的名字加上后缀（`-2`）。来源提交之后，上传的字节保存在这台 Mac 上；保存失败只记日志，丢的只是本机副本。
 
-只保留 Markdown：无论走的是哪个转换器，上传的文件本身都不存储。知识集始终是一棵每个智能体都能读的 Markdown 树，同步仓库里没有二进制文件。20 MiB 的上限不变。
+20 MiB 的上限不变。
+
+### 图片和原文件 {#pictures-and-originals}
+
+**图片。** 由 `infrastructure/knowledge/converters/images.py` 取出。MarkItDown 以 `keep_data_uris` 运行，所以 Office 或 HTML 文档里的图片以内联的 `data:` URI 到达；每一张都被解码，并替换成一个简单的名字（`image-1.png`）。PDF 的文本层不带图片，所以由 pdfminer 读出每一页上的图像，列在正文之后的 `## Images` 下，每页一个 `Page N:` 标题。保留的数量有上限：一边不到 48 px 的图片算装饰，丢掉且不留痕迹；超过 5 MB 的丢掉；重复的图片（同样的字节，比如每张幻灯片上的标志）只保留一份，它出现过的每个位置都链接这一个文件；一次上传最多保留 40 张；浏览器不能显示的格式用 Pillow 重新编码为 PNG。读不出来的图片跳过；纯图片 PDF 仍然拒绝，因为没有文字。
+
+`infrastructure/knowledge/assets.py` 在写来源之前先给这次上传的文件夹命名，即 `<标题 slug>-<上传内容 SHA-256 的前 8 位十六进制>`，把 Markdown 里的每个简单名字改写成 `../assets/<文件夹>/image-N.ext`，并在和来源同一个保险库事务里写入图片，所以来源和它的图片是一次提交、改动流里的一条改动、一次撤销。删除来源会留下它的文件夹；孤立的图片没有人清理。
+
+`GET /api/v1/knowledge/asset?path=` 返回图片的字节和媒体类型，支持 `png`、`jpg`、`jpeg`、`gif`、`webp` 和 `svg`，最大 10 MB，经过和读取相同的路径守卫，接入的文件夹则经过它自己的守卫。其他一律是 `404 KNOWLEDGE_FILE_NOT_FOUND`。Web 界面的阅读器把 Markdown 文档里每个相对图片链接按文档路径解析，通过这个路由取回（它需要守护进程的令牌，浏览器不能把它当普通 URL 加载），以 data URL 显示；从树里打开的图片也这样显示。这个路由读取的是普通文件，所以没有对应的命令。
+
+**原文件。** `infrastructure/knowledge/originals.py` 把上传的字节保存在 `~/.coffer/local/knowledge-originals/<sha256><.ext>`，权限 `0600`，同样的内容只写一次，经由临时文件再重命名。它属于本机类别，所以从不提交、从不同步。读取时根据来源的 `original` 和 `original_sha256` 解析出 `original_path`：副本在这里时是绝对路径，来源来自另一台 Mac 时是 `null`。`GET /api/v1/knowledge/file` 同时带上 `original` 和 `original_path`。Web 界面在来源标题下显示**原文件 `<name>`**，文件名是一个按钮，请守护进程用默认应用打开它（`POST /api/v1/fs/open`）；没有本机副本时，显示原文件在上传的那台 Mac 上。Markdown 或文本上传不保留原文件。来源被删时不会删除原文件，所以撤销找回的来源还能找到它。
 
 `markitdown` 是延迟导入的。一条 import-linter 契约把它限定在知识转换器和消息渠道的文档提取里。
 
@@ -347,7 +363,7 @@ stateDiagram-v2
 每次运行，worker 恰好做五件事：
 
 1. **接收 `.inbox/` 文件。** 知识集收件箱里每个新的 Markdown 文件都会被规范化，并作为来源保留在 `sources/` 下（见[放进收件箱的文件](#a-file-dropped-into-the-inbox)）。它提升的东西，都会以 `knowledge` 事件宣告。
-2. **归置零散文档。** 知识集里位于 `pages/`、`sources/` 和隐藏条目之外、不是根目录 `README.md`、并且 60 秒没被动过的 Markdown 文件，会被移到 `pages/<相同的相对路径>`，重名时加后缀。一个知识集在一次触发中的所有移动是一次由 `daemon` 写入者以 `layout` 操作做的提交，文字从不改写。这一分钟的静默期保证不会把智能体还在写的文件从它手底下挪走。在页面和来源出现之前建的知识集，就是这样在升级后的第一次扫描时归入新结构的；写错位置的智能体也会在一分钟内被纠正。`infrastructure/knowledge/layout.py` 负责找出并移动文件；`application/knowledge/layout.py` 负责提交。
+2. **归置零散文档。** 知识集里位于 `pages/`、`sources/`、`assets/` 和隐藏条目之外、不是根目录 `README.md`、并且 60 秒没被动过的 Markdown 文件，会被移到 `pages/<相同的相对路径>`，重名时加后缀。一个知识集在一次触发中的所有移动是一次由 `daemon` 写入者以 `layout` 操作做的提交，文字从不改写。这一分钟的静默期保证不会把智能体还在写的文件从它手底下挪走。在页面和来源出现之前建的知识集，就是这样在升级后的第一次扫描时归入新结构的；写错位置的智能体也会在一分钟内被纠正。`infrastructure/knowledge/layout.py` 负责找出并移动文件；`application/knowledge/layout.py` 负责提交。
 3. **提交磁盘上的编辑。** 自上次提交以来树里变过的任何东西，比如人的编辑器或智能体的文件工具，都会通过保险库写入者提交为在磁盘上编辑，这样历史保持最新，智能体写的东西也不会被算作 Coffer 的。有进行中整理的知识集处于暂停状态，不动它（见[一次整理就是一次改动](#a-tidy-is-one-change)）。
 4. **关闭闲置的整理。** 知识集 30 分钟没有变化的整理，会在那之后的第一次运行中作为一次改动提交，不带汇报，状态为 `expired`。
 5. **重新渲染指南技能**，这样手工添加的页面也会被编入目录。渲染出的字节没变就什么都不写。
@@ -428,7 +444,8 @@ Coffer 不做任何 embedding。它没有向量存储、没有 embedding 模型�
 - **智能体改写页面，Coffer 在它们动手前不做任何审查。** 保障措施就是任何文件编辑都有的那些，再加上检查：每次改动都是写明写入者的一个版本，任何文件都可以从它的历史或通过 git 回到任何版本，机械检查会立刻报告坏掉的链接或缺少来源的页面，一次整理以智能体自己报告它整合、合并、拆分、修正和删除了什么、留下什么给人决定作结。出了错的整理可以整体撤销，也可以把单个文件恢复到整理之前。
 - **在有人整理之前，来源会一直等待。** 上传或放进来的文件会一直作为来源留着，直到智能体整合它。人看得到待整理的数量，也看得到**整理**按钮，没有任何东西会在人背后编译页面。
 - **编译要花智能体的 token。** 与直接从原始来源检索相比，一次摄入的成本很高，所以指南保留了在 `sources/` 里 grep 作为查找确切事实的退路。
-- **糟糕的转换无法对照上传的文件来核对。** Coffer 只保留 Markdown；上传的文件由人自己保管。
+- **糟糕的转换只能在上传它的那台 Mac 上对照原文件核对。** 原文件只保存在那里，那台 Mac 丢了它也就丢了；Markdown 和它的图片在每台 Mac 上都在。
+- **图片让保险库变大，残留的也会留着。** 每张保留的图片都永久留在 git 历史里。删除来源会留下它的 `assets/` 文件夹，以及上传那台 Mac 上的原文件；两者都不会自动清理。
 - **一次整理期间，知识集的编辑不提交。** 在智能体结束、或知识集 30 分钟没有变化之前，它的编辑只在磁盘上，要改动其中某个文件的一轮同步会等待。重启丢掉的只是分组，从不丢编辑。
 - **扫描会移动文件。** 归置零散文档会改变它的路径。链接用的是 slug 而不是路径，目录也会重新生成，所以除了人的记忆，没有任何东西指向旧路径；这次移动是一次提交，可以恢复。
 - **历史随每次写入增长。** 没有任何东西会修剪它。它就在文件旁边，保存着后来被并掉或被删掉的文字。
@@ -443,7 +460,7 @@ Coffer 不做任何 embedding。它没有向量存储、没有 embedding 模型�
 | 包 | 职责 |
 | --- | --- |
 | `application/knowledge/` | 知识集、提交并提升进 `sources/`、规范化放进来的收件箱文件、上传、扫描及其归置职责（`layout.py`）、整理提示词（`tidy_handoff.py`）、一次整理的开始、结束和到期（`tidy_service.py`）、改动流、撤销删除或整理（`collection_writes.py`）、接入外部文件夹（`linking.py`），以及 `coffer-guide` 的文字和目录（`guide_render.py`） |
-| `infrastructure/knowledge/` | 路径、路径守卫以及文件属于哪一种、文件读写、frontmatter、命名、目录、wiki 图、链接和发现（`wiki.py`）、找出并移动零散文档（`layout.py`）、历史仓库及其暂停的知识集（`history.py`）、进行中的整理（`tidy_runs.py`）、读取接入的文件夹（`linked.py`）、转换器 |
+| `infrastructure/knowledge/` | 路径、路径守卫以及文件属于哪一种、文件读写、frontmatter、命名、目录、wiki 图、链接和发现（`wiki.py`）、找出并移动零散文档（`layout.py`）、历史仓库及其暂停的知识集（`history.py`）、进行中的整理（`tidy_runs.py`）、读取接入的文件夹（`linked.py`）、转换器及取出图片（`converters/images.py`）、上传的图片（`assets.py`）、本机原文件（`originals.py`） |
 | `domain/handoff` | 每个交接提示词（包括整理）渲染的唯一位置 |
 | `surfaces/http/` | 扫描的装配和启动；渲染器到技能 seed 的接合；Web 界面的知识路由、检查和内容路由、整理的开始、结束和撤销路由，以及历史交接 |
 
@@ -452,6 +469,6 @@ Coffer 不做任何 embedding。它没有向量存储、没有 embedding 模型�
 ## 相关 {#related}
 
 - 规格：[knowledge](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md)、[knowledge 数据模型](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/data-model.md)、[skill-manager](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/skill-manager/spec.md)
-- 决策：[Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md)、[Knowledge Is a Directory of Markdown Files, Not an Index](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md)、[Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md)、[Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-write-is-a-validated-commit-naming-its-writer.md)、[Coffer Ships Its Own Skill](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md)、[Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-stays-current-through-flags-coffer-computes.md)、[A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md)、[原则 → 治理](/zh/architecture/principles#governance)
+- 决策：[Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md)、[Knowledge Is a Directory of Markdown Files, Not an Index](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md)、[Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md)、[Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-write-is-a-validated-commit-naming-its-writer.md)、[Coffer Ships Its Own Skill](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md)、[Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-stays-current-through-flags-coffer-computes.md)、[A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md)、[Knowledge Sources Keep Their Images; Originals Stay on This Mac](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md)、[原则 → 治理](/zh/architecture/principles#governance)
 - 研究：[Knowledge structures](https://github.com/wyx-sg/Coffer/blob/main/docs/research/knowledge-structures.md)
 - 页面：[知识指南](/zh/guides/knowledge)、[记忆](/zh/architecture/memory)、[保险库同步](/zh/architecture/vault-sync)、[MCP 网关](/zh/architecture/mcp-gateway)、[资源框架](/zh/architecture/resource-framework)、[MCP 工具参考](/zh/reference/mcp-tools)、[`coffer knowledge`](/zh/reference/cli/knowledge)

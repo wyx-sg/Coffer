@@ -184,6 +184,10 @@ class KnowledgeFile:
     superseded_by: SourceRef | None = None
     #: A source's ``summary``.
     summary: str = ""
+    #: An uploaded source's original file name (its ``original``), and where
+    #: that file is on this Mac — ``None`` on any other Mac.
+    original: str = ""
+    original_path: str | None = None
 
 
 @dataclass(frozen=True)

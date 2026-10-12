@@ -16,6 +16,19 @@ from typing import Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
+class ConvertedImage:
+    """One picture taken out of an uploaded document, kept beside its source
+    (ADR knowledge-sources-keep-their-images-and-originals-stay-on-this-mac).
+
+    ``name`` is how the Markdown refers to it (``![…](name)``) until the
+    source is written and the link is pointed at where it is kept.
+    """
+
+    name: str
+    data: bytes
+
+
+@dataclass(frozen=True)
 class Conversion:
     """The result of turning one uploaded document into Markdown."""
 
@@ -29,6 +42,8 @@ class Conversion:
     #: instead, and the engine-level failure names its own engine
     #: (``EngineUnavailable``).
     converter: str
+    #: The pictures the Markdown refers to by name, in order of appearance.
+    images: tuple[ConvertedImage, ...] = ()
 
 
 class UnsupportedDocument(Exception):  # noqa: N818 - carries the rejected type, not an "...Error"

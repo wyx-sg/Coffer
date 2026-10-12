@@ -6,14 +6,17 @@
 // whole Knowledge area in its place (KnowledgeHistoryView). Nothing here edits:
 // a person changes a file in their own editor and the next read shows it. A
 // linked folder's file has no History and no Delete: its own tools keep it.
+// A picture opened from the tree shows the picture.
 import { useState } from "react";
 
 import { useDeleteDocument } from "@/components/knowledge/KnowledgeDeleteDocument";
 import { ReadingActions, type DocumentView } from "@/components/knowledge/KnowledgeDocumentActions";
 import { KnowledgeDocumentReader } from "@/components/knowledge/KnowledgeDocumentReader";
+import { KnowledgeImage } from "@/components/knowledge/KnowledgeImage";
 import { KnowledgePaneBar } from "@/components/knowledge/KnowledgePaneBar";
 import type { CollectionOut, FileOut } from "@/lib/api/knowledge";
 import { useFileActionItems } from "@/lib/fileActionItems";
+import { isImagePath } from "@/lib/knowledge/assets";
 import { crumbsOf } from "@/lib/knowledge/crumbs";
 import { useOpenInObsidian } from "@/lib/knowledge/obsidian";
 
@@ -49,11 +52,17 @@ export function KnowledgeLoadedDocument({ collection, file, onHistory }: LoadedP
       />
       <div className="flex min-h-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <KnowledgeDocumentReader
-            file={file}
-            collectionUid={collection.uid}
-            source={!markdown || view === "source"}
-          />
+          {isImagePath(file.path) ? (
+            <div data-testid="knowledge-picture" className="min-h-0 flex-1 overflow-auto px-8 py-7">
+              <KnowledgeImage path={file.path} alt={file.title} />
+            </div>
+          ) : (
+            <KnowledgeDocumentReader
+              file={file}
+              collectionUid={collection.uid}
+              source={!markdown || view === "source"}
+            />
+          )}
         </div>
       </div>
     </div>

@@ -181,6 +181,7 @@ export const knowledgeKey = ["knowledge"] as const;
 export const knowledgeCollectionsKey = ["knowledge", "collections"] as const;
 export const knowledgeTreeKey = (path: string) => ["knowledge", "tree", path] as const;
 export const knowledgeFileKey = (path: string) => ["knowledge", "file", path] as const;
+export const knowledgeAssetKey = (path: string) => ["knowledge", "asset", path] as const;
 export const knowledgeCheckKey = (uid: string) => ["knowledge", "check", uid] as const;
 export const knowledgeFilesKey = (uid: string) => ["knowledge", "files", uid] as const;
 export const knowledgeChangesKey = (collection: string) =>

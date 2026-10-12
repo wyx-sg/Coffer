@@ -47,6 +47,10 @@ INBOX_DIR_NAME = ".inbox"
 PAGES_DIR_NAME = "pages"
 SOURCES_DIR_NAME = "sources"
 
+#: The pictures taken out of uploads, one folder per upload. Visible on
+#: purpose: the vault leaves hidden knowledge entries out of git.
+ASSETS_DIR_NAME = "assets"
+
 #: What a file under a collection is (see :func:`kind_of`).
 KIND_PAGE = "page"
 KIND_SOURCE = "source"

@@ -3264,7 +3264,7 @@
     "upload": {
       "button": "上传",
       "title": "上传文档",
-      "body": "Coffer 会把每个文件转换成 Markdown，作为来源保存在知识集中。上传的文件本身不保存。",
+      "body": "Coffer 会把每个文件转换成 Markdown，连同其中的图片作为来源保存在知识集中。上传的文件本身只留在这台 Mac 上。",
       "choose": "把文件拖到这里，或选择文件",
       "types": "PDF、Word、PowerPoint、Excel、HTML、CSV、Markdown 或纯文本 · 最大 20 MB",
       "into": "放入知识集",
@@ -3307,7 +3307,10 @@
       "verified": "{{date}} 核对过",
       "stale": "需要重新核对",
       "neverVerified": "从未核对",
-      "supersededBy": "已被替换为"
+      "supersededBy": "已被替换为",
+      "original": "原文件",
+      "originalFailed": "无法打开原文件。",
+      "originalElsewhere": "原文件 {{name}} 在上传的那台 Mac 上"
     },
     "deleteDocument": {
       "menu": "删除",

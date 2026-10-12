@@ -17,6 +17,7 @@ import {
   describeCollection,
   getCheck,
   getCollectionFiles,
+  getAsset,
   getFile,
   getTree,
   listChanges,
@@ -29,6 +30,7 @@ import {
   knowledgeChangesKey,
   knowledgeCheckKey,
   knowledgeCollectionsKey,
+  knowledgeAssetKey,
   knowledgeFileKey,
   knowledgeFilesKey,
   knowledgeKey,
@@ -97,6 +99,15 @@ export function useKnowledgeFile(path: string | null) {
     queryKey: knowledgeFileKey(path ?? ""),
     queryFn: () => getFile(path as string),
     enabled: Boolean(path),
+  });
+}
+
+/** A picture a document shows, as a data URL (`null` when it is gone). */
+export function useKnowledgeAsset(path: string) {
+  return useQuery({
+    queryKey: knowledgeAssetKey(path),
+    queryFn: () => getAsset(path),
+    staleTime: 60_000,
   });
 }
 

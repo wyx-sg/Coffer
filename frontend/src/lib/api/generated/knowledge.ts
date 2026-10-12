@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/v1/knowledge/asset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Asset */
+        get: operations["read_asset_api_v1_knowledge_asset_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge/changes": {
         parameters: {
             query?: never;
@@ -556,6 +573,13 @@ export interface components {
             /** Links */
             links: components["schemas"]["LinkRefOut"][];
             /**
+             * Original
+             * @default
+             */
+            original: string;
+            /** Original Path */
+            original_path: string | null;
+            /**
              * Page Type
              * @default
              */
@@ -771,6 +795,48 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    read_asset_api_v1_knowledge_asset_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The picture's bytes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": unknown;
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     recent_changes_api_v1_knowledge_changes_get: {
         parameters: {
             query?: {
