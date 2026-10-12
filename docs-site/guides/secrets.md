@@ -248,7 +248,7 @@ The [Secrets page](#the-secrets-page) shows the same list. The table's first col
 
 Deleting a secret is refused while a resource cites it or a skill's files cite its URI; the message names them.
 
-Every time Coffer decrypts a secret to use it — a server starting, a channel connecting, a provider key fetched, a sync push, `coffer run` — it records `secret_resolved` in [Activity](/guides/activity), naming who used it and the slot, never the value. The same secret and destination is recorded at most once a minute. Read them in Activity or with `coffer log audit --event-type secret_resolved`.
+Every time Coffer decrypts a secret to use it — a server starting, a channel connecting, a provider key fetched, a sync push, `coffer run` — it records `secret_resolved` in [Activity](/guides/activity), naming who used it and the slot, never the value. The same secret and destination is recorded at most once a minute. Read them on the **Secret use** tab of Activity, where repeated uses of one secret by one destination fold into one row, or with `coffer log audit --nature use`.
 
 ## The master key and its backup
 

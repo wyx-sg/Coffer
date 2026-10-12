@@ -104,7 +104,12 @@ function mockApi(initial: Partial<Data> = {}) {
           (row as { timestamp: string }).timestamp >= String(query.since));
       if (path === "/audit") {
         const limit = Number(query.limit ?? 50);
-        const rows = data.audit.filter(matches);
+        // The daemon reads secret uses apart from changes (`nature`).
+        const use = (row: unknown) =>
+          ["secret_resolved", "secret_revealed"].includes((row as { event_type: string }).event_type);
+        const rows = data.audit
+          .filter(matches)
+          .filter((r) => !query.nature || (query.nature === "use") === use(r));
         return Promise.resolve({
           data: {
             entries: rows.slice(0, limit),
@@ -686,7 +691,9 @@ acceptance("web-ui", "a failed log is one banner that retries only that log", as
   render(wrap(<ActivityPage />));
   const note = await screen.findByRole("status");
   expect(note).toHaveTextContent("Tool calls couldn't be loaded");
-  expect(note).toHaveTextContent("Changes and daemon records below are complete.");
+  expect(note).toHaveTextContent(
+    "Changes, secret uses, and daemon records below are complete.",
+  );
   expect(within(note).queryByRole("button", { name: /close|dismiss|ignore/i })).toBeNull();
   const reads = (path: string) => get.mock.calls.filter((c: unknown[]) => c[0] === path).length;
   const audit = reads("/audit");
@@ -891,7 +898,7 @@ test("Tool calls sorts by Took, right-aligned, with the day heading gone while s
   expect(times()).toEqual(["5 ms", "900 ms", "50 ms"]);
 });
 
-test("the Kind pill on Everything has three flat values and no counts", async () => {
+test("the Kind pill on Everything has four flat values and no counts", async () => {
   mockApi({ audit: [AUDIT_ENTRY], invocations: [INVOCATION], daemon: [DAEMON_RECORD] });
   render(wrap(<ActivityPage />));
   await screen.findByText("auto_sync_failed");
@@ -900,6 +907,7 @@ test("the Kind pill on Everything has three flat values and no counts", async ()
   expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual([
     "Tool calls",
     "Changes",
+    "Secret uses",
     "Daemon records",
   ]);
   fireEvent.click(screen.getByRole("option", { name: "Tool calls" }));

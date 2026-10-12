@@ -12,6 +12,7 @@ import type { TFunction } from "i18next";
 
 import {
   TAB_SOURCES,
+  isSecretUse,
   recordLogger,
   recordTimeMs,
   type ActivityRecord,
@@ -74,13 +75,13 @@ export const WHO_ACTORS = ["you", "cli", "system", "sync"] as const;
  */
 function actorWho(actor: string): string | null {
   if (actor === "ui" || actor === "user" || actor === "desktop") return "you";
-  if (actor === "system" || actor.startsWith("system:")) return "system";
+  if (actor === "system" || actor === "coffer" || actor.startsWith("system:")) return "system";
   if (actor === "cli" || actor === "sync" || actor === "api" || actor === "channel") return actor;
   return null;
 }
 
-/** The Everything tab's kinds: the three records, flat. */
-export const RECORD_KINDS = ["calls", "changes", "daemon"] as const;
+/** The Everything tab's kinds, flat. */
+export const RECORD_KINDS = ["calls", "changes", "uses", "daemon"] as const;
 
 /** An MCP call status filter: all, ok, or every failure (error, timeout, denied). */
 export type StatusFilter = "all" | "ok" | "failed";
@@ -94,7 +95,7 @@ export interface ActivityFilters {
   /** By: `agent:<uid>` and `actor:<who group>` values; empty is any. */
   by: string[];
   /**
-   * Kind: on Everything "calls", "changes" and "daemon"; on Changes the change
+   * Kind: on Everything "calls", "changes", "uses" and "daemon"; on Changes the change
    * categories. Empty is any.
    */
   kinds: string[];
@@ -171,20 +172,21 @@ export function sourcesFor(tab: ActivityTab, f: ActivityFilters): ActivitySource
   let sources = [...TAB_SOURCES[tab]];
   const kinds = kindsFor(tab, f);
   if (tab === "everything" && kinds.length) {
-    sources = sources.filter((s) =>
-      s === "call"
-        ? kinds.includes("calls")
-        : s === "daemon"
-          ? kinds.includes("daemon")
-          : kinds.includes("changes"),
-    );
+    const kindOf: Record<ActivitySource, string> = {
+      call: "calls",
+      daemon: "daemon",
+      change: "changes",
+      use: "uses",
+    };
+    sources = sources.filter((s) => kinds.includes(kindOf[s]));
   }
   const by = byFor(tab, f);
   if (by.length) {
     const agents = by.some((b) => b.startsWith("agent:"));
     const coffer = by.includes("actor:system");
     sources = sources.filter(
-      (s) => s === "change" || (s === "call" && agents) || (s === "daemon" && coffer),
+      (s) =>
+        s === "change" || s === "use" || (s === "call" && agents) || (s === "daemon" && coffer),
     );
   }
   return sources;
@@ -217,11 +219,11 @@ function recordWho(r: ActivityRecord, agentNames: ReadonlyMap<string, string>): 
   return uid ? `agent:${uid}` : null;
 }
 
-/** The Everything kind value one record carries: "calls", "changes" or "daemon". */
+/** The Everything kind value one record carries: "calls", "changes", "uses" or "daemon". */
 function recordKind(r: ActivityRecord): string {
   if (r.source === "call") return "calls";
   if (r.source === "daemon") return "daemon";
-  return "changes";
+  return isSecretUse(r.entry) ? "uses" : "changes";
 }
 
 /**

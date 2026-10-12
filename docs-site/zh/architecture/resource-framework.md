@@ -188,7 +188,7 @@ sequenceDiagram
 - 资源的 `uid`，加上它**当时的类型和名字**，这样历史在改名后依然成立，旧记录仍能说明当时的真实情况；
 - **详情**，其中配置会经过该类型的审计脱敏。范围只携带智能体 uid，原样记录。
 
-你可以在 Web 界面**活动**页的**变更**标签页、用 `coffer log audit`，或者通过 `GET /api/v1/audit` 查看这份日志。
+你可以在 Web 界面**活动**页的**变更**标签页（密钥的使用，即 `secret_resolved` 和 `secret_revealed`，在**密钥使用**标签页）、用 `coffer log audit`，或者通过 `GET /api/v1/audit` 查看这份日志。
 
 ## Schema 校验 {#schema-validation}
 

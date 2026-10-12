@@ -11,7 +11,7 @@ Coffer keeps three records of itself: an audit log of what changed in the vault,
 
 | Record | Answers | Stored in | Where to read it |
 | --- | --- | --- | --- |
-| Audit log | What changed, and who changed it? | `audit_log` table in `runs.db` | **Activity → Changes**, `coffer log audit` |
+| Audit log | What changed, and who changed it? Where did a secret's value go? | `audit_log` table in `runs.db` | **Activity → Changes** and **Activity → Secret use**, `coffer log audit` |
 | MCP invocations | What did an agent call, and how did it go? | `mcp_invocations` table | **Activity → Tool calls**, `coffer log mcp` |
 | Daemon log | What happened inside Coffer, including what broke? | `~/.coffer/logs/daemon.log` | **Activity → Daemon log**, `coffer log daemon`, `coffer path logs` |
 
@@ -19,10 +19,11 @@ All three stay on the machine that wrote them. [Vault sync](/guides/vault-sync) 
 
 ## The Activity page
 
-Open **Activity** in the sidebar. The header carries a **Live** mark (a dot and the word; **Reconnecting…** while the daemon's change feed is closed, which means new records are not streaming in) and an **Export** menu. Four tabs follow, without counts: **Everything**, the default, **Changes**, **Tool calls** and **Daemon log**. A tab whose log could not be read shows a warning icon.
+Open **Activity** in the sidebar. The header carries a **Live** mark (a dot and the word; **Reconnecting…** while the daemon's change feed is closed, which means new records are not streaming in) and an **Export** menu. Five tabs follow, without counts: **Everything**, the default, **Changes**, **Secret use**, **Tool calls** and **Daemon log**. A tab whose log could not be read shows a warning icon.
 
-- **Everything** — changes, tool calls and the daemon's warnings and errors merged into one stream, newest first. Columns: **Time**, **Event**, **By** and **Took**.
-- **Changes** — the audit log: **Time**, **Event** (the change as a sentence, such as "Stored a secret") and **By** (who made it).
+- **Everything** — changes, secret uses, tool calls and the daemon's warnings and errors merged into one stream, newest first. Columns: **Time**, **Event**, **By** and **Took**.
+- **Changes** — the audit log's changes: **Time**, **Event** (the change as a sentence that names what it changed, such as "Added the MCP server filesystem") and **By** (who made it, in words: you, the command line, Coffer, sync, or the agent's name).
+- **Secret use** — the audit log's records of a secret's value leaving the vault without anything changing: Coffer handing it to a server it started, a `coffer run` command receiving it, or you revealing it in the Coffer app. Columns: **Time**, **Use** and **By**. Each row has a key icon and names the secret and where its value went, such as "Gave GITHUB_TOKEN to the MCP server github"; a value is never shown. Uses of the same secret by the same destination less than ten minutes apart fold into one row marked **×N**, and its drawer lists the time of each.
 - **Tool calls** — one row per tool call, resource read or prompt fetch the gateway routed: **Time**, **Agent** (whose session made it), **Server · tool**, **Took** and **Status**.
 - **Daemon log** — the tail of `daemon.log`: **Time**, **Level**, **Logger** and **Message**. Open it when Coffer itself misbehaves rather than something it proxied. The line above the rows names the file, says "newest first" and "following" while the feed is open, and **Open in Finder** reveals the file.
 
@@ -32,14 +33,15 @@ Rows are grouped under a heading for their day ("Today · Sep 29"), and there is
 
 - Everything: **By** and **Kind**.
 - Changes: **By** and **Kind**.
+- Secret use: **By**.
 - Tool calls: a segmented **All / OK / Failed** first (Failed is an error, a timeout or a denial), then **By**.
 - Daemon log: a segmented **All / Info / Warnings / Errors** level first, then **Logger**.
 
 The time range offers **Last hour**, **Last 24 h**, **Last 7 days**, **Last 30 days** or a custom range picked on a calendar (optional times, an end of "now", at most 90 days back). A tab opens on the last hour, the Daemon log on the last 24 hours, until you pick a range.
 
-**By** takes several values at once, and a record is shown when it matches any of them. It lists your agents, then, under "Not an agent", you (the web UI or the Coffer app), the command line, Coffer itself and sync; on Tool calls it lists agents only. **Kind** on Everything is three values: **Tool calls**, **Changes** and **Daemon records**. On Changes it lists the eleven kinds of change: a kind of resource, or secrets, sync, settings and CLIs for a change that names no resource. The filters, the search and the range are all kept in the address (`q`, `range`, `by`, `kind`, `status`, `level`, `logger`), so a link such as `/activity?tab=mcp&q=github` opens already searching, and **View in Activity** on another page uses it. Moving to another tab keeps the search, the range and **By**, and drops the filters only the old tab had.
+**By** takes several values at once, and a record is shown when it matches any of them. It lists your agents, then, under "Not an agent", you (the web UI or the Coffer app), the command line, Coffer itself and sync; on Tool calls it lists agents only. **Kind** on Everything is four values: **Tool calls**, **Changes**, **Secret uses** and **Daemon records**. On Changes it lists the eleven kinds of change: a kind of resource, or secrets, sync, settings and CLIs for a change that names no resource. The filters, the search and the range are all kept in the address (`q`, `range`, `by`, `kind`, `status`, `level`, `logger`), so a link such as `/activity?tab=mcp&q=github` opens already searching, and **View in Activity** on another page uses it. Moving to another tab keeps the search, the range and **By**, and drops the filters only the old tab had.
 
-**Details.** Select a row on Everything, Changes or Tool calls to open it in a drawer 640 pixels wide beside the page; **Esc**, a click outside or the ✕ closes it, and **↑** and **↓** step to the previous or next record. A failed call leads with its error and how its server has been doing (since when it has been failing and how many errors it had in the last 24 hours); a change says who made it and what it touched, then shows the configuration before and after as a diff (secret values are never recorded). Below come the facts, the records written within five minutes of it, and the raw record, folded until you ask for it. A call then shows what it carried: its arguments, its result or error, and for a [custom tool](/guides/custom-tools) the HTTP request and response, each in a foldable block with **Copy** (see [What a call records](#what-a-call-records)). The footer holds the next step: **Open** the resource, beside **Copy details**.
+**Details.** Select a row on Everything, Changes, Secret use or Tool calls to open it in a drawer 640 pixels wide beside the page; **Esc**, a click outside or the ✕ closes it, and **↑** and **↓** step to the previous or next record. A failed call leads with its error and how its server has been doing (since when it has been failing and how many errors it had in the last 24 hours); a change says who made it and what it touched, then shows the configuration before and after as a diff (secret values are never recorded). Below come the facts, the records written within five minutes of it, and the raw record, folded until you ask for it. A call then shows what it carried: its arguments, its result or error, and for a [custom tool](/guides/custom-tools) the HTTP request and response, each in a foldable block with **Copy** (see [What a call records](#what-a-call-records)). The footer holds the next step: **Open** the resource, beside **Copy details**.
 
 On the **Daemon log** a row opens in place instead, under its own line, with its traceback, **Copy record** and, when the record names a server and a tool, **Show the tool call**, which switches to Tool calls searching for that call.
 
@@ -74,7 +76,7 @@ The **actor** is one of:
 | `desktop` | You (Coffer app) | An action the desktop app confirmed. |
 | `cli` | CLI | The CLI sends `X-Coffer-Actor: cli`. |
 | `api` | API | A REST caller that sent no `X-Coffer-Actor` header. |
-| `system` | Coffer | The daemon acting on its own, such as a background pass. |
+| `system`, `coffer` | Coffer | The daemon acting on its own, such as a background pass, or handing a secret to a server it starts. |
 | `sync` | Sync | A sync round applying what another machine changed. |
 | `channel` | Channel | An action taken from a chat channel. |
 | `human` | human | A change to a vault file that no Coffer operation made — your editor, a shell, an agent's own file tools, a `git commit` of your own. It is audited as `vault_file_edited`, one entry per file, once the vault has committed it (see [Editing the vault by hand](/guides/vault-files)). |
@@ -89,6 +91,7 @@ coffer log audit                                   # newest 50
 coffer log audit --kind mcp_server --name filesystem
 coffer log audit --event-type secret_resolved --since 2026-09-01T00:00:00Z
 coffer log audit --event-type memory_synced --limit 20
+coffer log audit --nature use --since 1d          # only secret uses
 coffer log audit --trace 44e10b60da1b4f26         # one request's or turn's rows
 coffer log audit --json
 ```
@@ -98,6 +101,7 @@ coffer log audit --json
 | `--kind` | Resource kind, such as `mcp_server`, `agent`, `skill`. |
 | `--name` | Resource name. Needs `--kind`. |
 | `--event-type` | One event type. |
+| `--nature` | `change` for changes only, `use` for secret uses only (`secret_resolved`, `secret_revealed`), as the Changes and Secret use tabs read them. |
 | `--since` | ISO 8601 lower bound, or an age such as `30m`, `1h`, `2d`. |
 | `--trace` | Only the rows of one request or turn: its trace id, the one the drawer, an `X-Coffer-Trace` header or a daemon log line shows. `coffer log mcp` and `coffer log daemon` take it too. |
 | `--q` | Free text, matched in any case against the event code, resource name, actor and details — the page's search box. |
@@ -106,7 +110,7 @@ coffer log audit --json
 | `--limit` | 1–500, default 50. |
 | `--json` | Machine-readable output. |
 
-Over REST the same query is `GET /api/v1/audit`, which also accepts `event_prefix` to select a family of events such as `sync_` or `skill_`.
+Over REST the same query is `GET /api/v1/audit`, which also accepts `event_prefix` to select a family of events such as `sync_` or `skill_`, and `nature` (`change` or `use`).
 
 ## Query MCP invocations from the CLI
 

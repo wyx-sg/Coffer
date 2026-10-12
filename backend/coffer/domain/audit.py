@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 
 class AuditEventType(StrEnum):
@@ -138,6 +138,17 @@ class AuditEventType(StrEnum):
     # The reconciler rewrote, or removed, an agent's projection whose keys no
     # longer matched the connection the registry marks active.
     PROVIDER_PROJECTION_REPAIRED = "provider_projection_repaired"
+
+
+#: Events in which a secret's value left the store for a moment of use and
+#: nothing in the vault changed (spec resource-framework "Tell a secret's use
+#: from a change in the audit log"). Every other event is a change.
+SECRET_USE_EVENTS: frozenset[str] = frozenset(
+    {AuditEventType.SECRET_RESOLVED.value, AuditEventType.SECRET_REVEALED.value}
+)
+
+#: What an audit query reads: changes only, or secret uses only.
+AuditNature = Literal["change", "use"]
 
 
 @dataclass

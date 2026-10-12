@@ -248,7 +248,7 @@ coffer secret list
 
 只要还有资源引用某个密钥，或还有技能文件引用它的 URI，删除就会被拒绝；报错会列出它们。
 
-Coffer 每次为了使用而解密一个密钥——服务器启动、消息渠道连接、取用提供商的 Key、同步推送、`coffer run`——都会在[活动](/zh/guides/activity)里记录 `secret_resolved`，写明谁用了它以及用的槽位，从不记录值。同一个密钥和去处每分钟最多记录一次。可以在活动里查看，或用 `coffer log audit --event-type secret_resolved`。
+Coffer 每次为了使用而解密一个密钥——服务器启动、消息渠道连接、取用提供商的 Key、同步推送、`coffer run`——都会在[活动](/zh/guides/activity)里记录 `secret_resolved`，写明谁用了它以及用的槽位，从不记录值。同一个密钥和去处每分钟最多记录一次。可以在活动的**密钥使用**标签页查看（同一个密钥交给同一个去处的多次使用会折叠成一行），或用 `coffer log audit --nature use`。
 
 ## 主密钥及其备份 {#the-master-key-and-its-backup}
 

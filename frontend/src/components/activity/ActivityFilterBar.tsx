@@ -148,6 +148,8 @@ export function ActivityFilterBar({ tab, filters, onChange, onClear, agents, log
         onChange={(logger) => set({ logger })}
       />,
     ];
+  } else if (tab === "uses") {
+    pills = [time, by];
   } else {
     pills = [time, by, kind];
   }

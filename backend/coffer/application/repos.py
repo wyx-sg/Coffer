@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any, Protocol
 
-from coffer.domain.audit import AuditEntry
+from coffer.domain.audit import AuditEntry, AuditNature
 from coffer.domain.resource import Resource
 from coffer.domain.retention import RetentionPolicy
 from coffer.domain.scope import Scope
@@ -74,6 +74,7 @@ class AuditRepo(Protocol):
         resource_uid: str | None = None,
         event_type: str | None = None,
         event_prefix: str | None = None,
+        nature: AuditNature | None = None,
         since: datetime | None = None,
         limit: int = 50,
         after: tuple[datetime, int] | None = None,
@@ -88,6 +89,7 @@ class AuditRepo(Protocol):
         resource_uid: str | None = None,
         event_type: str | None = None,
         event_prefix: str | None = None,
+        nature: AuditNature | None = None,
         since: datetime | None = None,
         trace_id: str | None = None,
         q: str | None = None,
