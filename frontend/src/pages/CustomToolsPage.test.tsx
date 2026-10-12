@@ -223,7 +223,7 @@ describe("CustomToolsPage", () => {
     },
   );
 
-  acceptance("web-ui", "a group's page has Overview and Tools tabs", async () => {
+  acceptance("web-ui", "a group's page has Overview, Tools and Environments tabs", async () => {
     api.test.mockResolvedValue({
       ok: true,
       duration_ms: 180,
@@ -243,14 +243,11 @@ describe("CustomToolsPage", () => {
       within(screen.getByRole("tablist"))
         .getAllByRole("tab")
         .map((tab) => tab.textContent),
-    ).toEqual(["Overview", "Tools"]);
+    ).toEqual(["Overview", "Tools", "Environments1"]);
     expect(screen.queryByRole("region", { name: "Tools" })).not.toBeInTheDocument();
     expect(within(definition).getByText("billing__<tool>")).toBeInTheDocument();
     // Where calls go is the environments', even with one: the definition names no base URL or header.
     expect(within(definition).queryByText("Authorization")).not.toBeInTheDocument();
-    expect(screen.getByTestId("environment-default")).toHaveTextContent(
-      "https://billing.internal.example/v2",
-    );
     expect(within(definition).getByText("30 s per call")).toBeInTheDocument();
     expect(within(definition).queryByText(/Available to/)).not.toBeInTheDocument();
     expect(within(definition).getByRole("button", { name: "Re-import" })).toBeInTheDocument();
@@ -270,15 +267,29 @@ describe("CustomToolsPage", () => {
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Tools" }));
     await waitFor(() => expect(location()).toBe("/custom-tools/billing/tools"));
     const tools = await screen.findByRole("region", { name: "Tools" });
-    expect(within(tools).getByText("GET /invoices/{id}")).toBeInTheDocument();
+    expect(within(tools).getByText("/invoices/{id}")).toBeInTheDocument();
     expect(within(tools).queryByText("2 of 2 on")).not.toBeInTheDocument();
     // A tool has no reach of its own: the group's header carries it.
     expect(within(tools).queryByRole("button", { name: /Available to/ })).toBeNull();
 
-    fireEvent.click(within(tools).getByText("get_invoice"));
+    // Environments: one card per environment, its base URL in view.
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /Environments/ }));
+    await waitFor(() => expect(location()).toBe("/custom-tools/billing/environments"));
+    expect(await screen.findByTestId("environment-default")).toHaveTextContent(
+      "https://billing.internal.example/v2",
+    );
+
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Tools" }));
+    fireEvent.click(await screen.findByText("get_invoice"));
     const drawer = await screen.findByRole("dialog");
+    // The editor's last tab is Test; before a run it shows the request it would send.
+    expect(
+      within(drawer)
+        .getAllByRole("tab")
+        .map((tab) => tab.textContent?.replace(/\d+$/, "")),
+    ).toEqual(["General", "Request", "Inputs", "Response", "Test"]);
+    fireEvent.mouseDown(within(drawer).getByRole("tab", { name: "Test" }));
     expect(within(drawer).getByRole("region", { name: "Try it" })).toBeInTheDocument();
-    // Before a run, Try it shows the request it would send.
     expect(within(drawer).getByTestId("custom-tool-request-preview")).toBeInTheDocument();
     fireEvent.change(within(drawer).getByLabelText("Value for id"), { target: { value: "7" } });
     fireEvent.click(within(drawer).getByRole("button", { name: "Run" }));
@@ -360,8 +371,9 @@ describe("CustomToolsPage", () => {
     // The tool's own On switch is in the table, not in the drawer footer.
     expect(within(drawer).queryByLabelText("Tool on")).not.toBeInTheDocument();
     expect(within(drawer).queryByText(/Only for this tool/)).not.toBeInTheDocument();
-    // The group's header shows as what the group already adds.
-    expect(within(drawer).getByText("from the group")).toBeInTheDocument();
+    // The group's header shows as what the group already adds, in the headers table's From column.
+    const headers = within(drawer).getAllByRole("table", { name: "Headers" })[0];
+    expect(within(headers).getAllByText("Group").length).toBeGreaterThan(0);
     expect(within(drawer).getByRole("button", { name: "Delete tool" })).toBeInTheDocument();
     expect(within(drawer).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });

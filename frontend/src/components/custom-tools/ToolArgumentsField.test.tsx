@@ -38,9 +38,9 @@ describe("ToolArgumentsField", () => {
     expect(screen.getByText(/status isn't used anywhere in the request/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add as query parameter" }));
     expect(onAddToQuery).toHaveBeenCalledWith("status");
-    // `{org}` has no argument: Add argument org adds a required one.
-    expect(screen.getByText(/no argument is named org/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Add argument org" }));
+    // `{org}` has no argument: Add input org adds a required one.
+    expect(screen.getByText(/no input is named org/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add input org" }));
     expect(onChange.mock.calls[0][0].at(-1)).toMatchObject({ name: "org", required: true });
   });
 });

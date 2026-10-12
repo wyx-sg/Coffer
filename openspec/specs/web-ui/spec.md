@@ -2748,32 +2748,45 @@ offers the two ways in:
   description starts the new group's description, which the user can change.
 - **Add one request by hand** — the new group's name, description, base URL,
   header rows and reach, then its first request: method, path, headers, body template
-  and arguments.
+  and inputs.
 
 Every request form — the tool drawer and Add a request alike — MUST be the same
-**tool editor**: tabs on the left and **Try it** on the right, always in view.
+**tool editor**: five tabs at the full width of the drawer or dialog.
 The tabs are **General** (the tool's name — editable while it is being added,
-fixed once it is saved — its description, the changes-data flag and what agents
-see: the full name with its arguments, the description, the read-only or
-changes-data hint and the environments `coffer_environment` takes),
-**Request** (method and path; the path's **query parameters** as key/value rows
-kept in step with the path, a row whose value is an `{argument}` hole marked as
-an argument; the headers; and the body template, which a GET replaces with a
-line saying it sends none), **Arguments** (one row per argument with its type,
-Required, where the request uses it — the path, a query key, a header or the
-body — and the description agents read under it; an argument no hole names is
-marked not used with **Add as query parameter** and **Remove argument**, and a
-hole no argument names is listed with **Add argument <name>**; the tab counts
-those problems) and **Response** (whether the tool follows its group's response
+fixed once it is saved — its description, in a box that grows with its text,
+the changes-data flag and what agents see: the full name with its inputs, the
+description, the read-only or changes-data hint and the environments
+`coffer_environment` takes),
+**Request** (method and path; the path's **query parameters** as a table of
+key/value rows kept in step with the path, a row whose value is an `{input}`
+hole naming that input as "Input · <name>", which opens it on the Inputs tab;
+the headers as one table — Name, Value, From — with the chosen environment's
+headers read-only (from the group, or from the environment when the group has
+several, a secret header by its secret's name) above the tool's own, edited in
+place; and the body template in a JSON code editor with line numbers, syntax
+colours and its `{input}` and `{env:NAME}` holes marked, which lays out a
+template saved on one line when it opens, offers **Format**, and names the line
+where the JSON breaks — a hole outside quotes is not a mistake — while a GET
+replaces it with a line saying it sends none), **Inputs** (the values an agent
+fills when it calls the tool, the arguments of its input schema: one row per
+input with its type, Required, where the request uses it — the path, a query
+key, a header or the body — and the description agents read under it, in a box
+that grows with its text; an input no hole names is marked not used with **Add
+as query parameter** and **Remove input**, and a hole no input names is listed
+with **Add input <name>**; the tab counts those problems), **Response** (whether the tool follows its group's response
 rules, shown one per line, or has rules of its own — edited with the same rule
 editor as the group's, where an empty list judges by the HTTP status alone
 ([mcp-gateway](../mcp-gateway/spec.md) "Judge a custom tool's answer by its
 group's response rules") — and what the agent gets: the status line, the
 headers the group names, the broken rule if any, and the body or a note that it
-was empty, cut at 1 MiB). A new tool opens on General, a saved one on Request.
-**Try it** takes a sample value per argument, and its Run runs the request as the form
-holds it once and shows the answer — the status and time in a block, the response
-in a viewer under it — the API's error body, a timeout, a failed
+was empty, cut at 1 MiB) and **Test**. A new tool opens on General, a saved one
+on Request. **Test** stacks, top to bottom, its environment picker and **Run**,
+a sample value per input, the **request to send** with those values filled in
+("Preview and test a custom tool in one chosen environment"), and the
+**response**; it keeps its values and its last result while the person visits
+the other tabs. Run runs the request as the form holds it once and shows the
+answer — the status and time in a block, then the response body and the
+response headers on two tabs — the API's error body, a timeout, a failed
 connection (each of these two with the daemon's hand-off and, for a timeout,
 **Change timeout**), a response cut short or an answer that broke a response
 rule (the block turns to a failure and names the rule, the value read and the
@@ -2799,13 +2812,11 @@ button in the definition of an imported group.
 
 A group's detail page (`/custom-tools/<group>/<tab>`) MUST carry, under its
 header — its **reach** and a one-line summary of the last 24 hours (calls and
-failures) — two tabs laid out like every other detail page's. **Overview** (the
+failures) — three tabs laid out like every other detail page's. **Overview** (the
 default, at the bare `/custom-tools/<group>`) stacks the group's **definition**
 (its description, the name agents see, its timeout, its diagnostic headers and
 response rules — "HTTP status only" when it has none — and, for an imported group,
-its spec), then **Environments** — one row per environment, however many there
-are, each with its switch, base URL, secret state and variables, edited from the
-row — then
+its spec), then
 what an MCP server's Overview shows ("Open an MCP server on its Overview"):
 **Last 24 hours** — the group's calls and errors with a table of the agents that
 made them, and for a group that is on a View in Activity link to Activity's Tool
@@ -2816,7 +2827,8 @@ Secrets link to `/secrets?q=<name>` (a group runs no command, so it has no
 launcher row); and **Most-called tools** — the busiest four, read-only with no
 switches, each marked when it sits behind search, with the rest one link away
 ("Show all N in Tools"). **Tools** (`/custom-tools/<group>/tools`) holds the
-**tools table** — each tool's method and path, its switch, its changes-data flag
+**tools table** — each tool's method, as a chip tinted by what it does (GET
+green; POST, PUT and PATCH amber; DELETE red), and its path, its switch, its changes-data flag
 and its **exposure**, the same choice as an MCP server's Tools tab ("Auto ·
 Listed", "Always listed", "Search only"; [mcp-gateway](../mcp-gateway/spec.md)
 "Choose how each tool is exposed"), shown for a tool that is on while tool
@@ -2829,16 +2841,26 @@ per-row checkbox (select-all in the header); while any is ticked a selection bar
 replaces that row with **Turn on**, **Turn off** and, while the exposure column
 shows, **Exposure**, acting on the ticked tools. Choosing
 a tool opens the tool editor in a 1040-wide **drawer** below the title bar —
-the headers the chosen environment already adds shown as
-"from the group" ("from <environment>" when the group has several),
+the headers the chosen environment already adds shown as from the
+group (from the environment when the group has several),
 no switch, which lives in the table — with **Delete tool**, Cancel and Save
-in its footer. **Edit group** edits the group's description, timeout and response
+in its footer. **Environments** (`/custom-tools/<group>/environments`, its tab
+counting them) shows one **card** per environment, however many there are,
+everything it holds readable without opening it: its switch, name and secret
+state with **Edit** and a **⋯** menu holding Delete environment (off, with the
+reason, for a group's only environment) in the card's head, then its base URL,
+its timeout and whose it is (its own, or the group's), its headers in the same
+table as the tool editor's (a secret header by its secret's name and state,
+never a value) and its variables. Edit opens the environment's dialog, whose
+header and variable rows carry Name and Value column heads. **Edit group** edits,
+in two parts, Basics — the group's description, in a box that grows with its
+text, and its timeout — and Judging the response — its response
 settings — the **diagnostic headers** to report and the **response rules**, one
 card per rule (read the HTTP status, a response header or a JSON field; the
 success values; what a missing value means; where the API's error message is),
 whose mistakes are named under the field and keep Save off:
-base URLs, headers, secrets and variables are the environments', edited from
-their rows, so a group with one environment is edited the same way as one with
+base URLs, headers, secrets and variables are the environments', edited on
+the Environments tab, so a group with one environment is edited the same way as one with
 several. Script tools are not offered: they are deferred past 1.0.
 How the gateway runs an HTTP API tool is mcp-gateway's ([mcp-gateway](../mcp-gateway/spec.md)
 "Serve an HTTP API as a group of custom tools", "Make a custom tool's request in
@@ -2896,11 +2918,12 @@ the gateway").
 - **THEN** a banner says the secret was refused, with Ask again as its only button, and no banner says it waits for approval
 - **AND** pressing Ask again asks again for that approval
 
-#### Scenario: a group's page has Overview and Tools tabs
-- **GIVEN** the `billing` group with three tools and a call in the last 24 hours
-- **WHEN** the user opens `/custom-tools/billing`, switches to Tools and chooses one tool
-- **THEN** the page opens on Overview with the definition and the environment's base URL under Environments, under a header with the reach and a one-line 24-hour summary, and its tabs are Overview and Tools and no other
-- **AND** Tools, at `/custom-tools/billing/tools`, shows the tools table, and the tool opens in a drawer on its Request tab beside Try it, which shows the request it would send, without changing the address
+#### Scenario: a group's page has Overview, Tools and Environments tabs
+- **GIVEN** the `billing` group with three tools, one environment and a call in the last 24 hours
+- **WHEN** the user opens `/custom-tools/billing`, switches to Tools, then Environments, then back to Tools and chooses one tool
+- **THEN** the page opens on Overview with the definition, under a header with the reach and a one-line 24-hour summary, and its tabs are Overview, Tools and Environments and no other
+- **AND** Tools, at `/custom-tools/billing/tools`, shows the tools table; Environments, at `/custom-tools/billing/environments`, shows the environment's card with its base URL
+- **AND** the tool opens in a drawer on its Request tab without changing the address, its tabs are General, Request, Inputs, Response and Test, and Test shows the request it would send before any run
 
 #### Scenario: a group's Overview shows what it requires, its busiest tools and the last 24 hours
 - **GIVEN** the `billing` group, on, whose `Authorization` header is bound to the stored secret `billing-token`, with 31 calls from Claude Code in 24 hours, most of them to `get_invoice`
@@ -2917,7 +2940,7 @@ the gateway").
 #### Scenario: a tool's drawer has no switch, and Delete tool is outlined
 - **GIVEN** the `billing` group with a tool
 - **WHEN** the user opens the tool
-- **THEN** the drawer shows no On switch, shows the group's header as from the group, and offers Delete tool and Cancel
+- **THEN** the drawer shows no On switch, shows the group's header in the headers table as from the group, and offers Delete tool and Cancel
 
 #### Scenario: a spec that does not parse shows the lines around the failure
 - **GIVEN** the import step with a file whose YAML breaks on line 3
@@ -2940,10 +2963,10 @@ the gateway").
 - **THEN** only `list_invoices` and `void_invoice` are listed, no row carries a reach control, and Add request sits beside the search above the table
 
 #### Scenario: an argument the request never uses is flagged with its fix
-- **GIVEN** a tool `GET /orgs/{org}/search?q={query}` whose arguments are `query` and `status`
-- **WHEN** the user opens its Arguments tab
-- **THEN** `query` reads as used in `?q=`, `status` as not used with Add as query parameter and Remove argument, and `{org}` is listed with Add argument org, and the tab counts two problems
-- **AND** Add as query parameter adds `status={status}` to the path, which the Request tab's query parameters show as an argument row
+- **GIVEN** a tool `GET /orgs/{org}/search?q={query}` whose inputs are `query` and `status`
+- **WHEN** the user opens its Inputs tab
+- **THEN** `query` reads as used in `?q=`, `status` as not used with Add as query parameter and Remove input, and `{org}` is listed with Add input org, and the tab counts two problems
+- **AND** Add as query parameter adds `status={status}` to the path, which the Request tab's query parameters show as a row filled by the input `status`
 
 #### Scenario: Edit group edits the description, timeout and response settings
 - **GIVEN** the `billing` group with one environment
@@ -2963,8 +2986,14 @@ the gateway").
 
 #### Scenario: Try it names the response rule an answer broke
 - **GIVEN** a tool whose answer breaks a response rule
-- **WHEN** the user runs it in Try it
+- **WHEN** the user runs it on the Test tab
 - **THEN** the block reads as a failure, names the rule failed with the value read, the success values and the API's message, and the body's size is shown
+
+#### Scenario: a one-line body template opens laid out and its holes are not errors
+- **GIVEN** a `POST` tool whose body template was saved on one line as `{"ids":{ids},"region":{region},"flag":111}`
+- **WHEN** the user opens its Request tab
+- **THEN** the body shows one key per line, indented, with `{ids}` and `{region}` marked as holes, no JSON error, and Format off
+- **AND** a template missing a value after a key names the line where the JSON breaks
 
 ### Requirement: Draw every diff in the web UI with one renderer
 Every diff the web UI shows of a file's changed lines — a change preview of a write Coffer is about to make, a version on a History tab, a skill's copy or folder-in-the-way review, and a custom-tool group's re-import — MUST be drawn by one renderer: old and new line numbers, a sign, additions and deletions on their colour, hunk headers muted, and a long line wrapped at a word boundary with a ↳ on its continuation rows, never cut off. Each file is shown under its path, operation and line counts.
@@ -3145,18 +3174,22 @@ A saved group's request form — the tool drawer and Add request into an existin
 group — MUST hold ONE chosen environment, starting at the first one that is on,
 and everything the form shows about where the request goes MUST come from it:
 the help under Request names its base URL (and, with several environments, the
-environment), the headers already added are its headers, and Try it
-shows a **preview** of the request, on its own tab beside the result (the
-preview until the first run, the result after it) — method and URL with the environment's
-`{env:NAME}` filled and `{argument}` holes left, the merged headers (the
-environment's plain ones, a tool header replacing one of the same name, the
-environment's secret headers last, each by its secret's name and state, never a
-value), its variables and the timeout that applies (its own, else the group's) —
+environment), the headers already added are its headers, and the Test tab
+shows the **request to send** above the response — method and full URL with the
+environment's `{env:NAME}` filled and the sample values typed so far put in, the
+merged headers in the shared headers table (the environment's plain ones, a
+tool header replacing one of the same name, the environment's secret headers
+last, each by its secret's name and state, never a value), the body laid out as
+JSON, its variables and the timeout that applies (its own, else the group's) —
 by the gateway's rules ([mcp-gateway](../mcp-gateway/spec.md) "Make a custom
-tool's request in the gateway"). The note under Try it names that environment's
-secret, and none when it has no secret header. Run MUST send the chosen
-environment by name. Try it's picker lists the environments that are
-on and only changes the choice: it saves nothing and changes no group setting.
+tool's request in the gateway"): a path hole with no value stays `{name}` and is
+named as missing, a query pair or tool header whose input has no value is left
+out, a list fills one query pair per item, an input with no value is `null` in
+the body (nothing inside a string), and a body adds `Content-Type:
+application/json` unless a header sets it. The note on the Test tab names that
+environment's secret, and none when it has no secret header. Run MUST send the
+chosen environment by name. The Test tab's picker lists the environments that
+are on and only changes the choice: it saves nothing and changes no group setting.
 An environment switched off or deleted while the form is open MUST stay chosen
 and be reported — off, deleted, or no environment on — with Run off and no
 preview, until another is picked; the form never runs in another environment in
@@ -3164,14 +3197,14 @@ its place.
 
 #### Scenario: the tool form previews and tests in the environment it names
 - **GIVEN** a group with environments `test` (a secret header, a plain header, `region=eu-1`, the group's 30 s timeout) and `live` (a different base URL and plain header, no secret header, `region=us-1`, its own 7 s timeout) and a tool `GET /v1/{env:region}/items/{id}`
-- **WHEN** the person opens the tool, reads the preview, picks `live` in Try it and runs it
+- **WHEN** the person opens the tool, reads the request to send, picks `live` on the Test tab and runs it
 - **THEN** the help, headers and preview first show `test`'s base URL, headers, secret and 30 s, then `live`'s base URL with `us-1`, its header and 7 s, and no secret of `test` anywhere
 - **AND** the run names `live`, its result shows the allow-listed response headers, and nothing about the group is saved
 
 #### Scenario: a tool form never runs in an environment that is off or gone
 - **GIVEN** a tool drawer open on environment `test`
 - **WHEN** `test` is switched off, then deleted, while the drawer stays open
-- **THEN** Try it says `test` is off, then that it was deleted, with Run off and no preview each time
+- **THEN** the Test tab says `test` is off, then that it was deleted, with Run off and no request to send each time
 - **AND** Run comes back only once the person picks another environment
 
 ### Requirement: Offer uninstall on Settings › About

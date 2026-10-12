@@ -5147,7 +5147,8 @@
     "title": "自定义工具",
     "tabs": {
       "overview": "概览",
-      "tools": "工具"
+      "tools": "工具",
+      "environments": "环境"
     },
     "pendingApprovalSaved": "已保存。密钥需要先在 Coffer 应用里批准，调用才能使用它。",
     "list": {
@@ -5202,7 +5203,7 @@
       "importPoint1": "base URL 和认证来自规范",
       "importPoint2": "之后可重新导入以获取改动",
       "handTitle": "手动添加一个请求",
-      "handBody": "方法、URL 模板、请求头、请求体模板和参数。",
+      "handBody": "方法、URL 模板、请求头、请求体模板和输入。",
       "handPoint1": "由你设置 base URL 和认证",
       "handPoint2": "添加前先测试"
     },
@@ -5268,9 +5269,9 @@
         "timeout": "请求超时",
         "unreachable": "无法访问该主机"
       },
-      "noArguments": "没有参数",
-      "arguments_one": "{{count}} 个参数：{{names}}",
-      "arguments_other": "{{count}} 个参数：{{names}}",
+      "noArguments": "没有输入",
+      "arguments_one": "{{count}} 个输入：{{names}}",
+      "arguments_other": "{{count}} 个输入：{{names}}",
       "changes": "会修改数据",
       "reads": "读取数据",
       "noSource": "这个操作没有可显示的规范文本。"
@@ -5370,54 +5371,53 @@
       "headers": "请求头",
       "headerKey": "请求头",
       "headerValue": "值",
-      "removeHeader": "移除请求头",
       "addHeader": "添加请求头",
       "body": "请求体模板",
-      "bodyHelp": "GET 不发送请求体。POST、PUT 或 PATCH 请写 JSON，用 {argument} 占位。",
-      "arguments": "参数",
+      "bodyHelp": "写 JSON，用 {名称} 放入智能体填的输入，例如 {\"region\": {region}}。",
+      "arguments": "输入",
       "argName": "名称",
       "argType": "类型",
       "argRequired": "必填",
       "argRequiredFor": "{{name}} 为必填",
       "argDescription": "给智能体的说明",
       "enumValues": "取值，用逗号分隔",
-      "removeArgument": "移除参数",
-      "addArgument": "添加参数",
+      "removeArgument": "移除输入",
+      "addArgument": "添加输入",
       "delete": "删除工具",
       "deleteTitle": "删除 {{name}}？",
       "deleteBody": "智能体将不再看到它。它的调用记录仍保留在活动中。",
       "and": " 和 ",
       "requestHelpAdd": "接在 {{url}} 后面。",
-      "requestHelpArgs": "接在 {{url}} 后面。{{holes}} 来自参数。",
+      "requestHelpArgs": "接在 {{url}} 后面。{{holes}} 来自输入。",
       "changesDataHelpShort": "POST、PUT、PATCH 和 DELETE 默认开启。智能体会把它作为工具的只读或破坏性提示。",
-      "fromGroup": "来自分组",
+      "fromGroup": "分组",
       "addHeaderThis": "为此请求添加请求头",
       "requestHelpEnv": "拼接在环境 {{environment}} 的基础 URL {{url}} 后面。",
       "requestHelpNoEnv": "拼接在请求所在环境的基础 URL 后面。",
-      "fromEnvironment": "来自环境 {{environment}}",
+      "fromEnvironment": "环境 {{environment}}",
       "nameFixed": "添加后不可更改——它是智能体调用的名称的一部分。",
-      "bodyGet": "GET 不发送请求体。把方法改为 POST、PUT 或 PATCH 才能写 JSON 请求体，其中的 {argument} 占位来自参数。",
-      "query": "查询参数",
+      "bodyGet": "GET 不发送请求体。把方法改为 POST、PUT 或 PATCH 才能写 JSON 请求体，其中的 {名称} 占位来自输入。",
+      "query": "URL 查询参数",
       "queryHelp": "与请求路径保持同步。",
-      "queryKey": "参数名",
+      "queryKey": "名称",
       "queryValue": "值",
       "queryValueFor": "{{key}} 的值",
-      "fromArgument": "来自参数",
       "removeQuery": "移除 {{key}}",
       "addQuery": "添加查询参数",
       "argUsedIn": "用在",
       "argUnused": "未使用",
-      "noArguments": "还没有参数。请求里的每个 {占位} 都要有一个参数。",
-      "unusedArgument": "请求里没有用到 {{name}}，智能体传的值会被丢掉。",
+      "noArguments": "还没有输入。请求里的每个 {占位} 都要有一个输入。",
+      "unusedArgument": "请求里没有用到 {{name}}，智能体填的值会被丢掉。",
       "addToQuery": "加为查询参数",
-      "missingArgument": "请求里用到了 {{name}}，但没有名为 {{name}} 的参数，它永远填不上。",
-      "addArgumentNamed": "添加参数 {{name}}",
-      "argumentsHelp": "类型、取值和必填会作为工具的输入 schema 交给智能体。",
+      "missingArgument": "请求里用到了 {{name}}，但没有名为 {{name}} 的输入，它永远填不上。",
+      "addArgumentNamed": "添加输入 {{name}}",
+      "argumentsHelp": "输入是智能体调用这个工具时填的值。类型、取值和必填会作为工具的输入 schema 交给智能体。",
       "tabs": {
         "general": "概览",
         "request": "请求",
-        "arguments": "参数",
-        "response": "响应"
+        "arguments": "输入",
+        "response": "响应",
+        "test": "测试"
       },
       "agentPreview": "智能体看到的",
       "hintChanges": "会修改数据",
@@ -5431,7 +5431,17 @@
         "statusOnly": "仅看 HTTP 状态码",
         "own": "仅此工具使用的规则",
         "ownHelp": "从分组的规则开始修改。没有规则时，只有 HTTP 400 及以上才算失败。"
-      }
+      },
+      "queryFills": "填入",
+      "noQuery": "没有查询参数。",
+      "fromInput": "输入 · {{name}}",
+      "fromTool": "此工具",
+      "noHeaders": "没有请求头。",
+      "headerValueFor": "{{name}} 的值",
+      "removeHeaderNamed": "移除请求头 {{name}}",
+      "format": "格式化",
+      "bodyInvalid": "第 {{line}} 行第 {{column}} 列附近不是有效的 JSON。{名称} 占位不算错误。",
+      "bodyHoles": "{名称} 填入输入的值，{env:名称} 填入环境变量。不加引号时按 JSON 值填入（列表、数字、true/false），放在引号里时按文本填入。"
     },
     "test": {
       "title": "试运行",
@@ -5445,7 +5455,7 @@
       "responseType": "响应 · {{type}}",
       "changeTimeout": "修改超时",
       "changeValue": "修改值",
-      "notRun": "尚未运行。填好参数后点击运行。",
+      "notRun": "尚未运行。填好输入取值后点击运行。",
       "noteUnsaved": {
         "save": "不带密钥运行一次——分组保存后才会发送密钥；点击保存前不会保存任何内容。",
         "add": "不带密钥运行一次——分组保存后才会发送密钥；添加工具前不会保存任何内容。"
@@ -5462,13 +5472,13 @@
         "connect": "Coffer 无法从这台 Mac 建立连接{{detail}}。如果你通过 VPN 或 proxy 上网，请确认它能访问 {{host}}，然后重试。没有保存任何内容。",
         "blocked": "分组保存前，Coffer 只测试能解析到公网地址的 base URL。请先添加工具，再在分组中测试。",
         "rejected": "API 拒绝了 {{secret}}。如果它已过期，请修改它的值；{{group}} 中的每个工具都使用同一个密钥。",
-        "httpError": "API 返回了错误，响应见下方。请检查路径和参数的值，然后重试。没有保存任何内容。",
+        "httpError": "API 返回了错误，响应见下方。请检查路径和输入的值，然后重试。没有保存任何内容。",
         "rejectedEnv": "API 拒绝了 {{secret}}。如果它已过期，请修改它的值；这个分组的每个工具在 {{environment}} 中都使用它。",
         "timeoutEnv": "Coffer 在环境 {{environment}} 自己的 {{seconds}} 秒超时后停止了等待。如果只是 API 慢，请在“环境”中调大超时；如果它本该很快响应，请交给智能体查原因。没有保存任何内容。",
         "ruleFailed": "API 有响应，但响应没有通过某条响应规则。请检查「响应」里的规则或请求，然后重试。没有保存任何内容。"
       },
       "cutShort": "已在 {{size}} 处截断。",
-      "cutShortBody": "智能体也只会拿到前 {{size}}。请用参数缩小请求范围，或让 API 返回更少内容。",
+      "cutShortBody": "智能体也只会拿到前 {{size}}。请用输入缩小请求范围，或让 API 返回更少内容。",
       "note": {
         "save": "运行一次；点击保存前不会保存任何内容。",
         "add": "运行一次；添加工具前不会保存任何内容。"
@@ -5486,10 +5496,16 @@
         "deleted": "环境 {{environment}} 已被删除，测试不会运行。请选择其他环境。"
       },
       "responseHeaders": "响应头",
-      "resultTab": "结果",
-      "requestTab": "预览",
       "emptyBody": "0 字节 · 响应正文为空",
-      "ruleFailed": "响应规则未通过"
+      "ruleFailed": "响应规则未通过",
+      "valuesTitle": "输入取值",
+      "noInputs": "这个工具没有输入。",
+      "requestTitle": "将发送的请求",
+      "inEnvironment": "环境 {{environment}}",
+      "missingPath": "路径里的 {{names}} 还没有取值，运行会被拒绝。",
+      "responseTitle": "响应",
+      "bodyTab": "正文",
+      "bodyLabel": "请求体"
     },
     "editGroup": {
       "title": "编辑 {{name}}",
@@ -5501,7 +5517,7 @@
       "nameHelp": "固定不变——智能体以 {{prefix}} 调用它的工具。",
       "descriptionHelp": "智能体搜索工具时会读到它，写清这组 API 是做什么的。",
       "descriptionPlaceholder": "例如：计费系统的发票和付款",
-      "environmentsNote": "基础 URL、请求头、密钥和变量属于各个环境，在「环境」里对应的行上编辑。",
+      "environmentsNote": "基础 URL、请求头、密钥和变量属于各个环境，在「环境」标签里编辑。",
       "diagnosticHeaders": "诊断响应头",
       "diagnosticHeadersHelp": "用逗号分隔的响应头名称。测试和智能体收到的结果里会与请求 id、追踪 id 一起报告。不能指定携带凭据或 Cookie 的响应头。",
       "diagnosticProblem": {
@@ -5510,7 +5526,9 @@
         "many": "最多 20 个响应头。"
       },
       "responseRules": "响应规则",
-      "responseRulesHelp": "每条规则都满足，调用才算成功。没有规则时，只有 HTTP 400 及以上才算失败。"
+      "responseRulesHelp": "每条规则都满足，调用才算成功。没有规则时，只有 HTTP 400 及以上才算失败。",
+      "basics": "基本",
+      "judging": "响应判断"
     },
     "reimport": {
       "action": "重新导入",
@@ -5530,8 +5548,8 @@
       "summary_other": "{{name}} 中有 {{count}} 项改动",
       "willAddRead": "<b>{{name}}</b> 会成为工具，已开启。",
       "willAddWrite": "<b>{{name}}</b> 会修改数据，所以不会添加，除非你勾选它。",
-      "willRequire_one": "<b>{{name}}</b> 新增了必填参数 {{names}}。",
-      "willRequire_other": "<b>{{name}}</b> 新增了必填参数 {{names}}。",
+      "willRequire_one": "<b>{{name}}</b> 新增了必填输入 {{names}}。",
+      "willRequire_other": "<b>{{name}}</b> 新增了必填输入 {{names}}。",
       "willChange": "<b>{{name}}</b> 的请求有改动。",
       "willRemove": "<b>{{name}}</b> 已从规范中移除；智能体将失去它。",
       "add": "添加 {{name}}",
@@ -5543,7 +5561,7 @@
       "body": "自定义工具是 Coffer 替智能体发出的一次 HTTP 请求——无需运行 MCP 服务器。工具放在分组里；一个分组包含它的环境（每个环境有自己的基础 URL、请求头和密钥）和可使用它工具的范围。",
       "importBody": "从 URL 或文件里挑选操作；这次导入成为一个分组。",
       "importPoint": "之后可重新导入以获取改动。",
-      "handBody": "方法、URL 模板、请求头、请求体和参数。",
+      "handBody": "方法、URL 模板、请求头、请求体和输入。",
       "handPoint": "新建一个分组；添加前先测试。"
     },
     "request": {
@@ -5591,10 +5609,19 @@
         "pending_approval": "等待批准",
         "none": "无密钥",
         "rejected": "已拒绝"
+      },
+      "off": "已关闭",
+      "more": "{{name}} 的更多操作",
+      "lastOne": "分组至少要有一个环境。",
+      "headersOf": "{{name}} 的请求头",
+      "variablesOf": "{{name}} 的变量",
+      "noVariables": "没有变量。",
+      "timeout": {
+        "environment": "每次调用 {{seconds}} 秒（此环境自己的）",
+        "group": "每次调用 {{seconds}} 秒（沿用分组的）"
       }
     },
     "preview": {
-      "title": "{{environment}} 中的请求",
       "secretState": {
         "present": "已设置",
         "missing": "缺失",
@@ -5635,6 +5662,11 @@
         "status": "状态码是 100 到 599 的数字。",
         "long": "最多 20 个值，每个最多 200 个字符。"
       }
+    },
+    "headerTable": {
+      "name": "名称",
+      "value": "值",
+      "source": "来源"
     }
   },
   "clis": {

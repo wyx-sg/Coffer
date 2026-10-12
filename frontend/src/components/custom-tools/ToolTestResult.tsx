@@ -1,18 +1,23 @@
 // src/components/custom-tools/ToolTestResult.tsx — what one test run got (4.2.08–4.2.12), under the form's fields:
-//  · an answer: a neutral sunken block — green ✓, grey status line, the URL — the response in the viewer below it;
+//  · an answer: a neutral sunken block — green ✓, grey status line, the URL — the response below it, its body and
+//    response headers on two tabs;
 //  · the API's error (4xx/5xx): a danger-soft block, no hand-off (401/403 add Change value for the secret);
 //  · no connection / timeout: a danger-soft block with Hand off to <Agent> ▾ and ? (a timeout also Change timeout).
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, CircleAlert, Copy } from "lucide-react";
+import { Check, CircleAlert } from "lucide-react";
 
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { ReplaceSecretDialog } from "@/components/secret/ReplaceSecretDialog";
 import { useSecretChoices } from "@/components/secret/useSecretChoices";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { CustomToolTestOut } from "@/lib/api/customTools";
 import { hostOf } from "@/lib/customTools/groups";
 import { cn, formatBytes } from "@/lib/utils";
+import { CopyUrlLine } from "./CopyUrlLine";
+import { HeaderTable } from "./HeaderTable";
 import { ResponseViewer } from "./ResponseViewer";
 
 /** The most of a response a tool returns (mcp-gateway "Make a custom tool's
@@ -44,49 +49,36 @@ function took(ms: number): string {
   return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
 }
 
-function UrlLine({ method, url }: { method: string; url: string }) {
+/** The response's body and the allow-listed headers the daemon kept (request and trace ids, server, date), one tab
+ *  each; with no headers kept, the body alone. */
+function ResponseTabs({ result, cutAt }: { result: CustomToolTestOut; cutAt: string | null }) {
   const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
-  return (
-    <p className="flex min-w-0 items-center gap-2">
-      <span className="shrink-0 rounded-sm bg-chip px-1.5 font-mono text-2xs text-text-muted">
-        {method}
-      </span>
-      <span className="min-w-0 truncate font-mono text-xs text-text-muted" title={url}>
-        {url}
-      </span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={t("common.copy")}
-        className="text-text-subtle"
-        onClick={() =>
-          void navigator.clipboard?.writeText(url).then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
-          })
-        }
-      >
-        {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
-      </Button>
-    </p>
+  const headers = Object.entries(result.response_headers ?? {});
+  const body = result.body ? (
+    <ResponseViewer body={result.body} contentType={result.content_type} cutAt={cutAt} />
+  ) : (
+    <p className="text-xs text-text-muted">{t("customTools.test.emptyBody")}</p>
   );
-}
-
-/** The allow-listed response headers the daemon kept (request and trace ids, server, date). */
-function ResponseHeaders({ headers }: { headers: Record<string, string> }) {
-  const { t } = useTranslation();
-  const rows = Object.entries(headers);
-  if (rows.length === 0) return null;
+  if (headers.length === 0) return result.body ? body : null;
   return (
-    <div aria-label={t("customTools.test.responseHeaders")} className="flex flex-col gap-0.5">
-      {rows.map(([name, value]) => (
-        <p key={name} className="break-all font-mono text-2xs text-text-muted">
-          {name}: {value}
-        </p>
-      ))}
-    </div>
+    <Tabs defaultValue="body">
+      <TabsList className="h-8">
+        <TabsTrigger value="body">{t("customTools.test.bodyTab")}</TabsTrigger>
+        <TabsTrigger value="headers">
+          {t("customTools.test.responseHeaders")}
+          <Badge variant="secondary">{headers.length}</Badge>
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="body" className="mt-3">
+        {body}
+      </TabsContent>
+      <TabsContent value="headers" className="mt-3">
+        <HeaderTable
+          ariaLabel={t("customTools.test.responseHeaders")}
+          rows={headers.map(([name, value]) => ({ name, value }))}
+        />
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -198,18 +190,14 @@ export function ToolTestResult({
             <span className="break-all">{ruleFailure.summary}</span>
           </p>
         ) : null}
-        {result.url ? <UrlLine method={method} url={result.url} /> : null}
-        <ResponseHeaders headers={result.response_headers ?? {}} />
+        {result.url ? <CopyUrlLine method={method} url={result.url} /> : null}
         {hint ? <p className="text-xs leading-[1.45] text-text-muted">{hint}</p> : null}
         {actions}
       </div>
-      {result.body ? (
-        <ResponseViewer
-          body={result.body}
-          contentType={result.content_type}
-          cutAt={result.truncated ? formatBytes(RESPONSE_CAP_BYTES) : null}
-        />
-      ) : null}
+      <ResponseTabs
+        result={result}
+        cutAt={result.truncated ? formatBytes(RESPONSE_CAP_BYTES) : null}
+      />
       <ReplaceSecretDialog
         secretRef={changing && secret ? (rowOf(secret)?.ref ?? null) : null}
         onClose={() => setChanging(false)}

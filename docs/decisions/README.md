@@ -171,6 +171,9 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`tool-search-indexes-parameter-text`](tool-search-indexes-parameter-text.md) | Tool Search Indexes Parameter Text |
 | [`eval-capture-and-regression-gate`](eval-capture-and-regression-gate.md) | Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate |
 | [`record-tool-call-content-redacted-and-bounded`](record-tool-call-content-redacted-and-bounded.md) | Record Tool Call Content, Masked Where the Secrets Are Known and Cut at 16 KB |
+| [`custom-tool-pages-give-testing-and-environments-their-own-tabs`](custom-tool-pages-give-testing-and-environments-their-own-tabs.md) | A Custom Tool's Test and a Group's Environments Each Have Their Own Tab |
+| [`what-an-agent-fills-in-a-custom-tool-is-an-input`](what-an-agent-fills-in-a-custom-tool-is-an-input.md) | What an Agent Fills in a Custom Tool Is an Input; Query Parameters Are Only the URL's |
+| [`a-body-template-is-laid-out-by-its-tokens`](a-body-template-is-laid-out-by-its-tokens.md) | A Body Template Is Laid Out by Its Tokens, Never Parsed |
 
 ### Agents & providers
 

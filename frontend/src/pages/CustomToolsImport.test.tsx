@@ -297,7 +297,7 @@ describe("CustomToolsPage import", () => {
       expect(within(preview).getByText(/becomes a tool, on\./)).toBeInTheDocument();
       expect(within(preview).getByText(/changes data, so it isn't added/)).toBeInTheDocument();
       expect(
-        within(preview).getByText(/gets a new required argument, currency/),
+        within(preview).getByText(/gets a new required input, currency/),
       ).toBeInTheDocument();
       expect(
         within(preview).getByText(/is gone from the spec; agents lose it/),

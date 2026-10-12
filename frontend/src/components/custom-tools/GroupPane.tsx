@@ -1,7 +1,7 @@
 // src/components/custom-tools/GroupPane.tsx — the selected group: header and banners, then the tabs Overview
-// (definition, Last 24 hours, Requires, most-called tools) · Tools (the tools table with each tool's exposure), the
-// tab in the path (`/custom-tools/<group>/tools`; spec web-ui "Lay out every detail page's tabs alike"); the tool
-// drawer, Edit group, Re-import and Delete over it.
+// (definition, Last 24 hours, Requires, most-called tools) · Tools (the tools table with each tool's exposure) ·
+// Environments (one card each), the tab in the path (`/custom-tools/<group>/tools`; spec web-ui "Lay out every
+// detail page's tabs alike"); the tool drawer, Edit group, Re-import and Delete over it.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -9,6 +9,7 @@ import { Wrench } from "lucide-react";
 
 import { DetailNotFound } from "@/components/DetailNotFound";
 import { EmptyState } from "@/components/EmptyState";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApiError, translateApiError } from "@/lib/api/errors";
@@ -19,6 +20,7 @@ import { useMcpInvocationSummary, useMcpToolTiering } from "@/lib/hooks/useMcpSe
 import { CUSTOM_TOOL_TABS } from "./customToolTabs";
 import { DeleteGroupDialog } from "./DeleteGroupDialog";
 import { EditGroupDialog } from "./EditGroupDialog";
+import { GroupEnvironments } from "./GroupEnvironments";
 import { GroupHeader } from "./GroupHeader";
 import { GroupBanners } from "./GroupBanners";
 import { GroupOverview } from "./GroupOverview";
@@ -88,6 +90,10 @@ export function GroupPane({ name, onAddRequest }: Props) {
         <TabsList>
           <TabsTrigger value="overview">{t("customTools.tabs.overview")}</TabsTrigger>
           <TabsTrigger value="tools">{t("customTools.tabs.tools")}</TabsTrigger>
+          <TabsTrigger value="environments">
+            {t("customTools.tabs.environments")}
+            <Badge variant="secondary">{group.environments?.length ?? 0}</Badge>
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="pt-5">
           <GroupOverview
@@ -108,6 +114,9 @@ export function GroupPane({ name, onAddRequest }: Props) {
             onOpenTool={setTool}
             onAddRequest={onAddRequest}
           />
+        </TabsContent>
+        <TabsContent value="environments" className="pt-5">
+          <GroupEnvironments group={group} />
         </TabsContent>
       </Tabs>
       <ToolEditorDrawer

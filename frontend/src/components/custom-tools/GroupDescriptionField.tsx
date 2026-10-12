@@ -22,6 +22,7 @@ export function GroupDescriptionField({ value, onChange }: Props) {
     >
       <Textarea
         id={id}
+        autoGrow
         className="min-h-[58px]"
         rows={2}
         maxLength={2000}

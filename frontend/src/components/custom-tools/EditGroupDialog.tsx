@@ -1,5 +1,6 @@
-// src/components/custom-tools/EditGroupDialog.tsx — Edit group (4.2.35, 640): its description and timeout. Base URLs,
-// headers, secrets and variables belong to the environments and are edited from their rows, however many there are.
+// src/components/custom-tools/EditGroupDialog.tsx — Edit group (4.2.35, 640) in two parts: Basics (its description
+// and timeout) and Judging the response (the diagnostic headers and the response rules). Base URLs, headers,
+// secrets and variables belong to the environments and are edited on the Environments tab.
 // The name is fixed: it is the prefix agents see. Reach is the header's Reach control, not a field here.
 import { useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -82,6 +83,9 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
           <DialogTitle>{t("customTools.editGroup.title", { name: group.name })}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+            {t("customTools.editGroup.basics")}
+          </h3>
           <FormField
             label={t("customTools.editGroup.name")}
             htmlFor={`${id}-name`}
@@ -110,6 +114,9 @@ export function EditGroupDialog({ group, open, onOpenChange }: Props) {
               </span>
             </div>
           </FormField>
+          <h3 className="mt-2 border-t border-border-subtle pt-4 text-xs font-semibold uppercase tracking-wide text-text-muted">
+            {t("customTools.editGroup.judging")}
+          </h3>
           <GroupResponseFields
             key={opened}
             headers={diagnostic}

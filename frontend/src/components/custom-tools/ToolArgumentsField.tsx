@@ -1,8 +1,8 @@
-// src/components/custom-tools/ToolArgumentsField.tsx — the tool's arguments: the top-level properties of its input
+// src/components/custom-tools/ToolArgumentsField.tsx — the tool's inputs (its arguments, on the Inputs tab): the top-level properties of its input
 // schema, one row each (name, type, required, where the request uses it, and the description agents read under
 // it). An argument no hole names is sent nowhere, and a hole no argument names can never be filled: both are listed
 // under the rows with their fix (Add as query parameter, Remove argument; Add argument).
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle, Plus, Trash2 } from "lucide-react";
 
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { argumentProblems, type ArgumentUse } from "@/lib/customTools/requestParts";
 import { emptyArg, type ArgRow, type ArgType } from "@/lib/customTools/schemaArgs";
+import { cn } from "@/lib/utils";
 
 const EDITABLE_TYPES: readonly ArgType[] = ["string", "number", "integer", "boolean", "enum"];
 const COLS = "grid-cols-[minmax(0,1fr)_7rem_4.5rem_minmax(0,1fr)_2rem]";
@@ -30,6 +32,8 @@ interface Props {
   uses: Map<string, ArgumentUse[]>;
   /** Add as query parameter: `<name>={<name>}` on the path. */
   onAddToQuery: (name: string) => void;
+  /** The input a chip on the Request tab opened: scrolled to and outlined. */
+  focus?: string | null;
 }
 
 function labelOfUse(use: ArgumentUse): string {
@@ -38,8 +42,12 @@ function labelOfUse(use: ArgumentUse): string {
   return use.where;
 }
 
-export function ToolArgumentsField({ args, onChange, uses, onAddToQuery }: Props) {
+export function ToolArgumentsField({ args, onChange, uses, onAddToQuery, focus = null }: Props) {
   const { t } = useTranslation();
+  const focused = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    focused.current?.scrollIntoView?.({ block: "center" });
+  }, [focus]);
   const set = (i: number, row: ArgRow) => onChange(args.map((a, j) => (j === i ? row : a)));
   const { unused, missing } = argumentProblems(
     args.map((a) => a.name),
@@ -61,7 +69,11 @@ export function ToolArgumentsField({ args, onChange, uses, onAddToQuery }: Props
             return (
               <div
                 key={i}
-                className="flex flex-col gap-1.5 border-b border-border-subtle py-2.5"
+                ref={row.name === focus ? focused : undefined}
+                className={cn(
+                  "flex flex-col gap-1.5 border-b border-border-subtle py-2.5",
+                  row.name === focus && "-mx-2 rounded-md bg-accent-soft/40 px-2",
+                )}
                 data-testid={`argument-${row.name}`}
               >
                 <div className={`grid ${COLS} items-center gap-2`}>
@@ -122,7 +134,10 @@ export function ToolArgumentsField({ args, onChange, uses, onAddToQuery }: Props
                     <Trash2 aria-hidden />
                   </Button>
                 </div>
-                <Input
+                <Textarea
+                  autoGrow
+                  rows={1}
+                  className="min-h-[38px]"
                   value={row.description}
                   placeholder={t("customTools.editor.argDescription")}
                   aria-label={t("customTools.editor.argDescription")}

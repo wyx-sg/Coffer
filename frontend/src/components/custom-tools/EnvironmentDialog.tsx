@@ -1,5 +1,5 @@
-// src/components/custom-tools/EnvironmentDialog.tsx — Add environment / Edit environment (4.2.28): its name, base URL,
-// headers (a plain value, or a secret from Coffer behind an optional scheme), variables and timeout. The group's
+// src/components/custom-tools/EnvironmentDialog.tsx — Add environment / Edit environment (4.2.28, 760): its name,
+// base URL, headers (a plain value, or a secret from Coffer behind an optional scheme), variables and timeout. The group's
 // tools are not copied: an environment is only where the same tools are sent (spec mcp-gateway "Keep a custom-tool
 // group's environments in the group"). A new base URL, or a secret bound to a header, waits for approval before any
 // request carries the secret, and only for this environment.
@@ -95,7 +95,7 @@ export function EnvironmentDialog({ group, environment, open, onOpenChange }: Pr
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[90vh] max-w-[640px] overflow-y-auto"
+        className="max-h-[90vh] max-w-[760px] overflow-y-auto"
         aria-describedby={undefined}
       >
         <DialogHeader>
@@ -138,6 +138,7 @@ export function EnvironmentDialog({ group, environment, open, onOpenChange }: Pr
             label={t("customTools.fields.headers")}
             help={t("customTools.environments.headersHelp")}
           >
+            {rows.length > 0 ? <ColumnHeads /> : null}
             <KeyValueSecretRows
               rows={rows}
               onChange={setRows}
@@ -152,6 +153,7 @@ export function EnvironmentDialog({ group, environment, open, onOpenChange }: Pr
             label={t("customTools.environments.variables")}
             help={t("customTools.environments.variablesHelp")}
           >
+            {variables.length > 0 ? <ColumnHeads /> : null}
             <VariableRows rows={variables} onChange={setVariables} />
           </FormField>
           <FormField
@@ -191,5 +193,19 @@ export function EnvironmentDialog({ group, environment, open, onOpenChange }: Pr
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Name · Value over a list of rows, on the rows' own grid (KeyValueSecretRows, VariableRows). */
+function ColumnHeads() {
+  const { t } = useTranslation();
+  return (
+    <div
+      aria-hidden
+      className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_26px] gap-2 text-2xs font-semibold text-text-muted"
+    >
+      <span>{t("customTools.headerTable.name")}</span>
+      <span>{t("customTools.headerTable.value")}</span>
+    </div>
   );
 }

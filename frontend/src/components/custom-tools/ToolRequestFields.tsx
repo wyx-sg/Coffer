@@ -1,11 +1,16 @@
 // src/components/custom-tools/ToolRequestFields.tsx — the fields of one request, which the Add a request
 // step and the tool drawer lay out on the editor's tabs (ToolEditorForm): the tool's name, method + path (one compound
-// field), the description agents read, the changes-data flag and the body template. The base URL the
-// path is added to is the form's chosen environment's.
+// field), the description agents read, the changes-data flag and the body template (a JSON editor
+// that marks its `{holes}` and lays it out on Format). The base URL the path is added to is the form's chosen
+// environment's.
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
+import { WrapText } from "lucide-react";
 
+import { CodeEditor } from "@/components/preview/CodeEditor";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -16,7 +21,9 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { HTTP_METHODS, type HttpMethod } from "@/lib/api/customTools";
+import { bodyTemplateProblem, formatBodyTemplate } from "@/lib/customTools/bodyTemplate";
 import { FormField } from "./FormField";
+import { holeMarks } from "./holeMarks";
 import { withMethod, type ToolForm } from "./toolForm";
 
 interface FieldProps {
@@ -125,8 +132,10 @@ export function DescriptionField({ form, onChange }: FieldProps) {
       required
       help={t("customTools.editor.descriptionHelp")}
     >
-      <Input
+      <Textarea
         id={id}
+        autoGrow
+        className="min-h-[96px]"
         value={form.description}
         onChange={(e) => onChange({ ...form, description: e.target.value })}
       />
@@ -176,16 +185,42 @@ export function BodyField({ form, onChange }: FieldProps) {
         <p className="text-xs text-text-muted">{t("customTools.editor.bodyGet")}</p>
       </FormField>
     );
+  const problem = bodyTemplateProblem(form.body);
+  const formatted = formatBodyTemplate(form.body);
   return (
-    <FormField label={t("customTools.editor.body")} htmlFor={id}>
-      <Textarea
+    <div className="flex flex-col gap-1.5">
+      <div className="flex min-h-control-sm items-center gap-2">
+        <Label htmlFor={id}>{t("customTools.editor.body")}</Label>
+        <span className="text-xs text-text-muted">JSON</span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="ml-auto"
+          disabled={formatted === null || formatted === form.body}
+          onClick={() => formatted !== null && onChange({ ...form, body: formatted })}
+        >
+          <WrapText aria-hidden />
+          {t("customTools.editor.format")}
+        </Button>
+      </div>
+      <CodeEditor
         id={id}
-        rows={4}
-        className="font-mono text-xs"
-        placeholder={t("customTools.editor.bodyHelp")}
+        language="json"
         value={form.body}
-        onChange={(e) => onChange({ ...form, body: e.target.value })}
+        onChange={(body) => onChange({ ...form, body })}
+        invalid={problem !== null}
+        placeholder={t("customTools.editor.bodyHelp")}
+        ariaLabel={t("customTools.editor.body")}
+        extensions={holeMarks}
       />
-    </FormField>
+      {problem ? (
+        <p role="alert" className="text-xs text-danger">
+          {t("customTools.editor.bodyInvalid", problem)}
+        </p>
+      ) : (
+        <p className="text-xs text-text-muted">{t("customTools.editor.bodyHoles")}</p>
+      )}
+    </div>
   );
 }

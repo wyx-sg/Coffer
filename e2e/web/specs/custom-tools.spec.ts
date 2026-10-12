@@ -129,10 +129,12 @@ test("an OpenAPI file becomes a group, and a tool's Test calls the API from the 
     await expect(page).toHaveURL(new RegExp(`/custom-tools/${name}/tools$`));
     const tools = page.getByRole("region", { name: "Tools", exact: true });
     await expect(tools.getByRole("switch", { name: "Turn get_item on or off" })).toBeChecked();
-    await expect(tools.getByText("GET /items/{id}")).toBeVisible();
+    await expect(tools.getByText("/items/{id}", { exact: true })).toBeVisible();
 
     await tools.getByText("get_item", { exact: true }).click();
     const drawer = page.getByRole("dialog");
+    // Test is the editor's last tab: sample values, the request to send, then the response.
+    await drawer.getByRole("tab", { name: "Test" }).click();
     await drawer.getByLabel("Value for id").fill("7");
     await drawer.getByRole("button", { name: "Run" }).click();
     const result = drawer.getByTestId("custom-tool-test-result");
