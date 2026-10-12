@@ -36,6 +36,7 @@ _EXPECTED_ROUTES = {
     ("GET", "/api/v1/knowledge/tree"),
     ("GET", "/api/v1/knowledge/file"),
     ("DELETE", "/api/v1/knowledge/file"),
+    ("GET", "/api/v1/knowledge/asset"),
     # New knowledge arrives as material: an upload (see "Promote submitted
     # material at once"). There is no route that saves a document, no material
     # route and no route that creates a document at a path (see "Manage
@@ -123,11 +124,12 @@ def test_no_wire_model_carries_a_retrieval_payload() -> None:
 
 
 def test_an_ingested_document_names_the_source_it_became() -> None:
-    """Only the Markdown is kept, so no wire model names an original (see
-    "Keep every upload as a Markdown source")."""
+    """An upload answers with its source; a source's read names its original
+    and where it is on this Mac (see "Keep an upload's original on this Mac
+    only")."""
     fields = set(schemas.IngestedDocumentOut.model_fields)
     assert {"path", "title", "description", "converter"} == fields
-    assert "original_path" not in schemas.FileOut.model_fields
+    assert {"original", "original_path"} <= set(schemas.FileOut.model_fields)
 
 
 def test_a_collection_reports_its_pages_sources_and_its_one_handoff() -> None:

@@ -67,6 +67,8 @@ export function file(path: string, over: Partial<FileOut> = {}): FileOut {
     stale: false,
     superseded_by: null,
     summary: "",
+    original: "",
+    original_path: null,
     actor: "user",
     created_at: "2026-09-12T00:00:00Z",
     updated_at: "2026-09-20T00:00:00Z",

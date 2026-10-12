@@ -29,6 +29,9 @@ description: 把你和智能体对工作环境的了解，存成一个由保留�
     ├── sources/
     │   ├── gateway-design.md        ← a source: the upload converted to Markdown
     │   └── oncall-notes.md          ← a source from a Markdown upload
+    ├── assets/
+    │   └── gateway-design-1a2b3c4d/ ← the pictures taken out of one upload
+    │       └── image-1.png
     ├── pages/
     │   ├── session-ownership.md     ← a page
     │   └── gateway/
@@ -37,10 +40,11 @@ description: 把你和智能体对工作环境的了解，存成一个由保留�
 ```
 
 - 知识集根目录的 **`README.md`** 是这个知识集的**纲要**。它在第一个 `##` 小节之前的第一段，就是 Coffer 所有显示知识集描述的地方用的描述，也是 `coffer-guide` 技能告诉智能体这个知识集讲什么的依据。它的**页面类型**和**规则**两节，以及它关于本知识集约定的其他内容，优先于指南的默认规则。frontmatter 里的 `verify_after_days` 决定一次核对管多久（见[需要重新核对的页面](#pages-due-a-recheck)）。它从不作为页面或来源列出，也不计数。
-- **`sources/`** 保留到达的素材：每次上传和每个放进收件箱的文件，转换成 Markdown。只保留 Markdown，不保留你上传的文件，所以知识集始终是一棵每个智能体都能读的 Markdown 树。智能体读来源，从不编辑来源。
+- **`sources/`** 保留到达的素材：每次上传和每个放进收件箱的文件，转换成 Markdown。你上传的文件本身不放进知识集：Coffer 把它留在你上传它的那台 Mac 上（见[图片和原文件](#pictures-and-the-original-file)）。智能体读来源，从不编辑来源。
+- **`assets/`** 放 Coffer 从上传的文档里取出的图片，每次上传一个文件夹。来源会链接它自己的图片，所以你读来源时能看到它们，智能体也能打开它们。它们和 Markdown 一样随知识集同步，也有历史。
 - **`pages/`** 放 wiki 本身：你和你的智能体编写并保持更新的页面。智能体首先读的就是这里。
-- `pages/` 和 `sources/` 里的**文件夹**是可选的，不代表任何含义。你或你的智能体都可以创建、移动、删除它们。只有 `pages/` 和 `sources/` 这两个文件夹本身有含义。
-- 知识集里的**其他文件**会在树里列出，但既不进目录，也不参与检查。留在 `pages/` 和 `sources/` 之外的 Markdown 文件会被扫描移进 `pages/`（见[自己在运行的是什么](#what-runs-on-its-own)）。
+- `pages/` 和 `sources/` 里的**文件夹**是可选的，不代表任何含义。你或你的智能体都可以创建、移动、删除它们。只有 `pages/`、`sources/` 和 `assets/` 这几个文件夹本身有含义。
+- 知识集里的**其他文件**会在树里列出，但既不进目录，也不参与检查。留在 `pages/`、`sources/` 和 `assets/` 之外的 Markdown 文件会被扫描移进 `pages/`（见[自己在运行的是什么](#what-runs-on-its-own)）。
 - **隐藏条目**（以 `.` 开头的名字）不计入任何计数，也不进目录和检查，知识页面不会列出其中任何一个。Coffer 会读的是 `.inbox/`：留在那里的 Markdown 文件会在下一次扫描时作为来源保留下来（见[放进收件箱的文件](#a-file-in-the-inbox)）。
 
 文件的路径就是它所在的位置；它的 **slug**（去掉 `.md` 的文件名）是链接用的名字。文件名是标题的 slug，重名时加 `-2` 这样的后缀。
@@ -80,7 +84,7 @@ The `account-session` service owns ... see [[rate-limits|the gateway's limits]].
 
 Coffer 自己不写页面：谁写页面，谁就给它这些键，`coffer-guide` 技能就是这样教智能体的。缺少 `title`、`type` 或 `description`、没有列出任何 `sources` 或者没有 `verified` 的页面照样能用；[检查](#check-a-collection)知识集时它会作为一条发现出现。
 
-来源带着 Coffer 保留它时写入的键：`title`、`description`、`actor`、`created_at`、`updated_at`。智能体或你还可以再加三个键，它们只描述这个来源，不改动它的内容：
+来源带着 Coffer 保留它时写入的键：`title`、`description`、`actor`、`created_at`、`updated_at`；从上传的文件转换来的来源还带有 `original`（文件名）和 `original_sha256`（它的指纹）。这两个键请保持原样。智能体或你还可以再加三个键，它们只描述这个来源，不改动它的内容：
 
 | 键 | 含义 |
 | --- | --- |
@@ -166,13 +170,13 @@ How payments are taken, settled and refunded.
 
 ### 上传来源 {#upload-a-source}
 
-上传会把文件转换成 Markdown，并立刻作为来源保留在知识集里。只保留 Markdown：你上传的文件不会被存储，需要的话请自己留一份。
+上传会把文件转换成 Markdown，连同其中的图片立刻作为来源保留在知识集里。你上传的文件本身只留在这台 Mac 上（见[图片和原文件](#pictures-and-the-original-file)）。
 
 ```text
 知识 → 添加 → 上传文档… → 选择或拖入文件，选知识集 → 上传
 ```
 
-**添加**菜单会说明上传保存什么：每个文件转换成 Markdown，作为来源保存在你选的知识集里，并随它同步。
+**添加**菜单会说明上传保存什么：每个文件转换成 Markdown，作为来源保存在你选的知识集里，并随它同步。上传对话框还会说明图片会一起保留，文件本身留在这台 Mac 上。
 
 | 接受 | 格式 |
 | --- | --- |
@@ -180,11 +184,24 @@ How payments are taken, settled and refunded.
 | 表格 | `csv`、`tsv` |
 | 按文本读取 | `md`、`markdown`、`mdx`、`txt`、`text`、`rst`、`json`、`yaml`、`yml`、`toml`、`ini`、`cfg`、`log`、`sql`，以及常见源码文件（`py`、`js`、`ts`、`go`、`rs`、`java`、`sh` ……） |
 
-比如上传一个 PDF，会得到 `sources/gateway-design.md`（提取出的 Markdown 加上 frontmatter），除此之外什么都没有。按文本读取的文件（Markdown、纯文本、源码）也以同样的方式成为来源。名字和已有来源重复时，会加上后缀（`-2`）。
+比如上传一个 PDF，会得到 `sources/gateway-design.md`（提取出的 Markdown 加上 frontmatter），以及 `assets/gateway-design-<编码>/` 下它的图片。按文本读取的文件（Markdown、纯文本、源码）也以同样的方式成为来源。名字和已有来源重复时，会加上后缀（`-2`）。
 
 可以一次选择或拖入多个文件。每个文件单独列出它的状态（等待、正在转换、完成，或失败及原因），文件一个接一个地发送，一个失败不会挡住其余的。ZIP 压缩包和超过 20 MB 的文件在发送前就会标为拒绝并写明原因。失败的文件留在对话框里，可以重试；最后会有一条提示说明保存了几个、失败了几个。上传只选知识集，不选文件夹。不支持的类型会被拒绝，并指出是哪种类型；转换后没有文本的（比如纯图片 PDF）也会被拒绝。被拒绝的文件不会留下任何东西。
 
 来源的 `title` 取自文件（第一行的 `# ` 标题，没有就用文件名）。它的 `description` 取开头的正文，没有时用标题。之后这个来源就开始[等待](#sources-wait-until-a-page-cites-them)：把它的内容并进页面，是你按**整理**时（见[整理一个知识集](#tidy-a-collection)）或你随时请求时你的智能体的事。
+
+### 图片和原文件 {#pictures-and-the-original-file}
+
+**图片。** PDF、幻灯片、Word 文档或网页里的示意图、图表和截图会和来源一起保留。它们放在知识集的 `assets/` 文件夹里，在以这次上传命名的文件夹中，来源在它们原来出现的位置链接每一张；PDF 的图片列在正文之后的 **Images** 下，按它们所在的页分组。在知识页面上读来源时它们直接显示在正文里，从树里打开一张图片会显示这张图片。智能体像打开其他文件一样打开它们。并不是每张图片都会保留：
+
+- 小装饰（项目符号、分隔线、图标，任何一边不到 48 像素的图）会被丢掉；
+- 在文档里反复出现的图片，比如每张幻灯片上的标志，只保留一份；
+- 超过 5 MB 的图片会被丢掉，一次上传最多保留 40 张；
+- 浏览器不能显示的格式会存成 PNG。
+
+图片随知识集同步到你的其他 Mac，和知识集里的任何文件一样有历史。只有图片、没有文字的扫描 PDF 仍然会被拒绝。
+
+**原文件。** 你上传的文件保存在你上传它的那台 Mac 上，在保险库之外，从不同步：幻灯片、PDF 这样的原文件很大，而智能体读的是 Markdown 和图片。来源会记下它，所以在那台 Mac 上打开来源时，标题下面一行会显示**原文件**和文件名；点文件名就会用默认应用打开它，看到原来的版式。在你的其他 Mac 上，这一行写着**原文件 `<name>` 在上传的那台 Mac 上**。Markdown 或文本上传本身就是来源，所以没有要保留的原文件。
 
 ### 放进收件箱的文件 {#a-file-in-the-inbox}
 
@@ -334,7 +351,7 @@ superseded_by: gateway-design-2026
 后台的**扫描**让知识集保持最新。它大约每分钟运行一次，不调用任何模型。每一轮它会：
 
 - 把放进知识集 `.inbox/` 的文件作为来源保留下来（见[放进收件箱的文件](#a-file-in-the-inbox)），
-- 把留在知识集里 `pages/` 和 `sources/` 之外的 Markdown 文件（README 除外，并且要等它一分钟没人动过）移到 `pages/` 下相同的相对路径，名字被占用时加后缀，不改动它的文字，
+- 把留在知识集里 `pages/`、`sources/` 和 `assets/` 之外的 Markdown 文件（README 除外，并且要等它一分钟没人动过）移到 `pages/` 下相同的相对路径，名字被占用时加后缀，不改动它的文字，
 - 把自上次提交以来树里变过的东西（你编辑器里的保存和你的智能体对文件的编辑）作为在磁盘上编辑提交进历史，以及
 - 重新渲染 `coffer-guide` 技能的目录，这样你或智能体手工添加的页面会被列出来。
 
@@ -380,7 +397,9 @@ Coffer **没有读取、列出或搜索知识的工具**。智能体用它已有
 **页面或来源。** 选中一个文件会只读地显示它。它的窗格栏先写明文件在哪里，然后是**历史**（见[历史与恢复](#history-and-restore)）、Markdown 的**预览 / 源码**切换、作为按钮的**在编辑器中打开**（见[自己编辑文件](#edit-a-file-yourself)），以及 **⋯** 菜单（**在访达中显示**、装了 Obsidian 时的**在 Obsidian 中打开**，以及**删除**）。标题下面一行描述这个文件，读自它的 frontmatter：
 
 - **页面**：它的类型、谁写的、什么时候创建的、页面带有 `verified` 时的**核对过**及日期，[需要重新核对](#pages-due-a-recheck)时的**需要重新核对**（没有日期时还会显示*从未核对*），以及它的来源，点开每个都会打开对应来源；页面写了但并不存在的来源会被划掉。正文里，每个 `[[链接]]` 都是指向它所指页面或来源的链接；失效的链接标成红色，悬停提示说没有叫这个名字的东西。行内代码比代码块更淡，长路径在 `/` 处换行。
-- **来源**：有来源替换它时，显示**已被替换为**和指向替换者的链接；**被 N 个页面引用**，点开每个都会打开对应页面；还没有页面引用时显示**待整理**。
+- **来源**：有来源替换它时，显示**已被替换为**和指向替换者的链接；**被 N 个页面引用**，点开每个都会打开对应页面；还没有页面引用时显示**待整理**；上传来的来源还会显示**原文件**和文件名，在上传它的那台 Mac 上点它会打开这个文件（见[图片和原文件](#pictures-and-the-original-file)）。
+
+页面或来源用相对路径链接的图片会在预览里直接显示。在树里选中一个图片文件（比如 `assets/` 下的），会显示这张图片。
 
 页面没有搜索框，也没有按知识集的开关：⌘K 按名字跳到知识集，每个知识集都到达每个智能体。知识页面上没有手工输入页面的表单：你在自己的编辑器里写，智能体则通过写文件来写。
 
@@ -465,7 +484,7 @@ Coffer 会跳过 `.obsidian/`、`.git/` 这类隐藏文件夹和 `node_modules`�
 
 通过 Coffer 删除只能由人来做。Coffer 不给智能体任何能删除知识的工具，而你可以删除任何页面或来源，不管是谁写的。这也只是一次普通的文件删除，所以在你自己的编辑器里删文件同样可以，历史里会把它记为一次磁盘上的编辑。
 
-- **删除一个页面或来源：** 知识 → 选中文件 → **⋯** → **删除**。立刻执行。删除仍被页面引用的来源，会让这些页面在[检查](#check-a-collection)里出现缺失的来源。
+- **删除一个页面或来源：** 知识 → 选中文件 → **⋯** → **删除**。立刻执行。删除仍被页面引用的来源，会让这些页面在[检查](#check-a-collection)里出现缺失的来源。它的图片仍留在 `assets/` 下，它的原文件仍留在上传它的那台 Mac 上；不再需要的话请自己删掉。
 - **删除整个知识集及其中所有文件：** 知识 → 选中知识集 → **⋯** → **删除知识集…**。Coffer 会先询问，写明知识集的名字和会一并删除多少个文件。
 
 ::: tip 删除可以撤销
@@ -500,6 +519,10 @@ Coffer 会跳过 `.obsidian/`、`.git/` 这类隐藏文件夹和 `node_modules`�
 
 **菜单里没有在 Obsidian 中打开。** 只有这台 Mac 装了 Obsidian（在 `/Applications` 或你自己的“应用程序”文件夹里）时，Coffer 才会提供它。
 
+**来源说它的原文件在另一台 Mac 上。** 上传的文件只保存在上传它的那台 Mac 上。到那台 Mac 上打开这个来源，或者在这台 Mac 上重新上传这个文件。
+
+**上传的文档里少了一张图。** 一边不到 48 像素、超过 5 MB，或一次上传里排在第 40 张之后的图片不会保留；画在图片里的文字会作为图片保留，而不是文字。可以在上传它的那台 Mac 上查看原文件。
+
 **智能体没有用到知识。** 检查 `coffer-guide` 技能已启用并且到达那个智能体（技能页面上它的**生效范围**按钮），以及知识集的 `README.md` 开头是否有一句写明主题的话。
 
 **智能体写的文件没有出现。** 写进知识集的页面在下一次读取时就会出现。留在 `.inbox/` 里的文件必须是 Markdown，直接放在已有知识集的 `.inbox/` 文件夹里，并在下一次扫描（约一分钟内）成为来源；放在别处的文件不会被处理，不是 Markdown 的文件也不会作为来源保留。
@@ -513,4 +536,4 @@ Coffer 会跳过 `.obsidian/`、`.git/` 这类隐藏文件夹和 `node_modules`�
 - [`coffer knowledge` 命令参考](/zh/reference/cli/knowledge)
 - [MCP 工具参考](/zh/reference/mcp-tools)
 - [知识规格](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md)
-- [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md)、[Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) 、[Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md)、[Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-stays-current-through-flags-coffer-computes.md) 和 [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md)
+- [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md)、[Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) 、[Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md)、[Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-stays-current-through-flags-coffer-computes.md)、[A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md) 和 [Knowledge Sources Keep Their Images; Originals Stay on This Mac](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md)

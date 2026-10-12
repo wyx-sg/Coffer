@@ -8,6 +8,45 @@ info:
 servers:
 - url: http://127.0.0.1:38470
 paths:
+  /api/v1/knowledge/asset:
+    get:
+      operationId: read_asset_api_v1_knowledge_asset_get
+      parameters:
+      - in: query
+        name: path
+        required: true
+        schema:
+          minLength: 1
+          title: Path
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            image/*: {}
+          description: The picture's bytes.
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Read Asset
+      tags:
+      - knowledge
   /api/v1/knowledge/changes:
     get:
       description: |-
@@ -1176,6 +1215,15 @@ components:
             $ref: '#/components/schemas/LinkRefOut'
           title: Links
           type: array
+        original:
+          default: ''
+          title: Original
+          type: string
+        original_path:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Original Path
         page_type:
           default: ''
           title: Page Type
@@ -1235,6 +1283,8 @@ components:
       - waiting
       - superseded_by
       - summary
+      - original
+      - original_path
       title: FileOut
       type: object
     FileSummaryOut:

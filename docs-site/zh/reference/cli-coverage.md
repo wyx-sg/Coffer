@@ -460,6 +460,7 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | `POST /fs/reveal` | 窗口操作: reveals a file in Finder |
 | `POST /fs/terminal` | 窗口操作: opens a terminal window for the person |
 | `GET /fs/terminals` | 窗口操作: which terminals the Open in… menu offers |
+| `GET /knowledge/asset` | 普通文件: a knowledge picture is a plain file |
 | `DELETE /knowledge/file` | 普通文件: a knowledge document is a plain file |
 | `GET /knowledge/file` | 普通文件: a knowledge document is a plain file |
 | `GET /skills/orphans/{name}/files/content` | 普通文件: a skill's files are plain files |

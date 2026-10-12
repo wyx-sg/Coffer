@@ -1,16 +1,11 @@
 """The knowledge layer's one service.
 
-Every operation resolves to a filesystem operation over ``~/.coffer/vault/knowledge/``. A
-collection is one tree of documents that a person and the agents write together (spec
-knowledge "Store each collection as one tree of Markdown files"). What this layer adds on
-top of the directory is the one rule about *how new knowledge arrives*: an upload
-submits **material**, which becomes a document at the collection root on the spot
-(see "Promote submitted material at once"). A file an agent drops into a collection's
-hidden ``.inbox/`` is promoted the same way by the next sweep.
-
-It adds no gate on the corpus: every registered collection is served to every caller
-(see "Serve every collection to every agent"). A **linked folder** is served the same
-way but only read (``infrastructure/knowledge/linked.py``).
+Every operation resolves to a filesystem operation over ``~/.coffer/vault/knowledge/``
+(spec knowledge "Store each collection as one tree of Markdown files"). New knowledge
+arrives as **material**, which becomes a source under ``sources/`` on the spot ("Promote
+submitted material at once"); a file dropped into a hidden ``.inbox/`` is promoted by the
+next sweep. Every collection is served to every caller ("Serve every collection to every
+agent"); a **linked folder** is only read (``infrastructure/knowledge/linked.py``).
 """
 
 from __future__ import annotations
@@ -18,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 
 from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.recording import recording, writer_of
@@ -49,6 +44,7 @@ from coffer.domain.knowledge.history import (
 from coffer.domain.resource import Resource
 from coffer.domain.vault.writers import CommitMeta
 from coffer.infrastructure.knowledge import (
+    assets,
     catalogue,
     collection_files,
     fs,
@@ -131,27 +127,16 @@ class KnowledgeService:
         return row
 
     async def collection(self, uid: str) -> Resource:
-        """One collection's row, by the identity that survives a rename.
-
-        The way anything inside the daemon reaches a collection: the
-        sweep and a route all hold the uid and read the directory name off the
-        row they get back. Raises ``ResourceNotFound`` for an absent uid, and
-        ``CollectionNotFound`` for a row of another kind.
-        """
+        """One collection's row, by the identity that survives a rename. Raises
+        ``ResourceNotFound`` for an absent uid, ``CollectionNotFound`` for another kind."""
         row = await self._resources.get(uid)
         if row.kind != KIND_KNOWLEDGE:
             raise CollectionNotFound(row.name)
         return row
 
     async def require_collection(self, relpath: str) -> Resource:
-        """The registered collection ``relpath`` names.
-
-        Hands back the **row**, not the name, because almost every caller needs
-        both halves of it: the name to build a path with, and the resource
-        itself to audit against. Resolving the label here once is what keeps
-        the audit trail tied to an identity a rename cannot move, without every
-        write path repeating the lookup.
-        """
+        """The registered collection ``relpath`` names: its row, so a write has both
+        the name for its path and the identity a rename cannot move for its audit."""
         row = await self.find_collection(relpath)
         if linked_folder(row.config) is not None:
             raise CollectionIsLinked(row.name)
@@ -321,14 +306,13 @@ class KnowledgeService:
         body: str,
         actor_kind: str = ACTOR_AGENT,
         actor: str,
+        extra: Mapping[str, str] | None = None,
+        files: Mapping[str, bytes] | None = None,
     ) -> Submission:
-        """Add new material to a collection (see "Promote submitted
-        material at once").
-
-        The material becomes a source under the collection's ``sources/`` on the
-        spot, as Markdown only ("Keep every upload as a Markdown source"). It waits
-        there until the person's agent compiles it into pages.
-        """
+        """Add new material to a collection ("Promote submitted material at once"):
+        a source under ``sources/`` on the spot, waiting until an agent compiles it.
+        ``extra`` adds frontmatter keys; ``files`` (knowledge-root-relative path to
+        bytes, an upload's pictures) land in the same commit."""
         row = await self.require_collection(collection)
         meta = CommitMeta(
             writer_of(actor_kind),
@@ -339,8 +323,16 @@ class KnowledgeService:
             collection=row.name,
         )
         async with recording(self.history, meta) as tx:
+            for relpath, data in (files or {}).items():
+                tx.touch(relpath)
+                assets.write_bytes(relpath, data)
             name = inbox.submit_material(
-                row.name, title=title, description=description, body=body, actor=actor_kind
+                row.name,
+                title=title,
+                description=description,
+                body=body,
+                actor=actor_kind,
+                extra=extra,
             )
             tx.touch(f"{row.name}/{paths.INBOX_DIR_NAME}/{name}")
             document = inbox.promote(row.name, name)

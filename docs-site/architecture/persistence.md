@@ -51,7 +51,7 @@ flowchart LR
 | Class | Where | What it holds | Syncs | History | Safe to delete |
 | --- | --- | --- | --- | --- | --- |
 | **vault** | `vault/` | Resource definitions, state documents, knowledge, skills, the memory hub, secret ciphertext, machine descriptors. | Yes, when a remote is set | Git | No: it is the only copy |
-| **local** | `local/` | Machine-local resources (agents, channels), reach, channel pairings, the sync remote, retention, the secret boundary's approvals, machine-local ciphertext. | Never | No | You lose settings you would set again |
+| **local** | `local/` | Machine-local resources (agents, channels), reach, channel pairings, the sync remote, retention, the secret boundary's approvals, machine-local ciphertext, the files uploaded to knowledge on this Mac. | Never | No | You lose settings you would set again, and those uploaded originals |
 | **content** | `content/` | Chat and channel attachments, the chat workspace. | Not yet | No | No: it is your only copy |
 | **runs** | `runs.db` (and `skill-data/`, `config-backups/`) | Audit log, MCP invocations, conversations, channel threads and outbox, sync rounds and usage; in `skill-data/`, the logs, journals and temp files skill scripts write; in `config-backups/`, the copies of agent config files made before each rewrite. | Never | It *is* history | You lose history |
 | **derived** | `derived/` | `derived.db`, Coffer's own guide skill, editor copies of sync conflicts, channel owners' pictures. | Never | No | Yes: it is rebuilt |

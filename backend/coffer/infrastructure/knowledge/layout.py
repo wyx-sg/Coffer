@@ -1,5 +1,5 @@
 """Keeping a collection in its layout: Markdown documents left outside
-``pages/`` and ``sources/`` are filed into ``pages/`` (spec knowledge "Sweep the
+``pages/``, ``sources/`` and ``assets/`` are filed into ``pages/`` (spec knowledge "Sweep the
 knowledge root on its mechanical duties").
 
 A collection made before pages and sources existed holds its documents at the
@@ -22,7 +22,7 @@ from coffer.infrastructure.knowledge.catalogue import is_collection_readme
 #: How long a loose document must have been untouched before it is moved.
 QUIET_SECONDS = 60.0
 
-_KEPT = {paths.PAGES_DIR_NAME, paths.SOURCES_DIR_NAME}
+_KEPT = {paths.PAGES_DIR_NAME, paths.SOURCES_DIR_NAME, paths.ASSETS_DIR_NAME}
 
 
 def loose_documents(collection: str, *, now: float | None = None) -> list[str]:

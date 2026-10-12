@@ -5,7 +5,9 @@ button and a channel attachment (see "Keep every upload as a Markdown source"
 and "Ingest documents sent to a channel"). The document is converted to Markdown and
 **submitted as material**: it goes through :meth:`KnowledgeService.submit`, which keeps
 it as a source under ``sources/`` on the spot (see "Promote submitted material at
-once"). Only the Markdown is kept; the uploaded file itself is not.
+once"). The pictures the converter took out are kept beside it under ``assets/``,
+in the same commit, and the uploaded file itself is kept on this Mac only (ADR
+knowledge-sources-keep-their-images-and-originals-stay-on-this-mac).
 
 What this module owns that ``submit`` does not need to think about: **the
 description is optional input, never optional output.** The catalogue the
@@ -16,6 +18,8 @@ drawn from its own opening prose (see "Fill frontmatter on converted material").
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import pathlib
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
@@ -24,7 +28,10 @@ from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.knowledge.converter import Conversion, EmptyConversion
 from coffer.domain.knowledge.entry import ACTOR_USER
 from coffer.domain.knowledge.errors import UploadTooLarge
+from coffer.infrastructure.knowledge import assets, originals
 from coffer.infrastructure.knowledge.naming import opening_prose
+
+logger = logging.getLogger(__name__)
 
 
 @runtime_checkable
@@ -51,6 +58,9 @@ class ConverterRegistry(Protocol):
 #: attachment) under one honest ceiling rather than the page silently accepting what a
 #: phone never could.
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+
+#: The converter that keeps a Markdown or text upload as it is.
+PASSTHROUGH = "passthrough"
 
 
 @dataclass(frozen=True)
@@ -103,7 +113,7 @@ class IngestService:
         # The same check `submit` itself makes, run here and up front so
         # a name that is not a collection is refused without first paying for
         # the conversion.
-        await self._knowledge.require_collection(collection)
+        row = await self._knowledge.require_collection(collection)
 
         conversion = await self._registry.convert(data, filename)
         # "Bound uploads and leave nothing behind on failure": a converter that succeeds
@@ -113,15 +123,33 @@ class IngestService:
         if not conversion.markdown.strip():
             raise EmptyConversion(pathlib.Path(filename).suffix.lstrip(".").lower())
         description = _fallback_description(conversion.markdown, title=conversion.title)
+        sha = originals.digest(data)
+        folder = assets.folder_for(conversion.title, sha)
+        name = pathlib.PurePosixPath(filename).name or "upload"
+        # A Markdown or text upload *is* its source: there is no other original.
+        keeps_original = conversion.converter != PASSTHROUGH
+        original = (
+            {originals.ORIGINAL_KEY: name, originals.ORIGINAL_SHA_KEY: sha}
+            if keeps_original
+            else {}
+        )
 
         submitted = await self._knowledge.submit(
             collection=collection,
             title=conversion.title,
             description=description,
-            body=conversion.markdown,
+            body=assets.link_pictures(conversion.markdown, folder, conversion.images),
             actor_kind=ACTOR_USER,
             actor=actor,
+            extra=original,
+            files=assets.picture_paths(row.name, folder, conversion.images),
         )
+        # After the source is in: a failure here loses the local copy, not the upload.
+        try:
+            if keeps_original:
+                await asyncio.to_thread(originals.keep, data, name)
+        except OSError:
+            logger.warning("knowledge.original.not_kept", exc_info=True)
         return IngestedDocument(
             path=submitted.document.path,
             title=conversion.title,

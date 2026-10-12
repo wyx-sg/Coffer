@@ -29,6 +29,9 @@ A **collection** is a top-level folder under the knowledge root:
     ├── sources/
     │   ├── gateway-design.md        ← a source: the upload converted to Markdown
     │   └── oncall-notes.md          ← a source from a Markdown upload
+    ├── assets/
+    │   └── gateway-design-1a2b3c4d/ ← the pictures taken out of one upload
+    │       └── image-1.png
     ├── pages/
     │   ├── session-ownership.md     ← a page
     │   └── gateway/
@@ -37,10 +40,11 @@ A **collection** is a top-level folder under the knowledge root:
 ```
 
 - **`README.md`** at the collection root is the collection's **schema**. Its first paragraph, before its first `##` section, is the collection's description everywhere Coffer shows one, and it is what the `coffer-guide` skill tells agents the collection is about. Its **Page types** and **Rules** sections, and anything else it says about the conventions the collection uses, take precedence over the guide's defaults. `verify_after_days` in its frontmatter sets how long a page's check holds (see [Pages due a recheck](#pages-due-a-recheck)). It is never listed as a page or a source, or counted.
-- **`sources/`** keeps the material that arrived: every upload and every file dropped into the inbox, converted to Markdown. Only the Markdown is kept, not the file you uploaded, so the collection stays one tree of Markdown every agent can read. Agents read sources and never edit them.
+- **`sources/`** keeps the material that arrived: every upload and every file dropped into the inbox, converted to Markdown. The file you uploaded is not put in the collection: Coffer keeps it on the Mac you uploaded it from (see [Pictures and the original file](#pictures-and-the-original-file)). Agents read sources and never edit them.
+- **`assets/`** holds the pictures Coffer took out of uploaded documents, one folder per upload. A source links its pictures, so you see them when you read it and agents can open them. They sync with the collection and have history, like the Markdown.
 - **`pages/`** holds the wiki itself: the pages you and your agents write and keep up to date. This is what agents read first.
-- **Folders** inside `pages/` and `sources/` are optional and carry no meaning. You or your agent can create, move and remove them. `pages/` and `sources/` are the only folders that mean anything.
-- **Any other file** in a collection is listed in the tree but neither catalogued nor checked. A Markdown file left outside `pages/` and `sources/` is moved into `pages/` by the sweep (see [What runs on its own](#what-runs-on-its-own)).
+- **Folders** inside `pages/` and `sources/` are optional and carry no meaning. You or your agent can create, move and remove them. `pages/`, `sources/` and `assets/` are the only folders that mean anything.
+- **Any other file** in a collection is listed in the tree but neither catalogued nor checked. A Markdown file left outside `pages/`, `sources/` and `assets/` is moved into `pages/` by the sweep (see [What runs on its own](#what-runs-on-its-own)).
 - **Hidden entries** (names starting with `.`) are left out of every count, the catalogue and the check, and the Knowledge page lists none of them. The one Coffer reads is `.inbox/`: a Markdown file left there is kept as a source at the next sweep (see [A file in the inbox](#a-file-in-the-inbox)).
 
 A file's path is where it is; its **slug** — the file name without `.md` — is the name links use. File names are slugs of the title, with a suffix such as `-2` on a collision.
@@ -80,7 +84,7 @@ The `account-session` service owns ... see [[rate-limits|the gateway's limits]].
 
 Coffer writes no page itself: whoever writes a page gives it these keys, as the `coffer-guide` skill teaches agents. A page that lacks `title`, `type` or `description`, names no `sources` or has no `verified`, still works; it shows up as a finding when the collection is [checked](#check-a-collection).
 
-A source carries the keys Coffer writes when it keeps one — `title`, `description`, `actor`, `created_at`, `updated_at`. An agent, or you, may add three more, which describe the source without changing what it says:
+A source carries the keys Coffer writes when it keeps one — `title`, `description`, `actor`, `created_at`, `updated_at`, and, for a source converted from an uploaded file, `original` (the file's name) and `original_sha256` (its fingerprint). Leave those two as they are. An agent, or you, may add three more, which describe the source without changing what it says:
 
 | Key | Meaning |
 | --- | --- |
@@ -166,13 +170,13 @@ You can also ask directly: "write down what we just found out about the session 
 
 ### Upload a source {#upload-a-source}
 
-Upload converts a file to Markdown and keeps it in the collection as a source straight away. Only the Markdown is kept: the file you uploaded is not stored, so keep your own copy if you need it.
+Upload converts a file to Markdown and keeps it in the collection as a source straight away, with the pictures it holds. The file you uploaded stays on this Mac only (see [Pictures and the original file](#pictures-and-the-original-file)).
 
 ```text
 Knowledge → Add → Upload documents… → choose or drop files, pick the collection → Upload
 ```
 
-The **Add** menu says what an upload keeps: each file is converted to Markdown and kept as a source in the collection you pick, and synced with it.
+The **Add** menu says what an upload keeps: each file is converted to Markdown and kept as a source in the collection you pick, and synced with it. The upload dialog adds that pictures are kept with it and the file itself stays on this Mac.
 
 | Accepted | Formats |
 | --- | --- |
@@ -180,11 +184,24 @@ The **Add** menu says what an upload keeps: each file is converted to Markdown a
 | Tables | `csv`, `tsv` |
 | Taken as text | `md`, `markdown`, `mdx`, `txt`, `text`, `rst`, `json`, `yaml`, `yml`, `toml`, `ini`, `cfg`, `log`, `sql`, and common source files (`py`, `js`, `ts`, `go`, `rs`, `java`, `sh`, …) |
 
-An uploaded PDF, for example, becomes `sources/gateway-design.md`, the extracted Markdown with frontmatter, and nothing else. A file taken as text — Markdown, plain text, source code — becomes a source the same way. A name another source already has gets a suffix (`-2`).
+An uploaded PDF, for example, becomes `sources/gateway-design.md`, the extracted Markdown with frontmatter, plus its pictures under `assets/gateway-design-<code>/`. A file taken as text — Markdown, plain text, source code — becomes a source the same way. A name another source already has gets a suffix (`-2`).
 
 You can pick or drop several files at once. Each is listed with its own state — waiting, converting, done, or failed with its reason — and they are sent one after another, so one failure does not stop the rest. A ZIP archive, or a file over 20 MB, is marked refused with its reason before anything is sent. A file that failed stays in the dialog so you can retry it, and one notice at the end says how many were kept and how many failed. The upload takes the collection, not a folder. An unsupported type is refused with the type named, and a conversion that produces no text — an image-only PDF, for example — is refused too. A refused file leaves nothing behind.
 
 The source's `title` comes from the file (a `# ` heading on its first line, or else the file name). Its `description` is taken from the opening prose, or its title when there is none. The source then [waits](#sources-wait-until-a-page-cites-them): folding what it says into the pages is your agent's job when you press **Tidy** (see [Tidy a collection](#tidy-a-collection)), or whenever you ask it to.
+
+### Pictures and the original file {#pictures-and-the-original-file}
+
+**Pictures.** Diagrams, charts and screenshots in a PDF, a slide deck, a Word document or a web page are kept with the source. They land in the collection's `assets/` folder, in a folder named after the upload, and the source links each one where it appeared; a PDF's pictures are listed after its text under **Images**, by the page they came from. On the Knowledge page they show inline as you read the source, and a picture you open from the tree shows the picture. Agents open them like any other file. Not every picture is kept:
+
+- small decorations — bullets, rules, icons, anything under 48 pixels on a side — are dropped;
+- a picture repeated through the document, such as a logo on every slide, is kept once;
+- a picture over 5 MB is dropped, and an upload keeps at most 40;
+- a picture in a format a browser cannot show is saved as PNG.
+
+The pictures sync to your other Macs with the collection and have history like any file in it. A scanned PDF whose pages are only pictures, with no text, is still refused.
+
+**The original file.** The file you uploaded is kept on the Mac you uploaded it from, outside the vault, and never synced: originals such as decks and PDFs are large, and the Markdown and pictures are what agents read. The source names it, so when you open the source on that Mac the line under its title reads **Original** and the file's name; click the name to open the file in its default app, to see the layout as it was. On your other Macs the line says **Original `<name>` is on the Mac it was uploaded from**. A Markdown or text upload is its own source, so there is no original to keep.
 
 ### A file in the inbox {#a-file-in-the-inbox}
 
@@ -334,7 +351,7 @@ The first time you open a collection after updating, every page without `verifie
 A background **sweep** keeps the collections current. It runs about once a minute and calls no model. Each round it:
 
 - keeps files dropped into a collection's `.inbox/` as sources (see [A file in the inbox](#a-file-in-the-inbox)),
-- files a Markdown file left in a collection outside `pages/` and `sources/` — other than the README, and once nobody has touched it for a minute — into `pages/` at the same relative path, adding a suffix if that name is taken, without changing its text,
+- files a Markdown file left in a collection outside `pages/`, `sources/` and `assets/` — other than the README, and once nobody has touched it for a minute — into `pages/` at the same relative path, adding a suffix if that name is taken, without changing its text,
 - commits to the history whatever changed in the tree since the last commit — your editor's saves and your agent's file edits — as an edit on disk, and
 - re-renders the `coffer-guide` skill's catalogue, so a page you or an agent added by hand is listed.
 
@@ -380,7 +397,9 @@ The collection's **⋯** menu holds **Reveal in Finder**, **Open in Obsidian** w
 **A page or a source.** Choosing a file shows it read-only. Its pane bar names where the file is, then carries **History** (see [History and restore](#history-and-restore)), a **Preview / Source** switch for Markdown, **Open in editor** as a button (see [Edit a file yourself](#edit-a-file-yourself)), and a **⋯** menu with **Reveal in Finder**, **Open in Obsidian** when it is installed, and **Delete**. Under the title one line describes the file, read from its frontmatter:
 
 - For a **page**: its type, who wrote it and when it was created, **verified** and the date when the page carries `verified`, **Needs rechecking** when it is [due a recheck](#pages-due-a-recheck) (with *never checked* when it has no date), and its sources, each opening that source; a source the page names that does not exist is struck through. In the text, every `[[link]]` is a link to the page or source it names; a dead one is marked in red, with a tooltip saying nothing has that name. Inline code is set lighter than a code block, and a long path wraps at its `/`.
-- For a **source**: **Superseded by** and a link to the source that replaces it, when one does; **Cited by N pages**, each opening that page, or **Waiting** when no page cites it yet.
+- For a **source**: **Superseded by** and a link to the source that replaces it, when one does; **Cited by N pages**, each opening that page, or **Waiting** when no page cites it yet; and, for an upload, **Original** with the file's name, which opens the file on the Mac it was uploaded from (see [Pictures and the original file](#pictures-and-the-original-file)).
+
+A picture a page or a source links by relative path shows inline in Preview. Choosing a picture file in the tree, such as one under `assets/`, shows the picture.
 
 The page has no search box and no per-collection switch: ⌘K jumps to a collection by name, and every collection reaches every agent. There is no form for typing a page into the Knowledge page: you write in your own editor, and agents by writing files.
 
@@ -465,7 +484,7 @@ A deleted file has no pane to open its history from once the delete's toast is g
 
 Only a person deletes through Coffer. Coffer gives agents no tool that deletes knowledge, and you can delete any page or source, whoever wrote it. The change is also an ordinary file delete, so removing a file in your own editor works too and shows up in the history as an edit made on disk.
 
-- **A page or a source:** Knowledge → choose the file → **⋯** → **Delete**. It happens at once. Deleting a source that pages still cite leaves those pages with a missing source in the [check](#check-a-collection).
+- **A page or a source:** Knowledge → choose the file → **⋯** → **Delete**. It happens at once. Deleting a source that pages still cite leaves those pages with a missing source in the [check](#check-a-collection). Its pictures stay under `assets/`, and its original stays on the Mac it was uploaded from; delete them yourself if you no longer want them.
 - **A whole collection, and every file in it:** Knowledge → choose the collection → **⋯** → **Delete collection…**. Coffer asks first, naming the collection and how many files go with it.
 
 ::: tip A delete can be undone
@@ -500,6 +519,10 @@ A delete is reported in a toast, *Deleted `<name>`*, with **Undo**, which puts b
 
 **Open in Obsidian is not in the menu.** Coffer offers it only when Obsidian is installed on this Mac, in `/Applications` or your own Applications folder.
 
+**A source says its original is on another Mac.** The uploaded file is kept only on the Mac it was uploaded from. Open the source there, or upload the file again on this Mac.
+
+**An upload's diagram is missing.** Pictures under 48 pixels on a side, over 5 MB, or past the 40th in one upload are not kept, and text drawn into a picture is kept as the picture, not as text. Check the original file on the Mac you uploaded it from.
+
 **An agent does not use the knowledge.** Check that the `coffer-guide` skill is enabled and reaches that agent (its **Reach** button on the Skills page), and that the collection's `README.md` opens with a sentence naming its subjects.
 
 **A file an agent wrote never shows up.** A page written into a collection shows up on the next read. A file left in `.inbox/` must be Markdown, directly in the `.inbox/` folder of an existing collection, and becomes a source at the next sweep, within about a minute; a file anywhere else is left alone, and a file that is not Markdown is not kept as a source.
@@ -513,4 +536,4 @@ A delete is reported in a toast, *Deleted `<name>`*, with **Undo**, which puts b
 - [`coffer knowledge` command reference](/reference/cli/knowledge)
 - [MCP tools reference](/reference/mcp-tools)
 - [Knowledge spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md)
-- [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md), [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md), [Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-stays-current-through-flags-coffer-computes.md) and [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md)
+- [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md), [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md), [Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-stays-current-through-flags-coffer-computes.md), [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md) and [Knowledge Sources Keep Their Images; Originals Stay on This Mac](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md)

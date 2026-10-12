@@ -270,7 +270,7 @@ describe("the Upload dialog", () => {
     const dialog = await openUpload();
     expect(
       within(dialog).getByText(
-        "Coffer converts each to Markdown and keeps it as a source of the collection. The uploaded files themselves are not stored.",
+        "Coffer converts each to Markdown and keeps it, with its pictures, as a source of the collection. The uploaded file itself stays on this Mac only.",
       ),
     ).toBeInTheDocument();
     const big = new File(["x"], "huge.pdf", { type: "application/pdf" });

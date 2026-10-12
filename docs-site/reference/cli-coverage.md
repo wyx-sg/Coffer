@@ -460,6 +460,7 @@ Plain files are read and edited with your own tools, and a few acts only make se
 | `POST /fs/reveal` | the window: reveals a file in Finder |
 | `POST /fs/terminal` | the window: opens a terminal window for the person |
 | `GET /fs/terminals` | the window: which terminals the Open in… menu offers |
+| `GET /knowledge/asset` | plain file: a knowledge picture is a plain file |
 | `DELETE /knowledge/file` | plain file: a knowledge document is a plain file |
 | `GET /knowledge/file` | plain file: a knowledge document is a plain file |
 | `GET /skills/orphans/{name}/files/content` | plain file: a skill's files are plain files |
