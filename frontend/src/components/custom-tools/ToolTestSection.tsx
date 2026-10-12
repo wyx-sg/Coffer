@@ -111,12 +111,7 @@ export function ToolTestSection(props: Props) {
 
   const preview =
     group && env ? (
-      <RequestPreview
-        group={group}
-        environment={env}
-        method={draft().method ?? "GET"}
-        tool={draft()}
-      />
+      <RequestPreview group={group} environment={env} method={draft().method ?? "GET"} tool={draft()} />
     ) : null;
   const result = test.error ? (
     <p role="alert" className="text-xs text-danger">
@@ -185,12 +180,7 @@ export function ToolTestSection(props: Props) {
         </div>
       ) : null}
       <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!ready || blocked || test.isPending}
-          onClick={run}
-        >
+        <Button variant="outline" size="sm" disabled={!ready || blocked || test.isPending} onClick={run}>
           <RotateCw aria-hidden />
           {test.isPending
             ? t("customTools.test.running")
