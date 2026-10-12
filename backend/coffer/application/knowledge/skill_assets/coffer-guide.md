@@ -55,6 +55,12 @@ phrase in any language. It matches bytes, so nothing is stemmed away.
 Check it before asking the developer something they may already have written
 down.
 
+Some collections are **linked folders**: folders the developer keeps with their
+own tools, an Obsidian vault say, which Coffer shares with you but does not
+keep. Each one's section in the catalogue names its own path and its own rules
+file. Read it the same way; write in it only by those rules, never by this
+file's, and do not tidy, upload into or drop files for the inbox of one.
+
 ### Writing a page
 
 When you learn something durable — a fact about a service, a convention this

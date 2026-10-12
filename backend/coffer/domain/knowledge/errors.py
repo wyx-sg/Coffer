@@ -33,6 +33,33 @@ class CollectionExists(KnowledgeError):  # noqa: N818
         self.name = name
 
 
+class CollectionIsLinked(KnowledgeError):  # noqa: N818
+    """A write, tidy, check or history action asked of a linked folder.
+
+    A linked folder is kept by the person's own tools and only shared with the
+    agents (ADR linked-knowledge-folders-are-read-only-and-machine-local), so
+    Coffer refuses every action that would change it or that needs its history.
+    """
+
+    code = "KNOWLEDGE_COLLECTION_LINKED"
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"knowledge collection {name!r} is a linked folder Coffer only reads")
+        self.name = name
+
+
+class LinkedFolderRefused(KnowledgeError):  # noqa: N818
+    """A folder that cannot be linked: missing, not a folder, or inside Coffer's
+    own home, which Coffer already keeps."""
+
+    code = "KNOWLEDGE_FOLDER_REFUSED"
+
+    def __init__(self, folder: str, reason: str) -> None:
+        super().__init__(f"cannot link {folder!r}: {reason}")
+        self.folder = folder
+        self.reason = reason
+
+
 class KnowledgeFileNotFound(KnowledgeError):  # noqa: N818
     code = "KNOWLEDGE_FILE_NOT_FOUND"
 

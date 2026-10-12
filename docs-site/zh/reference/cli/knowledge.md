@@ -24,6 +24,7 @@ coffer knowledge [OPTIONS] COMMAND [ARGS]...
 | [`knowledge delete`](#knowledge-delete) | Delete a collection. |
 | [`knowledge collections`](#knowledge-collections) | Every collection with its description, page, source, waiting-source and finding counts. |
 | [`knowledge create`](#knowledge-create) | Create a collection. |
+| [`knowledge link`](#knowledge-link) | Share a folder you keep yourself with every agent; nothing is copied into Coffer. |
 | [`knowledge describe`](#knowledge-describe) | Rewrite a collection's description. |
 | [`knowledge check`](#knowledge-check) | A collection's mechanical findings: dead links, orphan pages, waiting sources. |
 | [`knowledge tree`](#knowledge-tree) | One level of the knowledge tree. |
@@ -129,6 +130,24 @@ Create a collection. Body: name, description.
 
 ```sh
 coffer knowledge create [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## knowledge link
+
+Share a folder you keep yourself with every agent; nothing is copied into Coffer. Body: folder (absolute path), name.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer knowledge link [OPTIONS]
 ```
 
 <p class="cli-label">参数与选项</p>

@@ -88,6 +88,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge/collections/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link Collection
+         * @description Share a folder the person keeps themselves with every agent; nothing is
+         *     copied into Coffer ("Link a folder the person keeps themselves").
+         */
+        post: operations["link_collection_api_v1_knowledge_collections_link_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge/collections/{uid}/check": {
         parameters: {
             query?: never;
@@ -383,6 +404,13 @@ export interface components {
             /** Files */
             files: components["schemas"]["FileSummaryOut"][];
         };
+        /** CollectionLink */
+        CollectionLink: {
+            /** Folder */
+            folder: string;
+            /** Name */
+            name?: string | null;
+        };
         /** CollectionListOut */
         CollectionListOut: {
             /** Collections */
@@ -402,13 +430,28 @@ export interface components {
              * @default
              */
             folder_path: string;
+            /**
+             * Linked
+             * @default false
+             */
+            linked: boolean;
             /** Name */
             name: string;
+            /**
+             * Note Count
+             * @default 0
+             */
+            note_count: number;
             /**
              * Page Count
              * @default 0
              */
             page_count: number;
+            /**
+             * Rules File
+             * @default
+             */
+            rules_file: string;
             /**
              * Source Count
              * @default 0
@@ -879,6 +922,51 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CollectionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    link_collection_api_v1_knowledge_collections_link_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionLink"];
             };
         };
         responses: {

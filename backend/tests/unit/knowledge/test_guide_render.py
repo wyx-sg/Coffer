@@ -401,3 +401,34 @@ def test_a_catalogue_past_its_budget_drops_descriptions_then_lists_counts() -> N
     assert "_Shortened: only counts are listed" in counts
     assert "2000 pages under `pages/`, 0 sources under `sources/` (0 waiting)" in counts
     assert "a-much-longer-page-name-1.md" not in counts
+
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="the guide lists a linked folder with its own path and rules"
+)
+def test_the_guide_lists_a_linked_folder_with_its_own_path_and_rules() -> None:
+    home = pathlib.Path.home()
+    entry = CollectionEntry(
+        uid="uid-work",
+        name="Work",
+        description="My work notes.",
+        folder_path=str(home / "Obsidian" / "Work"),
+        linked=True,
+        note_count=1,
+        rules_file="AGENTS.md",
+    )
+    note = FileEntry(
+        path="Work/Projects/Gateway.md",
+        title="Payment gateway",
+        description="",
+        actor="user",
+        updated_at="",
+    )
+    text = render("~/.coffer/vault/knowledge", [_collection("shopee", "Shopee."), (entry, [note])])
+
+    assert "### Work (linked folder)" in text
+    assert "`~/Obsidian/Work/`" in text
+    assert "Follow its own `AGENTS.md`" in text
+    assert "- `Projects/Gateway.md` — **Payment gateway**" in text
+    assert str(home) not in text
+    assert "Work (My work notes)" in render_description([(entry, [note])])

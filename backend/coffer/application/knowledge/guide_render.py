@@ -151,7 +151,11 @@ def render_description(catalogue: Catalogue | None) -> str:
         lead = _lead(knowledge=False)
         return f"{lead}. {_TAIL}"[:MAX_DESCRIPTION_CHARS]
     lead = _lead(knowledge=True)
-    subjects = [_subject(entry) for entry, _ in catalogue if entry.page_count or entry.source_count]
+    subjects = [
+        _subject(entry)
+        for entry, _ in catalogue
+        if entry.page_count or entry.source_count or entry.note_count
+    ]
     while subjects:
         joined = "; ".join(subjects)
         candidate = f"{lead}, covering {joined}. {_TAIL}"
@@ -223,9 +227,37 @@ def _entry_line(file: FileEntry, *, describe: bool) -> str:
     return line + (f": {description}" if description else "")
 
 
+def _linked_lines(entry: CollectionEntry, files: Sequence[FileEntry], detail: str) -> list[str]:
+    """A linked folder: kept by the developer's own tools and only shared, so
+    it is described by its own rules rather than Coffer's wiki layout (ADR
+    linked-knowledge-folders-are-read-only-and-machine-local)."""
+    folder = _display(pathlib.Path(entry.folder_path), home=None)
+    lines = [f"### {entry.name} (linked folder)"]
+    if entry.description:
+        lines += ["", " ".join(entry.description.split())]
+    rules = (
+        f"Follow its own `{entry.rules_file}` before writing anything in it"
+        if entry.rules_file
+        else "Write in it only the way its existing notes are written"
+    )
+    lines += [
+        "",
+        f"A folder the developer keeps with their own tools, at `{folder}/`. Coffer only "
+        f"shares it with you. {rules}; Coffer's `pages/`, `sources/`, inbox and tidy "
+        "do not apply here.",
+    ]
+    if not files:
+        return [*lines, "", "_No Markdown notes here._"]
+    if detail == _COUNTS:
+        return [*lines, "", f"{len(files)} Markdown notes. Search the folder."]
+    return [*lines, "", *(_entry_line(f, describe=False) for f in files)]
+
+
 def _catalogue_lines(
     root: str, entry: CollectionEntry, files: Sequence[FileEntry], detail: str
 ) -> list[str]:
+    if entry.linked:
+        return _linked_lines(entry, files, detail)
     lines = [f"### {entry.name}"]
     if entry.description:
         lines += ["", " ".join(entry.description.split())]
@@ -263,6 +295,12 @@ def _render_catalogue_at(root: str, catalogue: Catalogue, detail: str) -> str:
         f"`{root}/<collection>/<path>` with your own file tool.",
         "",
     ]
+    if any(entry.linked for entry, _ in catalogue):
+        lines += [
+            "A linked folder lives where its own section says, not under that root; read "
+            "its notes at that folder's path.",
+            "",
+        ]
     if detail == _TITLES:
         lines += ["_Shortened: descriptions are left out. Read a page for its own._", ""]
     elif detail == _COUNTS:

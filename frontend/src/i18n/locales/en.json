@@ -1885,7 +1885,9 @@
     "MEMORY_SYNC_RUNNING": "A memory sync is already running",
     "MEMORY_SYNC_NO_PREVIEW": "There is no memory sync preview waiting",
     "KNOWLEDGE_UNDO_CONFLICT": "Not undone: files were edited since. Undo anyway to discard those edits.",
-    "KNOWLEDGE_NOT_A_CHANGE": "That change touched no knowledge file, so there is nothing to undo."
+    "KNOWLEDGE_NOT_A_CHANGE": "That change touched no knowledge file, so there is nothing to undo.",
+    "KNOWLEDGE_COLLECTION_LINKED": "This is a linked folder. Coffer only shares it with agents and doesn't change it.",
+    "KNOWLEDGE_FOLDER_REFUSED": "This folder can't be linked. Pick an existing folder outside Coffer's own folder."
   },
   "pagination": {
     "showing": "Showing {{shown}} of {{total}}",
@@ -3056,7 +3058,8 @@
       "title": "Rename {{name}}",
       "body": "Its folder moves with it, and agents find it under the new name.",
       "submit": "Rename",
-      "renamed": "Renamed to {{name}}"
+      "renamed": "Renamed to {{name}}",
+      "linkedBody": "It's only a label: the folder on disk keeps its name."
     },
     "deleteCollection": {
       "menu": "Delete collection…",
@@ -3247,10 +3250,46 @@
       "upload": "Upload documents…",
       "uploadHint": "Converted to Markdown and kept in the collection you pick, synced with it.",
       "create": "New collection…",
-      "createHint": "Kept in Coffer: synced to your other Macs, with history, tidied by your agent."
+      "createHint": "Kept in Coffer: synced to your other Macs, with history, tidied by your agent.",
+      "link": "Link an external folder…",
+      "linkHint": "Files stay where they are and are only shared with agents. Nothing is copied into Coffer, synced or tidied."
     },
     "obsidian": {
       "open": "Open in Obsidian"
+    },
+    "linkFolder": {
+      "title": "Link an external folder",
+      "body": "Share a folder you keep yourself, such as an Obsidian vault, with every agent.",
+      "folder": "Folder",
+      "folderHint": "/Users/you/Obsidian/Work",
+      "name": "Name",
+      "nameHint": "How Coffer and agents refer to it. The folder keeps its own name.",
+      "stays": "The files stay where they are. Nothing is copied into Coffer.",
+      "notManaged": "Coffer doesn't sync it, tidy it, keep its history or upload into it.",
+      "ownRules": "Agents read it and follow its own AGENTS.md, CLAUDE.md or README.md.",
+      "submit": "Link folder",
+      "linked": "Linked {{name}}. Agents can read it now."
+    },
+    "linked": {
+      "tag": "External",
+      "facts": "About this folder",
+      "location": "Location",
+      "notes": "Notes",
+      "noteCount_one": "{{count}} Markdown note",
+      "noteCount_other": "{{count}} Markdown notes",
+      "rules": "Rules file",
+      "noRules": "None",
+      "managed": "Managed by",
+      "managedBy": "Its own tools. Coffer only shares it with agents: it copies, syncs, tidies and records nothing here."
+    },
+    "disconnect": {
+      "menu": "Disconnect…",
+      "title": "Disconnect {{name}}?",
+      "body": "Agents stop seeing it. The files in {{path}} stay where they are.",
+      "confirm": "Disconnect",
+      "pending": "Disconnecting…",
+      "failed": "Couldn't disconnect {{name}}",
+      "done": "Disconnected {{name}}. Its files are untouched."
     }
   },
   "memory": {
@@ -4516,7 +4555,8 @@
       "definitions_other": "{{count}} MCP server and tool definitions",
       "synced": "secrets synced",
       "notSynced": "secrets not synced",
-      "line": "Syncs {{documents}} · {{skills}} · {{definitions}} · {{secrets}}"
+      "line": "Syncs {{documents}} · {{skills}} · {{definitions}} · {{secrets}} · {{linked}}",
+      "linkedNotSynced": "linked knowledge folders not synced"
     },
     "rounds": {
       "loadedCount": "Loaded {{loaded}} rounds",

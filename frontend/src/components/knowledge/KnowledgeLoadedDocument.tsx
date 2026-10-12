@@ -4,7 +4,8 @@
 // it is, then History, Preview / Source, Open in editor and the ⋯ menu (Reveal
 // in Finder, Delete) — and under it the read-only reader. History takes the
 // whole Knowledge area in its place (KnowledgeHistoryView). Nothing here edits:
-// a person changes a file in their own editor and the next read shows it.
+// a person changes a file in their own editor and the next read shows it. A
+// linked folder's file has no History and no Delete: its own tools keep it.
 import { useState } from "react";
 
 import { useDeleteDocument } from "@/components/knowledge/KnowledgeDeleteDocument";
@@ -40,8 +41,8 @@ export function KnowledgeLoadedDocument({ collection, file, onHistory }: LoadedP
             view={markdown ? view : "source"}
             onView={setView}
             fileActions={fileActions}
-            onDelete={() => removeDocument(file.path)}
-            onHistory={onHistory}
+            onDelete={collection.linked ? null : () => removeDocument(file.path)}
+            onHistory={collection.linked ? null : onHistory}
             obsidian={obsidian}
           />
         }

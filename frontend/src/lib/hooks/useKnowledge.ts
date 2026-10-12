@@ -12,6 +12,7 @@ import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import {
   createCollection,
+  linkFolder,
   deleteFile,
   describeCollection,
   getCheck,
@@ -54,6 +55,16 @@ export function useCreateCollection() {
     mutationFn: (input: { name: string; description?: string | null }) => createCollection(input),
     onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeCollectionsKey }),
     onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+/** Link a folder the person keeps themselves. No `onError` toast: the dialog
+ * shows the refusal beside the folder. */
+export function useLinkFolder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { folder: string; name?: string | null }) => linkFolder(input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeCollectionsKey }),
   });
 }
 

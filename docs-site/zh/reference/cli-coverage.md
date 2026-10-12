@@ -185,6 +185,7 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | Knowledge · Delete | `DELETE /resources/{uid}` | `coffer knowledge delete` | `test_cli_parity.py` |
 | Knowledge · edit a collection's description | `PUT /knowledge/collections/{uid}/description` | `coffer knowledge describe` | `test_cli_parity.py` |
 | Knowledge · a collection's Contents | `GET /knowledge/collections/{uid}/files` | `coffer knowledge files` | `test_cli_parity.py` |
+| Knowledge · Add · Link an external folder | `POST /knowledge/collections/link` | `coffer knowledge link` | `test_cli_parity.py` |
 | Knowledge · list | `GET /resources` | `coffer knowledge list` | `test_cli_parity.py` |
 | Knowledge · Undo a delete | `POST /knowledge/changes/{version}/restore` | `coffer knowledge restore` | `test_cli_parity.py` |
 | Knowledge · open a collection | `GET /resources/{uid}` | `coffer knowledge show` | `test_cli_parity.py` |
