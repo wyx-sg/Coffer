@@ -8,7 +8,7 @@
 // to act. Everything here goes through `shellInvoke` / `onShellEvent` in
 // `tauri.ts`, the one module that touches the Tauri API, and answers "not
 // here" in a browser: a page the daemon serves cannot replace the app.
-import { isTauri, onShellEvent, shellInvoke } from "./tauri";
+import { inDesktopShell, onShellEvent, shellInvoke } from "./tauri";
 
 /** Where a check or install is — the shell's `update_state::Phase`. */
 type UpdatePhase =
@@ -40,7 +40,7 @@ const UPDATE_EVENT = "coffer://update";
 
 /** Whether this host can check for and install updates at all. */
 export function updatesAvailable(): boolean {
-  return isTauri();
+  return inDesktopShell();
 }
 
 export function getUpdateStatus(): Promise<UpdateStatus> {

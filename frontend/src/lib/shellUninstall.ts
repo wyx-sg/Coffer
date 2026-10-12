@@ -6,7 +6,7 @@
 // for the daemon to exit, then the app moves itself to the Trash and quits. The
 // page only asks and shows the steps the daemon reported. In a browser there is
 // nothing to call: the page shows the command instead.
-import { isTauri, shellInvoke } from "./tauri";
+import { inDesktopShell, shellInvoke } from "./tauri";
 
 /** One step of the daemon's uninstall (`UninstallStepOut`). */
 interface UninstallStep {
@@ -23,7 +23,7 @@ export interface UninstallReport {
 
 /** Whether this host can uninstall Coffer from the page. */
 export function uninstallAvailable(): boolean {
-  return isTauri();
+  return inDesktopShell();
 }
 
 /** Uninstall; resolves with the daemon's steps shortly before the app quits.

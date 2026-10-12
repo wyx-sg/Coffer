@@ -25,6 +25,14 @@ for the axis it replaced (sidebar policy kept from it: no "soon" placeholders).
 appears in the sidebar only once it ships; Activity is not it, because a record
 of what happened is not a measurement of how the system is doing.
 
+Coffer shows files; the person's own editor changes them. Viewing a file Coffer
+manages or reads — a knowledge document, a memory, a skill file, an agent's
+config file — happens in Coffer's own UI, and so does a vault file's history,
+including putting back an earlier version of it. Changing a file's content is never done in
+Coffer's UI: every file viewer is read-only and offers **Open in editor** (see
+"Let the user choose an external editor"). A config file is previewed raw and
+read-only, as the agent reads it, never through a form that rewrites it.
+
 This capability adds no REST route and no backend of its own. Every screen
 renders over routes and entities other capabilities own, and those are named
 where they are used. The Activity page in particular reads three records with
