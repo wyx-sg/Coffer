@@ -115,7 +115,8 @@ class AgentNativeMemoryService:
                 config_dir / layout.projects_subdir,
                 layout.memory_subdir,
             )
-        result = [self._to_store(scan) for scan in scans]
+        # ``_to_store`` may walk the filesystem to decode a slug, so it too runs off the loop.
+        result = await asyncio.to_thread(lambda: [self._to_store(scan) for scan in scans])
         return sorted(result, key=lambda s: (-s.item_count, s.project_label))
 
     async def read_tree(self, uid: str, memory_dir: str) -> MemoryFileNode:

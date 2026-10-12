@@ -112,27 +112,74 @@ async def test_a_sync_round_always_reaches_the_service() -> None:
     assert rounds == [1]
 
 
-async def _sweep_ticks(monkeypatch: pytest.MonkeyPatch, features: FeatureService) -> list[object]:
-    """Run the real sweep loop for a few intervals; answer what each tick swept."""
-    swept: list[object] = []
-
+def _fake_sweep(
+    monkeypatch: pytest.MonkeyPatch, swept: list[object], *, waiting: bool = False
+) -> None:
     async def record(service: object, _refresh: object) -> None:
         swept.append(service)
 
+    async def loose(_service: object) -> bool:
+        return waiting
+
     monkeypatch.setattr(knowledge_sweep_wiring, "sweep_once", record)
-    monkeypatch.setattr(knowledge_sweep_wiring, "SWEEP_INTERVAL_S", 0.01)
-    task = asyncio.create_task(
-        knowledge_sweep_wiring._run_forever(
-            "service",  # type: ignore[arg-type]
-            SimpleNamespace(refresh=None),  # type: ignore[arg-type]
-            features,
-        )
+    monkeypatch.setattr(knowledge_sweep_wiring, "loose_documents_waiting", loose)
+
+    class _Tidies:
+        async def expire(self) -> list[str]:
+            return []
+
+    monkeypatch.setattr(knowledge_sweep_wiring, "get_tidy_service", _Tidies)
+
+
+async def _sweep_ticks(monkeypatch: pytest.MonkeyPatch, features: FeatureService) -> list[object]:
+    """Run the real sweep loop for a few fallbacks; answer what each run swept."""
+    swept: list[object] = []
+    _fake_sweep(monkeypatch, swept)
+    sweep = knowledge_sweep_wiring.KnowledgeSweep(
+        "service",  # type: ignore[arg-type]
+        SimpleNamespace(refresh=None),  # type: ignore[arg-type]
+        features,
+        fallback=0.01,
+        settle=0.0,
     )
+    task = asyncio.create_task(sweep.run())
     try:
         await asyncio.sleep(0.1)
     finally:
         await knowledge_sweep_wiring.stop_knowledge_sweep(task)
     return swept
+
+
+@pytest.mark.acceptance(
+    spec="daemon", scenario="a change under the knowledge area brings the sweep forward"
+)
+async def test_a_knowledge_file_event_wakes_the_sweep_and_it_is_listed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from coffer.application.runtime.workers import WorkerMode, workers
+
+    swept: list[object] = []
+    _fake_sweep(monkeypatch, swept)
+    hints: list[Any] = []
+    task = knowledge_sweep_wiring.start_knowledge_sweep(
+        "service",  # type: ignore[arg-type]
+        SimpleNamespace(refresh=None),  # type: ignore[arg-type]
+        None,  # type: ignore[arg-type]
+        _features(),
+        hints.append,
+    )
+    try:
+        await asyncio.sleep(0.2)
+        assert len(swept) == 1, "the start-up sweep, and nothing else on a 10 minute fallback"
+        row = next(w for w in workers().snapshot() if w.name == "knowledge-sweep")
+        assert row.mode == WorkerMode.EVENT_FALLBACK
+        (hint,) = hints
+        hint()
+        hint()  # a burst is one run
+        await asyncio.sleep(1.5)
+        assert len(swept) == 2
+    finally:
+        await knowledge_sweep_wiring.stop_knowledge_sweep(task)
 
 
 @pytest.mark.acceptance(

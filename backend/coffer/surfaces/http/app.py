@@ -43,6 +43,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.runtime import loop_lag
 from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.resource import Kind
+from coffer.domain.vault.layout import KNOWLEDGE as KNOWLEDGE_SUBTREE
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.agent.legacy_cleanup import remove_transcript_sidecar
 from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
@@ -287,6 +288,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         features=features,
         platform=platform,
         history_db=sqlite_file(_db_url()),
+        watch_knowledge=lambda hint: vault_scanning.scanner.on_subtree_event(
+            KNOWLEDGE_SUBTREE, hint
+        ),
     )
     # Published like ``app.state.kinds``: a test asserting the lifespan started
     # a worker needs a seam to reach it through.

@@ -54,4 +54,14 @@ async def file_loose_documents(service: KnowledgeService) -> list[str]:
     return moved
 
 
-__all__ = ["file_loose_documents"]
+async def loose_documents_waiting(service: KnowledgeService) -> bool:
+    """Whether any collection holds a loose document, however recently written:
+    one the sweep left because it was still inside its quiet minute."""
+    for row in await service.collection_rows():
+        # An infinite "now" makes every document old enough to be listed.
+        if await asyncio.to_thread(layout.loose_documents, row.name, now=float("inf")):
+            return True
+    return False
+
+
+__all__ = ["file_loose_documents", "loose_documents_waiting"]
