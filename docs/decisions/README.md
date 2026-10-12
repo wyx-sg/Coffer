@@ -139,6 +139,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`wire-contract-generated-from-the-pydantic-models`](wire-contract-generated-from-the-pydantic-models.md) | The Wire Contract Is Generated From the Pydantic Models, and the Frontend Client From the Contract |
 | [`background-work-runs-supervised-and-correlated`](background-work-runs-supervised-and-correlated.md) | Background Work Runs Supervised, and Every Record Carries One Correlation Id |
 | [`background-workers-wake-on-events`](background-workers-wake-on-events.md) | Background Workers Wake on Events, Fall Back Rarely, and Stop When Nothing Needs Them |
+| [`background-loops-stop-when-their-task-is-cancelled`](background-loops-stop-when-their-task-is-cancelled.md) | Background Loops Stop When Their Task Is Cancelled, Even If Cleanup Raised Something Else |
 | [`platform-differences-live-behind-one-platform-port`](platform-differences-live-behind-one-platform-port.md) | Platform Differences Live Behind One Platform Port; Only macOS Ships |
 
 ### Daemon, shell & distribution

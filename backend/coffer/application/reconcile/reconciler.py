@@ -46,6 +46,7 @@ from datetime import UTC, datetime
 from coffer.application.audit_service import AuditService
 from coffer.application.reconcile.pass_ops import log_report, plan_target, settle_change
 from coffer.application.reconcile.ports import ReconcileTarget
+from coffer.application.runtime.cancellation import raise_if_stopping
 from coffer.application.runtime.wakeable import WakeableLoop
 from coffer.domain.reconcile import (
     Changed,
@@ -287,6 +288,7 @@ class Reconciler:
                     try:
                         changes = await plan_target(target, trigger)
                     except Exception as exc:
+                        raise_if_stopping(exc)
                         _log.warning("reconcile.target_failed %s: %r", name, exc)
                         failures.append(TargetFailure(name, repr(exc)))
                         continue

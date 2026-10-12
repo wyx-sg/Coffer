@@ -28,6 +28,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import defer
 
+from coffer.application.runtime.cancellation import raise_if_stopping
 from coffer.application.runtime.supervisor import spawn
 from coffer.domain.mcp.capability import MCPInvocation
 from coffer.infrastructure.mcp.invocation_rows import (
@@ -376,10 +377,9 @@ class MCPInvocationRepo:
                 continue
             try:
                 await self._commit_batch(batch)
-            except Exception:
-                # Persistent DB failure shouldn't crash the writer; log and
-                # carry on. We do NOT requeue: better to drop one batch than
-                # to pin memory growing forever.
+            except Exception as exc:
+                raise_if_stopping(exc)
+                # A DB failure must not crash the writer; no requeue, so memory cannot grow.
                 _logger.exception(
                     "mcp.invocation_writer.commit_failed", extra={"batch_size": len(batch)}
                 )

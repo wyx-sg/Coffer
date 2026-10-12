@@ -21,6 +21,7 @@ from coffer.application.features import FeatureService
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.application.knowledge.sweep import sweep_once
 from coffer.application.resource_service import ResourceService
+from coffer.application.runtime.cancellation import raise_if_stopping
 from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.features import KNOWLEDGE
 from coffer.surfaces.http.guide_wiring import BuiltinGuide
@@ -46,7 +47,8 @@ async def _run_forever(
                 await get_tidy_service().expire()
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as exc:
+                raise_if_stopping(exc)
                 # A failed tick must never end the loop: the next one is a fresh
                 # attempt over whatever is still waiting.
                 _log.warning("knowledge.sweep.tick_failed", exc_info=True)

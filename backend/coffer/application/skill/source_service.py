@@ -16,6 +16,7 @@ import contextlib
 import logging
 from typing import IO
 
+from coffer.application.runtime.cancellation import raise_if_stopping
 from coffer.application.runtime.supervisor import spawn
 from coffer.application.skill import (
     source_change_ops,
@@ -159,7 +160,8 @@ class SkillUpdateWorker:
         while True:
             try:
                 await self._svc.check_due()
-            except Exception:
+            except Exception as exc:
+                raise_if_stopping(exc)
                 logger.warning("skill.update_check.failed", exc_info=True)
             await asyncio.sleep(self._slice)
 

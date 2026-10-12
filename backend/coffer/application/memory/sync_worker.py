@@ -14,6 +14,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
+from coffer.application.runtime.cancellation import raise_if_stopping
 from coffer.application.upkeep_clock import PASS_CLOCK, PassClock
 from coffer.application.upkeep_schedule import (
     DEFAULT_INTERVALS,
@@ -55,7 +56,8 @@ class MemorySyncWorker:
                 raise
             except MemorySyncRunning:
                 logger.debug("memory.sync_worker.already_running")
-            except Exception:
+            except Exception as exc:
+                raise_if_stopping(exc)
                 logger.warning("memory.sync_worker.pass_failed", exc_info=True)
             self._clock.waiting(MEMORY_SYNC)
             await wait_for_next_pass(self._read_interval, default_s=DEFAULT_INTERVALS[MEMORY_SYNC])
