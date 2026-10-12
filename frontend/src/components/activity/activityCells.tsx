@@ -4,7 +4,7 @@
 // Logs are tabular, so rows stay dense: times and identifiers in mono, a
 // failure in its status colour beside the call it belongs to.
 import type { TFunction } from "i18next";
-import { PencilLine, ScrollText, Server, type LucideIcon } from "lucide-react";
+import { KeyRound, PencilLine, ScrollText, Server, type LucideIcon } from "lucide-react";
 
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { StatusWord } from "@/components/status/StatusWord";
@@ -13,6 +13,7 @@ import { describeActivity, describeDaemonRecord } from "@/lib/activity/activityT
 import {
   callServerLabel,
   daemonLevel,
+  isSecretUse,
   formatDuration,
   recordLogger,
   recordSeverity,
@@ -47,7 +48,9 @@ const SOURCE_ICON: Record<ActivityRecord["source"], LucideIcon> = {
 
 /** The record's source as a small tile, toned by how serious it is. */
 export function SourceIcon({ record }: { record: ActivityRecord }) {
-  const Icon = SOURCE_ICON[record.source];
+  // A secret's use is not a change: a key, not a pencil.
+  const Icon =
+    record.source === "change" && isSecretUse(record.entry) ? KeyRound : SOURCE_ICON[record.source];
   const severity = recordSeverity(record);
   return (
     <span
@@ -113,9 +116,18 @@ export function EventCell({ t, record }: { t: TFunction; record: ActivityRecord 
     );
   }
   if (record.source === "change") {
+    const repeats = record.folded?.length ?? 0;
     return (
-      <span className="block min-w-0 truncate text-sm text-text">
-        {describeActivity(t, record.entry)}
+      <span className="flex min-w-0 items-baseline gap-1.5 text-sm text-text">
+        <span className="min-w-0 truncate">{describeActivity(t, record.entry)}</span>
+        {repeats > 0 ? (
+          <span
+            className="shrink-0 font-mono text-xs text-text-muted"
+            title={t("activity.folded.title", { count: repeats + 1 })}
+          >
+            ×{repeats + 1}
+          </span>
+        ) : null}
       </span>
     );
   }

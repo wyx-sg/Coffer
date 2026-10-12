@@ -7,6 +7,7 @@ import {
   fromAudit,
   fromCall,
   fromDaemonTail,
+  foldUses,
   mergeNewestFirst,
   recordSeverity,
   formatDuration,
@@ -110,13 +111,14 @@ test("mergeNewestFirst orders every log by time and drops duplicates", () => {
 });
 
 describe("sourcesFor", () => {
-  test("everything reads all three logs", () => {
-    expect(sourcesFor("everything", DEFAULT_FILTERS)).toEqual(["change", "call", "daemon"]);
+  test("everything reads all four reads", () => {
+    expect(sourcesFor("everything", DEFAULT_FILTERS)).toEqual(["change", "use", "call", "daemon"]);
   });
   test("the kinds narrow everything to the logs they name", () => {
     expect(sourcesFor("everything", f({ kinds: ["calls"] }))).toEqual(["call"]);
     expect(sourcesFor("everything", f({ kinds: ["changes"] }))).toEqual(["change"]);
     expect(sourcesFor("everything", f({ kinds: ["daemon"] }))).toEqual(["daemon"]);
+    expect(sourcesFor("everything", f({ kinds: ["uses"] }))).toEqual(["use"]);
     expect(sourcesFor("everything", f({ kinds: ["calls", "changes"] }))).toEqual([
       "change",
       "call",
@@ -125,12 +127,17 @@ describe("sourcesFor", () => {
   test("only agents leave the daemon log out", () => {
     expect(sourcesFor("everything", f({ by: ["agent:a-cc", "agent:a-cx"] }))).toEqual([
       "change",
+      "use",
       "call",
     ]);
   });
   test("a non-agent who keeps changes, and Coffer keeps its daemon records", () => {
-    expect(sourcesFor("everything", f({ by: ["actor:you"] }))).toEqual(["change"]);
-    expect(sourcesFor("everything", f({ by: ["actor:system"] }))).toEqual(["change", "daemon"]);
+    expect(sourcesFor("everything", f({ by: ["actor:you"] }))).toEqual(["change", "use"]);
+    expect(sourcesFor("everything", f({ by: ["actor:system"] }))).toEqual([
+      "change",
+      "use",
+      "daemon",
+    ]);
   });
 });
 
@@ -200,4 +207,66 @@ test("severity and duration read the way a person reads them", () => {
   expect(recordSeverity(fromCall(call({ status: "timeout" })))).toBe("warning");
   expect(formatDuration(12)).toBe("12 ms");
   expect(formatDuration(1300)).toBe("1.3 s");
+});
+
+describe("foldUses", () => {
+  const use = (id: number, timestamp: string, details: Record<string, unknown> = {}) =>
+    fromAudit(
+      audit({
+        id,
+        timestamp,
+        event_type: "secret_resolved",
+        actor: "coffer",
+        details: {
+          ref: "coffer://secrets/gh",
+          destination_kind: "server",
+          destination_uid: "u-gh",
+          slot: "GITHUB_TOKEN",
+          ...details,
+        },
+      }),
+    );
+
+  test("repeated uses of one secret by one destination read as one row", () => {
+    const rows = [
+      use(3, "2026-10-12T10:08:00Z"),
+      use(2, "2026-10-12T10:04:00Z"),
+      use(1, "2026-10-12T10:00:00Z"),
+    ];
+    const out = foldUses(rows);
+    expect(out.map((r) => r.key)).toEqual(["change:3"]);
+    const head = out[0];
+    expect(head.source === "change" && head.folded?.map((e) => e.id)).toEqual([2, 1]);
+  });
+
+  test("a gap of ten minutes or more starts a new row", () => {
+    const out = foldUses([use(2, "2026-10-12T10:10:00Z"), use(1, "2026-10-12T10:00:00Z")]);
+    expect(out.map((r) => r.key)).toEqual(["change:2", "change:1"]);
+  });
+
+  test("another destination, or a change between them, keeps its own row", () => {
+    const change = fromAudit(audit({ id: 5, timestamp: "2026-10-12T10:03:00Z" }));
+    const rows = [
+      use(4, "2026-10-12T10:04:00Z"),
+      change,
+      use(3, "2026-10-12T10:02:00Z", { destination_uid: "u-linear" }),
+      use(2, "2026-10-12T10:01:00Z"),
+    ];
+    const out = foldUses(rows);
+    expect(out.map((r) => r.key)).toEqual(["change:4", "change:5", "change:3"]);
+    const head = out[0];
+    expect(head.source === "change" && head.folded?.map((e) => e.id)).toEqual([2]);
+  });
+});
+
+describe("secret uses in the filters", () => {
+  test("a use is the uses kind, and Coffer's hand-off is Coffer's", () => {
+    const r = fromAudit(
+      audit({ id: 7, event_type: "secret_resolved", actor: "coffer", details: { ref: "x" } }),
+    );
+    expect(matchesFilters(r, "everything", f({ kinds: ["uses"] }), ctx)).toBe(true);
+    expect(matchesFilters(r, "everything", f({ kinds: ["changes"] }), ctx)).toBe(false);
+    expect(matchesFilters(r, "everything", f({ by: ["actor:system"] }), ctx)).toBe(true);
+    expect(matchesFilters(r, "everything", f({ by: ["actor:you"] }), ctx)).toBe(false);
+  });
 });

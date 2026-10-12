@@ -1,7 +1,8 @@
 // src/lib/hooks/useActivityFeed.ts — the visible Activity tab's records: the logs it reads, merged, filtered, held and counted.
 //
-// A tab reads one log (Changes, Tool calls, Daemon log) or all three
-// (Everything). Each log is a `useActivitySource`; this hook decides each
+// A tab reads one log (Changes, Secret use, Tool calls, Daemon log) or all
+// of them (Everything); Changes and Secret use are two reads of the audit log.
+// Repeated secret uses fold into one row (`foldUses`). Each log is a `useActivitySource`; this hook decides each
 // one's server-side filters from the tab's, merges what they loaded
 // newest-first, applies the client-side half of the filters, and answers the
 // questions the page asks: what to show, how many new records wait behind
@@ -16,6 +17,7 @@ import type { TFunction } from "i18next";
 
 import type { SourceParams } from "@/lib/api/activity";
 import {
+  foldUses,
   mergeNewestFirst,
   recordLogger,
   recordTimeMs,
@@ -49,7 +51,9 @@ function sourceParams(
   const q = f.search.trim() || undefined;
   // A change's kind is a category the audit route does not know (secrets,
   // sync, settings), so the kind filter is applied on the client.
-  if (source === "change") return { source, params: { since, q, qTypes } };
+  if (source === "change" || source === "use") {
+    return { source, params: { since, q, qTypes, nature: source } };
+  }
   if (source === "call") {
     return {
       source,
@@ -120,13 +124,15 @@ export function useActivityFeed({ tab, filters, t, agentNames }: Args): Activity
   // The three logs are always the same three hooks; a log this tab does not
   // read is simply switched off.
   const changeSpec = sourceParams("change", tab, filters, since, qTypes);
+  const useSpec = sourceParams("use", tab, filters, since, qTypes);
   const callSpec = sourceParams("call", tab, filters, since, qTypes);
   const daemonSpec = sourceParams("daemon", tab, filters, since, qTypes);
   const change = useActivitySource(changeSpec, active.has("change"));
+  const use = useActivitySource(useSpec, active.has("use"));
   const call = useActivitySource(callSpec, active.has("call"));
   const daemon = useActivitySource(daemonSpec, active.has("daemon"));
 
-  const states = [change, call, daemon].filter((s) => active.has(s.source));
+  const states = [change, use, call, daemon].filter((s) => active.has(s.source));
   const ctx: FilterContext = useMemo(() => ({ t, until, agentNames }), [t, until, agentNames]);
   const keep = useMemo(
     () => (r: ActivityRecord) => matchesFilters(r, tab, filters, ctx),
@@ -141,7 +147,7 @@ export function useActivityFeed({ tab, filters, t, agentNames }: Args): Activity
   );
   const merged = mergeNewestFirst(states.map((s) => s.records));
   const visible = frontier > 0 ? merged.filter((r) => recordTimeMs(r.at) >= frontier) : merged;
-  const rows = visible.filter(keep);
+  const rows = foldUses(visible.filter(keep));
   const pendingCount = states.reduce((n, s) => n + s.pending.filter(keep).length, 0);
 
   // The frontier logs are the ones to page: loading an older page of any
@@ -169,8 +175,11 @@ export function useActivityFeed({ tab, filters, t, agentNames }: Args): Activity
     hasOlder: pageable.length > 0,
     loadOlder: () => (limiting.length ? limiting : pageable).forEach((s) => s.loadOlder()),
     isLoadingOlder: states.some((s) => s.isLoadingOlder),
-    refreshChanges: change.refreshHead,
-    specs: [changeSpec, callSpec, daemonSpec].filter((s) => active.has(s.source)),
+    refreshChanges: () => {
+      change.refreshHead();
+      use.refreshHead();
+    },
+    specs: [changeSpec, useSpec, callSpec, daemonSpec].filter((s) => active.has(s.source)),
     until,
     loggers: [...new Set(merged.map(recordLogger).filter(Boolean))].sort(),
   };

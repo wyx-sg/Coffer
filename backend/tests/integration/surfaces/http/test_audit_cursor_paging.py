@@ -204,3 +204,31 @@ async def test_q_type_adds_events_the_client_matched_by_their_wording(env: _Env)
     assert _events(body) == ["skill_unbound"] and body["total"] == 1
     # Without a text there is nothing to widen.
     assert (await env.read(q_type=["skill_unbound"])).json()["total"] == 3
+
+
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="the audit route reads uses apart from changes"
+)
+async def test_nature_reads_uses_apart_from_changes(env: _Env) -> None:
+    for event, minutes in (
+        ("secret_set", 0),
+        ("secret_resolved", 1),
+        ("secret_revealed", 2),
+    ):
+        await env.record(event, _T0 + timedelta(minutes=minutes))
+
+    uses = (await env.read(nature="use")).json()
+    changes = (await env.read(nature="change")).json()
+    assert _events(uses) == ["secret_revealed", "secret_resolved"]
+    assert uses["total"] == 2
+    assert _events(changes) == ["secret_set"]
+    assert changes["total"] == 1
+    assert (await env.read(nature="other")).status_code == 422
+
+
+async def test_a_cursor_is_bound_to_its_nature(env: _Env) -> None:
+    for minutes in range(3):
+        await env.record("secret_resolved", _T0 + timedelta(minutes=minutes))
+    first = (await env.read(nature="use", limit=1)).json()
+    refused = await env.read(nature="change", limit=1, cursor=first["next_cursor"])
+    assert refused.status_code == 400

@@ -74,6 +74,11 @@ def audit(
     kind: str | None = typer.Option(None, "--kind", help="Only this resource kind"),
     name: str | None = typer.Option(None, "--name", help="Only this resource (needs --kind)"),
     event_type: str | None = typer.Option(None, "--event-type", help="Only this event type"),
+    nature: str | None = typer.Option(
+        None,
+        "--nature",
+        help="change for changes only, use for a secret's uses only (handed out or revealed)",
+    ),
     since: str | None = typer.Option(None, "--since", help=_SINCE_HELP),
     limit: int = typer.Option(50, "--limit", min=1, max=500, help="Most entries to print"),
     cursor: str | None = typer.Option(None, "--cursor", help=_CURSOR_HELP),
@@ -99,6 +104,8 @@ def audit(
         params["kind"] = kind
     if event_type is not None:
         params["event_type"] = event_type
+    if nature is not None:
+        params["nature"] = nature
     if since is not None:
         params["since"] = since_instant(since)
     if cursor is not None:

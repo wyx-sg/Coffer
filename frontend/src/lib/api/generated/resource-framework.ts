@@ -1068,6 +1068,8 @@ export interface operations {
                 resource_uid?: string | null;
                 event_type?: string | null;
                 event_prefix?: string | null;
+                /** @description ``change`` for changes only, ``use`` for a secret's uses only (its value handed to a server, a tool, a connection or a program, or revealed). */
+                nature?: ("change" | "use") | null;
                 since?: string | null;
                 limit?: number;
                 /** @description The previous page's next_cursor. Bound to the filters it was issued with; any other value is 400 CURSOR_INVALID. */

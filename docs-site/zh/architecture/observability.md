@@ -192,14 +192,14 @@ sequenceDiagram
 有些事件不再被记录：`agent_config_file_written` 和 `agent_config_file_deleted`，因为 Web 界面不再编辑智能体的配置文件；`knowledge_curated` 和 `provider_internal_default_set`；以及早先记忆层的 `memory_aggregated`、`memory_distilled`、`memory_delivery_installed`、`memory_delivery_removed`、`memory_delivery_fired`、`memory_note_edited` 和 `memory_note_deleted`。日志里已有的行在活动页面里仍保留它们的标签，所以依然能用平实的话读出来。`vault_file_restored` 会被记录：从历史标签或抽屉恢复一个版本是 Coffer 自己的写入。在磁盘上做的编辑，或智能体自己提交的恢复，是写明 `Coffer-Writer: disk` 或 `agent` 的保险库提交；保险库的 git 历史能回答是谁改了这个文件。
 
 - `secret_revealed`——有人在桌面应用里经过在场验证后显示或复制了一个值。这是值被展示的唯一途径，因为没有任何路由、命令或工具会返回它。
-- `secret_resolved`——`coffer run` 把一个独立密钥解析进一个子进程。记录写明密钥、程序和工作目录，从不记录值或命令行的其余部分。
+- `secret_resolved`——密钥的值被交给了使用它的地方。Coffer 在为它启动的服务器、工具或提供商解密密钥时写下它（执行者 `coffer`），写明 ref、去处的种类、uid 和名字，以及槽位（变量或请求头），同一个密钥、去处和槽位每分钟最多一条。`coffer run` 把一个独立密钥解析进一个子进程时也写下它，写明密钥、程序和工作目录，从不记录值或命令行的其余部分。
 - `secret_local_access_revoked`——有人撤销了某个独立密钥对本机程序的授权，`coffer run` 此后不能再解析它。授权本身记为一条普通的审批。
 - `secret_approval_requested`、`secret_approval_approved`、`secret_approval_rejected`——一个密钥等待被发往新的地方（或者一个正在使用的值等待被替换，或者保护等待被关闭），然后有人做了答复。见[密钥](/zh/guides/secrets#approvals)。
 - `master_key_exported`——桌面应用在经过在场验证后写出了一份密钥备份。没有任何命令或路由能导出密钥。
 
-为启动上游而解密密钥不是审计事件。
+`secret_resolved` 和 `secret_revealed` 是**密钥使用**：值离开了保险库，但什么都没改。它们的数量远多于改动，所以审计路由把它们分开读：`nature=use` 只返回这两种事件，`nature=change` 返回其余的，在分页和计数之前生效，并绑定在游标里（`domain/audit.py` 中的 `SECRET_USE_EVENTS`；见 [Secret Uses Are Read Apart From Changes](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/secret-uses-are-read-apart-from-changes.md)）。以后新增同类事件要加进这个集合，否则会落进改动里。
 
-你可以在「活动」页的「变更」标签页、用 `coffer log audit`（`--kind`、`--name`、`--event-type`、`--since`、`--limit`、`--json`），或通过 `GET /api/v1/audit` 读取审计日志。见[活动与审计](/zh/guides/activity)。
+你可以在「活动」页的「变更」标签页读改动、在「密钥使用」标签页读使用，也可以用 `coffer log audit`（`--kind`、`--name`、`--event-type`、`--nature`、`--since`、`--limit`、`--json`），或通过 `GET /api/v1/audit` 读取。见[活动与审计](/zh/guides/activity)。
 
 ## MCP 调用日志 {#the-mcp-invocation-log}
 
@@ -291,7 +291,7 @@ flowchart LR
 
 | 命令 | 读取 |
 | --- | --- |
-| `coffer log audit [--kind] [--name] [--event-type] [--since] [--trace] [--limit] [--json]` | 审计日志，最新的在前 |
+| `coffer log audit [--kind] [--name] [--event-type] [--nature] [--since] [--trace] [--limit] [--json]` | 审计日志，最新的在前 |
 | `coffer log mcp [--server] [--status ok\|error] [--since] [--trace] [--limit] [--json]` | MCP 调用日志，最新的在前 |
 | `coffer log daemon [--errors] [--since] [--trace] [--limit] [--json]` | `daemon.log` 的末尾，经过与「活动」页相同的宽容读取器 |
 | `coffer daemon status [--tasks] [--workers] [--json]` | 事件循环延迟和后台任务计数（加 `--tasks` 时按名字列出，加 `--workers` 时列出每个后台任务上次和下次运行），与守护进程的版本和端口一起 |

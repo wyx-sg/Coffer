@@ -13,24 +13,42 @@ export type AuditEntry = components["schemas"]["AuditEntryOut"];
 export type Invocation = components["schemas"]["InvocationOut"];
 export type DaemonLogRecord = components["schemas"]["DaemonLogRecordOut"];
 
-/** Which log a record came from. */
-export type ActivitySource = "change" | "call" | "daemon";
+/**
+ * Which log a tab reads: the audit log's changes (`change`) and its secret
+ * uses (`use`) are two reads of one route (spec resource-framework "Tell a
+ * secret's use from a change in the audit log"); a row of either is an audit
+ * record (`source: "change"`).
+ */
+export type ActivitySource = "change" | "use" | "call" | "daemon";
 
-/** The four tabs, in order; `everything` merges the other three. */
-export const ACTIVITY_TABS = ["everything", "changes", "mcp", "daemon"] as const;
+/** The five tabs, in order; `everything` merges the other four. */
+export const ACTIVITY_TABS = ["everything", "changes", "uses", "mcp", "daemon"] as const;
 export type ActivityTab = (typeof ACTIVITY_TABS)[number];
 
 /** The sources each tab reads. */
 export const TAB_SOURCES: Record<ActivityTab, readonly ActivitySource[]> = {
-  everything: ["change", "call", "daemon"],
+  everything: ["change", "use", "call", "daemon"],
   changes: ["change"],
+  uses: ["use"],
   mcp: ["call"],
   daemon: ["daemon"],
 };
 
-/** @ui-only One row of any of the three logs. `at` is null only for a daemon line nothing dates. */
+/** The audit events in which a secret's value was used and nothing changed. */
+const SECRET_USE_EVENTS: ReadonlySet<string> = new Set(["secret_resolved", "secret_revealed"]);
+
+/** Whether an audit row is a secret's use rather than a change. */
+export function isSecretUse(entry: AuditEntry): boolean {
+  return SECRET_USE_EVENTS.has(entry.event_type);
+}
+
+/**
+ * @ui-only One row of any of the three logs. `at` is null only for a daemon
+ * line nothing dates. A secret use may carry `folded`: the older uses of the
+ * same secret by the same destination that fold into it.
+ */
 export type ActivityRecord =
-  | { source: "change"; key: string; at: string; entry: AuditEntry }
+  | { source: "change"; key: string; at: string; entry: AuditEntry; folded?: AuditEntry[] }
   | { source: "call"; key: string; at: string; call: Invocation }
   | { source: "daemon"; key: string; at: string | null; log: DaemonLogRecord };
 
@@ -95,6 +113,59 @@ export function mergeNewestFirst(lists: readonly (readonly ActivityRecord[])[]):
 }
 
 export { timeMs as recordTimeMs };
+
+/** Uses this close together, of one secret by one destination, read as one row. */
+const FOLD_WINDOW_MS = 10 * 60_000;
+
+/** What makes two secret uses "the same": the secret and where its value went. */
+function identityOf(entry: AuditEntry): string {
+  const d = (entry.details ?? {}) as Record<string, unknown>;
+  const part = (k: string) =>
+    typeof d[k] === "string" || typeof d[k] === "number" ? String(d[k]) : "";
+  return [
+    entry.event_type,
+    entry.actor,
+    part("ref"),
+    part("destination_kind"),
+    part("destination_uid"),
+    part("slot"),
+    part("argv0"),
+    part("cwd"),
+  ].join("\u0000");
+}
+
+/**
+ * Fold repeated secret uses into the newest of each run (spec web-ui "Gather
+ * the three records on one Activity page"): a use of the same secret by the
+ * same destination less than ten minutes after the next one shown joins it.
+ * Display only — every row stays in the drawer's list, and other rows keep
+ * their place. `rows` is newest first.
+ */
+export function foldUses(rows: readonly ActivityRecord[]): ActivityRecord[] {
+  const out: ActivityRecord[] = [];
+  // identity → the index in `out` of its open run, and that run's oldest time.
+  const open = new Map<string, { index: number; oldest: number }>();
+  for (const r of rows) {
+    if (r.source !== "change" || !isSecretUse(r.entry)) {
+      out.push(r);
+      continue;
+    }
+    const id = identityOf(r.entry);
+    const at = timeMs(r.at);
+    const run = open.get(id);
+    if (run && run.oldest - at < FOLD_WINDOW_MS) {
+      const head = out[run.index];
+      if (head.source === "change") {
+        out[run.index] = { ...head, folded: [...(head.folded ?? []), r.entry] };
+      }
+      run.oldest = at;
+      continue;
+    }
+    open.set(id, { index: out.length, oldest: at });
+    out.push(r);
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // What a row says about itself

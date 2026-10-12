@@ -1,8 +1,11 @@
-// src/lib/activity/recordText.test.ts — where a change's "Open X" leads: the resource's own detail page.
+// src/lib/activity/recordText.test.ts — where a change's "Open X" leads, and who a record names.
+import type { TFunction } from "i18next";
 import { describe, expect, test } from "vitest";
 
+import i18next from "@/i18n";
+
 import type { AuditEntry } from "./records";
-import { changeLink } from "./recordText";
+import { actorLabel, actorLong, changeLink } from "./recordText";
 
 function entry(resource_kind: string, resource_name: string): AuditEntry {
   return {
@@ -44,5 +47,35 @@ describe("changeLink", () => {
   test("a name-addressed kind opens by name", () => {
     expect(changeLink(entry("mcp_server", "github"))?.to).toBe("/mcp-servers/github");
     expect(changeLink(entry("skill", "pdf"))?.to).toBe("/skills/pdf");
+  });
+});
+
+describe("actorLabel / actorLong", () => {
+  const en = i18next.getFixedT("en") as TFunction;
+  const zh = i18next.getFixedT("zh") as TFunction;
+
+  test("Coffer itself reads as Coffer, whichever way it recorded itself", () => {
+    for (const actor of ["coffer", "system", "system:memory-sync-worker", "system:upgrade"]) {
+      expect(actorLabel(en, actor)).toBe("Coffer");
+      expect(actorLong(en, actor)).toBe("Coffer");
+      expect(actorLabel(zh, actor)).toBe("Coffer");
+    }
+  });
+
+  test("a person reads as You, with where they acted", () => {
+    expect(actorLabel(en, "ui")).toBe("You · web UI");
+    expect(actorLabel(en, "desktop")).toBe("You · Coffer app");
+    expect(actorLabel(en, "cli")).toBe("You · command line");
+    expect(actorLabel(en, "user")).toBe("You");
+    expect(actorLabel(en, "human")).toBe("Outside Coffer");
+    expect(actorLabel(en, "api")).toBe("API");
+    expect(actorLabel(en, "sync")).toBe("Sync");
+    expect(actorLabel(zh, "cli")).toBe("你 · 命令行");
+    expect(actorLong(en, "desktop")).toBe("You, in the Coffer app");
+  });
+
+  test("an actor Coffer has no word for reads as recorded", () => {
+    expect(actorLabel(en, "e2e-mcp")).toBe("e2e-mcp");
+    expect(actorLong(en, "e2e-mcp")).toBe("e2e-mcp");
   });
 });

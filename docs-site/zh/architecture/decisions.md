@@ -43,6 +43,7 @@ Coffer 保留三类设计文本，各司其职：
 | 每个保险库文件都带着自己的格式版本；布局升级由一台所有者机器提交 | [`every-vault-file-carries-its-format-version`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-file-carries-its-format-version.md) |
 | 每次保险库写入都是一次经过校验、比较并交换、写明写入者的提交 | [`every-vault-write-is-a-validated-commit-naming-its-writer`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-write-is-a-validated-commit-naming-its-writer.md) |
 | 每次改动都连同执行者一起审计，每次调用都记日志，按表清理 | [`audit-and-retention`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/audit-and-retention.md) |
+| 密钥的使用与改动分开读取 | [`secret-uses-are-read-apart-from-changes`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/secret-uses-are-read-apart-from-changes.md) |
 | 一个电平触发的调和器收敛 Coffer 在数据库之外写下的一切，比较的是参数 | [`one-level-triggered-reconciler-compares-parameters`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/one-level-triggered-reconciler-compares-parameters.md) |
 | 线上契约由 Pydantic 模型生成，前端客户端再由契约生成 | [`wire-contract-generated-from-the-pydantic-models`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/wire-contract-generated-from-the-pydantic-models.md) |
 | 后台工作受监督运行，每条记录都带同一个关联 id | [`background-work-runs-supervised-and-correlated`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/background-work-runs-supervised-and-correlated.md) |

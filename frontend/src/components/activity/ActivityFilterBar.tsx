@@ -69,7 +69,7 @@ export function ActivityFilterBar({ tab, filters, onChange, onClear, agents, log
   }));
   const actorOptions: FilterOption[] = WHO_ACTORS.map((actor) => ({
     value: `actor:${actor}`,
-    label: t(`activity.actor.${actor}`),
+    label: t(`activity.filters.who.${actor}`),
     group: "actors",
   }));
   const byOptions = tab === "mcp" ? agentOptions : [...agentOptions, ...actorOptions];
@@ -148,6 +148,8 @@ export function ActivityFilterBar({ tab, filters, onChange, onClear, agents, log
         onChange={(logger) => set({ logger })}
       />,
     ];
+  } else if (tab === "uses") {
+    pills = [time, by];
   } else {
     pills = [time, by, kind];
   }

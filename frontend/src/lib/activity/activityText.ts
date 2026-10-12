@@ -5,60 +5,81 @@
 // the old audit page split them once and the search box promptly stopped
 // matching what the row actually said.
 import type { TFunction } from "i18next";
-import i18n from "@/i18n";
-import { agentTypeLabel } from "@/lib/agents/display";
 import type { components } from "@/lib/api/types";
+
+import { agentLabel } from "./auditFacts";
+import { auditVariant } from "./auditSentence";
 
 type AuditEntry = components["schemas"]["AuditEntryOut"];
 type DaemonLogRecord = components["schemas"]["DaemonLogRecordOut"];
 
-/** A capability type (tool / resource / prompt) in the reader's language. */
-function capTypeLabel(t: TFunction, raw: string): string {
-  return raw ? t(`audit.capType.${raw}`, { defaultValue: raw }) : "";
-}
-
 /**
  * Render one audit entry as a plain-language activity sentence — the same
- * text the Changes row shows. Event types are translated per locale (guarded
- * by `i18n/backend-keys.test.ts`) so a zh reader never sees a raw
- * `resource_enabled` on a row.
+ * text the Changes row shows. The sentence names what the row acted on from
+ * its `details` (see `auditSentence.ts`): a variant the row's fields fill
+ * completely, else the event's plain sentence. Event types are translated per
+ * locale (guarded by `i18n/backend-keys.test.ts`) so a zh reader never sees a
+ * raw `resource_enabled` on a row.
  */
 export function describeActivity(t: TFunction, entry: AuditEntry): string {
   const details = (entry.details ?? {}) as Record<string, unknown>;
-  const capTypeRaw = typeof details.capability_type === "string" ? details.capability_type : "";
+  const resource = entry.resource_name ?? "";
   const text = (k: string) => (typeof details[k] === "string" ? (details[k] as string) : "");
-  return t(`audit.activity.${entry.event_type}`, {
+  const base = {
     defaultValue: entry.event_type,
-    resource: entry.resource_name ?? "",
-    key: text("key"),
+    resource,
+    command: text("command"),
     // The agent a skill was bound to or unbound from (`details.agent`, written
     // by the link reconciler); older rows carry none.
-    agent: text("agent") ? agentTypeLabel(text("agent")) : t("audit.agentFallback"),
-    command: text("command"),
-    capType: capTypeLabel(t, capTypeRaw),
+    agent: text("agent") ? agentLabel(text("agent")) : t("audit.agentFallback"),
+  };
+  const plain = t(`audit.activity.${entry.event_type}`, base);
+  const variant = auditVariant(entry.event_type, details, { t, resource });
+  if (!variant) return plain;
+  return t(`audit.activity.${entry.event_type}_${variant.v}`, {
+    ...base,
+    ...variant.p,
+    defaultValue: plain,
   });
 }
 
-/** Every audit event type the current locale words as a sentence. */
-function knownEventTypes(): string[] {
-  const bundle = i18n.getResourceBundle(i18n.resolvedLanguage ?? i18n.language, "translation") as
-    | { audit?: { activity?: Record<string, string> } }
-    | undefined;
-  return Object.keys(bundle?.audit?.activity ?? {});
+/** Where the event sentences and their variants live. */
+const ACTIVITY_KEYS = "audit.activity";
+
+/** The `audit.activity` strings in `t`'s language. */
+function activityBundle(t: TFunction): Record<string, unknown> {
+  const bundle: unknown = t(ACTIVITY_KEYS, { returnObjects: true });
+  return bundle !== null && typeof bundle === "object" ? (bundle as Record<string, unknown>) : {};
 }
+
+/**
+ * Every audit event type the current locale words as a sentence. A key that
+ * extends another key (`secret_set_replaced` of `secret_set`) is one of that
+ * event's variants, not an event: no event's name extends another's.
+ */
+function knownEventTypes(keys: readonly string[]): string[] {
+  return keys.filter((k) => !keys.some((other) => other !== k && k.startsWith(`${other}_`)));
+}
+
+/** A variant's wording with its blanks left out, for the search to match. */
+const withoutBlanks = (template: unknown) =>
+  typeof template === "string" ? template.replace(/\{\{[^}]*\}\}/g, "") : "";
 
 /**
  * The audit event types whose sentence, in the reader's language, contains
  * `text`. The sentence a row shows is composed here from the event type and
  * its details, so the database cannot search it; it searches the raw event
  * code, the resource, the actor and the details itself, and is told these
- * event types in addition (`q_type`).
+ * event types in addition (`q_type`). An event matches on its plain sentence
+ * or on the fixed words of any of its variants.
  */
 export function eventTypesMatching(t: TFunction, text: string): string[] {
   const needle = text.trim().toLowerCase();
   if (!needle) return [];
-  return knownEventTypes().filter((eventType) =>
-    describeActivity(t, {
+  const bundle = activityBundle(t);
+  const keys = Object.keys(bundle);
+  return knownEventTypes(keys).filter((eventType) => {
+    const plain = describeActivity(t, {
       id: 0,
       timestamp: "",
       event_type: eventType,
@@ -69,10 +90,12 @@ export function eventTypesMatching(t: TFunction, text: string): string[] {
       trace_id: null,
       conversation_id: null,
       turn_id: null,
-    })
-      .toLowerCase()
-      .includes(needle),
-  );
+    });
+    const variants = keys
+      .filter((k) => k.startsWith(`${eventType}_`))
+      .map((k) => withoutBlanks(bundle[k]));
+    return [plain, ...variants].some((s) => s.toLowerCase().includes(needle));
+  });
 }
 
 /**
