@@ -220,7 +220,7 @@ make verify-installed-cli OUT=<dir> COFFER=<path>/coffer
 
 前端测试在 jsdom 环境中使用 Vitest 和 Testing Library。每个测试都放在它所覆盖的模块旁边（`*.test.ts`、`*.test.tsx`），`make verify-unit` 用 `npx vitest run src` 把它们全部运行。`src/test/setup.ts` 加载真实的 i18n 文案目录，所以组件渲染的是真实文案。用真实的 `QueryClientProvider` 渲染，只 mock 网络边界：`src/lib/api/*` 模块，或者聊天用的 `streamClient`。约定见[前端](/zh/contributing/frontend#testing)。
 
-在本地运行前端测试套件时，请使用 **Node 20**，也就是 CI 使用的版本。
+在本地运行前端测试套件时，请使用 **Node 20**，也就是 CI 使用的版本。`.nvmrc` 固定了它，运行 vitest 的 Makefile 目标在其他主版本下会提前停止。
 
 ## `make verify` 运行了什么 {#what-make-verify-runs}
 

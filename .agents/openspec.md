@@ -70,6 +70,10 @@ A change that alters no requirement — a refactor, tooling, docs — gets a cha
 folder when it has a plan worth reviewing, with `skip_specs: true` in its
 `.openspec.yaml`. A one-line fix needs none.
 
+A `MODIFIED` delta cannot rename or drop a scenario. When a change must, edit
+the main spec under `openspec/specs/` directly, set `skip_specs: true` on the
+change, rename the acceptance marker to match, then archive.
+
 ## Writing `spec.md`
 
 ```markdown

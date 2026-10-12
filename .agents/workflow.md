@@ -19,7 +19,7 @@ Rules:
 - Kebab-case throughout.
 - The short name typically mirrors (or describes) the affected spec folder (`openspec/specs/mcp-gateway/` → `feature/mcp-gateway-...`).
 - Branch from up-to-date `main`: `git checkout main && git pull --ff-only && git checkout -b <prefix>/<name>`.
-- Squash merge is the convention (the repository also permits merge commits and rebase merges, and does not delete merged branches). Delete the branch as you merge — `gh pr merge --squash --delete-branch` — or right afterwards.
+- Squash merge is the convention (the repository also permits merge commits and rebase merges, and does not delete merged branches). Delete the branch as you merge — `gh pr merge --squash --delete-branch` — or right afterwards. From inside a git worktree (or any checkout whose `main` is checked out elsewhere) `--delete-branch` aborts at the local cleanup and leaves the remote branch behind: merge without it, then delete the remote branch by exact name (`git push origin --delete <branch>`) and the local one.
 
 ## Commits
 
@@ -112,16 +112,20 @@ When NOT to use:
    - **Spec references**.
    - **Screenshots** for UI changes.
    - **Breaking changes** explicit.
-4. CI green (every parallel job must pass before review).
+4. CI green (every parallel job must pass before review). Right after a push `gh pr checks` can still report the previous run: wait until `statusCheckRollup` has no entry that is not `COMPLETED`. Two PRs that are each green can combine into a red `main` (a rename against a new caller), so when several PRs fail on the same error, check `main` first.
 5. **Squash merge** — keeps `main` linear. It is the convention, not a repository setting: merge commits and rebase merges are also enabled.
-6. Delete the branch — `gh pr merge --squash --delete-branch` does both; otherwise delete it right after the merge. The repository does not delete merged branches on its own.
+6. Delete the branch — `gh pr merge --squash --delete-branch` does both; otherwise delete it right after the merge. The repository does not delete merged branches on its own. In a worktree use plain `gh pr merge --squash` and delete the remote and local branches by exact name (see Branches). Never glob-delete (`worktree-agent-*` and the like): other sessions own some of those branches.
 
 ### Hygiene Rules
 
-- **One commit per PR** — squash before final push (`git reset --soft main && git commit -m "<final-subject>"`).
+- **One commit per PR** — squash before final push (`git fetch origin main && git rebase origin/main`, then `git reset --soft origin/main && git commit -m "<final-subject>"`). Never reset against a local `main`: if it is stale, or `origin/main` moved mid-session (parallel sessions share one `.git`), the squash silently reverts the PRs merged in between. Before the force-push, `git diff --stat origin/main..HEAD` must list only your files.
 - **Subject + PR title obey `.commitlintrc.yaml`** (≤ 120 subject / ≤ 150 header) — and stay aligned with each other.
 - **`gh pr edit --title` BEFORE `git push --force-with-lease`** — keep title in sync with the squashed commit at every snapshot.
 - **PR title and body stay in sync with the squashed commit** — re-check before every force push.
+
+When the lower PR of a stack is squash-merged, move the upper branch onto `main` with `git rebase --onto origin/main <old-base-tip>`, not a plain rebase that replays the squashed commits.
+
+Several subagents in one checkout share a single stash stack, so they must not use `git stash`. macOS BSD `sed` has no `\b` and silently matches nothing (exit 0): do bulk renames with Python `re`.
 
 ### Self-checklist before every force-push
 
@@ -138,7 +142,9 @@ git checkout main && git pull --ff-only
 git checkout -b feature/<short-name>
 make verify
 git add <files> && git commit -m "feat(<scope>): <subject>"
-git reset --soft main && git commit -m "<final-subject>"   # squash
+git fetch origin main && git rebase origin/main
+git reset --soft origin/main && git commit -m "<final-subject>"   # squash
+git diff --stat origin/main..HEAD                        # only your files
 git push -u origin feature/<short-name>
 gh pr create --fill --base main
 ```

@@ -585,6 +585,12 @@ A menu item ends in `…` only when a dialog follows. Progress in zh is
   module).
 - A new component or hook ships with its test in the same commit. Acceptance-
   scenario coverage follows [`testing.md`](./testing.md) markers.
+- A Radix popover inside a Dialog that closes the instant it opens means
+  `node_modules` holds duplicate copies of `@radix-ui/react-focus-scope`
+  (`npm ls @radix-ui/react-focus-scope`); dedupe them.
+- `TooltipTrigger` opens on `:focus-visible`, and jsdom treats every focus as
+  keyboard focus, so an open tooltip swallows the first Escape. Press Escape in
+  tests with `pressEscape` from `src/test/escape.ts`.
 - Run `cd frontend && npx vitest run <file>` for a focused check; `make verify`
   runs the suite + lint + tsc.
 

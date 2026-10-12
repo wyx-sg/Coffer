@@ -76,13 +76,25 @@ Run both with `cd e2e && npm test` (`playwright test`), or one leg with
 `npx playwright test --project=web` / `--project=mcp`.
 
 Both legs run the checkout they are launched from, and say so rather than
-assume it: `coffer` is installed into the venv editable, so `-m coffer...`
-resolves to whichever tree the venv was built in — which in a git worktree is
-the main checkout, because `.venv` there is a symlink to it. `start_daemon.sh`
-and `spawnShim` both put `<repo>/backend` on `PYTHONPATH` for that reason, and
-the daemon launcher refuses to start if `coffer` still resolves somewhere else.
-A suite that tests the wrong tree passes, which is why this is a hard failure
-rather than a warning.
+assume it. Every checkout and worktree has its own `.venv`, built by `make
+install`; the make targets fail fast without one, and the Makefile pins
+`PYTHONPATH` to the current checkout's `backend`. `coffer` is installed into
+the venv editable, so an editable install made from another checkout imports
+that checkout's code, which is why a `.venv` must never be shared or
+symlinked. `start_daemon.sh` and `spawnShim` also put `<repo>/backend` on
+`PYTHONPATH`, and the daemon launcher refuses to start if `coffer` still
+resolves somewhere else. A suite that tests the wrong tree passes, which is
+why this is a hard failure rather than a warning.
+
+## Test-Writing Gotchas
+
+- **Frontend type-check.** `tsc -p .` against the frontend's solution `tsconfig` checks nothing. Use `npm run typecheck` (`tsc -b`) plus `npm run knip`.
+- **Radix tabs.** `TabsTrigger` activates on mousedown, so a test's `click()` does not switch tabs and an assertion on the new panel can pass vacuously. Use `fireEvent.mouseDown` or `userEvent`.
+- **Dates.** A vitest test that depends on today's date fails just after midnight. Pin it with `vi.useFakeTimers({ toFake: ["Date"] })`.
+- **FastAPI routes.** To assert a route exists, read `app.openapi()["paths"]`; routes added through `include_router` are not reliably visible by walking `app.routes`.
+- **Shell completion.** Completion tests need a PTY: under a non-TTY harness macOS `ps` hides the parent process and shell detection fails.
+- **Fake secrets.** gitleaks (the `secrets-scan` job) scans every commit in the PR, not the final tree, so a realistic-looking fake secret in any commit fails it. Build fake secrets at runtime or use an obviously fake repeated pattern (`"c3" * 16`); never add a `.gitleaksignore` entry.
+- **Docs build.** VitePress (`docs-build`) treats `{{ ... }}` as a template even inside inline code and fails; and a spec citation must stay on one line.
 
 ## Layout Rationale
 

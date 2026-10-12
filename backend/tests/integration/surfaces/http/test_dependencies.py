@@ -7,132 +7,126 @@ later dereference with an opaque AttributeError. These tests pin that
 contract: every get_X() raises a clear RuntimeError when its module global
 was never set, and returns the set value afterwards.
 
-The hub (``dependencies``) is kind-agnostic; every kind publishes its own
-pairs from its own module. All of them are enumerated here, and a guard test
-fails the moment a module grows a ``set_*`` this table does not list.
+Providers are discovered, not listed: every module under ``coffer.surfaces.http``
+is scanned for ``set_X`` functions it defines itself. A new ``set_X``/``get_X``
+pair in any kind's module is therefore covered with no edit here. A getter that
+answers ``None`` while unset is an *optional* provider (a surface works without
+it); one that raises is required. The discovery guards below fail if a setter
+has no matching getter or global, or if the scan finds nothing.
 
 get_actor() validation lives in test_actor_header.py and is not duplicated here.
 """
 
 from __future__ import annotations
 
+import importlib
 import inspect
+import pkgutil
 from collections.abc import Callable
 from types import ModuleType
 from typing import Any
 
 import pytest
+from fastapi import HTTPException
 
-from coffer.surfaces.http import agent_dependencies as agent_deps
-from coffer.surfaces.http import dependencies as deps
-from coffer.surfaces.http import provider_dependencies as provider_deps
-from coffer.surfaces.http import secret_composition as cred_comp
-from coffer.surfaces.http import skill_dependencies as skill_deps
-from coffer.surfaces.http import workspace_dependencies as workspace_deps
-from coffer.surfaces.http.chat import dependencies as chat_deps
-from coffer.surfaces.http.knowledge import dependencies as knowledge_deps
-from coffer.surfaces.http.mcp import dependencies as mcp_deps
+import coffer.surfaces.http as http_pkg
 
 _Provider = tuple[ModuleType, str, Callable[[], Any], Callable[[Any], None]]
 
 
-def _pairs(mod: ModuleType, *attrs: str) -> list[_Provider]:
-    """One ``(module, "_attr", get_attr, set_attr)`` tuple per global name."""
-    return [(mod, attr, getattr(mod, f"get{attr}"), getattr(mod, f"set{attr}")) for attr in attrs]
+def _http_modules() -> list[ModuleType]:
+    return [
+        importlib.import_module(info.name)
+        for info in pkgutil.walk_packages(http_pkg.__path__, f"{http_pkg.__name__}.")
+    ]
 
 
-# Each tuple: (owning module, module global attr, getter, setter).
-# The setter takes any value; the getter must raise when the global is None
-# and return the set value afterwards.
-_PROVIDERS: list[_Provider] = [
-    # kind-agnostic hub
-    *_pairs(
-        deps,
-        "_resource_service",
-        "_audit_service",
-        "_retention_service",
-        "_internal_engine_config_service",
-        "_platform",
-    ),
-    # mcp kind
-    *_pairs(
-        mcp_deps,
-        "_mcp_session_factory",
-        "_capability_discovery",
-        "_preferences_repo",
-        "_invocation_repo",
-        "_health_repo",
-    ),
-    # agent kind (+ its workspace facets)
-    *_pairs(
-        agent_deps,
-        "_agent_service",
-        "_auto_detect_service",
-        "_agent_config_file_service",
-        "_agent_connection_service",
-        "_agent_model_catalogue",
-    ),
-    *_pairs(
-        workspace_deps,
-        "_agent_mcp_entry_service",
-        "_agent_plugin_service",
-        "_agent_native_memory_service",
-        "_native_session_service",
-        "_agent_sessions_listing",
-        "_agent_hooks_service",
-    ),
-    # skill kind
-    *_pairs(skill_deps, "_skill_service", "_skill_source_service"),
-    # knowledge kind — two services, not three: there is no search service to
-    # provide any more (spec knowledge "Expose no knowledge tool").
-    *_pairs(
-        knowledge_deps, "_knowledge_service", "_ingest_service", "_change_service", "_tidy_service"
-    ),
-    # turn platform (chat)
-    *_pairs(
-        chat_deps,
-        "_chat_service",
-        "_turn_orchestrator",
-        "_agent_registry",
-        "_model_catalog",
-    ),
-    # provider kind
-    *_pairs(
-        provider_deps,
-        "_provider_service",
-        "_introspection_service",
-        "_price_resolver",
-        "_window_resolver",
-    ),
-    # secret store + master key
-    *_pairs(cred_comp, "_secret_store", "_master_key_manager"),
-]
+def _global_of(mod: ModuleType, setter: Callable[..., Any]) -> str | None:
+    """The one module global a setter writes, read from its bytecode names."""
+    names = [
+        n
+        for n in setter.__code__.co_names
+        if n in vars(mod)
+        and not callable(vars(mod)[n])
+        and not isinstance(vars(mod)[n], ModuleType)
+    ]
+    return names[0] if len(names) == 1 else None
 
-# Providers a surface works without: the getter answers ``None`` while unset
-# instead of raising. The conversation list shows where a conversation lives in its
-# channel only when the channel kind has published its places, and a channel
-# turn's note says more than the channel's name only once it has published its
-# note reader (spec channels "Tell a channel-driven agent it is on a chat channel").
-_OPTIONAL_PROVIDERS: list[_Provider] = [
-    *_pairs(chat_deps, "_channel_places", "_channel_note_reader"),
-    # None in a graph built without the secret store.
-    *_pairs(skill_deps, "_skill_secret_presence", "_skill_tool_states"),
-    # A status read lists no requirements until the MCP composition publishes them.
-    *_pairs(mcp_deps, "_server_requirements"),
-]
 
-_MODULES: list[ModuleType] = sorted(
-    {mod for mod, _a, _g, _s in _PROVIDERS}, key=lambda m: m.__name__
-)
+def _discover() -> tuple[list[_Provider], list[_Provider], list[_Provider], list[str]]:
+    """``(required, optional, unwired_503, problems)`` for every ``set_X`` a module defines.
+
+    Required getters raise ``RuntimeError``; optional ones answer ``None``;
+    route-local ones answer HTTP 503 "not wired". A getter that builds a
+    default when unset (``get_release_check``) is not a "must be wired"
+    contract and is left out.
+
+    ``set_X`` is paired with the ``get_X`` beside it and with the module global
+    it writes. A setter with no such getter is some other kind of state (a
+    port, a start time) and is not a provider. A pair whose unset getter
+    neither raises ``RuntimeError`` nor answers ``None`` is a problem.
+    """
+    required: list[_Provider] = []
+    optional: list[_Provider] = []
+    unwired: list[_Provider] = []
+    problems: list[str] = []
+    for mod in _http_modules():
+        for name, obj in sorted(vars(mod).items()):
+            if not (name.startswith("set_") and inspect.isfunction(obj)):
+                continue
+            if obj.__module__ != mod.__name__:
+                continue
+            getter = getattr(mod, "get_" + name.removeprefix("set_"), None)
+            attr = _global_of(mod, obj)
+            if getter is None or attr is None:
+                continue
+            if any(
+                p.default is p.empty and p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+                for p in inspect.signature(getter).parameters.values()
+            ):
+                continue
+            saved = getattr(mod, attr)
+            setattr(mod, attr, None)
+            try:
+                try:
+                    unset = getter()
+                except RuntimeError:
+                    required.append((mod, attr, getter, obj))
+                except HTTPException as exc:
+                    if exc.status_code == 503:
+                        unwired.append((mod, attr, getter, obj))
+                    else:
+                        problems.append(f"{mod.__name__}.{name}: unset getter raised {exc!r}")
+                except Exception as exc:
+                    problems.append(f"{mod.__name__}.{name}: unset getter raised {exc!r}")
+                else:
+                    if unset is None:
+                        optional.append((mod, attr, getter, obj))
+            finally:
+                setattr(mod, attr, saved)
+    return required, optional, unwired, problems
+
+
+_PROVIDERS, _OPTIONAL_PROVIDERS, _UNWIRED_PROVIDERS, _PROBLEMS = _discover()
 
 
 def _id(mod: ModuleType, attr: str) -> str:
     """``mcp.dependencies._health_repo`` — the module short-name disambiguates
-    the four kinds whose module is itself called ``dependencies``."""
+    the kinds whose module is itself called ``dependencies``."""
     return f"{mod.__name__.removeprefix('coffer.surfaces.http.')}{attr}"
 
 
 _IDS = [_id(mod, attr) for mod, attr, _g, _s in _PROVIDERS]
+
+
+def test_discovery_found_the_providers():
+    assert len(_PROVIDERS) > 20, "the scan of coffer.surfaces.http found almost nothing"
+    assert _OPTIONAL_PROVIDERS
+
+
+def test_discovery_has_no_problems():
+    """An unset getter must raise RuntimeError, answer None, or answer 503."""
+    assert _PROBLEMS == []
 
 
 @pytest.fixture
@@ -142,7 +136,7 @@ def _reset_globals(monkeypatch):
     monkeypatch.setattr restores the original module-level value automatically,
     so a test that sets a provider can't leak into the next test.
     """
-    for mod, attr, _getter, _setter in [*_PROVIDERS, *_OPTIONAL_PROVIDERS]:
+    for mod, attr, _getter, _setter in [*_PROVIDERS, *_OPTIONAL_PROVIDERS, *_UNWIRED_PROVIDERS]:
         monkeypatch.setattr(mod, attr, None)
     yield
 
@@ -177,17 +171,16 @@ def test_optional_getter_is_none_when_unset(mod, attr, getter, setter, _reset_gl
     assert getattr(mod, attr) is sentinel
 
 
-@pytest.mark.parametrize("mod", _MODULES, ids=[m.__name__ for m in _MODULES])
-def test_every_setter_in_the_module_is_enumerated(mod):
-    """A ``set_*`` added to any DI module must be added to ``_PROVIDERS`` too,
-    or the two contracts above silently stop covering it."""
-    declared = {
-        name.removeprefix("set")
-        for name, obj in inspect.getmembers(mod, inspect.isfunction)
-        if name.startswith("set_") and obj.__module__ == mod.__name__
-    }
-    enumerated = {attr for m, attr, _g, _s in [*_PROVIDERS, *_OPTIONAL_PROVIDERS] if m is mod}
-    assert declared == enumerated, (
-        f"{mod.__name__}: setters {sorted(declared - enumerated)} are not enumerated; "
-        f"enumerated {sorted(enumerated - declared)} have no setter"
-    )
+@pytest.mark.parametrize(
+    ("mod", "attr", "getter", "setter"),
+    _UNWIRED_PROVIDERS,
+    ids=[_id(mod, attr) for mod, attr, _g, _s in _UNWIRED_PROVIDERS],
+)
+def test_route_local_getter_answers_503_when_unset(mod, attr, getter, setter, _reset_globals):
+    with pytest.raises(HTTPException) as exc_info:
+        getter()
+    assert exc_info.value.status_code == 503
+    sentinel = object()
+    setter(sentinel)
+    assert getter() is sentinel
+    assert getattr(mod, attr) is sentinel
