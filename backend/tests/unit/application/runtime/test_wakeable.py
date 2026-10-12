@@ -152,3 +152,26 @@ def test_a_stopped_worker_does_not_drop_a_newer_one_of_the_same_name() -> None:
     assert record.runs == 0
     reg.drop("w", new)
     assert reg.snapshot() == []
+
+
+async def test_a_cancel_that_the_run_turned_into_an_error_still_stops_the_loop() -> None:
+    """A run whose cleanup raises something else after the cancel (SQLAlchemy's
+    'no active connection') must not be logged as a failed run and slept on:
+    that loop never ended, and the daemon's shutdown waited on it for ever."""
+    started = asyncio.Event()
+
+    async def run(_poked: bool) -> None:
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            raise RuntimeError("no active connection") from None
+
+    loop = WakeableLoop("w", run, fallback=None, registry=WorkerRegistry())
+    task = asyncio.create_task(loop.serve())
+    loop.poke()
+    await asyncio.wait_for(started.wait(), 1.0)
+    task.cancel()
+    done, _ = await asyncio.wait({task}, timeout=1.0)
+    assert task in done
+    assert task.cancelled()

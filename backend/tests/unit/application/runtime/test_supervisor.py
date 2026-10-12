@@ -161,3 +161,28 @@ async def test_running_tasks_are_counted_by_the_name_before_the_colon() -> None:
     gate.set()
     await asyncio.wait(started)
     assert sup.running_by_name() == {}
+
+
+async def test_a_cancel_turned_into_an_error_stops_a_restarting_task(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Cleanup that raises something else after the cancel is a stop, not a
+    crash to restart from."""
+    sup = TaskSupervisor()
+    started = asyncio.Event()
+
+    async def loop() -> None:
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            raise RuntimeError("no active connection") from None
+
+    with caplog.at_level(logging.ERROR):
+        task = sup.spawn_restarting(loop, name="loop", restart=Restart(initial=0.01))
+        await asyncio.wait_for(started.wait(), 1.0)
+        task.cancel()
+        done, _ = await asyncio.wait({task}, timeout=1.0)
+    assert task in done and task.cancelled()
+    assert sup.stats().crashes == 0
+    assert _crash_records(caplog) == []
