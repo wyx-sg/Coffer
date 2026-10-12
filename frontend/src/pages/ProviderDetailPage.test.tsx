@@ -526,7 +526,7 @@ describe("ProviderDetailPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Replace key…" }));
     const dialog = within(await screen.findByRole("dialog"));
-    fireEvent.change(dialog.getByLabelText("New key"), { target: { value: "sk-new" } });
+    fireEvent.change(dialog.getByLabelText("New value"), { target: { value: "sk-new" } });
     // No Test button: the key is checked as it is pasted.
     expect(dialog.queryByRole("button", { name: "Test" })).toBeNull();
     await waitFor(() =>
@@ -550,7 +550,7 @@ describe("ProviderDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Replace key…" }));
     const dialog = within(await screen.findByRole("dialog"));
     fireEvent.click(dialog.getByRole("button", { name: "Use another secret" }));
-    expect(dialog.queryByLabelText("New key")).toBeNull();
+    expect(dialog.queryByLabelText("New value")).toBeNull();
     fireEvent.click(dialog.getByRole("combobox"));
     expect(screen.queryByRole("option", { name: /Acme key/ })).toBeNull();
     fireEvent.click(await screen.findByRole("option", { name: /Team key/ }));

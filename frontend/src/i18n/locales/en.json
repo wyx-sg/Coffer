@@ -3860,8 +3860,6 @@
         "body": "Paste the new secret from the SeaTalk Open Platform. Pairing and settings are kept; the bot restarts on the new secret.",
         "label": "App secret"
       },
-      "hint": "Stored in Coffer's secret store; the old value is overwritten.",
-      "submit": "Replace and restart",
       "works": "Works — this is @{{handle}}",
       "worksPlain": "Works",
       "worksSeatalk": "Works — the App ID and secret are valid.",
@@ -5620,7 +5618,6 @@
       "skippedWaiting_other": "{{names}} are waiting for approval and will be skipped."
     },
     "cols": {
-      "usedBy": "Used by",
       "lastUsed": "Last used",
       "created": "Created"
     },
@@ -5688,12 +5685,6 @@
       "saved": "Saved {{name}}"
     },
     "replace": {
-      "title": "Replace the value of {{name}}",
-      "storeTitle": "Add a value for {{name}}",
-      "value": "New value",
-      "hint": "The old value is destroyed. Everything that uses it gets the new one.",
-      "submit": "Replace value",
-      "storeSubmit": "Add value",
       "submitting": "Saving…",
       "replaced": "Replaced the value of {{name}}",
       "stored": "Added a value for {{name}}"
@@ -6244,13 +6235,8 @@
     "edit": {
       "title": "Edit {{name}}",
       "locked": "{{agents}} runs on it, so the OpenAI address can't be added or removed until it moves to another provider.",
-      "keyHint": "Keys are write-only. Use Replace key to change the value."
-    },
-    "replace": {
-      "title": "Replace API key",
-      "secret": "Secret",
-      "newKey": "New key",
-      "hint": "Write-only. Coffer overwrites the secret's value in its keychain-encrypted store and never shows it again."
+      "keyHint": "Keys are write-only. Replace enters a new value or picks another secret.",
+      "replaceHint": "Write-only. Saved with the rest of this form; left empty, the key stays as it is."
     },
     "delete": {
       "title": "Delete {{name}}?",
@@ -6528,6 +6514,17 @@
     "existingHint": "Only this one uses the chosen secret; the current secret and its value stay as they are.",
     "title": "Replace {{field}}",
     "current": "Current secret",
-    "useSubmit": "Use this secret"
+    "useSubmit": "Use this secret",
+    "addTitle": "Add {{field}}",
+    "valueLabel": "New value",
+    "valueHint": "Write-only. Coffer overwrites this secret's value and never shows it again.",
+    "shared": "Also used by {{users}}: a new value reaches them too.",
+    "pickLabel": "Secret to use",
+    "submit": "Replace key",
+    "addSubmit": "Add key",
+    "replaced": "Replaced {{name}}",
+    "added": "Added a value for {{name}}",
+    "replace": "Replace",
+    "keep": "Keep current key"
   }
 }

@@ -147,7 +147,7 @@ function EditSecretForm({ row, notes, set, onDone }: FormProps) {
       </div>
       <div className="flex flex-col gap-1.5">
         <label htmlFor={valueId} className={FIELD}>
-          {t(storing ? "secrets.add.value" : "secrets.replace.value")}
+          {t(storing ? "secrets.add.value" : "secretRef.valueLabel")}
         </label>
         <PasswordInput
           id={valueId}
@@ -157,7 +157,7 @@ function EditSecretForm({ row, notes, set, onDone }: FormProps) {
           onChange={(e) => setValue(e.target.value)}
         />
         <p className="text-xs text-text-muted">
-          {storing ? t("secrets.edit.storeHint") : t("secrets.replace.hint")}
+          {storing ? t("secrets.edit.storeHint") : t("secretRef.valueHint")}
           {citers.length === 0
             ? null
             : ` ${t("secrets.edit.usedBy", {

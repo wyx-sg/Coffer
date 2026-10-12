@@ -11,7 +11,6 @@ import { useSecretChoices } from "@/components/secret/useSecretChoices";
 import { secretRef } from "@/components/secret/secretValue";
 import { Button } from "@/components/ui/button";
 import type { CustomToolGroup } from "@/lib/api/customTools";
-import type { SecretRef } from "@/lib/api/secret";
 import { toolsOn } from "@/lib/customTools/groups";
 import { secretInState } from "./headerRows";
 import { openApprovalsSheet } from "@/lib/hooks/useApprovals";
@@ -26,7 +25,7 @@ interface Props {
 export function GroupSecretAlert({ group, onChooseAnother }: Props) {
   const { t } = useTranslation();
   const refresh = useRefreshCustomTools(group.name);
-  const { rowOf, displayOf } = useSecretChoices();
+  const { displayOf } = useSecretChoices();
   const [adding, setAdding] = useState(false);
   const askAgain = useAskAgainForGroup(group);
   if (group.secret_state === "rejected") {
@@ -94,34 +93,14 @@ export function GroupSecretAlert({ group, onChooseAnother }: Props) {
         {t("customTools.alert.missingBody", { count: toolsOn(group.tools) })}
       </GroupBanner>
       <ReplaceSecretDialog
-        row={adding ? (rowOf(secret) ?? uncitedRow(secret)) : null}
-        onOpenChange={(open) => {
-          setAdding(open);
-          if (!open) refresh();
+        // A cited secret the list has no row for yet: its value is stored under exactly the
+        // name the group cites, never one a person types.
+        secretRef={adding ? secretRef(secret) : null}
+        onClose={() => {
+          setAdding(false);
+          refresh();
         }}
       />
     </>
   );
-}
-
-/** The group cites this secret by name but the list has no row for it yet: a value is stored under
- *  exactly the name the group cites, never one a person types. */
-function uncitedRow(secret: string): SecretRef {
-  return {
-    ref: secretRef(secret),
-    present: false,
-    locked: false,
-    bindings: [],
-    cited_by: [],
-    mentioned_by_skills: [],
-    created_at: null,
-    last_used_at: null,
-    readable_by_local_processes: false,
-    local_access: null,
-    unreferenced: false,
-    uri: null,
-    label: null,
-    description: null,
-    created_for: null,
-  };
 }

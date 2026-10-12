@@ -291,6 +291,10 @@ return useMutation({
     offers to be stored. There is no Secret|Plain toggle, Replace button or
     Stored badge. A custom-tool group's auth is such a header row whose secret
     holds the whole header value (`Bearer <token>`), so nothing prefixes it.
+    Replacing a secret a resource already uses goes through the one
+    `ReplaceSecretDialog` (new value or another secret), and an Edit dialog
+    shows the same `ReplaceSecretFields` inline under its key row's Replace;
+    no resource writes its own replace dialog (ADR one-replace-dialog-for-every-secret).
   - **A drawer** (`ui/sheet.tsx`) is 640 wide and starts below the title bar
     (`--titlebar-inset`), scrim included.
   - **A toast can carry a second line**: `toast.success(title, { description })`
