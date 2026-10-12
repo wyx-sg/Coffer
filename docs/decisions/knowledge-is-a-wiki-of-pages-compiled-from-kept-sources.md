@@ -3,7 +3,11 @@
 **Status**: Accepted
 **Date**: 2026-10-12
 **Deciders**: Yuxing Wu
+<<<<<<< HEAD
 **Related**: [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md) (amended by this decision); [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md); [Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](knowledge-stays-current-through-flags-coffer-computes.md); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Knowledge Sources Keep Their Images; Originals Stay on This Mac](knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md); [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md); research notes [knowledge curation](../research/knowledge-curation.md) and [knowledge structures](../research/knowledge-structures.md); spec knowledge; OpenSpec change `restructure-knowledge-as-a-wiki`
+=======
+**Related**: [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md) (amended by this decision); [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md); [Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](knowledge-stays-current-through-flags-coffer-computes.md); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md); research notes [knowledge curation](../research/knowledge-curation.md) and [knowledge structures](../research/knowledge-structures.md); spec knowledge; OpenSpec change `restructure-knowledge-as-a-wiki`
+>>>>>>> origin/claude/project-thread-6qp5yc
 
 ## Context
 
@@ -148,6 +152,7 @@ generated, the git history stays the log, and judgement stays the agent's.**
 Rules a future change must respect:
 
 - **Sources are kept and immutable.** An upload is kept as its converted
+<<<<<<< HEAD
   Markdown, with its pictures beside it under `assets/`; the uploaded file is
   never stored in the collection, only on the Mac that uploaded it, which the
   source names in `original` ([Knowledge Sources Keep Their Images; Originals Stay on This Mac](knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md)). No agent instruction may tell an agent to edit a
@@ -155,6 +160,12 @@ Rules a future change must respect:
   `ingest: skipped` when it holds nothing worth a page, `superseded_by` when a
   newer source replaces it, and a `summary` of what it says; `original` and
   `original_sha256` are Coffer's and stay as written
+=======
+  Markdown only; the uploaded file is not stored. No agent instruction may tell an agent to edit a
+  source, except to add the few keys that describe it rather than change it:
+  `ingest: skipped` when it holds nothing worth a page, `superseded_by` when a
+  newer source replaces it, and a `summary` of what it says
+>>>>>>> origin/claude/project-thread-6qp5yc
   ([Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](knowledge-stays-current-through-flags-coffer-computes.md)).
 - **A page's identity is its slug.** File names are slugs; a page's `aliases`
   are extra names a link may use; a link names a slug or an alias, never a path.

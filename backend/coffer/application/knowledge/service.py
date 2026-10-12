@@ -1,11 +1,25 @@
 """The knowledge layer's one service.
 
+<<<<<<< HEAD
 Every operation resolves to a filesystem operation over ``~/.coffer/vault/knowledge/``
 (spec knowledge "Store each collection as one tree of Markdown files"). New knowledge
 arrives as **material**, which becomes a source under ``sources/`` on the spot ("Promote
 submitted material at once"); a file dropped into a hidden ``.inbox/`` is promoted by the
 next sweep. Every collection is served to every caller ("Serve every collection to every
 agent"); a **linked folder** is only read (``infrastructure/knowledge/linked.py``).
+=======
+Every operation resolves to a filesystem operation over ``~/.coffer/vault/knowledge/``. A
+collection is one tree of documents that a person and the agents write together (spec
+knowledge "Store each collection as one tree of Markdown files"). What this layer adds on
+top of the directory is the one rule about *how new knowledge arrives*: an upload
+submits **material**, which becomes a document at the collection root on the spot
+(see "Promote submitted material at once"). A file an agent drops into a collection's
+hidden ``.inbox/`` is promoted the same way by the next sweep.
+
+It adds no gate on the corpus: every registered collection is served to every caller
+(see "Serve every collection to every agent"). A **linked folder** is served the same
+way but only read (``infrastructure/knowledge/linked.py``).
+>>>>>>> origin/claude/project-thread-6qp5yc
 """
 
 from __future__ import annotations
@@ -44,7 +58,10 @@ from coffer.domain.knowledge.history import (
 from coffer.domain.resource import Resource
 from coffer.domain.vault.writers import CommitMeta
 from coffer.infrastructure.knowledge import (
+<<<<<<< HEAD
     assets,
+=======
+>>>>>>> origin/claude/project-thread-6qp5yc
     catalogue,
     collection_files,
     fs,

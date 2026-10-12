@@ -67,8 +67,11 @@ export function file(path: string, over: Partial<FileOut> = {}): FileOut {
     stale: false,
     superseded_by: null,
     summary: "",
+<<<<<<< HEAD
     original: "",
     original_path: null,
+=======
+>>>>>>> origin/claude/project-thread-6qp5yc
     actor: "user",
     created_at: "2026-09-12T00:00:00Z",
     updated_at: "2026-09-20T00:00:00Z",

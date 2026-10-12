@@ -210,8 +210,11 @@ Page 2:
 | `ingest` | `skipped` | Set by an agent on a source with nothing worth keeping, so it stops waiting. |
 | `superseded_by` | `str` | A source's replacement, by slug, set by an agent or a person (see "Mark a source superseded by the one that replaces it"). The source stops waiting; a page citing it and no later source in the chain → `superseded_source`; a slug no source has → `missing_source` on the source. |
 | `summary` | `str` | A source's one or two sentences on what it says, written by an agent as it integrates or tidies; shown in the catalogue and in Contents. |
+<<<<<<< HEAD
 | `original` | `str` | The name of the file an upload was converted from, written by Coffer (see "Keep an upload's original on this Mac only"). Absent on a Markdown or text upload, which is its own source. |
 | `original_sha256` | hex `str` | The SHA-256 of that file, written by Coffer; it names the copy kept in `~/.coffer/local/knowledge-originals/` on the Mac that uploaded it. |
+=======
+>>>>>>> origin/claude/project-thread-6qp5yc
 
 A page's **slug** is its file stem; so is a source's. A `[[slug]]` or
 `[[slug|text]]` outside code in a page's body resolves case-insensitively, after
@@ -303,7 +306,11 @@ of them is persisted and none of them can be stale.
 | `CatalogueLevel` | `path`, `directories`, `files` | **One level of one collection**, never the whole tree. |
 | `Finding` | `kind`, `path`, `target`, `others` | One mechanical finding (see "Check a collection mechanically on every read"): `dead_link`, `ambiguous_link`, `duplicate_slug`, `missing_source`, `superseded_source` (`others` = the newest replacement), `incomplete_page`, `unsourced_page`, `stale_page` (`target` = `verified` as written, none when missing), `orphan_page` or `waiting_source`. |
 | `SourceRef`, `LinkRef`, `PageRef` | `slug`/`target`, `path`, `title`/`ambiguous` | A page's `sources` entry or `[[link]]` with what it resolves to; a page that cites a source. |
+<<<<<<< HEAD
 | `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `kind`, `page_type`, `aliases`, `verified`, `stale`, `sources`, `links`, `cited_by`, `waiting`, `superseded_by`, `summary`, `original`, `original_path` | A file in full; a source's `superseded_by` is a `SourceRef`, `None` when it is current. `original` is the source's `original` (empty when none) and `original_path` the absolute path of that file on this Mac, `None` when it is not here. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); Coffer serves a document's bytes only to be shown: no route saves them (see "Treat a direct file edit as a complete change"). |
+=======
+| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `kind`, `page_type`, `aliases`, `verified`, `stale`, `sources`, `links`, `cited_by`, `waiting`, `superseded_by`, `summary` | A file in full; a source's `superseded_by` is a `SourceRef`, `None` when it is current. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); Coffer serves a document's bytes only to be shown: no route saves them (see "Treat a direct file edit as a complete change"). |
+>>>>>>> origin/claude/project-thread-6qp5yc
 
 Constants: `ACTOR_AGENT = "agent"`, `ACTOR_USER = "user"`.
 

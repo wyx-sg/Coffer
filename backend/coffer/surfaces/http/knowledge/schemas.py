@@ -257,10 +257,13 @@ class FileOut(BaseModel):
     superseded_by: SourceRefOut | None = None
     #: A source's ``summary``.
     summary: str = ""
+<<<<<<< HEAD
     #: An uploaded source's original file name; where it is on this Mac, or
     #: ``None`` when it was uploaded on another one.
     original: str = ""
     original_path: str | None = None
+=======
+>>>>>>> origin/claude/project-thread-6qp5yc
 
 
 class IngestedDocumentOut(BaseModel):

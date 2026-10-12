@@ -107,8 +107,12 @@ guess, an opinion, or something true only of this conversation.
 6. **Never edit a source.** A source is the record of what arrived. The only
    keys you may add to one are `ingest: skipped`, `superseded_by: <slug>` when
    a newer source replaces it, and `summary`, one or two sentences on what it
+<<<<<<< HEAD
    says (see "Integrating sources"). Coffer writes `original` and
    `original_sha256` on an upload; leave them as they are.
+=======
+   says (see "Integrating sources").
+>>>>>>> origin/claude/project-thread-6qp5yc
 7. **Give every page frontmatter**: a `title`; a `type` — `concept`, `entity`,
    `how-to`, `decision` or `overview` unless the README defines its own; a
    one-line `description` saying what *question* the page answers (it is the

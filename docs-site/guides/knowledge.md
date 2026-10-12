@@ -40,8 +40,12 @@ A **collection** is a top-level folder under the knowledge root:
 ```
 
 - **`README.md`** at the collection root is the collection's **schema**. Its first paragraph, before its first `##` section, is the collection's description everywhere Coffer shows one, and it is what the `coffer-guide` skill tells agents the collection is about. Its **Page types** and **Rules** sections, and anything else it says about the conventions the collection uses, take precedence over the guide's defaults. `verify_after_days` in its frontmatter sets how long a page's check holds (see [Pages due a recheck](#pages-due-a-recheck)). It is never listed as a page or a source, or counted.
+<<<<<<< HEAD
 - **`sources/`** keeps the material that arrived: every upload and every file dropped into the inbox, converted to Markdown. The file you uploaded is not put in the collection: Coffer keeps it on the Mac you uploaded it from (see [Pictures and the original file](#pictures-and-the-original-file)). Agents read sources and never edit them.
 - **`assets/`** holds the pictures Coffer took out of uploaded documents, one folder per upload. A source links its pictures, so you see them when you read it and agents can open them. They sync with the collection and have history, like the Markdown.
+=======
+- **`sources/`** keeps the material that arrived: every upload and every file dropped into the inbox, converted to Markdown. Only the Markdown is kept, not the file you uploaded, so the collection stays one tree of Markdown every agent can read. Agents read sources and never edit them.
+>>>>>>> origin/claude/project-thread-6qp5yc
 - **`pages/`** holds the wiki itself: the pages you and your agents write and keep up to date. This is what agents read first.
 - **Folders** inside `pages/` and `sources/` are optional and carry no meaning. You or your agent can create, move and remove them. `pages/`, `sources/` and `assets/` are the only folders that mean anything.
 - **Any other file** in a collection is listed in the tree but neither catalogued nor checked. A Markdown file left outside `pages/`, `sources/` and `assets/` is moved into `pages/` by the sweep (see [What runs on its own](#what-runs-on-its-own)).
@@ -84,7 +88,11 @@ The `account-session` service owns ... see [[rate-limits|the gateway's limits]].
 
 Coffer writes no page itself: whoever writes a page gives it these keys, as the `coffer-guide` skill teaches agents. A page that lacks `title`, `type` or `description`, names no `sources` or has no `verified`, still works; it shows up as a finding when the collection is [checked](#check-a-collection).
 
+<<<<<<< HEAD
 A source carries the keys Coffer writes when it keeps one — `title`, `description`, `actor`, `created_at`, `updated_at`, and, for a source converted from an uploaded file, `original` (the file's name) and `original_sha256` (its fingerprint). Leave those two as they are. An agent, or you, may add three more, which describe the source without changing what it says:
+=======
+A source carries the keys Coffer writes when it keeps one — `title`, `description`, `actor`, `created_at`, `updated_at`. An agent, or you, may add three more, which describe the source without changing what it says:
+>>>>>>> origin/claude/project-thread-6qp5yc
 
 | Key | Meaning |
 | --- | --- |
@@ -397,9 +405,13 @@ The collection's **⋯** menu holds **Reveal in Finder**, **Open in Obsidian** w
 **A page or a source.** Choosing a file shows it read-only. Its pane bar names where the file is, then carries **History** (see [History and restore](#history-and-restore)), a **Preview / Source** switch for Markdown, **Open in editor** as a button (see [Edit a file yourself](#edit-a-file-yourself)), and a **⋯** menu with **Reveal in Finder**, **Open in Obsidian** when it is installed, and **Delete**. Under the title one line describes the file, read from its frontmatter:
 
 - For a **page**: its type, who wrote it and when it was created, **verified** and the date when the page carries `verified`, **Needs rechecking** when it is [due a recheck](#pages-due-a-recheck) (with *never checked* when it has no date), and its sources, each opening that source; a source the page names that does not exist is struck through. In the text, every `[[link]]` is a link to the page or source it names; a dead one is marked in red, with a tooltip saying nothing has that name. Inline code is set lighter than a code block, and a long path wraps at its `/`.
+<<<<<<< HEAD
 - For a **source**: **Superseded by** and a link to the source that replaces it, when one does; **Cited by N pages**, each opening that page, or **Waiting** when no page cites it yet; and, for an upload, **Original** with the file's name, which opens the file on the Mac it was uploaded from (see [Pictures and the original file](#pictures-and-the-original-file)).
 
 A picture a page or a source links by relative path shows inline in Preview. Choosing a picture file in the tree, such as one under `assets/`, shows the picture.
+=======
+- For a **source**: **Superseded by** and a link to the source that replaces it, when one does; **Cited by N pages**, each opening that page, or **Waiting** when no page cites it yet.
+>>>>>>> origin/claude/project-thread-6qp5yc
 
 The page has no search box and no per-collection switch: ⌘K jumps to a collection by name, and every collection reaches every agent. There is no form for typing a page into the Knowledge page: you write in your own editor, and agents by writing files.
 
@@ -536,4 +548,8 @@ A delete is reported in a toast, *Deleted `<name>`*, with **Undo**, which puts b
 - [`coffer knowledge` command reference](/reference/cli/knowledge)
 - [MCP tools reference](/reference/mcp-tools)
 - [Knowledge spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md)
+<<<<<<< HEAD
 - [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md), [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md), [Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-stays-current-through-flags-coffer-computes.md), [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md) and [Knowledge Sources Keep Their Images; Originals Stay on This Mac](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md)
+=======
+- [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md), [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md), [Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-stays-current-through-flags-coffer-computes.md) and [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md)
+>>>>>>> origin/claude/project-thread-6qp5yc
