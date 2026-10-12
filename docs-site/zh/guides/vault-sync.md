@@ -100,7 +100,7 @@ Bitbucket 的 App password 需要你自己的账号名，因此不受支持；�
 
 | 会传输 | 留在每台机器上 |
 | --- | --- |
-| MCP 服务器、技能、知识集和提供商的定义（`vault/resources/`） | 智能体（`local/resources/agent/`）和消息渠道（`local/resources/channel/`）：每台机器注册自己的 |
+| MCP 服务器、技能、知识集和提供商的定义（`vault/resources/`） | 智能体（`local/resources/agent/`）、消息渠道（`local/resources/channel/`）和接入的外部知识文件夹（`local/resources/knowledge/`）：每台机器注册自己的 |
 | 知识文档（`vault/knowledge/`）、技能文件夹（`vault/skills/`）、记忆中心库（`vault/memory/`） | **生效范围**：每个资源的启用开关和智能体范围（`local/reach.json`） |
 | MCP 能力开关、语音转文字模型和定期维护设置（`vault/state/`） | 消息渠道配对（`local/channel-peers.json`）、同步远端、保留策略、密钥边界的批准（`local/`） |
 | 密钥密文（`vault/secret/`），需要**包含加密的密钥** | 缓存和 `coffer-guide` 技能（`derived/`），每台机器各自重建；记忆同步写进本机智能体的记录（`local/memory-sync.json`） |
@@ -110,6 +110,7 @@ Bitbucket 的 App password 需要你自己的账号名，因此不受支持；�
 
 - **生效范围按机器设置。** 一个只该在台式机上运行的服务器，会在所有机器上注册，但在笔记本上禁用。一个资源第一次到达某台机器时，采用那台机器的默认生效范围。
 - **消息渠道留在持有它的机器上。** 一个聊天机器人只能有一个消费者，所以消息渠道不会同步。要在另一台机器上使用同一个机器人，见[在另一台机器上使用机器人](/zh/guides/channels#using-the-bot-on-another-machine)。
+- **接入的外部知识文件夹不同步。** 用**接入外部文件夹…**接入的文件夹留在原处，它的文件和接入关系都不会传输：接入关系记的是只在这台 Mac 上成立的路径。同步页面的概要行以“外部知识文件夹不同步”结尾。想在另一台 Mac 上用同样的笔记，就用文件夹自己的工具（Obsidian Sync、iCloud 云盘、git）让它保持一致，再在那台 Mac 上也接入一次。见[接入外部文件夹](/zh/guides/knowledge#link-an-external-folder)。
 - **没有任何东西会在无人看管时改写你的文档。** 整理由智能体在你按下**整理**时进行，结果和其他编辑一样同步。见[知识](/zh/guides/knowledge)。
 - **插件清单只记录，不安装。** 每台机器的描述文件会列出它的智能体的插件；不会往任何智能体的配置里写任何东西。
 - 你 home 目录下的路径会以 `${HOME}` 占位符存储，并按每台机器自己的 home 展开。

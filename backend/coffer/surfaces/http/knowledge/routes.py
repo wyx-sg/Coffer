@@ -54,6 +54,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, UploadFile, status
 
 from coffer.application.knowledge.ingest import IngestService
+from coffer.application.knowledge.linking import link_folder
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.application.knowledge.tidy_handoff import all_tidy_prompt
 from coffer.domain.knowledge.converter import EmptyConversion, UnsupportedDocument
@@ -70,6 +71,7 @@ from coffer.surfaces.http.knowledge.schemas import (
     CheckOut,
     CollectionCreate,
     CollectionFilesOut,
+    CollectionLink,
     CollectionListOut,
     CollectionOut,
     DirectoryOut,
@@ -123,6 +125,17 @@ async def create_collection(
     return collection_out(created)
 
 
+@router.post("/collections/link", response_model=CollectionOut, status_code=status.HTTP_201_CREATED)
+async def link_collection(
+    body: CollectionLink,
+    svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
+    actor: str = Depends(_actor_kind),
+) -> CollectionOut:
+    """Share a folder the person keeps themselves with every agent; nothing is
+    copied into Coffer ("Link a folder the person keeps themselves")."""
+    return collection_out(await link_folder(svc, body.folder, name=body.name, actor=actor))
+
+
 @router.get("/collections/{uid}/check", response_model=CheckOut)
 async def check_collection(
     uid: str,
@@ -148,7 +161,7 @@ async def tidy_all_handoff(
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
 ) -> HandoffOut:
     """The prompt that hands tidying every collection to the person's agent."""
-    entries = await svc.list_collections()
+    entries = [c for c in await svc.list_collections() if not c.linked]
     return HandoffOut(prompt=all_tidy_prompt(str(paths.knowledge_root()), entries))
 
 

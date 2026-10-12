@@ -24,6 +24,7 @@ This page matches what `coffer knowledge --help` prints. Add `--help` to any com
 | [`knowledge delete`](#knowledge-delete) | Delete a collection. |
 | [`knowledge collections`](#knowledge-collections) | Every collection with its description, page, source, waiting-source and finding counts. |
 | [`knowledge create`](#knowledge-create) | Create a collection. |
+| [`knowledge link`](#knowledge-link) | Share a folder you keep yourself with every agent; nothing is copied into Coffer. |
 | [`knowledge describe`](#knowledge-describe) | Rewrite a collection's description. |
 | [`knowledge check`](#knowledge-check) | A collection's mechanical findings: dead links, orphan pages, waiting sources. |
 | [`knowledge tree`](#knowledge-tree) | One level of the knowledge tree. |
@@ -129,6 +130,24 @@ Create a collection. Body: name, description.
 
 ```sh
 coffer knowledge create [OPTIONS]
+```
+
+<p class="cli-label">Arguments and options</p>
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">option</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">option</span> | text (repeatable) |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## knowledge link
+
+Share a folder you keep yourself with every agent; nothing is copied into Coffer. Body: folder (absolute path), name.
+
+<p class="cli-label">Synopsis</p>
+
+```sh
+coffer knowledge link [OPTIONS]
 ```
 
 <p class="cli-label">Arguments and options</p>

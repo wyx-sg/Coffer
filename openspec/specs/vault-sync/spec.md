@@ -160,9 +160,10 @@ travel (see "Write only this machine's descriptor").
 
 ### Requirement: Keep machine-local state out of the repository
 Only `~/.coffer/vault/` is a repository. Everything true of one machine only
-MUST be stored outside it: `local/` (agents, reach, the sync remote, retention,
-the secret boundary's files, machine-local ciphertext, and what memory sync
-wrote into this machine's agents), `content/` (media and
+MUST be stored outside it: `local/` (agents, reach, the rows of linked
+knowledge folders, the sync remote, retention, the secret boundary's files,
+machine-local ciphertext, and what memory sync wrote into this machine's
+agents), `content/` (media and
 the chat workspace), `runs.db` (conversations, the audit log, MCP invocation
 records, rounds, usage), `derived/` (everything rebuilt),
 and `daemon-config.json`, `daemon.json`, the master key and logs directly under

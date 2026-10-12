@@ -308,7 +308,7 @@ Write a good `README.md` for each collection: its first paragraph is what a mode
 
 On the Knowledge page, choose the collection in the tree, then a page or a source. They are also plain files: the knowledge root is `~/.coffer/vault/knowledge/` and each collection is a folder in it, so you can read and grep them with your own tools. A collection's **⋯** menu has **Copy path**.
 
-The Knowledge page is one tree beside a reading pane, both filling the window under the page header. The title carries the **Experimental** tag; the header's actions are **Tidy all** and **Add**, the page's one primary button. **Add** opens a menu, each item with a line saying what it keeps in Coffer: **Upload documents…** (see [Upload a source](#upload-a-source)) and **New collection…** (see [Create a collection](#create-a-collection)). At the top of the tree, **Collections** has a **New collection** button; below it every collection by its folder name. Opening a collection shows **Pages** and **Sources** first, then anything else in it; every file is shown by its file name, each page with its type's icon, each source with the source icon, and a source still waiting to be integrated carries a **Waiting** mark. The tree remembers what you opened and closed: leave the page or reload it and the same collections and folders are open when you come back.
+The Knowledge page is one tree beside a reading pane, both filling the window under the page header. The title carries the **Experimental** tag; the header's actions are **Tidy all** and **Add**, the page's one primary button. **Add** opens a menu, each item with a line saying what it keeps in Coffer: **Upload documents…** (see [Upload a source](#upload-a-source)), **New collection…** (see [Create a collection](#create-a-collection)) and **Link an external folder…** (see [Link an external folder](#link-an-external-folder)). At the top of the tree, **Collections** has a **New collection** button; below it every collection by its folder name. Opening a collection shows **Pages** and **Sources** first, then anything else in it; every file is shown by its file name, each page with its type's icon, each source with the source icon, and a source still waiting to be integrated carries a **Waiting** mark. The tree remembers what you opened and closed: leave the page or reload it and the same collections and folders are open when you come back.
 
 **A collection.** Choosing a collection shows **Tidy** and a **⋯** menu in its pane bar. Below them come its folder name, what belongs in it (click it to edit; it saves when you leave the field or press **⌘Enter**, **Esc** cancels, and a toast offers **Undo**), and one summary line: how many pages, how many sources and how many of them wait, the folder's path with a copy button, and when it was last updated. A muted line under it says the collection is managed by Coffer: synced to your other Macs, its history kept, tidied by your agent. While an agent is tidying the collection, a notice says so (see [A tidy is one change](#a-tidy-is-one-change)). Then come three sections:
 
@@ -336,9 +336,48 @@ When Obsidian is installed on this Mac, a collection's **⋯** menu and a file's
 
 An edit you save in Obsidian is like an edit in any editor: live at once, recorded as an edit on disk by the next sweep. Leave the files under `sources/` as they are.
 
+## Link an external folder {#link-an-external-folder}
+
+If you already keep notes with your own tools, such as an Obsidian vault, a Logseq graph or a folder of Markdown in a repository, you can share that folder with your agents without moving it. Coffer calls it a linked folder.
+
+```text
+Knowledge → Add → Link an external folder… → Folder, Name → Link folder
+```
+
+**Folder** is the folder's absolute path, `/Users/you/Obsidian/Work` say. **Name** is how Coffer and your agents refer to it: it follows the folder's own name until you type one, and the folder on disk keeps its own name either way. On the command line the same thing is `coffer knowledge link --set folder=/Users/you/Obsidian/Work` (see [`coffer knowledge link`](/reference/cli/knowledge#knowledge-link)).
+
+### What Coffer does with it {#what-coffer-does-with-a-linked-folder}
+
+- **Shares it with every agent.** The folder gets its own section in the `coffer-guide` skill every agent reads: its path, its rules file and every Markdown note by title. Agents read the notes where they are, with their own file tools.
+- **Shows it on the Knowledge page.** The tree lists it with a linked-folder icon, and you can open and read any of its notes. Its page shows its name with an **External** tag and four facts: **Location** (its path, with **Reveal in Finder**), **Notes** (how many Markdown notes it holds), **Rules file**, and **Managed by**: its own tools, with Coffer only sharing it with agents.
+- **Reads it fresh each time.** Nothing is cached, so a note you save in Obsidian is what the page and your agents see next.
+
+### What Coffer does not do {#what-coffer-does-not-do-with-a-linked-folder}
+
+- **It copies nothing.** No file goes into `~/.coffer`. The folder stays the only copy.
+- **It writes nothing into the folder.** You cannot upload into it, its notes have no **Delete**, its description (the first paragraph of its own `README.md`) is not edited here, and it has no **Tidy**, no **To do**, no inbox and no filing of notes into `pages/`. Coffer's `pages/` and `sources/` layout does not apply to it.
+- **It keeps no history.** Its notes have no **History**, its page has no **Change log**, and nothing can be undone through Coffer. Use the folder's own tools for that: Obsidian's file recovery, or git if the folder is a repository.
+- **It does not sync it.** Neither the folder's files nor the link reach your other Macs through [vault sync](/guides/vault-sync). The link is recorded only on this Mac, in `~/.coffer/local/resources/knowledge/`, because the folder's path is true of this Mac only. To use the same notes on another Mac, keep the folder in step with its own tool (Obsidian Sync, iCloud Drive, git) and link it on that Mac as well.
+
+### How agents write in it {#how-agents-write-in-a-linked-folder}
+
+The folder's **rules file** is the first of `AGENTS.md`, `CLAUDE.md` and `README.md` found at its root. The guide tells agents to follow that file before writing anything in the folder, and, when there is none, to write only the way its existing notes are written. Coffer's own rules for a collection (pages under `pages/`, sources kept apart, page types in frontmatter, the inbox, Tidy) do not apply there. So if you want agents to add notes to your vault, write your conventions in an `AGENTS.md` at its root; if you want them only to read it, say that there.
+
+### Large folders {#large-linked-folders}
+
+Coffer skips hidden folders, such as `.obsidian/` and `.git/`, and `node_modules`. It reads at most 5000 Markdown notes from one folder, and a file over 2 MB is listed but not shown on the page. To share only part of a large vault, link a subfolder of it instead of the whole vault.
+
+### Folders that cannot be linked {#folders-that-cannot-be-linked}
+
+The folder must exist and be given as an absolute path. Coffer's own folder, `~/.coffer`, cannot be linked, and neither can a folder that holds it, such as your home folder or the disk root. These are refused with [`KNOWLEDGE_FOLDER_REFUSED`](/reference/error-codes). A folder that is already linked, or a name another collection has, is refused with `KNOWLEDGE_COLLECTION_EXISTS`.
+
+### Rename or disconnect {#rename-or-disconnect-a-linked-folder}
+
+A linked folder's **⋯** menu holds **Reveal in Finder**, **Open in Obsidian** when Obsidian is installed, **Copy path**, **Rename…** and **Disconnect…**. **Rename…** changes only the name Coffer and your agents use. **Disconnect…** asks first; afterwards agents stop seeing the folder, and every file in it stays where it is.
+
 ## Every collection reaches every agent
 
-A collection has no on/off switch and no per-agent reach: every collection is available to every agent, and a collection leaves agents' `coffer-guide` skill only by being deleted.
+A collection has no on/off switch and no per-agent reach: every collection is available to every agent, a linked folder too, and a collection leaves agents' `coffer-guide` skill only by being deleted (a linked folder by **Disconnect…**, which leaves its files alone).
 
 ::: warning Not access control
 The skill hands agents the knowledge root, and an agent can read anything under it with its own tools. Keep nothing in a collection that an agent on this machine should not read.
@@ -408,8 +447,9 @@ A delete is reported in a toast, *Deleted `<name>`*, with **Undo**, which puts b
 
 - [Skills](/guides/skills) — the `coffer-guide` skill that carries the catalogue and the writing, integrating and tidying rules
 - [Memory](/guides/memory)
+- [Vault sync](/guides/vault-sync) — what syncs, and why linked folders do not
 - [Knowledge architecture](/architecture/knowledge)
 - [`coffer knowledge` command reference](/reference/cli/knowledge)
 - [MCP tools reference](/reference/mcp-tools)
 - [Knowledge spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md)
-- [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md), [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) and [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md)
+- [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md), [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md) and [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md)

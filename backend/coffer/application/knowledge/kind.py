@@ -44,14 +44,27 @@ import logging
 
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.domain.errors import ResourceAlreadyExists
-from coffer.domain.knowledge.config import KnowledgeConfig
+from coffer.domain.knowledge.config import KnowledgeConfig, linked_folder
 from coffer.domain.resource import Kind, Resource
+from coffer.domain.vault.layout import StorageClass
 
 _logger = logging.getLogger(__name__)
 
 
+def _row_storage(config: dict[str, object]) -> StorageClass:
+    """A linked folder's row is machine-local: its path is true of this disk
+    only, so it never travels (ADR
+    linked-knowledge-folders-are-read-only-and-machine-local). Every
+    collection Coffer keeps is in the vault."""
+    return StorageClass.LOCAL if linked_folder(config) else StorageClass.VAULT
+
+
 def make_knowledge_kind(service: KnowledgeService) -> Kind:
     async def _on_delete(resource: Resource) -> None:
+        if linked_folder(resource.config):
+            # Disconnecting a linked folder leaves every file where it is.
+            await service.catalogue_changed()
+            return
         try:
             await service.cleanup_collection(resource.name)
         except Exception:
@@ -82,6 +95,9 @@ def make_knowledge_kind(service: KnowledgeService) -> Kind:
         as the same error and gets the same 409 rather than a 500 naming a
         path.
         """
+        if linked_folder(resource.config):
+            # A linked folder's name is a label; its folder stays put.
+            return
         try:
             await service.move_collection(resource.name, new_name)
         except FileExistsError as e:
@@ -97,4 +113,5 @@ def make_knowledge_kind(service: KnowledgeService) -> Kind:
         # to every agent"), so there is no ``on_enabled_changed`` either.
         toggleable=False,
         generic_create_allowed=False,
+        storage_row=_row_storage,
     )

@@ -86,7 +86,7 @@ class TidyService:
         """Open a tidy of the collection. What changed in it before is committed
         first, as the ``disk`` edit it is, so the tidy's change holds only the
         agent's work. Starting an open tidy again keeps it."""
-        row = await self._knowledge.collection(uid)
+        row = await self._knowledge.owned_collection(uid)
         if self._runs.get(row.name) is None:
             await settle(self._history)
             history = self._history
@@ -112,7 +112,7 @@ class TidyService:
         Finishing with no tidy open still commits the collection's pending
         edits as a tidy, so an agent that forgot to start loses no grouping of
         what it has not yet had committed."""
-        row = await self._knowledge.collection(uid)
+        row = await self._knowledge.owned_collection(uid)
         change = await self._close(row.name, report, actor=actor, status=TIDY_REPORTED)
         await self._knowledge.audit.record(
             AuditEventType.KNOWLEDGE_EDITED.value,

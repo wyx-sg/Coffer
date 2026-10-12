@@ -45,6 +45,15 @@ class CollectionEntry:
     #: When a document in the collection was last written (ISO 8601, UTC);
     #: ``None`` when it holds none.
     updated_at: str | None = None
+    #: A linked folder the person keeps with their own tools, which Coffer only
+    #: shares with the agents (ADR
+    #: linked-knowledge-folders-are-read-only-and-machine-local).
+    linked: bool = False
+    #: A linked folder's Markdown files; 0 for a collection Coffer keeps.
+    note_count: int = 0
+    #: A linked folder's own rules file at its root (``AGENTS.md``,
+    #: ``CLAUDE.md`` or ``README.md``, the first present); empty when none.
+    rules_file: str = ""
 
 
 @dataclass(frozen=True)

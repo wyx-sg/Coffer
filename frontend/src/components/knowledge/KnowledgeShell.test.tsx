@@ -80,6 +80,7 @@ describe("the header", () => {
     expect(items.map((i) => i.textContent)).toEqual([
       "Upload documents…Converted to Markdown and kept in the collection you pick, synced with it.",
       "New collection…Kept in Coffer: synced to your other Macs, with history, tidied by your agent.",
+      "Link an external folder…Files stay where they are and are only shared with agents. Nothing is copied into Coffer, synced or tidied.",
     ]);
     // "Add a document" no longer exists.
     expect(screen.queryByRole("button", { name: "Add a document" })).toBeNull();
