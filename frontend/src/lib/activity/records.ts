@@ -115,10 +115,10 @@ export function mergeNewestFirst(lists: readonly (readonly ActivityRecord[])[]):
 export { timeMs as recordTimeMs };
 
 /** Uses this close together, of one secret by one destination, read as one row. */
-export const FOLD_WINDOW_MS = 10 * 60_000;
+const FOLD_WINDOW_MS = 10 * 60_000;
 
 /** What makes two secret uses "the same": the secret and where its value went. */
-function useIdentity(entry: AuditEntry): string {
+function identityOf(entry: AuditEntry): string {
   const d = (entry.details ?? {}) as Record<string, unknown>;
   const part = (k: string) =>
     typeof d[k] === "string" || typeof d[k] === "number" ? String(d[k]) : "";
@@ -150,7 +150,7 @@ export function foldUses(rows: readonly ActivityRecord[]): ActivityRecord[] {
       out.push(r);
       continue;
     }
-    const id = useIdentity(r.entry);
+    const id = identityOf(r.entry);
     const at = timeMs(r.at);
     const run = open.get(id);
     if (run && run.oldest - at < FOLD_WINDOW_MS) {

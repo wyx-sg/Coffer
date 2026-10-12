@@ -84,13 +84,13 @@ async def list_audit(
     ),
     event_type: str | None = Query(default=None),
     event_prefix: str | None = Query(default=None),
+    # spec resource-framework "Tell a secret's use from a change in the audit log"
     nature: AuditNature | None = Query(  # noqa: B008
         default=None,
         description=(
             "``change`` for changes only, ``use`` for a secret's uses only "
             "(its value handed to a server, a tool, a connection or a program, "
-            "or revealed): spec resource-framework \"Tell a secret's use from a "
-            'change in the audit log".'
+            "or revealed)."
         ),
     ),
     since: str | None = Query(default=None),

@@ -217,6 +217,7 @@ class FakeAuditRepo:
         resource_uid=None,
         event_type=None,
         event_prefix=None,
+        nature=None,
         since=None,
         limit=50,
     ):

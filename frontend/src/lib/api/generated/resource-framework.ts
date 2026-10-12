@@ -1068,7 +1068,7 @@ export interface operations {
                 resource_uid?: string | null;
                 event_type?: string | null;
                 event_prefix?: string | null;
-                /** @description ``change`` for changes only, ``use`` for a secret's uses only (its value handed to a server, a tool, a connection or a program, or revealed): spec resource-framework "Tell a secret's use from a change in the audit log". */
+                /** @description ``change`` for changes only, ``use`` for a secret's uses only (its value handed to a server, a tool, a connection or a program, or revealed). */
                 nature?: ("change" | "use") | null;
                 since?: string | null;
                 limit?: number;

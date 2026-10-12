@@ -22,8 +22,8 @@ All three stay on the machine that wrote them. [Vault sync](/guides/vault-sync) 
 Open **Activity** in the sidebar. The header carries a **Live** mark (a dot and the word; **Reconnecting…** while the daemon's change feed is closed, which means new records are not streaming in) and an **Export** menu. Five tabs follow, without counts: **Everything**, the default, **Changes**, **Secret use**, **Tool calls** and **Daemon log**. A tab whose log could not be read shows a warning icon.
 
 - **Everything** — changes, secret uses, tool calls and the daemon's warnings and errors merged into one stream, newest first. Columns: **Time**, **Event**, **By** and **Took**.
-- **Changes** — the audit log's changes: **Time**, **Event** (the change as a sentence that names what it changed, such as "Added the MCP server filesystem") and **By** (who made it, in words: you, the command line, Coffer, sync, or the agent's name).
-- **Secret use** — the audit log's records of a secret's value leaving the vault without anything changing: Coffer handing it to a server it started, a `coffer run` command receiving it, or you revealing it in the Coffer app. Columns: **Time**, **Use** and **By**. Each row has a key icon and names the secret and where its value went, such as "Gave GITHUB_TOKEN to the MCP server github"; a value is never shown. Uses of the same secret by the same destination less than ten minutes apart fold into one row marked **×N**, and its drawer lists the time of each.
+- **Changes** — the audit log's changes: **Time**, **Event** (the change as a sentence that names what it changed, such as "Stored secret SENTRY_TOKEN, replacing its value") and **By** (who made it, in words, such as "You · web UI", "You · command line", "Coffer", "Sync" or the agent's name).
+- **Secret use** — the audit log's records of a secret's value leaving the vault without anything changing: Coffer handing it to a server it started, a `coffer run` command receiving it, or you revealing it in the Coffer app. Columns: **Time**, **Use** and **By**. Each row has a key icon and names the secret and where its value went, such as "Handed secret GITHUB_TOKEN to MCP server github (environment variable GITHUB_TOKEN)" or "Handed secret OPENAI_KEY to coffer run: python, in ~/proj"; a value is never shown. Uses of the same secret by the same destination less than ten minutes apart fold into one row marked **×N**, and its drawer lists the time of each.
 - **Tool calls** — one row per tool call, resource read or prompt fetch the gateway routed: **Time**, **Agent** (whose session made it), **Server · tool**, **Took** and **Status**.
 - **Daemon log** — the tail of `daemon.log`: **Time**, **Level**, **Logger** and **Message**. Open it when Coffer itself misbehaves rather than something it proxied. The line above the rows names the file, says "newest first" and "following" while the feed is open, and **Open in Finder** reveals the file.
 
@@ -72,14 +72,14 @@ The **actor** is one of:
 
 | Actor | Shown as | Source |
 | --- | --- | --- |
-| `ui` | You (web UI) | The web UI sends `X-Coffer-Actor: ui`. |
-| `desktop` | You (Coffer app) | An action the desktop app confirmed. |
-| `cli` | CLI | The CLI sends `X-Coffer-Actor: cli`. |
+| `ui` | You · web UI | The web UI sends `X-Coffer-Actor: ui`. |
+| `desktop` | You · Coffer app | An action the desktop app confirmed. |
+| `cli` | You · command line | The CLI sends `X-Coffer-Actor: cli`. |
 | `api` | API | A REST caller that sent no `X-Coffer-Actor` header. |
 | `system`, `coffer` | Coffer | The daemon acting on its own, such as a background pass, or handing a secret to a server it starts. |
 | `sync` | Sync | A sync round applying what another machine changed. |
 | `channel` | Channel | An action taken from a chat channel. |
-| `human` | human | A change to a vault file that no Coffer operation made — your editor, a shell, an agent's own file tools, a `git commit` of your own. It is audited as `vault_file_edited`, one entry per file, once the vault has committed it (see [Editing the vault by hand](/guides/vault-files)). |
+| `human` | Outside Coffer | A change to a vault file that no Coffer operation made — your editor, a shell, an agent's own file tools, a `git commit` of your own. It is audited as `vault_file_edited`, one entry per file, once the vault has committed it (see [Editing the vault by hand](/guides/vault-files)). |
 | an agent's name | the name | An agent's own action, such as a change it made through one of Coffer's built-in MCP tools. |
 
 Not every event is audited. The log keeps changes that land outside Coffer (a file written into an agent's configuration), that are irreversible or security-sensitive (a deletion, a secret revealed in the desktop app or resolved by `coffer run`, an approval, a master-key backup), or that current state cannot reveal later (a retention window). Every change to the vault is also a commit that names its writer, so the vault's git history (`git log -- <path>` in the vault folder) answers who changed a file even for what the audit log leaves out. Routine runtime events are log lines, not audit rows. Every audited event is also written to the daemon log under the same event name, so you can search either one for it.

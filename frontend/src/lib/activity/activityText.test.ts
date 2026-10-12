@@ -1,6 +1,7 @@
 // frontend/src/lib/activity/activityText.test.ts
 import { describe, expect, test } from "vitest";
 import i18next from "@/i18n";
+import backendKeys from "@/i18n/backend-keys.fixture.json";
 import type { TFunction } from "i18next";
 import type { components } from "@/lib/api/types";
 import {
@@ -132,6 +133,213 @@ describe("describeActivity", () => {
     expect(
       describeActivity(t, makeEntry({ event_type: "skill_unbound", resource_name: "demo-cli" })),
     ).toBe("Unbound skill demo-cli from an agent");
+  });
+
+  test("a secret Coffer hands to a server names the secret, the server and the variable", () => {
+    const coffer = (details: Record<string, unknown>) =>
+      describeActivity(t, makeEntry({ event_type: "secret_resolved", actor: "coffer", details }));
+    expect(
+      coffer({
+        ref: "secret/GITHUB_TOKEN",
+        destination_kind: "mcp_server",
+        destination_uid: "u-1",
+        destination_name: "github",
+        slot: "GITHUB_TOKEN",
+      }),
+    ).toBe("Handed secret GITHUB_TOKEN to MCP server github (environment variable GITHUB_TOKEN)");
+    expect(
+      coffer({
+        ref: "secret/SENTRY",
+        destination_kind: "mcp_server",
+        destination_name: "sentry",
+        slot: "Authorization",
+      }),
+    ).toBe("Handed secret SENTRY to MCP server sentry (header Authorization)");
+    expect(
+      coffer({
+        ref: "secret/JIRA",
+        destination_kind: "mcp_server",
+        destination_name: "jira · prod",
+        slot: "prod:X-Api-Key",
+      }),
+    ).toBe("Handed secret JIRA to custom tool jira · prod (header X-Api-Key)");
+    expect(
+      coffer({
+        ref: "secret/OPENAI",
+        destination_kind: "provider",
+        destination_name: "openai",
+        slot: "key",
+      }),
+    ).toBe("Handed secret OPENAI to model connection openai (API key)");
+    // Never claims a coffer run happened when Coffer handed the value to a server.
+    expect(
+      coffer({ ref: "secret/X", destination_kind: "mcp_server", destination_name: "s", slot: "X" }),
+    ).not.toContain("coffer run");
+    const zh = i18next.getFixedT("zh") as TFunction;
+    expect(
+      describeActivity(
+        zh,
+        makeEntry({
+          event_type: "secret_resolved",
+          details: {
+            ref: "secret/GITHUB_TOKEN",
+            destination_kind: "mcp_server",
+            destination_name: "github",
+            slot: "GITHUB_TOKEN",
+          },
+        }),
+      ),
+    ).toBe("把密钥 GITHUB_TOKEN 交给了 MCP 服务器 github（环境变量 GITHUB_TOKEN）");
+  });
+
+  test("a secret coffer run hands to a program names the program and its folder", () => {
+    const run = (details: Record<string, unknown>) =>
+      describeActivity(t, makeEntry({ event_type: "secret_resolved", actor: "cli", details }));
+    expect(
+      run({ ref: "secret/OPENAI_KEY", name: "OPENAI_KEY", argv0: "python", cwd: "~/proj" }),
+    ).toBe("Handed secret OPENAI_KEY to coffer run: python, in ~/proj");
+    expect(
+      run({
+        ref: "secret/OPENAI_KEY",
+        name: "OPENAI_KEY",
+        argv0: "/usr/bin/python3",
+        cwd: "/Users/ann/proj",
+      }),
+    ).toBe("Handed secret OPENAI_KEY to coffer run: python3, in ~/proj");
+    expect(run({ ref: "secret/OPENAI_KEY", argv0: "python" })).toBe(
+      "Handed secret OPENAI_KEY to coffer run: python",
+    );
+    const zh = i18next.getFixedT("zh") as TFunction;
+    expect(
+      describeActivity(
+        zh,
+        makeEntry({
+          event_type: "secret_resolved",
+          details: { ref: "secret/OPENAI_KEY", name: "OPENAI_KEY", argv0: "python", cwd: "~/proj" },
+        }),
+      ),
+    ).toBe("把密钥 OPENAI_KEY 交给了 coffer run：python，在 ~/proj");
+  });
+
+  test("secret_set names the secret, and says when it replaced a value", () => {
+    const set = (details: Record<string, unknown>) =>
+      describeActivity(t, makeEntry({ event_type: "secret_set", details }));
+    expect(set({ ref: "secret/SENTRY_TOKEN", replaced: true })).toBe(
+      "Stored secret SENTRY_TOKEN, replacing its value",
+    );
+    expect(set({ ref: "secret/SENTRY_TOKEN", replaced: false })).toBe("Stored secret SENTRY_TOKEN");
+    // A ref outside `secret/` is named by its last segment.
+    expect(set({ ref: "mcp_server/github/GH_TOKEN" })).toBe("Stored secret GH_TOKEN");
+  });
+
+  test("sync_run reads the round's outcome and file counts", () => {
+    const round = (details: Record<string, unknown>) =>
+      describeActivity(t, makeEntry({ event_type: "sync_run", actor: "sync", details }));
+    expect(round({ status: "pulled_and_pushed", pulled: 3, pushed: 1 })).toBe(
+      "Synced: pulled 3 files, pushed 1",
+    );
+    expect(round({ status: "pulled", pulled: 1, pushed: 0 })).toBe("Synced: pulled 1 file");
+    expect(round({ status: "nothing_to_do", pulled: 0, pushed: 0 })).toBe(
+      "Synced: nothing to pull or push",
+    );
+    expect(round({ status: "held", held: 12 })).toBe("Sync held: it would delete 12 files");
+    expect(round({ status: "stopped", conflicts: 2 })).toBe("Sync stopped: 2 files in conflict");
+  });
+
+  test("a change names its file, setting or approval", () => {
+    expect(
+      describeActivity(
+        t,
+        makeEntry({
+          event_type: "vault_file_edited",
+          details: { path: "knowledge/notes/x.md", version: "abc" },
+        }),
+      ),
+    ).toBe("Edited vault file knowledge/notes/x.md on disk");
+    expect(
+      describeActivity(
+        t,
+        makeEntry({
+          event_type: "retention_updated",
+          details: { table: "mcp_invocations", previous_days: 30, retention_days: 90 },
+        }),
+      ),
+    ).toBe("Changed how long “Tool calls” is kept: 30 days → 90 days");
+    expect(
+      describeActivity(
+        t,
+        makeEntry({
+          event_type: "retention_updated",
+          details: { table: "audit_log", previous_days: 30, retention_days: null },
+        }),
+      ),
+    ).toBe("Changed how long “Changes” is kept: 30 days → forever");
+    expect(
+      describeActivity(
+        t,
+        makeEntry({
+          event_type: "secret_approval_requested",
+          details: { approval_id: "a", op: "bind", ref: "secret/STRIPE" },
+        }),
+      ),
+    ).toBe("Asked for approval to send secret STRIPE somewhere new");
+    expect(
+      describeActivity(
+        t,
+        makeEntry({
+          event_type: "secret_approval_approved",
+          details: { op: "disable_protection" },
+        }),
+      ),
+    ).toBe("Approved turning off secret approval");
+  });
+
+  test("a row missing a field reads the sentence without it, never a blank", () => {
+    // An old secret_resolved row with no ref and no destination.
+    expect(describeActivity(t, makeEntry({ event_type: "secret_resolved", details: {} }))).toBe(
+      "Handed a secret over for use",
+    );
+    // A hand-off whose destination has no name drops it rather than leaving "to MCP server ".
+    expect(
+      describeActivity(
+        t,
+        makeEntry({
+          event_type: "secret_resolved",
+          details: { ref: "secret/A", destination_kind: "mcp_server", slot: "A" },
+        }),
+      ),
+    ).toBe("Handed secret A over for use");
+    expect(describeActivity(t, makeEntry({ event_type: "secret_set" }))).toBe("Stored a secret");
+    expect(
+      describeActivity(t, makeEntry({ event_type: "sync_plaintext_pushed", details: {} })),
+    ).toBe("Pushed files a round had refused as a plaintext secret");
+    expect(
+      describeActivity(
+        t,
+        makeEntry({ event_type: "capability_enabled", resource_name: "fs", details: {} }),
+      ),
+    ).toBe("Turned on a capability on fs");
+  });
+
+  test("no event, with or without details, renders an empty placeholder", () => {
+    const events: string[] = backendKeys.auditEvents;
+    const odd = {
+      ref: 7,
+      path: null,
+      destination_kind: "mcp_server",
+      status: "pulled",
+      agents: [],
+    };
+    for (const lang of ["en", "zh"]) {
+      const tl = i18next.getFixedT(lang) as TFunction;
+      for (const event_type of events) {
+        for (const details of [null, {}, odd]) {
+          const line = describeActivity(tl, makeEntry({ event_type, resource_name: "r", details }));
+          expect(line, `${lang}:${event_type}`).not.toMatch(/undefined|null|\{\{|\(\)|（）/);
+          expect(line, `${lang}:${event_type}`).not.toMatch(/ {2}| $/);
+        }
+      }
+    }
   });
 
   test("unknown event_type falls back to the raw event code", () => {

@@ -106,7 +106,9 @@ function mockApi(initial: Partial<Data> = {}) {
         const limit = Number(query.limit ?? 50);
         // The daemon reads secret uses apart from changes (`nature`).
         const use = (row: unknown) =>
-          ["secret_resolved", "secret_revealed"].includes((row as { event_type: string }).event_type);
+          ["secret_resolved", "secret_revealed"].includes(
+            (row as { event_type: string }).event_type,
+          );
         const rows = data.audit
           .filter(matches)
           .filter((r) => !query.nature || (query.nature === "use") === use(r));
@@ -349,7 +351,7 @@ describe("ActivityPage", () => {
     await screen.findByText(target("github.search_issues"));
     fireEvent.click(pill("By"));
     const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
-    expect(options).toEqual(["Claude Code", "You", "CLI", "Coffer", "Sync"]);
+    expect(options).toEqual(["Claude Code", "You", "Command line", "Coffer", "Sync"]);
     expect(screen.getByText("Agents")).toBeInTheDocument();
     expect(screen.getByText("Not an agent")).toBeInTheDocument();
     expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
@@ -419,6 +421,82 @@ describe("ActivityPage", () => {
       ),
     );
   });
+});
+
+const HANDOFF = (id: number, ms: number) => ({
+  id,
+  timestamp: ago(ms),
+  event_type: "secret_resolved",
+  resource_kind: null,
+  resource_name: null,
+  actor: "coffer",
+  details: {
+    ref: "secret/GITHUB_TOKEN",
+    destination_kind: "mcp_server",
+    destination_uid: "u-github",
+    destination_name: "github",
+    slot: "GITHUB_TOKEN",
+  },
+});
+
+acceptance("web-ui", "a secret Coffer hands to a server reads where it went", async () => {
+  mockApi({
+    audit: [
+      HANDOFF(91, 60_000),
+      {
+        id: 90,
+        timestamp: ago(120_000),
+        event_type: "secret_resolved",
+        resource_kind: null,
+        resource_name: null,
+        actor: "cli",
+        details: { ref: "secret/OPENAI_KEY", name: "OPENAI_KEY", argv0: "python", cwd: "~/proj" },
+      },
+      HANDOFF(89, 240_000),
+      AUDIT_ENTRY,
+    ],
+  });
+  render(wrap(<ActivityPage />, ["/activity?tab=uses"]));
+
+  const handoff = await screen.findByText(
+    "Handed secret GITHUB_TOKEN to MCP server github (environment variable GITHUB_TOKEN)",
+  );
+  const row = handoff.closest("tr") as HTMLElement;
+  expect(within(row).getByText("×2")).toBeInTheDocument();
+  expect(within(row).getByText("Coffer")).toBeInTheDocument();
+  expect(
+    screen.getByText("Handed secret OPENAI_KEY to coffer run: python, in ~/proj"),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("Added filesystem")).not.toBeInTheDocument();
+
+  openTab(/^Changes/);
+  expect(await screen.findByText("Added filesystem")).toBeInTheDocument();
+  expect(screen.queryByText(/Handed secret/)).not.toBeInTheDocument();
+});
+
+acceptance("web-ui", "a change names what it changed", async () => {
+  const change = (id: number, event_type: string, actor: string, details: object) => ({
+    id,
+    timestamp: ago(id * 1_000),
+    event_type,
+    resource_kind: null,
+    resource_name: null,
+    actor,
+    details,
+  });
+  mockApi({
+    audit: [
+      change(1, "secret_set", "ui", { ref: "secret/SENTRY_TOKEN", replaced: true }),
+      change(2, "sync_run", "sync", { status: "pulled_and_pushed", pulled: 3, pushed: 1 }),
+      change(3, "vault_file_edited", "human", { path: "knowledge/notes/x.md", version: "abc" }),
+    ],
+  });
+  render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
+  expect(
+    await screen.findByText("Stored secret SENTRY_TOKEN, replacing its value"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Synced: pulled 3 files, pushed 1")).toBeInTheDocument();
+  expect(screen.getByText("Edited vault file knowledge/notes/x.md on disk")).toBeInTheDocument();
 });
 
 acceptance("web-ui", "activity gives each record its own tab", async () => {
@@ -691,9 +769,7 @@ acceptance("web-ui", "a failed log is one banner that retries only that log", as
   render(wrap(<ActivityPage />));
   const note = await screen.findByRole("status");
   expect(note).toHaveTextContent("Tool calls couldn't be loaded");
-  expect(note).toHaveTextContent(
-    "Changes, secret uses, and daemon records below are complete.",
-  );
+  expect(note).toHaveTextContent("Changes, secret uses, and daemon records below are complete.");
   expect(within(note).queryByRole("button", { name: /close|dismiss|ignore/i })).toBeNull();
   const reads = (path: string) => get.mock.calls.filter((c: unknown[]) => c[0] === path).length;
   const audit = reads("/audit");

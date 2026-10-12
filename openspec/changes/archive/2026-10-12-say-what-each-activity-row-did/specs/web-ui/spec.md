@@ -39,7 +39,7 @@ approves — from fields the record already holds, so records written before thi
 read the same way. A sentence never names a secret's value. Who MUST read in
 words: "You · web UI", "You · Coffer app", "You · command line", "API",
 "Coffer" for Coffer itself (`coffer`, `system` and `system:<worker>`), "Sync",
-or the agent's name. A tab whose log failed to load shows a warning icon. Each tab pages older records on request:
+"Outside Coffer" for a vault file edited on disk, or the agent's name. A tab whose log failed to load shows a warning icon. Each tab pages older records on request:
 the box's last row says "Showing 30 of 1,204 · next 50 from before 13:58" with
 **Load 50 more**, and only once everything kept is shown does it say so, with how
 long tool calls are kept and a link to Settings › Data.
