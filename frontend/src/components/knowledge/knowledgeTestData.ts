@@ -29,6 +29,9 @@ export const COLLECTION: CollectionOut = {
   updated_at: "2026-09-30T13:30:00Z",
   tidy_handoff: { prompt: `Tidy the ${NAME} collection.` },
   tidy_running: false,
+  linked: false,
+  note_count: 0,
+  rules_file: "",
 };
 
 export const OTHER: CollectionOut = {
@@ -43,6 +46,9 @@ export const OTHER: CollectionOut = {
   updated_at: null,
   tidy_handoff: { prompt: "Tidy the runbooks collection." },
   tidy_running: false,
+  linked: false,
+  note_count: 0,
+  rules_file: "",
 };
 
 export function file(path: string, over: Partial<FileOut> = {}): FileOut {
