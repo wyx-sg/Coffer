@@ -10,7 +10,7 @@
 // Transport via the typed client (.agents/frontend.md §4); wire types in
 // `memoryTypes.ts`, aliases of the generated contract.
 import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
-import type { CurateResult, HubEntryList, MemorySyncReport, MemorySyncState } from "./memoryTypes";
+import type { CurateResult, HubEntryDetail, HubEntryList, MemorySyncReport, MemorySyncState } from "./memoryTypes";
 
 export * from "./memoryTypes";
 
@@ -47,6 +47,13 @@ export function setCodexImport(value: boolean | null): Promise<void> {
 /** One project's memories (`""` for global ones), each with its copy state here. */
 export function listEntries(project: string): Promise<HubEntryList> {
   return unwrap(getApiClient().GET("/memory/sync/entries", { params: { query: { project } } }));
+}
+
+/** One memory: its text, and on this machine where each agent holds it. */
+export function getEntry(id: string): Promise<HubEntryDetail> {
+  return unwrap(
+    getApiClient().GET("/memory/sync/entries/{entry_id}", { params: { path: { entry_id: id } } }),
+  );
 }
 
 /** Curate now: start the agent without a terminal, asking it to consolidate its own memory. */

@@ -5,7 +5,7 @@
 // so they are narrowed here, once, rather than at every component. Pure: no
 // React, no i18n. Also the one table of how each copy state reads, and the
 // project addresses the page and its detail share.
-import type { MemorySyncState, SyncProject } from "@/lib/api/memoryTypes";
+import type { MemorySyncState } from "@/lib/api/memoryTypes";
 import type { StatusTone } from "@/lib/statusTone";
 
 /** @ui-only One agent and project of a pending preview: how many copies it would write, update and remove. */
@@ -17,7 +17,18 @@ export interface PreviewRow {
   write: number;
   update: number;
   remove: number;
+  /** Each memory the preview would write, update or remove there. */
+  items: PreviewItem[];
 }
+
+/** @ui-only One memory of a preview row and what the preview does with its copy. */
+interface PreviewItem {
+  entry: string;
+  title: string;
+  action: "write" | "update" | "remove";
+}
+
+const ACTIONS = new Set(["write", "update", "remove"]);
 
 /** @ui-only A preview waiting for the person's Write or Cancel. */
 export interface SyncPreview {
@@ -48,6 +59,11 @@ export function parsePreview(raw: MemorySyncState["preview"]): SyncPreview | nul
     write: num(r.write),
     update: num(r.update),
     remove: num(r.remove),
+    items: (Array.isArray(r.items) ? r.items : []).filter(isRecord).map((i) => ({
+      entry: str(i.entry),
+      title: str(i.title),
+      action: (ACTIONS.has(str(i.action)) ? str(i.action) : "write") as PreviewItem["action"],
+    })),
   }));
   return { createdAt: str(raw.created_at), copies: num(raw.copies), rows };
 }
@@ -125,21 +141,35 @@ export function copyStateTone(state: CopyState): StatusTone {
   return COPY_TONE[state];
 }
 
-/** The URL segment of global memories, beside `/memory/projects/<folder>`. */
-const GLOBAL_SEGMENT = "global";
+/** The `?scope=` of global memories, beside each project's hub folder. */
+export const GLOBAL_SCOPE = "global";
 
-/** Where a project's memories open: global memories have a fixed address, a project its hub folder. */
-export function projectPath(project: Pick<SyncProject, "folder"> | null): string {
-  return project
-    ? `/memory/projects/${encodeURIComponent(project.folder)}`
-    : `/memory/${GLOBAL_SEGMENT}`;
+/** A project's short name: the last segment of its key (`github.com/acme/payments` → `payments`). */
+export function projectName(key: string): string {
+  const parts = key.split("/").filter(Boolean);
+  return parts[parts.length - 1] ?? key;
 }
 
-/** The address of a project known only by its key (a preview row), or the Memory page when it is not listed. */
-export function projectPathByKey(projects: readonly SyncProject[], key: string): string | null {
-  if (!key) return projectPath(null);
-  const project = projects.find((p) => p.key === key);
-  return project ? projectPath(project) : null;
+/** The scope a page opens on when the URL names none: global memories when
+ *  there are any, else the first project, else global (an empty hub). */
+export function defaultScope(
+  state: Pick<MemorySyncState, "projects" | "global_memories">,
+): string {
+  if (state.global_memories > 0) return GLOBAL_SCOPE;
+  return state.projects[0]?.folder ?? GLOBAL_SCOPE;
+}
+
+/** The copy states that mean something needs a look: everything else (the
+ *  origin, written, the rules file, Codex's own import, held back with its
+ *  whole project) is how a copy normally is, and the list says nothing. */
+const NOTABLE: readonly CopyState[] = ["pending", "edited", "removed"];
+
+/** Per agent, the copy states a memory's row calls out. */
+export function notableCopies(copies: Record<string, string>): [string, CopyState][] {
+  return Object.entries(copies).flatMap(([agent, raw]) => {
+    const state = copyState(raw);
+    return state && NOTABLE.includes(state) ? [[agent, state] as [string, CopyState]] : [];
+  });
 }
 
 /** How many memories the hub holds in all. */

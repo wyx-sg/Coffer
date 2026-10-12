@@ -104,3 +104,37 @@ def test_memory_sync_is_on_by_default(client: TestClient) -> None:
     cfg = client.get("/api/v1/internal-engine-config").json()
     assert cfg["upkeep"]["memory_sync"]["enabled"] is True
     assert cfg["upkeep"]["memory_sync"]["default_interval_s"] == 3600
+
+
+@pytest.mark.acceptance(
+    spec="memory", scenario="a memory opens with its text and where each agent holds it"
+)
+def test_a_memory_opens_with_its_text_and_where_each_agent_holds_it(
+    client: TestClient, home: pathlib.Path
+) -> None:
+    _seed(client, home)
+    client.post("/api/v1/memory/sync/run")
+    preview = client.get("/api/v1/memory/sync/state").json()["preview"]
+    titles = {i["title"] for r in preview["rows"] for i in r["items"]}
+    assert "Ledger" in titles
+    assert all(i["action"] == "write" for r in preview["rows"] for i in r["items"])
+    client.post("/api/v1/memory/sync/preview/write")
+
+    listed = client.get(
+        "/api/v1/memory/sync/entries", params={"project": "github.com/acme/payments"}
+    ).json()["entries"]
+    ledger = next(e for e in listed if e["title"] == "Ledger")
+    r = client.get(f"/api/v1/memory/sync/entries/{ledger['id']}")
+    assert r.status_code == 200, r.text
+    detail = r.json()
+    assert "Retry." in detail["body"]
+    copies = {c["agent_type"]: c for c in detail["copies"]}
+    assert copies["claude_code"]["state"] == "origin"
+    assert copies["claude_code"]["path"].endswith("p.md")
+    assert pathlib.Path(copies["claude_code"]["path"]).is_file()
+    assert copies["codex"]["state"] == "written"
+    assert pathlib.Path(copies["codex"]["path"]).is_file()
+
+    missing = client.get("/api/v1/memory/sync/entries/nope")
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "RESOURCE_NOT_FOUND"

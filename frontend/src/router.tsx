@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
 import { createBrowserRouter, type RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout";
-import { SettingsIndexRedirect } from "./components/shell/redirects";
+import { MemoryScopeRedirect, SettingsIndexRedirect } from "./components/shell/redirects";
 import { FeatureGate } from "./components/FeatureGate";
 import { PageFallback } from "./components/PageFallback";
 import type { FeatureKey } from "./lib/hooks/useFeatures";
@@ -64,7 +64,6 @@ function gateRoutes(table: RouteObject[]): RouteObject[] {
 }
 
 const knowledgePage = lazyPage(() => import("./pages/KnowledgePage"), "KnowledgePage");
-const memoryDetailPage = lazyPage(() => import("./pages/MemoryDetailPage"), "MemoryDetailPage");
 
 const conversationsPage = lazyPage(() => import("./pages/ConversationsPage"), "ConversationsPage");
 
@@ -155,9 +154,9 @@ const pageRoutes: RouteObject[] = gateRoutes([
     path: "memory",
     element: lazyPage(() => import("./pages/MemoryPage"), "MemoryPage"),
   },
-  // One project's memories, by its hub folder; the global ones at a fixed address.
-  { path: "memory/global", element: memoryDetailPage },
-  { path: "memory/projects/:folder", element: memoryDetailPage },
+  // The old per-project addresses open that scope on the Memory page.
+  { path: "memory/global", element: <MemoryScopeRedirect /> },
+  { path: "memory/projects/:folder", element: <MemoryScopeRedirect /> },
   {
     path: "sync",
     element: lazyPage(() => import("./pages/sync/SyncPage"), "SyncPage"),

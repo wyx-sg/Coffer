@@ -3,13 +3,14 @@
 // Reads a record or a log without leaving the list: 640 wide by default, from
 // the title bar down; its left edge drags wider or narrower (remembered across
 // drawers, double-click resets), the page behind dimmed to the 32% scrim. Esc, a click outside or ✕
-// closes it, and focus returns to the row that opened it. The header carries
+// closes it, and focus returns to the row that opened it. Maximize in the header
+// widens it as far as it goes until Restore or a drag. The header carries
 // the title (15/650), an optional mono subtitle and, for a list of records,
 // previous / next (also the ↑ / ↓ keys while the drawer is open, unless the
 // person is typing). Only the body scrolls; the footer, when given, holds the
 // next step on the right and an optional quiet fact on the left.
-import { ArrowDown, ArrowUp, X } from "lucide-react";
-import type { KeyboardEvent, ReactNode } from "react";
+import { ArrowDown, ArrowUp, Maximize2, Minimize2, X } from "lucide-react";
+import { useState, type KeyboardEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { SplitDivider } from "@/components/SplitDivider";
@@ -69,6 +70,9 @@ export function Drawer({
 }: Props) {
   const { t } = useTranslation();
   const stepping = onPrevious !== undefined || onNext !== undefined;
+  // Maximize: as wide as the drawer goes (the page keeps DRAWER_PAGE_GAP);
+  // restore returns to the dragged width. Not remembered across drawers.
+  const [maximized, setMaximized] = useState(false);
   const { width, setWidth, reset, bounds } = useResizableWidth({
     storageKey: "drawer",
     defaultWidth: DRAWER_DEFAULT_WIDTH,
@@ -93,7 +97,7 @@ export function Drawer({
         showClose={false}
         onKeyDown={onKeyDown}
         className="max-w-full"
-        style={{ width }}
+        style={{ width: maximized && Number.isFinite(bounds.max) ? bounds.max : width }}
         // No subtitle means no description to point at.
         {...(subtitle ? {} : { "aria-describedby": undefined })}
       >
@@ -101,7 +105,10 @@ export function Drawer({
           value={width}
           min={bounds.min}
           max={bounds.max}
-          onChange={setWidth}
+          onChange={(w) => {
+            setMaximized(false);
+            setWidth(w);
+          }}
           onReset={reset}
           label={t("drawer.resize")}
           growsLeft
@@ -115,6 +122,16 @@ export function Drawer({
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-0.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={maximized ? t("drawer.restore") : t("drawer.maximize")}
+              aria-pressed={maximized}
+              onClick={() => setMaximized((m) => !m)}
+            >
+              {maximized ? <Minimize2 aria-hidden /> : <Maximize2 aria-hidden />}
+            </Button>
             {stepping ? (
               <>
                 <Button

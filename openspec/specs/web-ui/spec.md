@@ -220,8 +220,9 @@ and paginated where its list needs that, and it behaves the same everywhere:
   selected" with the actions that apply, it holds no select-all of its own, and
   **Esc** clears the selection;
 - a row's detail that opens beside the list opens in the one right-hand drawer,
-  640 wide over a dimmed page, closed by **Esc**, a click outside or its ✕, with
-  focus returning to the row.
+  640 wide over a dimmed page, resized by dragging its left edge and widened as
+  far as it goes by its **Maximize** button until **Restore** or a drag, closed
+  by **Esc**, a click outside or its ✕, with focus returning to the row.
 
 The rules above have their exceptions: Sync's rounds table, whose quiet rounds
 fold into one row, has no search or filter. A row click MUST open that item's
@@ -235,7 +236,8 @@ what a click on its name does, except when it lands on a control inside the row
 (a button, link, switch, checkbox, menu item or input), carries a modifier key,
 or ends a text selection; the name stays a real link or button, so keyboard
 focus, Cmd/Ctrl-click and middle-click keep working. Knowledge is
-its collection tree beside the pane in the same way. Activity's tabs share one
+its collection tree beside the pane in the same way, and Memory its scopes
+beside the open scope's memories, each opening in the drawer. Activity's tabs share one
 record list of their own, each row opening its record (see "Filter each
 Activity tab and expand any row"). Sync's Remote tab is not a list surface: it
 is the remote's settings, and the machine registry on its Machines tab is a
@@ -255,6 +257,11 @@ small plain table.
 - **GIVEN** a list surface showing at least one row
 - **WHEN** the user clicks the row, or presses Enter on it
 - **THEN** the app navigates to that item's detail page
+
+#### Scenario: a drawer maximizes and restores
+- **GIVEN** a record open in the shared drawer
+- **WHEN** the user chooses Maximize, and then Restore
+- **THEN** the drawer first takes the page's width but for a strip on the left, then returns to its dragged width
 
 ### Requirement: Label every row action
 A row action MUST be an icon plus its label, never a bare icon — a bare icon
