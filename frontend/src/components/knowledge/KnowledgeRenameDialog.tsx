@@ -61,7 +61,9 @@ export function KnowledgeRenameDialog({ collection, open, onOpenChange }: Props)
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("knowledge.rename.title", { name: collection.name })}</DialogTitle>
-          <DialogDescription>{t("knowledge.rename.body")}</DialogDescription>
+          <DialogDescription>
+            {t(collection.linked ? "knowledge.rename.linkedBody" : "knowledge.rename.body")}
+          </DialogDescription>
         </DialogHeader>
         <form
           className="space-y-1.5"
@@ -80,9 +82,11 @@ export function KnowledgeRenameDialog({ collection, open, onOpenChange }: Props)
             aria-invalid={rename.error ? true : undefined}
             onChange={(e) => setName(e.target.value)}
           />
-          <p className="text-xs text-text-subtle">
-            {t("knowledge.create.folder", { name: next || "…" })}
-          </p>
+          {collection.linked ? null : (
+            <p className="text-xs text-text-subtle">
+              {t("knowledge.create.folder", { name: next || "…" })}
+            </p>
+          )}
           {rename.error ? (
             <p role="alert" className="text-xs text-danger">
               {translateApiError(t, rename.error)}
@@ -93,10 +97,7 @@ export function KnowledgeRenameDialog({ collection, open, onOpenChange }: Props)
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             {t("common.cancel")}
           </Button>
-          <Button
-            onClick={submit}
-            disabled={!next || next === collection.name || rename.isPending}
-          >
+          <Button onClick={submit} disabled={!next || next === collection.name || rename.isPending}>
             {t("knowledge.rename.submit")}
           </Button>
         </DialogFooter>

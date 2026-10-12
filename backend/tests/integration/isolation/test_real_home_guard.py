@@ -63,6 +63,8 @@ def test_home_is_redirected_away_from_the_real_one() -> None:
         # ... and every experimental feature is switched on (the features are
         # off until switched on, and almost every test drives one).
         "COFFER_FEATURES",
+        # ... and no web UI is mounted, whatever frontend/dist holds on disk.
+        "COFFER_WEBUI_DIR",
         real_home_guard.REAL_HOME_ENV,
     }
     leaked = {

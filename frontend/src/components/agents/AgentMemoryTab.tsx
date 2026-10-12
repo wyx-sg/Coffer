@@ -4,13 +4,15 @@
 // memory, its native stores (Claude Code's ~/.claude/projects/<project>/memory/,
 // Codex's ~/.codex/memories/MEMORY.md sliced by project), read-only, one
 // bordered table (Project · Memory folder · Files). A store is a directory, so
-// a row opens its own page (a file tree and a read-only preview). What Coffer
-// syncs between the agents is on the Memory page.
+// a row opens its own page (a file tree and a read-only preview). Above it,
+// the agent's part in the memory sync (AgentMemorySync); what Coffer syncs
+// between the agents is on the Memory page.
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 
+import { AgentMemorySync } from "./AgentMemorySync";
 import { TabEmpty } from "./tabs/TabEmpty";
 import { LoadError } from "@/components/LoadError";
 import { SearchInput } from "@/components/SearchInput";
@@ -161,6 +163,7 @@ export function AgentMemoryTab({ agent }: Props) {
 
   return (
     <div className="flex max-w-[1000px] flex-col gap-8">
+      <AgentMemorySync agentType={agent.type} />
       <Section
         as="h2"
         title={t("agents.memoryTab.own.title", { agent: agentName })}

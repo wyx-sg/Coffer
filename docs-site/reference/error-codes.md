@@ -179,6 +179,8 @@ give the status each code is actually sent with.
 | --- | --- | --- | --- |
 | `KNOWLEDGE_COLLECTION_NOT_FOUND` | 404 | No collection by that name is visible to the caller. | Pick a collection from the Knowledge page. |
 | `KNOWLEDGE_COLLECTION_EXISTS` | 409 | A collection with that name already exists. | Choose another name. |
+| `KNOWLEDGE_COLLECTION_LINKED` | 409 | The collection is a linked folder, which Coffer only shares with agents: it does not upload into it, delete from it, edit its description, check it, tidy it or keep its history. | Make the change with the folder's own tools, an editor or Obsidian say. |
+| `KNOWLEDGE_FOLDER_REFUSED` | 400 | The folder cannot be linked: it does not exist, the path is not absolute, or it is Coffer's own folder or a folder holding it, such as your home folder. | Pick an existing folder outside `~/.coffer`, given as an absolute path; to share part of a large folder, link a subfolder. |
 | `KNOWLEDGE_FILE_NOT_FOUND` | 404 | No document at that path. | Browse the collection's folder on the Knowledge page. |
 | `KNOWLEDGE_PATH_UNSAFE` | 400 | The path escapes the knowledge root, names a hidden entry, or cannot name a document. | Use a relative path to a Markdown document inside the collection. |
 | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 | The upload exceeds the size limit named in the message. | Split the document or upload a smaller file. |
@@ -186,6 +188,8 @@ give the status each code is actually sent with.
 | `KNOWLEDGE_HISTORY_UNAVAILABLE` | 503 | Knowledge history is not recorded on this machine, usually because git is not installed. Writes still work. | Install git; history starts with the next write. |
 | `KNOWLEDGE_NOT_A_DELETE` | 400 | The change you asked to restore deleted no document or collection. | Undo restores only a delete; restore an earlier version of a document from its **History** tab instead. |
 | `KNOWLEDGE_RESTORE_CONFLICT` | 409 | Putting the deleted document back would overwrite the file now at its path. `details` name the version and the document; nothing was written. | Move or rename the file at that path, then restore again. |
+| `KNOWLEDGE_NOT_A_CHANGE` | 400 | The change you asked to undo touched no knowledge file, or its files are already as they were before it. | Pick a change from the collection's **Change log**. |
+| `KNOWLEDGE_UNDO_CONFLICT` | 409 | Undoing the change would discard edits made to its files since. `details.documents` names those files; nothing was written. | Undo again with `force: true` (**Undo anyway** in the dialog) to discard them, or leave the change in place. |
 | `KNOWLEDGE_ERROR` | 400 | Any other knowledge-layer refusal. | Read `message`. |
 | `ENGINE_UNAVAILABLE` | 503 | A binary or converter the operation needs (ripgrep, or a document converter backend) is unavailable. | Reinstall Coffer; the bundled binaries include them. |
 

@@ -2072,7 +2072,11 @@
     "CUSTOM_TOOL_LAST_ENVIRONMENT": "A group needs at least one environment, so its last one can't be deleted.",
     "DESKTOP_REQUEST_NOT_FOUND": "That request to the Coffer app has expired or was already handled.",
     "MEMORY_SYNC_RUNNING": "A memory sync is already running",
-    "MEMORY_SYNC_NO_PREVIEW": "There is no memory sync preview waiting"
+    "MEMORY_SYNC_NO_PREVIEW": "There is no memory sync preview waiting",
+    "KNOWLEDGE_UNDO_CONFLICT": "Not undone: files were edited since. Undo anyway to discard those edits.",
+    "KNOWLEDGE_NOT_A_CHANGE": "That change touched no knowledge file, so there is nothing to undo.",
+    "KNOWLEDGE_COLLECTION_LINKED": "This is a linked folder. Coffer only shares it with agents and doesn't change it.",
+    "KNOWLEDGE_FOLDER_REFUSED": "This folder can't be linked. Pick an existing folder outside Coffer's own folder."
   },
   "pagination": {
     "showing": "Showing {{shown}} of {{total}}",
@@ -2251,6 +2255,10 @@
         "project": "Project",
         "folder": "Memory folder",
         "files": "Files"
+      },
+      "sync": {
+        "title": "Memory sync",
+        "open": "Open Memory"
       }
     },
     "config": {
@@ -3212,16 +3220,10 @@
       "pages": "Pages",
       "sources": "Sources"
     },
-    "stats": {
-      "pages": "Pages",
-      "sources": "Sources",
-      "sourcesWaiting": "{{count}} · {{waiting}} waiting",
-      "folder": "Folder"
-    },
     "collection": {
       "descriptionLabel": "What belongs in this collection",
       "noDescription": "No description yet. Say what belongs in here so agents recognise it.",
-      "emptyLine": "No pages or sources yet. Upload a source, or drop Markdown files into the folder.",
+      "emptyLine": "No pages or sources yet. Upload a document, or drop Markdown files into the folder.",
       "more": "More actions for {{name}}",
       "copyPath": "Copy path",
       "descriptionSaved": "Description updated",
@@ -3245,7 +3247,8 @@
       "title": "Rename {{name}}",
       "body": "Its folder moves with it, and agents find it under the new name.",
       "submit": "Rename",
-      "renamed": "Renamed to {{name}}"
+      "renamed": "Renamed to {{name}}",
+      "linkedBody": "It's only a label: the folder on disk keeps its name."
     },
     "deleteCollection": {
       "menu": "Delete collection…",
@@ -3260,17 +3263,16 @@
     },
     "upload": {
       "button": "Upload",
-      "title": "Upload a source",
-      "body": "Coffer converts it to Markdown and keeps it as a source of the collection. The uploaded file itself is not stored.",
-      "choose": "Drop a file here, or choose one",
+      "title": "Upload documents",
+      "body": "Coffer converts each to Markdown and keeps it as a source of the collection. The uploaded files themselves are not stored.",
+      "choose": "Drop files here, or choose them",
       "types": "PDF, Word, PowerPoint, Excel, HTML, CSV, Markdown or text · up to 20 MB",
-      "remove": "Remove this file",
       "into": "Into collection",
       "converting": "Converting to Markdown…",
       "uploading": "Uploading…",
       "written": "{{name}} is saved as {{path}}",
       "zipTitle": "ZIP files can't be converted",
-      "zipBody": "Unzip it and upload the files inside one at a time.",
+      "zipBody": "Unzip it and upload the files inside.",
       "tooLargeTitle": "Larger than 20 MB",
       "tooLargeBody": "Split it, or export the part that matters as PDF.",
       "noTextTitle": "No text in this PDF",
@@ -3278,7 +3280,16 @@
       "noTextAnyTitle": "No text found",
       "noTextAnyBody": "Coffer could not read any text in this file. Nothing was added.",
       "unsupportedTitle": "{{kind}} files can't be converted",
-      "failedTitle": "Couldn't upload this file"
+      "failedTitle": "Couldn't upload this file",
+      "chooseMore": "Add more files",
+      "files": "Files to upload",
+      "removeNamed": "Remove {{name}}",
+      "savedAs": "Saved as {{path}}",
+      "allSaved": "Uploaded {{count}} files to {{collection}}",
+      "someSaved": "{{count}} uploaded; {{refused}} couldn’t be",
+      "buttonMany": "Upload {{count}} files",
+      "noneSaved_one": "Nothing uploaded: {{count}} file couldn’t be",
+      "noneSaved_other": "Nothing uploaded: {{count}} files couldn’t be"
     },
     "document": {
       "where": "Where this file is",
@@ -3292,7 +3303,8 @@
       "sources": "Sources:",
       "missingSource": "No source is named {{slug}}",
       "citedBy_one": "Cited by {{count}} page:",
-      "citedBy_other": "Cited by {{count}} pages:"
+      "citedBy_other": "Cited by {{count}} pages:",
+      "verified": "verified {{date}}"
     },
     "deleteDocument": {
       "menu": "Delete",
@@ -3317,7 +3329,8 @@
     },
     "tidy": {
       "one": "Tidy",
-      "all": "Tidy all"
+      "all": "Tidy all",
+      "running": "An agent is tidying this collection. Its edits show here as one change when it finishes."
     },
     "landing": {
       "title": "Pick a collection",
@@ -3336,7 +3349,8 @@
       "remove": "Removed",
       "layout": "Filed into pages",
       "baseline": "Recorded",
-      "curation": "Curated"
+      "curation": "Curated",
+      "tidy": "Tidy"
     },
     "link": {
       "dead": "No page or source is named {{target}}",
@@ -3348,11 +3362,10 @@
       "close": "Close history"
     },
     "check": {
-      "title": "Check",
-      "description": "What Coffer finds in the collection's files on every read. It fixes none of it.",
-      "none": "Nothing found.",
+      "title": "To do",
+      "description": "What Coffer finds in the collection's files on every read. Tidy hands it to your agent.",
+      "none": "Nothing to do.",
       "failed": "Couldn’t check this collection",
-      "handoff": "Check with agent",
       "target": "→ {{target}}",
       "others": "also {{paths}}",
       "kinds": {
@@ -3364,7 +3377,10 @@
         "unsourced_page": "Pages without sources",
         "orphan_page": "Pages nothing links to",
         "waiting_source": "Waiting sources"
-      }
+      },
+      "missing": "missing {{target}}",
+      "more": "{{count}} more",
+      "fewer": "Show fewer"
     },
     "changeLog": {
       "title": "Change log",
@@ -3372,12 +3388,102 @@
       "none": "No changes yet.",
       "failed": "Couldn’t read the change log",
       "more": "Show more",
-      "lines": "+{{added}} −{{removed}}"
+      "lines": "+{{added}} −{{removed}}",
+      "moreFiles": "{{count}} more files",
+      "span": "{{from}}–{{to}}",
+      "saves_one": "{{count}} save",
+      "saves_other": "{{count}} saves",
+      "undid": "Undid a tidy",
+      "tidyExpired": "Closed without a report: the collection sat unchanged for 30 minutes."
+    },
+    "summary": {
+      "pages_one": "{{count}} page",
+      "pages_other": "{{count}} pages",
+      "sources_one": "{{count}} source",
+      "sources_other": "{{count}} sources",
+      "sourcesWaiting": "{{count}} sources ({{waiting}} waiting)",
+      "updated": "updated {{when}}",
+      "managed": "Kept in Coffer: synced to your other Macs, every change kept in its history, tidied by your agent."
+    },
+    "contents": {
+      "title": "Contents",
+      "description": "Its pages by type, and its sources. A title opens the file.",
+      "none": "No pages or sources yet.",
+      "failed": "Couldn’t read the contents"
+    },
+    "types": {
+      "overview": "Overviews",
+      "concept": "Concepts",
+      "entity": "Entities",
+      "how-to": "How-tos",
+      "decision": "Decisions",
+      "none": "No type"
+    },
+    "tidyUndo": {
+      "button": "Undo this tidy…",
+      "title": "Undo this tidy?",
+      "body_one": "The {{count}} file it changed goes back to how it was before; a file it added is removed. The undo is a change of its own.",
+      "body_other": "The {{count}} files it changed go back to how they were before; files it added are removed. The undo is a change of its own.",
+      "confirm": "Undo tidy",
+      "pending": "Undoing…",
+      "failed": "Couldn’t undo this tidy",
+      "done": "Tidy undone",
+      "undone": "Undone",
+      "conflictTitle": "Some files changed since this tidy",
+      "conflictBody_one": "{{count}} file was edited after the tidy. Undoing it anyway discards that edit too.",
+      "conflictBody_other": "{{count}} files were edited after the tidy. Undoing it anyway discards those edits too.",
+      "anyway": "Undo anyway"
+    },
+    "add": {
+      "button": "Add",
+      "upload": "Upload documents…",
+      "uploadHint": "Converted to Markdown and kept in the collection you pick, synced with it.",
+      "create": "New collection…",
+      "createHint": "Kept in Coffer: synced to your other Macs, with history, tidied by your agent.",
+      "link": "Link an external folder…",
+      "linkHint": "Files stay where they are and are only shared with agents. Nothing is copied into Coffer, synced or tidied."
+    },
+    "obsidian": {
+      "open": "Open in Obsidian"
+    },
+    "linkFolder": {
+      "title": "Link an external folder",
+      "body": "Share a folder you keep yourself, such as an Obsidian vault, with every agent.",
+      "folder": "Folder",
+      "folderHint": "/Users/you/Obsidian/Work",
+      "name": "Name",
+      "nameHint": "How Coffer and agents refer to it. The folder keeps its own name.",
+      "stays": "The files stay where they are. Nothing is copied into Coffer.",
+      "notManaged": "Coffer doesn't sync it, tidy it, keep its history or upload into it.",
+      "ownRules": "Agents read it and follow its own AGENTS.md, CLAUDE.md or README.md.",
+      "submit": "Link folder",
+      "linked": "Linked {{name}}. Agents can read it now."
+    },
+    "linked": {
+      "tag": "External",
+      "facts": "About this folder",
+      "location": "Location",
+      "notes": "Notes",
+      "noteCount_one": "{{count}} Markdown note",
+      "noteCount_other": "{{count}} Markdown notes",
+      "rules": "Rules file",
+      "noRules": "None",
+      "managed": "Managed by",
+      "managedBy": "Its own tools. Coffer only shares it with agents: it copies, syncs, tidies and records nothing here."
+    },
+    "disconnect": {
+      "menu": "Disconnect…",
+      "title": "Disconnect {{name}}?",
+      "body": "Agents stop seeing it. The files in {{path}} stay where they are.",
+      "confirm": "Disconnect",
+      "pending": "Disconnecting…",
+      "failed": "Couldn't disconnect {{name}}",
+      "done": "Disconnected {{name}}. Its files are untouched."
     }
   },
   "memory": {
     "title": "Memory",
-    "subtitle": "What each agent remembers, synced into your other agents.",
+    "subtitle": "What your agents remember, kept in sync between them.",
     "loadFailed": "Couldn't load memory sync",
     "moreActions": "More memory actions",
     "syncNow": "Sync now",
@@ -3410,46 +3516,36 @@
       "failed_other": "Couldn't read {{count}} memory sources",
       "failedKept": "Nothing was published from it this time; what it published before stays in the hub.",
       "withheld_one": "{{count}} memory looks like it holds a secret and was not published",
-      "withheld_other": "{{count}} memories look like they hold a secret and were not published"
+      "withheld_other": "{{count}} memories look like they hold a secret and were not published",
+      "withheldBody": "They were not published. Remove the secret from the memory and it is published on the next sync."
     },
     "preview": {
       "title_one": "Review {{count}} copy before it is written",
       "title_other": "Review {{count}} copies before they are written",
-      "description": "A first or large sync waits for you. The hub is already up to date; nothing is written into your agents until you choose Write. Open a row to see its memories.",
-      "write": "Write",
-      "empty": "Nothing to write",
-      "cols": {
-        "agent": "Into",
-        "project": "Project",
-        "write": "Write",
+      "description": "A first or large sync waits for you. Nothing is written into your agents until you choose Write.",
+      "cancel": "Cancel",
+      "write_one": "Write {{count}} copy",
+      "write_other": "Write {{count}} copies",
+      "action": {
+        "write": "New",
         "update": "Update",
         "remove": "Remove"
+      },
+      "count": {
+        "write": "{{count}} new",
+        "update": "{{count}} updated",
+        "remove": "{{count}} removed"
       }
     },
     "projects": {
-      "title": "Projects",
-      "description": "Every memory your agents wrote for themselves, on any of your machines, filed by project.",
-      "global": "Global memories",
-      "everywhere": "Every project, every machine",
-      "notHere": "Not checked out here",
-      "search": "Search projects",
-      "empty": "No memories yet. The next sync publishes what your agents remember.",
-      "cols": {
-        "project": "Project",
-        "here": "On this machine",
-        "memories": "Memories",
-        "from": "From"
-      }
+      "global": "Global memories"
     },
     "agents": {
       "title": "Agents on this machine",
-      "description": "Each agent curates and loads its own memory. Coffer only writes copies of what your other agents learned.",
-      "empty": "No agent on this machine has memory to sync.",
       "cols": {
-        "agent": "Agent",
-        "copies": "Copies written here",
         "memory": "Own memory",
-        "curation": "Own curation"
+        "curation": "Own curation",
+        "copies": "Copies Coffer wrote here"
       },
       "written_one": "{{count}} copy",
       "written_other": "{{count}} copies",
@@ -3541,21 +3637,23 @@
     },
     "detail": {
       "global": "Written into every agent on every machine",
-      "notHere": "Not checked out on this machine: its memories wait in the hub",
+      "notHere": "Not checked out on this machine: written here once it is",
       "memories_one": "{{count}} memory",
       "memories_other": "{{count}} memories"
     },
     "entries": {
       "search": "Search memories",
       "empty": "No memories in this project.",
-      "loadFailed": "Couldn't load the memories",
       "thisMachine": "This machine",
       "cols": {
         "memory": "Memory",
         "type": "Type",
         "origin": "From",
-        "copyIn": "In {{agent}}",
         "updated": "Updated"
+      },
+      "filters": {
+        "type": "Type",
+        "source": "From"
       }
     },
     "copy": {
@@ -3567,6 +3665,40 @@
       "deferred": "Codex imports it",
       "edited": "Edited by agent",
       "removed": "Removed by agent"
+    },
+    "scopes": {
+      "label": "Memory scopes",
+      "search": "Search projects",
+      "here": "Projects on this machine",
+      "elsewhere": "Not checked out here"
+    },
+    "note": {
+      "pending": "Not in {{agent}} yet",
+      "edited": "Edited in {{agent}}",
+      "removed": "Removed by {{agent}}"
+    },
+    "drawer": {
+      "updated": "updated {{when}}",
+      "editHint": "To change a memory, edit it in the agent's own memory.",
+      "inAgents": "In your agents on this machine",
+      "more_one": "{{count}} more agent",
+      "more_other": "{{count}} more agents"
+    },
+    "needsYou": {
+      "title_one": "{{count}} thing needs you",
+      "title_other": "{{count}} things need you",
+      "preview_one": "{{count}} copy waits for you to write it",
+      "preview_other": "{{count}} copies wait for you to write them",
+      "failed_one": "{{count}} source could not be read",
+      "failed_other": "{{count}} sources could not be read",
+      "withheld_one": "{{count}} memory looked like a secret",
+      "withheld_other": "{{count}} memories looked like a secret",
+      "review": "Review",
+      "agentOff": "{{agent}}'s own memory is off, so nothing is written into it",
+      "agentOffTitle": "Agents Coffer cannot write into",
+      "openAgent": "Open {{agent}}'s memory",
+      "blocked_one": "{{count}} agent cannot be written into",
+      "blocked_other": "{{count}} agents cannot be written into"
     }
   },
   "conversations": {
@@ -3956,8 +4088,6 @@
         "body": "Paste the new secret from the SeaTalk Open Platform. Pairing and settings are kept; the bot restarts on the new secret.",
         "label": "App secret"
       },
-      "hint": "Stored in Coffer's secret store; the old value is overwritten.",
-      "submit": "Replace and restart",
       "works": "Works — this is @{{handle}}",
       "worksPlain": "Works",
       "worksSeatalk": "Works — the App ID and secret are valid.",
@@ -4612,7 +4742,8 @@
       "definitions_other": "{{count}} MCP server and tool definitions",
       "synced": "secrets synced",
       "notSynced": "secrets not synced",
-      "line": "Syncs {{documents}} · {{skills}} · {{definitions}} · {{secrets}}"
+      "line": "Syncs {{documents}} · {{skills}} · {{definitions}} · {{secrets}} · {{linked}}",
+      "linkedNotSynced": "linked knowledge folders not synced"
     },
     "rounds": {
       "loadedCount": "Loaded {{loaded}} rounds",
@@ -5716,7 +5847,6 @@
       "skippedWaiting_other": "{{names}} are waiting for approval and will be skipped."
     },
     "cols": {
-      "usedBy": "Used by",
       "lastUsed": "Last used",
       "created": "Created"
     },
@@ -5784,12 +5914,6 @@
       "saved": "Saved {{name}}"
     },
     "replace": {
-      "title": "Replace the value of {{name}}",
-      "storeTitle": "Add a value for {{name}}",
-      "value": "New value",
-      "hint": "The old value is destroyed. Everything that uses it gets the new one.",
-      "submit": "Replace value",
-      "storeSubmit": "Add value",
       "submitting": "Saving…",
       "replaced": "Replaced the value of {{name}}",
       "stored": "Added a value for {{name}}"
@@ -6340,13 +6464,8 @@
     "edit": {
       "title": "Edit {{name}}",
       "locked": "{{agents}} runs on it, so the OpenAI address can't be added or removed until it moves to another provider.",
-      "keyHint": "Keys are write-only. Use Replace key to change the value."
-    },
-    "replace": {
-      "title": "Replace API key",
-      "secret": "Secret",
-      "newKey": "New key",
-      "hint": "Write-only. Coffer overwrites the secret's value in its keychain-encrypted store and never shows it again."
+      "keyHint": "Keys are write-only. Replace enters a new value or picks another secret.",
+      "replaceHint": "Write-only. Saved with the rest of this form; left empty, the key stays as it is."
     },
     "delete": {
       "title": "Delete {{name}}?",
@@ -6571,7 +6690,9 @@
   "drawer": {
     "previous": "Previous",
     "next": "Next",
-    "resize": "Resize the drawer"
+    "resize": "Resize the drawer",
+    "maximize": "Maximize",
+    "restore": "Restore"
   },
   "filters": {
     "clear": "Clear",
@@ -6622,6 +6743,17 @@
     "existingHint": "Only this one uses the chosen secret; the current secret and its value stay as they are.",
     "title": "Replace {{field}}",
     "current": "Current secret",
-    "useSubmit": "Use this secret"
+    "useSubmit": "Use this secret",
+    "addTitle": "Add {{field}}",
+    "valueLabel": "New value",
+    "valueHint": "Write-only. Coffer overwrites this secret's value and never shows it again.",
+    "shared": "Also used by {{users}}: a new value reaches them too.",
+    "pickLabel": "Secret to use",
+    "submit": "Replace key",
+    "addSubmit": "Add key",
+    "replaced": "Replaced {{name}}",
+    "added": "Added a value for {{name}}",
+    "replace": "Replace",
+    "keep": "Keep current key"
   }
 }

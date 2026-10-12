@@ -30,8 +30,10 @@ from coffer.domain.audit_diff import text_diff
 from coffer.domain.knowledge.entry import CollectionEntry
 from coffer.domain.knowledge.errors import (
     CollectionExists,
+    KnowledgeNotAChange,
     KnowledgeNotADelete,
     KnowledgeRestoreConflict,
+    KnowledgeUndoConflict,
 )
 from coffer.domain.knowledge.history import (
     OP_DELETE,
@@ -52,7 +54,7 @@ async def describe_collection(
     knowledge: KnowledgeService, audit: AuditService, uid: str, description: str, *, actor: str
 ) -> CollectionEntry:
     """Make ``description`` the opening paragraph of the collection's README."""
-    row = await knowledge.collection(uid)
+    row = await knowledge.owned_collection(uid)
     meta = CommitMeta(
         WRITER_USER, OP_SAVE, f"Describe collection {row.name}", actor=actor, collection=row.name
     )
@@ -170,4 +172,65 @@ async def restore_deleted(
     return tx.version
 
 
-__all__ = ["describe_collection", "restore_deleted"]
+async def undo_change(
+    knowledge: KnowledgeService,
+    history: KnowledgeHistory,
+    audit: AuditService,
+    change: Change,
+    *,
+    force: bool,
+    actor: str,
+) -> str | None:
+    """Put every file ``change`` touched back as it was just before it (spec
+    knowledge "Undo a tidy"): a file it changed or removed gets its earlier
+    bytes, a file it added is removed. One new commit naming the user, carrying
+    the version it undoes. Refused, naming them, when a file has been edited
+    since the change, unless ``force``."""
+    documents = [d.path for d in change.documents if f"/{paths.INBOX_DIR_NAME}/" not in d.path]
+    if not documents:
+        raise KnowledgeNotAChange(change.version)
+    name = change.meta.collection or documents[0].split("/", 1)[0]
+    row = await knowledge.require_collection(name)
+    before = f"{change.version}^"
+    earlier: dict[str, bytes | None] = {}
+    edited: list[str] = []
+    for relpath in documents:
+        at = await asyncio.to_thread(history.show, change.version, relpath)
+        now = await asyncio.to_thread(collection_files.current_bytes, relpath)
+        if now != at:
+            edited.append(relpath)
+        earlier[relpath] = await asyncio.to_thread(history.show, before, relpath)
+    if edited and not force:
+        raise KnowledgeUndoConflict(change.version, edited)
+    meta = CommitMeta(
+        WRITER_USER,
+        OP_RESTORE,
+        f"Undo: {change.meta.summary}"[:200],
+        actor=actor,
+        collection=row.name,
+        undoes=change.version,
+    )
+    async with recording(history, meta) as tx:
+        for relpath, raw in earlier.items():
+            tx.touch(relpath)
+            if raw is None:
+                await asyncio.to_thread(collection_files.remove_file, relpath)
+            else:
+                await asyncio.to_thread(collection_files.restore_file, relpath, raw)
+    await audit.record(
+        AuditEventType.KNOWLEDGE_EDITED.value,
+        resource=row,
+        actor=actor,
+        details={
+            "undoes": change.version,
+            "paths": documents,
+            "count": len(documents),
+            "discarded_later_edits": edited,
+        },
+    )
+    knowledge.announce(row.uid)
+    await knowledge.catalogue_changed()
+    return tx.version
+
+
+__all__ = ["describe_collection", "restore_deleted", "undo_change"]

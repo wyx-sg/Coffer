@@ -83,7 +83,7 @@ Coffer 的答案是一次同步，而不是一套自己的记忆系统：
 
 ### Codex 自己的导入 {#codex-s-own-import}
 
-Codex 可以自己导入 Claude Code 的项目记忆并保持更新。当它这样做时（记忆页上的一个开关，存在账本里，因为这个设置本身的位置没有文档），Coffer 在这台机器上跳过 Claude Code → Codex 这个方向。Codex → Claude Code 照常进行。
+Codex 可以自己导入 Claude Code 的项目记忆并保持更新。当它这样做时（Codex 记忆标签页上的一个开关，存在账本里，因为这个设置本身的位置没有文档），Coffer 在这台机器上跳过 Claude Code → Codex 这个方向。Codex → Claude Code 照常进行。
 
 ## 回声、吸收与移交 {#echo-absorption-and-hand-over}
 
@@ -129,7 +129,7 @@ flowchart TD
 
 ## 整理留给智能体 {#curation-stays-with-the-agents}
 
-记忆页从智能体自己的配置读取它们的状态，从不读未公开的内部数据库：Claude Code 的自动记忆（`settings.json` 里的 `autoMemoryEnabled`，缺省即开启）；Codex 的记忆功能（`config.toml` 里的 `[features] memories`），记忆开启时它的整合就会运行。Auto Dream 目前还没有公开的设置项，所以在自动记忆开启时显示为未知，并提示去 Claude Code 的 `/memory` 里查看。Coffer 读不到的状态显示为未知。
+每个智能体的记忆标签页从智能体自己的配置读取它的状态，从不读未公开的内部数据库：Claude Code 的自动记忆（`settings.json` 里的 `autoMemoryEnabled`，缺省即开启）；Codex 的记忆功能（`config.toml` 里的 `[features] memories`），记忆开启时它的整合就会运行。Auto Dream 目前还没有公开的设置项，所以在自动记忆开启时显示为未知，并提示去 Claude Code 的 `/memory` 里查看。Coffer 读不到的状态显示为未知。
 
 **立即整理**会像 Coffer 的移交那样以无界面方式启动智能体，在你的主目录里，给它一个让它整合自己记忆文件的提示（合并重复、丢掉被推翻或过时的内容、保持索引简短、不改其他东西），并记录 `memory_curation_requested`。因此整理按智能体自己的节奏进行：一个很少使用的项目，在智能体下次整理之前，可能同时放着一份副本和智能体自己对同一教训的版本。Coffer 的正确性不依赖整理，因为每份副本本身就是一个有效的记忆文件。
 

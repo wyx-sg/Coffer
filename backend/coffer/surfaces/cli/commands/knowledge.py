@@ -3,8 +3,9 @@
 Spec knowledge "Manage knowledge in the web UI and on the command line". A
 collection's pages and sources are plain files under the knowledge root, read,
 edited and deleted with the reader's own tools; creating and describing a
-collection, checking one, uploading sources, reading the changes feed and
-undoing a delete are commands.
+collection, checking one, listing its contents, opening and closing a tidy,
+uploading sources, reading the changes feed, undoing a delete and undoing a
+tidy are commands.
 """
 
 from __future__ import annotations
@@ -36,6 +37,15 @@ SPECS = [
         "/knowledge/collections",
         _UI + "New collection",
         "Create a collection. Body: name, description.",
+        body=True,
+    ),
+    RouteCommand(
+        "knowledge link",
+        "POST",
+        "/knowledge/collections/link",
+        _UI + "Add · Link an external folder",
+        "Share a folder you keep yourself with every agent; nothing is copied into Coffer. "
+        "Body: folder (absolute path), name.",
         body=True,
     ),
     RouteCommand(
@@ -77,6 +87,41 @@ SPECS = [
         "/knowledge/changes/{version}/restore",
         _UI + "Undo a delete",
         "Restore what a delete removed (from the changes feed).",
+    ),
+    RouteCommand(
+        "knowledge files",
+        "GET",
+        "/knowledge/collections/{uid}/files",
+        _UI + "a collection's Contents",
+        "Every page and source of a collection with its title, page type and waiting mark.",
+        names=K,
+    ),
+    RouteCommand(
+        "knowledge tidy-start",
+        "POST",
+        "/knowledge/collections/{uid}/tidy/start",
+        _UI + "Tidy (an agent starts it)",
+        "Open a tidy of a collection: until it finishes, its edits are kept for one change.",
+        names=K,
+    ),
+    RouteCommand(
+        "knowledge tidy-finish",
+        "POST",
+        "/knowledge/collections/{uid}/tidy/finish",
+        _UI + "Tidy (an agent finishes it)",
+        "Close a collection's tidy and commit its edits as one change. Body: summary (the "
+        "agent's report).",
+        names=K,
+        body=True,
+    ),
+    RouteCommand(
+        "knowledge undo",
+        "POST",
+        "/knowledge/changes/{version}/undo",
+        _UI + "Undo this tidy",
+        "Put every file a change touched back as it was before it. Body: force (discard "
+        "edits made since).",
+        body=True,
     ),
     RouteCommand(
         "knowledge tidy-handoff",

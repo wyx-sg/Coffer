@@ -3,15 +3,27 @@
 // A collection's own page (boards 5.1.10, 5.1.11, 5.1.12, 5.1.14), mocked only
 // at the network boundary: the folder name as the heading, the description
 // edited in place (blur / ⌘Enter saves, Esc cancels, the toast offers Undo),
-// the properties rows (Pages, Sources with how many wait, Folder), the empty
+// the summary line and what Coffer does with the collection, its To do,
+// Contents and Change log, Open in Obsidian when it is installed, the empty
 // collection's one muted line, Rename… from the
 // ⋯ menu (a dialog that closes only on success), and Delete collection… from
 // the same menu — which asks first, then offers Undo in a toast.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 
 import { answerFromFixtures, renderKnowledge } from "@/test/knowledgeHarness";
-import { COLLECTION, EDIT, NAME, OTHER, UID, change } from "./knowledgeTestData";
+import {
+  COLLECTION,
+  EDIT,
+  GATEWAY,
+  NAME,
+  OTHER,
+  RELEASE,
+  SESSION,
+  UID,
+  change,
+  summary as summaryOf,
+} from "./knowledgeTestData";
 import { acceptance } from "@/test/acceptance";
 import { ApiError } from "@/lib/api/errors";
 
@@ -26,6 +38,8 @@ vi.mock("@/lib/api/knowledge", () => ({
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
   getCheck: vi.fn(),
+  getCollectionFiles: vi.fn(),
+  undoChange: vi.fn(),
 }));
 vi.mock("@/lib/api/resources", () => ({ resourcesApi: { remove: vi.fn(), rename: vi.fn() } }));
 vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => undefined }));
@@ -41,6 +55,8 @@ vi.mock("@/lib/api/fs", () => ({
     listTerminals: vi.fn().mockResolvedValue([]),
     openTerminal: vi.fn(),
     reveal: vi.fn().mockResolvedValue(undefined),
+    open: vi.fn().mockResolvedValue(undefined),
+    listEditors: vi.fn().mockResolvedValue([]),
   },
 }));
 
@@ -56,18 +72,18 @@ afterEach(() => {
 
 const DESCRIPTION = { name: "What belongs in this collection" };
 
-describe("the properties", () => {
-  test("Pages, Sources and Folder — no inbox, no last-curated, no big numbers or danger zone", async () => {
+describe("the summary", () => {
+  test("one line of counts, folder and update time, and what Coffer does with it — no table, no danger zone", async () => {
     renderKnowledge(`/knowledge/${UID}`);
-    const stats = await screen.findByTestId("knowledge-stats");
-    expect(within(stats).getByText("Pages")).toBeInTheDocument();
-    expect(within(stats).getByText("Sources")).toBeInTheDocument();
-    expect(within(stats).getByText("1 · 1 waiting")).toBeInTheDocument();
-    expect(within(stats).queryByText("Documents")).toBeNull();
-    expect(within(stats).getByText("Folder")).toBeInTheDocument();
-    expect(within(stats).getByText("~/.coffer/knowledge/shopee")).toBeInTheDocument();
-    expect(within(stats).queryByText("Inbox")).toBeNull();
-    expect(within(stats).queryByText("Last curated")).toBeNull();
+    const summary = await screen.findByTestId("knowledge-summary");
+    expect(summary).toHaveTextContent("2 pages · 1 sources (1 waiting)");
+    expect(within(summary).getByText("~/.coffer/knowledge/shopee")).toBeInTheDocument();
+    expect(summary).toHaveTextContent(/updated /);
+    expect(summary).toHaveTextContent(
+      "Kept in Coffer: synced to your other Macs, every change kept in its history, tidied by your agent.",
+    );
+    expect(screen.queryByTestId("knowledge-stats")).toBeNull();
+    expect(screen.queryByText("Last curated")).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit description" })).toBeNull();
     expect(screen.queryByText("Danger zone")).toBeNull();
   });
@@ -76,66 +92,137 @@ describe("the properties", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     renderKnowledge(`/knowledge/${UID}`);
-    fireEvent.click(await screen.findByRole("button", { name: "Copy path" }));
+    const summary = await screen.findByTestId("knowledge-summary");
+    fireEvent.click(within(summary).getByRole("button", { name: "Copy path" }));
     expect(writeText).toHaveBeenCalledWith(COLLECTION.folder_path);
   });
 
-  acceptance("knowledge", "a collection page shows its properties", async () => {
-    api.getCheck.mockResolvedValue({
-      collection: COLLECTION,
-      findings: [
-        {
-          kind: "waiting_source",
-          path: `${NAME}/sources/release-notes.md`,
-          target: null,
-          others: [],
-        },
-      ],
-    });
-    api.listChanges.mockResolvedValue({
-      changes: [
-        change({
-          version: "c1",
-          writer: "agent",
-          agent: "claude-code",
-          operation: "edit",
-          documents: [
-            { path: `${NAME}/pages/gateway.md`, status: "modified", added: 3, removed: 1 },
-          ],
-        }),
-      ],
-      next_cursor: null,
+  test("while an agent has a tidy open, the page says so", async () => {
+    api.listCollections.mockResolvedValue({
+      collections: [{ ...COLLECTION, tidy_running: true }, OTHER],
     });
     renderKnowledge(`/knowledge/${UID}`);
-    expect(await screen.findByRole("heading", { name: NAME })).toBeInTheDocument();
-    expect(screen.getByText(COLLECTION.description)).toBeInTheDocument();
-    // Pages, Sources (1 waiting) and Folder.
-    const stats = screen.getByTestId("knowledge-stats");
-    expect(within(stats).getByText("Pages")).toBeInTheDocument();
-    expect(within(stats).getByText(String(COLLECTION.page_count))).toBeInTheDocument();
-    expect(within(stats).getByText("Sources")).toBeInTheDocument();
-    expect(within(stats).getByText("1 · 1 waiting")).toBeInTheDocument();
-    expect(within(stats).getByText("Folder")).toBeInTheDocument();
-    // Tidy and Check with agent.
-    expect(await screen.findByRole("button", { name: "Tidy" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Check with agent" })).toBeInTheDocument();
-    // A Check section listing the waiting source.
-    const check = screen.getByRole("region", { name: "Check" });
-    expect(await within(check).findByText("Waiting sources")).toBeInTheDocument();
     expect(
-      within(check).getByRole("link", { name: "sources/release-notes.md" }),
+      await screen.findByText(
+        "An agent is tidying this collection. Its edits show here as one change when it finishes.",
+      ),
     ).toBeInTheDocument();
-    // A Change log.
-    const log = screen.getByRole("region", { name: "Change log" });
-    expect(await within(log).findByText("Edited")).toBeInTheDocument();
-    // Its ⋯ menu.
-    fireEvent.click(screen.getByRole("button", { name: `More actions for ${NAME}` }));
-    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
-      "Reveal in Finder",
-      "Copy path",
-      "Rename…",
-      "Delete collection…",
-    ]);
+  });
+
+  acceptance(
+    "knowledge",
+    "the collection page shows a summary line, its to-do list, its contents and its change log",
+    async () => {
+      api.getCheck.mockResolvedValue({
+        collection: COLLECTION,
+        findings: [
+          { kind: "unsourced_page", path: GATEWAY.path, target: null, others: [] },
+          { kind: "waiting_source", path: RELEASE.path, target: null, others: [] },
+          { kind: "dead_link", path: SESSION.path, target: "nowhere", others: [] },
+        ],
+      });
+      api.getCollectionFiles.mockResolvedValue({
+        files: [GATEWAY, { ...SESSION, page_type: "how-to" }, RELEASE].map(summaryOf),
+      });
+      api.listChanges.mockResolvedValue({
+        changes: [
+          change({
+            version: "c1",
+            writer: "agent",
+            agent: "claude-code",
+            operation: "edit",
+            documents: [{ path: GATEWAY.path, status: "modified", added: 3, removed: 1 }],
+          }),
+        ],
+        next_cursor: null,
+      });
+      renderKnowledge(`/knowledge/${UID}`);
+      expect(await screen.findByRole("heading", { name: NAME })).toBeInTheDocument();
+      expect(screen.getByText(COLLECTION.description)).toBeInTheDocument();
+      const summary = screen.getByTestId("knowledge-summary");
+      expect(summary).toHaveTextContent("2 pages · 1 sources (1 waiting)");
+      expect(within(summary).getByRole("button", { name: "Copy path" })).toBeInTheDocument();
+      expect(summary).toHaveTextContent(/Kept in Coffer/);
+
+      // To do: the dead link before the waiting source, each page by title;
+      // the page without sources folded into one collapsed row.
+      const todo = screen.getByRole("region", { name: "To do" });
+      const dead = await within(todo).findByText("Dead links");
+      const waiting = within(todo).getByText("Waiting sources");
+      expect(dead.compareDocumentPosition(waiting) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(await within(todo).findByRole("link", { name: "Session ownership" })).toHaveAttribute(
+        "title",
+        "pages/account/session.md",
+      );
+      expect(within(todo).getByRole("link", { name: "Release notes" })).toBeInTheDocument();
+      const folded = within(todo).getByRole("button", { name: "Pages without sources 1" });
+      expect(folded).toHaveAttribute("aria-expanded", "false");
+      expect(within(todo).queryByRole("link", { name: "Account Gateway" })).toBeNull();
+      fireEvent.click(folded);
+      expect(within(todo).getByRole("link", { name: "Account Gateway" })).toBeInTheDocument();
+
+      // Contents: a card per page type, then Sources.
+      const contents = screen.getByRole("region", { name: "Contents" });
+      const concepts = within(contents).getByRole("region", { name: "Concepts" });
+      expect(within(concepts).getByRole("link", { name: "Account Gateway" })).toBeInTheDocument();
+      const howTos = within(contents).getByRole("region", { name: "How-tos" });
+      expect(within(howTos).getByRole("link", { name: "Session ownership" })).toBeInTheDocument();
+      const sources = within(contents).getByRole("region", { name: "Sources" });
+      expect(within(sources).getByText("Waiting")).toBeInTheDocument();
+
+      // A Change log.
+      const log = screen.getByRole("region", { name: "Change log" });
+      expect(await within(log).findByText("Edited")).toBeInTheDocument();
+
+      // Tidy, and no Check with agent; its ⋯ menu.
+      expect(await screen.findByRole("button", { name: "Tidy" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Check with agent" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: `More actions for ${NAME}` }));
+      expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
+        "Reveal in Finder",
+        "Copy path",
+        "Rename…",
+        "Delete collection…",
+      ]);
+    },
+  );
+});
+
+describe("Open in Obsidian", () => {
+  acceptance("knowledge", "Open in Obsidian shows only when Obsidian is installed", async () => {
+    const { fsApi } = await import("@/lib/api/fs");
+    const listEditors = vi.mocked(fsApi.listEditors);
+    const open = vi.mocked(fsApi.open);
+    listEditors.mockResolvedValue([{ label: "Obsidian", value: "Obsidian" }]);
+    renderKnowledge(`/knowledge/${UID}`);
+    await waitFor(() => expect(listEditors).toHaveBeenCalled());
+    fireEvent.click(await screen.findByRole("button", { name: `More actions for ${NAME}` }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Open in Obsidian" }));
+    expect(open).toHaveBeenCalledWith(COLLECTION.folder_path, "Obsidian");
+
+    // A page's ⋯ menu offers it too, with the page's path.
+    cleanup();
+    renderKnowledge(`/knowledge/${UID}?file=${encodeURIComponent(GATEWAY.path)}`);
+    fireEvent.click(
+      await screen.findByRole("button", { name: `More actions for ${GATEWAY.path}` }),
+    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Open in Obsidian" }));
+    expect(open).toHaveBeenLastCalledWith(GATEWAY.file_path, "Obsidian");
+
+    // Without Obsidian neither menu names it.
+    cleanup();
+    listEditors.mockResolvedValue([{ label: "Cursor", value: "Cursor" }]);
+    renderKnowledge(`/knowledge/${UID}?file=${encodeURIComponent(GATEWAY.path)}`);
+    fireEvent.click(
+      await screen.findByRole("button", { name: `More actions for ${GATEWAY.path}` }),
+    );
+    expect(await screen.findByRole("menuitem", { name: "Reveal in Finder" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Open in Obsidian" })).toBeNull();
+    cleanup();
+    renderKnowledge(`/knowledge/${UID}`);
+    fireEvent.click(await screen.findByRole("button", { name: `More actions for ${NAME}` }));
+    expect(await screen.findByRole("menuitem", { name: "Copy path" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Open in Obsidian" })).toBeNull();
   });
 });
 
@@ -145,7 +232,7 @@ describe("a just created, empty collection", () => {
     expect(await screen.findByRole("heading", { name: OTHER.name })).toBeInTheDocument();
     expect(
       screen.getByText(
-        /No pages or sources yet\. Upload a source, or drop Markdown files into the folder\./,
+        /No pages or sources yet\. Upload a document, or drop Markdown files into the folder\./,
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reveal in Finder" })).toBeInTheDocument();

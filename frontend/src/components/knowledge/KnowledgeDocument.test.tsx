@@ -4,7 +4,7 @@
 // its single line under the title (a page's type and sources, a source's
 // citing pages or Waiting mark) and no side rail, a page's
 // resolved `[[links]]`, the pane bar (full path, no tabs, History, Preview /
-// Source, Open in editor, ⋯), the history drawer beside the file reading its
+// Source, Open in editor, ⋯), the history over the whole area reading its
 // path in the vault, and delete at once with an Undo toast. Mocked only at the
 // network boundary, like the Knowledge page tests.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -28,6 +28,8 @@ vi.mock("@/lib/api/knowledge", () => ({
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
   getCheck: vi.fn(),
+  getCollectionFiles: vi.fn(),
+  undoChange: vi.fn(),
 }));
 vi.mock("@/lib/api/vault", () => ({
   vaultApi: { history: vi.fn(), diff: vi.fn(), restore: vi.fn() },
@@ -73,6 +75,19 @@ describe("the reader", () => {
     expect(screen.getByText("The text.")).toBeVisible();
   });
 
+  test("a page's verified date is in its line, and inline code wraps a long path at its separators", async () => {
+    api.getFile.mockResolvedValue({
+      ...GATEWAY,
+      verified: "2026-10-12",
+      body: "# Account Gateway\n\nIt lives in `services/account/gateway/internal/orchestrator.go`.\n",
+    });
+    renderKnowledge(OPEN);
+    expect(await screen.findByTestId("page-verified")).toHaveTextContent("verified Oct 12, 2026");
+    const code = screen.getByTestId("inline-code");
+    expect(code).toHaveTextContent("services/account/gateway/internal/orchestrator.go");
+    expect(code.querySelectorAll("wbr").length).toBeGreaterThan(3);
+  });
+
   test("names an agent that wrote it", async () => {
     api.getFile.mockResolvedValue({ ...GATEWAY, actor: "claude-code" });
     renderKnowledge(OPEN);
@@ -94,10 +109,7 @@ describe("the reader", () => {
     expect(where).toHaveTextContent("gateway.md");
     expect(screen.queryByRole("navigation", { name: "Document views" })).toBeNull();
     expect(screen.queryByRole("link", { name: "History" })).toBeNull();
-    expect(await screen.findByRole("button", { name: "History" })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
+    expect(await screen.findByRole("button", { name: "History" })).toBeVisible();
     expect(await screen.findByRole("button", { name: "Open in editor" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
 
@@ -151,14 +163,14 @@ function answerHistory() {
   });
 }
 
-describe("the history drawer", () => {
-  acceptance("knowledge", "a document's history opens in a drawer beside it", async () => {
+describe("the history", () => {
+  acceptance("knowledge", "a document's history takes the whole knowledge area", async () => {
     answerHistory();
     renderKnowledge(OPEN);
     fireEvent.click(await screen.findByRole("button", { name: "History" }));
 
-    // A drawer with the page's versions, read from its path in the vault.
-    const drawer = await screen.findByRole("complementary", { name: "History of gateway.md" });
+    // The page's versions, read from its path in the vault.
+    const drawer = await screen.findByRole("region", { name: "History of gateway.md" });
     const list = await within(drawer).findByRole("list", { name: "Versions" });
     expect(vaultApi.history).toHaveBeenCalledWith(VAULT_PATH);
     expect(
@@ -166,23 +178,27 @@ describe("the history drawer", () => {
         .getAllByRole("button")
         .map((b) => b.textContent),
     ).toEqual([expect.stringContaining("Claude Code"), expect.stringContaining("You")]);
-    // The address carries history=1, and the page is still shown beside the drawer.
+    // The address carries history=1, and the history has the area to itself:
+    // neither the page nor the tree is shown beside it.
     expect(screen.getByTestId("where")).toHaveTextContent("history=1");
-    expect(screen.getByRole("heading", { level: 1, name: GATEWAY.title })).toBeVisible();
-    expect(screen.getByText("The orchestration layer.")).toBeVisible();
-    expect(screen.getByRole("button", { name: "History" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("heading", { level: 1, name: GATEWAY.title })).toBeNull();
+    expect(screen.queryByText("The orchestration layer.")).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Collections and documents" })).toBeNull();
 
     // Closing it leaves the page as it was and drops history=1.
     fireEvent.click(within(drawer).getByRole("button", { name: "Close history" }));
-    await waitFor(() => expect(screen.queryByRole("complementary")).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "History of gateway.md" })).toBeNull(),
+    );
     expect(screen.getByTestId("where")).not.toHaveTextContent("history=1");
     expect(screen.getByTestId("where")).toHaveTextContent(
       `?file=${encodeURIComponent(GATEWAY.path)}`,
     );
-    expect(screen.getByRole("heading", { level: 1, name: GATEWAY.title })).toBeVisible();
+    expect(await screen.findByRole("heading", { level: 1, name: GATEWAY.title })).toBeVisible();
+    expect(screen.getByRole("navigation", { name: "Collections and documents" })).toBeVisible();
   });
 
-  test("the old History tab address opens the drawer", async () => {
+  test("the old History tab address opens the history", async () => {
     answerHistory();
     renderKnowledge(`/knowledge/${UID}/history?file=${encodeURIComponent(GATEWAY.path)}`);
     await waitFor(() =>
@@ -191,19 +207,20 @@ describe("the history drawer", () => {
       ),
     );
     expect(
-      await screen.findByRole("complementary", { name: "History of gateway.md" }),
+      await screen.findByRole("region", { name: "History of gateway.md" }),
     ).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { level: 1, name: GATEWAY.title })).toBeVisible();
   });
 
-  test("Esc closes the drawer", async () => {
+  test("Esc closes the history", async () => {
     answerHistory();
     renderKnowledge(`${OPEN}&history=1`);
-    const drawer = await screen.findByRole("complementary", { name: "History of gateway.md" });
+    const drawer = await screen.findByRole("region", { name: "History of gateway.md" });
     fireEvent.keyDown(within(drawer).getByRole("button", { name: "Close history" }), {
       key: "Escape",
     });
-    await waitFor(() => expect(screen.queryByRole("complementary")).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "History of gateway.md" })).toBeNull(),
+    );
   });
 });
 

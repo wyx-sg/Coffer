@@ -263,6 +263,25 @@ Notable details: Codex keeps a **git baseline** of its memory folder and feeds t
 - **Nothing**: mem0 OSS and LangMem expose APIs only.
 - Codex users have an open request for official inspect/prune/delete commands, a sign that plain files alone are not felt to be a sufficient management surface.
 
+### Memory page layouts
+
+Surveyed 2026-10-12 for the Memory page (ADR [The Memory Page Lists the Memories by Scope](../decisions/memory-page-lists-memories-by-scope.md)). Sources: help.openai.com/en/articles/8590148, support.claude.com/en/articles/11817273, code.claude.com/docs/en/memory, docs.devin.ai/desktop/cascade/memories, docs.github.com/en/copilot/concepts/agents/copilot-memory, code.visualstudio.com/docs/agents/memory, support.google.com/gemini/answer/16413516, manual.raycast.com/ai/personalization, docs.letta.com/guides/ade/core-memory, docs.mem0.ai/openmemory, docs.pieces.app/products/desktop/long-term-memory.
+
+| Product | Layout | Per item | Settings |
+| --- | --- | --- | --- |
+| ChatGPT | Settings > Personalization > Memory: a list of saved memories plus a memory summary; chat-history reference has no list | text, ranked by how recently and often it comes up | two dependent toggles above the list; **Sources** under an answer show which memory was used |
+| Claude.ai | "View and edit memory": entries grouped by category; one memory space per Project | text | toggle in Capabilities, with **Pause** vs **Reset** |
+| Claude Code `/memory` | files grouped by scope (managed, user, project, local) plus the auto-memory folder | path and scope | auto-memory toggle inside the same list; `/context` shows what is loaded |
+| Windsurf | Memories (per workspace) beside Rules (global / workspace) | short statement | Customizations panel |
+| GitHub Copilot Memory | repository facts and user preferences, separately | citations to code, 28-day expiry | switch on a different settings page from the list (criticised) |
+| Gemini | "Saved info" list | text | toggle next to the list header |
+| Raycast | one read-only summary | — | one toggle |
+| Letta ADE | labelled core-memory blocks with a character limit; a block can be shared by agents | label, value, limit | context-window viewer |
+| OpenMemory (mem0) | `/memories` list across tools, `/apps` page per client | memory, **source app**, created, category, state | pause a whole app on the Apps page; per-memory access log |
+| Pieces LTM | timeline | time, source app | per-app capture allow/deny |
+
+Patterns: the list of memories is the page and settings take a line; scope (global vs project) is a grouping, not a column; multi-tool stores show the source on each memory and keep per-tool controls on their own page; status shows when something needs attention. Anti-patterns: a toggle on a different page from what it governs (Copilot), an opaque summary with no items (Raycast, early Claude.ai), dropping saves silently while memory is off (Cursor). No surveyed product shows per-item sync state across tools well; OpenMemory's access log comes closest.
+
 ### Per-project vs global scoping
 
 - **Per repository, derived from git**: Claude Code auto memory (all worktrees share one directory), Windsurf auto-memories (per workspace), Cursor's former memories (per project).

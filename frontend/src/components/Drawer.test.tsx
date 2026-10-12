@@ -1,6 +1,8 @@
-// src/components/Drawer.test.tsx — the shared drawer: Esc / ✕ close, ↑ ↓ step, footer, resizable edge.
+// src/components/Drawer.test.tsx — the shared drawer: Esc / ✕ close, ↑ ↓ step, footer, resizable edge, Maximize.
 import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+
+import { acceptance } from "@/test/acceptance";
 
 import { Drawer } from "./Drawer";
 
@@ -72,5 +74,21 @@ describe("Drawer", () => {
     expect(dialog.style.width).toBe("624px");
     fireEvent.doubleClick(edge);
     expect(dialog.style.width).toBe("640px");
+  });
+
+  acceptance("web-ui", "a drawer maximizes and restores", () => {
+    window.localStorage.removeItem("coffer.split.drawer");
+    setup();
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(screen.getByRole("button", { name: "Maximize" }));
+    expect(parseInt(dialog.style.width, 10)).toBeGreaterThan(640);
+    const restore = screen.getByRole("button", { name: "Restore" });
+    expect(restore).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(restore);
+    expect(dialog.style.width).toBe("640px");
+    expect(screen.getByRole("button", { name: "Maximize" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
   });
 });

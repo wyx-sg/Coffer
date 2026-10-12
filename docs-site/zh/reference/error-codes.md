@@ -172,6 +172,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | --- | --- | --- | --- |
 | `KNOWLEDGE_COLLECTION_NOT_FOUND` | 404 | 调用方看不到这个名字的知识集。 | 在知识页面选一个知识集。 |
 | `KNOWLEDGE_COLLECTION_EXISTS` | 409 | 已存在同名知识集。 | 换一个名字。 |
+| `KNOWLEDGE_COLLECTION_LINKED` | 409 | 这个知识集是接入的外部文件夹，Coffer 只把它共享给智能体：不往里上传、不从中删除、不改它的描述、不检查、不整理，也不记录它的历史。 | 用这个文件夹自己的工具（比如编辑器或 Obsidian）去改。 |
+| `KNOWLEDGE_FOLDER_REFUSED` | 400 | 无法接入这个文件夹：它不存在、路径不是绝对路径，或者它是 Coffer 自己的文件夹或包含它的文件夹（比如你的主目录）。 | 用绝对路径选一个 `~/.coffer` 之外已存在的文件夹；只想共享大文件夹的一部分时，接入其中的子文件夹。 |
 | `KNOWLEDGE_FILE_NOT_FOUND` | 404 | 该路径下没有文档。 | 在知识页面浏览该知识集的文件夹。 |
 | `KNOWLEDGE_PATH_UNSAFE` | 400 | 路径跳出了知识根目录、指向隐藏条目，或无法指代一篇文档。 | 使用指向知识集内某篇 Markdown 文档的相对路径。 |
 | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 | 上传超过了消息中给出的大小上限。 | 拆分文档或上传更小的文件。 |
@@ -179,6 +181,8 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `KNOWLEDGE_HISTORY_UNAVAILABLE` | 503 | 本机不记录知识历史，通常是因为没装 git。写入仍然可用。 | 安装 git；历史从下一次写入开始记录。 |
 | `KNOWLEDGE_NOT_A_DELETE` | 400 | 你要恢复的改动没有删除任何文档或知识集。 | 撤销只能恢复一次删除；要恢复文档的早期版本，请改用它的**历史**标签。 |
 | `KNOWLEDGE_RESTORE_CONFLICT` | 409 | 放回被删除的文档会覆盖该路径上现在的文件。`details` 给出版本和文档；什么都没写。 | 先移走或重命名该路径上的文件，再恢复。 |
+| `KNOWLEDGE_NOT_A_CHANGE` | 400 | 你要撤销的改动没有动过任何知识文件，或者它动过的文件已经是改动之前的样子。 | 从知识集的**改动记录**里选一条改动。 |
+| `KNOWLEDGE_UNDO_CONFLICT` | 409 | 撤销这次改动会丢掉之后对它的文件所做的修改。`details.documents` 列出这些文件；什么都没写。 | 带 `force: true` 再撤销一次（对话框里的**仍然撤销**）丢掉这些修改，或者保留这次改动。 |
 | `KNOWLEDGE_ERROR` | 400 | 知识层的其他拒绝。 | 阅读 `message`。 |
 | `ENGINE_UNAVAILABLE` | 503 | 操作所需的某个二进制或转换器（ripgrep，或文档转换后端）不可用。 | 重新安装 Coffer；打包附带的二进制中包含它们。 |
 

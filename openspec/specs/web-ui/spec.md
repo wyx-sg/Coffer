@@ -25,6 +25,14 @@ for the axis it replaced (sidebar policy kept from it: no "soon" placeholders).
 appears in the sidebar only once it ships; Activity is not it, because a record
 of what happened is not a measurement of how the system is doing.
 
+Coffer shows files; the person's own editor changes them. Viewing a file Coffer
+manages or reads — a knowledge document, a memory, a skill file, an agent's
+config file — happens in Coffer's own UI, and so does a vault file's history,
+including putting back an earlier version of it. Changing a file's content is never done in
+Coffer's UI: every file viewer is read-only and offers **Open in editor** (see
+"Let the user choose an external editor"). A config file is previewed raw and
+read-only, as the agent reads it, never through a form that rewrites it.
+
 This capability adds no REST route and no backend of its own. Every screen
 renders over routes and entities other capabilities own, and those are named
 where they are used. The Activity page in particular reads three records with
@@ -220,8 +228,9 @@ and paginated where its list needs that, and it behaves the same everywhere:
   selected" with the actions that apply, it holds no select-all of its own, and
   **Esc** clears the selection;
 - a row's detail that opens beside the list opens in the one right-hand drawer,
-  640 wide over a dimmed page, closed by **Esc**, a click outside or its ✕, with
-  focus returning to the row.
+  640 wide over a dimmed page, resized by dragging its left edge and widened as
+  far as it goes by its **Maximize** button until **Restore** or a drag, closed
+  by **Esc**, a click outside or its ✕, with focus returning to the row.
 
 The rules above have their exceptions: Sync's rounds table, whose quiet rounds
 fold into one row, has no search or filter. A row click MUST open that item's
@@ -235,7 +244,8 @@ what a click on its name does, except when it lands on a control inside the row
 (a button, link, switch, checkbox, menu item or input), carries a modifier key,
 or ends a text selection; the name stays a real link or button, so keyboard
 focus, Cmd/Ctrl-click and middle-click keep working. Knowledge is
-its collection tree beside the pane in the same way. Activity's tabs share one
+its collection tree beside the pane in the same way, and Memory its scopes
+beside the open scope's memories, each opening in the drawer. Activity's tabs share one
 record list of their own, each row opening its record (see "Filter each
 Activity tab and expand any row"). Sync's Remote tab is not a list surface: it
 is the remote's settings, and the machine registry on its Machines tab is a
@@ -255,6 +265,11 @@ small plain table.
 - **GIVEN** a list surface showing at least one row
 - **WHEN** the user clicks the row, or presses Enter on it
 - **THEN** the app navigates to that item's detail page
+
+#### Scenario: a drawer maximizes and restores
+- **GIVEN** a record open in the shared drawer
+- **WHEN** the user chooses Maximize, and then Restore
+- **THEN** the drawer first takes the page's width but for a strip on the left, then returns to its dragged width
 
 ### Requirement: Label every row action
 A row action MUST be an icon plus its label, never a bare icon — a bare icon
@@ -1555,7 +1570,7 @@ command, and the failing callout and a failed test's result offer the diagnosis 
 #### Scenario: a rejected key reads Replace key
 - **GIVEN** an MCP server whose status reads failing with `failure_reason` `auth_rejected`, and an Overview item with the verb `replace_key`
 - **WHEN** the server's page opens and the Overview lists the item
-- **THEN** the failing callout says the key was rejected and offers Replace key, which opens the Replace value dialog on the secret its env or headers cite (the edit dialog when the key is typed into the config itself), and the Overview row's action reads Replace key and opens the server's page
+- **THEN** the failing callout says the key was rejected and offers Replace key, which opens the Replace dialog on the secret its env or headers cite (the edit dialog when the key is typed into the config itself), and the Overview row's action reads Replace key and opens the server's page
 
 #### Scenario: a failed test offers a diagnosis hand-off beside View log
 - **GIVEN** an MCP server whose test just failed with an error and a `handoff`
@@ -3112,7 +3127,7 @@ validates its source inline and MUST carry the Available to reach control.
 - **AND** the banner offers no Copy prompt or Ask an agent
 
 ### Requirement: Show a vault file's history on a History tab
-A managed skill MUST carry a **History** tab (spec skill-manager "Manage skills on REST and on the Skills page"), and a knowledge page or source a **History** button that opens the same card in a drawer beside the file, which stays in view (spec knowledge "Show a collection as one tree of read-only documents in the web UI"); either reads the history of the skill's master folder or the knowledge file in the vault ([vault-storage](../vault-storage/spec.md) "Show and restore any version of a vault file or folder"). It MUST be one bordered card split by a divider: on the left the versions, newest first, under a **Versions** header with their count — each row saying what the version did (Created, Edited, Deleted, a file added, removed or changed, N files changed, or which version a restore put back), who wrote it (You, Edited on disk, an agent by its product name, Coffer, Sync) and when, and the lines it moved — the newest marked **Current** and chosen when the tab opens; on the right the chosen version with its short id, writer and time, and every file it changed under its path, operation and line counts, drawn by the one diff renderer ("Draw every diff in the web UI with one renderer"). A version other than the current one MUST offer a switch between **Changes in this version** (against the version before it) and **Compare with current** (from that version to the path as it is now), and **Restore this version…**, which asks first — saying the result is a new version and, for a folder, that files added since are removed — and on confirmation restores it stating the newest version the tab listed, so a path changed since is refused and the refusal stays in the dialog; the restore never rewrites the past. A history that cannot be read MUST say so in one **Load error** row inside the tab with **Retry**, leaving the rest of the page working; a path with no recorded version says that its versions will be listed there. The divider moves both ways — the list narrows to 160 px and widens to leave the diff 320 px — and its position is remembered per kind. The knowledge file's and the skill's ⋯ menus offer no History… item.
+A managed skill MUST carry a **History** tab (spec skill-manager "Manage skills on REST and on the Skills page"), and a knowledge page or source a **History** button that opens the same card over the whole Knowledge area (spec knowledge "Show a collection as one tree of read-only documents in the web UI"); either reads the history of the skill's master folder or the knowledge file in the vault ([vault-storage](../vault-storage/spec.md) "Show and restore any version of a vault file or folder"). It MUST be one bordered card split by a divider: on the left the versions, newest first, under a **Versions** header with their count — each row saying what the version did (Created, Edited, Deleted, a file added, removed or changed, N files changed, or which version a restore put back), who wrote it (You, Edited on disk, an agent by its product name, Coffer, Sync) and when, and the lines it moved — the newest marked **Current** and chosen when the tab opens; on the right the chosen version with its short id, writer and time, and every file it changed under its path, operation and line counts, drawn by the one diff renderer ("Draw every diff in the web UI with one renderer"). A version other than the current one MUST offer a switch between **Changes in this version** (against the version before it) and **Compare with current** (from that version to the path as it is now), and **Restore this version…**, which asks first — saying the result is a new version and, for a folder, that files added since are removed — and on confirmation restores it stating the newest version the tab listed, so a path changed since is refused and the refusal stays in the dialog; the restore never rewrites the past. A history that cannot be read MUST say so in one **Load error** row inside the tab with **Retry**, leaving the rest of the page working; a path with no recorded version says that its versions will be listed there. The divider moves both ways — the list narrows to 160 px and widens to leave the diff 320 px — and its position is remembered per kind. The knowledge file's and the skill's ⋯ menus offer no History… item.
 
 #### Scenario: the history tab lists versions with their writers and restores one
 - **GIVEN** a knowledge document the user created, an agent then changed, and the person then edited in their own editor
@@ -3278,3 +3293,38 @@ under `~/.coffer/derived/` is not shown. Edits auto-save, like every settings su
 - **GIVEN** recording on, its default
 - **WHEN** the user turns Record tool call content off on `/settings/data` and reloads
 - **THEN** the switch reads off, and calls made from then on open with "Content was not recorded for this call"
+
+### Requirement: Replace a resource's secret through one dialog
+Wherever the app replaces a secret a resource already uses — a model provider's API key, a channel's
+bot token or app secret, an MCP server's environment variable or header, a custom-tool group's
+header, a secret menu's **Change value…**, and the banners for a missing or rejected secret — it MUST
+use one **Replace** dialog titled **Replace <field>**. The dialog MUST name the current secret
+(a link to its page on the Secrets page), say which other resources use it when there are any,
+and offer **Enter a new value** — an empty, write-only field whose value is written under the
+reference the resource already cites, so everything citing it gets the value — and, where the
+resource can be re-pointed, **Use another secret**, a picker of the other stored secrets that also
+offers **New secret…**, which re-points only that resource and leaves the old secret and its value
+as they are. A resource that can check a pasted value (a provider listing its models, a channel
+asking its platform) checks it in the same dialog, and a value the platform rejects cannot be
+saved. A secret this Mac holds no value for reads **Add <field>** with **Add key**. An Edit dialog
+that holds a secret (a model provider's) MUST offer the same fields in place: **Replace** on its
+key row opens them, what is entered there is saved with the rest of the form, and **Keep current
+key** folds them away with nothing changed. The Secrets page's own Edit, which changes the secret
+itself, and the add forms' secret field, which chooses one, are not Replace dialogs.
+
+#### Scenario: replacing a secret offers a new value or another stored secret
+- **GIVEN** a resource field citing a stored secret, and another stored secret
+- **WHEN** the user opens Replace on that field
+- **THEN** the dialog reads **Replace <field>** and names the current secret
+- **AND** a new value with **Replace key** is written under the current reference, while **Use another secret** lists only the other secret and **Use this secret** re-points the field to it
+
+#### Scenario: a secret missing on this Mac reads Add
+- **GIVEN** a field citing a secret this Mac holds no value for
+- **WHEN** the user opens its Replace dialog
+- **THEN** it reads **Add <field>**, and **Add key** stores the value under the reference the field cites
+
+#### Scenario: a provider's Edit dialog replaces its key with the form
+- **GIVEN** a model provider with a stored key
+- **WHEN** the user opens Edit, chooses **Replace** on the API Key row, enters a new value and saves
+- **THEN** the key's value is replaced under the same reference when the form is saved
+- **AND** **Keep current key** folds the fields away and Save then leaves the key as it was

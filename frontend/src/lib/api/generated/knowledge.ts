@@ -48,6 +48,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge/changes/{version}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Change
+         * @description Put every file a change touched — a tidy — back as it was just before
+         *     it, as one new change naming the user. 409 ``KNOWLEDGE_UNDO_CONFLICT``
+         *     naming the files edited since, unless ``force``; nothing is written then.
+         */
+        post: operations["undo_change_api_v1_knowledge_changes__version__undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge/collections": {
         parameters: {
             query?: never;
@@ -60,6 +82,27 @@ export interface paths {
         put?: never;
         /** Create Collection */
         post: operations["create_collection_api_v1_knowledge_collections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/collections/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link Collection
+         * @description Share a folder the person keeps themselves with every agent; nothing is
+         *     copied into Coffer ("Link a folder the person keeps themselves").
+         */
+        post: operations["link_collection_api_v1_knowledge_collections_link_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -101,6 +144,69 @@ export interface paths {
          */
         put: operations["describe_collection_api_v1_knowledge_collections__uid__description_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/collections/{uid}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Collection Files
+         * @description Every page and source of a collection with its title, page type and
+         *     waiting mark ("Show a collection's contents by page type").
+         */
+        get: operations["collection_files_api_v1_knowledge_collections__uid__files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/collections/{uid}/tidy/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish Tidy
+         * @description Close the collection's tidy and commit what it changed as one change
+         *     carrying the report; ``change`` is ``null`` when it changed nothing.
+         */
+        post: operations["finish_tidy_api_v1_knowledge_collections__uid__tidy_finish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/collections/{uid}/tidy/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Tidy
+         * @description Open a tidy of the collection: until it finishes, the edits made in it
+         *     are kept for one change ("Record a tidy as one change").
+         */
+        post: operations["start_tidy_api_v1_knowledge_collections__uid__tidy_start_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -219,14 +325,14 @@ export interface components {
             item: string | null;
             /**
              * Operation
-             * @description `save`, `delete`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, `remove`, `layout` or `baseline`; a change a retired curation pass made also reads `pass`, `submit` or `undo`.
+             * @description `save`, `delete`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, `remove`, `layout`, `baseline` or `tidy` (one tidy an agent did, its report the summary); a change a retired curation pass made also reads `pass`, `submit` or `undo`.
              */
             operation: string;
             /** Restored From */
             restored_from: string | null;
             /**
              * Status
-             * @description A retired curation pass's outcome status.
+             * @description A tidy's `reported` (its agent finished it with a report) or `expired` (Coffer closed it after its collection sat unchanged); a retired curation pass's outcome status.
              */
             status: string | null;
             /** Summary */
@@ -289,6 +395,22 @@ export interface components {
             /** Description */
             description: string;
         };
+        /**
+         * CollectionFilesOut
+         * @description Every page and source of one collection, for its page's Contents
+         *     ("Show a collection's contents by page type").
+         */
+        CollectionFilesOut: {
+            /** Files */
+            files: components["schemas"]["FileSummaryOut"][];
+        };
+        /** CollectionLink */
+        CollectionLink: {
+            /** Folder */
+            folder: string;
+            /** Name */
+            name?: string | null;
+        };
         /** CollectionListOut */
         CollectionListOut: {
             /** Collections */
@@ -296,7 +418,6 @@ export interface components {
         };
         /** CollectionOut */
         CollectionOut: {
-            check_handoff: components["schemas"]["HandoffOut"];
             /** Description */
             description: string;
             /**
@@ -309,19 +430,39 @@ export interface components {
              * @default
              */
             folder_path: string;
+            /**
+             * Linked
+             * @default false
+             */
+            linked: boolean;
             /** Name */
             name: string;
+            /**
+             * Note Count
+             * @default 0
+             */
+            note_count: number;
             /**
              * Page Count
              * @default 0
              */
             page_count: number;
             /**
+             * Rules File
+             * @default
+             */
+            rules_file: string;
+            /**
              * Source Count
              * @default 0
              */
             source_count: number;
             tidy_handoff: components["schemas"]["HandoffOut"];
+            /**
+             * Tidy Running
+             * @default false
+             */
+            tidy_running: boolean;
             /** Uid */
             uid: string;
             /** Updated At */
@@ -428,6 +569,11 @@ export interface components {
             /** Updated At */
             updated_at: string;
             /**
+             * Verified
+             * @default
+             */
+            verified: string;
+            /**
              * Waiting
              * @default false
              */
@@ -527,6 +673,38 @@ export interface components {
              */
             title: string;
         };
+        /**
+         * TidyFinishIn
+         * @description The agent's report on the tidy it finished.
+         */
+        TidyFinishIn: {
+            /**
+             * Summary
+             * @description Which sources it integrated or skipped, what it merged, split, corrected and deleted, and what it left for the person to decide.
+             * @default
+             */
+            summary?: string;
+        };
+        /** TidyFinishOut */
+        TidyFinishOut: {
+            /** @description The tidy's one change; null when it changed nothing. */
+            change: components["schemas"]["ChangeOut"] | null;
+        };
+        /**
+         * TidyStatusOut
+         * @description Where a collection's tidy stands ("Record a tidy as one change").
+         */
+        TidyStatusOut: {
+            /** Collection */
+            collection: string;
+            /** Running */
+            running: boolean;
+            /**
+             * Started At
+             * @description When the open tidy started (ISO 8601, UTC); null when none is.
+             */
+            started_at: string | null;
+        };
         /** TreeOut */
         TreeOut: {
             /** Directories */
@@ -535,6 +713,18 @@ export interface components {
             files: components["schemas"]["FileSummaryOut"][];
             /** Path */
             path: string;
+        };
+        /**
+         * UndoIn
+         * @description Undo a change ("Undo a tidy").
+         */
+        UndoIn: {
+            /**
+             * Force
+             * @description Undo even when a file was edited after the change, discarding those edits.
+             * @default false
+             */
+            force?: boolean;
         };
     };
     responses: never;
@@ -602,6 +792,53 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    undo_change_api_v1_knowledge_changes__version__undo_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UndoIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -717,6 +954,51 @@ export interface operations {
             };
         };
     };
+    link_collection_api_v1_knowledge_collections_link_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionLink"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     check_collection_api_v1_knowledge_collections__uid__check_get: {
         parameters: {
             query?: never;
@@ -784,6 +1066,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CollectionOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    collection_files_api_v1_knowledge_collections__uid__files_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionFilesOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    finish_tidy_api_v1_knowledge_collections__uid__tidy_finish_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TidyFinishIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TidyFinishOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    start_tidy_api_v1_knowledge_collections__uid__tidy_start_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TidyStatusOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

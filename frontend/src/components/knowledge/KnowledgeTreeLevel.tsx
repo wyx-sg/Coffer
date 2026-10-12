@@ -2,7 +2,8 @@
 //
 // ONE level of a collection's documents, and the recursion that walks it. The
 // rows are the Knowledge tree's rows (navRow.ts, boards 5.1.01, 5.1.09):
-// chevron, folder / open-folder or file icon, a folder's name in the sans face
+// chevron, folder / open-folder icon or the file's own — a page's type's
+// icon, a source's (lib/knowledge/pageTypes.ts) — a folder's name in the sans face
 // and a file's in the mono face — `port-and-handshake.md`, as it is on disk and
 // as an agent reads it — a 16px indent a level, and the open document filled
 // `surface-selected`.
@@ -10,15 +11,16 @@
 // What is NOT copied is the fetch. A collection descends a level per request,
 // so each expanded directory mounts another level and fetches its own listing
 // — and directories start CLOSED, except the ones on the way to the open
-// document, so a deep link lands with its document visible in the tree.
+// document, so a deep link lands with its document visible in the tree. What
+// the person opened and closed is kept in the browser (lib/knowledge/
+// treeState.ts), so the tree comes back as it was left.
 //
 // At a collection's root its two folders come first, labelled Pages and
 // Sources, then any other entry; a waiting source carries a dot and the word
 // Waiting (spec knowledge "Show a collection as one tree of read-only documents
 // in the web UI").
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react";
 
 import {
   NAV_CHEVRON,
@@ -34,6 +36,8 @@ import { StatusDot } from "@/components/status/StatusDot";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import { useKnowledgeTree } from "@/lib/hooks/useKnowledge";
+import { fileIcon } from "@/lib/knowledge/pageTypes";
+import { useTreeState } from "@/lib/knowledge/treeState";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -73,8 +77,7 @@ export function KnowledgeTreeLevel({
   const { t } = useTranslation();
   // What the person opened and closed; a folder on the way to the open
   // document is open unless they closed it.
-  const [opened, setOpened] = useState<Set<string>>(new Set());
-  const [closed, setClosed] = useState<Set<string>>(new Set());
+  const { opened, closed, setOpen } = useTreeState("folders");
   const { data, isPending, error } = useKnowledgeTree(path);
 
   if (error) {
@@ -109,21 +112,7 @@ export function KnowledgeTreeLevel({
 
   const isOpen = (dir: string) =>
     opened.has(dir) || (!closed.has(dir) && Boolean(selectedPath?.startsWith(`${dir}/`)));
-  const toggle = (dir: string) => {
-    const nowOpen = !isOpen(dir);
-    setOpened((prev) => {
-      const next = new Set(prev);
-      if (nowOpen) next.add(dir);
-      else next.delete(dir);
-      return next;
-    });
-    setClosed((prev) => {
-      const next = new Set(prev);
-      if (nowOpen) next.delete(dir);
-      else next.add(dir);
-      return next;
-    });
-  };
+  const toggle = (dir: string) => setOpen(dir, !isOpen(dir));
 
   return (
     <ul className="flex flex-col gap-px">
@@ -166,6 +155,7 @@ export function KnowledgeTreeLevel({
 
       {data.files.map((file) => {
         const active = selectedPath === file.path;
+        const Icon = fileIcon(file);
         return (
           <li key={file.path}>
             <button
@@ -178,7 +168,11 @@ export function KnowledgeTreeLevel({
             >
               {/* The chevron's width, blank, so file rows line up with folders. */}
               <span className={NAV_CHEVRON} />
-              <FileText className={NAV_ICON} aria-hidden />
+              <Icon
+                className={NAV_ICON}
+                aria-hidden
+                data-icon={file.kind === "page" ? file.page_type || "untyped" : file.kind}
+              />
               <span className={cn(NAV_NAME, active && "font-label")}>
                 {file.path.split("/").pop()}
               </span>

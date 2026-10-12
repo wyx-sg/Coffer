@@ -3,7 +3,7 @@
 // The one /knowledge page end-to-end, against a live daemon: create a
 // collection and upload an item over the REST API, then walk the page in the
 // real DOM — the collection in the tree, the upload opened read-only from its
-// Sources folder, and listed as a version in the file's History drawer.
+// Sources folder, and listed as a version in the file's history.
 //
 // Nothing auto-provisions a collection (spec knowledge "Create collections
 // only deliberately"), so a walk starts by making one. An upload is kept as a
@@ -63,7 +63,7 @@ async function submitItem(page: Page, collection: string, body: string) {
   return (await res.json()) as { path: string };
 }
 
-test("a collection is one tree; an uploaded source is read, opened in the editor and has a History drawer", async ({
+test("a collection is one tree; an uploaded source is read, opened in the editor and has a history", async ({
   page,
 }) => {
   const name = `e2e-tree-${Date.now()}`;
@@ -110,15 +110,12 @@ test("a collection is one tree; an uploaded source is read, opened in the editor
     page.getByRole("button", { name: "Edit", exact: true }),
   ).toHaveCount(0);
 
-  // History opens a drawer beside the file (no tabs) and lists the upload as
-  // the file's one version, read from the vault's history, with no restore
-  // offered on the current version. The file stays in view.
+  // History takes over the whole Knowledge area (no tabs; the tree and the
+  // file make way) and lists the upload as the file's one version, read from
+  // the vault's history, with no restore offered on the current version.
   await page.getByRole("button", { name: "History", exact: true }).click();
   await expect(page).toHaveURL(/[?&]history=1/);
-  // The rendered file, not the drawer's diff of it, which carries the same text.
-  await expect(
-    page.getByRole("paragraph").filter({ hasText: "The first body." }),
-  ).toBeVisible();
+  await expect(tree).toHaveCount(0);
   const versions = page.getByRole("list", { name: "Versions" });
   await expect(versions.getByRole("button")).toHaveCount(1);
   await expect(versions.getByRole("button").first()).toContainText("Current");

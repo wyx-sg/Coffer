@@ -32,6 +32,15 @@ collection's name and nothing about its contents. There is no per-agent reach
 and no `enabled` switch in play for this kind (see "Serve every collection to
 every agent"): the kind is non-toggleable, and it is always enabled.
 
+A **linked folder** (see "Link a folder the person keeps themselves") has no
+tree under the knowledge root at all. It is one resource file whose config is
+`{"folder": "<absolute path>"}`, filed in the machine-local class at
+`local/resources/knowledge/<name>.json` with the home written as `${HOME}`, and
+never in the vault (ADR linked-knowledge-folders-are-read-only-and-machine-local).
+The folder it names is the person's: Coffer reads it in place and writes
+nothing into it, so it has no `sources/`, `pages/`, `.inbox/` or history of
+Coffer's (see "Leave a linked folder to its own tools").
+
 ## On-disk layout
 
 ```text
@@ -143,6 +152,7 @@ updated_at: '2026-09-12T04:18:33Z'
 | `type` | `str` | A page's type: `concept`, `entity`, `how-to`, `decision` or `overview` by default, or one the README defines. Missing → `incomplete_page`. |
 | `sources` | list of `str` | A page's sources, by slug. Empty → `unsourced_page`; a slug no source has → `missing_source`. |
 | `aliases` | list of `str` | More names a page answers to in a `[[link]]`. |
+| `verified` | `YYYY-MM-DD` `str` | When the page was last checked against its sources or the code. Optional; returned on a page's read as written. |
 | `ingest` | `skipped` | Set by an agent on a source with nothing worth keeping, so it stops waiting. |
 
 A page's **slug** is its file stem; so is a source's. A `[[slug]]` or
@@ -227,13 +237,13 @@ of them is persisted and none of them can be stale.
 
 | Type | Fields | What it is |
 | --- | --- | --- |
-| `CollectionEntry` | `uid`, `name`, `description`, `page_count`, `source_count`, `waiting_source_count`, `finding_count`, `findings`, `folder_path`, `updated_at` | One collection, with the counts and findings its wiki graph gives. |
+| `CollectionEntry` | `uid`, `name`, `description`, `page_count`, `source_count`, `waiting_source_count`, `finding_count`, `findings`, `folder_path`, `updated_at`, `linked`, `note_count`, `rules_file` | One collection, with the counts and findings its wiki graph gives. For a linked folder `linked` is true, `note_count` counts its Markdown files, `rules_file` names the first of `AGENTS.md`, `CLAUDE.md` and `README.md` at its root (empty when none), and the wiki counts are zero. |
 | `DirectoryEntry` | `path`, `name`, `file_count` | A subdirectory at the level being listed. `path` is relative to the root — pass it back to descend. |
 | `FileEntry` | `path`, `title`, `description`, `actor`, `updated_at`, `kind`, `page_type`, `waiting` | One file as a listing or a catalogue shows it: enough to judge relevance without reading the body. |
 | `CatalogueLevel` | `path`, `directories`, `files` | **One level of one collection**, never the whole tree. |
 | `Finding` | `kind`, `path`, `target`, `others` | One mechanical finding (see "Check a collection mechanically on every read"). |
 | `SourceRef`, `LinkRef`, `PageRef` | `slug`/`target`, `path`, `title`/`ambiguous` | A page's `sources` entry or `[[link]]` with what it resolves to; a page that cites a source. |
-| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `kind`, `page_type`, `aliases`, `sources`, `links`, `cited_by`, `waiting` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); Coffer serves a document's bytes only to be shown: no route saves them (see "Treat a direct file edit as a complete change"). |
+| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `kind`, `page_type`, `aliases`, `verified`, `sources`, `links`, `cited_by`, `waiting` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); Coffer serves a document's bytes only to be shown: no route saves them (see "Treat a direct file edit as a complete change"). |
 
 Constants: `ACTOR_AGENT = "agent"`, `ACTOR_USER = "user"`.
 
@@ -255,12 +265,23 @@ kept, whichever converter ran.
 
 The HTTP wire models in `surfaces/http/knowledge/schemas.py` mirror the domain
 types and add the shapes that describe an answer no domain type does:
-`CollectionCreate`; `MaterialIn` (`collection`, `title`, `description`, `body`);
+`CollectionCreate`; `CollectionLink` (`folder`, the absolute path, and an
+optional `name`) for `POST /knowledge/collections/link` (see "Link a folder the
+person keeps themselves"); `MaterialIn` (`collection`, `title`, `description`, `body`);
 `HandoffOut` (`prompt` and the facts it was written from), carried on a
-collection's read as `tidy_handoff` and `check_handoff`, and answered by
+collection's read as `tidy_handoff` and answered by
 `GET /knowledge/tidy-handoff` for all collections (see "Hand a tidy to the
-agent", "Hand a check to the agent"); `CheckOut` (`collection`, `findings` of
-`FindingOut`), answered by `GET /knowledge/collections/{uid}/check`; and
+agent"); a collection's read also carries `tidy_running`, whether an agent has
+a tidy of it open (see "Record a tidy as one change"), and `linked`,
+`note_count` and `rules_file` as on `CollectionEntry`; `CheckOut`
+(`collection`, `findings` of `FindingOut`), answered by
+`GET /knowledge/collections/{uid}/check`; `CollectionFilesOut` (`files` of
+`FileSummaryOut`), answered by `GET /knowledge/collections/{uid}/files` (see
+"Show a collection's contents by page type"); `TidyStatusOut` (`collection`,
+`running`, `started_at`), answered by `POST .../tidy/start`; `TidyFinishIn`
+(`summary`, the agent's report) and `TidyFinishOut` (`change`, null when the
+tidy changed nothing) for `POST .../tidy/finish`; `UndoIn` (`force`) for
+`POST /knowledge/changes/{version}/undo` (see "Undo a tidy"); and
 `IngestedDocumentOut` (`path`, `title`, `description`, `converter`). There is no
 write-a-document model: every entrance submits material, which becomes a
 document at once, and a person's own text reaches a document through their
@@ -290,8 +311,11 @@ the live vault — and it could not have withheld anything it was asked to: the
 skill it narrows hands the agent the absolute knowledge root and tells it to
 grep. `PUT .../scope` on this kind is refused with `SCOPE_INVALID`.
 
-`KnowledgeConfig` (`domain/knowledge/config.py`) is **empty and forbids unknown
-keys**. A collection has no settings at all: no retrieval modes, no chunk size,
+`KnowledgeConfig` (`domain/knowledge/config.py`) **forbids unknown keys** and
+holds one optional field, `folder`, the absolute path a linked folder names; a
+collection Coffer keeps leaves it unset and its config stays `{}` on disk. The
+kind's `storage_row` hook files a row that names a folder in the machine-local
+class. A collection Coffer keeps has no settings at all: no retrieval modes, no chunk size,
 no entry-length cap, no embedding fields, no auto-update flag, no display label
 (see "Add no table and no directory outside the knowledge root"). Anything that
 used to be configured per scope was configuring machinery that no longer exists.
@@ -315,7 +339,9 @@ the hidden drop zone is never versioned.
 
 There is still no table and no index: the history is git's, read with `git log`
 by a person or an agent; the daemon reads it for one thing, the changes feed
-behind a delete's Undo (`GET /knowledge/changes`, `POST /knowledge/changes/{version}/restore`).
+behind a delete's Undo, a tidy's Undo and a collection's Change log
+(`GET /knowledge/changes`, `POST /knowledge/changes/{version}/restore`,
+`POST /knowledge/changes/{version}/undo`).
 
 **One commit per operation.** A person's upload, delete or Undo of a delete, or description edit; material
 promoted on arrival; a collection created, renamed or removed. Before any of them, whatever changed under
@@ -324,18 +350,33 @@ so a person's own editor is never counted as Coffer's; the sweep and every
 read of the changes feed do the same. A sync round's merge is a `sync` commit by
 construction.
 
+**A tidy is one commit.** While an agent has a tidy of a collection open
+(`coffer knowledge tidy-start`), the vault writer *pauses* the collection's
+path prefix: no settle — the vault scanner, the sweep, a sync round, another
+Coffer write — commits its edits. Closing the tidy (`tidy-finish`, or the sweep
+after the collection sat unchanged for 30 minutes) commits them all as one
+commit by the `agent` writer, operation `tidy`, the agent's report as its
+summary and `Coffer-Status: reported` (or `expired`, with no report). The open
+tidies are a registry in the daemon's memory (`infrastructure/knowledge/tidy_runs.py`),
+not stored: a restart forgets an open tidy, and its edits are then committed as
+ordinary `disk` writes (see "Record a tidy as one change"). Undoing a change is
+one commit by the `user` writer, operation `restore`, carrying `Coffer-Undoes`
+(see "Undo a tidy").
+
 **Trailers.** Each commit's message is a summary line and the vault's trailers
 (spec vault-storage), with the knowledge history's own four added:
 
 | Trailer | Value |
 | --- | --- |
-| `Coffer-Writer` | `user`, `agent`, `sync`, `disk` or `daemon` (filing loose documents); `curation` on commits an earlier version of Coffer made |
-| `Coffer-Operation` | `save`, `delete`, `submit`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, `remove`, `layout`, `baseline`; `pass` and `undo` on commits an earlier version made |
+| `Coffer-Writer` | `user`, `agent` (a tidy, or material an agent submitted), `sync`, `disk` or `daemon` (filing loose documents); `curation` on commits an earlier version of Coffer made |
+| `Coffer-Operation` | `save`, `delete`, `submit`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, `remove`, `layout`, `baseline`, `tidy`; `pass` and `undo` on commits an earlier version made |
 | `Coffer-Actor` | the audit actor of the operation |
 | `Coffer-Machine` | the machine that made the commit |
 | `Coffer-Agent` | an agent writer's name |
 | `Coffer-Collection` | the collection's name |
 | `Coffer-Restored-From` | the commit a restore reverses to (an Undo, or an agent's restore of the history hand-off) |
+| `Coffer-Status` | a tidy's `reported` (its agent finished it with a report) or `expired` (the sweep closed it) |
+| `Coffer-Undoes` | the change an Undo of a tidy put back |
 
 Commits an earlier version of Coffer made as curation passes keep their
 `Coffer-Item`, `Coffer-Status` and `Coffer-Undoes` trailers in the history and
@@ -394,7 +435,10 @@ channel — records one `KNOWLEDGE_WRITTEN` `audit_log` event naming the caller
 (`actor_reported: true` when the actor came from the file's own frontmatter),
 with the document path it was promoted to (see "Adopt a file dropped into the
 inbox"); an Undo of a delete records
-`KNOWLEDGE_EDITED` with the path and `restored_from`; a delete records `KNOWLEDGE_DELETED`. `KNOWLEDGE_CURATED` rows an
+`KNOWLEDGE_EDITED` with the path and `restored_from`; starting and finishing a
+tidy each record `KNOWLEDGE_EDITED` (`tidy: started`, or `tidy: finished` with
+the change's version and file count); an Undo of a tidy records
+`KNOWLEDGE_EDITED` with `undoes`, its paths and the later edits it discarded; a delete records `KNOWLEDGE_DELETED`. `KNOWLEDGE_CURATED` rows an
 earlier version of Coffer recorded for curation passes stay in the audit log and
 keep rendering under their label.
 

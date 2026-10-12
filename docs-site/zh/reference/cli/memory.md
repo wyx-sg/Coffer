@@ -25,6 +25,7 @@ coffer memory [OPTIONS] COMMAND [ARGS]...
 | [`memory undo`](#memory-undo) | Remove every unedited copy Coffer wrote on this machine and turn automatic sync off. |
 | [`memory codex-import`](#memory-codex-import) | Say whether Codex imports Claude Code's memories itself. |
 | [`memory entries`](#memory-entries) | A project's memories with their origin and where each was written. |
+| [`memory show`](#memory-show) | One memory's text and the file each agent on this machine holds it in. |
 | [`memory curate`](#memory-curate) | Ask an agent to consolidate its own memory now. |
 
 ## memory state
@@ -140,6 +141,23 @@ coffer memory entries [OPTIONS]
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `--project` <span class="cli-chip">选项</span> | text |  | The project key, or global |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## memory show
+
+One memory's text and the file each agent on this machine holds it in.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer memory show [OPTIONS] ENTRY_ID
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `ENTRY_ID` <span class="cli-chip">参数</span> | text | 必填 | The memory's id (from coffer memory entries) |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## memory curate

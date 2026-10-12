@@ -29,6 +29,7 @@ from coffer.surfaces.http.knowledge import schemas
 _EXPECTED_ROUTES = {
     ("GET", "/api/v1/knowledge/collections"),
     ("POST", "/api/v1/knowledge/collections"),
+    ("POST", "/api/v1/knowledge/collections/link"),
     # A collection's mechanical findings (see "Check a collection mechanically
     # on every read"); nothing here fixes one.
     ("GET", "/api/v1/knowledge/collections/{uid}/check"),
@@ -52,6 +53,14 @@ _EXPECTED_ROUTES = {
     ("GET", "/api/v1/knowledge/changes"),
     ("POST", "/api/v1/knowledge/changes/{version}/restore"),
     ("PUT", "/api/v1/knowledge/collections/{uid}/description"),
+    # A collection's contents for its page (see "Show a collection's contents
+    # by page type"); a tidy opened and closed by its agent so it is one change
+    # (see "Record a tidy as one change"); and undoing a change (see "Undo a
+    # tidy").
+    ("GET", "/api/v1/knowledge/collections/{uid}/files"),
+    ("POST", "/api/v1/knowledge/collections/{uid}/tidy/start"),
+    ("POST", "/api/v1/knowledge/collections/{uid}/tidy/finish"),
+    ("POST", "/api/v1/knowledge/changes/{version}/undo"),
 }
 
 
@@ -121,7 +130,7 @@ def test_an_ingested_document_names_the_source_it_became() -> None:
     assert "original_path" not in schemas.FileOut.model_fields
 
 
-def test_a_collection_reports_its_pages_sources_and_both_handoffs() -> None:
+def test_a_collection_reports_its_pages_sources_and_its_one_handoff() -> None:
     fields = set(schemas.CollectionOut.model_fields)
     assert {
         "page_count",
@@ -129,9 +138,16 @@ def test_a_collection_reports_its_pages_sources_and_both_handoffs() -> None:
         "waiting_source_count",
         "finding_count",
         "tidy_handoff",
-        "check_handoff",
+        "tidy_running",
     } <= fields
-    assert not fields & {"document_count", "pending_count", "file_count", "topic_count"}
+    # Tidy is the one hand-off: there is no separate report-only check.
+    assert not fields & {
+        "document_count",
+        "pending_count",
+        "file_count",
+        "topic_count",
+        "check_handoff",
+    }
 
 
 def test_no_curation_wire_model_remains() -> None:

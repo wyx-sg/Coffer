@@ -1,6 +1,9 @@
 {
   "name": "coffer-frontend",
   "private": true,
+  "engines": {
+    "node": ">=20 <21"
+  },
   "version": "0.2.0",
   "type": "module",
   "scripts": {

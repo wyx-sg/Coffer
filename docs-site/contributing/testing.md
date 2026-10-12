@@ -220,7 +220,7 @@ Both suites test only what an installed build can get wrong. A behaviour the sou
 
 Frontend tests use Vitest and Testing Library in a jsdom environment. Each test sits next to the module it covers (`*.test.ts`, `*.test.tsx`), and `make verify-unit` runs them all with `npx vitest run src`. `src/test/setup.ts` loads the real i18n catalogues, so components render real copy. Render with a real `QueryClientProvider` and mock only the network boundary: the `src/lib/api/*` module, or `streamClient` for chat. See [Frontend](/contributing/frontend#testing) for conventions.
 
-Use **Node 20**, the version CI uses, when you run the frontend suite locally.
+Use **Node 20**, the version CI uses, when you run the frontend suite locally. `.nvmrc` pins it and the Makefile targets that run vitest stop early on any other major.
 
 ## What `make verify` runs
 

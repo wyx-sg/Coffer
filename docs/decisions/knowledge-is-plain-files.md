@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-23
 **Deciders**: Yuxing Wu
-**Related**: spec knowledge; [Tidying Knowledge Is the Agent's Job](tidying-knowledge-is-the-agents-job.md); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Per-Agent Resource Scope](per-agent-resource-scope.md); [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md); [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md); research note [knowledge curation](../research/knowledge-curation.md); PRs #368, #382, #404, #405, #418
+**Related**: spec knowledge; [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md); [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](linked-knowledge-folders-are-read-only-and-machine-local.md) (a folder the person keeps elsewhere, shared with agents but never copied in); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Per-Agent Resource Scope](per-agent-resource-scope.md); [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md); [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md); research note [knowledge curation](../research/knowledge-curation.md); PRs #368, #382, #404, #405, #418
 
 **Partly superseded** (2026-10-05): the web UI no longer edits a document (it shows it read-only and opens it in the person's editor), and has no History tab or Recent changes; a delete keeps its toast Undo, see the OpenSpec change `hand-files-to-external-tools`.
 
@@ -67,7 +67,7 @@ frontmatter description names the subjects the collections cover (drawn from
 each collection's `README.md`). There is no knowledge tool: an agent adds knowledge by writing it into the
 right document itself, by the rules in the `coffer-guide` skill, and tidies a
 collection when the person asks (see
-[Tidying Knowledge Is the Agent's Job](tidying-knowledge-is-the-agents-job.md)).
+[Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md)).
 A Markdown file dropped into `<collection>/.inbox/` is adopted by the next
 sweep, which fills in the frontmatter.
 
@@ -155,7 +155,7 @@ uploads write sources; only a model pass writes topics, which agents read).
   to the knowledge base. One tree with every writer is that sentence; lanes
   contradict it. Tidying is done by the person's agent on request, with
   git history to restore from, so no pristine lane is needed
-  ([Tidying Knowledge Is the Agent's Job](tidying-knowledge-is-the-agents-job.md)).
+  ([Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md)).
 
 ### Option F — A store or a view per agent
 
@@ -260,7 +260,7 @@ Rules a future change must respect:
   and contradictions across documents are not prevented by a lane; they are
   resolved when the person presses Tidy and their agent rewrites the only copy
   under the rules in the `coffer-guide` skill
-  ([Tidying Knowledge Is the Agent's Job](tidying-knowledge-is-the-agents-job.md)).
+  ([Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md)).
 - **A ceiling exists.** Hundreds of documents fit the catalogue comfortably.
   Past that the answer is Option H built for the need, not a return to FTS5.
 - **Semantic retrieval is a placeholder, not a verdict.** Nothing here is to be

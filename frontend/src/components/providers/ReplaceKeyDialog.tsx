@@ -1,4 +1,4 @@
-// src/components/providers/ReplaceKeyDialog.tsx — replace the value behind a provider's secret, tested first.
+// src/components/providers/ReplaceKeyDialog.tsx — Replace API key: the one Replace dialog, with the key checked as it is pasted.
 //
 // The pasted key is checked as it arrives (no Test button): the endpoint's
 // models are listed with the NEW key inline, before anything is written. Replace PATCHes `secret_value`: the daemon overwrites the value
@@ -7,27 +7,15 @@
 // skips the check: a stored key is probed only for the connection that holds it.
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { KeyRound } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { PasswordInput } from "@/components/ui/password-input";
-import { translateApiError } from "@/lib/api/errors";
 import type { Provider } from "@/lib/api/providers";
 import { useRebindProviderKey, useReplaceProviderKey } from "@/lib/hooks/useProviders";
 import type { ProviderUse } from "@/lib/providers/usedBy";
+import { ReplaceSecretDialog } from "@/components/secret/ReplaceSecretDialog";
+import { EMPTY_DRAFT, type ReplaceDraft } from "@/components/secret/ReplaceSecretFields";
 import { ProbeResult } from "./ProbeResult";
 import { useEndpointTest } from "./useEndpointTest";
 import { useUserNames } from "./useUserNames";
-import { SecretNameLink } from "@/components/secret/SecretNameLink";
-import { SecretSourceSwitch, type SecretSource } from "@/components/secret/SecretSourceSwitch";
 
 interface Props {
   open: boolean;
@@ -42,19 +30,10 @@ export function ReplaceKeyDialog({ open, provider, use, onClose }: Props) {
   const rebind = useRebindProviderKey();
   const test = useEndpointTest(t);
   const users = useUserNames(use);
-  const [secret, setSecret] = useState("");
-  const [source, setSource] = useState<SecretSource>("value");
-  const [picked, setPicked] = useState("");
-  const replace = source === "value" ? replaceValue : rebind;
+  const [draft, setDraft] = useState<ReplaceDraft>(EMPTY_DRAFT);
 
   useEffect(() => {
-    if (!open) return;
-    setSecret("");
-    setSource("value");
-    setPicked("");
-    test.reset();
-    replaceValue.reset();
-    rebind.reset();
+    if (open) test.reset();
     // Re-seed only when the dialog opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -62,112 +41,43 @@ export function ReplaceKeyDialog({ open, provider, use, onClose }: Props) {
   // Check the key once the paste settles: nothing is written by a check.
   const runTest = useRef(test.run);
   runTest.current = test.run;
+  const pasted = draft.source === "value" ? draft.value : "";
   useEffect(() => {
-    if (!open || source !== "value" || !secret) return;
+    if (!open || !pasted) return;
     const timer = setTimeout(() => {
       void runTest.current({
         provider: provider.protocol,
         base_url: provider.base_url,
-        secret_value: secret,
+        secret_value: pasted,
       });
     }, 500);
     return () => clearTimeout(timer);
-  }, [open, source, secret, provider.protocol, provider.base_url]);
-
-  const submit = async () => {
-    try {
-      if (source === "value") {
-        await replaceValue.mutateAsync({ uid: provider.uid, secret });
-      } else {
-        await rebind.mutateAsync({ uid: provider.uid, secretRef: picked });
-      }
-    } catch {
-      return; // rendered inline below
-    }
-    onClose();
-  };
+  }, [open, pasted, provider.protocol, provider.base_url]);
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent aria-describedby={undefined} className="max-w-[480px]">
-        <DialogHeader>
-          <DialogTitle>{t("providers.replace.title")}</DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-label text-text">{t("providers.replace.secret")}</span>
-            <span className="inline-flex items-center gap-1.5">
-              <KeyRound className="size-3.5 text-text-muted" aria-hidden />
-              {provider.secret_ref ? (
-                <SecretNameLink
-                  secretRef={provider.secret_ref}
-                  className="text-xs"
-                  onNavigate={onClose}
-                />
-              ) : null}
-            </span>
-          </div>
-          {provider.secret_ref ? (
-            <SecretSourceSwitch
-              source={source}
-              onSourceChange={(next) => {
-                setSource(next);
-                test.reset();
-              }}
-              currentRef={provider.secret_ref}
-              picked={picked}
-              onPick={setPicked}
-              disabled={replace.isPending}
-            />
-          ) : null}
-          {source === "value" ? (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="pr-secret" required>
-                {t("providers.replace.newKey")}
-              </Label>
-              <PasswordInput
-                id="pr-secret"
-                autoComplete="off"
-                className="font-mono text-xs"
-                value={secret}
-                onChange={(e) => {
-                  setSecret(e.target.value);
-                  test.reset();
-                }}
-              />
-              <p className="text-xs text-text-muted">{t("providers.replace.hint")}</p>
-            </div>
-          ) : null}
-          {source === "value" ? (
-            <ProbeResult
-              result={test.result}
-              pending={test.isPending}
-              okNote={(count) =>
-                users
-                  ? t("providers.test.replaceOkUsed", { count, users })
-                  : t("providers.test.replaceOk", { count })
-              }
-              failNote={t("providers.test.replaceFail")}
-            />
-          ) : null}
-          {replace.error != null ? (
-            <p role="alert" className="text-sm text-danger">
-              {translateApiError(t, replace.error)}
-            </p>
-          ) : null}
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button
-            disabled={(source === "value" ? !secret : !picked) || replace.isPending}
-            onClick={() => void submit()}
-          >
-            {source === "value" ? t("providers.key.replace") : t("secretRef.useSubmit")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ReplaceSecretDialog
+      secretRef={open ? provider.secret_ref : null}
+      onClose={onClose}
+      field={t("providers.fields.apiKey")}
+      draft={draft}
+      onDraftChange={(next) => {
+        if (next.value !== draft.value || next.source !== draft.source) test.reset();
+        setDraft(next);
+      }}
+      onReplaceValue={(secret) => replaceValue.mutateAsync({ uid: provider.uid, secret })}
+      onRebind={(secretRef) => rebind.mutateAsync({ uid: provider.uid, secretRef })}
+      check={
+        <ProbeResult
+          result={test.result}
+          pending={test.isPending}
+          okNote={(count) =>
+            users
+              ? t("providers.test.replaceOkUsed", { count, users })
+              : t("providers.test.replaceOk", { count })
+          }
+          failNote={t("providers.test.replaceFail")}
+        />
+      }
+    />
   );
 }

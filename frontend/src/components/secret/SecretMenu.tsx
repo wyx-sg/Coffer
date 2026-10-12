@@ -182,7 +182,10 @@ export function SecretMenu(props: Props) {
         defaultLabel={defaultNewLabel}
         onCreated={onSelectStored}
       />
-      <ReplaceSecretDialog row={changing ? changeRow : null} onOpenChange={setChanging} />
+      <ReplaceSecretDialog
+        secretRef={changing ? (changeRow?.ref ?? null) : null}
+        onClose={() => setChanging(false)}
+      />
     </>
   );
 }

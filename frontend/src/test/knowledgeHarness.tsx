@@ -16,7 +16,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import * as knowledgeApi from "@/lib/api/knowledge";
 import { KnowledgePage } from "@/pages/KnowledgePage";
 
-import { COLLECTION, FILES, OTHER, TREES } from "@/components/knowledge/knowledgeTestData";
+import { COLLECTION, FILES, OTHER, TREES, summary } from "@/components/knowledge/knowledgeTestData";
 
 /** Where the router is now — rendered so a test can assert the address. A
  *  test-only file, so fast refresh is not a concern here. */
@@ -52,8 +52,12 @@ export function renderKnowledge(path: string) {
   return qc;
 }
 
-/** The mocked module's default answers: the fixtures. */
+/** The mocked module's default answers: the fixtures. Each test also starts
+ *  with the tree as a first visit finds it, everything closed. */
 export function answerFromFixtures() {
+  for (const kind of ["collections", "folders"]) {
+    localStorage.removeItem(`coffer.knowledge.tree.${kind}`);
+  }
   const api = vi.mocked(knowledgeApi);
   api.listCollections.mockResolvedValue({ collections: [COLLECTION, OTHER] });
   api.getTree.mockImplementation(
@@ -70,4 +74,13 @@ export function answerFromFixtures() {
     collection: [COLLECTION, OTHER].find((c) => c.uid === uid) ?? COLLECTION,
     findings: [],
   }));
+  // A collection's Contents: its fixtures' files.
+  api.getCollectionFiles.mockImplementation(async (uid: string) => {
+    const name = [COLLECTION, OTHER].find((c) => c.uid === uid)?.name ?? COLLECTION.name;
+    return {
+      files: Object.values(FILES)
+        .filter((f) => f.path.startsWith(`${name}/`))
+        .map(summary),
+    };
+  });
 }

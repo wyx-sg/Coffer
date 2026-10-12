@@ -184,11 +184,16 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | Knowledge · New collection | `POST /knowledge/collections` | `coffer knowledge create` | `test_cli_parity.py` |
 | Knowledge · Delete | `DELETE /resources/{uid}` | `coffer knowledge delete` | `test_cli_parity.py` |
 | Knowledge · edit a collection's description | `PUT /knowledge/collections/{uid}/description` | `coffer knowledge describe` | `test_cli_parity.py` |
+| Knowledge · a collection's Contents | `GET /knowledge/collections/{uid}/files` | `coffer knowledge files` | `test_cli_parity.py` |
+| Knowledge · Add · Link an external folder | `POST /knowledge/collections/link` | `coffer knowledge link` | `test_cli_parity.py` |
 | Knowledge · list | `GET /resources` | `coffer knowledge list` | `test_cli_parity.py` |
 | Knowledge · Undo a delete | `POST /knowledge/changes/{version}/restore` | `coffer knowledge restore` | `test_cli_parity.py` |
 | Knowledge · open a collection | `GET /resources/{uid}` | `coffer knowledge show` | `test_cli_parity.py` |
+| Knowledge · Tidy (an agent finishes it) | `POST /knowledge/collections/{uid}/tidy/finish` | `coffer knowledge tidy-finish` | `test_cli_parity.py` |
 | Knowledge · Tidy with an agent | `GET /knowledge/tidy-handoff` | `coffer knowledge tidy-handoff` | `test_cli_parity.py` |
+| Knowledge · Tidy (an agent starts it) | `POST /knowledge/collections/{uid}/tidy/start` | `coffer knowledge tidy-start` | `test_cli_parity.py` |
 | Knowledge · the tree | `GET /knowledge/tree` | `coffer knowledge tree` | `test_cli_parity.py` |
+| Knowledge · Undo this tidy | `POST /knowledge/changes/{version}/undo` | `coffer knowledge undo` | `test_cli_parity.py` |
 | Knowledge · edit a collection | `PATCH /resources/{uid}` | `coffer knowledge update` | `test_cli_parity.py` |
 | Knowledge · Upload | `POST /knowledge/upload` | `coffer knowledge upload` | `test_cli_parity.py` |
 
@@ -239,6 +244,7 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | Memory · a project's memories | `GET /memory/sync/entries` | `coffer memory entries` | `test_cli_parity.py` |
 | Memory · preview · Cancel | `POST /memory/sync/preview/cancel` | `coffer memory preview-cancel` | `test_cli_parity.py` |
 | Memory · preview · Write | `POST /memory/sync/preview/write` | `coffer memory preview-write` | `test_cli_parity.py` |
+| Memory · a memory | `GET /memory/sync/entries/{entry_id}` | `coffer memory show` | `test_cli_parity.py` |
 | Memory · the page | `GET /memory/sync/state` | `coffer memory state` | `test_cli_parity.py` |
 | Memory · Sync now | `POST /memory/sync/run` | `coffer memory sync` | `test_cli_parity.py` |
 | Memory · Undo sync… | `POST /memory/sync/undo` | `coffer memory undo` | `test_cli_parity.py` |

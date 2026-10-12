@@ -1,4 +1,4 @@
-// src/components/providers/EditProviderDialog.tsx — edit a provider's name and addresses; its key is only named.
+// src/components/providers/EditProviderDialog.tsx — edit a provider's name, addresses and key.
 //
 // A changed NAME is the kind-agnostic rename (`PATCH /resources/{uid}`), sent
 // FIRST so a taken label fails before anything else lands; nothing navigates,
@@ -6,9 +6,13 @@
 // Anthropic-compatible ones (ADR one-connection-serves-both-wires); they are
 // sent only when one moved. The wire they imply is locked while an agent runs
 // on the provider (409 PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE), so adding or
-// clearing the OpenAI address of a live connection is refused. The key is write-only and changed with Replace key, so
-// here it is a read-only row. Failures render inline.
-import { useEffect } from "react";
+// clearing the OpenAI address of a live connection is refused. The key is
+// write-only: its row names the secret, and Replace opens the same fields as the
+// Replace key dialog in place — a new value PATCHes `secret_value` (the value
+// behind the same ref is overwritten), another secret PATCHes `secret_ref` —
+// sent LAST, after the name and addresses, with the same Save. Test uses the
+// entered key when there is one. Failures render inline.
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
@@ -26,7 +30,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { translateApiError } from "@/lib/api/errors";
 import type { Provider, ProviderPatch } from "@/lib/api/providers";
-import { useUpdateProvider } from "@/lib/hooks/useProviders";
+import {
+  useRebindProviderKey,
+  useReplaceProviderKey,
+  useUpdateProvider,
+} from "@/lib/hooks/useProviders";
+import { draftReady, type ReplaceDraft } from "@/components/secret/ReplaceSecretFields";
 import { useRenameResource } from "@/lib/hooks/useResourceMutations";
 import { addressesOf, endpointOf, fieldsOf } from "@/lib/providers/addresses";
 import type { ProviderUse } from "@/lib/providers/usedBy";
@@ -50,6 +59,9 @@ export function EditProviderDialog({ open, provider, use, onClose, onSaved }: Pr
   const { t } = useTranslation();
   const update = useUpdateProvider();
   const rename = useRenameResource();
+  const replaceValue = useReplaceProviderKey();
+  const rebind = useRebindProviderKey();
+  const [key, setKey] = useState<ReplaceDraft | null>(null);
   const test = useEndpointTest(t);
   const lockedBy = useLockedBy(use);
   const form = useForm<EditValues>({ resolver: zodResolver(editSchema(t)) });
@@ -62,6 +74,9 @@ export function EditProviderDialog({ open, provider, use, onClose, onSaved }: Pr
     test.reset();
     update.reset();
     rename.reset();
+    replaceValue.reset();
+    rebind.reset();
+    setKey(null);
     // Re-seed only when the dialog opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -83,6 +98,12 @@ export function EditProviderDialog({ open, provider, use, onClose, onSaved }: Pr
       if (name !== provider.name)
         await rename.mutateAsync({ kind: "provider", uid: provider.uid, name });
       if (Object.keys(patch).length > 0) await update.mutateAsync({ uid: provider.uid, patch });
+      // An empty replacement keeps the key as it is.
+      if (key && draftReady(key)) {
+        if (key.source === "value")
+          await replaceValue.mutateAsync({ uid: provider.uid, secret: key.value });
+        else await rebind.mutateAsync({ uid: provider.uid, secretRef: key.picked });
+      }
     } catch {
       return; // the failure is the mutation's state, rendered below
     }
@@ -97,12 +118,17 @@ export function EditProviderDialog({ open, provider, use, onClose, onSaved }: Pr
     void test.run({
       provider: endpoint.protocol,
       base_url: endpoint.baseUrl,
-      secret_ref: provider.secret_ref,
+      ...(key?.source === "value" && key.value
+        ? { secret_value: key.value }
+        : {
+            secret_ref: key?.source === "existing" && key.picked ? key.picked : provider.secret_ref,
+          }),
     });
   };
 
-  const failure = rename.error ?? update.error;
-  const pending = rename.isPending || update.isPending;
+  const failure = rename.error ?? update.error ?? replaceValue.error ?? rebind.error;
+  const pending =
+    rename.isPending || update.isPending || replaceValue.isPending || rebind.isPending;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -135,7 +161,15 @@ export function EditProviderDialog({ open, provider, use, onClose, onSaved }: Pr
               {t("providers.edit.locked", { agents: lockedBy })}
             </p>
           ) : null}
-          <KeyRefField secretRef={provider.secret_ref} />
+          <KeyRefField
+            secretRef={provider.secret_ref}
+            draft={key}
+            onDraftChange={(next) => {
+              setKey(next);
+              test.reset();
+            }}
+            disabled={pending}
+          />
           <ProbeResult
             result={test.result}
             pending={test.isPending}

@@ -37,6 +37,12 @@ describe("SplitDivider", () => {
     expect(el).toHaveAttribute("aria-valuemax", "300");
   });
 
+  test("shows the col-resize cursor over the line and its whole hit area", () => {
+    render(<Harness />);
+    expect(sep().style.cursor).toBe("col-resize");
+    expect(sep().querySelector("span")).toHaveClass("cursor-col-resize");
+  });
+
   test("→ three times then ← once moves two steps, never past the max", () => {
     render(<Harness />);
     const el = sep();
@@ -61,6 +67,7 @@ describe("SplitDivider", () => {
     const el = sep();
     fireEvent.pointerDown(el, { button: 0, pointerId: 1, clientX: 220 });
     expect(document.body).toHaveClass("select-none");
+    expect(document.body).toHaveClass("split-dragging");
     expect(el).toHaveAttribute("data-dragging", "true");
     fireEvent.pointerMove(el, { pointerId: 1, clientX: 260 });
     expect(el).toHaveAttribute("aria-valuenow", "260");

@@ -1,13 +1,14 @@
 // frontend/src/components/knowledge/KnowledgePane.tsx
 //
 // The right side of the Knowledge page: which view the address names
-// (lib/knowledge/routes.ts). An open file, read-only, with its history drawer
+// (lib/knowledge/routes.ts). An open file, read-only, with its history
 // when the address names it; a collection with no file open → its overview;
 // nothing chosen → a line saying to pick one.
 import { Book } from "lucide-react";
 
 import { DetailNotFound } from "@/components/DetailNotFound";
 import { KnowledgeCollectionView } from "@/components/knowledge/KnowledgeCollectionView";
+import { KnowledgeLinkedView } from "@/components/knowledge/KnowledgeLinkedView";
 import { KnowledgeDocumentPane } from "@/components/knowledge/KnowledgeDocumentPane";
 import { KnowledgeLandingPanel } from "@/components/knowledge/KnowledgeLandingPanel";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -43,6 +44,9 @@ export function KnowledgePane(props: Props) {
   }
   if (props.file) {
     return <KnowledgeDocumentPane collection={props.collection} path={props.file} />;
+  }
+  if (props.collection.linked) {
+    return <KnowledgeLinkedView collection={props.collection} />;
   }
   return <KnowledgeCollectionView collection={props.collection} />;
 }

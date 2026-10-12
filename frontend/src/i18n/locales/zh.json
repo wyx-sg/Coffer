@@ -2072,7 +2072,11 @@
     "CUSTOM_TOOL_LAST_ENVIRONMENT": "分组至少需要一个环境，最后一个不能删除。",
     "DESKTOP_REQUEST_NOT_FOUND": "这个发给 Coffer 应用的请求已过期或已处理。",
     "MEMORY_SYNC_RUNNING": "已有一次记忆同步在运行",
-    "MEMORY_SYNC_NO_PREVIEW": "没有等待写入的记忆同步预览"
+    "MEMORY_SYNC_NO_PREVIEW": "没有等待写入的记忆同步预览",
+    "KNOWLEDGE_UNDO_CONFLICT": "没有撤销：之后有文件被编辑过。选择“仍然撤销”会丢掉那些编辑。",
+    "KNOWLEDGE_NOT_A_CHANGE": "这次改动没有涉及任何知识文件，没有可撤销的内容。",
+    "KNOWLEDGE_COLLECTION_LINKED": "这是接入的外部文件夹。Coffer 只把它共享给智能体，不会修改它。",
+    "KNOWLEDGE_FOLDER_REFUSED": "无法接入这个文件夹。请选一个已存在、且不在 Coffer 自己目录里的文件夹。"
   },
   "pagination": {
     "showing": "显示 {{shown}} / {{total}} 条",
@@ -2251,6 +2255,10 @@
         "project": "项目",
         "folder": "记忆目录",
         "files": "文件数"
+      },
+      "sync": {
+        "title": "记忆同步",
+        "open": "打开记忆页"
       }
     },
     "config": {
@@ -3212,16 +3220,10 @@
       "pages": "页面",
       "sources": "来源"
     },
-    "stats": {
-      "pages": "页面",
-      "sources": "来源",
-      "sourcesWaiting": "{{count}} · {{waiting}} 个待整理",
-      "folder": "文件夹"
-    },
     "collection": {
       "descriptionLabel": "这个知识集收录什么",
       "noDescription": "还没有描述。写下这里收录什么，智能体才认得出它。",
-      "emptyLine": "还没有页面或来源。上传一个来源，或把 Markdown 文件放进这个文件夹。",
+      "emptyLine": "还没有页面或来源。上传一个文档，或把 Markdown 文件放进这个文件夹。",
       "more": "{{name}} 的更多操作",
       "copyPath": "复制路径",
       "descriptionSaved": "描述已更新",
@@ -3245,7 +3247,8 @@
       "title": "重命名 {{name}}",
       "body": "它的文件夹会随之改名，智能体会按新名字找到它。",
       "submit": "重命名",
-      "renamed": "已重命名为 {{name}}"
+      "renamed": "已重命名为 {{name}}",
+      "linkedBody": "这只是一个名称，磁盘上的文件夹不会改名。"
     },
     "deleteCollection": {
       "menu": "删除知识集…",
@@ -3260,17 +3263,16 @@
     },
     "upload": {
       "button": "上传",
-      "title": "上传来源",
-      "body": "Coffer 会把它转换成 Markdown，作为来源保存在知识集中。上传的文件本身不保存。",
-      "choose": "把文件拖到这里，或选择一个",
+      "title": "上传文档",
+      "body": "Coffer 会把每个文件转换成 Markdown，作为来源保存在知识集中。上传的文件本身不保存。",
+      "choose": "把文件拖到这里，或选择文件",
       "types": "PDF、Word、PowerPoint、Excel、HTML、CSV、Markdown 或纯文本 · 最大 20 MB",
-      "remove": "移除这个文件",
       "into": "放入知识集",
       "converting": "正在转换为 Markdown…",
       "uploading": "正在上传…",
       "written": "{{name}} 已保存为 {{path}}",
       "zipTitle": "ZIP 文件无法转换",
-      "zipBody": "请先解压，再逐个上传里面的文件。",
+      "zipBody": "请先解压，再上传里面的文件。",
       "tooLargeTitle": "超过 20 MB",
       "tooLargeBody": "请拆分文件，或把需要的部分导出为 PDF。",
       "noTextTitle": "这个 PDF 里没有文字",
@@ -3278,7 +3280,16 @@
       "noTextAnyTitle": "没有找到文字",
       "noTextAnyBody": "Coffer 在这个文件里读不到任何文字。没有添加任何内容。",
       "unsupportedTitle": "{{kind}} 文件无法转换",
-      "failedTitle": "无法上传这个文件"
+      "failedTitle": "无法上传这个文件",
+      "chooseMore": "再添加文件",
+      "files": "要上传的文件",
+      "removeNamed": "移除 {{name}}",
+      "savedAs": "已保存为 {{path}}",
+      "allSaved": "已把 {{count}} 个文件上传到 {{collection}}",
+      "someSaved": "{{count}} 个已上传，{{refused}} 个没有，详见对话框",
+      "buttonMany": "上传 {{count}} 个文件",
+      "noneSaved_one": "没有上传任何文件：{{count}} 个文件无法上传",
+      "noneSaved_other": "没有上传任何文件：{{count}} 个文件无法上传"
     },
     "document": {
       "where": "这个文件的位置",
@@ -3292,7 +3303,8 @@
       "sources": "来源：",
       "missingSource": "没有名为 {{slug}} 的来源",
       "citedBy_one": "被 {{count}} 个页面引用：",
-      "citedBy_other": "被 {{count}} 个页面引用："
+      "citedBy_other": "被 {{count}} 个页面引用：",
+      "verified": "{{date}} 核对过"
     },
     "deleteDocument": {
       "menu": "删除",
@@ -3317,7 +3329,8 @@
     },
     "tidy": {
       "one": "整理",
-      "all": "整理全部"
+      "all": "整理全部",
+      "running": "智能体正在整理这个知识集。整理完成后，它的所有改动会在这里显示为一次改动。"
     },
     "landing": {
       "title": "选择一个知识集",
@@ -3336,7 +3349,8 @@
       "remove": "已移除",
       "layout": "已归入页面",
       "baseline": "已记录",
-      "curation": "已整理"
+      "curation": "已整理",
+      "tidy": "整理"
     },
     "link": {
       "dead": "没有名为 {{target}} 的页面或来源",
@@ -3348,11 +3362,10 @@
       "close": "关闭历史"
     },
     "check": {
-      "title": "检查",
-      "description": "Coffer 每次读取时在知识集文件中发现的问题，它不会修改任何内容。",
-      "none": "没有发现问题。",
+      "title": "待处理",
+      "description": "Coffer 每次读取时在知识集文件里发现的问题。点“整理”交给你的智能体处理。",
+      "none": "没有待处理的问题。",
       "failed": "无法检查这个知识集",
-      "handoff": "交给智能体检查",
       "target": "→ {{target}}",
       "others": "另见 {{paths}}",
       "kinds": {
@@ -3364,7 +3377,10 @@
         "unsourced_page": "没有来源的页面",
         "orphan_page": "没有被链接的页面",
         "waiting_source": "待整理的来源"
-      }
+      },
+      "missing": "缺少 {{target}}",
+      "more": "还有 {{count}} 个",
+      "fewer": "收起"
     },
     "changeLog": {
       "title": "改动记录",
@@ -3372,12 +3388,102 @@
       "none": "还没有改动。",
       "failed": "无法读取改动记录",
       "more": "显示更多",
-      "lines": "+{{added}} −{{removed}}"
+      "lines": "+{{added}} −{{removed}}",
+      "moreFiles": "还有 {{count}} 个文件",
+      "span": "{{from}}–{{to}}",
+      "saves_one": "{{count}} 次保存",
+      "saves_other": "{{count}} 次保存",
+      "undid": "撤销了一次整理",
+      "tidyExpired": "没有报告就结束了：知识集 30 分钟没有变化。"
+    },
+    "summary": {
+      "pages_one": "{{count}} 个页面",
+      "pages_other": "{{count}} 个页面",
+      "sources_one": "{{count}} 个来源",
+      "sources_other": "{{count}} 个来源",
+      "sourcesWaiting": "{{count}} 个来源（{{waiting}} 个待整理）",
+      "updated": "{{when}} 更新",
+      "managed": "由 Coffer 管理：同步到你的其他 Mac，每次改动都留在历史里，由你的智能体整理。"
+    },
+    "contents": {
+      "title": "内容",
+      "description": "按类型列出的页面，以及来源。点击标题打开文件。",
+      "none": "还没有页面或来源。",
+      "failed": "无法读取内容"
+    },
+    "types": {
+      "overview": "概览",
+      "concept": "概念",
+      "entity": "实体",
+      "how-to": "操作指南",
+      "decision": "决策",
+      "none": "未分类"
+    },
+    "tidyUndo": {
+      "button": "撤销这次整理…",
+      "title": "撤销这次整理？",
+      "body_one": "它改过的 {{count}} 个文件会恢复到整理前的样子，它新增的文件会被删除。撤销本身也会记为一次改动。",
+      "body_other": "它改过的 {{count}} 个文件会恢复到整理前的样子，它新增的文件会被删除。撤销本身也会记为一次改动。",
+      "confirm": "撤销整理",
+      "pending": "正在撤销…",
+      "failed": "无法撤销这次整理",
+      "done": "已撤销整理",
+      "undone": "已撤销",
+      "conflictTitle": "整理之后有文件又被改过",
+      "conflictBody_one": "有 {{count}} 个文件在整理之后被编辑过。仍然撤销会把那次编辑也一起丢掉。",
+      "conflictBody_other": "有 {{count}} 个文件在整理之后被编辑过。仍然撤销会把那些编辑也一起丢掉。",
+      "anyway": "仍然撤销"
+    },
+    "add": {
+      "button": "添加",
+      "upload": "上传文档…",
+      "uploadHint": "转换成 Markdown，保存在你选的知识集里，随它一起同步。",
+      "create": "新建知识集…",
+      "createHint": "保存在 Coffer 里：同步到你的其他 Mac，有历史记录，由你的智能体整理。",
+      "link": "接入外部文件夹…",
+      "linkHint": "文件留在原处，只共享给智能体。不会复制进 Coffer，也不同步、不整理。"
+    },
+    "obsidian": {
+      "open": "在 Obsidian 中打开"
+    },
+    "linkFolder": {
+      "title": "接入外部文件夹",
+      "body": "把你自己维护的文件夹（比如 Obsidian 库）共享给所有智能体。",
+      "folder": "文件夹",
+      "folderHint": "/Users/you/Obsidian/Work",
+      "name": "名称",
+      "nameHint": "Coffer 和智能体用这个名字称呼它，文件夹本身不改名。",
+      "stays": "文件留在原处，不会复制进 Coffer。",
+      "notManaged": "Coffer 不同步、不整理、不记录历史，也不能往里上传。",
+      "ownRules": "智能体读取它，并遵守它根目录下自己的规则文件。",
+      "submit": "接入文件夹",
+      "linked": "已接入 {{name}}，智能体现在可以读取它。"
+    },
+    "linked": {
+      "tag": "外部",
+      "facts": "关于这个文件夹",
+      "location": "位置",
+      "notes": "笔记",
+      "noteCount_one": "{{count}} 篇 Markdown 笔记",
+      "noteCount_other": "{{count}} 篇 Markdown 笔记",
+      "rules": "规则文件",
+      "noRules": "无",
+      "managed": "管理方式",
+      "managedBy": "由它自己的工具维护。Coffer 只把它共享给智能体，不复制、不同步、不整理，也不记录历史。"
+    },
+    "disconnect": {
+      "menu": "断开接入…",
+      "title": "断开 {{name}}？",
+      "body": "智能体将不再看到它。{{path}} 里的文件保持不动。",
+      "confirm": "断开",
+      "pending": "正在断开…",
+      "failed": "无法断开 {{name}}",
+      "done": "已断开 {{name}}，文件没有改动。"
     }
   },
   "memory": {
     "title": "记忆",
-    "subtitle": "每个智能体记住的东西，同步到你的其他智能体。",
+    "subtitle": "你的智能体记住的东西，在它们之间保持同步。",
     "loadFailed": "无法读取记忆同步",
     "moreActions": "更多记忆操作",
     "syncNow": "立即同步",
@@ -3410,46 +3516,36 @@
       "failed_other": "有 {{count}} 个记忆来源无法读取",
       "failedKept": "这次没有从它发布任何内容；它之前发布的内容仍留在中心库里。",
       "withheld_one": "有 {{count}} 条记忆看起来含有密钥，未发布",
-      "withheld_other": "有 {{count}} 条记忆看起来含有密钥，未发布"
+      "withheld_other": "有 {{count}} 条记忆看起来含有密钥，未发布",
+      "withheldBody": "这些记忆没有发布。把密钥从记忆里去掉，下次同步就会发布。"
     },
     "preview": {
       "title_one": "写入前请查看 {{count}} 份副本",
       "title_other": "写入前请查看 {{count}} 份副本",
-      "description": "首次或大量同步会先等你确认。中心库已经更新；在你选择写入之前，不会写入任何智能体。打开一行可查看其中的记忆。",
-      "write": "写入",
-      "empty": "没有要写入的内容",
-      "cols": {
-        "agent": "写入",
-        "project": "项目",
+      "description": "首次或大量同步会先等你确认。在你选择写入之前，不会写入任何智能体。",
+      "cancel": "取消",
+      "write_one": "写入 {{count}} 份副本",
+      "write_other": "写入 {{count}} 份副本",
+      "action": {
         "write": "新写入",
         "update": "更新",
         "remove": "移除"
+      },
+      "count": {
+        "write": "新写入 {{count}}",
+        "update": "更新 {{count}}",
+        "remove": "移除 {{count}}"
       }
     },
     "projects": {
-      "title": "项目",
-      "description": "你的智能体在任意一台机器上为自己写下的每条记忆，按项目归档。",
-      "global": "全局记忆",
-      "everywhere": "所有项目，所有机器",
-      "notHere": "这台机器上没有检出",
-      "search": "搜索项目",
-      "empty": "还没有记忆。下次同步会发布你的智能体记住的内容。",
-      "cols": {
-        "project": "项目",
-        "here": "在这台机器上",
-        "memories": "记忆",
-        "from": "来自"
-      }
+      "global": "全局记忆"
     },
     "agents": {
       "title": "这台机器上的智能体",
-      "description": "每个智能体自己整理并加载自己的记忆。Coffer 只写入你其他智能体所学内容的副本。",
-      "empty": "这台机器上没有可同步记忆的智能体。",
       "cols": {
-        "agent": "智能体",
-        "copies": "在此写入的副本",
         "memory": "自身记忆",
-        "curation": "自身整理"
+        "curation": "自身整理",
+        "copies": "Coffer 在此写入的副本"
       },
       "written_one": "{{count}} 份副本",
       "written_other": "{{count}} 份副本",
@@ -3541,21 +3637,23 @@
     },
     "detail": {
       "global": "写入每台机器上的每个智能体",
-      "notHere": "这台机器上没有检出：它的记忆留在中心库里等待",
+      "notHere": "这台机器上没有检出：检出后才会写入",
       "memories_one": "{{count}} 条记忆",
       "memories_other": "{{count}} 条记忆"
     },
     "entries": {
       "search": "搜索记忆",
       "empty": "这个项目里没有记忆。",
-      "loadFailed": "无法读取记忆",
       "thisMachine": "这台机器",
       "cols": {
         "memory": "记忆",
         "type": "类型",
         "origin": "来自",
-        "copyIn": "在 {{agent}} 中",
         "updated": "更新时间"
+      },
+      "filters": {
+        "type": "类型",
+        "source": "来自"
       }
     },
     "copy": {
@@ -3567,6 +3665,40 @@
       "deferred": "由 Codex 导入",
       "edited": "被智能体修改",
       "removed": "被智能体移除"
+    },
+    "scopes": {
+      "label": "记忆范围",
+      "search": "搜索项目",
+      "here": "这台机器上的项目",
+      "elsewhere": "这台机器上没有检出"
+    },
+    "note": {
+      "pending": "还没写入 {{agent}}",
+      "edited": "{{agent}} 改过",
+      "removed": "{{agent}} 已移除"
+    },
+    "drawer": {
+      "updated": "{{when}}更新",
+      "editHint": "要修改记忆，请在智能体自己的记忆里改。",
+      "inAgents": "在这台机器的智能体里",
+      "more_one": "还有 {{count}} 个智能体",
+      "more_other": "还有 {{count}} 个智能体"
+    },
+    "needsYou": {
+      "title_one": "{{count}} 件事需要你处理",
+      "title_other": "{{count}} 件事需要你处理",
+      "preview_one": "{{count}} 份副本等你确认写入",
+      "preview_other": "{{count}} 份副本等你确认写入",
+      "failed_one": "{{count}} 个来源无法读取",
+      "failed_other": "{{count}} 个来源无法读取",
+      "withheld_one": "{{count}} 条记忆疑似含密钥",
+      "withheld_other": "{{count}} 条记忆疑似含密钥",
+      "review": "查看",
+      "agentOff": "{{agent}} 自己的记忆关着，Coffer 没法写入",
+      "agentOffTitle": "Coffer 没法写入的智能体",
+      "openAgent": "打开 {{agent}} 的记忆设置",
+      "blocked_one": "{{count}} 个智能体没法写入",
+      "blocked_other": "{{count}} 个智能体没法写入"
     }
   },
   "conversations": {
@@ -3956,8 +4088,6 @@
         "body": "粘贴 SeaTalk 开放平台上的新密钥。配对和设置都会保留；机器人会用新密钥重启。",
         "label": "App Secret"
       },
-      "hint": "存入 Coffer 密钥库；旧值会被覆盖。",
-      "submit": "更换并重启",
       "works": "可用——这是 @{{handle}}",
       "worksPlain": "可用",
       "worksSeatalk": "可用——App ID 和 Secret 有效。",
@@ -4612,7 +4742,8 @@
       "definitions_other": "{{count}} 个 MCP 服务器和工具定义",
       "synced": "密钥已同步",
       "notSynced": "密钥未同步",
-      "line": "同步 {{documents}} · {{skills}} · {{definitions}} · {{secrets}}"
+      "line": "同步 {{documents}} · {{skills}} · {{definitions}} · {{secrets}} · {{linked}}",
+      "linkedNotSynced": "外部知识文件夹不同步"
     },
     "rounds": {
       "loadedCount": "已加载 {{loaded}} 轮",
@@ -5716,7 +5847,6 @@
       "skippedWaiting_other": "{{names}} 正在等待批准，将被跳过。"
     },
     "cols": {
-      "usedBy": "使用方",
       "lastUsed": "上次使用",
       "created": "创建于"
     },
@@ -5784,12 +5914,6 @@
       "saved": "已保存 {{name}}"
     },
     "replace": {
-      "title": "替换 {{name}} 的值",
-      "storeTitle": "为 {{name}} 添加值",
-      "value": "新值",
-      "hint": "旧值会被销毁，所有使用处都会拿到新值。",
-      "submit": "替换值",
-      "storeSubmit": "添加值",
       "submitting": "正在保存…",
       "replaced": "已替换 {{name}} 的值",
       "stored": "已为 {{name}} 添加值"
@@ -6340,13 +6464,8 @@
     "edit": {
       "title": "编辑 {{name}}",
       "locked": "{{agents}} 正在使用，换到别的服务商之前不能添加或删除 OpenAI 兼容地址。",
-      "keyHint": "密钥只写不读。要更改值，请用「更换密钥」。"
-    },
-    "replace": {
-      "title": "更换 API Key",
-      "secret": "密钥",
-      "newKey": "新密钥",
-      "hint": "只写不读。Coffer 会覆盖钥匙串加密存储中这个密钥的值，之后不再显示。"
+      "keyHint": "密钥只写不读。点「更换」可以输入新值或改用其他密钥。",
+      "replaceHint": "只写不读。和表单其他内容一起保存；留空则不更换。"
     },
     "delete": {
       "title": "删除 {{name}}？",
@@ -6571,7 +6690,9 @@
   "drawer": {
     "previous": "上一条",
     "next": "下一条",
-    "resize": "调整抽屉宽度"
+    "resize": "调整抽屉宽度",
+    "maximize": "放大",
+    "restore": "还原"
   },
   "filters": {
     "clear": "清除",
@@ -6622,6 +6743,17 @@
     "existingHint": "只有这里改用所选密钥；当前密钥和它的值保持不变。",
     "title": "更换 {{field}}",
     "current": "当前密钥",
-    "useSubmit": "改用此密钥"
+    "useSubmit": "改用此密钥",
+    "addTitle": "添加 {{field}}",
+    "valueLabel": "新值",
+    "valueHint": "只写不读。Coffer 会覆盖这个密钥的值，之后不再显示。",
+    "shared": "{{users}} 也在用这个密钥，输入新值后它们会一起更新。",
+    "pickLabel": "要用的密钥",
+    "submit": "更换密钥",
+    "addSubmit": "添加密钥",
+    "replaced": "已更换 {{name}}",
+    "added": "已为 {{name}} 添加值",
+    "replace": "更换",
+    "keep": "不更换"
   }
 }

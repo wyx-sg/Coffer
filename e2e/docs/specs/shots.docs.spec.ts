@@ -91,8 +91,10 @@ const HOME: Array<
     heading(/engineering/),
     async (page) => {
       await page.getByText("engineering", { exact: true }).first().click();
+      // The collection page's Contents lists the source by its title.
       await page
-        .getByText("deploy-checklist", { exact: false })
+        .locator("main#main")
+        .getByRole("link", { name: "Deploy checklist" })
         .first()
         .click();
       await expect(page.locator("main#main")).toContainText(

@@ -182,6 +182,7 @@ export const knowledgeCollectionsKey = ["knowledge", "collections"] as const;
 export const knowledgeTreeKey = (path: string) => ["knowledge", "tree", path] as const;
 export const knowledgeFileKey = (path: string) => ["knowledge", "file", path] as const;
 export const knowledgeCheckKey = (uid: string) => ["knowledge", "check", uid] as const;
+export const knowledgeFilesKey = (uid: string) => ["knowledge", "files", uid] as const;
 export const knowledgeChangesKey = (collection: string) =>
   ["knowledge", "changes", collection] as const;
 
@@ -192,6 +193,8 @@ export const memoryKey = ["memory"] as const;
 export const memorySyncStateKey = ["memory", "sync"] as const;
 /** One project's hub entries with their copy state here (`""` for global memories). */
 export const memoryEntriesKey = (project: string) => ["memory", "entries", project] as const;
+/** One memory with its text and where each agent holds it. */
+export const memoryEntryKey = (id: string) => ["memory", "entry", id] as const;
 
 // --- agent sessions — every agent's sessions in one list (the Conversations page) ---
 

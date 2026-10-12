@@ -45,6 +45,15 @@ class CollectionEntry:
     #: When a document in the collection was last written (ISO 8601, UTC);
     #: ``None`` when it holds none.
     updated_at: str | None = None
+    #: A linked folder the person keeps with their own tools, which Coffer only
+    #: shares with the agents (ADR
+    #: linked-knowledge-folders-are-read-only-and-machine-local).
+    linked: bool = False
+    #: A linked folder's Markdown files; 0 for a collection Coffer keeps.
+    note_count: int = 0
+    #: A linked folder's own rules file at its root (``AGENTS.md``,
+    #: ``CLAUDE.md`` or ``README.md``, the first present); empty when none.
+    rules_file: str = ""
 
 
 @dataclass(frozen=True)
@@ -149,6 +158,9 @@ class KnowledgeFile:
     #: A page's ``type`` and ``aliases``.
     page_type: str = ""
     aliases: tuple[str, ...] = ()
+    #: A page's ``verified`` date: when it was last checked against its
+    #: sources or the code; empty when it carries none.
+    verified: str = ""
     #: A page's ``sources`` entries, each resolved to the source it names.
     sources: tuple[SourceRef, ...] = ()
     #: A page's ``[[links]]``, each resolved to the file it names.

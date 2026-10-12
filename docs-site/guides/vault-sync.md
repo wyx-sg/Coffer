@@ -100,7 +100,7 @@ Carry the file over a channel you trust (a password manager, `scp`, a USB stick)
 
 | Travels | Stays on each machine |
 | --- | --- |
-| Definitions of MCP servers, skills, knowledge collections and providers (`vault/resources/`) | Agents (`local/resources/agent/`) and channels (`local/resources/channel/`): each machine registers its own |
+| Definitions of MCP servers, skills, knowledge collections and providers (`vault/resources/`) | Agents (`local/resources/agent/`), channels (`local/resources/channel/`) and linked knowledge folders (`local/resources/knowledge/`): each machine registers its own |
 | Knowledge documents (`vault/knowledge/`), skill folders (`vault/skills/`), the memory hub (`vault/memory/`) | **Reach**: each resource's enabled switch and agent scope (`local/reach.json`) |
 | MCP capability switches, the speech-to-text model and upkeep settings (`vault/state/`) | Channel pairings (`local/channel-peers.json`), the sync remote, retention, the secret boundary's approvals (`local/`) |
 | Secret ciphertext (`vault/secret/`), with **Include encrypted secrets** | Caches and the `coffer-guide` skill (`derived/`), which each machine rebuilds; the record of what memory sync wrote into this machine's agents (`local/memory-sync.json`) |
@@ -110,6 +110,7 @@ Some consequences to know:
 
 - **Reach is set per machine.** A server that should run only on the desktop is registered everywhere but disabled on the laptop. A resource arriving on a machine for the first time takes that machine's default reach.
 - **Channels stay on the machine that holds them.** A chat bot can have only one consumer, so a channel is not synced. To use the bot on another machine, see [Using the bot on another machine](/guides/channels#using-the-bot-on-another-machine).
+- **Linked knowledge folders do not sync.** A folder you linked with **Link an external folder…** stays where it is, and neither its files nor the link travel: the link names a path on this Mac only. The Sync page's summary line ends with "linked knowledge folders not synced". To use the same notes on another Mac, keep the folder in step with its own tool (Obsidian Sync, iCloud Drive, git) and link it there too. See [Link an external folder](/guides/knowledge#link-an-external-folder).
 - **Nothing rewrites your documents unattended.** Tidying is done by an agent when you press **Tidy**, and the result syncs like any other edit. See [Knowledge](/guides/knowledge).
 - **The plugin inventory records, it does not install.** Each machine's descriptor lists its agents' plugins; nothing is written into any agent's configuration.
 - Paths under your home directory are stored against a `${HOME}` placeholder and expanded with each machine's own home.

@@ -108,7 +108,9 @@ Coffer 保留三类设计文本，各司其职：
 | 对话是单一所有者的实时镜像 | [`chat-single-owner-live-mirror`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/chat-single-owner-live-mirror.md) |
 | 消息渠道是共享核心之上的薄传输适配器，在守护进程内受监管 | [`channel-adapter-framework`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md) |
 | 消息渠道只回应已配对的所有者，在群组中默认拒绝 | [`channel-owner-gate`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-owner-gate.md) |
-| 消息渠道对话以（渠道、聊天、线程）为键，并以其所在线程和引用为上下文 | [`channel-conversation-identity-and-context`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-conversation-identity-and-context.md) |
+| 消息渠道对话以（渠道、聊天、线程）为键；私聊是一个对话，直到 `/thread` 另开一个 | [`channel-conversation-identity`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-conversation-identity.md) |
+| 消息渠道的轮次只折入所在线程的有界片段，由传输层读取 | [`channel-thread-context-is-a-bounded-slice`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-thread-context-is-a-bounded-slice.md) |
+| 一阵连发的渠道消息合成一轮，在按渠道设置的静默窗口后放出 | [`a-burst-of-channel-messages-is-one-turn`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/a-burst-of-channel-messages-is-one-turn.md) |
 | 消息渠道中的切换：换智能体开新对话，换模型下一轮生效 | [`channel-switches-structural-vs-parametric`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-switches-structural-vs-parametric.md) |
 | 消息渠道的轮次在有预览界面的平台上显示进度，回复只含答案 | [`channel-live-surface-strategy`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-live-surface-strategy.md) |
 | 消息渠道附件：字节存磁盘，消息里放引用，发送时按智能体具体化 | [`channel-attachments`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md) |
@@ -125,8 +127,9 @@ Coffer 保留三类设计文本，各司其职：
 | 技能以指向唯一主目录的目录链接到达智能体 | [`cross-platform-skill-delivery`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/cross-platform-skill-delivery.md) |
 | Coffer 把自己的说明书作为技能资源随包发布 | [`coffer-ships-its-own-skill`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md) |
 | 知识是一个 Markdown 文件目录，而不是索引 | [`knowledge-is-plain-files`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) |
-| 整理知识是智能体的工作 | [`tidying-knowledge-is-the-agents-job`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md) |
+| 整理知识是智能体的工作：一次交接，记成一次改动 | [`tidying-knowledge-is-the-agents-job`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md) |
 | 知识是一个由保留下来的来源编译出页面的 wiki | [`knowledge-is-a-wiki-of-pages-compiled-from-kept-sources`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md) |
+| 接入的外部知识文件夹原地共享，对 Coffer 只读，记录只留在本机 | [`linked-knowledge-folders-are-read-only-and-machine-local`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md) |
 | 通过保险库里的中心库，把记忆同步进每个智能体自己的记忆 | [`sync-memory-into-each-agents-own-memory`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-memory-into-each-agents-own-memory.md) |
 
 ## 同步与密钥 {#sync-secrets}
@@ -143,6 +146,7 @@ Coffer 保留三类设计文本，各司其职：
 | 资源以不透明引用来引用密钥，只在使用的那一刻解析 | [`credential-references`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/credential-references.md) |
 | 密钥只以密文形式跨机器传递；主密钥和推送令牌从不进入仓库 | [`secrets-cross-machines-only-as-ciphertext`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/secrets-cross-machines-only-as-ciphertext.md) |
 | 独立密钥是具名的 `coffer://secret/` 引用，只注入一个子进程 | [`standalone-secrets-are-named-references-injected-into-one-child`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/standalone-secrets-are-named-references-injected-into-one-child.md) |
+| 密钥类请求头只存凭据本身，由槽位声明认证方案 | [`a-secret-header-stores-the-credential-and-its-slot-names-the-scheme`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/a-secret-header-stores-the-credential-and-its-slot-names-the-scheme.md) |
 | 智能体可以配置 Coffer；只有在场的人能看到密钥明文或把它发往新的地方 | [`only-a-present-human-sees-a-secret-or-sends-it-somewhere-new`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md) |
 
 ## 文档 {#documentation}

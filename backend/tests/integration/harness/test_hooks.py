@@ -33,6 +33,19 @@ def test_auto_format_reformats_python(tmp_path: Path) -> None:
     assert target.read_text() == "x = 1\ny = 2\n"
 
 
+@pytest.mark.skipif(not RUFF.exists(), reason="ruff not installed in .venv")
+def test_auto_format_keeps_unused_import(tmp_path: Path) -> None:
+    target = tmp_path / "sample.py"
+    target.write_text("import os\nx=1\n")  # the use of `os` is not written yet
+
+    proc = run_hook(
+        "auto_format.py", {"tool_name": "Write", "tool_input": {"file_path": str(target)}}
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    assert target.read_text() == "import os\n\nx = 1\n"
+
+
 def test_auto_format_ignores_unknown_extension(tmp_path: Path) -> None:
     target = tmp_path / "notes.txt"
     original = "x=1 (leave me alone)\n"
@@ -69,6 +82,11 @@ def test_auto_format_survives_missing_file(tmp_path: Path) -> None:
         "dd if=/dev/zero of=/dev/disk2",  # disk destroyer (macOS)
         "cat image.iso > /dev/sda",  # raw redirect to a block device
         "echo x > /dev/rdisk0",  # macOS raw disk
+        'pkill -f "make verify"',  # kills other sessions' runs
+        "pkill -f make",
+        "killall make",
+        "killall -9 pytest",
+        "pkill -f pytest; echo done",
     ],
 )
 def test_block_dangerous_bash_denies(command: str) -> None:
@@ -92,6 +110,9 @@ def test_block_dangerous_bash_denies(command: str) -> None:
         "dd if=/dev/disk2 of=backup.img",  # reading FROM a device is fine
         "dd if=in.img of=out.img",  # file-to-file is fine
         "echo done > /dev/null",  # /dev/null is not a block device
+        "kill 12345",  # an exact PID is the sanctioned way
+        "pkill -f coffer-daemon",  # not make/pytest/verify
+        "make verify && pkill node",  # make is not a kill target here
     ],
 )
 def test_block_dangerous_bash_allows_safe(command: str) -> None:

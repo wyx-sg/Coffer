@@ -5,8 +5,8 @@
 //
 // The e2e daemon runs on an isolated HOME, so it normally has no agent with
 // memory to sync and the page shows its "No agent to sync" state; a daemon
-// with an agent registered shows the projects and agents sections with one
-// Sync now. The walk asserts whichever the daemon's own sync state says, so it
+// with an agent registered shows the scopes beside the open scope's memories,
+// with one Sync now. The walk asserts whichever the daemon's own sync state says, so it
 // holds either way.
 //
 // No acceptance marker: the memory scenarios are pinned by the component
@@ -41,12 +41,16 @@ test("the Memory page shows the sync state", async ({ page }) => {
 
   if (agents.length === 0) {
     await expect(page.getByText("No agent to sync")).toBeVisible();
-    await expect(page.getByTestId("memory-projects")).toHaveCount(0);
+    await expect(
+      page.getByRole("navigation", { name: "Memory scopes" }),
+    ).toHaveCount(0);
     return;
   }
 
-  await expect(page.getByTestId("memory-projects")).toBeVisible();
-  await expect(page.getByTestId("memory-agents")).toBeVisible();
+  await expect(
+    page.getByRole("navigation", { name: "Memory scopes" }),
+  ).toBeVisible();
+  await expect(page.getByTestId("memory-list")).toBeVisible();
   await expect(
     page.getByRole("button", { name: /^(Sync now|Syncing…)$/ }),
   ).toHaveCount(1);

@@ -42,6 +42,7 @@ export function DataTable<T>({
   rowKey,
   search,
   filters = [],
+  initialFilters,
   onRowClick,
   isRowClickable,
   rowFooter,
@@ -74,7 +75,7 @@ export function DataTable<T>({
     else setInternalSort(next);
   };
 
-  const [filterVals, setFilterVals] = useState<Record<string, string>>({});
+  const [filterVals, setFilterVals] = useState<Record<string, string>>(initialFilters ?? {});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const expandable = Boolean(getRowDetail);
   const colCount = columns.length + (expandable ? 1 : 0) + (selection ? 1 : 0);

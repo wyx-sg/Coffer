@@ -358,3 +358,27 @@ async def test_a_periodic_pass_that_changes_nothing_tells_no_listener() -> None:
     del t.actual["foreign1"]  # an open difference closing is heard too
     await rec.run(trigger=Trigger.PERIOD)
     assert len(heard) == 4
+
+
+async def test_a_cancel_turned_into_an_error_while_planning_stops_the_pass() -> None:
+    """A target read cancelled mid-query can surface as an ordinary error; the
+    pass must not log it as a failed target and carry on."""
+    rec, _ = _reconciler()
+    started = asyncio.Event()
+
+    class _Stuck(_Target):
+        async def desired(self) -> Sequence[Item]:
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                raise RuntimeError("no active connection") from None
+            return []
+
+    rec.register(_Stuck(wanted={"a": {"command": "x"}}))
+    task = asyncio.create_task(rec.run(trigger=Trigger.PERIOD))
+    await asyncio.wait_for(started.wait(), 1.0)
+    task.cancel()
+    done, _ = await asyncio.wait({task}, timeout=1.0)
+    assert task in done and task.cancelled()
+    assert rec.last_pass is None

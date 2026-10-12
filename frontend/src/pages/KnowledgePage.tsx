@@ -4,7 +4,8 @@
 // documents in the web UI"): the tree of every collection on the left, each
 // with its pages and sources, and whatever the address names on the right
 // (lib/knowledge/routes.ts): a line to pick a collection, a collection, or an
-// open file, read-only, with its history drawer when the address names it. Every collection is served to every agent, so
+// open file, read-only. A file's history, when the address names it, takes the
+// whole area: the tree makes way for it. Every collection is served to every agent, so
 // there is no per-collection switch and no reach control; and the layer has no
 // retrieval, so there is no search box — ⌘K jumps to a collection by name.
 //
@@ -16,15 +17,19 @@
 // Nothing auto-provisions a collection, so an empty list is the first-run
 // empty state. The page is a workspace (boards 5.1.01–5.1.29): a header — the
 // title with its Experimental tag, one subtitle line, and on the right Tidy all
-// and Upload, the page's one primary button — then the tree and the pane, each
-// scrolling on its own.
+// and **Add**, the page's one primary button — then the tree and the pane, each
+// scrolling on its own. Add is one menu, each entry saying what Coffer keeps:
+// Upload documents… (converted to Markdown and kept in the collection picked,
+// synced with it) and New collection… (kept in Coffer, synced to the person's
+// other Macs, with history, tidied by their agent), so nobody has to guess
+// what lands in Coffer.
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Navigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Upload } from "lucide-react";
 
 import { ListLoadError } from "@/components/ListPaneStates";
+import { KnowledgeAddMenu } from "@/components/knowledge/KnowledgeAddMenu";
 import { KnowledgeDialogs, type KnowledgeDialog } from "@/components/knowledge/KnowledgeDialogs";
 import { KnowledgeNav } from "@/components/knowledge/KnowledgeNav";
 import { KnowledgePane } from "@/components/knowledge/KnowledgePane";
@@ -33,12 +38,11 @@ import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { ExperimentalTag } from "@/components/ExperimentalTag";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
-import { Button } from "@/components/ui/button";
 import { getTidyHandoff } from "@/lib/api/knowledge";
 import { knowledgeKey } from "@/lib/api/queryKeys";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
 import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
-import { legacyRedirect } from "@/lib/knowledge/routes";
+import { HISTORY_PARAM, legacyRedirect } from "@/lib/knowledge/routes";
 import { PAGE_BLEED, PAGE_BLEED_HEAD } from "@/components/shell/pageFrame";
 import { cn } from "@/lib/utils";
 
@@ -62,11 +66,13 @@ export function KnowledgePage() {
   const { search } = useLocation();
   const [params] = useSearchParams();
   const file = params.get("file");
+  // A file's history fills the whole area, so the tree makes way for it.
+  const historyOpen = Boolean(file) && params.get(HISTORY_PARAM) === "1";
   const collections = useKnowledgeCollections();
   const [dialog, setDialog] = useState<KnowledgeDialog>(null);
 
   // A file's pane has no tabs: the History tab's old address
-  // (`/<uid>/history?file=`) opens its history drawer, any other segment the
+  // (`/<uid>/history?file=`) opens its history, any other segment the
   // bare address.
   if (uid && tab) {
     return <Navigate to={legacyRedirect(uid, tab, search)} replace />;
@@ -89,9 +95,7 @@ export function KnowledgePage() {
           list.length > 0 ? (
             <>
               <AgentHandoff prompt={tidyAllPrompt} label={t("knowledge.tidy.all")} help={false} />
-              <Button onClick={() => setDialog("upload")}>
-                <Upload aria-hidden /> {t("knowledge.upload.button")}
-              </Button>
+              <KnowledgeAddMenu onSelect={setDialog} canUpload={list.some((c) => !c.linked)} />
             </>
           ) : null
         }
@@ -117,7 +121,10 @@ export function KnowledgePage() {
       <div className={shell}>
         {header}
         <div className="min-h-0 flex-1 overflow-auto">
-          <KnowledgeWelcomePanel onCreate={() => setDialog("create")} />
+          <KnowledgeWelcomePanel
+            onCreate={() => setDialog("create")}
+            onLink={() => setDialog("link")}
+          />
         </div>
         {dialogs}
       </div>
@@ -131,6 +138,7 @@ export function KnowledgePage() {
         storageKey="knowledge"
         label={t("splitView.resizeList")}
         defaultListWidth={260}
+        listHidden={historyOpen}
         className="min-h-0 flex-1"
         listClassName="flex min-h-0 flex-col bg-surface-sidebar"
         detailClassName="flex min-h-0 min-w-0 flex-col"

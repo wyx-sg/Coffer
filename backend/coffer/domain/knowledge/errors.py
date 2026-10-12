@@ -33,6 +33,33 @@ class CollectionExists(KnowledgeError):  # noqa: N818
         self.name = name
 
 
+class CollectionIsLinked(KnowledgeError):  # noqa: N818
+    """A write, tidy, check or history action asked of a linked folder.
+
+    A linked folder is kept by the person's own tools and only shared with the
+    agents (ADR linked-knowledge-folders-are-read-only-and-machine-local), so
+    Coffer refuses every action that would change it or that needs its history.
+    """
+
+    code = "KNOWLEDGE_COLLECTION_LINKED"
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"knowledge collection {name!r} is a linked folder Coffer only reads")
+        self.name = name
+
+
+class LinkedFolderRefused(KnowledgeError):  # noqa: N818
+    """A folder that cannot be linked: missing, not a folder, or inside Coffer's
+    own home, which Coffer already keeps."""
+
+    code = "KNOWLEDGE_FOLDER_REFUSED"
+
+    def __init__(self, folder: str, reason: str) -> None:
+        super().__init__(f"cannot link {folder!r}: {reason}")
+        self.folder = folder
+        self.reason = reason
+
+
 class KnowledgeFileNotFound(KnowledgeError):  # noqa: N818
     code = "KNOWLEDGE_FILE_NOT_FOUND"
 
@@ -121,3 +148,29 @@ class KnowledgeRestoreConflict(KnowledgeError):  # noqa: N818
         self.version = version
         self.document = document
         self.error_details: dict[str, object] = {"version": version, "document": document}
+
+
+class KnowledgeUndoConflict(KnowledgeError):  # noqa: N818
+    """Undoing a change would throw away edits made to its files since. Refused,
+    naming them; nothing is written unless the person confirms (spec knowledge
+    "Undo a tidy")."""
+
+    code = "KNOWLEDGE_UNDO_CONFLICT"
+
+    def __init__(self, version: str, documents: list[str]) -> None:
+        super().__init__(
+            f"undoing {version!r} would discard later edits to {len(documents)} file(s)"
+        )
+        self.version = version
+        self.documents = documents
+        self.error_details: dict[str, object] = {"version": version, "documents": documents}
+
+
+class KnowledgeNotAChange(KnowledgeError):  # noqa: N818
+    """An undo aimed at a version that changed no knowledge file."""
+
+    code = "KNOWLEDGE_NOT_A_CHANGE"
+
+    def __init__(self, version: str) -> None:
+        super().__init__(f"{version!r} changed no knowledge file")
+        self.version = version

@@ -13,12 +13,12 @@ description: 从源码安装 Coffer，用一次性保险库运行守护进程和
 | --- | --- | --- |
 | Python | 3.12（`.python-version`；`requires-python = ">=3.12"`） | 后端、CLI、MCP shim、所有仓库门禁 |
 | [uv](https://docs.astral.sh/uv/) | 较新的任意版本 | 安装锁定的依赖集，`make lock` |
-| Node.js + npm | 20，即每个 CI job 使用的版本 | Web 界面、OpenSpec CLI、Playwright |
+| Node.js + npm | 20，即每个 CI job 使用的版本（`.nvmrc`，以及每个 `package.json` 的 `engines`） | Web 界面、OpenSpec CLI、Playwright |
 | git | 2.40 或更高（`merge-tree --write-tree --merge-base`） | 保险库是一个 git 仓库：没有 git 守护进程会停在设置状态，保险库和同步测试也要运行它 |
 | Rust 工具链（[rustup](https://rustup.rs)）+ Xcode 命令行工具 | stable | 只有桌面壳（`make desktop*`）需要 |
 
 ::: warning 使用 Node 20
-CI 跑的是 Node 20。其他大版本在测试运行器里的表现可能不同。比如 Node 22 自带一个内置的 Web Storage，会在 jsdom 下弄坏 `localStorage`，`frontend/src/test/setup.ts` 不得不专门绕开它。如果前端测试在本地失败而在 CI 上通过，先检查 `node --version`。
+CI 跑的是 Node 20。其他大版本在测试运行器里的表现可能不同。比如 Node 22 自带一个内置的 Web Storage，会在 jsdom 下弄坏 `localStorage`，`frontend/src/test/setup.ts` 不得不专门绕开它。如果前端测试在本地失败而在 CI 上通过，先检查 `node --version`。仓库在 `.nvmrc`（运行 `nvm use`）和每个 `package.json` 的 `engines.node` 里固定了这个版本。每个运行 npm、vitest 或 Playwright 的 Makefile 目标（`lint`、`verify-unit`、`verify-e2e`、`verify-visual`、`visual-update`、`docs-shots`、`coverage`、`dev`、`frontend-codegen`、`docs-build`、`desktop`）都会先检查 `node --version`，主版本不是 20 就报错退出，因为在其他主版本下 vitest 会打印一条多余的 `AbortSignal` 错误，即使所有测试通过也以 1 退出。
 :::
 
 ## 安装 {#install}
@@ -39,7 +39,7 @@ UV_PROJECT_ENVIRONMENT=.venv uv sync --frozen --extra dev --project backend --py
 然后它会在 `frontend/`、仓库根目录（为了锁定版本的 OpenSpec CLI）和 `e2e/` 里分别运行 `npm install`。端到端测试用的浏览器是单独的、体积很大的下载：`make install-e2e-browsers`。
 
 ::: tip 本地结果和 CI 不一致时
-先重新运行 `make install`，再调试别的。venv 与锁文件出现偏移（比如对 `>=` 下限做了一次 `pip install`）是测试在本地失败、在 CI 上通过的最常见原因。
+先重新运行 `make install`，再调试别的。当本检出目录没有 `.venv` 时，每个需要 Python 环境的目标都会立刻失败，并提示“`.venv/bin/python3` 不存在：请先运行 `make install`”；Makefile 不会回退到系统的 `python3`（只有 CI 任务例外：`CI=true` 且由任务自己准备解释器，此时用 `PATH` 里的 `python3`）。venv 与锁文件出现偏移（比如对 `>=` 下限做了一次 `pip install`）是测试在本地失败、在 CI 上通过的最常见原因。
 :::
 
 ## 从源码运行 Coffer {#run-coffer-from-source}
@@ -226,7 +226,7 @@ cd ../coffer-my-fix && make install
 
 - **`.git` 是共享的。** 任何一个 worktree 执行 fetch，`origin/main` 都会在你脚下移动。有意识地去 rebase，不要假设 `main` 还停在你离开时的位置。
 - **stash 也是共享的。** 在一个 worktree 里 `git stash`，推入的是所有 worktree 都能看到的同一个栈，而裸的 `git stash pop` 可能会应用别人的工作。优先用一个临时的 WIP 提交。如果一定要 stash，就给条目命名（`git stash push -m "<tag>"`），并按它的 SHA 来应用。
-- **每个 worktree 用自己的 `.venv`。** 后端以可编辑模式安装，所以从另一个检出目录软链过来的 `.venv` 导入的是那个检出目录的代码，你的测试就会在错误的代码树上通过。有两道门禁防范这一点：`make lint` 用 `PYTHONPATH=backend` 运行 `lint-imports`；如果 `coffer` 解析到本检出目录之外，`e2e/scripts/start_daemon.sh` 会拒绝启动。其他一切都只会测试 venv 指向的那份代码。
+- **每个 worktree 用自己的 `.venv`。** 后端以可编辑模式安装，所以从另一个检出目录软链过来的 `.venv` 导入的是那个检出目录的代码，你的测试就会在错误的代码树上通过。有两道门禁防范这一点：`make lint` 用 `PYTHONPATH=backend` 运行 `lint-imports`；如果 `coffer` 解析到本检出目录之外，`e2e/scripts/start_daemon.sh` 会拒绝启动。其他一切都只会测试 venv 指向的那份代码。没有 `.venv` 的新克隆或新 worktree 会立刻停下并提示运行 `make install`，而不是在系统 Python 上运行。
 - **每个 worktree 只开一个会话。** 两个编辑器或智能体写同一个 worktree，会互相覆盖对方未提交的改动。
 - **把守护进程放进沙盒。** 各 worktree 共享你的 `HOME`，所以两个 `make dev` 会争抢 `~/.coffer` 和 38470 端口。请使用上文的一次性保险库做法。
 
