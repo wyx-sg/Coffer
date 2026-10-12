@@ -38,6 +38,7 @@ from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.infrastructure.vault.home import content_root
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.channel_prompt_preview import set_channel_prompt_reader
 from coffer.surfaces.http.channel_routes import (
     get_channel_service,
     set_channel_avatars,
@@ -161,6 +162,8 @@ async def ctx(tmp_path) -> AsyncIterator[_Ctx]:
     err_handlers.register(app)
     app.include_router(channel_router)
     set_channel_service(service)
+    # No note reader here, whatever an earlier test in this worker wired.
+    set_channel_prompt_reader(None)
     set_active_token(_TOKEN)
     yield _Ctx(
         app=app,
@@ -173,6 +176,7 @@ async def ctx(tmp_path) -> AsyncIterator[_Ctx]:
         st_uid=st.uid,
     )
     set_channel_service(None)
+    set_channel_prompt_reader(None)
     set_active_token(None)
     await engine.dispose()
 

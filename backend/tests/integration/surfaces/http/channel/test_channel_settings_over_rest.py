@@ -30,6 +30,7 @@ from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.infrastructure.vault.home import content_root, local_root
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.channel_prompt_preview import set_channel_prompt_reader
 from coffer.surfaces.http.channel_routes import router as channel_router
 from coffer.surfaces.http.channel_routes import set_channel_service
 from coffer.surfaces.http.dependencies import get_audit_service, get_resource_service
@@ -97,6 +98,8 @@ async def ctx(tmp_path) -> AsyncIterator[_Ctx]:
     app.dependency_overrides[get_resource_service] = lambda: resources
     app.dependency_overrides[get_audit_service] = lambda: audit
     set_channel_service(service)
+    # No note reader here, whatever an earlier test in this worker wired.
+    set_channel_prompt_reader(None)
     set_active_token(_TOKEN)
     http = AsyncClient(
         transport=ASGITransport(app), base_url="http://t", headers={"X-Coffer-Token": _TOKEN}
@@ -104,6 +107,7 @@ async def ctx(tmp_path) -> AsyncIterator[_Ctx]:
     yield _Ctx(http=http, resources=resources, audit=audit, runtime=runtime)
     await http.aclose()
     set_channel_service(None)
+    set_channel_prompt_reader(None)
     set_active_token(None)
     await engine.dispose()
 
