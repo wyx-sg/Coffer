@@ -23,9 +23,9 @@ import { cn } from "@/lib/utils";
 /** How far one ← / → press moves the divider (px). */
 export const KEYBOARD_STEP = 16;
 
-// Put on <body> while dragging so no text is selected and the cursor stays
-// col-resize wherever the pointer wanders.
-const DRAGGING_BODY_CLASSES = ["select-none", "cursor-col-resize"];
+// Put on <body> while dragging so no text is selected; index.css forces the
+// col-resize cursor on every element under it, wherever the pointer wanders.
+const DRAGGING_BODY_CLASSES = ["select-none", "split-dragging"];
 
 export interface SplitDividerProps {
   /** Current width (px) of the pane the divider resizes. */
@@ -144,17 +144,21 @@ export function SplitDivider({
       onLostPointerCapture={onPointerEnd}
       onDoubleClick={onReset}
       onKeyDown={onKeyDown}
+      style={{ cursor: "col-resize" }}
       className={cn(
         // The 1px hairline; it takes 1px in the row and never shrinks.
         "group relative z-sticky w-px shrink-0 cursor-col-resize touch-none self-stretch bg-border outline-none",
-        // The invisible 12px hit area, centred on the line.
-        "before:absolute before:inset-y-0 before:-inset-x-[5.5px] before:content-['']",
         // The 2px accent line, centred on the hairline: hover, drag, focus.
         "after:pointer-events-none after:absolute after:inset-y-0 after:-inset-x-[0.5px] after:bg-accent after:opacity-0 after:transition-opacity after:duration-fast after:content-['']",
         "hover:after:opacity-100 focus-visible:after:opacity-100 data-[dragging=true]:after:opacity-100",
         "focus-visible:ring-2 focus-visible:ring-focus-ring",
         className,
       )}
-    />
+    >
+      {/* The invisible 12px hit area, centred on the line. A real element, not
+          a pseudo-element, so WebKit (the macOS app) reliably shows the cursor
+          over the whole gutter, not only on the 1px line. */}
+      <span aria-hidden="true" className="absolute inset-y-0 -inset-x-[5.5px] cursor-col-resize" />
+    </div>
   );
 }

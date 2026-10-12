@@ -357,3 +357,10 @@
   background-color: rgb(var(--highlight-active) / 0.9);
   color: rgb(var(--text));
 }
+
+/* While a split divider is dragged, the resize cursor wins over every
+   element's own cursor (buttons, inputs, links) so it never flickers. */
+body.split-dragging,
+body.split-dragging * {
+  cursor: col-resize !important;
+}
