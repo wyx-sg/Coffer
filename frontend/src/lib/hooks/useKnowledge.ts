@@ -15,10 +15,12 @@ import {
   deleteFile,
   describeCollection,
   getCheck,
+  getCollectionFiles,
   getFile,
   getTree,
   listChanges,
   listCollections,
+  undoChange,
   uploadFile,
   type ChangeOut,
 } from "@/lib/api/knowledge";
@@ -27,6 +29,7 @@ import {
   knowledgeCheckKey,
   knowledgeCollectionsKey,
   knowledgeFileKey,
+  knowledgeFilesKey,
   knowledgeKey,
   knowledgeTreeKey,
 } from "@/lib/api/queryKeys";
@@ -92,6 +95,30 @@ export function useKnowledgeCheck(uid: string) {
   return useQuery({
     queryKey: knowledgeCheckKey(uid),
     queryFn: () => getCheck(uid),
+  });
+}
+
+/** Every page and source of a collection, with its title, page type and
+ *  waiting mark: its page's Contents, and the titles To do and the Change log
+ *  name files by. */
+export function useKnowledgeFiles(uid: string) {
+  return useQuery({
+    queryKey: knowledgeFilesKey(uid),
+    queryFn: async () => (await getCollectionFiles(uid)).files,
+  });
+}
+
+/**
+ * Undo a change — a tidy's **Undo this tidy**: every file it touched put back,
+ * as one new change. A refusal (`KNOWLEDGE_UNDO_CONFLICT`, files edited since)
+ * is the caller's to show, with Undo anyway; so no `onError` toast here.
+ */
+export function useUndoChange() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ version, force = false }: { version: string; force?: boolean }) =>
+      undoChange(version, force),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
   });
 }
 

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-10-09
 **Deciders**: Yuxing Wu
-**Related**: [Tidying Knowledge Is the Agent's Job](tidying-knowledge-is-the-agents-job.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md), design principle [Pull, not push](../../docs-site/architecture/design-principles.md#pull-not-push), research note [agent memory](../research/agent-memory.md), OpenSpec change `sync-memory-into-agents`
+**Related**: [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md), design principle [Pull, not push](../../docs-site/architecture/design-principles.md#pull-not-push), research note [agent memory](../research/agent-memory.md), OpenSpec change `sync-memory-into-agents`
 
 ## Context
 

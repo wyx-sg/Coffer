@@ -81,4 +81,19 @@ def restore_file(relpath: str, raw: bytes) -> None:
     atomic_write(target, decode(raw))
 
 
-__all__ = ["restore_file", "write_description"]
+def current_bytes(relpath: str) -> bytes | None:
+    """A document's bytes on disk now, ``None`` when it is not there."""
+    target = paths.resolve(relpath)
+    try:
+        return target.read_bytes() if target.is_file() else None
+    except OSError:
+        return None
+
+
+def remove_file(relpath: str) -> None:
+    """Remove one document an undone change had added; nothing if it is gone."""
+    target = paths.resolve(relpath)
+    target.unlink(missing_ok=True)
+
+
+__all__ = ["current_bytes", "remove_file", "restore_file", "write_description"]

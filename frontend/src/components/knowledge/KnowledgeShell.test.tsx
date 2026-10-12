@@ -2,16 +2,19 @@
 //
 // The Knowledge page's shell (boards 5.1.01, 5.1.03, 5.1.09, 5.1.11, 5.1.12,
 // 5.1.13, 5.1.26–28; Foundations 0.6.04): the header (title, Experimental tag,
-// one subtitle, Tidy all and the one primary Upload), the landing with no
-// collection open, the first-run empty state, the tree (a Collections strip
-// with New collection) and the Upload dialog's Cancel. Mocked only at the network boundary, like the page tests.
+// one subtitle, Tidy all and the one primary Add menu, each entry saying what
+// it keeps in Coffer), the landing with no collection open, the first-run
+// empty state, the tree (a Collections strip with New collection, each page
+// with its type's icon) and the Upload dialog — several files at once, each
+// with its own outcome, and Cancel. Mocked only at the network boundary, like the page tests.
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { COLLECTION, GATEWAY, OTHER, UID } from "@/components/knowledge/knowledgeTestData";
+import { COLLECTION, GATEWAY, OTHER, TREES, UID } from "@/components/knowledge/knowledgeTestData";
 import { answerFromFixtures, renderKnowledge } from "@/test/knowledgeHarness";
 
 import { acceptance } from "@/test/acceptance";
+import { ApiError } from "@/lib/api/errors";
 
 vi.mock("@/lib/api/knowledge", () => ({
   listCollections: vi.fn(),
@@ -24,6 +27,8 @@ vi.mock("@/lib/api/knowledge", () => ({
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
   getCheck: vi.fn(),
+  getCollectionFiles: vi.fn(),
+  undoChange: vi.fn(),
 }));
 vi.mock("@/lib/hooks/useDaemonEvents", () => ({ useDaemonEvents: () => undefined }));
 vi.mock("@/lib/api/agentProviders", () => ({
@@ -54,7 +59,7 @@ function tree() {
 }
 
 describe("the header", () => {
-  acceptance("knowledge", "the page's one primary action is Upload", async () => {
+  acceptance("knowledge", "the Add menu says what each entry keeps in Coffer", async () => {
     renderKnowledge(`/knowledge/${UID}?file=${encodeURIComponent(GATEWAY.path)}`);
     const tidyAll = await within(screen.getByRole("banner")).findByRole("button", {
       name: "Tidy all",
@@ -65,10 +70,17 @@ describe("the header", () => {
     expect(tidyAll.className).not.toMatch(/bg-accent/);
     // No curation control any more: no Automatic button, no engine link.
     expect(screen.queryByTestId("knowledge-automatic")).toBeNull();
-    const upload = screen.getByRole("button", { name: "Upload" });
-    expect(upload.className).toMatch(/bg-accent/);
-    // Upload sits to the right of Tidy all.
-    expect(tidyAll.compareDocumentPosition(upload) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // One primary Add, right of Tidy all, and no separate Upload button.
+    const add = screen.getByRole("button", { name: "Add" });
+    expect(add.className).toMatch(/bg-accent/);
+    expect(tidyAll.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Upload" })).toBeNull();
+    fireEvent.click(add);
+    const items = await screen.findAllByRole("menuitem");
+    expect(items.map((i) => i.textContent)).toEqual([
+      "Upload documents…Converted to Markdown and kept in the collection you pick, synced with it.",
+      "New collection…Kept in Coffer: synced to your other Macs, with history, tidied by your agent.",
+    ]);
     // "Add a document" no longer exists.
     expect(screen.queryByRole("button", { name: "Add a document" })).toBeNull();
     // 16 top / 32 sides / 12 bottom, no divider.
@@ -79,6 +91,13 @@ describe("the header", () => {
     expect(await screen.findByRole("button", { name: "Open in editor" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  test("New collection… in the Add menu opens the New collection dialog", async () => {
+    renderKnowledge(`/knowledge/${UID}`);
+    fireEvent.click(await screen.findByRole("button", { name: "Add" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /^New collection…/ }));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("New collection");
   });
 });
 
@@ -146,6 +165,45 @@ describe("the tree", () => {
     expect(await screen.findByRole("dialog")).toHaveTextContent("New collection");
   });
 
+  acceptance("knowledge", "the tree marks each page with its type's icon", async () => {
+    const page = (slug: string, page_type: string) => ({
+      path: `${COLLECTION.name}/pages/${slug}.md`,
+      kind: "page" as const,
+      title: slug,
+      description: "",
+      page_type,
+      waiting: false,
+      actor: "user",
+      updated_at: "2026-09-20T00:00:00Z",
+    });
+    api.getTree.mockImplementation(async (path: string) => {
+      if (path === `${COLLECTION.name}/pages`) {
+        return {
+          path,
+          directories: [],
+          files: [page("map", "overview"), page("runbook", "playbook"), page("loose", "")],
+        };
+      }
+      return TREES[path] ?? { path, directories: [], files: [] };
+    });
+    renderKnowledge(`/knowledge/${UID}`);
+    const nav = tree();
+    fireEvent.click(await within(nav).findByRole("button", { name: "Pages" }));
+    fireEvent.click(within(nav).getByRole("button", { name: "Sources" }));
+    const icon = async (name: RegExp) =>
+      (await within(nav).findByRole("button", { name })).querySelector("svg[data-icon]");
+    expect(await icon(/^map\.md/)).toHaveAttribute("data-icon", "overview");
+    expect(await icon(/^map\.md/)).toHaveClass("lucide-compass");
+    // A type the README defines has no icon of its own: the generic page icon.
+    expect(await icon(/^runbook\.md/)).toHaveClass("lucide-file-text");
+    expect(await icon(/^loose\.md/)).toHaveAttribute("data-icon", "untyped");
+    expect(await icon(/^loose\.md/)).toHaveClass("lucide-file-question-mark");
+    const source = await within(nav).findByRole("button", { name: /^release-notes\.md/ });
+    expect(source.querySelector("svg[data-icon]")).toHaveAttribute("data-icon", "source");
+    expect(source.querySelector("svg[data-icon]")).toHaveClass("lucide-scroll-text");
+    expect(source).toHaveTextContent("Waiting");
+  });
+
   acceptance("knowledge", "the tree comes back as the person left it", async () => {
     renderKnowledge("/knowledge");
     let nav = tree();
@@ -184,6 +242,85 @@ describe("the tree", () => {
 });
 
 describe("the Upload dialog", () => {
+  async function openUpload() {
+    fireEvent.click(await screen.findByRole("button", { name: "Add" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /^Upload documents…/ }));
+    return screen.findByRole("dialog");
+  }
+
+  acceptance("knowledge", "upload several files at once, each with its own outcome", async () => {
+    api.uploadFile.mockImplementation(async ({ file }: { file: File }) => {
+      if (file.name === "scan.pdf") {
+        throw new ApiError("KNOWLEDGE_INGEST_FAILED", "no text", { reason: "scanned_pdf" });
+      }
+      return {
+        path: `${COLLECTION.name}/sources/notes.md`,
+        title: "notes",
+        description: "",
+        converter: "markdown",
+      };
+    });
+    renderKnowledge(`/knowledge/${UID}`);
+    const dialog = await openUpload();
+    expect(
+      within(dialog).getByText(
+        "Coffer converts each to Markdown and keeps it as a source of the collection. The uploaded files themselves are not stored.",
+      ),
+    ).toBeInTheDocument();
+    const big = new File(["x"], "huge.pdf", { type: "application/pdf" });
+    Object.defineProperty(big, "size", { value: 21 * 1024 * 1024 });
+    fireEvent.change(within(dialog).getByLabelText("Drop files here, or choose them"), {
+      target: {
+        files: [
+          new File(["hello"], "notes.md", { type: "text/markdown" }),
+          new File(["%PDF"], "scan.pdf", { type: "application/pdf" }),
+          new File(["PK"], "bundle.zip", { type: "application/zip" }),
+          big,
+        ],
+      },
+    });
+    // The ZIP and the large file are refused before anything is sent.
+    const files = within(dialog).getByRole("list", { name: "Files to upload" });
+    const row = (name: string) => within(files).getByText(name).closest("li") as HTMLElement;
+    expect(row("bundle.zip")).toHaveTextContent("ZIP files can't be converted");
+    expect(row("huge.pdf")).toHaveTextContent("Larger than 20 MB");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Upload 2 files" }));
+
+    // The other two go one after another, each with its own outcome.
+    await waitFor(() => expect(row("scan.pdf")).toHaveAttribute("data-status", "refused"));
+    expect(api.uploadFile).toHaveBeenCalledTimes(2);
+    expect(api.uploadFile.mock.calls.map(([p]) => p.file.name)).toEqual(["notes.md", "scan.pdf"]);
+    expect(row("notes.md")).toHaveAttribute("data-status", "saved");
+    expect(row("notes.md")).toHaveTextContent(`Saved as ${COLLECTION.name}/sources/notes.md`);
+    expect(row("scan.pdf")).toHaveTextContent("No text in this PDF");
+    // One toast sums it up; the dialog stays on the outcomes.
+    expect(await screen.findByText("1 uploaded; 3 couldn’t be")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    // The refused PDF stays to be tried again.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Retry" }));
+    expect(row("scan.pdf")).toHaveAttribute("data-status", "ready");
+    expect(within(dialog).getByRole("button", { name: "Upload" })).toBeEnabled();
+  });
+
+  test("when every file is saved the dialog closes with one toast", async () => {
+    api.uploadFile.mockImplementation(async ({ file }: { file: File }) => ({
+      path: `${COLLECTION.name}/sources/${file.name}`,
+      title: file.name,
+      description: "",
+      converter: "markdown",
+    }));
+    renderKnowledge(`/knowledge/${UID}`);
+    const dialog = await openUpload();
+    fireEvent.change(within(dialog).getByLabelText("Drop files here, or choose them"), {
+      target: {
+        files: [new File(["a"], "a.md"), new File(["b"], "b.md")],
+      },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Upload 2 files" }));
+    expect(await screen.findByText(`Uploaded 2 files to ${COLLECTION.name}`)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
   test("Cancel stays live while converting and aborts the upload", async () => {
     let signal: AbortSignal | undefined;
     api.uploadFile.mockImplementation(
@@ -196,23 +333,24 @@ describe("the Upload dialog", () => {
         }),
     );
     renderKnowledge(`/knowledge/${UID}`);
-    fireEvent.click(await screen.findByRole("button", { name: "Upload" }));
-    const dialog = await screen.findByRole("dialog");
-    expect(
-      within(dialog).getByText(
-        "Coffer converts it to Markdown and keeps it as a source of the collection. The uploaded file itself is not stored.",
-      ),
-    ).toBeInTheDocument();
-    const input = within(dialog).getByLabelText("Drop a file here, or choose one");
+    const dialog = await openUpload();
+    const input = within(dialog).getByLabelText("Drop files here, or choose them");
     fireEvent.change(input, {
-      target: { files: [new File(["hello"], "notes.md", { type: "text/markdown" })] },
+      target: {
+        files: [
+          new File(["hello"], "notes.md", { type: "text/markdown" }),
+          new File(["more"], "more.md", { type: "text/markdown" }),
+        ],
+      },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Upload" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Upload 2 files" }));
     await waitFor(() => expect(api.uploadFile).toHaveBeenCalled());
     const cancel = within(dialog).getByRole("button", { name: "Cancel" });
     expect(cancel).toBeEnabled();
     fireEvent.click(cancel);
     expect(signal?.aborted).toBe(true);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    // The second file is never sent.
+    expect(api.uploadFile).toHaveBeenCalledTimes(1);
   });
 });

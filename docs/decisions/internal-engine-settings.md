@@ -3,12 +3,12 @@
 **Status**: Accepted
 **Date**: 2026-10-04
 **Deciders**: Yuxing Wu
-**Related**: [Tidying Knowledge Is the Agent's Job](tidying-knowledge-is-the-agents-job.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [Sync Withholds Derived Output](sync-withholds-derived-output.md), [Kind Plugin Contract](kind-plugin-contract.md), spec internal-engine "Keep the engine's settings in one vault document", spec internal-engine "Transcribe speech on its own connection and model", spec internal-engine "Drop the speech-to-text model when its connection moves", spec internal-engine "Publish no document while the defaults hold", spec provider-switching "Keep an independent speech-to-text default"
+**Related**: [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md), [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [Sync Withholds Derived Output](sync-withholds-derived-output.md), [Kind Plugin Contract](kind-plugin-contract.md), spec internal-engine "Keep the engine's settings in one vault document", spec internal-engine "Transcribe speech on its own connection and model", spec internal-engine "Drop the speech-to-text model when its connection moves", spec internal-engine "Publish no document while the defaults hold", spec provider-switching "Keep an independent speech-to-text default"
 
 ## Context
 
 Transcribing a voice message is the one model call Coffer makes on its own
-behalf ([Tidying Knowledge Is the Agent's Job](tidying-knowledge-is-the-agents-job.md)
+behalf ([Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md)
 puts every other judgement in the person's agent). The call needs two
 things: an endpoint with a key and a model id. Coffer also runs one mechanical pass on a timer, the memory sync
 ([Sync Memory Into Each Agent's Own Memory](sync-memory-into-each-agents-own-memory.md)), with a switch and an interval.

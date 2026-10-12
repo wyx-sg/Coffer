@@ -221,6 +221,16 @@ class KnowledgeService:
         entry = await asyncio.to_thread(catalogue.collection_entry, directory)
         return dataclasses.replace(entry, uid=row.uid)
 
+    async def files(self, uid: str) -> tuple[FileEntry, ...]:
+        """Every file of one collection with its title, type and waiting mark,
+        for the collection page's Contents (spec knowledge "Show a collection's
+        contents by page type"). Read off disk on every call."""
+        row = await self.collection(uid)
+        directory = paths.collection_dir(row.name)
+        if not directory.is_dir():
+            raise CollectionNotFound(row.name)
+        return await asyncio.to_thread(catalogue.walk_files, directory)
+
     async def catalogue(self) -> list[tuple[CollectionEntry, tuple[FileEntry, ...]]]:
         """Every registered collection with every document in it.
 

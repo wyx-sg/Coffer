@@ -12,6 +12,7 @@ from __future__ import annotations
 from coffer.application.knowledge.change_service import KnowledgeChangeService
 from coffer.application.knowledge.ingest import IngestService
 from coffer.application.knowledge.service import KnowledgeService
+from coffer.application.knowledge.tidy_service import TidyService
 
 _knowledge_service: KnowledgeService | None = None
 
@@ -61,3 +62,20 @@ def get_change_service() -> KnowledgeChangeService:
     if _change_service is None:
         raise RuntimeError("knowledge change service not initialised")
     return _change_service
+
+
+_tidy_service: TidyService | None = None
+
+
+def set_tidy_service(svc: TidyService) -> None:
+    """Called by the composition root once on startup."""
+    global _tidy_service
+    _tidy_service = svc
+
+
+def get_tidy_service() -> TidyService:
+    """FastAPI Depends() target: opening and closing a tidy (spec knowledge
+    "Record a tidy as one change")."""
+    if _tidy_service is None:
+        raise RuntimeError("knowledge tidy service not initialised")
+    return _tidy_service

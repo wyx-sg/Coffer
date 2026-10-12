@@ -28,6 +28,8 @@ vi.mock("@/lib/api/knowledge", () => ({
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
   getCheck: vi.fn(),
+  getCollectionFiles: vi.fn(),
+  undoChange: vi.fn(),
 }));
 vi.mock("@/lib/api/vault", () => ({
   vaultApi: { history: vi.fn(), diff: vi.fn(), restore: vi.fn() },
@@ -71,6 +73,19 @@ describe("the reader", () => {
     ).toBeVisible();
     expect(screen.getAllByRole("heading", { name: /^Gateway/ })).toHaveLength(1);
     expect(screen.getByText("The text.")).toBeVisible();
+  });
+
+  test("a page's verified date is in its line, and inline code wraps a long path at its separators", async () => {
+    api.getFile.mockResolvedValue({
+      ...GATEWAY,
+      verified: "2026-10-12",
+      body: "# Account Gateway\n\nIt lives in `services/account/gateway/internal/orchestrator.go`.\n",
+    });
+    renderKnowledge(OPEN);
+    expect(await screen.findByTestId("page-verified")).toHaveTextContent("verified Oct 12, 2026");
+    const code = screen.getByTestId("inline-code");
+    expect(code).toHaveTextContent("services/account/gateway/internal/orchestrator.go");
+    expect(code.querySelectorAll("wbr").length).toBeGreaterThan(3);
   });
 
   test("names an agent that wrote it", async () => {

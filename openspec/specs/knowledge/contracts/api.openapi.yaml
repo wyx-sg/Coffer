@@ -124,6 +124,64 @@ paths:
       summary: Restore Deleted
       tags:
       - knowledge
+  /api/v1/knowledge/changes/{version}/undo:
+    post:
+      description: |-
+        Put every file a change touched — a tidy — back as it was just before
+        it, as one new change naming the user. 409 ``KNOWLEDGE_UNDO_CONFLICT``
+        naming the files edited since, unless ``force``; nothing is written then.
+      operationId: undo_change_api_v1_knowledge_changes__version__undo_post
+      parameters:
+      - in: path
+        name: version
+        required: true
+        schema:
+          title: Version
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UndoIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Undo Change
+      tags:
+      - knowledge
   /api/v1/knowledge/collections:
     get:
       operationId: list_collections_api_v1_knowledge_collections_get
@@ -301,6 +359,157 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Describe Collection
+      tags:
+      - knowledge
+  /api/v1/knowledge/collections/{uid}/files:
+    get:
+      description: |-
+        Every page and source of a collection with its title, page type and
+        waiting mark ("Show a collection's contents by page type").
+      operationId: collection_files_api_v1_knowledge_collections__uid__files_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionFilesOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Collection Files
+      tags:
+      - knowledge
+  /api/v1/knowledge/collections/{uid}/tidy/finish:
+    post:
+      description: |-
+        Close the collection's tidy and commit what it changed as one change
+        carrying the report; ``change`` is ``null`` when it changed nothing.
+      operationId: finish_tidy_api_v1_knowledge_collections__uid__tidy_finish_post
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TidyFinishIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TidyFinishOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Finish Tidy
+      tags:
+      - knowledge
+  /api/v1/knowledge/collections/{uid}/tidy/start:
+    post:
+      description: |-
+        Open a tidy of the collection: until it finishes, the edits made in it
+        are kept for one change ("Record a tidy as one change").
+      operationId: start_tidy_api_v1_knowledge_collections__uid__tidy_start_post
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TidyStatusOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Start Tidy
       tags:
       - knowledge
   /api/v1/knowledge/file:
@@ -561,7 +770,7 @@ components:
           description: The item a retired curation pass curated.
           title: Item
         operation:
-          description: '`save`, `delete`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, `remove`, `layout` or `baseline`; a change a retired curation pass made also reads `pass`, `submit` or `undo`.'
+          description: '`save`, `delete`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, `remove`, `layout`, `baseline` or `tidy` (one tidy an agent did, its report the summary); a change a retired curation pass made also reads `pass`, `submit` or `undo`.'
           title: Operation
           type: string
         restored_from:
@@ -573,7 +782,7 @@ components:
           anyOf:
           - type: string
           - type: 'null'
-          description: A retired curation pass's outcome status.
+          description: A tidy's `reported` (its agent finished it with a report) or `expired` (Coffer closed it after its collection sat unchanged); a retired curation pass's outcome status.
           title: Status
         summary:
           title: Summary
@@ -683,6 +892,20 @@ components:
       - description
       title: CollectionDescribeIn
       type: object
+    CollectionFilesOut:
+      description: |-
+        Every page and source of one collection, for its page's Contents
+        ("Show a collection's contents by page type").
+      properties:
+        files:
+          items:
+            $ref: '#/components/schemas/FileSummaryOut'
+          title: Files
+          type: array
+      required:
+      - files
+      title: CollectionFilesOut
+      type: object
     CollectionListOut:
       properties:
         collections:
@@ -696,8 +919,6 @@ components:
       type: object
     CollectionOut:
       properties:
-        check_handoff:
-          $ref: '#/components/schemas/HandoffOut'
         description:
           title: Description
           type: string
@@ -722,6 +943,10 @@ components:
           type: integer
         tidy_handoff:
           $ref: '#/components/schemas/HandoffOut'
+        tidy_running:
+          default: false
+          title: Tidy Running
+          type: boolean
         uid:
           title: Uid
           type: string
@@ -745,7 +970,7 @@ components:
       - folder_path
       - updated_at
       - tidy_handoff
-      - check_handoff
+      - tidy_running
       title: CollectionOut
       type: object
     DirectoryOut:
@@ -885,6 +1110,10 @@ components:
         updated_at:
           title: Updated At
           type: string
+        verified:
+          default: ''
+          title: Verified
+          type: string
         waiting:
           default: false
           title: Waiting
@@ -902,6 +1131,7 @@ components:
       - kind
       - page_type
       - aliases
+      - verified
       - sources
       - links
       - cited_by
@@ -1072,6 +1302,49 @@ components:
       - title
       title: SourceRefOut
       type: object
+    TidyFinishIn:
+      description: The agent's report on the tidy it finished.
+      properties:
+        summary:
+          default: ''
+          description: Which sources it integrated or skipped, what it merged, split, corrected and deleted, and what it left for the person to decide.
+          maxLength: 20000
+          title: Summary
+          type: string
+      title: TidyFinishIn
+      type: object
+    TidyFinishOut:
+      properties:
+        change:
+          anyOf:
+          - $ref: '#/components/schemas/ChangeOut'
+          - type: 'null'
+          description: The tidy's one change; null when it changed nothing.
+      required:
+      - change
+      title: TidyFinishOut
+      type: object
+    TidyStatusOut:
+      description: Where a collection's tidy stands ("Record a tidy as one change").
+      properties:
+        collection:
+          title: Collection
+          type: string
+        running:
+          title: Running
+          type: boolean
+        started_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: When the open tidy started (ISO 8601, UTC); null when none is.
+          title: Started At
+      required:
+      - collection
+      - running
+      - started_at
+      title: TidyStatusOut
+      type: object
     TreeOut:
       properties:
         directories:
@@ -1092,4 +1365,14 @@ components:
       - directories
       - files
       title: TreeOut
+      type: object
+    UndoIn:
+      description: Undo a change ("Undo a tidy").
+      properties:
+        force:
+          default: false
+          description: Undo even when a file was edited after the change, discarding those edits.
+          title: Force
+          type: boolean
+      title: UndoIn
       type: object

@@ -89,8 +89,12 @@ so make it the right one.
    `how-to`, `decision` or `overview` unless the README defines its own; a
    one-line `description` saying what *question* the page answers (it is the
    only thing a future reader chooses by); `sources`, the slugs of the sources
-   it draws on; any `aliases`; and `actor: agent`. Leave any other key a person
-   added alone.
+   it draws on; any `aliases`; when you last checked the page against its
+   sources or the code, as `verified: YYYY-MM-DD`; and `actor: agent`. Leave
+   any other key a person added alone. Where a page's facts came from belongs
+   in `sources` and `verified`, never in a paragraph of the body listing what
+   you read; a source that is not in the collection is cited where its fact
+   is, as a link.
 
 ```markdown
 ---
@@ -99,6 +103,7 @@ type: concept
 description: Which service owns a login session, and how long it lives
 sources: [auth-design-2024, oncall-notes]
 aliases: [sessions]
+verified: 2026-10-12
 actor: agent
 ---
 ```
@@ -131,38 +136,33 @@ sources one at a time, oldest first.
 When the developer asks you to tidy, organise or clean up knowledge (整理知识),
 work through one collection at a time:
 
-1. Integrate its waiting sources first (see "Integrating sources").
-2. Read its README and every page's title and description, then read the pages
+1. Run `coffer knowledge tidy-start <collection>` before you change anything.
+   Until you finish, Coffer keeps your edits in that collection together, so
+   the developer sees the whole tidy as one change and can undo it at once.
+2. Integrate its waiting sources first (see "Integrating sources").
+3. Fix what Coffer found: the mechanical findings the prompt lists, or
+   `coffer knowledge check <collection>` prints — dead and ambiguous links,
+   orphan and incomplete pages, pages without sources, missing sources.
+4. Read its README and every page's title and description, then read the pages
    in full before changing them.
-3. **Merge** pages that answer the same question into one, keeping every fact
+5. **Merge** pages that answer the same question into one, keeping every fact
    and every source; keep the merged-away slug in the survivor's `aliases`, and
    delete the pages you merged away.
-4. **Split** a page that answers several unrelated questions, one subject per
+6. **Split** a page that answers several unrelated questions, one subject per
    page, and link them to each other.
-5. **Fix** what is wrong or contradictory by rule 4 of "Writing a page", the
-   links Coffer reports as dead, and a description that does not say what
-   question its page answers.
-6. Report which sources you integrated or skipped, and what you merged, split,
-   corrected and deleted, so the developer can check it against the vault's git
-   history.
+7. **Fix** what is wrong, stale or contradictory by rule 4 of "Writing a page",
+   and a description that does not say what question its page answers. Give a
+   subject mentioned across pages but owned by none a page of its own.
+8. **Leave alone what you are not sure about** — two pages that disagree with
+   nothing to tell which is right, a deletion of much text, a change to the
+   README's page types — and put it in your report for the developer to decide.
+9. Run `coffer knowledge tidy-finish <collection> --set summary="<report>"`.
+   The report says which sources you integrated or skipped, what you merged,
+   split, corrected and deleted, and what you left for the developer. It is
+   shown with the tidy in the collection's change log.
 
-Change nothing that does not need changing.
-
-### Checking a collection
-
-When the developer asks you to check a collection, **change nothing**: read its
-README, its pages and, where a page's claim needs it, the sources it cites, and
-report:
-
-- statements that contradict each other, naming both pages;
-- statements a newer source or page shows to be stale;
-- subjects covered twice, by pages that should be one;
-- subjects mentioned across pages that deserve a page of their own;
-- the mechanical findings Coffer handed you (dead and ambiguous links, orphan
-  and incomplete pages, pages without sources, missing and waiting sources),
-  each with what you would do about it.
-
-The developer decides what to fix, and may then ask you to tidy.
+Change nothing that does not need changing. When the developer asks only for a
+check or a review, report what you would do and change nothing.
 
 <!-- end:knowledge -->
 ## Nothing here waits on a human

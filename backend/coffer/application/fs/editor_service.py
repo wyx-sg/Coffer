@@ -56,6 +56,10 @@ _KNOWN: tuple[_Editor, ...] = (
     _Editor("BBEdit", "BBEdit", "bbedit"),
     _Editor("Xcode", "Xcode", None),
     _Editor("Emacs", "Emacs", None),  # GUI Emacs.app on macOS
+    # A Markdown editor, not a code editor: listed because a knowledge
+    # collection opens in it as a vault (spec knowledge "Open a collection in
+    # Obsidian when it is installed").
+    _Editor("Obsidian", "Obsidian", "obsidian"),
     _Editor("Gedit", None, "gedit"),
     _Editor("Kate", None, "kate"),
 )

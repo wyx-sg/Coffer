@@ -152,6 +152,7 @@ class VaultWriter:
         self._listeners: list[Listener] = []
         self._problems: dict[str, tuple[Finding, ...]] = {}
         self._held: Callable[[], Iterable[str]] = _nothing_held
+        self._paused: Callable[[], Iterable[str]] = _nothing_held
 
     # --- configuration -------------------------------------------------------
 
@@ -174,6 +175,16 @@ class VaultWriter:
 
     def held(self) -> frozenset[str]:
         return frozenset(self._held())
+
+    def set_paused(self, provider: Callable[[], Iterable[str]]) -> None:
+        """Path prefixes whose edits are left in the working tree for now — a
+        knowledge collection an agent is tidying, committed as one change when
+        the tidy closes (spec knowledge "Record a tidy as one change"). Unlike a
+        held path, a paused one is the edit's to commit later, by whoever paused it."""
+        self._paused = provider
+
+    def _is_paused(self, path: str, prefixes: tuple[str, ...]) -> bool:
+        return bool(prefixes) and path.startswith(prefixes)
 
     def restore_disk(self, path: str, data: bytes | None) -> None:
         """Put ``data`` back at ``path`` on disk without committing — only for
@@ -295,17 +306,21 @@ class VaultWriter:
 
     # --- a person's edits --------------------------------------------------------
 
-    def pending(self) -> dict[str, str | None]:
+    def pending(self, *, include_paused: bool = False) -> dict[str, str | None]:
         """Every working-tree path that differs from ``HEAD`` and no operation
-        owns, with the fingerprint it has now (``None`` for a deletion)."""
+        owns, with the fingerprint it has now (``None`` for a deletion). Paused
+        paths are left out unless ``include_paused``."""
         self.repo.ensure()
         with self.lock:
             out: dict[str, str | None] = {}
             changed = [p for _code, p in self.repo.status() if not p.endswith("/")]
             ignored = self.repo.ignored(changed) | self.repo.unsupported(changed)
             held = self.held()
+            paused = () if include_paused else tuple(self._paused())
             for path in changed:
                 if self._owned[path] or path in ignored or path in held:
+                    continue
+                if self._is_paused(path, paused):
                     continue
                 data = self.read_disk(path)
                 out[path] = fingerprint(data) if data is not None else None
@@ -321,10 +336,11 @@ class VaultWriter:
         meta = meta or CommitMeta(writer=WRITER_DISK, operation=OP_EDIT, summary="Edited on disk")
         with self.lock:
             held = self.held()
+            paused = tuple(self._paused())
             candidates = [
                 p
                 for p in (paths if paths is not None else self.pending())
-                if not self._owned[p] and p not in held
+                if not self._owned[p] and p not in held and not self._is_paused(p, paused)
             ]
             if not candidates:
                 return None

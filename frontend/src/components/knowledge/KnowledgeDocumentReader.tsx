@@ -10,7 +10,12 @@
 // viewer. Every file is the same here, whoever wrote it last (spec knowledge
 // "Let only a person delete a document"); its file actions live in the pane
 // bar, not beside the text.
-import { useMemo } from "react";
+//
+// Inline code reads as part of the sentence — a light tint, a size relative to
+// the text around it — and a long path or identifier breaks after each `/`,
+// `.` or `_` rather than running out of the column; a fenced block keeps the
+// shared code style.
+import { Fragment, useMemo, type ReactNode } from "react";
 import type { Components } from "react-markdown";
 
 import { KnowledgeFileLine } from "@/components/knowledge/KnowledgeFileLine";
@@ -20,6 +25,39 @@ import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
 import type { FileOut } from "@/lib/api/knowledge";
 import { splitTitleHeading } from "@/lib/knowledge/titleHeading";
 import { markWikiLinks, wikiTargetOf } from "@/lib/knowledge/wikiLinks";
+
+/** `a/b/c.md` with a break opportunity after each `/`, `.`, `_` and `-`, so a
+ *  long path wraps at its separators instead of overflowing or mid-word. */
+function breakable(text: string): ReactNode {
+  const parts = text.split(/(?<=[/._-])/);
+  if (parts.length < 2) return text;
+  return parts.map((part, i) => (
+    <Fragment key={i}>
+      {part}
+      {i < parts.length - 1 ? <wbr /> : null}
+    </Fragment>
+  ));
+}
+
+/** Inline code as part of the sentence; a fenced block as the shared renderer has it. */
+const code: Components["code"] = ({ className, children, ...props }) => {
+  if (String(className ?? "").includes("language-")) {
+    return (
+      <code className={`${className ?? ""} font-mono text-xs leading-[1.6]`} {...props}>
+        {children}
+      </code>
+    );
+  }
+  return (
+    <code
+      data-testid="inline-code"
+      className="rounded-[4px] bg-surface-sunken px-[0.3em] py-[0.1em] font-mono text-[0.88em] text-text [overflow-wrap:anywhere]"
+      {...props}
+    >
+      {typeof children === "string" ? breakable(children) : children}
+    </code>
+  );
+};
 
 interface Props {
   file: FileOut;
@@ -36,10 +74,11 @@ export function KnowledgeDocumentReader({ file, collectionUid, source }: Props) 
   );
   const page = file.kind === "page";
   const rendered = useMemo(() => (page ? markWikiLinks(body) : body), [page, body]);
-  const components = useMemo<Components | undefined>(
+  const components = useMemo<Components>(
     () =>
       page
         ? {
+            code,
             a: ({ href, title: hint, children }) => {
               const target = wikiTargetOf(href);
               return target === null ? (
@@ -59,7 +98,7 @@ export function KnowledgeDocumentReader({ file, collectionUid, source }: Props) 
               );
             },
           }
-        : undefined,
+        : { code },
     [page, collectionUid, file.links],
   );
 

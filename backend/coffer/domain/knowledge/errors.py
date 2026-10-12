@@ -121,3 +121,29 @@ class KnowledgeRestoreConflict(KnowledgeError):  # noqa: N818
         self.version = version
         self.document = document
         self.error_details: dict[str, object] = {"version": version, "document": document}
+
+
+class KnowledgeUndoConflict(KnowledgeError):  # noqa: N818
+    """Undoing a change would throw away edits made to its files since. Refused,
+    naming them; nothing is written unless the person confirms (spec knowledge
+    "Undo a tidy")."""
+
+    code = "KNOWLEDGE_UNDO_CONFLICT"
+
+    def __init__(self, version: str, documents: list[str]) -> None:
+        super().__init__(
+            f"undoing {version!r} would discard later edits to {len(documents)} file(s)"
+        )
+        self.version = version
+        self.documents = documents
+        self.error_details: dict[str, object] = {"version": version, "documents": documents}
+
+
+class KnowledgeNotAChange(KnowledgeError):  # noqa: N818
+    """An undo aimed at a version that changed no knowledge file."""
+
+    code = "KNOWLEDGE_NOT_A_CHANGE"
+
+    def __init__(self, version: str) -> None:
+        super().__init__(f"{version!r} changed no knowledge file")
+        self.version = version

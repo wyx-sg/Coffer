@@ -67,7 +67,7 @@ describe("KnowledgeCreateDialog", () => {
       folder_path: "/home/u/.coffer/knowledge/team-notes",
       updated_at: null,
       tidy_handoff: { prompt: "Tidy the team-notes collection." },
-      check_handoff: { prompt: "Check the team-notes collection." },
+      tidy_running: false,
     });
     const onOpenChange = renderDialog();
 

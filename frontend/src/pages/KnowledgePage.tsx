@@ -17,13 +17,17 @@
 // Nothing auto-provisions a collection, so an empty list is the first-run
 // empty state. The page is a workspace (boards 5.1.01–5.1.29): a header — the
 // title with its Experimental tag, one subtitle line, and on the right Tidy all
-// and Upload, the page's one primary button — then the tree and the pane, each
-// scrolling on its own.
+// and **Add**, the page's one primary button — then the tree and the pane, each
+// scrolling on its own. Add is one menu, each entry saying what Coffer keeps:
+// Upload documents… (converted to Markdown and kept in the collection picked,
+// synced with it) and New collection… (kept in Coffer, synced to the person's
+// other Macs, with history, tidied by their agent), so nobody has to guess
+// what lands in Coffer.
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Navigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Upload } from "lucide-react";
+import { ChevronDown, FolderPlus, Plus, Upload } from "lucide-react";
 
 import { ListLoadError } from "@/components/ListPaneStates";
 import { KnowledgeDialogs, type KnowledgeDialog } from "@/components/knowledge/KnowledgeDialogs";
@@ -35,6 +39,7 @@ import { ExperimentalTag } from "@/components/ExperimentalTag";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
 import { Button } from "@/components/ui/button";
+import { ActionMenu } from "@/components/ui/menu";
 import { getTidyHandoff } from "@/lib/api/knowledge";
 import { knowledgeKey } from "@/lib/api/queryKeys";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
@@ -92,9 +97,31 @@ export function KnowledgePage() {
           list.length > 0 ? (
             <>
               <AgentHandoff prompt={tidyAllPrompt} label={t("knowledge.tidy.all")} help={false} />
-              <Button onClick={() => setDialog("upload")}>
-                <Upload aria-hidden /> {t("knowledge.upload.button")}
-              </Button>
+              <ActionMenu
+                label={t("knowledge.add.button")}
+                trigger={
+                  <Button aria-haspopup="menu">
+                    <Plus aria-hidden /> {t("knowledge.add.button")}
+                    <ChevronDown aria-hidden />
+                  </Button>
+                }
+                actions={[
+                  {
+                    key: "upload",
+                    icon: Upload,
+                    label: t("knowledge.add.upload"),
+                    description: t("knowledge.add.uploadHint"),
+                    onSelect: () => setDialog("upload"),
+                  },
+                  {
+                    key: "create",
+                    icon: FolderPlus,
+                    label: t("knowledge.add.create"),
+                    description: t("knowledge.add.createHint"),
+                    onSelect: () => setDialog("create"),
+                  },
+                ]}
+              />
             </>
           ) : null
         }
