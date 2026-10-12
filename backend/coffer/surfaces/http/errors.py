@@ -214,6 +214,8 @@ _STATUS: dict[str, int] = {
     # nothing deleted is a wrong request, a path taken again a conflict.
     "KNOWLEDGE_NOT_A_DELETE": 400,
     "KNOWLEDGE_RESTORE_CONFLICT": 409,
+    "KNOWLEDGE_UNDO_CONFLICT": 409,
+    "KNOWLEDGE_NOT_A_CHANGE": 400,
     # Also the answer for a path that cannot name a document — the
     # collection itself, its README, or anything hidden (spec knowledge "Guard
     # every path through one module").

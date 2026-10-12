@@ -85,7 +85,9 @@ _PROVIDERS: list[_Provider] = [
     *_pairs(skill_deps, "_skill_service", "_skill_source_service"),
     # knowledge kind — two services, not three: there is no search service to
     # provide any more (spec knowledge "Expose no knowledge tool").
-    *_pairs(knowledge_deps, "_knowledge_service", "_ingest_service", "_change_service"),
+    *_pairs(
+        knowledge_deps, "_knowledge_service", "_ingest_service", "_change_service", "_tidy_service"
+    ),
     # turn platform (chat)
     *_pairs(
         chat_deps,

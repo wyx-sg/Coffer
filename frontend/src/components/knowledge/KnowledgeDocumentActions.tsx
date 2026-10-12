@@ -4,14 +4,14 @@
 // clock icon button that opens the file's history over the whole Knowledge
 // area; the Preview / Source toggle (Markdown files
 // only); **Open in editor** as a visible button — a file is changed in the
-// person's own editor — and the ⋯ menu: Reveal in Finder · (separator) Delete
-// in danger (spec knowledge "Show a collection as one tree of read-only
+// person's own editor — and the ⋯ menu: Reveal in Finder · Open in Obsidian
+// (only when it is installed) · (separator) Delete in danger (spec knowledge "Show a collection as one tree of read-only
 // documents in the web UI").
 import { useTranslation } from "react-i18next";
 import { ExternalLink, History } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { ActionMenu } from "@/components/ui/menu";
+import { ActionMenu, type MenuAction } from "@/components/ui/menu";
 import { Segmented } from "@/components/ui/segmented";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { useFileActionItems } from "@/lib/fileActionItems";
@@ -27,6 +27,8 @@ interface ReadingProps {
   fileActions: ReturnType<typeof useFileActionItems>;
   onDelete: () => void;
   onHistory: () => void;
+  /** Open in Obsidian, when it is installed. */
+  obsidian?: MenuAction | null;
 }
 
 export function ReadingActions({
@@ -37,6 +39,7 @@ export function ReadingActions({
   fileActions: [openItem, revealItem],
   onDelete,
   onHistory,
+  obsidian = null,
 }: ReadingProps) {
   const { t } = useTranslation();
   return (
@@ -72,6 +75,7 @@ export function ReadingActions({
         label={t("knowledge.document.more", { path })}
         actions={[
           { key: "reveal", label: revealItem.label, onSelect: revealItem.onClick },
+          ...(obsidian ? [obsidian] : []),
           {
             key: "delete",
             label: t("knowledge.deleteDocument.menu"),

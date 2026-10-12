@@ -33,6 +33,7 @@ from coffer.application.knowledge.service import (
     CatalogueChanged,
     KnowledgeService,
 )
+from coffer.application.knowledge.tidy_service import TidyService
 from coffer.domain.features import KNOWLEDGE
 from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.converters.registry import default_registry
@@ -44,6 +45,7 @@ from coffer.surfaces.http.knowledge.dependencies import (
     set_change_service,
     set_ingest_service,
     set_knowledge_service,
+    set_tidy_service,
 )
 
 if TYPE_CHECKING:
@@ -92,6 +94,9 @@ def wire_knowledge_kind(
             machine=cache(machine_label),
         )
     )
+
+    # A tidy is one change (spec knowledge "Record a tidy as one change").
+    set_tidy_service(TidyService(knowledge=service, history=KNOWLEDGE_HISTORY))
 
     ingest_service = IngestService(
         knowledge=service,

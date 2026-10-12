@@ -24,6 +24,12 @@ is never attributed to Coffer. The paths an open transaction has touched are
 *owned* by the vault writer meanwhile, and a concurrent settle leaves them alone.
 A sync round's merge is a ``sync`` commit by construction, so nothing here marks sync's paths.
 
+**A tidy in progress.** While an agent tidies a collection (``tidy_runs``),
+the vault writer leaves that collection's edits in the working tree — paused,
+so no settle of any kind commits them — and closing the tidy commits them as
+one change (:meth:`KnowledgeHistory.settle_as`). A sync round whose incoming
+changes touch a paused file waits, as it does for any uncommitted edit.
+
 **Never in the way.** Without git every method is a no-op and
 :meth:`available` is false: a write is never refused because it could not be
 recorded.
@@ -40,6 +46,7 @@ from coffer.domain.knowledge.history import Change, DocumentChange
 from coffer.domain.vault.history import Commit, looks_like_a_version
 from coffer.domain.vault.writers import CommitMeta
 from coffer.infrastructure.knowledge import paths
+from coffer.infrastructure.knowledge.tidy_runs import TIDY_RUNS, TidyRuns
 from coffer.infrastructure.vault import git
 from coffer.infrastructure.vault.instance import vault_writer
 from coffer.infrastructure.vault.writer import Transaction as VaultTransaction
@@ -105,8 +112,11 @@ class Transaction:
 class KnowledgeHistory:
     """The knowledge directory's view of the vault repository."""
 
-    def __init__(self, writer: Callable[[], VaultWriter] = vault_writer) -> None:
+    def __init__(
+        self, writer: Callable[[], VaultWriter] = vault_writer, runs: TidyRuns = TIDY_RUNS
+    ) -> None:
         self._writer = writer
+        self._runs = runs
 
     # --- the repository ------------------------------------------------------
 
@@ -167,6 +177,46 @@ class KnowledgeHistory:
                 writer.settle(pending)
         except _RECORDING_ERRORS:
             logger.warning("knowledge.history.settle_failed", exc_info=True)
+
+    def pause_tidies(self) -> None:
+        """Leave the edits in every collection with an open tidy uncommitted:
+        neither the vault scanner, a sweep nor a sync round settles them until
+        the tidy closes. Idempotent."""
+        if not self.available():
+            return
+        runs = self._runs
+        self._writer().set_paused(lambda: [f"{paths.vault_path(c)}/" for c in runs.running()])
+
+    def settle_as(self, collection: str, meta: CommitMeta) -> str | None:
+        """Commit what changed in ``collection`` outside any Coffer operation as
+        one commit carrying ``meta`` — a tidy's edits; the commit, or ``None``
+        when nothing had changed."""
+        if not self.available():
+            return None
+        prefix = f"{paths.vault_path(collection)}/"
+        writer = self._writer()
+        try:
+            pending = [p for p in writer.pending() if p.startswith(prefix)]
+            if not pending:
+                return None
+            result = writer.settle(pending, meta=meta)
+        except _RECORDING_ERRORS:
+            logger.warning("knowledge.history.settle_failed", exc_info=True)
+            return None
+        return result.version if result is not None else None
+
+    def pending_in(self, collection: str) -> tuple[tuple[str, str | None], ...]:
+        """``collection``'s uncommitted paths and their digests, sorted: what a
+        tidy watches to tell whether its agent is still at work."""
+        if not self.available():
+            return ()
+        prefix = f"{paths.vault_path(collection)}/"
+        try:
+            pending = self._writer().pending(include_paused=True)
+        except _RECORDING_ERRORS:
+            logger.warning("knowledge.history.pending_failed", exc_info=True)
+            return ()
+        return tuple(sorted((p, d) for p, d in pending.items() if p.startswith(prefix)))
 
     def new_files(self) -> list[str]:
         """Knowledge-root-relative paths that exist on disk, have never been

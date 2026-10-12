@@ -1,35 +1,40 @@
 // frontend/src/components/knowledge/KnowledgeCollectionView.tsx
 //
 // A collection with no file open (boards 5.1.10, 5.1.11, 5.1.14). The pane
-// bar is the collection's name with a ⋯ menu — Reveal in Finder · Copy path ·
-// Rename… (a dialog; the folder moves with the name, board 5.1.31) · Delete
-// collection…, which asks first and then offers Undo in a toast; beside it
-// **Tidy** and **Check with agent**, which hand the collection to the default
-// managed agent and send the prompt at once (spec knowledge "Hand a tidy to
-// the agent", "Hand a check to the agent"). The body is one 720-wide page: the
-// folder name as the heading, its description — the opening paragraph of its
-// README — edited in place (KnowledgeDescriptionEditor), its properties
-// (KnowledgeStatsLine), its Check section and its Change log. A just created,
-// empty collection is the same page with one muted line under the properties
-// saying how the first source gets in.
+// bar is the collection's name with **Tidy**, which hands the collection to
+// the default managed agent and sends the prompt at once (spec knowledge "Hand
+// a tidy to the agent"), and a ⋯ menu — Reveal in Finder · Open in Obsidian
+// (only when it is installed) · Copy path · Rename… (a dialog; the folder
+// moves with the name, board 5.1.31) · Delete collection…, which asks first
+// and then offers Undo in a toast. While an agent has a tidy open, a line
+// under the summary says so (spec knowledge "Record a tidy as one change").
+// The body is one 720-wide page: the folder name as the heading, its
+// description — the opening paragraph of its README — edited in place
+// (KnowledgeDescriptionEditor), its summary line and what Coffer does with it
+// (KnowledgeSummaryLine), its To do, its Contents by page type and its Change
+// log. A just created, empty collection is the same page with one muted line
+// under the summary saying how the first source gets in.
 //
 // No switch and no reach: every collection is served to every agent (spec
 // knowledge "Serve every collection to every agent").
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Loader2 } from "lucide-react";
 
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { KnowledgeChangeLog } from "@/components/knowledge/KnowledgeChangeLog";
-import { KnowledgeCheckSection } from "@/components/knowledge/KnowledgeCheckSection";
+import { KnowledgeContents } from "@/components/knowledge/KnowledgeContents";
 import { KnowledgeDeleteCollection } from "@/components/knowledge/KnowledgeDeleteCollection";
 import { KnowledgeDescriptionEditor } from "@/components/knowledge/KnowledgeDescriptionEditor";
 import { KnowledgePaneBar } from "@/components/knowledge/KnowledgePaneBar";
 import { KnowledgeRenameDialog } from "@/components/knowledge/KnowledgeRenameDialog";
-import { KnowledgeStatsLine } from "@/components/knowledge/KnowledgeStatsLine";
+import { KnowledgeSummaryLine } from "@/components/knowledge/KnowledgeSummaryLine";
+import { KnowledgeTodoSection } from "@/components/knowledge/KnowledgeTodoSection";
 import { ActionMenu } from "@/components/ui/menu";
 import { useToast } from "@/components/ui/toast";
 import type { CollectionOut } from "@/lib/api/knowledge";
 import { useFsActions } from "@/lib/fsActions";
+import { useOpenInObsidian } from "@/lib/knowledge/obsidian";
 
 interface Props {
   collection: CollectionOut;
@@ -42,6 +47,7 @@ export function KnowledgeCollectionView({ collection }: Props) {
   const [editing, setEditing] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const obsidian = useOpenInObsidian(collection.folder_path);
   const empty = collection.page_count === 0 && collection.source_count === 0;
 
   const revealFolder = () =>
@@ -64,12 +70,6 @@ export function KnowledgeCollectionView({ collection }: Props) {
               size="sm"
               help={false}
             />
-            <AgentHandoff
-              prompt={collection.check_handoff.prompt}
-              label={t("knowledge.check.handoff")}
-              size="sm"
-              help={false}
-            />
             <ActionMenu
               label={t("knowledge.collection.more", { name: collection.name })}
               actions={[
@@ -79,6 +79,7 @@ export function KnowledgeCollectionView({ collection }: Props) {
                   onSelect: revealFolder,
                   disabled: !collection.folder_path,
                 },
+                ...(obsidian ? [obsidian] : []),
                 { key: "copy", label: t("knowledge.collection.copyPath"), onSelect: copyPath },
                 {
                   key: "rename",
@@ -129,7 +130,19 @@ export function KnowledgeCollectionView({ collection }: Props) {
                 </button>
               )}
             </div>
-            <KnowledgeStatsLine collection={collection} />
+            <KnowledgeSummaryLine collection={collection} />
+            {collection.tidy_running ? (
+              <p
+                role="status"
+                className="flex items-start gap-2 rounded-lg bg-accent-soft px-3 py-2.5 text-sm text-text"
+              >
+                <Loader2
+                  className="mt-0.5 size-3.5 shrink-0 animate-spin text-accent-text"
+                  aria-hidden
+                />
+                {t("knowledge.tidy.running")}
+              </p>
+            ) : null}
             {empty ? (
               <p className="flex flex-wrap items-center gap-x-1 text-sm text-text-muted">
                 {t("knowledge.collection.emptyLine")}
@@ -145,7 +158,8 @@ export function KnowledgeCollectionView({ collection }: Props) {
               </p>
             ) : null}
           </div>
-          <KnowledgeCheckSection collection={collection} />
+          {empty ? null : <KnowledgeTodoSection collection={collection} />}
+          {empty ? null : <KnowledgeContents collection={collection} />}
           <KnowledgeChangeLog collection={collection} />
         </div>
       </div>

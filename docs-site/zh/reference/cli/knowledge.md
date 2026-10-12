@@ -29,6 +29,10 @@ coffer knowledge [OPTIONS] COMMAND [ARGS]...
 | [`knowledge tree`](#knowledge-tree) | One level of the knowledge tree. |
 | [`knowledge changes`](#knowledge-changes) | Recent changes across collections, newest first. |
 | [`knowledge restore`](#knowledge-restore) | Restore what a delete removed (from the changes feed). |
+| [`knowledge files`](#knowledge-files) | Every page and source of a collection with its title, page type and waiting mark. |
+| [`knowledge tidy-start`](#knowledge-tidy-start) | Open a tidy of a collection: until it finishes, its edits are kept for one change. |
+| [`knowledge tidy-finish`](#knowledge-tidy-finish) | Close a collection's tidy and commit its edits as one change. |
+| [`knowledge undo`](#knowledge-undo) | Put every file a change touched back as it was before it. |
 | [`knowledge tidy-handoff`](#knowledge-tidy-handoff) | The prompt that hands tidying knowledge to an agent. |
 | [`knowledge upload`](#knowledge-upload) | Upload files into a collection; each is kept as a Markdown source. |
 
@@ -222,6 +226,78 @@ coffer knowledge restore [OPTIONS] VERSION
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `VERSION` <span class="cli-chip">参数</span> | text | 必填 | version |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## knowledge files
+
+Every page and source of a collection with its title, page type and waiting mark.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer knowledge files [OPTIONS] UID
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `UID` <span class="cli-chip">参数</span> | text | 必填 | The knowledge's name or uid |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## knowledge tidy-start
+
+Open a tidy of a collection: until it finishes, its edits are kept for one change.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer knowledge tidy-start [OPTIONS] UID
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `UID` <span class="cli-chip">参数</span> | text | 必填 | The knowledge's name or uid |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## knowledge tidy-finish
+
+Close a collection's tidy and commit its edits as one change. Body: summary (the agent's report).
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer knowledge tidy-finish [OPTIONS] UID
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `UID` <span class="cli-chip">参数</span> | text | 必填 | The knowledge's name or uid |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## knowledge undo
+
+Put every file a change touched back as it was before it. Body: force (discard edits made since).
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer knowledge undo [OPTIONS] VERSION
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `VERSION` <span class="cli-chip">参数</span> | text | 必填 | version |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## knowledge tidy-handoff

@@ -163,7 +163,10 @@ def test_the_manual_names_one_tool_and_the_log_reader() -> None:
     # committed through git in the vault.
     assert "### Writing a page" in text
     assert "never run git inside the vault" in text
-    assert "coffer knowledge" not in text
+    # The only knowledge commands it names are the ones a tidy runs: writing a
+    # page is a file edit, never a command.
+    commands = set(re.findall(r"coffer knowledge ([a-z-]+)", text))
+    assert commands == {"tidy-start", "tidy-finish", "check"}
     assert "coffer path knowledge" not in text
     assert "coffer path memory" not in text
     assert "trigger" not in text
@@ -310,9 +313,10 @@ def test_the_guide_carries_the_writing_and_tidying_sections() -> None:
         "Writing a page",
         "Integrating sources",
         "Tidying a collection",
-        "Checking a collection",
     ):
         assert f"### {heading}" in text, heading
+    # Checking is part of tidying, not a section of its own.
+    assert "### Checking a collection" not in text
     description = yaml.safe_load(text.split("---", 2)[1])["description"].lower()
     assert "writ" in description and "tidy" in description and "check" in description
 

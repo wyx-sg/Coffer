@@ -1,11 +1,9 @@
 # Knowledge Is a Wiki of Pages Compiled From Kept Sources
 
 **Status**: Accepted
-**Date**: 2026-10-09
+**Date**: 2026-10-12
 **Deciders**: Yuxing Wu
-**Related**: [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md) (amended by this decision); [Tidying Knowledge Is the Agent's Job](tidying-knowledge-is-the-agents-job.md); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md); research notes [knowledge curation](../research/knowledge-curation.md) and [knowledge structures](../research/knowledge-structures.md); spec knowledge; OpenSpec change `restructure-knowledge-as-a-wiki`
-
-**Amended** (2026-10-09): the owner decided that an upload keeps only its converted Markdown source, `sources/<slug>.md`; the uploaded file itself is no longer stored and a source has no `original` key. The collection stays one tree of Markdown every agent can read, and the sync repository carries no binaries. The text below describes that.
+**Related**: [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md) (amended by this decision); [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md); research notes [knowledge curation](../research/knowledge-curation.md) and [knowledge structures](../research/knowledge-structures.md); spec knowledge; OpenSpec change `restructure-knowledge-as-a-wiki`
 
 ## Context
 
@@ -116,9 +114,10 @@ Each collection holds three things:
   (dead and ambiguous links, duplicate slugs, orphan pages, pages missing
   frontmatter or sources, sources still waiting) on every read. Judgement
   (contradictions, stale statements, duplicated subjects, subjects with no page)
-  is handed to the agent with **Check**, which reports and changes nothing: one
-  implementation found that separate unattended maintenance passes undid each
-  other.
+  is the agent's, inside the one **Tidy** hand-off, whose prompt carries the
+  mechanical findings: the agent fixes what is certain and reports what needs
+  the person's decision
+  ([Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md)).
 
 - **Pros.** Closes all three gaps with plain files: pages accumulate, every page
   traces back to kept sources, and pages relate through links that are checked.
@@ -155,7 +154,8 @@ Rules a future change must respect:
 - **What waits is derived, never recorded.** A source waits while no page cites
   it and it is not marked skipped. There is no ingest manifest.
 - **Coffer's checks are mechanical and read-only.** Coffer computes findings on
-  read and fixes nothing; the agent's Check reports and edits nothing.
+  read and fixes nothing; fixing them is the agent's, when the person presses
+  Tidy.
 - **Coffer moves a file only to keep the layout.** The sweep files a Markdown
   document left outside `pages/` and `sources/` into `pages/` at the same
   relative path, so older collections and agents writing to the wrong place
@@ -164,14 +164,55 @@ Rules a future change must respect:
   stands**: no derived store, no knowledge tool, one undivided store served to
   every agent, nothing pushed into a session.
 
+## Opening a Collection in Obsidian, and Recording When a Page Was Checked
+
+The layout above happens to be what Obsidian reads natively: a folder of plain
+Markdown, `[[slug]]` links that resolve by file name, and `aliases` frontmatter.
+People who already keep notes in Obsidian asked to browse and edit collections
+there. Three options were weighed:
+
+- **Make collections Obsidian-compatible and offer Open in Obsidian (chosen).**
+  A collection folder, or the knowledge root, opens as an Obsidian vault with
+  nothing converted. Coffer already ignores hidden entries, so Obsidian's
+  `.obsidian/` folder is neither committed, catalogued nor synced. The web UI
+  offers **Open in Obsidian** in a collection's and a file's ⋯ menu only when
+  the daemon detects Obsidian on this Mac, so a person who does not use it never
+  sees the word. Pros: no new storage, no new code path for edits — an
+  Obsidian save is an edit on disk like any editor's — and the person keeps
+  Coffer's history, sync, check and Tidy. Cons: a Markdown file Obsidian
+  creates outside `pages/` and `sources/` is filed into `pages/` by the sweep
+  within a minute, so people should point Obsidian's default location for new
+  notes at the collection's `pages/` folder.
+- **Replace the knowledge UI with Obsidian.** Pros: a mature editor, graph view
+  and plugins for free. Cons: Obsidian knows nothing of sources that wait, the
+  mechanical findings, Tidy or a tidy's report and undo, and it is not
+  installed for most people; Coffer's own page is still needed. Lost for that
+  reason.
+- **Link external folders (an existing Obsidian vault) as collections, for
+  now.** Pros: a person's notes stay where they are. Cons: an external folder
+  is outside the vault, so it has no history, no sync and no undo, and its own
+  conventions would need a second, looser rule set for Tidy and the check.
+  Deferred: it is a separate decision with its own trade-offs, and opening
+  Coffer's collections in Obsidian covers the browsing and editing that was
+  asked for.
+
+A page may also carry **`verified: YYYY-MM-DD`**, when it was last checked
+against its sources or the code; a page's read returns it and the reader shows
+it. The guide tells agents that where a page's facts came from belongs in
+`sources` and `verified`, never in a paragraph of the body listing what was
+read: provenance in the body is organisation by provenance, which rule 3 of
+writing a page forbids, and a date in frontmatter is something a person or a
+later check can compare without reading the page. It is optional and Coffer
+derives no finding from it.
+
 ## Consequences
 
 - The earlier decision's rule "no document may name another knowledge file"
   becomes "a page links by slug, never by path"; its "no directory carries
   meaning" is reversed for `sources/` and `pages/`. Its "no kept originals"
   stands: a source is the converted Markdown alone.
-- Tidy now means: compile the waiting sources into pages, then tidy the pages.
-  A second hand-off, Check, asks the agent for a report only.
+- Tidy means: compile the waiting sources into pages, fix the mechanical
+  findings, then tidy the pages, reporting what is left for the person.
 - The web UI shows a collection as pages and sources, flags a waiting source and
   a dead link, lists the collection's change log, and shows a page's history in
   a drawer beside the page rather than on a tab that replaces it.
@@ -180,4 +221,4 @@ Rules a future change must respect:
 - Enforcement: spec knowledge "Keep sources and pages apart in each collection",
   "Keep every upload as a Markdown source", "Link pages by slug and
   check every link", "Check a collection mechanically on every read", "Hand a
-  check to the agent".
+  tidy to the agent", "Open a collection in Obsidian when it is installed".

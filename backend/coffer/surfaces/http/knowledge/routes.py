@@ -69,6 +69,7 @@ from coffer.surfaces.http.knowledge.dependencies import (
 from coffer.surfaces.http.knowledge.schemas import (
     CheckOut,
     CollectionCreate,
+    CollectionFilesOut,
     CollectionListOut,
     CollectionOut,
     DirectoryOut,
@@ -78,6 +79,7 @@ from coffer.surfaces.http.knowledge.schemas import (
     TreeOut,
     check_out,
     collection_out,
+    file_summary_out,
 )
 
 router = APIRouter(
@@ -129,6 +131,16 @@ async def check_collection(
     """One collection's mechanical findings, computed now from its files and
     fixed by nothing here ("Check a collection mechanically on every read")."""
     return check_out(await svc.check(uid))
+
+
+@router.get("/collections/{uid}/files", response_model=CollectionFilesOut)
+async def collection_files(
+    uid: str,
+    svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
+) -> CollectionFilesOut:
+    """Every page and source of a collection with its title, page type and
+    waiting mark ("Show a collection's contents by page type")."""
+    return CollectionFilesOut(files=[file_summary_out(f) for f in await svc.files(uid)])
 
 
 @router.get("/tidy-handoff", response_model=HandoffOut)

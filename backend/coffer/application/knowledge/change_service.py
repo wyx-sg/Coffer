@@ -11,8 +11,9 @@ toast finds its change in the feed and restores it; a document's versions are
 read and restored through the vault's history (spec vault-storage "Show and
 restore any version of a vault file or folder").
 
-Two writes live here, and both are a person's: **restore a delete** puts back
-what a delete removed, and **describe** rewrites a collection's description.
+Three writes live here, all a person's: **restore a delete** puts back what a
+delete removed, **undo** puts back every file a change — a tidy — touched, and
+**describe** rewrites a collection's description.
 """
 
 from __future__ import annotations
@@ -27,7 +28,11 @@ from coffer.application.knowledge.recording import settle
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.git_handoff import git_missing_details
 from coffer.domain.knowledge.entry import CollectionEntry
-from coffer.domain.knowledge.errors import KnowledgeHistoryUnavailable, KnowledgeNotADelete
+from coffer.domain.knowledge.errors import (
+    KnowledgeHistoryUnavailable,
+    KnowledgeNotAChange,
+    KnowledgeNotADelete,
+)
 from coffer.domain.knowledge.history import Change, ChangesPage
 from coffer.domain.pagination import decode_cursor, encode_cursor
 from coffer.infrastructure.knowledge import paths
@@ -90,6 +95,22 @@ class KnowledgeChangeService:
         if restored is None:
             raise KnowledgeNotADelete(version)
         return restored
+
+    async def undo(self, version: str, *, force: bool, actor: str) -> Change:
+        """Put back every file a change touched as it was just before it — a
+        tidy, most of all (spec knowledge "Undo a tidy")."""
+        history = await self._settled()
+        change = await asyncio.to_thread(history.change, version)
+        if change is None:
+            raise KnowledgeNotAChange(version)
+        made = await collection_writes.undo_change(
+            self._knowledge, history, self._audit, change, force=force, actor=actor
+        )
+        undone = await asyncio.to_thread(history.change, made) if made else None
+        if undone is None:
+            # Nothing differed: the files already were as they were before.
+            raise KnowledgeNotAChange(version)
+        return undone
 
     async def describe(self, uid: str, description: str, *, actor: str) -> CollectionEntry:
         """Rewrite a collection's description — its README's first paragraph."""

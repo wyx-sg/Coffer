@@ -29,6 +29,7 @@ import type {
   ChangeOut,
   ChangesOut,
   CheckOut,
+  CollectionFilesOut,
   CollectionListOut,
   CollectionOut,
   FileOut,
@@ -97,6 +98,15 @@ export function getCheck(uid: string): Promise<CheckOut> {
   );
 }
 
+/** Every page and source of a collection with its title, page type and
+ *  waiting mark: a collection page's Contents, and the titles its To do and
+ *  Change log show (see "Show a collection's contents by page type"). */
+export function getCollectionFiles(uid: string): Promise<CollectionFilesOut> {
+  return unwrap(
+    getApiClient().GET("/knowledge/collections/{uid}/files", { params: { path: { uid } } }),
+  );
+}
+
 // --- tidy ---------------------------------------------------------------------
 
 /** The prompt that hands tidying every collection to the person's agent: the
@@ -145,6 +155,21 @@ export function restoreDeleted(version: string): Promise<ChangeOut> {
   return unwrap(
     getApiClient().POST("/knowledge/changes/{version}/restore", {
       params: { path: { version } },
+    }),
+  );
+}
+
+/**
+ * Put every file a change touched back as it was before it, as one new change
+ * naming the user: a tidy's **Undo this tidy** (see "Undo a tidy"). Refused
+ * with 409 `KNOWLEDGE_UNDO_CONFLICT`, naming the files, when one was edited
+ * since; `force` discards those edits.
+ */
+export function undoChange(version: string, force = false): Promise<ChangeOut> {
+  return unwrap(
+    getApiClient().POST("/knowledge/changes/{version}/undo", {
+      params: { path: { version } },
+      body: { force },
     }),
   );
 }

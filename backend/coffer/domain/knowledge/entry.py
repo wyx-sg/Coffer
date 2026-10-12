@@ -149,6 +149,9 @@ class KnowledgeFile:
     #: A page's ``type`` and ``aliases``.
     page_type: str = ""
     aliases: tuple[str, ...] = ()
+    #: A page's ``verified`` date: when it was last checked against its
+    #: sources or the code; empty when it carries none.
+    verified: str = ""
     #: A page's ``sources`` entries, each resolved to the source it names.
     sources: tuple[SourceRef, ...] = ()
     #: A page's ``[[links]]``, each resolved to the file it names.

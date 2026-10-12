@@ -180,7 +180,12 @@ and a file's modification time MUST NOT decide anything. The reasoning is
 A person's edits SHALL be found, not intercepted: a file-system watcher is a
 hint, and a scan asking git which files differ from `HEAD` is the truth —
 at boot, on every hint once the changed paths have been quiet for a second,
-and periodically. A valid change SHALL be committed as a `disk` write. A change
+and periodically. A valid change SHALL be committed as a `disk` write, except
+under a path prefix the writer has **paused** for the component that owns it —
+a knowledge collection an agent is tidying ([knowledge](../knowledge/spec.md)
+"Record a tidy as one change") — whose changes stay in the working tree, left
+alone by every settle, until that component commits them as one write of its
+own; a sync round treats them as it treats any uncommitted edit. A change
 that fails validation MUST stay in the working tree uncommitted, MUST be
 reported on the attention list with its reason, and the version at `HEAD`
 MUST stay in effect until the file is fixed.

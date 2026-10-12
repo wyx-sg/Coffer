@@ -1883,7 +1883,9 @@
     "CUSTOM_TOOL_LAST_ENVIRONMENT": "A group needs at least one environment, so its last one can't be deleted.",
     "DESKTOP_REQUEST_NOT_FOUND": "That request to the Coffer app has expired or was already handled.",
     "MEMORY_SYNC_RUNNING": "A memory sync is already running",
-    "MEMORY_SYNC_NO_PREVIEW": "There is no memory sync preview waiting"
+    "MEMORY_SYNC_NO_PREVIEW": "There is no memory sync preview waiting",
+    "KNOWLEDGE_UNDO_CONFLICT": "Not undone: files were edited since. Undo anyway to discard those edits.",
+    "KNOWLEDGE_NOT_A_CHANGE": "That change touched no knowledge file, so there is nothing to undo."
   },
   "pagination": {
     "showing": "Showing {{shown}} of {{total}}",
@@ -3027,16 +3029,10 @@
       "pages": "Pages",
       "sources": "Sources"
     },
-    "stats": {
-      "pages": "Pages",
-      "sources": "Sources",
-      "sourcesWaiting": "{{count}} · {{waiting}} waiting",
-      "folder": "Folder"
-    },
     "collection": {
       "descriptionLabel": "What belongs in this collection",
       "noDescription": "No description yet. Say what belongs in here so agents recognise it.",
-      "emptyLine": "No pages or sources yet. Upload a source, or drop Markdown files into the folder.",
+      "emptyLine": "No pages or sources yet. Upload a document, or drop Markdown files into the folder.",
       "more": "More actions for {{name}}",
       "copyPath": "Copy path",
       "descriptionSaved": "Description updated",
@@ -3075,17 +3071,16 @@
     },
     "upload": {
       "button": "Upload",
-      "title": "Upload a source",
-      "body": "Coffer converts it to Markdown and keeps it as a source of the collection. The uploaded file itself is not stored.",
-      "choose": "Drop a file here, or choose one",
+      "title": "Upload documents",
+      "body": "Coffer converts each to Markdown and keeps it as a source of the collection. The uploaded files themselves are not stored.",
+      "choose": "Drop files here, or choose them",
       "types": "PDF, Word, PowerPoint, Excel, HTML, CSV, Markdown or text · up to 20 MB",
-      "remove": "Remove this file",
       "into": "Into collection",
       "converting": "Converting to Markdown…",
       "uploading": "Uploading…",
       "written": "{{name}} is saved as {{path}}",
       "zipTitle": "ZIP files can't be converted",
-      "zipBody": "Unzip it and upload the files inside one at a time.",
+      "zipBody": "Unzip it and upload the files inside.",
       "tooLargeTitle": "Larger than 20 MB",
       "tooLargeBody": "Split it, or export the part that matters as PDF.",
       "noTextTitle": "No text in this PDF",
@@ -3093,7 +3088,16 @@
       "noTextAnyTitle": "No text found",
       "noTextAnyBody": "Coffer could not read any text in this file. Nothing was added.",
       "unsupportedTitle": "{{kind}} files can't be converted",
-      "failedTitle": "Couldn't upload this file"
+      "failedTitle": "Couldn't upload this file",
+      "chooseMore": "Add more files",
+      "files": "Files to upload",
+      "removeNamed": "Remove {{name}}",
+      "savedAs": "Saved as {{path}}",
+      "allSaved": "Uploaded {{count}} files to {{collection}}",
+      "someSaved": "{{count}} uploaded; {{refused}} couldn’t be",
+      "buttonMany": "Upload {{count}} files",
+      "noneSaved_one": "Nothing uploaded: {{count}} file couldn’t be",
+      "noneSaved_other": "Nothing uploaded: {{count}} files couldn’t be"
     },
     "document": {
       "where": "Where this file is",
@@ -3107,7 +3111,8 @@
       "sources": "Sources:",
       "missingSource": "No source is named {{slug}}",
       "citedBy_one": "Cited by {{count}} page:",
-      "citedBy_other": "Cited by {{count}} pages:"
+      "citedBy_other": "Cited by {{count}} pages:",
+      "verified": "verified {{date}}"
     },
     "deleteDocument": {
       "menu": "Delete",
@@ -3132,7 +3137,8 @@
     },
     "tidy": {
       "one": "Tidy",
-      "all": "Tidy all"
+      "all": "Tidy all",
+      "running": "An agent is tidying this collection. Its edits show here as one change when it finishes."
     },
     "landing": {
       "title": "Pick a collection",
@@ -3151,7 +3157,8 @@
       "remove": "Removed",
       "layout": "Filed into pages",
       "baseline": "Recorded",
-      "curation": "Curated"
+      "curation": "Curated",
+      "tidy": "Tidy"
     },
     "link": {
       "dead": "No page or source is named {{target}}",
@@ -3163,11 +3170,10 @@
       "close": "Close history"
     },
     "check": {
-      "title": "Check",
-      "description": "What Coffer finds in the collection's files on every read. It fixes none of it.",
-      "none": "Nothing found.",
+      "title": "To do",
+      "description": "What Coffer finds in the collection's files on every read. Tidy hands it to your agent.",
+      "none": "Nothing to do.",
       "failed": "Couldn’t check this collection",
-      "handoff": "Check with agent",
       "target": "→ {{target}}",
       "others": "also {{paths}}",
       "kinds": {
@@ -3179,7 +3185,10 @@
         "unsourced_page": "Pages without sources",
         "orphan_page": "Pages nothing links to",
         "waiting_source": "Waiting sources"
-      }
+      },
+      "missing": "missing {{target}}",
+      "more": "{{count}} more",
+      "fewer": "Show fewer"
     },
     "changeLog": {
       "title": "Change log",
@@ -3187,7 +3196,61 @@
       "none": "No changes yet.",
       "failed": "Couldn’t read the change log",
       "more": "Show more",
-      "lines": "+{{added}} −{{removed}}"
+      "lines": "+{{added}} −{{removed}}",
+      "moreFiles": "{{count}} more files",
+      "span": "{{from}}–{{to}}",
+      "saves_one": "{{count}} save",
+      "saves_other": "{{count}} saves",
+      "undid": "Undid a tidy",
+      "tidyExpired": "Closed without a report: the collection sat unchanged for 30 minutes."
+    },
+    "summary": {
+      "pages_one": "{{count}} page",
+      "pages_other": "{{count}} pages",
+      "sources_one": "{{count}} source",
+      "sources_other": "{{count}} sources",
+      "sourcesWaiting": "{{count}} sources ({{waiting}} waiting)",
+      "updated": "updated {{when}}",
+      "managed": "Kept in Coffer: synced to your other Macs, every change kept in its history, tidied by your agent."
+    },
+    "contents": {
+      "title": "Contents",
+      "description": "Its pages by type, and its sources. A title opens the file.",
+      "none": "No pages or sources yet.",
+      "failed": "Couldn’t read the contents"
+    },
+    "types": {
+      "overview": "Overviews",
+      "concept": "Concepts",
+      "entity": "Entities",
+      "how-to": "How-tos",
+      "decision": "Decisions",
+      "none": "No type"
+    },
+    "tidyUndo": {
+      "button": "Undo this tidy…",
+      "title": "Undo this tidy?",
+      "body_one": "The {{count}} file it changed goes back to how it was before; a file it added is removed. The undo is a change of its own.",
+      "body_other": "The {{count}} files it changed go back to how they were before; files it added are removed. The undo is a change of its own.",
+      "confirm": "Undo tidy",
+      "pending": "Undoing…",
+      "failed": "Couldn’t undo this tidy",
+      "done": "Tidy undone",
+      "undone": "Undone",
+      "conflictTitle": "Some files changed since this tidy",
+      "conflictBody_one": "{{count}} file was edited after the tidy. Undoing it anyway discards that edit too.",
+      "conflictBody_other": "{{count}} files were edited after the tidy. Undoing it anyway discards those edits too.",
+      "anyway": "Undo anyway"
+    },
+    "add": {
+      "button": "Add",
+      "upload": "Upload documents…",
+      "uploadHint": "Converted to Markdown and kept in the collection you pick, synced with it.",
+      "create": "New collection…",
+      "createHint": "Kept in Coffer: synced to your other Macs, with history, tidied by your agent."
+    },
+    "obsidian": {
+      "open": "Open in Obsidian"
     }
   },
   "memory": {

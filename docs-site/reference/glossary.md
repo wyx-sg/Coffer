@@ -400,8 +400,9 @@ the target asks again. See [Secrets](/guides/secrets#approvals).
 
 The button on a knowledge [collection](#collection) (and
 **Tidy all** on the list page) that starts your default hand-off agent in your preferred terminal,
-with a prompt to merge, split and correct what is there, following the `coffer-guide`
-skill, sent as the session's first message. When no managed agent is available, it offers the prompt to copy. Coffer does the
+with a prompt to integrate waiting sources, fix what Coffer found, and merge, split and correct what is there, following the `coffer-guide`
+skill, sent as the session's first message. When no managed agent is available, it offers the prompt to copy. The agent's edits land as
+one change carrying its report, which **Undo this tidy…** puts back. Coffer does the
 tidying through your agent, never on its own. Memory has no Tidy: each agent curates its own. See [Knowledge](/guides/knowledge).
 
 ### Tiering

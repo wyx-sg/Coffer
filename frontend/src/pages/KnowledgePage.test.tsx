@@ -24,6 +24,8 @@ vi.mock("@/lib/api/knowledge", () => ({
   restoreDeleted: vi.fn(),
   describeCollection: vi.fn(),
   getCheck: vi.fn(),
+  getCollectionFiles: vi.fn(),
+  undoChange: vi.fn(),
 }));
 vi.mock("@/lib/api/fs", () => ({
   fsApi: {

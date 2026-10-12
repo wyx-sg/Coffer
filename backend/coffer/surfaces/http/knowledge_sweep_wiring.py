@@ -24,6 +24,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.features import KNOWLEDGE
 from coffer.surfaces.http.guide_wiring import BuiltinGuide
+from coffer.surfaces.http.knowledge.dependencies import get_tidy_service
 
 _log = logging.getLogger(__name__)
 
@@ -40,6 +41,9 @@ async def _run_forever(
         if features.is_enabled(KNOWLEDGE):
             try:
                 await sweep_once(knowledge_service, guide.refresh)
+                # A tidy whose agent went quiet is closed, so no collection
+                # stays paused (spec knowledge "Record a tidy as one change").
+                await get_tidy_service().expire()
             except asyncio.CancelledError:
                 raise
             except Exception:
