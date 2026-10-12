@@ -124,6 +124,12 @@ def _fake_sweep(
     monkeypatch.setattr(knowledge_sweep_wiring, "sweep_once", record)
     monkeypatch.setattr(knowledge_sweep_wiring, "loose_documents_waiting", loose)
 
+    class _Tidies:
+        async def expire(self) -> list[str]:
+            return []
+
+    monkeypatch.setattr(knowledge_sweep_wiring, "get_tidy_service", _Tidies)
+
 
 async def _sweep_ticks(monkeypatch: pytest.MonkeyPatch, features: FeatureService) -> list[object]:
     """Run the real sweep loop for a few fallbacks; answer what each run swept."""
