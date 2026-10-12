@@ -13,12 +13,12 @@ This page takes you from a fresh clone to a running daemon and web UI built from
 | --- | --- | --- |
 | Python | 3.12 (`.python-version`; `requires-python = ">=3.12"`) | Backend, CLI, MCP shim, every repository gate |
 | [uv](https://docs.astral.sh/uv/) | any recent | Installing the locked dependency set, `make lock` |
-| Node.js + npm | 20, the version every CI job uses | Web UI, the OpenSpec CLI, Playwright |
+| Node.js + npm | 20, the version every CI job uses (`.nvmrc`, `engines` in each `package.json`) | Web UI, the OpenSpec CLI, Playwright |
 | git | 2.40 or later (`merge-tree --write-tree --merge-base`) | The vault is a git repository: without git the daemon waits in its setup state, and the vault and sync tests run it |
 | Rust toolchain ([rustup](https://rustup.rs)) + Xcode command line tools | stable | Only the desktop shell (`make desktop*`) |
 
 ::: warning Use Node 20
-CI runs Node 20. Other major versions can behave differently in the test runner. For example, Node 22 ships a built-in Web Storage that breaks `localStorage` under jsdom, which `frontend/src/test/setup.ts` has to work around. If the frontend suite fails locally but not in CI, check `node --version` first.
+CI runs Node 20. Other major versions can behave differently in the test runner. For example, Node 22 ships a built-in Web Storage that breaks `localStorage` under jsdom, which `frontend/src/test/setup.ts` has to work around. The repository pins it in `.nvmrc` (run `nvm use`) and in `engines.node` of every `package.json`. Every Makefile target that runs npm, vitest or Playwright (`lint`, `verify-unit`, `verify-e2e`, `verify-visual`, `visual-update`, `docs-shots`, `coverage`, `dev`, `frontend-codegen`, `docs-build`, `desktop`) first checks `node --version` and stops with a message if the major is not 20, because under another major vitest prints a spurious `AbortSignal` error and exits 1 even when every test passes.
 :::
 
 ## Install
@@ -39,7 +39,7 @@ UV_PROJECT_ENVIRONMENT=.venv uv sync --frozen --extra dev --project backend --py
 It then runs `npm install` in `frontend/`, at the repository root (for the pinned OpenSpec CLI) and in `e2e/`. Browsers for the end-to-end suite are a separate, heavy download: `make install-e2e-browsers`.
 
 ::: tip When a local result disagrees with CI
-Re-run `make install` before you debug anything else. A venv that drifted from the lock, for example after a `pip install` of the `>=` floors, is the most common reason a test fails locally but passes in CI.
+Re-run `make install` before you debug anything else. Every target that needs the Python environment fails fast with "`.venv/bin/python3` is missing: run 'make install' first" when this checkout has no `.venv`; the Makefile never falls back to a system `python3` (only a CI job, where `CI=true` and the job provisions its own interpreter, uses `python3` from `PATH`). A venv that drifted from the lock, for example after a `pip install` of the `>=` floors, is the most common reason a test fails locally but passes in CI.
 :::
 
 ## Run Coffer from source
@@ -226,7 +226,7 @@ Keep these caveats in mind:
 
 - **`.git` is shared.** `origin/main` moves under you whenever any worktree fetches. Rebase deliberately rather than assuming `main` is where you left it.
 - **The stash is shared too.** `git stash` in one worktree pushes to the same stack every other worktree sees, and a bare `git stash pop` can apply someone else's work. Prefer a temporary WIP commit. If you must stash, name the entry (`git stash push -m "<tag>"`) and apply it by its SHA.
-- **Give each worktree its own `.venv`.** The backend is installed editable, so a `.venv` symlinked from another checkout imports that checkout's code. Your tests would then pass against the wrong tree. Two gates guard against this: `make lint` runs `lint-imports` with `PYTHONPATH=backend`, and `e2e/scripts/start_daemon.sh` refuses to start if `coffer` resolves outside this checkout. Everything else simply tests whatever the venv points at.
+- **Give each worktree its own `.venv`.** The backend is installed editable, so a `.venv` symlinked from another checkout imports that checkout's code. Your tests would then pass against the wrong tree. Two gates guard against this: `make lint` runs `lint-imports` with `PYTHONPATH=backend`, and `e2e/scripts/start_daemon.sh` refuses to start if `coffer` resolves outside this checkout. Everything else simply tests whatever the venv points at. A fresh clone or worktree without a `.venv` stops at once with a "run `make install`" message instead of running against a system Python.
 - **One session per worktree.** Two editors or agents writing to the same worktree overwrite each other's uncommitted changes.
 - **Sandbox the daemon.** Worktrees share your `HOME`, so two `make dev` runs fight over `~/.coffer` and port 38470. Use the throwaway-vault recipe above.
 

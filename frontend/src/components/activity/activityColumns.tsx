@@ -132,7 +132,13 @@ export function columnsFor(
     { key: "icon", header: "", width: 26, cell: (r) => <SourceIcon record={r} /> },
     {
       key: "event",
-      header: t(tab === "changes" ? "activity.table.change" : "activity.table.event"),
+      header: t(
+        tab === "changes"
+          ? "activity.table.change"
+          : tab === "uses"
+            ? "activity.table.use"
+            : "activity.table.event",
+      ),
       cell: (r) => <EventCell t={t} record={r} />,
     },
     {

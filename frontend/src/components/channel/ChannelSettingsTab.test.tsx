@@ -21,7 +21,7 @@ import { acceptance } from "@/test/acceptance";
 import { mockApiClient, type ApiClientMock } from "@/test/mockApiClient";
 import { ChannelReplaceSecretDialog } from "./ChannelReplaceSecretDialog";
 import { ChannelSettingsTab } from "./ChannelSettingsTab";
-import { AGENT, makeChannel, makeSettings } from "@/test/channelKit";
+import { AGENT, DEFAULT_STYLE, makeChannel, makePrompts, makeSettings } from "@/test/channelKit";
 
 const SECRETS = {
   refs: [
@@ -47,6 +47,8 @@ const SECRETS = {
 };
 vi.mock("@/lib/hooks/useSecrets", () => ({
   useSecrets: () => ({ data: SECRETS }),
+  useSetSecret: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useAddSecret: () => ({ mutateAsync: vi.fn(), isPending: false, reset: vi.fn() }),
 }));
 
 vi.mock("@/lib/api/client", async (orig) => ({
@@ -86,11 +88,12 @@ function wrap(ui: React.ReactNode) {
   );
 }
 
-function renderSettings(channel: ResourceOut = makeChannel()) {
+function renderSettings(channel: ResourceOut = makeChannel(), prompts = makePrompts()) {
   return wrap(
     <ChannelSettingsTab
       channel={channel}
       settings={makeSettings(channel)}
+      prompts={prompts}
       workspaceDirectory="/home/me/.coffer/content/workspace"
       onReplaceSecret={() => {}}
       onDelete={() => {}}
@@ -149,24 +152,28 @@ describe("message batching", () => {
     expect(api.PATCH).not.toHaveBeenCalled();
   });
 
-  acceptance("channels", "a value half typed into a channel setting never takes effect", async () => {
-    const api = installApi();
-    renderSettings(makeChannel({ config: { wait_after_text_seconds: 1.5 } }));
+  acceptance(
+    "channels",
+    "a value half typed into a channel setting never takes effect",
+    async () => {
+      const api = installApi();
+      renderSettings(makeChannel({ config: { wait_after_text_seconds: 1.5 } }));
 
-    // Typing "32" passes through "3", a valid window, and pauses there.
-    fireEvent.change(textField(), { target: { value: "3" } });
-    await new Promise((r) => setTimeout(r, 900));
-    expect(api.PATCH).not.toHaveBeenCalled();
-    fireEvent.change(textField(), { target: { value: "32" } });
-    fireEvent.keyDown(textField(), { key: "Enter" });
+      // Typing "32" passes through "3", a valid window, and pauses there.
+      fireEvent.change(textField(), { target: { value: "3" } });
+      await new Promise((r) => setTimeout(r, 900));
+      expect(api.PATCH).not.toHaveBeenCalled();
+      fireEvent.change(textField(), { target: { value: "32" } });
+      fireEvent.keyDown(textField(), { key: "Enter" });
 
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
-    expect(patched(api).wait_after_text_seconds).toBe(32);
-    // Leaving the field afterwards sends nothing more: the value is saved.
-    fireEvent.blur(textField());
-    await new Promise((r) => setTimeout(r, 50));
-    expect(api.PATCH).toHaveBeenCalledTimes(1);
-  });
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+      expect(patched(api).wait_after_text_seconds).toBe(32);
+      // Leaving the field afterwards sends nothing more: the value is saved.
+      fireEvent.blur(textField());
+      await new Promise((r) => setTimeout(r, 50));
+      expect(api.PATCH).toHaveBeenCalledTimes(1);
+    },
+  );
 });
 
 describe("replies", () => {
@@ -336,10 +343,10 @@ acceptance("channels", "rotating a channel secret keeps its refs and pairing", a
   wrap(<ChannelReplaceSecretDialog channel={TG} open onOpenChange={() => {}} />);
 
   const dialog = screen.getByRole("dialog");
-  fireEvent.change(within(dialog).getByLabelText(/bot token/i), {
+  fireEvent.change(within(dialog).getByLabelText(/new value/i), {
     target: { value: "999:rotated" },
   });
-  fireEvent.click(within(dialog).getByRole("button", { name: /replace and restart/i }));
+  fireEvent.click(within(dialog).getByRole("button", { name: /^replace key$/i }));
 
   await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
   expect(api.POST.mock.calls[0]).toEqual([
@@ -373,46 +380,94 @@ test("picking another stored secret re-points the channel and writes no value", 
   expect(api.POST).not.toHaveBeenCalled();
 });
 
-describe("system prompts", () => {
+describe("system prompt", () => {
   const section = () => screen.getByTestId("channel-system-prompts");
   const openDialog = () =>
-    fireEvent.click(within(section()).getByRole("button", { name: /edit system prompts/i }));
+    fireEvent.click(within(section()).getByRole("button", { name: /edit reply styles/i }));
 
   acceptance(
     "channels",
-    "the system prompts are edited through a dialog on the Settings tab",
+    "the Settings tab shows Coffer's channel note and the reply style in force",
+    () => {
+      renderSettings(makeChannel({ config: { group_reply_style: "Name the ticket first." } }));
+
+      const direct = screen.getByTestId("channel-prompt-direct");
+      const group = screen.getByTestId("channel-prompt-group");
+      // Coffer's note is shown read-only for each kind; nothing in the section
+      // is an input.
+      expect(within(direct).getByText(/Telegram direct chat/)).toBeInTheDocument();
+      expect(within(direct).getByText("Read-only")).toBeInTheDocument();
+      expect(within(section()).queryByRole("textbox")).toBeNull();
+      // An untouched style shows Coffer's default; a rewritten one shows the owner's.
+      expect(within(direct).getByText(DEFAULT_STYLE)).toBeInTheDocument();
+      expect(within(direct).getByText("Default")).toBeInTheDocument();
+      expect(within(group).getByText("Name the ticket first.")).toBeInTheDocument();
+      expect(within(group).getByText("Rewritten")).toBeInTheDocument();
+      expect(within(group).queryByText(DEFAULT_STYLE)).toBeNull();
+    },
+  );
+
+  acceptance("channels", "the Settings tab says when Coffer's default style has changed", () => {
+    renderSettings(
+      makeChannel({ config: { direct_reply_style: "Be brief." } }),
+      makePrompts({ directChanged: true }),
+    );
+
+    expect(
+      within(screen.getByTestId("channel-prompt-direct")).getByText(
+        /default reply style has changed/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("channel-prompt-group")).queryByText(/has changed/),
+    ).toBeNull();
+  });
+
+  acceptance(
+    "channels",
+    "the reply styles are edited through a dialog on the Settings tab",
     async () => {
       const api = installApi();
-      renderSettings(
-        makeChannel({ config: { group_system_prompt: "Name the ticket first.\nBe brief." } }),
-      );
-
-      // Shown as written; an empty prompt is a blank row, with no placeholder.
-      expect(within(section()).getByText(/Name the ticket first\./)).toBeInTheDocument();
-      expect(within(section()).queryByRole("textbox")).toBeNull();
+      renderSettings(makeChannel({ config: { group_reply_style: "Name the ticket first." } }));
 
       openDialog();
       const dialog = screen.getByRole("dialog");
       const direct = within(dialog).getByLabelText("Direct chats");
       const group = within(dialog).getByLabelText("Group chats");
-      expect(direct).toHaveValue("");
-      expect(direct).not.toHaveAttribute("placeholder");
-      expect(group).toHaveValue("Name the ticket first.\nBe brief.");
+      // Each field starts from the style in force, the default included.
+      expect(direct).toHaveValue(DEFAULT_STYLE);
+      expect(group).toHaveValue("Name the ticket first.");
 
       fireEvent.change(direct, { target: { value: "  Answer in Chinese.\n" } });
-      fireEvent.change(group, { target: { value: "" } });
+      fireEvent.click(
+        within(dialog).getByRole("button", {
+          name: "Restore the default reply style for Group chats",
+        }),
+      );
+      expect(group).toHaveValue(DEFAULT_STYLE);
       expect(api.PATCH).not.toHaveBeenCalled(); // nothing is saved until Save
       fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
       await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
       expect(patched(api)).toMatchObject({
-        direct_system_prompt: "Answer in Chinese.",
-        group_system_prompt: "",
+        direct_reply_style: "Answer in Chinese.",
+        // Equal to the default: saved empty, so it keeps following the default.
+        group_reply_style: "",
         app_secret_ref: "channel/0f/app-secret", // every ref goes back as it was
       });
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     },
   );
+
+  test("Restore default is unavailable while the field already holds it", () => {
+    renderSettings(TG);
+    openDialog();
+    expect(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Restore the default reply style for Direct chats",
+      }),
+    ).toBeDisabled();
+  });
 
   test("Cancel discards the draft and saves nothing", async () => {
     const api = installApi();
@@ -426,20 +481,22 @@ describe("system prompts", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(api.PATCH).not.toHaveBeenCalled();
     openDialog();
-    expect(within(screen.getByRole("dialog")).getByLabelText("Direct chats")).toHaveValue("");
+    expect(within(screen.getByRole("dialog")).getByLabelText("Direct chats")).toHaveValue(
+      DEFAULT_STYLE,
+    );
   });
 
-  acceptance("channels", "a system prompt longer than 4,000 characters is refused", async () => {
+  acceptance("channels", "a reply style longer than 6,000 characters is refused", async () => {
     const api = installApi();
     renderSettings(TG);
     openDialog();
     const dialog = screen.getByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText("Group chats"), {
-      target: { value: "x".repeat(4001) },
+      target: { value: "x".repeat(6001) },
     });
 
-    expect(within(dialog).getByRole("alert")).toHaveTextContent("At most 4000 characters.");
-    expect(within(dialog).getByText("4001 / 4000")).toBeInTheDocument();
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("At most 6000 characters.");
+    expect(within(dialog).getByText("6001 / 6000")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
     expect(api.PATCH).not.toHaveBeenCalled();
   });

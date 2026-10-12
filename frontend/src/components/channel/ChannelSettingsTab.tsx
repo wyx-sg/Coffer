@@ -3,7 +3,8 @@
 // Saved line; a failed save is a toast. The sections: Connection (its name —
 // its display name, renamed in place — SeaTalk's App ID, the
 // secret shown masked and replaced through a dialog), Receiving messages (group rules and batching), Replies and
-// conversations, System prompts (edited through a dialog), and Working
+// conversations, System prompt (Coffer's note read-only, the reply style edited
+// through a dialog), and Working
 // directories; the one destructive action, Delete,
 // is a row at the bottom, not a section.
 import { useId } from "react";
@@ -15,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { translateApiError } from "@/lib/api/errors";
 import { freeNameErrorKey, freeNameProblem } from "@/lib/freeName";
-import type { ChannelSettings } from "@/lib/api/channels";
+import type { ChannelPrompts, ChannelSettings } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import { useChannelAutoSave, CHANNEL_KIND } from "@/lib/hooks/useChannels";
 import { useRenameResource } from "@/lib/hooks/useResourceMutations";
@@ -34,6 +35,8 @@ interface Props {
   channel: ResourceOut;
   /** The channel's typed settings, defaults filled in — what its fields start from. */
   settings: ChannelSettings;
+  /** Coffer's channel note and default reply style per chat kind (`status.prompts`). */
+  prompts: ChannelPrompts | null;
   /** Coffer's workspace, where new conversations start while no default is marked. */
   workspaceDirectory: string;
   onReplaceSecret: () => void;
@@ -43,6 +46,7 @@ interface Props {
 export function ChannelSettingsTab({
   channel,
   settings,
+  prompts,
   workspaceDirectory,
   onReplaceSecret,
   onDelete,
@@ -160,7 +164,7 @@ export function ChannelSettingsTab({
         <ChannelReplyFields settings={settings} save={save} />
       </SettingsSection>
 
-      <ChannelSystemPromptsSection settings={settings} save={save} />
+      <ChannelSystemPromptsSection settings={settings} prompts={prompts} save={save} />
 
       <SettingsSection
         title={t("channels.edit.directories.title")}

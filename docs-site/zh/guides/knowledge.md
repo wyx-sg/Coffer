@@ -308,7 +308,7 @@ Coffer **没有读取、列出或搜索知识的工具**。智能体用它已有
 
 在知识页面里，先在树中选知识集，再选页面或来源。它们同时也是普通文件：知识根目录是 `~/.coffer/vault/knowledge/`，每个知识集是其中的一个文件夹，所以你可以用自己的工具读和 grep。知识集的 **⋯** 菜单里有**复制路径**。
 
-知识页面是一棵树加一个阅读窗格，两者都撑满页头下方的窗口。标题带着**实验性**标签；页头的操作是**整理全部**和**添加**，后者是页面唯一的主按钮。**添加**会打开一个菜单，每一项都带一行说明它在 Coffer 里保存什么：**上传文档…**（见[上传来源](#upload-a-source)）和**新建知识集…**（见[创建知识集](#create-a-collection)）。树的顶部，**知识集**有一个**新建知识集**按钮；下面是按文件夹名显示的每个知识集。展开一个知识集，先显示**页面**和**来源**，然后是其中的其他内容；每个文件都按文件名显示，每个页面带着它的类型图标，每个来源带着来源图标，仍在等待整合的来源带着**待整理**标记。树会记住你展开和收起了什么：离开页面或刷新之后回来，还是同样的知识集和文件夹开着。
+知识页面是一棵树加一个阅读窗格，两者都撑满页头下方的窗口。标题带着**实验性**标签；页头的操作是**整理全部**和**添加**，后者是页面唯一的主按钮。**添加**会打开一个菜单，每一项都带一行说明它在 Coffer 里保存什么：**上传文档…**（见[上传来源](#upload-a-source)）、**新建知识集…**（见[创建知识集](#create-a-collection)）和**接入外部文件夹…**（见[接入外部文件夹](#link-an-external-folder)）。树的顶部，**知识集**有一个**新建知识集**按钮；下面是按文件夹名显示的每个知识集。展开一个知识集，先显示**页面**和**来源**，然后是其中的其他内容；每个文件都按文件名显示，每个页面带着它的类型图标，每个来源带着来源图标，仍在等待整合的来源带着**待整理**标记。树会记住你展开和收起了什么：离开页面或刷新之后回来，还是同样的知识集和文件夹开着。
 
 **知识集。** 选中一个知识集，它的窗格栏里有**整理**和 **⋯** 菜单。下面是它的文件夹名、这里放什么（点一下可编辑；离开输入框或按 **⌘Enter** 保存，**Esc** 取消，并有提示给出**撤销**），以及一行概要：多少个页面、多少个来源及其中几个待整理、文件夹路径和复制按钮、最后更新时间。概要下面一行浅色文字说明这个知识集由 Coffer 管理：同步到你的其他 Mac，保留历史，由你的智能体整理。有智能体正在整理它时，会有一条提示（见[一次整理就是一次改动](#a-tidy-is-one-change)）。然后是三节：
 
@@ -336,9 +336,48 @@ Coffer **没有读取、列出或搜索知识的工具**。智能体用它已有
 
 在 Obsidian 里保存的编辑和在任何编辑器里一样：马上生效，由下一次扫描记成在磁盘上编辑。`sources/` 下的文件请保持原样。
 
+## 接入外部文件夹 {#link-an-external-folder}
+
+如果你已经在用自己的工具记笔记，比如一个 Obsidian 库、一个 Logseq 图谱，或者仓库里的一个 Markdown 文件夹，可以把这个文件夹共享给你的智能体，而不用挪动它。Coffer 把它叫作接入的外部文件夹。
+
+```text
+知识 → 添加 → 接入外部文件夹… → 文件夹、名称 → 接入文件夹
+```
+
+**文件夹**是它的绝对路径，比如 `/Users/you/Obsidian/Work`。**名称**是 Coffer 和智能体称呼它的名字：在你自己输入之前，它跟着文件夹本身的名字走；不管怎样，磁盘上的文件夹都不会改名。在命令行里，同样的操作是 `coffer knowledge link --set folder=/Users/you/Obsidian/Work`（见 [`coffer knowledge link`](/zh/reference/cli/knowledge#knowledge-link)）。
+
+### Coffer 会做什么 {#what-coffer-does-with-a-linked-folder}
+
+- **把它共享给每个智能体。** 这个文件夹在每个智能体都会读的 `coffer-guide` 技能里有单独的一节：它的路径、它的规则文件，以及按标题列出的每篇 Markdown 笔记。智能体用自己的文件工具在原处读这些笔记。
+- **在知识页面上显示它。** 树里用外部文件夹图标列出它，你可以打开、阅读其中任何一篇笔记。它的页面在名字旁标着**外部**，并列出四项信息：**位置**（它的路径，附**在访达中显示**）、**笔记**（它有多少篇 Markdown 笔记）、**规则文件**，以及**管理方式**：由它自己的工具维护，Coffer 只把它共享给智能体。
+- **每次都重新读取。** 不做任何缓存，所以你在 Obsidian 里保存的笔记，就是页面和智能体下一次看到的内容。
+
+### Coffer 不会做什么 {#what-coffer-does-not-do-with-a-linked-folder}
+
+- **不复制任何东西。** 没有文件会进入 `~/.coffer`。这个文件夹始终是唯一的一份。
+- **不往文件夹里写任何东西。** 不能往里上传，它的笔记没有**删除**，它的描述（它自己 `README.md` 的第一段）不在这里编辑，它也没有**整理**、**待办**、收件箱，不会把笔记移进 `pages/`。Coffer 的 `pages/` 和 `sources/` 结构对它不适用。
+- **不记录历史。** 它的笔记没有**历史**，它的页面没有**改动记录**，也不能通过 Coffer 撤销任何东西。需要时请用这个文件夹自己的工具：Obsidian 的文件恢复，或者文件夹本身是仓库时用 git。
+- **不同步它。** 文件夹里的文件和这个接入关系都不会经由[保险库同步](/zh/guides/vault-sync)到达你的其他 Mac。接入关系只记录在这台 Mac 上的 `~/.coffer/local/resources/knowledge/` 里，因为文件夹的路径只在这台 Mac 上成立。想在另一台 Mac 上用同样的笔记，就用文件夹自己的工具（Obsidian Sync、iCloud 云盘、git）让它保持一致，再在那台 Mac 上也接入一次。
+
+### 智能体怎样往里写 {#how-agents-write-in-a-linked-folder}
+
+文件夹的**规则文件**是它根目录下 `AGENTS.md`、`CLAUDE.md` 和 `README.md` 中第一个存在的那个。指南会告诉智能体，在往文件夹里写任何东西之前先遵守这个文件；没有规则文件时，只按现有笔记的写法来写。Coffer 给知识集定的规则（页面放在 `pages/`、来源分开保存、frontmatter 里的页面类型、收件箱、整理）在这里都不适用。所以，如果你希望智能体往你的库里添加笔记，就把你的约定写进库根目录的 `AGENTS.md`；如果只希望它们读，也在那里写明。
+
+### 大文件夹 {#large-linked-folders}
+
+Coffer 会跳过 `.obsidian/`、`.git/` 这类隐藏文件夹和 `node_modules`。一个文件夹最多读取 5000 篇 Markdown 笔记，超过 2 MB 的文件会列出，但不在页面上显示。只想共享大库的一部分时，接入其中的子文件夹，而不是整个库。
+
+### 不能接入的文件夹 {#folders-that-cannot-be-linked}
+
+文件夹必须存在，并且要用绝对路径给出。Coffer 自己的文件夹 `~/.coffer` 不能接入，包含它的文件夹也不行，比如你的主目录或磁盘根目录。这些会被拒绝并返回 [`KNOWLEDGE_FOLDER_REFUSED`](/zh/reference/error-codes)。已经接入过的文件夹，或者别的知识集已经在用的名字，会被拒绝并返回 `KNOWLEDGE_COLLECTION_EXISTS`。
+
+### 重命名或断开接入 {#rename-or-disconnect-a-linked-folder}
+
+接入文件夹的 **⋯** 菜单里有**在访达中显示**、装了 Obsidian 时的**在 Obsidian 中打开**、**复制路径**、**重命名…**和**断开接入…**。**重命名…**只改 Coffer 和智能体使用的名字。**断开接入…**会先询问；之后智能体不再看到这个文件夹，里面的每个文件都留在原处。
+
 ## 每个知识集都对所有智能体生效 {#every-collection-reaches-every-agent}
 
-知识集没有开关，也没有按智能体设置的生效范围：每个知识集对所有智能体都可用，只有删除才能让它从智能体的 `coffer-guide` 技能里消失。
+知识集没有开关，也没有按智能体设置的生效范围：每个知识集（包括接入的外部文件夹）对所有智能体都可用，只有删除才能让它从智能体的 `coffer-guide` 技能里消失（接入的文件夹用**断开接入…**，文件保持不动）。
 
 ::: warning 这不是访问控制
 技能会把知识根目录交给智能体，智能体可以用自己的工具读取其下的任何东西。不要把这台机器上的智能体不该读的内容放进知识集。
@@ -408,8 +447,9 @@ Coffer **没有读取、列出或搜索知识的工具**。智能体用它已有
 
 - [技能](/zh/guides/skills)：携带目录以及写下、整合和整理规则的 `coffer-guide` 技能
 - [记忆](/zh/guides/memory)
+- [保险库同步](/zh/guides/vault-sync)：哪些内容会同步，以及接入的文件夹为什么不同步
 - [知识架构](/zh/architecture/knowledge)
 - [`coffer knowledge` 命令参考](/zh/reference/cli/knowledge)
 - [MCP 工具参考](/zh/reference/mcp-tools)
 - [知识规格](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md)
-- [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md)、[Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) 和 [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md)
+- [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md)、[Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) 、[Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md) 和 [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md)

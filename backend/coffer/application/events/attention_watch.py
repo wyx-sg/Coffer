@@ -22,6 +22,7 @@ from collections.abc import Awaitable, Callable, Hashable
 
 from coffer.application.attention import AttentionReport
 from coffer.application.events.broker import EventBroker
+from coffer.application.runtime.cancellation import raise_if_stopping
 from coffer.application.runtime.wakeable import WakeableLoop
 from coffer.domain.reconcile import Changed, PassReport
 
@@ -119,7 +120,8 @@ class AttentionWatcher:
     async def _check_logged(self, report: ReportFn) -> None:
         try:
             await self.check(report)
-        except Exception:
+        except Exception as exc:
+            raise_if_stopping(exc)
             _log.exception("events.attention_check_failed")
 
 

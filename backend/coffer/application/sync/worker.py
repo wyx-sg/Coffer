@@ -18,6 +18,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
+from coffer.application.runtime.cancellation import raise_if_stopping
 from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.sync.remote import DEFAULT_INTERVAL_SECONDS, SyncRemote
 from coffer.domain.sync.rounds import RoundRecord
@@ -79,7 +80,8 @@ class SyncWorker:
             return self._idle_poll
         try:
             await self._service.run(trigger="timer")
-        except Exception:  # the loop outlives any single round
+        except Exception as exc:  # the loop outlives any single round
+            raise_if_stopping(exc)
             _log.exception("sync.round_raised")
         interval = float(
             (self._service.remote() or remote).interval_seconds or DEFAULT_INTERVAL_SECONDS

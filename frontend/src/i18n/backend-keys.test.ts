@@ -56,9 +56,13 @@ test("errors.* maps carry no key the backend no longer emits", () => {
 
 test("audit.activity.* maps carry no key the backend no longer emits", () => {
   const known = new Set(AUDIT_EVENTS);
+  // A variant `<event>_<variant>` names what a row of `<event>` acted on
+  // (activity/auditSentence.ts); it is legitimate while its event is known.
+  const isKnownOrVariant = (k: string) =>
+    known.has(k) || AUDIT_EVENTS.some((e) => k.startsWith(`${e}_`));
   const stale = (have: Record<string, unknown>) =>
     Object.keys(have)
-      .filter((k) => !known.has(k))
+      .filter((k) => !isKnownOrVariant(k))
       .sort();
   expect(stale(en.audit.activity)).toEqual([]);
   expect(stale(zh.audit.activity)).toEqual([]);

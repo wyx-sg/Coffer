@@ -31,7 +31,7 @@ from coffer.infrastructure.persistence.space import reclaim_free_pages
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.infrastructure.secret.master_key import MasterKeyManager
 from coffer.surfaces.http.guide_wiring import BuiltinGuide
-from coffer.surfaces.http.knowledge_sweep_wiring import start_knowledge_sweep
+from coffer.surfaces.http.knowledge_sweep_wiring import WatchKnowledge, start_knowledge_sweep
 from coffer.surfaces.http.memory_sync_wiring import start_memory_sync_worker, wire_memory_sync
 from coffer.surfaces.http.sync_wiring import SyncWiring, start_sync, start_sync_worker
 
@@ -62,6 +62,7 @@ def start_background_workers(
     features: FeatureService,
     platform: PlatformPort,
     history_db: pathlib.Path | None,
+    watch_knowledge: WatchKnowledge | None = None,
 ) -> BackgroundWorkers:
     retention_worker = RetentionWorker(
         retention_svc,
@@ -85,8 +86,11 @@ def start_background_workers(
     # Every experimental feature's pass reads its switch at the top of each
     # round and skips it while off (spec experimental-features).
     # The knowledge sweep: refresh the guide, promote what landed in a
-    # collection's inbox, and commit edits found on disk.
-    knowledge_sweep_task = start_knowledge_sweep(knowledge_service, guide, resource_svc, features)
+    # collection's inbox, and commit edits found on disk; woken by file events
+    # under knowledge/ and otherwise a 10-minute fallback.
+    knowledge_sweep_task = start_knowledge_sweep(
+        knowledge_service, guide, resource_svc, features, watch_knowledge
+    )
     # The memory sync into each agent's own memory (spec memory "Sync on an
     # interval and on demand"): a sync at start, then on its interval.
     memory_sync = wire_memory_sync(resource_svc, audit, engine_config)

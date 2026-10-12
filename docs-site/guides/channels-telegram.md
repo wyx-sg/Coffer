@@ -136,7 +136,7 @@ Until you do, the channel's page shows a warning naming this fix.
 
 ## Rotate the token
 
-On the channel's page, choose **Replace token** in the banner when Telegram rejected the old one, or **Replace key…** under **Settings** → **Connection**; paste the new token in **Bot token** and choose **Replace and restart**. Coffer checks the token with Telegram as you paste it and says **Works — this is @your_bot**, and for the same bot that the pairing still holds; a token Telegram rejects is named under the field. The token is written under the reference the channel already uses, so the pairing is untouched.
+On the channel's page, choose **Replace token** in the banner when Telegram rejected the old one, or **Replace key…** under **Settings** → **Connection**; paste the new token in **New value** and choose **Replace key**; the bot restarts on it. Coffer checks the token with Telegram as you paste it and says **Works — this is @your_bot**, and for the same bot that the pairing still holds; a token Telegram rejects is named under the field. The token is written under the reference the channel already uses, so the pairing is untouched.
 
 ## Limits
 

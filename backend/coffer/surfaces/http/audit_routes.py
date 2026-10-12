@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
-from coffer.domain.audit import AuditEntry
+from coffer.domain.audit import AuditEntry, AuditNature
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_audit_service, get_resource_service
 from coffer.surfaces.http.log_schemas import AuditEntryOut, AuditListOut
@@ -84,6 +84,15 @@ async def list_audit(
     ),
     event_type: str | None = Query(default=None),
     event_prefix: str | None = Query(default=None),
+    # spec resource-framework "Tell a secret's use from a change in the audit log"
+    nature: AuditNature | None = Query(  # noqa: B008
+        default=None,
+        description=(
+            "``change`` for changes only, ``use`` for a secret's uses only "
+            "(its value handed to a server, a tool, a connection or a program, "
+            "or revealed)."
+        ),
+    ),
     since: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
     cursor: str | None = Query(
@@ -130,6 +139,7 @@ async def list_audit(
         kind=kind,
         event_type=event_type,
         event_prefix=event_prefix,
+        nature=nature,
         since=since_dt,
         limit=limit,
         cursor=cursor,
@@ -143,6 +153,7 @@ async def list_audit(
         kind=kind,
         event_type=event_type,
         event_prefix=event_prefix,
+        nature=nature,
         since=since_dt,
         trace_id=trace_id,
         q=q or None,

@@ -97,6 +97,7 @@ describe("useChannels hooks", () => {
       workspace_directory: "/home/me/.coffer/content/workspace",
       commands: [],
       people: [],
+      prompts: null,
       inbound: null,
       handoff: null,
       settings: null,

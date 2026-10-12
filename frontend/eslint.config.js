@@ -40,6 +40,14 @@ export default tseslint.config(
           message:
             "Inline query keys are not allowed — import a key builder from src/lib/api/queryKeys.ts.",
         },
+        {
+          // Callers ask presenceAvailable() / inDesktopShell() (documented atop
+          // lib/tauri.ts); isTauri is the raw WebView probe behind them, so only
+          // its definition and tests (which mock it) may name it.
+          selector: 'ImportSpecifier[imported.name="isTauri"]',
+          message:
+            "Do not import isTauri — ask presenceAvailable() or inDesktopShell() from lib/tauri instead.",
+        },
       ],
     },
   },

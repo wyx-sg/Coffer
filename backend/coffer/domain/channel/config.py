@@ -22,6 +22,8 @@ from pydantic import (
     model_validator,
 )
 
+from coffer.domain.chat.channel_prompt import default_reply_style, reply_style_hash
+
 # A secret ref is a vault ADDRESS, not a secret: Coffer mints
 # "channel/<uuid4 hex>/<secret>" for one the UI stores, and a user may type a
 # path of their own. Raw secrets are longer and machine-shaped; reject the
@@ -50,10 +52,17 @@ def _reject_raw_secret(field: str, value: str) -> str:
 #: upgrade never stops a channel from starting.
 _RETIRED_KEYS = frozenset({"notify_after_seconds"})
 
-#: The longest system prompt a channel keeps per chat kind (spec channels "Append
-#: the owner's system prompt to a channel turn"). It rides on every turn, so it is
-#: capped well below anything that would crowd the agent's own context.
-SYSTEM_PROMPT_MAX_LENGTH = 4000
+#: The longest reply style a channel keeps per chat kind (spec channels "Let the
+#: owner rewrite a channel's reply style"). It rides on every turn, so it is
+#: capped well below anything that would crowd the agent's own context — and
+#: above Coffer's default plus a 4,000-character prompt of the kind that the
+#: style replaced, so every migrated channel fits.
+REPLY_STYLE_MAX_LENGTH = 6000
+
+#: The owner prompts a channel carried before the reply style replaced them
+#: (ADR channel-prompt-fixed-note-and-editable-style), and the style
+#: each one migrates into.
+_LEGACY_PROMPT_KEYS = {"direct_system_prompt": "direct", "group_system_prompt": "group"}
 
 
 class _CommonChannelFields(BaseModel):
@@ -107,12 +116,18 @@ class _CommonChannelFields(BaseModel):
     # default directory is the only one — a chat cannot point an agent at an
     # arbitrary folder on this machine.
     directories: list[str] = Field(default_factory=list, max_length=32)
-    # The owner's own system prompts (spec channels "Append the owner's system
-    # prompt to a channel turn"): appended after Coffer's channel note on every
-    # turn of a direct chat (and its threads), or of a group's main chat and its
-    # threads. Empty appends nothing; they never replace Coffer's note.
-    direct_system_prompt: str = Field(default="", max_length=SYSTEM_PROMPT_MAX_LENGTH)
-    group_system_prompt: str = Field(default="", max_length=SYSTEM_PROMPT_MAX_LENGTH)
+    # The owner's rewrite of the reply style (spec channels "Let the owner rewrite
+    # a channel's reply style"): for a direct chat (and its threads), and for a
+    # group's main chat and its threads. Empty follows Coffer's default, which
+    # is also what text equal to that default is stored as. It follows Coffer's
+    # fixed channel note on every turn and never replaces it.
+    direct_reply_style: str = Field(default="", max_length=REPLY_STYLE_MAX_LENGTH)
+    group_reply_style: str = Field(default="", max_length=REPLY_STYLE_MAX_LENGTH)
+    # The fingerprint of Coffer's default each rewrite was written against
+    # (``reply_style_hash``), so the page can say the default has changed
+    # since. "" while the style follows the default.
+    direct_reply_style_base: str = Field(default="", max_length=64)
+    group_reply_style_base: str = Field(default="", max_length=64)
     # NOTE: a channel curates no MODELS. A new conversation opens on the bound
     # agent's own CLI default and ``/model`` offers that agent's whole
     # catalogue, refusing nothing — picking a model is the agent's business,
@@ -124,12 +139,29 @@ class _CommonChannelFields(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _drop_retired_keys(cls, data: Any) -> Any:
-        """Migration for the removal of the long-turn ping: a stored config may
-        still carry ``notify_after_seconds``; drop it (the file loses the key
-        on its next write)."""
-        if isinstance(data, dict) and any(k in data for k in _RETIRED_KEYS):
-            return {k: v for k, v in data.items() if k not in _RETIRED_KEYS}
-        return data
+        """Migrations on read (the file loses the old keys on its next write).
+
+        - The long-turn ping is gone: drop ``notify_after_seconds``.
+        - The owner prompt became the reply style: a stored
+          ``direct_system_prompt`` / ``group_system_prompt`` was appended after
+          Coffer's whole note, so it becomes a rewrite holding Coffer's default
+          style followed by the owner's text — the agent reads the same
+          instructions as before. An empty one simply goes.
+        """
+        if not isinstance(data, dict):
+            return data
+        if not any(k in data for k in _RETIRED_KEYS | _LEGACY_PROMPT_KEYS.keys()):
+            return data
+        out = {k: v for k, v in data.items() if k not in _RETIRED_KEYS | _LEGACY_PROMPT_KEYS.keys()}
+        for key, kind in _LEGACY_PROMPT_KEYS.items():
+            old = data.get(key)
+            # A document that already says what the style is (even "") wins.
+            if not isinstance(old, str) or not old.strip() or f"{kind}_reply_style" in out:
+                continue
+            default = default_reply_style(kind)
+            out[f"{kind}_reply_style"] = f"{default}\n\n{old.strip()}"
+            out[f"{kind}_reply_style_base"] = reply_style_hash(default)
+        return out
 
     @field_validator("default_agent_config")
     @classmethod
@@ -141,12 +173,30 @@ class _CommonChannelFields(BaseModel):
             raise ValueError(f"the default directory must be an absolute path; got {cwd!r}")
         return v
 
-    @field_validator("direct_system_prompt", "group_system_prompt")
+    @field_validator("direct_reply_style", "group_reply_style")
     @classmethod
-    def _trim_system_prompt(cls, v: str) -> str:
-        # Surrounding blank lines and spaces carry nothing; a prompt of only
-        # whitespace is no prompt. The text inside is kept as written.
+    def _trim_reply_style(cls, v: str) -> str:
+        # Surrounding blank lines and spaces carry nothing; a style of only
+        # whitespace is no rewrite. The text inside is kept as written.
         return v.strip()
+
+    @model_validator(mode="after")
+    def _settle_reply_styles(self) -> Any:
+        # A rewrite equal to Coffer's default is no rewrite: it is stored empty,
+        # so it keeps following the default. A rewrite saved without saying
+        # what it was written against was written against today's default.
+        for kind in ("direct", "group"):
+            default = default_reply_style(kind)
+            style = getattr(self, f"{kind}_reply_style")
+            if style == default.strip():
+                style = ""
+                object.__setattr__(self, f"{kind}_reply_style", "")
+            base = getattr(self, f"{kind}_reply_style_base")
+            if not style:
+                object.__setattr__(self, f"{kind}_reply_style_base", "")
+            elif not base:
+                object.__setattr__(self, f"{kind}_reply_style_base", reply_style_hash(default))
+        return self
 
     @field_validator("directories")
     @classmethod

@@ -30,10 +30,6 @@ from alembic.script import ScriptDirectory
 
 #: The baseline revision: the id the squashed history ended at.
 BASELINE_REVISION = "0146"
-#: The newest revision in the tree. Equal to the baseline until a revision is
-#: stacked on it; bump it with each new revision.
-HEAD_REVISION = "0153"
-
 _ALEMBIC_INI = (
     pathlib.Path(__file__).resolve().parents[4]
     / "coffer"
@@ -42,12 +38,26 @@ _ALEMBIC_INI = (
     / "migrations"
     / "alembic.ini"
 )
+
 _OLD_CHAIN_SCHEMA = pathlib.Path(__file__).with_name("old_chain_schema_0146.json")
 
 
 def _alembic_config() -> AlembicConfig:
     assert _ALEMBIC_INI.is_file(), f"alembic.ini not found at {_ALEMBIC_INI}"
     return AlembicConfig(str(_ALEMBIC_INI))
+
+
+def _tree_head() -> str:
+    """The tree's single head, read from the script directory, so a new
+    revision never needs this file touched. A forked tree has no one head and
+    fails here (and in ``test_the_tree_is_one_line_from_the_baseline``)."""
+    (head,) = ScriptDirectory.from_config(_alembic_config()).get_heads()
+    return head
+
+
+#: The newest revision in the tree, derived rather than written down. Other
+#: tests import it as "the revision an up-to-date database carries".
+HEAD_REVISION = _tree_head()
 
 
 def _normalized(sql: str | None) -> str | None:
@@ -111,7 +121,7 @@ def test_a_conversation_without_an_agent_is_refused_by_the_store(tmp_path, monke
 def test_the_tree_is_one_line_from_the_baseline():
     script = ScriptDirectory.from_config(_alembic_config())
     assert script.get_bases() == [BASELINE_REVISION]
-    assert script.get_heads() == [HEAD_REVISION]
+    assert script.get_heads() == [HEAD_REVISION]  # exactly one head: no fork
     assert script.get_revision(BASELINE_REVISION).down_revision is None
 
 

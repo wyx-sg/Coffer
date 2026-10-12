@@ -199,8 +199,8 @@ export function ToolTestResult({
         cutAt={result.truncated ? formatBytes(RESPONSE_CAP_BYTES) : null}
       />
       <ReplaceSecretDialog
-        row={changing && secret ? (rowOf(secret) ?? null) : null}
-        onOpenChange={setChanging}
+        secretRef={changing && secret ? (rowOf(secret)?.ref ?? null) : null}
+        onClose={() => setChanging(false)}
       />
     </div>
   );

@@ -59,6 +59,14 @@ export function createCollection(payload: {
   return unwrap(getApiClient().POST("/knowledge/collections", { body: payload }));
 }
 
+/** Share a folder the person keeps themselves with every agent; nothing is copied. */
+export function linkFolder(payload: {
+  folder: string;
+  name?: string | null;
+}): Promise<CollectionOut> {
+  return unwrap(getApiClient().POST("/knowledge/collections/link", { body: payload }));
+}
+
 // --- catalogue --------------------------------------------------------------
 
 /**

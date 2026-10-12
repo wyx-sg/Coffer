@@ -436,6 +436,35 @@ components:
       - active_conversation_id
       title: ChannelPersonOut
       type: object
+    ChannelPromptOut:
+      description: One chat kind's system prompt, as the page shows it.
+      properties:
+        channel_note:
+          title: Channel Note
+          type: string
+        default_changed:
+          title: Default Changed
+          type: boolean
+        default_style:
+          title: Default Style
+          type: string
+      required:
+      - channel_note
+      - default_style
+      - default_changed
+      title: ChannelPromptOut
+      type: object
+    ChannelPromptsOut:
+      properties:
+        direct:
+          $ref: '#/components/schemas/ChannelPromptOut'
+        group:
+          $ref: '#/components/schemas/ChannelPromptOut'
+      required:
+      - direct
+      - group
+      title: ChannelPromptsOut
+      type: object
     ChannelStatusOut:
       properties:
         channel_type:
@@ -478,6 +507,10 @@ components:
             $ref: '#/components/schemas/ChannelPersonOut'
           title: People
           type: array
+        prompts:
+          anyOf:
+          - $ref: '#/components/schemas/ChannelPromptsOut'
+          - type: 'null'
         running:
           title: Running
           type: boolean
@@ -522,6 +555,7 @@ components:
       - starting
       - handoff
       - settings
+      - prompts
       - commands
       - workspace_directory
       title: ChannelStatusOut
@@ -734,10 +768,15 @@ components:
             type: object
           - type: 'null'
           title: Default Agent Config
-        direct_system_prompt:
+        direct_reply_style:
           default: ''
-          maxLength: 4000
-          title: Direct System Prompt
+          maxLength: 6000
+          title: Direct Reply Style
+          type: string
+        direct_reply_style_base:
+          default: ''
+          maxLength: 64
+          title: Direct Reply Style Base
           type: string
         directories:
           items:
@@ -745,10 +784,15 @@ components:
           maxItems: 32
           title: Directories
           type: array
-        group_system_prompt:
+        group_reply_style:
           default: ''
-          maxLength: 4000
-          title: Group System Prompt
+          maxLength: 6000
+          title: Group Reply Style
+          type: string
+        group_reply_style_base:
+          default: ''
+          maxLength: 64
+          title: Group Reply Style Base
           type: string
         ignore_other_mentions:
           default: false
@@ -790,8 +834,10 @@ components:
       - show_steps
       - new_conversation_after_idle_hours
       - directories
-      - direct_system_prompt
-      - group_system_prompt
+      - direct_reply_style
+      - group_reply_style
+      - direct_reply_style_base
+      - group_reply_style_base
       - channel_type
       - app_id
       - app_secret_ref
@@ -844,10 +890,15 @@ components:
             type: object
           - type: 'null'
           title: Default Agent Config
-        direct_system_prompt:
+        direct_reply_style:
           default: ''
-          maxLength: 4000
-          title: Direct System Prompt
+          maxLength: 6000
+          title: Direct Reply Style
+          type: string
+        direct_reply_style_base:
+          default: ''
+          maxLength: 64
+          title: Direct Reply Style Base
           type: string
         directories:
           items:
@@ -855,10 +906,15 @@ components:
           maxItems: 32
           title: Directories
           type: array
-        group_system_prompt:
+        group_reply_style:
           default: ''
-          maxLength: 4000
-          title: Group System Prompt
+          maxLength: 6000
+          title: Group Reply Style
+          type: string
+        group_reply_style_base:
+          default: ''
+          maxLength: 64
+          title: Group Reply Style Base
           type: string
         ignore_other_mentions:
           default: false
@@ -900,8 +956,10 @@ components:
       - show_steps
       - new_conversation_after_idle_hours
       - directories
-      - direct_system_prompt
-      - group_system_prompt
+      - direct_reply_style
+      - group_reply_style
+      - direct_reply_style_base
+      - group_reply_style_base
       - channel_type
       - bot_token_ref
       title: TelegramChannelConfig

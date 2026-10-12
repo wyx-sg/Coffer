@@ -8,6 +8,7 @@ import { Book } from "lucide-react";
 
 import { DetailNotFound } from "@/components/DetailNotFound";
 import { KnowledgeCollectionView } from "@/components/knowledge/KnowledgeCollectionView";
+import { KnowledgeLinkedView } from "@/components/knowledge/KnowledgeLinkedView";
 import { KnowledgeDocumentPane } from "@/components/knowledge/KnowledgeDocumentPane";
 import { KnowledgeLandingPanel } from "@/components/knowledge/KnowledgeLandingPanel";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -43,6 +44,9 @@ export function KnowledgePane(props: Props) {
   }
   if (props.file) {
     return <KnowledgeDocumentPane collection={props.collection} path={props.file} />;
+  }
+  if (props.collection.linked) {
+    return <KnowledgeLinkedView collection={props.collection} />;
   }
   return <KnowledgeCollectionView collection={props.collection} />;
 }

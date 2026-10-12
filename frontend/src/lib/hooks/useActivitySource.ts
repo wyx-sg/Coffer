@@ -46,7 +46,7 @@ async function readPage(
   signal: AbortSignal,
   withTotal = false,
 ): Promise<ListPage<ActivityRecord>> {
-  if (spec.source === "change") {
+  if (spec.source === "change" || spec.source === "use") {
     const out = await fetchAuditPage(spec.params, limit, cursor, signal);
     return { items: out.entries.map(fromAudit), next: out.next_cursor, total: out.total };
   }
@@ -65,7 +65,7 @@ async function readPage(
 
 function keyFor(spec: SourceParams, view: "pages" | "head" | "count") {
   const filters = { ...spec.params, view };
-  if (spec.source === "change") return auditListKey(filters);
+  if (spec.source === "change" || spec.source === "use") return auditListKey(filters);
   if (spec.source === "call") return mcpAllInvocationsKey(filters);
   return daemonLogsKey(filters);
 }

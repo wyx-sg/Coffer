@@ -40,6 +40,15 @@ SPECS = [
         body=True,
     ),
     RouteCommand(
+        "knowledge link",
+        "POST",
+        "/knowledge/collections/link",
+        _UI + "Add · Link an external folder",
+        "Share a folder you keep yourself with every agent; nothing is copied into Coffer. "
+        "Body: folder (absolute path), name.",
+        body=True,
+    ),
+    RouteCommand(
         "knowledge describe",
         "PUT",
         "/knowledge/collections/{uid}/description",

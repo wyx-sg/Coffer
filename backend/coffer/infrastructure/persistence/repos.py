@@ -15,7 +15,7 @@ from typing import Any
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from coffer.domain.audit import AuditEntry
+from coffer.domain.audit import SECRET_USE_EVENTS, AuditEntry, AuditNature
 from coffer.infrastructure.persistence.keyset import newest_first_after
 from coffer.infrastructure.persistence.models import AuditLogModel
 from coffer.infrastructure.persistence.textsearch import contains_any
@@ -53,6 +53,7 @@ def _audit_filtered(
     event_prefix: str | None,
     since: datetime | None,
     trace_id: str | None = None,
+    nature: AuditNature | None = None,
     q: str | None = None,
     q_types: Sequence[str] = (),
 ) -> Select[Any]:
@@ -75,6 +76,10 @@ def _audit_filtered(
         # caller keeps the page's log complete — a client-side filter
         # over a fixed window silently drops whatever fell outside it.
         stmt = stmt.where(AuditLogModel.event_type.startswith(event_prefix))
+    if nature == "use":
+        stmt = stmt.where(AuditLogModel.event_type.in_(SECRET_USE_EVENTS))
+    elif nature == "change":
+        stmt = stmt.where(AuditLogModel.event_type.not_in(SECRET_USE_EVENTS))
     if since is not None:
         stmt = stmt.where(AuditLogModel.timestamp >= since)
     if q:
@@ -129,6 +134,7 @@ class SqlAlchemyAuditRepo:
         resource_uid: str | None = None,
         event_type: str | None = None,
         event_prefix: str | None = None,
+        nature: AuditNature | None = None,
         since: datetime | None = None,
         limit: int = 50,
         after: tuple[datetime, int] | None = None,
@@ -152,6 +158,7 @@ class SqlAlchemyAuditRepo:
                 resource_uid=resource_uid,
                 event_type=event_type,
                 event_prefix=event_prefix,
+                nature=nature,
                 since=since,
                 trace_id=trace_id,
                 q=q,
@@ -168,6 +175,7 @@ class SqlAlchemyAuditRepo:
         resource_uid: str | None = None,
         event_type: str | None = None,
         event_prefix: str | None = None,
+        nature: AuditNature | None = None,
         since: datetime | None = None,
         trace_id: str | None = None,
         q: str | None = None,
@@ -181,6 +189,7 @@ class SqlAlchemyAuditRepo:
                 resource_uid=resource_uid,
                 event_type=event_type,
                 event_prefix=event_prefix,
+                nature=nature,
                 since=since,
                 trace_id=trace_id,
                 q=q,

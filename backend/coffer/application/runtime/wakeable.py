@@ -23,6 +23,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 
+from coffer.application.runtime.cancellation import raise_if_stopping
 from coffer.application.runtime.workers import WorkerMode, WorkerRegistry, workers
 
 _log = logging.getLogger(__name__)
@@ -95,7 +96,8 @@ class WakeableLoop:
             ok = True
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as exc:
+            raise_if_stopping(exc)
             _log.exception(self._failure_event, extra={"worker": self.name})
         finally:
             self._registry.finished(self.name, token, ok=ok, seconds=time.monotonic() - clock)

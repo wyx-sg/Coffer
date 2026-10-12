@@ -45,7 +45,7 @@ flowchart LR
 
 **Staging.** A stage is a directory in the system's temporary space, never inside `~/.coffer`, so vault sync cannot see it and a crash leaves nothing in the vault. The daemon remembers each stage for an hour; confirming or cancelling removes it at once. A stage that is never confirmed is swept on the next call.
 
-**Finding the skill.** One rule for every source: a folder whose top holds `SKILL.md` is a skill. If the top of what you handed over is not one, each folder one level down that is becomes a candidate, and you choose which to add. Two levels down is not searched — a skill buried that deep is usually a repository's example or test fixture. Each candidate is checked like any imported folder (a valid `name` and `description`, no symlink that leaves the folder, at most 50 MB), and one that fails is shown with its reason rather than failing the rest.
+**Finding the skill.** One rule for every source: a folder whose top holds `SKILL.md` is a skill. If the top of what you handed over is not one, each folder one level down that is becomes a candidate, and you choose which to add. Two levels down is not searched — a skill buried that deep is usually a repository's example or test fixture. Each candidate is checked like any imported folder (`SKILL.md` present, a valid `name`, a `description` of at most 1024 characters, no symlink that leaves the folder or points at a folder, at most 50 MB — the only rules a skill must meet), and one that fails is shown with its reason rather than failing the rest.
 
 **A name that is taken** is refused unless you choose Replace. Replacing swaps the master folder's content in place, so the skill keeps its reach and its delivered links.
 

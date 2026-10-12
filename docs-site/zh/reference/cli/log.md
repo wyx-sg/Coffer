@@ -40,6 +40,7 @@ coffer log audit [OPTIONS]
 | `--kind` <span class="cli-chip">选项</span> | text |  | Only this resource kind |
 | `--name` <span class="cli-chip">选项</span> | text |  | Only this resource (needs --kind) |
 | `--event-type` <span class="cli-chip">选项</span> | text |  | Only this event type |
+| `--nature` <span class="cli-chip">选项</span> | text |  | change for changes only, use for a secret's uses only (handed out or revealed) |
 | `--since` <span class="cli-chip">选项</span> | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
 | `--limit` <span class="cli-chip">选项</span> | integer (1-500) | `50` | Most entries to print |
 | `--cursor` <span class="cli-chip">选项</span> | text |  | Read the page after this one: the next_cursor a previous read printed |

@@ -33,6 +33,7 @@ from coffer.application.channel.service import ChannelService
 from coffer.application.channel.thread_tool import ThreadReader, channel_read_thread_tool
 from coffer.application.chat import questions
 from coffer.domain.channel.config import parse_channel_config
+from coffer.domain.channel.envelopes import ChannelCapabilities
 from coffer.domain.chat.question import QuestionBlock
 from coffer.domain.resource import Resource
 from coffer.domain.secrets import SecretDestination, channel_destination
@@ -45,10 +46,14 @@ from coffer.infrastructure.channel.persistence import (
     ChannelThreadCursorRepo,
 )
 from coffer.infrastructure.channel.seatalk import SeaTalkAdapter
+from coffer.infrastructure.channel.seatalk_caps import SEATALK_CAPABILITIES
 from coffer.infrastructure.channel.seatalk_ws_controller import SeaTalkWebSocketController
 from coffer.infrastructure.channel.telegram import TelegramAdapter
+from coffer.infrastructure.channel.telegram_caps import telegram_capabilities
+from coffer.infrastructure.channel.telegram_features import FeatureSet
 from coffer.infrastructure.secret.encrypted_store import EncryptedSecretStore
 from coffer.surfaces.http.channel_credential_wiring import build_credential_check
+from coffer.surfaces.http.channel_prompt_preview import set_channel_prompt_reader
 from coffer.surfaces.http.channel_routes import (
     get_channel_service,
     set_channel_avatars,
@@ -194,9 +199,16 @@ def wire_channel_kind(
     # channels "Tell a channel-driven agent it is on a chat channel"): chat
     # composes the note, only the channel kind knows platform, chat kind and
     # what the running transport renders.
-    set_channel_note_reader(
-        ChannelNoteReader(resources=resource_svc, threads=threads, binding=processor.binding)
+    note_reader = ChannelNoteReader(
+        resources=resource_svc,
+        threads=threads,
+        binding=processor.binding,
+        idle_capabilities=_idle_capabilities,
     )
+    set_channel_note_reader(note_reader)
+    # The Settings tab shows the same note (spec channels "Let the owner rewrite
+    # a channel's reply style").
+    set_channel_prompt_reader(note_reader)
 
     runtime = ChannelRuntime(
         resources=resource_svc,
@@ -289,3 +301,14 @@ def _channel_secret_destination(
         return dest, {"token": parsed.bot_token_ref}
     dest = channel_destination(resource.uid, resource.name, "seatalk", parsed.app_id)
     return dest, {"secret": parsed.app_secret_ref}
+
+
+def _idle_capabilities(channel_type: str) -> ChannelCapabilities | None:
+    """What a channel type's transport declares when it runs, for the Settings
+    tab's preview of a stopped channel. Telegram's rich-message answer is its
+    first guess before the server has refused anything."""
+    if channel_type == "seatalk":
+        return SEATALK_CAPABILITIES
+    if channel_type == "telegram":
+        return telegram_capabilities(FeatureSet())
+    return None

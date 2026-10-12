@@ -192,14 +192,14 @@ No secret event carries a secret value; each records the ref, the standalone sec
 Some events are no longer recorded: `agent_config_file_written` and `agent_config_file_deleted`, because the web UI no longer edits an agent's config file; `knowledge_curated` and `provider_internal_default_set`; and the earlier memory layer's `memory_aggregated`, `memory_distilled`, `memory_delivery_installed`, `memory_delivery_removed`, `memory_delivery_fired`, `memory_note_edited` and `memory_note_deleted`. Rows already in the log keep their labels in the Activity page, so they still read in plain words. `vault_file_restored` is recorded: restoring a version from a History tab or drawer is Coffer's own write. An edit made on disk, or a restore an agent commits itself, is a vault commit naming `Coffer-Writer: disk` or `agent`; the vault's git history answers who changed the file.
 
 - `secret_revealed` — a person revealed or copied a value in the desktop app, behind a presence check. It is the only way a value is shown, since no route, command or tool returns one.
-- `secret_resolved` — `coffer run` resolved a standalone secret into one child process. The row names the secret, the program and the working directory, never the value or the rest of the command line.
+- `secret_resolved` — a secret's value was handed to where it is used. Coffer writes it (actor `coffer`) when it decrypts a secret for a server, tool or provider it starts, naming the ref, the destination's kind, uid and name, and the slot (the variable or header), at most once a minute per secret, destination and slot. `coffer run` writes it when it resolves a standalone secret into one child process, naming the secret, the program and the working directory, never the value or the rest of the command line.
 - `secret_local_access_revoked` — a person revoked a standalone secret's grant to local programs, so `coffer run` can no longer resolve it. Granting is recorded as an ordinary approval.
 - `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected` — a secret waited to be sent somewhere new (or a value in use waited to be replaced, or the protection waited to be switched off), and a person answered. See [Secrets](/guides/secrets#approvals).
 - `master_key_exported` — the desktop app wrote a key backup, behind a presence check. No command or route exports the key.
 
-Decrypting a secret to spawn an upstream is not an audit event.
+`secret_resolved` and `secret_revealed` are **secret uses**: a value left the vault and nothing changed. They outnumber the changes many times over, so the audit route reads them apart: `nature=use` returns only these two events and `nature=change` everything else, applied before paging and counting and bound into the cursor (`SECRET_USE_EVENTS` in `domain/audit.py`; see [Secret Uses Are Read Apart From Changes](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/secret-uses-are-read-apart-from-changes.md)). A new event of that nature joins the set, or it lands among the changes.
 
-You read the audit log from the **Changes** tab of the Activity page, with `coffer log audit` (`--kind`, `--name`, `--event-type`, `--since`, `--limit`, `--json`), or through `GET /api/v1/audit`. See [Activity and audit](/guides/activity).
+You read the changes from the **Changes** tab of the Activity page and the uses from its **Secret use** tab, with `coffer log audit` (`--kind`, `--name`, `--event-type`, `--nature`, `--since`, `--limit`, `--json`), or through `GET /api/v1/audit`. See [Activity and audit](/guides/activity).
 
 ## The MCP invocation log
 
@@ -291,7 +291,7 @@ The realistic reader of these records is often an agent at the moment something 
 
 | Command | Reads |
 | --- | --- |
-| `coffer log audit [--kind] [--name] [--event-type] [--since] [--trace] [--limit] [--json]` | the audit log, newest first |
+| `coffer log audit [--kind] [--name] [--event-type] [--nature] [--since] [--trace] [--limit] [--json]` | the audit log, newest first |
 | `coffer log mcp [--server] [--status ok\|error] [--since] [--trace] [--limit] [--json]` | the MCP invocation log, newest first |
 | `coffer log daemon [--errors] [--since] [--trace] [--limit] [--json]` | the tail of `daemon.log`, through the same tolerant reader as the Activity page |
 | `coffer daemon status [--tasks] [--workers] [--json]` | the event-loop lag and the background task counts (by name with `--tasks`, each worker's last and next run with `--workers`), beside the daemon's version and port |

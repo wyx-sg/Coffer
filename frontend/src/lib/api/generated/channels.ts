@@ -184,6 +184,23 @@ export interface components {
             /** Sender Id */
             sender_id: string;
         };
+        /**
+         * ChannelPromptOut
+         * @description One chat kind's system prompt, as the page shows it.
+         */
+        ChannelPromptOut: {
+            /** Channel Note */
+            channel_note: string;
+            /** Default Changed */
+            default_changed: boolean;
+            /** Default Style */
+            default_style: string;
+        };
+        /** ChannelPromptsOut */
+        ChannelPromptsOut: {
+            direct: components["schemas"]["ChannelPromptOut"];
+            group: components["schemas"]["ChannelPromptOut"];
+        };
         /** ChannelStatusOut */
         ChannelStatusOut: {
             /**
@@ -211,6 +228,7 @@ export interface components {
             pending_pairing: boolean;
             /** People */
             people: components["schemas"]["ChannelPersonOut"][];
+            prompts: components["schemas"]["ChannelPromptsOut"] | null;
             /** Running */
             running: boolean;
             secret_approval: components["schemas"]["SecretApprovalOut"] | null;
@@ -343,17 +361,27 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             /**
-             * Direct System Prompt
+             * Direct Reply Style
              * @default
              */
-            direct_system_prompt: string;
+            direct_reply_style: string;
+            /**
+             * Direct Reply Style Base
+             * @default
+             */
+            direct_reply_style_base: string;
             /** Directories */
             directories: string[];
             /**
-             * Group System Prompt
+             * Group Reply Style
              * @default
              */
-            group_system_prompt: string;
+            group_reply_style: string;
+            /**
+             * Group Reply Style Base
+             * @default
+             */
+            group_reply_style_base: string;
             /**
              * Ignore Other Mentions
              * @default false
@@ -418,17 +446,27 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             /**
-             * Direct System Prompt
+             * Direct Reply Style
              * @default
              */
-            direct_system_prompt: string;
+            direct_reply_style: string;
+            /**
+             * Direct Reply Style Base
+             * @default
+             */
+            direct_reply_style_base: string;
             /** Directories */
             directories: string[];
             /**
-             * Group System Prompt
+             * Group Reply Style
              * @default
              */
-            group_system_prompt: string;
+            group_reply_style: string;
+            /**
+             * Group Reply Style Base
+             * @default
+             */
+            group_reply_style_base: string;
             /**
              * Ignore Other Mentions
              * @default false

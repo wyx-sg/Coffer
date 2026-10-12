@@ -151,7 +151,7 @@ A channel turn runs against the config directory of the registered agent of its 
 
 On top of the agent's own system prompt, Coffer appends, in this order:
 
-1. A note that the agent is on a chat channel — keep replies short, and it cannot click dialogs on your computer — then the channel's own system prompt for this chat kind, if set, under "Instructions from the channel's owner:" (see [Your own system prompts](/guides/channels#your-own-system-prompts)).
+1. A note that the agent is on a chat channel — how to send files, ask you with buttons, and that it cannot click dialogs on your computer — then, under "Reply style:", the channel's reply style for this chat kind: Coffer's default, or your rewrite of it (see [The system prompt and your reply style](/guides/channels#your-own-system-prompts)).
 2. The note naming the model Coffer put the agent on.
 
 A session you open from the Conversations page, or start with **New conversation**, runs in your terminal, outside Coffer, so it gets neither note. Memory reaches the agent the same way in both: through the agent's own memory, which [memory sync](/guides/memory) fills with what your other agents learned.

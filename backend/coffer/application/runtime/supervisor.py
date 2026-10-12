@@ -41,6 +41,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from coffer.application.runtime.cancellation import raise_if_stopping
+
 _logger = logging.getLogger(__name__)
 
 #: How many recent crashes the status surface can show.
@@ -129,6 +131,7 @@ class TaskSupervisor:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
+                raise_if_stopping(exc)
                 self._record(name, exc, restarting=not self._closing)
                 if self._closing:
                     return

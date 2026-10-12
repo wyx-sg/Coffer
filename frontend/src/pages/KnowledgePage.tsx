@@ -27,9 +27,9 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Navigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, FolderPlus, Plus, Upload } from "lucide-react";
 
 import { ListLoadError } from "@/components/ListPaneStates";
+import { KnowledgeAddMenu } from "@/components/knowledge/KnowledgeAddMenu";
 import { KnowledgeDialogs, type KnowledgeDialog } from "@/components/knowledge/KnowledgeDialogs";
 import { KnowledgeNav } from "@/components/knowledge/KnowledgeNav";
 import { KnowledgePane } from "@/components/knowledge/KnowledgePane";
@@ -38,8 +38,6 @@ import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { ExperimentalTag } from "@/components/ExperimentalTag";
 import { PageHeader } from "@/components/PageHeader";
 import { SplitView } from "@/components/SplitView";
-import { Button } from "@/components/ui/button";
-import { ActionMenu } from "@/components/ui/menu";
 import { getTidyHandoff } from "@/lib/api/knowledge";
 import { knowledgeKey } from "@/lib/api/queryKeys";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
@@ -97,31 +95,7 @@ export function KnowledgePage() {
           list.length > 0 ? (
             <>
               <AgentHandoff prompt={tidyAllPrompt} label={t("knowledge.tidy.all")} help={false} />
-              <ActionMenu
-                label={t("knowledge.add.button")}
-                trigger={
-                  <Button aria-haspopup="menu">
-                    <Plus aria-hidden /> {t("knowledge.add.button")}
-                    <ChevronDown aria-hidden />
-                  </Button>
-                }
-                actions={[
-                  {
-                    key: "upload",
-                    icon: Upload,
-                    label: t("knowledge.add.upload"),
-                    description: t("knowledge.add.uploadHint"),
-                    onSelect: () => setDialog("upload"),
-                  },
-                  {
-                    key: "create",
-                    icon: FolderPlus,
-                    label: t("knowledge.add.create"),
-                    description: t("knowledge.add.createHint"),
-                    onSelect: () => setDialog("create"),
-                  },
-                ]}
-              />
+              <KnowledgeAddMenu onSelect={setDialog} canUpload={list.some((c) => !c.linked)} />
             </>
           ) : null
         }
@@ -147,7 +121,10 @@ export function KnowledgePage() {
       <div className={shell}>
         {header}
         <div className="min-h-0 flex-1 overflow-auto">
-          <KnowledgeWelcomePanel onCreate={() => setDialog("create")} />
+          <KnowledgeWelcomePanel
+            onCreate={() => setDialog("create")}
+            onLink={() => setDialog("link")}
+          />
         </div>
         {dialogs}
       </div>

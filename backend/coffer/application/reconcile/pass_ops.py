@@ -14,6 +14,7 @@ import logging
 
 from coffer.application.audit_service import AuditService
 from coffer.application.reconcile.ports import ReconcileTarget
+from coffer.application.runtime.cancellation import raise_if_stopping
 from coffer.domain.reconcile import (
     Disposition,
     ItemResult,
@@ -63,6 +64,7 @@ async def settle_change(
     try:
         applied = await target.apply(change)
     except Exception as exc:
+        raise_if_stopping(exc)
         _log.warning("reconcile.apply_failed %s: %r", change.id, exc)
         return ItemResult(change, Outcome.FAILED, repr(exc))
     if applied.event is None:
@@ -89,6 +91,7 @@ async def settle_change(
             except Exception:
                 # The write stands unaudited; the daemon log is the record.
                 _log.exception("reconcile.undo_failed %s", change.id)
+        raise_if_stopping(exc)
         return ItemResult(change, Outcome.FAILED, f"audit not recorded: {exc!r}")
     return ItemResult(change, Outcome.APPLIED)
 

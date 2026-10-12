@@ -134,11 +134,13 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`every-vault-file-carries-its-format-version`](every-vault-file-carries-its-format-version.md) | Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades |
 | [`every-vault-write-is-a-validated-commit-naming-its-writer`](every-vault-write-is-a-validated-commit-naming-its-writer.md) | Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer |
 | [`audit-and-retention`](audit-and-retention.md) | Audit Every Change With Its Actor, Log Every Invocation, Prune Per Table |
+| [`secret-uses-are-read-apart-from-changes`](secret-uses-are-read-apart-from-changes.md) | Secret Uses Are Read Apart From Changes |
 | [`runs-db-gives-pruned-space-back`](runs-db-gives-pruned-space-back.md) | `runs.db` Gives Pruned Space Back With a Threshold `VACUUM`, and Copies Itself With `VACUUM INTO` |
 | [`one-level-triggered-reconciler-compares-parameters`](one-level-triggered-reconciler-compares-parameters.md) | One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters |
 | [`wire-contract-generated-from-the-pydantic-models`](wire-contract-generated-from-the-pydantic-models.md) | The Wire Contract Is Generated From the Pydantic Models, and the Frontend Client From the Contract |
 | [`background-work-runs-supervised-and-correlated`](background-work-runs-supervised-and-correlated.md) | Background Work Runs Supervised, and Every Record Carries One Correlation Id |
 | [`background-workers-wake-on-events`](background-workers-wake-on-events.md) | Background Workers Wake on Events, Fall Back Rarely, and Stop When Nothing Needs Them |
+| [`background-loops-stop-when-their-task-is-cancelled`](background-loops-stop-when-their-task-is-cancelled.md) | Background Loops Stop When Their Task Is Cancelled, Even If Cleanup Raised Something Else |
 | [`platform-differences-live-behind-one-platform-port`](platform-differences-live-behind-one-platform-port.md) | Platform Differences Live Behind One Platform Port; Only macOS Ships |
 
 ### Daemon, shell & distribution
@@ -199,10 +201,13 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`channel-adapter-framework`](channel-adapter-framework.md) | Channels Are Thin Transport Adapters Over One Shared Core, Supervised In-Daemon |
 | [`channels-are-machine-local-resources`](channels-are-machine-local-resources.md) | Channels Are Machine-Local Resources, Like Agents |
 | [`channel-owner-gate`](channel-owner-gate.md) | A Channel Answers Only Its Paired Owner, and Fails Closed in Groups |
-| [`channel-conversation-identity-and-context`](channel-conversation-identity-and-context.md) | A Channel Conversation Is Keyed by (Channel, Chat, Thread) and Grounded in Its Thread and Quote |
+| [`channel-conversation-identity`](channel-conversation-identity.md) | A Channel Conversation Is Keyed by (Channel, Chat, Thread); a Direct Chat Is One Conversation Until `/thread` Opens Another |
+| [`channel-thread-context-is-a-bounded-slice`](channel-thread-context-is-a-bounded-slice.md) | A Channel Turn Folds a Bounded Slice of Its Thread, Read by the Transport |
+| [`a-burst-of-channel-messages-is-one-turn`](a-burst-of-channel-messages-is-one-turn.md) | A Burst of Channel Messages Is One Turn, Released After a Per-Channel Quiet Window |
 | [`channel-switches-structural-vs-parametric`](channel-switches-structural-vs-parametric.md) | Channel Switches: the Agent Opens a New Conversation, the Model Applies Next Turn |
 | [`channel-live-surface-strategy`](channel-live-surface-strategy.md) | A Channel Turn Shows Progress on a Preview Surface Where One Exists, and the Reply Is the Answer Alone |
 | [`channel-attachments`](channel-attachments.md) | Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send |
+| [`channel-prompt-fixed-note-and-editable-style`](channel-prompt-fixed-note-and-editable-style.md) | A Channel's System Prompt Is a Fixed Channel Note Plus a Reply Style the Owner Can Rewrite |
 | [`chat-attachment-uploads`](chat-attachment-uploads.md) | The Chat Page Uploads a File First and Sends Its Id, Into a Sibling Media Directory |
 | [`seatalk-websocket-inbound`](seatalk-websocket-inbound.md) | SeaTalk Inbound Is One Outbound WebSocket, Through an Operator-Supplied SDK |
 | [`telegram-long-polling`](telegram-long-polling.md) | Telegram Inbound Is a Long Poll That Commits the Offset After Dispatch |
@@ -216,7 +221,9 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`knowledge-is-plain-files`](knowledge-is-plain-files.md) | Knowledge Is a Directory of Markdown Files, Not an Index |
 | [`tidying-knowledge-is-the-agents-job`](tidying-knowledge-is-the-agents-job.md) | Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change |
 | [`knowledge-is-a-wiki-of-pages-compiled-from-kept-sources`](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md) | Knowledge Is a Wiki of Pages Compiled From Kept Sources |
+| [`linked-knowledge-folders-are-read-only-and-machine-local`](linked-knowledge-folders-are-read-only-and-machine-local.md) | A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local |
 | [`sync-memory-into-each-agents-own-memory`](sync-memory-into-each-agents-own-memory.md) | Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault |
+| [`codex-memory-identity-is-content-with-rewrite-carry-over`](codex-memory-identity-is-content-with-rewrite-carry-over.md) | A Codex Memory Is Identified by Its Content, and a Rewrite Keeps the Identity |
 | [`memory-page-lists-memories-by-scope`](memory-page-lists-memories-by-scope.md) | The Memory Page Lists the Memories by Scope; the Sync Shows Only When It Needs the Person |
 
 ### Sync & secrets
@@ -231,7 +238,9 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`credential-references`](credential-references.md) | Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use |
 | [`secrets-cross-machines-only-as-ciphertext`](secrets-cross-machines-only-as-ciphertext.md) | Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository |
 | [`standalone-secrets-are-named-references-injected-into-one-child`](standalone-secrets-are-named-references-injected-into-one-child.md) | Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process |
+| [`a-secret-header-stores-the-credential-and-its-slot-names-the-scheme`](a-secret-header-stores-the-credential-and-its-slot-names-the-scheme.md) | A Secret Header Stores the Credential Alone, and Its Slot Names the Auth Scheme |
 | [`only-a-present-human-sees-a-secret-or-sends-it-somewhere-new`](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md) | Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New |
+| [`one-replace-dialog-for-every-secret`](one-replace-dialog-for-every-secret.md) | One Replace Dialog for Every Secret a Resource Uses, Shown Inline in Edit Dialogs |
 
 ### Documentation
 

@@ -22,11 +22,17 @@ import { Drawer } from "@/components/Drawer";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { describeActivity } from "@/lib/activity/activityText";
-import { callServerLabel, recordLogger, type ActivityRecord } from "@/lib/activity/records";
+import {
+  callServerLabel,
+  isSecretUse,
+  recordLogger,
+  type ActivityRecord,
+} from "@/lib/activity/records";
 import { useKindPageOpen } from "@/lib/hooks/useFeatures";
 import {
   UID_ADDRESSED_KINDS,
   changeLink,
+  clockTime,
   nearby,
   offsetLabel,
   whenLabel,
@@ -150,7 +156,9 @@ export function RecordDrawer({ record, rows, agents, transports, onSelect, onClo
     footer.push(copyButton, openButton);
   }
 
-  const kind = t(`activity.drawer.kinds.${record.source}`);
+  const kind = t(
+    `activity.drawer.kinds.${record.source === "change" && isSecretUse(record.entry) ? "use" : record.source}`,
+  );
   const when = record.at ? whenLabel(t, record.at, record.source !== "change", i18n.language) : "";
 
   return (
@@ -167,6 +175,20 @@ export function RecordDrawer({ record, rows, agents, transports, onSelect, onClo
       bodyClassName="flex flex-col gap-5"
     >
       {record.source === "change" ? <ChangeBody t={t} entry={record.entry} /> : null}
+      {record.source === "change" && record.folded?.length ? (
+        <Section
+          title={t("activity.folded.title", { count: record.folded.length + 1 })}
+          gap="tight"
+        >
+          <ul className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs text-text-muted">
+            {[record.entry, ...record.folded].map((e) => (
+              <li key={e.id}>
+                <time dateTime={e.timestamp}>{clockTime(e.timestamp, false)}</time>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      ) : null}
       {call ? (
         <CallBody
           t={t}

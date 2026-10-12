@@ -1,8 +1,15 @@
 _VENV_PY := .venv/bin/python3
-PY := $(or $(and $(wildcard $(_VENV_PY)),$(_VENV_PY)),python3)
+# Locally the interpreter is always this checkout's own venv. There is no
+# fallback to a system python3: a bare interpreter has none of the locked
+# dependencies, so every gate would fail for reasons unrelated to the code. A CI
+# job (CI=true) provisions its interpreter itself and may have no .venv, so it
+# uses python3 from PATH. `=` (not `:=`) makes the check lazy: only a recipe
+# that actually expands $(PY) fails when the venv is missing, so `make install`,
+# `clean` and `help` still work without one.
+PY = $(if $(wildcard $(_VENV_PY)),$(_VENV_PY),$(if $(filter true,$(CI)),python3,$(error $(_VENV_PY) is missing: run 'make install' first (every checkout and worktree needs its own .venv))))
 BACKEND := backend
-# Every Python step imports this checkout's backend, never whichever checkout the
-# shared venv's editable install points at (worktrees share one venv).
+# Every Python step imports this checkout's backend, never whichever checkout a
+# venv's editable install points at.
 export PYTHONPATH := $(CURDIR)/$(BACKEND)$(if $(PYTHONPATH),:$(PYTHONPATH))
 FRONTEND := frontend
 
@@ -21,7 +28,24 @@ PYTEST_ARGS ?=
 PYTEST_TIMEOUT ?= 300
 PYTEST_XDIST := -n $(PYTEST_WORKERS) --dist loadgroup
 
-.PHONY: help install install-e2e-browsers hooks \
+# Node is pinned to CI's major (.nvmrc, "engines" in each package.json). Under
+# another major vitest prints a spurious undici AbortSignal error and exits 1
+# with every test passing, so each target that runs npm/npx/vitest/playwright
+# depends on node-check and stops early with a clear message.
+NODE_MAJOR := 20
+
+node-check:
+	@command -v node >/dev/null 2>&1 || { \
+		echo "node-check: node not found; install Node $(NODE_MAJOR) (see .nvmrc, e.g. 'nvm install')"; exit 1; \
+	}
+	@v=$$(node --version); \
+	case "$$v" in \
+		v$(NODE_MAJOR).*) ;; \
+		*) echo "node-check: found Node $$v but this repo needs Node $(NODE_MAJOR), the version CI uses (.nvmrc)."; \
+		   echo "  Run 'nvm use' (or 'nvm install'), then retry."; exit 1;; \
+	esac
+
+.PHONY: node-check help install install-e2e-browsers hooks \
 	verify verify-all \
 	verify-unit verify-integration verify-contract verify-e2e verify-visual visual-update docs-shots verify-acceptance openspec-validate verify-benchmark verify-secrets \
 	verify-installed-mcp \
@@ -167,7 +191,7 @@ openspec-validate:
 		echo "openspec-validate: node_modules/.bin/openspec missing — run 'make install'"; exit 1; \
 	fi
 
-lint:
+lint: node-check
 	$(PY) scripts/check_file_sizes.py
 # The wire contracts are generated from the Pydantic models (Principles,
 # "Contract direction"); this fails when a checked-in contract is not what the
@@ -205,7 +229,7 @@ lint:
 # contract violations for modules this tree does not have. In the main
 # checkout it resolves to the same code either way, so setting it always is
 # free and makes the two environments agree.
-	PYTHONPATH=$(BACKEND) .venv/bin/lint-imports --config $(BACKEND)/pyproject.toml
+	PYTHONPATH=$(BACKEND) $(dir $(PY))lint-imports --config $(BACKEND)/pyproject.toml
 # `npm run knip` is the frontend's dead-code gate — eslint.config.js carries
 # only the react-hooks rules and one no-restricted-syntax, which is why dead
 # modules, dead hooks and dead query keys once accumulated unnoticed. Its
@@ -221,7 +245,7 @@ lint:
 	PYTHONPATH=$(BACKEND) $(PY) scripts/dump_i18n_backend_keys.py --check
 	cd $(FRONTEND) && npm run lint && npm run typecheck && npm run knip
 
-verify-unit:
+verify-unit: node-check
 	$(PY) scripts/check_unit_purity.py
 	$(PY) -m pytest $(PYTEST_XDIST) $(PYTEST_ARGS) $(BACKEND)/tests/unit
 	@if [ ! -d $(FRONTEND)/node_modules ]; then \
@@ -269,7 +293,7 @@ verify-contract:
 # `npx playwright test` runs BOTH projects in e2e/playwright.config.ts: `web`
 # (browser specs under e2e/web/specs/) and `mcp` (cross-process shim+daemon
 # specs under e2e/mcp/specs/, no browser).
-verify-e2e:
+verify-e2e: node-check
 	@if [ ! -f e2e/playwright.config.ts ]; then \
 		echo "verify-e2e: no e2e/playwright.config.ts — skipping"; \
 	elif [ ! -d e2e/node_modules ]; then \
@@ -308,14 +332,14 @@ verify-installed-mcp:
 # verify-e2e — see .agents/testing.md "Visual baseline".
 VISUAL_PW := npx playwright test -c playwright.visual.config.ts
 
-verify-visual:
+verify-visual: node-check
 	@if [ ! -d e2e/node_modules ]; then \
 		echo "verify-visual: e2e/node_modules missing — run 'make install' first"; exit 1; \
 	else \
 		cd e2e && $(VISUAL_PW); \
 	fi
 
-visual-update:
+visual-update: node-check
 	@if [ ! -d e2e/node_modules ]; then \
 		echo "visual-update: e2e/node_modules missing — run 'make install' first"; exit 1; \
 	else \
@@ -325,7 +349,7 @@ visual-update:
 # Docs images (e2e/playwright.docs.config.ts): its own seeded daemon (:18200) and
 # Vite (:5175); writes docs-site/public/shots/<lang>/<theme>/<name>.webp. Not part
 # of verify: a run changes files, and a person reviews the image diff.
-docs-shots:
+docs-shots: node-check
 	@if [ ! -d e2e/node_modules ]; then \
 		echo "docs-shots: e2e/node_modules missing — run 'make install' first"; exit 1; \
 	else \
@@ -353,7 +377,7 @@ eval-curate:
 # empirical data from real feature code. When ready, add `--cov-fail-under=N`
 # here (and `--coverage.thresholds.lines=N` on the vitest side) via an
 # amendment to docs-site/architecture/principles.md.
-coverage:
+coverage: node-check
 	@if [ -d $(BACKEND)/tests ]; then \
 		$(PY) -m pytest $(BACKEND)/tests --cov=coffer --cov-report=term-missing --cov-report=xml; \
 	fi
@@ -394,11 +418,11 @@ lock:
 # eliminates the race where Vite starts first, the browser fetches /,
 # cofferDevTokenInjection finds no daemon.json, and injects no token — so
 # the page bakes in the wrong base URL and shows "Failed to fetch" forever.
-dev:
+dev: node-check
 	@echo "Starting backend (:38470) and frontend (:5173). Ctrl-C to stop both."
 	@trap 'kill 0' EXIT; \
 	DAEMON_JSON="$$HOME/.coffer/daemon.json"; \
-	(cd $(BACKEND) && COFFER_DEV_CORS=1 PYTHONPATH=. ../.venv/bin/python3 -m coffer.infrastructure.daemon.entry) & \
+	(cd $(BACKEND) && COFFER_DEV_CORS=1 PYTHONPATH=. $(abspath $(PY)) -m coffer.infrastructure.daemon.entry) & \
 	echo "Waiting for daemon to become ready (up to 30 s)…"; \
 	_elapsed=0; \
 	until [ -f "$$DAEMON_JSON" ]; do \
@@ -428,7 +452,7 @@ contracts:
 	$(PY) scripts/gen_contracts.py
 	$(MAKE) frontend-codegen
 
-frontend-codegen:
+frontend-codegen: node-check
 	@if [ -d $(FRONTEND) ]; then \
 		cd $(FRONTEND) && npm run codegen; \
 	fi
@@ -456,7 +480,7 @@ refresh-secret-rules:
 # VitePress fails the build on a dead internal link or on Markdown Vue cannot
 # compile, so `verify` runs it right after `lint`: the same build CI's Docs
 # site job runs, found before a push rather than after.
-docs-build:
+docs-build: node-check
 	@if [ ! -d docs-site/node_modules ]; then \
 		echo "docs-build: installing docs-site dependencies"; \
 		cd docs-site && npm ci; \
@@ -482,7 +506,7 @@ bundle-binaries:
 # bundle.macOS.files, which is why this target has to run PyInstaller first. Tauri
 # resolves each `binaries/<name>` entry to `binaries/<name>-<target-triple>`,
 # so the freshly-built binaries are staged under that suffixed name.
-desktop:
+desktop: node-check
 	@echo "make desktop: this runs PyInstaller for four binaries before the"
 	@echo "  Tauri build — expect roughly 50 minutes on a laptop. The result is"
 	@echo "  UNSIGNED: macOS Gatekeeper will block a downloaded copy of it."

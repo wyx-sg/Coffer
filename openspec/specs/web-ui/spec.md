@@ -25,6 +25,14 @@ for the axis it replaced (sidebar policy kept from it: no "soon" placeholders).
 appears in the sidebar only once it ships; Activity is not it, because a record
 of what happened is not a measurement of how the system is doing.
 
+Coffer shows files; the person's own editor changes them. Viewing a file Coffer
+manages or reads — a knowledge document, a memory, a skill file, an agent's
+config file — happens in Coffer's own UI, and so does a vault file's history,
+including putting back an earlier version of it. Changing a file's content is never done in
+Coffer's UI: every file viewer is read-only and offers **Open in editor** (see
+"Let the user choose an external editor"). A config file is previewed raw and
+read-only, as the agent reads it, never through a form that rewrites it.
+
 This capability adds no REST route and no backend of its own. Every screen
 renders over routes and entities other capabilities own, and those are named
 where they are used. The Activity page in particular reads three records with
@@ -847,17 +855,38 @@ including what broke) — MUST reach a person through one page at `/activity`,
 under System. The header carries the title, a **Live** mark (a dot and the word,
 **Reconnecting…** while the daemon's change feed is closed), the line "Every
 change, tool call and daemon record, newest first."
-Four tabs follow, without counts: **Everything**, the default, merging the
-changes, the calls and the daemon's warnings and errors into one newest-first
-stream, then one tab per record — **Changes**, **Tool calls**, **Daemon log** —
+Five tabs follow, without counts: **Everything**, the default, merging the
+changes, the secret uses, the calls and the daemon's warnings and errors into one
+newest-first stream, then **Changes**, **Secret use**, **Tool calls** and
+**Daemon log** —
 each a newest-first table in a bordered box with the columns that record
 actually has: Everything — time, an icon, the event, who (an agent or the actor)
-and how long a call took; Changes — time, an icon, the change, who; Tool calls —
+and how long a call took; Changes — time, an icon, the change, who; Secret use —
+time, a key icon, the use, who; Tool calls —
 time, agent, `server.` (muted) and tool, how long it took (right-aligned,
 sortable over the loaded rows) and the status as a dot and its word; Daemon log —
 time with milliseconds, level, logger and message. The day a run of rows falls
 on is a sunken heading row inside the box ("Today · Sep 29"); no summary line
-sits above the table. A tab whose log failed to load shows a warning icon. Each tab pages older records on request:
+sits above the table.
+
+Changes holds what changed; Secret use holds every time a secret's value was
+used — handed by Coffer to a server, a custom tool or a model connection it
+starts, handed to a program by `coffer run`, or revealed in the Coffer app
+([resource-framework](../resource-framework/spec.md) "Tell a secret's use from a
+change in the audit log"). A secret use shows a key icon wherever it appears, and
+uses of one secret by one destination less than ten minutes apart fold into one
+row ending in "×N", newest first, the drawer listing each.
+
+Every change and use MUST read as a sentence that names what it acted on and,
+for a use, where the value went — the secret's name, the server, tool or
+connection and the environment variable or header it filled, or the program and
+folder `coffer run` started; a file's path; a sync round's outcome and file
+counts; the setting and its old and new value; the approval and what it
+approves — from fields the record already holds, so records written before this
+read the same way. A sentence never names a secret's value. Who MUST read in
+words: "You · web UI", "You · Coffer app", "You · command line", "API",
+"Coffer" for Coffer itself (`coffer`, `system` and `system:<worker>`), "Sync",
+"Outside Coffer" for a vault file edited on disk, or the agent's name. A tab whose log failed to load shows a warning icon. Each tab pages older records on request:
 the box's last row says "Showing 30 of 1,204 · next 50 from before 13:58" with
 **Load 50 more**, and only once everything kept is shown does it say so, with how
 long tool calls are kept and a link to Settings › Data.
@@ -868,6 +897,18 @@ long tool calls are kept and a link to Settings › Data.
 - **THEN** Everything shows all three newest first, and each other tab renders that record's own newest-first table with the columns that record has, and no tab carries a count
 - **AND** a change reads as a plain-language line, not a raw event code
 - **AND** Changes has its own Kind filter listing the eleven kinds of change
+
+#### Scenario: a secret Coffer hands to a server reads where it went
+- **GIVEN** Coffer started the MCP server `github`, handing it the secret `GITHUB_TOKEN` in the environment variable `GITHUB_TOKEN`, twice within five minutes, and `coffer run` handed `OPENAI_KEY` to `python` in `~/proj`
+- **WHEN** the user opens the Secret use tab
+- **THEN** one row reads "Handed secret GITHUB_TOKEN to MCP server github (environment variable GITHUB_TOKEN)" with "×2", a key icon and who "Coffer"
+- **AND** another reads "Handed secret OPENAI_KEY to coffer run: python, in ~/proj"
+- **AND** neither row appears on the Changes tab, and no row says a secret went to `coffer run` when Coffer handed it to a server
+
+#### Scenario: a change names what it changed
+- **GIVEN** the user stored the secret `SENTRY_TOKEN` over an older value, a sync round pulled 3 files and pushed 1, and a vault file `knowledge/notes/x.md` was edited on disk
+- **WHEN** the user opens the Changes tab
+- **THEN** the rows read "Stored secret SENTRY_TOKEN, replacing its value", "Synced: pulled 3 files, pushed 1" and "Edited vault file knowledge/notes/x.md on disk"
 
 #### Scenario: the daemon tab reads every writer in the log
 - **GIVEN** `daemon.log` holds lines from several writers at once — Coffer's own JSON, an upstream's `LEVEL - logger - message` lines, uvicorn and rich — with a colour-escaped line among them and a traceback written under the record that raised it
@@ -887,15 +928,16 @@ long tool calls are kept and a link to Settings › Data.
 Every Activity tab MUST filter in one row — the search first (240 wide), then
 the time range and the pills, with **Clear filters** at the far right while
 anything is set — and show no counts in it. Everything: search, time range,
-**By** and **Kind**; Changes: search, time range, **By** and **Kind**; Tool calls:
+**By** and **Kind**; Changes: search, time range, **By** and **Kind**; Secret use:
+search, time range and **By**; Tool calls:
 a segmented **All / OK / Failed** first (Failed is an error, a timeout or a
 denial), then search, time range and **By**; Daemon log: a segmented **All /
 Info / Warnings / Errors** first, then search, time range and **Logger**. There
 is no filter for a server: the search matches a server's name. **By** chooses
 several values, listing the agents and, under "Not an agent", you (the web UI,
 the desktop app), the command line, Coffer itself and sync, last; on Tool calls
-it lists agents only. **Kind** on Everything is three flat values — Tool calls,
-Changes, Daemon records — and on Changes the eleven kinds of change (a resource
+it lists agents only. **Kind** on Everything is four flat values — Tool calls,
+Changes, Secret uses, Daemon records — and on Changes the eleven kinds of change (a resource
 kind, or secrets, sync, settings and CLIs for a change that names no resource),
 flat. A pill lists no counts and searches only above eight values. The time
 range is the shared picker: Last hour, Last 24 h, Last 7 days, Last 30 days and
@@ -903,7 +945,7 @@ a custom range (calendar days, optional HH:MM, an end of "now", at most 90 days
 back); a tab opens on the last hour, the Daemon log on the last 24 hours, until
 the user picks one. A record passes when it matches any chosen value.
 
-Selecting a row on Everything, Changes or Tool calls MUST open it in the shared
+Selecting a row on Everything, Changes, Secret use or Tool calls MUST open it in the shared
 right-hand drawer (640 wide until its left edge is dragged, the page dimmed behind it; Esc, a click outside or
 its ✕ closes it, ↑ ↓ step to the previous or next record, focus returns to the
 row), answer first — a failed call's error and how its server has been doing
@@ -927,7 +969,7 @@ the tool call**, which opens the Tool calls tab looking for that call.
 
 #### Scenario: activity row expands to its raw record
 - **GIVEN** an Activity tab has at least one row
-- **WHEN** the user clicks (or presses Enter/Space on) that row on Everything, Changes or Tool calls
+- **WHEN** the user clicks (or presses Enter/Space on) that row on Everything, Changes, Secret use or Tool calls
 - **THEN** the shared drawer opens over the page with its raw underlying record open — the full JSON, pretty-printed in a monospace, scrollable block
 
 #### Scenario: a daemon log row opens in place
@@ -1528,7 +1570,7 @@ command, and the failing callout and a failed test's result offer the diagnosis 
 #### Scenario: a rejected key reads Replace key
 - **GIVEN** an MCP server whose status reads failing with `failure_reason` `auth_rejected`, and an Overview item with the verb `replace_key`
 - **WHEN** the server's page opens and the Overview lists the item
-- **THEN** the failing callout says the key was rejected and offers Replace key, which opens the Replace value dialog on the secret its env or headers cite (the edit dialog when the key is typed into the config itself), and the Overview row's action reads Replace key and opens the server's page
+- **THEN** the failing callout says the key was rejected and offers Replace key, which opens the Replace dialog on the secret its env or headers cite (the edit dialog when the key is typed into the config itself), and the Overview row's action reads Replace key and opens the server's page
 
 #### Scenario: a failed test offers a diagnosis hand-off beside View log
 - **GIVEN** an MCP server whose test just failed with an error and a `handoff`
@@ -3284,3 +3326,38 @@ under `~/.coffer/derived/` is not shown. Edits auto-save, like every settings su
 - **GIVEN** recording on, its default
 - **WHEN** the user turns Record tool call content off on `/settings/data` and reloads
 - **THEN** the switch reads off, and calls made from then on open with "Content was not recorded for this call"
+
+### Requirement: Replace a resource's secret through one dialog
+Wherever the app replaces a secret a resource already uses — a model provider's API key, a channel's
+bot token or app secret, an MCP server's environment variable or header, a custom-tool group's
+header, a secret menu's **Change value…**, and the banners for a missing or rejected secret — it MUST
+use one **Replace** dialog titled **Replace <field>**. The dialog MUST name the current secret
+(a link to its page on the Secrets page), say which other resources use it when there are any,
+and offer **Enter a new value** — an empty, write-only field whose value is written under the
+reference the resource already cites, so everything citing it gets the value — and, where the
+resource can be re-pointed, **Use another secret**, a picker of the other stored secrets that also
+offers **New secret…**, which re-points only that resource and leaves the old secret and its value
+as they are. A resource that can check a pasted value (a provider listing its models, a channel
+asking its platform) checks it in the same dialog, and a value the platform rejects cannot be
+saved. A secret this Mac holds no value for reads **Add <field>** with **Add key**. An Edit dialog
+that holds a secret (a model provider's) MUST offer the same fields in place: **Replace** on its
+key row opens them, what is entered there is saved with the rest of the form, and **Keep current
+key** folds them away with nothing changed. The Secrets page's own Edit, which changes the secret
+itself, and the add forms' secret field, which chooses one, are not Replace dialogs.
+
+#### Scenario: replacing a secret offers a new value or another stored secret
+- **GIVEN** a resource field citing a stored secret, and another stored secret
+- **WHEN** the user opens Replace on that field
+- **THEN** the dialog reads **Replace <field>** and names the current secret
+- **AND** a new value with **Replace key** is written under the current reference, while **Use another secret** lists only the other secret and **Use this secret** re-points the field to it
+
+#### Scenario: a secret missing on this Mac reads Add
+- **GIVEN** a field citing a secret this Mac holds no value for
+- **WHEN** the user opens its Replace dialog
+- **THEN** it reads **Add <field>**, and **Add key** stores the value under the reference the field cites
+
+#### Scenario: a provider's Edit dialog replaces its key with the form
+- **GIVEN** a model provider with a stored key
+- **WHEN** the user opens Edit, chooses **Replace** on the API Key row, enters a new value and saves
+- **THEN** the key's value is replaced under the same reference when the form is saved
+- **AND** **Keep current key** folds the fields away and Save then leaves the key as it was

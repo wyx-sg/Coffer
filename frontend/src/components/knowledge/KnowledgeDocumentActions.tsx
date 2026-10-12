@@ -25,8 +25,9 @@ interface ReadingProps {
   view: DocumentView;
   onView: (view: DocumentView) => void;
   fileActions: ReturnType<typeof useFileActionItems>;
-  onDelete: () => void;
-  onHistory: () => void;
+  /** Absent for a linked folder's file: Coffer neither deletes it nor keeps its history. */
+  onDelete?: (() => void) | null;
+  onHistory?: (() => void) | null;
   /** Open in Obsidian, when it is installed. */
   obsidian?: MenuAction | null;
 }
@@ -37,26 +38,28 @@ export function ReadingActions({
   view,
   onView,
   fileActions: [openItem, revealItem],
-  onDelete,
-  onHistory,
+  onDelete = null,
+  onHistory = null,
   obsidian = null,
 }: ReadingProps) {
   const { t } = useTranslation();
   return (
     <>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-md"
-            aria-label={t("knowledge.history.title")}
-            onClick={onHistory}
-          >
-            <History aria-hidden />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>{t("knowledge.history.title")}</TooltipContent>
-      </Tooltip>
+      {onHistory ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-md"
+              aria-label={t("knowledge.history.title")}
+              onClick={onHistory}
+            >
+              <History aria-hidden />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t("knowledge.history.title")}</TooltipContent>
+        </Tooltip>
+      ) : null}
       {markdown ? (
         <Segmented
           label={t("knowledge.document.view")}
@@ -76,13 +79,17 @@ export function ReadingActions({
         actions={[
           { key: "reveal", label: revealItem.label, onSelect: revealItem.onClick },
           ...(obsidian ? [obsidian] : []),
-          {
-            key: "delete",
-            label: t("knowledge.deleteDocument.menu"),
-            destructive: true,
-            separated: true,
-            onSelect: onDelete,
-          },
+          ...(onDelete
+            ? [
+                {
+                  key: "delete",
+                  label: t("knowledge.deleteDocument.menu"),
+                  destructive: true,
+                  separated: true,
+                  onSelect: onDelete,
+                },
+              ]
+            : []),
         ]}
       />
     </>

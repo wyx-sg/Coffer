@@ -300,14 +300,34 @@ What protects the data is mechanical. Coffer saves no text of a person's on the 
 
 A collection's layout is what Obsidian reads natively: plain Markdown, `[[slug]]` links that resolve by file name, and `aliases` frontmatter. Obsidian is in the daemon's list of detected editors (`application/fs/editor_service.py`), and the web UI offers **Open in Obsidian** in a collection's and a file's ⋯ menu only when `GET /api/v1/fs/editors` lists it, opening the path with it through `POST /api/v1/fs/open`. Obsidian keeps its settings in `.obsidian/`, a hidden entry the vault ignores. An Obsidian save is an edit on disk like any editor's; a note Obsidian creates outside `pages/` and `sources/` is filed into `pages/` by the sweep, so the guide tells people to point Obsidian's default location for new notes at `pages/`.
 
+## Linked folders
+
+A **linked folder** is a collection the person keeps with their own tools anywhere on this machine, an Obsidian vault say, which Coffer only shares with agents. It is the same `knowledge` kind with a different config, and it has none of a collection's machinery: no tree under the knowledge root, no wiki layout, no history, no sweep, no check and no tidy. The reasoning is in [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md).
+
+### The machine-local row
+
+`POST /api/v1/knowledge/collections/link` (`application/knowledge/linking.py`, `coffer knowledge link`) checks the folder and registers one resource whose config is `{"folder": "<absolute path>"}`. `KnowledgeConfig` has that one optional field; a collection Coffer keeps leaves it unset and stays `{}` on disk. The kind's `storage_row` hook (`application/knowledge/kind.py`) files a row that names a folder in the `local` class, so the file is `~/.coffer/local/resources/knowledge/<name>.json`, with the home written as `${HOME}`, and is never committed or synced; agents and channels are kept machine-local the same way. The name defaults to the folder's own and is only a label: `on_rename` does nothing for a linked folder, and `on_delete` skips the directory cleanup and only re-renders the guide, so Disconnect leaves every file where it is.
+
+### The read path
+
+`infrastructure/knowledge/linked.py` is the only code that touches a linked folder, and it only reads. It has its own path guard, because the folder lies outside the root that `paths.py` guards and a person's own file names may hold characters `paths.py` refuses: it rejects a hidden segment, a backslash or NUL, and any path that resolves outside the folder, a symlink pointing out of it included. Surfaces still address a linked folder name-first, `<name>/<path inside the folder>`, so the tree and file routes serve it unchanged; `KnowledgeService.find_collection` sends the read to `linked.py` when the row names a folder. A walk skips hidden directories, `node_modules` and `__pycache__`, and stops at 5000 Markdown files; a file over 2 MB is listed but its body is not read. A note's title is its frontmatter `title`, else its first `# ` heading, else its file name. The collection list carries `linked`, `note_count`, `rules_file` (the first of `AGENTS.md`, `CLAUDE.md` and `README.md` at the root) and the description from the folder's own `README.md`; a folder that has gone missing lists with no notes.
+
+### In the guide
+
+`guide_render.py` gives a linked folder a section of its own in the `coffer-guide` catalogue, after the collections Coffer keeps: `### <name> (linked folder)`, its README description, its path with the home written as `~` (which keeps the render byte-identical across machines), a line telling the agent to follow the folder's own rules file before writing anything there, or with none to write only the way its notes are written, and that Coffer's `pages/`, `sources/`, inbox and tidy do not apply; then its notes by folder-relative path and title. When the catalogue shortens itself to counts, a linked folder lists its note count. The guide's manual has a paragraph saying the same in general terms, and the skill's description names the folder's subject when it has notes.
+
+### What is refused
+
+`KnowledgeService.collection_rows()` returns only the collections Coffer keeps, so the sweep, Tidy all and the history never see a linked folder. Every write, tidy, check and description edit asks `owned_collection(uid)` or `require_collection(relpath)`, which raise `CollectionIsLinked`, answered as `409 KNOWLEDGE_COLLECTION_LINKED`; upload and file delete reach the same refusal. Linking a folder that does not exist, a relative path, or Coffer's own home or a folder holding it (the home folder, the disk root) is `400 KNOWLEDGE_FOLDER_REFUSED`; a taken name, or a folder already linked, is `409 KNOWLEDGE_COLLECTION_EXISTS`.
+
 ## The sweep
 
-The sweep is a background asyncio task in the daemon. It follows the same shape as the retention worker, and it calls no model.
+The sweep is a background worker in the daemon on the shared wakeable loop, and it calls no model. It runs when a file under `knowledge/` changes (it borrows the vault scanner's file watch, and a burst of events is one run), when the `knowledge` feature is switched on, and otherwise every 10 minutes. A loose document still inside its quiet minute brings one more run once that minute is over, because no file event announces it.
 
 ```mermaid
 stateDiagram-v2
   [*] --> Waiting: start
-  Waiting --> Intake: tick
+  Waiting --> Intake: file event or 10 min
   Intake --> Layout: adopt .inbox/ files as sources
   Layout --> Record: file loose documents into pages/
   Record --> Expire: commit edits on disk
@@ -315,12 +335,12 @@ stateDiagram-v2
   Refresh --> Waiting: re-render coffer-guide
 ```
 
-On each tick, once a minute, the worker does exactly five things:
+On each run the worker does exactly five things:
 
 1. **Adopts `.inbox/` files.** Each new Markdown file in a collection's inbox is normalised and kept as a source under `sources/` (see [A file dropped into the inbox](#a-file-dropped-into-the-inbox)). Whatever it promotes, it announces as a `knowledge` event.
 2. **Files loose documents.** A Markdown file in a collection outside `pages/`, `sources/` and hidden entries, other than the root `README.md`, untouched for 60 seconds, is moved to `pages/<same relative path>`, suffixed on a collision. All of a tick's moves for one collection are one commit by the `daemon` writer with the `layout` operation, and the text is never rewritten. The quiet minute keeps a file an agent is still writing from being moved from under it. This is how a collection made before pages and sources existed converges on the first sweep after an upgrade, and how an agent that writes to the wrong place is corrected within a minute. `infrastructure/knowledge/layout.py` finds and moves the files; `application/knowledge/layout.py` makes the commit.
 3. **Commits edits on disk.** Anything changed in the tree since the last commit, such as a person's editor or an agent's file tools, is committed as an edit on disk through the vault writer, so the history stays current and nothing an agent wrote is counted as Coffer's. A collection with an open tidy is paused and left alone (see [A tidy is one change](#a-tidy-is-one-change)).
-4. **Closes idle tidies.** A tidy whose collection has not changed for 30 minutes is committed as one change with no report and status `expired`.
+4. **Closes idle tidies.** A tidy whose collection has not changed for 30 minutes is committed, at the first run after that, as one change with no report and status `expired`.
 5. **Re-renders the guide skill**, so a page added by hand is catalogued. A render that produces the same bytes writes nothing.
 
 A failed duty is logged and never ends the loop; one file that cannot be moved is logged and skipped. While the `knowledge` feature is switched off the sweep skips its rounds, and the collections stay on disk untouched. Shutdown cancels the task without waiting.
@@ -406,14 +426,15 @@ Coffer embeds nothing. It has no vector store, no embedding model and no FTS ind
 - **User content can leave the machine only through the agent the person chose.** Coffer sends no knowledge to any model. Tidy sends it to the agent's own provider, as every conversation does.
 - **Nothing here is access control.** An agent with shell tools can read any file under the knowledge root. Every collection is named to every agent; the only way to keep a collection from agents is to delete it.
 - **Agents' own file tools leave no read telemetry.** Coffer sees neither the reads nor the writes an agent makes with its own tools. The agents' own transcripts are the retroactive measure of reads, and the vault history names what changed on disk.
+- **A linked folder gets none of this machinery.** No history, check, tidy or sync through Coffer: its own tools keep it, and on a second Mac the person links that Mac's copy.
 - **A filed item's actor is self-reported.** The sweep keeps the `actor` an agent wrote; nothing verifies it. Frontmatter on a page is advisory: a page with no sources is a finding, not an error.
 
 ## Where it lives in the code
 
 | Package | Responsibility |
 | --- | --- |
-| `application/knowledge/` | Collections, submission and promotion into `sources/`, normalising a dropped inbox file, uploads, the sweep and its layout duty (`layout.py`), the tidy prompts (`tidy_handoff.py`), a tidy's start, finish and expiry (`tidy_service.py`), the changes feed, undoing a delete or a tidy (`collection_writes.py`), and the `coffer-guide` text and catalogue (`guide_render.py`) |
-| `infrastructure/knowledge/` | Paths, their guards and what kind a file is, file reads and writes, frontmatter, naming, the catalogue, the wiki graph, links and findings (`wiki.py`), finding and moving loose documents (`layout.py`), the history repository and its paused collections (`history.py`), the open tidies (`tidy_runs.py`), converters |
+| `application/knowledge/` | Collections, submission and promotion into `sources/`, normalising a dropped inbox file, uploads, the sweep and its layout duty (`layout.py`), the tidy prompts (`tidy_handoff.py`), a tidy's start, finish and expiry (`tidy_service.py`), the changes feed, undoing a delete or a tidy (`collection_writes.py`), linking a folder (`linking.py`), and the `coffer-guide` text and catalogue (`guide_render.py`) |
+| `infrastructure/knowledge/` | Paths, their guards and what kind a file is, file reads and writes, frontmatter, naming, the catalogue, the wiki graph, links and findings (`wiki.py`), finding and moving loose documents (`layout.py`), the history repository and its paused collections (`history.py`), the open tidies (`tidy_runs.py`), reading a linked folder (`linked.py`), converters |
 | `domain/handoff` | The one place every hand-off prompt, Tidy included, is rendered |
 | `surfaces/http/` | Sweep wiring and start; the renderer-to-skill-seed join; the web UI's knowledge routes, the check and contents routes, the tidy start, finish and undo routes, and the history hand-off |
 
@@ -422,6 +443,6 @@ All paths are under `backend/coffer/`.
 ## Related
 
 - Spec: [knowledge](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md), [knowledge data model](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/data-model.md), [skill-manager](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/skill-manager/spec.md)
-- Decisions: [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md), [Knowledge Is a Directory of Markdown Files, Not an Index](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md), [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-write-is-a-validated-commit-naming-its-writer.md), [Coffer Ships Its Own Skill](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md), [Principles → Governance](/architecture/principles#governance)
+- Decisions: [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md), [Knowledge Is a Directory of Markdown Files, Not an Index](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md), [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-write-is-a-validated-commit-naming-its-writer.md), [Coffer Ships Its Own Skill](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md), [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md), [Principles → Governance](/architecture/principles#governance)
 - Research: [Knowledge structures](https://github.com/wyx-sg/Coffer/blob/main/docs/research/knowledge-structures.md)
 - Pages: [Knowledge guide](/guides/knowledge), [Memory](/architecture/memory), [Vault sync](/architecture/vault-sync), [MCP gateway](/architecture/mcp-gateway), [Resource framework](/architecture/resource-framework), [MCP tools reference](/reference/mcp-tools), [`coffer knowledge`](/reference/cli/knowledge)

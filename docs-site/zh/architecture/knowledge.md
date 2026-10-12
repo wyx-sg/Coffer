@@ -300,14 +300,34 @@ sequenceDiagram
 
 知识集的结构正是 Obsidian 原生能读的：普通 Markdown、按文件名解析的 `[[slug]]` 链接，以及 `aliases` frontmatter。Obsidian 在守护进程检测的编辑器列表里（`application/fs/editor_service.py`），只有 `GET /api/v1/fs/editors` 列出它时，Web 界面才会在知识集和文件的 ⋯ 菜单里提供**在 Obsidian 中打开**，通过 `POST /api/v1/fs/open` 用它打开路径。Obsidian 把设置存在 `.obsidian/` 里，这是保险库忽略的隐藏条目。在 Obsidian 里保存和在任何编辑器里一样，是一次磁盘上的编辑；Obsidian 在 `pages/` 和 `sources/` 之外新建的笔记会被扫描移进 `pages/`，所以指南让人把 Obsidian 新建笔记的默认位置设成 `pages/`。
 
+## 接入的外部文件夹 {#linked-folders}
+
+**接入的外部文件夹**是一个人在这台机器任意位置、用自己的工具维护的知识集，比如一个 Obsidian 库，Coffer 只把它共享给智能体。它和知识集是同一个 `knowledge` 类型，只是配置不同，但知识集的那套机制它一样都没有：知识根目录下没有目录树，没有 wiki 结构，没有历史，不参与扫描、检查和整理。理由见 [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md)。
+
+### 只留在本机的记录 {#the-machine-local-row}
+
+`POST /api/v1/knowledge/collections/link`（`application/knowledge/linking.py`，`coffer knowledge link`）检查文件夹，然后注册一个配置为 `{"folder": "<绝对路径>"}` 的资源。`KnowledgeConfig` 只有这一个可选字段；Coffer 自己保存的知识集不设置它，磁盘上仍是 `{}`。这个类型的 `storage_row` 钩子（`application/knowledge/kind.py`）把指向文件夹的记录归入 `local` 类，所以文件是 `~/.coffer/local/resources/knowledge/<name>.json`（主目录写成 `${HOME}`），从不提交、从不同步；智能体和渠道也是这样留在本机的。名称默认取文件夹自己的名字，只是一个标签：对接入的文件夹，`on_rename` 什么都不做，`on_delete` 跳过目录清理、只重新渲染指南，所以断开接入时每个文件都留在原处。
+
+### 读取路径 {#the-read-path}
+
+`infrastructure/knowledge/linked.py` 是唯一接触接入文件夹的代码，而且只读。它有自己的路径守卫，因为文件夹在 `paths.py` 守护的根目录之外，而人自己的文件名可能含有 `paths.py` 拒绝的字符：它拒绝隐藏的路径段、反斜杠或 NUL，以及任何解析到文件夹之外的路径（包括指向外面的符号链接）。各个界面仍然以名称开头来指代接入的文件夹，即 `<名称>/<文件夹内的路径>`，所以目录树和文件路由不用改就能服务它；行指向文件夹时，`KnowledgeService.find_collection` 把读取交给 `linked.py`。遍历会跳过隐藏目录、`node_modules` 和 `__pycache__`，最多 5000 个 Markdown 文件；超过 2 MB 的文件会列出，但不读取正文。笔记的标题取 frontmatter 的 `title`，没有就取第一个 `# ` 标题，再没有就用文件名。知识集列表带有 `linked`、`note_count`、`rules_file`（根目录下 `AGENTS.md`、`CLAUDE.md`、`README.md` 中第一个存在的），以及取自文件夹自己 `README.md` 的描述；文件夹不见了时，列出来就是没有笔记。
+
+### 在指南里 {#in-the-guide}
+
+`guide_render.py` 在 `coffer-guide` 目录里给接入的文件夹单独一节，排在 Coffer 自己保存的知识集之后：`### <名称> (linked folder)`、它的 README 描述、主目录写成 `~` 的路径（这样不同机器渲染出的内容逐字节一致）、一行话让智能体在往里写任何东西之前先遵守文件夹自己的规则文件（没有规则文件时，只按现有笔记的写法来写），并说明 Coffer 的 `pages/`、`sources/`、收件箱和整理在这里都不适用；然后按文件夹内的相对路径和标题列出笔记。目录缩减到只剩数量时，接入的文件夹只列笔记数。指南的说明部分有一段话概括同样的意思；文件夹里有笔记时，技能的描述会写出它的主题。
+
+### 被拒绝的操作 {#what-is-refused}
+
+`KnowledgeService.collection_rows()` 只返回 Coffer 自己保存的知识集，所以扫描、全部整理和历史都看不到接入的文件夹。每次写入、整理、检查和描述编辑都要经过 `owned_collection(uid)` 或 `require_collection(relpath)`，它们抛出 `CollectionIsLinked`，回答为 `409 KNOWLEDGE_COLLECTION_LINKED`；上传和删除文件也会得到同样的拒绝。接入不存在的文件夹、相对路径、Coffer 自己的目录或包含它的文件夹（主目录、磁盘根目录）会得到 `400 KNOWLEDGE_FOLDER_REFUSED`；名字已被占用，或文件夹已经接入过，会得到 `409 KNOWLEDGE_COLLECTION_EXISTS`。
+
 ## 扫描 {#the-sweep}
 
-扫描是守护进程里的一个后台 asyncio 任务。它的形状和保留期 worker 一样，并且不调用任何模型。
+扫描是守护进程里跑在共用可唤醒循环上的后台 worker，不调用任何模型。`knowledge/` 下有文件变化时它就运行（借用保险库扫描器的文件监听，一连串事件只跑一次），打开 `knowledge` 功能时也会运行，此外每 10 分钟兜底一次。还在静默一分钟内的零散文档，会在那一分钟过去后再触发一次运行，因为这件事没有文件事件来通知。
 
 ```mermaid
 stateDiagram-v2
   [*] --> Waiting: start
-  Waiting --> Intake: tick
+  Waiting --> Intake: file event or 10 min
   Intake --> Layout: adopt .inbox/ files as sources
   Layout --> Record: file loose documents into pages/
   Record --> Expire: commit edits on disk
@@ -315,12 +335,12 @@ stateDiagram-v2
   Refresh --> Waiting: re-render coffer-guide
 ```
 
-每次触发（每分钟一次），worker 恰好做五件事：
+每次运行，worker 恰好做五件事：
 
 1. **接收 `.inbox/` 文件。** 知识集收件箱里每个新的 Markdown 文件都会被规范化，并作为来源保留在 `sources/` 下（见[放进收件箱的文件](#a-file-dropped-into-the-inbox)）。它提升的东西，都会以 `knowledge` 事件宣告。
 2. **归置零散文档。** 知识集里位于 `pages/`、`sources/` 和隐藏条目之外、不是根目录 `README.md`、并且 60 秒没被动过的 Markdown 文件，会被移到 `pages/<相同的相对路径>`，重名时加后缀。一个知识集在一次触发中的所有移动是一次由 `daemon` 写入者以 `layout` 操作做的提交，文字从不改写。这一分钟的静默期保证不会把智能体还在写的文件从它手底下挪走。在页面和来源出现之前建的知识集，就是这样在升级后的第一次扫描时归入新结构的；写错位置的智能体也会在一分钟内被纠正。`infrastructure/knowledge/layout.py` 负责找出并移动文件；`application/knowledge/layout.py` 负责提交。
 3. **提交磁盘上的编辑。** 自上次提交以来树里变过的任何东西，比如人的编辑器或智能体的文件工具，都会通过保险库写入者提交为在磁盘上编辑，这样历史保持最新，智能体写的东西也不会被算作 Coffer 的。有进行中整理的知识集处于暂停状态，不动它（见[一次整理就是一次改动](#a-tidy-is-one-change)）。
-4. **关闭闲置的整理。** 知识集 30 分钟没有变化的整理，会作为一次改动提交，不带汇报，状态为 `expired`。
+4. **关闭闲置的整理。** 知识集 30 分钟没有变化的整理，会在那之后的第一次运行中作为一次改动提交，不带汇报，状态为 `expired`。
 5. **重新渲染指南技能**，这样手工添加的页面也会被编入目录。渲染出的字节没变就什么都不写。
 
 某一项失败只记日志，从不终止循环；某个移动不了的文件会记日志并跳过。`knowledge` 功能关闭期间，扫描跳过它的各轮，知识集原样留在磁盘上。关闭时取消任务，不等待。
@@ -406,14 +426,15 @@ Coffer 不做任何 embedding。它没有向量存储、没有 embedding 模型�
 - **用户内容只会经由人选定的智能体离开本机。** Coffer 不把任何知识发给任何模型。整理会把它发给智能体自己的提供商，和每个对话一样。
 - **这里的一切都不是访问控制。** 有 shell 工具的智能体可以读知识根目录下的任何文件。每个知识集都会告诉每个智能体；不让智能体看到某个知识集的唯一办法是删除它。
 - **智能体自己的文件工具不留读取遥测。** Coffer 既看不到智能体用自己工具做的读取，也看不到写入。智能体自己的对话记录是事后衡量读取的依据，保险库历史则指明磁盘上变了什么。
+- **接入的外部文件夹不享有这些机制。** 没有历史、检查、整理，也不经 Coffer 同步：它由自己的工具维护，在第二台 Mac 上需要接入那台 Mac 上的副本。
 - **归档条目的 actor 是自报的。** 扫描保留智能体写下的 `actor`；没有任何东西验证它。页面上的 frontmatter 只是建议性的：没有来源的页面是一条发现，不是错误。
 
 ## 在代码里的位置 {#where-it-lives-in-the-code}
 
 | 包 | 职责 |
 | --- | --- |
-| `application/knowledge/` | 知识集、提交并提升进 `sources/`、规范化放进来的收件箱文件、上传、扫描及其归置职责（`layout.py`）、整理提示词（`tidy_handoff.py`）、一次整理的开始、结束和到期（`tidy_service.py`）、改动流、撤销删除或整理（`collection_writes.py`），以及 `coffer-guide` 的文字和目录（`guide_render.py`） |
-| `infrastructure/knowledge/` | 路径、路径守卫以及文件属于哪一种、文件读写、frontmatter、命名、目录、wiki 图、链接和发现（`wiki.py`）、找出并移动零散文档（`layout.py`）、历史仓库及其暂停的知识集（`history.py`）、进行中的整理（`tidy_runs.py`）、转换器 |
+| `application/knowledge/` | 知识集、提交并提升进 `sources/`、规范化放进来的收件箱文件、上传、扫描及其归置职责（`layout.py`）、整理提示词（`tidy_handoff.py`）、一次整理的开始、结束和到期（`tidy_service.py`）、改动流、撤销删除或整理（`collection_writes.py`）、接入外部文件夹（`linking.py`），以及 `coffer-guide` 的文字和目录（`guide_render.py`） |
+| `infrastructure/knowledge/` | 路径、路径守卫以及文件属于哪一种、文件读写、frontmatter、命名、目录、wiki 图、链接和发现（`wiki.py`）、找出并移动零散文档（`layout.py`）、历史仓库及其暂停的知识集（`history.py`）、进行中的整理（`tidy_runs.py`）、读取接入的文件夹（`linked.py`）、转换器 |
 | `domain/handoff` | 每个交接提示词（包括整理）渲染的唯一位置 |
 | `surfaces/http/` | 扫描的装配和启动；渲染器到技能 seed 的接合；Web 界面的知识路由、检查和内容路由、整理的开始、结束和撤销路由，以及历史交接 |
 
@@ -422,6 +443,6 @@ Coffer 不做任何 embedding。它没有向量存储、没有 embedding 模型�
 ## 相关 {#related}
 
 - 规格：[knowledge](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md)、[knowledge 数据模型](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/data-model.md)、[skill-manager](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/skill-manager/spec.md)
-- 决策：[Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md)、[Knowledge Is a Directory of Markdown Files, Not an Index](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md)、[Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md)、[Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-write-is-a-validated-commit-naming-its-writer.md)、[Coffer Ships Its Own Skill](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md)、[原则 → 治理](/zh/architecture/principles#governance)
+- 决策：[Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md)、[Knowledge Is a Directory of Markdown Files, Not an Index](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md)、[Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md)、[Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-write-is-a-validated-commit-naming-its-writer.md)、[Coffer Ships Its Own Skill](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md)、[A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md)、[原则 → 治理](/zh/architecture/principles#governance)
 - 研究：[Knowledge structures](https://github.com/wyx-sg/Coffer/blob/main/docs/research/knowledge-structures.md)
 - 页面：[知识指南](/zh/guides/knowledge)、[记忆](/zh/architecture/memory)、[保险库同步](/zh/architecture/vault-sync)、[MCP 网关](/zh/architecture/mcp-gateway)、[资源框架](/zh/architecture/resource-framework)、[MCP 工具参考](/zh/reference/mcp-tools)、[`coffer knowledge`](/zh/reference/cli/knowledge)

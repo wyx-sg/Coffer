@@ -11,7 +11,7 @@ from typing import Any
 from coffer.application.repos import AuditRepo
 from coffer.application.runtime import correlation
 from coffer.domain.activity_content import cut
-from coffer.domain.audit import AuditEntry
+from coffer.domain.audit import AuditEntry, AuditNature
 from coffer.domain.pagination import Page, decode_cursor, paginate, position_of, time_and_id
 from coffer.domain.resource import Resource
 
@@ -129,6 +129,7 @@ class AuditService:
         kind: str | None = None,
         event_type: str | None = None,
         event_prefix: str | None = None,
+        nature: AuditNature | None = None,
         since: datetime | None = None,
         limit: int = 50,
     ) -> list[AuditEntry]:
@@ -144,6 +145,7 @@ class AuditService:
             resource_uid=resource.uid if resource else None,
             event_type=event_type,
             event_prefix=event_prefix,
+            nature=nature,
             since=since,
             limit=limit,
         )
@@ -155,6 +157,7 @@ class AuditService:
         kind: str | None = None,
         event_type: str | None = None,
         event_prefix: str | None = None,
+        nature: AuditNature | None = None,
         since: datetime | None = None,
         limit: int = 50,
         cursor: str | None = None,
@@ -174,6 +177,7 @@ class AuditService:
             "resource_uid": resource.uid if resource else None,
             "event_type": event_type,
             "event_prefix": event_prefix,
+            "nature": nature,
             "since": since.isoformat() if since else None,
             "trace_id": trace_id,
             "q": q,
@@ -185,6 +189,7 @@ class AuditService:
             resource_uid=resource.uid if resource else None,
             event_type=event_type,
             event_prefix=event_prefix,
+            nature=nature,
             since=since,
             limit=limit + 1,
             after=after,
@@ -207,6 +212,7 @@ class AuditService:
         kind: str | None = None,
         event_type: str | None = None,
         event_prefix: str | None = None,
+        nature: AuditNature | None = None,
         since: datetime | None = None,
         trace_id: str | None = None,
         q: str | None = None,
@@ -221,6 +227,7 @@ class AuditService:
             resource_uid=resource.uid if resource else None,
             event_type=event_type,
             event_prefix=event_prefix,
+            nature=nature,
             since=since,
             trace_id=trace_id,
             q=q,

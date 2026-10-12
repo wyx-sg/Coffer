@@ -1,9 +1,10 @@
 // src/pages/activity/ActivityPage.tsx — what just happened, and why did it fail: Coffer's three records on one page.
 //
-// Four tabs (spec web-ui "Gather the three records on one Activity page"):
+// Five tabs (spec web-ui "Gather the three records on one Activity page"):
 // Everything merges the audit log, the Tool calls the gateway proxied and the
-// daemon's warnings and errors into one newest-first stream; Changes, MCP
-// calls and Daemon log narrow to one record each, with the columns and
+// daemon's warnings and errors into one newest-first stream; Changes, Secret
+// use, Tool calls and Daemon log narrow to one record each (Changes and Secret
+// use split the audit log), with the columns and
 // filters that record affords. Tabs carry no counts; one whose log failed to
 // load shows a warning icon. Every filter lives in the URL.
 //
@@ -45,7 +46,7 @@ import { PAGE_BLEED, PAGE_BLEED_HEAD } from "@/components/shell/pageFrame";
 import { cn } from "@/lib/utils";
 
 /** The tab each log belongs to, for the warning icon on a tab whose log failed. */
-const SOURCE_TAB = { change: "changes", call: "mcp", daemon: "daemon" } as const;
+const SOURCE_TAB = { change: "changes", use: "uses", call: "mcp", daemon: "daemon" } as const;
 
 /** Within this many pixels of the top counts as "at the top". */
 const TOP_SLACK = 8;

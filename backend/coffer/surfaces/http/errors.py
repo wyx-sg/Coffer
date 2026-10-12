@@ -206,6 +206,8 @@ _STATUS: dict[str, int] = {
     # to you" and "not there" as the same answer.
     "KNOWLEDGE_COLLECTION_NOT_FOUND": 404,
     "KNOWLEDGE_COLLECTION_EXISTS": 409,
+    "KNOWLEDGE_COLLECTION_LINKED": 409,
+    "KNOWLEDGE_FOLDER_REFUSED": 400,
     "KNOWLEDGE_FILE_NOT_FOUND": 404,
     # The changes feed (spec knowledge "Commit every knowledge write naming its
     # writer"): no git on this machine is a state of the machine.

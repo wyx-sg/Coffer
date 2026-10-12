@@ -38,13 +38,17 @@ export function callOutcome(t: TFunction, call: Invocation): string {
 }
 
 /**
- * Who a change was made by, in words. The daemon's own background passes
- * record themselves as `system:<worker>`; to a reader every one of them is
- * Coffer.
+ * The actor's word key. The daemon's own background passes record themselves
+ * as `system:<worker>`, and its hand-offs of a secret as `coffer`; to a reader
+ * every one of them is Coffer.
  */
+function actorKey(actor: string): string {
+  return actor.startsWith("system:") ? "system" : actor;
+}
+
+/** Who a change was made by, in words: "You · web UI", "Coffer", "Sync". */
 export function actorLabel(t: TFunction, actor: string): string {
-  const base = actor.startsWith("system:") ? "system" : actor;
-  return t(`activity.actor.${base}`, { defaultValue: actor });
+  return t(`activity.actor.${actorKey(actor)}`, { defaultValue: actor });
 }
 
 /** "Today · 29 Sep", "Yesterday · 28 Sep" or "27 Sep" — the local day a record falls on. */
@@ -93,8 +97,7 @@ export function changeLink(entry: AuditEntry, uid?: string): { to: string; name:
 
 /** "You, in the web UI", "Coffer", "Sync" — who made a change, said in full. */
 export function actorLong(t: TFunction, actor: string): string {
-  const base = actor.startsWith("system:") ? "system" : actor;
-  return t(`activity.actorLong.${base}`, { defaultValue: actorLabel(t, actor) });
+  return t(`activity.actorLong.${actorKey(actor)}`, { defaultValue: actorLabel(t, actor) });
 }
 
 /** "14:32:08.114 today" — when a record was written, for the drawer's header. */

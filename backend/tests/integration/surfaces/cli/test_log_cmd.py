@@ -66,6 +66,62 @@ def test_the_command_line_reads_the_audit_log(in_proc_daemon: Any) -> None:
     assert [e["event_type"] for e in entries] == ["resource_disabled", "resource_created"]
 
 
+def _seed_audit(event_type: str, actor: str, details: dict[str, Any]) -> None:
+    """Write one audit row straight into the daemon's database."""
+    import asyncio
+    import os
+
+    from coffer.domain.audit import AuditEntry
+    from coffer.infrastructure.persistence.engine import (
+        create_async_engine_with_pragmas,
+        session_maker,
+    )
+    from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
+
+    engine = create_async_engine_with_pragmas(os.environ["COFFER_DB_URL"])
+
+    async def _seed() -> None:
+        await SqlAlchemyAuditRepo(session_maker(engine)).insert(
+            AuditEntry(
+                id=None,
+                timestamp=datetime.now(tz=UTC),
+                event_type=event_type,
+                actor=actor,
+                details=details,
+            )
+        )
+        await engine.dispose()
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(_seed())
+    loop.close()
+
+
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="the command line reads secret uses apart from changes"
+)
+def test_the_command_line_reads_secret_uses_apart_from_changes(in_proc_daemon: Any) -> None:
+    _seed_audit("secret_set", "ui", {"ref": "secret/GITHUB_TOKEN", "replaced": False})
+    _seed_audit(
+        "secret_resolved",
+        "coffer",
+        {
+            "ref": "secret/GITHUB_TOKEN",
+            "destination_kind": "mcp_server",
+            "destination_uid": "u1",
+            "destination_name": "github",
+            "slot": "GITHUB_TOKEN",
+        },
+    )
+
+    uses = _run("log", "audit", "--nature", "use", "--json")
+    changes = _run("log", "audit", "--nature", "change", "--json")
+    assert uses.exit_code == changes.exit_code == 0, uses.output + changes.output
+    assert [e["event_type"] for e in json.loads(uses.output)["entries"]] == ["secret_resolved"]
+    assert "secret_resolved" not in {e["event_type"] for e in json.loads(changes.output)["entries"]}
+    assert "secret_set" in {e["event_type"] for e in json.loads(changes.output)["entries"]}
+
+
 @pytest.mark.acceptance(
     spec="resource-framework", scenario="the command line pages the audit log by cursor"
 )

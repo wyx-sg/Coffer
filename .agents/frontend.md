@@ -291,6 +291,10 @@ return useMutation({
     offers to be stored. There is no Secret|Plain toggle, Replace button or
     Stored badge. A custom-tool group's auth is such a header row whose secret
     holds the whole header value (`Bearer <token>`), so nothing prefixes it.
+    Replacing a secret a resource already uses goes through the one
+    `ReplaceSecretDialog` (new value or another secret), and an Edit dialog
+    shows the same `ReplaceSecretFields` inline under its key row's Replace;
+    no resource writes its own replace dialog (ADR one-replace-dialog-for-every-secret).
   - **A drawer** (`ui/sheet.tsx`) is 640 wide and starts below the title bar
     (`--titlebar-inset`), scrim included.
   - **A toast can carry a second line**: `toast.success(title, { description })`
@@ -581,6 +585,12 @@ A menu item ends in `…` only when a dialog follows. Progress in zh is
   module).
 - A new component or hook ships with its test in the same commit. Acceptance-
   scenario coverage follows [`testing.md`](./testing.md) markers.
+- A Radix popover inside a Dialog that closes the instant it opens means
+  `node_modules` holds duplicate copies of `@radix-ui/react-focus-scope`
+  (`npm ls @radix-ui/react-focus-scope`); dedupe them.
+- `TooltipTrigger` opens on `:focus-visible`, and jsdom treats every focus as
+  keyboard focus, so an open tooltip swallows the first Escape. Press Escape in
+  tests with `pressEscape` from `src/test/escape.ts`.
 - Run `cd frontend && npx vitest run <file>` for a focused check; `make verify`
   runs the suite + lint + tsc.
 

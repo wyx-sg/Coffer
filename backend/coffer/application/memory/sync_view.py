@@ -8,6 +8,7 @@ the one action that asks an agent to curate its own memory.
 
 from __future__ import annotations
 
+import asyncio
 import pathlib
 from collections import Counter, defaultdict
 from collections.abc import Awaitable, Callable, Mapping
@@ -111,15 +112,23 @@ class MemorySyncView:
         self._launch = launch
 
     async def _checkouts(self, agents: list[LocalAgent]) -> dict[str, str]:
-        dirs = [d for a in agents for d in checkout_map.recorded_dirs(a.agent_type, a.config_dir)]
-        return checkout_map.checkouts(dirs)
+        # Walks each agent's projects tree and probes every repository: blocking
+        # filesystem work, kept off the daemon's event loop.
+        def scan() -> dict[str, str]:
+            dirs = [
+                d for a in agents for d in checkout_map.recorded_dirs(a.agent_type, a.config_dir)
+            ]
+            return checkout_map.checkouts(dirs)
+
+        return await asyncio.to_thread(scan)
 
     async def state(self) -> SyncState:
         agents = await self._svc.local_agents()
-        ledger = self._svc.ledger.load()
-        hub = self._svc.hub.entries()
+        # The ledger, hub and preview are files on disk: read them off the loop.
+        ledger, hub, pending = await asyncio.to_thread(
+            lambda: (self._svc.ledger.load(), self._svc.hub.entries(), self._svc.previews.load())
+        )
         here = await self._checkouts(agents)
-        pending = self._svc.previews.load()
         rows = []
         for a in agents:
             writer = self._svc.writers.get(a.agent_type)

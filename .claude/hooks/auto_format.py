@@ -56,7 +56,10 @@ def main() -> int:
         if ruff.exists():
             # Lint-fix first, then format last so the formatter has the final say
             # on layout (a fix can re-sort imports / rewrite lines).
-            _run([str(ruff), "check", "--fix", str(path)])
+            # F401 (unused import) is never auto-fixed: an agent writes the
+            # import in one edit and its first use in the next, and the fix
+            # would strip the import in between. `make lint` still reports it.
+            _run([str(ruff), "check", "--fix", "--unfixable", "F401", str(path)])
             _run([str(ruff), "format", str(path)])
     elif suffix in _PRETTIER_SUFFIXES and _under_frontend(path):
         prettier = REPO / "frontend" / "node_modules" / ".bin" / "prettier"

@@ -179,6 +179,8 @@ give the status each code is actually sent with.
 | --- | --- | --- | --- |
 | `KNOWLEDGE_COLLECTION_NOT_FOUND` | 404 | No collection by that name is visible to the caller. | Pick a collection from the Knowledge page. |
 | `KNOWLEDGE_COLLECTION_EXISTS` | 409 | A collection with that name already exists. | Choose another name. |
+| `KNOWLEDGE_COLLECTION_LINKED` | 409 | The collection is a linked folder, which Coffer only shares with agents: it does not upload into it, delete from it, edit its description, check it, tidy it or keep its history. | Make the change with the folder's own tools, an editor or Obsidian say. |
+| `KNOWLEDGE_FOLDER_REFUSED` | 400 | The folder cannot be linked: it does not exist, the path is not absolute, or it is Coffer's own folder or a folder holding it, such as your home folder. | Pick an existing folder outside `~/.coffer`, given as an absolute path; to share part of a large folder, link a subfolder. |
 | `KNOWLEDGE_FILE_NOT_FOUND` | 404 | No document at that path. | Browse the collection's folder on the Knowledge page. |
 | `KNOWLEDGE_PATH_UNSAFE` | 400 | The path escapes the knowledge root, names a hidden entry, or cannot name a document. | Use a relative path to a Markdown document inside the collection. |
 | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 | The upload exceeds the size limit named in the message. | Split the document or upload a smaller file. |

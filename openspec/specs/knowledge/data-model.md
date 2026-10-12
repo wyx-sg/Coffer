@@ -32,6 +32,15 @@ collection's name and nothing about its contents. There is no per-agent reach
 and no `enabled` switch in play for this kind (see "Serve every collection to
 every agent"): the kind is non-toggleable, and it is always enabled.
 
+A **linked folder** (see "Link a folder the person keeps themselves") has no
+tree under the knowledge root at all. It is one resource file whose config is
+`{"folder": "<absolute path>"}`, filed in the machine-local class at
+`local/resources/knowledge/<name>.json` with the home written as `${HOME}`, and
+never in the vault (ADR linked-knowledge-folders-are-read-only-and-machine-local).
+The folder it names is the person's: Coffer reads it in place and writes
+nothing into it, so it has no `sources/`, `pages/`, `.inbox/` or history of
+Coffer's (see "Leave a linked folder to its own tools").
+
 ## On-disk layout
 
 ```text
@@ -167,7 +176,7 @@ hand-edited file with a stray colon cannot break a whole collection walk.
 
 ### What the sweep does
 
-The knowledge sweep runs on a timer and does four mechanical things, calling no
+The knowledge sweep runs when a file under `knowledge/` changes (and every 10 minutes otherwise) and does four mechanical things, calling no
 model (see "Sweep the knowledge root on its mechanical duties"):
 
 1. **Adopt and promote `.inbox/` files**: each Markdown file in a collection's
@@ -228,7 +237,7 @@ of them is persisted and none of them can be stale.
 
 | Type | Fields | What it is |
 | --- | --- | --- |
-| `CollectionEntry` | `uid`, `name`, `description`, `page_count`, `source_count`, `waiting_source_count`, `finding_count`, `findings`, `folder_path`, `updated_at` | One collection, with the counts and findings its wiki graph gives. |
+| `CollectionEntry` | `uid`, `name`, `description`, `page_count`, `source_count`, `waiting_source_count`, `finding_count`, `findings`, `folder_path`, `updated_at`, `linked`, `note_count`, `rules_file` | One collection, with the counts and findings its wiki graph gives. For a linked folder `linked` is true, `note_count` counts its Markdown files, `rules_file` names the first of `AGENTS.md`, `CLAUDE.md` and `README.md` at its root (empty when none), and the wiki counts are zero. |
 | `DirectoryEntry` | `path`, `name`, `file_count` | A subdirectory at the level being listed. `path` is relative to the root — pass it back to descend. |
 | `FileEntry` | `path`, `title`, `description`, `actor`, `updated_at`, `kind`, `page_type`, `waiting` | One file as a listing or a catalogue shows it: enough to judge relevance without reading the body. |
 | `CatalogueLevel` | `path`, `directories`, `files` | **One level of one collection**, never the whole tree. |
@@ -256,12 +265,15 @@ kept, whichever converter ran.
 
 The HTTP wire models in `surfaces/http/knowledge/schemas.py` mirror the domain
 types and add the shapes that describe an answer no domain type does:
-`CollectionCreate`; `MaterialIn` (`collection`, `title`, `description`, `body`);
+`CollectionCreate`; `CollectionLink` (`folder`, the absolute path, and an
+optional `name`) for `POST /knowledge/collections/link` (see "Link a folder the
+person keeps themselves"); `MaterialIn` (`collection`, `title`, `description`, `body`);
 `HandoffOut` (`prompt` and the facts it was written from), carried on a
 collection's read as `tidy_handoff` and answered by
 `GET /knowledge/tidy-handoff` for all collections (see "Hand a tidy to the
 agent"); a collection's read also carries `tidy_running`, whether an agent has
-a tidy of it open (see "Record a tidy as one change"); `CheckOut`
+a tidy of it open (see "Record a tidy as one change"), and `linked`,
+`note_count` and `rules_file` as on `CollectionEntry`; `CheckOut`
 (`collection`, `findings` of `FindingOut`), answered by
 `GET /knowledge/collections/{uid}/check`; `CollectionFilesOut` (`files` of
 `FileSummaryOut`), answered by `GET /knowledge/collections/{uid}/files` (see
@@ -299,8 +311,11 @@ the live vault — and it could not have withheld anything it was asked to: the
 skill it narrows hands the agent the absolute knowledge root and tells it to
 grep. `PUT .../scope` on this kind is refused with `SCOPE_INVALID`.
 
-`KnowledgeConfig` (`domain/knowledge/config.py`) is **empty and forbids unknown
-keys**. A collection has no settings at all: no retrieval modes, no chunk size,
+`KnowledgeConfig` (`domain/knowledge/config.py`) **forbids unknown keys** and
+holds one optional field, `folder`, the absolute path a linked folder names; a
+collection Coffer keeps leaves it unset and its config stays `{}` on disk. The
+kind's `storage_row` hook files a row that names a folder in the machine-local
+class. A collection Coffer keeps has no settings at all: no retrieval modes, no chunk size,
 no entry-length cap, no embedding fields, no auto-update flag, no display label
 (see "Add no table and no directory outside the knowledge root"). Anything that
 used to be configured per scope was configuring machinery that no longer exists.

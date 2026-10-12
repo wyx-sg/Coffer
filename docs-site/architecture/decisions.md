@@ -43,6 +43,7 @@ Explained in: [Resource framework](/architecture/resource-framework), [Persisten
 | Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades | [`every-vault-file-carries-its-format-version`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-file-carries-its-format-version.md) |
 | Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer | [`every-vault-write-is-a-validated-commit-naming-its-writer`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-write-is-a-validated-commit-naming-its-writer.md) |
 | Audit Every Change With Its Actor, Log Every Invocation, Prune Per Table | [`audit-and-retention`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/audit-and-retention.md) |
+| Secret Uses Are Read Apart From Changes | [`secret-uses-are-read-apart-from-changes`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/secret-uses-are-read-apart-from-changes.md) |
 | One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters | [`one-level-triggered-reconciler-compares-parameters`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/one-level-triggered-reconciler-compares-parameters.md) |
 | The Wire Contract Is Generated From the Pydantic Models, and the Frontend Client From the Contract | [`wire-contract-generated-from-the-pydantic-models`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/wire-contract-generated-from-the-pydantic-models.md) |
 | Background Work Runs Supervised, and Every Record Carries One Correlation Id | [`background-work-runs-supervised-and-correlated`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/background-work-runs-supervised-and-correlated.md) |
@@ -107,7 +108,9 @@ Explained in: [Chat and turns](/architecture/chat), [Channels](/guides/channels)
 | Chat Is a Single-Owner Live Mirror | [`chat-single-owner-live-mirror`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/chat-single-owner-live-mirror.md) |
 | Channels Are Thin Transport Adapters Over One Shared Core, Supervised In-Daemon | [`channel-adapter-framework`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md) |
 | A Channel Answers Only Its Paired Owner, and Fails Closed in Groups | [`channel-owner-gate`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-owner-gate.md) |
-| A Channel Conversation Is Keyed by (Channel, Chat, Thread) and Grounded in Its Thread and Quote | [`channel-conversation-identity-and-context`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-conversation-identity-and-context.md) |
+| A Channel Conversation Is Keyed by (Channel, Chat, Thread); a Direct Chat Is One Conversation Until `/thread` Opens Another | [`channel-conversation-identity`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-conversation-identity.md) |
+| A Channel Turn Folds a Bounded Slice of Its Thread, Read by the Transport | [`channel-thread-context-is-a-bounded-slice`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-thread-context-is-a-bounded-slice.md) |
+| A Burst of Channel Messages Is One Turn, Released After a Per-Channel Quiet Window | [`a-burst-of-channel-messages-is-one-turn`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/a-burst-of-channel-messages-is-one-turn.md) |
 | Channel Switches: the Agent Opens a New Conversation, the Model Applies Next Turn | [`channel-switches-structural-vs-parametric`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-switches-structural-vs-parametric.md) |
 | A Channel Turn Shows Progress on a Preview Surface Where One Exists, and the Reply Is the Answer Alone | [`channel-live-surface-strategy`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-live-surface-strategy.md) |
 | Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send | [`channel-attachments`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md) |
@@ -126,6 +129,7 @@ Explained in: [Knowledge](/architecture/knowledge), [Memory](/architecture/memor
 | Knowledge Is a Directory of Markdown Files, Not an Index | [`knowledge-is-plain-files`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) |
 | Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change | [`tidying-knowledge-is-the-agents-job`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md) |
 | Knowledge Is a Wiki of Pages Compiled From Kept Sources | [`knowledge-is-a-wiki-of-pages-compiled-from-kept-sources`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md) |
+| A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local | [`linked-knowledge-folders-are-read-only-and-machine-local`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md) |
 | Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault | [`sync-memory-into-each-agents-own-memory`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-memory-into-each-agents-own-memory.md) |
 
 ## Sync & secrets
@@ -142,6 +146,7 @@ Explained in: [Vault sync](/architecture/vault-sync), [Security model](/architec
 | Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use | [`credential-references`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/credential-references.md) |
 | Secrets Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository | [`secrets-cross-machines-only-as-ciphertext`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/secrets-cross-machines-only-as-ciphertext.md) |
 | Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process | [`standalone-secrets-are-named-references-injected-into-one-child`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/standalone-secrets-are-named-references-injected-into-one-child.md) |
+| A Secret Header Stores the Credential Alone, and Its Slot Names the Auth Scheme | [`a-secret-header-stores-the-credential-and-its-slot-names-the-scheme`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/a-secret-header-stores-the-credential-and-its-slot-names-the-scheme.md) |
 | Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New | [`only-a-present-human-sees-a-secret-or-sends-it-somewhere-new`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md) |
 
 ## Documentation

@@ -58,6 +58,13 @@ os.environ.setdefault("COFFER_MODEL_PROXY", "off")
 # (``infrastructure/usage/price_refresh.REFRESH_ENV``); tests price from the
 # snapshot in the tree.
 os.environ.setdefault("COFFER_PRICE_REFRESH", "off")
+# The daemon mounts a catch-all web UI when ``frontend/dist`` exists on disk
+# (``surfaces/http/webui.resolve_webui_dir``). That directory is gitignored and
+# present in any checkout that ever ran ``npm run build``, so without this a
+# route test expecting 404 for a retired route would get the SPA's 405 on one
+# machine and pass on another. Point the daemon at a directory that never
+# exists; the tests of the web UI itself set ``COFFER_WEBUI_DIR`` to their own.
+os.environ.setdefault("COFFER_WEBUI_DIR", str(_RUN_ROOT / "no-webui"))
 # Each connection's health is swept at boot and re-checked after every edit,
 # over the network (``surfaces/http/provider_health_wiring.BACKGROUND_ENV``);
 # tests check only when they ask.

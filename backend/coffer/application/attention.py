@@ -48,6 +48,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any, Protocol
 
+from coffer.application.runtime.cancellation import raise_if_stopping
 from coffer.domain.attention_errors import AttentionNotIgnorable
 from coffer.domain.audit import AuditEventType
 from coffer.domain.handoff import Handoff, render_handoff
@@ -180,6 +181,7 @@ async def _ask(source: AttentionSource) -> Sequence[AttentionItem] | Exception:
     try:
         return await source.items()
     except Exception as exc:
+        raise_if_stopping(exc)
         return exc
 
 

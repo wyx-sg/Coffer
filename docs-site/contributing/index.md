@@ -103,7 +103,8 @@ flowchart TD
 7. **Squash and open the pull request:**
 
    ```sh
-   git reset --soft main && git commit      # one commit, Conventional Commits subject
+   git fetch origin main && git rebase origin/main
+   git reset --soft origin/main && git commit      # one commit, Conventional Commits subject
    git push -u origin feature/<short-name>
    gh pr create --fill --base main
    ```

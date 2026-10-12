@@ -22,8 +22,10 @@ ChannelConfig (discriminator: channel_type)
 │   ├── show_steps: bool = True             # step lines under the live status line
 │   ├── new_conversation_after_idle_hours: float = 24.0  # idle hours before a chat's next message opens a new conversation (0–8760; 0 = never)
 │   ├── directories: list[str] = []         # absolute paths `/dir` may switch into (≤32)
-│   ├── direct_system_prompt: str = ""      # owner's prompt for direct chats + their threads (≤4000, trimmed)
-│   └── group_system_prompt: str = ""       # owner's prompt for group main chats + threads (≤4000, trimmed)
+│   ├── direct_reply_style: str = ""        # owner's reply style for direct chats + their threads ("" = Coffer's default; ≤6000, trimmed)
+│   ├── group_reply_style: str = ""         # owner's reply style for group main chats + threads (same rules)
+│   ├── direct_reply_style_base: str = ""   # fingerprint of the default the direct rewrite was written against
+│   └── group_reply_style_base: str = ""    # …and the group one; "" while the style follows the default
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
 │   └── bot_token_ref: str            # secret-store ref, probed at register
@@ -35,11 +37,20 @@ ChannelConfig (discriminator: channel_type)
 
 Validation rules:
 
-- `direct_system_prompt` and `group_system_prompt` are plain text of at most
-  4,000 characters (`SYSTEM_PROMPT_MAX_LENGTH`), stripped of surrounding
-  whitespace; empty means none. They are read from the stored config each time a
-  turn's system prompt is composed (`ChannelNoteReader` → `ChannelNote.owner_prompt`),
+- `direct_reply_style` and `group_reply_style` are plain text of at most
+  6,000 characters (`REPLY_STYLE_MAX_LENGTH`), stripped of surrounding
+  whitespace; empty — or text equal to Coffer's default (`DEFAULT_REPLY_STYLE`),
+  which is stored empty — follows the default. A non-empty style without a
+  `*_reply_style_base` is stamped with today's default's fingerprint
+  (`reply_style_hash`). They are read from the stored config each time a turn's
+  system prompt is composed (`ChannelNoteReader` → `ChannelNote.reply_style`),
   never copied onto the live binding, so an edit applies from the next turn.
+  Coffer's channel note is generated per turn and never stored here (ADR
+  channel-prompt-fixed-note-and-editable-style).
+- A stored `direct_system_prompt` / `group_system_prompt` (the owner prompt the
+  style replaced) is migrated on read: a non-empty one becomes
+  `<default style>\n\n<prompt>` with today's fingerprint, unless the document
+  already sets that kind's style; the old keys go on the next write.
 - `*_ref` fields must not look like raw secrets (a Telegram token pattern or
   a long high-entropy string is rejected with a pointer to the secret
   store) — same posture as `mcp_server`'s static-value secret rejection.

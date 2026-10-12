@@ -371,10 +371,10 @@ async def test_on_conversation_deleted_is_noop(tmp_path: Any) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="an edited system prompt applies from the next turn"
+    spec="channels", scenario="an edited reply style applies from the next turn"
 )
 @pytest.mark.asyncio
-async def test_a_resumed_thread_carries_the_owner_prompt_as_it_is_now(tmp_path: Any) -> None:
+async def test_a_resumed_thread_carries_the_reply_style_as_it_is_now(tmp_path: Any) -> None:
     """Codex is told Coffer's context in ``developerInstructions`` on every
     ``thread/resume`` too, composed for that turn — so the group prompt the owner
     just edited rides on the resumed thread's next turn."""
@@ -386,7 +386,7 @@ async def test_a_resumed_thread_carries_the_owner_prompt_as_it_is_now(tmp_path: 
 
     async def _note(uid: str, conversation_id: str) -> ChannelNote | None:
         return ChannelNote(
-            name="st-ops", platform="SeaTalk", chat_kind="group", owner_prompt="Be brief."
+            name="st-ops", platform="SeaTalk", chat_kind="group", reply_style="Be brief."
         )
 
     factory, server = _make_factory()
@@ -406,7 +406,7 @@ async def test_a_resumed_thread_carries_the_owner_prompt_as_it_is_now(tmp_path: 
 
     resume = next(p for m, p in server.requests if m == "thread/resume")
     assert resume["threadId"] == "thread-99"
-    assert resume["developerInstructions"].count("Instructions from the channel's owner:") == 1
-    assert "Instructions from the channel's owner:\nBe brief." in resume["developerInstructions"]
+    assert resume["developerInstructions"].count("Reply style:") == 1
+    assert "Reply style:\nBe brief." in resume["developerInstructions"]
 
     await engine.dispose()

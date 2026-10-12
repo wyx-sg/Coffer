@@ -188,7 +188,7 @@ An audit row records:
 - the resource's `uid` plus its **kind and name at the time**, so a history survives a rename and old rows keep saying what was true then;
 - **details**, with config passed through the kind's audit redactor. Scope carries only agent uids and is recorded verbatim.
 
-You read the log on the **Changes** tab of **Activity** in the web UI, with `coffer log audit`, or through `GET /api/v1/audit`.
+You read the log on the **Changes** tab of **Activity** in the web UI (a secret's uses, `secret_resolved` and `secret_revealed`, on its **Secret use** tab), with `coffer log audit`, or through `GET /api/v1/audit`.
 
 ## Schema validation
 

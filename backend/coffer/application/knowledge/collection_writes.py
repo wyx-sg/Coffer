@@ -54,7 +54,7 @@ async def describe_collection(
     knowledge: KnowledgeService, audit: AuditService, uid: str, description: str, *, actor: str
 ) -> CollectionEntry:
     """Make ``description`` the opening paragraph of the collection's README."""
-    row = await knowledge.collection(uid)
+    row = await knowledge.owned_collection(uid)
     meta = CommitMeta(
         WRITER_USER, OP_SAVE, f"Describe collection {row.name}", actor=actor, collection=row.name
     )

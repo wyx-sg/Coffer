@@ -136,13 +136,19 @@ Option B, in three steps so each can be measured:
      proxy stops, and then parks.
    - The MCP session reaper parks with no session open.
 
+   Done in change `wake-knowledge-sweep-on-events`:
+   - The knowledge sweep is woken by file events under `knowledge/` (borrowed
+     from the vault scanner's one watch) and by switching the feature on, and
+     falls back every 10 minutes. A loose document inside its quiet minute
+     schedules one more run.
+
    Two parts are left for later changes. The reconciler keeps its 60-second
    period until the agents' config files are watched. A running proxy is still
    left running when the last agent leaves: stopping it needs a drain decision
    for in-flight streams that this change does not make.
 
-Knowledge and memory workers (knowledge sweep, memory aggregate, distil, sync)
-are being redesigned separately and are not moved here.
+The memory workers (aggregate, distil, sync) are being redesigned separately
+and are not moved here.
 
 ## Consequences
 

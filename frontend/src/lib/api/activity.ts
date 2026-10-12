@@ -24,6 +24,8 @@ export interface AuditParams {
   q?: string;
   /** With `q`: event types whose localized wording matched it (composed client-side). */
   qTypes?: string[];
+  /** Changes only, or a secret's uses only. */
+  nature?: "change" | "use";
 }
 
 /** @ui-only The server-side filters the invocation route takes. */
@@ -46,7 +48,7 @@ export interface DaemonParams {
 
 /** @ui-only One log and its server-side filters. */
 export type SourceParams =
-  | { source: "change"; params: AuditParams }
+  | { source: "change" | "use"; params: AuditParams }
   | { source: "call"; params: CallParams }
   | { source: "daemon"; params: DaemonParams };
 
@@ -65,6 +67,7 @@ export function fetchAuditPage(
           since: params.since || undefined,
           kind: params.kind || undefined,
           event_type: params.eventType || undefined,
+          nature: params.nature,
           q: params.q || undefined,
           q_type: params.q && params.qTypes?.length ? params.qTypes : undefined,
           cursor: cursor || undefined,

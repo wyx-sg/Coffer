@@ -12,7 +12,7 @@ import { useTranslation } from "react-i18next";
 import { KeyRound } from "lucide-react";
 
 import { Section } from "@/components/Section";
-import { ReplaceSecretRefDialog } from "@/components/secret/ReplaceSecretRefDialog";
+import { ReplaceSecretDialog } from "@/components/secret/ReplaceSecretDialog";
 import { SecretRefControl } from "@/components/secret/SecretRefControl";
 import { Button } from "@/components/ui/button";
 import type { McpStatusDetail } from "@/lib/hooks/useMcpServerStatus";
@@ -88,7 +88,7 @@ export function McpRequires({ requires, onRebind }: Props) {
         })}
       </ul>
       {onRebind ? (
-        <ReplaceSecretRefDialog
+        <ReplaceSecretDialog
           secretRef={replacing?.secret ? refOf(replacing.secret) : null}
           field={replacing?.name ?? ""}
           onClose={() => setReplacing(null)}
