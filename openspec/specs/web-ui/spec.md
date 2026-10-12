@@ -2812,7 +2812,8 @@ button in the definition of an imported group.
 
 A group's detail page (`/custom-tools/<group>/<tab>`) MUST carry, under its
 header — its **reach** and a one-line summary of the last 24 hours (calls and
-failures) — three tabs laid out like every other detail page's. **Overview** (the
+failures) — three tabs, in this order: Overview, Environments, Tools, laid out
+like every other detail page's. **Overview** (the
 default, at the bare `/custom-tools/<group>`) stacks the group's **definition**
 (its description, the name agents see, its timeout, its diagnostic headers and
 response rules — "HTTP status only" when it has none — and, for an imported group,
@@ -2918,10 +2919,10 @@ the gateway").
 - **THEN** a banner says the secret was refused, with Ask again as its only button, and no banner says it waits for approval
 - **AND** pressing Ask again asks again for that approval
 
-#### Scenario: a group's page has Overview, Tools and Environments tabs
+#### Scenario: a group's page has Overview, Environments and Tools tabs
 - **GIVEN** the `billing` group with three tools, one environment and a call in the last 24 hours
 - **WHEN** the user opens `/custom-tools/billing`, switches to Tools, then Environments, then back to Tools and chooses one tool
-- **THEN** the page opens on Overview with the definition, under a header with the reach and a one-line 24-hour summary, and its tabs are Overview, Tools and Environments and no other
+- **THEN** the page opens on Overview with the definition, under a header with the reach and a one-line 24-hour summary, and its tabs are Overview, Environments and Tools, in that order, and no other
 - **AND** Tools, at `/custom-tools/billing/tools`, shows the tools table; Environments, at `/custom-tools/billing/environments`, shows the environment's card with its base URL
 - **AND** the tool opens in a drawer on its Request tab without changing the address, its tabs are General, Request, Inputs, Response and Test, and Test shows the request it would send before any run
 

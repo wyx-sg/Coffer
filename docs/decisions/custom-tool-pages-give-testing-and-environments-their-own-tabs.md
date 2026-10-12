@@ -36,7 +36,7 @@ calls, which is what Coffer's are, test in a step or view of its own.
 
 ## Options Considered
 
-### Option A — Test is the editor's last tab; environments are the group's third tab (chosen)
+### Option A — Test is the editor's last tab; environments are a tab of the group's, after Overview (chosen)
 
 The editor's tabs are General, Request, Inputs, Response and **Test**, each
 full width. Test reads top to bottom: where it runs and **Run**, a sample
@@ -45,7 +45,8 @@ the body), then the response with Body / Response headers tabs. The tab keeps
 its values and result while the person switches tabs, so they can fix the
 request and come back.
 
-A group's tabs are Overview, Tools and **Environments**. Each environment is
+A group's tabs are Overview, **Environments** and Tools: where its calls go
+comes before the tools that use it. Each environment is
 a card that shows everything it holds — switch, secret state, base URL,
 timeout and whose it is, headers, variables — with **Edit** and a menu for
 Delete.
