@@ -1188,6 +1188,18 @@ components:
             $ref: '#/components/schemas/SourceRefOut'
           title: Sources
           type: array
+        stale:
+          default: false
+          title: Stale
+          type: boolean
+        summary:
+          default: ''
+          title: Summary
+          type: string
+        superseded_by:
+          anyOf:
+          - $ref: '#/components/schemas/SourceRefOut'
+          - type: 'null'
         title:
           title: Title
           type: string
@@ -1216,10 +1228,13 @@ components:
       - page_type
       - aliases
       - verified
+      - stale
       - sources
       - links
       - cited_by
       - waiting
+      - superseded_by
+      - summary
       title: FileOut
       type: object
     FileSummaryOut:
@@ -1227,6 +1242,10 @@ components:
         actor:
           title: Actor
           type: string
+        cited_count:
+          default: 0
+          title: Cited Count
+          type: integer
         description:
           title: Description
           type: string
@@ -1244,6 +1263,22 @@ components:
           type: string
         path:
           title: Path
+          type: string
+        skipped:
+          default: false
+          title: Skipped
+          type: boolean
+        stale:
+          default: false
+          title: Stale
+          type: boolean
+        summary:
+          default: ''
+          title: Summary
+          type: string
+        superseded_by:
+          default: ''
+          title: Superseded By
           type: string
         title:
           title: Title
@@ -1264,6 +1299,11 @@ components:
       - kind
       - page_type
       - waiting
+      - stale
+      - superseded_by
+      - summary
+      - cited_count
+      - skipped
       title: FileSummaryOut
       type: object
     FindingOut:
@@ -1274,8 +1314,10 @@ components:
           - ambiguous_link
           - duplicate_slug
           - missing_source
+          - superseded_source
           - incomplete_page
           - unsourced_page
+          - stale_page
           - orphan_page
           - waiting_source
           title: Kind

@@ -141,7 +141,8 @@ def test_the_readme_is_never_a_document(root: pathlib.Path) -> None:
     assert [f.path for f in level.files] == [document]
     assert catalogue.list_level("shopee").files == ()
     [entry] = catalogue.list_collections()
-    assert (entry.page_count, entry.source_count, entry.finding_count) == (1, 0, 2)
+    # Without sources and never checked: unsourced_page and stale_page.
+    assert (entry.page_count, entry.source_count, entry.finding_count) == (1, 0, 3)
 
 
 # ----- presented as files --------------------------------------------------

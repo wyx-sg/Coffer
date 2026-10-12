@@ -46,7 +46,7 @@ Coffer's (see "Leave a linked folder to its own tools").
 ```text
 ~/.coffer/vault/knowledge/
 ├── shopee/                         # a collection = a top-level folder = one Resource
-│   ├── README.md                   # the schema; first paragraph = the description; not a page
+│   ├── README.md                   # the schema: verify_after_days, the description, page types, rules; not a page
 │   ├── sources/                    # what arrived, kept as Markdown; never edited
 │   │   └── q3-review.md            # a source: converted Markdown + frontmatter
 │   ├── pages/                      # the wiki: read by agents, edited by people and agents
@@ -96,13 +96,37 @@ Coffer's (see "Leave a linked folder to its own tools").
 
 A collection describes itself in a `README.md` at its own root, which is not a
 page or a source: it is never listed as content or counted (see "Keep the
-collection README out of the corpus"). Its first paragraph is the collection's
-one-line description everywhere one is shown (see "Read a collection's
-description from its README"), read off disk on every listing so it cannot drift
-from what the person browsing the folder reads.
-`POST /api/v1/knowledge/collections` writes one when given a `description`.
-The README is also the collection's **schema**: the page types and conventions
-it names win over the guide's defaults, which the guide tells agents.
+collection README out of the corpus"). Its first paragraph before its first
+`##` section is the collection's one-line description everywhere one is shown
+(see "Read a collection's description from its README"), read off disk on every
+listing so it cannot drift from what the person browsing the folder reads.
+The README is also the collection's **schema**: the page types and rules it
+names win over the guide's defaults, which the guide tells agents.
+`POST /api/v1/knowledge/collections` writes it with the defaults spelled out
+(see "Start a collection's README with its rules written out"):
+
+```markdown
+---
+verify_after_days: 90
+---
+
+# shopee
+
+How the shop is built.
+
+## Page types
+
+- `overview`: where to start. …
+- `concept`, `entity`, `how-to`, `decision`: …
+
+## Rules
+
+- One subject per page. Link related pages with `[[slug]]`. …
+```
+
+| README key | Type | Notes |
+| --- | --- | --- |
+| `verify_after_days` | `int` | Days a page's `verified` date holds before it is a `stale_page` finding (see "Ask for a recheck of a page after the collection's interval"). Absent, negative or not a whole number → 90; `0` turns the check off. |
 
 That paragraph does more work than it used to: it is also what the delivered
 skill's frontmatter description draws on, which is the only part of this layer
@@ -152,8 +176,10 @@ updated_at: '2026-09-12T04:18:33Z'
 | `type` | `str` | A page's type: `concept`, `entity`, `how-to`, `decision` or `overview` by default, or one the README defines. Missing → `incomplete_page`. |
 | `sources` | list of `str` | A page's sources, by slug. Empty → `unsourced_page`; a slug no source has → `missing_source`. |
 | `aliases` | list of `str` | More names a page answers to in a `[[link]]`. |
-| `verified` | `YYYY-MM-DD` `str` | When the page was last checked against its sources or the code. Optional; returned on a page's read as written. |
+| `verified` | `YYYY-MM-DD` `str` | When the page was last checked against its sources or the code; returned on a page's read as written. Missing, unreadable or older than the README's `verify_after_days` → `stale_page`. |
 | `ingest` | `skipped` | Set by an agent on a source with nothing worth keeping, so it stops waiting. |
+| `superseded_by` | `str` | A source's replacement, by slug, set by an agent or a person (see "Mark a source superseded by the one that replaces it"). The source stops waiting; a page citing it and no later source in the chain → `superseded_source`; a slug no source has → `missing_source` on the source. |
+| `summary` | `str` | A source's one or two sentences on what it says, written by an agent as it integrates or tidies; shown in the catalogue and in Contents. |
 
 A page's **slug** is its file stem; so is a source's. A `[[slug]]` or
 `[[slug|text]]` outside code in a page's body resolves case-insensitively, after
@@ -239,11 +265,11 @@ of them is persisted and none of them can be stale.
 | --- | --- | --- |
 | `CollectionEntry` | `uid`, `name`, `description`, `page_count`, `source_count`, `waiting_source_count`, `finding_count`, `findings`, `folder_path`, `updated_at`, `linked`, `note_count`, `rules_file` | One collection, with the counts and findings its wiki graph gives. For a linked folder `linked` is true, `note_count` counts its Markdown files, `rules_file` names the first of `AGENTS.md`, `CLAUDE.md` and `README.md` at its root (empty when none), and the wiki counts are zero. |
 | `DirectoryEntry` | `path`, `name`, `file_count` | A subdirectory at the level being listed. `path` is relative to the root — pass it back to descend. |
-| `FileEntry` | `path`, `title`, `description`, `actor`, `updated_at`, `kind`, `page_type`, `waiting` | One file as a listing or a catalogue shows it: enough to judge relevance without reading the body. |
+| `FileEntry` | `path`, `title`, `description`, `actor`, `updated_at`, `kind`, `page_type`, `waiting`, `stale`, `superseded_by`, `summary`, `cited_count`, `skipped` | One file as a listing or a catalogue shows it: enough to judge relevance without reading the body. `stale` marks a page due a recheck; a source's `superseded_by` is the path its replacement resolves to (the slug as written when it names none), `cited_count` how many pages cite it and `skipped` whether it is marked `ingest: skipped`. |
 | `CatalogueLevel` | `path`, `directories`, `files` | **One level of one collection**, never the whole tree. |
-| `Finding` | `kind`, `path`, `target`, `others` | One mechanical finding (see "Check a collection mechanically on every read"). |
+| `Finding` | `kind`, `path`, `target`, `others` | One mechanical finding (see "Check a collection mechanically on every read"): `dead_link`, `ambiguous_link`, `duplicate_slug`, `missing_source`, `superseded_source` (`others` = the newest replacement), `incomplete_page`, `unsourced_page`, `stale_page` (`target` = `verified` as written, none when missing), `orphan_page` or `waiting_source`. |
 | `SourceRef`, `LinkRef`, `PageRef` | `slug`/`target`, `path`, `title`/`ambiguous` | A page's `sources` entry or `[[link]]` with what it resolves to; a page that cites a source. |
-| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `kind`, `page_type`, `aliases`, `verified`, `sources`, `links`, `cited_by`, `waiting` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); Coffer serves a document's bytes only to be shown: no route saves them (see "Treat a direct file edit as a complete change"). |
+| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `kind`, `page_type`, `aliases`, `verified`, `stale`, `sources`, `links`, `cited_by`, `waiting`, `superseded_by`, `summary` | A file in full; a source's `superseded_by` is a `SourceRef`, `None` when it is current. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); Coffer serves a document's bytes only to be shown: no route saves them (see "Treat a direct file edit as a complete change"). |
 
 Constants: `ACTOR_AGENT = "agent"`, `ACTOR_USER = "user"`.
 

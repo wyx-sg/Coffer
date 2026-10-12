@@ -128,6 +128,7 @@ Explained in: [Knowledge](/architecture/knowledge), [Memory](/architecture/memor
 | Knowledge Is a Directory of Markdown Files, Not an Index | [`knowledge-is-plain-files`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) |
 | Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change | [`tidying-knowledge-is-the-agents-job`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md) |
 | Knowledge Is a Wiki of Pages Compiled From Kept Sources | [`knowledge-is-a-wiki-of-pages-compiled-from-kept-sources`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md) |
+| Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears | [`knowledge-stays-current-through-flags-coffer-computes`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-stays-current-through-flags-coffer-computes.md) |
 | A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local | [`linked-knowledge-folders-are-read-only-and-machine-local`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md) |
 | Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault | [`sync-memory-into-each-agents-own-memory`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-memory-into-each-agents-own-memory.md) |
 

@@ -5,7 +5,7 @@ description: Keep what you and your agents know about your working environment a
 
 # Knowledge
 
-Knowledge is a directory of Markdown about your working environment — services, repositories, conventions, decisions, pitfalls — that every agent on your machine reads. Each collection is a small wiki: the material you upload is kept as **sources**, and your agent compiles it into **pages** that link to each other. This page covers creating collections, adding sources and pages, how you and your agent change them, how your agent integrates sources, fixes what Coffer found and tidies pages when you press **Tidy**, how a tidy lands as one change you can undo, how Coffer checks a collection, how to look back at a file's history and bring a version back, how to open a collection in Obsidian, and how agents find what is there.
+Knowledge is a directory of Markdown about your working environment — services, repositories, conventions, decisions, pitfalls — that every agent on your machine reads. Each collection is a small wiki: the material you upload is kept as **sources**, and your agent compiles it into **pages** that link to each other. This page covers creating collections, adding sources and pages, how you and your agent change them, how your agent integrates sources, fixes what Coffer found and tidies pages when you press **Tidy**, how a tidy lands as one change you can undo, how Coffer checks a collection and keeps it current, how to look back at a file's history and bring a version back, how to open a collection in Obsidian, and how agents find what is there.
 
 ## What knowledge is for
 
@@ -25,7 +25,7 @@ A **collection** is a top-level folder under the knowledge root:
 ```text
 ~/.coffer/vault/knowledge/
 └── payments/                        ← one collection
-    ├── README.md                    ← the schema: what belongs here, page types, conventions
+    ├── README.md                    ← the schema: what belongs here, page types, rules
     ├── sources/
     │   ├── gateway-design.md        ← a source: the upload converted to Markdown
     │   └── oncall-notes.md          ← a source from a Markdown upload
@@ -36,7 +36,7 @@ A **collection** is a top-level folder under the knowledge root:
     └── .inbox/                      ← hidden: a drop zone, kept as sources at the next sweep
 ```
 
-- **`README.md`** at the collection root is the collection's **schema**. Its first paragraph is the collection's description everywhere Coffer shows one, and it is what the `coffer-guide` skill tells agents the collection is about. Whatever else it says about the page types and conventions the collection uses takes precedence over the guide's defaults. It is never listed as a page or a source, or counted.
+- **`README.md`** at the collection root is the collection's **schema**. Its first paragraph, before its first `##` section, is the collection's description everywhere Coffer shows one, and it is what the `coffer-guide` skill tells agents the collection is about. Its **Page types** and **Rules** sections, and anything else it says about the conventions the collection uses, take precedence over the guide's defaults. `verify_after_days` in its frontmatter sets how long a page's check holds (see [Pages due a recheck](#pages-due-a-recheck)). It is never listed as a page or a source, or counted.
 - **`sources/`** keeps the material that arrived: every upload and every file dropped into the inbox, converted to Markdown. Only the Markdown is kept, not the file you uploaded, so the collection stays one tree of Markdown every agent can read. Agents read sources and never edit them.
 - **`pages/`** holds the wiki itself: the pages you and your agents write and keep up to date. This is what agents read first.
 - **Folders** inside `pages/` and `sources/` are optional and carry no meaning. You or your agent can create, move and remove them. `pages/` and `sources/` are the only folders that mean anything.
@@ -74,13 +74,19 @@ The `account-session` service owns ... see [[rate-limits|the gateway's limits]].
 | `description` | One sentence on what question the page answers. Agents see it in the catalogue. |
 | `sources` | The slugs of the sources the page draws on. A source no page lists here is still [waiting](#sources-wait-until-a-page-cites-them). |
 | `aliases` | Other names a link may use for this page, such as an old slug after a rename. |
-| `verified` | Optional. The date (`YYYY-MM-DD`) the page was last checked against its sources or the code. The page's line in the reader shows it. Where a page's facts came from belongs here and in `sources`, not in a paragraph of the body listing what was read. |
+| `verified` | The date (`YYYY-MM-DD`) the page was last checked against its sources or the code. The page's line in the reader shows it. A page without it, or with one older than the collection's `verify_after_days`, is [due a recheck](#pages-due-a-recheck). Where a page's facts came from belongs here and in `sources`, not in a paragraph of the body listing what was read. |
 | `actor` | `user` or `agent` — who wrote the page. |
 | `created_at`, `updated_at` | Timestamps. |
 
-Coffer writes no page itself: whoever writes a page gives it these keys, as the `coffer-guide` skill teaches agents. A page that lacks `title`, `type` or `description`, or names no `sources`, still works; it shows up as a finding when the collection is [checked](#check-a-collection).
+Coffer writes no page itself: whoever writes a page gives it these keys, as the `coffer-guide` skill teaches agents. A page that lacks `title`, `type` or `description`, names no `sources` or has no `verified`, still works; it shows up as a finding when the collection is [checked](#check-a-collection).
 
-A source carries the keys Coffer writes when it keeps one — `title`, `description`, `actor`, `created_at`, `updated_at`. The one key an agent may add to a source is `ingest: skipped`, for a source with nothing worth a page.
+A source carries the keys Coffer writes when it keeps one — `title`, `description`, `actor`, `created_at`, `updated_at`. An agent, or you, may add three more, which describe the source without changing what it says:
+
+| Key | Meaning |
+| --- | --- |
+| `summary` | One or two sentences on what the source says, written by the agent when it integrates or tidies. The catalogue and the collection's **Contents** show it. |
+| `superseded_by` | The slug of a newer source that replaces this one, such as the next version of a design doc (see [When a source is replaced](#when-a-source-is-replaced)). |
+| `ingest: skipped` | For a source with nothing worth a page, so it stops waiting. |
 
 Any other key you add to a file is kept, with its value, whenever Coffer rewrites the file.
 
@@ -92,7 +98,7 @@ Coffer resolves every link each time a page is read, ignoring case. A link that 
 
 ### Sources wait until a page cites them {#sources-wait-until-a-page-cites-them}
 
-A source **waits** while no page lists it in `sources` and it is not marked `ingest: skipped`. Nothing else records which sources have been integrated: as soon as a page cites a source, it stops waiting. The Knowledge page marks a waiting source **Waiting**, the collection's page counts them, the `coffer-guide` catalogue names them, and **Tidy** asks your agent to integrate them first.
+A source **waits** while no page lists it in `sources` and it is marked neither `ingest: skipped` nor `superseded_by`. Nothing else records which sources have been integrated: as soon as a page cites a source, it stops waiting. The Knowledge page marks a waiting source **Waiting**, the collection's page counts them, the `coffer-guide` catalogue names them, and **Tidy** asks your agent to integrate them first.
 
 ## Create a collection
 
@@ -104,7 +110,35 @@ Collections are created only on purpose, and only by a person. Reading, writing,
 Knowledge → Add → New collection… → Name, What belongs in here → Create collection
 ```
 
-**New collection…** is also the button at the top of the tree. The **Add** menu says what each entry keeps: a new collection is kept in Coffer, synced to your other Macs, with its history, and tidied by your agent. This creates `~/.coffer/vault/knowledge/payments/` and a `README.md` holding the description; `pages/` and `sources/` appear as soon as something is written into them. A collection has no title: every page and listing shows it by its folder name. Its description is the opening paragraph of the README: change it on the collection's page (click the text; it saves when you leave the field) or in the file itself. Either way only that paragraph changes, and anything written under it — page types and conventions included — stays.
+**New collection…** is also the button at the top of the tree. The **Add** menu says what each entry keeps: a new collection is kept in Coffer, synced to your other Macs, with its history, and tidied by your agent. This creates `~/.coffer/vault/knowledge/payments/` and its `README.md`; `pages/` and `sources/` appear as soon as something is written into them. The README starts with the defaults written out, so you can see what your agents follow and change it:
+
+```markdown
+---
+verify_after_days: 90
+---
+
+# payments
+
+How payments are taken, settled and refunded.
+
+## Page types
+
+- `overview`: where to start. What this collection covers and which pages to read first.
+- `concept`: what something is and why it works the way it does.
+- `entity`: one service, system or team. What it owns and how to reach it.
+- `how-to`: the steps for one task.
+- `decision`: a choice that was made, the options and the reason.
+
+## Rules
+
+- One subject per page. Link related pages with `[[slug]]`.
+- Every page lists the sources it draws on in `sources`, and the day it was last
+  checked against them or the code in `verified`.
+- `verify_after_days` at the top of this file is how many days a check holds
+  before Coffer asks for another. `0` turns it off.
+```
+
+Change the page types or add rules of your own here; agents follow this file over their defaults. A collection has no title: every page and listing shows it by its folder name. Its description is the opening paragraph of the README, before the first `##` section: change it on the collection's page (click the text; it saves when you leave the field) or in the file itself. Either way only that paragraph changes, and everything under it — the page types and rules included — stays.
 
 To rename a collection, choose **⋯ → Rename…** on its page and enter the new name. Its folder moves with it (`~/.coffer/vault/knowledge/<new-name>/`), the page stays on the same collection, and agents find it under the new name from the next catalogue. A name another collection already has, or that is not a valid folder name, is refused under the field and nothing changes.
 
@@ -123,8 +157,10 @@ Agents file knowledge with their own file tools. An agent connected to Coffer re
 3. Organise by subject, never by who or when.
 4. Where two statements disagree, the newer wins unless the older is shown to be right by a source, a date, a command's output or the code. The superseded one stays legible.
 5. Link other pages by `[[slug]]`, never by path; when renaming a page, update the links to it or keep its old slug in `aliases`.
-6. Never edit a source, except to mark it `ingest: skipped`.
+6. Never edit a source, except to add `ingest: skipped`, `superseded_by` or a `summary`.
 7. Give every page a `title`, a `type`, a one-line `description` saying what question it answers, the `sources` it draws on, any `aliases`, the date it last checked the page against its sources or the code as `verified`, and `actor: agent`. Where the page's facts came from goes in `sources` and `verified`, never in a paragraph listing what it read.
+
+The guide also tells an agent to **write back what it works out**. When it answers your question by reading a source, the code or a system, and the pages do not already say it, it writes the answer into the page that owns the subject before it finishes, adds what it read to `sources` when that is a source, sets `verified` to today, and tells you in one line what it added. It does not write back a guess, an opinion, or something true only of that conversation. Every such write is in the collection's history, so you can undo it.
 
 You can also ask directly: "write down what we just found out about the session TTL in the payments collection." The collection must already exist; only you create one. Whatever the agent writes is readable at once, and the next sweep commits it to the [history](#history-and-restore). A page an agent writes in the wrong place — at the collection root, say — is moved into `pages/` within a minute.
 
@@ -199,14 +235,14 @@ Knowledge → Tidy all   (every collection, one after another)
 The prompt points the agent at the **Integrating sources** and **Tidying a collection** sections of the `coffer-guide` skill. Following them, the agent works through one collection at a time:
 
 1. **Opens the tidy** with `coffer knowledge tidy-start <collection>` before it changes anything (see [A tidy is one change](#a-tidy-is-one-change)).
-2. **Integrates the waiting sources**, oldest first: reads each one in full, folds what it says into the pages that own its subjects, creates a page for a subject no page owns, and adds the source's slug to the `sources` of every page it changed. A source with nothing worth keeping — a duplicate, an empty export — is marked `ingest: skipped` instead.
-3. **Fixes what Coffer found**: dead and ambiguous links, orphan and incomplete pages, pages without sources, missing sources.
+2. **Integrates the waiting sources**, oldest first: reads each one in full, folds what it says into the pages that own its subjects, creates a page for a subject no page owns, adds the source's slug to the `sources` of every page it changed, and gives the source a `summary`. When the source replaces an older one, it marks the older one `superseded_by` and rechecks the pages that cite it. A source with nothing worth keeping — a duplicate, an empty export — is marked `ingest: skipped` instead.
+3. **Fixes what Coffer found**: dead and ambiguous links, orphan and incomplete pages, pages without sources, missing sources, pages citing an outdated source. It **rechecks every page due a recheck** against its sources or the code, fixes what changed and sets its `verified` to today; a page it cannot recheck keeps its date and goes into its report. It gives every source without a `summary` one.
 4. Reads the collection's `README.md` and every page's title and description, then the pages in full.
 5. **Merges** pages that answer the same question into one, keeping every fact and every source, keeps the merged-away slug in the survivor's `aliases`, and deletes the pages it merged away.
 6. **Splits** a page that answers several unrelated questions, one subject per page, linked to each other.
 7. **Corrects** what is wrong, stale or contradictory by the rule that the newer statement wins unless the older is shown to be right, rewrites a description that does not say what question its page answers, and gives a subject mentioned across pages but owned by none a page of its own.
 8. **Leaves alone what it is not sure about** — two pages that disagree with nothing to tell which is right, a deletion of much text, a change to the README's page types — and lists it in its report for you to decide.
-9. **Finishes the tidy** with `coffer knowledge tidy-finish <collection> --set summary="<report>"`. The report says which sources it integrated or skipped, what it merged, split, corrected and deleted, and what it left for you.
+9. **Finishes the tidy** with `coffer knowledge tidy-finish <collection> --set summary="<report>"`. The report says which sources it integrated or skipped, what it merged, split, corrected, rechecked and deleted, and what it left for you. It ends with **Gaps**: questions the pages cannot answer, subjects mentioned across pages but owned by none, and sources worth finding — a spec, a runbook, a person to ask.
 
 It changes nothing that does not need changing. You can also ask any agent that has the `coffer-guide` skill to do this in your own words: "tidy up the payments knowledge."
 
@@ -262,13 +298,36 @@ The **To do** section of a collection's page lists these findings, grouped by ki
 | **Dead links** | A `[[link]]` that names no page, alias or source. |
 | **Ambiguous links** | A `[[link]]` that names more than one file. |
 | **Names used twice** | Two pages share a slug, or an alias names two pages. |
-| **Missing sources** | A page's `sources` names a source that does not exist. |
+| **Missing sources** | A page's `sources` names a source that does not exist, or a source's `superseded_by` names one that does not. |
+| **Pages citing an outdated source** | A page cites a superseded source and none of the sources that replace it (see [When a source is replaced](#when-a-source-is-replaced)). The row names the source it cites and its newest replacement. |
+| **Waiting sources** | A source no page cites and not marked `ingest: skipped` or `superseded_by`. |
 | **Incomplete pages** | A page missing its `title`, `type` or `description`. |
-| **Waiting sources** | A source no page cites and not marked `ingest: skipped`. |
+| **Pages to recheck** | A page whose `verified` date is missing or older than the collection's interval (see [Pages due a recheck](#pages-due-a-recheck)). The row says when it was last checked, or *never checked*. |
 | **Pages without sources** | A page whose `sources` is empty. |
 | **Pages nothing links to** | A page no other page links to, once the collection has two or more pages. Pages of type `overview` are exempt: they are entry points. |
 
 The findings are worked out from the files on every read and stored nowhere, so they are current the moment a file changes. They are hints, not errors: a page you wrote without sources still works. On the command line, `coffer knowledge check <collection>` prints the same list (see [`coffer knowledge`](/reference/cli/knowledge#knowledge-check)).
+
+### When a source is replaced {#when-a-source-is-replaced}
+
+Sources go out of date: a newer design doc or runbook replaces the one your pages were written from. Mark the old source with the slug of the new one:
+
+```markdown
+---
+title: Gateway design (2025)
+superseded_by: gateway-design-2026
+---
+```
+
+Your agent adds this line itself when it integrates a source that replaces another. From then on every page that cites the old source and none of the newer ones is listed under **Pages citing an outdated source**, and the next tidy rechecks it against the new source. Replacements can chain: if `v1` is replaced by `v2` and `v2` by `v3`, a page that cites `v1` and `v3` is current. The old source stays where it is and stops waiting, because a page may still cite it for what used to be true; opening it shows **Superseded by** and a link to its replacement, and the catalogue marks it so agents know it is no longer evidence. A `superseded_by` that names no source is listed under **Missing sources**.
+
+### Pages due a recheck {#pages-due-a-recheck}
+
+A page can drift from the world while its sources stay the same: the code or the system it describes changes. Every page carries `verified`, the day it was last checked against its sources or the code, and a page whose `verified` is missing or older than the collection's interval is listed under **Pages to recheck**. Opening it shows **Needs rechecking**, and *never checked* when it has no date. It is only flagged: it stays in the catalogue and agents still read it.
+
+The interval is 90 days. Set another in the README's frontmatter — `verify_after_days: 30` for a runbook collection, say — or `0` to turn the check off for that collection. A negative value, or one that is not a whole number of days, is read as 90. A tidy rechecks each page it lists and sets its `verified` to today.
+
+The first time you open a collection after updating, every page without `verified` is listed. Press **Tidy** and the agent rechecks them.
 
 ## What runs on its own {#what-runs-on-its-own}
 
@@ -292,9 +351,9 @@ Coffer has **no tool for reading, listing or searching knowledge**. An agent rea
 What tells it where to look is Coffer's built-in [`coffer-guide` skill](/guides/skills#the-built-in-coffer-guide-skill), which Coffer links into every agent's skill folder:
 
 - Its **description**, which is in every session, names the subjects of your collections, taken from each `README.md`, and says the skill teaches writing, tidying and checking knowledge.
-- Its **body**, loaded when the agent opens the skill, gives the knowledge root's path and a catalogue of every collection: its README, its pages grouped by `type` with each page's path, title and description, and the sources still waiting to be integrated. It also carries the layout, the rules for writing a page, and the steps for integrating sources and tidying described above.
+- Its **body**, loaded when the agent opens the skill, gives the knowledge root's path and a catalogue of every collection: its README, its pages grouped by `type` with each page's path, title and description, and its sources, each marked *(waiting)* or *(superseded by …)* and followed by its `summary`. It also carries the layout, the rules for writing a page, and the steps for integrating sources and tidying described above.
 
-When the pages do not carry what an agent is after, the guide tells it to grep the collection's `sources/` for the exact string. A large catalogue is shortened to fit: first the descriptions are left out, and if it is still too long only each collection's counts are listed with the folders to search, and the skill says so.
+When the pages do not carry what an agent is after, the guide tells it to grep the collection's `sources/` for the exact string. A large catalogue is shortened to fit: first the descriptions and summaries are left out and only the waiting sources are listed, and if it is still too long only each collection's counts are listed with the folders to search, and the skill says so.
 
 Coffer rewrites the skill whenever the catalogue changes, so a new page appears in it within one sweep.
 
@@ -302,7 +361,7 @@ Coffer rewrites the skill whenever the catalogue changes, so a new page appears 
 Agents reliably use the file tools they already have, and rarely remember to call a special-purpose retrieval tool. Handing them a catalogue and a path turns retrieval into something they already do well, and a literal `grep` over a few hundred files matches identifiers and names that fuzzy search would blur. See [Knowledge architecture](/architecture/knowledge) for the full reasoning.
 :::
 
-Write a good `README.md` for each collection: its first paragraph is what a model matches on when deciding whether your knowledge is relevant, and what it says about page types and conventions is what agents follow.
+Write a good `README.md` for each collection: its first paragraph is what a model matches on when deciding whether your knowledge is relevant, and what it says about page types and rules is what agents follow.
 
 ## Browse and read
 
@@ -312,16 +371,16 @@ The Knowledge page is one tree beside a reading pane, both filling the window un
 
 **A collection.** Choosing a collection shows **Tidy** and a **⋯** menu in its pane bar. Below them come its folder name, what belongs in it (click it to edit; it saves when you leave the field or press **⌘Enter**, **Esc** cancels, and a toast offers **Undo**), and one summary line: how many pages, how many sources and how many of them wait, the folder's path with a copy button, and when it was last updated. A muted line under it says the collection is managed by Coffer: synced to your other Macs, its history kept, tidied by your agent. While an agent is tidying the collection, a notice says so (see [A tidy is one change](#a-tidy-is-one-change)). Then come three sections:
 
-- **To do** lists what Coffer found in the collection's files, most serious first, each page by its title and opening when you click it (see [What Coffer finds on its own](#what-coffer-finds-on-its-own)).
-- **Contents** shows the collection's pages by type — overview, concept, entity, how-to and decision, then the types the README defines, then pages with no type — one card each, with the type's icon, how many pages it holds and the first few titles, then how many more; a **Sources** card lists the sources the same way, marking the ones still waiting. Each title opens its file.
+- **To do** lists what Coffer found in the collection's files, most serious first, each page by its title and opening when you click it, including **Pages citing an outdated source** and **Pages to recheck** (see [What Coffer finds on its own](#what-coffer-finds-on-its-own)).
+- **Contents** shows the collection's pages by type — overview, concept, entity, how-to and decision, then the types the README defines, then pages with no type — one card each, with the type's icon, how many pages it holds and the first few titles, then how many more; a **Sources** card lists the sources — the waiting ones first, then the rest, the superseded ones last and struck through — each with its state (*waiting*, *used by N pages*, *skipped* or *superseded*) and its summary under it. Each title opens its file.
 - **Change log** lists every change to the collection, newest first: what it did, who wrote it and when, and the files it touched by title, each opening at its history. A tidy is one entry with the agent's report and **Undo this tidy…** (see [Undo a tidy](#undo-a-tidy)); edits made on disk within 10 minutes of each other are one entry listing their files. **Show more** loads older changes.
 
 The collection's **⋯** menu holds **Reveal in Finder**, **Open in Obsidian** when Obsidian is installed on this Mac (see [Open a collection in Obsidian](#open-a-collection-in-obsidian)), **Copy path**, **Rename…** and **Delete collection…**; a collection with nothing in it yet says so and reminds you that you can upload a source or drop Markdown files into its folder.
 
 **A page or a source.** Choosing a file shows it read-only. Its pane bar names where the file is, then carries **History** (see [History and restore](#history-and-restore)), a **Preview / Source** switch for Markdown, **Open in editor** as a button (see [Edit a file yourself](#edit-a-file-yourself)), and a **⋯** menu with **Reveal in Finder**, **Open in Obsidian** when it is installed, and **Delete**. Under the title one line describes the file, read from its frontmatter:
 
-- For a **page**: its type, who wrote it and when it was created, **verified** and the date when the page carries `verified`, and its sources, each opening that source; a source the page names that does not exist is struck through. In the text, every `[[link]]` is a link to the page or source it names; a dead one is marked in red, with a tooltip saying nothing has that name. Inline code is set lighter than a code block, and a long path wraps at its `/`.
-- For a **source**: **Cited by N pages**, each opening that page, or **Waiting** when no page cites it yet.
+- For a **page**: its type, who wrote it and when it was created, **verified** and the date when the page carries `verified`, **Needs rechecking** when it is [due a recheck](#pages-due-a-recheck) (with *never checked* when it has no date), and its sources, each opening that source; a source the page names that does not exist is struck through. In the text, every `[[link]]` is a link to the page or source it names; a dead one is marked in red, with a tooltip saying nothing has that name. Inline code is set lighter than a code block, and a long path wraps at its `/`.
+- For a **source**: **Superseded by** and a link to the source that replaces it, when one does; **Cited by N pages**, each opening that page, or **Waiting** when no page cites it yet.
 
 The page has no search box and no per-collection switch: ⌘K jumps to a collection by name, and every collection reaches every agent. There is no form for typing a page into the Knowledge page: you write in your own editor, and agents by writing files.
 
@@ -427,6 +486,8 @@ A delete is reported in a toast, *Deleted `<name>`*, with **Undo**, which puts b
 
 **The collection page says an agent is tidying, but nothing is happening.** The agent stopped without running `tidy-finish`. Ask it to finish, or wait: once the collection has sat unchanged for 30 minutes, Coffer closes the tidy and records it as *closed without a report*.
 
+**Every page is listed under Pages to recheck after updating.** Those pages have no `verified` date yet. Press **Tidy**: the agent rechecks each one and sets its date. To stop the check for a collection, set `verify_after_days: 0` in its README.
+
 **A source stays Waiting after a tidy.** No page lists its slug in `sources`. Ask your agent to integrate it, or, if nothing in it is worth a page, to mark it `ingest: skipped`.
 
 **A link shows in red.** It names no page, alias or source — usually a page that was renamed or merged away. Fix the link, or add the old slug to the surviving page's `aliases`; **Tidy** fixes the dead links it finds.
@@ -452,4 +513,4 @@ A delete is reported in a toast, *Deleted `<name>`*, with **Undo**, which puts b
 - [`coffer knowledge` command reference](/reference/cli/knowledge)
 - [MCP tools reference](/reference/mcp-tools)
 - [Knowledge spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md)
-- [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md), [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md) and [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md)
+- [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md), [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md), [Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-stays-current-through-flags-coffer-computes.md) and [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md)

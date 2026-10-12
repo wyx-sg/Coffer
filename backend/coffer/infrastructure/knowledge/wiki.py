@@ -4,9 +4,10 @@ which sources wait from the pages that cite them", "Check a collection
 mechanically on every read").
 
 :func:`build` walks a collection's ``pages/`` and ``sources/`` once and returns
-a :class:`WikiGraph`. Nothing is stored: every read builds it again from the
-files, so it cannot disagree with them (spec knowledge "Store each collection
-as one tree of Markdown files"). A collection is hundreds of files at most, so
+a :class:`WikiGraph`, with the README's ``verify_after_days``. Nothing is
+stored: every read builds it again from the files, so it cannot disagree with
+them (spec knowledge "Store each collection as one tree of Markdown files").
+A collection is hundreds of files at most, so
 one walk is cheap.
 
 A page's slug is its file stem, and a link names a slug or one of a page's
@@ -19,7 +20,7 @@ for a near miss.
 
 from __future__ import annotations
 
-import dataclasses
+import datetime as dt
 import os
 import pathlib
 import re
@@ -28,7 +29,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from coffer.domain.knowledge.entry import Finding, KnowledgeFile, LinkRef, PageRef, SourceRef
+from coffer.domain.knowledge.entry import Finding
 from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 
@@ -37,8 +38,10 @@ DEAD_LINK = "dead_link"
 AMBIGUOUS_LINK = "ambiguous_link"
 DUPLICATE_SLUG = "duplicate_slug"
 MISSING_SOURCE = "missing_source"
+SUPERSEDED_SOURCE = "superseded_source"
 INCOMPLETE_PAGE = "incomplete_page"
 UNSOURCED_PAGE = "unsourced_page"
+STALE_PAGE = "stale_page"
 ORPHAN_PAGE = "orphan_page"
 WAITING_SOURCE = "waiting_source"
 FINDING_KINDS = (
@@ -46,8 +49,10 @@ FINDING_KINDS = (
     AMBIGUOUS_LINK,
     DUPLICATE_SLUG,
     MISSING_SOURCE,
+    SUPERSEDED_SOURCE,
     INCOMPLETE_PAGE,
     UNSOURCED_PAGE,
+    STALE_PAGE,
     ORPHAN_PAGE,
     WAITING_SOURCE,
 )
@@ -55,9 +60,18 @@ FINDING_KINDS = (
 #: The page type exempt from the orphan check: an overview is an entry point.
 OVERVIEW_TYPE = "overview"
 
-#: The one key the guide lets an agent add to a source, and its one value.
+#: The keys the guide lets an agent add to a source: ``ingest: skipped``, the
+#: newer source that replaces it, and a short summary of what it says (ADR
+#: knowledge-stays-current-through-flags-coffer-computes).
 INGEST_KEY = "ingest"
 INGEST_SKIPPED = "skipped"
+SUPERSEDED_KEY = "superseded_by"
+SUMMARY_KEY = "summary"
+
+#: The README frontmatter key that sets how many days a page's ``verified``
+#: date holds, and its default; ``0`` turns the check off.
+VERIFY_KEY = "verify_after_days"
+DEFAULT_VERIFY_DAYS = 90
 
 #: Keys a page must carry to be complete.
 _REQUIRED_PAGE_KEYS = ("title", "type", "description")
@@ -135,6 +149,9 @@ class Source:
     slug: str
     title: str
     skipped: bool
+    #: The slug of the newer source that replaces this one; empty when none.
+    superseded_by: str = ""
+    summary: str = ""
 
 
 @dataclass
@@ -147,6 +164,10 @@ class WikiGraph:
     names: dict[str, set[str]] = field(default_factory=dict)
     #: Normalised source slug → the sources it names.
     source_names: dict[str, set[str]] = field(default_factory=dict)
+    #: How many days a page's ``verified`` date holds; ``0`` turns it off.
+    verify_after_days: int = DEFAULT_VERIFY_DAYS
+    #: The day staleness is measured on.
+    today: dt.date = field(default_factory=dt.date.today)
 
     def resolve(self, target: str) -> list[str]:
         """The files a link target names, in path order: the pages it names,
@@ -174,9 +195,40 @@ class WikiGraph:
         return {path for p in self.pages for s in p.sources for path in self.resolve_source(s)}
 
     def waiting(self) -> list[Source]:
-        """Sources no page cites and none marks skipped."""
+        """Sources no page cites, none marks skipped and none superseded."""
         cited = self.cited()
-        return [s for s in self.sources if s.path not in cited and not s.skipped]
+        return [
+            s for s in self.sources if s.path not in cited and not s.skipped and not s.superseded_by
+        ]
+
+    def successor(self, source: Source) -> str | None:
+        """The source that replaces ``source``, when its ``superseded_by``
+        names exactly one."""
+        if not source.superseded_by:
+            return None
+        hits = self.resolve_source(source.superseded_by)
+        return hits[0] if len(hits) == 1 else None
+
+    def successors(self, source: Source) -> list[str]:
+        """Every source after ``source`` in its chain of replacements, nearest
+        first; a cycle stops where it repeats."""
+        chain: list[str] = []
+        current: Source | None = source
+        while current is not None:
+            nxt = self.successor(current)
+            if nxt is None or nxt == source.path or nxt in chain:
+                break
+            chain.append(nxt)
+            current = self.source(nxt)
+        return chain
+
+    def is_stale(self, page: Page) -> bool:
+        """Whether ``page`` is due a recheck: its ``verified`` date is missing,
+        unreadable or older than :attr:`verify_after_days`."""
+        if self.verify_after_days <= 0:
+            return False
+        checked = parse_day(page.verified)
+        return checked is None or (self.today - checked).days > self.verify_after_days
 
     def findings(self) -> list[Finding]:
         """Every mechanical finding, grouped by kind in :data:`FINDING_KINDS` order."""
@@ -192,13 +244,27 @@ class WikiGraph:
                     found.append(Finding(AMBIGUOUS_LINK, page.path, target, tuple(hits)))
                 elif hits[0] in page_paths and hits[0] != page.path:
                     inbound[hits[0]] += 1
+            cited = {path for slug in page.sources for path in self.resolve_source(slug)}
             for slug in page.sources:
-                if not self.resolve_source(slug):
+                hits = self.resolve_source(slug)
+                if not hits:
                     found.append(Finding(MISSING_SOURCE, page.path, slug))
+                    continue
+                old = self.source(hits[0])
+                if old is None or not old.superseded_by:
+                    continue
+                later = self.successors(old)
+                if later and not cited & set(later):
+                    found.append(Finding(SUPERSEDED_SOURCE, page.path, slug, (later[-1],)))
             if page.missing_keys:
                 found.append(Finding(INCOMPLETE_PAGE, page.path, ", ".join(page.missing_keys)))
             if not page.sources:
                 found.append(Finding(UNSOURCED_PAGE, page.path))
+            if self.is_stale(page):
+                found.append(Finding(STALE_PAGE, page.path, page.verified or None))
+        for source in self.sources:
+            if source.superseded_by and not self.resolve_source(source.superseded_by):
+                found.append(Finding(MISSING_SOURCE, source.path, source.superseded_by))
         seen: set[tuple[str, ...]] = set()
         for alias, named in sorted(self.names.items()):
             pages_named = sorted(h for h in named if h in page_paths)
@@ -213,6 +279,33 @@ class WikiGraph:
             found.append(Finding(WAITING_SOURCE, source.path))
         order = {kind: i for i, kind in enumerate(FINDING_KINDS)}
         return sorted(found, key=lambda f: (order[f.kind], f.path, f.target or ""))
+
+
+def parse_day(value: object) -> dt.date | None:
+    """A ``YYYY-MM-DD`` date (a full timestamp is read by its date); ``None``
+    when it is missing or not a date."""
+    text = str(value or "").strip()[:10]
+    try:
+        return dt.date.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def verify_days(collection: str) -> int:
+    """The collection's ``verify_after_days`` from its README frontmatter, or
+    :data:`DEFAULT_VERIFY_DAYS` when it sets none or an unreadable one."""
+    readme = paths.readme_path(collection)
+    if not readme.is_file():
+        return DEFAULT_VERIFY_DAYS
+    fm, _ = _read(readme)
+    value = fm.get(VERIFY_KEY)
+    if isinstance(value, bool) or not isinstance(value, int | str):
+        return DEFAULT_VERIFY_DAYS
+    try:
+        days = int(value)
+    except ValueError:
+        return DEFAULT_VERIFY_DAYS
+    return days if days >= 0 else DEFAULT_VERIFY_DAYS
 
 
 def _markdown_under(directory: pathlib.Path) -> list[pathlib.Path]:
@@ -234,9 +327,11 @@ def _read(path: pathlib.Path) -> tuple[dict[str, Any], str]:
     return split_frontmatter(text.replace("\r\n", "\n"))
 
 
-def build(collection: str) -> WikiGraph:
+def build(collection: str, *, today: dt.date | None = None) -> WikiGraph:
     """Read a collection's pages and sources into a :class:`WikiGraph`."""
-    graph = WikiGraph()
+    graph = WikiGraph(verify_after_days=verify_days(collection))
+    if today is not None:
+        graph.today = today
     for path in _markdown_under(paths.sources_dir(collection)):
         fm, _ = _read(path)
         source = Source(
@@ -244,6 +339,8 @@ def build(collection: str) -> WikiGraph:
             slug=path.stem,
             title=str(fm.get("title") or path.stem),
             skipped=str(fm.get(INGEST_KEY) or "").strip().lower() == INGEST_SKIPPED,
+            superseded_by=str(fm.get(SUPERSEDED_KEY) or "").strip(),
+            summary=" ".join(str(fm.get(SUMMARY_KEY) or "").split()),
         )
         graph.sources.append(source)
         graph.source_names.setdefault(normalise(path.stem), set()).add(source.path)
@@ -267,55 +364,6 @@ def build(collection: str) -> WikiGraph:
     return graph
 
 
-def describe(file: KnowledgeFile) -> KnowledgeFile:
-    """``file`` with what the wiki says about it: a page's type, aliases,
-    resolved sources and links; a source's citing pages and whether it waits
-    (spec knowledge "Link pages by slug and check every
-    link", "Derive which sources wait from the pages that cite them")."""
-    kind = paths.kind_of(file.path)
-    if kind == paths.KIND_FILE:
-        return dataclasses.replace(file, kind=kind)
-    graph = build(paths.collection_of(file.path))
-    titles = {p.path: p.title for p in graph.pages} | {s.path: s.title for s in graph.sources}
-    if kind == paths.KIND_PAGE:
-        page = graph.page(file.path)
-        if page is None:
-            return dataclasses.replace(file, kind=kind)
-        sources = []
-        for slug in page.sources:
-            hits = graph.resolve_source(slug)
-            hit = hits[0] if hits else None
-            sources.append(SourceRef(slug=slug, path=hit, title=titles.get(hit or "", "")))
-        links = []
-        for target in dict.fromkeys(page.links):
-            hits = graph.resolve(target)
-            links.append(
-                LinkRef(
-                    target=target,
-                    path=hits[0] if len(hits) == 1 else None,
-                    ambiguous=len(hits) > 1,
-                )
-            )
-        return dataclasses.replace(
-            file,
-            kind=kind,
-            page_type=page.page_type,
-            aliases=page.aliases,
-            verified=page.verified,
-            sources=tuple(sources),
-            links=tuple(links),
-        )
-    source = graph.source(file.path)
-    if source is None:
-        return dataclasses.replace(file, kind=kind)
-    return dataclasses.replace(
-        file,
-        kind=kind,
-        cited_by=tuple(PageRef(p.path, p.title) for p in graph.citing(source.path)),
-        waiting=any(s.path == source.path for s in graph.waiting()),
-    )
-
-
 __all__ = [
     "AMBIGUOUS_LINK",
     "DEAD_LINK",
@@ -327,13 +375,19 @@ __all__ = [
     "MISSING_SOURCE",
     "ORPHAN_PAGE",
     "OVERVIEW_TYPE",
+    "STALE_PAGE",
+    "SUMMARY_KEY",
+    "SUPERSEDED_KEY",
+    "SUPERSEDED_SOURCE",
     "UNSOURCED_PAGE",
+    "VERIFY_KEY",
     "WAITING_SOURCE",
     "Page",
     "Source",
     "WikiGraph",
     "build",
-    "describe",
     "links_in",
     "normalise",
+    "parse_day",
+    "verify_days",
 ]

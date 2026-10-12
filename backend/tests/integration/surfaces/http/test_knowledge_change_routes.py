@@ -42,7 +42,11 @@ def test_the_feed_lists_edits_across_collections_newest_first(client) -> None:  
 
     changes = client.get("/api/v1/knowledge/changes").json()["changes"]
     edits = [c for c in changes if c["documents"]]
-    by_collection = {c["collections"][0]: c for c in edits}
+    # Newest first, so each collection's latest edit (its creation, which
+    # writes the README, is older).
+    by_collection: dict[str, dict] = {}
+    for c in edits:
+        by_collection.setdefault(c["collections"][0], c)
     assert by_collection["personal"]["writer"] == "disk"
     assert by_collection["shopee"]["writer"] == "user"
     assert [d["path"] for d in by_collection["personal"]["documents"]] == [

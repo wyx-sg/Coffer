@@ -4,10 +4,11 @@
 // collection as one tree of read-only documents in the web UI"), read from the
 // file's frontmatter and the daemon's resolution of it; a part with no data is
 // left out. A page: its type, when it was created and by whom, when it was
-// last verified against its sources (its `verified` date), and its sources
-// — each opening that source, one that names no source struck through. A
-// source: when it was created and by whom, the pages that cite it (each
-// opening the page) or the Waiting mark.
+// last verified against its sources (its `verified` date) with a Needs
+// rechecking mark once that is too old or missing, and its sources — each
+// opening that source, one that names no source struck through. A source:
+// when it was created and by whom, what supersedes it, the pages that cite
+// it (each opening the page) or the Waiting or Skipped mark.
 // Any other file: when it was created and by whom.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -73,7 +74,17 @@ export function KnowledgeFileLine({ file, collectionUid }: Props) {
     );
   }
 
-  // Verified: the date as written; a page that carries none leaves it out.
+  // Verified: the date as written, and the mark once a recheck is due.
+  if (file.kind === "page" && file.stale) {
+    parts.push(
+      <StatusPill key="stale" tone="warn">
+        {t("knowledge.document.stale")}
+      </StatusPill>,
+    );
+  }
+  if (file.kind === "page" && !file.verified && file.stale) {
+    parts.push(<span key="never">{t("knowledge.document.neverVerified")}</span>);
+  }
   if (file.kind === "page" && file.verified) {
     const at = Date.parse(file.verified);
     const date = Number.isNaN(at)
@@ -119,6 +130,22 @@ export function KnowledgeFileLine({ file, collectionUid }: Props) {
             ),
           )}
         </Joined>
+      </span>,
+    );
+  }
+
+  if (file.kind === "source" && file.superseded_by) {
+    const next = file.superseded_by;
+    parts.push(
+      <span key="superseded" className="inline-flex flex-wrap items-center gap-x-1">
+        {t("knowledge.document.supersededBy")}
+        {next.path ? (
+          <Link to={collectionPath(collectionUid, next.path)} className={LINK}>
+            {next.title || next.slug}
+          </Link>
+        ) : (
+          <s className="text-text-subtle">{next.slug}</s>
+        )}
       </span>,
     );
   }

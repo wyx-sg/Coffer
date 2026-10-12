@@ -3115,7 +3115,10 @@
       "missingSource": "没有名为 {{slug}} 的来源",
       "citedBy_one": "被 {{count}} 个页面引用：",
       "citedBy_other": "被 {{count}} 个页面引用：",
-      "verified": "{{date}} 核对过"
+      "verified": "{{date}} 核对过",
+      "stale": "需要重新核对",
+      "neverVerified": "从未核对",
+      "supersededBy": "已被替换为"
     },
     "deleteDocument": {
       "menu": "删除",
@@ -3184,14 +3187,19 @@
         "ambiguous_link": "有歧义的链接",
         "duplicate_slug": "重复的名称",
         "missing_source": "缺失的来源",
+        "superseded_source": "引用了过期来源的页面",
         "incomplete_page": "不完整的页面",
         "unsourced_page": "没有来源的页面",
+        "stale_page": "需要重新核对的页面",
         "orphan_page": "没有被链接的页面",
         "waiting_source": "待整理的来源"
       },
       "missing": "缺少 {{target}}",
       "more": "还有 {{count}} 个",
-      "fewer": "收起"
+      "fewer": "收起",
+      "replaced": "引用的 {{target}} 已被 {{newest}} 替换",
+      "lastChecked": "上次核对 {{date}}",
+      "neverChecked": "从未核对"
     },
     "changeLog": {
       "title": "改动记录",
@@ -3220,7 +3228,11 @@
       "title": "内容",
       "description": "按类型列出的页面，以及来源。点击标题打开文件。",
       "none": "还没有页面或来源。",
-      "failed": "无法读取内容"
+      "failed": "无法读取内容",
+      "used_one": "被 {{count}} 页引用",
+      "used_other": "被 {{count}} 页引用",
+      "skipped": "已跳过",
+      "superseded": "已被替换"
     },
     "types": {
       "overview": "概览",

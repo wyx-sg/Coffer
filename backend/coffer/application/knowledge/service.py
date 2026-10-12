@@ -8,11 +8,9 @@ submits **material**, which becomes a document at the collection root on the spo
 (see "Promote submitted material at once"). A file an agent drops into a collection's
 hidden ``.inbox/`` is promoted the same way by the next sweep.
 
-What it does *not* add is a gate of any kind on the corpus. Every registered
-collection is served to every caller, agent or person alike (see "Serve every
-collection to every agent"): the kind cannot be switched off, so a collection
-leaves an agent's view only by being deleted. A **linked folder** is served the same
-way but only read (``infrastructure/knowledge/linked.py``): Coffer writes nothing into it.
+It adds no gate on the corpus: every registered collection is served to every caller
+(see "Serve every collection to every agent"). A **linked folder** is served the same
+way but only read (``infrastructure/knowledge/linked.py``).
 """
 
 from __future__ import annotations
@@ -50,7 +48,15 @@ from coffer.domain.knowledge.history import (
 )
 from coffer.domain.resource import Resource
 from coffer.domain.vault.writers import CommitMeta
-from coffer.infrastructure.knowledge import catalogue, fs, inbox, linked, paths, wiki
+from coffer.infrastructure.knowledge import (
+    catalogue,
+    collection_files,
+    fs,
+    inbox,
+    linked,
+    paths,
+    wiki_reads,
+)
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
 
 logger = logging.getLogger(__name__)
@@ -168,12 +174,8 @@ class KnowledgeService:
         actor: str,
         description: str | None = None,
     ) -> CollectionEntry:
-        """Register a collection and create its directory.
-
-        Deliberate creation is the whole point (see "Create collections only
-        deliberately"): nothing here is reachable from a read or a write, so a typo
-        cannot conjure a collection.
-        """
+        """Register a collection and create its directory and README — only ever on
+        purpose (see "Create collections only deliberately")."""
         directory = paths.collection_dir(name)
         if directory.exists() or name in await self.collection_names():
             raise CollectionExists(name)
@@ -181,9 +183,8 @@ class KnowledgeService:
         meta = CommitMeta(WRITER_USER, OP_CREATE, f"Create collection {name}", actor=actor)
         async with recording(self.history, meta) as tx:
             fs.create_collection_dir(name)
-            if description:
-                readme = paths.readme_path(name)
-                readme.write_text(f"# {name}\n\n{description}\n", encoding="utf-8")
+            readme = collection_files.default_readme(name, description)
+            paths.readme_path(name).write_text(readme, encoding="utf-8")
             tx.touch(name)
         await self.catalogue_changed()
         return CollectionEntry(
@@ -196,8 +197,7 @@ class KnowledgeService:
     async def register_row(
         self, name: str, *, actor: str, config: dict[str, object] | None = None
     ) -> Resource:
-        """The collection's ``resources`` row — without its description, which
-        lives in the README (see "Read a collection's description from its README").
+        """The collection's ``resources`` row; its description lives in the README.
         ``config`` names a linked folder (``linking.py``)."""
         return await self._resources.register(
             kind=KIND_KNOWLEDGE,
@@ -262,7 +262,7 @@ class KnowledgeService:
         if folder is not None:
             return await asyncio.to_thread(linked.read_file, row.name, folder, relpath)
         file = fs.read_file(relpath)
-        return await asyncio.to_thread(wiki.describe, file)
+        return await asyncio.to_thread(wiki_reads.describe, file)
 
     async def check(self, uid: str) -> CollectionEntry:
         """One collection's entry with its mechanical findings (spec knowledge

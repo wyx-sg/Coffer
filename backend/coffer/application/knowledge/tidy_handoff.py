@@ -22,14 +22,16 @@ _STEPS = (
     "coffer-guide skill first.",
     "Before you change anything in a collection, run `coffer knowledge tidy-start <collection>`.",
     "Integrate every waiting source, then fix the mechanical findings, then merge, "
-    "split and correct the pages.",
+    "split and correct the pages. Recheck every stale page against its sources or the "
+    "code and set its `verified` to today; give every source without a `summary` one.",
     "Leave alone anything you are not sure about — two pages that disagree with "
     "no way to tell which is right, a large deletion, a change to the README's "
     "page types — and list it in your report for the developer to decide.",
     "When you finish a collection, run `coffer knowledge tidy-finish <collection> "
     '--set summary="<your report>"`. The report says which sources you '
-    "integrated or skipped, what you merged, split, corrected and deleted, and "
-    "what you left for the developer to decide.",
+    "integrated or skipped, what you merged, split, corrected, rechecked and "
+    "deleted, and what you left for the developer to decide, and ends with Gaps: "
+    "questions the pages cannot answer and sources worth finding.",
 )
 
 #: How many findings a prompt lists before it says how many it left out.

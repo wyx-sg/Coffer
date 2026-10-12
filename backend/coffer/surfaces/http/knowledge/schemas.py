@@ -92,8 +92,10 @@ FindingKind = Literal[
     "ambiguous_link",
     "duplicate_slug",
     "missing_source",
+    "superseded_source",
     "incomplete_page",
     "unsourced_page",
+    "stale_page",
     "orphan_page",
     "waiting_source",
 ]
@@ -104,9 +106,11 @@ class FindingOut(BaseModel):
     #: The file the finding concerns, knowledge-root-relative.
     path: str
     #: The link, slug or source it names; for ``incomplete_page`` the missing
-    #: keys, comma-separated.
+    #: keys, comma-separated; for ``stale_page`` the ``verified`` date as
+    #: written (``null`` when the page has none).
     target: str | None = None
-    #: The other files a duplicate slug or an ambiguous link involves.
+    #: The other files a duplicate slug or an ambiguous link involves; for
+    #: ``superseded_source`` the newest source that replaces the cited one.
     others: list[str] = Field(default_factory=list)
 
 
@@ -169,8 +173,19 @@ class FileSummaryOut(BaseModel):
     kind: FileKind = "file"
     #: A page's ``type``; empty otherwise.
     page_type: str = ""
-    #: A source no page cites and none marks skipped.
+    #: A source no page cites, none marks skipped and none superseded.
     waiting: bool = False
+    #: A page due a recheck: its ``verified`` date missing or older than the
+    #: collection's ``verify_after_days``.
+    stale: bool = False
+    #: A source's replacement: the path its ``superseded_by`` resolves to, or
+    #: the slug itself when it names none; empty when it is current.
+    superseded_by: str = ""
+    #: A source's ``summary``.
+    summary: str = ""
+    #: How many pages cite a source, and whether it is marked ``ingest: skipped``.
+    cited_count: int = 0
+    skipped: bool = False
 
 
 def file_summary_out(entry: FileEntry) -> FileSummaryOut:
@@ -230,12 +245,18 @@ class FileOut(BaseModel):
     aliases: list[str] = Field(default_factory=list)
     #: A page's ``verified`` date, as written; empty when it carries none.
     verified: str = ""
+    #: Whether the page is due a recheck (see ``FileSummaryOut.stale``).
+    stale: bool = False
     sources: list[SourceRefOut] = Field(default_factory=list)
     links: list[LinkRefOut] = Field(default_factory=list)
     #: A source's citing pages and whether it waits ("Derive which sources
     #: wait from the pages that cite them").
     cited_by: list[PageRefOut] = Field(default_factory=list)
     waiting: bool = False
+    #: A source's replacement, resolved; ``null`` when it is current.
+    superseded_by: SourceRefOut | None = None
+    #: A source's ``summary``.
+    summary: str = ""
 
 
 class IngestedDocumentOut(BaseModel):

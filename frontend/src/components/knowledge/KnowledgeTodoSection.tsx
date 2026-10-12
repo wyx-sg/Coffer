@@ -4,7 +4,8 @@
 // every read", "Show a collection as one tree of read-only documents in the
 // web UI"): what Coffer found in its files on this read, grouped by kind and
 // listed by what breaks a reader first — dead and ambiguous links, names used
-// twice, missing and waiting sources, incomplete pages. Each item names its
+// twice, missing and outdated sources, waiting sources, incomplete pages and
+// pages due a recheck (ADR knowledge-stays-current-through-flags-coffer-computes). Each item names its
 // page by title (the path is its tooltip) and opens it. Pages without sources
 // and pages nothing links to are worth knowing but rarely urgent, so they are
 // folded into one line until opened. Coffer fixes none of it: Tidy hands it
@@ -29,8 +30,10 @@ const URGENT: Kind[] = [
   "ambiguous_link",
   "duplicate_slug",
   "missing_source",
+  "superseded_source",
   "waiting_source",
   "incomplete_page",
+  "stale_page",
 ];
 
 /** The kinds folded into one line until opened. */
@@ -41,6 +44,41 @@ const SHOWN = 6;
 
 interface Props {
   collection: CollectionOut;
+}
+
+/** What a finding names, after the page: the link, slug or keys it concerns. */
+function FindingDetail({
+  finding,
+  titleOf,
+}: {
+  finding: FindingOut;
+  titleOf: (path: string) => string;
+}) {
+  const { t } = useTranslation();
+  let text: string | null = null;
+  if (finding.kind === "stale_page") {
+    text = finding.target
+      ? t("knowledge.check.lastChecked", { date: finding.target })
+      : t("knowledge.check.neverChecked");
+  } else if (finding.kind === "superseded_source") {
+    const newest = finding.others[0];
+    text = t("knowledge.check.replaced", {
+      target: finding.target,
+      newest: newest ? titleOf(newest) : "",
+    });
+  } else if (finding.target) {
+    const key = finding.kind === "incomplete_page" ? "missing" : "target";
+    text = t(`knowledge.check.${key}`, { target: finding.target });
+  }
+  if (!text) return null;
+  const mono = finding.kind !== "stale_page" && finding.kind !== "superseded_source";
+  return (
+    <span
+      className={`min-w-0 shrink-0 truncate text-xs text-text-muted ${mono ? "font-mono" : ""}`}
+    >
+      {text}
+    </span>
+  );
 }
 
 function FindingGroup({
@@ -76,15 +114,8 @@ function FindingGroup({
             >
               {titleOf(finding.path)}
             </Link>
-            {finding.target ? (
-              <span className="min-w-0 shrink-0 truncate font-mono text-xs text-text-muted">
-                {t(
-                  kind === "incomplete_page" ? "knowledge.check.missing" : "knowledge.check.target",
-                  { target: finding.target },
-                )}
-              </span>
-            ) : null}
-            {finding.others.length > 0 ? (
+            <FindingDetail finding={finding} titleOf={titleOf} />
+            {finding.others.length > 0 && kind !== "superseded_source" ? (
               <span className="min-w-0 truncate text-xs text-text-muted">
                 {t("knowledge.check.others", { paths: finding.others.map(titleOf).join(", ") })}
               </span>

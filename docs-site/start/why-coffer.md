@@ -47,7 +47,7 @@ See [MCP gateway](/architecture/mcp-gateway) for how sessions, namespacing and t
 
 ## Knowledge is pulled, not pushed
 
-**The decision.** Coffer does not insert knowledge into an agent's prompt. A knowledge collection is a folder of Markdown files under `~/.coffer/vault/knowledge/`. Coffer delivers one skill of its own, `coffer-guide`, which lists every collection's pages, grouped by type, with their paths, titles and descriptions, and the sources still waiting to be integrated. The agent reads what it needs with its own `Read` and `Grep` tools. Coffer does not index, chunk or embed the files.
+**The decision.** Coffer does not insert knowledge into an agent's prompt. A knowledge collection is a folder of Markdown files under `~/.coffer/vault/knowledge/`. Coffer delivers one skill of its own, `coffer-guide`, which lists every collection's pages, grouped by type, with their paths, titles and descriptions, and its sources with a summary of each, marked when one is still waiting to be integrated or has been superseded. The agent reads what it needs with its own `Read` and `Grep` tools. Coffer does not index, chunk or embed the files.
 
 **Why.** Retrieval that depends on the agent remembering to call a special tool gets skipped. Every supported agent can already read files. What an agent needs is to know which files exist and where they are, and a catalogue gives it that. Keeping the files as the only copy also means you can edit a page in your own editor and the next read picks up the change.
 

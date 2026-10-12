@@ -9,12 +9,13 @@ The knowledge root resolves from the fresh ``HOME`` every test gets
 
 from __future__ import annotations
 
+import datetime as dt
 import pathlib
 
 import pytest
 import yaml
 
-from coffer.infrastructure.knowledge import fs, paths, wiki
+from coffer.infrastructure.knowledge import fs, paths, wiki, wiki_reads
 
 
 @pytest.fixture
@@ -31,7 +32,13 @@ def _write(directory: pathlib.Path, name: str, front: dict, body: str = "") -> p
 
 
 def _page(shopee: pathlib.Path, slug: str, body: str = "", **front: object) -> pathlib.Path:
-    fields = {"title": slug, "type": "concept", "description": "d", "sources": ["s"]}
+    fields = {
+        "title": slug,
+        "type": "concept",
+        "description": "d",
+        "sources": ["s"],
+        "verified": dt.date.today().isoformat(),
+    }
     fields.update(front)
     return _write(shopee / "pages", f"{slug}.md", fields, body)
 
@@ -41,7 +48,7 @@ def _source(shopee: pathlib.Path, slug: str, **front: object) -> pathlib.Path:
 
 
 def _read(relpath: str):  # type: ignore[no-untyped-def]
-    return wiki.describe(fs.read_file(relpath))
+    return wiki_reads.describe(fs.read_file(relpath))
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="a page's links resolve by slug and alias")
@@ -146,3 +153,77 @@ def test_kind_follows_the_folder(shopee: pathlib.Path) -> None:
     assert paths.kind_of("shopee/sources/a.pdf") == "file"
     assert paths.kind_of("shopee/a.md") == "file"
     assert paths.kind_of("shopee/pages") == "file"
+
+
+# ----- keeping it current (ADR knowledge-stays-current-through-flags-coffer-computes)
+
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="a page that leans on a superseded source is flagged"
+)
+def test_a_page_that_leans_on_a_superseded_source_is_flagged(shopee: pathlib.Path) -> None:
+    _source(shopee, "s")
+    _source(shopee, "design-v1", superseded_by="design-v2", summary="The first  design.")
+    _source(shopee, "design-v2", superseded_by="design-v3")
+    _source(shopee, "design-v3")
+    _page(shopee, "old", sources=["design-v1"])
+    _page(shopee, "current", "[[old]]", sources=["design-v1", "design-v3"])
+    _page(shopee, "hub", "[[current]] [[old]]")
+
+    graph = wiki.build("shopee")
+    flagged = [
+        (f.path, f.target, f.others) for f in graph.findings() if f.kind == wiki.SUPERSEDED_SOURCE
+    ]
+    assert flagged == [("shopee/pages/old.md", "design-v1", ("shopee/sources/design-v3.md",))]
+    # A superseded source no page cites does not wait.
+    assert "shopee/sources/design-v2.md" not in {s.path for s in graph.waiting()}
+    source = _read("shopee/sources/design-v1.md")
+    assert source.superseded_by is not None
+    assert source.superseded_by.path == "shopee/sources/design-v2.md"
+    assert source.summary == "The first design."
+
+
+def test_a_replacement_that_names_nothing_is_a_missing_source(shopee: pathlib.Path) -> None:
+    _source(shopee, "s")
+    _source(shopee, "old", superseded_by="gone", ingest="skipped")
+    _page(shopee, "alone")
+    found = [(f.kind, f.path, f.target) for f in wiki.build("shopee").findings()]
+    assert found == [("missing_source", "shopee/sources/old.md", "gone")]
+
+
+@pytest.mark.acceptance(spec="knowledge", scenario="a page not checked for too long is flagged")
+def test_a_page_not_checked_for_too_long_is_flagged(shopee: pathlib.Path) -> None:
+    _source(shopee, "s")
+    _page(shopee, "fresh", "[[old]] [[never]]", verified="2026-09-01")
+    _page(shopee, "old", "[[fresh]]", verified="2026-06-01")
+    _page(shopee, "never", "[[fresh]]", verified="")
+    today = dt.date(2026, 10, 12)
+
+    stale = [
+        (f.path, f.target)
+        for f in wiki.build("shopee", today=today).findings()
+        if f.kind == wiki.STALE_PAGE
+    ]
+    assert stale == [("shopee/pages/never.md", None), ("shopee/pages/old.md", "2026-06-01")]
+
+    paths.readme_path("shopee").write_text(
+        "---\nverify_after_days: 200\n---\n# shopee\n", encoding="utf-8"
+    )
+    stale = [
+        f.path for f in wiki.build("shopee", today=today).findings() if f.kind == wiki.STALE_PAGE
+    ]
+    assert stale == ["shopee/pages/never.md"]
+    paths.readme_path("shopee").write_text(
+        "---\nverify_after_days: 0\n---\n# shopee\n", encoding="utf-8"
+    )
+    assert not [
+        f for f in wiki.build("shopee", today=today).findings() if f.kind == wiki.STALE_PAGE
+    ]
+
+
+@pytest.mark.parametrize("value", ["-3", "soon", "true"])
+def test_an_unreadable_interval_keeps_the_default(shopee: pathlib.Path, value: str) -> None:
+    paths.readme_path("shopee").write_text(
+        f"---\nverify_after_days: {value}\n---\n# shopee\n", encoding="utf-8"
+    )
+    assert wiki.verify_days("shopee") == wiki.DEFAULT_VERIFY_DAYS

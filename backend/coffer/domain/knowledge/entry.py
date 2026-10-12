@@ -80,8 +80,18 @@ class FileEntry:
     kind: str = "file"
     #: A page's ``type``; empty otherwise.
     page_type: str = ""
-    #: A source no page cites and none marks skipped.
+    #: A source no page cites, none marks skipped and none superseded.
     waiting: bool = False
+    #: A page due a recheck (its ``verified`` date missing or too old).
+    stale: bool = False
+    #: A source's replacement: the path its ``superseded_by`` resolves to, or
+    #: the slug itself when it names none; empty when it is current.
+    superseded_by: str = ""
+    #: A source's ``summary``: what it says, in a line or two.
+    summary: str = ""
+    #: How many pages cite a source, and whether it is marked ``ingest: skipped``.
+    cited_count: int = 0
+    skipped: bool = False
 
 
 @dataclass(frozen=True)
@@ -165,9 +175,15 @@ class KnowledgeFile:
     sources: tuple[SourceRef, ...] = ()
     #: A page's ``[[links]]``, each resolved to the file it names.
     links: tuple[LinkRef, ...] = ()
+    #: Whether a page is due a recheck (see ``FileEntry.stale``).
+    stale: bool = False
     #: A source's pages that cite it, and whether it waits.
     cited_by: tuple[PageRef, ...] = ()
     waiting: bool = False
+    #: A source's replacement, resolved; ``None`` when it is current.
+    superseded_by: SourceRef | None = None
+    #: A source's ``summary``.
+    summary: str = ""
 
 
 @dataclass(frozen=True)

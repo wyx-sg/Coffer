@@ -97,7 +97,8 @@ def latest_edit(directory: pathlib.Path) -> str | None:
 
 
 def readme_description(collection: str) -> str:
-    """A collection's one-line description: its README's first paragraph.
+    """A collection's one-line description: its README's first paragraph,
+    before its first section (``##``), where its rules begin.
 
     Deliberately read from the file rather than stored (see "Read a collection's
     description from its README") — the person browsing the folder must be
@@ -112,6 +113,9 @@ def readme_description(collection: str) -> str:
     paragraph: list[str] = []
     for line in body.splitlines():
         stripped = line.strip()
+        if stripped.startswith("##"):
+            # The rules begin: the description is what comes before them.
+            break
         if stripped.startswith("#"):
             continue
         if not stripped:
@@ -171,9 +175,22 @@ def _file_entry(path: pathlib.Path, graph: wiki.WikiGraph | None = None) -> File
     fm, _ = split_frontmatter(text)
     relpath = paths.relative_of(path)
     kind = paths.kind_of(relpath)
-    waiting = False
+    waiting = stale = skipped = False
+    superseded_by = summary = ""
+    cited_count = 0
     if kind == paths.KIND_SOURCE and graph is not None:
         waiting = relpath in {s.path for s in graph.waiting()}
+        source = graph.source(relpath)
+        if source is not None:
+            superseded_by = (
+                (graph.successor(source) or source.superseded_by) if source.superseded_by else ""
+            )
+            summary = source.summary
+            skipped = source.skipped
+            cited_count = len(graph.citing(source.path))
+    elif kind == paths.KIND_PAGE and graph is not None:
+        page = graph.page(relpath)
+        stale = page is not None and graph.is_stale(page)
     return FileEntry(
         path=relpath,
         title=str(fm.get("title") or path.stem),
@@ -183,6 +200,11 @@ def _file_entry(path: pathlib.Path, graph: wiki.WikiGraph | None = None) -> File
         kind=kind,
         page_type=str(fm.get("type") or "").strip() if kind == paths.KIND_PAGE else "",
         waiting=waiting,
+        stale=stale,
+        superseded_by=superseded_by,
+        summary=summary,
+        cited_count=cited_count,
+        skipped=skipped,
     )
 
 

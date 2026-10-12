@@ -5,7 +5,7 @@ description: 把你和智能体对工作环境的了解，存成一个由保留�
 
 # 知识 {#knowledge}
 
-知识是一个存放工作环境相关 Markdown 的目录：服务、仓库、约定、决策、坑，这台机器上的每个智能体都会读。每个知识集都是一个小 wiki：你上传的素材作为**来源**保留下来，你的智能体再把它们编译成互相链接的**页面**。本页讲如何创建知识集、添加来源和页面、你和你的智能体如何修改它们、你的智能体如何在你按**整理**时整合来源、修好 Coffer 发现的问题并整理页面、一次整理如何记成一次可以撤销的改动、Coffer 如何检查知识集、如何回看文件的历史并找回某个版本、如何在 Obsidian 中打开知识集，以及智能体如何找到这些内容。
+知识是一个存放工作环境相关 Markdown 的目录：服务、仓库、约定、决策、坑，这台机器上的每个智能体都会读。每个知识集都是一个小 wiki：你上传的素材作为**来源**保留下来，你的智能体再把它们编译成互相链接的**页面**。本页讲如何创建知识集、添加来源和页面、你和你的智能体如何修改它们、你的智能体如何在你按**整理**时整合来源、修好 Coffer 发现的问题并整理页面、一次整理如何记成一次可以撤销的改动、Coffer 如何检查知识集并让它保持最新、如何回看文件的历史并找回某个版本、如何在 Obsidian 中打开知识集，以及智能体如何找到这些内容。
 
 ## 知识用来做什么 {#what-knowledge-is-for}
 
@@ -25,7 +25,7 @@ description: 把你和智能体对工作环境的了解，存成一个由保留�
 ```text
 ~/.coffer/vault/knowledge/
 └── payments/                        ← one collection
-    ├── README.md                    ← the schema: what belongs here, page types, conventions
+    ├── README.md                    ← the schema: what belongs here, page types, rules
     ├── sources/
     │   ├── gateway-design.md        ← a source: the upload converted to Markdown
     │   └── oncall-notes.md          ← a source from a Markdown upload
@@ -36,7 +36,7 @@ description: 把你和智能体对工作环境的了解，存成一个由保留�
     └── .inbox/                      ← hidden: a drop zone, kept as sources at the next sweep
 ```
 
-- 知识集根目录的 **`README.md`** 是这个知识集的**纲要**。它的第一段就是 Coffer 所有显示知识集描述的地方用的描述，也是 `coffer-guide` 技能告诉智能体这个知识集讲什么的依据。它关于本知识集所用页面类型和约定的其余内容，优先于指南的默认规则。它从不作为页面或来源列出，也不计数。
+- 知识集根目录的 **`README.md`** 是这个知识集的**纲要**。它在第一个 `##` 小节之前的第一段，就是 Coffer 所有显示知识集描述的地方用的描述，也是 `coffer-guide` 技能告诉智能体这个知识集讲什么的依据。它的**页面类型**和**规则**两节，以及它关于本知识集约定的其他内容，优先于指南的默认规则。frontmatter 里的 `verify_after_days` 决定一次核对管多久（见[需要重新核对的页面](#pages-due-a-recheck)）。它从不作为页面或来源列出，也不计数。
 - **`sources/`** 保留到达的素材：每次上传和每个放进收件箱的文件，转换成 Markdown。只保留 Markdown，不保留你上传的文件，所以知识集始终是一棵每个智能体都能读的 Markdown 树。智能体读来源，从不编辑来源。
 - **`pages/`** 放 wiki 本身：你和你的智能体编写并保持更新的页面。智能体首先读的就是这里。
 - `pages/` 和 `sources/` 里的**文件夹**是可选的，不代表任何含义。你或你的智能体都可以创建、移动、删除它们。只有 `pages/` 和 `sources/` 这两个文件夹本身有含义。
@@ -74,13 +74,19 @@ The `account-session` service owns ... see [[rate-limits|the gateway's limits]].
 | `description` | 一句话说明页面回答什么问题。智能体在目录里看到的就是它。 |
 | `sources` | 页面依据的来源的 slug。没有任何页面在这里列出的来源仍在[等待](#sources-wait-until-a-page-cites-them)。 |
 | `aliases` | 链接可以用来指向这个页面的其他名字，比如改名后的旧 slug。 |
-| `verified` | 可选。最近一次对照来源或代码核实这个页面的日期（`YYYY-MM-DD`），阅读窗格里页面的说明行会显示它。页面的事实从哪里来，写在这里和 `sources` 里，不要在正文里写一段列出读过什么。 |
+| `verified` | 最近一次对照来源或代码核对这个页面的日期（`YYYY-MM-DD`），阅读窗格里页面的说明行会显示它。没有这个日期，或者日期早于知识集的 `verify_after_days`，页面就[需要重新核对](#pages-due-a-recheck)。页面的事实从哪里来，写在这里和 `sources` 里，不要在正文里写一段列出读过什么。 |
 | `actor` | `user` 或 `agent`，表示这个页面是谁写的。 |
 | `created_at`、`updated_at` | 时间戳。 |
 
-Coffer 自己不写页面：谁写页面，谁就给它这些键，`coffer-guide` 技能就是这样教智能体的。缺少 `title`、`type` 或 `description`，或者没有列出任何 `sources` 的页面照样能用；[检查](#check-a-collection)知识集时它会作为一条发现出现。
+Coffer 自己不写页面：谁写页面，谁就给它这些键，`coffer-guide` 技能就是这样教智能体的。缺少 `title`、`type` 或 `description`、没有列出任何 `sources` 或者没有 `verified` 的页面照样能用；[检查](#check-a-collection)知识集时它会作为一条发现出现。
 
-来源带着 Coffer 保留它时写入的键：`title`、`description`、`actor`、`created_at`、`updated_at`。智能体唯一可以加到来源上的键是 `ingest: skipped`，用于没有任何值得写成页面的内容的来源。
+来源带着 Coffer 保留它时写入的键：`title`、`description`、`actor`、`created_at`、`updated_at`。智能体或你还可以再加三个键，它们只描述这个来源，不改动它的内容：
+
+| 键 | 含义 |
+| --- | --- |
+| `summary` | 用一两句话说明这个来源讲了什么，由智能体在整合或整理时写上。目录和知识集的**内容**都会显示它。 |
+| `superseded_by` | 替换这个来源的新来源的 slug，比如一份设计文档的下一版（见[来源被替换时](#when-a-source-is-replaced)）。 |
+| `ingest: skipped` | 用于没有任何值得写成页面的内容的来源，让它不再等待。 |
 
 你给文件加的其他键，Coffer 每次重写文件时都会连同值一起保留。
 
@@ -92,7 +98,7 @@ Coffer 自己不写页面：谁写页面，谁就给它这些键，`coffer-guide
 
 ### 来源在被页面引用之前一直等待 {#sources-wait-until-a-page-cites-them}
 
-只要没有页面在 `sources` 里列出某个来源，而它又没有标记 `ingest: skipped`，这个来源就处于**等待**状态。除此之外，没有任何东西记录哪些来源已经整合：一旦有页面引用了某个来源，它就不再等待。知识页面会给等待中的来源标上**待整理**，知识集页面会统计它们的数量，`coffer-guide` 的目录会列出它们，**整理**会请你的智能体先整合它们。
+只要没有页面在 `sources` 里列出某个来源，而它既没有标记 `ingest: skipped`，也没有 `superseded_by`，这个来源就处于**等待**状态。除此之外，没有任何东西记录哪些来源已经整合：一旦有页面引用了某个来源，它就不再等待。知识页面会给等待中的来源标上**待整理**，知识集页面会统计它们的数量，`coffer-guide` 的目录会列出它们，**整理**会请你的智能体先整合它们。
 
 ## 创建知识集 {#create-a-collection}
 
@@ -104,7 +110,35 @@ Coffer 自己不写页面：谁写页面，谁就给它这些键，`coffer-guide
 知识 → 添加 → 新建知识集… → 名称、这里放什么 → 创建知识集
 ```
 
-树顶部也有**新建知识集**按钮。**添加**菜单会说明每一项保存什么：新建的知识集存在 Coffer 里，同步到你的其他 Mac，保留历史，由你的智能体整理。这会创建 `~/.coffer/vault/knowledge/payments/`，以及一个装着这段描述的 `README.md`；`pages/` 和 `sources/` 在第一次往里写东西时出现。知识集没有标题：所有页面和列表都按文件夹名显示它。它的描述就是 README 的开头一段：可以在知识集页面直接修改（点一下文字，离开输入框时保存），也可以直接改文件。不管哪种方式，都只改这一段，下面写的内容（包括页面类型和约定）保持不变。
+树顶部也有**新建知识集**按钮。**添加**菜单会说明每一项保存什么：新建的知识集存在 Coffer 里，同步到你的其他 Mac，保留历史，由你的智能体整理。这会创建 `~/.coffer/vault/knowledge/payments/` 和它的 `README.md`；`pages/` 和 `sources/` 在第一次往里写东西时出现。README 一开始就把默认规则写了出来，你能看到智能体遵循的是什么，也可以修改：
+
+```markdown
+---
+verify_after_days: 90
+---
+
+# payments
+
+How payments are taken, settled and refunded.
+
+## Page types
+
+- `overview`: where to start. What this collection covers and which pages to read first.
+- `concept`: what something is and why it works the way it does.
+- `entity`: one service, system or team. What it owns and how to reach it.
+- `how-to`: the steps for one task.
+- `decision`: a choice that was made, the options and the reason.
+
+## Rules
+
+- One subject per page. Link related pages with `[[slug]]`.
+- Every page lists the sources it draws on in `sources`, and the day it was last
+  checked against them or the code in `verified`.
+- `verify_after_days` at the top of this file is how many days a check holds
+  before Coffer asks for another. `0` turns it off.
+```
+
+可以在这里改页面类型，或者加上你自己的规则；智能体会优先遵循这个文件，而不是它们的默认规则。知识集没有标题：所有页面和列表都按文件夹名显示它。它的描述就是 README 在第一个 `##` 小节之前的开头一段：可以在知识集页面直接修改（点一下文字，离开输入框时保存），也可以直接改文件。不管哪种方式，都只改这一段，下面的内容（包括页面类型和规则）保持不变。
 
 要重命名知识集，在它的页面上选 **⋯ → 重命名…**，输入新名字。它的文件夹会随之改名（`~/.coffer/vault/knowledge/<新名字>/`），页面仍停在这个知识集上，智能体从下一次目录更新起按新名字找到它。如果新名字已被别的知识集占用，或不是合法的文件夹名，会在输入框下方提示，什么都不会改。
 
@@ -123,8 +157,10 @@ Coffer 自己不写页面：谁写页面，谁就给它这些键，`coffer-guide
 3. 按主题组织，不按谁写的、什么时候写的。
 4. 两种说法不一致时，较新的胜出，除非较旧的被来源、日期、命令输出或代码证明是对的。被取代的说法仍然看得到。
 5. 用 `[[slug]]` 链接其他页面，从不用路径；给页面改名时，更新指向它的链接，或把旧 slug 留在 `aliases` 里。
-6. 从不编辑来源，只能给它标记 `ingest: skipped`。
+6. 从不编辑来源，只能给它加上 `ingest: skipped`、`superseded_by` 或 `summary`。
 7. 给每个页面写 `title`、`type`、一行说明它回答什么问题的 `description`、它依据的 `sources`、可能有的 `aliases`、最近一次对照来源或代码核实页面的日期 `verified`，以及 `actor: agent`。页面的事实从哪里来写在 `sources` 和 `verified` 里，不要在正文里写一段列出读过什么。
+
+指南还会让智能体**把查出来的答案写回去**。它为了回答你的问题去读了来源、代码或某个系统，而页面里还没有这个答案时，它会在结束前把答案写进拥有这个主题的页面：读的如果是来源，就把它加进 `sources`，把 `verified` 设为今天，并用一句话告诉你它加了什么。猜测、观点，或者只在这次对话里成立的东西，它不会写回去。每一次这样的写入都在知识集的历史里，你可以撤销。
 
 你也可以直接要求：「把我们刚发现的 session TTL 记到 payments 知识集里。」知识集必须已经存在；只有你才创建知识集。智能体写下的东西马上就能读到，下一次扫描会把它提交进[历史](#history-and-restore)。智能体写错了位置的页面（比如写在知识集根目录），一分钟内会被移进 `pages/`。
 
@@ -199,14 +235,14 @@ Markdown 文件也可能出现在知识集隐藏的 `.inbox/` 文件夹里：来
 提示词会让智能体去看 `coffer-guide` 技能的**整合来源**和**整理一个知识集**两节。照着做，智能体一次处理一个知识集：
 
 1. 在改动任何东西之前，用 `coffer knowledge tidy-start <collection>` **开始整理**（见[一次整理就是一次改动](#a-tidy-is-one-change)）。
-2. **整合等待中的来源**，从最早的开始：完整读每个来源，把它的内容并进拥有相应主题的页面，为没有页面拥有的主题新建页面，并把来源的 slug 加进它改过的每个页面的 `sources`。没有任何值得保留内容的来源（重复的、空的导出）则标记为 `ingest: skipped`。
-3. **修好 Coffer 发现的问题**：失效和有歧义的链接、没有被链接的页面和不完整的页面、没有来源的页面、缺失的来源。
+2. **整合等待中的来源**，从最早的开始：完整读每个来源，把它的内容并进拥有相应主题的页面，为没有页面拥有的主题新建页面，把来源的 slug 加进它改过的每个页面的 `sources`，并给来源写上 `summary`。如果这个来源替换了一个旧来源，它会给旧来源标上 `superseded_by`，并重新核对引用旧来源的页面。没有任何值得保留内容的来源（重复的、空的导出）则标记为 `ingest: skipped`。
+3. **修好 Coffer 发现的问题**：失效和有歧义的链接、没有被链接的页面和不完整的页面、没有来源的页面、缺失的来源、引用了过期来源的页面。它会**重新核对每个需要重新核对的页面**，对照来源或代码修正变了的地方，并把 `verified` 设为今天；核对不了的页面保留原来的日期，写进汇报。没有 `summary` 的来源，它都会补上。
 4. 读知识集的 `README.md` 和每个页面的标题与描述，再完整读页面。
 5. 把回答同一个问题的页面**合并**成一个，保留每条事实和每个来源，把被合并掉的 slug 留在保留下来的页面的 `aliases` 里，并删掉被合并掉的页面。
 6. 把回答好几个不相关问题的页面**拆分**，一个主题一个页面，并互相链接。
 7. 按「新的说法胜出，除非旧的被证明是对的」这条规则**修正**错误、过时或矛盾之处，重写没有说明页面回答什么问题的描述，并给在多个页面里提到、却没有页面的主题建一个页面。
 8. **拿不准的不动手**：两个页面说法冲突却看不出哪个对、要删掉大段内容、要改 README 里的页面类型，这些写进汇报，留给你决定。
-9. 用 `coffer knowledge tidy-finish <collection> --set summary="<汇报>"` **结束整理**。汇报写明它整合或跳过了哪些来源，合并、拆分、修正和删除了什么，以及留给你决定的事。
+9. 用 `coffer knowledge tidy-finish <collection> --set summary="<汇报>"` **结束整理**。汇报写明它整合或跳过了哪些来源，合并、拆分、修正、重新核对和删除了什么，以及留给你决定的事。最后一部分是**缺口**：页面回答不了的问题、多个页面都提到却没有页面负责的主题，以及值得去找的来源（一份规格、一份运行手册、一个可以问的人）。
 
 不需要改的地方，它一概不动。你也可以用自己的话请任何装有 `coffer-guide` 技能的智能体去做这件事：「把 payments 的知识整理一下。」
 
@@ -262,13 +298,36 @@ Coffer 不会把任何关于你知识的东西发给任何模型。你按下整�
 | **失效链接** | 一个指不到任何页面、别名或来源的 `[[链接]]`。 |
 | **有歧义的链接** | 一个指到不止一个文件的 `[[链接]]`。 |
 | **重复的名称** | 两个页面的 slug 相同，或者一个别名指到两个页面。 |
-| **缺失的来源** | 页面的 `sources` 里写了一个不存在的来源。 |
+| **缺失的来源** | 页面的 `sources` 里写了一个不存在的来源，或者来源的 `superseded_by` 指向一个不存在的来源。 |
+| **引用了过期来源的页面** | 页面引用了一个已被替换的来源，却没有引用任何替换它的来源（见[来源被替换时](#when-a-source-is-replaced)）。这一行写明它引用的来源和最新的替换者。 |
+| **待整理的来源** | 没有任何页面引用、也没有标记 `ingest: skipped` 或 `superseded_by` 的来源。 |
 | **不完整的页面** | 缺少 `title`、`type` 或 `description` 的页面。 |
-| **待整理的来源** | 没有任何页面引用、也没有标记 `ingest: skipped` 的来源。 |
+| **需要重新核对的页面** | `verified` 日期缺失或早于知识集期限的页面（见[需要重新核对的页面](#pages-due-a-recheck)）。这一行写明上次核对的日期，或者*从未核对*。 |
 | **没有来源的页面** | `sources` 为空的页面。 |
 | **没有被链接的页面** | 知识集里有两个或更多页面时，没有任何其他页面链接到的页面。`overview` 类型的页面除外：它们是入口。 |
 
 这些发现在每次读取时从文件算出来，不存在任何地方，所以文件一变它们就是最新的。它们是提示，不是错误：你写的没有来源的页面照样能用。在命令行上，`coffer knowledge check <collection>` 会打印同样的列表（见 [`coffer knowledge`](/zh/reference/cli/knowledge#knowledge-check)）。
+
+### 来源被替换时 {#when-a-source-is-replaced}
+
+来源会过期：新的设计文档或运行手册替换了你的页面当初依据的那一份。给旧来源标上新来源的 slug：
+
+```markdown
+---
+title: Gateway design (2025)
+superseded_by: gateway-design-2026
+---
+```
+
+智能体在整合一个替换了旧来源的新来源时，会自己加上这一行。从那以后，每个引用了旧来源、却没有引用任何新来源的页面，都会列在**引用了过期来源的页面**下，下一次整理会对照新来源重新核对它。替换可以连成一串：`v1` 被 `v2` 替换、`v2` 又被 `v3` 替换时，同时引用 `v1` 和 `v3` 的页面就是最新的。旧来源留在原处，不再等待，因为页面仍然可以引用它来说明过去的情况；打开它会看到**已被替换为**和指向替换者的链接，目录也会标出它，让智能体知道它已经不能作为依据。指向不存在来源的 `superseded_by` 会列在**缺失的来源**下。
+
+### 需要重新核对的页面 {#pages-due-a-recheck}
+
+来源没变，页面也可能和现实脱节：它描述的代码或系统变了。每个页面都带着 `verified`，即最近一次对照来源或代码核对它的日期；`verified` 缺失或早于知识集期限的页面，会列在**需要重新核对的页面**下。打开它会看到**需要重新核对**，没有日期时还会显示*从未核对*。它只是被标出来：仍然留在目录里，智能体照样会读。
+
+期限是 90 天。可以在 README 的 frontmatter 里设成别的值，比如运行手册的知识集设 `verify_after_days: 30`；设为 `0` 就关闭这个知识集的检查。负数，或者不是整数天数的值，都按 90 天算。整理会重新核对列出的每个页面，并把 `verified` 设为今天。
+
+更新之后第一次打开知识集时，所有没有 `verified` 的页面都会被列出来。按**整理**，智能体会逐个重新核对。
 
 ## 自己在运行的是什么 {#what-runs-on-its-own}
 
@@ -292,9 +351,9 @@ Coffer **没有读取、列出或搜索知识的工具**。智能体用它已有
 告诉它去哪里找的是 Coffer 内置的 [`coffer-guide` 技能](/zh/guides/skills#the-built-in-coffer-guide-skill)，Coffer 会把它链接进每个智能体的技能文件夹：
 
 - 它的**描述**出现在每个会话里，列出你各个知识集的主题，取自每个 `README.md`，并说明这个技能教如何写下、整理和检查知识。
-- 它的**正文**在智能体打开技能时加载，给出知识根目录的路径和每个知识集的目录：它的 README、按 `type` 分组的页面（每个页面的路径、标题和描述），以及仍在等待整合的来源。它还带有上面讲的结构、写页面的规则，以及整合来源和整理的步骤。
+- 它的**正文**在智能体打开技能时加载，给出知识根目录的路径和每个知识集的目录：它的 README、按 `type` 分组的页面（每个页面的路径、标题和描述），以及它的来源，每个来源标着 *(waiting)* 或 *(superseded by …)*，后面跟着它的 `summary`。它还带有上面讲的结构、写页面的规则，以及整合来源和整理的步骤。
 
-页面里没有智能体要找的东西时，指南会让它在知识集的 `sources/` 里 grep 确切的字符串。目录太大时会被缩短：先去掉描述，还是太长就只列出每个知识集的数量和要搜索的文件夹，技能里会说明这一点。
+页面里没有智能体要找的东西时，指南会让它在知识集的 `sources/` 里 grep 确切的字符串。目录太大时会被缩短：先去掉描述和摘要，只列出等待中的来源，还是太长就只列出每个知识集的数量和要搜索的文件夹，技能里会说明这一点。
 
 目录一变，Coffer 就重写这个技能，所以新页面会在一次扫描内出现在里面。
 
@@ -302,7 +361,7 @@ Coffer **没有读取、列出或搜索知识的工具**。智能体用它已有
 智能体会稳定地使用它已有的文件工具，却很少记得去调一个专用的检索工具。给它们一份目录和一个路径，就把检索变成了它们本来就擅长的事；而且对几百个文件做一次字面 `grep`，能准确匹配标识符和名字，模糊搜索反而会把它们弄混。完整理由见[知识架构](/zh/architecture/knowledge)。
 :::
 
-给每个知识集写一个好的 `README.md`：模型判断你的知识是否相关时，匹配的就是它的第一段；它关于页面类型和约定的内容，就是智能体要遵循的。
+给每个知识集写一个好的 `README.md`：模型判断你的知识是否相关时，匹配的就是它的第一段；它关于页面类型和规则的内容，就是智能体要遵循的。
 
 ## 浏览和阅读 {#browse-and-read}
 
@@ -312,16 +371,16 @@ Coffer **没有读取、列出或搜索知识的工具**。智能体用它已有
 
 **知识集。** 选中一个知识集，它的窗格栏里有**整理**和 **⋯** 菜单。下面是它的文件夹名、这里放什么（点一下可编辑；离开输入框或按 **⌘Enter** 保存，**Esc** 取消，并有提示给出**撤销**），以及一行概要：多少个页面、多少个来源及其中几个待整理、文件夹路径和复制按钮、最后更新时间。概要下面一行浅色文字说明这个知识集由 Coffer 管理：同步到你的其他 Mac，保留历史，由你的智能体整理。有智能体正在整理它时，会有一条提示（见[一次整理就是一次改动](#a-tidy-is-one-change)）。然后是三节：
 
-- **待办**列出 Coffer 在知识集文件里发现的问题，最严重的在前，每条按标题写明页面，点一下就打开（见 [Coffer 自己能发现的问题](#what-coffer-finds-on-its-own)）。
-- **内容**按类型显示知识集的页面：概览、概念、实体、操作指南、决策，然后是 README 定义的类型，最后是没有类型的页面；每种一张卡片，带着类型图标、页面数和前几个标题，再写明还有多少个；**来源**卡片同样列出来源，并标出仍在等待的。点开每个标题就打开对应文件。
+- **待办**列出 Coffer 在知识集文件里发现的问题，最严重的在前，每条按标题写明页面，点一下就打开，其中包括**引用了过期来源的页面**和**需要重新核对的页面**（见 [Coffer 自己能发现的问题](#what-coffer-finds-on-its-own)）。
+- **内容**按类型显示知识集的页面：概览、概念、实体、操作指南、决策，然后是 README 定义的类型，最后是没有类型的页面；每种一张卡片，带着类型图标、页面数和前几个标题，再写明还有多少个；**来源**卡片列出来源：等待中的在前，然后是其余的，已被替换的排在最后并划掉；每个都写明状态（*待整理*、*被 N 页引用*、*已跳过*或*已被替换*），下面是它的摘要。点开每个标题就打开对应文件。
 - **改动记录**列出这个知识集的每次改动，最新的在前：它做了什么、谁写的、什么时候，以及按标题列出它涉及的文件，点开每个文件都会打开它的历史。一次整理是一条，带着智能体的汇报和**撤销这次整理…**（见[撤销一次整理](#undo-a-tidy)）；彼此相隔不到 10 分钟的磁盘编辑合成一条，列出它们的文件。**显示更多**会加载更早的改动。
 
 知识集的 **⋯** 菜单里有**在访达中显示**、这台 Mac 装了 Obsidian 时的**在 Obsidian 中打开**（见[在 Obsidian 中打开知识集](#open-a-collection-in-obsidian)）、**复制路径**、**重命名…**和**删除知识集…**；里面还什么都没有的知识集会这样说明，并提醒你可以上传一个来源，或把 Markdown 文件放进它的文件夹。
 
 **页面或来源。** 选中一个文件会只读地显示它。它的窗格栏先写明文件在哪里，然后是**历史**（见[历史与恢复](#history-and-restore)）、Markdown 的**预览 / 源码**切换、作为按钮的**在编辑器中打开**（见[自己编辑文件](#edit-a-file-yourself)），以及 **⋯** 菜单（**在访达中显示**、装了 Obsidian 时的**在 Obsidian 中打开**，以及**删除**）。标题下面一行描述这个文件，读自它的 frontmatter：
 
-- **页面**：它的类型、谁写的、什么时候创建的、页面带有 `verified` 时的**核实于**及日期，以及它的来源，点开每个都会打开对应来源；页面写了但并不存在的来源会被划掉。正文里，每个 `[[链接]]` 都是指向它所指页面或来源的链接；失效的链接标成红色，悬停提示说没有叫这个名字的东西。行内代码比代码块更淡，长路径在 `/` 处换行。
-- **来源**：**被 N 个页面引用**，点开每个都会打开对应页面；还没有页面引用时显示**待整理**。
+- **页面**：它的类型、谁写的、什么时候创建的、页面带有 `verified` 时的**核对过**及日期，[需要重新核对](#pages-due-a-recheck)时的**需要重新核对**（没有日期时还会显示*从未核对*），以及它的来源，点开每个都会打开对应来源；页面写了但并不存在的来源会被划掉。正文里，每个 `[[链接]]` 都是指向它所指页面或来源的链接；失效的链接标成红色，悬停提示说没有叫这个名字的东西。行内代码比代码块更淡，长路径在 `/` 处换行。
+- **来源**：有来源替换它时，显示**已被替换为**和指向替换者的链接；**被 N 个页面引用**，点开每个都会打开对应页面；还没有页面引用时显示**待整理**。
 
 页面没有搜索框，也没有按知识集的开关：⌘K 按名字跳到知识集，每个知识集都到达每个智能体。知识页面上没有手工输入页面的表单：你在自己的编辑器里写，智能体则通过写文件来写。
 
@@ -427,6 +486,8 @@ Coffer 会跳过 `.obsidian/`、`.git/` 这类隐藏文件夹和 `node_modules`�
 
 **知识集页面说有智能体在整理，但什么都没发生。** 智能体没有运行 `tidy-finish` 就停了。请它结束，或者等着：知识集 30 分钟没有变化后，Coffer 会结束这次整理，记为*未汇报即结束*。
 
+**更新之后，所有页面都列在需要重新核对的页面下。** 这些页面还没有 `verified` 日期。按**整理**：智能体会逐个重新核对并写上日期。想关闭某个知识集的这项检查，就在它的 README 里设 `verify_after_days: 0`。
+
 **整理之后来源仍然是待整理。** 没有页面在 `sources` 里列出它的 slug。请你的智能体整合它；如果其中没有值得写成页面的内容，就请它标记 `ingest: skipped`。
 
 **某个链接显示为红色。** 它指不到任何页面、别名或来源，通常是页面被改了名或被合并掉了。修好这个链接，或者把旧 slug 加进保留下来的页面的 `aliases`；**整理**会修好它发现的失效链接。
@@ -452,4 +513,4 @@ Coffer 会跳过 `.obsidian/`、`.git/` 这类隐藏文件夹和 `node_modules`�
 - [`coffer knowledge` 命令参考](/zh/reference/cli/knowledge)
 - [MCP 工具参考](/zh/reference/mcp-tools)
 - [知识规格](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md)
-- [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md)、[Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) 、[Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md) 和 [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md)
+- [Knowledge Is a Wiki of Pages Compiled From Kept Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md)、[Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) 、[Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tidying-knowledge-is-the-agents-job.md)、[Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-stays-current-through-flags-coffer-computes.md) 和 [A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/linked-knowledge-folders-are-read-only-and-machine-local.md)
