@@ -10,13 +10,14 @@
 // What is NOT copied is the fetch. A collection descends a level per request,
 // so each expanded directory mounts another level and fetches its own listing
 // — and directories start CLOSED, except the ones on the way to the open
-// document, so a deep link lands with its document visible in the tree.
+// document, so a deep link lands with its document visible in the tree. What
+// the person opened and closed is kept in the browser (lib/knowledge/
+// treeState.ts), so the tree comes back as it was left.
 //
 // At a collection's root its two folders come first, labelled Pages and
 // Sources, then any other entry; a waiting source carries a dot and the word
 // Waiting (spec knowledge "Show a collection as one tree of read-only documents
 // in the web UI").
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 
@@ -34,6 +35,7 @@ import { StatusDot } from "@/components/status/StatusDot";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import { useKnowledgeTree } from "@/lib/hooks/useKnowledge";
+import { useTreeState } from "@/lib/knowledge/treeState";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -73,8 +75,7 @@ export function KnowledgeTreeLevel({
   const { t } = useTranslation();
   // What the person opened and closed; a folder on the way to the open
   // document is open unless they closed it.
-  const [opened, setOpened] = useState<Set<string>>(new Set());
-  const [closed, setClosed] = useState<Set<string>>(new Set());
+  const { opened, closed, setOpen } = useTreeState("folders");
   const { data, isPending, error } = useKnowledgeTree(path);
 
   if (error) {
@@ -109,21 +110,7 @@ export function KnowledgeTreeLevel({
 
   const isOpen = (dir: string) =>
     opened.has(dir) || (!closed.has(dir) && Boolean(selectedPath?.startsWith(`${dir}/`)));
-  const toggle = (dir: string) => {
-    const nowOpen = !isOpen(dir);
-    setOpened((prev) => {
-      const next = new Set(prev);
-      if (nowOpen) next.add(dir);
-      else next.delete(dir);
-      return next;
-    });
-    setClosed((prev) => {
-      const next = new Set(prev);
-      if (nowOpen) next.delete(dir);
-      else next.add(dir);
-      return next;
-    });
-  };
+  const toggle = (dir: string) => setOpen(dir, !isOpen(dir));
 
   return (
     <ul className="flex flex-col gap-px">

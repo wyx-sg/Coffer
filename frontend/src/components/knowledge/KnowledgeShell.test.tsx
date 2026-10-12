@@ -5,7 +5,7 @@
 // one subtitle, Tidy all and the one primary Upload), the landing with no
 // collection open, the first-run empty state, the tree (a Collections strip
 // with New collection) and the Upload dialog's Cancel. Mocked only at the network boundary, like the page tests.
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { COLLECTION, GATEWAY, OTHER, UID } from "@/components/knowledge/knowledgeTestData";
@@ -92,7 +92,7 @@ describe("with no collection open", () => {
     expect(
       await within(screen.getByRole("banner")).findByRole("button", { name: "Tidy all" }),
     ).toBeInTheDocument();
-    // There is no Recent changes view: a file's history is its history drawer.
+    // There is no Recent changes view: a file's history opens from its pane bar.
     expect(screen.queryByText("Recent changes")).toBeNull();
     expect(screen.queryByRole("link", { name: /Recent changes/ })).toBeNull();
   });
@@ -144,6 +144,42 @@ describe("the tree", () => {
     expect(within(nav).getAllByRole("button", { name: "New collection" })).toHaveLength(1);
     fireEvent.click(within(nav).getByRole("button", { name: "New collection" }));
     expect(await screen.findByRole("dialog")).toHaveTextContent("New collection");
+  });
+
+  acceptance("knowledge", "the tree comes back as the person left it", async () => {
+    renderKnowledge("/knowledge");
+    let nav = tree();
+    // Open a collection, then its Sources folder, and open a second collection.
+    fireEvent.click(await within(nav).findByRole("button", { name: `Expand ${COLLECTION.name}` }));
+    fireEvent.click(await within(nav).findByRole("button", { name: "Sources" }));
+    expect(await within(nav).findByRole("button", { name: /^release-notes\.md/ })).toBeVisible();
+    fireEvent.click(within(nav).getByRole("button", { name: `Expand ${OTHER.name}` }));
+    cleanup();
+
+    // Coming back to the page finds the same collections and folder open.
+    renderKnowledge("/knowledge");
+    nav = tree();
+    expect(
+      await within(nav).findByRole("button", { name: `Collapse ${COLLECTION.name}` }),
+    ).toHaveAttribute("aria-expanded", "true");
+    expect(within(nav).getByRole("button", { name: `Collapse ${OTHER.name}` })).toBeVisible();
+    expect(await within(nav).findByRole("button", { name: "Sources" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(await within(nav).findByRole("button", { name: /^release-notes\.md/ })).toBeVisible();
+    expect(within(nav).getByRole("button", { name: "Pages" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+
+    // Closing them is remembered too.
+    fireEvent.click(within(nav).getByRole("button", { name: `Collapse ${COLLECTION.name}` }));
+    cleanup();
+    renderKnowledge("/knowledge");
+    expect(
+      await within(tree()).findByRole("button", { name: `Expand ${COLLECTION.name}` }),
+    ).toHaveAttribute("aria-expanded", "false");
   });
 });
 

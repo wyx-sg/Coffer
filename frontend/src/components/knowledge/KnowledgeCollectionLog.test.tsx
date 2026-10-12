@@ -4,7 +4,7 @@
 // collection as one tree of read-only documents in the web UI"): the findings
 // grouped by kind, each path opening its file; the changes feed for the
 // collection, one row per change — what it did, its writer and time, its
-// files, each opening that file with its history drawer — with Show more while
+// files, each opening that file at its history — with Show more while
 // more are left. Mocked only at the network boundary.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -70,15 +70,14 @@ describe("the Change log", () => {
     expect(api.listChanges).toHaveBeenCalledWith(expect.objectContaining({ collection: NAME }));
 
     fireEvent.click(within(log).getByRole("link", { name: "pages/gateway.md" }));
-    // The page opens with its history drawer.
+    // The page opens at its history.
     await waitFor(() =>
       expect(screen.getByTestId("where")).toHaveTextContent(
         `${ROOT}?file=${encodeURIComponent(GATEWAY.path)}&history=1`,
       ),
     );
-    expect(await screen.findByRole("heading", { level: 1, name: GATEWAY.title })).toBeVisible();
     expect(
-      await screen.findByRole("complementary", { name: "History of gateway.md" }),
+      await screen.findByRole("region", { name: "History of gateway.md" }),
     ).toBeInTheDocument();
     await waitFor(() => expect(vaultApi.history).toHaveBeenCalledWith(`knowledge/${GATEWAY.path}`));
   });

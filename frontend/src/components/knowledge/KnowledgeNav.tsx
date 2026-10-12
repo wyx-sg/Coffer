@@ -5,12 +5,12 @@
 // every collection as a node of one tree — its documents under it (spec
 // knowledge "Show a collection as one tree of read-only documents in the web
 // UI"). The open collection is expanded unless closed on
-// its chevron; others open and close on theirs, and that choice is ephemeral
-// UI state (it does not survive a reload).
+// its chevron; others open and close on theirs, and that choice is kept in the
+// browser (lib/knowledge/treeState.ts), so the tree comes back as it was left.
 //
 // There is no filter input: the layer has no retrieval, and ⌘K already jumps
 // to a collection by name.
-import { useState } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderPlus } from "lucide-react";
 
@@ -19,6 +19,7 @@ import { ListLoadingRows } from "@/components/ListPaneStates";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { CollectionOut } from "@/lib/api/knowledge";
+import { clearTreeClosed, useTreeState } from "@/lib/knowledge/treeState";
 
 interface Props {
   collections: CollectionOut[];
@@ -33,35 +34,18 @@ export function KnowledgeNav(props: Props) {
   // What the person opened and closed on a chevron. The collection on screen
   // is open unless they closed it; opening one first and then navigating into
   // it keeps it open rather than flipping it shut.
-  const [opened, setOpened] = useState<Set<string>>(new Set());
-  const [closed, setClosed] = useState<Set<string>>(new Set());
+  const { opened, closed, setOpen } = useTreeState("collections");
   // Arriving in a collection — a document, a link — opens it again even if it was closed earlier, so what is on
-  // screen is visible in the tree. Adjusted during render, not in an effect,
-  // so the tree never paints closed first.
-  const [arrivedAt, setArrivedAt] = useState(props.currentUid);
-  if (arrivedAt !== props.currentUid) {
-    setArrivedAt(props.currentUid);
-    const uid = props.currentUid;
-    if (uid && closed.has(uid)) {
-      setClosed((prev) => {
-        const next = new Set(prev);
-        next.delete(uid);
-        return next;
-      });
-    }
-  }
+  // screen is visible in the tree. A layout effect, so the tree never paints
+  // closed first; not on mount, so coming back finds the tree as it was left.
+  const arrivedAt = useRef(props.currentUid);
+  useLayoutEffect(() => {
+    if (arrivedAt.current === props.currentUid) return;
+    arrivedAt.current = props.currentUid;
+    if (props.currentUid) clearTreeClosed("collections", props.currentUid);
+  }, [props.currentUid]);
   const isOpen = (uid: string) => !closed.has(uid) && (opened.has(uid) || uid === props.currentUid);
-  const toggle = (uid: string) => {
-    const nowOpen = !isOpen(uid);
-    const flip = (prev: Set<string>, add: boolean) => {
-      const next = new Set(prev);
-      if (add) next.add(uid);
-      else next.delete(uid);
-      return next;
-    };
-    setOpened((prev) => flip(prev, nowOpen));
-    setClosed((prev) => flip(prev, !nowOpen));
-  };
+  const toggle = (uid: string) => setOpen(uid, !isOpen(uid));
 
   return (
     <nav aria-label={t("knowledge.nav.label")} className="flex min-h-0 flex-1 flex-col">

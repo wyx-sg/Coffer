@@ -2,16 +2,15 @@
 //
 // One open file (boards 5.1.01, 5.1.05, 5.1.29): the bar — where it is
 // (collection › folders › file, full path) and its actions — over the reader,
-// with no tabs. History opens a drawer beside the file (spec knowledge "Show a
-// collection as one tree of read-only documents in the web UI"), named in the
-// address as `history=1` so it survives a reload and a link can open it; the
-// file stays in view while it is open. The drawer reads on its own, so a
-// history that cannot be read leaves the file working, and a file that cannot
-// be read still shows its history.
+// with no tabs. History takes over the whole Knowledge area (spec knowledge
+// "Show a collection as one tree of read-only documents in the web UI"), named
+// in the address as `history=1` so it survives a reload and a link can open
+// it; closing it brings the file back. The history reads on its own, so a file
+// that cannot be read still shows its history.
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
-import { KnowledgeHistoryDrawer } from "@/components/knowledge/KnowledgeHistoryDrawer";
+import { KnowledgeHistoryView } from "@/components/knowledge/KnowledgeHistoryView";
 import { KnowledgeLoadedDocument } from "@/components/knowledge/KnowledgeLoadedDocument";
 import { KnowledgePaneBar } from "@/components/knowledge/KnowledgePaneBar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -43,18 +42,16 @@ export function KnowledgeDocumentPane({ collection, path }: Props) {
       },
       { replace: true },
     );
-  const drawer = historyOpen ? (
-    <KnowledgeHistoryDrawer path={path} onClose={() => setHistory(false)} />
-  ) : null;
+  if (historyOpen) {
+    return <KnowledgeHistoryView path={path} onClose={() => setHistory(false)} />;
+  }
 
   if (file.data) {
     return (
       <KnowledgeLoadedDocument
         collection={collection}
         file={file.data}
-        historyOpen={historyOpen}
-        onHistory={() => setHistory(!historyOpen)}
-        drawer={drawer}
+        onHistory={() => setHistory(true)}
       />
     );
   }
@@ -76,7 +73,6 @@ export function KnowledgeDocumentPane({ collection, path }: Props) {
             </div>
           )}
         </div>
-        {drawer}
       </div>
     </div>
   );
