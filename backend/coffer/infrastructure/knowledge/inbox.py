@@ -3,9 +3,9 @@
 The hidden ``.inbox/`` half of what ``fs.py`` writes (see "Promote submitted
 material at once"). An item is ordinary frontmatter and Markdown;
 :func:`promote` keeps it as a source under ``sources/`` with its Markdown and
-frontmatter ("Keep every upload as a Markdown source") and removes it. Coffer's own entrances promote at once, and the
-sweep adopts and promotes whatever an agent outside Coffer, another machine or
-an older guide dropped there.
+frontmatter ("Keep every upload as a Markdown source") and removes it. Coffer's
+own entrances promote at once, and the sweep adopts and promotes whatever an
+agent outside Coffer, another machine or an older guide dropped there.
 """
 
 from __future__ import annotations
