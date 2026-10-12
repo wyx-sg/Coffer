@@ -151,7 +151,7 @@ Claude Code 会删除超过 `cleanupPeriodDays` 没有动过的会话，**默认
 
 在智能体自己的系统提示词之后，Coffer 按以下顺序追加：
 
-1. 一段说明，告诉智能体它在聊天渠道上，回复要简短，而且它不能点你电脑上的对话框；如果消息渠道为这类聊天设了自己的系统提示词，接着在 "Instructions from the channel's owner:" 标题下追加它（见[你自己的系统提示词](/zh/guides/channels#your-own-system-prompts)）。
+1. 一段说明，告诉智能体它在聊天渠道上，怎么发文件、怎么用按钮问你，以及它不能点你电脑上的对话框；接着在 "Reply style:" 标题下追加这类聊天的回复风格：Coffer 的默认风格，或者你改写的版本（见[系统提示词和回复风格](/zh/guides/channels#your-own-system-prompts)）。
 2. 说明 Coffer 让智能体用的是哪个模型。
 
 从对话页面打开或用**新建对话**开启的会话在你的终端里运行，在 Coffer 之外，所以这两段说明都不追加。两种情况下记忆都以同样的方式到达智能体：通过智能体自己的记忆，[记忆同步](/zh/guides/memory)把你其他智能体学到的东西写进去。

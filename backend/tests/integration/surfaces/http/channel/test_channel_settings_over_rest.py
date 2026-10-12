@@ -19,6 +19,7 @@ from coffer.application.channel.kind import make_channel_kind
 from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.service import ChannelService
 from coffer.application.resource_service import ResourceService
+from coffer.domain.chat.channel_prompt import DEFAULT_REPLY_STYLE, reply_style_hash
 from coffer.infrastructure.channel.persistence import (
     ChannelPeerRepo,
     ChannelThreadConversationRepo,
@@ -293,35 +294,36 @@ async def test_status_names_the_workspace_new_conversations_fall_back_to(ctx: _C
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="the system prompts are edited through a dialog on the Settings tab"
+    spec="channels", scenario="the reply styles are edited through a dialog on the Settings tab"
 )
-async def test_the_system_prompts_are_saved_and_reported_in_the_settings(ctx: _Ctx) -> None:
+async def test_the_reply_styles_are_saved_and_reported_in_the_settings(ctx: _Ctx) -> None:
     uid = (await _register(ctx))["uid"]
     before = (await ctx.http.get(f"/api/v1/channels/{uid}/status")).json()["settings"]
-    assert (before["direct_system_prompt"], before["group_system_prompt"]) == ("", "")
+    assert (before["direct_reply_style"], before["group_reply_style"]) == ("", "")
 
     r = await _patch(
-        ctx, uid, direct_system_prompt="Answer in Chinese.\nBe brief.", group_system_prompt=""
+        ctx, uid, direct_reply_style="Answer in Chinese.\nBe brief.", group_reply_style=""
     )
     assert r.status_code == 200, r.text
 
     settings = (await ctx.http.get(f"/api/v1/channels/{uid}/status")).json()["settings"]
-    assert settings["direct_system_prompt"] == "Answer in Chinese.\nBe brief."
-    assert settings["group_system_prompt"] == ""
+    assert settings["direct_reply_style"] == "Answer in Chinese.\nBe brief."
+    assert settings["direct_reply_style_base"] == reply_style_hash(DEFAULT_REPLY_STYLE)
+    assert settings["group_reply_style"] == ""
     # Every other setting and ref is as it was.
-    assert {k: v for k, v in settings.items() if not k.endswith("_system_prompt")} == {
-        k: v for k, v in before.items() if not k.endswith("_system_prompt")
+    assert {k: v for k, v in settings.items() if "_reply_style" not in k} == {
+        k: v for k, v in before.items() if "_reply_style" not in k
     }
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="a system prompt longer than 4,000 characters is refused"
+    spec="channels", scenario="a reply style longer than 6,000 characters is refused"
 )
-async def test_a_too_long_system_prompt_is_refused_and_nothing_changes(ctx: _Ctx) -> None:
+async def test_a_too_long_reply_style_is_refused_and_nothing_changes(ctx: _Ctx) -> None:
     uid = (await _register(ctx))["uid"]
-    assert (await _patch(ctx, uid, group_system_prompt="Be brief.")).status_code == 200
+    assert (await _patch(ctx, uid, group_reply_style="Be brief.")).status_code == 200
 
-    refused = await _patch(ctx, uid, group_system_prompt="x" * 4001)
+    refused = await _patch(ctx, uid, group_reply_style="x" * 6001)
 
     assert refused.status_code == 422, refused.text
-    assert (await _config(ctx, uid))["group_system_prompt"] == "Be brief."
+    assert (await _config(ctx, uid))["group_reply_style"] == "Be brief."

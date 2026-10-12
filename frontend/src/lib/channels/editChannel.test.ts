@@ -274,42 +274,64 @@ describe("planChannelEdit", () => {
     });
   });
 
-  describe("system prompts", () => {
+  describe("reply styles", () => {
     const config = { channel_type: "telegram", bot_token_ref: "channel/tg/bot-token" };
 
-    test("an empty prompt over a config that holds none writes nothing", () => {
+    test("an empty style over a config that holds none writes nothing", () => {
       const plan = planChannelEdit({
         ...TG,
         config,
-        values: { default_agent: AGENT_A, direct_system_prompt: "", group_system_prompt: "" },
+        values: { default_agent: AGENT_A, direct_reply_style: "", group_reply_style: "" },
       });
 
       expect(plan.config).toEqual({ ...config, default_agent: AGENT_A });
     });
 
-    test("a changed prompt writes its key and leaves the other alone", () => {
+    test("a changed style writes its key and leaves the other alone", () => {
       const plan = planChannelEdit({
         ...TG,
-        config: { ...config, group_system_prompt: "Be brief." },
+        config: { ...config, group_reply_style: "Be brief." },
         values: {
           default_agent: AGENT_A,
-          direct_system_prompt: "Answer in Chinese.",
-          group_system_prompt: "Be brief.",
+          direct_reply_style: "Answer in Chinese.",
+          group_reply_style: "Be brief.",
         },
       });
 
-      expect(plan.config.direct_system_prompt).toBe("Answer in Chinese.");
-      expect(plan.config.group_system_prompt).toBe("Be brief.");
+      expect(plan.config.direct_reply_style).toBe("Answer in Chinese.");
+      expect(plan.config.group_reply_style).toBe("Be brief.");
     });
 
-    test("clearing a prompt writes it empty", () => {
+    test("restoring the default writes the style empty", () => {
+      const plan = planChannelEdit({
+        ...TG,
+        config: { ...config, direct_reply_style: "Answer in Chinese." },
+        values: { default_agent: AGENT_A, direct_reply_style: "" },
+      });
+
+      expect(plan.config.direct_reply_style).toBe("");
+    });
+
+    test("saving re-dates a style written against an older default", () => {
+      const plan = planChannelEdit({
+        ...TG,
+        config: { ...config, group_reply_style: "Be brief.", group_reply_style_base: "0123" },
+        values: { default_agent: AGENT_A, group_reply_style: "Be brief." },
+      });
+
+      // Cleared, so the daemon stamps today's default and the notice goes.
+      expect(plan.config.group_reply_style_base).toBe("");
+    });
+
+    test("a style saved over a channel stored before it drops the old prompt", () => {
       const plan = planChannelEdit({
         ...TG,
         config: { ...config, direct_system_prompt: "Answer in Chinese." },
-        values: { default_agent: AGENT_A, direct_system_prompt: "" },
+        values: { default_agent: AGENT_A, direct_reply_style: "" },
       });
 
-      expect(plan.config.direct_system_prompt).toBe("");
+      expect(plan.config).not.toHaveProperty("direct_system_prompt");
+      expect(plan.config.direct_reply_style).toBe("");
     });
   });
 

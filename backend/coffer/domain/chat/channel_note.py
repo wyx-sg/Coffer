@@ -33,11 +33,11 @@ class ChannelNote:
     #: The transport collapses a ``## Details`` section itself
     #: (``ChannelCapabilities.collapses_details``), so the agent may use one.
     collapses_details: bool = False
-    #: The owner's own system prompt for this chat kind — the channel's direct-chat
-    #: or group-chat prompt (spec channels "Append the owner's system prompt to a
-    #: channel turn"); "" when none is set or the chat kind is unknown. It is
-    #: appended after the note, never in its place.
-    owner_prompt: str = ""
+    #: The owner's rewrite of the reply style for this chat kind (spec channels
+    #: "Let the owner rewrite a channel's reply style"); "" when they have not
+    #: rewritten it or the chat kind is unknown, and Coffer's default applies.
+    #: It never touches the channel note above it.
+    reply_style: str = ""
     #: The transport can read a thread's earlier messages, so the agent is told
     #: the tool that does (``coffer__channel_read_thread``).
     reads_threads: bool = False

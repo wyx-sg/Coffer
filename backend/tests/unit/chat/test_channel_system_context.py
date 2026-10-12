@@ -13,12 +13,13 @@ from __future__ import annotations
 import pytest
 
 from coffer.domain.chat.channel_note import ChannelNote
+from coffer.domain.chat.channel_prompt import (
+    DEFAULT_REPLY_STYLE,
+    channel_note_text,
+)
 from coffer.infrastructure.channel.seatalk_caps import SEATALK_RENDER_NOTES
 from coffer.infrastructure.channel.telegram_caps import RICH_RENDER_NOTES
-from coffer.infrastructure.chat.adapter_support import (
-    channel_system_context,
-    owner_prompt_context,
-)
+from coffer.infrastructure.chat.adapter_support import channel_system_context
 
 _SEATALK_GROUP_THREAD = ChannelNote(
     name="ops", platform="SeaTalk", chat_kind="group", in_thread=True, renders=SEATALK_RENDER_NOTES
@@ -35,7 +36,7 @@ def test_names_the_platform_and_chat_kind_and_keeps_the_evidence() -> None:
     assert text.startswith(
         "You are replying in a SeaTalk group thread (the ops channel), most likely"
     )
-    assert "do not narrate your steps" in text
+    assert "Do not narrate your steps" in text
     assert "Short never means dropping evidence" in text
     assert "verbatim" in text
     assert "cannot click permission or confirmation dialogs" in text
@@ -66,7 +67,7 @@ def test_asks_for_outcome_first_details_png_and_coffer_ask() -> None:
     text = channel_system_context(_SEATALK_GROUP_THREAD)
 
     assert "The first line is the outcome in one sentence" in text
-    assert "only what you write after your last tool call is sent" in text
+    assert "only what you write after your last tool call is sent" in text.lower()
     assert "as a PNG file" in text
     assert "call `coffer__ask`" in text
     assert "NEEDS YOU" not in text
@@ -100,35 +101,48 @@ def test_an_unresolvable_channel_keeps_the_guidance() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="the owner's prompt follows Coffer's note under its own heading"
+    spec="channels",
+    scenario="the owner's reply style follows Coffer's note",
 )
-def test_the_owner_prompt_follows_the_note_under_its_heading() -> None:
-    prompt = "Answer in Chinese.\n\nAlways name the ticket number."
-    note = ChannelNote(name="tg", platform="Telegram", chat_kind="direct", owner_prompt=prompt)
-
-    text = channel_system_context(note)
-    builtin = channel_system_context(
-        ChannelNote(name="tg", platform="Telegram", chat_kind="direct")
-    )
-
-    # Coffer's note is kept whole and comes first; the owner's text follows it
-    # under the heading, exactly as written.
-    assert text == f"{builtin}\n\nInstructions from the channel's owner:\n{prompt}"
-
-
-@pytest.mark.acceptance(spec="channels", scenario="an empty system prompt appends nothing")
-@pytest.mark.parametrize("prompt", ["", "   \n\t "])
-def test_an_empty_or_blank_owner_prompt_appends_nothing(prompt: str) -> None:
-    note = ChannelNote(platform="SeaTalk", chat_kind="group", owner_prompt=prompt)
+def test_the_owner_style_replaces_the_default_after_the_note() -> None:
+    style = "Answer in Chinese.\n\nAlways name the ticket number."
+    plain = ChannelNote(name="tg", platform="Telegram", chat_kind="direct")
+    note = ChannelNote(name="tg", platform="Telegram", chat_kind="direct", reply_style=style)
 
     text = channel_system_context(note)
 
-    assert "Instructions from the channel's owner" not in text
-    assert text == channel_system_context(ChannelNote(platform="SeaTalk", chat_kind="group"))
+    # Coffer's note is kept whole and comes first; the owner's style follows
+    # it under the heading, exactly as written, and the default is gone.
+    assert text == f"{channel_note_text(plain)}\n\nReply style:\n{style}"
+    assert DEFAULT_REPLY_STYLE not in text
 
 
-def test_a_deleted_channel_has_no_owner_prompt() -> None:
-    assert owner_prompt_context(None) == ""
+@pytest.mark.acceptance(spec="channels", scenario="an untouched reply style follows the default")
+@pytest.mark.parametrize("style", ["", "   \n\t "])
+def test_no_rewrite_carries_the_default_style(style: str) -> None:
+    note = ChannelNote(platform="SeaTalk", chat_kind="group", reply_style=style)
+
+    text = channel_system_context(note)
+
+    assert text.endswith(f"\n\nReply style:\n{DEFAULT_REPLY_STYLE}")
+
+
+def test_a_deleted_channel_gets_the_default_style() -> None:
+    assert channel_system_context(None).endswith(DEFAULT_REPLY_STYLE)
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a rewritten style cannot remove how the channel works"
+)
+def test_a_rewrite_keeps_every_feature_instruction() -> None:
+    note = ChannelNote(platform="SeaTalk", chat_kind="direct", reply_style="Be chatty.")
+
+    text = channel_system_context(note)
+
+    assert "call `coffer__ask`" in text
+    assert "`MEDIA:/absolute/path`" in text
+    assert "only what you write after your last tool call is sent" in text.lower().lower()
+    assert "cannot click permission or confirmation dialogs" in text
 
 
 @pytest.mark.acceptance(
@@ -151,19 +165,17 @@ def test_a_platform_that_reads_threads_names_the_tool() -> None:
     assert len(text.split()) < 260
 
 
-def test_the_owner_prompt_stays_last_after_the_thread_tool_line() -> None:
+def test_the_style_stays_last_after_the_thread_tool_line() -> None:
     note = ChannelNote(
         name="ops",
         platform="SeaTalk",
         chat_kind="group",
         in_thread=True,
         reads_threads=True,
-        owner_prompt="Name the ticket number first.",
+        reply_style="Name the ticket number first.",
     )
 
     text = channel_system_context(note)
 
-    assert text.index("coffer__channel_read_thread") < text.index(
-        "Instructions from the channel's owner:"
-    )
+    assert text.index("coffer__channel_read_thread") < text.index("Reply style:")
     assert text.endswith("\nName the ticket number first.")
