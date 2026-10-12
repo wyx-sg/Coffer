@@ -2064,6 +2064,10 @@
         "project": "项目",
         "folder": "记忆目录",
         "files": "文件数"
+      },
+      "sync": {
+        "title": "记忆同步",
+        "open": "打开记忆页"
       }
     },
     "config": {
@@ -3251,7 +3255,7 @@
   },
   "memory": {
     "title": "记忆",
-    "subtitle": "每个智能体记住的东西，同步到你的其他智能体。",
+    "subtitle": "你的智能体记住的东西，在它们之间保持同步。",
     "loadFailed": "无法读取记忆同步",
     "moreActions": "更多记忆操作",
     "syncNow": "立即同步",
@@ -3284,46 +3288,36 @@
       "failed_other": "有 {{count}} 个记忆来源无法读取",
       "failedKept": "这次没有从它发布任何内容；它之前发布的内容仍留在中心库里。",
       "withheld_one": "有 {{count}} 条记忆看起来含有密钥，未发布",
-      "withheld_other": "有 {{count}} 条记忆看起来含有密钥，未发布"
+      "withheld_other": "有 {{count}} 条记忆看起来含有密钥，未发布",
+      "withheldBody": "这些记忆没有发布。把密钥从记忆里去掉，下次同步就会发布。"
     },
     "preview": {
       "title_one": "写入前请查看 {{count}} 份副本",
       "title_other": "写入前请查看 {{count}} 份副本",
-      "description": "首次或大量同步会先等你确认。中心库已经更新；在你选择写入之前，不会写入任何智能体。打开一行可查看其中的记忆。",
-      "write": "写入",
-      "empty": "没有要写入的内容",
-      "cols": {
-        "agent": "写入",
-        "project": "项目",
+      "description": "首次或大量同步会先等你确认。在你选择写入之前，不会写入任何智能体。",
+      "cancel": "取消",
+      "write_one": "写入 {{count}} 份副本",
+      "write_other": "写入 {{count}} 份副本",
+      "action": {
         "write": "新写入",
         "update": "更新",
         "remove": "移除"
+      },
+      "count": {
+        "write": "新写入 {{count}}",
+        "update": "更新 {{count}}",
+        "remove": "移除 {{count}}"
       }
     },
     "projects": {
-      "title": "项目",
-      "description": "你的智能体在任意一台机器上为自己写下的每条记忆，按项目归档。",
-      "global": "全局记忆",
-      "everywhere": "所有项目，所有机器",
-      "notHere": "这台机器上没有检出",
-      "search": "搜索项目",
-      "empty": "还没有记忆。下次同步会发布你的智能体记住的内容。",
-      "cols": {
-        "project": "项目",
-        "here": "在这台机器上",
-        "memories": "记忆",
-        "from": "来自"
-      }
+      "global": "全局记忆"
     },
     "agents": {
       "title": "这台机器上的智能体",
-      "description": "每个智能体自己整理并加载自己的记忆。Coffer 只写入你其他智能体所学内容的副本。",
-      "empty": "这台机器上没有可同步记忆的智能体。",
       "cols": {
-        "agent": "智能体",
-        "copies": "在此写入的副本",
         "memory": "自身记忆",
-        "curation": "自身整理"
+        "curation": "自身整理",
+        "copies": "Coffer 在此写入的副本"
       },
       "written_one": "{{count}} 份副本",
       "written_other": "{{count}} 份副本",
@@ -3415,21 +3409,23 @@
     },
     "detail": {
       "global": "写入每台机器上的每个智能体",
-      "notHere": "这台机器上没有检出：它的记忆留在中心库里等待",
+      "notHere": "这台机器上没有检出：检出后才会写入",
       "memories_one": "{{count}} 条记忆",
       "memories_other": "{{count}} 条记忆"
     },
     "entries": {
       "search": "搜索记忆",
       "empty": "这个项目里没有记忆。",
-      "loadFailed": "无法读取记忆",
       "thisMachine": "这台机器",
       "cols": {
         "memory": "记忆",
         "type": "类型",
         "origin": "来自",
-        "copyIn": "在 {{agent}} 中",
         "updated": "更新时间"
+      },
+      "filters": {
+        "type": "类型",
+        "source": "来自"
       }
     },
     "copy": {
@@ -3441,6 +3437,40 @@
       "deferred": "由 Codex 导入",
       "edited": "被智能体修改",
       "removed": "被智能体移除"
+    },
+    "scopes": {
+      "label": "记忆范围",
+      "search": "搜索项目",
+      "here": "这台机器上的项目",
+      "elsewhere": "这台机器上没有检出"
+    },
+    "note": {
+      "pending": "还没写入 {{agent}}",
+      "edited": "{{agent}} 改过",
+      "removed": "{{agent}} 已移除"
+    },
+    "drawer": {
+      "updated": "{{when}}更新",
+      "editHint": "要修改记忆，请在智能体自己的记忆里改。",
+      "inAgents": "在这台机器的智能体里",
+      "more_one": "还有 {{count}} 个智能体",
+      "more_other": "还有 {{count}} 个智能体"
+    },
+    "needsYou": {
+      "title_one": "{{count}} 件事需要你处理",
+      "title_other": "{{count}} 件事需要你处理",
+      "preview_one": "{{count}} 份副本等你确认写入",
+      "preview_other": "{{count}} 份副本等你确认写入",
+      "failed_one": "{{count}} 个来源无法读取",
+      "failed_other": "{{count}} 个来源无法读取",
+      "withheld_one": "{{count}} 条记忆疑似含密钥",
+      "withheld_other": "{{count}} 条记忆疑似含密钥",
+      "review": "查看",
+      "agentOff": "{{agent}} 自己的记忆关着，Coffer 没法写入",
+      "agentOffTitle": "Coffer 没法写入的智能体",
+      "openAgent": "打开 {{agent}} 的记忆设置",
+      "blocked_one": "{{count}} 个智能体没法写入",
+      "blocked_other": "{{count}} 个智能体没法写入"
     }
   },
   "conversations": {
@@ -6445,7 +6475,9 @@
   "drawer": {
     "previous": "上一条",
     "next": "下一条",
-    "resize": "调整抽屉宽度"
+    "resize": "调整抽屉宽度",
+    "maximize": "放大",
+    "restore": "还原"
   },
   "filters": {
     "clear": "清除",

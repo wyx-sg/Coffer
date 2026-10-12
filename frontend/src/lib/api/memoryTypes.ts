@@ -29,5 +29,8 @@ export type MemorySyncReport = Schemas["MemorySyncReportOut"];
 /** One hub entry with, per local agent type, its copy's state here. */
 export type HubEntry = Schemas["HubEntryOut"];
 export type HubEntryList = Schemas["HubEntryListOut"];
+/** One hub entry with its text and, per local agent, its copy's state and file. */
+export type HubEntryDetail = Schemas["HubEntryDetailOut"];
+export type EntryCopy = Schemas["EntryCopyOut"];
 
 export type CurateResult = Schemas["CurateOut"];

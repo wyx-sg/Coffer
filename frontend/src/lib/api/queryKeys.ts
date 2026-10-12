@@ -193,6 +193,8 @@ export const memoryKey = ["memory"] as const;
 export const memorySyncStateKey = ["memory", "sync"] as const;
 /** One project's hub entries with their copy state here (`""` for global memories). */
 export const memoryEntriesKey = (project: string) => ["memory", "entries", project] as const;
+/** One memory with its text and where each agent holds it. */
+export const memoryEntryKey = (id: string) => ["memory", "entry", id] as const;
 
 // --- agent sessions — every agent's sessions in one list (the Conversations page) ---
 

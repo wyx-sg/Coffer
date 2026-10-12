@@ -66,6 +66,14 @@ SPECS = [
         columns=("title", "origin_agent", "origin_machine", "type"),
     ),
     RouteCommand(
+        "memory show",
+        "GET",
+        "/memory/sync/entries/{entry_id}",
+        _UI + "a memory",
+        "One memory's text and the file each agent on this machine holds it in.",
+        args={"entry_id": "The memory's id (from coffer memory entries)"},
+    ),
+    RouteCommand(
         "memory curate",
         "POST",
         "/memory/sync/curate",

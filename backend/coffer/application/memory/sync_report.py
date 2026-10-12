@@ -9,9 +9,9 @@ read. It never carries a memory's body.
 
 from __future__ import annotations
 
-from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from pathlib import PurePath
 from typing import TYPE_CHECKING, Any
 
 from coffer.domain.memory.hub import HubEntry
@@ -137,17 +137,25 @@ class SyncReport:
 
 def preview_summary(ops: Sequence[CopyOp], globals_: Mapping[str, int]) -> dict[str, Any]:
     """Per agent and project, how many copies a preview would write, update
-    and remove."""
-    counts: Counter[tuple[str, str, str]] = Counter(
-        (op.agent, op.project or "", op.action) for op in ops
-    )
+    and remove, and each memory it would do that to."""
     rows: dict[tuple[str, str], dict[str, Any]] = {}
-    for (agent, project, action), n in counts.items():
+    for op in ops:
         row = rows.setdefault(
-            (agent, project),
-            {"agent": agent, "project": project, "write": 0, "update": 0, "remove": 0},
+            (op.agent, op.project or ""),
+            {
+                "agent": op.agent,
+                "project": op.project or "",
+                "write": 0,
+                "update": 0,
+                "remove": 0,
+                "items": [],
+            },
         )
-        row[action] = n
+        row[op.action] += 1
+        row["items"].append(
+            # A removal carries no title; its file's name stands in for it.
+            {"entry": op.entry, "title": op.title or PurePath(op.path).stem, "action": op.action}
+        )
     return {
         "copies": len(ops),
         "rows": sorted(rows.values(), key=lambda r: (r["agent"], r["project"])),

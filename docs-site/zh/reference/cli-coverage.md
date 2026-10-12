@@ -243,6 +243,7 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | Memory · a project's memories | `GET /memory/sync/entries` | `coffer memory entries` | `test_cli_parity.py` |
 | Memory · preview · Cancel | `POST /memory/sync/preview/cancel` | `coffer memory preview-cancel` | `test_cli_parity.py` |
 | Memory · preview · Write | `POST /memory/sync/preview/write` | `coffer memory preview-write` | `test_cli_parity.py` |
+| Memory · a memory | `GET /memory/sync/entries/{entry_id}` | `coffer memory show` | `test_cli_parity.py` |
 | Memory · the page | `GET /memory/sync/state` | `coffer memory state` | `test_cli_parity.py` |
 | Memory · Sync now | `POST /memory/sync/run` | `coffer memory sync` | `test_cli_parity.py` |
 | Memory · Undo sync… | `POST /memory/sync/undo` | `coffer memory undo` | `test_cli_parity.py` |

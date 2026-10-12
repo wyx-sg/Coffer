@@ -4,7 +4,8 @@ sync in the web UI and on the command line").
 The sync's state, **Sync now**, the pending preview's **Write** and
 **Cancel**, **Undo sync…**, the person's answer to "Codex imports Claude
 Code's memories itself", the hub's memories for one project with where each
-was written here, and **Curate now**.
+was written here, one memory's text with the file each agent holds it in,
+and **Curate now**.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from pydantic import BaseModel, Field
 from coffer.application.memory.sync_report import SyncReport
 from coffer.application.memory.sync_service import MemorySyncService
 from coffer.application.memory.sync_view import MemorySyncView, SyncState
+from coffer.domain.errors import ResourceNotFound
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor
 from coffer.surfaces.http.memory.sync_dependencies import get_sync_service, get_sync_view
@@ -98,6 +100,31 @@ class HubEntryOut(BaseModel):
 class HubEntryListOut(BaseModel):
     project: str
     entries: list[HubEntryOut] = Field(default_factory=list)
+
+
+class EntryCopyOut(BaseModel):
+    agent_type: str
+    #: The copy's state here (as in ``HubEntryOut.copies``).
+    state: str
+    #: The file that holds the memory in this agent here; ``""`` when none.
+    path: str = ""
+
+
+class HubEntryDetailOut(BaseModel):
+    """One memory with its text and, per local agent, where it is held."""
+
+    id: str
+    title: str
+    description: str
+    type: str
+    project: str = ""
+    origin_machine: str
+    origin_agent: str
+    created_at: str
+    updated_at: str
+    #: The memory's text, its paths expanded for this machine. Read only.
+    body: str
+    copies: list[EntryCopyOut] = Field(default_factory=list)
 
 
 class CodexImportIn(BaseModel):
@@ -222,6 +249,33 @@ async def list_entries(
                 copies=r.copies,
             )
             for r in rows
+        ],
+    )
+
+
+@router.get("/entries/{entry_id}", response_model=HubEntryDetailOut)
+async def get_entry(
+    entry_id: str,
+    view: MemorySyncView = Depends(get_sync_view),  # noqa: B008
+) -> HubEntryDetailOut:
+    """One memory's text and where each agent on this machine holds it."""
+    detail = await view.entry(entry_id)
+    if detail is None:
+        raise ResourceNotFound(f"memory {entry_id}")
+    e = detail.entry
+    return HubEntryDetailOut(
+        id=e.id,
+        title=e.title,
+        description=e.description,
+        type=e.type,
+        project=e.project,
+        origin_machine=e.origin.machine,
+        origin_agent=e.origin.agent,
+        created_at=e.created_at,
+        updated_at=e.updated_at,
+        body=detail.body,
+        copies=[
+            EntryCopyOut(agent_type=c.agent_type, state=c.state, path=c.path) for c in detail.copies
         ],
     )
 
