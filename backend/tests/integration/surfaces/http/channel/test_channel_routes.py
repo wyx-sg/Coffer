@@ -38,6 +38,7 @@ from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from coffer.infrastructure.vault.home import content_root
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.channel_prompt_preview import set_channel_prompt_reader
 from coffer.surfaces.http.channel_routes import (
     get_channel_service,
     set_channel_avatars,
@@ -161,6 +162,8 @@ async def ctx(tmp_path) -> AsyncIterator[_Ctx]:
     err_handlers.register(app)
     app.include_router(channel_router)
     set_channel_service(service)
+    # No note reader here, whatever an earlier test in this worker wired.
+    set_channel_prompt_reader(None)
     set_active_token(_TOKEN)
     yield _Ctx(
         app=app,
@@ -173,6 +176,7 @@ async def ctx(tmp_path) -> AsyncIterator[_Ctx]:
         st_uid=st.uid,
     )
     set_channel_service(None)
+    set_channel_prompt_reader(None)
     set_active_token(None)
     await engine.dispose()
 
@@ -276,9 +280,12 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
             "show_steps": True,
             "new_conversation_after_idle_hours": 24.0,
             "directories": [],
-            "direct_system_prompt": "",
-            "group_system_prompt": "",
+            "direct_reply_style": "",
+            "group_reply_style": "",
+            "direct_reply_style_base": "",
+            "group_reply_style_base": "",
         },
+        "prompts": None,  # no note reader is wired in this harness
     }
 
 

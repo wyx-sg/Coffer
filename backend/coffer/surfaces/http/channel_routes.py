@@ -24,6 +24,7 @@ from coffer.domain.channel_type import ChannelType
 from coffer.infrastructure.vault.home import content_root
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.channel_handoff import sdk_missing_handoff
+from coffer.surfaces.http.channel_prompt_preview import ChannelPromptsOut, channel_prompts
 from coffer.surfaces.http.dependencies import get_actor
 from coffer.surfaces.http.handoff_schemas import HandoffOut, handoff_out
 
@@ -175,6 +176,10 @@ class ChannelStatusOut(BaseModel):
     #: of its configuration, so a surface never carries a copy of the defaults.
     #: ``null`` only for a stored configuration that no longer validates.
     settings: ChannelConfig | None = None
+    #: The channel's system prompt per chat kind, as its Settings tab shows it:
+    #: Coffer's fixed note and default reply style (spec channels "Let the owner
+    #: rewrite a channel's reply style"). ``null`` whenever ``settings`` is.
+    prompts: ChannelPromptsOut | None = None
     #: Every command the channel answers, in the roster's order — the Overview
     #: lists them so nobody has to type /help to learn them.
     commands: list[ChannelCommandOut] = []
@@ -343,6 +348,7 @@ async def channel_status(uid: str) -> ChannelStatusOut:
         ),
         starting=status.starting,
         settings=status.settings,
+        prompts=await channel_prompts(status.uid, status.settings),
         workspace_directory=str(content_root() / "workspace"),
         commands=[
             ChannelCommandOut(

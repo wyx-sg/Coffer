@@ -64,19 +64,20 @@ export interface ChannelEditValues {
   /** The folder new conversations start in (`default_agent_config.cwd`);
    *  `null` clears it. Undefined leaves the stored value alone. */
   default_directory?: string | null;
-  /** The owner's system prompt for direct chats and their threads; "" sets
-   *  none. Undefined leaves the stored value alone. */
-  direct_system_prompt?: string;
-  /** The owner's system prompt for a group's main chat and its threads. */
-  group_system_prompt?: string;
+  /** The owner's reply style for direct chats and their threads; "" (or
+   *  Coffer's default itself) follows the default. Undefined leaves the stored
+   *  value alone. Saving one also re-dates it against today's default. */
+  direct_reply_style?: string;
+  /** The owner's reply style for a group's main chat and its threads. */
+  group_reply_style?: string;
   /** The default agent's model for new conversations (`default_agent_config.model`);
    *  `null` clears it. Undefined leaves the stored value alone — except that
    *  changing the default agent drops it, since it named the old agent's model. */
   default_model?: string | null;
 }
 
-/** The longest system prompt a channel keeps per chat kind (the backend's cap). */
-export const SYSTEM_PROMPT_MAX = 4000;
+/** The longest reply style a channel keeps per chat kind (the backend's cap). */
+export const REPLY_STYLE_MAX = 6000;
 
 /** The most folders a channel may list (the backend's cap). */
 export const DIRECTORIES_MAX = 32;
@@ -179,11 +180,23 @@ export function planChannelEdit(input: ChannelEditInput): ChannelEditPlan {
     "new_conversation_after_idle_hours",
     values.new_conversation_after_idle_hours,
   );
-  // A prompt the config does not hold reads as empty, so saving an empty one
-  // over a missing key writes nothing.
-  for (const key of ["direct_system_prompt", "group_system_prompt"] as const) {
-    const value = values[key];
-    if (value !== undefined && value !== (config[key] ?? "")) nextConfig[key] = value;
+  // A style the config does not hold reads as empty, so saving an empty one
+  // over a missing key writes nothing. Saving a style also clears the default
+  // it was written against: the daemon stamps today's, so a notice that the
+  // default changed goes once the owner has saved after reading it.
+  for (const kind of ["direct", "group"] as const) {
+    const value = values[`${kind}_reply_style`];
+    if (value === undefined) continue;
+    const key = `${kind}_reply_style` as const;
+    const base = `${kind}_reply_style_base` as const;
+    if (value !== (config[key] ?? "")) nextConfig[key] = value;
+    if ((config[base] ?? "") !== "") nextConfig[base] = "";
+    // A channel stored before the reply style still holds the prompt it
+    // migrates from; the style saved here replaces it, so it must not come back.
+    if (`${kind}_system_prompt` in nextConfig) {
+      delete nextConfig[`${kind}_system_prompt`];
+      nextConfig[key] = value;
+    }
   }
   // The /dir allow-list is compared as a list (order matters: the chat lists it
   // as given).

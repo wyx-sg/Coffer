@@ -7,6 +7,7 @@ import pytest
 
 from coffer.application.channel.prompt_note import ChannelNoteReader
 from coffer.domain.chat.channel_note import ChannelNote
+from coffer.domain.chat.channel_prompt import channel_note_text
 
 from .conftest import ChannelEnv, FakeChannelAdapter, inbound, wait_until
 
@@ -50,8 +51,8 @@ async def test_a_deleted_channel_has_no_facts(env: ChannelEnv) -> None:
 _PROMPTS = {
     "channel_type": "telegram",
     "bot_token_ref": "channel/tg/bot-token",
-    "direct_system_prompt": "Answer in Chinese.",
-    "group_system_prompt": "Name the ticket number first.",
+    "direct_reply_style": "Answer in Chinese.",
+    "group_reply_style": "Name the ticket number first.",
 }
 
 
@@ -68,7 +69,7 @@ def _group(text: str, thread_id: str, *, main: bool = False) -> object:
     )
 
 
-@pytest.mark.acceptance(spec="channels", scenario="each chat kind reads its own system prompt")
+@pytest.mark.acceptance(spec="channels", scenario="each chat kind reads its own reply style")
 async def test_each_chat_kind_reads_its_own_prompt(env: ChannelEnv) -> None:
     resource = await env.register_channel(config=dict(_PROMPTS))
     adapter = env.bind(resource)
@@ -89,16 +90,16 @@ async def test_each_chat_kind_reads_its_own_prompt(env: ChannelEnv) -> None:
     thread = await env.active_conversation(resource, "grp-1", "t-1")
     assert direct and main and thread
 
-    assert (await reader(resource.uid, direct)).owner_prompt == "Answer in Chinese."  # type: ignore[union-attr]
+    assert (await reader(resource.uid, direct)).reply_style == "Answer in Chinese."  # type: ignore[union-attr]
     for conversation_id in (main, thread):
         note = await reader(resource.uid, conversation_id)
         assert note is not None
         assert note.chat_kind == "group"
-        assert note.owner_prompt == "Name the ticket number first."
+        assert note.reply_style == "Name the ticket number first."
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="an edited system prompt applies from the next turn"
+    spec="channels", scenario="an edited reply style applies from the next turn"
 )
 async def test_an_edited_prompt_is_read_on_the_next_turn_without_a_restart(
     env: ChannelEnv,
@@ -116,16 +117,16 @@ async def test_an_edited_prompt_is_read_on_the_next_turn_without_a_restart(
 
     stored = (await env.resources.get(resource.uid)).config
     await env.resources.update_config(
-        resource.uid, {**stored, "direct_system_prompt": "Answer in English."}, actor="test"
+        resource.uid, {**stored, "direct_reply_style": "Answer in English."}, actor="test"
     )
     note = await reader(resource.uid, conversation_id)
-    assert note is not None and note.owner_prompt == "Answer in English."
+    assert note is not None and note.reply_style == "Answer in English."
 
     await env.resources.update_config(
-        resource.uid, {**stored, "direct_system_prompt": ""}, actor="test"
+        resource.uid, {**stored, "direct_reply_style": ""}, actor="test"
     )
     cleared = await reader(resource.uid, conversation_id)
-    assert cleared is not None and cleared.owner_prompt == ""
+    assert cleared is not None and cleared.reply_style == ""
 
 
 @pytest.mark.acceptance(
@@ -146,3 +147,29 @@ async def test_a_transport_that_reads_threads_says_so_in_the_note(env: ChannelEn
     note = await reader(resource.uid, conversation_id)
 
     assert note is not None and note.reads_threads is True
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="the Settings tab shows the note a stopped channel will send"
+)
+async def test_the_preview_of_a_stopped_channel_reads_its_type_capabilities(
+    env: ChannelEnv,
+) -> None:
+    resource = await env.register_channel(config=dict(_PROMPTS))
+    caps = FakeChannelAdapter(render_notes="This chat renders bold.").capabilities
+    reader = ChannelNoteReader(
+        resources=env.resources,
+        threads=env.threads,
+        binding=env.processor.binding,
+        idle_capabilities=lambda channel_type: caps if channel_type == "telegram" else None,
+    )
+
+    notes = await reader.preview(resource.uid)
+
+    assert set(notes) == {"direct", "group"}
+    assert notes["direct"].renders == "This chat renders bold."
+    assert notes["direct"].reply_style == "Answer in Chinese."
+    assert notes["group"].chat_kind == "group" and not notes["group"].in_thread
+    assert channel_note_text(notes["group"]).startswith(
+        "You are replying in a Telegram group chat (the tg channel)"
+    )
