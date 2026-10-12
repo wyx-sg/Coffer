@@ -31,9 +31,7 @@ lets the seed skip the write, so a boot or a sweep tick that changed nothing
 registers nothing, audits nothing and re-delivers nothing, and the row's
 ``version_hash`` means "the content moved" rather than "time passed".
 
-That is still why the knowledge root is rendered in its
-``~``-relative form whenever they sit under the home — though the reason there has always
-been partly that a path an agent reads should be one a person can retype.
+It is also why the knowledge root is rendered ``~``-relative under the home.
 """
 
 from __future__ import annotations
@@ -227,6 +225,16 @@ def _entry_line(file: FileEntry, *, describe: bool) -> str:
     return line + (f": {description}" if description else "")
 
 
+def _source_line(file: FileEntry, *, describe: bool) -> str:
+    """A source, marked waiting or superseded, with its summary when ``describe``."""
+    line = _entry_line(file, describe=False)
+    if file.superseded_by:
+        line += f" (superseded by `{file.superseded_by.split('/', 1)[-1]}`)"
+    elif file.waiting:
+        line += " (waiting)"
+    return line + (f": {file.summary}" if describe and file.summary else "")
+
+
 def _linked_lines(entry: CollectionEntry, files: Sequence[FileEntry], detail: str) -> list[str]:
     """A linked folder: kept by the developer's own tools and only shared, so
     it is described by its own rules rather than Coffer's wiki layout (ADR
@@ -279,9 +287,13 @@ def _catalogue_lines(
     for page_type, group in _pages_by_type(files):
         lines += ["", f"**Pages: {page_type}**", ""]
         lines += [_entry_line(page, describe=describe) for page in group]
-    if waiting:
+    if describe and sources:
+        # Every source with its summary; a superseded one is no longer evidence.
+        lines += ["", "**Sources**", ""]
+        lines += [_source_line(f, describe=True) for f in files if f.kind == "source"]
+    elif waiting:
         lines += ["", "**Sources waiting to be integrated**", ""]
-        lines += [_entry_line(source, describe=False) for source in waiting]
+        lines += [_source_line(source, describe=False) for source in waiting]
     lines += ["", f"{sources} sources in all under `sources/`; grep them for an exact fact."]
     return lines
 
@@ -291,7 +303,8 @@ def _render_catalogue_at(root: str, catalogue: Catalogue, detail: str) -> str:
     lines = [
         "## What is in this developer's knowledge",
         "",
-        f"Every page, {pages} in all, and every source waiting to be integrated. Read one at "
+        f"Every page, {pages} in all, and the sources, each marked when it waits to be "
+        "integrated or another source supersedes it. Read one at "
         f"`{root}/<collection>/<path>` with your own file tool.",
         "",
     ]

@@ -5,9 +5,10 @@
 // a reader starts from (overview, concept, entity, how-to, decision), then a
 // type the collection's README defines, then pages with no type — each with
 // its type's icon (the tree's), its count and its pages by title, a few at a
-// time with "N more". Sources come last in a card of their own, the waiting
-// ones first and marked. A title opens its file; its description is the
-// tooltip.
+// time with "N more". Sources come last in a card of their own: the waiting
+// ones first, then the current ones, the superseded ones last and muted; each
+// with its state (waiting, used by N pages, skipped, superseded) and its
+// summary under it. A title opens its file; its description is the tooltip.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
@@ -26,6 +27,29 @@ const SHOWN = 5;
 
 interface Props {
   collection: CollectionOut;
+}
+
+/** Where a source stands: waiting, superseded, skipped, or how many pages use it. */
+function SourceState({ file }: { file: FileSummaryOut }) {
+  const { t } = useTranslation();
+  const label = file.superseded_by
+    ? t("knowledge.contents.superseded")
+    : file.waiting
+      ? t("knowledge.waiting")
+      : file.skipped
+        ? t("knowledge.contents.skipped")
+        : t("knowledge.contents.used", { count: file.cited_count });
+  return (
+    <span className="flex shrink-0 items-center gap-1 text-2xs text-text-muted">
+      {file.waiting && !file.superseded_by ? <StatusDot tone="warn" size={6} /> : null}
+      {label}
+    </span>
+  );
+}
+
+/** Waiting first, then current, superseded last. */
+function sourceRank(file: FileSummaryOut): number {
+  return file.superseded_by ? 2 : file.waiting ? 0 : 1;
 }
 
 function ContentsCard({
@@ -57,19 +81,21 @@ function ContentsCard({
       </h3>
       <ul className="flex flex-col gap-1">
         {shown.map((file) => (
-          <li key={file.path} className="flex min-w-0 items-center gap-1.5 text-sm">
+          <li key={file.path} className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm">
             <Link
               to={collectionPath(uid, file.path)}
               title={file.description || undefined}
-              className="min-w-0 truncate text-text hover:underline"
+              className={`min-w-0 truncate hover:underline ${
+                file.superseded_by ? "text-text-muted line-through" : "text-text"
+              }`}
             >
               {file.title || file.path.split("/").pop()}
             </Link>
-            {file.kind === "source" && file.waiting ? (
-              <span className="flex shrink-0 items-center gap-1 text-2xs text-text-muted">
-                <StatusDot tone="warn" size={6} />
-                {t("knowledge.waiting")}
-              </span>
+            {file.kind === "source" ? <SourceState file={file} /> : null}
+            {file.kind === "source" && file.summary ? (
+              <p className="w-full truncate text-xs text-text-muted" title={file.summary}>
+                {file.summary}
+              </p>
             ) : null}
           </li>
         ))}
@@ -113,7 +139,7 @@ export function KnowledgeContents({ collection }: Props) {
     const pages = files.data.filter((f) => f.kind === "page");
     const sources = files.data
       .filter((f) => f.kind === "source")
-      .sort((a, b) => Number(b.waiting) - Number(a.waiting));
+      .sort((a, b) => sourceRank(a) - sourceRank(b));
     const types = [...new Set(pages.map((p) => p.page_type))].sort(compareTypes);
     const typeLabel = (type: string) =>
       !type ? t("knowledge.types.none") : isBuiltInType(type) ? t(`knowledge.types.${type}`) : type;

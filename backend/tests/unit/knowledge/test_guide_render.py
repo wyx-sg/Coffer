@@ -369,11 +369,35 @@ def test_the_catalogue_groups_pages_by_type_and_names_waiting_sources() -> None:
     assert concept < text.index("`pages/sessions.md` — **Sessions**: What Sessions answers.")
     assert concept < text.index("`pages/tokens.md` — **Tokens**") < entity
     assert entity < text.index("`pages/gateway.md` — **Gateway**")
-    waiting = text.split("**Sources waiting to be integrated**")[1]
-    assert "`sources/design.md` — **Design doc**" in waiting
-    assert "old.md" not in text and "diagram.png" not in text
+    sources = text.split("**Sources**")[1]
+    assert "`sources/design.md` — **Design doc** (waiting)" in sources
+    assert "`sources/old.md` — **Old notes**\n" in sources
+    assert "diagram.png" not in text
     assert "`~/.coffer/vault/knowledge/shopee/`" in text
     assert "_Shortened" not in text
+
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="the catalogue marks a superseded source and shows summaries"
+)
+def test_the_catalogue_marks_a_superseded_source_and_shows_summaries() -> None:
+    entry = CollectionEntry(uid="u", name="shopee", description="", page_count=0)
+    files = [
+        dataclasses.replace(
+            _file("shopee/sources/v1.md", "Design v1", kind="source"),
+            superseded_by="shopee/sources/v2.md",
+            summary="The 2024 design.",
+        ),
+        dataclasses.replace(
+            _file("shopee/sources/v2.md", "Design v2", kind="source"),
+            summary="The 2026 design, with the new gateway.",
+        ),
+    ]
+    text = render_catalogue("~/k", [(entry, files)])
+    assert (
+        "`sources/v1.md` — **Design v1** (superseded by `sources/v2.md`): The 2024 design." in text
+    )
+    assert "`sources/v2.md` — **Design v2**: The 2026 design, with the new gateway." in text
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="a catalogue past its budget shortens itself")

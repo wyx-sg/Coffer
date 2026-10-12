@@ -39,9 +39,12 @@ The developer's knowledge lives under `<KNOWLEDGE_ROOT>/<collection>/`, one
 wiki per collection, which the developer and agents like you write together:
 
 - `README.md` is the collection's **schema**: what belongs in it, the page
-  types it uses and any conventions. Where it disagrees with this file, it wins.
+  types it uses and any conventions, and in its frontmatter
+  `verify_after_days`, how long a page's check holds. Where it disagrees with
+  this file, it wins.
 - `sources/` holds the **sources**: material as it arrived (an upload, a file
-  dropped into the inbox), converted to Markdown. Sources are never edited.
+  dropped into the inbox), converted to Markdown. Sources are never edited,
+  beyond the few keys rule 6 allows.
 - `pages/` holds the **pages**: the wiki itself, compiled from the sources and
   kept up to date. This is what you read first and what you write.
 
@@ -69,6 +72,13 @@ it — put it into the collection's pages yourself, with your own file tools.
 Coffer does not rewrite what you write: where a fact ends up is your decision,
 so make it the right one.
 
+That includes **answers you work out**. When you answer the developer's
+question by reading a source, the code or a system, and the pages do not
+already say it, write the answer into the page that owns the subject before you
+finish: add what you read to `sources` when it is a source, set `verified` to
+today, and tell the developer in one line what you added. Do not write back a
+guess, an opinion, or something true only of this conversation.
+
 1. **Find its home.** Read the catalogue at the bottom of this file and grep
    `pages/` for the subject. If a page already answers the question this fact
    belongs to, read it in full and fold the fact into the section it belongs
@@ -89,8 +99,10 @@ so make it the right one.
    `[[session-ownership|the session service]]`. A link may also name a source's
    slug. When you rename a page, update the links to it, or keep its old slug in
    its `aliases`. Coffer reports every link that names nothing.
-6. **Never edit a source.** A source is the record of what arrived; the only
-   thing you may add to one is `ingest: skipped` (see "Integrating sources").
+6. **Never edit a source.** A source is the record of what arrived. The only
+   keys you may add to one are `ingest: skipped`, `superseded_by: <slug>` when
+   a newer source replaces it, and `summary`, one or two sentences on what it
+   says (see "Integrating sources").
 7. **Give every page frontmatter**: a `title`; a `type` — `concept`, `entity`,
    `how-to`, `decision` or `overview` unless the README defines its own; a
    one-line `description` saying what *question* the page answers (it is the
@@ -131,7 +143,14 @@ A source **waits** while no page lists it in `sources` and it is not marked
 2. Fold what it says into the pages that own its subjects, by the rules of
    "Writing a page". Create a page for a subject no page owns.
 3. Add the source's slug to the `sources` of every page you changed with it.
-4. When nothing in it is worth keeping (a duplicate, an empty export), add
+4. Give the source a `summary`: one or two sentences on what it says, so a
+   reader of the catalogue knows without opening it.
+5. When it replaces an older source (a newer version of the same document),
+   add `superseded_by: <its slug>` to the older one and recheck every page that
+   cites the older one against it. Coffer flags a page that still cites only
+   the older one (`superseded_source`). A superseded source stays: a page may
+   still cite it for what used to be true.
+6. When nothing in it is worth keeping (a duplicate, an empty export), add
    `ingest: skipped` to the source's frontmatter instead.
 
 One source may touch many pages; that is the point. Integrate the waiting
@@ -148,7 +167,13 @@ work through one collection at a time:
 2. Integrate its waiting sources first (see "Integrating sources").
 3. Fix what Coffer found: the mechanical findings the prompt lists, or
    `coffer knowledge check <collection>` prints — dead and ambiguous links,
-   orphan and incomplete pages, pages without sources, missing sources.
+   orphan and incomplete pages, pages without sources, missing sources, pages
+   that lean on a superseded source. A **stale** page (`stale_page`: its
+   `verified` date is missing or older than the README's `verify_after_days`,
+   90 days by default) is rechecked: read it against its sources or the code,
+   fix what changed, and set `verified` to today. A page you cannot recheck
+   keeps its date and goes into your report. Give every source without a
+   `summary` one.
 4. Read its README and every page's title and description, then read the pages
    in full before changing them.
 5. **Merge** pages that answer the same question into one, keeping every fact
@@ -164,8 +189,11 @@ work through one collection at a time:
    README's page types — and put it in your report for the developer to decide.
 9. Run `coffer knowledge tidy-finish <collection> --set summary="<report>"`.
    The report says which sources you integrated or skipped, what you merged,
-   split, corrected and deleted, and what you left for the developer. It is
-   shown with the tidy in the collection's change log.
+   split, corrected, rechecked and deleted, and what you left for the
+   developer. End it with **Gaps**: questions the pages cannot answer,
+   subjects mentioned across pages but owned by none, and sources worth
+   finding (a spec, a runbook, a person to ask). It is shown with the tidy in
+   the collection's change log.
 
 Change nothing that does not need changing. When the developer asks only for a
 check or a review, report what you would do and change nothing.

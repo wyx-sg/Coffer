@@ -1,9 +1,13 @@
-"""The two writes a collection's own files take besides its documents: its
-README's description, and every file of a deleted collection put back.
+"""The writes a collection's own files take besides its documents: its README
+as a new collection starts it, its description, and every file of a deleted
+collection put back.
 
 A collection has no title (spec knowledge "Read a collection's description from
 its README"): its heading is its folder name, and what it is about is the first
-paragraph of its ``README.md``. Editing that description rewrites exactly that
+paragraph of its ``README.md``, before its first section. A new collection's
+README also carries the default page types and rules, written out so the
+person sees what they can change (spec knowledge "Start a collection's README
+with its rules written out"). Editing that description rewrites exactly that
 paragraph and leaves the rest of the README — anything a person wrote under it —
 as it was.
 
@@ -21,16 +25,57 @@ from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 from coffer.infrastructure.knowledge.fs import atomic_write, decode
+from coffer.infrastructure.knowledge.wiki import DEFAULT_VERIFY_DAYS
+
+#: The rules a new collection's README starts with, below its description.
+#: The page types are the guide's defaults; the person changes them here.
+DEFAULT_RULES = """\
+## Page types
+
+Every page under `pages/` has one `type` from this list. Change, add or remove
+types here; agents follow this list over their defaults.
+
+- `overview`: where to start. What this collection covers and which pages to read first.
+- `concept`: what something is and why it works the way it does.
+- `entity`: one service, system or team. What it owns and how to reach it.
+- `how-to`: the steps for one task.
+- `decision`: a choice that was made, the options and the reason.
+
+## Rules
+
+- One subject per page. Link related pages with `[[slug]]`.
+- Every page lists the sources it draws on in `sources`, and the day it was last
+  checked against them or the code in `verified`.
+- `verify_after_days` at the top of this file is how many days a check holds
+  before Coffer asks for another. `0` turns it off.
+"""
+
+
+def default_readme(collection: str, description: str | None) -> str:
+    """A new collection's README: its heading, its description and the
+    default rules, with the default recheck interval in its frontmatter."""
+    head = f"---\nverify_after_days: {DEFAULT_VERIFY_DAYS}\n---\n\n# {collection}\n\n"
+    text = (description or "").strip()
+    return head + (f"{text}\n\n" if text else "") + DEFAULT_RULES
+
+
+def _is_section(stripped: str) -> bool:
+    """A second-level or deeper heading: where the README's rules begin."""
+    return stripped.startswith("##")
 
 
 def _replace_first_paragraph(body: str, description: str) -> str:
-    """``body`` with its first non-heading paragraph replaced by ``description``
-    (or ``description`` inserted after the leading headings when it has none)."""
+    """``body`` with its first non-heading paragraph before any section replaced
+    by ``description`` (or inserted after the leading headings when it has none)."""
     lines = body.splitlines()
     start = end = None
+    section = len(lines)
     for i, line in enumerate(lines):
         stripped = line.strip()
         if start is None:
+            if _is_section(stripped):
+                section = i
+                break
             if stripped and not stripped.startswith("#"):
                 start = i
             continue
@@ -39,10 +84,13 @@ def _replace_first_paragraph(body: str, description: str) -> str:
             break
     new = description.strip().splitlines()
     if start is None:
-        head = list(lines)
+        head = list(lines[:section])
         while head and not head[-1].strip():
             head.pop()
-        out = [*head, "", *new] if head else new
+        rest = lines[section:]
+        out = [*head, "", *new] if head else list(new)
+        if rest:
+            out += ["", *rest]
     else:
         out = [*lines[:start], *new, *lines[end if end is not None else len(lines) :]]
     return "\n".join(out).rstrip("\n") + "\n"
@@ -53,7 +101,7 @@ def write_description(collection: str, description: str) -> None:
     creating the README (headed by the folder name) when there is none."""
     readme = paths.readme_path(collection)
     if not readme.is_file():
-        atomic_write(readme, f"# {collection}\n\n{description.strip()}\n")
+        atomic_write(readme, default_readme(collection, description))
         return
     raw = readme.read_text(encoding="utf-8", errors="replace")
     _, body = split_frontmatter(raw)

@@ -174,6 +174,11 @@ describe("the tree", () => {
       description: "",
       page_type,
       waiting: false,
+      stale: false,
+      superseded_by: "",
+      summary: "",
+      cited_count: 0,
+      skipped: false,
       actor: "user",
       updated_at: "2026-09-20T00:00:00Z",
     });

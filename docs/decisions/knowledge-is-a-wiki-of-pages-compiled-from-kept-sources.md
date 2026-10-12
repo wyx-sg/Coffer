@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-10-12
 **Deciders**: Yuxing Wu
-**Related**: [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md) (amended by this decision); [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md); research notes [knowledge curation](../research/knowledge-curation.md) and [knowledge structures](../research/knowledge-structures.md); spec knowledge; OpenSpec change `restructure-knowledge-as-a-wiki`
+**Related**: [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md) (amended by this decision); [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md); [Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](knowledge-stays-current-through-flags-coffer-computes.md); [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md); research notes [knowledge curation](../research/knowledge-curation.md) and [knowledge structures](../research/knowledge-structures.md); spec knowledge; OpenSpec change `restructure-knowledge-as-a-wiki`
 
 ## Context
 
@@ -82,7 +82,7 @@ Each collection holds three things:
 
 ```text
 <collection>/
-├── README.md     the schema: what the collection is for, its page types, its conventions
+├── README.md     the schema: what the collection is for, its page types, its rules, verify_after_days
 ├── sources/      kept material: each upload's converted Markdown
 └── pages/        the wiki: pages people and agents both edit, linked by [[slug]]
 ```
@@ -112,7 +112,8 @@ Each collection holds three things:
   so there is no `log.md` to keep.
 - **Checking is in two layers.** Coffer itself computes the mechanical findings
   (dead and ambiguous links, duplicate slugs, orphan pages, pages missing
-  frontmatter or sources, sources still waiting) on every read. Judgement
+  frontmatter or sources, sources still waiting, pages citing a superseded
+  source, pages due a recheck) on every read. Judgement
   (contradictions, stale statements, duplicated subjects, subjects with no page)
   is the agent's, inside the one **Tidy** hand-off, whose prompt carries the
   mechanical findings: the agent fixes what is certain and reports what needs
@@ -146,13 +147,16 @@ Rules a future change must respect:
 
 - **Sources are kept and immutable.** An upload is kept as its converted
   Markdown only; the uploaded file is not stored. No agent instruction may tell an agent to edit a
-  source, except to mark one `ingest: skipped` when it holds nothing worth a
-  page.
+  source, except to add the few keys that describe it rather than change it:
+  `ingest: skipped` when it holds nothing worth a page, `superseded_by` when a
+  newer source replaces it, and a `summary` of what it says
+  ([Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](knowledge-stays-current-through-flags-coffer-computes.md)).
 - **A page's identity is its slug.** File names are slugs; a page's `aliases`
   are extra names a link may use; a link names a slug or an alias, never a path.
   A slug two pages share is a finding, not something Coffer resolves.
 - **What waits is derived, never recorded.** A source waits while no page cites
-  it and it is not marked skipped. There is no ingest manifest.
+  it and it is marked neither skipped nor superseded. There is no ingest
+  manifest.
 - **Coffer's checks are mechanical and read-only.** Coffer computes findings on
   read and fixes nothing; fixing them is the agent's, when the person presses
   Tidy.
@@ -202,8 +206,11 @@ it. The guide tells agents that where a page's facts came from belongs in
 `sources` and `verified`, never in a paragraph of the body listing what was
 read: provenance in the body is organisation by provenance, which rule 3 of
 writing a page forbids, and a date in frontmatter is something a person or a
-later check can compare without reading the page. It is optional and Coffer
-derives no finding from it.
+later check can compare without reading the page. Coffer compares it: a page
+whose `verified` is missing or older than the collection's `verify_after_days`
+(90 by default) is a `stale_page` finding, which a tidy clears by rechecking
+the page
+([Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](knowledge-stays-current-through-flags-coffer-computes.md)).
 
 ## Consequences
 
@@ -212,7 +219,8 @@ derives no finding from it.
   meaning" is reversed for `sources/` and `pages/`. Its "no kept originals"
   stands: a source is the converted Markdown alone.
 - Tidy means: compile the waiting sources into pages, fix the mechanical
-  findings, then tidy the pages, reporting what is left for the person.
+  findings, recheck the pages due a recheck, then tidy the pages, reporting
+  what is left for the person and the gaps it found.
 - The web UI shows a collection as pages and sources, flags a waiting source and
   a dead link, lists the collection's change log, and shows a page's history in
   a drawer beside the page rather than on a tab that replaces it.

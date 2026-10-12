@@ -3304,7 +3304,10 @@
       "missingSource": "No source is named {{slug}}",
       "citedBy_one": "Cited by {{count}} page:",
       "citedBy_other": "Cited by {{count}} pages:",
-      "verified": "verified {{date}}"
+      "verified": "verified {{date}}",
+      "stale": "Needs rechecking",
+      "neverVerified": "never checked",
+      "supersededBy": "Superseded by"
     },
     "deleteDocument": {
       "menu": "Delete",
@@ -3373,14 +3376,19 @@
         "ambiguous_link": "Ambiguous links",
         "duplicate_slug": "Names used twice",
         "missing_source": "Missing sources",
+        "superseded_source": "Pages citing an outdated source",
         "incomplete_page": "Incomplete pages",
         "unsourced_page": "Pages without sources",
+        "stale_page": "Pages to recheck",
         "orphan_page": "Pages nothing links to",
         "waiting_source": "Waiting sources"
       },
       "missing": "missing {{target}}",
       "more": "{{count}} more",
-      "fewer": "Show fewer"
+      "fewer": "Show fewer",
+      "replaced": "cites {{target}}, replaced by {{newest}}",
+      "lastChecked": "last checked {{date}}",
+      "neverChecked": "never checked"
     },
     "changeLog": {
       "title": "Change log",
@@ -3409,7 +3417,11 @@
       "title": "Contents",
       "description": "Its pages by type, and its sources. A title opens the file.",
       "none": "No pages or sources yet.",
-      "failed": "Couldn’t read the contents"
+      "failed": "Couldn’t read the contents",
+      "used_one": "used by {{count}} page",
+      "used_other": "used by {{count}} pages",
+      "skipped": "skipped",
+      "superseded": "superseded"
     },
     "types": {
       "overview": "Overviews",

@@ -564,6 +564,17 @@ export interface components {
             path: string;
             /** Sources */
             sources: components["schemas"]["SourceRefOut"][];
+            /**
+             * Stale
+             * @default false
+             */
+            stale: boolean;
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            superseded_by: components["schemas"]["SourceRefOut"] | null;
             /** Title */
             title: string;
             /** Updated At */
@@ -583,6 +594,11 @@ export interface components {
         FileSummaryOut: {
             /** Actor */
             actor: string;
+            /**
+             * Cited Count
+             * @default 0
+             */
+            cited_count: number;
             /** Description */
             description: string;
             /**
@@ -598,6 +614,26 @@ export interface components {
             page_type: string;
             /** Path */
             path: string;
+            /**
+             * Skipped
+             * @default false
+             */
+            skipped: boolean;
+            /**
+             * Stale
+             * @default false
+             */
+            stale: boolean;
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /**
+             * Superseded By
+             * @default
+             */
+            superseded_by: string;
             /** Title */
             title: string;
             /** Updated At */
@@ -614,7 +650,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "dead_link" | "ambiguous_link" | "duplicate_slug" | "missing_source" | "incomplete_page" | "unsourced_page" | "orphan_page" | "waiting_source";
+            kind: "dead_link" | "ambiguous_link" | "duplicate_slug" | "missing_source" | "superseded_source" | "incomplete_page" | "unsourced_page" | "stale_page" | "orphan_page" | "waiting_source";
             /** Others */
             others: string[];
             /** Path */
