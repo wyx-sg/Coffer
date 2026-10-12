@@ -1,9 +1,10 @@
 // frontend/src/components/agents/AgentMemoryTab.test.tsx
 //
 // The Memory tab (boards 2.1.49–50): the agent's own native stores as one
-// bordered list whose row opens the store's page. No Coffer section (what
-// Coffer syncs is on the Memory page), no counts in headings, no row actions,
-// a search only for a long list. Hooks are mocked at the hook boundary.
+// bordered list whose row opens the store's page, no counts in headings, no
+// row actions, a search only for a long list. The Memory sync section above it
+// has its own tests (AgentMemorySync.test.tsx) and is stubbed here. Hooks are
+// mocked at the hook boundary.
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
@@ -19,6 +20,7 @@ vi.mock("react-router-dom", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-router-dom")>()),
   useNavigate: () => navigateMock,
 }));
+vi.mock("./AgentMemorySync", () => ({ AgentMemorySync: () => null }));
 vi.mock("@/lib/hooks/useAgentNativeMemory", () => ({ useAgentNativeMemory: vi.fn() }));
 const nativeHooks = await import("@/lib/hooks/useAgentNativeMemory");
 
@@ -72,7 +74,7 @@ function stubNative(items: NativeMemoryStore[] = [COFFER_STORE], extra: object =
 afterEach(() => vi.clearAllMocks());
 
 describe("AgentMemoryTab", () => {
-  test("the tab is the agent's own memory only, with no Coffer section", () => {
+  test("the agent's own memory is one section of its stores", () => {
     stubNative();
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     expect(screen.queryByTestId("coffer-memory-section")).not.toBeInTheDocument();

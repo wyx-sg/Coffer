@@ -25,6 +25,7 @@ This page matches what `coffer memory --help` prints. Add `--help` to any comman
 | [`memory undo`](#memory-undo) | Remove every unedited copy Coffer wrote on this machine and turn automatic sync off. |
 | [`memory codex-import`](#memory-codex-import) | Say whether Codex imports Claude Code's memories itself. |
 | [`memory entries`](#memory-entries) | A project's memories with their origin and where each was written. |
+| [`memory show`](#memory-show) | One memory's text and the file each agent on this machine holds it in. |
 | [`memory curate`](#memory-curate) | Ask an agent to consolidate its own memory now. |
 
 ## memory state
@@ -140,6 +141,23 @@ coffer memory entries [OPTIONS]
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `--project` <span class="cli-chip">option</span> | text |  | The project key, or global |
+| `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## memory show
+
+One memory's text and the file each agent on this machine holds it in.
+
+<p class="cli-label">Synopsis</p>
+
+```sh
+coffer memory show [OPTIONS] ENTRY_ID
+```
+
+<p class="cli-label">Arguments and options</p>
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `ENTRY_ID` <span class="cli-chip">argument</span> | text | required | The memory's id (from coffer memory entries) |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 
 ## memory curate

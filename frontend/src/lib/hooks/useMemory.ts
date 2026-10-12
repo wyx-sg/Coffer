@@ -15,6 +15,7 @@ import { translateApiError } from "@/lib/api/errors";
 import {
   cancelPreview,
   curate,
+  getEntry,
   getSyncState,
   listEntries,
   runSync,
@@ -26,6 +27,7 @@ import {
 import {
   internalEngineKey,
   memoryEntriesKey,
+  memoryEntryKey,
   memoryKey,
   memorySyncStateKey,
 } from "@/lib/api/queryKeys";
@@ -48,6 +50,15 @@ export function useMemoryEntries(project: string | null) {
     queryKey: memoryEntriesKey(project ?? ""),
     queryFn: async () => (await listEntries(project ?? "")).entries,
     enabled: project !== null,
+  });
+}
+
+/** One memory's text and where each agent holds it; `null` reads nothing. */
+export function useMemoryEntry(id: string | null) {
+  return useQuery({
+    queryKey: memoryEntryKey(id ?? ""),
+    queryFn: () => getEntry(id ?? ""),
+    enabled: id !== null,
   });
 }
 

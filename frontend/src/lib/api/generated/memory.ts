@@ -59,6 +59,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/memory/sync/entries/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Entry
+         * @description One memory's text and where each agent on this machine holds it.
+         */
+        get: operations["get_entry_api_v1_memory_sync_entries__entry_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/memory/sync/preview/cancel": {
         parameters: {
             query?: never;
@@ -177,6 +197,18 @@ export interface components {
             /** Memory */
             memory: string;
         };
+        /** EntryCopyOut */
+        EntryCopyOut: {
+            /** Agent Type */
+            agent_type: string;
+            /**
+             * Path
+             * @default
+             */
+            path: string;
+            /** State */
+            state: string;
+        };
         /** ErrorDetail */
         ErrorDetail: {
             /**
@@ -197,6 +229,37 @@ export interface components {
         /** ErrorResponse */
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
+        };
+        /**
+         * HubEntryDetailOut
+         * @description One memory with its text and, per local agent, where it is held.
+         */
+        HubEntryDetailOut: {
+            /** Body */
+            body: string;
+            /** Copies */
+            copies: components["schemas"]["EntryCopyOut"][];
+            /** Created At */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Origin Agent */
+            origin_agent: string;
+            /** Origin Machine */
+            origin_machine: string;
+            /**
+             * Project
+             * @default
+             */
+            project: string;
+            /** Title */
+            title: string;
+            /** Type */
+            type: string;
+            /** Updated At */
+            updated_at: string;
         };
         /** HubEntryListOut */
         HubEntryListOut: {
@@ -441,6 +504,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HubEntryListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_entry_api_v1_memory_sync_entries__entry_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubEntryDetailOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

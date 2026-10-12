@@ -112,6 +112,7 @@ def test_memory_sync_is_managed_on_the_command_line() -> None:
         "undo",
         "codex-import",
         "entries",
+        "show",
         "curate",
     }
     # A memory's text is edited in the agent's own memory directory, never here.

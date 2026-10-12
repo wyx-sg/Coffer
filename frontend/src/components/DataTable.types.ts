@@ -84,6 +84,8 @@ export interface DataTableProps<T> extends ListLoading {
     onChange?: (v: string) => void;
   };
   filters?: FilterDef<T>[];
+  /** Filter values the table starts with (`filter key → option value`), e.g. from the URL. */
+  initialFilters?: Record<string, string>;
   onRowClick?: (row: T) => void;
   /** Rows returning false do not open on click (default: all do). */
   isRowClickable?: (row: T) => boolean;

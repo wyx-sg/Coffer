@@ -138,6 +138,47 @@ paths:
       summary: List Entries
       tags:
       - memory
+  /api/v1/memory/sync/entries/{entry_id}:
+    get:
+      description: One memory's text and where each agent on this machine holds it.
+      operationId: get_entry_api_v1_memory_sync_entries__entry_id__get
+      parameters:
+      - in: path
+        name: entry_id
+        required: true
+        schema:
+          title: Entry Id
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HubEntryDetailOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Entry
+      tags:
+      - memory
   /api/v1/memory/sync/preview/cancel:
     post:
       operationId: cancel_preview_api_v1_memory_sync_preview_cancel_post
@@ -374,6 +415,24 @@ components:
       - curation
       title: CurationStateOut
       type: object
+    EntryCopyOut:
+      properties:
+        agent_type:
+          title: Agent Type
+          type: string
+        path:
+          default: ''
+          title: Path
+          type: string
+        state:
+          title: State
+          type: string
+      required:
+      - agent_type
+      - state
+      - path
+      title: EntryCopyOut
+      type: object
     ErrorDetail:
       properties:
         code:
@@ -403,6 +462,59 @@ components:
       required:
       - error
       title: ErrorResponse
+      type: object
+    HubEntryDetailOut:
+      description: One memory with its text and, per local agent, where it is held.
+      properties:
+        body:
+          title: Body
+          type: string
+        copies:
+          items:
+            $ref: '#/components/schemas/EntryCopyOut'
+          title: Copies
+          type: array
+        created_at:
+          title: Created At
+          type: string
+        description:
+          title: Description
+          type: string
+        id:
+          title: Id
+          type: string
+        origin_agent:
+          title: Origin Agent
+          type: string
+        origin_machine:
+          title: Origin Machine
+          type: string
+        project:
+          default: ''
+          title: Project
+          type: string
+        title:
+          title: Title
+          type: string
+        type:
+          title: Type
+          type: string
+        updated_at:
+          title: Updated At
+          type: string
+      required:
+      - id
+      - title
+      - description
+      - type
+      - project
+      - origin_machine
+      - origin_agent
+      - created_at
+      - updated_at
+      - body
+      - copies
+      title: HubEntryDetailOut
       type: object
     HubEntryListOut:
       properties:

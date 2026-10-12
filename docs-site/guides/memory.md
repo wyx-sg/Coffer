@@ -82,7 +82,7 @@ A hub memory is written into every registered agent on this machine except the a
 
 ### When Codex imports from Claude Code itself
 
-Codex can import Claude Code's project memories itself and keep that import updated. When you use that, turn on **Codex imports Claude Code's memories itself** under the agents table on the Memory page. Coffer then writes no Claude Code memory into Codex on this machine, and the table says *Codex imports it*. Codex's memories still reach Claude Code.
+Codex can import Claude Code's project memories itself and keep that import updated. When you use that, turn on **Codex imports Claude Code's memories itself** in the **Memory sync** section of Codex's Memory tab (**Agents → Codex → More → Memory**). Coffer then writes no Claude Code memory into Codex on this machine, and a memory from Claude Code says *Codex imports it* for Codex. Codex's memories still reach Claude Code.
 
 ## How a sync runs
 
@@ -96,7 +96,7 @@ Memory → Sync now
 
 ### A first or large sync waits for you
 
-The first sync on a machine, and any sync that would write more than 50 copies, publishes to the hub as usual but writes nothing into your agents yet. The Memory page shows it as a preview: per agent and project, how many copies would be written, updated and removed. Open a row to see the project's memories. **Write** applies exactly that plan; **Cancel** drops it. A later sync replaces a preview you have not answered.
+The first sync on a machine, and any sync that would write more than 50 copies, publishes to the hub as usual but writes nothing into your agents yet. The Memory page counts it in its banner; **Review** lists it per agent and project with how many copies would be new, updated and removed. Open a line to see each memory it would write, update or remove (a line that removes anything starts open), and choose a memory to open it. **Write** applies exactly that plan; **Cancel** drops it. A later sync replaces a preview you have not answered.
 
 ### What each sync recorded
 
@@ -112,16 +112,22 @@ coffer log audit --event-type memory_synced --limit 20
 Memory
 ```
 
-The **Memory** page carries the **Experimental** tag. Its header holds **Sync now** with its **▾**, when memory last synced, and a **⋯** menu with **Undo sync…**. Below it, in order:
+The **Memory** page carries the **Experimental** tag. Its header holds **Sync now** with its **▾**, when memory last synced, and a **⋯** menu with **Undo sync…**.
 
-- **Problems**: sources the last sync could not read, and memories withheld because they look like secrets.
-- **The preview**, while a first or large sync waits for **Write** or **Cancel**.
-- **Projects**: every project in the hub, with whether and where it is checked out on this machine (**Not checked out here** otherwise), how many memories it holds and the agents they came from. **Global memories** sits at the top. A search box filters the rows.
-- **Agents on this machine**: per agent, the copies written here (and how many the agent edited or removed), whether its own memory is on (Claude Code's auto memory, Codex's memories) and whether its own curation is on (Claude Code's Auto Dream, Codex's consolidation), with a hint when either is off, and **Curate now**. With Codex registered, the switch **Codex imports Claude Code's memories itself** sits below the table.
+When something waits on you, one banner under the header counts it: a first or large sync waiting for **Write**, sources the last sync could not read, memories withheld because they look like secrets, and agents Coffer cannot write into (their own memory is off). **Review** opens a drawer that lists each, with the file to reveal and a link to the agent's Memory tab.
+
+Below, the scopes sit beside the memories:
+
+- **Scopes**, on the left: **Global memories** first, then every project in the hub by its short name with its count. Projects not checked out on this machine are grouped under **Not checked out here**. A search box appears when there are many.
+- **Memories**, on the right: the open scope's memories, newest first, with the project's full key and where it is checked out (or that its memories wait in the hub until it is). Each row shows the title and description, the type, the agent and machine it came from, and when it last changed. Search and the **Type** and **From** filters narrow the list. A row adds a note only when a copy is worth a look: *Not in Codex yet*, *Edited in Claude Code*, *Removed by Codex*.
+
+The address keeps the open scope (`/memory?scope=<project folder>` or `?scope=global`), so a scope can be linked to.
 
 With no Claude Code or Codex registered, the page says there is no agent to sync and offers **Open Agents**.
 
-Choose a project to open its page. It names where the project is checked out on this machine, or that its memories wait in the hub because it is not, and lists every memory: its title and type, the agent and machine it came from, when it was last updated, and per agent on this machine what became of its copy:
+### A memory
+
+Choose a memory to open it in a drawer. Under its title are its type, the agent and machine it came from and when it changed. First comes where each agent on this machine holds it: per agent, what became of its copy, the file, and **Open in editor** and **Reveal in Finder**. Below is the memory's text, read only. **↑** and **↓** step through the list, and the drawer's **Maximize** gives a long memory the page's width.
 
 | State | Meaning |
 | --- | --- |
@@ -132,7 +138,15 @@ Choose a project to open its page. It names where the project is checked out on 
 | **Codex imports it** | Codex's own import carries this memory |
 | **Edited by agent** / **Removed by agent** | the agent changed or removed the copy, and Coffer leaves it alone |
 
-The page never edits a memory's text. To change a memory, change it where the agent keeps it — in Claude Code's memory folder or with Codex's memory tools — and the next sync carries the change. To see an agent's own memory folders, open **Agents → choose the agent → More → Memory**.
+The page never edits a memory's text. To change a memory, change it where the agent keeps it — in Claude Code's memory folder or with Codex's memory tools — and the next sync carries the change.
+
+### On each agent's Memory tab
+
+```text
+Agents → choose the agent → More → Memory
+```
+
+Each agent's own settings are on its Memory tab, so the Memory page does not grow with the number of agents. While the memory feature is on, the tab starts with a **Memory sync** section: whether the agent's own memory is on (Claude Code's auto memory, Codex's memories) and whether its own curation is on (Claude Code's Auto Dream, Codex's consolidation), with a hint when either is off; the copies Coffer wrote into it (and how many the agent edited or removed); **Curate now**; and **Open Memory**, which opens the Memory page filtered to this agent's memories. Codex's tab also has **Codex imports Claude Code's memories itself**. Below it are the agent's own memory folders.
 
 ## Curation is each agent's own
 
@@ -141,7 +155,7 @@ Coffer does not merge or retire memories. Each agent curates what it holds, Coff
 - **Claude Code**: Auto Dream merges duplicates, drops what is contradicted or stale and rewrites the index, on Claude Code's own schedule. Coffer cannot read whether it is on yet, so the page shows it as unknown; check it in Claude Code's `/memory`.
 - **Codex**: consolidation runs whenever its memories are on and its inputs changed, and reads Coffer's extension folder as one of its inputs. Fresher evidence wins over an older statement.
 
-A rarely used project can hold a copy beside the agent's own version of the same lesson until its curation next runs. To run it now, choose **Curate now** on the agent's row: Coffer starts the agent without a terminal, in your home folder, with a prompt asking it to consolidate its own memory, and records a `memory_curation_requested` event. The run uses that agent's own model and account, as any session with it does.
+A rarely used project can hold a copy beside the agent's own version of the same lesson until its curation next runs. To run it now, choose **Curate now** in the agent's **Memory sync** section: Coffer starts the agent without a terminal, in your home folder, with a prompt asking it to consolidate its own memory, and records a `memory_curation_requested` event. The run uses that agent's own model and account, as any session with it does.
 
 ## Undo sync
 
@@ -161,11 +175,11 @@ Earlier builds kept memory as notes under `~/.coffer/derived/memory/` and handed
 
 ## Troubleshooting
 
-**A project's memories are not in an agent.** Open the project's page: **Held back** means the project is not checked out on this machine (open it once with an agent there); **Next sync** means a sync has not run since; a preview waiting on the Memory page means you have not chosen **Write** yet. For Codex, check that its memories are on.
+**A project's memories are not in an agent.** Open the project on the Memory page and choose a memory: its drawer says per agent what became of its copy. **Held back** means the project is not checked out on this machine (open it once with an agent there); **Next sync** means a sync has not run since; a preview waiting on the Memory page means you have not chosen **Write** yet. For Codex, check that its memories are on.
 
-**An agent's memory is not published.** Check that the agent is registered and its own memory is on, then choose **Sync now** and read the **Problems** above the projects. A memory learned outside any repository is published only when it is about you.
+**An agent's memory is not published.** Check that the agent is registered and its own memory is on, then choose **Sync now** and read what the banner's **Review** lists. A memory learned outside any repository is published only when it is about you.
 
-**The same lesson appears twice in an agent.** Two agents' accounts of one lesson are two memories until the agent curates. Choose **Curate now** on the agent, or wait for its own curation to run.
+**The same lesson appears twice in an agent.** Two agents' accounts of one lesson are two memories until the agent curates. Choose **Curate now** on the agent's Memory tab, or wait for its own curation to run.
 
 **A copy keeps coming back after I deleted it.** It does not, unless the memory changed in the hub since: then the new version is written as a new copy. To stop a memory reaching an agent, change or remove it in the agent that wrote it.
 

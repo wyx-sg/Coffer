@@ -83,7 +83,7 @@ A writer that does not recognise the layout it is about to write into (no Claude
 
 ### Codex's own import
 
-Codex can import Claude Code's project memories itself and keep the import updated. When it does (a switch on the Memory page, stored in the ledger, because the setting's own location is not documented), Coffer skips the Claude Code → Codex direction on that machine. Codex → Claude Code continues.
+Codex can import Claude Code's project memories itself and keep the import updated. When it does (a switch on Codex's Memory tab, stored in the ledger, because the setting's own location is not documented), Coffer skips the Claude Code → Codex direction on that machine. Codex → Claude Code continues.
 
 ## Echo, absorption and hand-over
 
@@ -129,7 +129,7 @@ The whole layer sits behind the `memory` experimental feature: off, the worker s
 
 ## Curation stays with the agents
 
-The Memory page reads each agent's own state from its config, never from undocumented internal databases: Claude Code's auto memory (`autoMemoryEnabled` in `settings.json`, absent means on); Codex's memories feature (`[features] memories` in `config.toml`), whose consolidation runs whenever its memories are on. Auto Dream has no documented setting yet, so it shows as unknown while auto memory is on, with a hint to check `/memory` in Claude Code. A state Coffer cannot read is shown as unknown.
+Each agent's Memory tab reads the agent's own state from its config, never from undocumented internal databases: Claude Code's auto memory (`autoMemoryEnabled` in `settings.json`, absent means on); Codex's memories feature (`[features] memories` in `config.toml`), whose consolidation runs whenever its memories are on. Auto Dream has no documented setting yet, so it shows as unknown while auto memory is on, with a hint to check `/memory` in Claude Code. A state Coffer cannot read is shown as unknown.
 
 **Curate now** starts the agent headless, the way Coffer's hand-offs launch agents, in the person's home directory, with a prompt asking it to consolidate its memory files (merge duplicates, drop what is contradicted or stale, keep its index short, change nothing else), and records `memory_curation_requested`. Curation therefore runs on the agents' schedules: a rarely used project may hold a copy beside the agent's own version of the same lesson until the agent next curates. Coffer does not depend on curation for correctness, because every copy is a valid memory file on its own.
 
