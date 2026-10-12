@@ -176,7 +176,7 @@ hand-edited file with a stray colon cannot break a whole collection walk.
 
 ### What the sweep does
 
-The knowledge sweep runs on a timer and does four mechanical things, calling no
+The knowledge sweep runs when a file under `knowledge/` changes (and every 10 minutes otherwise) and does four mechanical things, calling no
 model (see "Sweep the knowledge root on its mechanical duties"):
 
 1. **Adopt and promote `.inbox/` files**: each Markdown file in a collection's

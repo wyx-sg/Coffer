@@ -198,6 +198,57 @@ async def test_a_memory_the_agent_changed_updates_its_hub_entry(
     assert after.updated_at != before.updated_at
 
 
+@pytest.mark.acceptance(
+    spec="memory", scenario="a Codex memory keeps its id when bullets around it move"
+)
+async def test_a_codex_memory_keeps_its_id_when_bullets_around_it_move(
+    tmp_path: pathlib.Path, payments: pathlib.Path
+) -> None:
+    a = Machine("machine-a", tmp_path / "a")
+    bullets = ["Use uv sync --frozen.", "Run make verify before pushing.", "Tag releases by hand."]
+    codex = a.codex(memory_md=codex_memory([("Payments", str(payments), bullets)]))
+    await a.sync()
+    before = {e.body: e.id for e in _entries()}
+
+    reordered = ["Never commit generated files.", bullets[2], bullets[0]]
+    (codex / "memories" / "MEMORY.md").write_text(
+        codex_memory([("Payments", str(payments), reordered)]), encoding="utf-8"
+    )
+    report = await a.sync()
+    after = {e.body: e.id for e in _entries()}
+    assert after[bullets[0]] == before[bullets[0]]
+    assert after[bullets[2]] == before[bullets[2]]
+    assert bullets[1] not in after
+    assert after["Never commit generated files."] not in before.values()
+    assert report.updated == []  # type: ignore[attr-defined]
+    assert [e["title"] for e in report.created] == ["Never commit generated files"]  # type: ignore[attr-defined]
+    assert [e["title"] for e in report.deleted] == ["Run make verify before pushing"]  # type: ignore[attr-defined]
+
+
+@pytest.mark.acceptance(
+    spec="memory", scenario="a Codex bullet replaced by an unrelated one is a new memory"
+)
+async def test_a_codex_bullet_replaced_by_an_unrelated_one_is_a_new_memory(
+    tmp_path: pathlib.Path, payments: pathlib.Path
+) -> None:
+    a = Machine("machine-a", tmp_path / "a")
+    codex = a.codex(
+        memory_md=codex_memory([("Payments", str(payments), ["Use uv sync --frozen."])])
+    )
+    await a.sync()
+    (before,) = _entries()
+
+    (codex / "memories" / "MEMORY.md").write_text(
+        codex_memory([("Payments", str(payments), ["Reviews need two approvals on main."])]),
+        encoding="utf-8",
+    )
+    report = await a.sync()
+    (after,) = _entries()
+    assert after.id != before.id
+    assert report.updated == []  # type: ignore[attr-defined]
+    assert [e["id"] for e in report.deleted] == [before.id]  # type: ignore[attr-defined]
+
+
 @pytest.mark.acceptance(spec="memory", scenario="a memory the agent dropped leaves the hub")
 async def test_a_memory_the_agent_dropped_leaves_the_hub(
     tmp_path: pathlib.Path, payments: pathlib.Path

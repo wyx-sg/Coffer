@@ -204,6 +204,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`channel-switches-structural-vs-parametric`](channel-switches-structural-vs-parametric.md) | Channel Switches: the Agent Opens a New Conversation, the Model Applies Next Turn |
 | [`channel-live-surface-strategy`](channel-live-surface-strategy.md) | A Channel Turn Shows Progress on a Preview Surface Where One Exists, and the Reply Is the Answer Alone |
 | [`channel-attachments`](channel-attachments.md) | Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send |
+| [`channel-prompt-fixed-note-and-editable-style`](channel-prompt-fixed-note-and-editable-style.md) | A Channel's System Prompt Is a Fixed Channel Note Plus a Reply Style the Owner Can Rewrite |
 | [`chat-attachment-uploads`](chat-attachment-uploads.md) | The Chat Page Uploads a File First and Sends Its Id, Into a Sibling Media Directory |
 | [`seatalk-websocket-inbound`](seatalk-websocket-inbound.md) | SeaTalk Inbound Is One Outbound WebSocket, Through an Operator-Supplied SDK |
 | [`telegram-long-polling`](telegram-long-polling.md) | Telegram Inbound Is a Long Poll That Commits the Offset After Dispatch |
@@ -219,6 +220,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`knowledge-is-a-wiki-of-pages-compiled-from-kept-sources`](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md) | Knowledge Is a Wiki of Pages Compiled From Kept Sources |
 | [`linked-knowledge-folders-are-read-only-and-machine-local`](linked-knowledge-folders-are-read-only-and-machine-local.md) | A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local |
 | [`sync-memory-into-each-agents-own-memory`](sync-memory-into-each-agents-own-memory.md) | Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault |
+| [`codex-memory-identity-is-content-with-rewrite-carry-over`](codex-memory-identity-is-content-with-rewrite-carry-over.md) | A Codex Memory Is Identified by Its Content, and a Rewrite Keeps the Identity |
 | [`memory-page-lists-memories-by-scope`](memory-page-lists-memories-by-scope.md) | The Memory Page Lists the Memories by Scope; the Sync Shows Only When It Needs the Person |
 
 ### Sync & secrets

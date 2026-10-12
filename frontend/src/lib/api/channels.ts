@@ -37,6 +37,10 @@ export type CredentialCheckRequest = Schemas["ValidateCredentialsIn"];
  *  reading of its configuration (`status.settings`), common fields included. */
 export type ChannelSettings = NonNullable<Schemas["ChannelStatusOut"]["settings"]>;
 
+/** Per chat kind, Coffer's fixed channel note and default reply style, as the
+ *  channel's System prompt section shows them (`status.prompts`). */
+export type ChannelPrompts = Schemas["ChannelPromptsOut"];
+
 // ---------------------------------------------------------------------------
 // API functions
 // ---------------------------------------------------------------------------

@@ -111,3 +111,28 @@ async def test_a_file_event_wakes_the_scanner_and_a_cancel_stops_the_watch(
         watch.cancel()
         await asyncio.gather(watch, return_exceptions=True)
         assert time.monotonic() - started < 2.0
+
+
+async def test_a_file_event_under_a_subtree_calls_its_listener_only(
+    repo: VaultRepository, writer: VaultWriter
+) -> None:
+    """A worker that follows ``knowledge/`` borrows the vault's one watch; an
+    edit elsewhere does not call it."""
+    import asyncio
+
+    scanner = VaultScanner(writer, interval=3600.0)
+    heard = asyncio.Event()
+    scanner.on_subtree_event("knowledge", heard.set)
+    watch = asyncio.create_task(scanner._watch_files())
+    try:
+        await asyncio.sleep(0.5)
+        (repo.root / "skills").mkdir()
+        (repo.root / "skills" / "a.md").write_bytes(b"elsewhere\n")
+        await asyncio.sleep(1.0)
+        assert not heard.is_set()
+        (repo.root / "knowledge").mkdir()
+        (repo.root / "knowledge" / "a.md").write_bytes(b"typed by hand\n")
+        await asyncio.wait_for(heard.wait(), timeout=5.0)
+    finally:
+        watch.cancel()
+        await asyncio.gather(watch, return_exceptions=True)

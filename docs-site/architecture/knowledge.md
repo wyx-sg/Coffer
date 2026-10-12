@@ -322,12 +322,12 @@ A **linked folder** is a collection the person keeps with their own tools anywhe
 
 ## The sweep
 
-The sweep is a background asyncio task in the daemon. It follows the same shape as the retention worker, and it calls no model.
+The sweep is a background worker in the daemon on the shared wakeable loop, and it calls no model. It runs when a file under `knowledge/` changes (it borrows the vault scanner's file watch, and a burst of events is one run), when the `knowledge` feature is switched on, and otherwise every 10 minutes. A loose document still inside its quiet minute brings one more run once that minute is over, because no file event announces it.
 
 ```mermaid
 stateDiagram-v2
   [*] --> Waiting: start
-  Waiting --> Intake: tick
+  Waiting --> Intake: file event or 10 min
   Intake --> Layout: adopt .inbox/ files as sources
   Layout --> Record: file loose documents into pages/
   Record --> Expire: commit edits on disk
@@ -335,12 +335,12 @@ stateDiagram-v2
   Refresh --> Waiting: re-render coffer-guide
 ```
 
-On each tick, once a minute, the worker does exactly five things:
+On each run the worker does exactly five things:
 
 1. **Adopts `.inbox/` files.** Each new Markdown file in a collection's inbox is normalised and kept as a source under `sources/` (see [A file dropped into the inbox](#a-file-dropped-into-the-inbox)). Whatever it promotes, it announces as a `knowledge` event.
 2. **Files loose documents.** A Markdown file in a collection outside `pages/`, `sources/` and hidden entries, other than the root `README.md`, untouched for 60 seconds, is moved to `pages/<same relative path>`, suffixed on a collision. All of a tick's moves for one collection are one commit by the `daemon` writer with the `layout` operation, and the text is never rewritten. The quiet minute keeps a file an agent is still writing from being moved from under it. This is how a collection made before pages and sources existed converges on the first sweep after an upgrade, and how an agent that writes to the wrong place is corrected within a minute. `infrastructure/knowledge/layout.py` finds and moves the files; `application/knowledge/layout.py` makes the commit.
 3. **Commits edits on disk.** Anything changed in the tree since the last commit, such as a person's editor or an agent's file tools, is committed as an edit on disk through the vault writer, so the history stays current and nothing an agent wrote is counted as Coffer's. A collection with an open tidy is paused and left alone (see [A tidy is one change](#a-tidy-is-one-change)).
-4. **Closes idle tidies.** A tidy whose collection has not changed for 30 minutes is committed as one change with no report and status `expired`.
+4. **Closes idle tidies.** A tidy whose collection has not changed for 30 minutes is committed, at the first run after that, as one change with no report and status `expired`.
 5. **Re-renders the guide skill**, so a page added by hand is catalogued. A render that produces the same bytes writes nothing.
 
 A failed duty is logged and never ends the loop; one file that cannot be moved is logged and skipped. While the `knowledge` feature is switched off the sweep skips its rounds, and the collections stay on disk untouched. Shutdown cancels the task without waiting.

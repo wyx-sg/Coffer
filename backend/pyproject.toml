@@ -351,6 +351,7 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.http.channel_handoff",
+    "coffer.surfaces.http.channel_prompt_preview",
     "coffer.domain.chat",
     "coffer.application.chat",
     "coffer.infrastructure.chat",
@@ -424,6 +425,7 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.http.channel_handoff",
+    "coffer.surfaces.http.channel_prompt_preview",
     "coffer.domain.chat",
     "coffer.application.chat",
     "coffer.infrastructure.chat",
@@ -497,6 +499,7 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.http.channel_handoff",
+    "coffer.surfaces.http.channel_prompt_preview",
     "coffer.domain.chat",
     "coffer.application.chat",
     "coffer.infrastructure.chat",
@@ -574,6 +577,7 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.http.channel_handoff",
+    "coffer.surfaces.http.channel_prompt_preview",
     "coffer.domain.chat",
     "coffer.application.chat",
     "coffer.infrastructure.chat",
@@ -611,6 +615,7 @@ source_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.http.channel_handoff",
+    "coffer.surfaces.http.channel_prompt_preview",
 ]
 forbidden_modules = [
     "coffer.domain.mcp",
@@ -675,6 +680,11 @@ forbidden_modules = [
 ]
 ignore_imports = [
     "coffer.application.channel.* -> coffer.domain.chat.*",
+    # A channel's config stores the owner's rewrite of the reply style and
+    # settles it against Coffer's default, which is chat's text.
+    "coffer.domain.channel.config -> coffer.domain.chat.channel_prompt",
+    # The Settings tab shows the very text a turn is composed from.
+    "coffer.surfaces.http.channel_prompt_preview -> coffer.domain.chat.channel_prompt",
 ]
 
 # The turn platform (conversations, the agent-provider registry, the turn
@@ -730,6 +740,7 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.http.channel_handoff",
+    "coffer.surfaces.http.channel_prompt_preview",
     "coffer.domain.provider",
     "coffer.application.provider",
     "coffer.infrastructure.provider",
@@ -806,6 +817,7 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.http.channel_handoff",
+    "coffer.surfaces.http.channel_prompt_preview",
     "coffer.domain.chat",
     "coffer.application.chat",
     "coffer.infrastructure.chat",
@@ -882,6 +894,7 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.http.channel_handoff",
+    "coffer.surfaces.http.channel_prompt_preview",
     "coffer.domain.chat",
     "coffer.application.chat",
     "coffer.infrastructure.chat",
@@ -967,6 +980,7 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.http.channel_handoff",
+    "coffer.surfaces.http.channel_prompt_preview",
     "coffer.domain.chat",
     "coffer.application.chat",
     "coffer.infrastructure.chat",
@@ -1086,6 +1100,7 @@ forbidden_modules = [
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.http.channel_handoff",
+    "coffer.surfaces.http.channel_prompt_preview",
     "coffer.domain.chat",
     "coffer.application.chat",
     "coffer.infrastructure.chat",

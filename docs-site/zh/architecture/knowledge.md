@@ -322,12 +322,12 @@ sequenceDiagram
 
 ## 扫描 {#the-sweep}
 
-扫描是守护进程里的一个后台 asyncio 任务。它的形状和保留期 worker 一样，并且不调用任何模型。
+扫描是守护进程里跑在共用可唤醒循环上的后台 worker，不调用任何模型。`knowledge/` 下有文件变化时它就运行（借用保险库扫描器的文件监听，一连串事件只跑一次），打开 `knowledge` 功能时也会运行，此外每 10 分钟兜底一次。还在静默一分钟内的零散文档，会在那一分钟过去后再触发一次运行，因为这件事没有文件事件来通知。
 
 ```mermaid
 stateDiagram-v2
   [*] --> Waiting: start
-  Waiting --> Intake: tick
+  Waiting --> Intake: file event or 10 min
   Intake --> Layout: adopt .inbox/ files as sources
   Layout --> Record: file loose documents into pages/
   Record --> Expire: commit edits on disk
@@ -335,12 +335,12 @@ stateDiagram-v2
   Refresh --> Waiting: re-render coffer-guide
 ```
 
-每次触发（每分钟一次），worker 恰好做五件事：
+每次运行，worker 恰好做五件事：
 
 1. **接收 `.inbox/` 文件。** 知识集收件箱里每个新的 Markdown 文件都会被规范化，并作为来源保留在 `sources/` 下（见[放进收件箱的文件](#a-file-dropped-into-the-inbox)）。它提升的东西，都会以 `knowledge` 事件宣告。
 2. **归置零散文档。** 知识集里位于 `pages/`、`sources/` 和隐藏条目之外、不是根目录 `README.md`、并且 60 秒没被动过的 Markdown 文件，会被移到 `pages/<相同的相对路径>`，重名时加后缀。一个知识集在一次触发中的所有移动是一次由 `daemon` 写入者以 `layout` 操作做的提交，文字从不改写。这一分钟的静默期保证不会把智能体还在写的文件从它手底下挪走。在页面和来源出现之前建的知识集，就是这样在升级后的第一次扫描时归入新结构的；写错位置的智能体也会在一分钟内被纠正。`infrastructure/knowledge/layout.py` 负责找出并移动文件；`application/knowledge/layout.py` 负责提交。
 3. **提交磁盘上的编辑。** 自上次提交以来树里变过的任何东西，比如人的编辑器或智能体的文件工具，都会通过保险库写入者提交为在磁盘上编辑，这样历史保持最新，智能体写的东西也不会被算作 Coffer 的。有进行中整理的知识集处于暂停状态，不动它（见[一次整理就是一次改动](#a-tidy-is-one-change)）。
-4. **关闭闲置的整理。** 知识集 30 分钟没有变化的整理，会作为一次改动提交，不带汇报，状态为 `expired`。
+4. **关闭闲置的整理。** 知识集 30 分钟没有变化的整理，会在那之后的第一次运行中作为一次改动提交，不带汇报，状态为 `expired`。
 5. **重新渲染指南技能**，这样手工添加的页面也会被编入目录。渲染出的字节没变就什么都不写。
 
 某一项失败只记日志，从不终止循环；某个移动不了的文件会记日志并跳过。`knowledge` 功能关闭期间，扫描跳过它的各轮，知识集原样留在磁盘上。关闭时取消任务，不等待。

@@ -136,6 +136,7 @@ class FileResourceRepo:
         return Reach(enabled=True, scope=None)
 
     def _snapshot(self) -> dict[str, Resource]:
+        # Blocking (cache refresh, a stat per file): async readers run it in a thread.
         entries = self.files.by_uid()
         reach = self._reach.all()
         out: dict[str, Resource] = {}
@@ -178,10 +179,10 @@ class FileResourceRepo:
         )
 
     async def find(self, uid: str) -> Resource | None:
-        return self._snapshot().get(uid)
+        return (await asyncio.to_thread(self._snapshot)).get(uid)
 
     async def find_by_name(self, kind: str, name: str) -> Resource | None:
-        for r in self._snapshot().values():
+        for r in (await asyncio.to_thread(self._snapshot)).values():
             if r.kind == kind and self._same_name(kind, r.name, name):
                 return r
         return None
@@ -189,7 +190,7 @@ class FileResourceRepo:
     async def list(self, kind: str | None = None, enabled: bool | None = None) -> list[Resource]:
         rows = [
             r
-            for r in self._snapshot().values()
+            for r in (await asyncio.to_thread(self._snapshot)).values()
             if (kind is None or r.kind == kind) and (enabled is None or r.enabled == enabled)
         ]
         # Ordered by (kind, name): a surface renders this as a list a person

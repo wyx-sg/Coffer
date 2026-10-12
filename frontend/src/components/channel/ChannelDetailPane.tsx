@@ -136,6 +136,7 @@ export function ChannelDetailPane({ channel, tab, onTabChange, onDeleted }: Prop
               key={channel.uid}
               channel={channel}
               settings={status.data.settings}
+              prompts={status.data.prompts ?? null}
               workspaceDirectory={status.data.workspace_directory}
               onReplaceSecret={() => setDialog("secret")}
               onDelete={() => setDialog("delete")}

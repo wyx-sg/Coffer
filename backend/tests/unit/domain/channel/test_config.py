@@ -6,12 +6,13 @@ import pytest
 from pydantic import ValidationError
 
 from coffer.domain.channel.config import (
-    SYSTEM_PROMPT_MAX_LENGTH,
+    REPLY_STYLE_MAX_LENGTH,
     ChannelConfigModel,
     SeaTalkChannelConfig,
     TelegramChannelConfig,
     parse_channel_config,
 )
+from coffer.domain.chat.channel_prompt import DEFAULT_REPLY_STYLE, reply_style_hash
 
 TELEGRAM_CONFIG = {
     "channel_type": "telegram",
@@ -250,8 +251,10 @@ def test_root_model_round_trips_flat_dict():
         "show_steps": True,
         "new_conversation_after_idle_hours": 24.0,
         "directories": [],
-        "direct_system_prompt": "",
-        "group_system_prompt": "",
+        "direct_reply_style": "",
+        "group_reply_style": "",
+        "direct_reply_style_base": "",
+        "group_reply_style_base": "",
     }
 
 
@@ -269,8 +272,10 @@ def test_root_model_round_trips_seatalk_dict():
         "show_steps": True,
         "new_conversation_after_idle_hours": 24.0,
         "directories": [],
-        "direct_system_prompt": "",
-        "group_system_prompt": "",
+        "direct_reply_style": "",
+        "group_reply_style": "",
+        "direct_reply_style_base": "",
+        "group_reply_style_base": "",
     }
 
 
@@ -309,21 +314,57 @@ def test_the_default_directory_must_be_absolute() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="a system prompt longer than 4,000 characters is refused"
+    spec="channels", scenario="a reply style longer than 6,000 characters is refused"
 )
-@pytest.mark.parametrize("field", ["direct_system_prompt", "group_system_prompt"])
-def test_a_system_prompt_is_capped_at_4000_characters(field: str) -> None:
-    at_limit = parse_channel_config({**TELEGRAM_CONFIG, field: "x" * SYSTEM_PROMPT_MAX_LENGTH})
-    assert len(getattr(at_limit, field)) == SYSTEM_PROMPT_MAX_LENGTH == 4000
+@pytest.mark.parametrize("field", ["direct_reply_style", "group_reply_style"])
+def test_a_reply_style_is_capped_at_6000_characters(field: str) -> None:
+    at_limit = parse_channel_config({**TELEGRAM_CONFIG, field: "x" * REPLY_STYLE_MAX_LENGTH})
+    assert len(getattr(at_limit, field)) == REPLY_STYLE_MAX_LENGTH == 6000
     with pytest.raises(ValidationError):
-        parse_channel_config({**TELEGRAM_CONFIG, field: "x" * (SYSTEM_PROMPT_MAX_LENGTH + 1)})
+        parse_channel_config({**TELEGRAM_CONFIG, field: "x" * (REPLY_STYLE_MAX_LENGTH + 1)})
 
 
-def test_system_prompts_default_to_empty_and_are_trimmed_but_kept_inside() -> None:
+def test_reply_styles_default_to_empty_and_are_trimmed_but_kept_inside() -> None:
     parsed = parse_channel_config(
-        {**SEATALK_CONFIG, "group_system_prompt": "\n  Reply in English.\n\n- Be brief.  \n"}
+        {**SEATALK_CONFIG, "group_reply_style": "\n  Reply in English.\n\n- Be brief.  \n"}
     )
-    assert parsed.direct_system_prompt == ""
-    assert parsed.group_system_prompt == "Reply in English.\n\n- Be brief."
-    blank = parse_channel_config({**TELEGRAM_CONFIG, "direct_system_prompt": " \n\t"})
-    assert blank.direct_system_prompt == ""
+    assert parsed.direct_reply_style == ""
+    assert parsed.group_reply_style == "Reply in English.\n\n- Be brief."
+    blank = parse_channel_config({**TELEGRAM_CONFIG, "direct_reply_style": " \n\t"})
+    assert blank.direct_reply_style == ""
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a reply style equal to the default follows the default"
+)
+def test_a_style_equal_to_the_default_is_stored_as_following_it() -> None:
+    parsed = parse_channel_config(
+        {**TELEGRAM_CONFIG, "direct_reply_style": f"  {DEFAULT_REPLY_STYLE}\n"}
+    )
+    assert (parsed.direct_reply_style, parsed.direct_reply_style_base) == ("", "")
+
+
+def test_a_rewrite_records_the_default_it_was_written_against() -> None:
+    fresh = parse_channel_config({**TELEGRAM_CONFIG, "group_reply_style": "Be brief."})
+    assert fresh.group_reply_style_base == reply_style_hash(DEFAULT_REPLY_STYLE)
+    older = parse_channel_config(
+        {**TELEGRAM_CONFIG, "group_reply_style": "Be brief.", "group_reply_style_base": "abc"}
+    )
+    assert older.group_reply_style_base == "abc"  # kept, so the page can say it changed
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="an owner prompt from before the reply style keeps its effect"
+)
+def test_an_old_owner_prompt_becomes_the_default_style_plus_the_prompt() -> None:
+    parsed = parse_channel_config(
+        {
+            **SEATALK_CONFIG,
+            "direct_system_prompt": " Answer in Chinese. ",
+            "group_system_prompt": "",
+        }
+    )
+    assert parsed.direct_reply_style == f"{DEFAULT_REPLY_STYLE}\n\nAnswer in Chinese."
+    assert parsed.direct_reply_style_base == reply_style_hash(DEFAULT_REPLY_STYLE)
+    assert (parsed.group_reply_style, parsed.group_reply_style_base) == ("", "")
+    assert "direct_system_prompt" not in parsed.model_dump()

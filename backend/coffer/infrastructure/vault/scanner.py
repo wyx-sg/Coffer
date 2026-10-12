@@ -60,6 +60,7 @@ class VaultScanner:
         self._clock = clock
         self._seen: dict[str, tuple[str | None, float]] = {}
         self._loop = WakeableLoop("vault-scanner", self._look, fallback=interval)
+        self._subtree_listeners: list[tuple[str, Callable[[], None]]] = []
 
     def boot_scan(self) -> CommitResult | None:
         """Settle everything that differs from ``HEAD`` now."""
@@ -90,6 +91,26 @@ class VaultScanner:
     def poke(self) -> None:
         """A hint that something changed (a file event, a CLI call)."""
         self._loop.poke()
+
+    def on_subtree_event(self, subtree: str, callback: Callable[[], None]) -> None:
+        """Call ``callback`` (on the event loop) whenever a file-system event
+        lands under ``subtree`` of the vault, such as ``knowledge``. The watch is
+        the vault's one; a worker that follows a part of the tree borrows it
+        rather than opening a second."""
+        self._subtree_listeners.append((subtree.strip("/") + "/", callback))
+
+    def _announce(self, changes: object) -> None:
+        if not self._subtree_listeners:
+            return
+        base = str(self._writer.repo.root).rstrip("/") + "/"
+        paths = [str(path) for _change, path in changes]  # type: ignore[attr-defined]
+        for subtree, callback in self._subtree_listeners:
+            prefix = base + subtree
+            if any(path.startswith(prefix) for path in paths):
+                try:
+                    callback()
+                except Exception:
+                    logger.warning("vault.subtree_listener_failed", exc_info=True)
 
     async def run(self) -> None:
         """Until cancelled: look on every hint (after it has been quiet) and on
@@ -129,7 +150,7 @@ class VaultScanner:
                 if not Path(root).is_dir():
                     await asyncio.sleep(self._interval)
                     continue
-                async for _changes in awatch(
+                async for changes in awatch(
                     root,
                     watch_filter=outside_git,
                     debounce=200,
@@ -137,6 +158,7 @@ class VaultScanner:
                     rust_timeout=_WATCH_TIMEOUT_MS,
                 ):
                     self.poke()
+                    self._announce(changes)
             except asyncio.CancelledError:
                 raise
             except Exception:

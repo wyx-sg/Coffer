@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
-import type { ChannelSettings, ChannelStatus } from "@/lib/api/channels";
+import type { ChannelPrompts, ChannelSettings, ChannelStatus } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 import { ChannelsPage } from "@/pages/ChannelsPage";
 
@@ -52,10 +52,29 @@ export function makeSettings(channel: ResourceOut): ChannelSettings {
     show_steps: true,
     new_conversation_after_idle_hours: 24,
     directories: [],
-    direct_system_prompt: "",
-    group_system_prompt: "",
+    direct_reply_style: "",
+    group_reply_style: "",
+    direct_reply_style_base: "",
+    group_reply_style_base: "",
     ...channel.config,
   } as unknown as ChannelSettings;
+}
+
+/** Coffer's default reply style, as the tests' daemon reports it. */
+export const DEFAULT_STYLE = "The first line is the outcome; then at most about 15 lines.";
+
+/** What the daemon reports for the System prompt section. */
+export function makePrompts(over: { directChanged?: boolean } = {}): ChannelPrompts {
+  const note = (kind: string) =>
+    `You are replying in a Telegram ${kind} chat (the team-bot channel). To send a file, put MEDIA:/path on its own line.`;
+  return {
+    direct: {
+      channel_note: note("direct"),
+      default_style: DEFAULT_STYLE,
+      default_changed: over.directChanged ?? false,
+    },
+    group: { channel_note: note("group"), default_style: DEFAULT_STYLE, default_changed: false },
+  };
 }
 
 export function makeStatus(channel: ResourceOut, over: Partial<ChannelStatus> = {}): ChannelStatus {
@@ -103,6 +122,7 @@ export function makeStatus(channel: ResourceOut, over: Partial<ChannelStatus> = 
     secret_approval: null,
     handoff: null,
     settings: makeSettings(channel),
+    prompts: makePrompts(),
     ...over,
   };
 }
