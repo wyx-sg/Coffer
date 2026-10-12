@@ -89,11 +89,11 @@ export function GroupPane({ name, onAddRequest }: Props) {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="overview">{t("customTools.tabs.overview")}</TabsTrigger>
-          <TabsTrigger value="tools">{t("customTools.tabs.tools")}</TabsTrigger>
           <TabsTrigger value="environments">
             {t("customTools.tabs.environments")}
             <Badge variant="secondary">{group.environments?.length ?? 0}</Badge>
           </TabsTrigger>
+          <TabsTrigger value="tools">{t("customTools.tabs.tools")}</TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="pt-5">
           <GroupOverview
