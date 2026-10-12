@@ -1425,7 +1425,10 @@ and none is needed, until the next state push; while a proxy runs it MUST keep
 probing it and restart it after a crash. The usage ingest MUST empty the spool
 on its period only while a proxy runs, MUST run one more pass when the proxy
 stops, and then park. The MCP session reaper MUST park while no session is
-open. Each of them MUST be listed on `runtime.workers`.
+open. The knowledge sweep MUST run when a file under `knowledge/` changes (a
+burst of changes is one run) and when the `knowledge` feature is switched on,
+and otherwise at most every 10 minutes. Each of them MUST be listed on
+`runtime.workers`.
 
 #### Scenario: a resource write brings the channel runtime's next pass forward
 - **GIVEN** a running channel runtime whose fallback is far off, and a channel switched on without its pass having run
@@ -1453,3 +1456,9 @@ open. Each of them MUST be listed on `runtime.workers`.
 - **GIVEN** the reaper started with no session open
 - **WHEN** a session becomes active and is later reaped as idle
 - **THEN** the reaper is `parked` before the session, runs while it is open, and is `parked` again once it is reaped
+
+#### Scenario: a change under the knowledge area brings the sweep forward
+- **GIVEN** the knowledge sweep running with its fallback far off, and it has finished its first run
+- **WHEN** a file under `knowledge/` changes, twice in quick succession
+- **THEN** the sweep runs once more, not twice
+- **AND** before that change no further run has started, and `knowledge-sweep` is listed on `runtime.workers`

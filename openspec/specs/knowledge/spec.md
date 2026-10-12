@@ -15,7 +15,7 @@ Coffer holds **knowledge about the user's working environment**: their repositor
 
 These are **standing constraints**, not a phase that has passed: no derived index of any kind, no retrieval tool (an audit of 448 Claude Code sessions found the old tools were never called — a tool an agent does not remember to call is not retrieval), no second retrieval surface on the web page, and no stored state about the corpus. Ingestion is an additional entrance, never a required one: writing a Markdown page with any editor stays a complete way to add knowledge, and upload exists because the user's live entrance is often a phone.
 
-The **knowledge sweep** keeps its mechanical duties: it adopts files dropped into `.inbox/` as sources, files Markdown left outside `pages/` and `sources/` into `pages/`, commits edits found on disk, and re-renders the guide. It calls no model and has no switch or interval of its own.
+The **knowledge sweep** keeps its mechanical duties: it adopts files dropped into `.inbox/` as sources, files Markdown left outside `pages/` and `sources/` into `pages/`, commits edits found on disk, and re-renders the guide. It calls no model and has no switch or interval of its own; it runs when a file under `knowledge/` changes, with a 10-minute fallback.
 
 Assumptions: the corpus stays in the hundreds of files, so a catalogue of every document fits a skill body (measured at ~5.2K tokens for 58 documents); tens of thousands of files would be a different design and the place embeddings would be reconsidered. Agents tidy with no review step; what stands between a document and a bad tidy is the collection's git history, where every change is recorded and can be undone through History and Restore. An ingested document's description is filled from its opening prose, so no user content leaves the machine for this layer.
 
@@ -339,7 +339,7 @@ A collection's read MUST carry `tidy_handoff`: a prompt the daemon writes, from 
 - **THEN** the page offers Copy prompt carrying the collection's tidy prompt and starts no terminal
 
 ### Requirement: Sweep the knowledge root on its mechanical duties
-The daemon MUST run a **knowledge sweep** on a recurring timer, and the sweep MUST do exactly these things and call no model: adopt every file sitting in a collection's `.inbox/` as a source (see "Adopt a file dropped into the inbox"); file every Markdown document left in a collection outside `pages/`, `sources/` and hidden entries, other than the root `README.md`, and untouched for a minute, into `pages/` at the same relative path, suffixed on a collision, as one commit by the daemon that rewrites no content; commit every change found on disk under `knowledge/` as an edit on disk, so a person's editor or an agent's file tools is never counted as Coffer's (see "Commit every knowledge write naming its writer"); and re-render and re-seed the `coffer-guide` skill so a page added by hand is catalogued. The sweep MUST NOT hold the vault against a sync round: whatever it writes goes through the vault's ordinary writer. While the `knowledge` feature is switched off the sweep MUST skip its rounds ([experimental-features](../experimental-features/spec.md) "Close the knowledge feature's surfaces").
+The daemon MUST run a **knowledge sweep** when a file under `knowledge/` changes and otherwise every 10 minutes ([daemon](../daemon/spec.md) "Wake background workers on events and park them without demand"), and the sweep MUST do exactly these things and call no model: adopt every file sitting in a collection's `.inbox/` as a source (see "Adopt a file dropped into the inbox"); file every Markdown document left in a collection outside `pages/`, `sources/` and hidden entries, other than the root `README.md`, and untouched for a minute (a document still inside that minute is revisited once it is over), into `pages/` at the same relative path, suffixed on a collision, as one commit by the daemon that rewrites no content; commit every change found on disk under `knowledge/` as an edit on disk, so a person's editor or an agent's file tools is never counted as Coffer's (see "Commit every knowledge write naming its writer"); and re-render and re-seed the `coffer-guide` skill so a page added by hand is catalogued. The sweep MUST NOT hold the vault against a sync round: whatever it writes goes through the vault's ordinary writer. While the `knowledge` feature is switched off the sweep MUST skip its rounds ([experimental-features](../experimental-features/spec.md) "Close the knowledge feature's surfaces").
 
 #### Scenario: a sweep catalogues a document added by hand
 - **GIVEN** a collection and a Markdown page a person adds under its `pages/` in their own editor
@@ -363,7 +363,7 @@ The daemon MUST run a **knowledge sweep** on a recurring timer, and the sweep MU
 
 #### Scenario: a switched-off knowledge feature skips the sweep
 - **GIVEN** the `knowledge` feature switched off and a file in an inbox
-- **WHEN** the sweep's timer fires
+- **WHEN** the sweep runs
 - **THEN** nothing is adopted, moved, committed or re-rendered, and the collections stay on disk untouched
 
 ### Requirement: Promote submitted material at once

@@ -28,6 +28,7 @@ from __future__ import annotations
 import pathlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 
 from coffer.application.memory.sources import AgentSource, SourceFailure
 from coffer.domain.memory import absorption
@@ -92,9 +93,9 @@ def source_identity(agent_type: str, config_dir: str, source: SourceFile, anchor
     """What names one memory inside an agent, stable across a re-read.
 
     Claude Code: the topic file's path under the config directory. Codex: the
-    file, the task group and section, and the bullet's position in it (the
-    reader's anchor ends in the bullet's content hash, which a rewrite of the
-    bullet would change, and an edit is an update, not a new memory).
+    file plus the reader's anchor (task group, section and the bullet's content
+    hash); a rewritten bullet keeps the identity of the one it replaced through
+    :func:`_codex_identities`.
     """
     try:
         rel = pathlib.Path(source.path).relative_to(config_dir).as_posix()
@@ -105,20 +106,72 @@ def source_identity(agent_type: str, config_dir: str, source: SourceFile, anchor
     return f"{rel}::{anchor}"
 
 
-def _codex_anchors(entries: Sequence[RawEntry]) -> list[str]:
-    """Each Codex bullet's anchor with its content hash replaced by its
-    position in its section."""
+#: How alike a Codex bullet must be to a vanished one in its section to be
+#: that memory rewritten rather than a new one (``difflib`` ratio). Bullets
+#: that merely share a section score well below it.
+SAME_MEMORY_RATIO = 0.6
+
+
+def _section(identity: str) -> str:
+    return identity.rpartition("::")[0]
+
+
+def _codex_identities(
+    agent: AgentSource,
+    source: SourceFile,
+    entries: Sequence[RawEntry],
+    hub: Mapping[str, HubEntry],
+    machine: str,
+) -> list[str]:
+    """Each Codex bullet's source identity (spec memory "Keep a Codex memory's
+    id when its bullet moves or is rewritten").
+
+    A bullet that is still in the hub under its content identity keeps it, so
+    inserting, removing or reordering bullets around it changes nothing. A
+    bullet that is not there takes over the identity of the most alike entry
+    this source published that no bullet claimed any more, in the same
+    section, when they are at least :data:`SAME_MEMORY_RATIO` alike: that is
+    the same memory rewritten, and stays an update. Any other bullet is new.
+    """
+    identities = [
+        source_identity(agent.agent_type, agent.config_dir, source, raw.anchor) for raw in entries
+    ]
     seen: dict[str, int] = {}
-    out: list[str] = []
-    for entry in entries:
-        head, sep, tail = entry.anchor.rpartition("::")
-        if sep and len(tail) == 16 and all(c in "0123456789abcdef" for c in tail):
-            n = seen.get(head, 0)
-            seen[head] = n + 1
-            out.append(f"{head}::{n}")
-        else:
-            out.append(entry.anchor)
-    return out
+    for i, identity in enumerate(identities):
+        n = seen.get(identity, 0)
+        seen[identity] = n + 1
+        if n:
+            identities[i] = f"{identity}#{n + 1}"
+    prefix = source_identity(agent.agent_type, agent.config_dir, source, "")
+    published = {
+        e.origin.source: e
+        for e in hub.values()
+        if _mine(e, machine, agent.agent_type) and e.origin.source.startswith(prefix)
+    }
+    claimed = {i for i in identities if i in published}
+    vanished = [e for s, e in published.items() if s not in claimed]
+    pairs = sorted(
+        (
+            -SequenceMatcher(None, one_line(raw.description, 400), old.description).ratio(),
+            i,
+            old.origin.source,
+        )
+        for i, raw in enumerate(entries)
+        if identities[i] not in claimed
+        for old in vanished
+        if _section(old.origin.source) == _section(identities[i])
+    )
+    taken: set[str] = set()
+    moved: set[int] = set()
+    for negative_ratio, i, old_identity in pairs:
+        if -negative_ratio < SAME_MEMORY_RATIO:
+            break
+        if i in moved or old_identity in taken:
+            continue
+        identities[i] = old_identity
+        moved.add(i)
+        taken.add(old_identity)
+    return identities
 
 
 def publish(
@@ -195,12 +248,13 @@ def _publish_source(
 ) -> set[str]:
     """Publish one source's entries; answer the ids it stands for in the hub."""
     kept: set[str] = set()
-    anchors = (
-        [e.anchor for e in entries] if agent.agent_type == CLAUDE_CODE else _codex_anchors(entries)
+    identities = (
+        [source_identity(agent.agent_type, agent.config_dir, source, e.anchor) for e in entries]
+        if agent.agent_type == CLAUDE_CODE
+        else _codex_identities(agent, source, entries, hub, ctx.machine)
     )
     delivered = ledger.delivered.get(agent.agent_type, [])
-    for raw, anchor in zip(entries, anchors, strict=True):
-        identity = source_identity(agent.agent_type, agent.config_dir, source, anchor)
+    for raw, identity in zip(entries, identities, strict=True):
         eid = entry_id(ctx.machine, agent.agent_type, identity)
         placed = _place(raw, ctx)
         if placed is None:

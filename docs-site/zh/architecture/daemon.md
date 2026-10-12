@@ -277,7 +277,7 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.0 (/Users/you/.coffe
 | --- | --- | --- |
 | 保留策略 | 立即，然后每 6 h | 把每张登记的日志型表按策略清理，并让 `~/.coffer/logs/` 里的文件（包括每个进程的 shim 日志）按时过期。 |
 | 保险库同步 | 30 s 后第一轮，然后按所配远端的间隔（默认 1 h）。没有远端或远端已暂停时，每分钟重新检查一次 | 和你的 git 远端跑一轮同步。在你配置远端之前什么都不做。见[保险库同步](/zh/architecture/vault-sync#the-worker)。 |
-| 知识清扫 | 立即一次，然后每 60 s | 把丢进知识集隐藏目录 `.inbox/` 的每个文件作为来源归档到 `sources/` 下，把 `pages/` 和 `sources/` 之外的零散 Markdown 移进 `pages/`，把在磁盘上发现的编辑作为 `disk` 写入提交，并重新渲染指南技能。每台机器上都运行。见[知识](/zh/architecture/knowledge)。 |
+| 知识清扫 | 立即一次，然后在 `knowledge/` 下有文件变化或功能被打开时运行，否则每 10 min 一次 | 把丢进知识集隐藏目录 `.inbox/` 的每个文件作为来源归档到 `sources/` 下，把 `pages/` 和 `sources/` 之外的零散 Markdown 移进 `pages/`，把在磁盘上发现的编辑作为 `disk` 写入提交，并重新渲染指南技能。仍在静默一分钟内的文档会在这一分钟结束后再多运行一次。每台机器上都运行。见[知识](/zh/architecture/knowledge)。 |
 | 记忆同步 | 立即，然后默认每小时 | 把每个智能体自己的记忆发布到保险库的记忆中心库，并把中心库写进每个智能体自己的记忆。不涉及任何模型。见[记忆](/zh/architecture/memory)。 |
 | 消息渠道运行时 | 每次资源写入、每次保存或批准密钥时；启动失败 30 s 后；否则每 5 分钟 | 把运行中的适配器（Telegram 轮询、SeaTalk 连接）和本机持有的消息渠道进行调和。 |
 | MCP 会话回收器 | 有会话打开时每 60 s；没有会话时停住 | 关闭超过 10 分钟没有请求也没有上游通知的 `/mcp` 会话（打开着的通知流不算活动），连同它们的每会话监管者和上游子进程。可用 `COFFER_MCP_SESSION_IDLE_S` 和 `COFFER_MCP_SESSION_REAPER_INTERVAL_S` 调整。 |
@@ -293,9 +293,9 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.0 (/Users/you/.coffe
 | 提供商健康 | 启动时一次，然后每 30 分钟，每次编辑某个连接时也会再查 | 列出每个启用的模型提供商的模型，判断它的接入地址能否应答、是否接受密钥，并据此产生提供商的待处理事项。 |
 | 发布检查 | 60 s 后第一次，然后每天 | 仅限安装脚本装的二进制。向 GitHub 查询最新的 Coffer 发布，有更新的版本时在**设置 › 关于**里报告。`update_check` 关闭或设置了 `COFFER_UPDATE_CHECK=off` 时不运行。见[分发](/zh/architecture/distribution#how-the-installer-s-binaries-update)。 |
 
-保险库扫描器、对账器、提醒检查、消息渠道运行时、模型代理监管者、用量摄取和 MCP 会话回收器跑在同一个共用的可唤醒循环上：提示或文件事件会唤醒它（一连串事件只跑一次），没有事件时它的周期就是兜底，一次运行失败会记日志，循环继续。后三个在没有需要服务的对象时停住，不留任何定时器。`coffer daemon status --workers` 列出它们每一个的上次运行，以及兜底下次什么时候运行它，见[可观测性](/zh/architecture/observability#background-tasks-and-event-loop-lag)。
+保险库扫描器、对账器、提醒检查、知识清扫、消息渠道运行时、模型代理监管者、用量摄取和 MCP 会话回收器跑在同一个共用的可唤醒循环上：提示或文件事件会唤醒它（一连串事件只跑一次），没有事件时它的周期就是兜底，一次运行失败会记日志，循环继续。后三个在没有需要服务的对象时停住，不留任何定时器。`coffer daemon status --workers` 列出它们每一个的上次运行，以及兜底下次什么时候运行它，见[可观测性](/zh/architecture/observability#background-tasks-and-event-loop-lag)。
 
-记忆同步的开关和间隔来自内部引擎设置，并在后台任务等待期间重新读取，所以在**记忆**页上的改动无需重启就生效。清扫的 60 s 间隔是固定的。
+记忆同步的开关和间隔来自内部引擎设置，并在后台任务等待期间重新读取，所以在**记忆**页上的改动无需重启就生效。知识清扫借用保险库扫描器的文件监视，不另开一个，它 10 min 的兜底间隔是固定的。
 
 ## 退下 {#standing-down}
 
