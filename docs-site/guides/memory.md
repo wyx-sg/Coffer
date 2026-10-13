@@ -119,7 +119,7 @@ When something waits on you, one banner under the header counts it: a first or l
 Below, the scopes sit beside the memories:
 
 - **Scopes**, on the left: **Global memories** first, then every project in the hub by its short name with its count. Projects not checked out on this machine are grouped under **Not checked out here**. A search box appears when there are many.
-- **Memories**, on the right: the open scope's memories, newest first, with the project's full key and where it is checked out (or that its memories wait in the hub until it is). Each row shows the title and description, the type, the agent and machine it came from, and when it last changed. Search and the **Type** and **From** filters narrow the list. A row adds a note only when a copy is worth a look: *Not in Codex yet*, *Edited in Claude Code*, *Removed by Codex*.
+- **Memories**, on the right: the open scope's memories, newest first, with the project's full key and where it is checked out (or that its memories wait in the hub until it is). Each row shows the title and description, the type, the agent and machine it came from, and when it last changed. Search and the **From** filter narrow the list. A row adds a note only when a copy is worth a look: *Not in Codex yet*, *Edited in Claude Code*, *Removed by Codex*.
 
 The address keeps the open scope (`/memory?scope=<project folder>` or `?scope=global`), so a scope can be linked to.
 
