@@ -335,7 +335,7 @@ describe("an experimental feature's entry", () => {
 describe("the Knowledge entry", () => {
   afterEach(() => forgetKnowledgeLocation());
 
-  test("returns to the collection and document last open, and to the landing once forgotten", () => {
+  acceptance("knowledge", "the sidebar returns to the open document", () => {
     features.mockReturnValue(ALL_ON);
     rememberKnowledgeLocation("/knowledge/col-1", "?file=coffer%2Fpages%2Fa.md");
     const open = renderNav("/agents");
