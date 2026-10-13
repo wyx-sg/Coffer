@@ -27,6 +27,19 @@ def get_secret_notes() -> VaultSecretNotes:
     return _notes
 
 
+def secret_label_of(ref: str) -> str | None:
+    """The label ``ref`` has right now, or None."""
+    note = _notes.get(ref) if _notes is not None else None
+    return note.label if note else None
+
+
+def labelled(details: dict[str, Any], label: str | None) -> dict[str, Any]:
+    """``details`` carrying the secret's ``label`` as ``ref_label``, when it has one: the
+    routes pass the label a row would otherwise miss (a new secret's is filed after its
+    row, a deleted one's notes are gone)."""
+    return {**details, "ref_label": label} if label else details
+
+
 def name_secret_refs(details: dict[str, Any]) -> dict[str, Any]:
     """An audit row's details with the secret its ``ref`` names also carrying
     ``ref_label``, the name a person gave it right now: the trail reads by
