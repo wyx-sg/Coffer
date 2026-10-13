@@ -92,7 +92,8 @@ def test_a_person_deletes_a_document_an_agent_wrote(client, tmp_path) -> None:  
     (_root(tmp_path) / second).unlink()
 
     level = client.get("/api/v1/knowledge/tree", params={"path": "shopee"}).json()
-    assert level["files"] == []
+    # Only the collection's README is left: it is listed like any root file.
+    assert [f["path"] for f in level["files"]] == ["shopee/README.md"]
     assert not (_root(tmp_path) / first).exists()
     entries = client.get("/api/v1/audit", params={"limit": 100}).json()["entries"]
     deletions = [e for e in entries if e["event_type"] == "knowledge_deleted"]

@@ -456,6 +456,7 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | `GET /fs/browse` | 窗口操作: the folder picker's own listing |
 | `GET /fs/editors` | 窗口操作: which editors the Open in… menu offers |
 | `POST /fs/open` | 窗口操作: opens a file in the person's editor |
+| `POST /fs/open-url` | 窗口操作: opens a web link in the default browser |
 | `POST /fs/pick-folder` | 窗口操作: a native folder picker for the person |
 | `POST /fs/reveal` | 窗口操作: reveals a file in Finder |
 | `POST /fs/terminal` | 窗口操作: opens a terminal window for the person |

@@ -192,8 +192,12 @@ export function useUploadKnowledgeFile() {
   return useMutation({
     // `collection` is the collection's NAME here, not its uid: an upload lands
     // in a directory, and the directory is named after the collection.
-    mutationFn: (vars: { collection: string; file: File; signal?: AbortSignal }) =>
-      uploadFile(vars),
+    mutationFn: (vars: {
+      collection: string;
+      file: File;
+      replace?: boolean;
+      signal?: AbortSignal;
+    }) => uploadFile(vars),
     onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
   });
 }

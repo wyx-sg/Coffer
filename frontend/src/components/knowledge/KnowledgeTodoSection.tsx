@@ -28,6 +28,7 @@ type Kind = FindingOut["kind"];
 const URGENT: Kind[] = [
   "dead_link",
   "ambiguous_link",
+  "outside_link",
   "duplicate_slug",
   "missing_source",
   "superseded_source",

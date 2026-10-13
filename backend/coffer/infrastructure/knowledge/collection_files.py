@@ -23,9 +23,11 @@ from __future__ import annotations
 
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 from coffer.infrastructure.knowledge import paths
+from coffer.infrastructure.knowledge.assets import write_bytes
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 from coffer.infrastructure.knowledge.fs import atomic_write, decode
 from coffer.infrastructure.knowledge.wiki import DEFAULT_VERIFY_DAYS
+from coffer.infrastructure.knowledge.wiki_rules import DEFAULT_SOURCELESS_TYPES, SOURCELESS_KEY
 
 #: The rules a new collection's README starts with, below its description.
 #: The page types are the guide's defaults; the person changes them here.
@@ -43,18 +45,28 @@ types here; agents follow this list over their defaults.
 
 ## Rules
 
-- One subject per page. Link related pages with `[[slug]]`.
+- One subject per page. Link related pages with `[[slug]]`, or with an ordinary
+  relative link such as `[the cache](cache-ttl.md)`; Coffer checks both.
 - Every page lists the sources it draws on in `sources`, and the day it was last
-  checked against them or the code in `verified`.
+  checked against them or the code in `verified`. A page that rests on code,
+  configuration or what someone observed names that in `evidence` instead.
+  `types_without_sources` at the top of this file lists the types that need
+  neither.
 - `verify_after_days` at the top of this file is how many days a check holds
-  before Coffer asks for another. `0` turns it off.
+  before Coffer asks for another. `0` turns it off. A page may set its own.
+- Files anywhere else in the collection, such as an `index.md`, a `log.md` or a
+  folder of your own, stay where they are. Their links count; they are never
+  asked for a type or sources.
 """
 
 
 def default_readme(collection: str, description: str | None) -> str:
     """A new collection's README: its heading, its description and the
     default rules, with the default recheck interval in its frontmatter."""
-    head = f"---\nverify_after_days: {DEFAULT_VERIFY_DAYS}\n---\n\n# {collection}\n\n"
+    head = (
+        f"---\nverify_after_days: {DEFAULT_VERIFY_DAYS}\n"
+        f"{SOURCELESS_KEY}: [{', '.join(DEFAULT_SOURCELESS_TYPES)}]\n---\n\n# {collection}\n\n"
+    )
     text = (description or "").strip()
     return head + (f"{text}\n\n" if text else "") + DEFAULT_RULES
 
@@ -112,7 +124,9 @@ def write_description(collection: str, description: str) -> None:
 
 def restore_file(relpath: str, raw: bytes) -> None:
     """Put back one file of a deleted collection exactly as it was: a document,
-    the README, or an inbox item."""
+    the README, a picture or other attachment, or an inbox item. Anything that
+    is not Markdown — a picture, a diagram's source, a raw export — goes back
+    byte for byte, never through a text decode."""
     in_inbox = paths.inbox_parts(relpath)
     if in_inbox is not None:
         collection, item = in_inbox
@@ -126,6 +140,9 @@ def restore_file(relpath: str, raw: bytes) -> None:
         else:
             paths.require_document(relpath)
             target = paths.resolve(relpath)
+    if not target.name.endswith(".md"):
+        write_bytes(paths.relative_of(target), raw)
+        return
     atomic_write(target, decode(raw))
 
 

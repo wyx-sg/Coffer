@@ -299,8 +299,8 @@ Your tool list is a budgeted slice: 88 more upstream tools are unlisted, all cal
 Coffer has no tool for knowledge, memory or its own records, because an agent can
 already do all of them with what it has. To add knowledge, write a Markdown page into a
 collection's `pages/`, as the `coffer-guide` skill describes; a file left in a collection's
-`.inbox/` folder is adopted by Coffer's sweep and kept as a source under `sources/`, and a
-document written outside `pages/` and `sources/` is moved into `pages/`. To change a document,
+`.inbox/` folder is adopted by Coffer's sweep and kept as a source under `sources/`. Coffer
+moves no file: a document stays where it was written. To change a document,
 edit the file in place. Memory needs no tool at all: an agent
 keeps writing its own memory, and [memory sync](/guides/memory) writes what your other agents
 learned into that same memory, which the agent loads itself.

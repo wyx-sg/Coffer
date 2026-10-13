@@ -124,12 +124,25 @@ def test_no_wire_model_carries_a_retrieval_payload() -> None:
 
 
 def test_an_ingested_document_names_the_source_it_became() -> None:
-    """An upload answers with its source; a source's read names its original
-    and where it is on this Mac (see "Keep an upload's original on this Mac
-    only")."""
+    """An upload answers with its source and, for a structured import, its
+    report part by part; a source's read names its original and where it is
+    on this Mac (see "Keep an upload's original on this Mac only") and where
+    an imported page came from."""
     fields = set(schemas.IngestedDocumentOut.model_fields)
-    assert {"path", "title", "description", "converter"} == fields
-    assert {"original", "original_path"} <= set(schemas.FileOut.model_fields)
+    assert {
+        "path",
+        "title",
+        "description",
+        "converter",
+        "report",
+        "page_id",
+        "replaces",
+        "files",
+        "preview",
+    } == fields
+    assert {"original", "original_path", "origin", "readable_body", "import_report"} <= set(
+        schemas.FileOut.model_fields
+    )
 
 
 def test_a_collection_reports_its_pages_sources_and_its_one_handoff() -> None:
@@ -175,3 +188,13 @@ def app_with_knowledge(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     from coffer.surfaces.http.app import create_app
 
     return create_app()
+
+
+def test_every_finding_the_check_makes_is_a_kind_the_wire_carries() -> None:
+    """A finding kind the check computes but the wire model does not list
+    would fail the whole check response, not just that finding."""
+    from typing import get_args
+
+    from coffer.infrastructure.knowledge.wiki_findings import FINDING_KINDS
+
+    assert set(get_args(schemas.FindingKind)) == set(FINDING_KINDS)

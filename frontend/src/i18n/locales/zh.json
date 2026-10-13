@@ -1955,6 +1955,7 @@
     "KNOWLEDGE_FILE_NOT_FOUND": "未找到该知识文件",
     "KNOWLEDGE_HISTORY_UNAVAILABLE": "无法查看文档历史：本机没有安装 git",
     "KNOWLEDGE_PATH_UNSAFE": "该路径不在知识集合范围内",
+    "KNOWLEDGE_SOURCE_EXISTS": "这个页面之前已经导入过。先预览导入，再选择替换以保留新版本。",
     "KNOWLEDGE_UPLOAD_TOO_LARGE": "文件过大，无法上传。上限为 20 MB。",
     "MASTER_KEY_FILE_INVALID": "这不是一个有效的主密钥",
     "MASTER_KEY_MISSING": "主密钥缺失，Coffer 无法解密已存储的密钥——请在「设置 › 安全」中导入主密钥",
@@ -3268,7 +3269,7 @@
       "title": "上传文档",
       "body": "Coffer 会把每个文件转换成 Markdown，连同其中的图片作为来源保存在知识集中。上传的文件本身只留在这台 Mac 上。",
       "choose": "把文件拖到这里，或选择文件",
-      "types": "PDF、Word、PowerPoint、Excel、HTML、CSV、Markdown 或纯文本 · 最大 20 MB",
+      "types": "PDF、Word、PowerPoint、Excel、HTML、CSV、Markdown、纯文本或 Confluence 页面（JSON）· 最大 20 MB",
       "into": "放入知识集",
       "converting": "正在转换为 Markdown…",
       "uploading": "正在上传…",
@@ -3291,7 +3292,12 @@
       "someSaved": "{{count}} 个已上传，{{refused}} 个没有，详见对话框",
       "buttonMany": "上传 {{count}} 个文件",
       "noneSaved_one": "没有上传任何文件：{{count}} 个文件无法上传",
-      "noneSaved_other": "没有上传任何文件：{{count}} 个文件无法上传"
+      "noneSaved_other": "没有上传任何文件：{{count}} 个文件无法上传",
+      "existsTitle": "已经导入过",
+      "existsBody": "这个页面已经是来源 {{source}}。选择“替换”会把它作为新来源再导入一次，并把旧来源标为已替换；旧来源及其文件都会保留。",
+      "replace": "替换",
+      "partialTitle": "已保存，但有部分内容没有保留",
+      "savedPartly": "已上传，但有部分内容没有保留，详见列表"
     },
     "document": {
       "where": "这个文件的位置",
@@ -3312,7 +3318,14 @@
       "supersededBy": "已被替换为",
       "original": "原文件",
       "originalFailed": "无法打开原文件。",
-      "originalElsewhere": "原文件 {{name}} 在上传的那台 Mac 上"
+      "originalElsewhere": "原文件 {{name}} 在上传的那台 Mac 上",
+      "readableNote": "按现在的导入方式显示：这个文件仍保留着导出时的标记。重新导入该页面即可按此保存。",
+      "origin": "来自 {{system}}",
+      "originWeb": "网页",
+      "originVersion": "版本 {{version}}",
+      "fetched": "抓取于 {{date}}",
+      "partial": "部分导入",
+      "partialHint": "这次导入没有保留以下内容："
     },
     "deleteDocument": {
       "menu": "删除",
@@ -3362,7 +3375,10 @@
     },
     "link": {
       "dead": "没有名为 {{target}} 的页面或来源",
-      "ambiguous": "{{target}} 对应不止一个文件"
+      "ambiguous": "{{target}} 对应不止一个文件",
+      "deadPath": "{{target}} 处没有文件",
+      "outside": "{{target}} 指向知识库目录之外",
+      "openFailed": "无法在浏览器中打开这个链接"
     },
     "history": {
       "title": "历史",
@@ -3379,6 +3395,7 @@
       "kinds": {
         "dead_link": "失效链接",
         "ambiguous_link": "有歧义的链接",
+        "outside_link": "指向知识库之外的链接",
         "duplicate_slug": "重复的名称",
         "missing_source": "缺失的来源",
         "superseded_source": "引用了过期来源的页面",

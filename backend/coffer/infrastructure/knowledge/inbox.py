@@ -13,6 +13,7 @@ from __future__ import annotations
 import pathlib
 from collections.abc import Mapping
 from datetime import UTC, datetime
+from typing import Any
 
 from coffer.domain.knowledge.entry import ACTOR_AGENT, KnowledgeFile
 from coffer.domain.knowledge.errors import KnowledgeFileNotFound
@@ -50,7 +51,7 @@ def submit_material(
     description: str,
     body: str,
     actor: str = ACTOR_AGENT,
-    extra: Mapping[str, str] | None = None,
+    extra: Mapping[str, Any] | None = None,
 ) -> str:
     """Put new material in the collection's inbox. Returns the item's name.
 

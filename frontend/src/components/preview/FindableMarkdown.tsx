@@ -38,6 +38,8 @@ interface FindableMarkdownProps {
   initialQuery?: string;
   /** Per-element overrides for the renderer (a knowledge page's `[[links]]`). */
   components?: Components;
+  /** Render the document's own HTML, sanitised (Markdown's `html`). */
+  html?: boolean;
 }
 
 function FrontmatterList({ entries }: { entries: FrontmatterEntry[] }) {
@@ -73,6 +75,7 @@ export function FindableMarkdown({
   frontmatter = true,
   initialQuery,
   components,
+  html = false,
 }: FindableMarkdownProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // Pass the markdown source as the revision so an open search re-applies when
@@ -94,7 +97,9 @@ export function FindableMarkdown({
             so long lines don't stretch edge-to-edge on wide screens. */}
         <div className="mx-auto max-w-3xl">
           {entries.length > 0 ? <FrontmatterList entries={entries} /> : null}
-          <Markdown components={components}>{body}</Markdown>
+          <Markdown components={components} html={html}>
+            {body}
+          </Markdown>
         </div>
       </div>
       {find.open ? (

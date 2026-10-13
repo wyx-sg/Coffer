@@ -7,7 +7,9 @@ shape of an answer, never the shape of a row.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import Any
 
 ACTOR_AGENT = "agent"
 ACTOR_USER = "user"
@@ -115,12 +117,17 @@ class SourceRef:
 
 @dataclass(frozen=True)
 class LinkRef:
-    """A ``[[target]]`` in a page's body and the one file it resolves to;
-    ``path`` ``None`` when it is dead or ambiguous (``ambiguous`` says which)."""
+    """A link in a file's body and the one file it resolves to: a
+    ``[[target]]`` (``kind`` ``wiki``) or a standard Markdown link by relative
+    path (``kind`` ``path``, ``target`` as written). ``path`` is ``None`` when
+    it is dead or ambiguous (``ambiguous`` says which), or leaves the
+    knowledge root (``outside``)."""
 
     target: str
     path: str | None = None
     ambiguous: bool = False
+    kind: str = "wiki"
+    outside: bool = False
 
 
 @dataclass(frozen=True)
@@ -173,7 +180,8 @@ class KnowledgeFile:
     verified: str = ""
     #: A page's ``sources`` entries, each resolved to the source it names.
     sources: tuple[SourceRef, ...] = ()
-    #: A page's ``[[links]]``, each resolved to the file it names.
+    #: A page's ``[[links]]``, and any Markdown file's links by relative
+    #: path, each resolved to the file it names.
     links: tuple[LinkRef, ...] = ()
     #: Whether a page is due a recheck (see ``FileEntry.stale``).
     stale: bool = False
@@ -188,6 +196,16 @@ class KnowledgeFile:
     #: that file is on this Mac — ``None`` on any other Mac.
     original: str = ""
     original_path: str | None = None
+    #: The body as a reader should see it when the file still carries an
+    #: export's own frontmatter or storage markers; ``None`` when it reads as
+    #: it is (spec knowledge "Import a Confluence page as a readable source
+    #: with its attachments").
+    readable_body: str | None = None
+    #: Where an imported source came from (``system``, ``url``, ``page_id``,
+    #: ``version``, ``fetched_at``…); empty for anything else.
+    origin: Mapping[str, str] = field(default_factory=dict)
+    #: An import's report as its frontmatter keeps it; empty when none.
+    import_report: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

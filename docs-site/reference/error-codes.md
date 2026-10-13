@@ -150,7 +150,7 @@ give the status each code is actually sent with.
 | `PLUGIN_UNINSTALL_UNSUPPORTED` | 422 | This agent type's plugins must be uninstalled with the agent's own tooling. | Use the agent's own tooling. |
 | `PLUGIN_UNINSTALL_FAILED` | 422 | The agent's own uninstall command failed. | Read `message`; run the uninstall yourself. |
 | `FS_PATH_NOT_BROWSABLE` | 400 | A folder-picker path is missing, not a directory, or unreadable. | Pick another folder. |
-| `FS_PATH_NOT_OPENABLE` | 400 | An open or reveal target is not absolute, does not exist, or the launch failed. | Check the path and the preferred editor setting. |
+| `FS_PATH_NOT_OPENABLE` | 400 | An open or reveal target is not absolute, does not exist, or the launch failed; or a web link to open is not `http`, `https` or `mailto` (reason `not_a_web_link`). | Check the path, the link and the preferred editor setting. |
 | `FS_TERMINAL_INVALID` | 400 | A request to open an agent session in a terminal cannot become a command: an unknown agent, a session id with characters other than letters, digits and dashes, a relative directory, both or neither of `resume` and `prompt`, or a terminal template without `{command}`. Nothing was started. | Fix the field `message` names; check the preferred terminal setting. |
 | `FS_TERMINAL_FAILED` | 502 | The terminal could not be started: the launcher is not installed, would not start, or the host has no terminal to use. | Read `message`; pick another terminal in the preferred terminal setting. |
 | `AGENT_TYPE_UNSUPPORTED` | 400 | This agent type has no native sessions Coffer can list, rename or delete. | None for this agent; open its sessions in the agent itself. |
@@ -179,6 +179,7 @@ give the status each code is actually sent with.
 | --- | --- | --- | --- |
 | `KNOWLEDGE_COLLECTION_NOT_FOUND` | 404 | No collection by that name is visible to the caller. | Pick a collection from the Knowledge page. |
 | `KNOWLEDGE_COLLECTION_EXISTS` | 409 | A collection with that name already exists. | Choose another name. |
+| `KNOWLEDGE_SOURCE_EXISTS` | 409 | An uploaded Confluence page is already a source in the collection (`details.page_id`, `details.source`). | Preview the import, then upload it again with replace (`--replace`, or **Replace** in the dialog); the older source is kept and marked superseded. |
 | `KNOWLEDGE_COLLECTION_LINKED` | 409 | The collection is a linked folder, which Coffer only shares with agents: it does not upload into it, delete from it, edit its description, check it, tidy it or keep its history. | Make the change with the folder's own tools, an editor or Obsidian say. |
 | `KNOWLEDGE_FOLDER_REFUSED` | 400 | The folder cannot be linked: it does not exist, the path is not absolute, or it is Coffer's own folder or a folder holding it, such as your home folder. | Pick an existing folder outside `~/.coffer`, given as an absolute path; to share part of a large folder, link a subfolder. |
 | `KNOWLEDGE_FILE_NOT_FOUND` | 404 | No document at that path. | Browse the collection's folder on the Knowledge page. |

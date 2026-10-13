@@ -174,3 +174,23 @@ class KnowledgeNotAChange(KnowledgeError):  # noqa: N818
     def __init__(self, version: str) -> None:
         super().__init__(f"{version!r} changed no knowledge file")
         self.version = version
+
+
+class KnowledgeSourceExists(KnowledgeError):  # noqa: N818
+    """An import of a page a source in the collection already holds.
+
+    Spec knowledge "Import a Confluence page as a readable source with its
+    attachments": a page is imported once, and a later import replaces the
+    older source only when asked to, so nothing is duplicated or overwritten
+    by accident.
+    """
+
+    code = "KNOWLEDGE_SOURCE_EXISTS"
+
+    def __init__(self, page_id: str, source: str) -> None:
+        super().__init__(
+            f"page {page_id!r} is already imported as {source!r}; import again with replace"
+        )
+        self.page_id = page_id
+        self.source = source
+        self.error_details: dict[str, object] = {"page_id": page_id, "source": source}

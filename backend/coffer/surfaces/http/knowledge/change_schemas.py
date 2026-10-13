@@ -41,8 +41,8 @@ class ChangeOut(BaseModel):
         description="`user` a person; `agent` an agent whose material became a document on "
         "arrival; `curation` a change Coffer's retired curation pass made, kept in the "
         "history; `sync` another machine's change; `disk` an edit made outside Coffer "
-        "(a person's editor, an agent's file tools); `daemon` Coffer filing a loose document "
-        "into `pages/`."
+        "(a person's editor, an agent's file tools); `daemon` a loose document an earlier "
+        "Coffer filed into `pages/`, kept in the history."
     )
     operation: str = Field(
         description="`save`, `delete`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, "

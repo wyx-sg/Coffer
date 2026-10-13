@@ -105,3 +105,30 @@ def test_spawn_detaches_and_silences_output(tmp_path, monkeypatch):
     assert seen["start_new_session"] is True
     assert seen["stdout"] == open_service.subprocess.DEVNULL
     assert seen["stderr"] == open_service.subprocess.DEVNULL
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="a web link opens in the default browser")
+def test_a_web_link_is_handed_to_the_browser(captured):
+    _svc().open_url("https://confluence.example/pages/viewpage.action?pageId=1&x=2")
+
+    assert captured == [["browse", "https://confluence.example/pages/viewpage.action?pageId=1&x=2"]]
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="anything but a web link is refused")
+@pytest.mark.parametrize(
+    "url",
+    [
+        "file:///etc/passwd",
+        "javascript:alert(1)",
+        "vscode://open?x",
+        "https://",
+        "https://a.example/with space",
+        "",
+    ],
+)
+def test_anything_but_a_web_link_is_refused(captured, url):
+    with pytest.raises(FsPathNotOpenable) as refused:
+        _svc().open_url(url)
+
+    assert refused.value.reason == "not_a_web_link"
+    assert captured == []

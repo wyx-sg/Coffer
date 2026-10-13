@@ -143,7 +143,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `PLUGIN_UNINSTALL_UNSUPPORTED` | 422 | 这个类型智能体的插件必须用智能体自己的工具卸载。 | 使用智能体自己的工具。 |
 | `PLUGIN_UNINSTALL_FAILED` | 422 | 智能体自己的卸载命令失败了。 | 阅读 `message`；自己运行卸载。 |
 | `FS_PATH_NOT_BROWSABLE` | 400 | 文件夹选择器的路径不存在、不是目录或不可读。 | 选另一个文件夹。 |
-| `FS_PATH_NOT_OPENABLE` | 400 | 要打开或显示的目标不是绝对路径、不存在，或启动失败。 | 检查路径和首选编辑器设置。 |
+| `FS_PATH_NOT_OPENABLE` | 400 | 要打开或显示的目标不是绝对路径、不存在，或启动失败；或者要打开的网页链接不是 `http`、`https` 或 `mailto`（reason 为 `not_a_web_link`）。 | 检查路径、链接和首选编辑器设置。 |
 | `FS_TERMINAL_INVALID` | 400 | 在终端里打开智能体会话的请求无法变成命令：智能体未知、会话 id 含字母、数字和连字符以外的字符、目录是相对路径、`resume` 与 `prompt` 同时给出或都没给，或终端模板里没有 `{command}`。没有启动任何东西。 | 修正 `message` 指出的字段；检查首选终端设置。 |
 | `FS_TERMINAL_FAILED` | 502 | 终端启动失败：启动器没有安装、无法启动，或这台机器上没有可用的终端。 | 阅读 `message`；在首选终端设置里换一个终端。 |
 | `AGENT_TYPE_UNSUPPORTED` | 400 | 这个类型的智能体没有 Coffer 能列出、重命名或删除的原生会话。 | 无；请在该智能体自己的界面里打开它的会话。 |
@@ -172,6 +172,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | --- | --- | --- | --- |
 | `KNOWLEDGE_COLLECTION_NOT_FOUND` | 404 | 调用方看不到这个名字的知识集。 | 在知识页面选一个知识集。 |
 | `KNOWLEDGE_COLLECTION_EXISTS` | 409 | 已存在同名知识集。 | 换一个名字。 |
+| `KNOWLEDGE_SOURCE_EXISTS` | 409 | 上传的 Confluence 页面已经是这个知识集里的一份来源（`details.page_id`、`details.source`）。 | 先预览导入，再用替换方式重新上传（`--replace`，或对话框里的 **替换**）；旧来源会保留并标为已被取代。 |
 | `KNOWLEDGE_COLLECTION_LINKED` | 409 | 这个知识集是接入的外部文件夹，Coffer 只把它共享给智能体：不往里上传、不从中删除、不改它的描述、不检查、不整理，也不记录它的历史。 | 用这个文件夹自己的工具（比如编辑器或 Obsidian）去改。 |
 | `KNOWLEDGE_FOLDER_REFUSED` | 400 | 无法接入这个文件夹：它不存在、路径不是绝对路径，或者它是 Coffer 自己的文件夹或包含它的文件夹（比如你的主目录）。 | 用绝对路径选一个 `~/.coffer` 之外已存在的文件夹；只想共享大文件夹的一部分时，接入其中的子文件夹。 |
 | `KNOWLEDGE_FILE_NOT_FOUND` | 404 | 该路径下没有文档。 | 在知识页面浏览该知识集的文件夹。 |

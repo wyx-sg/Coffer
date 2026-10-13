@@ -44,8 +44,8 @@ from coffer.domain.vault.writers import (
 #: still in the history; ``sync`` — a
 #: change another machine made, applied by vault sync; ``disk`` — a change
 #: found in the tree that no Coffer operation made (a person's own editor, an
-#: agent's file tools); ``daemon`` — Coffer itself keeping a collection in its
-#: layout, filing a loose document into ``pages/``.
+#: agent's file tools); ``daemon`` — a loose document an earlier version of
+#: Coffer filed into ``pages/``, still in the history (Coffer moves no file now).
 WRITERS = (WRITER_USER, WRITER_AGENT, WRITER_CURATION, WRITER_SYNC, WRITER_DISK, WRITER_DAEMON)
 
 #: What the change was — knowledge's own operation words beside the vault's.

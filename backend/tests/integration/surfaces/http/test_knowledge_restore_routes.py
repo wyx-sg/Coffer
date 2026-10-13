@@ -78,6 +78,43 @@ def test_a_deleted_collection_comes_back_with_its_documents_and_readme(  # type:
 
 
 @pytest.mark.acceptance(
+    spec="knowledge", scenario="a collection's own files and attachments come back byte for byte"
+)
+def test_a_restored_collection_keeps_its_root_files_assets_and_links(  # type: ignore[no-untyped-def]
+    client,
+) -> None:
+    client.post("/api/v1/knowledge/collections", json={"name": "shopee", "description": "Shop."})
+    root = knowledge_root() / "shopee"
+    picture = bytes(range(256)) * 4  # not text: a decode would change it
+    files: dict[str, bytes] = {
+        "index.md": b"# Index\n\n- [Gateway](pages/gateway.md)\n",
+        "log.md": b"# Log\n\n- 2026-10-13 added gateway\n",
+        "schema.md": b"# Schema\n",
+        "pages/gateway.md": b"---\ntitle: Gateway\n---\n\n![arch](../assets/gw/arch.png)\n",
+        "sources/gw.md": b"---\ntitle: Gateway page\n---\n\nText.\n",
+        "assets/gw/arch.png": picture,
+        "assets/gw/arch.drawio": b"<mxfile><diagram/></mxfile>\n",
+    }
+    for relative, data in files.items():
+        (root / relative).parent.mkdir(parents=True, exist_ok=True)
+        (root / relative).write_bytes(data)
+    readme = (root / "README.md").read_bytes()
+    client.get("/api/v1/knowledge/changes")  # settles the hand-made files as a disk edit
+
+    assert client.delete(f"/api/v1/resources/{_uid(client, 'shopee')}").status_code in (200, 204)
+    removal = _change(client, "remove")
+    restored = client.post(f"/api/v1/knowledge/changes/{removal['version']}/restore")
+    assert restored.status_code == 200, restored.text
+
+    for relative, data in files.items():
+        assert (root / relative).read_bytes() == data, relative
+    assert (root / "README.md").read_bytes() == readme
+    index = client.get("/api/v1/knowledge/file", params={"path": "shopee/index.md"}).json()
+    [link] = index["links"]
+    assert (link["kind"], link["path"]) == ("path", "shopee/pages/gateway.md")
+
+
+@pytest.mark.acceptance(
     spec="knowledge", scenario="a collection undo that fails part-way leaves nothing behind"
 )
 def test_a_failed_collection_restore_leaves_no_row_and_no_directory(  # type: ignore[no-untyped-def]

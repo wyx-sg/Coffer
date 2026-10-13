@@ -2,8 +2,8 @@
 
 Real git over a real directory, because "found on disk" is decided by what the
 vault repository has committed. The registry and the audit log are in-memory
-stand-ins. Each tick promotes what waits in an inbox, files loose documents into
-``pages/``, commits edits found on disk, and re-renders the guide (spec
+stand-ins. Each tick promotes what waits in an inbox, commits edits found on
+disk, and re-renders the guide; it never moves a file (spec
 knowledge "Adopt a file dropped into the inbox", "Sweep the knowledge root on
 its mechanical duties", "Treat a direct file edit as a complete change").
 """
@@ -172,54 +172,38 @@ def _age(path: pathlib.Path, seconds: float = 120) -> None:
     os.utime(path, (stamp, stamp))
 
 
-@pytest.mark.acceptance(spec="knowledge", scenario="a sweep files a loose document into pages")
-async def test_a_sweep_files_loose_documents_into_pages_in_one_daemon_commit() -> None:
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="a sweep leaves every file where its writer put it"
+)
+async def test_sweeps_leave_root_files_and_custom_folders_in_place() -> None:
     service, history, _ = _world()
     guide = _Guide()
     root = paths.collection_dir("shopee")
-    (root / "infra").mkdir()
-    cache = root / "infra" / "cache.md"
-    notes = root / "notes.md"
-    cache.write_text("---\ntitle: Cache\n---\n\nTTL is 60s.\n", encoding="utf-8")
-    notes.write_text("Plain notes.\n", encoding="utf-8")
-    paths.readme_path("shopee").write_text("# shopee\n\nThe schema.\n", encoding="utf-8")
-    fresh = root / "fresh.md"
-    fresh.write_text("Still being written.\n", encoding="utf-8")
-    texts = {"infra/cache.md": cache.read_bytes(), "notes.md": notes.read_bytes()}
-    for path in (cache, notes, paths.readme_path("shopee")):
-        _age(path)
-
-    await sweep_once(service, guide.refresh)
-
-    for relative, data in texts.items():
-        assert not (root / relative).exists()
-        assert (root / "pages" / relative).read_bytes() == data
-    assert paths.readme_path("shopee").is_file()
-    assert fresh.is_file()  # touched within the minute: left for the next sweep
-    layout = [c for c in history.log("shopee") if c.meta.operation == "layout"]
-    [change] = layout
-    assert change.meta.writer == "daemon"
-    moved = {d.path: d.status for d in change.documents}
-    assert moved == {
-        "shopee/infra/cache.md": "removed",
-        "shopee/notes.md": "removed",
-        "shopee/pages/infra/cache.md": "added",
-        "shopee/pages/notes.md": "added",
+    files = {
+        "README.md": "# shopee\n\nThe schema.\n",
+        "index.md": "# Index\n\n- [Gateway](pages/gateway.md)\n",
+        "log.md": "# Log\n\n- 2026-10-13 added the gateway page\n",
+        "schema.md": "# Schema\n\nPages carry a subject_kind.\n",
+        "glossary.md": "# Glossary\n\nA root file of the person's own.\n",
+        "services/notes.md": "---\ntitle: Notes\n---\n\nIn a folder of their own.\n",
+        "pages/gateway.md": "---\ntitle: Gateway\ntype: entity\n---\n\nSee [index](../index.md).\n",
+        "assets/gateway/diagram.drawio": "<mxfile/>\n",
     }
+    for relative, text in files.items():
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+        _age(target)
 
+    for _ in range(3):
+        await sweep_once(service, guide.refresh)
 
-async def test_a_loose_document_never_overwrites_a_page() -> None:
-    service, _, _ = _world()
-    root = paths.collection_dir("shopee")
-    paths.pages_dir("shopee").mkdir(parents=True)
-    (root / "pages" / "notes.md").write_text("the page\n", encoding="utf-8")
-    (root / "notes.md").write_text("the loose one\n", encoding="utf-8")
-    _age(root / "notes.md")
-
-    await sweep_once(service, _Guide().refresh)
-
-    assert (root / "pages" / "notes.md").read_text(encoding="utf-8") == "the page\n"
-    assert (root / "pages" / "notes-2.md").read_text(encoding="utf-8") == "the loose one\n"
+    for relative, text in files.items():
+        assert (root / relative).read_text(encoding="utf-8") == text, relative
+    assert not (root / "pages" / "index.md").exists()
+    assert all(c.meta.operation != "layout" for c in history.log("shopee"))
+    committed = {d.path for c in history.log("shopee") for d in c.documents}
+    assert {"shopee/index.md", "shopee/log.md", "shopee/services/notes.md"} <= committed
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="a sweep runs while a sync round waits")

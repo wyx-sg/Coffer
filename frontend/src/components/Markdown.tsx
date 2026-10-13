@@ -8,13 +8,32 @@
 // Headings are demoted one level (markdown `#` renders as <h2>): the renderer
 // always sits under a page that already owns the <h1>, so a document's own
 // title must never become a second one. `#`→h2 … `#####`/`######`→h6.
-import ReactMarkdown, { type Components } from "react-markdown";
+//
+// `html` lets a stored document's own HTML through — the tables an imported
+// Confluence page keeps as HTML because Markdown cannot hold their merged
+// cells or lists — but only after sanitising it (GitHub's rules,
+// rehype-sanitize): structure, links and pictures stay; scripts, iframes,
+// styles, event handlers and HTML comments go, so a document never runs code
+// and a fidelity comment never shows as text.
+import ReactMarkdown, { type Components, type Options } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
+import rehypeRaw from "rehype-raw";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 
 import { CodeBlock } from "@/components/CodeBlock";
 import { cn } from "@/lib/utils";
+
+type Plugins = NonNullable<Options["rehypePlugins"]>;
+
+/** Raw HTML is parsed, then sanitised, before anything else sees it. */
+function rehypePlugins(html: boolean, highlight: boolean): Plugins {
+  const plugins: Plugins = [];
+  if (html) plugins.push(rehypeRaw, [rehypeSanitize, defaultSchema]);
+  if (highlight) plugins.push(rehypeHighlight);
+  return plugins;
+}
 
 const docComponents: Components = {
   h1: (props) => <h2 className="mb-3 mt-5 text-xl font-bold first:mt-0" {...props} />,
@@ -161,6 +180,8 @@ interface Props {
   /** Per-element overrides applied last, for a caller needing a custom
    *  element (e.g. a link that routes inside the app). */
   components?: Components;
+  /** Render the document's own HTML, sanitised (see the header). */
+  html?: boolean;
 }
 
 export function Markdown({
@@ -171,6 +192,7 @@ export function Markdown({
   breaks = false,
   copyableCode = false,
   components,
+  html = false,
 }: Props) {
   const base = density === "chat" ? chatComponents : docComponents;
   const overrides: Components = {
@@ -199,7 +221,7 @@ export function Markdown({
     <div className={cn("text-sm text-foreground", density === "chat" && "markdown-body")}>
       <ReactMarkdown
         remarkPlugins={breaks ? [remarkGfm, remarkBreaks] : [remarkGfm]}
-        rehypePlugins={highlight ? [rehypeHighlight] : []}
+        rehypePlugins={rehypePlugins(html, highlight)}
         components={overrides}
       >
         {children}

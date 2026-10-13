@@ -52,6 +52,18 @@ def reveal_command(target: Path) -> list[str]:
     return ["xdg-open", str(folder)]
 
 
+def url_command(url: str) -> list[str]:
+    """The argv that opens a web ``url`` in the default browser."""
+    system = host_os()
+    if system is HostOs.MACOS:
+        return ["open", url]
+    if system is HostOs.WINDOWS:
+        # Not `cmd /c start`: cmd would read the `&` of a query string as a
+        # command separator. The URL protocol handler takes it as one argument.
+        return ["rundll32", "url.dll,FileProtocolHandler", url]
+    return ["xdg-open", url]
+
+
 def _applescript_str(value: str) -> str:
     """Quote a Python string as an AppleScript string literal (escaped)."""
     esc = value.replace("\\", "\\\\").replace('"', '\\"')

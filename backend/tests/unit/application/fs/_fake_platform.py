@@ -28,6 +28,9 @@ class FakePlatform:
     def reveal_command(self, target: Path) -> list[str]:
         return ["reveal", str(target)]
 
+    def url_command(self, url: str) -> list[str]:
+        return ["browse", url]
+
     def folder_picker_command(self, start: str | None) -> list[str] | None:
         self.picker_starts.append(start)
         return self.picker

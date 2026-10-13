@@ -277,7 +277,7 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.0 (/Users/you/.coffe
 | --- | --- | --- |
 | 保留策略 | 立即，然后每 6 h | 把每张登记的日志型表按策略清理，并让 `~/.coffer/logs/` 里的文件（包括每个进程的 shim 日志）按时过期。 |
 | 保险库同步 | 30 s 后第一轮，然后按所配远端的间隔（默认 1 h）。没有远端或远端已暂停时，每分钟重新检查一次 | 和你的 git 远端跑一轮同步。在你配置远端之前什么都不做。见[保险库同步](/zh/architecture/vault-sync#the-worker)。 |
-| 知识清扫 | 立即一次，然后在 `knowledge/` 下有文件变化或功能被打开时运行，否则每 10 min 一次 | 把丢进知识集隐藏目录 `.inbox/` 的每个文件作为来源归档到 `sources/` 下，把 `pages/` 和 `sources/` 之外的零散 Markdown 移进 `pages/`，把在磁盘上发现的编辑作为 `disk` 写入提交，并重新渲染指南技能。仍在静默一分钟内的文档会在这一分钟结束后再多运行一次。每台机器上都运行。见[知识](/zh/architecture/knowledge)。 |
+| 知识清扫 | 立即一次，然后在 `knowledge/` 下有文件变化或功能被打开时运行，否则每 10 min 一次 | 把丢进知识集隐藏目录 `.inbox/` 的每个文件作为来源归档到 `sources/` 下，把在磁盘上发现的编辑作为 `disk` 写入提交，并重新渲染指南技能。仍在静默一分钟内的文档会在这一分钟结束后再多运行一次。每台机器上都运行。见[知识](/zh/architecture/knowledge)。 |
 | 记忆同步 | 立即，然后默认每小时 | 把每个智能体自己的记忆发布到保险库的记忆中心库，并把中心库写进每个智能体自己的记忆。不涉及任何模型。见[记忆](/zh/architecture/memory)。 |
 | 消息渠道运行时 | 每次资源写入、每次保存或批准密钥时；启动失败 30 s 后；否则每 5 分钟 | 把运行中的适配器（Telegram 轮询、SeaTalk 连接）和本机持有的消息渠道进行调和。 |
 | MCP 会话回收器 | 有会话打开时每 60 s；没有会话时停住 | 关闭超过 10 分钟没有请求也没有上游通知的 `/mcp` 会话（打开着的通知流不算活动），连同它们的每会话监管者和上游子进程。可用 `COFFER_MCP_SESSION_IDLE_S` 和 `COFFER_MCP_SESSION_REAPER_INTERVAL_S` 调整。 |

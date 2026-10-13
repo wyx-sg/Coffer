@@ -52,6 +52,13 @@ wiki per collection, which the developer and agents like you write together:
   open one when the text around it is not enough, and link it the same way from
   a page that needs the picture. An uploaded source's `original` names the file
   it came from, which stays on the developer's Mac and is not in the collection.
+  An imported Confluence page keeps its folder there too
+  (`confluence-<page id>-v<version>/`): its attachments, the source of each
+  diagram (`.drawio`, `.puml`) and the page's raw storage (`storage.xml`).
+- Anything else is the collection's own: an `index.md`, a `log.md` or a
+  `schema.md` at its root, a folder the developer keeps. Coffer never moves or
+  renames it. Its links count (an index's links make the pages it lists
+  reachable), and it is never asked for a type, sources or a recheck.
 
 **There is no Coffer tool for reading, listing, searching or grepping it.** Use
 your own file tools on those paths. The catalogue at the bottom of this file
@@ -99,26 +106,38 @@ guess, an opinion, or something true only of this conversation.
    Whoever wrote either, the developer included. Keep the superseded statement
    legible where the corrected fact is: "(previously recorded as X; corrected
    YYYY-MM-DD)".
-5. **Link pages by `[[slug]]`, never by path.** A page's slug is its file name
-   without `.md`; write `[[session-ownership]]` or
+5. **Link pages by `[[slug]]`, or by a relative path.** A page's slug is its
+   file name without `.md`; write `[[session-ownership]]` or
    `[[session-ownership|the session service]]`. A link may also name a source's
-   slug. When you rename a page, update the links to it, or keep its old slug in
-   its `aliases`. Coffer reports every link that names nothing.
+   slug. An ordinary Markdown link by relative path works too,
+   `[the cache](cache-ttl.md)` or, into another collection,
+   `[Kafka](../../platform/pages/kafka.md)`; a `[[slug]]` survives a move, a
+   path does not. When you rename or move a page, update the links to it, or
+   keep its old slug in its `aliases`. Coffer reports every link that names
+   nothing, and every relative link that climbs out of the knowledge root.
 6. **Never edit a source.** A source is the record of what arrived. The only
    keys you may add to one are `ingest: skipped`, `superseded_by: <slug>` when
    a newer source replaces it, and `summary`, one or two sentences on what it
    says (see "Integrating sources"). Coffer writes `original` and
    `original_sha256` on an upload; leave them as they are.
 7. **Give every page frontmatter**: a `title`; a `type` — `concept`, `entity`,
-   `how-to`, `decision` or `overview` unless the README defines its own; a
-   one-line `description` saying what *question* the page answers (it is the
-   only thing a future reader chooses by); `sources`, the slugs of the sources
-   it draws on; any `aliases`; when you last checked the page against its
+   `how-to`, `decision` or `overview` unless the README defines its own, and
+   any other key the README asks for (a `subject_kind`, say); a one-line
+   `description` saying what *question* the page answers (it is the only
+   thing a future reader chooses by); `sources`, the slugs of the sources it
+   draws on; any `aliases`; when you last checked the page against its
    sources or the code, as `verified: YYYY-MM-DD`; and `actor: agent`. Leave
    any other key a person added alone. Where a page's facts came from belongs
    in `sources` and `verified`, never in a paragraph of the body listing what
    you read; a source that is not in the collection is cited where its fact
-   is, as a link.
+   is, as a link. A page whose facts rest on code, configuration or what
+   someone observed rather than on a source names that in `evidence`
+   (`code: <repo>/<path>`, `config: <where>`, `observed: <date>, <where>`); a
+   type the README lists under `types_without_sources` (an `overview` by
+   default) needs neither. Never write a `verified` date for a check you did
+   not make: leave it out until you have. A page may set its own
+   `verify_after_days` when its subject changes faster or slower than the
+   collection's.
 
 ```markdown
 ---
@@ -132,9 +151,9 @@ actor: agent
 ---
 ```
 
-The collection must already exist: only the developer creates one. A Markdown
-file you leave outside `pages/` and `sources/` is moved into `pages/` by Coffer
-within a minute. Coffer commits every change it finds on disk to the vault's
+The collection must already exist: only the developer creates one. Coffer
+never moves or renames a file you write: put a page under `pages/`, and
+anything else where the README says it goes. Coffer commits every change it finds on disk to the vault's
 git history, so a bad edit can be brought back from it;
 never run git inside the vault on your own initiative, because a commit of your
 own would be attributed to nobody. The developer reads a file's versions and restores an
@@ -162,6 +181,17 @@ A source **waits** while no page lists it in `sources` and it is not marked
 One source may touch many pages; that is the point. Integrate the waiting
 sources one at a time, oldest first.
 
+To bring in a **Confluence page**, export it with the developer's Confluence
+tool as JSON, with its attachments, and run
+`coffer knowledge upload <collection> <page>.json` (`--attachments <dir>` adds
+attachments downloaded beside it). Coffer converts its macros, keeps its
+attachments and diagram sources, and names what it could not keep in the
+source's `import_report`; `--preview` shows all of that and writes nothing. A
+page imported before is refused until you add `--replace`, which keeps the
+older source and marks it `superseded_by` the new one. The source's `origin`
+says where it came from and when it was fetched; a fetch is not a check, so it
+sets no page's `verified`.
+
 ### Tidying a collection
 
 When the developer asks you to tidy, organise or clean up knowledge (整理知识),
@@ -173,7 +203,7 @@ work through one collection at a time:
 2. Integrate its waiting sources first (see "Integrating sources").
 3. Fix what Coffer found: the mechanical findings the prompt lists, or
    `coffer knowledge check <collection>` prints — dead and ambiguous links,
-   orphan and incomplete pages, pages without sources, missing sources, pages
+   links outside the knowledge root, orphan and incomplete pages, pages without sources, missing sources, pages
    that lean on a superseded source. A **stale** page (`stale_page`: its
    `verified` date is missing or older than the README's `verify_after_days`,
    90 days by default) is rechecked: read it against its sources or the code,
@@ -301,7 +331,8 @@ text does not explain, not as a debugger for the developer's own program.
   already read, read the code. Knowledge is for what the repository cannot say.
 - **Not a scratch pad.** What goes in should still be true in a month.
 - Address knowledge files by collection and relative path, and link pages by
-  `[[slug]]`. A path that climbs out of the knowledge root is refused.
+  `[[slug]]` or a relative path. A path that climbs out of the knowledge root
+  is refused.
 
 <!-- end:knowledge -->
 ## This file

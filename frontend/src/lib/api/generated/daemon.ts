@@ -359,6 +359,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/fs/open-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Url
+         * @description Open a web link (`http`, `https`, `mailto`) in the default browser.
+         */
+        post: operations["open_url_api_v1_fs_open_url_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/fs/pick-folder": {
         parameters: {
             query?: never;
@@ -732,6 +752,11 @@ export interface components {
             path: string;
             /** With */
             with?: string | null;
+        };
+        /** FsOpenUrlRequest */
+        FsOpenUrlRequest: {
+            /** Url */
+            url: string;
         };
         /** FsPickFolderOut */
         FsPickFolderOut: {
@@ -1790,6 +1815,48 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["FsOpenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    open_url_api_v1_fs_open_url_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FsOpenUrlRequest"];
             };
         };
         responses: {

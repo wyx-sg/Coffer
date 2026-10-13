@@ -822,6 +822,14 @@ components:
           contentMediaType: application/octet-stream
           title: File
           type: string
+        preview:
+          default: false
+          title: Preview
+          type: boolean
+        replace:
+          default: false
+          title: Replace
+          type: boolean
       required:
       - file
       - collection
@@ -891,7 +899,7 @@ components:
           title: Version
           type: string
         writer:
-          description: '`user` a person; `agent` an agent whose material became a document on arrival; `curation` a change Coffer''s retired curation pass made, kept in the history; `sync` another machine''s change; `disk` an edit made outside Coffer (a person''s editor, an agent''s file tools); `daemon` Coffer filing a loose document into `pages/`.'
+          description: '`user` a person; `agent` an agent whose material became a document on arrival; `curation` a change Coffer''s retired curation pass made, kept in the history; `sync` another machine''s change; `disk` an edit made outside Coffer (a person''s editor, an agent''s file tools); `daemon` a loose document an earlier Coffer filed into `pages/`, kept in the history.'
           enum:
           - user
           - agent
@@ -1202,6 +1210,10 @@ components:
         folder_path:
           title: Folder Path
           type: string
+        import_report:
+          additionalProperties: true
+          title: Import Report
+          type: object
         kind:
           default: file
           enum:
@@ -1215,6 +1227,11 @@ components:
             $ref: '#/components/schemas/LinkRefOut'
           title: Links
           type: array
+        origin:
+          additionalProperties:
+            type: string
+          title: Origin
+          type: object
         original:
           default: ''
           title: Original
@@ -1231,6 +1248,11 @@ components:
         path:
           title: Path
           type: string
+        readable_body:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Readable Body
         sources:
           items:
             $ref: '#/components/schemas/SourceRefOut'
@@ -1285,6 +1307,9 @@ components:
       - summary
       - original
       - original_path
+      - readable_body
+      - origin
+      - import_report
       title: FileOut
       type: object
     FileSummaryOut:
@@ -1362,6 +1387,7 @@ components:
           enum:
           - dead_link
           - ambiguous_link
+          - outside_link
           - duplicate_slug
           - missing_source
           - superseded_source
@@ -1404,6 +1430,64 @@ components:
       - prompt
       title: HandoffOut
       type: object
+    ImportItemOut:
+      description: One attachment, embed or macro of an import, and how it ended.
+      properties:
+        name:
+          title: Name
+          type: string
+        path:
+          default: ''
+          title: Path
+          type: string
+        reason:
+          default: ''
+          title: Reason
+          type: string
+        status:
+          title: Status
+          type: string
+      required:
+      - name
+      - status
+      - reason
+      - path
+      title: ImportItemOut
+      type: object
+    ImportReportOut:
+      description: |-
+        What a structured import did, part by part (spec knowledge "Import a
+        Confluence page as a readable source with its attachments").
+      properties:
+        attachments:
+          items:
+            $ref: '#/components/schemas/ImportItemOut'
+          title: Attachments
+          type: array
+        body:
+          title: Body
+          type: string
+        complete:
+          title: Complete
+          type: boolean
+        macros:
+          items:
+            $ref: '#/components/schemas/ImportItemOut'
+          title: Macros
+          type: array
+        warnings:
+          items:
+            type: string
+          title: Warnings
+          type: array
+      required:
+      - body
+      - attachments
+      - macros
+      - warnings
+      - complete
+      title: ImportReportOut
+      type: object
     IngestedDocumentOut:
       properties:
         converter:
@@ -1412,9 +1496,31 @@ components:
         description:
           title: Description
           type: string
+        files:
+          items:
+            type: string
+          title: Files
+          type: array
+        page_id:
+          default: ''
+          title: Page Id
+          type: string
         path:
           title: Path
           type: string
+        preview:
+          default: false
+          title: Preview
+          type: boolean
+        replaces:
+          items:
+            type: string
+          title: Replaces
+          type: array
+        report:
+          anyOf:
+          - $ref: '#/components/schemas/ImportReportOut'
+          - type: 'null'
         title:
           title: Title
           type: string
@@ -1423,6 +1529,11 @@ components:
       - title
       - description
       - converter
+      - report
+      - page_id
+      - replaces
+      - files
+      - preview
       title: IngestedDocumentOut
       type: object
     LinkRefOut:
@@ -1430,6 +1541,17 @@ components:
         ambiguous:
           default: false
           title: Ambiguous
+          type: boolean
+        kind:
+          default: wiki
+          enum:
+          - wiki
+          - path
+          title: Kind
+          type: string
+        outside:
+          default: false
+          title: Outside
           type: boolean
         path:
           anyOf:
@@ -1443,6 +1565,8 @@ components:
       - target
       - path
       - ambiguous
+      - kind
+      - outside
       title: LinkRefOut
       type: object
     PageRefOut:

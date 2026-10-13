@@ -8,9 +8,11 @@ disk — there is no second copy to keep in sync.
 A walk sees every visible file under a collection and says what each is — a
 page, a source or a plain file (``paths.kind_of``) — with a page's type and
 whether a source waits, read off the collection's wiki graph (``wiki.build``).
-It never sees the hidden ``.inbox/`` — material there is not knowledge yet —
-and it never lists a ``README.md``, which is the collection's schema rather
-than content in it (see "Keep the collection README out of the corpus").
+It never sees the hidden ``.inbox/`` — material there is not knowledge yet.
+A level lists the collection's ``README.md`` like any other root file, but no
+count, catalogue walk or check treats it as a page or a source, because it is
+the collection's schema rather than content in it (see "Keep the collection
+README out of the corpus").
 """
 
 from __future__ import annotations
@@ -236,7 +238,10 @@ def list_level(relpath: str) -> CatalogueLevel:
                     file_count=count_files(child),
                 )
             )
-        elif is_listed(child.name) and not is_collection_readme(child):
+        elif is_listed(child.name):
+            # The README is listed too, as the plain file it is: a person browses
+            # and opens a collection's own files — its README, an index, a log —
+            # where they are. It is never a page or a source and never counted.
             files.append(_file_entry(child, graph))
     return CatalogueLevel(
         path=relpath.strip("/"),
@@ -252,8 +257,9 @@ def walk_files(directory: pathlib.Path) -> tuple[FileEntry, ...]:
     The catalogue a skill carries is a whole collection at once (see "Merge the
     manual and the catalogue in the skill body"), unlike the level-at-a-time
     listing a human surface pages through — so this is the shape that builds
-    it. A Markdown file outside ``pages/`` and ``sources/`` is listed as a plain
-    file until the sweep files it into ``pages/``.
+    it. A Markdown file outside ``pages/`` and ``sources/`` — an ``index.md``
+    or a ``log.md`` at the root, a note in a folder of the person's own — is
+    listed as a plain file where it is: nothing moves it.
     """
     if not directory.is_dir():
         return ()

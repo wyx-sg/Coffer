@@ -11,8 +11,9 @@ different layer's job.
 from __future__ import annotations
 
 import pathlib
-from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from typing import Any, Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,70 @@ class ConvertedImage:
 
     name: str
     data: bytes
+
+
+@dataclass(frozen=True)
+class ConvertedFile:
+    """Any other file a conversion keeps beside its source, under the
+    folder the conversion names (:attr:`Conversion.asset_folder`): an
+    attachment the document refers to, a diagram's source, the raw form the
+    readable Markdown was made from. The Markdown already links it by
+    ``../assets/<folder>/<name>``."""
+
+    name: str
+    data: bytes
+
+
+#: How each part of an import ended (``ImportItem.status``).
+ITEM_KEPT = "kept"
+ITEM_CONVERTED = "converted"
+ITEM_SOURCE_KEPT = "source_kept"
+ITEM_DROPPED = "dropped"
+ITEM_MISSING = "missing"
+ITEM_UNSUPPORTED = "unsupported"
+ITEM_SKIPPED = "skipped"
+
+
+@dataclass(frozen=True)
+class ImportItem:
+    """One attachment, embed or macro of an imported document, and how it
+    ended: ``kept`` beside the source, ``converted`` into the Markdown,
+    ``source_kept`` (a diagram's source kept, no picture of it), ``dropped``
+    (generated content such as a table of contents), ``missing`` (it could not
+    be had: not downloaded, behind someone else's permission), ``unsupported``
+    (Coffer does not read it) or ``skipped`` (not referenced by the document)."""
+
+    name: str
+    status: str
+    reason: str = ""
+    #: Where it is kept, relative to the source, when it is.
+    path: str = ""
+
+
+#: ``ImportReport.body``: every part of the text was read, or some was not.
+BODY_CONVERTED = "converted"
+BODY_PARTIAL = "partial"
+
+
+@dataclass(frozen=True)
+class ImportReport:
+    """What an import of a structured document did, part by part, so a partial
+    import is never reported as a plain success (spec knowledge "Import a
+    Confluence page as a readable source with its attachments")."""
+
+    body: str = BODY_CONVERTED
+    attachments: tuple[ImportItem, ...] = ()
+    macros: tuple[ImportItem, ...] = ()
+    warnings: tuple[str, ...] = ()
+
+    @property
+    def complete(self) -> bool:
+        """Whether nothing was left behind: the body converted whole and no
+        attachment or macro is missing or unsupported."""
+        bad = {ITEM_MISSING, ITEM_UNSUPPORTED}
+        return self.body == BODY_CONVERTED and not any(
+            item.status in bad for item in (*self.attachments, *self.macros)
+        )
 
 
 @dataclass(frozen=True)
@@ -44,6 +109,18 @@ class Conversion:
     converter: str
     #: The pictures the Markdown refers to by name, in order of appearance.
     images: tuple[ConvertedImage, ...] = ()
+    #: Frontmatter the document carried or the converter read off it — its
+    #: own title, where it came from, its version — kept on the source. Never
+    #: the keys Coffer writes itself (``actor``, the timestamps).
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+    #: Other files kept beside the source, in :attr:`asset_folder`.
+    files: tuple[ConvertedFile, ...] = ()
+    #: The folder under ``assets/`` the conversion's files go in, when the
+    #: converter names it (a Confluence page by its id and version); ``None``
+    #: lets the upload name it.
+    asset_folder: str | None = None
+    #: Part by part, what a structured import did; ``None`` for a plain file.
+    report: ImportReport | None = None
 
 
 class UnsupportedDocument(Exception):  # noqa: N818 - carries the rejected type, not an "...Error"

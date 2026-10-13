@@ -1,6 +1,7 @@
 // frontend/src/lib/api/fs.ts — local filesystem browse + open/reveal through
 // the loopback daemon (spec daemon "Browse folders without
-// reading files", "Open and reveal existing absolute paths"). A browser can't
+// reading files", "Open and reveal existing absolute paths", "Open web links
+// in the default browser"). A browser can't
 // read absolute paths or reach the OS, but the daemon — always on the user's own
 // machine — can (ADR daemon-proxies-os-file-actions). `browse` backs the web folder picker; `open`/`reveal`
 // back the read-only file viewers' "open in editor" / "reveal in file manager".
@@ -37,6 +38,12 @@ export const fsApi = {
   /** Select / reveal `path` in the OS file manager. */
   reveal: (path: string): Promise<void> =>
     unwrapVoid(getApiClient().POST("/fs/reveal", { body: { path } })),
+
+  /** Open a web link (`http`, `https`, `mailto`) in the default browser —
+   *  what a link in a document does in the desktop app, whose webview opens
+   *  no window of its own (spec daemon "Open web links in the default browser"). */
+  openUrl: (url: string): Promise<void> =>
+    unwrapVoid(getApiClient().POST("/fs/open-url", { body: { url } })),
 
   /**
    * Open the host's native folder dialog (via the daemon) and return the chosen

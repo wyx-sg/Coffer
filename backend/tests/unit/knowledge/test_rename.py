@@ -160,7 +160,7 @@ async def test_a_collection_the_service_can_reach_is_the_renamed_one(
 
     assert await service.collection_names() == ["account"]
     [level] = [await service.list_level("account")]
-    assert [f.path for f in level.files] == ["account/session-facts.md"]
+    assert [f.path for f in level.files] == ["account/README.md", "account/session-facts.md"]
 
 
 @pytest.mark.asyncio

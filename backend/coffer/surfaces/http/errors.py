@@ -225,6 +225,9 @@ _STATUS: dict[str, int] = {
     # Ingestion (spec knowledge "Bound uploads and leave nothing behind on
     # failure"): named the limit, refused before any conversion or write.
     "KNOWLEDGE_UPLOAD_TOO_LARGE": 413,
+    # Importing a page twice (spec knowledge "Import a Confluence page as a
+    # readable source with its attachments"): replaced only when asked.
+    "KNOWLEDGE_SOURCE_EXISTS": 409,
     "KNOWLEDGE_ERROR": 400,
     # Upkeep passes (memory's distil). A second pass over a
     # target one is already rewriting is refused, not queued — the surface

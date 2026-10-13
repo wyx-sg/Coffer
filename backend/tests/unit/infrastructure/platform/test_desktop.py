@@ -167,3 +167,21 @@ def test_editor_elsewhere_is_found_on_path(monkeypatch, host):
     assert desktop.editor_launch_value(app_bundle="Zed", command="zed") is None
     # A GUI-only (bundle-only) editor is never offered off macOS.
     assert desktop.editor_launch_value(app_bundle="Nova", command=None) is None
+
+
+# --- web links -----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("platform", "argv"),
+    [
+        ("darwin", ["open"]),
+        ("linux", ["xdg-open"]),
+        # Never `cmd /c start`: cmd reads the query string's `&` as a separator.
+        ("win32", ["rundll32", "url.dll,FileProtocolHandler"]),
+    ],
+)
+def test_a_web_link_opens_in_the_default_browser(monkeypatch, platform, argv):
+    monkeypatch.setattr("sys.platform", platform)
+    url = "https://example.com/a?b=1&c=2"
+    assert desktop.url_command(url) == [*argv, url]

@@ -10,6 +10,8 @@ tidy are commands.
 
 from __future__ import annotations
 
+import base64
+import json
 from pathlib import Path
 
 import typer
@@ -142,13 +144,30 @@ knowledge = group("knowledge")
 def upload(
     collection: str = typer.Argument(..., help="The collection's folder name"),
     files: list[Path] = typer.Argument(..., help="Files to keep as sources"),
+    replace: bool = typer.Option(
+        False, "--replace", help="Import a page already imported again; the older source is kept"
+    ),
+    preview: bool = typer.Option(
+        False, "--preview", help="Show what the import would do and write nothing"
+    ),
+    attachments: Path | None = typer.Option(
+        None,
+        "--attachments",
+        help="A folder of a Confluence page's downloaded attachments, by file name",
+    ),
     as_json: bool = _io.json_option(),
 ) -> None:
-    """Upload files into a collection; each is kept as a Markdown source."""
+    """Upload files into a collection; each is kept as a Markdown source.
+
+    A Confluence page exported as JSON is imported with its attachments: the
+    ones the export carries, and with ``--attachments`` the ones in that folder.
+    """
     results = []
     for path in files:
         try:
             data = path.expanduser().read_bytes()
+            if attachments is not None:
+                data = _with_attachments(data, attachments.expanduser())
         except OSError as e:
             _io.fail(
                 "CLI_INVALID_INPUT",
@@ -162,7 +181,30 @@ def upload(
                 "/knowledge/upload",
                 as_json=as_json,
                 files={"file": (path.name, data)},
-                form={"collection": collection},
+                form={
+                    "collection": collection,
+                    "replace": str(replace).lower(),
+                    "preview": str(preview).lower(),
+                },
             )
         )
     _io.emit(results, as_json=as_json)
+
+
+def _with_attachments(data: bytes, folder: Path) -> bytes:
+    """A Confluence page export with each listed attachment it does not carry
+    filled in from ``folder``, when a file of that name is there. Anything
+    that is not such an export is sent as it is."""
+    try:
+        doc = json.loads(data.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return data
+    if not isinstance(doc, dict) or doc.get("kind") != "confluence.page":
+        return data
+    for item in doc.get("attachments") or []:
+        if not isinstance(item, dict) or item.get("dataBase64") or not item.get("name"):
+            continue
+        candidate = folder / Path(str(item["name"])).name
+        if candidate.is_file():
+            item["dataBase64"] = base64.b64encode(candidate.read_bytes()).decode("ascii")
+    return json.dumps(doc, ensure_ascii=False).encode("utf-8")

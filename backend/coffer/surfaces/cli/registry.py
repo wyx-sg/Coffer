@@ -85,6 +85,7 @@ EXEMPT: dict[tuple[str, str], tuple[Category, str]] = {
     ("GET", "/fs/terminals"): ("window", "which terminals the Open in… menu offers"),
     ("POST", "/fs/open"): ("window", "opens a file in the person's editor"),
     ("POST", "/fs/reveal"): ("window", "reveals a file in Finder"),
+    ("POST", "/fs/open-url"): ("window", "opens a web link in the default browser"),
     ("POST", "/fs/terminal"): ("window", "opens a terminal window for the person"),
     ("POST", "/fs/pick-folder"): ("window", "a native folder picker for the person"),
     ("POST", "/sync/join-choices/editor"): ("window", "opens a conflicting file in the editor"),
