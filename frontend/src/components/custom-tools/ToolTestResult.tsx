@@ -10,7 +10,6 @@ import { Check, CircleAlert } from "lucide-react";
 import { AgentHandoff } from "@/components/handoff/AgentHandoff";
 import { ReplaceSecretDialog } from "@/components/secret/ReplaceSecretDialog";
 import { useSecretChoices } from "@/components/secret/useSecretChoices";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { CustomToolTestOut } from "@/lib/api/customTools";
@@ -64,10 +63,7 @@ function ResponseTabs({ result, cutAt }: { result: CustomToolTestOut; cutAt: str
     <Tabs defaultValue="body">
       <TabsList className="h-8">
         <TabsTrigger value="body">{t("customTools.test.bodyTab")}</TabsTrigger>
-        <TabsTrigger value="headers">
-          {t("customTools.test.responseHeaders")}
-          <Badge variant="secondary">{headers.length}</Badge>
-        </TabsTrigger>
+        <TabsTrigger value="headers">{t("customTools.test.responseHeaders")}</TabsTrigger>
       </TabsList>
       <TabsContent value="body" className="mt-3">
         {body}
