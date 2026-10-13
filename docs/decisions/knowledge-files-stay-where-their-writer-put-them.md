@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-10-13
 **Deciders**: Yuxing Wu
-**Related**: [Knowledge Is a Wiki of Pages Compiled From Kept Sources](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md); [Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](knowledge-stays-current-through-flags-coffer-computes.md); [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md); [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md); [Confluence Pages Import as Readable Sources With Their Attachments](confluence-pages-import-as-readable-sources.md); spec knowledge "Sweep the knowledge root", "Link pages by slug or relative path and check every link", "Check a collection for what needs attention"; OpenSpec change `respect-knowledge-file-locations-and-import-confluence`
+**Related**: [Knowledge Is a Wiki of Pages Compiled From Kept Sources](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md); [Knowledge Stays Current Through Flags Coffer Computes and an Agent Clears](knowledge-stays-current-through-flags-coffer-computes.md); [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md); [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md); [Confluence Pages Import as Readable Sources With Their Attachments](confluence-pages-import-as-readable-sources.md); spec knowledge "Sweep the knowledge root on its mechanical duties", "Link pages by slug or relative path and check every link", "Check a collection mechanically on every read"; OpenSpec change `respect-knowledge-file-locations-and-import-confluence`
 
 ## Context
 
