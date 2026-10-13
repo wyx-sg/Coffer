@@ -21,7 +21,8 @@ import { CodeView } from "@/components/preview/CodeView";
 import { Drawer } from "@/components/Drawer";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { describeActivity } from "@/lib/activity/activityText";
+import type { components } from "@/lib/api/types";
+import { useActivitySentence } from "@/lib/hooks/useActivitySentence";
 import {
   callServerLabel,
   isSecretUse,
@@ -43,10 +44,16 @@ import { EventCell, SourceIcon, type AgentLook } from "./activityCells";
 import { CallBody, ChangeBody, DaemonBody } from "./recordBodies";
 import { Section } from "@/components/Section";
 
-function titleOf(t: TFunction, record: ActivityRecord): string {
+type AuditEntry = components["schemas"]["AuditEntryOut"];
+
+function titleOf(
+  t: TFunction,
+  record: ActivityRecord,
+  describeEntry: (entry: AuditEntry) => string,
+): string {
   if (record.source === "call")
     return `${callServerLabel(record.call)}.${record.call.capability_key}`;
-  if (record.source === "change") return describeActivity(t, record.entry);
+  if (record.source === "change") return describeEntry(record.entry);
   return recordLogger(record) || t("activity.drawer.kinds.daemon");
 }
 
@@ -92,6 +99,7 @@ interface Props {
 
 export function RecordDrawer({ record, rows, agents, transports, onSelect, onClose }: Props) {
   const { t, i18n } = useTranslation();
+  const describeEntry = useActivitySentence();
   const { toast } = useToast();
   const index = rows.findIndex((r) => r.key === record.key);
   const previous = index > 0 ? rows[index - 1] : undefined;
@@ -165,7 +173,7 @@ export function RecordDrawer({ record, rows, agents, transports, onSelect, onClo
     <Drawer
       open
       onOpenChange={(open) => !open && onClose()}
-      title={titleOf(t, record)}
+      title={titleOf(t, record, describeEntry)}
       subtitle={when ? `${kind} · ${when}` : kind}
       onPrevious={() => previous && onSelect(previous.key)}
       onNext={() => next && onSelect(next.key)}

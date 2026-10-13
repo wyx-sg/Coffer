@@ -51,6 +51,7 @@ from coffer.domain.secrets import (
 from coffer.infrastructure.secret.plaintext_scan import skills_citing_secrets
 from coffer.infrastructure.skill.master_store import default_master_root as skills_root
 from coffer.infrastructure.sync.local_state import JsonRemoteStore
+from coffer.surfaces.http import secret_notes_wiring as notes_wiring
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import (
     get_actor,
@@ -60,7 +61,6 @@ from coffer.surfaces.http.dependencies import (
 from coffer.surfaces.http.errors import error_response
 from coffer.surfaces.http.secret_boundary_wiring import approval_applied, get_secret_boundary
 from coffer.surfaces.http.secret_composition import get_secret_store
-from coffer.surfaces.http.secret_notes_wiring import get_secret_notes, optional_secret_notes
 from coffer.surfaces.http.secret_schemas import (
     SecretBindingOut,
     SecretCiterOut,
@@ -118,10 +118,10 @@ async def set_secret(
     await audit.record(
         AuditEventType.SECRET_SET.value,
         actor=actor,
-        details={"ref": ref, "replaced": replaced},
+        details=notes_wiring.labelled({"ref": ref, "replaced": replaced}, body.label),
     )
     if body.label or body.description or body.created_for or minted:
-        notes = get_secret_notes()
+        notes = notes_wiring.get_secret_notes()
 
         def merge(before: SecretNote | None) -> SecretNote:
             before = before or SecretNote()
@@ -165,7 +165,7 @@ async def list_refs(
     value is decrypted, so nothing is audited.
     """
     cited = await resources.cited_secret_refs()
-    notes = optional_secret_notes()
+    notes = notes_wiring.optional_secret_notes()
     noted = await asyncio.to_thread(notes.all) if notes is not None else {}
     rows_stored = [
         row
@@ -386,6 +386,8 @@ async def delete_secret(
         )
     # to_thread: the removal is file IO and, for a vault ref, a git commit
     # under the vault's write lock — nothing for the event loop.
+    # Its notes go with it, so the name it had is taken from before.
+    details = notes_wiring.labelled({"ref": ref}, notes_wiring.secret_label_of(ref))
     removed = await asyncio.to_thread(store.remove, ref)
     # 204 either way, but only a real removal is a lifecycle change worth an
     # audit row (spec secret "Delete a secret idempotently").
@@ -393,6 +395,6 @@ async def delete_secret(
         await audit.record(
             AuditEventType.SECRET_DELETED.value,
             actor=actor,
-            details={"ref": ref},
+            details=details,
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -50,8 +50,17 @@ class AuditService:
     already has the row.
     """
 
-    def __init__(self, repo: AuditRepo) -> None:
+    def __init__(
+        self,
+        repo: AuditRepo,
+        *,
+        enrich: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    ) -> None:
         self._repo = repo
+        # Names what a row's details only point at (a secret's ref) with what a
+        # person called it at that moment, so the trail still reads after a
+        # rename or a deletion. Supplied by the composition root.
+        self._enrich = enrich
 
     async def record(
         self,
@@ -80,6 +89,8 @@ class AuditService:
         invocation log and the daemon log by one trace id").
         """
         bound = correlation.current()
+        if details and self._enrich is not None:
+            details = self._enrich(details)
         await self._repo.insert(
             AuditEntry(
                 id=None,

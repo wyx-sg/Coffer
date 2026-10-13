@@ -86,7 +86,11 @@ def test_a_label_and_description_change_nothing_that_cites_the_secret(d: Boundar
     assert got["config"]["transport"]["secret_refs"] == {"JIRA_TOKEN": ref}
     assert d.resolve_for(server) == {"JIRA_TOKEN": VALUE} and d.pending() == []
     entry = d.audit("secret_notes_updated")[0]
-    assert entry["details"] == {"ref": ref, "fields": ["label", "description"]}
+    assert entry["details"] == {
+        "ref": ref,
+        "fields": ["label", "description"],
+        "ref_label": "Jira PAT",
+    }
     # One field left out stays; an empty one is removed; a long one is refused.
     keep = d.client.put("/api/v1/secrets/notes", json={"ref": ref, "description": ""})
     assert keep.json()["label"] == "Jira PAT" and keep.json()["description"] is None
@@ -180,6 +184,28 @@ def test_a_server_start_and_a_coffer_run_each_show_as_a_use(d: BoundaryDaemon) -
     assert (run["argv0"], run["cwd"]) == ("psql", "/tmp/work")
     assert "destination_kind" not in run
     assert VALUE not in str(d.audit("secret_resolved"))
+
+
+@pytest.mark.acceptance(spec="secret", scenario="Activity names a secret by its label, not its id")
+def test_a_use_records_the_label_the_secret_had(d: BoundaryDaemon) -> None:
+    named = _mint_for_resource(d)
+    put = d.client.put("/api/v1/secrets/notes", json={"ref": named, "label": "Git token"})
+    assert put.status_code == 200, put.text
+    server = d.register_stdio("svc", "svc-mcp", {"SVC_TOKEN": named})
+    d.resolve_for(server)
+    _eventually(lambda: len(d.audit("secret_resolved")) >= 1)
+    assert d.audit("secret_resolved")[0]["details"]["ref_label"] == "Git token"
+
+    # The label rides on a delete too, though the secret's notes go with it.
+    spare = _add(d, "Spare")["ref"]
+    assert d.client.delete(f"/api/v1/secrets/{spare}").status_code == 204
+    assert d.audit("secret_deleted")[0]["details"]["ref_label"] == "Spare"
+
+    # A secret nobody labelled records no label, so Activity reads it as unnamed.
+    bare = _mint_for_resource(d)
+    assert "ref_label" not in next(
+        e["details"] for e in d.audit("secret_set") if e["details"]["ref"] == bare
+    )
 
 
 @pytest.mark.acceptance(spec="secret", scenario="a new citation shows without a rescan")

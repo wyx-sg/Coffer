@@ -459,13 +459,13 @@ acceptance("web-ui", "a secret Coffer hands to a server reads where it went", as
   render(wrap(<ActivityPage />, ["/activity?tab=uses"]));
 
   const handoff = await screen.findByText(
-    "Handed secret GITHUB_TOKEN to MCP server github (environment variable GITHUB_TOKEN)",
+    "Handed secret “GITHUB_TOKEN” to MCP server github (environment variable GITHUB_TOKEN)",
   );
   const row = handoff.closest("tr") as HTMLElement;
   expect(within(row).getByText("×2")).toBeInTheDocument();
   expect(within(row).getByText("Coffer")).toBeInTheDocument();
   expect(
-    screen.getByText("Handed secret OPENAI_KEY to coffer run: python, in ~/proj"),
+    screen.getByText("Handed secret “OPENAI_KEY” to coffer run: python, in ~/proj"),
   ).toBeInTheDocument();
   expect(screen.queryByText("Added filesystem")).not.toBeInTheDocument();
 
@@ -493,7 +493,7 @@ acceptance("web-ui", "a change names what it changed", async () => {
   });
   render(wrap(<ActivityPage />, ["/activity?tab=changes"]));
   expect(
-    await screen.findByText("Stored secret SENTRY_TOKEN, replacing its value"),
+    await screen.findByText("Stored secret “SENTRY_TOKEN”, replacing its value"),
   ).toBeInTheDocument();
   expect(screen.getByText("Synced: pulled 3 files, pushed 1")).toBeInTheDocument();
   expect(screen.getByText("Edited vault file knowledge/notes/x.md on disk")).toBeInTheDocument();
@@ -787,7 +787,8 @@ acceptance("web-ui", "each activity tab reads its owner's route", async () => {
     daemon: [DAEMON_RECORD],
   });
   // The three owners' routes, plus the agent list the By pill offers and the
-  // attention list every page header reads for the items ignored on it.
+  // attention list every page header reads for the items ignored on it, and the
+  // secret list a sentence names its secrets from.
   // Anything else would be a route of the Activity page's own.
   const ALLOWED = new Set([
     "/audit",
@@ -796,6 +797,7 @@ acceptance("web-ui", "each activity tab reads its owner's route", async () => {
     "/resources",
     "/attention",
     "/retention/policies",
+    "/secrets",
   ]);
   const requested = () => get.mock.calls.map((c: unknown[]) => c[0] as string);
 
