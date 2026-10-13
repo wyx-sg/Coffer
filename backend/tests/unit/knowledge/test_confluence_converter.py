@@ -11,20 +11,22 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import urllib.parse
+import zlib
 
 import pytest
 
 from coffer.domain.knowledge.converter import (
     BODY_CONVERTED,
+    ITEM_CONVERTED,
     ITEM_DROPPED,
     ITEM_KEPT,
     ITEM_MISSING,
     ITEM_SKIPPED,
-    ITEM_SOURCE_KEPT,
     ITEM_UNSUPPORTED,
 )
-from coffer.infrastructure.knowledge.converters.confluence import markers, page, storage
+from coffer.infrastructure.knowledge.converters.confluence import diagrams, markers, page, storage
 from coffer.infrastructure.knowledge.converters.confluence.context import Context, safe_name
 from coffer.infrastructure.knowledge.converters.passthrough_converter import PassthroughConverter
 from coffer.infrastructure.knowledge.converters.registry import default_registry
@@ -182,12 +184,15 @@ def test_pictures_that_could_not_be_kept_are_reported_and_marked() -> None:
     assert embed.status == ITEM_MISSING and "Google Drive" in embed.reason
 
 
-@pytest.mark.acceptance(spec="knowledge", scenario="a diagram's source is kept beside the source")
-def test_draw_io_diagrams_in_the_page_are_kept_as_drawio_files() -> None:
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="a diagram shows as its picture, its link or its source"
+)
+def test_draw_io_diagrams_show_as_their_picture_or_a_link() -> None:
     link = "https://viewer.diagrams.net/?lightbox=1#R" + urllib.parse.quote(_MXFILE)
     inline = json.dumps({"xml": _MXFILE})
     xml = (
-        f'<p><a href="{link.replace("&", "&amp;")}">https://viewer.diagrams.net/long</a></p>'
+        _macro("drawio", diagramName="flow")
+        + f'<p><a href="{link.replace("&", "&amp;")}">{link.replace("&", "&amp;")}</a></p>'
         + _macro(
             "html",
             f"<ac:plain-text-body><![CDATA[<div class=\"mxgraph\" data-mxgraph='{inline}'></div>"
@@ -195,27 +200,34 @@ def test_draw_io_diagrams_in_the_page_are_kept_as_drawio_files() -> None:
             "]]></ac:plain-text-body>",
         )
     )
-    md, ctx = _convert(xml)
+    md, ctx = _convert(xml, **{"flow.png": b"png", "flow": b"<mxfile/>"})
 
-    kept = {f.name: f.data.decode() for f in ctx.files}
-    assert set(kept) == {"diagram-1.drawio", "diagram-2.drawio"}
-    assert all(v == _MXFILE for v in kept.values())
+    # An attached diagram shows its picture; its source is not taken along.
+    assert "![flow](../assets/confluence-1-v2/flow.png)" in md
+    assert [f.name for f in ctx.files] == ["flow.png"]
+    # The page's link stays the link it was, read as what it is.
+    assert f"[draw.io diagram]({link})" in md
+    # A diagram drawn in the page is a link that opens it, the diagram in its fragment.
+    made = re.findall(r"\[draw\.io diagram\]\((https://viewer\.diagrams\.net/[^)\s]+)\)", md)
+    assert len(made) == 2 and made[1].startswith(diagrams.VIEWER)
+    packed = base64.b64decode(urllib.parse.unquote(made[1][len(diagrams.VIEWER) :]))
+    assert urllib.parse.unquote(zlib.decompress(packed, -15).decode()) == _MXFILE
     assert "<script" not in md and "viewer-static" not in md
-    assert "(../assets/confluence-1-v2/diagram-" in md
-    assert {i.status for i in ctx.macro_items} == {ITEM_SOURCE_KEPT}
 
 
-@pytest.mark.acceptance(spec="knowledge", scenario="a diagram's source is kept beside the source")
-def test_a_plantuml_macro_keeps_its_source() -> None:
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="a diagram shows as its picture, its link or its source"
+)
+def test_a_plantuml_macro_shows_its_source() -> None:
     xml = _macro(
         "plantuml",
         "<ac:plain-text-body><![CDATA[@startuml\nA -> B\n@enduml]]></ac:plain-text-body>",
     )
     md, ctx = _convert(xml)
 
-    assert [f.name for f in ctx.files] == ["plantuml-1.puml"]
-    assert "A -> B" in md
-    assert ctx.macro_items[0].status == ITEM_SOURCE_KEPT
+    assert ctx.files == []
+    assert "```plantuml\n@startuml\nA -> B\n@enduml\n```" in md
+    assert ctx.macro_items[0].status == ITEM_CONVERTED
 
 
 def test_names_are_made_safe_and_never_collide() -> None:
@@ -268,9 +280,9 @@ def test_a_page_export_converts_with_its_origin_raw_storage_and_report() -> None
     origin = conversion.metadata["origin"]
     assert origin["page_id"] == "42" and origin["version"] == 7
     assert origin["url"].endswith("pageId=42")
-    assert origin["raw"] == "../assets/confluence-42-v7/storage.xml"
+    assert "raw" not in origin
     names = {f.name for f in conversion.files}
-    assert names == {"a.png", "storage.xml"}
+    assert names == {"a.png"}
     report = conversion.report
     assert report is not None and report.body == BODY_CONVERTED
     assert {i.name: i.status for i in report.attachments} == {
@@ -342,5 +354,6 @@ async def test_markdown_frontmatter_is_read_not_passed_on() -> None:
     assert not conversion.markdown.startswith("---")
     assert conversion.metadata["version"] == 4
     assert conversion.asset_folder == "confluence-5-v4"
-    assert [f.name for f in conversion.files] == ["storage.xml"]
+    assert conversion.files == ()
+    assert conversion.report is not None
     assert "> **Info**" in conversion.markdown

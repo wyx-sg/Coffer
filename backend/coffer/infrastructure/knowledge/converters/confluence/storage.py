@@ -126,19 +126,13 @@ def _task_list(soup: BeautifulSoup, tag: Tag) -> None:
     tag.replace_with(items)
 
 
-def _viewer_links(soup: BeautifulSoup, ctx: Context) -> None:
-    """A draw.io viewer link carrying its diagram (``#R``) keeps the diagram
-    as a file and points at it, instead of a URL thousands of characters long."""
+def _viewer_links(soup: BeautifulSoup) -> None:
+    """A draw.io viewer link stays the link it was; one that reads as its own
+    address (thousands of characters, the diagram in it) reads as what it is."""
     for anchor in soup.find_all("a", href=True):
-        xml = diagrams.from_viewer_link(str(anchor["href"]))
-        if xml is None:
-            continue
-        n = ctx.next_number("diagram")
-        link = ctx.add_file(f"diagram-{n}.drawio", xml.encode("utf-8"))
-        ctx.macro("draw.io link", "source_kept", "the diagram the link carried; source kept", link)
-        if link:
-            anchor["href"] = link
-        anchor.string = f"draw.io diagram (diagram-{n}.drawio)"
+        text = anchor.get_text(" ").strip()
+        if diagrams.is_viewer(str(anchor["href"])) and (not text or diagrams.is_viewer(text)):
+            anchor.string = "draw.io diagram"
 
 
 def _confluence_elements(soup: BeautifulSoup, ctx: Context) -> None:
@@ -263,7 +257,7 @@ def convert(storage: str, ctx: Context) -> str:
     soup = parse(storage)
     macros.rewrite(soup, ctx)
     _confluence_elements(soup, ctx)
-    _viewer_links(soup, ctx)
+    _viewer_links(soup)
     return to_markdown(soup)
 
 

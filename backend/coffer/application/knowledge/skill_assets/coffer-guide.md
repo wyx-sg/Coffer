@@ -53,8 +53,9 @@ wiki per collection, which the developer and agents like you write together:
   a page that needs the picture. An uploaded source's `original` names the file
   it came from, which stays on the developer's Mac and is not in the collection.
   An imported Confluence page keeps its folder there too
-  (`confluence-<page id>-v<version>/`): its attachments, the source of each
-  diagram (`.drawio`, `.puml`) and the page's raw storage (`storage.xml`).
+  (`confluence-<page id>-v<version>/`): its attachments. A draw.io diagram is
+  its picture or a viewer link, a PlantUML one a `plantuml` code block. Its
+  export is its `original`, on the Mac.
 - Anything else is the collection's own: an `index.md`, a `log.md` or a
   `schema.md` at its root, a folder the developer keeps. Coffer never moves or
   renames it. Its links count (an index's links make the pages it lists
@@ -185,7 +186,7 @@ To bring in a **Confluence page**, export it with the developer's Confluence
 tool as JSON, with its attachments, and run
 `coffer knowledge upload <collection> <page>.json` (`--attachments <dir>` adds
 attachments downloaded beside it). Coffer converts its macros, keeps its
-attachments and diagram sources, and names what it could not keep in the
+attachments, and names what it could not keep in the
 source's `import_report`; `--preview` shows all of that and writes nothing. A
 page imported before is refused until you add `--replace`, which keeps the
 older source and marks it `superseded_by` the new one. The source's `origin`

@@ -1,6 +1,7 @@
 """One Confluence page — its storage body, its attachments and what it is — as
-a source: readable Markdown, the attachments it refers to, its raw storage and
-a report of every part (spec knowledge "Import a Confluence page as a readable
+a source: readable Markdown, the attachments it refers to and a report of
+every part. The export itself is kept on this Mac as the upload's original,
+like any other upload's (spec knowledge "Import a Confluence page as a readable
 source with its attachments").
 
 Two shapes of page export are read, both JSON, sniffed by content rather than
@@ -30,10 +31,8 @@ from typing import Any
 from coffer.domain.knowledge.converter import (
     BODY_CONVERTED,
     BODY_PARTIAL,
-    ITEM_KEPT,
     ITEM_MISSING,
     ITEM_SKIPPED,
-    ITEM_SOURCE_KEPT,
     Conversion,
     ImportItem,
     ImportReport,
@@ -45,9 +44,6 @@ CONVERTER = "confluence"
 #: The frontmatter key a Confluence source records where it came from under.
 ORIGIN_KEY = "origin"
 SYSTEM = "confluence"
-RAW_NAME = "storage.xml"
-#: Files that are a diagram's source: kept when their picture is.
-_DIAGRAM_SOURCES = (".drawio", ".puml", ".plantuml")
 
 
 @dataclass(frozen=True)
@@ -149,20 +145,9 @@ def folder_for(page: Page) -> str:
 
 
 def _companions(ctx: Context, page: Page) -> None:
-    """Keep the source of a diagram whose picture was kept (``x.drawio`` for
-    ``x.drawio.png``), and say which downloaded attachments nothing refers to."""
-    kept = {i.name for i in ctx.attachment_items if i.status == ITEM_KEPT}
+    """Say which downloaded attachments nothing refers to."""
     for name in sorted(page.attachments):
-        if name in kept or any(i.name == name for i in ctx.attachment_items):
-            continue
-        if name.lower().endswith(_DIAGRAM_SOURCES) and any(k.startswith(name) for k in kept):
-            ctx.attachment(name, reason_missing="")
-            ctx.attachment_items[-1] = ImportItem(
-                name,
-                ITEM_SOURCE_KEPT,
-                "the source of a picture the page shows",
-                ctx.attachment_items[-1].path,
-            )
+        if any(i.name == name for i in ctx.attachment_items):
             continue
         ctx.attachment_items.append(ImportItem(name, ITEM_SKIPPED, "the page does not refer to it"))
     for name in page.listed:
@@ -179,7 +164,6 @@ def convert(page: Page, *, fetched_at: str | None = None) -> Conversion:
     ctx = Context(folder=folder, attachments=dict(page.attachments))
     markdown = storage.convert(page.storage, ctx)
     _companions(ctx, page)
-    raw = ctx.add_file(RAW_NAME, page.storage.encode("utf-8"))
     title = page.title or f"Confluence page {page.page_id}"
     report = ImportReport(
         body=BODY_PARTIAL if ctx.partial else BODY_CONVERTED,
@@ -195,7 +179,6 @@ def convert(page: Page, *, fetched_at: str | None = None) -> Conversion:
         "version": page.version,
         "fetched_at": fetched_at or datetime.now(UTC).replace(microsecond=0).isoformat(),
         "format": "confluence-storage",
-        "raw": raw,
     }
     return Conversion(
         markdown=f"# {title}\n\n{markdown}",

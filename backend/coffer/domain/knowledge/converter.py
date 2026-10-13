@@ -44,7 +44,6 @@ class ConvertedFile:
 #: How each part of an import ended (``ImportItem.status``).
 ITEM_KEPT = "kept"
 ITEM_CONVERTED = "converted"
-ITEM_SOURCE_KEPT = "source_kept"
 ITEM_DROPPED = "dropped"
 ITEM_MISSING = "missing"
 ITEM_UNSUPPORTED = "unsupported"
@@ -54,8 +53,7 @@ ITEM_SKIPPED = "skipped"
 @dataclass(frozen=True)
 class ImportItem:
     """One attachment, embed or macro of an imported document, and how it
-    ended: ``kept`` beside the source, ``converted`` into the Markdown,
-    ``source_kept`` (a diagram's source kept, no picture of it), ``dropped``
+    ended: ``kept`` beside the source, ``converted`` into the Markdown, ``dropped``
     (generated content such as a table of contents), ``missing`` (it could not
     be had: not downloaded, behind someone else's permission), ``unsupported``
     (Coffer does not read it) or ``skipped`` (not referenced by the document)."""

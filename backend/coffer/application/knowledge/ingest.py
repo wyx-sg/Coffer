@@ -185,8 +185,9 @@ class IngestService:
             },
         }
         name = pathlib.PurePosixPath(filename).name or "upload"
-        # A Markdown or text upload *is* its source: there is no other original.
-        keeps_original = conversion.converter != PASSTHROUGH
+        # A Markdown or text upload *is* its source: there is no other original,
+        # unless converting it rewrote it (an export's markers expanded).
+        keeps_original = conversion.converter != PASSTHROUGH or conversion.report is not None
         extra: dict[str, Any] = {k: v for k, v in meta.items() if k not in _OWNED_KEYS}
         if keeps_original:
             extra |= {originals.ORIGINAL_KEY: name, originals.ORIGINAL_SHA_KEY: sha}

@@ -7,13 +7,14 @@ from __future__ import annotations
 
 import base64
 import json
+import pathlib
 
 import pytest
 
 from coffer.application.knowledge.ingest import REPORT_KEY, IngestService
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.knowledge.errors import KnowledgeSourceExists
-from coffer.infrastructure.knowledge import fs, paths
+from coffer.infrastructure.knowledge import fs, originals, paths
 from coffer.infrastructure.knowledge.converters.registry import default_registry
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 from tests.unit.knowledge.test_ingest import _Audit, _on_disk, _Resources
@@ -76,9 +77,12 @@ async def test_a_page_becomes_one_source_with_its_files_and_report(service) -> N
     assert "![a.png](../assets/confluence-42-v7/a.png)" in body
     assert sorted(_on_disk()) == [
         "assets/confluence-42-v7/a.png",
-        "assets/confluence-42-v7/storage.xml",
         "sources/account-core.md",
     ]
+    # The export itself is the source's original, kept on this Mac only.
+    assert fm["original"] == "page.json"
+    kept = originals.local_copy(fm["original_sha256"], "page.json")
+    assert kept is not None and pathlib.Path(kept).read_bytes() == _export()
     assert result.report is not None and not result.report.complete
 
 
@@ -159,6 +163,29 @@ async def test_a_markdown_export_keeps_one_frontmatter_block(service) -> None:  
     assert fm["description"] == "Account core owns logins."
     assert fm["version"] == 7 and fm["redacted"] == "none"
     assert not body.lstrip().startswith("---")
+    # Nothing was rewritten, so the source is the upload: no other original.
+    assert "original" not in fm
     # Its page id is read from its origin URL: the same page is not imported twice.
     with pytest.raises(KnowledgeSourceExists):
         await service.ingest(collection="shopee", filename="page.json", data=_export(), actor="t")
+
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="a Markdown export's storage markers are made readable"
+)
+async def test_a_marked_up_export_keeps_its_upload_as_the_original(service) -> None:  # type: ignore[no-untyped-def]
+    data = (
+        b"# Notes\n\nBefore\n\n"
+        b"<!-- skynet-confluence-storage:v1 kind=structured-macro\n"
+        b'<ac:structured-macro ac:name="info"><ac:rich-text-body><p>Hi</p>'
+        b"</ac:rich-text-body></ac:structured-macro>\n-->\n"
+    )
+
+    result = await service.ingest(collection="shopee", filename="notes.md", data=data, actor="t")
+
+    fm, body = split_frontmatter(_raw(result.path))
+    assert "skynet-confluence-storage" not in body
+    assert fm["original"] == "notes.md"
+    kept = originals.local_copy(fm["original_sha256"], "notes.md")
+    assert kept is not None and pathlib.Path(kept).read_bytes() == data
+    assert not any(p.startswith("assets/") for p in _on_disk())

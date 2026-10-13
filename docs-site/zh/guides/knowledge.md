@@ -33,9 +33,7 @@ description: 把你和智能体对工作环境的了解，存成一个由保留�
     │   ├── gateway-design-1a2b3c4d/ ← the pictures taken out of one upload
     │   │   └── image-1.png
     │   └── confluence-12345-v7/     ← an imported Confluence page's attachments
-    │       ├── flow.drawio.png      ←   a diagram's picture, and its source:
-    │       ├── flow.drawio
-    │       └── storage.xml          ←   the page as Confluence stored it
+    │       └── flow.drawio.png      ←   a diagram's picture, as the page shows it
     ├── pages/
     │   ├── session-ownership.md     ← a page
     │   └── gateway/
@@ -45,7 +43,7 @@ description: 把你和智能体对工作环境的了解，存成一个由保留�
 
 - 知识集根目录的 **`README.md`** 是这个知识集的**纲要**。它在第一个 `##` 小节之前的第一段，就是 Coffer 所有显示知识集描述的地方用的描述，也是 `coffer-guide` 技能告诉智能体这个知识集讲什么的依据。它的**页面类型**和**规则**两节，以及它关于本知识集约定的其他内容，优先于指南的默认规则。frontmatter 里的 `verify_after_days` 决定一次核对管多久（见[需要重新核对的页面](#pages-due-a-recheck)）。它从不作为页面或来源列出，也不计数。
 - **`sources/`** 保留到达的素材：每次上传和每个放进收件箱的文件，转换成 Markdown。你上传的文件本身不放进知识集：Coffer 把它留在你上传它的那台 Mac 上（见[图片和原文件](#pictures-and-the-original-file)）。智能体读来源，从不编辑来源。
-- **`assets/`** 放 Coffer 从上传的文档里取出的图片，每次上传一个文件夹，以及导入的 Confluence 页面的附件、图表源文件和存储的页面（见[导入 Confluence 页面](#import-a-confluence-page)）。来源会链接它自己的图片，所以你读来源时能看到它们，智能体也能打开它们。它们和 Markdown 一样随知识集同步，也有历史。
+- **`assets/`** 放 Coffer 从上传的文档里取出的图片，每次上传一个文件夹，以及导入的 Confluence 页面的附件（见[导入 Confluence 页面](#import-a-confluence-page)）。来源会链接它自己的图片，所以你读来源时能看到它们，智能体也能打开它们。它们和 Markdown 一样随知识集同步，也有历史。
 - **`pages/`** 放 wiki 本身：你和你的智能体编写并保持更新的页面。智能体首先读的就是这里。
 - `pages/` 和 `sources/` 里的**文件夹**是可选的，不代表任何含义。你或你的智能体都可以创建、移动、删除它们。只有 `pages/`、`sources/` 和 `assets/` 这几个文件夹本身有含义。
 - **知识集自己的文件。** 你或你的智能体在知识集里保存的其他任何东西，比如 README 旁边的 `index.md` 或 `log.md`，或者你自己的文件夹，都留在写入的位置。它会在树里列出，它的链接会被检查，但它从不进目录、不计数，也从不要求它有类型或来源。Coffer 从不自己移动文件。
@@ -91,7 +89,7 @@ The `account-session` service owns ... see [[rate-limits|the gateway's limits]].
 
 Coffer 自己不写页面：谁写页面，谁就给它这些键，`coffer-guide` 技能就是这样教智能体的。缺少 `title`、`type` 或 `description`、既没有 `sources` 也没有 `evidence`，或者没有 `verified` 的页面照样能用；[检查](#check-a-collection)知识集时它会作为一条发现出现。
 
-来源带着 Coffer 保留它时写入的键：`title`、`description`、`actor`、`created_at`、`updated_at`；从上传的文件转换来的来源还带有 `original`（文件名）和 `original_sha256`（它的指纹），导入的 Confluence 页面则带有 `origin`（它来自哪里）和 `import_report`（导入保留了什么、漏掉了什么）。这些键请保持原样。上传的 Markdown 文件原本带的 frontmatter 会成为来源自己的 frontmatter，放在唯一的那个块里，从不作为正文里的第二个块。智能体或你还可以再加三个键，它们只描述这个来源，不改动它的内容：
+来源带着 Coffer 保留它时写入的键：`title`、`description`、`actor`、`created_at`、`updated_at`；从上传的文件转换来的来源还带有 `original`（文件名）和 `original_sha256`（它的指纹），导入的 Confluence 页面另外带有 `origin`（它来自哪里）和 `import_report`（导入保留了什么、漏掉了什么）。这些键请保持原样。上传的 Markdown 文件原本带的 frontmatter 会成为来源自己的 frontmatter，放在唯一的那个块里，从不作为正文里的第二个块。智能体或你还可以再加三个键，它们只描述这个来源，不改动它的内容：
 
 | 键 | 含义 |
 | --- | --- |
@@ -219,8 +217,8 @@ coffer knowledge upload payments account-core.json --attachments account-core-fi
 `--attachments` 按 Confluence 里的文件名，加上在导出文件旁边下载的一个文件夹里的文件。Coffer 把页面变成一个你读得懂的来源：
 
 - **正文读起来就是这个页面。** 每个宏都变成页面读者看到的样子：只负责排版内容的宏（编号标题、分节、分栏、展开、标签页）交回它的内容，信息、备注、提示或警告面板变成带标签的引用，代码块保留它的语言，带合并单元格的表格仍是表格。Confluence 从别处生成的内容，比如目录或子页面列表，会被略去并注明。读来源时看不到任何 Confluence 自己的标记。
-- **附件会保留。** 页面用到的图片和文件放进 `assets/confluence-<page id>-v<version>/`，来源链接它们。draw.io 图表在图片旁边保留它的 `.drawio` 源文件，PlantUML 图表把它的文字保留为 `.puml` 文件。Coffer 不渲染任何图表，也不向任何外部服务发送任何东西。
-- **Confluence 存储的页面原样** 保存为同一文件夹里的 `storage.xml`，所以导出里的东西一样都不丢。
+- **附件会保留。** 页面用到的图片和文件放进 `assets/confluence-<page id>-v<version>/`，来源链接它们。图表按页面里原来的样子显示：作为附件的 draw.io 图表显示它的图片，draw.io 链接保持为那个链接，直接画在页面里的 draw.io 图表变成一个 **draw.io diagram** 链接，点它就在 draw.io 的查看器里打开。图表放在链接 `#` 后面的部分，浏览器从不把这部分发给服务器。PlantUML 图表以代码块显示它的源码。Coffer 不下载任何东西，不渲染任何图表，也不向任何外部服务发送任何东西。
+- **导出文件本身就是来源的原文件。** 和其他上传一样，它留在你导入它的那台 Mac 上，在保险库之外，来源标题下面一行显示**原文件**和它的名字（见[图片和原文件](#pictures-and-the-original-file)）。
 - **它来自哪里** 作为 `origin` 写进来源唯一的 frontmatter 块：Confluence URL、页面 id、空间、版本和获取时间。知识页面在来源标题下显示**来自 confluence**和指向这个页面的链接。
 - **漏掉了什么会说出来。** `import_report` 记录正文是否完整转换，并分别为附件和宏记下保留了什么、缺了什么、什么不支持，以及原因。有缺失时，上传对话框保持打开并列出它们，来源的说明行显示**部分导入**。
 
@@ -241,7 +239,7 @@ coffer knowledge upload payments account-core.json --attachments account-core-fi
 
 图片随知识集同步到你的其他 Mac，和知识集里的任何文件一样有历史。只有图片、没有文字的扫描 PDF 仍然会被拒绝。
 
-**原文件。** 你上传的文件保存在你上传它的那台 Mac 上，在保险库之外，从不同步：幻灯片、PDF 这样的原文件很大，而智能体读的是 Markdown 和图片。来源会记下它，所以在那台 Mac 上打开来源时，标题下面一行会显示**原文件**和文件名；点文件名就会用默认应用打开它，看到原来的版式。在你的其他 Mac 上，这一行写着**原文件 `<name>` 在上传的那台 Mac 上**。Markdown 或文本上传本身就是来源，所以没有要保留的原文件。
+**原文件。** 你上传的文件保存在你上传它的那台 Mac 上，在保险库之外，从不同步：幻灯片、PDF 这样的原文件很大，而智能体读的是 Markdown 和图片。来源会记下它，所以在那台 Mac 上打开来源时，标题下面一行会显示**原文件**和文件名；点文件名就会用默认应用打开它，看到原来的版式。在你的其他 Mac 上，这一行写着**原文件 `<name>` 在上传的那台 Mac 上**。Markdown 或文本上传本身就是来源，所以没有要保留的原文件，除非转换改写了它（Confluence 导出里的存储标记被转成可读内容），这时你上传的文件会像其他上传一样保留。
 
 ### 放进收件箱的文件 {#a-file-in-the-inbox}
 

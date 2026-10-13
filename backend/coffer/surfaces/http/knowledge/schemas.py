@@ -284,8 +284,8 @@ class ImportItemOut(BaseModel):
     """One attachment, embed or macro of an import, and how it ended."""
 
     name: str
-    #: ``kept``, ``converted``, ``source_kept``, ``dropped``, ``missing``,
-    #: ``unsupported`` or ``skipped``.
+    #: ``kept``, ``converted``, ``dropped``, ``missing``, ``unsupported`` or
+    #: ``skipped``.
     status: str
     reason: str = ""
     #: Where it is kept, relative to the source, when it is.

@@ -13,8 +13,8 @@ page as a readable source with its attachments"):
   body is what follows the block. Without this the block would land in the
   body under a second one, and its text in the description.
 * **Confluence storage markers.** What a Confluence export left as storage
-  inside an HTML comment is converted where it stands (``confluence.markers``),
-  and the storage itself kept beside the source for tracing.
+  inside an HTML comment is converted where it stands (``confluence.markers``);
+  the uploaded file, markers and all, is kept on this Mac as its original.
 """
 
 from __future__ import annotations
@@ -31,7 +31,6 @@ from coffer.domain.knowledge.converter import (
 )
 from coffer.infrastructure.knowledge.converters.confluence import markers
 from coffer.infrastructure.knowledge.converters.confluence.context import Context
-from coffer.infrastructure.knowledge.converters.confluence.page import RAW_NAME
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 from coffer.infrastructure.knowledge.naming import slugify
 from coffer.infrastructure.knowledge.source_imports import page_id_of
@@ -96,7 +95,6 @@ class PassthroughConverter:
         folder = _folder(meta, title, data)
         ctx = Context(folder=folder)
         expanded = markers.expand(body, ctx)
-        ctx.add_file(RAW_NAME, "\n\n".join(expanded.storage).encode("utf-8"))
         return Conversion(
             markdown=expanded.markdown,
             title=title,

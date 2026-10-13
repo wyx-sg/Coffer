@@ -7,7 +7,8 @@ macro: a macro that only arranges its body — ``numberedheadings``, ``section``
 ``column``, an ``expand`` — gives its body back, so a page wrapped whole in one
 loses nothing; ``info``, ``note``, ``tip`` and ``warning`` become a quote that
 says which; ``code`` and ``noformat`` keep their text and language; a
-``plantuml`` or draw.io diagram keeps its source as a file. Only what Confluence
+``plantuml`` diagram shows its source as code, and a draw.io diagram its
+picture or a link that opens it. Only what Confluence
 generates from the rest of the page — a table of contents, a child-page list —
 is dropped, and said so. A macro Coffer does not know keeps its body when it has
 one and is reported unsupported when it has none. Every outcome is recorded on
@@ -26,7 +27,6 @@ from coffer.domain.knowledge.converter import (
     ITEM_DROPPED,
     ITEM_KEPT,
     ITEM_MISSING,
-    ITEM_SOURCE_KEPT,
     ITEM_UNSUPPORTED,
 )
 from coffer.infrastructure.knowledge.converters.confluence import diagrams
@@ -192,11 +192,8 @@ def _plantuml(soup: BeautifulSoup, m: Tag, name: str, ctx: Context) -> list[Node
         ctx.macro(name, ITEM_UNSUPPORTED, "the diagram has no source in the page")
         ctx.partial = True
         return [_p(soup, _em(soup, "[PlantUML diagram with no source in the page]"))]
-    n = ctx.next_number("plantuml")
-    link = ctx.add_file(f"plantuml-{n}.puml", (text + "\n").encode("utf-8"))
-    ctx.macro(name, ITEM_SOURCE_KEPT, "source kept; no picture drawn", link)
-    note = _p(soup, _em(soup, "PlantUML source, kept as "), _a(soup, link, f"plantuml-{n}.puml"))
-    return [note, _code(soup, text, "plantuml")]
+    ctx.macro(name, ITEM_CONVERTED, "shown as its source; no picture drawn")
+    return [_code(soup, text, "plantuml")]
 
 
 def _drawio(soup: BeautifulSoup, m: Tag, name: str, ctx: Context) -> list[Node]:
@@ -204,45 +201,23 @@ def _drawio(soup: BeautifulSoup, m: Tag, name: str, ctx: Context) -> list[Node]:
     if not diagram:
         ctx.macro(name, ITEM_UNSUPPORTED, "names no diagram")
         return [_p(soup, _em(soup, f"[{name} diagram that names no file]"))]
-    nodes: list[Node] = []
-    picture = None
     for candidate in (f"{diagram}.png", f"{diagram}.svg", f"{diagram}.drawio.png"):
-        if ctx.has(candidate):
-            picture = ctx.attachment(candidate, reason_missing="")
-            break
-    if picture:
-        nodes.append(soup.new_tag("img", src=picture, alt=diagram))
-    source = None
-    for candidate in (diagram, f"{diagram}.drawio", f"{diagram}.xml"):
-        if ctx.has(candidate):
-            source = ctx.attachment(candidate, reason_missing="")
-            break
-    if source:
-        nodes.append(_p(soup, _em(soup, "draw.io source: "), _a(soup, source, diagram)))
-    if picture or source:
-        ctx.macro(name, ITEM_KEPT if picture else ITEM_SOURCE_KEPT, diagram)
-    else:
-        reason = "the diagram's attachment was not downloaded with the page"
-        ctx.macro(name, ITEM_MISSING, reason)
-        ctx.attachment(diagram, reason_missing=reason)
-        nodes.append(_p(soup, _em(soup, f"[draw.io diagram {diagram}: not archived]")))
-    return nodes
+        picture = ctx.attachment(candidate, reason_missing="") if ctx.has(candidate) else None
+        if picture:
+            ctx.macro(name, ITEM_KEPT, diagram)
+            return [soup.new_tag("img", src=picture, alt=diagram)]
+    reason = "the diagram's picture was not downloaded with the page"
+    ctx.macro(name, ITEM_MISSING, reason)
+    ctx.attachment(f"{diagram}.png", reason_missing=reason)
+    return [_p(soup, _em(soup, f"[draw.io diagram {diagram}: not archived]"))]
 
 
 def _html(soup: BeautifulSoup, m: Tag, name: str, ctx: Context) -> list[Node]:
     markup = _plain(m)
     nodes: list[Node] = []
     for xml in diagrams.from_html(markup):
-        n = ctx.next_number("diagram")
-        link = ctx.add_file(f"diagram-{n}.drawio", xml.encode("utf-8"))
-        ctx.macro(name, ITEM_SOURCE_KEPT, "draw.io diagram in the page; source kept", link)
-        nodes.append(
-            _p(
-                soup,
-                _em(soup, "draw.io diagram, source kept as "),
-                _a(soup, link, f"diagram-{n}.drawio"),
-            )
-        )
+        ctx.macro(name, ITEM_CONVERTED, "draw.io diagram in the page; shown as a viewer link")
+        nodes.append(_p(soup, _a(soup, diagrams.viewer_link(xml), "draw.io diagram")))
     for src in diagrams.embeds(markup):
         elsewhere = diagrams.remote_kind(src) or "a page outside Confluence"
         ctx.macro(name, ITEM_MISSING, f"embeds {elsewhere}; needs its owner's access, not archived")

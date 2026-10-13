@@ -57,9 +57,7 @@ Coffer's (see "Leave a linked folder to its own tools").
 │   │       ├── image-1.png         # linked from the source as ../assets/q3-review-1a2b3c4d/image-1.png
 │   │       └── image-2.jpg
 │   │   └── confluence-42-v7/       # one folder per imported Confluence page and version
-│   │       ├── storage.xml         # the page's raw storage, kept for tracing
-│   │       ├── arch.png            # an attachment the page shows
-│   │       └── diagram-1.drawio    # a diagram held in the page, kept as its source
+│   │       └── arch.png            # an attachment the page shows
 │   ├── pages/                      # the wiki: read by agents, edited by people and agents
 │   │   ├── account/                # nesting chosen by whoever files a page
 │   │   │   └── login-sessions.md
@@ -220,9 +218,9 @@ Page 2:
 | `ingest` | `skipped` | Set by an agent on a source with nothing worth keeping, so it stops waiting. |
 | `superseded_by` | `str` | A source's replacement, by slug, set by an agent or a person (see "Mark a source superseded by the one that replaces it"), or by Coffer when a page is imported again with `replace`. The source stops waiting; a page citing it and no later source in the chain → `superseded_source`; a slug no source has → `missing_source` on the source. |
 | `summary` | `str` | A source's one or two sentences on what it says, written by an agent as it integrates or tidies; shown in the catalogue and in Contents. |
-| `original` | `str` | The name of the file an upload was converted from, written by Coffer (see "Keep an upload's original on this Mac only"). Absent on a Markdown or text upload, which is its own source. |
+| `original` | `str` | The name of the file an upload was converted from, written by Coffer (see "Keep an upload's original on this Mac only"). Absent on a Markdown or text upload, which is its own source, unless converting it rewrote it. An imported Confluence page's original is its export. |
 | `original_sha256` | hex `str` | The SHA-256 of that file, written by Coffer; it names the copy kept in `~/.coffer/local/knowledge-originals/` on the Mac that uploaded it. |
-| `origin` | mapping | An imported page's provenance, written by Coffer (see "Import a Confluence page as a readable source with its attachments"): `system` (`confluence`), `url`, `page_id`, `space`, `version`, `fetched_at`, `format` (`confluence-storage`) and `raw`, the relative link to its `storage.xml`. A fetch date, never a `verified`. |
+| `origin` | mapping | An imported page's provenance, written by Coffer (see "Import a Confluence page as a readable source with its attachments"): `system` (`confluence`), `url`, `page_id`, `space`, `version`, `fetched_at` and `format` (`confluence-storage`). A fetch date, never a `verified`. |
 | `import_report` | mapping | How an import ended, written by Coffer: `body` (`converted` or `partial`), `complete`, `attachments_kept`, and `missing` / `unsupported`, each a list of `<name>: <why>`. |
 | *any other key* | | An upload's own frontmatter is kept on its source (an export's `version`, `retrieved_at`, `redacted`…), Coffer's keys aside, so a source never carries a second block in its body. |
 
@@ -346,13 +344,12 @@ on disk — and the `images` it took out (`ConvertedImage`: a `name` such as
 `data`). The Markdown becomes the source and the images its `assets/` folder;
 the uploaded file itself is kept on this Mac only, unless the `passthrough`
 converter ran, which keeps a Markdown or text upload as it stands and keeps no
-original. A conversion may also carry `metadata` (frontmatter the document
+original unless it also returns a `report` (an export's markers expanded). A conversion may also carry `metadata` (frontmatter the document
 carried or the converter read: a Markdown upload's own block, an imported
-page's `origin`), other `files` (`ConvertedFile`: attachments, diagram
-sources, the raw storage) kept in the `asset_folder` it names, and a `report`
+page's `origin`), other `files` (`ConvertedFile`: attachments) kept in the `asset_folder` it names, and a `report`
 (`ImportReport`: the `body` as `converted` or `partial`, and each attachment
 and macro as an `ImportItem` with a `name`, a `status` — `kept`, `converted`,
-`source_kept`, `dropped`, `missing`, `unsupported` or `skipped` — a `reason`
+`dropped`, `missing`, `unsupported` or `skipped` — a `reason`
 and where it is kept; `complete` when nothing is missing or unsupported). The
 `confluence` converter (`infrastructure/knowledge/converters/confluence/`)
 claims a `.json` upload by its content (see "Import a Confluence page as a
