@@ -207,7 +207,7 @@ The memory sync is not in Settings. It is switched and retimed from the **▾** 
 | --- | --- | --- | --- |
 | `memory_sync` | **Memory** header → **▾** on **Sync now** → **Sync memory automatically** | on, every 1 h | Publishes what each agent wrote on this machine to the vault's memory hub and writes the hub into each agent's own memory. The first sync on a machine, and one that would write more than 50 copies, waits as a preview. It calls no model. See [Memory](/guides/memory). |
 
-The knowledge sweep has no setting. While the **Knowledge** [experimental feature](#experimental-features) is on, it runs every minute: it re-renders the `coffer-guide` skill, keeps files dropped in a collection's `.inbox/` as sources under `sources/`, files loose documents into `pages/`, and commits edits made on disk.
+The knowledge sweep has no setting. While the **Knowledge** [experimental feature](#experimental-features) is on, it runs every minute: it re-renders the `coffer-guide` skill, keeps files dropped in a collection's `.inbox/` as sources under `sources/`, and commits edits made on disk. It moves no file.
 
 ### Sync remote
 

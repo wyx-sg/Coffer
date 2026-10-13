@@ -16,7 +16,7 @@ surface no one asked for.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -90,6 +90,7 @@ def collection_out(entry: CollectionEntry) -> CollectionOut:
 FindingKind = Literal[
     "dead_link",
     "ambiguous_link",
+    "outside_link",
     "duplicate_slug",
     "missing_source",
     "superseded_source",
@@ -214,11 +215,17 @@ class SourceRefOut(BaseModel):
 
 
 class LinkRefOut(BaseModel):
-    #: What the ``[[link]]`` names.
+    #: What the link names: a ``[[link]]``'s target, or a Markdown link's
+    #: relative path as written.
     target: str
-    #: The page or source it resolves to; ``null`` when dead or ambiguous.
+    #: The knowledge path it resolves to; ``null`` when dead or ambiguous, or
+    #: when it leaves the knowledge root.
     path: str | None = None
     ambiguous: bool = False
+    #: ``wiki`` for ``[[target]]``, ``path`` for a link by relative path.
+    kind: Literal["wiki", "path"] = "wiki"
+    #: A relative link that climbs out of the knowledge root.
+    outside: bool = False
 
 
 class PageRefOut(BaseModel):
@@ -240,7 +247,7 @@ class FileOut(BaseModel):
     folder_path: str
     kind: FileKind = "file"
     #: A page's ``type``, ``aliases``, resolved ``sources`` and ``[[links]]``
-    #: ("Link pages by slug and check every link").
+    #: ("Link pages by slug or relative path and check every link").
     page_type: str = ""
     aliases: list[str] = Field(default_factory=list)
     #: A page's ``verified`` date, as written; empty when it carries none.
@@ -261,12 +268,57 @@ class FileOut(BaseModel):
     #: ``None`` when it was uploaded on another one.
     original: str = ""
     original_path: str | None = None
+    #: The body as a reader should see it, when it differs from ``body``: a
+    #: source that still carries an export's own frontmatter or Confluence
+    #: storage markers, shown converted while the file stays as it is.
+    readable_body: str | None = None
+    #: Where an imported source came from: ``system``, ``title``, ``url``,
+    #: ``page_id``, ``space``, ``version``, ``fetched_at``, ``raw``.
+    origin: dict[str, str] = Field(default_factory=dict)
+    #: An import's report as the source keeps it (``body``, ``complete``,
+    #: ``attachments_kept``, ``missing``, ``unsupported``).
+    import_report: dict[str, Any] = Field(default_factory=dict)
+
+
+class ImportItemOut(BaseModel):
+    """One attachment, embed or macro of an import, and how it ended."""
+
+    name: str
+    #: ``kept``, ``converted``, ``source_kept``, ``dropped``, ``missing``,
+    #: ``unsupported`` or ``skipped``.
+    status: str
+    reason: str = ""
+    #: Where it is kept, relative to the source, when it is.
+    path: str = ""
+
+
+class ImportReportOut(BaseModel):
+    """What a structured import did, part by part (spec knowledge "Import a
+    Confluence page as a readable source with its attachments")."""
+
+    #: ``converted`` or ``partial``.
+    body: str
+    attachments: list[ImportItemOut] = Field(default_factory=list)
+    macros: list[ImportItemOut] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    #: Nothing was left behind: the body whole, nothing missing or unsupported.
+    complete: bool
 
 
 class IngestedDocumentOut(BaseModel):
-    #: The source the upload became.
+    #: The source the upload became (previewed: the path it would most likely get).
     path: str
     title: str
     description: str
     #: Which converter produced the Markdown.
     converter: str
+    #: Part by part, what a structured import did; ``null`` for a plain file.
+    report: ImportReportOut | None = None
+    #: The page the upload is, by its system's id, when it says one.
+    page_id: str = ""
+    #: Older sources of the same page this import replaces (previewed: would).
+    replaces: list[str] = Field(default_factory=list)
+    #: Files kept beside the source, knowledge-root-relative.
+    files: list[str] = Field(default_factory=list)
+    #: Nothing was written: this is what the import would do.
+    preview: bool = False

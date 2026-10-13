@@ -350,3 +350,98 @@ def test_a_markdown_upload_is_its_own_source_and_keeps_no_original(client, tmp_p
     ).json()
     assert (file_out["original"], file_out["original_path"]) == ("", None)
     assert not (tmp_path / ".coffer" / "local" / "knowledge-originals").exists()
+
+
+def _page_export(version: int = 3) -> bytes:
+    import base64
+    import json
+
+    return json.dumps(
+        {
+            "kind": "confluence.page",
+            "pageId": "77",
+            "title": "Gateway",
+            "bodyFormat": "storage",
+            "version": version,
+            "pageUrl": "https://confluence.example/pages/viewpage.action?pageId=77",
+            "body": (
+                '<ac:structured-macro ac:name="numberedheadings"><ac:rich-text-body>'
+                "<h1>Overview</h1><p>The gateway routes calls.</p>"
+                '<p><ac:image><ri:attachment ri:filename="map.png" /></ac:image></p>'
+                "</ac:rich-text-body></ac:structured-macro>"
+            ),
+            "attachments": [{"name": "map.png", "dataBase64": base64.b64encode(b"PNG").decode()}],
+        }
+    ).encode()
+
+
+@pytest.mark.acceptance(
+    spec="knowledge",
+    scenario="a page already imported is replaced only when asked",
+)
+def test_a_confluence_page_imports_previews_and_replaces_over_http(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    _create_collection(client, "shopee")
+
+    preview = client.post(
+        "/api/v1/knowledge/upload",
+        data={"collection": "shopee", "preview": "true"},
+        files={"file": ("page.json", _page_export())},
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["preview"] is True
+    assert _files_on_disk(tmp_path) == []
+
+    first = client.post(
+        "/api/v1/knowledge/upload",
+        data={"collection": "shopee"},
+        files={"file": ("page.json", _page_export())},
+    )
+    assert first.status_code == 201, first.text
+    doc = first.json()
+    assert (doc["converter"], doc["page_id"]) == ("confluence", "77")
+    assert doc["report"]["body"] == "converted" and doc["report"]["complete"] is True
+    read = client.get("/api/v1/knowledge/file", params={"path": doc["path"]}).json()
+    assert read["origin"]["page_id"] == "77"
+    assert "# Overview" in read["body"]
+    assert "![map.png](../assets/confluence-77-v3/map.png)" in read["body"]
+
+    again = client.post(
+        "/api/v1/knowledge/upload",
+        data={"collection": "shopee"},
+        files={"file": ("page.json", _page_export(4))},
+    )
+    assert again.status_code == 409, again.text
+    assert again.json()["error"]["code"] == "KNOWLEDGE_SOURCE_EXISTS"
+
+    replaced = client.post(
+        "/api/v1/knowledge/upload",
+        data={"collection": "shopee", "replace": "true"},
+        files={"file": ("page.json", _page_export(4))},
+    )
+    assert replaced.status_code == 201, replaced.text
+    assert replaced.json()["replaces"] == [doc["path"]]
+    older = client.get("/api/v1/knowledge/file", params={"path": doc["path"]}).json()
+    assert older["superseded_by"]["path"] == replaced.json()["path"]
+
+
+def test_a_source_with_storage_markers_reads_converted_but_stays_as_written(  # type: ignore[no-untyped-def]
+    client, tmp_path
+) -> None:
+    _create_collection(client, "shopee")
+    source = tmp_path / ".coffer" / "vault" / "knowledge" / "shopee" / "sources" / "old.md"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    written = (
+        "---\ntitle: Old\ndescription: d\n---\n\n"
+        "---\ntitle: Old\norigin: https://confluence.example/pages/viewpage.action?pageId=5\n---\n\n"
+        "<!-- skynet-confluence-storage:v1 kind=structured-macro\n"
+        '<ac:structured-macro ac:name="numberedheadings"><ac:rich-text-body>'
+        "<h1>Kept Heading</h1></ac:rich-text-body></ac:structured-macro>\n-->\n"
+    )
+    source.write_text(written, encoding="utf-8")
+
+    read = client.get("/api/v1/knowledge/file", params={"path": "shopee/sources/old.md"}).json()
+
+    assert "skynet-confluence-storage" in read["body"]
+    assert read["readable_body"].strip() == "# Kept Heading"
+    assert read["origin"]["url"].endswith("pageId=5")
+    assert source.read_text(encoding="utf-8") == written

@@ -177,11 +177,12 @@ def test_the_listing_reads_the_description_off_disk_every_time(client, tmp_path)
 # ----- the tree ------------------------------------------------------------
 
 
-def test_the_tree_lists_documents_but_neither_the_readme_nor_the_inbox(client) -> None:  # type: ignore[no-untyped-def]
+def test_the_tree_lists_documents_and_the_readme_but_not_the_inbox(client) -> None:  # type: ignore[no-untyped-def]
     """One tree per collection ("Show a collection as one tree of read-only
-    documents in the web UI"). The README describes it rather than being content
-    in it ("Keep the collection README out of the corpus"), and the hidden inbox
-    is not listed ("Hide dot-prefixed entries except the inbox")."""
+    documents in the web UI"). The README is listed as the plain file it is —
+    readable, never a page or a source ("Keep the collection README out of
+    counts and curation") — and the hidden inbox is not listed ("Hide
+    dot-prefixed entries except the inbox")."""
     client.post("/api/v1/knowledge/collections", json={"name": "shopee", "description": "d"})
     document = _submit(client, collection="shopee", title="Note", description="d", body="b")
     inbox_dir = paths.inbox_dir("shopee")
@@ -190,7 +191,7 @@ def test_the_tree_lists_documents_but_neither_the_readme_nor_the_inbox(client) -
 
     level = client.get("/api/v1/knowledge/tree", params={"path": "shopee"})
     assert level.status_code == 200, level.text
-    assert level.json()["files"] == []
+    assert [(f["path"], f["kind"]) for f in level.json()["files"]] == [("shopee/README.md", "file")]
     assert [d["path"] for d in level.json()["directories"]] == ["shopee/sources"]
     sources = client.get("/api/v1/knowledge/tree", params={"path": "shopee/sources"}).json()
     assert [(f["path"], f["kind"], f["waiting"]) for f in sources["files"]] == [
@@ -454,8 +455,14 @@ def test_reading_a_page_resolves_its_sources_and_links(client) -> None:  # type:
         {"slug": "missing", "path": None, "title": ""},
     ]
     assert out["links"] == [
-        {"target": "sessions", "path": "shopee/pages/session-ownership.md", "ambiguous": False},
-        {"target": "gone", "path": None, "ambiguous": False},
+        {
+            "target": "sessions",
+            "path": "shopee/pages/session-ownership.md",
+            "ambiguous": False,
+            "kind": "wiki",
+            "outside": False,
+        },
+        {"target": "gone", "path": None, "ambiguous": False, "kind": "wiki", "outside": False},
     ]
     cited = client.get("/api/v1/knowledge/file", params={"path": source}).json()
     assert (cited["waiting"], cited["cited_by"]) == (False, [{"path": page, "title": "overview"}])

@@ -69,6 +69,10 @@ class PlatformPort(Protocol):
         """The argv that selects an existing ``target`` in the OS file manager."""
         ...
 
+    def url_command(self, url: str) -> list[str]:
+        """The argv that opens a web ``url`` in the default browser."""
+        ...
+
     def folder_picker_command(self, start: str | None) -> list[str] | None:
         """The argv of the native folder dialog, or None when the host has none."""
         ...

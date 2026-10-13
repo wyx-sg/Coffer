@@ -13,7 +13,9 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from pathlib import PurePosixPath
+from typing import Any
 
 from coffer.application.audit_service import AuditService
 from coffer.application.knowledge.recording import recording, writer_of
@@ -51,6 +53,7 @@ from coffer.infrastructure.knowledge import (
     inbox,
     linked,
     paths,
+    source_imports,
     wiki_reads,
 )
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
@@ -306,13 +309,15 @@ class KnowledgeService:
         body: str,
         actor_kind: str = ACTOR_AGENT,
         actor: str,
-        extra: Mapping[str, str] | None = None,
+        extra: Mapping[str, Any] | None = None,
         files: Mapping[str, bytes] | None = None,
+        supersede: Sequence[str] = (),
     ) -> Submission:
         """Add new material to a collection ("Promote submitted material at once"):
         a source under ``sources/`` on the spot, waiting until an agent compiles it.
         ``extra`` adds frontmatter keys; ``files`` (knowledge-root-relative path to
-        bytes, an upload's pictures) land in the same commit."""
+        bytes, an upload's pictures) land in the same commit, as does marking each
+        source in ``supersede`` replaced by the new one (a page imported again)."""
         row = await self.require_collection(collection)
         meta = CommitMeta(
             writer_of(actor_kind),
@@ -337,6 +342,9 @@ class KnowledgeService:
             tx.touch(f"{row.name}/{paths.INBOX_DIR_NAME}/{name}")
             document = inbox.promote(row.name, name)
             tx.touch(document.path)
+            for older in supersede:
+                tx.touch(older)
+                source_imports.mark_superseded(older, PurePosixPath(document.path).stem)
         await self._audit.record(
             AuditEventType.KNOWLEDGE_WRITTEN.value,
             resource=row,

@@ -312,6 +312,16 @@ export interface components {
             collection: string;
             /** File */
             file: string;
+            /**
+             * Preview
+             * @default false
+             */
+            preview?: boolean;
+            /**
+             * Replace
+             * @default false
+             */
+            replace?: boolean;
         };
         /**
          * ChangeOut
@@ -368,7 +378,7 @@ export interface components {
             version: string;
             /**
              * Writer
-             * @description `user` a person; `agent` an agent whose material became a document on arrival; `curation` a change Coffer's retired curation pass made, kept in the history; `sync` another machine's change; `disk` an edit made outside Coffer (a person's editor, an agent's file tools); `daemon` Coffer filing a loose document into `pages/`.
+             * @description `user` a person; `agent` an agent whose material became a document on arrival; `curation` a change Coffer's retired curation pass made, kept in the history; `sync` another machine's change; `disk` an edit made outside Coffer (a person's editor, an agent's file tools); `daemon` a loose document an earlier Coffer filed into `pages/`, kept in the history.
              * @enum {string}
              */
             writer: "user" | "agent" | "curation" | "sync" | "disk" | "daemon";
@@ -564,6 +574,10 @@ export interface components {
             file_path: string;
             /** Folder Path */
             folder_path: string;
+            /** Import Report */
+            import_report: {
+                [key: string]: unknown;
+            };
             /**
              * Kind
              * @default file
@@ -572,6 +586,10 @@ export interface components {
             kind: "page" | "source" | "file";
             /** Links */
             links: components["schemas"]["LinkRefOut"][];
+            /** Origin */
+            origin: {
+                [key: string]: string;
+            };
             /**
              * Original
              * @default
@@ -586,6 +604,8 @@ export interface components {
             page_type: string;
             /** Path */
             path: string;
+            /** Readable Body */
+            readable_body: string | null;
             /** Sources */
             sources: components["schemas"]["SourceRefOut"][];
             /**
@@ -674,7 +694,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "dead_link" | "ambiguous_link" | "duplicate_slug" | "missing_source" | "superseded_source" | "incomplete_page" | "unsourced_page" | "stale_page" | "orphan_page" | "waiting_source";
+            kind: "dead_link" | "ambiguous_link" | "outside_link" | "duplicate_slug" | "missing_source" | "superseded_source" | "incomplete_page" | "unsourced_page" | "stale_page" | "orphan_page" | "waiting_source";
             /** Others */
             others: string[];
             /** Path */
@@ -691,14 +711,66 @@ export interface components {
             /** Prompt */
             prompt: string;
         };
+        /**
+         * ImportItemOut
+         * @description One attachment, embed or macro of an import, and how it ended.
+         */
+        ImportItemOut: {
+            /** Name */
+            name: string;
+            /**
+             * Path
+             * @default
+             */
+            path: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * ImportReportOut
+         * @description What a structured import did, part by part (spec knowledge "Import a
+         *     Confluence page as a readable source with its attachments").
+         */
+        ImportReportOut: {
+            /** Attachments */
+            attachments: components["schemas"]["ImportItemOut"][];
+            /** Body */
+            body: string;
+            /** Complete */
+            complete: boolean;
+            /** Macros */
+            macros: components["schemas"]["ImportItemOut"][];
+            /** Warnings */
+            warnings: string[];
+        };
         /** IngestedDocumentOut */
         IngestedDocumentOut: {
             /** Converter */
             converter: string;
             /** Description */
             description: string;
+            /** Files */
+            files: string[];
+            /**
+             * Page Id
+             * @default
+             */
+            page_id: string;
             /** Path */
             path: string;
+            /**
+             * Preview
+             * @default false
+             */
+            preview: boolean;
+            /** Replaces */
+            replaces: string[];
+            report: components["schemas"]["ImportReportOut"] | null;
             /** Title */
             title: string;
         };
@@ -709,6 +781,17 @@ export interface components {
              * @default false
              */
             ambiguous: boolean;
+            /**
+             * Kind
+             * @default wiki
+             * @enum {string}
+             */
+            kind: "wiki" | "path";
+            /**
+             * Outside
+             * @default false
+             */
+            outside: boolean;
             /** Path */
             path: string | null;
             /** Target */

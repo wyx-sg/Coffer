@@ -59,7 +59,7 @@ def test_a_nested_readme_is_a_document_and_only_the_collection_readme_is_not() -
     listed = [f.path for f in catalogue.list_level("shopee").files]
 
     assert walked == ["shopee/guide/README.md", "shopee/real.md"]
-    assert listed == ["shopee/real.md"]
+    assert listed == ["shopee/README.md", "shopee/real.md"]
     assert catalogue.count_files(paths.collection_dir("shopee"), markdown_only=True) == 2
     paths.require_document("shopee/guide/README.md")
     with pytest.raises(Exception, match="README"):

@@ -339,6 +339,8 @@ coffer knowledge tidy-handoff [OPTIONS]
 
 Upload files into a collection; each is kept as a Markdown source.
 
+A Confluence page exported as JSON is imported with its attachments: the ones the export carries, and with ``--attachments`` the ones in that folder.
+
 <p class="cli-label">Synopsis</p>
 
 ```sh
@@ -351,4 +353,7 @@ coffer knowledge upload [OPTIONS] COLLECTION FILES...
 | --- | --- | --- | --- |
 | `COLLECTION` <span class="cli-chip">argument</span> | text | required | The collection's folder name |
 | `FILES` <span class="cli-chip">argument</span> | path (variadic) | required | Files to keep as sources |
+| `--replace` <span class="cli-chip">option</span> | flag |  | Import a page already imported again; the older source is kept |
+| `--preview` <span class="cli-chip">option</span> | flag |  | Show what the import would do and write nothing |
+| `--attachments` <span class="cli-chip">option</span> | path |  | A folder of a Confluence page's downloaded attachments, by file name |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

@@ -24,6 +24,7 @@ export const KINDS: Record<string, string> = {
   md: "Markdown",
   markdown: "Markdown",
   txt: "Text",
+  json: "JSON",
   zip: "ZIP archive",
   epub: "EPUB",
 };
@@ -53,6 +54,13 @@ export function refuseBeforeSending(t: TFunction, file: File): Refusal | null {
 export function refusalOf(t: TFunction, error: unknown, file: File | null): Refusal {
   if (error instanceof ApiError) {
     const reason = (error.details as { reason?: unknown } | undefined)?.reason;
+    if (error.code === "KNOWLEDGE_SOURCE_EXISTS") {
+      const source = String((error.details as { source?: unknown } | undefined)?.source ?? "");
+      return {
+        title: t("knowledge.upload.existsTitle"),
+        body: t("knowledge.upload.existsBody", { source }),
+      };
+    }
     if (error.code === "KNOWLEDGE_UPLOAD_TOO_LARGE") {
       return {
         title: t("knowledge.upload.tooLargeTitle"),
@@ -79,4 +87,33 @@ export function refusalOf(t: TFunction, error: unknown, file: File | null): Refu
     }
   }
   return { title: t("knowledge.upload.failedTitle"), body: translateApiError(t, error) };
+}
+
+interface ReportPart {
+  name: string;
+  status: string;
+  reason?: string | null;
+}
+
+/** What an import left behind, one line each; `undefined` when it kept it all. */
+export function partsLeft(
+  report: { complete: boolean; attachments: ReportPart[]; macros: ReportPart[] } | null | undefined,
+): string[] | undefined {
+  if (!report || report.complete) return undefined;
+  return [...report.attachments, ...report.macros]
+    .filter((part) => part.status === "missing" || part.status === "unsupported")
+    .map((part) => (part.reason ? `${part.name}: ${part.reason}` : part.name));
+}
+
+/** The one toast once a batch is sent and the dialog stays open on its rows. */
+export function batchOutcome(
+  t: TFunction,
+  saved: number,
+  failed: number,
+): { ok: boolean; text: string } {
+  if (failed === 0) return { ok: true, text: t("knowledge.upload.savedPartly") };
+  if (saved > 0) {
+    return { ok: true, text: t("knowledge.upload.someSaved", { count: saved, refused: failed }) };
+  }
+  return { ok: false, text: t("knowledge.upload.noneSaved", { count: failed }) };
 }

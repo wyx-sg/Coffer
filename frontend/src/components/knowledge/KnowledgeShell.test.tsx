@@ -264,6 +264,11 @@ describe("the Upload dialog", () => {
         title: "notes",
         description: "",
         converter: "markdown",
+        page_id: "",
+        replaces: [],
+        files: [],
+        preview: false,
+        report: null,
       };
     });
     renderKnowledge(`/knowledge/${UID}`);
@@ -314,6 +319,11 @@ describe("the Upload dialog", () => {
       title: file.name,
       description: "",
       converter: "markdown",
+      page_id: "",
+      replaces: [],
+      files: [],
+      preview: false,
+      report: null,
     }));
     renderKnowledge(`/knowledge/${UID}`);
     const dialog = await openUpload();
@@ -358,5 +368,56 @@ describe("the Upload dialog", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     // The second file is never sent.
     expect(api.uploadFile).toHaveBeenCalledTimes(1);
+  });
+  acceptance("knowledge", "a page already imported is replaced only when asked", async () => {
+    let calls = 0;
+    api.uploadFile.mockImplementation(async (params: { file: File; replace?: boolean }) => {
+      calls += 1;
+      if (!params.replace) {
+        throw new ApiError("KNOWLEDGE_SOURCE_EXISTS", "exists", {
+          page_id: "42",
+          source: `${COLLECTION.name}/sources/account-core.md`,
+        });
+      }
+      return {
+        path: `${COLLECTION.name}/sources/account-core-2.md`,
+        title: "Account Core",
+        description: "",
+        converter: "confluence",
+        page_id: "42",
+        replaces: [`${COLLECTION.name}/sources/account-core.md`],
+        files: [],
+        preview: false,
+        report: {
+          body: "converted",
+          complete: false,
+          attachments: [
+            { name: "gone.png", status: "missing", reason: "not downloaded", path: "" },
+          ],
+          macros: [],
+          warnings: [],
+        },
+      };
+    });
+    renderKnowledge(`/knowledge/${UID}`);
+    const dialog = await openUpload();
+    fireEvent.change(within(dialog).getByLabelText("Drop files here, or choose them"), {
+      target: { files: [new File(["{}"], "page.json", { type: "application/json" })] },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Upload" }));
+    const files = within(dialog).getByRole("list", { name: "Files to upload" });
+    const row = () => within(files).getByText("page.json").closest("li") as HTMLElement;
+    await waitFor(() => expect(row()).toHaveAttribute("data-status", "refused"));
+    expect(row()).toHaveTextContent("Already imported");
+    expect(within(dialog).queryByRole("button", { name: "Retry" })).toBeNull();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Replace" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Upload" }));
+    await waitFor(() => expect(calls).toBe(2));
+    expect(api.uploadFile.mock.calls[1][0]).toMatchObject({ replace: true });
+    // Saved, and the parts the import left behind are named — not a plain success.
+    expect(await screen.findByTestId("upload-partial")).toHaveTextContent(
+      "gone.png: not downloaded",
+    );
   });
 });

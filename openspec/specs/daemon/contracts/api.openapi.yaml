@@ -866,6 +866,43 @@ paths:
       summary: Open Path
       tags:
       - fs
+  /api/v1/fs/open-url:
+    post:
+      description: Open a web link (`http`, `https`, `mailto`) in the default browser.
+      operationId: open_url_api_v1_fs_open_url_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FsOpenUrlRequest'
+        required: true
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Open Url
+      tags:
+      - fs
   /api/v1/fs/pick-folder:
     post:
       description: Open the host's native folder dialog and return the chosen directory.
@@ -1526,6 +1563,15 @@ components:
       required:
       - path
       title: FsOpenRequest
+      type: object
+    FsOpenUrlRequest:
+      properties:
+        url:
+          title: Url
+          type: string
+      required:
+      - url
+      title: FsOpenUrlRequest
       type: object
     FsPickFolderOut:
       properties:

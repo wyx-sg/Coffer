@@ -1,5 +1,5 @@
 """A collection read as a wiki: pages and sources, links by slug, which
-sources wait, and the mechanical findings (spec knowledge "Link pages by slug
+sources wait, and the mechanical findings (spec knowledge "Link pages by slug or relative path
 and check every link", "Derive which sources wait from the pages that cite
 them", "Check a collection mechanically on every read").
 

@@ -10,12 +10,13 @@
 // when it was created and by whom, what supersedes it, the pages that cite
 // it (each opening the page) or the Waiting or Skipped mark, and the file an
 // upload came from: opened from here on the Mac that uploaded it, named with
-// where it is on any other.
+// where it is on any other, and what an import adds (KnowledgeImportParts).
 // Any other file: when it was created and by whom.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
+import { PartialImport, SourceOrigin } from "@/components/knowledge/KnowledgeImportParts";
 import { StatusPill } from "@/components/status/StatusPill";
 import { useToast } from "@/components/ui/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -174,6 +175,15 @@ export function KnowledgeFileLine({ file, collectionUid }: Props) {
         </Joined>
       </span>,
     );
+  }
+
+  const origin = file.origin ?? {};
+  if (file.kind === "source" && origin.url) {
+    parts.push(<SourceOrigin key="origin" origin={origin} />);
+  }
+  const report = file.import_report;
+  if (file.kind === "source" && report && report.complete === false) {
+    parts.push(<PartialImport key="partial" report={report} />);
   }
 
   if (file.kind === "source" && file.original) {

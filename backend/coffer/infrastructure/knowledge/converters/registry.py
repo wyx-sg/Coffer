@@ -2,6 +2,9 @@
 
 Order matters: passthrough (text/code) and csv claim their formats before the
 MarkItDown fallback, so cheap formats never spin up the heavy engine.
+
+A converter that recognises a file by its content (a Confluence page export is
+a ``.json`` file like any other) is asked first, through ``claims``.
 """
 
 from __future__ import annotations
@@ -9,6 +12,7 @@ from __future__ import annotations
 import pathlib
 
 from coffer.domain.knowledge.converter import Conversion, Converter, UnsupportedDocument
+from coffer.infrastructure.knowledge.converters.confluence import ConfluenceConverter
 from coffer.infrastructure.knowledge.converters.csv_converter import CsvConverter
 from coffer.infrastructure.knowledge.converters.markitdown_converter import (
     MarkItDownConverter,
@@ -38,14 +42,20 @@ class ConverterRegistry:
         handles it — never a half-conversion.
         """
         fmt = pathlib.Path(filename).suffix.lstrip(".")
+        for candidate in self._converters:
+            claims = getattr(candidate, "claims", None)
+            if claims is not None and claims(data, fmt.lower()):
+                return await candidate.convert(data, filename)
         converter = self._resolve(fmt)
         return await converter.convert(data, filename)
 
 
 def default_registry() -> ConverterRegistry:
-    """The production registry: passthrough → csv → markitdown."""
+    """The production registry: a Confluence page (by content), then
+    passthrough → csv → markitdown."""
     return ConverterRegistry(
         [
+            ConfluenceConverter(),
             PassthroughConverter(),
             CsvConverter(),
             MarkItDownConverter(),

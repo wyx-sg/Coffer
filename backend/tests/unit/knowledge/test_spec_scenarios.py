@@ -128,9 +128,7 @@ def test_a_nested_document_is_listed_and_catalogued_where_it_was_filed(
     assert _files_under(root) == ["shopee/a/b/deep.md"]
 
 
-@pytest.mark.acceptance(
-    spec="knowledge", scenario="keep the README out of listings, counts and curation"
-)
+@pytest.mark.acceptance(spec="knowledge", scenario="keep the README out of counts and curation")
 def test_the_readme_is_never_a_document(root: pathlib.Path) -> None:
     document = fs.write_file(
         directory="shopee/pages", title="Gateway", description="d", body="b"
@@ -139,7 +137,9 @@ def test_the_readme_is_never_a_document(root: pathlib.Path) -> None:
 
     level = catalogue.list_level("shopee/pages")
     assert [f.path for f in level.files] == [document]
-    assert catalogue.list_level("shopee").files == ()
+    # Listed where it is, as the plain file it is: never a page or a source.
+    [readme] = catalogue.list_level("shopee").files
+    assert (readme.path, readme.kind) == ("shopee/README.md", "file")
     [entry] = catalogue.list_collections()
     # Without sources and never checked: unsourced_page and stale_page.
     assert (entry.page_count, entry.source_count, entry.finding_count) == (1, 0, 3)

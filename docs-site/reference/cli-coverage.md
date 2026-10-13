@@ -456,6 +456,7 @@ Plain files are read and edited with your own tools, and a few acts only make se
 | `GET /fs/browse` | the window: the folder picker's own listing |
 | `GET /fs/editors` | the window: which editors the Open in… menu offers |
 | `POST /fs/open` | the window: opens a file in the person's editor |
+| `POST /fs/open-url` | the window: opens a web link in the default browser |
 | `POST /fs/pick-folder` | the window: a native folder picker for the person |
 | `POST /fs/reveal` | the window: reveals a file in Finder |
 | `POST /fs/terminal` | the window: opens a terminal window for the person |

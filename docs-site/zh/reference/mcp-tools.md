@@ -255,7 +255,7 @@ Your tool list is a budgeted slice: 88 more upstream tools are unlisted, all cal
 ## 不用工具处理知识、记忆和日志 {#memory-and-logs-without-a-tool}
 
 Coffer 没有用于知识、记忆或自身记录的工具，因为智能体用已有的能力就都能做到。
-要新增知识，就按 `coffer-guide` 技能的说明，往某个知识集的 `pages/` 里写一个 Markdown 页面；留在知识集 `.inbox/` 文件夹里的文件，会被 Coffer 的扫描收编，作为来源保留在 `sources/` 下；写在 `pages/` 和 `sources/` 之外的文档会被移进 `pages/`。
+要新增知识，就按 `coffer-guide` 技能的说明，往某个知识集的 `pages/` 里写一个 Markdown 页面；留在知识集 `.inbox/` 文件夹里的文件，会被 Coffer 的扫描收编，作为来源保留在 `sources/` 下。Coffer 不移动任何文件：文档留在它被写入的位置。
 要修改文档，直接就地编辑文件。记忆根本不需要工具：智能体照常写自己的记忆，[记忆同步](/zh/guides/memory)把你其他智能体学到的东西写进同一份记忆，由智能体自己加载。
 
 | 要找 | 做法 |

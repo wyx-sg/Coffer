@@ -440,7 +440,7 @@ agent's page lists them so you can [adopt](#adopt) or discard them. See [Skills]
 
 Mechanical work Coffer does on a timer, without being asked: the [memory sync](#memory-sync),
 and the sweep for knowledge (re-render the guide, adopt files left in the
-[inbox](#inbox), file loose documents into `pages/`, commit edits made on disk). None of them calls a model. The memory sync can be switched
+[inbox](#inbox), commit edits made on disk). None of them calls a model. The memory sync can be switched
 off or retimed from the **▾** on **Sync now** on the Memory page.
 See [Memory](/architecture/memory#the-sync-pass) and [Knowledge](/architecture/knowledge#the-sweep).
 

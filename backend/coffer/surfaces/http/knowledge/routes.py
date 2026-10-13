@@ -53,6 +53,7 @@ import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, UploadFile, status
+from fastapi.responses import JSONResponse
 
 from coffer.application.knowledge.ingest import IngestService
 from coffer.application.knowledge.linking import link_folder
@@ -236,6 +237,10 @@ async def upload(
     #: segment ``IngestService`` joins under the knowledge root, exactly like
     #: ``FileWrite.collection``.
     collection: str = Form(...),
+    #: Import a page already imported again, marking the older source replaced.
+    replace: bool = Form(False),
+    #: Answer what the import would do and write nothing.
+    preview: bool = Form(False),
     svc: IngestService = Depends(get_ingest_service),  # noqa: B008
     actor: str = Depends(_actor_kind),
 ) -> Any:
@@ -250,6 +255,8 @@ async def upload(
             filename=file.filename or "upload",
             data=data,
             actor=actor,
+            replace=replace,
+            preview=preview,
         )
     except UnsupportedDocument as exc:
         return error_response(
@@ -267,4 +274,7 @@ async def upload(
             f"no text could be extracted from this {exc.doc_type!r} document",
             {"reason": reason, "doc_type": exc.doc_type},
         )
-    return IngestedDocumentOut.model_validate(doc, from_attributes=True)
+    out = IngestedDocumentOut.model_validate(doc, from_attributes=True)
+    if doc.preview:
+        return JSONResponse(out.model_dump(mode="json"), status_code=status.HTTP_200_OK)
+    return out

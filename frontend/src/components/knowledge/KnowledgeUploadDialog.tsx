@@ -12,16 +12,20 @@
 // dialog closes with one toast; when some were refused it stays open on the
 // outcomes, with a toast counting both. Cancel stays live while converting: it
 // aborts the file being converted and sends no more.
+// A Confluence page already imported is refused; Replace sends it again as a
+// new source that supersedes the older (spec knowledge "Import a Confluence
+// page as a readable source with its attachments"). An import that left
+// parts behind is saved, and the dialog stays open saying which.
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { KnowledgeCollectionSelect } from "@/components/knowledge/KnowledgeCollectionSelect";
 import {
+  KnowledgeUploadButtons,
   KnowledgeUploadRow,
   KnowledgeUploadZone,
   type UploadItem as Item,
 } from "@/components/knowledge/KnowledgeUploadRow";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -32,9 +36,15 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
+import { ApiError } from "@/lib/api/errors";
 import type { CollectionOut } from "@/lib/api/knowledge";
 import { useUploadKnowledgeFile } from "@/lib/hooks/useKnowledge";
-import { refusalOf, refuseBeforeSending } from "@/lib/knowledge/uploadChecks";
+import {
+  batchOutcome,
+  partsLeft,
+  refusalOf,
+  refuseBeforeSending,
+} from "@/lib/knowledge/uploadChecks";
 
 interface Props {
   open: boolean;
@@ -43,9 +53,7 @@ interface Props {
   initial: string | null;
 }
 
-function isAbort(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "AbortError";
-}
+const isAbort = (error: unknown) => error instanceof DOMException && error.name === "AbortError";
 
 export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial }: Props) {
   const { t } = useTranslation();
@@ -98,6 +106,8 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
     aborter.current = controller;
     const saved: Item[] = [];
     let refused = 0;
+    // Saved, but with parts left behind: the dialog stays open to say which.
+    let partials = 0;
     for (const item of ready) {
       if (controller.signal.aborted) return;
       patch(item.id, { status: "converting" });
@@ -105,24 +115,29 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
         const doc = await upload.mutateAsync({
           collection,
           file: item.file,
+          replace: item.replace,
           signal: controller.signal,
         });
-        patch(item.id, { status: "saved", path: doc.path });
+        const partial = partsLeft(doc.report);
+        if (partial) partials += 1;
+        patch(item.id, { status: "saved", path: doc.path, partial });
         saved.push({ ...item, path: doc.path });
       } catch (error) {
         if (controller.signal.aborted || isAbort(error)) return;
         refused += 1;
+        const exists = error instanceof ApiError && error.code === "KNOWLEDGE_SOURCE_EXISTS";
         patch(item.id, {
           status: "refused",
           refusal: refusalOf(t, error, item.file),
-          retryable: true,
+          retryable: !exists,
+          replaceable: exists,
         });
       }
     }
     aborter.current = null;
     setRunning(false);
     const earlier = items.filter((i) => i.status === "refused").length;
-    if (refused === 0 && earlier === 0) {
+    if (refused === 0 && earlier === 0 && partials === 0) {
       toast.success(
         saved.length === 1
           ? t("knowledge.upload.written", { name: saved[0].file.name, path: saved[0].path })
@@ -132,22 +147,27 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
       return;
     }
     setFinished(true);
-    const failed = refused + earlier;
-    if (saved.length > 0) {
-      toast.success(t("knowledge.upload.someSaved", { count: saved.length, refused: failed }));
-    } else {
-      toast.error(t("knowledge.upload.noneSaved", { count: failed }));
-    }
+    const outcome = batchOutcome(t, saved.length, refused + earlier);
+    (outcome.ok ? toast.success : toast.error)(outcome.text);
   };
 
-  // Try again: the files the daemon refused go back in the queue.
-  const retry = () =>
+  // Try again puts the files the daemon refused back in the queue; Replace puts
+  // a page already imported back, to replace its source.
+  const requeue = (flag: "retryable" | "replaceable") =>
     setItems((current) =>
       current.map((i) =>
-        i.retryable ? { ...i, status: "ready", refusal: null, retryable: false } : i,
+        i[flag]
+          ? {
+              ...i,
+              status: "ready",
+              refusal: null,
+              retryable: false,
+              replaceable: false,
+              replace: flag === "replaceable",
+            }
+          : i,
       ),
     );
-  const retryable = items.some((i) => i.retryable);
 
   // Cancel while converting abandons the file in flight and the rest;
   // otherwise it just closes.
@@ -212,26 +232,17 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={cancel}>
-            {finished && ready.length === 0 ? t("common.close") : t("common.cancel")}
-          </Button>
-          {finished && ready.length === 0 && retryable ? (
-            <Button variant="outline" onClick={retry}>
-              {t("common.tryAgain")}
-            </Button>
-          ) : null}
-          {finished && ready.length === 0 ? null : (
-            <Button
-              onClick={() => void send()}
-              disabled={ready.length === 0 || !collection || running}
-            >
-              {running
-                ? t("knowledge.upload.uploading")
-                : ready.length > 1
-                  ? t("knowledge.upload.buttonMany", { count: ready.length })
-                  : t("knowledge.upload.button")}
-            </Button>
-          )}
+          <KnowledgeUploadButtons
+            done={finished && ready.length === 0}
+            running={running}
+            ready={ready.length}
+            canSend={ready.length > 0 && !!collection && !running}
+            retryable={items.some((i) => i.retryable)}
+            replaceable={items.some((i) => i.replaceable)}
+            onCancel={cancel}
+            onRequeue={requeue}
+            onSend={() => void send()}
+          />
         </DialogFooter>
       </DialogContent>
     </Dialog>

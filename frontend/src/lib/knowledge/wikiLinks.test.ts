@@ -33,7 +33,15 @@ describe("markWikiLinks", () => {
 
 describe("resolveWikiLink", () => {
   test("matches a target case-insensitively", () => {
-    const links = [{ target: "Session-Ownership", path: "c/pages/s.md", ambiguous: false }];
+    const links = [
+      {
+        target: "Session-Ownership",
+        path: "c/pages/s.md",
+        ambiguous: false,
+        kind: "wiki" as const,
+        outside: false,
+      },
+    ];
     expect(resolveWikiLink(links, "session-ownership")?.path).toBe("c/pages/s.md");
     expect(resolveWikiLink(links, "gone")).toBeUndefined();
     expect(wikiTargetOf("https://example.com")).toBeNull();

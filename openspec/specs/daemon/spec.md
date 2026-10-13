@@ -603,6 +603,27 @@ none of these files itself.
 - **THEN** the request is rejected with `FS_PATH_NOT_OPENABLE` (400), no launcher process is started and nothing is created,
 - **AND** `GET /api/v1/fs/editors` lists the GUI editors detected on this host, each with the launcher value that `/fs/open`'s `with` field accepts.
 
+### Requirement: Open web links in the default browser
+The daemon MUST expose `POST /api/v1/fs/open-url`, which opens a web link in the host's default
+browser: the links in a document the desktop app shows, whose webview opens no window of its own.
+It MUST accept only an `http`, `https` or `mailto` link — with a host, for `http` and `https` —
+of at most 8192 characters with no whitespace or control character, and refuse anything else
+(`FS_PATH_NOT_OPENABLE`, 400, reason `not_a_web_link`) before any process is started, so the
+route never opens a file, runs a `javascript:` link or launches an application's own scheme. It
+MUST invoke the OS's URL handler with a fixed argument vector and no shell interpolation (on
+Windows not through `cmd`, which would read a query string's `&` as a separator), and is guarded by
+the same loopback + token auth as all other daemon routes.
+
+#### Scenario: a web link opens in the default browser
+- **GIVEN** a link `https://confluence.example/pages/viewpage.action?pageId=1&x=2`
+- **WHEN** it is sent to `POST /api/v1/fs/open-url`
+- **THEN** the OS URL handler is started once with the link as one argument
+
+#### Scenario: anything but a web link is refused
+- **GIVEN** a `file:` URL, a `javascript:` link, an application's own scheme, an `https:` link with no host, a link with a space and an empty string
+- **WHEN** each is sent to `POST /api/v1/fs/open-url`
+- **THEN** each is refused with `FS_PATH_NOT_OPENABLE`, reason `not_a_web_link`, and no process is started
+
 ### Requirement: Write one bounded daemon log in one format
 `~/.coffer/logs/daemon.log` MUST be the one file the daemon, the children it spawns, and every
 surface writing on their behalf append to — one timeline rather than one file per writer, because

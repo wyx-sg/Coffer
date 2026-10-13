@@ -62,7 +62,7 @@ def test_hidden_entries_are_in_no_listing_count_or_catalogue(  # type: ignore[no
 
     # The tree names the document — and nothing from `.scratch/` or the inbox.
     level = client.get("/api/v1/knowledge/tree", params={"path": "shopee"}).json()
-    assert level["files"] == []
+    assert [f["path"] for f in level["files"]] == ["shopee/README.md"]
     assert [d["path"] for d in level["directories"]] == ["shopee/sources"]
     level = client.get("/api/v1/knowledge/tree", params={"path": "shopee/sources"}).json()
     assert [f["path"] for f in level["files"]] == [document]

@@ -66,7 +66,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `state/settings/internal-engine.json` | 语音转文字模型，以及记忆同步的开关和间隔。不存在时用默认值。 | 你、守护进程 | 是 | 可以：设置恢复默认。 |
 | `state/secret-notes/notes.json` | 每个密钥的标签和描述（从不含值）。 | 你、守护进程 | 是 | 标签和描述会丢失，值还在。 |
 | `state/cli-tools/tools.json` | 你手动添加的命令行工具，以及你对技能所需工具的修改。 | 你、守护进程 | 是 | 可以：手动添加的工具和你的修改会丢失。 |
-| `knowledge/<collection>/` | 一个知识集：一个描述它的 `README.md`，加上 `pages/`、`sources/` 和 `assets/`。放在其他位置的 Markdown 文档会被扫描移进 `pages/`。整理则由智能体来合并和纠正。 | 你、守护进程 | 是 | **不能。** 这是写下来的知识。 |
+| `knowledge/<collection>/` | 一个知识集：一个描述它的 `README.md`，加上 `pages/`、`sources/` 和 `assets/`。它自己的文件（`index.md`、`log.md`）留在写入的位置；Coffer 不移动任何文件。整理则由智能体来合并和纠正。 | 你、守护进程 | 是 | **不能。** 这是写下来的知识。 |
 | `knowledge/<collection>/pages/` | wiki 本身：任意层级嵌套的 Markdown 页面，由你和你的智能体编写并保持更新。 | 你、你的智能体、守护进程 | 是 | **不能。** 这是写下来的知识。 |
 | `knowledge/<collection>/sources/` | 到达的素材——每次上传和每个收件箱文件——按原样以 Markdown 保留。智能体读来源，从不编辑来源。 | 守护进程 | 是 | **不能。** 页面引用这些来源。 |
 | `knowledge/<collection>/assets/` | 从上传的文档里取出的图片，每次上传一个文件夹，由对应的来源链接。 | 守护进程 | 是 | **不能。** 来源要显示这些图片。 |

@@ -23,6 +23,9 @@ class HostPlatform:
     def reveal_command(self, target: Path) -> list[str]:
         return desktop.reveal_command(target)
 
+    def url_command(self, url: str) -> list[str]:
+        return desktop.url_command(url)
+
     def folder_picker_command(self, start: str | None) -> list[str] | None:
         return desktop.folder_picker_command(start)
 

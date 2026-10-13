@@ -25,6 +25,11 @@ export interface UploadItem {
   path?: string;
   /** Refused by the daemon rather than before sending: Try again sends it again. */
   retryable?: boolean;
+  /** Refused as a page already imported: Replace sends it again with `replace`. */
+  replaceable?: boolean;
+  replace?: boolean;
+  /** Saved, but the import left these behind (missing or unsupported parts). */
+  partial?: string[];
 }
 
 interface Props {
@@ -70,6 +75,20 @@ export function KnowledgeUploadRow({ item, removable, onRemove }: Props) {
           </Button>
         ) : null}
       </div>
+      {item.partial ? (
+        <div
+          role="status"
+          data-testid="upload-partial"
+          className="flex flex-col gap-[3px] rounded-lg bg-warning-soft px-3 py-2.5"
+        >
+          <p className="text-sm font-label">{t("knowledge.upload.partialTitle")}</p>
+          <ul className="list-disc pl-4 text-xs leading-[1.45] text-text-muted">
+            {item.partial.map((part) => (
+              <li key={part}>{part}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {item.refusal ? (
         <div
           role="alert"
@@ -129,5 +148,51 @@ export function KnowledgeUploadZone({
         <span className="text-xs text-text-subtle">{t("knowledge.upload.types")}</span>
       )}
     </button>
+  );
+}
+
+interface FooterProps {
+  /** Every file is sent: the outcomes are on their rows. */
+  done: boolean;
+  running: boolean;
+  ready: number;
+  canSend: boolean;
+  retryable: boolean;
+  replaceable: boolean;
+  onCancel: () => void;
+  onRequeue: (flag: "retryable" | "replaceable") => void;
+  onSend: () => void;
+}
+
+/** The dialog's buttons: Cancel or Close, Replace and Try again once a batch is
+ *  done with files to send again, and Upload while files wait. */
+export function KnowledgeUploadButtons(props: FooterProps) {
+  const { t } = useTranslation();
+  const { done, running, ready } = props;
+  return (
+    <>
+      <Button variant="ghost" onClick={props.onCancel}>
+        {done ? t("common.close") : t("common.cancel")}
+      </Button>
+      {done && props.replaceable ? (
+        <Button variant="outline" onClick={() => props.onRequeue("replaceable")}>
+          {t("knowledge.upload.replace")}
+        </Button>
+      ) : null}
+      {done && props.retryable ? (
+        <Button variant="outline" onClick={() => props.onRequeue("retryable")}>
+          {t("common.tryAgain")}
+        </Button>
+      ) : null}
+      {done ? null : (
+        <Button onClick={props.onSend} disabled={!props.canSend}>
+          {running
+            ? t("knowledge.upload.uploading")
+            : ready > 1
+              ? t("knowledge.upload.buttonMany", { count: ready })
+              : t("knowledge.upload.button")}
+        </Button>
+      )}
+    </>
   );
 }

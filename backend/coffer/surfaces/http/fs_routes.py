@@ -1,7 +1,7 @@
 """/api/v1/fs/* — local filesystem browse + open/reveal.
 
-Spec daemon "Browse folders without reading files" and "Open and reveal
-existing absolute paths".
+Spec daemon "Browse folders without reading files", "Open and reveal
+existing absolute paths" and "Open web links in the default browser".
 
 Backs the web folder picker (browse) and the read-only file viewers' open/reveal
 actions. A browser can't read absolute paths or reach the OS, but the loopback
@@ -71,6 +71,10 @@ class FsRevealRequest(BaseModel):
     path: str
 
 
+class FsOpenUrlRequest(BaseModel):
+    url: str
+
+
 @router.get("/browse", response_model=FsBrowseOut)
 async def browse(
     path: str | None = None,
@@ -104,6 +108,16 @@ async def reveal_path(
 ) -> Response:
     """Select / reveal `path` in the OS file manager."""
     await asyncio.to_thread(svc.reveal, body.path)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/open-url", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+async def open_url(
+    body: FsOpenUrlRequest,
+    svc: FsOpenService = Depends(get_fs_open_service),  # noqa: B008
+) -> Response:
+    """Open a web link (`http`, `https`, `mailto`) in the default browser."""
+    await asyncio.to_thread(svc.open_url, body.url)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

@@ -1,7 +1,7 @@
 // frontend/src/lib/knowledge/wikiLinks.ts
 //
 // A page's `[[target]]` and `[[target|text]]` links (spec knowledge "Link
-// pages by slug and check every link"), made renderable: outside code spans
+// pages by slug or relative path and check every link"), made renderable: outside code spans
 // and fenced blocks each becomes an ordinary Markdown link whose href carries
 // the target behind a `#wiki:` marker, so the reader's link element can look
 // it up in the page's resolved `links` and open the file it names — or mark it

@@ -223,12 +223,17 @@ export function uploadFile(params: {
   /** The collection's NAME: this lands material in its directory. */
   collection: string;
   file: File;
+  /** Import a page already imported again, marking the older source replaced
+   *  (spec knowledge "Import a Confluence page as a readable source with its
+   *  attachments"). */
+  replace?: boolean;
   /** Aborts the request — the upload dialog's Cancel while it converts. */
   signal?: AbortSignal;
 }): Promise<IngestedDocumentOut> {
   const form = new FormData();
   form.append("file", params.file);
   form.append("collection", params.collection);
+  if (params.replace) form.append("replace", "true");
   // A FormData body goes out with no Content-Type: the browser sets the
   // multipart boundary itself. `body` only carries the generated type.
   return unwrap(

@@ -134,3 +134,16 @@ shell").
   error. The `available: false` path is not exercised in CI.
 - Adding a new OS action means a daemon route with the four rules above, never
   a Tauri plugin or a browser API branch.
+
+## Addendum (2026-10-13): opening a web link
+
+The desktop shell's webview opens no window of its own, so a web link in a
+knowledge page had nowhere to go. `POST /fs/open-url` opens one in the
+default browser, under the same guard as the other routes, with the URL in
+place of the path: it must be `http`, `https` (with a host) or `mailto`, at
+most 8192 characters, with no whitespace or control characters, and is
+refused with `FS_PATH_NOT_OPENABLE` (reason `not_a_web_link`) otherwise. It is
+launched with a fixed argument vector (`open`, `xdg-open`, or `rundll32
+url.dll,FileProtocolHandler`). In a browser the page opens the link itself in
+a new tab. See
+[Confluence Pages Import as Readable Sources With Their Attachments](confluence-pages-import-as-readable-sources.md).
