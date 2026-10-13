@@ -18,7 +18,7 @@ from coffer.infrastructure.knowledge.converters.confluence import markers
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
 
 #: The keys of an origin a reader is shown, in order.
-_ORIGIN_KEYS = ("system", "title", "url", "page_id", "space", "version", "fetched_at", "raw")
+_ORIGIN_KEYS = ("system", "title", "url", "page_id", "space", "version", "fetched_at")
 #: Where a Confluence export's own frontmatter says the same things.
 _ALIASES = {"url": ("url", "origin", "source"), "fetched_at": ("fetched_at", "retrieved_at")}
 

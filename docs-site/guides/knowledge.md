@@ -33,9 +33,7 @@ A **collection** is a top-level folder under the knowledge root:
     │   ├── gateway-design-1a2b3c4d/ ← the pictures taken out of one upload
     │   │   └── image-1.png
     │   └── confluence-12345-v7/     ← an imported Confluence page's attachments
-    │       ├── flow.drawio.png      ←   a diagram's picture, and its source:
-    │       ├── flow.drawio
-    │       └── storage.xml          ←   the page as Confluence stored it
+    │       └── flow.drawio.png      ←   a diagram's picture, as the page shows it
     ├── pages/
     │   ├── session-ownership.md     ← a page
     │   └── gateway/
@@ -45,7 +43,7 @@ A **collection** is a top-level folder under the knowledge root:
 
 - **`README.md`** at the collection root is the collection's **schema**. Its first paragraph, before its first `##` section, is the collection's description everywhere Coffer shows one, and it is what the `coffer-guide` skill tells agents the collection is about. Its **Page types** and **Rules** sections, and anything else it says about the conventions the collection uses, take precedence over the guide's defaults. `verify_after_days` in its frontmatter sets how long a page's check holds (see [Pages due a recheck](#pages-due-a-recheck)). It is never listed as a page or a source, or counted.
 - **`sources/`** keeps the material that arrived: every upload and every file dropped into the inbox, converted to Markdown. The file you uploaded is not put in the collection: Coffer keeps it on the Mac you uploaded it from (see [Pictures and the original file](#pictures-and-the-original-file)). Agents read sources and never edit them.
-- **`assets/`** holds the pictures Coffer took out of uploaded documents, one folder per upload, and an imported Confluence page's attachments, diagram sources and stored page (see [Import a Confluence page](#import-a-confluence-page)). A source links its pictures, so you see them when you read it and agents can open them. They sync with the collection and have history, like the Markdown.
+- **`assets/`** holds the pictures Coffer took out of uploaded documents, one folder per upload, and an imported Confluence page's attachments (see [Import a Confluence page](#import-a-confluence-page)). A source links its pictures, so you see them when you read it and agents can open them. They sync with the collection and have history, like the Markdown.
 - **`pages/`** holds the wiki itself: the pages you and your agents write and keep up to date. This is what agents read first.
 - **Folders** inside `pages/` and `sources/` are optional and carry no meaning. You or your agent can create, move and remove them. `pages/`, `sources/` and `assets/` are the only folders that mean anything.
 - **The collection's own files.** Anything else you or your agent keep in a collection, such as an `index.md` or a `log.md` beside the README, or a folder of your own, stays where it was written. It is listed in the tree and its links are checked, but it is never catalogued, counted, or asked for a type or sources. Coffer never moves a file on its own.
@@ -91,7 +89,7 @@ The `account-session` service owns ... see [[rate-limits|the gateway's limits]].
 
 Coffer writes no page itself: whoever writes a page gives it these keys, as the `coffer-guide` skill teaches agents. A page that lacks `title`, `type` or `description`, names neither `sources` nor `evidence`, or has no `verified`, still works; it shows up as a finding when the collection is [checked](#check-a-collection).
 
-A source carries the keys Coffer writes when it keeps one — `title`, `description`, `actor`, `created_at`, `updated_at`, and, for a source converted from an uploaded file, `original` (the file's name) and `original_sha256` (its fingerprint), or, for an imported Confluence page, `origin` (where it came from) and `import_report` (what the import kept and left out). Leave those as they are. Frontmatter an uploaded Markdown file already had becomes the source's own, in the one block, never a second block in the body. An agent, or you, may add three more, which describe the source without changing what it says:
+A source carries the keys Coffer writes when it keeps one — `title`, `description`, `actor`, `created_at`, `updated_at`, and, for a source converted from an uploaded file, `original` (the file's name) and `original_sha256` (its fingerprint), and, for an imported Confluence page, `origin` (where it came from) and `import_report` (what the import kept and left out). Leave those as they are. Frontmatter an uploaded Markdown file already had becomes the source's own, in the one block, never a second block in the body. An agent, or you, may add three more, which describe the source without changing what it says:
 
 | Key | Meaning |
 | --- | --- |
@@ -219,8 +217,8 @@ coffer knowledge upload payments account-core.json --attachments account-core-fi
 `--attachments` adds the files in a folder downloaded beside the export, by their Confluence file names. Coffer turns the page into a source you can read:
 
 - **The body reads as the page.** Each macro becomes what a reader of the page sees: a macro that only arranges its content (numbered headings, sections, columns, expand, tabs) gives that content back, an info, note, tip or warning panel becomes a labelled quote, a code block keeps its language, and a table with merged cells stays a table. What Confluence generates from elsewhere, such as a table of contents or a child-page list, is left out and said so. Nothing of Confluence's own markup shows when you read the source.
-- **Attachments are kept.** Pictures and files the page uses land in `assets/confluence-<page id>-v<version>/` and the source links them. A draw.io diagram keeps its `.drawio` source beside its picture, and a PlantUML diagram keeps its text as a `.puml` file. Coffer renders no diagram and sends nothing to an outside service.
-- **The page as Confluence stored it** is kept as `storage.xml` in the same folder, so nothing in the export is lost.
+- **Attachments are kept.** Pictures and files the page uses land in `assets/confluence-<page id>-v<version>/` and the source links them. A diagram shows as the page had it: an attached draw.io diagram as its picture, a draw.io link as that link, and a draw.io diagram drawn in the page as a **draw.io diagram** link that opens it in draw.io's viewer. The diagram travels in the part of the link after `#`, which your browser never sends to a server. A PlantUML diagram shows its source as a code block. Coffer downloads nothing, renders no diagram and sends nothing to an outside service.
+- **The export itself is the source's original.** Like any upload's, it stays on the Mac you imported it on, outside the vault, and the line under the source's title reads **Original** and its name (see [Pictures and the original file](#pictures-and-the-original-file)).
 - **Where it came from** goes in the source's one frontmatter block as `origin`: the Confluence URL, page id, space, version and when it was fetched. Under the source's title the Knowledge page shows **From confluence** and a link to the page.
 - **What was left out is said.** `import_report` records whether the body converted fully, and, separately for attachments and macros, what was kept, missing or unsupported, with the reason. When anything is missing, the upload dialog stays open and lists it, and the source's line shows **Partial import**.
 
@@ -241,7 +239,7 @@ Not kept: an attachment of another page, an embed from another service (Google D
 
 The pictures sync to your other Macs with the collection and have history like any file in it. A scanned PDF whose pages are only pictures, with no text, is still refused.
 
-**The original file.** The file you uploaded is kept on the Mac you uploaded it from, outside the vault, and never synced: originals such as decks and PDFs are large, and the Markdown and pictures are what agents read. The source names it, so when you open the source on that Mac the line under its title reads **Original** and the file's name; click the name to open the file in its default app, to see the layout as it was. On your other Macs the line says **Original `<name>` is on the Mac it was uploaded from**. A Markdown or text upload is its own source, so there is no original to keep.
+**The original file.** The file you uploaded is kept on the Mac you uploaded it from, outside the vault, and never synced: originals such as decks and PDFs are large, and the Markdown and pictures are what agents read. The source names it, so when you open the source on that Mac the line under its title reads **Original** and the file's name; click the name to open the file in its default app, to see the layout as it was. On your other Macs the line says **Original `<name>` is on the Mac it was uploaded from**. A Markdown or text upload is its own source, so there is no original to keep, unless converting it rewrote it (a Confluence export's storage markers made readable); then the file you uploaded is kept like any other.
 
 ### A file in the inbox {#a-file-in-the-inbox}
 

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-10-13
 **Deciders**: Yuxing Wu
-**Related**: [Knowledge Sources Keep Their Images; Originals Stay on This Mac](knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md); [Knowledge Is a Wiki of Pages Compiled From Kept Sources](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md); [Knowledge Files Stay Where Their Writer Put Them, and Every Link Is Checked](knowledge-files-stay-where-their-writer-put-them.md); [The Loopback Daemon Performs OS File Actions for the UI](daemon-proxies-os-file-actions.md); spec knowledge "Import a Confluence page as a readable source with its attachments", spec daemon "Open web links in the default browser"; OpenSpec change `respect-knowledge-file-locations-and-import-confluence`
+**Related**: [Knowledge Sources Keep Their Images; Originals Stay on This Mac](knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md); [Knowledge Is a Wiki of Pages Compiled From Kept Sources](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md); [Knowledge Files Stay Where Their Writer Put Them, and Every Link Is Checked](knowledge-files-stay-where-their-writer-put-them.md); [The Loopback Daemon Performs OS File Actions for the UI](daemon-proxies-os-file-actions.md); spec knowledge "Import a Confluence page as a readable source with its attachments", spec daemon "Open web links in the default browser"; OpenSpec changes `respect-knowledge-file-locations-and-import-confluence`, `keep-confluence-export-as-original`
 
 ## Context
 
@@ -71,7 +71,7 @@ none report what was lost.
   content inside a wrapping macro is hidden in them.
 - Why it lost: it is the failure this change fixes.
 
-### Option C — Readable Markdown plus the raw storage beside it, with a report (chosen)
+### Option C — Readable Markdown with its attachments, the export kept as the original, and a report (chosen)
 
 - The page becomes one source in `sources/`, Markdown first, with HTML kept
   where Markdown cannot express it (merged cells) and rendered safely: comments
@@ -79,12 +79,13 @@ none report what was lost.
 - Every macro is read for what a reader sees. A macro that only arranges its
   body (`numberedheadings`, `section`, `column`, `expand`, tabs) gives the body
   back; `info`/`note`/`tip`/`warning` become a labelled quote; `code` keeps its
-  language; `plantuml` and draw.io keep their source as a file; generated
+  language; a diagram shows as the page had it (amended 2026-10-13); generated
   content (`toc`, `children`) is dropped and said so; an unknown macro keeps
   its body or is reported unsupported.
 - Attachments go to `assets/confluence-<page id>-v<version>/`, linked
-  relatively, with a diagram's `.drawio` source kept beside its picture. The
-  page's storage is kept as `storage.xml` in the same folder.
+  relatively. The
+  export itself is the upload's original: kept on the Mac it was imported on,
+  never in the vault, like a PDF's or a deck's (amended 2026-10-13, below).
 - The export's metadata becomes the source's frontmatter under `origin`
   (system, URL, page id, space, version, fetched time), so there is one YAML
   block. `import_report` records the body (converted or partial) and what was
@@ -99,18 +100,19 @@ none report what was lost.
   inside the knowledge base.
 
 - Pro: a person and an agent read the page as the page; nothing Confluence
-  wrote is lost, because the storage is kept.
+  wrote is lost, because the export is kept as the original.
 - Pro: what was lost is said, per item, in the upload dialog and on the file.
 - Pro: re-import is explicit, previewable and recoverable.
-- Con: the vault keeps the storage of every version imported; a page with many
-  versions grows the vault by each one.
+- Con: the vault keeps the attachments of every version imported; a page with
+  many versions grows the vault by each one.
 - Con: the converter knows a fixed list of macros; a new one shows up as
   unsupported until it is added.
 
 ## Decision
 
 **Option C.** A Confluence page export becomes a readable source with its
-storage and attachments kept beside it under `assets/`, its metadata in its
+attachments kept beside it under `assets/`, the export itself kept as its
+original on this Mac, its metadata in its
 one frontmatter block, and a report of what was kept, missing and unsupported.
 A re-import is explicit, previewable, and leaves the older version in place,
 marked superseded.
@@ -120,12 +122,13 @@ Rules a future change must respect:
 - **No markup in the reader.** Nothing Confluence wrote for itself (macros,
   markers, comments) reaches the rendered page; what cannot be shown is
   reported instead.
-- **The storage is kept.** A future converter can always re-read the page from
-  `storage.xml` without asking Confluence again.
+- **The export is kept.** A future converter can always re-read the page from
+  the original on the Mac it was imported on, without asking Confluence again.
 - **Never overwrite an import.** A re-import is a new version folder and a new
   source; the older one is superseded, not replaced in place.
-- **Diagram sources are kept, never rendered by an outside service.** Coffer
-  sends no page content to a diagram renderer.
+- **A diagram shows as the page had it, never rendered by an outside
+  service.** Coffer sends no page content to a diagram renderer and downloads
+  nothing the export did not carry.
 - **Web links leave through the daemon only for http, https and mailto.**
 
 ## Consequences
@@ -137,7 +140,48 @@ Rules a future change must respect:
 - An attachment on another page, an embed from another service (Google Drive,
   Jira charts) and an attachment the export did not download are reported
   missing, not fetched.
-- Diagrams are kept as their picture and source; Coffer does not render a
-  diagram that has no picture.
+- A diagram is its picture, its link or its PlantUML source; Coffer does not
+  render a diagram that has no picture.
 - The daemon's OS-action surface gains one route, `POST /fs/open-url`, with the
   same guard as the others.
+
+## Amendment (2026-10-13): the export is the original, and a diagram shows as the page had it
+
+As first shipped, the page's storage was also written into the vault as
+`storage.xml` beside the attachments. That made an imported page the one upload
+whose raw form was synced to every Mac, unlike a PDF's or a deck's, which
+[Knowledge Sources Keep Their Images; Originals Stay on This Mac](knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md)
+keeps on the uploading Mac only. Now:
+
+- **The export is the upload's original.** It gets `original` and
+  `original_sha256` like any other upload and is kept in
+  `~/.coffer/local/knowledge-originals/`, never synced; no `storage.xml` is
+  written and `origin` has no `raw` key. A Markdown upload whose storage
+  markers were expanded keeps its file the same way, because the source is no
+  longer what was uploaded.
+- **No `raw/` folder.** Karpathy's LLM-wiki keeps raw material in a `raw/`
+  folder, and Obsidian vaults often keep an attachments folder of originals.
+  Here `sources/` already is the raw layer agents read, and an original beside
+  it would be synced bytes no agent reads. The user chose to keep this layout
+  (decision card, 2026-10-13).
+- **A diagram shows as the page had it, and Coffer keeps no file of its own
+  for it** (the user's words: "是图片我们直接展示了图片，是链接就展示链接。不要自己再去下载之类的").
+  As first shipped, a diagram held in the page was decoded into a `.drawio`
+  file and the page's viewer link pointed at that file, and a PlantUML macro
+  became a `.puml` file; a reader could no longer click through to the
+  diagram. Now an attached draw.io diagram shows its picture; a viewer link
+  stays the link it was; a diagram drawn inline gets a viewer link
+  (`https://viewer.diagrams.net/?lightbox=1&nav=1#R…`) carrying the diagram in
+  its fragment, the way draw.io's own "link" export does; a PlantUML macro
+  shows its source as a code block. A browser never sends a fragment to the
+  server, so the diagram is drawn in the reader's browser, as it was in
+  Confluence. Comparable tools do the same: confluence-markdown-exporter and
+  Notion's importer keep the picture and drop the macro, and none keeps a
+  diagram file the page did not have.
+- **PlantUML is not rendered.** Rendering it needs Java and PlantUML on the Mac
+  (the VS Code and Obsidian PlantUML extensions) or a rendering server
+  (GitLab); a public server would see internal diagrams. The user chose to
+  show the source only (decision card, 2026-10-13).
+
+Old imports keep their `storage.xml` and diagram files; nothing is deleted
+from the vault.

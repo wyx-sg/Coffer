@@ -37,7 +37,7 @@ Knowledge is also distinct from [memory](/architecture/memory). Knowledge is abo
 | Tidying starts only when a person presses **Tidy** or **Tidy all**. Coffer starts no agent run of its own. | An unattended agent run would spend the person's quota without their knowledge and leave conversations nobody started. |
 | A tidy is one commit: while the agent works, the collection is paused in the vault writer, and finishing commits every edit at once with the agent's report. A tidy can be undone as one new commit. | The history itself holds the boundary, so the change log, a file's history and sync see one unit, and undo is the inverse of one commit. A grouping kept anywhere else would be a second record of the history. |
 | Coffer moves no file. A file outside `pages/`, `sources/` and `assets/`, an `index.md` beside the README say, is the collection's own; its links are checked and it is never asked for a type or sources. | Navigation files are part of a hand-built wiki, and a move breaks every relative link to the file. The writer decides where a file lives; Coffer reports what is broken. See [Knowledge Files Stay Where Their Writer Put Them](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-files-stay-where-their-writer-put-them.md). |
-| A Confluence page export becomes a readable source: macros read for what they show, the page's storage, attachments and diagram sources kept under `assets/`, its metadata in the one frontmatter block, and a report of what was left out. A re-import is explicit and supersedes the older source. | A source nobody can read is not knowledge, and a silent loss looks like a clean import. See [Confluence Pages Import as Readable Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/confluence-pages-import-as-readable-sources.md). |
+| A Confluence page export becomes a readable source: macros read for what they show, attachments kept under `assets/`, the export kept as the original on this Mac, its metadata in the one frontmatter block, and a report of what was left out. A re-import is explicit and supersedes the older source. | A source nobody can read is not knowledge, and a silent loss looks like a clean import. See [Confluence Pages Import as Readable Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/confluence-pages-import-as-readable-sources.md). |
 | Every accepted write is one git commit naming its writer. | Agents rewrite the only copy. A history of who changed what makes every change inspectable and every version one `git` or one hand-off to an agent away, and it is the collection's change log. |
 | The newer statement wins unless the older one is shown to be right. No writer is exempt. | A statement is judged by when it was made and the evidence behind it, never by who wrote it: a person's edit and an agent's can both be stale or wrong. The vault's history and a restore from a file's history are the recovery path. |
 | No retrieval tool. The catalogue rides in Coffer's own skill. | Agents read files with the tools they already use. The layer's job is to put the right absolute paths in front of the model. |
@@ -57,7 +57,7 @@ Knowledge is also distinct from [memory](/architecture/memory). Knowledge is abo
 │   ├── assets/
 │   │   ├── q3-review-1a2b3c4d/      # an upload's pictures: <title-slug>-<first 8 hex of its sha256>
 │   │   │   └── image-1.png          # linked from the source as ../assets/q3-review-1a2b3c4d/image-1.png
-│   │   └── confluence-42-v7/        # an imported Confluence page: attachments, diagram sources, storage.xml
+│   │   └── confluence-42-v7/        # an imported Confluence page: its attachments
 │   ├── pages/
 │   │   ├── session-ownership.md     # a page
 │   │   └── infra/
@@ -135,7 +135,6 @@ origin:
   version: 7
   fetched_at: '2026-10-13T08:00:00+00:00'
   format: confluence-storage
-  raw: ../assets/confluence-42-v7/storage.xml
 import_report:
   body: partial             # or converted
   complete: false
@@ -143,6 +142,8 @@ import_report:
   missing: ['gone.png: not downloaded with the page']
   unsupported: ['jira: a Jira issue list']
 actor: user
+original: account-core.json
+original_sha256: 9f86d0…
 ---
 ```
 
@@ -161,7 +162,7 @@ Every entrance Coffer serves ends in a source. None of them waits. Pages are wri
 | Entrance | Surface | Ends in |
 | --- | --- | --- |
 | Upload, converted to Markdown first | The Knowledge page, `coffer knowledge upload` | A source, its pictures under `assets/`, and the original on this Mac |
-| A Confluence page export (JSON) | The Knowledge page, `coffer knowledge upload` | A readable source, its attachments, diagram sources and storage under `assets/`, and an import report |
+| A Confluence page export (JSON) | The Knowledge page, `coffer knowledge upload` | A readable source, its attachments under `assets/`, and an import report |
 | A Markdown file dropped into `<collection>/.inbox/` | An agent outside Coffer, another machine, or an older guide; the sweep adopts it | A source |
 | A page written straight into `pages/` | An agent's own file tools, or a person's editor | A page, committed as an edit on disk |
 
@@ -216,9 +217,9 @@ The 20 MiB ceiling stays.
 
 ### Confluence pages {#confluence-pages}
 
-`infrastructure/knowledge/converters/confluence/` reads a page export (`page.read`: storage, title, page id, version, space, URL, and attachments carried as base64) and converts the storage with BeautifulSoup before markdownify. `macros.py` rewrites each `ac:structured-macro` as plain HTML for what a reader sees: arranging macros give their body back, panels become a labelled quote, `code`/`noformat` keep their text and language, draw.io and PlantUML keep their source as a file, generated content (`toc`, `children`) is dropped and recorded, and an unknown macro keeps its body or is recorded unsupported. `storage.py` turns `ac:image`, `ac:link` and `ri:attachment` into links under the page's folder, and keeps a table with merged cells as HTML. Every outcome lands on a `Context` and becomes the `ImportReport`: the body `converted` or `partial`, then attachments and macros as separate lists of kept, source-kept, converted, dropped, missing and unsupported items with reasons.
+`infrastructure/knowledge/converters/confluence/` reads a page export (`page.read`: storage, title, page id, version, space, URL, and attachments carried as base64) and converts the storage with BeautifulSoup before markdownify. `macros.py` rewrites each `ac:structured-macro` as plain HTML for what a reader sees: arranging macros give their body back, panels become a labelled quote, `code`/`noformat` keep their text and language, an attached draw.io diagram shows its picture and one drawn in the page becomes a viewer link, PlantUML shows its source as a code block, generated content (`toc`, `children`) is dropped and recorded, and an unknown macro keeps its body or is recorded unsupported. `storage.py` turns `ac:image`, `ac:link` and `ri:attachment` into links under the page's folder, and keeps a table with merged cells as HTML. Every outcome lands on a `Context` and becomes the `ImportReport`: the body `converted` or `partial`, then attachments and macros as separate lists of kept, converted, dropped, missing and unsupported items with reasons.
 
-The page's files go to `assets/confluence-<page id>-v<version>/`, chosen so a newer version never overwrites an older one's files (suffixed `-2` if the folder exists), with the raw storage as `storage.xml`. No diagram is rendered and nothing is sent to an outside service.
+The page's files go to `assets/confluence-<page id>-v<version>/`, chosen so a newer version never overwrites an older one's files (suffixed `-2` if the folder exists). The export itself is the source's original, kept on this Mac like any upload's (`originals.keep`), never in the vault. A draw.io diagram drawn in the page becomes a viewer link (`diagrams.viewer_link`) carrying the diagram in its `#R` fragment, as draw.io's own link export does; a viewer link the page had stays as it was. Coffer keeps no diagram file of its own, renders nothing and sends nothing to an outside service: a browser never sends a fragment to the server.
 
 A source written before this converter may still carry an exporter's comment markers and a second frontmatter block in its body. Coffer does not rewrite it: `source_view.readable_body` strips the inner block and expands the markers for the read (`readable_body` on `GET /api/v1/knowledge/file`), and `source_view.origin` reads where it came from out of either block. The reader shows `readable_body` with a note that it is a converted view.
 
@@ -486,7 +487,7 @@ Coffer embeds nothing. It has no vector store, no embedding model and no FTS ind
 - **Pictures grow the vault, and leftovers stay.** Every kept picture is in the git history for good. Deleting a source leaves its `assets/` folder, and its original on the uploading Mac; neither is cleaned up automatically.
 - **A tidy holds its collection's edits uncommitted.** Until the agent finishes, or the collection sits unchanged for 30 minutes, its edits are only on disk, and a sync round that would change one of them waits. A restart loses the grouping, never an edit.
 - **Nothing keeps the layout.** Coffer no longer files a document left outside `pages/`, so a collection can drift from the `pages/`/`sources/` shape. The check reports dead and outside links, not a file in an unexpected folder, because no folder is wrong.
-- **A Confluence import keeps every version's files.** A re-import writes a new folder under `assets/` with its own `storage.xml`, and the older one stays for the source it superseded; the vault grows by each version imported.
+- **A Confluence import keeps every version's files.** A re-import writes a new folder under `assets/` with its own attachments, and the older one stays for the source it superseded; the vault grows by each version imported.
 - **The history grows with every write.** Nothing prunes it. It sits beside the files and holds text that was later folded away or deleted.
 - **User content can leave the machine only through the agent the person chose.** Coffer sends no knowledge to any model. Tidy sends it to the agent's own provider, as every conversation does.
 - **Nothing here is access control.** An agent with shell tools can read any file under the knowledge root. Every collection is named to every agent; the only way to keep a collection from agents is to delete it.

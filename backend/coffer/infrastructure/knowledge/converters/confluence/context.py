@@ -54,7 +54,6 @@ class Context:
     keeps_files: bool = True
     _stored: dict[str, str] = field(default_factory=dict)
     _taken: set[str] = field(default_factory=set)
-    _counters: dict[str, int] = field(default_factory=dict)
 
     def link(self, stored: str) -> str:
         """The relative link from a source under ``sources/`` to a kept file."""
@@ -70,19 +69,6 @@ class Context:
             n += 1
         self._taken.add(candidate.lower())
         return candidate
-
-    def add_file(self, wanted: str, data: bytes) -> str:
-        """Keep a file the conversion made (a diagram's source, the raw page)
-        and answer its link; ``""`` when this conversion keeps no files."""
-        if not self.keeps_files:
-            return ""
-        stored = self._free(safe_name(wanted))
-        self.files.append(ConvertedFile(stored, data))
-        return self.link(stored)
-
-    def next_number(self, kind: str) -> int:
-        self._counters[kind] = self._counters.get(kind, 0) + 1
-        return self._counters[kind]
 
     def has(self, name: str) -> bool:
         return name in self._stored or name in self.attachments

@@ -37,7 +37,7 @@ description: Coffer 的知识层如何工作：每个知识集是一个由保留
 | 只有人按下**整理**或**整理全部**时，才开始整理。Coffer 不会自己启动智能体运行。 | 无人值守的智能体运行会在人不知情时消耗他的额度，还会留下没人开过的对话。 |
 | 一次整理就是一次提交：智能体工作期间，知识集在保险库写入者里被暂停，结束时把所有编辑连同智能体的汇报一次提交。一次整理可以作为一次新提交整体撤销。 | 分界就在历史本身里，所以改动记录、文件历史和同步看到的是同一个单位，撤销就是一次提交的逆操作。放在别处的分组，就成了历史的第二份记录。 |
 | Coffer 不移动任何文件。`pages/`、`sources/` 和 `assets/` 之外的文件，比如 README 旁边的 `index.md`，是知识集自己的文件；它的链接会被检查，但从不要求它有类型或来源。 | 导航文件是手工搭建的 wiki 的一部分，而移动会弄坏指向这个文件的每个相对链接。文件放在哪里由写入者决定；Coffer 报告什么坏了。见 [Knowledge Files Stay Where Their Writer Put Them](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-files-stay-where-their-writer-put-them.md)。 |
-| Confluence 页面导出变成一个可读的来源：宏按它显示出来的样子读出，页面的存储格式、附件和图表源文件保存在 `assets/` 下，元数据放进唯一的 frontmatter 块，并附一份说明漏掉了什么的报告。重新导入要明确操作，并替换较旧的来源。 | 没人读得懂的来源算不上知识，而悄悄丢掉的东西看起来就像一次干净的导入。见 [Confluence Pages Import as Readable Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/confluence-pages-import-as-readable-sources.md)。 |
+| Confluence 页面导出变成一个可读的来源：宏按它显示出来的样子读出，附件保存在 `assets/` 下，导出文件作为原文件留在这台 Mac 上，元数据放进唯一的 frontmatter 块，并附一份说明漏掉了什么的报告。重新导入要明确操作，并替换较旧的来源。 | 没人读得懂的来源算不上知识，而悄悄丢掉的东西看起来就像一次干净的导入。见 [Confluence Pages Import as Readable Sources](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/confluence-pages-import-as-readable-sources.md)。 |
 | 每一次被接受的写入都是一次写明写入者的 git 提交。 | 智能体改写的是唯一的那份副本。有了谁改了什么的历史，每次改动都可查看，每个版本都只隔着一次 `git` 或一次交给智能体的操作，而它也就是知识集的改动记录。 |
 | 新的说法胜出，除非旧的说法被证明是对的。没有哪个写入者可以例外。 | 一句话可信与否，看它是什么时候说的、背后有什么证据，而不是谁写的：人的修改和智能体的修改都可能过时或出错。保险库的历史和从文件历史做的恢复是补救途径。 |
 | 没有检索工具，目录搭在 Coffer 自己的技能里。 | 智能体用它们已经在用的工具读文件。知识层的任务是把正确的绝对路径摆到模型面前。 |
@@ -57,7 +57,7 @@ description: Coffer 的知识层如何工作：每个知识集是一个由保留
 │   ├── assets/
 │   │   ├── q3-review-1a2b3c4d/      # an upload's pictures: <title-slug>-<first 8 hex of its sha256>
 │   │   │   └── image-1.png          # linked from the source as ../assets/q3-review-1a2b3c4d/image-1.png
-│   │   └── confluence-42-v7/        # an imported Confluence page: attachments, diagram sources, storage.xml
+│   │   └── confluence-42-v7/        # an imported Confluence page: its attachments
 │   ├── pages/
 │   │   ├── session-ownership.md     # a page
 │   │   └── infra/
@@ -135,7 +135,6 @@ origin:
   version: 7
   fetched_at: '2026-10-13T08:00:00+00:00'
   format: confluence-storage
-  raw: ../assets/confluence-42-v7/storage.xml
 import_report:
   body: partial             # or converted
   complete: false
@@ -143,6 +142,8 @@ import_report:
   missing: ['gone.png: not downloaded with the page']
   unsupported: ['jira: a Jira issue list']
 actor: user
+original: account-core.json
+original_sha256: 9f86d0…
 ---
 ```
 
@@ -161,7 +162,7 @@ Coffer 提供的每个入口都以一个来源结束。没有哪个需要等。�
 | 入口 | 界面 | 结果 |
 | --- | --- | --- |
 | 上传，先转换为 Markdown | 知识页面、`coffer knowledge upload` | 一个来源、`assets/` 下它的图片，以及留在这台 Mac 上的原文件 |
-| Confluence 页面导出（JSON） | 知识页面、`coffer knowledge upload` | 一个可读的来源、`assets/` 下它的附件、图表源文件和存储格式，以及一份导入报告 |
+| Confluence 页面导出（JSON） | 知识页面、`coffer knowledge upload` | 一个可读的来源、`assets/` 下它的附件，以及一份导入报告 |
 | 放进 `<collection>/.inbox/` 的 Markdown 文件 | Coffer 之外的智能体、另一台机器，或旧版指南；由扫描接收 | 一个来源 |
 | 直接写进 `pages/` 的页面 | 智能体自己的文件工具，或人的编辑器 | 一个页面，作为在磁盘上编辑提交 |
 
@@ -216,9 +217,9 @@ Coffer 从不把任何东西合并进页面。把来源编译进页面，是人�
 
 ### Confluence 页面 {#confluence-pages}
 
-`infrastructure/knowledge/converters/confluence/` 读取页面导出（`page.read`：存储格式、标题、页面 id、版本、空间、URL，以及以 base64 携带的附件），先用 BeautifulSoup 转换存储格式，再交给 markdownify。`macros.py` 把每个 `ac:structured-macro` 改写成读者看到的那样的普通 HTML：只做排版的宏交回它的内容，面板变成带标签的引用，`code`/`noformat` 保留文字和语言，draw.io 和 PlantUML 把源文件保留为文件，生成的内容（`toc`、`children`）丢掉并记录下来，不认识的宏保留其内容，或记为不支持。`storage.py` 把 `ac:image`、`ac:link` 和 `ri:attachment` 变成指向页面文件夹下的链接，并把带合并单元格的表格保留为 HTML。每个结果都落在一个 `Context` 上，最后成为 `ImportReport`：正文 `converted` 或 `partial`，然后附件和宏分别列出保留、保留源文件、已转换、丢掉、缺失和不支持的条目及原因。
+`infrastructure/knowledge/converters/confluence/` 读取页面导出（`page.read`：存储格式、标题、页面 id、版本、空间、URL，以及以 base64 携带的附件），先用 BeautifulSoup 转换存储格式，再交给 markdownify。`macros.py` 把每个 `ac:structured-macro` 改写成读者看到的那样的普通 HTML：只做排版的宏交回它的内容，面板变成带标签的引用，`code`/`noformat` 保留文字和语言，作为附件的 draw.io 图表显示它的图片，画在页面里的变成一个查看器链接，PlantUML 以代码块显示源码，生成的内容（`toc`、`children`）丢掉并记录下来，不认识的宏保留其内容，或记为不支持。`storage.py` 把 `ac:image`、`ac:link` 和 `ri:attachment` 变成指向页面文件夹下的链接，并把带合并单元格的表格保留为 HTML。每个结果都落在一个 `Context` 上，最后成为 `ImportReport`：正文 `converted` 或 `partial`，然后附件和宏分别列出保留、已转换、丢掉、缺失和不支持的条目及原因。
 
-页面的文件放在 `assets/confluence-<page id>-v<version>/`，这样选是为了较新的版本从不覆盖较旧版本的文件（文件夹已存在时加后缀 `-2`），原始存储格式保存为 `storage.xml`。不渲染任何图表，也不向任何外部服务发送任何东西。
+页面的文件放在 `assets/confluence-<page id>-v<version>/`，这样选是为了较新的版本从不覆盖较旧版本的文件（文件夹已存在时加后缀 `-2`）。导出文件本身是来源的原文件，像任何上传一样保存在这台 Mac 上（`originals.keep`），从不进保险库。画在页面里的 draw.io 图表变成一个查看器链接（`diagrams.viewer_link`），像 draw.io 自己导出的链接那样把图表放在 `#R` 片段里；页面原有的查看器链接保持原样。Coffer 不为图表另存任何文件，不渲染任何东西，也不向任何外部服务发送任何东西：浏览器从不把片段发给服务器。
 
 在这个转换器之前写入的来源，正文里可能还带着导出工具的注释标记和第二个 frontmatter 块。Coffer 不改写它：`source_view.readable_body` 在读取时去掉内层块并展开这些标记（`GET /api/v1/knowledge/file` 上的 `readable_body`），`source_view.origin` 从任一个块里读出它来自哪里。阅读器显示 `readable_body`，并注明这是转换后的视图。
 
@@ -486,7 +487,7 @@ Coffer 不做任何 embedding。它没有向量存储、没有 embedding 模型�
 - **图片让保险库变大，残留的也会留着。** 每张保留的图片都永久留在 git 历史里。删除来源会留下它的 `assets/` 文件夹，以及上传那台 Mac 上的原文件；两者都不会自动清理。
 - **一次整理期间，知识集的编辑不提交。** 在智能体结束、或知识集 30 分钟没有变化之前，它的编辑只在磁盘上，要改动其中某个文件的一轮同步会等待。重启丢掉的只是分组，从不丢编辑。
 - **没有任何东西维持结构。** Coffer 不再归置留在 `pages/` 之外的文档，所以知识集可能偏离 `pages/`/`sources/` 的形状。检查报告失效和越界的链接，而不报告放在意外文件夹里的文件，因为没有哪个文件夹是错的。
-- **Confluence 导入保留每个版本的文件。** 重新导入会在 `assets/` 下写一个新文件夹，带它自己的 `storage.xml`，旧的那个留给被它替换的来源；保险库每导入一个版本就增长一些。
+- **Confluence 导入保留每个版本的文件。** 重新导入会在 `assets/` 下写一个新文件夹，带它自己的附件，旧的那个留给被它替换的来源；保险库每导入一个版本就增长一些。
 - **历史随每次写入增长。** 没有任何东西会修剪它。它就在文件旁边，保存着后来被并掉或被删掉的文字。
 - **用户内容只会经由人选定的智能体离开本机。** Coffer 不把任何知识发给任何模型。整理会把它发给智能体自己的提供商，和每个对话一样。
 - **这里的一切都不是访问控制。** 有 shell 工具的智能体可以读知识根目录下的任何文件。每个知识集都会告诉每个智能体；不让智能体看到某个知识集的唯一办法是删除它。

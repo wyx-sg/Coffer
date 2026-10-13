@@ -1,36 +1,37 @@
-"""draw.io diagrams found in a Confluence page, told apart by what can be kept.
+"""draw.io diagrams found in a Confluence page, shown as what the page had
+(spec knowledge "Import a Confluence page as a readable source with its
+attachments").
 
-Three shapes reach a page, and each ends differently (spec knowledge "Import a
-Confluence page as a readable source with its attachments"):
+* **An attached diagram** shows its picture, kept like any other attachment
+  by the page converter.
+* **A viewer link** stays the link it was; a reader clicks it to see the
+  diagram.
+* **A diagram drawn in the page** (an ``html`` macro holding draw.io's viewer
+  markup, the diagram in its ``data-mxgraph`` attribute) becomes a viewer link
+  carrying the diagram in its ``#R`` fragment, as draw.io's own "link" export
+  does. A browser never sends a fragment to the server, so the diagram is drawn
+  in the reader's browser and leaves the page no more than it did in
+  Confluence.
+* **A diagram that is a file elsewhere** (a viewer embed whose fragment starts
+  ``#G`` for Google Drive, ``#U`` for a URL, ...) names a file Coffer has no
+  access to: it is reported as an embed behind its owner's permission.
 
-* **The diagram is in the page.** An ``html`` macro holding draw.io's viewer
-  markup carries the whole diagram in its ``data-mxgraph`` attribute, and a
-  viewer link whose fragment starts ``#R`` carries it in the URL. Both are
-  decoded here into the ``.drawio`` file draw.io itself opens, kept beside the
-  source.
-* **The diagram is a file elsewhere.** A viewer link or ``<iframe>`` whose
-  fragment starts ``#G`` (Google Drive), ``#U`` (a URL), ``#D`` (Dropbox) or
-  ``#W`` (OneDrive) names a file Coffer has no access to and does not fetch:
-  it is reported as an embed behind its owner's permission.
-* **The diagram is an attachment** of the page (the ``drawio`` macro) and is
-  kept like any other attachment, by the page converter.
-
-Nothing is sent to a rendering service: Coffer keeps a diagram's source and
-any picture the page already had, and draws nothing itself.
+Coffer keeps no diagram source of its own, fetches nothing and draws nothing.
 """
 
 from __future__ import annotations
 
 import base64
-import binascii
 import json
 import re
 import zlib
-from urllib.parse import unquote, urlsplit
+from urllib.parse import quote, urlsplit
 
 from bs4 import BeautifulSoup
 
 _VIEWER_HOSTS = ("viewer.diagrams.net", "app.diagrams.net", "embed.diagrams.net", "draw.io")
+#: The viewer a diagram with no picture opens in (draw.io's own lightbox).
+VIEWER = "https://viewer.diagrams.net/?lightbox=1&nav=1#R"
 _REMOTE_KINDS = {
     "G": "a Google Drive file",
     "U": "a file at another URL",
@@ -45,27 +46,16 @@ def is_viewer(url: str) -> bool:
     return any(host == h or host.endswith("." + h) for h in _VIEWER_HOSTS)
 
 
-def _inflate(data: str) -> str | None:
+def _deflate(xml: str) -> str:
     """draw.io's compressed form: base64 of raw deflate of URL-encoded XML."""
-    try:
-        raw = base64.b64decode(data, validate=False)
-        return unquote(zlib.decompress(raw, -15).decode("utf-8"))
-    except (binascii.Error, zlib.error, UnicodeDecodeError, ValueError):
-        return None
+    packer = zlib.compressobj(9, zlib.DEFLATED, -15)
+    raw = packer.compress(quote(xml, safe="-_.!~*'()").encode("ascii")) + packer.flush()
+    return base64.b64encode(raw).decode("ascii")
 
 
-def from_viewer_link(url: str) -> str | None:
-    """The diagram a viewer link carries in its ``#R`` fragment, as draw.io
-    XML; ``None`` for any other link."""
-    if not is_viewer(url):
-        return None
-    fragment = urlsplit(url).fragment
-    if not fragment.startswith("R"):
-        return None
-    data = unquote(fragment[1:]).strip()
-    if data.startswith("<"):
-        return data
-    return _inflate(data)
+def viewer_link(xml: str) -> str:
+    """A link that opens ``xml`` in draw.io's viewer, the diagram in its fragment."""
+    return VIEWER + quote(_deflate(xml), safe="")
 
 
 def remote_kind(url: str) -> str | None:
@@ -109,4 +99,12 @@ def readable_text(markup: str) -> str:
     return re.sub(r"\s+", " ", soup.get_text(" ")).strip()
 
 
-__all__ = ["embeds", "from_html", "from_viewer_link", "is_viewer", "readable_text", "remote_kind"]
+__all__ = [
+    "VIEWER",
+    "embeds",
+    "from_html",
+    "is_viewer",
+    "readable_text",
+    "remote_kind",
+    "viewer_link",
+]
