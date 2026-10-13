@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
+import pathlib
 from collections.abc import Awaitable, Callable, Mapping
 
 from coffer.application.audit_service import AuditService
@@ -53,6 +54,7 @@ from coffer.infrastructure.knowledge import (
     paths,
     wiki_reads,
 )
+from coffer.infrastructure.knowledge.frontmatter import with_key
 from coffer.infrastructure.knowledge.history import KnowledgeHistory
 
 logger = logging.getLogger(__name__)
@@ -306,13 +308,14 @@ class KnowledgeService:
         body: str,
         actor_kind: str = ACTOR_AGENT,
         actor: str,
-        extra: Mapping[str, str] | None = None,
+        extra: Mapping[str, object] | None = None,
         files: Mapping[str, bytes] | None = None,
+        supersedes: str | None = None,
     ) -> Submission:
         """Add new material to a collection ("Promote submitted material at once"):
         a source under ``sources/`` on the spot, waiting until an agent compiles it.
-        ``extra`` adds frontmatter keys; ``files`` (knowledge-root-relative path to
-        bytes, an upload's pictures) land in the same commit."""
+        ``extra`` adds frontmatter keys; ``files`` (knowledge path to bytes) land in
+        the same commit, as does ``superseded_by`` on the source ``supersedes`` names."""
         row = await self.require_collection(collection)
         meta = CommitMeta(
             writer_of(actor_kind),
@@ -337,6 +340,11 @@ class KnowledgeService:
             tx.touch(f"{row.name}/{paths.INBOX_DIR_NAME}/{name}")
             document = inbox.promote(row.name, name)
             tx.touch(document.path)
+            if supersedes:
+                tx.touch(supersedes)
+                old = fs.decode(paths.resolve(supersedes).read_bytes())
+                slug = pathlib.PurePosixPath(document.path).stem
+                assets.write_bytes(supersedes, with_key(old, "superseded_by", slug).encode())
         await self._audit.record(
             AuditEventType.KNOWLEDGE_WRITTEN.value,
             resource=row,

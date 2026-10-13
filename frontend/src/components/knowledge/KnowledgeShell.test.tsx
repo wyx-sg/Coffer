@@ -10,7 +10,14 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-import { COLLECTION, GATEWAY, OTHER, TREES, UID } from "@/components/knowledge/knowledgeTestData";
+import {
+  COLLECTION,
+  GATEWAY,
+  OTHER,
+  TREES,
+  UID,
+  ingested,
+} from "@/components/knowledge/knowledgeTestData";
 import { answerFromFixtures, renderKnowledge } from "@/test/knowledgeHarness";
 
 import { acceptance } from "@/test/acceptance";
@@ -259,12 +266,7 @@ describe("the Upload dialog", () => {
       if (file.name === "scan.pdf") {
         throw new ApiError("KNOWLEDGE_INGEST_FAILED", "no text", { reason: "scanned_pdf" });
       }
-      return {
-        path: `${COLLECTION.name}/sources/notes.md`,
-        title: "notes",
-        description: "",
-        converter: "markdown",
-      };
+      return ingested(`${COLLECTION.name}/sources/notes.md`, { title: "notes" });
     });
     renderKnowledge(`/knowledge/${UID}`);
     const dialog = await openUpload();
@@ -309,12 +311,9 @@ describe("the Upload dialog", () => {
   });
 
   test("when every file is saved the dialog closes with one toast", async () => {
-    api.uploadFile.mockImplementation(async ({ file }: { file: File }) => ({
-      path: `${COLLECTION.name}/sources/${file.name}`,
-      title: file.name,
-      description: "",
-      converter: "markdown",
-    }));
+    api.uploadFile.mockImplementation(async ({ file }: { file: File }) =>
+      ingested(`${COLLECTION.name}/sources/${file.name}`, { title: file.name }),
+    );
     renderKnowledge(`/knowledge/${UID}`);
     const dialog = await openUpload();
     fireEvent.change(within(dialog).getByLabelText("Drop files here, or choose them"), {

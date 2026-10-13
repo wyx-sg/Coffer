@@ -1,15 +1,22 @@
 """What the wiki says about one file: a page's type, aliases, resolved sources
-and links, and whether it is due a recheck; a source's citing pages, whether it
-waits, what replaces it and its summary (spec knowledge "Link pages by slug and
-check every link", "Derive which sources wait from the pages that cite them").
+and links (wiki links, then standard links with the path each resolves to),
+and whether it is due a recheck; a source's citing pages, whether it waits,
+what replaces it and its summary (spec knowledge "Link pages by slug and check
+every link", "Derive which sources wait from the pages that cite them").
 """
 
 from __future__ import annotations
 
 import dataclasses
 
-from coffer.domain.knowledge.entry import KnowledgeFile, LinkRef, PageRef, SourceRef
-from coffer.infrastructure.knowledge import paths
+from coffer.domain.knowledge.entry import (
+    LINK_MARKDOWN,
+    KnowledgeFile,
+    LinkRef,
+    PageRef,
+    SourceRef,
+)
+from coffer.infrastructure.knowledge import paths, wiki_links
 from coffer.infrastructure.knowledge.wiki import build
 
 
@@ -41,6 +48,11 @@ def describe(file: KnowledgeFile) -> KnowledgeFile:
                     path=hits[0] if len(hits) == 1 else None,
                     ambiguous=len(hits) > 1,
                 )
+            )
+        for target in dict.fromkeys(page.doc_links):
+            leads = wiki_links.resolve(page.path, target)
+            links.append(
+                LinkRef(target=target, path=leads.path, kind=LINK_MARKDOWN, outside=leads.outside)
             )
         return dataclasses.replace(
             file,

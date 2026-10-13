@@ -26,6 +26,7 @@ description: 把你和智能体对工作环境的了解，存成一个由保留�
 ~/.coffer/vault/knowledge/
 └── payments/                        ← one collection
     ├── README.md                    ← the schema: what belongs here, page types, rules
+    ├── index.md                     ← optional: a collection file (index, log, schema) kept at the root
     ├── sources/
     │   ├── gateway-design.md        ← a source: the upload converted to Markdown
     │   └── oncall-notes.md          ← a source from a Markdown upload
@@ -43,8 +44,8 @@ description: 把你和智能体对工作环境的了解，存成一个由保留�
 - **`sources/`** 保留到达的素材：每次上传和每个放进收件箱的文件，转换成 Markdown。你上传的文件本身不放进知识集：Coffer 把它留在你上传它的那台 Mac 上（见[图片和原文件](#pictures-and-the-original-file)）。智能体读来源，从不编辑来源。
 - **`assets/`** 放 Coffer 从上传的文档里取出的图片，每次上传一个文件夹。来源会链接它自己的图片，所以你读来源时能看到它们，智能体也能打开它们。它们和 Markdown 一样随知识集同步，也有历史。
 - **`pages/`** 放 wiki 本身：你和你的智能体编写并保持更新的页面。智能体首先读的就是这里。
-- `pages/` 和 `sources/` 里的**文件夹**是可选的，不代表任何含义。你或你的智能体都可以创建、移动、删除它们。只有 `pages/`、`sources/` 和 `assets/` 这几个文件夹本身有含义。
-- 知识集里的**其他文件**会在树里列出，但既不进目录，也不参与检查。留在 `pages/`、`sources/` 和 `assets/` 之外的 Markdown 文件会被扫描移进 `pages/`（见[自己在运行的是什么](#what-runs-on-its-own)）。
+- `pages/` 和 `sources/` 里的**文件夹**是可选的，不代表任何含义。你或你的智能体都可以创建、移动、删除它们。只有 `pages/` 和 `sources/` 这两个文件夹会让一个文件成为页面或来源。
+- 知识集里的**其他文件**——根目录的 `index.md`、`log.md` 或 `schema.md`、你自己的文件夹——是**知识集文件**。它会在树里列出，你可以读它，扫描会提交你对它的编辑，知识集的删除及其撤销会带上它，保险库也会导出它；它从不按页面检查。没有任何东西会移动或重命名它，它里面的链接算作导航（见[知识集文件与链接](#collection-files-and-links)）。
 - **隐藏条目**（以 `.` 开头的名字）不计入任何计数，也不进目录和检查，知识页面不会列出其中任何一个。Coffer 会读的是 `.inbox/`：留在那里的 Markdown 文件会在下一次扫描时作为来源保留下来（见[放进收件箱的文件](#a-file-in-the-inbox)）。
 
 文件的路径就是它所在的位置；它的 **slug**（去掉 `.md` 的文件名）是链接用的名字。文件名是标题的 slug，重名时加 `-2` 这样的后缀。
@@ -74,15 +75,17 @@ The `account-session` service owns ... see [[rate-limits|the gateway's limits]].
 | 键 | 含义 |
 | --- | --- |
 | `title` | 页面标题。 |
-| `type` | 页面的种类：`concept`、`entity`、`how-to`、`decision` 或 `overview`，除非知识集的 README 定义了自己的类型。智能体看到的目录按它分组。 |
+| `type` | 页面的种类，是自由文本。知识集的 README 列出它用到的类型（新建的知识集列出 `overview`、`concept`、`entity`、`how-to` 和 `decision`；`comparison`、`synthesis`、`summary` 同样有效）。智能体看到的目录按它分组。`subject_kind` 是你自己的另一个键，Coffer 不读它。 |
 | `description` | 一句话说明页面回答什么问题。智能体在目录里看到的就是它。 |
 | `sources` | 页面依据的来源的 slug。没有任何页面在这里列出的来源仍在[等待](#sources-wait-until-a-page-cites-them)。 |
+| `evidence` | 给依据是代码、配置或一次观察而不是来源的页面用的自由格式引用列表：`code: <repo>/<path>@<rev>`、`config: …`、`observed: …`。Coffer 不读它们；带 `evidence` 的页面不会被标成没有来源。 |
 | `aliases` | 链接可以用来指向这个页面的其他名字，比如改名后的旧 slug。 |
-| `verified` | 最近一次对照来源或代码核对这个页面的日期（`YYYY-MM-DD`），阅读窗格里页面的说明行会显示它。没有这个日期，或者日期早于知识集的 `verify_after_days`，页面就[需要重新核对](#pages-due-a-recheck)。页面的事实从哪里来，写在这里和 `sources` 里，不要在正文里写一段列出读过什么。 |
+| `verified` | 最近一次核对这个页面的日期（`YYYY-MM-DD`），阅读窗格里页面的说明行会显示它。没有这个日期，或者日期早于它的期限，页面就[需要重新核对](#pages-due-a-recheck)。Coffer 从不写它，由核对页面的一方来写。页面的事实从哪里来，写在这里和 `sources` 或 `evidence` 里，不要在正文里写一段列出读过什么。 |
+| `verify_after_days` | 可选：这个页面的核对能保持多少天，覆盖 README 的设置。 |
 | `actor` | `user` 或 `agent`，表示这个页面是谁写的。 |
 | `created_at`、`updated_at` | 时间戳。 |
 
-Coffer 自己不写页面：谁写页面，谁就给它这些键，`coffer-guide` 技能就是这样教智能体的。缺少 `title`、`type` 或 `description`、没有列出任何 `sources` 或者没有 `verified` 的页面照样能用；[检查](#check-a-collection)知识集时它会作为一条发现出现。
+Coffer 自己不写页面：谁写页面，谁就给它这些键，`coffer-guide` 技能就是这样教智能体的。缺少 `title`、`type` 或 `description`、没有列出任何 `sources` 或 `evidence`、或者没有 `verified` 的页面照样能用；[检查](#check-a-collection)知识集时它会作为一条发现出现。
 
 来源带着 Coffer 保留它时写入的键：`title`、`description`、`actor`、`created_at`、`updated_at`；从上传的文件转换来的来源还带有 `original`（文件名）和 `original_sha256`（它的指纹）。这两个键请保持原样。智能体或你还可以再加三个键，它们只描述这个来源，不改动它的内容：
 
@@ -94,11 +97,22 @@ Coffer 自己不写页面：谁写页面，谁就给它这些键，`coffer-guide
 
 你给文件加的其他键，Coffer 每次重写文件时都会连同值一起保留。
 
-### 用 slug 链接页面 {#link-pages-by-slug}
+### 链接页面 {#link-pages-by-slug}
 
-页面用 slug 链接另一个页面，从不用路径：`[[session-ownership]]`，或者用 `[[session-ownership|the session service]]` 来指定显示的文字。链接也可以写某个页面的 `aliases` 之一，或者某个来源的 slug。整理知识集时路径会变；slug 只在页面改名时才变，而 `coffer-guide` 技能会告诉智能体：给页面改名时，要更新指向它的链接，或者把旧 slug 留在 `aliases` 里。
+页面用 slug 链接另一个页面，`[[session-ownership]]`，或者用 `[[session-ownership|the session service]]` 来指定显示的文字；也可以用标准的 Markdown 链接，路径相对于持有它的文件：`[session ownership](session-ownership.md)`。wiki 链接也可以写某个页面的 `aliases` 之一，或者某个来源的 slug。slug 只在页面改名时才变，而 `coffer-guide` 技能会告诉智能体：给页面改名或移动时，保持链接完整，要更新指向它的链接，或者把旧 slug 留在 `aliases` 里。
 
-每次读取页面时，Coffer 都会解析其中的每个链接，不区分大小写。什么都指不到的链接是**失效**的，指到不止一个文件的链接是**有歧义**的；两者都会由[检查](#check-a-collection)报告，知识页面也会在页面里标出失效链接。
+每次读取页面时，Coffer 都会解析其中的每个链接，wiki 链接不区分大小写。什么都指不到的链接是**失效**的，指到不止一个文件的链接是**有歧义**的，离开知识根目录的相对链接是**越界链接**；它们都会由[检查](#check-a-collection)报告，知识页面也会在页面里标出失效链接。带 URL（`https:`、`mailto:`）或以 `#` 开头的链接是外部的，从不检查。
+
+### 知识集文件与链接 {#collection-files-and-links}
+
+知识集里可以放既不是页面也不是来源的文件：列出它的页面的 `index.md`、记录发生过什么的 `log.md`、`schema.md`、你自己笔记的文件夹。Coffer 让它们留在你放的地方。后台没有任何东西会移动或重命名它们，所以指向它们的链接、编辑器里的标签页，以及在 `pages/` 出现之前就这样组织的知识集，都保持有效。
+
+- 它们会在树里列出，并像页面一样在阅读窗格里打开；**在编辑器中打开**可以编辑它们。
+- 扫描像提交别的文件一样提交你对它们的编辑，知识集的删除会把它们一起带走，**撤销**会把它们放回来。
+- 它们不按页面检查：不要求有 `type`、`sources` 或 `verified`。
+- 它们里面的链接算数。相对链接 `[title](pages/session-ownership.md)` 或 `![diagram](assets/gateway/overview.png)` 相对于持有它的文件所在的文件夹解析，可以指向别的知识集（只检查它是否存在），并算作它所指页面的一条入站链接，所以只被根目录 `index.md` 链接到的页面不是孤立页面。这些文件和页面里的失效链接、离开知识根目录的链接由[检查](#check-a-collection)报告。来源里的链接算作可达，但从不报告：来源是原样保留的。
+
+想把一个散放的文件放进 wiki，让你的智能体在[整理](#tidy-a-collection)时把它移进 `pages/`；它会在同一次改动里修好指向它的链接。
 
 ### 来源在被页面引用之前一直等待 {#sources-wait-until-a-page-cites-them}
 
@@ -160,13 +174,13 @@ How payments are taken, settled and refunded.
 2. 一个字都不丢：页面里原有的每条事实都要在这次编辑后保留。
 3. 按主题组织，不按谁写的、什么时候写的。
 4. 两种说法不一致时，较新的胜出，除非较旧的被来源、日期、命令输出或代码证明是对的。被取代的说法仍然看得到。
-5. 用 `[[slug]]` 链接其他页面，从不用路径；给页面改名时，更新指向它的链接，或把旧 slug 留在 `aliases` 里。
+5. 用 `[[slug]]` 或标准的相对 Markdown 链接来链接其他页面；给页面改名或移动时，保持链接完整：更新指向它的链接，或把旧 slug 留在 `aliases` 里。
 6. 从不编辑来源，只能给它加上 `ingest: skipped`、`superseded_by` 或 `summary`。
-7. 给每个页面写 `title`、`type`、一行说明它回答什么问题的 `description`、它依据的 `sources`、可能有的 `aliases`、最近一次对照来源或代码核实页面的日期 `verified`，以及 `actor: agent`。页面的事实从哪里来写在 `sources` 和 `verified` 里，不要在正文里写一段列出读过什么。
+7. 给每个页面写 `title`、`type`、一行说明它回答什么问题的 `description`、它依据的 `sources`（依据是代码或一次观察的页面则写 `evidence`）、可能有的 `aliases`、最近一次核实页面的日期 `verified`，以及 `actor: agent`；`type` 取自 README 的列表。页面的事实从哪里来写在 `sources`、`evidence` 和 `verified` 里，不要在正文里写一段列出读过什么。
 
 指南还会让智能体**把查出来的答案写回去**。它为了回答你的问题去读了来源、代码或某个系统，而页面里还没有这个答案时，它会在结束前把答案写进拥有这个主题的页面：读的如果是来源，就把它加进 `sources`，把 `verified` 设为今天，并用一句话告诉你它加了什么。猜测、观点，或者只在这次对话里成立的东西，它不会写回去。每一次这样的写入都在知识集的历史里，你可以撤销。
 
-你也可以直接要求：「把我们刚发现的 session TTL 记到 payments 知识集里。」知识集必须已经存在；只有你才创建知识集。智能体写下的东西马上就能读到，下一次扫描会把它提交进[历史](#history-and-restore)。智能体写错了位置的页面（比如写在知识集根目录），一分钟内会被移进 `pages/`。
+你也可以直接要求：「把我们刚发现的 session TTL 记到 payments 知识集里。」知识集必须已经存在；只有你才创建知识集。智能体写下的东西马上就能读到，下一次扫描会把它提交进[历史](#history-and-restore)。智能体写在 `pages/` 和 `sources/` 之外的文档（比如写在知识集根目录）会留在原处，是[知识集文件](#collection-files-and-links)；放在 `pages/` 下它才是页面。
 
 ### 上传来源 {#upload-a-source}
 
@@ -188,7 +202,34 @@ How payments are taken, settled and refunded.
 
 可以一次选择或拖入多个文件。每个文件单独列出它的状态（等待、正在转换、完成，或失败及原因），文件一个接一个地发送，一个失败不会挡住其余的。ZIP 压缩包和超过 20 MB 的文件在发送前就会标为拒绝并写明原因。失败的文件留在对话框里，可以重试；最后会有一条提示说明保存了几个、失败了几个。上传只选知识集，不选文件夹。不支持的类型会被拒绝，并指出是哪种类型；转换后没有文本的（比如纯图片 PDF）也会被拒绝。被拒绝的文件不会留下任何东西。
 
-来源的 `title` 取自文件（第一行的 `# ` 标题，没有就用文件名）。它的 `description` 取开头的正文，没有时用标题。之后这个来源就开始[等待](#sources-wait-until-a-page-cites-them)：把它的内容并进页面，是你按**整理**时（见[整理一个知识集](#tidy-a-collection)）或你随时请求时你的智能体的事。
+来源的 `title` 取自文件（第一行的 `# ` 标题，没有就用文件名）。它的 `description` 取开头的正文，没有时用标题。自带 frontmatter 的 Markdown 文件只保留一个 frontmatter 块：如果这个文件本身就是从别的知识集复制来的来源，第一个块下面还有第二个块，两者会被合并，标题取自它。之后这个来源就开始[等待](#sources-wait-until-a-page-cites-them)：把它的内容并进页面，是你按**整理**时（见[整理一个知识集](#tidy-a-collection)）或你随时请求时你的智能体的事。
+
+### 导入 Confluence 页面 {#import-a-confluence-page}
+
+Confluence 页面可以作为一份可读的来源保留下来，连同它的图片和图表。Coffer 从不替你去连 Confluence：由你或你的智能体用你有权限的工具取回页面，再把取回的结果上传。
+
+1. **以 Storage Format 取回页面，连同附件。** 让你的智能体用你的 Confluence 工具以 Storage Format 读取页面，比如 Confluence CLI 的读取，带 `--format storage --json`，并保存结果。JSON 格式的页面读取结果（含 `body`、`version`、`space`，工具提供时还有 base64 的 `attachments`）、名为 `<name>.storage.xml` 的文件，或者在 `skynet-confluence-storage` 标记里带着页面 Storage XML 的 Markdown 文件，都可以接受。
+2. **上传**到一个知识集：**添加 → 上传文档…**，或者在命令行：
+
+   ```text
+   coffer knowledge upload payments ./account-core.page.json
+   ```
+
+3. **看报告。** 上传会答复一个状态，以及有什么东西没能保留（如果有的话）。
+
+**保留了什么。** 来源是 `sources/<页面标题>.md`，是 Markdown：标题、列表、表格、代码块、提示块和任务列表都会转换，目录这类生成式导航会被丢弃。页面显示的图片、每个图表的 draw.io 或 PlantUML 源文件，以及页面原样的 Storage Format（`page.storage.xml`）放进 `assets/confluence-<pageId>-v<version>/`，所以来源能显示它的图片，智能体也能打开图表文件。来源的 frontmatter 记录它从哪里来：`origin`（页面的 URL）、`page_id`、`page_version`、`space` 和 `retrieved_at`（你导入的时间，不是页面被核对的时间）。
+
+**报告。** `status` 是 `complete`，有东西没能保留时是 `partial`。每个问题都会指明：导出里缺了的图片（`missing_attachment`）、托管在别处而 Coffer 没有取回的图表或图片（`external_embed`、`external_image`）、Coffer 不转换的宏（`unsupported_macro`，它的文字会保留），或者只保留了源码的图表（`not_rendered`）。同样的清单也写在来源的 `import_status` 和 `import_issues` 里，所以之后的整理或读者能看到导入漏掉了什么。
+
+**页面变了之后重新导入。** 重新取回页面，用 `--replaces` 指明旧来源再上传；新来源写入，旧来源同时在一次改动里被标上指向新来源的 `superseded_by`。什么都不删除，引用旧来源的页面会出现在**引用了过时来源的页面**下，等下一次整理处理。
+
+```text
+coffer knowledge upload payments ./account-core.page.json --replaces sources/account-core-service.md
+```
+
+两条命令都可以加 `--dry-run`，只转换不写入：它打印同样的报告和将要写入的文件，知识集原封不动。
+
+**阅读。** 阅读窗格显示页面的表格和 details 块，并从它里面带有的任何 HTML 中移除脚本、框架、样式、注释和事件处理器。仍然带着 Confluence 标记的来源在**预览**里展开显示；**源码**显示的是文件本身。
 
 ### 图片和原文件 {#pictures-and-the-original-file}
 
@@ -312,16 +353,17 @@ Coffer 不会把任何关于你知识的东西发给任何模型。你按下整�
 
 | 发现 | 含义 |
 | --- | --- |
-| **失效链接** | 一个指不到任何页面、别名或来源的 `[[链接]]`。 |
+| **失效链接** | 一个指不到任何页面、别名或来源的 `[[链接]]`，或者指向不存在文件的相对链接。 |
 | **有歧义的链接** | 一个指到不止一个文件的 `[[链接]]`。 |
+| **越界链接** | 离开知识根目录的相对链接。 |
 | **重复的名称** | 两个页面的 slug 相同，或者一个别名指到两个页面。 |
 | **缺失的来源** | 页面的 `sources` 里写了一个不存在的来源，或者来源的 `superseded_by` 指向一个不存在的来源。 |
 | **引用了过期来源的页面** | 页面引用了一个已被替换的来源，却没有引用任何替换它的来源（见[来源被替换时](#when-a-source-is-replaced)）。这一行写明它引用的来源和最新的替换者。 |
 | **待整理的来源** | 没有任何页面引用、也没有标记 `ingest: skipped` 或 `superseded_by` 的来源。 |
 | **不完整的页面** | 缺少 `title`、`type` 或 `description` 的页面。 |
 | **需要重新核对的页面** | `verified` 日期缺失或早于知识集期限的页面（见[需要重新核对的页面](#pages-due-a-recheck)）。这一行写明上次核对的日期，或者*从未核对*。 |
-| **没有来源的页面** | `sources` 为空的页面。 |
-| **没有被链接的页面** | 知识集里有两个或更多页面时，没有任何其他页面链接到的页面。`overview` 类型的页面除外：它们是入口。 |
+| **没有来源的页面** | 既没有 `sources` 也没有 `evidence` 的页面，除非它的 `type` 列在 README 的 `sourceless_types` 里。 |
+| **没有被链接的页面** | 知识集里有两个或更多页面时，没有任何其他页面、知识集文件或来源链接到的页面。`overview` 类型的页面除外：它们是入口。 |
 
 这些发现在每次读取时从文件算出来，不存在任何地方，所以文件一变它们就是最新的。它们是提示，不是错误：你写的没有来源的页面照样能用。在命令行上，`coffer knowledge check <collection>` 会打印同样的列表（见 [`coffer knowledge`](/zh/reference/cli/knowledge#knowledge-check)）。
 
@@ -340,26 +382,22 @@ superseded_by: gateway-design-2026
 
 ### 需要重新核对的页面 {#pages-due-a-recheck}
 
-来源没变，页面也可能和现实脱节：它描述的代码或系统变了。每个页面都带着 `verified`，即最近一次对照来源或代码核对它的日期；`verified` 缺失或早于知识集期限的页面，会列在**需要重新核对的页面**下。打开它会看到**需要重新核对**，没有日期时还会显示*从未核对*。它只是被标出来：仍然留在目录里，智能体照样会读。
+来源没变，页面也可能和现实脱节：它描述的代码或系统变了。每个页面都带着 `verified`，即最近一次核对它的日期；`verified` 缺失、为空或早于它的期限的页面，会列在**需要重新核对的页面**下。打开它会看到**需要重新核对**，没有日期时还会显示*从未核对*。它只是被标出来：仍然留在目录里，智能体照样会读。
 
-期限是 90 天。可以在 README 的 frontmatter 里设成别的值，比如运行手册的知识集设 `verify_after_days: 30`；设为 `0` 就关闭这个知识集的检查。负数，或者不是整数天数的值，都按 90 天算。整理会重新核对列出的每个页面，并把 `verified` 设为今天。
+期限是 90 天。可以在 README 的 frontmatter 里设成别的值，比如运行手册的知识集设 `verify_after_days: 30`；设为 `0` 就关闭这个知识集的检查；页面自己的 `verify_after_days` 会覆盖它。Coffer 从不写 `verified`，由重新核对页面的一方设置。想让依据不是来源的页面类型（比如 `overview` 或 `how-to`）免于检查，就在 README 的 frontmatter 里列出：`sourceless_types: [overview, how-to]`。负数，或者不是整数天数的值，都按 90 天算。整理会重新核对列出的每个页面，并把 `verified` 设为今天。
 
 更新之后第一次打开知识集时，所有没有 `verified` 的页面都会被列出来。按**整理**，智能体会逐个重新核对。
 
 ## 自己在运行的是什么 {#what-runs-on-its-own}
 
-后台的**扫描**让知识集保持最新。它大约每分钟运行一次，不调用任何模型。每一轮它会：
+后台的**扫描**让知识集保持最新。它大约每分钟运行一次，不调用任何模型，也不移动或重命名任何文件。每一轮它会：
 
 - 把放进知识集 `.inbox/` 的文件作为来源保留下来（见[放进收件箱的文件](#a-file-in-the-inbox)），
-- 把留在知识集里 `pages/`、`sources/` 和 `assets/` 之外的 Markdown 文件（README 除外，并且要等它一分钟没人动过）移到 `pages/` 下相同的相对路径，名字被占用时加后缀，不改动它的文字，
-- 把自上次提交以来树里变过的东西（你编辑器里的保存和你的智能体对文件的编辑）作为在磁盘上编辑提交进历史，以及
+- 把自上次提交以来树里变过的东西（你编辑器里的保存和你的智能体对文件的编辑，无论在页面、来源还是知识集文件里）作为在磁盘上编辑提交进历史，
+- 关闭已经 30 分钟没有变化的整理，以及
 - 重新渲染 `coffer-guide` 技能的目录，这样你或智能体手工添加的页面会被列出来。
 
 它在每台机器上都运行，不参与[保险库同步](/zh/guides/vault-sync)的各轮，也从不等待其中任何一轮，并且不改写任何文件的文字。知识功能关闭期间它会被跳过（见[实验功能](/zh/guides/experimental-features)）。
-
-### 页面和来源出现之前的知识集 {#collections-from-before-pages-and-sources}
-
-在页面和来源出现之前建的知识集，文档放在它的根目录和它自己的文件夹里。更新之后的第一次扫描会把它们全部移进 `pages/`，保留原来的文件夹结构，作为一次由 **Coffer** 写入的改动，你可以在知识集的**改动记录**里看到，也可以从历史里撤回。它们的文字不变；它们缺的东西（`type`、`sources`）会出现在[检查](#check-a-collection)里，一次**整理**会把它们补上。
 
 ## 智能体如何找到知识 {#how-agents-find-knowledge}
 
@@ -410,7 +448,7 @@ Coffer **没有读取、列出或搜索知识的工具**。智能体用它已有
 这台 Mac 装了 Obsidian 时，知识集的 **⋯** 菜单和文件的 **⋯** 菜单里会有**在 Obsidian 中打开**。第一次使用时：
 
 1. 在 Obsidian 里选**打开文件夹作为仓库**（Open folder as vault），选中知识集的文件夹 `~/.coffer/vault/knowledge/<collection>/`。`~/.coffer` 是隐藏的：在对话框里按 **⌘⇧.** 显示它，或者在知识集上用**复制路径**，再按 **⌘⇧G** 粘贴。
-2. 在 Obsidian 的**设置 › 文件与链接**里，把**新建笔记的存放位置**设成知识集的 `pages/` 文件夹。留在 `pages/` 和 `sources/` 之外的 Markdown 文件会在一分钟内被扫描移进 `pages/`，所以建在库根目录的笔记会被移走。
+2. 在 Obsidian 的**设置 › 文件与链接**里，把**新建笔记的存放位置**设成知识集的 `pages/` 文件夹，这样新笔记就是页面。建在别处的笔记会留在 Obsidian 建它的地方，是[知识集文件](#collection-files-and-links)。
 
 在 Obsidian 里保存的编辑和在任何编辑器里一样：马上生效，由下一次扫描记成在磁盘上编辑。`sources/` 下的文件请保持原样。
 
@@ -463,7 +501,7 @@ Coffer 会跳过 `.obsidian/`、`.git/` 这类隐藏文件夹和 `node_modules`�
 
 ## 历史与恢复 {#history-and-restore}
 
-知识集的每一次改动都会作为一个版本保留：你的上传和删除、放进收件箱并作为来源保留下来的文件、扫描把零散文档移进 `pages/`、保险库同步带进来的内容，一次整理（记成一次由智能体写入、带着汇报的改动），以及在 Coffer 之外用你自己的编辑器或智能体文件工具做的编辑。每次改动都注明**写入者**：`user`、`agent`、`daemon`（Coffer 把零散文档移进 `pages/`）、`sync` 或 `disk`（早期版本的 Coffer 写的版本是 `curation`），所以你总能知道谁改了什么。知识集页面在它的**改动记录**里列出这些改动。
+知识集的每一次改动都会作为一个版本保留：你的上传和删除、放进收件箱并作为来源保留下来的文件、保险库同步带进来的内容，一次整理（记成一次由智能体写入、带着汇报的改动），以及在 Coffer 之外用你自己的编辑器或智能体文件工具做的编辑。每次改动都注明**写入者**：`user`、`agent`、`daemon`（Coffer 接收一个收件箱文件）、`sync` 或 `disk`（早期版本的 Coffer 写的版本是 `curation`），所以你总能知道谁改了什么。知识集页面在它的**改动记录**里列出这些改动。
 
 历史就是保险库仓库自己的历史：知识集位于 `~/.coffer/vault` 的 `knowledge/` 下，所以 `git -C ~/.coffer/vault log -- knowledge/<collection>/<path>` 读到的是同样的版本，[保险库同步](/zh/guides/vault-sync)会把它们带到你的其他机器上。Coffer 的保险库需要 `git`；没有 git 时，应用会一直显示 [Coffer 需要 git](/zh/guides/troubleshooting#coffer-needs-git)，直到装好为止。如果守护进程运行期间 git 没了，所有写入照常工作，知识集的改动记录和删除的**撤销**所读的改动流会被拒绝。这个拒绝附带一段提示词，让你的智能体按适合你机器的方式安装 git，并用 `git --version` 确认。
 
@@ -511,11 +549,11 @@ Coffer 会跳过 `.obsidian/`、`.git/` 这类隐藏文件夹和 `node_modules`�
 
 **某个链接显示为红色。** 它指不到任何页面、别名或来源，通常是页面被改了名或被合并掉了。修好这个链接，或者把旧 slug 加进保留下来的页面的 `aliases`；**整理**会修好它发现的失效链接。
 
-**我的文档被移进了 `pages/`。** 这是扫描在把零散的 Markdown 归入知识集的结构（见[页面和来源出现之前的知识集](#collections-from-before-pages-and-sources)）。新页面请写在 `pages/` 下；这次移动在**改动记录**里，可以从历史里恢复。
+**我写的文档不在目录里。** 只有 `pages/` 和 `sources/` 下的 Markdown 会进目录、被检查。别处的文件是[知识集文件](#collection-files-and-links)：会被列出、可读取，但不是页面。自己把它移进 `pages/`，或让你的智能体在整理时去做。
 
 **整理只提供复制提示词。** 没有可用的托管智能体。到**智能体**里添加一个，或者把复制的提示词粘贴到你用的智能体里；它必须装有 `coffer-guide` 技能。
 
-**在 Obsidian 里新建的笔记被移进了 `pages/`。** Obsidian 把它建在了库根目录，扫描把它归了档。把 Obsidian 新建笔记的存放位置设成知识集的 `pages/` 文件夹（见[在 Obsidian 中打开知识集](#open-a-collection-in-obsidian)）。
+**在 Obsidian 里新建的笔记不是页面。** Obsidian 把它建在了 `pages/` 之外。把 Obsidian 新建笔记的存放位置设成知识集的 `pages/` 文件夹（见[在 Obsidian 中打开知识集](#open-a-collection-in-obsidian)），再把这条笔记移过去。
 
 **菜单里没有在 Obsidian 中打开。** 只有这台 Mac 装了 Obsidian（在 `/Applications` 或你自己的“应用程序”文件夹里）时，Coffer 才会提供它。
 

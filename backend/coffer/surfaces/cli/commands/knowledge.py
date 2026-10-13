@@ -11,6 +11,7 @@ tidy are commands.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import typer
 
@@ -142,9 +143,18 @@ knowledge = group("knowledge")
 def upload(
     collection: str = typer.Argument(..., help="The collection's folder name"),
     files: list[Path] = typer.Argument(..., help="Files to keep as sources"),
+    replaces: str | None = typer.Option(
+        None, "--replaces", help="A source of the collection the upload replaces"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Convert and show what would be written; write nothing"
+    ),
     as_json: bool = _io.json_option(),
 ) -> None:
     """Upload files into a collection; each is kept as a Markdown source."""
+    form = {"collection": collection, "dry_run": "true" if dry_run else "false"}
+    if replaces:
+        form["replaces"] = replaces
     results = []
     for path in files:
         try:
@@ -162,7 +172,22 @@ def upload(
                 "/knowledge/upload",
                 as_json=as_json,
                 files={"file": (path.name, data)},
-                form={"collection": collection},
+                form=form,
             )
         )
-    _io.emit(results, as_json=as_json)
+    _io.emit(results, as_json=as_json, human=_report)
+
+
+def _report(results: list[dict[str, Any]]) -> None:
+    """One block per upload: where it went, its status, what it kept and
+    what it could not."""
+    for r in results:
+        typer.echo(f"{r['path']}: {r.get('status', 'complete')} ({r['converter']})")
+        for path in r.get("files") or []:
+            typer.echo(f"  file: {path}")
+        for issue in r.get("issues") or []:
+            typer.echo(f"  issue: {issue['kind']} {issue['name']}: {issue['reason']}")
+        if r.get("replaced"):
+            typer.echo(f"  replaced: {r['replaced']}")
+        if r.get("dry_run"):
+            typer.echo("  dry run — nothing written")

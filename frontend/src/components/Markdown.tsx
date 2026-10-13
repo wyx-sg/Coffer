@@ -8,8 +8,17 @@
 // Headings are demoted one level (markdown `#` renders as <h2>): the renderer
 // always sits under a page that already owns the <h1>, so a document's own
 // title must never become a second one. `#`→h2 … `#####`/`######`→h6.
-import ReactMarkdown, { type Components } from "react-markdown";
+//
+// Raw HTML in the Markdown is shown as text unless the caller opts in with
+// `allowHtml` (only the Knowledge reader does): then it is parsed (rehype-raw)
+// and cut down to GitHub's own allowlist (rehype-sanitize) plus `details` /
+// `summary` and cell spans, so a document's tables and folds render while its
+// comments, scripts, styles, frames, embeds, forms and `on*` handlers never
+// reach the page.
+import ReactMarkdown, { type Components, type Options } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
+import rehypeRaw from "rehype-raw";
+import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from "rehype-sanitize";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 
@@ -71,6 +80,30 @@ const docComponents: Components = {
   td: (props) => <td className="border border-border px-3 py-1.5 align-top" {...props} />,
   img: (props) => <img className="my-3 max-w-full rounded-md" {...props} />,
 };
+
+/** GitHub's sanitize schema, plus folds and spanning table cells. Comments,
+ *  `script`, `style`, `iframe`, `object`, `embed`, `form` and every `on*`
+ *  attribute are outside it, so they are dropped. */
+const HTML_SCHEMA: SanitizeSchema = {
+  ...defaultSchema,
+  tagNames: [...(defaultSchema.tagNames ?? []), "details", "summary"],
+  attributes: {
+    ...defaultSchema.attributes,
+    details: [...(defaultSchema.attributes?.details ?? []), "open"],
+    td: [...(defaultSchema.attributes?.td ?? []), "colSpan", "rowSpan"],
+    th: [...(defaultSchema.attributes?.th ?? []), "colSpan", "rowSpan"],
+  },
+  allowComments: false,
+};
+
+type Plugins = NonNullable<Options["rehypePlugins"]>;
+
+/** Raw HTML parsed then sanitized, before any highlighting adds its classes. */
+function rehypePlugins(allowHtml: boolean, highlight: boolean): Plugins {
+  const plugins: Plugins = allowHtml ? [rehypeRaw, [rehypeSanitize, HTML_SCHEMA]] : [];
+  if (highlight) plugins.push(rehypeHighlight);
+  return plugins;
+}
 
 const chatComponents: Components = {
   p: ({ children }) => <p className="my-2 leading-relaxed first:mt-0 last:mb-0">{children}</p>,
@@ -161,6 +194,9 @@ interface Props {
   /** Per-element overrides applied last, for a caller needing a custom
    *  element (e.g. a link that routes inside the app). */
   components?: Components;
+  /** Render the HTML a document holds, sanitized (see HTML_SCHEMA). Off by
+   *  default: chat and every other preview show raw HTML as text. */
+  allowHtml?: boolean;
 }
 
 export function Markdown({
@@ -171,6 +207,7 @@ export function Markdown({
   breaks = false,
   copyableCode = false,
   components,
+  allowHtml = false,
 }: Props) {
   const base = density === "chat" ? chatComponents : docComponents;
   const overrides: Components = {
@@ -199,7 +236,7 @@ export function Markdown({
     <div className={cn("text-sm text-foreground", density === "chat" && "markdown-body")}>
       <ReactMarkdown
         remarkPlugins={breaks ? [remarkGfm, remarkBreaks] : [remarkGfm]}
-        rehypePlugins={highlight ? [rehypeHighlight] : []}
+        rehypePlugins={rehypePlugins(allowHtml, highlight)}
         components={overrides}
       >
         {children}

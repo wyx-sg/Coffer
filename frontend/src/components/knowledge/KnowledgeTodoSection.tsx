@@ -3,7 +3,8 @@
 // A collection's To do (spec knowledge "Check a collection mechanically on
 // every read", "Show a collection as one tree of read-only documents in the
 // web UI"): what Coffer found in its files on this read, grouped by kind and
-// listed by what breaks a reader first — dead and ambiguous links, names used
+// listed by what breaks a reader first — dead and ambiguous links, links
+// leaving the knowledge folder, names used
 // twice, missing and outdated sources, waiting sources, incomplete pages and
 // pages due a recheck (ADR knowledge-stays-current-through-flags-coffer-computes). Each item names its
 // page by title (the path is its tooltip) and opens it. Pages without sources
@@ -28,6 +29,7 @@ type Kind = FindingOut["kind"];
 const URGENT: Kind[] = [
   "dead_link",
   "ambiguous_link",
+  "outside_link",
   "duplicate_slug",
   "missing_source",
   "superseded_source",

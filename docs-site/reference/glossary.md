@@ -85,7 +85,7 @@ receive notifications when you are away from the machine. A channel is a
 
 One knowledge tree under `~/.coffer/vault/knowledge/<collection>/`: a small wiki of
 [pages](#page) under `pages/`, compiled by you and your agents from the [sources](#source) kept
-under `sources/`, with a `README.md` at its root. A collection is a
+under `sources/`, with a `README.md` at its root. Any other file in it (an `index.md`, a log, your own folders) stays where it was put. A collection is a
 [resource](#resource) of kind `knowledge`. See [Knowledge](/guides/knowledge).
 
 ### `coffer-guide`
@@ -440,7 +440,7 @@ agent's page lists them so you can [adopt](#adopt) or discard them. See [Skills]
 
 Mechanical work Coffer does on a timer, without being asked: the [memory sync](#memory-sync),
 and the sweep for knowledge (re-render the guide, adopt files left in the
-[inbox](#inbox), file loose documents into `pages/`, commit edits made on disk). None of them calls a model. The memory sync can be switched
+[inbox](#inbox), commit edits made on disk; it moves no file). None of them calls a model. The memory sync can be switched
 off or retimed from the **▾** on **Sync now** on the Memory page.
 See [Memory](/architecture/memory#the-sync-pass) and [Knowledge](/architecture/knowledge#the-sweep).
 

@@ -3287,6 +3287,18 @@
       "files": "Files to upload",
       "removeNamed": "Remove {{name}}",
       "savedAs": "Saved as {{path}}",
+      "partial_one": "Imported as {{path}} with {{count}} issue",
+      "partial_other": "Imported as {{path}} with {{count}} issues",
+      "issues": "What {{name}} could not keep",
+      "issueKinds": {
+        "missing_attachment": "Missing attachment",
+        "external_embed": "External embed",
+        "external_image": "External image",
+        "unsupported_macro": "Unsupported macro",
+        "not_rendered": "Not rendered"
+      },
+      "someIssues_one": "{{count}} uploaded; {{partial}} with issues to look at",
+      "someIssues_other": "{{count}} uploaded; {{partial}} with issues to look at",
       "allSaved": "Uploaded {{count}} files to {{collection}}",
       "someSaved": "{{count}} uploaded; {{refused}} couldn’t be",
       "buttonMany": "Upload {{count}} files",
@@ -3362,7 +3374,9 @@
     },
     "link": {
       "dead": "No page or source is named {{target}}",
-      "ambiguous": "{{target}} names more than one file"
+      "ambiguous": "{{target}} names more than one file",
+      "outside": "{{target}} is outside the knowledge folder",
+      "noFile": "No file at {{target}}"
     },
     "history": {
       "title": "History",
@@ -3379,6 +3393,7 @@
       "kinds": {
         "dead_link": "Dead links",
         "ambiguous_link": "Ambiguous links",
+        "outside_link": "Links leaving the knowledge folder",
         "duplicate_slug": "Names used twice",
         "missing_source": "Missing sources",
         "superseded_source": "Pages citing an outdated source",

@@ -163,10 +163,10 @@ def test_the_manual_names_one_tool_and_the_log_reader() -> None:
     # committed through git in the vault.
     assert "### Writing a page" in text
     assert "never run git inside the vault" in text
-    # The only knowledge commands it names are the ones a tidy runs: writing a
-    # page is a file edit, never a command.
+    # The only knowledge commands it names are the ones a tidy runs and the upload
+    # that imports a Confluence page: writing a page is a file edit, never a command.
     commands = set(re.findall(r"coffer knowledge ([a-z-]+)", text))
-    assert commands == {"tidy-start", "tidy-finish", "check"}
+    assert commands == {"tidy-start", "tidy-finish", "check", "upload"}
     assert "coffer path knowledge" not in text
     assert "coffer path memory" not in text
     assert "trigger" not in text
@@ -329,8 +329,10 @@ def test_the_writing_section_states_the_six_rules() -> None:
     assert "Lose nothing" in flat
     assert "Organise by subject, never by provenance" in flat
     assert "the newer wins unless the older one is shown to be right" in flat
-    assert "Link pages by `[[slug]]`, never by path" in flat
+    assert "Link pages by `[[slug]]` or a standard relative Markdown link" in flat
+    assert "Keep links whole when you rename or move a page" in flat
     assert "update the links to it, or keep its old slug in its `aliases`" in flat
+    assert "`evidence`" in flat and "`verify_after_days`" in flat
     assert "Never edit a source" in flat
     for key in ("a `title`", "a `type`", "`description`", "`sources`", "`aliases`"):
         assert key in flat

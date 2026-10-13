@@ -14,8 +14,10 @@ from __future__ import annotations
 import os
 import pathlib
 import re
+from collections.abc import Mapping
+from typing import Any
 
-from coffer.domain.knowledge.converter import ConvertedImage
+from coffer.domain.knowledge.converter import ASSET_LINK_PREFIX, ConvertedImage
 from coffer.domain.knowledge.errors import KnowledgeFileNotFound
 from coffer.infrastructure.knowledge import linked, paths
 from coffer.infrastructure.knowledge.naming import slugify
@@ -35,6 +37,12 @@ MAX_ASSET_BYTES = 10 * 1024 * 1024
 
 _LINK = re.compile(r"\]\((image-\d+\.[a-z]+)\)")
 
+#: A converter's placeholder for a file it hands over: ``coffer-asset:<name>``.
+_ASSET_LINK = re.compile(re.escape(ASSET_LINK_PREFIX) + r"([^\s()<>\"'\[\]]+)")
+
+#: How many suffixed folders are tried before an upload's files are refused.
+_MAX_FOLDER_TRIES = 100
+
 
 def folder_for(title: str, digest: str) -> str:
     """The folder one upload's pictures go in: readable, and unique per file."""
@@ -53,6 +61,71 @@ def link_pictures(markdown: str, folder: str, images: tuple[ConvertedImage, ...]
         return f"](../{paths.ASSETS_DIR_NAME}/{folder}/{name})"
 
     return _LINK.sub(_point, markdown)
+
+
+def link_assets(text: str, folder: str, names: frozenset[str]) -> str:
+    """``text`` with each ``coffer-asset:<name>`` of a kept file pointed at
+    where it is kept, relative to the source under ``sources/``. A name the
+    upload did not keep is left as written."""
+
+    def _point(match: re.Match[str]) -> str:
+        name = match.group(1)
+        if name not in names:
+            return match.group(0)
+        return f"../{paths.ASSETS_DIR_NAME}/{folder}/{name}"
+
+    return _ASSET_LINK.sub(_point, text)
+
+
+def link_values(value: Any, folder: str, names: frozenset[str]) -> Any:
+    """:func:`link_assets` over every string inside ``value``, recursively —
+    a source's frontmatter names its kept files the way its body does."""
+    if isinstance(value, str):
+        return link_assets(value, folder, names)
+    if isinstance(value, Mapping):
+        return {k: link_values(v, folder, names) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [link_values(v, folder, names) for v in value]
+    return value
+
+
+def _clashes(directory: pathlib.Path, kept: Mapping[str, bytes]) -> bool:
+    """Whether ``directory`` holds any of ``kept``'s names with other bytes."""
+    for name, data in kept.items():
+        path = directory / name
+        if path.is_symlink() or (path.exists() and not path.is_file()):
+            return True
+        if path.is_file() and path.read_bytes() != data:
+            return True
+    return False
+
+
+def place(
+    collection: str, folder: str, kept: Mapping[str, bytes], digest: str
+) -> tuple[str, dict[str, bytes]]:
+    """The folder an upload's files go in, and those still to write, by their
+    knowledge-root-relative path.
+
+    A folder already holding the same bytes under the same names is reused and
+    nothing is written again; one holding other bytes is left alone and the
+    upload's files go in ``<folder>-<sha8>`` (then ``-2``, ``-3`` …).
+    """
+    if not kept:
+        return folder, {}
+    base = paths.collection_dir(collection) / paths.ASSETS_DIR_NAME
+    suffixed = f"{folder}-{digest[:8]}"
+    candidates = [folder, suffixed] + [f"{suffixed}-{n}" for n in range(2, _MAX_FOLDER_TRIES)]
+    for candidate in candidates:
+        directory = base / candidate
+        if not _clashes(directory, kept):
+            prefix = f"{collection}/{paths.ASSETS_DIR_NAME}/{candidate}"
+            fresh = {
+                f"{prefix}/{name}": data
+                for name, data in kept.items()
+                if not (directory / name).is_file()
+            }
+            return candidate, fresh
+    raise ValueError(f"cannot find a free assets folder for {folder!r}")
 
 
 def picture_paths(
@@ -113,9 +186,12 @@ __all__ = [
     "MAX_ASSET_BYTES",
     "folder_for",
     "image_type",
+    "link_assets",
     "link_pictures",
+    "link_values",
     "picture_at",
     "picture_paths",
+    "place",
     "read_picture",
     "write_bytes",
 ]

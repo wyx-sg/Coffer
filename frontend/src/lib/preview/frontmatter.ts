@@ -8,7 +8,8 @@
 //
 // A tiny hand-written reader for the subset Coffer's own files and agents'
 // files actually use — `key: value`, a block list under a key (`- item`, where
-// an item may itself be a small mapping), a nested mapping, a `|` / `>` block
+// an item may itself be a small mapping, block or flow `{a: b}`), a nested
+// mapping, a `|` / `>` block
 // scalar — not a YAML implementation. Anything it does not understand still
 // comes out as text under its key: the point is to keep metadata out of the
 // body, not to interpret it. Text that does not open with a fence, or whose
@@ -41,6 +42,21 @@ function unquote(value: string): string {
   return v;
 }
 
+/** `a: 'b'` as `a: b`; anything that is not one pair, unquoted. */
+function pair(text: string): string {
+  const kv = /^([\w.-]+):\s+(.*)$/.exec(text.trim());
+  return kv ? `${kv[1]}: ${unquote(kv[2])}` : unquote(text);
+}
+
+/** A flow mapping `{a: b, c: d}` read as `a: b, c: d`; a single `a: 'b'`
+ *  pair with its value unquoted; anything else as is. */
+function readable(value: string): string {
+  const v = unquote(value);
+  const flow = /^\{(.*)\}$/.exec(v);
+  if (!flow) return pair(v);
+  return flow[1].split(",").map(pair).filter(Boolean).join(", ");
+}
+
 /** The lines indented under one key, turned into a list or a text value. */
 function readNested(lines: string[], scalar: string): string | string[] {
   const content = lines.filter((l) => l.trim() !== "" && !l.trim().startsWith("#"));
@@ -48,7 +64,7 @@ function readNested(lines: string[], scalar: string): string | string[] {
   if (/^[|>][+-]?$/.test(scalar)) {
     return content.map((l) => l.trim()).join(scalar.startsWith("|") ? "\n" : " ");
   }
-  if (content.length === 0) return unquote(scalar);
+  if (content.length === 0) return readable(scalar);
 
   // A list, possibly of small mappings: each `- ` opens an item, and a deeper
   // line continues the one before it.
@@ -56,10 +72,11 @@ function readNested(lines: string[], scalar: string): string | string[] {
     const items: string[] = [];
     for (const line of content) {
       const item = ITEM_RE.exec(line);
-      if (item) items.push(unquote(item[1] ?? ""));
+      if (item) items.push(readable(item[1] ?? ""));
       else if (items.length > 0) {
         const last = items.length - 1;
-        items[last] = items[last] ? `${items[last]}, ${line.trim()}` : line.trim();
+        const more = readable(line.trim());
+        items[last] = items[last] ? `${items[last]}, ${more}` : more;
       }
     }
     return items;
@@ -100,4 +117,13 @@ export function splitFrontmatter(text: string): SplitFrontmatter {
   // fence pair, and still not body.
   if (entries.length === 0 && block.trim() !== "") return { entries: [], body: text };
   return { entries, body };
+}
+
+/** `display` with the leading frontmatter of `original` put back in front,
+ *  when `original` has one and `display` does not: a preview text derived
+ *  from a file's body keeps the file's metadata grid. */
+export function withFrontmatterOf(original: string, display: string): string {
+  const fence = FENCE_RE.exec(original);
+  if (!fence || FENCE_RE.test(display)) return display;
+  return fence[0] + display;
 }

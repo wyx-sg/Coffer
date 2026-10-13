@@ -11,6 +11,7 @@ import type {
   CollectionOut,
   FileOut,
   FileSummaryOut,
+  IngestedDocumentOut,
   TreeOut,
 } from "@/lib/api/knowledge";
 
@@ -73,6 +74,7 @@ export function file(path: string, over: Partial<FileOut> = {}): FileOut {
     created_at: "2026-09-12T00:00:00Z",
     updated_at: "2026-09-20T00:00:00Z",
     body: `Body of ${path}.`,
+    display_body: null,
     file_path: `/Users/dev/.coffer/knowledge/${path}`,
     folder_path: `/Users/dev/.coffer/knowledge/${path.split("/").slice(0, -1).join("/")}`,
     ...over,
@@ -176,3 +178,22 @@ export const EDIT = change({
   collections: [OTHER.name],
   documents: [{ path: `${OTHER.name}/on-call.md`, status: "modified", added: 1, removed: 1 }],
 });
+
+/** What `POST /knowledge/upload` answers for a document saved whole. */
+export function ingested(
+  path: string,
+  over: Partial<IngestedDocumentOut> = {},
+): IngestedDocumentOut {
+  return {
+    path,
+    title: path.split("/").pop() ?? path,
+    description: "",
+    converter: "markdown",
+    status: "complete",
+    files: [],
+    issues: [],
+    replaced: null,
+    dry_run: false,
+    ...over,
+  };
+}

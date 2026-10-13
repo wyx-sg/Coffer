@@ -351,4 +351,6 @@ coffer knowledge upload [OPTIONS] COLLECTION FILES...
 | --- | --- | --- | --- |
 | `COLLECTION` <span class="cli-chip">argument</span> | text | required | The collection's folder name |
 | `FILES` <span class="cli-chip">argument</span> | path (variadic) | required | Files to keep as sources |
+| `--replaces` <span class="cli-chip">option</span> | text |  | A source of the collection the upload replaces |
+| `--dry-run` <span class="cli-chip">option</span> | flag |  | Convert and show what would be written; write nothing |
 | `--json` <span class="cli-chip">option</span> | flag |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |

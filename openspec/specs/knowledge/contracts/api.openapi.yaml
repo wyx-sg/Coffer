@@ -790,6 +790,12 @@ paths:
               $ref: '#/components/schemas/Body_upload_api_v1_knowledge_upload_post'
         required: true
       responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestedDocumentOut'
+          description: A dry run; nothing written.
         '201':
           content:
             application/json:
@@ -818,10 +824,19 @@ components:
         collection:
           title: Collection
           type: string
+        dry_run:
+          default: false
+          title: Dry Run
+          type: boolean
         file:
           contentMediaType: application/octet-stream
           title: File
           type: string
+        replaces:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Replaces
       required:
       - file
       - collection
@@ -891,7 +906,7 @@ components:
           title: Version
           type: string
         writer:
-          description: '`user` a person; `agent` an agent whose material became a document on arrival; `curation` a change Coffer''s retired curation pass made, kept in the history; `sync` another machine''s change; `disk` an edit made outside Coffer (a person''s editor, an agent''s file tools); `daemon` Coffer filing a loose document into `pages/`.'
+          description: '`user` a person; `agent` an agent whose material became a document on arrival; `curation` a change Coffer''s retired curation pass made, kept in the history; `sync` another machine''s change; `disk` an edit made outside Coffer (a person''s editor, an agent''s file tools); `daemon` Coffer adopting an inbox file as a source, or a layout commit an older version made (operation `layout`).'
           enum:
           - user
           - agent
@@ -1196,6 +1211,11 @@ components:
         description:
           title: Description
           type: string
+        display_body:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Display Body
         file_path:
           title: File Path
           type: string
@@ -1285,6 +1305,7 @@ components:
       - summary
       - original
       - original_path
+      - display_body
       title: FileOut
       type: object
     FileSummaryOut:
@@ -1362,6 +1383,7 @@ components:
           enum:
           - dead_link
           - ambiguous_link
+          - outside_link
           - duplicate_slug
           - missing_source
           - superseded_source
@@ -1404,6 +1426,24 @@ components:
       - prompt
       title: HandoffOut
       type: object
+    IngestIssueOut:
+      description: Something an import could not keep or render.
+      properties:
+        kind:
+          title: Kind
+          type: string
+        name:
+          title: Name
+          type: string
+        reason:
+          title: Reason
+          type: string
+      required:
+      - kind
+      - name
+      - reason
+      title: IngestIssueOut
+      type: object
     IngestedDocumentOut:
       properties:
         converter:
@@ -1412,8 +1452,34 @@ components:
         description:
           title: Description
           type: string
+        dry_run:
+          default: false
+          title: Dry Run
+          type: boolean
+        files:
+          items:
+            type: string
+          title: Files
+          type: array
+        issues:
+          items:
+            $ref: '#/components/schemas/IngestIssueOut'
+          title: Issues
+          type: array
         path:
           title: Path
+          type: string
+        replaced:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Replaced
+        status:
+          default: complete
+          enum:
+          - complete
+          - partial
+          title: Status
           type: string
         title:
           title: Title
@@ -1423,6 +1489,11 @@ components:
       - title
       - description
       - converter
+      - status
+      - files
+      - issues
+      - replaced
+      - dry_run
       title: IngestedDocumentOut
       type: object
     LinkRefOut:
@@ -1430,6 +1501,17 @@ components:
         ambiguous:
           default: false
           title: Ambiguous
+          type: boolean
+        kind:
+          default: wiki
+          enum:
+          - wiki
+          - markdown
+          title: Kind
+          type: string
+        outside:
+          default: false
+          title: Outside
           type: boolean
         path:
           anyOf:
@@ -1443,6 +1525,8 @@ components:
       - target
       - path
       - ambiguous
+      - kind
+      - outside
       title: LinkRefOut
       type: object
     PageRefOut:

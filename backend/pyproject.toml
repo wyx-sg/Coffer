@@ -57,6 +57,10 @@ dependencies = [
     # sentence-transformers, chromadb, mem0ai, pypdf. Coffer embeds nothing at
     # all now — knowledge search and memory recall are literal.
     "markitdown[docx,pdf,pptx,xls,xlsx]>=0.1",
+    # Confluence Storage Format → Markdown (knowledge import): parsed as HTML
+    # by BeautifulSoup's stdlib parser in
+    # ``infrastructure/knowledge/converters/confluence``.
+    "beautifulsoup4>=4.15",
     "openai>=1.40",
     "claude-agent-sdk>=0.2,<0.3",
 ]

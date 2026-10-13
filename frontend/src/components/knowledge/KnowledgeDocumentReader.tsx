@@ -8,7 +8,11 @@
 // Preview renders the Markdown, a page's `[[links]]` opening the file each
 // resolves to (KnowledgeWikiLink); Source shows the raw text in the code
 // viewer. A picture the Markdown links by a relative path (an upload's,
-// under `assets/`) shows inline (KnowledgeImage). Every file is the same here, whoever wrote it last (spec knowledge
+// under `assets/`) shows inline (KnowledgeImage); a standard relative link to
+// another knowledge file opens it (KnowledgeFileLink). The preview renders the
+// HTML a document holds, sanitized (Markdown `allowHtml`), and reads the
+// daemon's `display_body` when it sends one — a Confluence source's storage
+// markers turned into Markdown — while Source always shows the file as it is. Every file is the same here, whoever wrote it last (spec knowledge
 // "Let only a person delete a document"); its file actions live in the pane
 // bar, not beside the text.
 //
@@ -20,14 +24,17 @@ import { Fragment, useMemo, type ReactNode } from "react";
 import type { Components } from "react-markdown";
 
 import { KnowledgeFileLine } from "@/components/knowledge/KnowledgeFileLine";
+import { KnowledgeFileLink } from "@/components/knowledge/KnowledgeFileLink";
 import { KnowledgeImage } from "@/components/knowledge/KnowledgeImage";
 import { KnowledgeWikiLink } from "@/components/knowledge/KnowledgeWikiLink";
 import { CodeView } from "@/components/preview/CodeView";
 import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
 import type { FileOut } from "@/lib/api/knowledge";
 import { resolveAsset } from "@/lib/knowledge/assets";
+import { isExternalHref } from "@/lib/knowledge/fileLinks";
 import { splitTitleHeading } from "@/lib/knowledge/titleHeading";
 import { markWikiLinks, wikiTargetOf } from "@/lib/knowledge/wikiLinks";
+import { withFrontmatterOf } from "@/lib/preview/frontmatter";
 
 /** `a/b/c.md` with a break opportunity after each `/`, `.`, `_` and `-`, so a
  *  long path wraps at its separators instead of overflowing or mid-word. */
@@ -71,10 +78,14 @@ interface Props {
 }
 
 export function KnowledgeDocumentReader({ file, collectionUid, source }: Props) {
-  const { title, body } = useMemo(
-    () => splitTitleHeading(file.body, file.title),
-    [file.body, file.title],
+  // The preview reads the daemon's display body when it sends one, keeping
+  // the file's own frontmatter (if any) for the metadata grid.
+  const shown = useMemo(
+    () =>
+      file.display_body === null ? file.body : withFrontmatterOf(file.body, file.display_body),
+    [file.body, file.display_body],
   );
+  const { title, body } = useMemo(() => splitTitleHeading(shown, file.title), [shown, file.title]);
   const page = file.kind === "page";
   const rendered = useMemo(() => (page ? markWikiLinks(body) : body), [page, body]);
   const components = useMemo<Components>(() => {
@@ -90,30 +101,40 @@ export function KnowledgeDocumentReader({ file, collectionUid, source }: Props) 
         />
       );
     };
-    return page
-      ? {
-          code,
-          img,
-          a: ({ href, title: hint, children }) => {
-            const target = wikiTargetOf(href);
-            return target === null ? (
-              <a
-                className="text-accent-text underline underline-offset-2"
-                target="_blank"
-                rel="noreferrer"
-                href={href}
-                title={hint}
-              >
-                {children}
-              </a>
-            ) : (
-              <KnowledgeWikiLink collectionUid={collectionUid} links={file.links} target={target}>
-                {children}
-              </KnowledgeWikiLink>
-            );
-          },
-        }
-      : { code, img };
+    const a: Components["a"] = ({ href, title: hint, children }) => {
+      const target = page ? wikiTargetOf(href) : null;
+      if (target !== null) {
+        return (
+          <KnowledgeWikiLink collectionUid={collectionUid} links={file.links} target={target}>
+            {children}
+          </KnowledgeWikiLink>
+        );
+      }
+      if (href && !isExternalHref(href)) {
+        return (
+          <KnowledgeFileLink
+            collectionUid={collectionUid}
+            collectionName={file.path.split("/")[0]}
+            links={file.links}
+            href={href}
+          >
+            {children}
+          </KnowledgeFileLink>
+        );
+      }
+      return (
+        <a
+          className="text-accent-text underline underline-offset-2"
+          target="_blank"
+          rel="noreferrer"
+          href={href}
+          title={hint}
+        >
+          {children}
+        </a>
+      );
+    };
+    return { code, img, a };
   }, [page, collectionUid, file.links, file.path]);
 
   if (source) {
@@ -129,7 +150,9 @@ export function KnowledgeDocumentReader({ file, collectionUid, source }: Props) 
       <div className="mx-auto max-w-[720px]">
         <h1 className="text-xl font-bold">{title}</h1>
         <KnowledgeFileLine file={file} collectionUid={collectionUid} />
-        <FindableMarkdown components={components}>{rendered}</FindableMarkdown>
+        <FindableMarkdown components={components} allowHtml>
+          {rendered}
+        </FindableMarkdown>
       </div>
     </div>
   );

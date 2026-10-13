@@ -140,7 +140,9 @@ Option B, in three steps so each can be measured:
    - The knowledge sweep is woken by file events under `knowledge/` (borrowed
      from the vault scanner's one watch) and by switching the feature on, and
      falls back every 10 minutes. A loose document inside its quiet minute
-     schedules one more run.
+     schedules one more run. (Superseded in part by
+     `knowledge-files-stay-where-their-writer-put-them`: the sweep no longer
+     files loose documents, so the quiet-minute retry is gone.)
 
    Two parts are left for later changes. The reconciler keeps its 60-second
    period until the agents' config files are watched. A running proxy is still

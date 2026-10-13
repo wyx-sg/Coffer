@@ -243,8 +243,8 @@ describe("a page's line and links", () => {
       { slug: "old-spec", path: null, title: "" },
     ],
     links: [
-      { target: "cache-ttl", path: CACHE.path, ambiguous: false },
-      { target: "gone", path: null, ambiguous: false },
+      { target: "cache-ttl", path: CACHE.path, ambiguous: false, kind: "wiki", outside: false },
+      { target: "gone", path: null, ambiguous: false, kind: "wiki", outside: false },
     ],
   });
 

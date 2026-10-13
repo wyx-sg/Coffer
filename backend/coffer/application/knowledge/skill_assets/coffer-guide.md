@@ -40,13 +40,19 @@ wiki per collection, which the developer and agents like you write together:
 
 - `README.md` is the collection's **schema**: what belongs in it, the page
   types it uses and any conventions, and in its frontmatter
-  `verify_after_days`, how long a page's check holds. Where it disagrees with
-  this file, it wins.
+  `verify_after_days`, how long a page's check holds, and `sourceless_types`,
+  page types that need neither `sources` nor `evidence`. Where it disagrees
+  with this file, it wins.
 - `sources/` holds the **sources**: material as it arrived (an upload, a file
   dropped into the inbox), converted to Markdown. Sources are never edited,
   beyond the few keys rule 6 allows.
 - `pages/` holds the **pages**: the wiki itself, compiled from the sources and
   kept up to date. This is what you read first and what you write.
+- Any other file — a root `index.md`, `log.md` or `schema.md`, a folder of the
+  developer's own — is a **collection file**. Coffer keeps it where its writer
+  put it: it never moves or renames one, lists and commits it, and follows its
+  links, but does not check it as a page. A page you want in the wiki goes
+  under `pages/`.
 - `assets/` holds the pictures Coffer took out of uploaded documents, one
   folder per upload. A source links its own (`../assets/<folder>/image-1.png`);
   open one when the text around it is not enough, and link it the same way from
@@ -99,26 +105,32 @@ guess, an opinion, or something true only of this conversation.
    Whoever wrote either, the developer included. Keep the superseded statement
    legible where the corrected fact is: "(previously recorded as X; corrected
    YYYY-MM-DD)".
-5. **Link pages by `[[slug]]`, never by path.** A page's slug is its file name
-   without `.md`; write `[[session-ownership]]` or
-   `[[session-ownership|the session service]]`. A link may also name a source's
-   slug. When you rename a page, update the links to it, or keep its old slug in
-   its `aliases`. Coffer reports every link that names nothing.
+5. **Link pages by `[[slug]]` or a standard relative Markdown link.** A page's
+   slug is its file name without `.md`; write `[[session-ownership]]` or
+   `[[session-ownership|the session service]]`, or `[the session service](session-ownership.md)`
+   with a path relative to the file that holds the link. A link may also name a
+   source's slug. Keep links whole when you rename or move a page: update the
+   links to it, or keep its old slug in its `aliases`. Coffer reports every link
+   that names nothing, and a relative link that leaves the knowledge root.
 6. **Never edit a source.** A source is the record of what arrived. The only
    keys you may add to one are `ingest: skipped`, `superseded_by: <slug>` when
    a newer source replaces it, and `summary`, one or two sentences on what it
    says (see "Integrating sources"). Coffer writes `original` and
    `original_sha256` on an upload; leave them as they are.
-7. **Give every page frontmatter**: a `title`; a `type` — `concept`, `entity`,
-   `how-to`, `decision` or `overview` unless the README defines its own; a
-   one-line `description` saying what *question* the page answers (it is the
-   only thing a future reader chooses by); `sources`, the slugs of the sources
-   it draws on; any `aliases`; when you last checked the page against its
-   sources or the code, as `verified: YYYY-MM-DD`; and `actor: agent`. Leave
-   any other key a person added alone. Where a page's facts came from belongs
-   in `sources` and `verified`, never in a paragraph of the body listing what
-   you read; a source that is not in the collection is cited where its fact
-   is, as a link.
+7. **Give every page frontmatter**: a `title`; a `type`, one of the types the
+   README lists; a one-line `description` saying what *question* the page
+   answers (it is the only thing a future reader chooses by); `sources`, the
+   slugs of the sources it draws on, or, for a page resting on code,
+   configuration or an observation, `evidence`, a list such as
+   `code: <repo>/<path>@<rev>`, `config: …`, `observed: …`; any `aliases`; when
+   you last checked the page, as `verified: YYYY-MM-DD`; an optional
+   `verify_after_days` of its own, which overrides the README's; and
+   `actor: agent`. A page with neither `sources` nor `evidence` is a finding
+   unless its type is one the README lists under `sourceless_types`. Leave any
+   other key a person added alone. Where a page's facts came from belongs in
+   `sources`, `evidence` and `verified`, never in a paragraph of the body
+   listing what you read; a source that is not in the collection is cited where
+   its fact is, as a link.
 
 ```markdown
 ---
@@ -132,10 +144,10 @@ actor: agent
 ---
 ```
 
-The collection must already exist: only the developer creates one. A Markdown
-file you leave outside `pages/` and `sources/` is moved into `pages/` by Coffer
-within a minute. Coffer commits every change it finds on disk to the vault's
-git history, so a bad edit can be brought back from it;
+The collection must already exist: only the developer creates one. A file you
+write outside `pages/` and `sources/` stays where you put it; it is a
+collection file, not a page. Coffer commits every change it finds on disk to the
+vault's git history, so a bad edit can be brought back from it;
 never run git inside the vault on your own initiative, because a commit of your
 own would be attributed to nobody. The developer reads a file's versions and restores an
 earlier one from its history in Coffer.
@@ -162,6 +174,25 @@ A source **waits** while no page lists it in `sources` and it is not marked
 One source may touch many pages; that is the point. Integrate the waiting
 sources one at a time, oldest first.
 
+### Importing a Confluence page
+
+Coffer never calls Confluence. When the developer wants a Confluence page kept
+as a source, fetch it with the Confluence tool they are authorised to use, in
+Storage Format with its attachments (a Confluence CLI read with
+`--format storage --json`, saved to a file), then run
+`coffer knowledge upload <collection> <file>`. A JSON page read result, a
+`*.storage.xml` file or a Markdown file carrying
+`skynet-confluence-storage` markers are all accepted. Coffer converts it, keeps
+its pictures and diagram sources under `assets/confluence-<pageId>-v<version>/`,
+and prints a report: `status` (`complete` or `partial`), the files written and
+the issues (`missing_attachment`, `external_embed`, `external_image`,
+`unsupported_macro`, `not_rendered`). Show the developer any issue. To import the
+same page again after it changed, upload it with
+`--replaces sources/<old>.md`: the new source is written and the old one is
+marked `superseded_by` in one change, nothing is deleted. Add `--dry-run` to
+see the report and the files without writing. The imported source is then
+integrated like any other, and never edited.
+
 ### Tidying a collection
 
 When the developer asks you to tidy, organise or clean up knowledge (整理知识),
@@ -172,11 +203,11 @@ work through one collection at a time:
    the developer sees the whole tidy as one change and can undo it at once.
 2. Integrate its waiting sources first (see "Integrating sources").
 3. Fix what Coffer found: the mechanical findings the prompt lists, or
-   `coffer knowledge check <collection>` prints — dead and ambiguous links,
-   orphan and incomplete pages, pages without sources, missing sources, pages
+   `coffer knowledge check <collection>` prints — dead, ambiguous and
+   outside-the-root links, orphan and incomplete pages, pages without sources, missing sources, pages
    that lean on a superseded source. A **stale** page (`stale_page`: its
-   `verified` date is missing or older than the README's `verify_after_days`,
-   90 days by default) is rechecked: read it against its sources or the code,
+   `verified` date is missing or older than the page's own or the README's
+   `verify_after_days`, 90 days by default) is rechecked: read it against its sources or the code,
    fix what changed, and set `verified` to today. A page you cannot recheck
    keeps its date and goes into your report. Give every source without a
    `summary` one.
@@ -301,7 +332,8 @@ text does not explain, not as a debugger for the developer's own program.
   already read, read the code. Knowledge is for what the repository cannot say.
 - **Not a scratch pad.** What goes in should still be true in a month.
 - Address knowledge files by collection and relative path, and link pages by
-  `[[slug]]`. A path that climbs out of the knowledge root is refused.
+  `[[slug]]` or a relative Markdown link. A link that climbs out of the knowledge
+  root is reported, and a path that does is refused.
 
 <!-- end:knowledge -->
 ## This file

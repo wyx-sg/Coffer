@@ -112,17 +112,11 @@ async def test_a_sync_round_always_reaches_the_service() -> None:
     assert rounds == [1]
 
 
-def _fake_sweep(
-    monkeypatch: pytest.MonkeyPatch, swept: list[object], *, waiting: bool = False
-) -> None:
+def _fake_sweep(monkeypatch: pytest.MonkeyPatch, swept: list[object]) -> None:
     async def record(service: object, _refresh: object) -> None:
         swept.append(service)
 
-    async def loose(_service: object) -> bool:
-        return waiting
-
     monkeypatch.setattr(knowledge_sweep_wiring, "sweep_once", record)
-    monkeypatch.setattr(knowledge_sweep_wiring, "loose_documents_waiting", loose)
 
     class _Tidies:
         async def expire(self) -> list[str]:

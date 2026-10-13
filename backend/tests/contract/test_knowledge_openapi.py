@@ -126,10 +126,22 @@ def test_no_wire_model_carries_a_retrieval_payload() -> None:
 def test_an_ingested_document_names_the_source_it_became() -> None:
     """An upload answers with its source; a source's read names its original
     and where it is on this Mac (see "Keep an upload's original on this Mac
-    only")."""
+    only"), with its report: status, the files kept beside it, the issues,
+    what it replaced and whether it was only a dry run."""
     fields = set(schemas.IngestedDocumentOut.model_fields)
-    assert {"path", "title", "description", "converter"} == fields
-    assert {"original", "original_path"} <= set(schemas.FileOut.model_fields)
+    assert {
+        "path",
+        "title",
+        "description",
+        "converter",
+        "status",
+        "files",
+        "issues",
+        "replaced",
+        "dry_run",
+    } == fields
+    assert {"kind", "name", "reason"} == set(schemas.IngestIssueOut.model_fields)
+    assert {"original", "original_path", "display_body"} <= set(schemas.FileOut.model_fields)
 
 
 def test_a_collection_reports_its_pages_sources_and_its_one_handoff() -> None:

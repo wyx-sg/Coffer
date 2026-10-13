@@ -11,8 +11,14 @@ different layer's job.
 from __future__ import annotations
 
 import pathlib
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
+
+#: How a converter's Markdown names a file it keeps beside the source
+#: (:class:`ConvertedFile`); the ingest points each such link at where the file
+#: is kept.
+ASSET_LINK_PREFIX = "coffer-asset:"
 
 
 @dataclass(frozen=True)
@@ -26,6 +32,32 @@ class ConvertedImage:
 
     name: str
     data: bytes
+
+
+@dataclass(frozen=True)
+class ConvertedFile:
+    """A file kept beside the source as it came: a picture, a diagram source
+    or the original Storage Format of an imported page (design §5).
+
+    ``name`` is a safe file name; the Markdown links it as
+    ``coffer-asset:<name>``.
+    """
+
+    name: str
+    data: bytes
+
+
+@dataclass(frozen=True)
+class ConversionIssue:
+    """Something an import could not keep, and why (design §5).
+
+    ``kind`` is one of ``missing_attachment``, ``external_embed``,
+    ``external_image``, ``unsupported_macro`` or ``not_rendered``.
+    """
+
+    kind: str
+    name: str
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -44,6 +76,18 @@ class Conversion:
     converter: str
     #: The pictures the Markdown refers to by name, in order of appearance.
     images: tuple[ConvertedImage, ...] = ()
+    #: Files kept as they came, linked from the Markdown as ``coffer-asset:<name>``.
+    files: tuple[ConvertedFile, ...] = ()
+    #: What the conversion could not keep, each with its reason.
+    issues: tuple[ConversionIssue, ...] = ()
+    #: Extra frontmatter keys the source carries (never ``title``,
+    #: ``description``, ``actor``, ``created_at`` or ``updated_at``).
+    metadata: Mapping[str, object] = field(default_factory=dict, hash=False)
+    #: The folder the kept files would like; ``""`` lets the ingest decide.
+    asset_folder: str = ""
+    #: Whether the uploaded file is kept as the original; ``None`` keeps the
+    #: existing rule (every converter but passthrough).
+    keeps_original: bool | None = None
 
 
 class UnsupportedDocument(Exception):  # noqa: N818 - carries the rejected type, not an "...Error"

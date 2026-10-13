@@ -1,0 +1,23 @@
+{
+  "id": "400500600",
+  "type": "page",
+  "status": "current",
+  "title": "Service B Overview",
+  "space": {
+    "key": "EXB",
+    "name": "Example Space"
+  },
+  "version": {
+    "number": 3
+  },
+  "body": {
+    "storage": {
+      "value": "<h1>Overview</h1><p>Service B handles <strong>requests</strong>.</p><ac:structured-macro ac:name=\"code\" ac:schema-version=\"1\"><ac:parameter ac:name=\"language\">python</ac:parameter><ac:plain-text-body><![CDATA[print(\"<b>\")]]></ac:plain-text-body></ac:structured-macro>",
+      "representation": "storage"
+    }
+  },
+  "_links": {
+    "base": "https://confluence.example.com",
+    "webui": "/display/EXB/Service+B+Overview"
+  }
+}

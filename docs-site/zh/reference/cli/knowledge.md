@@ -351,4 +351,6 @@ coffer knowledge upload [OPTIONS] COLLECTION FILES...
 | --- | --- | --- | --- |
 | `COLLECTION` <span class="cli-chip">参数</span> | text | 必填 | The collection's folder name |
 | `FILES` <span class="cli-chip">参数</span> | path（可变个数） | 必填 | Files to keep as sources |
+| `--replaces` <span class="cli-chip">选项</span> | text |  | A source of the collection the upload replaces |
+| `--dry-run` <span class="cli-chip">选项</span> | 开关 |  | Convert and show what would be written; write nothing |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
