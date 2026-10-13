@@ -357,6 +357,7 @@ source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
     { name = "alembic" },
+    { name = "beautifulsoup4" },
     { name = "claude-agent-sdk" },
     { name = "cryptography" },
     { name = "fastapi" },
@@ -404,6 +405,7 @@ dev = [
 requires-dist = [
     { name = "aiosqlite", specifier = ">=0.20" },
     { name = "alembic", specifier = ">=1.13" },
+    { name = "beautifulsoup4", specifier = ">=4.15" },
     { name = "claude-agent-sdk", specifier = ">=0.2,<0.3" },
     { name = "cryptography", specifier = ">=42.0" },
     { name = "fastapi", specifier = ">=0.141.1,<0.142" },

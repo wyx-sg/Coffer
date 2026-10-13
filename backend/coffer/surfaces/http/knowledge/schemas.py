@@ -90,6 +90,7 @@ def collection_out(entry: CollectionEntry) -> CollectionOut:
 FindingKind = Literal[
     "dead_link",
     "ambiguous_link",
+    "outside_link",
     "duplicate_slug",
     "missing_source",
     "superseded_source",
@@ -214,11 +215,17 @@ class SourceRefOut(BaseModel):
 
 
 class LinkRefOut(BaseModel):
-    #: What the ``[[link]]`` names.
+    #: What the link names, as written: a slug for a ``wiki`` link
+    #: (``[[target]]``), a relative path for a ``markdown`` one
+    #: (``[text](target)`` or ``![alt](target)``; external targets are left out).
     target: str
-    #: The page or source it resolves to; ``null`` when dead or ambiguous.
+    #: The file it resolves to, knowledge-root-relative; ``null`` when dead,
+    #: ambiguous or outside the knowledge root.
     path: str | None = None
     ambiguous: bool = False
+    kind: Literal["wiki", "markdown"] = "wiki"
+    #: A ``markdown`` link that leads outside the knowledge root.
+    outside: bool = False
 
 
 class PageRefOut(BaseModel):
@@ -261,6 +268,20 @@ class FileOut(BaseModel):
     #: ``None`` when it was uploaded on another one.
     original: str = ""
     original_path: str | None = None
+    #: The body with its ``skynet-confluence-storage:v1`` markers converted to
+    #: Markdown, for the preview; ``null`` when the body holds none. The file
+    #: itself is never rewritten.
+    display_body: str | None = None
+
+
+class IngestIssueOut(BaseModel):
+    """Something an import could not keep or render."""
+
+    #: ``missing_attachment``, ``external_embed``, ``external_image``,
+    #: ``unsupported_macro`` or ``not_rendered``.
+    kind: str
+    name: str
+    reason: str
 
 
 class IngestedDocumentOut(BaseModel):
@@ -270,3 +291,14 @@ class IngestedDocumentOut(BaseModel):
     description: str
     #: Which converter produced the Markdown.
     converter: str
+    #: ``partial`` when the conversion could not keep something (any issue
+    #: but ``not_rendered``); never reported as plain success then.
+    status: Literal["complete", "partial"] = "complete"
+    #: The knowledge paths kept beside the source: its pictures and files.
+    files: list[str] = Field(default_factory=list)
+    issues: list[IngestIssueOut] = Field(default_factory=list)
+    #: The source this upload replaces, now ``superseded_by`` it; ``null`` when none.
+    replaced: str | None = None
+    #: True when this is a preview: the paths are what would be written, and
+    #: nothing was.
+    dry_run: bool = False

@@ -55,7 +55,7 @@ Coffer 自己提供的 MCP 工具，以保留前缀 `coffer__` 与上游工具�
 
 ### 知识集（Collection） {#collection}
 
-一棵知识树，位于 `~/.coffer/vault/knowledge/<collection>/`：一个小 wiki，`pages/` 下的[页面](#page)由你和你的智能体根据 `sources/` 下保留的[来源](#source)编译而成，根目录有一个 `README.md`。知识集是类型为 `knowledge` 的[资源](#resource)。见[知识](/zh/guides/knowledge)。
+一棵知识树，位于 `~/.coffer/vault/knowledge/<collection>/`：一个小 wiki，`pages/` 下的[页面](#page)由你和你的智能体根据 `sources/` 下保留的[来源](#source)编译而成，根目录有一个 `README.md`。其中的其他文件（`index.md`、日志、你自己的文件夹）留在放下它们的地方。知识集是类型为 `knowledge` 的[资源](#resource)。见[知识](/zh/guides/knowledge)。
 
 ### `coffer-guide` {#coffer-guide}
 
@@ -275,7 +275,7 @@ Coffer 保存的五类状态之一，每类在 `~/.coffer` 下有自己的位置
 
 ### 维护任务（Upkeep pass） {#upkeep-pass}
 
-Coffer 按定时器、无需要求就做的机械性工作：[记忆同步](#memory-sync)，以及知识的扫描（重新渲染指南、收编留在[收件箱](#inbox)的文件、把散落的文档归入 `pages/`、提交磁盘上的编辑）。它们都不调用模型。记忆同步可以在记忆页面**立即同步**的 **▾** 里关闭或调整时间。见[记忆](/zh/architecture/memory#the-sync-pass)和[知识](/zh/architecture/knowledge#the-sweep)。
+Coffer 按定时器、无需要求就做的机械性工作：[记忆同步](#memory-sync)，以及知识的扫描（重新渲染指南、收编留在[收件箱](#inbox)的文件、提交磁盘上的编辑；它不移动任何文件）。它们都不调用模型。记忆同步可以在记忆页面**立即同步**的 **▾** 里关闭或调整时间。见[记忆](/zh/architecture/memory#the-sync-pass)和[知识](/zh/architecture/knowledge#the-sweep)。
 
 ## V {#v}
 

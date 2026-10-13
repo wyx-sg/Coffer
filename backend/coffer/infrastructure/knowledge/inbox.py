@@ -50,7 +50,7 @@ def submit_material(
     description: str,
     body: str,
     actor: str = ACTOR_AGENT,
-    extra: Mapping[str, str] | None = None,
+    extra: Mapping[str, object] | None = None,
 ) -> str:
     """Put new material in the collection's inbox. Returns the item's name.
 

@@ -71,3 +71,10 @@ def render_frontmatter(frontmatter: dict[str, Any], body: str) -> str:
     ).rstrip("\n")
     body_clean = body.strip("\n")
     return f"{_FENCE}\n{block}\n{_FENCE}\n\n{body_clean}\n"
+
+
+def with_key(text: str, key: str, value: Any) -> str:
+    """``text`` with one frontmatter key set: every other key kept in its
+    place, the body as it was (bar the blank lines around it)."""
+    frontmatter, body = split_frontmatter(text)
+    return render_frontmatter({**frontmatter, key: value}, body)

@@ -2,8 +2,9 @@
 
 Every run is :func:`coffer.application.knowledge.sweep.sweep_once`: it promotes
 what waits in a collection's ``.inbox/``, commits edits found on disk, and
-re-renders the guide skill. All three are mechanical, so the sweep runs on every
-machine whenever the ``knowledge`` feature is on (spec experimental-features
+re-renders the guide skill; this module then closes idle tidies. None of them
+moves or renames a file a collection holds. All are mechanical, so the sweep
+runs on every machine whenever the ``knowledge`` feature is on (spec experimental-features
 "Close every surface of a switched-off feature"): a collection's files are the
 same wherever it is read, and what the sweep writes goes through ``VaultWriter``
 like any other write.
@@ -19,15 +20,12 @@ import logging
 from collections.abc import Callable
 
 from coffer.application.features import FeatureService
-from coffer.application.knowledge.layout import loose_documents_waiting
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.application.knowledge.sweep import sweep_once
 from coffer.application.resource_service import ResourceService
-from coffer.application.runtime.cancellation import raise_if_stopping
 from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.application.runtime.wakeable import WakeableLoop
 from coffer.domain.features import KNOWLEDGE
-from coffer.infrastructure.knowledge.layout import QUIET_SECONDS
 from coffer.surfaces.http.guide_wiring import BuiltinGuide
 from coffer.surfaces.http.knowledge.dependencies import get_tidy_service
 
@@ -68,7 +66,6 @@ class KnowledgeSweep:
             settle=settle,
             failure_event="knowledge.sweep.tick_failed",
         )
-        self._retry: asyncio.TimerHandle | None = None
 
     def poke(self) -> None:
         """A file under the knowledge area changed, or the feature was switched."""
@@ -86,27 +83,6 @@ class KnowledgeSweep:
         # A tidy whose agent went quiet is closed, so no collection stays
         # paused (spec knowledge "Record a tidy as one change").
         await get_tidy_service().expire()
-        await self._schedule_quiet_retry()
-
-    async def _schedule_quiet_retry(self) -> None:
-        """A loose document younger than its quiet minute was left alone; look
-        again once that minute is over, since no event will announce it."""
-        if self._retry is not None:
-            self._retry.cancel()
-            self._retry = None
-        try:
-            waiting = await loose_documents_waiting(self._service)
-        except Exception as exc:
-            raise_if_stopping(exc)
-            _log.warning("knowledge.sweep.quiet_check_failed", exc_info=True)
-            return
-        if waiting:
-            self._retry = asyncio.get_running_loop().call_later(QUIET_SECONDS + 1.0, self.poke)
-
-    def cancel_timers(self) -> None:
-        if self._retry is not None:
-            self._retry.cancel()
-            self._retry = None
 
 
 def start_knowledge_sweep(
@@ -129,13 +105,7 @@ def start_knowledge_sweep(
     # Switching knowledge on brings the first sweep forward.
     features.subscribe(lambda key, _enabled: sweep.poke() if key == KNOWLEDGE else None)
 
-    async def serve() -> None:
-        try:
-            await sweep.run()
-        finally:
-            sweep.cancel_timers()
-
-    return spawn_restarting(serve, name="knowledge-sweep")
+    return spawn_restarting(sweep.run, name="knowledge-sweep")
 
 
 async def stop_knowledge_sweep(task: asyncio.Task[None]) -> None:

@@ -5,7 +5,7 @@
 // not frontmatter passed through untouched.
 import { describe, expect, test } from "vitest";
 
-import { splitFrontmatter } from "./frontmatter";
+import { splitFrontmatter, withFrontmatterOf } from "./frontmatter";
 
 describe("splitFrontmatter", () => {
   test("parses scalar keys in order and strips the block off the body", () => {
@@ -75,5 +75,47 @@ describe("splitFrontmatter", () => {
     const { entries, body } = splitFrontmatter("---\r\ntitle: T\r\n---\r\nbody");
     expect(entries).toEqual([{ key: "title", value: "T" }]);
     expect(body).toBe("body");
+  });
+
+  test("an import's attachments and issues read as one line per item, flow or block", () => {
+    const { entries } = splitFrontmatter(
+      [
+        "---",
+        "attachments:",
+        "  - {name: spec.pdf, status: saved}",
+        '  - {name: "diagram.png", status: missing}',
+        "import_issues:",
+        "  - kind: external_embed",
+        "    name: jira",
+        "    reason: 'kept as a link'",
+        "owner: {team: account}",
+        "---",
+        "body",
+      ].join("\n"),
+    );
+    expect(entries).toEqual([
+      {
+        key: "attachments",
+        value: ["name: spec.pdf, status: saved", "name: diagram.png, status: missing"],
+      },
+      {
+        key: "import_issues",
+        value: ["kind: external_embed, name: jira, reason: kept as a link"],
+      },
+      { key: "owner", value: "team: account" },
+    ]);
+  });
+});
+
+describe("withFrontmatterOf", () => {
+  test("puts the original's frontmatter in front of a display text that has none", () => {
+    expect(withFrontmatterOf("---\ntitle: T\n---\nraw", "shown")).toBe("---\ntitle: T\n---\nshown");
+  });
+
+  test("leaves the display text alone when the original has no frontmatter or it has its own", () => {
+    expect(withFrontmatterOf("raw", "shown")).toBe("shown");
+    expect(withFrontmatterOf("---\na: 1\n---\nraw", "---\nb: 2\n---\nshown")).toBe(
+      "---\nb: 2\n---\nshown",
+    );
   });
 });

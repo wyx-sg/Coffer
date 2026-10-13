@@ -3287,6 +3287,18 @@
       "files": "要上传的文件",
       "removeNamed": "移除 {{name}}",
       "savedAs": "已保存为 {{path}}",
+      "partial_one": "已导入为 {{path}}，有 {{count}} 个问题",
+      "partial_other": "已导入为 {{path}}，有 {{count}} 个问题",
+      "issues": "{{name}} 未能保留的内容",
+      "issueKinds": {
+        "missing_attachment": "缺失的附件",
+        "external_embed": "外部嵌入内容",
+        "external_image": "外部图片",
+        "unsupported_macro": "不支持的宏",
+        "not_rendered": "未能渲染"
+      },
+      "someIssues_one": "已上传 {{count}} 个，其中 {{partial}} 个有问题需要查看",
+      "someIssues_other": "已上传 {{count}} 个，其中 {{partial}} 个有问题需要查看",
       "allSaved": "已把 {{count}} 个文件上传到 {{collection}}",
       "someSaved": "{{count}} 个已上传，{{refused}} 个没有，详见对话框",
       "buttonMany": "上传 {{count}} 个文件",
@@ -3362,7 +3374,9 @@
     },
     "link": {
       "dead": "没有名为 {{target}} 的页面或来源",
-      "ambiguous": "{{target}} 对应不止一个文件"
+      "ambiguous": "{{target}} 对应不止一个文件",
+      "outside": "{{target}} 在知识库之外",
+      "noFile": "没有 {{target}} 这个文件"
     },
     "history": {
       "title": "历史",
@@ -3379,6 +3393,7 @@
       "kinds": {
         "dead_link": "失效链接",
         "ambiguous_link": "有歧义的链接",
+        "outside_link": "指向知识库之外的链接",
         "duplicate_slug": "重复的名称",
         "missing_source": "缺失的来源",
         "superseded_source": "引用了过期来源的页面",

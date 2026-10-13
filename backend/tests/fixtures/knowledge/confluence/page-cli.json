@@ -1,0 +1,72 @@
+{
+  "id": "100200300",
+  "schemaVersion": 1,
+  "kind": "confluence.page",
+  "link": "https://confluence.example.com/x/AbCd",
+  "pageId": "100200300",
+  "title": "[Service] Service A Overview",
+  "spaceKey": "EXA",
+  "status": "current",
+  "body": "<p><ac:structured-macro ac:name=\"easy-heading-free\" ac:schema-version=\"1\" ac:macro-id=\"00000000-0000-4000-8000-000000000001\" /></p><p><ac:structured-macro ac:macro-id=\"00000000-0000-4000-8000-000000000002\" ac:name=\"toc\" ac:schema-version=\"1\" /></p><ac:structured-macro ac:name=\"numberedheadings\" ac:schema-version=\"1\" ac:macro-id=\"00000000-0000-4000-8000-000000000003\"><ac:rich-text-body><h1>Basic Info</h1><table class=\"wrapped\"><colgroup><col /><col /></colgroup><tbody><tr><th>Service Name</th><td>service-a</td></tr><tr><th>Owner</th><td><ac:link><ri:user ri:userkey=\"0000000000000000000000000000000a\" /></ac:link></td></tr><tr><th>Console</th><td><a href=\"https://console.example.com/service-a\">service-a console</a></td></tr></tbody></table><h1>Operations</h1><table class=\"wrapped\"><colgroup><col /><col /></colgroup><tbody><tr><th>Logs</th><td><div class=\"content-wrapper\"><ac:structured-macro ac:macro-id=\"00000000-0000-4000-8000-000000000004\" ac:name=\"code\" ac:schema-version=\"1\"><ac:parameter ac:name=\"language\">bash</ac:parameter><ac:plain-text-body><![CDATA[example-cli service enter service-a-<module>-<env>-xx\ntail -f log/data.log]]></ac:plain-text-body></ac:structured-macro><p class=\"auto-cursor-target\"><br /></p></div></td></tr><tr><th colspan=\"2\">Regions</th></tr><tr><td>Region A</td><td>Region B</td></tr></tbody></table><h2>Notes</h2><ac:structured-macro ac:name=\"info\" ac:schema-version=\"1\" ac:macro-id=\"00000000-0000-4000-8000-000000000005\"><ac:rich-text-body><p>How to check the cache:</p><ul><li><ac:inline-comment-marker ac:ref=\"00000000-0000-4000-8000-000000000006\">open the <a href=\"https://console.example.com/cache\">cache console</a></ac:inline-comment-marker></li></ul></ac:rich-text-body></ac:structured-macro><h2>Architecture</h2><p><ac:image ac:width=\"860\"><ri:attachment ri:filename=\"service a architecture.drawio.png\" /></ac:image></p><ac:structured-macro ac:name=\"expand\" ac:schema-version=\"1\" ac:macro-id=\"00000000-0000-4000-8000-000000000007\"><ac:parameter ac:name=\"title\">diagram source</ac:parameter><ac:rich-text-body><p class=\"auto-cursor-target\"><a href=\"https://viewer.diagrams.net/?tags=%7B%7D&amp;lightbox=1&amp;highlight=0000ff&amp;title=service-a.drawio#R%3Cmxfile%3E%3Cdiagram%20name%3D%22Page-1%22%20id%3D%22d-one%22%3EjVDBDsIgDP2a3hES7wZ1J09%2BAZFmkIAsFef29xLoXHZY4qFJ33t9D1pQOk4dmcHdksUA6gJKU0q5dXHSGAJI4S2oM0gpSoG87qiHqorBED7zPwbZDKMJb2zMHWn0DyzkiTWkjNNufqU4vMMUMdNcRhZDe17MW%2FjxNjum%2BIfCoe8dhx6ZM6%2BG%2B1%2FwuktpeJ0Frmer2uaqXw%3D%3D%3C%2Fdiagram%3E%3C%2Fmxfile%3E\">service-a.drawio</a></p></ac:rich-text-body></ac:structured-macro><p><ac:image ac:style=\"max-height: 250.0px;\"><ri:attachment ri:filename=\"screenshot-1.png\" /></ac:image></p><p><ac:image ac:height=\"250\"><ri:attachment ri:filename=\"missing.png\" /></ac:image></p><p><ac:image><ri:attachment ri:filename=\"other.png\"><ri:page ri:content-title=\"Another Page\" /></ri:attachment></ac:image></p><p><ac:image><ri:url ri:value=\"https://images.example.com/remote.png\" /></ac:image></p><h2>Diagrams</h2><ac:structured-macro ac:name=\"html\" ac:schema-version=\"1\" ac:macro-id=\"00000000-0000-4000-8000-000000000008\"><ac:plain-text-body><![CDATA[<iframe frameborder=\"0\" style=\"width:100%;height:600px;\" src=\"https://viewer.diagrams.net/?tags=%7B%7D&highlight=0000ff&edit=_blank#G1AbCdEfGhIjKlMnOpQrStUvWxYz\"></iframe>]]></ac:plain-text-body></ac:structured-macro><ac:structured-macro ac:macro-id=\"00000000-0000-4000-8000-000000000009\" ac:name=\"html\" ac:schema-version=\"1\"><ac:plain-text-body><![CDATA[<!-- draw.io diagram -->\n<div class=\"mxgraph\" style=\"max-width:100%;border:1px solid transparent;\" data-mxgraph='{\"highlight\":\"#0000ff\",\"nav\":true,\"xml\":\"<mxfile host=\\\"app.diagrams.net\\\"><diagram name=\\\"Page-1\\\" id=\\\"d-two\\\"><mxGraphModel><root><mxCell id=\\\"0\\\"/><mxCell id=\\\"1\\\" parent=\\\"0\\\"/><mxCell id=\\\"2\\\" value=\\\"Service A\\\" vertex=\\\"1\\\" parent=\\\"1\\\"><mxGeometry x=\\\"10\\\" y=\\\"10\\\" width=\\\"120\\\" height=\\\"60\\\" as=\\\"geometry\\\"/></mxCell></root></mxGraphModel></diagram></mxfile>\"}'></div>\n<script type=\"text/javascript\" src=\"https://viewer.diagrams.net/js/viewer-static.min.js\"></script>\n]]></ac:plain-text-body></ac:structured-macro><ac:structured-macro ac:name=\"html\" ac:schema-version=\"1\" ac:macro-id=\"00000000-0000-4000-8000-000000000010\"><ac:plain-text-body><![CDATA[<marquee>placeholder banner</marquee>]]></ac:plain-text-body></ac:structured-macro><ac:structured-macro ac:name=\"plantuml\" ac:schema-version=\"1\" ac:macro-id=\"00000000-0000-4000-8000-000000000011\"><ac:plain-text-body><![CDATA[@startuml\nServiceA -> ServiceB: request\n@enduml]]></ac:plain-text-body></ac:structured-macro><ac:structured-macro ac:name=\"drawio\" ac:schema-version=\"1\" ac:macro-id=\"00000000-0000-4000-8000-000000000012\"><ac:parameter ac:name=\"diagramName\">request flow</ac:parameter></ac:structured-macro><h2>Tracking</h2><p>Ticket <ac:structured-macro ac:name=\"jira\" ac:schema-version=\"1\" ac:macro-id=\"00000000-0000-4000-8000-000000000013\"><ac:parameter ac:name=\"server\">Example Jira</ac:parameter><ac:parameter ac:name=\"key\">ABC-123</ac:parameter></ac:structured-macro> is <ac:structured-macro ac:name=\"status\" ac:schema-version=\"1\" ac:macro-id=\"00000000-0000-4000-8000-000000000014\"><ac:parameter ac:name=\"colour\">Blue</ac:parameter><ac:parameter ac:name=\"title\">In Progress</ac:parameter></ac:structured-macro>.</p><p>See <ac:link><ri:page ri:space-key=\"EXA\" ri:content-title=\"Circuit Breaker\" /></ac:link> for details.</p><ac:structured-macro ac:name=\"mystery-widget\" ac:schema-version=\"1\" ac:macro-id=\"00000000-0000-4000-8000-000000000015\" /><ac:structured-macro ac:name=\"fancy-box\" ac:schema-version=\"1\" ac:macro-id=\"00000000-0000-4000-8000-000000000016\"><ac:rich-text-body><p>Kept body text.</p></ac:rich-text-body></ac:structured-macro><ac:task-list><ac:task><ac:task-id>1</ac:task-id><ac:task-status>complete</ac:task-status><ac:task-body>Write the runbook</ac:task-body></ac:task><ac:task><ac:task-id>2</ac:task-id><ac:task-status>incomplete</ac:task-status><ac:task-body>Review the runbook</ac:task-body></ac:task></ac:task-list></ac:rich-text-body></ac:structured-macro>",
+  "bodyFormat": "storage",
+  "attachments": [
+    {
+      "id": "att1001",
+      "name": "service a architecture.drawio.png",
+      "mimeType": "image/png",
+      "fileSize": 184,
+      "version": 1,
+      "downloadUrl": "https://confluence.example.com/download/attachments/100200300/service%20a%20architecture.drawio.png?version=1",
+      "dataBase64": "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAf0lEQVR4nNXOQREAIAzAsFIh8y8FWYjgsWsU5NwZyiRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4twO/HpDdQGEAC7yUgAAAABJRU5ErkJggg=="
+    },
+    {
+      "id": "att1002",
+      "name": "screenshot-1.png",
+      "mimeType": "image/png",
+      "fileSize": 184,
+      "version": 1,
+      "downloadUrl": "https://confluence.example.com/download/attachments/100200300/screenshot-1.png?version=1",
+      "dataBase64": "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAf0lEQVR4nNXOQREAIAzAsFIh8y8FWYjgsWsU5MwdyiRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4twO/HpCywGEn9Ef0QAAAABJRU5ErkJggg=="
+    },
+    {
+      "id": "att1003",
+      "name": "request flow.png",
+      "mimeType": "image/png",
+      "fileSize": 184,
+      "version": 1,
+      "downloadUrl": "https://confluence.example.com/download/attachments/100200300/request%20flow.png?version=1",
+      "dataBase64": "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAf0lEQVR4nNXOQREAIAzAsFIh8y8FWYjgsWsU5MxcyiRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4iRO4twO/HpCIQGEaBnnbwAAAABJRU5ErkJggg=="
+    },
+    {
+      "id": "att1004",
+      "name": "request flow",
+      "mimeType": "application/vnd.jgraph.mxfile",
+      "fileSize": 277,
+      "version": 1,
+      "downloadUrl": "https://confluence.example.com/download/attachments/100200300/request%20flow?version=1",
+      "dataBase64": "PG14ZmlsZT48ZGlhZ3JhbSBuYW1lPSJQYWdlLTEiIGlkPSJkLXRocmVlIj48bXhHcmFwaE1vZGVsPjxyb290PjxteENlbGwgaWQ9IjAiLz48bXhDZWxsIGlkPSIxIiBwYXJlbnQ9IjAiLz48bXhDZWxsIGlkPSIyIiB2YWx1ZT0iU2VydmljZSBBIiB2ZXJ0ZXg9IjEiIHBhcmVudD0iMSI+PG14R2VvbWV0cnkgeD0iMTAiIHk9IjEwIiB3aWR0aD0iMTIwIiBoZWlnaHQ9IjYwIiBhcz0iZ2VvbWV0cnkiLz48L214Q2VsbD48L3Jvb3Q+PC9teEdyYXBoTW9kZWw+PC9kaWFncmFtPjwvbXhmaWxlPg=="
+    },
+    {
+      "id": "att1005",
+      "name": "missing.png",
+      "mimeType": "image/png",
+      "fileSize": 0,
+      "version": 1,
+      "downloadUrl": "https://confluence.example.com/download/attachments/100200300/missing.png?version=1"
+    },
+    {
+      "id": "att1006",
+      "name": "unused.png",
+      "mimeType": "image/png",
+      "fileSize": 183,
+      "version": 1,
+      "downloadUrl": "https://confluence.example.com/download/attachments/100200300/unused.png?version=1",
+      "dataBase64": "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAfklEQVR4nNXOQREAIADDsFKZ8y8EETy4RkHONsokTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuIkTuL8HXh1ASVVAY6nuLz2AAAAAElFTkSuQmCC"
+    }
+  ],
+  "warnings": [],
+  "version": 7,
+  "createdAt": "2026-01-02T03:04:05.000+00:00",
+  "authorName": "Example Author",
+  "pageUrl": "https://confluence.example.com/pages/viewpage.action?pageId=100200300"
+}

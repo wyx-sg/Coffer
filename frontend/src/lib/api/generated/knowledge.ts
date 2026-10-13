@@ -310,8 +310,15 @@ export interface components {
         Body_upload_api_v1_knowledge_upload_post: {
             /** Collection */
             collection: string;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run?: boolean;
             /** File */
             file: string;
+            /** Replaces */
+            replaces?: string | null;
         };
         /**
          * ChangeOut
@@ -368,7 +375,7 @@ export interface components {
             version: string;
             /**
              * Writer
-             * @description `user` a person; `agent` an agent whose material became a document on arrival; `curation` a change Coffer's retired curation pass made, kept in the history; `sync` another machine's change; `disk` an edit made outside Coffer (a person's editor, an agent's file tools); `daemon` Coffer filing a loose document into `pages/`.
+             * @description `user` a person; `agent` an agent whose material became a document on arrival; `curation` a change Coffer's retired curation pass made, kept in the history; `sync` another machine's change; `disk` an edit made outside Coffer (a person's editor, an agent's file tools); `daemon` Coffer adopting an inbox file as a source, or a layout commit an older version made (operation `layout`).
              * @enum {string}
              */
             writer: "user" | "agent" | "curation" | "sync" | "disk" | "daemon";
@@ -560,6 +567,8 @@ export interface components {
             created_at: string;
             /** Description */
             description: string;
+            /** Display Body */
+            display_body: string | null;
             /** File Path */
             file_path: string;
             /** Folder Path */
@@ -674,7 +683,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "dead_link" | "ambiguous_link" | "duplicate_slug" | "missing_source" | "superseded_source" | "incomplete_page" | "unsourced_page" | "stale_page" | "orphan_page" | "waiting_source";
+            kind: "dead_link" | "ambiguous_link" | "outside_link" | "duplicate_slug" | "missing_source" | "superseded_source" | "incomplete_page" | "unsourced_page" | "stale_page" | "orphan_page" | "waiting_source";
             /** Others */
             others: string[];
             /** Path */
@@ -691,14 +700,43 @@ export interface components {
             /** Prompt */
             prompt: string;
         };
+        /**
+         * IngestIssueOut
+         * @description Something an import could not keep or render.
+         */
+        IngestIssueOut: {
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Reason */
+            reason: string;
+        };
         /** IngestedDocumentOut */
         IngestedDocumentOut: {
             /** Converter */
             converter: string;
             /** Description */
             description: string;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+            /** Files */
+            files: string[];
+            /** Issues */
+            issues: components["schemas"]["IngestIssueOut"][];
             /** Path */
             path: string;
+            /** Replaced */
+            replaced: string | null;
+            /**
+             * Status
+             * @default complete
+             * @enum {string}
+             */
+            status: "complete" | "partial";
             /** Title */
             title: string;
         };
@@ -709,6 +747,17 @@ export interface components {
              * @default false
              */
             ambiguous: boolean;
+            /**
+             * Kind
+             * @default wiki
+             * @enum {string}
+             */
+            kind: "wiki" | "markdown";
+            /**
+             * Outside
+             * @default false
+             */
+            outside: boolean;
             /** Path */
             path: string | null;
             /** Target */
@@ -1503,6 +1552,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description A dry run; nothing written. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestedDocumentOut"];
+                };
+            };
             /** @description Successful Response */
             201: {
                 headers: {

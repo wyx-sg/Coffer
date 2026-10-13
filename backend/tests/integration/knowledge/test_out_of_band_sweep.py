@@ -2,8 +2,8 @@
 
 Real git over a real directory, because "found on disk" is decided by what the
 vault repository has committed. The registry and the audit log are in-memory
-stand-ins. Each tick promotes what waits in an inbox, files loose documents into
-``pages/``, commits edits found on disk, and re-renders the guide (spec
+stand-ins. Each tick promotes what waits in an inbox, commits edits found on disk, and
+re-renders the guide, and never moves a file a collection already holds (spec
 knowledge "Adopt a file dropped into the inbox", "Sweep the knowledge root on
 its mechanical duties", "Treat a direct file edit as a complete change").
 """
@@ -172,54 +172,91 @@ def _age(path: pathlib.Path, seconds: float = 120) -> None:
     os.utime(path, (stamp, stamp))
 
 
-@pytest.mark.acceptance(spec="knowledge", scenario="a sweep files a loose document into pages")
-async def test_a_sweep_files_loose_documents_into_pages_in_one_daemon_commit() -> None:
-    service, history, _ = _world()
-    guide = _Guide()
-    root = paths.collection_dir("shopee")
-    (root / "infra").mkdir()
-    cache = root / "infra" / "cache.md"
-    notes = root / "notes.md"
-    cache.write_text("---\ntitle: Cache\n---\n\nTTL is 60s.\n", encoding="utf-8")
-    notes.write_text("Plain notes.\n", encoding="utf-8")
-    paths.readme_path("shopee").write_text("# shopee\n\nThe schema.\n", encoding="utf-8")
-    fresh = root / "fresh.md"
-    fresh.write_text("Still being written.\n", encoding="utf-8")
-    texts = {"infra/cache.md": cache.read_bytes(), "notes.md": notes.read_bytes()}
-    for path in (cache, notes, paths.readme_path("shopee")):
-        _age(path)
+#: Files a person or an agent put anywhere in a collection, by collection-relative
+#: path: the root management files, a custom root file, a file that is not
+#: Markdown, and a folder of the person's own, nested.
+_IN_PLACE: dict[str, bytes] = {
+    "README.md": b"# shopee\n\nThe schema.\n",
+    "index.md": b"# Index\n\n- [Notes](notes/deep/x.md)\n- [[cache]]\n",
+    "log.md": b"## 2026-10-13\r\n\r\n- ingested the gateway doc\r\n",
+    "schema.md": b"---\ntitle: Schema\n---\n\nHow pages are laid out.\n",
+    "glossary.md": b"SDU: service deployment unit.\n",
+    "diagram.drawio": b"<mxfile>\x00\xff binary-ish</mxfile>",
+    "notes/deep/x.md": b"Deep note. See [index](../../index.md).\n",
+}
 
-    await sweep_once(service, guide.refresh)
 
-    for relative, data in texts.items():
-        assert not (root / relative).exists()
-        assert (root / "pages" / relative).read_bytes() == data
-    assert paths.readme_path("shopee").is_file()
-    assert fresh.is_file()  # touched within the minute: left for the next sweep
-    layout = [c for c in history.log("shopee") if c.meta.operation == "layout"]
-    [change] = layout
-    assert change.meta.writer == "daemon"
-    moved = {d.path: d.status for d in change.documents}
-    assert moved == {
-        "shopee/infra/cache.md": "removed",
-        "shopee/notes.md": "removed",
-        "shopee/pages/infra/cache.md": "added",
-        "shopee/pages/notes.md": "added",
+def _plant(root: pathlib.Path) -> None:
+    for relative, data in _IN_PLACE.items():
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        _age(target)
+
+
+def _on_disk(root: pathlib.Path) -> dict[str, bytes]:
+    return {
+        str(p.relative_to(root)): p.read_bytes()
+        for p in sorted(root.rglob("*"))
+        if p.is_file() and not any(part.startswith(".") for part in p.relative_to(root).parts)
     }
 
 
-async def test_a_loose_document_never_overwrites_a_page() -> None:
-    service, _, _ = _world()
-    root = paths.collection_dir("shopee")
-    paths.pages_dir("shopee").mkdir(parents=True)
-    (root / "pages" / "notes.md").write_text("the page\n", encoding="utf-8")
-    (root / "notes.md").write_text("the loose one\n", encoding="utf-8")
-    _age(root / "notes.md")
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="a sweep leaves every file where its writer put it"
+)
+async def test_sweeps_leave_every_file_in_place_and_commit_it_as_a_disk_edit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from coffer.surfaces.http import knowledge_sweep_wiring
 
+    service, history, _ = _world()
+    guide = _Guide()
+    root = paths.collection_dir("shopee")
+    _plant(root)
+
+    await sweep_once(service, guide.refresh)
+    await sweep_once(service, guide.refresh)
+
+    # The wiring's own pass too: the sweep and the tidy expiry after it.
+    class _Tidies:
+        async def expire(self) -> list[str]:
+            return []
+
+    class _Features:
+        def is_enabled(self, _key: str) -> bool:
+            return True
+
+    monkeypatch.setattr(knowledge_sweep_wiring, "get_tidy_service", _Tidies)
+    sweep = knowledge_sweep_wiring.KnowledgeSweep(
+        service,
+        guide,  # type: ignore[arg-type]
+        _Features(),  # type: ignore[arg-type]
+    )
+    await sweep._pass(False)
+
+    assert _on_disk(root) == _IN_PLACE
+    assert not paths.pages_dir("shopee").exists()
+    changes = history.log("shopee")
+    assert [c.meta.operation for c in changes if c.meta.operation == "layout"] == []
+    committed = {d.path: (c.meta.writer, d.status) for c in changes for d in c.documents}
+    for relative in _IN_PLACE:
+        assert committed[f"shopee/{relative}"] == ("disk", "added")
+
+
+async def test_an_edit_to_a_root_file_is_committed_where_it_is() -> None:
+    service, history, _ = _world()
+    root = paths.collection_dir("shopee")
+    _plant(root)
     await sweep_once(service, _Guide().refresh)
 
-    assert (root / "pages" / "notes.md").read_text(encoding="utf-8") == "the page\n"
-    assert (root / "pages" / "notes-2.md").read_text(encoding="utf-8") == "the loose one\n"
+    (root / "log.md").write_bytes(_IN_PLACE["log.md"] + b"- tidied\r\n")
+    await sweep_once(service, _Guide().refresh)
+
+    [change] = history.log("shopee", limit=1)
+    assert change.meta.writer == "disk"
+    assert [(d.path, d.status) for d in change.documents] == [("shopee/log.md", "modified")]
+    assert (root / "log.md").read_bytes().endswith(b"- tidied\r\n")
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="a sweep runs while a sync round waits")

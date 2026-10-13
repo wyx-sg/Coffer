@@ -53,6 +53,7 @@ import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, UploadFile, status
+from fastapi.responses import JSONResponse
 
 from coffer.application.knowledge.ingest import IngestService
 from coffer.application.knowledge.linking import link_folder
@@ -62,6 +63,10 @@ from coffer.domain.knowledge.config import linked_folder
 from coffer.domain.knowledge.converter import EmptyConversion, UnsupportedDocument
 from coffer.domain.knowledge.entry import ACTOR_AGENT, ACTOR_USER
 from coffer.infrastructure.knowledge import assets, paths
+from coffer.infrastructure.knowledge.converters.confluence import (
+    STORAGE_MARKER,
+    expand_storage_markers,
+)
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.errors import error_response
 from coffer.surfaces.http.handoff_schemas import HandoffOut
@@ -196,7 +201,11 @@ async def read_file(
     # The response carries both absolute paths ("Return absolute paths on
     # reads"), which is what the
     # page's open-in-editor and reveal actions hand back to the daemon.
-    return _file_out(await svc.read(path))
+    out = _file_out(await svc.read(path))
+    if STORAGE_MARKER in out.body:
+        # The preview reads the markers as Markdown; the file stays as it is.
+        out.display_body, _ = await asyncio.to_thread(expand_storage_markers, out.body)
+    return out
 
 
 @router.get(
@@ -229,13 +238,23 @@ async def delete_file(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/upload", response_model=IngestedDocumentOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/upload",
+    response_model=IngestedDocumentOut,
+    status_code=status.HTTP_201_CREATED,
+    responses={200: {"model": IngestedDocumentOut, "description": "A dry run; nothing written."}},
+)
 async def upload(
     file: UploadFile = File(...),  # noqa: B008
     #: The collection's directory NAME, not its uid: this value is a path
     #: segment ``IngestService`` joins under the knowledge root, exactly like
     #: ``FileWrite.collection``.
     collection: str = Form(...),
+    #: A source of the same collection the upload replaces: it gains
+    #: ``superseded_by`` in the same commit.
+    replaces: str | None = Form(default=None),
+    #: Convert and report what would be written, writing nothing.
+    dry_run: bool = Form(default=False),
     svc: IngestService = Depends(get_ingest_service),  # noqa: B008
     actor: str = Depends(_actor_kind),
 ) -> Any:
@@ -250,6 +269,8 @@ async def upload(
             filename=file.filename or "upload",
             data=data,
             actor=actor,
+            replaces=replaces or None,
+            dry_run=dry_run,
         )
     except UnsupportedDocument as exc:
         return error_response(
@@ -267,4 +288,6 @@ async def upload(
             f"no text could be extracted from this {exc.doc_type!r} document",
             {"reason": reason, "doc_type": exc.doc_type},
         )
-    return IngestedDocumentOut.model_validate(doc, from_attributes=True)
+    out = IngestedDocumentOut.model_validate(doc, from_attributes=True)
+    # A preview created nothing.
+    return JSONResponse(out.model_dump(mode="json"), status_code=200) if doc.dry_run else out

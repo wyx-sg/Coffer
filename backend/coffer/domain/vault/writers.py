@@ -23,7 +23,7 @@ WRITER_DISK = "disk"
 #: An agent through a Coffer tool; ``agent`` names which (``Coffer-Agent``).
 WRITER_AGENT = "agent"
 #: The daemon on its own account: a uid minted for a hand-made file, a
-#: machine descriptor, a layout upgrade.
+#: machine descriptor.
 WRITER_DAEMON = "daemon"
 #: Coffer's curation pass over a knowledge collection.
 WRITER_CURATION = "curation"
@@ -47,6 +47,9 @@ WRITERS = (
 OP_EDIT = "edit"
 OP_BASELINE = "baseline"
 OP_RESTORE = "restore"
+#: Older versions' knowledge sweep wrote ``layout`` when it filed loose
+#: documents into ``pages/``; kept only so the changes feed can name those
+#: commits. Nothing writes it any more.
 OP_LAYOUT = "layout"
 OP_SYNC = "sync"
 OP_CREATE = "create"

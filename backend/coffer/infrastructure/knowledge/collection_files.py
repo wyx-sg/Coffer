@@ -13,19 +13,24 @@ as it was.
 
 Restoring a deleted collection (spec knowledge "Undo a knowledge delete from its
 toast") puts back, byte for byte, every file the delete
-removed: its documents, its README and any inbox items.
-Documents go through the same guard every document write does; the README and
-an inbox item are the two non-document paths a collection holds, and each is
-resolved through the module that owns its shape.
+removed: its pages and sources, its README, root files such as ``index.md`` or
+``log.md``, folders a person made, ``assets/`` and any other file, Markdown or
+not, and any inbox items. Every path goes through the same traversal guard as
+any knowledge write; an inbox item, the one hidden path a collection holds, is
+resolved through the module that owns its shape. Bytes are written as they
+were, never decoded, so a picture, a CRLF file and the relative links between
+files all come back unchanged.
 """
 
 from __future__ import annotations
 
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 from coffer.infrastructure.knowledge import paths
+from coffer.infrastructure.knowledge.assets import write_bytes
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
-from coffer.infrastructure.knowledge.fs import atomic_write, decode
+from coffer.infrastructure.knowledge.fs import atomic_write
 from coffer.infrastructure.knowledge.wiki import DEFAULT_VERIFY_DAYS
+from coffer.infrastructure.vault.atomic import atomic_write as atomic_write_bytes
 
 #: The rules a new collection's README starts with, below its description.
 #: The page types are the guide's defaults; the person changes them here.
@@ -111,26 +116,24 @@ def write_description(collection: str, description: str) -> None:
 
 
 def restore_file(relpath: str, raw: bytes) -> None:
-    """Put back one file of a deleted collection exactly as it was: a document,
-    the README, or an inbox item."""
+    """Put back one file of a deleted collection exactly as it was, byte for
+    byte: any file under the collection, or an inbox item."""
     in_inbox = paths.inbox_parts(relpath)
-    if in_inbox is not None:
-        collection, item = in_inbox
-        if item is None:
-            raise UnsafeKnowledgePath(relpath, "the inbox itself is not a file")
-        target = paths.inbox_dir(collection) / item
-    else:
-        segments = paths.split(relpath)
-        if len(segments) == 2 and segments[1] == paths.README_NAME:
-            target = paths.readme_path(segments[0])
-        else:
-            paths.require_document(relpath)
-            target = paths.resolve(relpath)
-    atomic_write(target, decode(raw))
+    if in_inbox is None:
+        if len(paths.split(relpath)) < 2:
+            raise UnsafeKnowledgePath(relpath, "a file lives inside a collection")
+        write_bytes(relpath, raw)
+        return
+    collection, item = in_inbox
+    if item is None:
+        raise UnsafeKnowledgePath(relpath, "the inbox itself is not a file")
+    target = paths.inbox_dir(collection) / item
+    paths.assert_inside_root(target, relpath)
+    atomic_write_bytes(target, raw)
 
 
 def current_bytes(relpath: str) -> bytes | None:
-    """A document's bytes on disk now, ``None`` when it is not there."""
+    """A file's bytes on disk now, ``None`` when it is not there."""
     target = paths.resolve(relpath)
     try:
         return target.read_bytes() if target.is_file() else None

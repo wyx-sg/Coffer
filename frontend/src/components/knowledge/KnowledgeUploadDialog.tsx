@@ -6,11 +6,12 @@
 // several at once; each shows its name, kind and size, and the target
 // collection shows before anything is sent. Upload sends them one after
 // another, each with its own outcome on its row — converting, saved, or
+// imported with issues (what it could not keep, listed under the row), or
 // refused with what to do instead (a ZIP or anything over 20 MB before it is
 // sent, a scanned PDF or an unsupported type once the daemon has looked at
-// it); one file refused never stops the rest. When every file is saved the
-// dialog closes with one toast; when some were refused it stays open on the
-// outcomes, with a toast counting both. Cancel stays live while converting: it
+// it); one file refused never stops the rest. When every file is saved whole
+// the dialog closes with one toast; when some were refused or imported with
+// issues it stays open on the outcomes, with a toast counting them. Cancel stays live while converting: it
 // aborts the file being converted and sends no more.
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -98,6 +99,7 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
     aborter.current = controller;
     const saved: Item[] = [];
     let refused = 0;
+    let partial = 0;
     for (const item of ready) {
       if (controller.signal.aborted) return;
       patch(item.id, { status: "converting" });
@@ -107,7 +109,12 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
           file: item.file,
           signal: controller.signal,
         });
-        patch(item.id, { status: "saved", path: doc.path });
+        if (doc.status === "partial") {
+          partial += 1;
+          patch(item.id, { status: "partial", path: doc.path, issues: doc.issues });
+        } else {
+          patch(item.id, { status: "saved", path: doc.path });
+        }
         saved.push({ ...item, path: doc.path });
       } catch (error) {
         if (controller.signal.aborted || isAbort(error)) return;
@@ -122,7 +129,7 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
     aborter.current = null;
     setRunning(false);
     const earlier = items.filter((i) => i.status === "refused").length;
-    if (refused === 0 && earlier === 0) {
+    if (refused === 0 && earlier === 0 && partial === 0) {
       toast.success(
         saved.length === 1
           ? t("knowledge.upload.written", { name: saved[0].file.name, path: saved[0].path })
@@ -133,7 +140,9 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
     }
     setFinished(true);
     const failed = refused + earlier;
-    if (saved.length > 0) {
+    if (failed === 0) {
+      toast.info(t("knowledge.upload.someIssues", { count: saved.length, partial }));
+    } else if (saved.length > 0) {
       toast.success(t("knowledge.upload.someSaved", { count: saved.length, refused: failed }));
     } else {
       toast.error(t("knowledge.upload.noneSaved", { count: failed }));
@@ -175,7 +184,7 @@ export function KnowledgeUploadDialog({ open, onOpenChange, collections, initial
                 <KnowledgeUploadRow
                   key={item.id}
                   item={item}
-                  removable={!running && item.status !== "saved"}
+                  removable={!running && item.status !== "saved" && item.status !== "partial"}
                   onRemove={() => remove(item.id)}
                 />
               ))}

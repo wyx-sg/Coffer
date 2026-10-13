@@ -2,19 +2,32 @@
 //
 // One file in the Upload dialog (KnowledgeUploadDialog): its name, and under
 // it its kind and size while it waits, "Converting to Markdown…" while it is
-// sent, the source it became once saved; an icon for each state; a remove
+// sent, the source it became once saved — or, when the import kept the
+// document but not all of it (a missing attachment, an external embed), that
+// it was imported with N issues and each issue under it, in the warning tone,
+// never as a plain success; an icon for each state; a remove
 // button while nothing is being sent; and, when it was refused — before
 // sending or by the daemon — why, and what to do instead. And the zone files
 // are dropped on or chosen from, smaller once some are listed.
 import { useState, type DragEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertCircle, CheckCircle2, FileText, Loader2, Upload, X } from "lucide-react";
+import {
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  FileText,
+  Loader2,
+  Upload,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import type { IngestedDocumentOut } from "@/lib/api/knowledge";
 import { extensionOf, KINDS, type Refusal } from "@/lib/knowledge/uploadChecks";
 import { cn, formatBytes } from "@/lib/utils";
 
-type UploadStatus = "ready" | "converting" | "saved" | "refused";
+/** `partial`: saved, but the import could not keep everything (its `issues`). */
+type UploadStatus = "ready" | "converting" | "saved" | "partial" | "refused";
 
 export interface UploadItem {
   id: number;
@@ -23,6 +36,8 @@ export interface UploadItem {
   refusal: Refusal | null;
   /** The source it became, once saved. */
   path?: string;
+  /** What the import could not keep or render, once saved as `partial`. */
+  issues?: IngestedDocumentOut["issues"];
   /** Refused by the daemon rather than before sending: Try again sends it again. */
   retryable?: boolean;
 }
@@ -38,11 +53,13 @@ export function KnowledgeUploadRow({ item, removable, onRemove }: Props) {
   const meta =
     item.status === "converting"
       ? t("knowledge.upload.converting")
-      : item.status === "saved" && item.path
-        ? t("knowledge.upload.savedAs", { path: item.path })
-        : [KINDS[extensionOf(item.file.name)], formatBytes(item.file.size)]
-            .filter(Boolean)
-            .join(" · ");
+      : item.status === "partial"
+        ? t("knowledge.upload.partial", { count: item.issues?.length ?? 0, path: item.path })
+        : item.status === "saved" && item.path
+          ? t("knowledge.upload.savedAs", { path: item.path })
+          : [KINDS[extensionOf(item.file.name)], formatBytes(item.file.size)]
+              .filter(Boolean)
+              .join(" · ");
   return (
     <li key={item.id} className="space-y-1.5" data-status={item.status}>
       <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5">
@@ -50,6 +67,8 @@ export function KnowledgeUploadRow({ item, removable, onRemove }: Props) {
           <Loader2 className="size-4 shrink-0 animate-spin text-text-subtle" aria-hidden />
         ) : item.status === "saved" ? (
           <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden />
+        ) : item.status === "partial" ? (
+          <AlertTriangle className="size-4 shrink-0 text-warning" aria-hidden />
         ) : item.status === "refused" ? (
           <AlertCircle className="size-4 shrink-0 text-danger" aria-hidden />
         ) : (
@@ -70,6 +89,22 @@ export function KnowledgeUploadRow({ item, removable, onRemove }: Props) {
           </Button>
         ) : null}
       </div>
+      {item.status === "partial" && item.issues && item.issues.length > 0 ? (
+        <ul
+          aria-label={t("knowledge.upload.issues", { name: item.file.name })}
+          className="flex flex-col gap-1 rounded-lg bg-warning-soft px-3 py-2.5"
+        >
+          {item.issues.map((issue, i) => (
+            <li key={i} className="text-xs leading-[1.45]">
+              <span className="font-label">
+                {t(`knowledge.upload.issueKinds.${issue.kind}`, { defaultValue: issue.kind })}
+              </span>{" "}
+              <span className="font-mono">{issue.name}</span>
+              <span className="text-text-muted"> — {issue.reason}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {item.refusal ? (
         <div
           role="alert"

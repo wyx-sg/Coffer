@@ -442,7 +442,8 @@ def test_reading_a_page_resolves_its_sources_and_links(client) -> None:  # type:
     page = _page(
         "shopee",
         "overview",
-        "[[sessions|the session service]] and [[gone]]",
+        "[[sessions|the session service]] and [[gone]], "
+        "[the owner](session-ownership.md#rules), [out](../../../x.md) and [web](https://x.y)",
         sources=["design", "missing"],
     )
 
@@ -454,8 +455,28 @@ def test_reading_a_page_resolves_its_sources_and_links(client) -> None:  # type:
         {"slug": "missing", "path": None, "title": ""},
     ]
     assert out["links"] == [
-        {"target": "sessions", "path": "shopee/pages/session-ownership.md", "ambiguous": False},
-        {"target": "gone", "path": None, "ambiguous": False},
+        {
+            "target": "sessions",
+            "path": "shopee/pages/session-ownership.md",
+            "ambiguous": False,
+            "kind": "wiki",
+            "outside": False,
+        },
+        {"target": "gone", "path": None, "ambiguous": False, "kind": "wiki", "outside": False},
+        {
+            "target": "session-ownership.md#rules",
+            "path": "shopee/pages/session-ownership.md",
+            "ambiguous": False,
+            "kind": "markdown",
+            "outside": False,
+        },
+        {
+            "target": "../../../x.md",
+            "path": None,
+            "ambiguous": False,
+            "kind": "markdown",
+            "outside": True,
+        },
     ]
     cited = client.get("/api/v1/knowledge/file", params={"path": source}).json()
     assert (cited["waiting"], cited["cited_by"]) == (False, [{"path": page, "title": "overview"}])

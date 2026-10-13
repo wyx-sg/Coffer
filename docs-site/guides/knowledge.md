@@ -26,6 +26,7 @@ A **collection** is a top-level folder under the knowledge root:
 ~/.coffer/vault/knowledge/
 └── payments/                        ← one collection
     ├── README.md                    ← the schema: what belongs here, page types, rules
+    ├── index.md                     ← optional: a collection file (index, log, schema) kept at the root
     ├── sources/
     │   ├── gateway-design.md        ← a source: the upload converted to Markdown
     │   └── oncall-notes.md          ← a source from a Markdown upload
@@ -43,8 +44,8 @@ A **collection** is a top-level folder under the knowledge root:
 - **`sources/`** keeps the material that arrived: every upload and every file dropped into the inbox, converted to Markdown. The file you uploaded is not put in the collection: Coffer keeps it on the Mac you uploaded it from (see [Pictures and the original file](#pictures-and-the-original-file)). Agents read sources and never edit them.
 - **`assets/`** holds the pictures Coffer took out of uploaded documents, one folder per upload. A source links its pictures, so you see them when you read it and agents can open them. They sync with the collection and have history, like the Markdown.
 - **`pages/`** holds the wiki itself: the pages you and your agents write and keep up to date. This is what agents read first.
-- **Folders** inside `pages/` and `sources/` are optional and carry no meaning. You or your agent can create, move and remove them. `pages/`, `sources/` and `assets/` are the only folders that mean anything.
-- **Any other file** in a collection is listed in the tree but neither catalogued nor checked. A Markdown file left outside `pages/`, `sources/` and `assets/` is moved into `pages/` by the sweep (see [What runs on its own](#what-runs-on-its-own)).
+- **Folders** inside `pages/` and `sources/` are optional and carry no meaning. You or your agent can create, move and remove them. `pages/` and `sources/` are the only folders that make a file a page or a source.
+- **Any other file** in a collection — a root `index.md`, `log.md` or `schema.md`, a folder of your own — is a **collection file**. It is listed in the tree, you can read it, the sweep commits your edits to it, a collection's delete and its Undo carry it, and the vault exports it; it is never checked as a page. Nothing moves or renames it, and the links it holds count as navigation (see [Collection files and links](#collection-files-and-links)).
 - **Hidden entries** (names starting with `.`) are left out of every count, the catalogue and the check, and the Knowledge page lists none of them. The one Coffer reads is `.inbox/`: a Markdown file left there is kept as a source at the next sweep (see [A file in the inbox](#a-file-in-the-inbox)).
 
 A file's path is where it is; its **slug** — the file name without `.md` — is the name links use. File names are slugs of the title, with a suffix such as `-2` on a collision.
@@ -74,15 +75,17 @@ The `account-session` service owns ... see [[rate-limits|the gateway's limits]].
 | Key | Meaning |
 | --- | --- |
 | `title` | The page's title. |
-| `type` | What kind of page it is: `concept`, `entity`, `how-to`, `decision` or `overview`, unless the collection's README defines its own types. Agents see the catalogue grouped by it. |
+| `type` | What kind of page it is, as free text. The collection's README lists the types it uses (a new collection lists `overview`, `concept`, `entity`, `how-to` and `decision`; `comparison`, `synthesis` or `summary` are as valid). Agents see the catalogue grouped by it. `subject_kind` is a separate key of yours that Coffer does not read. |
 | `description` | One sentence on what question the page answers. Agents see it in the catalogue. |
 | `sources` | The slugs of the sources the page draws on. A source no page lists here is still [waiting](#sources-wait-until-a-page-cites-them). |
+| `evidence` | A list of free-form references for a page that rests on code, configuration or an observation instead of a source: `code: <repo>/<path>@<rev>`, `config: …`, `observed: …`. Coffer does not read them; a page with `evidence` is not flagged as having no sources. |
 | `aliases` | Other names a link may use for this page, such as an old slug after a rename. |
-| `verified` | The date (`YYYY-MM-DD`) the page was last checked against its sources or the code. The page's line in the reader shows it. A page without it, or with one older than the collection's `verify_after_days`, is [due a recheck](#pages-due-a-recheck). Where a page's facts came from belongs here and in `sources`, not in a paragraph of the body listing what was read. |
+| `verified` | The date (`YYYY-MM-DD`) the page was last checked against its sources or the code. The page's line in the reader shows it. A page without it, or with one older than its interval, is [due a recheck](#pages-due-a-recheck). Coffer never writes it; whoever checks the page does. Where a page's facts came from belongs here and in `sources` or `evidence`, not in a paragraph of the body listing what was read. |
+| `verify_after_days` | Optional: how many days this page's check holds, overriding the README's. |
 | `actor` | `user` or `agent` — who wrote the page. |
 | `created_at`, `updated_at` | Timestamps. |
 
-Coffer writes no page itself: whoever writes a page gives it these keys, as the `coffer-guide` skill teaches agents. A page that lacks `title`, `type` or `description`, names no `sources` or has no `verified`, still works; it shows up as a finding when the collection is [checked](#check-a-collection).
+Coffer writes no page itself: whoever writes a page gives it these keys, as the `coffer-guide` skill teaches agents. A page that lacks `title`, `type` or `description`, names no `sources` or `evidence`, or has no `verified`, still works; it shows up as a finding when the collection is [checked](#check-a-collection).
 
 A source carries the keys Coffer writes when it keeps one — `title`, `description`, `actor`, `created_at`, `updated_at`, and, for a source converted from an uploaded file, `original` (the file's name) and `original_sha256` (its fingerprint). Leave those two as they are. An agent, or you, may add three more, which describe the source without changing what it says:
 
@@ -94,11 +97,22 @@ A source carries the keys Coffer writes when it keeps one — `title`, `descript
 
 Any other key you add to a file is kept, with its value, whenever Coffer rewrites the file.
 
-### Link pages by slug {#link-pages-by-slug}
+### Link pages {#link-pages-by-slug}
 
-A page links to another by its slug, never by its path: `[[session-ownership]]`, or `[[session-ownership|the session service]]` to choose the text shown. A link may also name one of a page's `aliases`, or a source's slug. Paths change as a collection is tidied; slugs do not change unless a page is renamed, and the `coffer-guide` skill tells agents to update the links to a page they rename, or to keep its old slug in `aliases`.
+A page links to another by its slug, `[[session-ownership]]`, or `[[session-ownership|the session service]]` to choose the text shown, or by a standard Markdown link with a path relative to the file that holds it, `[session ownership](session-ownership.md)`. A wiki link may also name one of a page's `aliases`, or a source's slug. Slugs do not change unless a page is renamed, and the `coffer-guide` skill tells agents to keep a link whole when they rename or move a page: update the links to it, or keep the old slug in `aliases`.
 
-Coffer resolves every link each time a page is read, ignoring case. A link that names nothing is **dead**, and one that names more than one file is **ambiguous**; both are reported by the [check](#check-a-collection), and the Knowledge page marks a dead link in the page.
+Coffer resolves every link each time a page is read, ignoring case in wiki links. A link that names nothing is **dead**, one that names more than one file is **ambiguous**, and a relative link that leaves the knowledge root is an **outside link**; all are reported by the [check](#check-a-collection), and the Knowledge page marks a dead link in the page. A link with a URL (`https:`, `mailto:`) or starting with `#` is external and never checked.
+
+### Collection files and links {#collection-files-and-links}
+
+A collection can hold files that are neither pages nor sources: an `index.md` that lists its pages, a `log.md` that records what happened, a `schema.md`, a folder of your own notes. Coffer keeps them where you put them. Nothing moves or renames them in the background, so a link into one, an editor tab or a collection you laid out before `pages/` existed stays valid.
+
+- They are listed in the tree and open in the reader like a page; **Open in editor** edits them.
+- The sweep commits your edits to them like any other, a collection's delete takes them with it, and its **Undo** puts them back.
+- They are not checked as pages: no `type`, `sources` or `verified` is expected of them.
+- Their links count. A relative link `[title](pages/session-ownership.md)` or `![diagram](assets/gateway/overview.png)` resolves against the folder of the file that holds it, may point into another collection (only its existence is checked), and counts as an inbound link for the page it reaches, so a page that only the root `index.md` links to is not an orphan. Dead links and links that leave the knowledge root in these files and in pages are reported by the [check](#check-a-collection). Links inside sources count for reachability but are never reported: a source is kept as it came.
+
+To bring a loose file into the wiki, ask your agent to move it into `pages/` during a [tidy](#tidy-a-collection); it fixes the links to it in the same change.
 
 ### Sources wait until a page cites them {#sources-wait-until-a-page-cites-them}
 
@@ -160,13 +174,13 @@ Agents file knowledge with their own file tools. An agent connected to Coffer re
 2. Lose nothing: every fact already in a page survives the edit.
 3. Organise by subject, never by who or when.
 4. Where two statements disagree, the newer wins unless the older is shown to be right by a source, a date, a command's output or the code. The superseded one stays legible.
-5. Link other pages by `[[slug]]`, never by path; when renaming a page, update the links to it or keep its old slug in `aliases`.
+5. Link other pages by `[[slug]]` or a standard relative Markdown link; when renaming or moving a page, keep its links whole: update the links to it or keep its old slug in `aliases`.
 6. Never edit a source, except to add `ingest: skipped`, `superseded_by` or a `summary`.
-7. Give every page a `title`, a `type`, a one-line `description` saying what question it answers, the `sources` it draws on, any `aliases`, the date it last checked the page against its sources or the code as `verified`, and `actor: agent`. Where the page's facts came from goes in `sources` and `verified`, never in a paragraph listing what it read.
+7. Give every page a `title`, a `type`, a one-line `description` saying what question it answers, the `sources` it draws on (or, for a page resting on code or an observation, `evidence`), any `aliases`, the date it last checked the page as `verified`, and `actor: agent`; the `type` comes from the README's list. Where the page's facts came from goes in `sources`, `evidence` and `verified`, never in a paragraph listing what it read.
 
 The guide also tells an agent to **write back what it works out**. When it answers your question by reading a source, the code or a system, and the pages do not already say it, it writes the answer into the page that owns the subject before it finishes, adds what it read to `sources` when that is a source, sets `verified` to today, and tells you in one line what it added. It does not write back a guess, an opinion, or something true only of that conversation. Every such write is in the collection's history, so you can undo it.
 
-You can also ask directly: "write down what we just found out about the session TTL in the payments collection." The collection must already exist; only you create one. Whatever the agent writes is readable at once, and the next sweep commits it to the [history](#history-and-restore). A page an agent writes in the wrong place — at the collection root, say — is moved into `pages/` within a minute.
+You can also ask directly: "write down what we just found out about the session TTL in the payments collection." The collection must already exist; only you create one. Whatever the agent writes is readable at once, and the next sweep commits it to the [history](#history-and-restore). A document an agent writes outside `pages/` and `sources/` — at the collection root, say — stays where it is as a [collection file](#collection-files-and-links); it becomes a page when it is under `pages/`.
 
 ### Upload a source {#upload-a-source}
 
@@ -188,7 +202,34 @@ An uploaded PDF, for example, becomes `sources/gateway-design.md`, the extracted
 
 You can pick or drop several files at once. Each is listed with its own state — waiting, converting, done, or failed with its reason — and they are sent one after another, so one failure does not stop the rest. A ZIP archive, or a file over 20 MB, is marked refused with its reason before anything is sent. A file that failed stays in the dialog so you can retry it, and one notice at the end says how many were kept and how many failed. The upload takes the collection, not a folder. An unsupported type is refused with the type named, and a conversion that produces no text — an image-only PDF, for example — is refused too. A refused file leaves nothing behind.
 
-The source's `title` comes from the file (a `# ` heading on its first line, or else the file name). Its `description` is taken from the opening prose, or its title when there is none. The source then [waits](#sources-wait-until-a-page-cites-them): folding what it says into the pages is your agent's job when you press **Tidy** (see [Tidy a collection](#tidy-a-collection)), or whenever you ask it to.
+The source's `title` comes from the file (a `# ` heading on its first line, or else the file name). Its `description` is taken from the opening prose, or its title when there is none. A Markdown file that has frontmatter of its own keeps one frontmatter block: if the file is itself a source copied from another collection, with a second block under the first, the two are merged and the title comes from it. The source then [waits](#sources-wait-until-a-page-cites-them): folding what it says into the pages is your agent's job when you press **Tidy** (see [Tidy a collection](#tidy-a-collection)), or whenever you ask it to.
+
+### Import a Confluence page {#import-a-confluence-page}
+
+A Confluence page can be kept as a readable source, with its pictures and its diagrams. Coffer never talks to Confluence for you: you, or your agent, fetch the page with the tool you are authorised to use, and upload what it returns.
+
+1. **Fetch the page in Storage Format with its attachments.** Ask your agent to read the page with your Confluence tool in Storage Format, for example a Confluence CLI read with `--format storage --json`, and to save the result. A page read result in JSON (with `body`, `version`, `space` and, when the tool provides them, base64 `attachments`), a file named `<name>.storage.xml`, or a Markdown file that holds the page's Storage XML in `skynet-confluence-storage` markers are all accepted.
+2. **Upload it** to a collection: **Add → Upload documents…**, or from the command line:
+
+   ```text
+   coffer knowledge upload payments ./account-core.page.json
+   ```
+
+3. **Read the report.** The upload answers with a status and, if anything could not be kept, what.
+
+**What is kept.** The source is `sources/<page title>.md` in Markdown: headings, lists, tables, code blocks, callouts and task lists convert, and generated navigation such as a table of contents is dropped. The pictures the page shows, each diagram's draw.io or PlantUML source, and the page's original Storage Format (`page.storage.xml`) go into `assets/confluence-<pageId>-v<version>/`, so the source shows its pictures and an agent can open the diagram files. The source's frontmatter records where it came from: `origin` (the page's URL), `page_id`, `page_version`, `space` and `retrieved_at` (when you imported it, not when the page was checked).
+
+**The report.** `status` is `complete`, or `partial` when something could not be kept. Each issue names it: a picture missing from the export (`missing_attachment`), a diagram or image hosted elsewhere that Coffer did not fetch (`external_embed`, `external_image`), a macro Coffer does not convert (`unsupported_macro`, whose text is kept) or a diagram kept as source only (`not_rendered`). The same list is in the source's `import_status` and `import_issues`, so a tidy or a later reader sees what the import left out.
+
+**Import again after the page changes.** Fetch the page again and upload it with `--replaces` naming the old source; the new source is written and the old one is marked `superseded_by` the new one in a single change. Nothing is deleted, and the pages that cite the old source appear under **Pages citing an outdated source** for the next tidy.
+
+```text
+coffer knowledge upload payments ./account-core.page.json --replaces sources/account-core-service.md
+```
+
+Add `--dry-run` to either command to convert without writing: it prints the same report and the files it would write, and the collection is untouched.
+
+**Reading it.** The reader shows the page's tables and details blocks, and removes scripts, frames, styles, comments and event handlers from any HTML it holds. A source still holding Confluence markers is shown expanded in **Preview**; **Source** shows the file.
 
 ### Pictures and the original file {#pictures-and-the-original-file}
 
@@ -312,16 +353,17 @@ The **To do** section of a collection's page lists these findings, grouped by ki
 
 | Finding | What it means |
 | --- | --- |
-| **Dead links** | A `[[link]]` that names no page, alias or source. |
+| **Dead links** | A `[[link]]` that names no page, alias or source, or a relative link to a file that does not exist. |
 | **Ambiguous links** | A `[[link]]` that names more than one file. |
+| **Links outside the knowledge root** | A relative link that leaves the knowledge root. |
 | **Names used twice** | Two pages share a slug, or an alias names two pages. |
 | **Missing sources** | A page's `sources` names a source that does not exist, or a source's `superseded_by` names one that does not. |
 | **Pages citing an outdated source** | A page cites a superseded source and none of the sources that replace it (see [When a source is replaced](#when-a-source-is-replaced)). The row names the source it cites and its newest replacement. |
 | **Waiting sources** | A source no page cites and not marked `ingest: skipped` or `superseded_by`. |
 | **Incomplete pages** | A page missing its `title`, `type` or `description`. |
 | **Pages to recheck** | A page whose `verified` date is missing or older than the collection's interval (see [Pages due a recheck](#pages-due-a-recheck)). The row says when it was last checked, or *never checked*. |
-| **Pages without sources** | A page whose `sources` is empty. |
-| **Pages nothing links to** | A page no other page links to, once the collection has two or more pages. Pages of type `overview` are exempt: they are entry points. |
+| **Pages without sources** | A page with neither `sources` nor `evidence`, unless its `type` is listed in the README's `sourceless_types`. |
+| **Pages nothing links to** | A page no other page, collection file or source links to, once the collection has two or more pages. Pages of type `overview` are exempt: they are entry points. |
 
 The findings are worked out from the files on every read and stored nowhere, so they are current the moment a file changes. They are hints, not errors: a page you wrote without sources still works. On the command line, `coffer knowledge check <collection>` prints the same list (see [`coffer knowledge`](/reference/cli/knowledge#knowledge-check)).
 
@@ -340,26 +382,22 @@ Your agent adds this line itself when it integrates a source that replaces anoth
 
 ### Pages due a recheck {#pages-due-a-recheck}
 
-A page can drift from the world while its sources stay the same: the code or the system it describes changes. Every page carries `verified`, the day it was last checked against its sources or the code, and a page whose `verified` is missing or older than the collection's interval is listed under **Pages to recheck**. Opening it shows **Needs rechecking**, and *never checked* when it has no date. It is only flagged: it stays in the catalogue and agents still read it.
+A page can drift from the world while its sources stay the same: the code or the system it describes changes. Every page carries `verified`, the day it was last checked, and a page whose `verified` is missing, empty or older than its interval is listed under **Pages to recheck**. Opening it shows **Needs rechecking**, and *never checked* when it has no date. It is only flagged: it stays in the catalogue and agents still read it.
 
-The interval is 90 days. Set another in the README's frontmatter — `verify_after_days: 30` for a runbook collection, say — or `0` to turn the check off for that collection. A negative value, or one that is not a whole number of days, is read as 90. A tidy rechecks each page it lists and sets its `verified` to today.
+The interval is 90 days. Set another in the README's frontmatter — `verify_after_days: 30` for a runbook collection, say — or `0` to turn the check off for that collection; a page's own `verify_after_days` overrides it. Coffer never writes `verified`: whoever rechecks the page sets it. To exempt page types that rest on no source, such as `overview` or `how-to`, list them in the README's frontmatter as `sourceless_types: [overview, how-to]`. A negative value, or one that is not a whole number of days, is read as 90. A tidy rechecks each page it lists and sets its `verified` to today.
 
 The first time you open a collection after updating, every page without `verified` is listed. Press **Tidy** and the agent rechecks them.
 
 ## What runs on its own {#what-runs-on-its-own}
 
-A background **sweep** keeps the collections current. It runs about once a minute and calls no model. Each round it:
+A background **sweep** keeps the collections current. It runs about once a minute and calls no model, and it moves or renames no file. Each round it:
 
 - keeps files dropped into a collection's `.inbox/` as sources (see [A file in the inbox](#a-file-in-the-inbox)),
-- files a Markdown file left in a collection outside `pages/`, `sources/` and `assets/` — other than the README, and once nobody has touched it for a minute — into `pages/` at the same relative path, adding a suffix if that name is taken, without changing its text,
-- commits to the history whatever changed in the tree since the last commit — your editor's saves and your agent's file edits — as an edit on disk, and
+- commits to the history whatever changed in the tree since the last commit — your editor's saves and your agent's file edits, in a page, a source or a collection file — as an edit on disk,
+- closes a tidy whose collection has sat unchanged for 30 minutes, and
 - re-renders the `coffer-guide` skill's catalogue, so a page you or an agent added by hand is listed.
 
 It runs on every machine, takes no part in [vault sync](/guides/vault-sync)'s rounds and never waits for one, and rewrites the text of no file. It is skipped while the Knowledge feature is switched off (see [Experimental features](/guides/experimental-features)).
-
-### Collections from before pages and sources {#collections-from-before-pages-and-sources}
-
-A collection made before pages and sources existed holds its documents at its root and in folders of its own. The first sweep after you update moves every one of them into `pages/`, keeping their folders, as one change written by **Coffer** that you can see in the collection's **Change log** and undo from the history. Their text is unchanged; what they lack — a `type`, `sources` — shows up in the [check](#check-a-collection), and a **Tidy** fills it in.
 
 ## How agents find knowledge
 
@@ -410,7 +448,7 @@ A collection is plain Markdown that [Obsidian](https://obsidian.md) reads as it 
 When Obsidian is installed on this Mac, a collection's **⋯** menu and a file's **⋯** menu offer **Open in Obsidian**. The first time:
 
 1. In Obsidian, choose **Open folder as vault** and pick the collection's folder, `~/.coffer/vault/knowledge/<collection>/`. `~/.coffer` is hidden: press **⌘⇧.** in the dialog to show it, or use **Copy path** on the collection and paste it with **⌘⇧G**.
-2. In Obsidian's **Settings › Files and links**, set **Default location for new notes** to the collection's `pages/` folder. A Markdown file left outside `pages/` and `sources/` is filed into `pages/` by the sweep within a minute, so a note created at the vault's root would move.
+2. In Obsidian's **Settings › Files and links**, set **Default location for new notes** to the collection's `pages/` folder, so a new note is a page. A note created elsewhere stays where Obsidian made it, as a [collection file](#collection-files-and-links).
 
 An edit you save in Obsidian is like an edit in any editor: live at once, recorded as an edit on disk by the next sweep. Leave the files under `sources/` as they are.
 
@@ -463,7 +501,7 @@ The skill hands agents the knowledge root, and an agent can read anything under 
 
 ## History and restore
 
-Every change to a collection is kept as a version: your uploads and deletes, a file dropped into the inbox and kept as a source, the sweep filing loose documents into `pages/`, what vault sync brought in, and a tidy, recorded as one change by the agent carrying its report, and edits made outside Coffer in your own editor or with an agent's file tools. Each change names its **writer** — `user`, `agent`, `daemon` (Coffer filing a loose document into `pages/`), `sync` or `disk` (and `curation` on versions an earlier Coffer wrote) — so you can always tell who changed what. A collection's page lists its changes in its **Change log**.
+Every change to a collection is kept as a version: your uploads and deletes, a file dropped into the inbox and kept as a source, what vault sync brought in, and a tidy, recorded as one change by the agent carrying its report, and edits made outside Coffer in your own editor or with an agent's file tools. Each change names its **writer** — `user`, `agent`, `daemon` (Coffer adopting an inbox file), `sync` or `disk` (and `curation` on versions an earlier Coffer wrote) — so you can always tell who changed what. A collection's page lists its changes in its **Change log**.
 
 The history is the vault repository's own: collections live under `knowledge/` in `~/.coffer/vault`, so `git -C ~/.coffer/vault log -- knowledge/<collection>/<path>` reads the same versions, and [vault sync](/guides/vault-sync) carries them to your other machines. Coffer needs `git` for the vault; without it the app shows [Coffer needs git](/guides/troubleshooting#coffer-needs-git) until it is installed. If git goes missing while the daemon runs, every write keeps working and the changes feed that a collection's Change log and a delete's **Undo** read is refused. The refusal carries a prompt for your agent to install git the way that fits your machine and confirm it with `git --version`.
 
@@ -511,11 +549,11 @@ A delete is reported in a toast, *Deleted `<name>`*, with **Undo**, which puts b
 
 **A link shows in red.** It names no page, alias or source — usually a page that was renamed or merged away. Fix the link, or add the old slug to the surviving page's `aliases`; **Tidy** fixes the dead links it finds.
 
-**My documents moved into `pages/`.** That is the sweep filing loose Markdown into the collection's layout (see [Collections from before pages and sources](#collections-from-before-pages-and-sources)). Write new pages under `pages/`; the move is in the **Change log** and can be restored from the history.
+**A document I wrote is not in the catalogue.** Only Markdown under `pages/` and `sources/` is catalogued and checked. A file anywhere else is a [collection file](#collection-files-and-links): listed and readable, but not a page. Move it into `pages/` yourself, or ask your agent to during a tidy.
 
 **Tidy offers only Copy prompt.** No managed agent is available. Add one under **Agents**, or paste the copied prompt into the agent you use; it must have the `coffer-guide` skill.
 
-**A note made in Obsidian moved into `pages/`.** Obsidian created it at the vault's root, and the sweep filed it. Set Obsidian's default location for new notes to the collection's `pages/` folder (see [Open a collection in Obsidian](#open-a-collection-in-obsidian)).
+**A note made in Obsidian is not a page.** Obsidian created it outside `pages/`. Set Obsidian's default location for new notes to the collection's `pages/` folder (see [Open a collection in Obsidian](#open-a-collection-in-obsidian)) and move the note there.
 
 **Open in Obsidian is not in the menu.** Coffer offers it only when Obsidian is installed on this Mac, in `/Applications` or your own Applications folder.
 

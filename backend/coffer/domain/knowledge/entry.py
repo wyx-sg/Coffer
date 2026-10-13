@@ -113,14 +113,27 @@ class SourceRef:
     title: str = ""
 
 
+#: What a :class:`LinkRef` is: a ``[[target]]`` wiki link, or a standard
+#: Markdown link or image ``[text](target)`` that names a path.
+LINK_WIKI = "wiki"
+LINK_MARKDOWN = "markdown"
+
+
 @dataclass(frozen=True)
 class LinkRef:
-    """A ``[[target]]`` in a page's body and the one file it resolves to;
-    ``path`` ``None`` when it is dead or ambiguous (``ambiguous`` says which)."""
+    """A link in a page's body and the one file it resolves to, as a
+    knowledge-root-relative path; ``path`` ``None`` when it is dead, ambiguous
+    (``ambiguous`` says so) or leads outside the knowledge root (``outside``).
+
+    ``target`` is as written: a slug for a ``wiki`` link, a relative path for a
+    ``markdown`` one. External targets (a URL scheme, ``#anchor``) are not
+    carried."""
 
     target: str
     path: str | None = None
     ambiguous: bool = False
+    kind: str = LINK_WIKI
+    outside: bool = False
 
 
 @dataclass(frozen=True)
@@ -173,7 +186,8 @@ class KnowledgeFile:
     verified: str = ""
     #: A page's ``sources`` entries, each resolved to the source it names.
     sources: tuple[SourceRef, ...] = ()
-    #: A page's ``[[links]]``, each resolved to the file it names.
+    #: A page's ``[[links]]`` and then its standard links, each resolved to
+    #: the file it names.
     links: tuple[LinkRef, ...] = ()
     #: Whether a page is due a recheck (see ``FileEntry.stale``).
     stale: bool = False

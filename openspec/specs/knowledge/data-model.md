@@ -20,9 +20,8 @@ reindex, and no reconciliation of any kind (see "Store each collection as one
 tree of Markdown files").
 
 The sweep needs no record either. What it adopts is a file in a collection's
-hidden `.inbox/`; what it files is a Markdown document outside `pages/`,
-`sources/` and `assets/`; what it commits is whatever differs on disk from the vault's
-`HEAD`. Nothing remembers which sources were integrated: a source waits while
+hidden `.inbox/`; what it commits is whatever differs on disk from the vault's
+`HEAD`. It moves and renames no file. Nothing remembers which sources were integrated: a source waits while
 no page cites it, which is read off the pages every time (see "Derive which
 sources wait from the pages that cite them"). Judgement over pages is the
 agent's, done through its own file tools (see "Teach writing and tidying in the
@@ -48,15 +47,17 @@ Coffer's (see "Leave a linked folder to its own tools").
 ```text
 ~/.coffer/vault/knowledge/
 ├── shopee/                         # a collection = a top-level folder = one Resource
-│   ├── README.md                   # the schema: verify_after_days, the description, page types, rules; not a page
+│   ├── README.md                   # the schema: verify_after_days, sourceless_types, the description, page types, rules; not a page
+│   ├── index.md                    # a collection file: any file outside pages/ and sources/ stays where its writer put it
 │   ├── sources/                    # what arrived, kept as Markdown; never edited
 │   │   └── q3-review.md            # a source: converted Markdown + frontmatter
 │   ├── assets/                     # pictures taken out of uploads; visible, so they sync
 │   │   └── q3-review-1a2b3c4d/     # one folder per upload: <title-slug>-<first 8 hex of its sha256>
 │   │       ├── image-1.png         # linked from the source as ../assets/q3-review-1a2b3c4d/image-1.png
 │   │       └── image-2.jpg
+│   │   └── confluence-1234-v7/  # a Confluence import: pictures, .drawio/.puml sources, page.storage.xml
 │   ├── pages/                      # the wiki: read by agents, edited by people and agents
-│   │   ├── account/                # nesting chosen by whoever files a page
+│   │   ├── account/                # nesting chosen by whoever writes a page
 │   │   │   └── login-sessions.md
 │   │   └── gateway-routing.md
 │   └── .inbox/                     # hidden drop zone: the next sweep adopts it into sources/
@@ -83,13 +84,16 @@ Coffer's (see "Leave a linked folder to its own tools").
 - **A collection is a wiki**: `sources/` keeps what arrived and `pages/`
   holds what people and agents write from it (see "Keep sources and pages apart
   in each collection"). `paths.kind_of` names a Markdown file under `pages/` a
-  **page**, one under `sources/` a **source**, and anything else a plain
-  **file**, listed but neither catalogued nor checked — the pictures under
-  `assets/` among them. A person edits any page in
-  their own editor and an agent edits one with its own file tools; nobody edits a
-  source. Below the two folders the nesting is free — whoever files a page
-  chooses where (see "Allow nesting without giving it meaning"). A Markdown
-  document left outside them and `assets/` is filed into `pages/` by the sweep.
+  **page**, one under `sources/` a **source**, and anything else a **file**: a
+  *collection file* — the root `index.md`, `log.md` or `schema.md`, a folder of a
+  person's own, the pictures under `assets/`. A collection file is listed,
+  readable, committed by the sweep as an edit on disk, carried by the collection's
+  delete and its Undo and exported with the vault; it is never checked as a page
+  and nothing moves or renames it. Its links count as navigation (see "Link
+  pages by slug and check every link"). A person edits any page in their own
+  editor and an agent edits one with its own file tools; nobody edits a source.
+  Below the two folders the nesting is free — whoever writes a page chooses where
+  (see "Allow nesting without giving it meaning").
 - **`assets/` holds an upload's pictures** (see "Keep the pictures of an
   upload beside its source"): one folder per upload,
   `assets/<title-slug>-<first 8 hex of the upload's SHA-256>/`, holding
@@ -102,7 +106,15 @@ Coffer's (see "Leave a linked folder to its own tools").
   `assets.py` owns the layout, the links and the read route's guard;
   `converters/images.py` owns extraction and its bounds (48 px minimum side,
   5 MB per picture, repeats kept once, 40 per upload, non-web formats
-  re-encoded as PNG).
+  re-encoded as PNG). A Confluence import's folder is
+  `assets/confluence-<pageId>-v<version>/` (a Storage Format file with no id:
+  `<title-slug>-<sha8>`), holding every picture the body shows, each diagram
+  source (`.drawio`, `.puml`) and `page.storage.xml`; when the folder exists with
+  different bytes it gains `-<sha8>`, with the same bytes it is reused. A
+  Markdown upload with its own frontmatter ends with one block: a nested second
+  block is merged (its keys win except `actor`, `created_at`, `updated_at`) and
+  `title` comes from it (see "Import a Confluence page from an export the person
+  fetched").
 - **Dot-prefixed entries are invisible** (see "Hide every dot-prefixed entry").
   Coffer's own surfaces list none of them and the read route refuses every
   hidden segment, through the path guard rather than by skipping. `.inbox/` is
@@ -146,7 +158,8 @@ How the shop is built.
 
 | README key | Type | Notes |
 | --- | --- | --- |
-| `verify_after_days` | `int` | Days a page's `verified` date holds before it is a `stale_page` finding (see "Ask for a recheck of a page after the collection's interval"). Absent, negative or not a whole number → 90; `0` turns the check off. |
+| `verify_after_days` | `int` | Days a page's `verified` date holds before it is a `stale_page` finding (see "Ask for a recheck of a page after the collection's interval"). Absent, negative or not a whole number → 90; `0` turns the check off. A page's own `verify_after_days` overrides it. |
+| `sourceless_types` | list of `str` | Page types exempt from `unsourced_page` (for example `overview`, `how-to`). Absent → none. |
 
 That paragraph does more work than it used to: it is also what the delivered
 skill's frontmatter description draws on, which is the only part of this layer
@@ -203,21 +216,40 @@ Page 2:
 | `actor` | `agent` \| `user` | Who last wrote it. From the `X-Coffer-Actor` header on a submission, the actor a dropped file reports, or `agent` for a document an agent wrote. |
 | `created_at` | ISO-8601 `str` | Preserved across a rewrite, so a document keeps its own history even though nothing but the file records it. |
 | `updated_at` | ISO-8601 `str` | Set on every write Coffer makes. |
-| `type` | `str` | A page's type: `concept`, `entity`, `how-to`, `decision` or `overview` by default, or one the README defines. Missing → `incomplete_page`. |
-| `sources` | list of `str` | A page's sources, by slug. Empty → `unsourced_page`; a slug no source has → `missing_source`. |
+| `type` | `str` | A page's type, free text; the README lists the types a collection uses (`overview`, `concept`, `entity`, `how-to`, `decision` by default; `comparison`, `synthesis`, `summary` and others are valid). Missing → `incomplete_page`. |
+| `subject_kind` | `str` | Independent of `type`; Coffer does not interpret it. |
+| `sources` | list of `str` | A page's sources, by slug. Empty and no `evidence` (and `type` not in the README's `sourceless_types`) → `unsourced_page`; a slug no source has → `missing_source`. |
+| `evidence` | list of `str` | Free-form references (`code: <repo>/<path>@<rev>`, `config: …`, `observed: …`) for a page resting on code, configuration or an observation; Coffer does not interpret them. Stands in for `sources` in the `unsourced_page` rule. |
 | `aliases` | list of `str` | More names a page answers to in a `[[link]]`. |
-| `verified` | `YYYY-MM-DD` `str` | When the page was last checked against its sources or the code; returned on a page's read as written. Missing, unreadable or older than the README's `verify_after_days` → `stale_page`. |
+| `verified` | `YYYY-MM-DD` `str` | When the page was last checked; returned on a page's read as written, never written by Coffer. Missing, null, unreadable or older than the page's interval → `stale_page`. |
+| `verify_after_days` | `int` | On a page: overrides the README's interval for that page, read by the same rule. |
 | `ingest` | `skipped` | Set by an agent on a source with nothing worth keeping, so it stops waiting. |
 | `superseded_by` | `str` | A source's replacement, by slug, set by an agent or a person (see "Mark a source superseded by the one that replaces it"). The source stops waiting; a page citing it and no later source in the chain → `superseded_source`; a slug no source has → `missing_source` on the source. |
 | `summary` | `str` | A source's one or two sentences on what it says, written by an agent as it integrates or tidies; shown in the catalogue and in Contents. |
 | `original` | `str` | The name of the file an upload was converted from, written by Coffer (see "Keep an upload's original on this Mac only"). Absent on a Markdown or text upload, which is its own source. |
 | `original_sha256` | hex `str` | The SHA-256 of that file, written by Coffer; it names the copy kept in `~/.coffer/local/knowledge-originals/` on the Mac that uploaded it. |
+| `origin` | `str` | A Confluence source's page URL (see "Import a Confluence page from an export the person fetched"). |
+| `page_id`, `page_version`, `space` | `str`, `int`, `str` | The Confluence page's id, version number and space key. |
+| `retrieved_at` | ISO-8601 `str` | When the page was imported; not a verification date. |
+| `representation`, `original_representation`, `redaction` | `str` | `markdown from confluence storage`; the `../assets/...` path of the kept `page.storage.xml`; what the export said was redacted (`none` when nothing). |
+| `attachments` | list of mappings | Each attachment: `name`, `original_name`, `path`, `status` (`saved` or `missing`, with `reason`). |
+| `import_status` | `complete` \| `partial` | `partial` whenever an import issue other than `not_rendered` exists. |
+| `import_issues` | list of mappings | `{kind, name, reason}`; `kind` is `missing_attachment`, `external_embed`, `external_image`, `unsupported_macro` or `not_rendered`. |
 
 A page's **slug** is its file stem; so is a source's. A `[[slug]]` or
-`[[slug|text]]` outside code in a page's body resolves case-insensitively, after
-NFKC, against page slugs and aliases first and then source slugs
+`[[slug|text]]` outside code resolves case-insensitively, after NFKC, against
+page slugs and aliases first and then source slugs
 (`infrastructure/knowledge/wiki.py`); none is a dead link, two or more an
-ambiguous one (see "Link pages by slug and check every link").
+ambiguous one. A standard Markdown link or image `[t](path)` outside code
+resolves, percent-decoded and without its `#fragment`/`?query`, against the
+directory of the file that holds it (`wiki_links.py`): a URL scheme or a leading
+`#` is external and never checked; a path leaving the knowledge root is an
+`outside_link`; a path naming no file is a `dead_link`; a path naming a page of
+the same collection is an inbound link, and one into another collection is
+checked for existence only. Links in pages, the README, root collection files
+and a person's folders are checked; links in sources count for reachability but
+produce no finding. A page reached only from a root collection file is not an
+orphan (see "Link pages by slug and check every link").
 
 These are the keys **Coffer writes**, not the only keys a document may carry. A
 person who adds `tags:` or `reviewed_by:` in their own editor keeps it: every
@@ -235,18 +267,16 @@ hand-edited file with a stray colon cannot break a whole collection walk.
 ### What the sweep does
 
 The knowledge sweep runs when a file under `knowledge/` changes (and every 10 minutes otherwise) and does four mechanical things, calling no
-model (see "Sweep the knowledge root on its mechanical duties"):
+model, and moves or renames no file (see "Sweep the knowledge root on its mechanical duties"):
 
 1. **Adopt and promote `.inbox/` files**: each Markdown file in a collection's
    `.inbox/` is normalised and kept (`inbox.promote`) as a source under
    `sources/`, recorded with one `KNOWLEDGE_WRITTEN` audit event.
-2. **File loose documents**: a Markdown file outside `pages/`, `sources/`,
-   `assets/` and hidden entries, other than the README, untouched for a minute
-   (`layout.QUIET_SECONDS`), moves to `pages/` at the same relative path,
-   suffixed on a collision — all of a tick's moves as one `daemon` / `layout`
-   commit, with the text unchanged.
-3. **Commit edits found on disk** as `disk` writes, so an edit in any editor is
-   a version of its own and is never counted as Coffer's.
+2. **Commit edits found on disk** as `disk` writes, so an edit in any editor is
+   a version of its own and is never counted as Coffer's. A collection file is
+   committed the same way and left where it is.
+3. **Close idle tidies**: a tidy whose collection has not changed for 30 minutes
+   is committed as one change with no report and status `expired`.
 4. **Re-render and re-seed the guide**, so a page added by hand is catalogued.
 
 The sweep takes no lock against a sync round: what it promotes is written
@@ -301,7 +331,7 @@ of them is persisted and none of them can be stale.
 | `DirectoryEntry` | `path`, `name`, `file_count` | A subdirectory at the level being listed. `path` is relative to the root — pass it back to descend. |
 | `FileEntry` | `path`, `title`, `description`, `actor`, `updated_at`, `kind`, `page_type`, `waiting`, `stale`, `superseded_by`, `summary`, `cited_count`, `skipped` | One file as a listing or a catalogue shows it: enough to judge relevance without reading the body. `stale` marks a page due a recheck; a source's `superseded_by` is the path its replacement resolves to (the slug as written when it names none), `cited_count` how many pages cite it and `skipped` whether it is marked `ingest: skipped`. |
 | `CatalogueLevel` | `path`, `directories`, `files` | **One level of one collection**, never the whole tree. |
-| `Finding` | `kind`, `path`, `target`, `others` | One mechanical finding (see "Check a collection mechanically on every read"): `dead_link`, `ambiguous_link`, `duplicate_slug`, `missing_source`, `superseded_source` (`others` = the newest replacement), `incomplete_page`, `unsourced_page`, `stale_page` (`target` = `verified` as written, none when missing), `orphan_page` or `waiting_source`. |
+| `Finding` | `kind`, `path`, `target`, `others` | One mechanical finding (see "Check a collection mechanically on every read"): `dead_link`, `ambiguous_link`, `outside_link` (a relative link leaving the knowledge root; `path` is the file holding it, `target` the link as written), `duplicate_slug`, `missing_source`, `superseded_source` (`others` = the newest replacement), `incomplete_page`, `unsourced_page`, `stale_page` (`target` = `verified` as written, none when missing), `orphan_page` or `waiting_source`. |
 | `SourceRef`, `LinkRef`, `PageRef` | `slug`/`target`, `path`, `title`/`ambiguous` | A page's `sources` entry or `[[link]]` with what it resolves to; a page that cites a source. |
 | `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `kind`, `page_type`, `aliases`, `verified`, `stale`, `sources`, `links`, `cited_by`, `waiting`, `superseded_by`, `summary`, `original`, `original_path` | A file in full; a source's `superseded_by` is a `SourceRef`, `None` when it is current. `original` is the source's `original` (empty when none) and `original_path` the absolute path of that file on this Mac, `None` when it is not here. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); Coffer serves a document's bytes only to be shown: no route saves them (see "Treat a direct file edit as a complete change"). |
 
@@ -346,9 +376,11 @@ a tidy of it open (see "Record a tidy as one change"), and `linked`,
 (`summary`, the agent's report) and `TidyFinishOut` (`change`, null when the
 tidy changed nothing) for `POST .../tidy/finish`; `UndoIn` (`force`) for
 `POST /knowledge/changes/{version}/undo` (see "Undo a tidy"); and
-`IngestedDocumentOut` (`path`, `title`, `description`, `converter`); and
+`IngestedDocumentOut` (`path`, `title`, `description`, `converter`, `status` `complete` \| `partial`, `files` the knowledge paths written beside the source, `issues` of `{kind, name, reason}`, `replaced` the superseded source's path or null, `dry_run`) for `POST /knowledge/upload`, whose form takes `replaces` (a source of the same collection, marked `superseded_by` the new one in the same commit) and `dry_run` (convert and answer, write nothing); and
 `FileOut`, a file's read, which carries the `KnowledgeFile` fields, `original`
-and `original_path` among them. `GET /knowledge/asset?path=` answers a
+and `original_path` among them, and `display_body` — a body holding
+`skynet-confluence-storage` markers with each converted to Markdown, null when it
+holds none (the file is never rewritten). `GET /knowledge/asset?path=` answers a
 picture's bytes with its media type (`png`, `jpg`, `jpeg`, `gif`, `webp`,
 `svg`, up to 10 MB) rather than a wire model, and 404 for anything else. There is no
 write-a-document model: every entrance submits material, which becomes a
@@ -459,7 +491,7 @@ one commit by the `user` writer, operation `restore`, carrying `Coffer-Undoes`
 
 | Trailer | Value |
 | --- | --- |
-| `Coffer-Writer` | `user`, `agent` (a tidy, or material an agent submitted), `sync`, `disk` or `daemon` (filing loose documents); `curation` on commits an earlier version of Coffer made |
+| `Coffer-Writer` | `user`, `agent` (a tidy, or material an agent submitted), `sync`, `disk` or `daemon` (adopting an inbox file; `layout` commits an earlier version made); `curation` on commits an earlier version of Coffer made |
 | `Coffer-Operation` | `save`, `delete`, `submit`, `promote`, `restore`, `edit`, `sync`, `create`, `rename`, `remove`, `layout`, `baseline`, `tidy`; `pass` and `undo` on commits an earlier version made |
 | `Coffer-Actor` | the audit actor of the operation |
 | `Coffer-Machine` | the machine that made the commit |
