@@ -9,7 +9,6 @@ import { Wrench } from "lucide-react";
 
 import { DetailNotFound } from "@/components/DetailNotFound";
 import { EmptyState } from "@/components/EmptyState";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApiError, translateApiError } from "@/lib/api/errors";
@@ -89,10 +88,7 @@ export function GroupPane({ name, onAddRequest }: Props) {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="overview">{t("customTools.tabs.overview")}</TabsTrigger>
-          <TabsTrigger value="environments">
-            {t("customTools.tabs.environments")}
-            <Badge variant="secondary">{group.environments?.length ?? 0}</Badge>
-          </TabsTrigger>
+          <TabsTrigger value="environments">{t("customTools.tabs.environments")}</TabsTrigger>
           <TabsTrigger value="tools">{t("customTools.tabs.tools")}</TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="pt-5">

@@ -96,11 +96,7 @@ export function ToolEditorForm(props: Props) {
         <TabsTrigger value="request">{t("customTools.editor.tabs.request")}</TabsTrigger>
         <TabsTrigger value="arguments">
           {t("customTools.editor.tabs.arguments")}
-          {problemCount > 0 ? (
-            <Badge variant="warning">{problemCount}</Badge>
-          ) : form.args.length > 0 ? (
-            <Badge variant="secondary">{form.args.length}</Badge>
-          ) : null}
+          {problemCount > 0 ? <Badge variant="warning">{problemCount}</Badge> : null}
         </TabsTrigger>
         <TabsTrigger value="response">{t("customTools.editor.tabs.response")}</TabsTrigger>
         <TabsTrigger value="test">{t("customTools.editor.tabs.test")}</TabsTrigger>

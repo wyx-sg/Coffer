@@ -2846,7 +2846,7 @@ the headers the chosen environment already adds shown as from the
 group (from the environment when the group has several),
 no switch, which lives in the table — with **Delete tool**, Cancel and Save
 in its footer. **Environments** (`/custom-tools/<group>/environments`, its tab
-counting them) shows one **card** per environment, however many there are,
+carrying no count) shows one **card** per environment, however many there are,
 everything it holds readable without opening it: its switch, name and secret
 state with **Edit** and a **⋯** menu holding Delete environment (off, with the
 reason, for a group's only environment) in the card's head, then its base URL,
