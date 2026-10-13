@@ -78,6 +78,23 @@ async def test_a_codex_profile_reaches_every_claude_code_session(
     assert (memory / "MEMORY.md").read_text(encoding="utf-8") == "# index\n"
 
 
+@pytest.mark.acceptance(spec="memory", scenario="a long set of global memories becomes an index")
+async def test_a_long_set_of_global_memories_becomes_an_index(
+    tmp_path: pathlib.Path, payments: pathlib.Path
+) -> None:
+    a = Machine("machine-a", tmp_path / "a")
+    bullets = "".join(f"- Preference {i}: {'x' * 400}.\n" for i in range(30))
+    a.codex(memory_md="", summary_md=f"## User preferences\n{bullets}")
+    cc = a.claude()
+    cc_project(cc, payments, {"MEMORY.md": "# index\n"})
+    await a.sync()
+
+    rules = (cc / "rules" / "coffer-memory.md").read_text(encoding="utf-8")
+    assert "index" in rules
+    assert "vault/memory/global/" in rules
+    assert "x" * 400 not in rules
+
+
 @pytest.mark.acceptance(spec="memory", scenario="a Claude Code memory reaches Codex")
 async def test_a_claude_code_memory_reaches_codex(
     tmp_path: pathlib.Path, payments: pathlib.Path

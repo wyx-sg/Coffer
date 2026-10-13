@@ -42,8 +42,13 @@ BLOCK_BEGIN = "<!-- coffer:memory-sync:begin -->"
 BLOCK_END = "<!-- coffer:memory-sync:end -->"
 #: Lines the block lists before naming the rest (of Claude Code's 200).
 BLOCK_CAP = 30
-#: The rules file's size bound; the newest memories first.
+#: Past this many bytes the rules file lists the memories instead of holding
+#: their text (every session loads it, so it stays small).
+RULES_FULL_MAX_BYTES = 8 * 1024
+#: The index form's size bound; the newest memories first.
 RULES_MAX_BYTES = 25 * 1024
+#: Where the full text of a global memory lives, for the index to point at.
+HUB_DIR = "~/.coffer/vault/memory"
 
 RULES_HEADER = (
     "# Memories from your other agents\n\n"
@@ -218,10 +223,44 @@ def _index_lines(
 
 
 def _render_rules(targets: Sequence[Target]) -> str:
+    """The memories' text while it fits :data:`RULES_FULL_MAX_BYTES`, else one
+    index line per memory pointing at its full text in the hub."""
     ordered = sorted(targets, key=lambda t: (t.entry.updated_at, t.entry.id), reverse=True)
+    full = _render_rules_full(ordered)
+    if len(full.encode("utf-8")) <= RULES_FULL_MAX_BYTES:
+        return full
+    return _render_rules_index(ordered)
+
+
+def _render_rules_index(ordered: Sequence[Target]) -> str:
+    header = (
+        RULES_HEADER
+        + "\nThis is an index. Read a memory's file when its title is relevant to the task.\n\n"
+    )
+    parts = [header]
+    size = len(header.encode("utf-8"))
+    listed = 0
+    for target in ordered:
+        entry = target.entry
+        description = one_line(entry.description, 200)
+        line = (
+            f"- **{one_line(entry.title, 120)}**"
+            + (f": {description}" if description else "")
+            + f" ({HUB_DIR}/{entry.path})\n"
+        )
+        if size + len(line.encode("utf-8")) > RULES_MAX_BYTES:
+            break
+        parts.append(line)
+        size += len(line.encode("utf-8"))
+        listed += 1
+    rest = len(ordered) - listed
+    if rest > 0:
+        parts.append(f"\n_{rest} older memories are not listed here to keep this file short._\n")
+    return "".join(parts)
+
+
+def _render_rules_full(ordered: Sequence[Target]) -> str:
     parts = [RULES_HEADER]
-    size = len(RULES_HEADER.encode("utf-8"))
-    written = 0
     for target in ordered:
         entry = target.entry
         origin = AGENT_LABELS.get(entry.origin.agent, entry.origin.agent)
@@ -230,14 +269,7 @@ def _render_rules(targets: Sequence[Target]) -> str:
             f"{one_line(entry.description, 300)}\n\n"
             f"{target.body.strip()}\n\n_Learned by {origin}._\n"
         )
-        if size + len(section.encode("utf-8")) > RULES_MAX_BYTES:
-            break
         parts.append(section)
-        size += len(section.encode("utf-8"))
-        written += 1
-    rest = len(ordered) - written
-    if rest > 0:
-        parts.append(f"\n_{rest} older memories are not listed here to keep this file short._\n")
     return "".join(parts)
 
 
