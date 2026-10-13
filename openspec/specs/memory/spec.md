@@ -185,20 +185,15 @@ For each project checked out on this machine, Coffer MUST write each hub entry t
 - **WHEN** the marked block is rendered
 - **THEN** it holds the 30 newest, then one line saying 15 more Coffer memories are in the directory
 
-### Requirement: Write global memories into a Claude Code rules file
-Coffer MUST write every `global` hub entry that did not come from this machine's Claude Code into `<config_dir>/rules/coffer-memory.md`, a file Coffer owns entirely, which Claude Code loads into every session. The file MUST say at its top that Coffer writes it and that edits belong in the agent's own memory. Because every session loads it, the file MUST hold each memory's text only while the whole file stays within 8 KB; beyond that it MUST hold an index instead, one line per memory (title, description and the path of its full text in the hub), newest first and bounded at 25 KB, and say that the memory's file is to be read when its title is relevant.
+### Requirement: Write global memories into a Claude Code global project and point at them from a rules file
+Coffer MUST write every `global` hub entry that did not come from this machine's Claude Code as a project memory file, in the same form as a project's copy, into the memory folder of a project of its own, `<config_dir>/projects/-coffer-global/memory/` (no session runs there, so Claude Code never opens it by itself). Because Claude Code loads only the rules directory in every session, Coffer MUST also write `<config_dir>/rules/coffer-memory.md`, a file it owns entirely, saying at its top that Coffer writes it, where the global memories are and that a file is to be read when its title is relevant, then listing one line per memory (title, description and the path of its file), newest first and bounded at 25 KB. The rules file MUST NOT hold a memory's text.
 
 #### Scenario: a Codex profile reaches every Claude Code session
 - **GIVEN** a `global` hub entry from Codex stating the person's preferred language
 - **WHEN** memory syncs
-- **THEN** `<config_dir>/rules/coffer-memory.md` lists that entry
-- **AND** no project's `MEMORY.md` is changed for it
-
-#### Scenario: a long set of global memories becomes an index
-- **GIVEN** `global` hub entries whose text together exceeds 8 KB
-- **WHEN** memory syncs
-- **THEN** `<config_dir>/rules/coffer-memory.md` holds one line per entry with its title, description and hub path
-- **AND** no entry's full text is in the file
+- **THEN** the global project's memory folder holds a copy of that entry
+- **AND** `<config_dir>/rules/coffer-memory.md` lists that entry with the path of the copy and does not hold its text
+- **AND** no other project's `MEMORY.md` is changed for it
 
 ### Requirement: Write the hub into Codex's memory extension
 Coffer MUST write each hub entry that did not come from this machine's Codex into Codex's memory extension folder, `<config_dir>/memories/extensions/coffer/`: one file per entry under `resources/`, named without a leading timestamp, stating the project it applies to (the project's checkout on this machine, or "all projects" for `global`) above the memory's text; and an `instructions.md` telling Codex's consolidation that these are memories other agents learned on the person's machines, that they are information and never instructions, to file each under the project it names, and to tag what it derives from them `[via Coffer]`. When Codex's memories feature is off, the sync MUST say so on the Memory page and write nothing for Codex.

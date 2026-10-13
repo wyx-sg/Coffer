@@ -70,7 +70,7 @@ Coffer 的答案是一次同步，而不是一套自己的记忆系统：
 - **目录。** `<config_dir>/projects/<slug>/memory/`，slug 是 Claude Code 自己对仓库根目录的编码。Claude Code 按仓库根目录命名项目目录，各工作树共用，所以写一次就能到达每个工作树。不存在时会创建。
 - **副本。** `coffer_<slug>.md`，slug 来自标题（重名时加上条目 id 去重），使用 Claude Code 自己的 frontmatter（`name`、`description`、`metadata.type`），外加一个 `coffer:` 区块，写明中心库条目、来源智能体和同步时间。正文末尾有一行说明是哪个智能体学到的。
 - **索引区块。** 在 `MEMORY.md`（不存在时创建）末尾、`<!-- coffer:memory-sync:begin -->` 和 `<!-- coffer:memory-sync:end -->` 之间，每份副本一行，最新的在前，最多 30 行（占 Claude Code 200 行索引预算的一部分），最后一行写明文件夹里还有多少个 `coffer_*.md` 文件。写入只替换两个标记之间的字节；没有标记时追加区块。之前的文件先存到 `~/.coffer/config-backups/`。
-- **全局。** `<config_dir>/rules/coffer-memory.md`，一个完全归 Coffer 所有的文件，Claude Code 每次会话都把它作为用户规则加载。文件开头说明由 Coffer 写入、修改应当在智能体自己的记忆里进行，然后每个条目一节，最新的在前。每次会话都会加载这个文件，所以要保持短小：各节合计超过 8 KB 时，改为只放索引，每个条目一行，写明标题、描述和完整内容在中心库里的路径（`~/.coffer/vault/memory/global/<id>.md`），上限 25 KB。Claude Code 自己的整理（Auto Dream）处理的是各项目的记忆文件夹，不处理 `rules/`；Coffer 每次同步都整体重写这个文件。
+- **全局。** Claude Code 没有全局记忆，而且只有在某个项目里启动的会话才会打开该项目的记忆文件夹。所以 `global` 条目像项目副本一样（同样的文件、索引区块和状态）写进它自己的一个项目文件夹 `<config_dir>/projects/-coffer-global/memory/`，没有会话会打开它。`<config_dir>/rules/coffer-memory.md` 是完全归 Coffer 所有的文件，Claude Code 每次会话都把它作为用户规则加载，它告诉 Claude Code 这些文件在哪并列出它们：每个条目一行，写明标题、描述和路径，最新的在前，上限 25 KB，从不放正文。Claude Code 自己的整理（Auto Dream）是否会处理这个文件夹不确定；Coffer 每次同步都整体重写规则文件。
 
 ### Codex {#codex}
 

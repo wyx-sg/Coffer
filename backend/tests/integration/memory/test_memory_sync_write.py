@@ -73,26 +73,14 @@ async def test_a_codex_profile_reaches_every_claude_code_session(
     await a.sync()
 
     rules = (cc / "rules" / "coffer-memory.md").read_text(encoding="utf-8")
+    global_memory = cc / "projects" / "-coffer-global" / "memory"
     assert "Coffer writes this file" in rules
-    assert "Prefers replies in Chinese" in rules
+    # The rules file points at the memory; the text is in the global folder.
+    assert str(global_memory / "coffer_prefers-replies-in-chinese.md") in rules
+    assert "Prefers replies in Chinese" in next(global_memory.glob("coffer_*.md")).read_text(
+        encoding="utf-8"
+    )
     assert (memory / "MEMORY.md").read_text(encoding="utf-8") == "# index\n"
-
-
-@pytest.mark.acceptance(spec="memory", scenario="a long set of global memories becomes an index")
-async def test_a_long_set_of_global_memories_becomes_an_index(
-    tmp_path: pathlib.Path, payments: pathlib.Path
-) -> None:
-    a = Machine("machine-a", tmp_path / "a")
-    bullets = "".join(f"- Preference {i}: {'x' * 400}.\n" for i in range(30))
-    a.codex(memory_md="", summary_md=f"## User preferences\n{bullets}")
-    cc = a.claude()
-    cc_project(cc, payments, {"MEMORY.md": "# index\n"})
-    await a.sync()
-
-    rules = (cc / "rules" / "coffer-memory.md").read_text(encoding="utf-8")
-    assert "index" in rules
-    assert "vault/memory/global/" in rules
-    assert "x" * 400 not in rules
 
 
 @pytest.mark.acceptance(spec="memory", scenario="a Claude Code memory reaches Codex")
