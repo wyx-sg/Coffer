@@ -243,7 +243,7 @@ describe("CustomToolsPage", () => {
       within(screen.getByRole("tablist"))
         .getAllByRole("tab")
         .map((tab) => tab.textContent),
-    ).toEqual(["Overview", "Environments1", "Tools"]);
+    ).toEqual(["Overview", "Environments", "Tools"]);
     expect(screen.queryByRole("region", { name: "Tools" })).not.toBeInTheDocument();
     expect(within(definition).getByText("billing__<tool>")).toBeInTheDocument();
     // Where calls go is the environments', even with one: the definition names no base URL or header.
