@@ -8,6 +8,7 @@ import { Link, matchPath } from "react-router-dom";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { prefetchAllAgentSessions } from "@/lib/hooks/useAllAgentSessions";
+import { knowledgeLocation } from "@/lib/knowledge/lastLocation";
 import { isFeatureOn, useFeatureMap } from "@/lib/hooks/useFeatures";
 import { NAV_GROUPS, type NavEntry } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
@@ -29,9 +30,11 @@ function NavRow({ entry, collapsed, active }: RowProps) {
   // itself stays plain; the page's title carries the tag) — spec
   // experimental-features "Mark an experimental feature's sidebar entry".
   const experimental = entry.feature !== undefined;
+  // Knowledge returns to the collection and document last open there.
+  const to = entry.to === "/knowledge" ? knowledgeLocation() : entry.to;
   const link = (
     <Link
-      to={entry.to}
+      to={to}
       onPointerEnter={warm}
       onFocus={warm}
       aria-current={active ? "page" : undefined}

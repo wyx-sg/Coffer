@@ -23,7 +23,7 @@
 // synced with it) and New collection… (kept in Coffer, synced to the person's
 // other Macs, with history, tidied by their agent), so nobody has to guess
 // what lands in Coffer.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Navigate, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -42,6 +42,10 @@ import { getTidyHandoff } from "@/lib/api/knowledge";
 import { knowledgeKey } from "@/lib/api/queryKeys";
 import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
 import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
+import {
+  forgetKnowledgeLocation,
+  rememberKnowledgeLocation,
+} from "@/lib/knowledge/lastLocation";
 import { HISTORY_PARAM, legacyRedirect } from "@/lib/knowledge/routes";
 import { PAGE_BLEED, PAGE_BLEED_HEAD } from "@/components/shell/pageFrame";
 import { cn } from "@/lib/utils";
@@ -63,13 +67,23 @@ export function KnowledgePage() {
     },
   });
   const { uid, tab } = useParams<{ uid?: string; tab?: string }>();
-  const { search } = useLocation();
+  const { pathname, search } = useLocation();
   const [params] = useSearchParams();
   const file = params.get("file");
   // A file's history fills the whole area, so the tree makes way for it.
   const historyOpen = Boolean(file) && params.get(HISTORY_PARAM) === "1";
   const collections = useKnowledgeCollections();
   const [dialog, setDialog] = useState<KnowledgeDialog>(null);
+
+  // Remember where the person is, so the sidebar's Knowledge entry returns
+  // here; a collection that is gone is forgotten rather than returned to.
+  const loaded = !collections.isPending && !collections.error;
+  const known = !uid || (collections.data ?? []).some((c) => c.uid === uid);
+  useEffect(() => {
+    if (tab || !loaded) return;
+    if (known) rememberKnowledgeLocation(pathname, search);
+    else forgetKnowledgeLocation();
+  }, [tab, loaded, known, pathname, search]);
 
   // A file's pane has no tabs: the History tab's old address
   // (`/<uid>/history?file=`) opens its history, any other segment the

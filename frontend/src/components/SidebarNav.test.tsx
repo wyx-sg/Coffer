@@ -12,6 +12,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarNav } from "./SidebarNav";
+import { forgetKnowledgeLocation, rememberKnowledgeLocation } from "@/lib/knowledge/lastLocation";
 import { appRoutes } from "@/router";
 
 // The two experimental features (knowledge, memory) own two of the fourteen
@@ -329,4 +330,20 @@ describe("an experimental feature's entry", () => {
       }
     },
   );
+});
+
+describe("the Knowledge entry", () => {
+  afterEach(() => forgetKnowledgeLocation());
+
+  acceptance("knowledge", "the sidebar returns to the open document", () => {
+    features.mockReturnValue(ALL_ON);
+    rememberKnowledgeLocation("/knowledge/col-1", "?file=coffer%2Fpages%2Fa.md");
+    const open = renderNav("/agents");
+    expect(hrefs()).toContain("/knowledge/col-1?file=coffer%2Fpages%2Fa.md");
+    open.unmount();
+
+    forgetKnowledgeLocation();
+    renderNav("/agents");
+    expect(hrefs()).toContain("/knowledge");
+  });
 });

@@ -5,6 +5,9 @@ folder")."""
 
 from __future__ import annotations
 
+import asyncio
+from pathlib import Path
+
 import pytest
 
 from coffer.domain.vault.writers import (
@@ -88,6 +91,22 @@ def test_a_version_written_back_as_a_restore_is_a_new_commit(
     assert [c.version for c in repo.log()][1:] == before
 
 
+async def _touch_until(event: asyncio.Event, path: Path, timeout: float = 20.0) -> None:
+    """Write ``path`` again until ``event`` is set. The native watch registers
+    asynchronously, and on a loaded runner a fixed sleep does not guarantee it is
+    listening yet; one write made before then is lost and the test would time out."""
+    deadline = asyncio.get_running_loop().time() + timeout
+    n = 0
+    while not event.is_set():
+        n += 1
+        path.write_bytes(f"typed by hand {n}\n".encode())
+        try:
+            await asyncio.wait_for(event.wait(), timeout=1.0)
+        except TimeoutError:
+            if asyncio.get_running_loop().time() > deadline:
+                raise
+
+
 async def test_a_file_event_wakes_the_scanner_and_a_cancel_stops_the_watch(
     repo: VaultRepository, writer: VaultWriter
 ) -> None:
@@ -104,8 +123,7 @@ async def test_a_file_event_wakes_the_scanner_and_a_cancel_stops_the_watch(
         await asyncio.sleep(0.5)  # let the native watch start
         assert not poked.is_set()
         (repo.root / "knowledge").mkdir()
-        (repo.root / "knowledge" / "a.md").write_bytes(b"typed by hand\n")
-        await asyncio.wait_for(poked.wait(), timeout=5.0)
+        await _touch_until(poked, repo.root / "knowledge" / "a.md")
     finally:
         started = time.monotonic()
         watch.cancel()
@@ -131,8 +149,7 @@ async def test_a_file_event_under_a_subtree_calls_its_listener_only(
         await asyncio.sleep(1.0)
         assert not heard.is_set()
         (repo.root / "knowledge").mkdir()
-        (repo.root / "knowledge" / "a.md").write_bytes(b"typed by hand\n")
-        await asyncio.wait_for(heard.wait(), timeout=5.0)
+        await _touch_until(heard, repo.root / "knowledge" / "a.md")
     finally:
         watch.cancel()
         await asyncio.gather(watch, return_exceptions=True)
