@@ -19,7 +19,7 @@ import { useKindPageOpen } from "@/lib/hooks/useFeatures";
 import { kindMeta } from "@/lib/overview/kinds";
 import { formatShortTime } from "@/lib/overview/time";
 import { Section } from "@/components/Section";
-import { describeActivity } from "@/lib/activity/activityText";
+import { useActivitySentence } from "@/lib/hooks/useActivitySentence";
 import { actorLabel } from "@/lib/activity/recordText";
 
 // Four across one card, as the board lays them out; a few more are read so that
@@ -28,6 +28,7 @@ const LIMIT = 4;
 const FETCH = 12;
 
 export function RecentActivity() {
+  const describeEntry = useActivitySentence();
   const { t } = useTranslation();
   const audit = useAudit({ limit: FETCH });
   const pageOpen = useKindPageOpen();
@@ -73,7 +74,7 @@ export function RecentActivity() {
             const meta = kindMeta(entry.resource_kind);
             const KindIcon = meta.icon;
             const named = entry.resource_kind && entry.resource_name;
-            const verbPart = describeActivity(t, entry);
+            const verbPart = describeEntry(entry);
             const sentence = [named ? t(meta.labelKey) : "", entry.resource_name ?? "", verbPart]
               .filter(Boolean)
               .join(" ");

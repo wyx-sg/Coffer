@@ -21,7 +21,11 @@ type DaemonLogRecord = components["schemas"]["DaemonLogRecordOut"];
  * locale (guarded by `i18n/backend-keys.test.ts`) so a zh reader never sees a
  * raw `resource_enabled` on a row.
  */
-export function describeActivity(t: TFunction, entry: AuditEntry): string {
+export function describeActivity(
+  t: TFunction,
+  entry: AuditEntry,
+  secretLabels?: ReadonlyMap<string, string | null>,
+): string {
   const details = (entry.details ?? {}) as Record<string, unknown>;
   const resource = entry.resource_name ?? "";
   const text = (k: string) => (typeof details[k] === "string" ? (details[k] as string) : "");
@@ -34,7 +38,7 @@ export function describeActivity(t: TFunction, entry: AuditEntry): string {
     agent: text("agent") ? agentLabel(text("agent")) : t("audit.agentFallback"),
   };
   const plain = t(`audit.activity.${entry.event_type}`, base);
-  const variant = auditVariant(entry.event_type, details, { t, resource });
+  const variant = auditVariant(entry.event_type, details, { t, resource, secretLabels });
   if (!variant) return plain;
   return t(`audit.activity.${entry.event_type}_${variant.v}`, {
     ...base,

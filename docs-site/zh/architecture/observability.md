@@ -187,7 +187,7 @@ sequenceDiagram
 | 保险库同步 | `sync_run`、`sync_confirmed`、`sync_rejected`、`sync_rolled_back`、`sync_machine_removed`、`sync_plaintext_pushed`、`master_key_exported`、`master_key_imported` |
 | 提供商 | `provider_switched`、`provider_transcribe_default_set`、`provider_projection_refused`、`provider_projection_repaired` |
 
-没有任何密钥事件携带密钥值；每条只记录 ref、独立密钥的名字或目的地。
+没有任何密钥事件携带密钥值；每条只记录 ref、独立密钥的名字或目的地。点名某个密钥的记录还带有 `ref_label`，即写下该记录时密钥的名称，由审计服务从密钥的备注里补上（删除密钥和新建密钥的路由自己传入，因为那时备注已经没了或还没写）。活动页按密钥当前的名称显示它，没有则用 `ref_label`，再没有就显示为未命名的密钥；从不显示生成的 id。
 
 有些事件不再被记录：`agent_config_file_written` 和 `agent_config_file_deleted`，因为 Web 界面不再编辑智能体的配置文件；`knowledge_curated` 和 `provider_internal_default_set`；以及早先记忆层的 `memory_aggregated`、`memory_distilled`、`memory_delivery_installed`、`memory_delivery_removed`、`memory_delivery_fired`、`memory_note_edited` 和 `memory_note_deleted`。日志里已有的行在活动页面里仍保留它们的标签，所以依然能用平实的话读出来。`vault_file_restored` 会被记录：从历史标签或抽屉恢复一个版本是 Coffer 自己的写入。在磁盘上做的编辑，或智能体自己提交的恢复，是写明 `Coffer-Writer: disk` 或 `agent` 的保险库提交；保险库的 git 历史能回答是谁改了这个文件。
 

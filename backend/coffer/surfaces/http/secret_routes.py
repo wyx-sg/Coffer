@@ -118,7 +118,12 @@ async def set_secret(
     await audit.record(
         AuditEventType.SECRET_SET.value,
         actor=actor,
-        details={"ref": ref, "replaced": replaced},
+        details={
+            "ref": ref,
+            "replaced": replaced,
+            # A new secret's label is filed after this row, so it rides here.
+            **({"ref_label": body.label} if body.label else {}),
+        },
     )
     if body.label or body.description or body.created_for or minted:
         notes = get_secret_notes()
@@ -386,6 +391,8 @@ async def delete_secret(
         )
     # to_thread: the removal is file IO and, for a vault ref, a git commit
     # under the vault's write lock — nothing for the event loop.
+    notes = optional_secret_notes()
+    note = notes.get(ref) if notes is not None else None
     removed = await asyncio.to_thread(store.remove, ref)
     # 204 either way, but only a real removal is a lifecycle change worth an
     # audit row (spec secret "Delete a secret idempotently").
@@ -393,6 +400,7 @@ async def delete_secret(
         await audit.record(
             AuditEventType.SECRET_DELETED.value,
             actor=actor,
-            details={"ref": ref},
+            # Its notes went with it, so the name it had is taken from before.
+            details={"ref": ref, **({"ref_label": note.label} if note and note.label else {})},
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

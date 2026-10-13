@@ -5,7 +5,14 @@
 // audit row carries a value to begin with.
 import type { TFunction } from "i18next";
 
-import { type Builder, type Facts, type Variant, shownPath } from "./auditFacts";
+import {
+  type Builder,
+  type Ctx,
+  type Facts,
+  type Variant,
+  secretPhrase,
+  shownPath,
+} from "./auditFacts";
 
 /** Variant suffix per destination kind a `SecretDestination` names. */
 const DESTINATIONS: Record<string, string> = {
@@ -63,8 +70,15 @@ function cofferRun(f: Facts, secret: string): Variant {
   return { v: cwd ? "run" : "runProgram", p: { secret, program, cwd } };
 }
 
-const secretResolved: Builder = (f, { t }) => {
-  const secret = f.str("name") || f.secret();
+/** A row's secret: the `name` an older row carries, else the one its `ref` names. */
+function secretOf(f: Facts, x: Ctx): string {
+  const name = f.str("name");
+  return name ? x.t("audit.secretNamed", { name }) : secretPhrase(f, x);
+}
+
+const secretResolved: Builder = (f, x) => {
+  const { t } = x;
+  const secret = secretOf(f, x);
   if (!secret) return null;
   if (f.has("destination_kind")) return handOff(f, t, secret) ?? { v: "secret", p: { secret } };
   if (f.has("argv0")) return cofferRun(f, secret);
@@ -72,27 +86,27 @@ const secretResolved: Builder = (f, { t }) => {
 };
 
 /** The approval events: the secret a binding sends, or turning approval off. */
-const approval: Builder = (f) => {
+const approval: Builder = (f, x) => {
   const op = f.str("op");
   if (op === "disable_protection") return { v: "disable" };
-  const secret = f.secret();
+  const secret = secretPhrase(f, x);
   return op === "bind" && secret ? { v: "bind", p: { secret } } : null;
 };
 
 /** An event whose only object is the secret its `ref` names. */
-const namedSecret: Builder = (f) => {
-  const secret = f.secret();
+const namedSecret: Builder = (f, x) => {
+  const secret = secretPhrase(f, x);
   return secret ? { v: "secret", p: { secret } } : null;
 };
 
-const secretSet: Builder = (f) => {
-  const secret = f.secret();
+const secretSet: Builder = (f, x) => {
+  const secret = secretPhrase(f, x);
   if (!secret) return null;
   return { v: f.bool("replaced") ? "replaced" : "secret", p: { secret } };
 };
 
-const secretDeleted: Builder = (f) => {
-  const secret = f.secret();
+const secretDeleted: Builder = (f, x) => {
+  const secret = secretPhrase(f, x);
   if (!secret) return null;
   return {
     v: f.str("reason") === "released_with_resource" ? "released" : "secret",
@@ -101,8 +115,8 @@ const secretDeleted: Builder = (f) => {
 };
 
 /** A plaintext value moved into a secret: where it was found and the secret it became. */
-const secretImported: Builder = (f) => {
-  const secret = f.str("name") || f.secret();
+const secretImported: Builder = (f, x) => {
+  const secret = secretOf(f, x);
   if (!secret) return null;
   const key = f.str("key");
   const where = f.str("resource") || (f.str("path") ? shownPath(f.str("path")) : "");

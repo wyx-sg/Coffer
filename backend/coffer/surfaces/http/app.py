@@ -96,6 +96,7 @@ from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.secret_boundary_wiring import remember_destination_sources
 from coffer.surfaces.http.secret_composition import init_secret_store
 from coffer.surfaces.http.secret_index_wiring import wire_secret_index
+from coffer.surfaces.http.secret_notes_wiring import name_secret_refs
 from coffer.surfaces.http.session_conversation_wiring import wire_session_conversations
 from coffer.surfaces.http.setup_lifespan import guarded
 from coffer.surfaces.http.vault_composition import build_vault_stores
@@ -154,7 +155,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # ``AuditService.record`` is handed the ``Resource`` the event is about, so
     # the uid it stores is read off it, never looked back up by label.
-    audit = AuditService(SqlAlchemyAuditRepo(sm))
+    audit = AuditService(SqlAlchemyAuditRepo(sm), enrich=name_secret_refs)
     # The unified reconciler (ADR one-level-triggered-reconciler-compares-
     # parameters) and the event stream: built first, so every resource write
     # hints both, and so each kind below can register the targets it supplies.

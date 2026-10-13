@@ -1179,6 +1179,21 @@ cwd}`; never a value or the rest of a command line. A (ref, destination, slot)
 MUST be audited at most once a minute. The rows are read in Activity; no secrets
 route lists them.
 
+Every audit row of a secret event names the secret by its ref, and the daemon
+MUST also file the secret's label as `ref_label` when it has one at that moment
+(a delete takes it from before the secret's notes go, a new secret's from the
+request), so the row still names it once the secret is renamed or deleted.
+Activity MUST name a secret by what a person calls it, never by its minted id:
+by its label now when it still exists, else by `ref_label`, else, when nobody
+named it, as "an unnamed secret"; a ref from before ids were minted reads as
+its own name.
+
+#### Scenario: Activity names a secret by its label, not its id
+- **GIVEN** a secret labelled "Git token" that the sync push has used, and a second secret nobody labelled
+- **WHEN** Activity shows their uses
+- **THEN** the first reads "Handed secret “Git token” to the sync remote (access token)", the second reads "Handed an unnamed secret to …", and neither shows its 32-hex id
+- **AND** after the first is renamed the row reads by the new label, and after it is deleted by the label the row recorded
+
 #### Scenario: a server start and a coffer run each show as a use
 - **GIVEN** a standalone secret and a stored secret an MCP server resolves
 - **WHEN** the server's secret is resolved for its destination and `coffer run` resolves the standalone secret

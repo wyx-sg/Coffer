@@ -86,7 +86,11 @@ def test_a_label_and_description_change_nothing_that_cites_the_secret(d: Boundar
     assert got["config"]["transport"]["secret_refs"] == {"JIRA_TOKEN": ref}
     assert d.resolve_for(server) == {"JIRA_TOKEN": VALUE} and d.pending() == []
     entry = d.audit("secret_notes_updated")[0]
-    assert entry["details"] == {"ref": ref, "fields": ["label", "description"]}
+    assert entry["details"] == {
+        "ref": ref,
+        "fields": ["label", "description"],
+        "ref_label": "Jira PAT",
+    }
     # One field left out stays; an empty one is removed; a long one is refused.
     keep = d.client.put("/api/v1/secrets/notes", json={"ref": ref, "description": ""})
     assert keep.json()["label"] == "Jira PAT" and keep.json()["description"] is None

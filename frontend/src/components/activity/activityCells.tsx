@@ -9,7 +9,8 @@ import { KeyRound, PencilLine, ScrollText, Server, type LucideIcon } from "lucid
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { StatusWord } from "@/components/status/StatusWord";
 import type { StatusTone } from "@/lib/statusTone";
-import { describeActivity, describeDaemonRecord } from "@/lib/activity/activityText";
+import { describeDaemonRecord } from "@/lib/activity/activityText";
+import { useActivitySentence } from "@/lib/hooks/useActivitySentence";
 import {
   callServerLabel,
   daemonLevel,
@@ -97,6 +98,7 @@ export function CallTarget({
 
 /** One line saying what happened, for the Everything and Changes tabs. */
 export function EventCell({ t, record }: { t: TFunction; record: ActivityRecord }) {
+  const describeEntry = useActivitySentence();
   if (record.source === "call") {
     const outcome = callOutcome(t, record.call);
     return (
@@ -119,7 +121,7 @@ export function EventCell({ t, record }: { t: TFunction; record: ActivityRecord 
     const repeats = record.folded?.length ?? 0;
     return (
       <span className="flex min-w-0 items-baseline gap-1.5 text-sm text-text">
-        <span className="min-w-0 truncate">{describeActivity(t, record.entry)}</span>
+        <span className="min-w-0 truncate">{describeEntry(record.entry)}</span>
         {repeats > 0 ? (
           <span
             className="shrink-0 font-mono text-xs text-text-muted"

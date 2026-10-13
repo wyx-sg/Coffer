@@ -7,7 +7,6 @@
 import type { TFunction } from "i18next";
 
 import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
-import { secretNameOf } from "@/lib/secretValue";
 
 export class Facts {
   constructor(readonly raw: Record<string, unknown>) {}
@@ -43,13 +42,6 @@ export class Facts {
       ? new Facts(v as Record<string, unknown>)
       : null;
   }
-
-  /** The secret a `ref` field names: `secret/<name>`'s name, else the ref's last segment. */
-  secret(k = "ref"): string {
-    const ref = this.str(k);
-    if (!ref) return "";
-    return secretNameOf(ref) ?? ref.split("/").filter(Boolean).pop() ?? "";
-  }
 }
 
 /** What a builder chose: the variant key's suffix and the values it fills. */
@@ -63,6 +55,27 @@ export interface Ctx {
   t: TFunction;
   /** The row's `resource_name`, "" when it has none. */
   resource: string;
+  /** The secrets as they are named now, by ref; absent until the list loads. */
+  secretLabels?: ReadonlyMap<string, string | null>;
+}
+
+/**
+ * The secret a row's `ref` names, as a phrase of the sentence: by the name a
+ * person gave it — today's if the secret still exists, else the one the row
+ * recorded (`ref_label`) — and, when nobody named it, as an unnamed secret.
+ * The ref itself is a minted id and never reads.
+ */
+export function secretPhrase(f: Facts, { t, secretLabels }: Ctx, k = "ref"): string {
+  const ref = f.str(k);
+  if (!ref) return "";
+  const name = secretLabels?.get(ref) || f.str("ref_label") || legacyName(ref);
+  return name ? t("audit.secretNamed", { name }) : t("audit.secretUnnamed");
+}
+
+/** A ref from before ids were minted is its own name; a minted id (32 hex) is not one. */
+function legacyName(ref: string): string {
+  const last = ref.split("/").filter(Boolean).pop() ?? "";
+  return /^[0-9a-f]{32}$/.test(last) ? "" : last;
 }
 
 export type Builder = (f: Facts, x: Ctx) => Variant | null;

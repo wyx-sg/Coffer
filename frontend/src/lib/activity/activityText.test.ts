@@ -146,7 +146,7 @@ describe("describeActivity", () => {
         destination_name: "github",
         slot: "GITHUB_TOKEN",
       }),
-    ).toBe("Handed secret GITHUB_TOKEN to MCP server github (environment variable GITHUB_TOKEN)");
+    ).toBe("Handed secret “GITHUB_TOKEN” to MCP server github (environment variable GITHUB_TOKEN)");
     expect(
       coffer({
         ref: "secret/SENTRY",
@@ -154,7 +154,7 @@ describe("describeActivity", () => {
         destination_name: "sentry",
         slot: "Authorization",
       }),
-    ).toBe("Handed secret SENTRY to MCP server sentry (header Authorization)");
+    ).toBe("Handed secret “SENTRY” to MCP server sentry (header Authorization)");
     expect(
       coffer({
         ref: "secret/JIRA",
@@ -162,7 +162,7 @@ describe("describeActivity", () => {
         destination_name: "jira · prod",
         slot: "prod:X-Api-Key",
       }),
-    ).toBe("Handed secret JIRA to custom tool jira · prod (header X-Api-Key)");
+    ).toBe("Handed secret “JIRA” to custom tool jira · prod (header X-Api-Key)");
     expect(
       coffer({
         ref: "secret/OPENAI",
@@ -170,7 +170,7 @@ describe("describeActivity", () => {
         destination_name: "openai",
         slot: "key",
       }),
-    ).toBe("Handed secret OPENAI to model connection openai (API key)");
+    ).toBe("Handed secret “OPENAI” to model connection openai (API key)");
     // Never claims a coffer run happened when Coffer handed the value to a server.
     expect(
       coffer({ ref: "secret/X", destination_kind: "mcp_server", destination_name: "s", slot: "X" }),
@@ -189,7 +189,7 @@ describe("describeActivity", () => {
           },
         }),
       ),
-    ).toBe("把密钥 GITHUB_TOKEN 交给了 MCP 服务器 github（环境变量 GITHUB_TOKEN）");
+    ).toBe("把密钥“GITHUB_TOKEN”交给了 MCP 服务器 github（环境变量 GITHUB_TOKEN）");
   });
 
   test("a secret coffer run hands to a program names the program and its folder", () => {
@@ -197,7 +197,7 @@ describe("describeActivity", () => {
       describeActivity(t, makeEntry({ event_type: "secret_resolved", actor: "cli", details }));
     expect(
       run({ ref: "secret/OPENAI_KEY", name: "OPENAI_KEY", argv0: "python", cwd: "~/proj" }),
-    ).toBe("Handed secret OPENAI_KEY to coffer run: python, in ~/proj");
+    ).toBe("Handed secret “OPENAI_KEY” to coffer run: python, in ~/proj");
     expect(
       run({
         ref: "secret/OPENAI_KEY",
@@ -205,9 +205,9 @@ describe("describeActivity", () => {
         argv0: "/usr/bin/python3",
         cwd: "/Users/ann/proj",
       }),
-    ).toBe("Handed secret OPENAI_KEY to coffer run: python3, in ~/proj");
+    ).toBe("Handed secret “OPENAI_KEY” to coffer run: python3, in ~/proj");
     expect(run({ ref: "secret/OPENAI_KEY", argv0: "python" })).toBe(
-      "Handed secret OPENAI_KEY to coffer run: python",
+      "Handed secret “OPENAI_KEY” to coffer run: python",
     );
     const zh = i18next.getFixedT("zh") as TFunction;
     expect(
@@ -218,18 +218,46 @@ describe("describeActivity", () => {
           details: { ref: "secret/OPENAI_KEY", name: "OPENAI_KEY", argv0: "python", cwd: "~/proj" },
         }),
       ),
-    ).toBe("把密钥 OPENAI_KEY 交给了 coffer run：python，在 ~/proj");
+    ).toBe("把密钥“OPENAI_KEY”交给了 coffer run：python，在 ~/proj");
   });
 
   test("secret_set names the secret, and says when it replaced a value", () => {
     const set = (details: Record<string, unknown>) =>
       describeActivity(t, makeEntry({ event_type: "secret_set", details }));
     expect(set({ ref: "secret/SENTRY_TOKEN", replaced: true })).toBe(
-      "Stored secret SENTRY_TOKEN, replacing its value",
+      "Stored secret “SENTRY_TOKEN”, replacing its value",
     );
-    expect(set({ ref: "secret/SENTRY_TOKEN", replaced: false })).toBe("Stored secret SENTRY_TOKEN");
+    expect(set({ ref: "secret/SENTRY_TOKEN", replaced: false })).toBe(
+      "Stored secret “SENTRY_TOKEN”",
+    );
     // A ref outside `secret/` is named by its last segment.
-    expect(set({ ref: "mcp_server/github/GH_TOKEN" })).toBe("Stored secret GH_TOKEN");
+    expect(set({ ref: "mcp_server/github/GH_TOKEN" })).toBe("Stored secret “GH_TOKEN”");
+  });
+
+  test("a minted secret reads by its name, never by its id", () => {
+    const id = "fe55638667a74ca18a73e78cf67f5fe5";
+    const row = (details: Record<string, unknown>) =>
+      makeEntry({ event_type: "secret_resolved", actor: "coffer", details });
+    const sync = {
+      ref: `secret/${id}`,
+      destination_kind: "sync_remote",
+      destination_name: "sync",
+      slot: "token",
+    };
+    // Today's name wins, so a renamed secret reads by its new name.
+    const live = new Map([[`secret/${id}`, "Git token"]]);
+    expect(describeActivity(t, row({ ...sync, ref_label: "Old name" }), live)).toBe(
+      "Handed secret “Git token” to the sync remote (access token)",
+    );
+    // A deleted secret reads by the name the row recorded.
+    expect(describeActivity(t, row({ ...sync, ref_label: "Old name" }), new Map())).toBe(
+      "Handed secret “Old name” to the sync remote (access token)",
+    );
+    // Nobody named it: an unnamed secret, not its id.
+    expect(describeActivity(t, row(sync), new Map([[`secret/${id}`, null]]))).toBe(
+      "Handed an unnamed secret to the sync remote (access token)",
+    );
+    expect(describeActivity(t, row(sync))).not.toContain(id);
   });
 
   test("sync_run reads the round's outcome and file counts", () => {
@@ -282,7 +310,7 @@ describe("describeActivity", () => {
           details: { approval_id: "a", op: "bind", ref: "secret/STRIPE" },
         }),
       ),
-    ).toBe("Asked for approval to send secret STRIPE somewhere new");
+    ).toBe("Asked for approval to send secret “STRIPE” somewhere new");
     expect(
       describeActivity(
         t,
@@ -308,7 +336,7 @@ describe("describeActivity", () => {
           details: { ref: "secret/A", destination_kind: "mcp_server", slot: "A" },
         }),
       ),
-    ).toBe("Handed secret A over for use");
+    ).toBe("Handed secret “A” over for use");
     expect(describeActivity(t, makeEntry({ event_type: "secret_set" }))).toBe("Stored a secret");
     expect(
       describeActivity(t, makeEntry({ event_type: "sync_plaintext_pushed", details: {} })),
