@@ -225,6 +225,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`knowledge-sources-keep-their-images-and-originals-stay-on-this-mac`](knowledge-sources-keep-their-images-and-originals-stay-on-this-mac.md) | Knowledge Sources Keep Their Images; Originals Stay on This Mac |
 | [`linked-knowledge-folders-are-read-only-and-machine-local`](linked-knowledge-folders-are-read-only-and-machine-local.md) | A Linked Knowledge Folder Is Shared in Place, Read-Only to Coffer, and Recorded Machine-Local |
 | [`sync-memory-into-each-agents-own-memory`](sync-memory-into-each-agents-own-memory.md) | Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault |
+| [`global-memories-in-claude-code-live-in-a-global-project`](global-memories-in-claude-code-live-in-a-global-project.md) | Global Memories Live in a Claude Code Project of Their Own, Pointed at From a Rules File |
 | [`codex-memory-identity-is-content-with-rewrite-carry-over`](codex-memory-identity-is-content-with-rewrite-carry-over.md) | A Codex Memory Is Identified by Its Content, and a Rewrite Keeps the Identity |
 | [`memory-page-lists-memories-by-scope`](memory-page-lists-memories-by-scope.md) | The Memory Page Lists the Memories by Scope; the Sync Shows Only When It Needs the Person |
 

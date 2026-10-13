@@ -211,7 +211,8 @@ The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by 
 | `settings.json` | `apiKeyHelper` set to `<absolute path to coffer> proxy token --agent-uid <agent uid>` (for example `/Users/you/.coffer/bin/coffer …`; the bare `coffer` only when no CLI can be found), which prints the agent's local proxy token; `env.ANTHROPIC_BASE_URL` set to the model proxy's `http://127.0.0.1:<proxy port>/anthropic`; `127.0.0.1,localhost` appended to `env.NO_PROXY`; and the model keys (`model`, `env.ANTHROPIC_DEFAULT_<TIER>_MODEL`, `modelPicker`). No provider key is ever written. | Switching the agent to a model provider. See [Model providers](/guides/providers). |
 | `projects/<project>/memory/coffer_<slug>.md` | One copy per memory another agent or machine learned, in Claude Code's memory format plus a `coffer:` block naming its origin. Left alone once Claude Code edits or removes it. | Memory sync, for a project checked out on this machine. See [Memory](/guides/memory#what-coffer-writes-into-each-agent). |
 | `projects/<project>/memory/MEMORY.md` | One line per copy between `<!-- coffer:memory-sync:begin -->` and `<!-- coffer:memory-sync:end -->`, at most 30; the rest of the file is never changed. Created when missing. | Memory sync. |
-| `rules/coffer-memory.md` | Every `global` memory from your other agents and machines, in a file Coffer owns. | Memory sync. |
+| `projects/-coffer-global/memory/` | The `global` memories from your other agents and machines, in the same form as a project's copies (the folder of a project of its own that no session opens). | Memory sync. |
+| `rules/coffer-memory.md` | Where the `global` memories are, and one line per memory (title, description, path), in a file Coffer owns. | Memory sync. |
 | `skills/<name>` | A symlink to `~/.coffer/vault/skills/<name>` (a copy where symlinks are unavailable). | Delivering a skill to the agent. See [Skills](/guides/skills). |
 
 ### Codex

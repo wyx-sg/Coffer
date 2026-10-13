@@ -211,7 +211,8 @@ Coffer 只会为你要求的事写入已注册智能体自己的配置目录：�
 | `settings.json` | `apiKeyHelper` 设为 `<absolute path to coffer> proxy token --agent-uid <agent uid>`（例如 `/Users/you/.coffer/bin/coffer …`；只有找不到 CLI 时才用裸的 `coffer`），它会打印该智能体的本地代理令牌；`env.ANTHROPIC_BASE_URL` 设为模型代理的 `http://127.0.0.1:<proxy port>/anthropic`；把 `127.0.0.1,localhost` 追加到 `env.NO_PROXY`；以及模型相关的键（`model`、`env.ANTHROPIC_DEFAULT_<TIER>_MODEL`、`modelPicker`）。从不写入提供商的 API 密钥。 | 把智能体切换到某个模型提供商时。见[模型提供商](/zh/guides/providers)。 |
 | `projects/<project>/memory/coffer_<slug>.md` | 另一个智能体或另一台机器学到的每条记忆一份副本，使用 Claude Code 的记忆格式，外加一个写明来源的 `coffer:` 区块。一旦 Claude Code 修改或移除它，Coffer 就不再动它。 | 记忆同步，针对本机已检出的项目。见[记忆](/zh/guides/memory#what-coffer-writes-into-each-agent)。 |
 | `projects/<project>/memory/MEMORY.md` | 在 `<!-- coffer:memory-sync:begin -->` 和 `<!-- coffer:memory-sync:end -->` 之间每份副本一行，最多 30 行；文件的其余部分从不改动。不存在时创建。 | 记忆同步。 |
-| `rules/coffer-memory.md` | 来自你其他智能体和机器的每条 `global` 记忆，放在一个归 Coffer 所有的文件里。 | 记忆同步。 |
+| `projects/-coffer-global/memory/` | 来自你其他智能体和机器的 `global` 记忆，形式和项目副本相同（一个没有会话会打开的、自成一体的项目文件夹）。 | 记忆同步。 |
+| `rules/coffer-memory.md` | 说明 `global` 记忆在哪，并每条一行列出标题、描述和路径，放在一个归 Coffer 所有的文件里。 | 记忆同步。 |
 | `skills/<name>` | 指向 `~/.coffer/vault/skills/<name>` 的符号链接（不支持符号链接时为副本）。 | 向智能体投递技能时。见[技能](/zh/guides/skills)。 |
 
 ### Codex {#codex}

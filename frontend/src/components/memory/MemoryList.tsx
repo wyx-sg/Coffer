@@ -8,7 +8,7 @@
 // agent and machine it came from, and when it last changed. A copy state shows
 // on a row only when it is worth a look (waiting for the next sync, edited or
 // removed by the agent's own curation); a written copy says nothing. Search,
-// type and source filter the list (the table's own toolbar). A row opens the memory in the drawer.
+// and source filter the list (the table's own toolbar). A row opens the memory in the drawer.
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -61,7 +61,6 @@ export function MemoryList({
   source = null,
 }: Props) {
   const { t, i18n } = useTranslation();
-  const types = useMemo(() => [...new Set(entries.map((e) => e.type))].sort(), [entries]);
   const sources = useMemo(
     () =>
       sortAgents([...new Set(entries.map((e) => e.origin_agent))].map((type) => ({ type }))).map(
@@ -151,12 +150,6 @@ export function MemoryList({
         }}
         initialFilters={source ? { source } : undefined}
         filters={[
-          {
-            key: "type",
-            label: t("memory.entries.filters.type"),
-            options: types.map((v) => ({ value: v, label: v })),
-            accessor: (e) => e.type,
-          },
           {
             key: "source",
             label: t("memory.entries.filters.source"),

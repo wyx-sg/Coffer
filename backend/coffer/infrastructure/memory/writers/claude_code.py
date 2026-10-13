@@ -12,8 +12,11 @@ rules file").
   directory's ``MEMORY.md``, newest first, at most :data:`BLOCK_CAP` lines and
   then one line naming the rest. Only the bytes between the markers change;
   the file is backed up before each change.
-- **Global memories** go to ``<config_dir>/rules/coffer-memory.md``, a file
-  Coffer owns, which Claude Code loads in every session.
+- **Global memories** are written the same way into a project folder of their
+  own, :data:`GLOBAL_ROOT`'s, which no session opens by itself; so
+  ``<config_dir>/rules/coffer-memory.md``, a file Coffer owns that Claude Code
+  loads in every session, says where they are and indexes them. The file never
+  holds their text.
 """
 
 from __future__ import annotations
@@ -42,14 +45,16 @@ BLOCK_BEGIN = "<!-- coffer:memory-sync:begin -->"
 BLOCK_END = "<!-- coffer:memory-sync:end -->"
 #: Lines the block lists before naming the rest (of Claude Code's 200).
 BLOCK_CAP = 30
-#: The rules file's size bound; the newest memories first.
+#: The pseudo project global memories are filed under: Claude Code names a
+#: project's memory folder after its root, and no session runs here.
+GLOBAL_ROOT = "/coffer-global"
+#: The rules file's index size bound; the newest memories first.
 RULES_MAX_BYTES = 25 * 1024
 
 RULES_HEADER = (
     "# Memories from your other agents\n\n"
-    "Coffer writes this file from what your other coding agents learned about you "
-    "on your machines. Do not edit it: change the memory in the agent that wrote "
-    "it, and Coffer brings the change here.\n"
+    "Coffer writes this file. Do not edit it: change the memory in the agent that "
+    "wrote it, and Coffer brings the change here.\n"
 )
 
 
@@ -105,11 +110,10 @@ class ClaudeCodeMemoryWriter:
         return WriterStatus(STATUS_OK, config_dir)
 
     def wants(self, target: Target) -> bool:
-        return target.root is not None
+        return True
 
     def path_for(self, config_dir: str, target: Target, taken: set[str]) -> str:
-        assert target.root is not None
-        folder = memory_dir(config_dir, target.root)
+        folder = memory_dir(config_dir, target.root or GLOBAL_ROOT)
         slug = title_slug(target.entry.title)
         for name in (
             f"{COPY_PREFIX}{slug}.md",
@@ -165,8 +169,10 @@ class ClaudeCodeMemoryWriter:
             if new != current:
                 out.append(AuxWrite(str(index), new or None, backup=bool(current)))
         rules = rules_path(config_dir)
-        if global_targets:
-            out.append(AuxWrite(str(rules), _render_rules(global_targets)))
+        folder = memory_dir(config_dir, GLOBAL_ROOT)
+        live_global = by_dir.get(folder, [])
+        if live_global:
+            out.append(AuxWrite(str(rules), _render_rules(folder, live_global, targets)))
         elif rules.exists():
             out.append(AuxWrite(str(rules), None))
         return out
@@ -217,25 +223,40 @@ def _index_lines(
     return lines
 
 
-def _render_rules(targets: Sequence[Target]) -> str:
-    ordered = sorted(targets, key=lambda t: (t.entry.updated_at, t.entry.id), reverse=True)
-    parts = [RULES_HEADER]
-    size = len(RULES_HEADER.encode("utf-8"))
-    written = 0
-    for target in ordered:
+def _render_rules(
+    folder: pathlib.Path,
+    live: Sequence[tuple[str, CopyRecord]],
+    targets: Mapping[str, Target],
+) -> str:
+    """Where the global memories are, and one line per memory pointing at its
+    file. Every session loads this, so it holds no memory text."""
+    rows = sorted(
+        ((targets[rec.entry], path) for path, rec in live),
+        key=lambda row: (row[0].entry.updated_at, row[1]),
+        reverse=True,
+    )
+    header = (
+        RULES_HEADER
+        + f"\nThe memories below are about the person, or were learned outside any project. "
+        f"Their files are in `{folder}`; read one when its title is relevant to the task.\n\n"
+    )
+    parts = [header]
+    size = len(header.encode("utf-8"))
+    listed = 0
+    for target, path in rows:
         entry = target.entry
-        origin = AGENT_LABELS.get(entry.origin.agent, entry.origin.agent)
-        section = (
-            f"\n## {one_line(entry.title, 120)}\n\n"
-            f"{one_line(entry.description, 300)}\n\n"
-            f"{target.body.strip()}\n\n_Learned by {origin}._\n"
+        description = one_line(entry.description, 200)
+        line = (
+            f"- **{one_line(entry.title, 120)}**"
+            + (f": {description}" if description else "")
+            + f" ({path})\n"
         )
-        if size + len(section.encode("utf-8")) > RULES_MAX_BYTES:
+        if size + len(line.encode("utf-8")) > RULES_MAX_BYTES:
             break
-        parts.append(section)
-        size += len(section.encode("utf-8"))
-        written += 1
-    rest = len(ordered) - written
+        parts.append(line)
+        size += len(line.encode("utf-8"))
+        listed += 1
+    rest = len(rows) - listed
     if rest > 0:
         parts.append(f"\n_{rest} older memories are not listed here to keep this file short._\n")
     return "".join(parts)
