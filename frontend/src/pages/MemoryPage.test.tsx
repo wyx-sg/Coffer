@@ -47,7 +47,7 @@ function agent(type: string, over: Partial<SyncAgent> = {}): SyncAgent {
     agent: type === "codex" ? "codex" : "claude-code",
     agent_type: type,
     copies: { written: 0 },
-    curation: { memory: "on", curation: "on" },
+    curation: { memory: "on", curation: "on", source: "", last_curated_at: "" },
     writer: { state: "ok", reason: "", path: "" },
     ...over,
   };
@@ -369,7 +369,7 @@ describe("MemoryPage — what needs the person", () => {
         agents: [
           agent("claude_code"),
           agent("codex", {
-            curation: { memory: "off", curation: "off" },
+            curation: { memory: "off", curation: "off", source: "", last_curated_at: "" },
             writer: { state: "off", reason: "", path: "" },
           }),
         ],

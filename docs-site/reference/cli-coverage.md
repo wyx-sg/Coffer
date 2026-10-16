@@ -240,7 +240,8 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | UI operation | Route | Command | Acceptance |
 | --- | --- | --- | --- |
 | Memory · Codex imports Claude Code's memories itself | `PUT /memory/sync/codex-import` | `coffer memory codex-import` | `test_cli_parity.py` |
-| Memory · Curate now | `POST /memory/sync/curate` | `coffer memory curate` | `test_cli_parity.py` |
+| Memory · Curate now | `POST /memory/sync/curation/handoff` | `coffer memory curate` | `test_cli_parity.py` |
+| Memory · agent · Memory · Turn on (Auto Dream) | `POST /memory/sync/curation/enable` | `coffer memory curation-enable` | `test_cli_parity.py` |
 | Memory · a project's memories | `GET /memory/sync/entries` | `coffer memory entries` | `test_cli_parity.py` |
 | Memory · preview · Cancel | `POST /memory/sync/preview/cancel` | `coffer memory preview-cancel` | `test_cli_parity.py` |
 | Memory · preview · Write | `POST /memory/sync/preview/write` | `coffer memory preview-write` | `test_cli_parity.py` |

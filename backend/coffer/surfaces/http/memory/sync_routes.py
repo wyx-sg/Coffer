@@ -5,7 +5,7 @@ The sync's state, **Sync now**, the pending preview's **Write** and
 **Cancel**, **Undo sync…**, the person's answer to "Codex imports Claude
 Code's memories itself", the hub's memories for one project with where each
 was written here, one memory's text with the file each agent holds it in,
-and **Curate now**.
+**Curate now**, and **Turn on** for an agent's own curation.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from coffer.application.memory.sync_view import MemorySyncView, SyncState
 from coffer.domain.errors import ResourceNotFound
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor
+from coffer.surfaces.http.handoff_schemas import HandoffOut
 from coffer.surfaces.http.memory.sync_dependencies import get_sync_service, get_sync_view
 
 router = APIRouter(
@@ -41,6 +42,11 @@ class CurationStateOut(BaseModel):
     memory: str
     #: ``on`` / ``off`` / ``unknown``: the agent's own curation.
     curation: str
+    #: ``setting`` (the agent's own setting says so), ``default`` (the
+    #: vendor's default for the account), or ``""`` when unknown.
+    source: str = ""
+    #: When the agent's curation last ran on this machine, ``""`` if never seen.
+    last_curated_at: str = ""
 
 
 class SyncAgentOut(BaseModel):
@@ -136,8 +142,16 @@ class CurateIn(BaseModel):
     agent_type: str
 
 
-class CurateOut(BaseModel):
-    started: bool
+class CurationHandoffOut(BaseModel):
+    """**Curate now**: the prompt the page starts the agent with in a terminal."""
+
+    handoff: HandoffOut
+
+
+class CurationEnableOut(BaseModel):
+    #: Whether a setting was written (``false`` when it was already on, or the
+    #: agent has no switch for it).
+    changed: bool
 
 
 def _report(report: SyncReport) -> MemorySyncReportOut:
@@ -156,7 +170,12 @@ def _state(state: SyncState) -> MemorySyncStateOut:
                 agent=a.agent,
                 agent_type=a.agent_type,
                 writer=WriterStatusOut(**a.writer),
-                curation=CurationStateOut(memory=a.curation.memory, curation=a.curation.curation),
+                curation=CurationStateOut(
+                    memory=a.curation.memory,
+                    curation=a.curation.curation,
+                    source=a.curation.source,
+                    last_curated_at=a.curation.last_curated_at,
+                ),
                 copies=a.copies,
             )
             for a in state.agents
@@ -280,15 +299,30 @@ async def get_entry(
     )
 
 
-@router.post("/curate", response_model=CurateOut)
-async def curate_now(
+@router.post("/curation/handoff", response_model=CurationHandoffOut)
+async def curation_handoff(
     body: CurateIn,
     view: MemorySyncView = Depends(get_sync_view),  # noqa: B008
     actor: str = Depends(get_actor),
-) -> CurateOut:
-    """**Curate now**: start the agent headless with a prompt to consolidate
-    its own memory."""
-    return CurateOut(started=await view.curate(body.agent_type, actor))
+) -> CurationHandoffOut:
+    """**Curate now**: the prompt that asks the agent to consolidate its memory
+    in a terminal the person watches. Claude Code only: Codex consolidates
+    whenever its memories are on."""
+    prompt = await view.curation_handoff(body.agent_type, actor)
+    if prompt is None:
+        raise ResourceNotFound(f"a curation hand-off for {body.agent_type}")
+    return CurationHandoffOut(handoff=HandoffOut(prompt=prompt))
+
+
+@router.post("/curation/enable", response_model=CurationEnableOut)
+async def enable_curation(
+    body: CurateIn,
+    view: MemorySyncView = Depends(get_sync_view),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> CurationEnableOut:
+    """**Turn on** an agent's own curation (Claude Code's Auto Dream) in its
+    settings, backed up first."""
+    return CurationEnableOut(changed=await view.enable_curation(body.agent_type, actor))
 
 
 __all__ = ["router"]

@@ -33,4 +33,5 @@ export type HubEntryList = Schemas["HubEntryListOut"];
 export type HubEntryDetail = Schemas["HubEntryDetailOut"];
 export type EntryCopy = Schemas["EntryCopyOut"];
 
-export type CurateResult = Schemas["CurateOut"];
+export type CurationHandoff = Schemas["CurationHandoffOut"];
+export type CurationEnableResult = Schemas["CurationEnableOut"];

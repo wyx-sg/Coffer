@@ -129,9 +129,9 @@ flowchart TD
 
 ## 整理留给智能体 {#curation-stays-with-the-agents}
 
-每个智能体的记忆标签页从智能体自己的配置读取它的状态，从不读未公开的内部数据库：Claude Code 的自动记忆（`settings.json` 里的 `autoMemoryEnabled`，缺省即开启）；Codex 的记忆功能（`config.toml` 里的 `[features] memories`），记忆开启时它的整合就会运行。Auto Dream 目前还没有公开的设置项，所以在自动记忆开启时显示为未知，并提示去 Claude Code 的 `/memory` 里查看。Coffer 读不到的状态显示为未知。
+每个智能体的记忆标签页从智能体自己的配置读取它的状态，从不读未公开的内部数据库：Claude Code 的自动记忆（`settings.json` 里的 `autoMemoryEnabled`，缺省即开启）；Codex 的记忆功能（`config.toml` 里的 `[features] memories`），记忆开启时它的整合就会运行。Auto Dream 没有公开的设置项：Coffer 读取 `settings.json` 里的 `autoDreamEnabled`，缺省时读取 Claude Code 缓存在 `~/.claude.json` 里的账号默认值，并说明是哪一个决定的；Claude Code 各项目记忆文件夹里最新的 `.consolidate-lock` 说明它上次运行的时间。Coffer 读不到的状态显示为未知。**开启**在你确认后只往 `settings.json` 写入 `"autoDreamEnabled": true`，并留下备份，记录 `memory_curation_enabled`；Coffer 从不擅自改这个设置（[ADR](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/curate-claude-memory-in-the-open.md)）。
 
-**立即整理**会像 Coffer 的移交那样以无界面方式启动智能体，在你的主目录里，给它一个让它整合自己记忆文件的提示（合并重复、丢掉被推翻或过时的内容、保持索引简短、不改其他东西），并记录 `memory_curation_requested`。因此整理按智能体自己的节奏进行：一个很少使用的项目，在智能体下次整理之前，可能同时放着一份副本和智能体自己对同一教训的版本。Coffer 的正确性不依赖整理，因为每份副本本身就是一个有效的记忆文件。
+Claude Code 的**立即整理**是一次移交：Coffer 在你的终端里打开 Claude Code，给它一个提示，列出 Coffer 在这台机器上写入过的记忆文件夹，请它逐个文件夹整合（先给计划，合并重复并把 Coffer 的副本并入，丢掉被推翻或过时的内容，使用绝对日期，不动 Coffer 的索引标记和规则文件，不改其他东西，报告前后条数），并记录 `memory_curation_requested`。你能看到每一步，并按 Claude Code 自己的权限批准编辑。Codex 没有这个按钮：它的整合会自己运行。因此整理按智能体自己的节奏进行：一个很少使用的项目，在智能体下次整理之前，可能同时放着一份副本和智能体自己对同一教训的版本。Coffer 的正确性不依赖整理，因为每份副本本身就是一个有效的记忆文件。
 
 ## 撤销 {#undo}
 
@@ -143,7 +143,8 @@ flowchart TD
 | --- | --- |
 | `memory_synced` | 一次同步（或预览的**写入**）有了改动；列出发布、更新和删除的中心库条目，按智能体和路径列出写入、更新和移除的副本，扣下的记忆和失败的来源 |
 | `memory_sync_undone` | 运行了**撤销同步** |
-| `memory_curation_requested` | **立即整理**启动了一个智能体 |
+| `memory_curation_requested` | **立即整理**把整理移交给了 Claude Code |
+| `memory_curation_enabled` | **开启**往 Claude Code 的设置里加了 `autoDreamEnabled` |
 | `memory_hook_removed` | 升级时从一个智能体中移除了已停用的 `coffer-memory` Hook |
 
 智能体自己对记忆的修改不是 Coffer 的行为，不审计。

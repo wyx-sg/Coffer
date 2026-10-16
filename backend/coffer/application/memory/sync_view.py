@@ -3,7 +3,8 @@
 own curation and ask it to curate now").
 
 Read-only views over the hub, the ledger and the agents' own settings, plus
-the one action that asks an agent to curate its own memory.
+the two actions on an agent's own curation: ask it to curate now, and turn it
+on when the person asks.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import pathlib
 from collections import Counter, defaultdict
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -19,12 +20,18 @@ from coffer.application.memory.sync_report import preview_summary
 from coffer.application.memory.sync_service import AuditPort, MemorySyncService
 from coffer.application.memory.sync_write import LocalAgent
 from coffer.domain.audit import AuditEventType
+from coffer.domain.handoff import Handoff, render_handoff
 from coffer.domain.memory.hub import CLAUDE_CODE, CODEX, HubEntry, project_folder
 from coffer.domain.memory.portable import from_portable
 from coffer.domain.memory.sync_plan import STATE_WRITTEN
 from coffer.infrastructure.memory import checkouts as checkout_map
-from coffer.infrastructure.memory.curation import CurationState, curation_state
-from coffer.infrastructure.memory.writers.claude_code import rules_path
+from coffer.infrastructure.memory.curation import CurationState, curation_state, enable_curation
+from coffer.infrastructure.memory.writers.claude_code import (
+    BLOCK_BEGIN,
+    BLOCK_END,
+    COPY_PREFIX,
+    rules_path,
+)
 
 #: A copy's state on the page, per local agent.
 COPY_ORIGIN = "origin"
@@ -32,8 +39,6 @@ COPY_HELD_BACK = "held_back"
 COPY_DEFERRED = "deferred"
 COPY_RULES = "rules"
 COPY_PENDING = "pending"
-
-Launch = Callable[[str, str, str], Awaitable[bool]]
 
 
 @dataclass(frozen=True)
@@ -103,13 +108,11 @@ class MemorySyncView:
         machine: Callable[[], str],
         home: Callable[[], str],
         audit: AuditPort,
-        launch: Launch,
     ) -> None:
         self._svc = service
         self._machine = machine
         self._home = home
         self._audit = audit
-        self._launch = launch
 
     async def _checkouts(self, agents: list[LocalAgent]) -> dict[str, str]:
         # Walks each agent's projects tree and probes every repository: blocking
@@ -237,19 +240,79 @@ class MemorySyncView:
         body = from_portable(entry.body, repo_root=here.get(entry.project), home=self._home())
         return EntryDetail(entry=entry, body=body, copies=copies)
 
-    async def curate(self, agent_type: str, actor: str) -> bool:
-        """Start the agent headless with the curation prompt ("Curate now")."""
+    async def curation_handoff(self, agent_type: str, actor: str) -> str | None:
+        """**Curate now**: the prompt that asks the agent, in a terminal the
+        person watches, to consolidate the memory folders Coffer wrote copies
+        into; ``None`` for an agent whose own curation needs no asking (Codex
+        consolidates whenever its memories are on)."""
+        if agent_type != CLAUDE_CODE:
+            return None
+        agents = [a for a in await self._svc.local_agents() if a.agent_type == agent_type]
+        if not agents:
+            return None
+        local = agents[0]
+        ledger = await asyncio.to_thread(self._svc.ledger.load)
+        folders = sorted(
+            {
+                str(pathlib.Path(path).parent)
+                for path, rec in ledger.agent_copies(local.key).items()
+                if rec.state == STATE_WRITTEN
+            }
+        )
+        await self._audit.record(
+            AuditEventType.MEMORY_CURATION_REQUESTED.value,
+            actor=actor,
+            details={"agent": local.agent, "agent_type": local.agent_type, "folders": len(folders)},
+        )
+        return claude_curation_prompt(folders, str(rules_path(local.config_dir)))
+
+    async def enable_curation(self, agent_type: str, actor: str) -> bool:
+        """**Turn on** the agent's own curation in its settings (Claude Code's
+        Auto Dream), backed up first; answer whether a setting was written."""
         agents = [a for a in await self._svc.local_agents() if a.agent_type == agent_type]
         if not agents:
             return False
         local = agents[0]
-        started = await self._launch(local.agent_type, local.config_dir, self._home())
-        await self._audit.record(
-            AuditEventType.MEMORY_CURATION_REQUESTED.value,
-            actor=actor,
-            details={"agent": local.agent, "agent_type": local.agent_type, "started": started},
+        changed = await asyncio.to_thread(enable_curation, local.agent_type, local.config_dir)
+        if changed:
+            await self._audit.record(
+                AuditEventType.MEMORY_CURATION_ENABLED.value,
+                actor=actor,
+                details={"agent": local.agent, "agent_type": local.agent_type},
+            )
+        return changed
+
+
+def claude_curation_prompt(folders: list[str], rules: str) -> str:
+    """The hand-off that asks Claude Code to curate its memory the way Auto
+    Dream would, folder by folder, with the person watching."""
+    listed = folders or ["(none yet: Coffer has written no copies on this machine)"]
+    return render_handoff(
+        Handoff(
+            task=(
+                "Please consolidate your auto-memory folders below, the way your own "
+                "background memory consolidation (Auto Dream) would."
+            ),
+            facts=(
+                *(f"Memory folder: {folder}" for folder in listed),
+                f"Files named {COPY_PREFIX}*.md were copied in by Coffer from my other "
+                "agents; they are memories like your own.",
+                f"Between {BLOCK_BEGIN} and {BLOCK_END} in each MEMORY.md, and all of "
+                f"{rules}, is Coffer's index: Coffer rewrites it on every sync.",
+            ),
+            steps=(
+                "Work one folder at a time: read its MEMORY.md and memory files, then tell "
+                "me what you plan to merge, rewrite or delete before you change anything.",
+                "Merge duplicates (a Coffer copy that says what one of your own memories "
+                "says can be folded into yours and the copy deleted), drop what is "
+                "contradicted or stale, and turn relative dates into absolute ones.",
+                "Keep the part of MEMORY.md outside Coffer's markers short, and leave "
+                "Coffer's markers, what is between them and the rules file as they are.",
+                "Change nothing outside these folders. At the end, list each folder with "
+                "how many memory files it had before and after.",
+            ),
         )
-        return started
+    )
 
 
 def _copy_state(

@@ -5,42 +5,46 @@ Read from the agents' own settings files, never from their internal
 databases:
 
 - Claude Code's auto memory: ``autoMemoryEnabled`` in ``settings.json``,
-  absent meaning on. Auto Dream has no documented setting yet, so its state
-  reads ``unknown`` with a hint to check ``/memory``.
+  absent meaning on. Auto Dream (its background consolidation) is not in
+  Claude Code's documentation: ``autoDreamEnabled`` in ``settings.json``
+  overrides a server default that Claude Code caches in its ``.claude.json``
+  (``cachedGrowthBookFeatures.tengu_onyx_plover.enabled``). Either is read;
+  neither present reads ``unknown``. A run leaves ``.consolidate-lock`` in
+  the project's memory folder, whose newest time is when it last curated.
+  **Turn on** writes ``autoDreamEnabled: true`` into ``settings.json``, backed
+  up first, only when the person asks (ADR
+  curate-claude-memory-in-the-open).
 - Codex's memories: ``[features] memories`` in ``config.toml``; Codex's
   consolidation runs whenever memories are on.
 
-**Curate now** starts the agent without a terminal in the person's home
-directory with a prompt asking it to consolidate its memory, and does not
-wait for it: the agent's own curation is its business, and its result is the
-agent's memory files.
+**Curate now** is a hand-off (``application.memory.sync_view``): the
+person watches the agent consolidate in a terminal.
 """
 
 from __future__ import annotations
 
-import asyncio
 import json
-import logging
-import os
 import pathlib
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from coffer.domain.memory.hub import CLAUDE_CODE, CODEX
+from coffer.infrastructure.memory import native_files
 from coffer.infrastructure.memory.writers.codex import memories_enabled
-from coffer.infrastructure.platform.user_path import which_on_user_path
-
-logger = logging.getLogger(__name__)
 
 ON = "on"
 OFF = "off"
 UNKNOWN = "unknown"
 
-CURATE_PROMPT = (
-    "Consolidate your memory files now: merge duplicates, drop what is "
-    "contradicted or stale, and keep your index short. Change nothing else."
-)
 
-_BINARY = {CLAUDE_CODE: "claude", CODEX: "codex"}
+#: Where a curation state came from: the agent's own setting, or the
+#: default its vendor sets for the account.
+SOURCE_SETTING = "setting"
+SOURCE_DEFAULT = "default"
+
+_AUTO_DREAM_KEY = "autoDreamEnabled"
+_AUTO_DREAM_FLAG = "tengu_onyx_plover"
+_LOCK_NAME = ".consolidate-lock"
 
 
 @dataclass(frozen=True)
@@ -49,12 +53,24 @@ class CurationState:
 
     memory: str
     curation: str
+    #: :data:`SOURCE_SETTING` or :data:`SOURCE_DEFAULT`; ``""`` when unknown.
+    source: str = ""
+    #: When the agent's curation last ran here (ISO 8601), ``""`` if never seen.
+    last_curated_at: str = ""
 
 
 def curation_state(agent_type: str, config_dir: str) -> CurationState:
     if agent_type == CLAUDE_CODE:
         memory = _claude_auto_memory(config_dir)
-        return CurationState(memory=memory, curation=UNKNOWN if memory == ON else OFF)
+        if memory != ON:
+            return CurationState(memory=memory, curation=OFF)
+        curation, source = _claude_auto_dream(config_dir)
+        return CurationState(
+            memory=memory,
+            curation=curation,
+            source=source,
+            last_curated_at=_claude_last_curated(config_dir),
+        )
     if agent_type == CODEX:
         enabled = memories_enabled(config_dir)
         state = UNKNOWN if enabled is None else (ON if enabled else OFF)
@@ -75,46 +91,82 @@ def _claude_auto_memory(config_dir: str) -> str:
     return OFF if data.get("autoMemoryEnabled") is False else ON
 
 
-def curate_command(agent_type: str, binary: str) -> list[str]:
-    if agent_type == CLAUDE_CODE:
-        return [binary, "-p", CURATE_PROMPT]
-    return [binary, "exec", "--skip-git-repo-check", CURATE_PROMPT]
-
-
-async def launch_curation(agent_type: str, config_dir: str, home: str) -> bool:
-    """Start the agent headless in ``home`` with the curation prompt; answer
-    whether it started. The process is not waited for."""
-    binary = which_on_user_path(_BINARY.get(agent_type, ""))
-    if binary is None:
-        return False
-    env = dict(os.environ)
-    if agent_type == CLAUDE_CODE:
-        env["CLAUDE_CONFIG_DIR"] = config_dir
-    elif agent_type == CODEX:
-        env["CODEX_HOME"] = config_dir
+def _read_json(path: pathlib.Path) -> dict[str, object] | None:
     try:
-        await asyncio.create_subprocess_exec(
-            *curate_command(agent_type, binary),
-            cwd=home,
-            env=env,
-            stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-            start_new_session=True,
-        )
-    except OSError:
-        logger.warning("memory.curation.launch_failed agent=%s", agent_type, exc_info=True)
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _claude_global_config(config_dir: str) -> pathlib.Path:
+    """Claude Code's ``.claude.json``: inside a ``CLAUDE_CONFIG_DIR``, or
+    beside the default ``~/.claude``."""
+    folder = pathlib.Path(config_dir)
+    inside = folder / ".claude.json"
+    if inside.is_file() or folder.name != ".claude":
+        return inside
+    return folder.parent / ".claude.json"
+
+
+def _claude_auto_dream(config_dir: str) -> tuple[str, str]:
+    settings = _read_json(pathlib.Path(config_dir) / "settings.json") or {}
+    value = settings.get(_AUTO_DREAM_KEY)
+    if isinstance(value, bool):
+        return (ON if value else OFF), SOURCE_SETTING
+    cached = _read_json(_claude_global_config(config_dir)) or {}
+    features = cached.get("cachedGrowthBookFeatures")
+    flag = features.get(_AUTO_DREAM_FLAG) if isinstance(features, dict) else None
+    enabled = flag.get("enabled") if isinstance(flag, dict) else None
+    if isinstance(enabled, bool):
+        return (ON if enabled else OFF), SOURCE_DEFAULT
+    return UNKNOWN, ""
+
+
+def _claude_last_curated(config_dir: str) -> str:
+    newest = 0.0
+    for lock in (pathlib.Path(config_dir) / "projects").glob(f"*/memory/{_LOCK_NAME}"):
+        try:
+            newest = max(newest, lock.stat().st_mtime)
+        except OSError:
+            continue
+    if not newest:
+        return ""
+    return datetime.fromtimestamp(newest, tz=UTC).isoformat().replace("+00:00", "Z")
+
+
+def enable_curation(agent_type: str, config_dir: str) -> bool:
+    """Turn the agent's own curation on in its settings, backed up first;
+    answer whether anything was written. Only Claude Code's Auto Dream has a
+    switch: Codex's consolidation runs whenever its memories are on."""
+    if agent_type != CLAUDE_CODE:
         return False
+    path = pathlib.Path(config_dir) / "settings.json"
+    current = native_files.read(path)
+    settings: dict[str, object] = {}
+    if current is not None and current.strip():
+        loaded = json.loads(current)
+        if not isinstance(loaded, dict):
+            raise ValueError(f"{path} does not hold a JSON object")
+        settings = loaded
+    if settings.get(_AUTO_DREAM_KEY) is True:
+        return False
+    settings[_AUTO_DREAM_KEY] = True
+    mode = path.stat().st_mode & 0o777 if path.exists() else None
+    native_files.backup(path)
+    native_files.write(path, json.dumps(settings, indent=2, ensure_ascii=False) + "\n")
+    if mode is not None:
+        path.chmod(mode)
     return True
 
 
 __all__ = [
-    "CURATE_PROMPT",
     "OFF",
     "ON",
+    "SOURCE_DEFAULT",
+    "SOURCE_SETTING",
     "UNKNOWN",
     "CurationState",
-    "curate_command",
     "curation_state",
-    "launch_curation",
+    "enable_curation",
 ]

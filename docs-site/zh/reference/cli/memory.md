@@ -26,7 +26,8 @@ coffer memory [OPTIONS] COMMAND [ARGS]...
 | [`memory codex-import`](#memory-codex-import) | Say whether Codex imports Claude Code's memories itself. |
 | [`memory entries`](#memory-entries) | A project's memories with their origin and where each was written. |
 | [`memory show`](#memory-show) | One memory's text and the file each agent on this machine holds it in. |
-| [`memory curate`](#memory-curate) | Ask an agent to consolidate its own memory now. |
+| [`memory curate`](#memory-curate) | The prompt that asks Claude Code to consolidate its memory; give it to the agent. |
+| [`memory curation-enable`](#memory-curation-enable) | Turn on an agent's own curation in its settings, backed up first. |
 
 ## memory state
 
@@ -162,12 +163,30 @@ coffer memory show [OPTIONS] ENTRY_ID
 
 ## memory curate
 
-Ask an agent to consolidate its own memory now. Body: agent_type.
+The prompt that asks Claude Code to consolidate its memory; give it to the agent. Body: agent_type.
 
 <p class="cli-label">概要</p>
 
 ```sh
 coffer memory curate [OPTIONS]
+```
+
+<p class="cli-label">参数与选项</p>
+
+| 名称 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
+| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
+| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
+
+## memory curation-enable
+
+Turn on an agent's own curation in its settings, backed up first. Body: agent_type.
+
+<p class="cli-label">概要</p>
+
+```sh
+coffer memory curation-enable [OPTIONS]
 ```
 
 <p class="cli-label">参数与选项</p>

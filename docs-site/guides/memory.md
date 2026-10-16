@@ -146,16 +146,16 @@ The page never edits a memory's text. To change a memory, change it where the ag
 Agents → choose the agent → More → Memory
 ```
 
-Each agent's own settings are on its Memory tab, so the Memory page does not grow with the number of agents. While the memory feature is on, the tab starts with a **Memory sync** section: whether the agent's own memory is on (Claude Code's auto memory, Codex's memories) and whether its own curation is on (Claude Code's Auto Dream, Codex's consolidation), with a hint when either is off; the copies Coffer wrote into it (and how many the agent edited or removed); **Curate now**; and **Open Memory**, which opens the Memory page filtered to this agent's memories. Codex's tab also has **Codex imports Claude Code's memories itself**. Below it are the agent's own memory folders.
+Each agent's own settings are on its Memory tab, so the Memory page does not grow with the number of agents. While the memory feature is on, the tab starts with a **Memory sync** section: whether the agent's own memory is on (Claude Code's auto memory, Codex's memories) and whether its own curation is on (Claude Code's Auto Dream, Codex's consolidation), with a hint when either is off; the copies Coffer wrote into it (and how many the agent edited or removed); **Curate now** on Claude Code's tab; and **Open Memory**, which opens the Memory page filtered to this agent's memories. Codex's tab also has **Codex imports Claude Code's memories itself**. Below it are the agent's own memory folders.
 
 ## Curation is each agent's own
 
 Coffer does not merge or retire memories. Each agent curates what it holds, Coffer's copies included:
 
-- **Claude Code**: Auto Dream merges duplicates, drops what is contradicted or stale and rewrites the index, on Claude Code's own schedule. Coffer cannot read whether it is on yet, so the page shows it as unknown; check it in Claude Code's `/memory`.
+- **Claude Code**: Auto Dream merges duplicates, drops what is contradicted or stale and rewrites the index, on Claude Code's own schedule: in a project after a day and a few sessions. It is a Claude Code preview, off for many accounts. The tab says whether it is on, whether that comes from your `settings.json` or from your account's default, and when it last ran on this machine. While it is off, **Turn on** adds `"autoDreamEnabled": true` to `~/.claude/settings.json` after you confirm, keeping a backup of the file and changing nothing else in it; Coffer never turns it on by itself.
 - **Codex**: consolidation runs whenever its memories are on and its inputs changed, and reads Coffer's extension folder as one of its inputs. Fresher evidence wins over an older statement.
 
-A rarely used project can hold a copy beside the agent's own version of the same lesson until its curation next runs. To run it now, choose **Curate now** in the agent's **Memory sync** section: Coffer starts the agent without a terminal, in your home folder, with a prompt asking it to consolidate its own memory, and records a `memory_curation_requested` event. The run uses that agent's own model and account, as any session with it does.
+A rarely used project can hold a copy beside the agent's own version of the same lesson until its curation next runs. To run it now, choose **Curate now** in Claude Code's **Memory sync** section: Coffer opens Claude Code in your terminal with a prompt listing the memory folders it wrote into and asking Claude Code to consolidate them one at a time, so you watch every change and approve its edits as in any session. Coffer records a `memory_curation_requested` event. Codex has no **Curate now**: its consolidation already runs on its own whenever its memories changed.
 
 ## Undo sync
 
@@ -179,7 +179,7 @@ Earlier builds kept memory as notes under `~/.coffer/derived/memory/` and handed
 
 **An agent's memory is not published.** Check that the agent is registered and its own memory is on, then choose **Sync now** and read what the banner's **Review** lists. A memory learned outside any repository is published only when it is about you.
 
-**The same lesson appears twice in an agent.** Two agents' accounts of one lesson are two memories until the agent curates. Choose **Curate now** on the agent's Memory tab, or wait for its own curation to run.
+**The same lesson appears twice in an agent.** Two agents' accounts of one lesson are two memories until the agent curates. Choose **Curate now** on Claude Code's Memory tab, or wait for the agent's own curation to run.
 
 **A copy keeps coming back after I deleted it.** It does not, unless the memory changed in the hub since: then the new version is written as a new copy. To stop a memory reaching an agent, change or remove it in the agent that wrote it.
 

@@ -129,9 +129,9 @@ The whole layer sits behind the `memory` experimental feature: off, the worker s
 
 ## Curation stays with the agents
 
-Each agent's Memory tab reads the agent's own state from its config, never from undocumented internal databases: Claude Code's auto memory (`autoMemoryEnabled` in `settings.json`, absent means on); Codex's memories feature (`[features] memories` in `config.toml`), whose consolidation runs whenever its memories are on. Auto Dream has no documented setting yet, so it shows as unknown while auto memory is on, with a hint to check `/memory` in Claude Code. A state Coffer cannot read is shown as unknown.
+Each agent's Memory tab reads the agent's own state from its config, never from undocumented internal databases: Claude Code's auto memory (`autoMemoryEnabled` in `settings.json`, absent means on); Codex's memories feature (`[features] memories` in `config.toml`), whose consolidation runs whenever its memories are on. Auto Dream has no documented setting: Coffer reads `autoDreamEnabled` in `settings.json` and, when it is absent, the account default Claude Code caches in `~/.claude.json`, and says which one decided; the newest `.consolidate-lock` in Claude Code's project memory folders says when it last ran. A state Coffer cannot read is shown as unknown. **Turn on** writes only `"autoDreamEnabled": true` into `settings.json`, after the person confirms, with a backup, and records `memory_curation_enabled`; Coffer never changes the setting unasked ([ADR](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/curate-claude-memory-in-the-open.md)).
 
-**Curate now** starts the agent headless, the way Coffer's hand-offs launch agents, in the person's home directory, with a prompt asking it to consolidate its memory files (merge duplicates, drop what is contradicted or stale, keep its index short, change nothing else), and records `memory_curation_requested`. Curation therefore runs on the agents' schedules: a rarely used project may hold a copy beside the agent's own version of the same lesson until the agent next curates. Coffer does not depend on curation for correctness, because every copy is a valid memory file on its own.
+**Curate now** on Claude Code is a hand-off: Coffer opens Claude Code in the person's terminal with a prompt that lists the memory folders Coffer wrote into on this machine and asks it to consolidate them one folder at a time (plan first, merge duplicates and fold Coffer's copies in, drop what is contradicted or stale, use absolute dates, leave Coffer's index markers and rules file alone, change nothing else, report the counts), and records `memory_curation_requested`. The person sees every step and approves edits under Claude Code's own permissions. Codex has none: its consolidation runs by itself. Curation therefore runs on the agents' schedules: a rarely used project may hold a copy beside the agent's own version of the same lesson until the agent next curates. Coffer does not depend on curation for correctness, because every copy is a valid memory file on its own.
 
 ## Undo
 
@@ -143,7 +143,8 @@ Each agent's Memory tab reads the agent's own state from its config, never from 
 | --- | --- |
 | `memory_synced` | a sync (or a preview's **Write**) changed something; lists hub entries published, updated and deleted, copies written, updated and removed per agent and path, memories withheld and sources that failed |
 | `memory_sync_undone` | **Undo sync** ran |
-| `memory_curation_requested` | **Curate now** started an agent |
+| `memory_curation_requested` | **Curate now** handed curation to Claude Code |
+| `memory_curation_enabled` | **Turn on** added `autoDreamEnabled` to Claude Code's settings |
 | `memory_hook_removed` | the upgrade removed the retired `coffer-memory` hook from one agent |
 
 An agent's own change to its memory is not a Coffer act and is not audited.

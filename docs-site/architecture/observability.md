@@ -181,7 +181,7 @@ The vocabulary is a closed enumeration, defined in the domain layer.
 | Skills | `skill_imported`, `skill_updated`, `skill_update_merged`, `skill_bound`, `skill_unbound`, `skill_relinked`, `skill_drift_remediated`, `skill_adopted`, `skill_unmanaged_deleted` |
 | CLIs | `cli_tool_added`, `cli_tool_edited`, `cli_tool_removed` |
 | Knowledge | `knowledge_written`, `knowledge_edited`, `knowledge_deleted` |
-| Memory | `memory_synced`, `memory_sync_undone`, `memory_curation_requested`, `memory_hook_removed` |
+| Memory | `memory_synced`, `memory_sync_undone`, `memory_curation_requested`, `memory_curation_enabled`, `memory_hook_removed` |
 | Channels | `channel_pairing_issued`, `channel_paired`, `channel_person_removed`, `channel_reply_withdrawn` |
 | Vault files | `vault_file_edited` (a hand edit committed as `disk`, by a person), `vault_file_restored` |
 | Vault sync | `sync_run`, `sync_confirmed`, `sync_rejected`, `sync_rolled_back`, `sync_machine_removed`, `sync_plaintext_pushed`, `master_key_exported`, `master_key_imported` |

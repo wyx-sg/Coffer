@@ -99,6 +99,7 @@ class AuditEventType(StrEnum):
     MEMORY_SYNCED = "memory_synced"
     MEMORY_SYNC_UNDONE = "memory_sync_undone"
     MEMORY_CURATION_REQUESTED = "memory_curation_requested"
+    MEMORY_CURATION_ENABLED = "memory_curation_enabled"
     MEMORY_HOOK_REMOVED = "memory_hook_removed"
     # The retired memory layer's: no longer emitted, kept so a row written by
     # an earlier build keeps its name.

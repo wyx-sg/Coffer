@@ -163,6 +163,7 @@ const BUILDERS: Record<string, Builder> = {
   memory_synced: memorySynced,
   memory_sync_undone: memorySyncUndone,
   memory_curation_requested: agentField("agent_type"),
+  memory_curation_enabled: agentField("agent_type"),
   provider_transcribe_default_set: withResource((f, { resource }) => {
     const from = f.str("from");
     return from && from !== resource ? { v: "from", p: { from } } : null;

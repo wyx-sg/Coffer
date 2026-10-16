@@ -310,13 +310,25 @@ Every sync that changed anything MUST record one `memory_synced` audit event wit
 - **THEN** every unedited copy, the marked blocks, the rules file and the extension folder are gone, the edited copy remains, the hub is unchanged and automatic sync is off
 
 ### Requirement: Show each agent's own curation and ask it to curate now
-Each registered agent's Memory tab MUST show, while the memory feature is on, whether the agent's own memory and its own curation are on (Claude Code's auto memory and Auto Dream; Codex's memories feature), with a hint to turn either on when it is off, and the copies Coffer wrote into it on this machine (and how many the agent has since edited or removed), or why Coffer cannot write into it. The Memory page MUST NOT list the agents; it MUST count an agent Coffer cannot write into among what needs the person, linking to that agent's Memory tab. **Curate now** on an agent MUST start that agent without a terminal, in the person's home directory, with a prompt asking it to consolidate its own memory, and MUST record a `memory_curation_requested` event.
+Each registered agent's Memory tab MUST show, while the memory feature is on, whether the agent's own memory and its own curation are on (Claude Code's auto memory and Auto Dream; Codex's memories feature), with a hint to turn either on when it is off, and the copies Coffer wrote into it on this machine (and how many the agent has since edited or removed), or why Coffer cannot write into it. For Claude Code it MUST say whether Auto Dream's state comes from `autoDreamEnabled` in `settings.json` or from the account default Claude Code caches, and when Auto Dream last ran on this machine. While Auto Dream is off, **Turn on** MUST, only after the person confirms, add `"autoDreamEnabled": true` to Claude Code's `settings.json` with a backup of the file and nothing else in it changed, and record a `memory_curation_enabled` event; Coffer MUST NOT change that setting unasked. The Memory page MUST NOT list the agents; it MUST count an agent Coffer cannot write into among what needs the person, linking to that agent's Memory tab. **Curate now**, offered on Claude Code only, MUST open Claude Code in the person's terminal with a prompt that lists the memory folders Coffer wrote into on this machine and asks it to consolidate them, and MUST record a `memory_curation_requested` event; Codex MUST NOT offer it, since its consolidation runs on its own.
 
 #### Scenario: an agent's curation state is shown
 - **GIVEN** Claude Code with auto memory on and Auto Dream off, and Codex with memories on
 - **WHEN** the person opens each agent's Memory tab
 - **THEN** Claude Code's says auto memory is on and Auto Dream is off with a hint to turn it on, and Codex's says its memories are on
 - **AND** the Memory page shows no row or chip per agent
+
+#### Scenario: the person turns Claude Code's Auto Dream on
+- **GIVEN** Claude Code with auto memory on and Auto Dream off by its account default
+- **WHEN** the person chooses **Turn on** on its Memory tab and confirms
+- **THEN** Coffer adds `"autoDreamEnabled": true` to its `settings.json`, keeping a backup and the rest of the file unchanged
+- **AND** records a `memory_curation_enabled` event
+
+#### Scenario: Curate now opens Claude Code in a terminal
+- **GIVEN** Claude Code holding copies Coffer wrote into two project memory folders
+- **WHEN** the person chooses **Curate now** on its Memory tab
+- **THEN** Claude Code opens in the person's terminal with a prompt naming both folders
+- **AND** a `memory_curation_requested` event is recorded, and Codex's tab offers no **Curate now**
 
 ### Requirement: Deliver no memory into a session
 Coffer MUST NOT put memory into an agent's session itself: no session-start context, no notes added to a prompt, and nothing added to a channel turn's system prompt or message. An agent reaches memory only through its own native memory.

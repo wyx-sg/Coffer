@@ -242,10 +242,13 @@ async def test_an_agents_curation_state_is_shown(tmp_path: pathlib.Path) -> None
     rows = {r.agent_type: r for r in state.agents}
     assert rows["claude_code"].curation.memory == "on"
     assert rows["claude_code"].curation.curation == "unknown"
+    assert rows["claude_code"].curation.last_curated_at == ""
     assert rows["codex"].curation.memory == "on"
-    assert await a.view.curate("codex", "user") is True
-    assert a.launched[0][0] == "codex"
+    prompt = await a.view.curation_handoff("claude_code", "user")
+    assert prompt is not None and "consolidate your auto-memory folders" in prompt
     assert a.audit.events[-1][0] == "memory_curation_requested"
+    # Codex consolidates on its own whenever its memories are on.
+    assert await a.view.curation_handoff("codex", "user") is None
 
 
 @pytest.mark.acceptance(

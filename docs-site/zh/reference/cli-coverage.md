@@ -240,7 +240,8 @@ description: 每一个网页界面和桌面应用操作、它调用的接口、�
 | 界面操作 | 接口 | 命令 | 验收 |
 | --- | --- | --- | --- |
 | Memory · Codex imports Claude Code's memories itself | `PUT /memory/sync/codex-import` | `coffer memory codex-import` | `test_cli_parity.py` |
-| Memory · Curate now | `POST /memory/sync/curate` | `coffer memory curate` | `test_cli_parity.py` |
+| Memory · Curate now | `POST /memory/sync/curation/handoff` | `coffer memory curate` | `test_cli_parity.py` |
+| Memory · agent · Memory · Turn on (Auto Dream) | `POST /memory/sync/curation/enable` | `coffer memory curation-enable` | `test_cli_parity.py` |
 | Memory · a project's memories | `GET /memory/sync/entries` | `coffer memory entries` | `test_cli_parity.py` |
 | Memory · preview · Cancel | `POST /memory/sync/preview/cancel` | `coffer memory preview-cancel` | `test_cli_parity.py` |
 | Memory · preview · Write | `POST /memory/sync/preview/write` | `coffer memory preview-write` | `test_cli_parity.py` |
