@@ -35,8 +35,8 @@ from coffer.domain.memory import absorption
 from coffer.domain.memory.errors import UnreadableMemory
 from coffer.domain.memory.hub import (
     CLAUDE_CODE,
-    HubEntry,
     TYPE_USER,
+    HubEntry,
     Origin,
     entry_id,
     one_line,
