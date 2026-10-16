@@ -36,6 +36,9 @@ _APPLIES_RE = re.compile(r"^applies_to:[ \t]*cwd=(.*)$", re.MULTILINE)
 # whitespace / ``;`` / ``,`` so prose words ("plus", "from") and the trailing
 # ``; reuse_rule=...`` are never captured. Handles ``*`` wildcards inside a token.
 _PATH_RE = re.compile(r"[~/][^\s;,]*")
+# Prose punctuation a path token can pick up at its end: "(work in /a/b)." gives
+# "/a/b)." and the path is "/a/b".
+_PATH_TRAIL = ").:'\"`]"
 
 # The summary section listing one bullet per remembered task group.
 _TOPICS_HEADING = "What's in Memory"
@@ -85,7 +88,9 @@ def parse_codex_memory(text: str) -> list[CodexMemoryEntry]:
         applies = _APPLIES_RE.search(block)
         if applies is not None:
             value = applies.group(1).split(";", 1)[0]
-            cwds = tuple(_PATH_RE.findall(value))
+            cwds = tuple(
+                path for path in (p.rstrip(_PATH_TRAIL) for p in _PATH_RE.findall(value)) if path
+            )
         entries.append(CodexMemoryEntry(title=title, cwds=cwds, body=block.strip()))
     return entries
 

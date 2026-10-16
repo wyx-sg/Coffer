@@ -31,7 +31,7 @@ Coffer 的答案是一次同步，而不是一套自己的记忆系统：
 ```
 
 - **项目键。** 项目以仓库的 `origin` URL 命名，并经过规范化：去掉协议、凭据、端口和末尾的 `.git`，主机名转为小写，路径保留大小写（`git@host:owner/repo.git` 和 `https://host/owner/repo` 得到同一个键）。没有远端的仓库退而使用目录名，因为路径不能跨机器使用。主检出、它的工作树，以及 `origin` 相同的另一份克隆，无论在哪台机器上，都是同一个项目。文件夹名是把键里 `[A-Za-z0-9._-]` 之外的字符都换成 `-` 后的结果；键本身写在每个条目 frontmatter 的 `project:` 里，所以从不需要反解文件夹名。
-- **归档。** 类型为 `user` 的记忆和 Codex 的档案，不管来自哪个仓库，都归入 `global`：它们描述的是人。其他记忆归入各自的项目。在不属于任何仓库的目录里学到的记忆，类型为 `user` 时发布到 `global`，否则不发布。
+- **归档。** 记忆放在智能体放它的地方，不看类型：在某个仓库里学到的归入那个项目，没有工作目录的（Codex 的档案、没写目录的任务组）归入 `global`。Codex 任务组的 `applies_to` 可能写着临时聊天目录，旁边再写上实际处理的仓库；其中每个路径都会读取，第一个位于仓库内的胜出。只在不属于任何仓库的目录里学到的记忆，类型为 `user` 时发布到 `global`，否则不发布。参见 [ADR：记忆放在智能体放它的地方](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/file-a-memory-where-its-agent-filed-it.md)。
 - **条目 id。** `sha256(machine_id, agent_type, source_identity)` 的前 16 个十六进制字符。来源标识是 Claude Code 记忆文件在配置目录下的路径，或者 Codex 的文件加上任务组、小节和条目内容的哈希。没变过的来源重读时映射到同一个 id；一条记忆前后的 Codex 条目增加、删除或换位，都不会改变它的 id。中心库里找不到的 Codex 条目，会接过同一小节里已经消失、且与它最相似的那条记忆的标识（相似度至少 0.6），所以改写过的条目算一次更新，而不是一个新条目；更不相似的就是一条新记忆。
 - **Frontmatter。** `id`、`origin`（`machine`、`agent`、`source`）、`project`（`global` 没有）、`type`（`user`、`feedback`、`project` 或 `reference`）、`title`、`description`、来源给出时的 `search_terms`、`created_at` 和 `updated_at`。正文是记忆的文本。
 - **可移植的路径。** 发布时，先把仓库根目录（以及智能体记录的每个工作树根目录）换成 `<repo>`，再把主目录换成 `~`，最长匹配优先，并且只在路径边界上替换。写入时，`<repo>` 展开成项目在写入机器上的检出位置，`~` 展开成那台机器的主目录。其他路径保持原样。
@@ -70,7 +70,7 @@ Coffer 的答案是一次同步，而不是一套自己的记忆系统：
 - **目录。** `<config_dir>/projects/<slug>/memory/`，slug 是 Claude Code 自己对仓库根目录的编码。Claude Code 按仓库根目录命名项目目录，各工作树共用，所以写一次就能到达每个工作树。不存在时会创建。
 - **副本。** `coffer_<slug>.md`，slug 来自标题（重名时加上条目 id 去重），使用 Claude Code 自己的 frontmatter（`name`、`description`、`metadata.type`），外加一个 `coffer:` 区块，写明中心库条目、来源智能体和同步时间。正文末尾有一行说明是哪个智能体学到的。
 - **索引区块。** 在 `MEMORY.md`（不存在时创建）末尾、`<!-- coffer:memory-sync:begin -->` 和 `<!-- coffer:memory-sync:end -->` 之间，每份副本一行，最新的在前，最多 30 行（占 Claude Code 200 行索引预算的一部分），最后一行写明文件夹里还有多少个 `coffer_*.md` 文件。写入只替换两个标记之间的字节；没有标记时追加区块。之前的文件先存到 `~/.coffer/config-backups/`。
-- **全局。** Claude Code 没有全局记忆，而且只有在某个项目里启动的会话才会打开该项目的记忆文件夹。所以 `global` 条目像项目副本一样（同样的文件、索引区块和状态）写进它自己的一个项目文件夹 `<config_dir>/projects/-coffer-global/memory/`，没有会话会打开它。`<config_dir>/rules/coffer-memory.md` 是完全归 Coffer 所有的文件，Claude Code 每次会话都把它作为用户规则加载，它告诉 Claude Code 这些文件在哪并列出它们：每个条目一行，写明标题、描述和路径，最新的在前，上限 25 KB，从不放正文。Claude Code 自己的整理（Auto Dream）是否会处理这个文件夹不确定；Coffer 每次同步都整体重写规则文件。
+- **全局。** Claude Code 没有全局记忆，而且只有在某个项目里启动的会话才会打开该项目的记忆文件夹。所以 `global` 条目像项目副本一样（同样的文件、索引区块和状态）写进它自己的一个项目文件夹 `<config_dir>/projects/-coffer-global/memory/`，没有会话会打开它。`<config_dir>/rules/coffer-memory.md` 是完全归 Coffer 所有的文件，Claude Code 每次会话都把它作为用户规则加载，它告诉 Claude Code 这些文件在哪并列出它们：每个条目一行，写明标题、描述和路径，最新的在前，上限 25 KB，从不放正文。描述以标题开头时（Codex 用记忆的第一个分句作标题），这一行只写标题之后的部分，`MEMORY.md` 区块里也一样。Claude Code 自己的整理（Auto Dream）是否会处理这个文件夹不确定；Coffer 每次同步都整体重写规则文件。
 
 ### Codex {#codex}
 
@@ -89,7 +89,7 @@ Codex 可以自己导入 Claude Code 的项目记忆并保持更新。当它这�
 
 写进智能体、下次同步再读回来，这个过程不能形成循环。
 
-- **认得出副本。** 在 Claude Code 上，一个文件名以 `coffer_` 开头**并且** frontmatter 里有 `coffer.entry` 的文件属于 Coffer；读取器跳过它、标记区块和规则文件。在 Codex 上，读取器跳过 `extensions/` 下的一切，以及标了 `[via Coffer]` 的条目。
+- **认得出副本。** 在 Claude Code 上，一个文件名以 `coffer_` 开头**并且** frontmatter 里有 `coffer.entry` 的文件属于 Coffer；读取器跳过它、标记区块和规则文件。在 Codex 上，读取器跳过 `extensions/` 下的一切，以及标了 `[via Coffer]` 的条目；用户画像是成段的文字，读取器去掉其中标了 `[via Coffer]` 的句子，其余照读。
 - **吸收不会循环流转。** 整理会把副本并入智能体自己的记忆：Auto Dream 把一个 `coffer_` 文件并入 Claude 自己的某个文件并删除它；Codex 改写一个条目。那条记忆属于智能体，会被同步，但它的改写不能无休止地来回流转。账本为每个智能体保存 Coffer 交给它的每个句子的指纹（转小写、合并空白、去标点后取哈希）。当智能体自己的记忆发生变化，而新增的每个句子都是 Coffer 交给它的，这次变化只记录、不发布。一个事实只跨过每个智能体边界一次；改写到指纹认不出时，它作为该智能体自己的记忆发布，每一侧的整理再把它和已有的内容合并。
 - **被修改或移除的副本归智能体所有。** 摘要与 Coffer 写入时不一致的副本是 `edited`；不见了的是 `removed`。只要中心库条目没变，两者都保持不动。条目变化时，新版本作为一份新副本写在被修改的那份旁边（`coffer_<slug>-2.md`），或者把被移除的副本重新写入。移除副本从不删除它的中心库条目。
 

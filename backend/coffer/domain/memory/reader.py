@@ -85,6 +85,11 @@ class RawEntry:
     #: its merits by distil ("Create no partition for a non-repository
     #: directory").
     project_root: str
+    #: Further directories the entry was learned for, when its source routes it
+    #: to more than one (a Codex task group's ``applies_to`` can name a scratch
+    #: directory and the repository worked on). The first inside a repository
+    #: files the entry.
+    other_roots: tuple[str, ...] = ()
     #: The source's own timestamp for this entry, when it records one at all.
     source_written_at: str = ""
     #: Search terms the source itself states for this material. Codex writes
