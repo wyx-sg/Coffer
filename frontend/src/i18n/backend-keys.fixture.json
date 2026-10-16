@@ -203,6 +203,7 @@
     "master_key_imported",
     "master_key_relocated",
     "memory_aggregated",
+    "memory_curation_enabled",
     "memory_curation_requested",
     "memory_delivery_fired",
     "memory_delivery_installed",

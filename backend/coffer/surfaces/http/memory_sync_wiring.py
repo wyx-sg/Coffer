@@ -27,7 +27,6 @@ from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.features import MEMORY
 from coffer.domain.internal_engine_config import MEMORY_SYNC
-from coffer.infrastructure.memory.curation import launch_curation
 from coffer.infrastructure.memory.readers import MEMORY_READERS
 from coffer.infrastructure.memory.writers import MEMORY_WRITERS
 from coffer.infrastructure.secret.detector import detect
@@ -91,9 +90,7 @@ def wire_memory_sync(
         find_secret=_find_secret,
         stop_automatic=_stop_automatic,
     )
-    view = MemorySyncView(
-        service, machine=_machine, home=_home, audit=audit, launch=launch_curation
-    )
+    view = MemorySyncView(service, machine=_machine, home=_home, audit=audit)
     set_sync_services(service, view)
     return service
 

@@ -229,6 +229,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`sync-memory-into-each-agents-own-memory`](sync-memory-into-each-agents-own-memory.md) | Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault |
 | [`global-memories-in-claude-code-live-in-a-global-project`](global-memories-in-claude-code-live-in-a-global-project.md) | Global Memories Live in a Claude Code Project of Their Own, Pointed at From a Rules File |
 | [`file-a-memory-where-its-agent-filed-it`](file-a-memory-where-its-agent-filed-it.md) | File a Memory Where Its Agent Filed It |
+| [`curate-claude-memory-in-the-open`](curate-claude-memory-in-the-open.md) | Curate Claude Code's Memory in the Open, and Turn Auto Dream On Only When Asked |
 | [`codex-memory-identity-is-content-with-rewrite-carry-over`](codex-memory-identity-is-content-with-rewrite-carry-over.md) | A Codex Memory Is Identified by Its Content, and a Rewrite Keeps the Identity |
 | [`memory-page-lists-memories-by-scope`](memory-page-lists-memories-by-scope.md) | The Memory Page Lists the Memories by Scope; the Sync Shows Only When It Needs the Person |
 

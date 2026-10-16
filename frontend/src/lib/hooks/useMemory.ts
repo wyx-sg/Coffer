@@ -14,7 +14,8 @@ import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import {
   cancelPreview,
-  curate,
+  curationHandoff,
+  enableCuration,
   getEntry,
   getSyncState,
   listEntries,
@@ -31,6 +32,7 @@ import {
   memoryKey,
   memorySyncStateKey,
 } from "@/lib/api/queryKeys";
+import { useOpenInTerminal } from "@/lib/hooks/useTerminals";
 import { parseSummary } from "@/lib/memory/syncFacts";
 
 /** How often the state is re-read while a sync runs (the worker's or another tab's). */
@@ -165,15 +167,31 @@ export function useSetCodexImport() {
   });
 }
 
-/** Curate now: the agent starts without a terminal and consolidates its own memory. */
+/** Turn on the agent's own curation in its settings; the state is re-read. */
+export function useEnableCuration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (agentType: string) => enableCuration(agentType),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: memoryKey }),
+  });
+}
+
+/** Curate now: the agent opens in the person's terminal with the daemon's
+ *  prompt to consolidate its memory, so they watch and confirm each change. */
 export function useCurateNow() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const openTerminal = useOpenInTerminal();
   return useMutation({
-    mutationFn: (agent: { type: string; name: string }) => curate(agent.type),
-    onSuccess: (result, agent) => {
-      if (result.started) toast.success(t("memory.agents.curateStarted", { agent: agent.name }));
-      else toast.error(t("memory.agents.curateNotStarted", { agent: agent.name }));
+    mutationFn: async (agentType: string) => {
+      const prompt = (await curationHandoff(agentType)).handoff.prompt;
+      await openTerminal(
+        { agent: agentType, prompt },
+        {
+          label: t("handoff.copyPrompt"),
+          onClick: () => void navigator.clipboard?.writeText(prompt),
+        },
+      );
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });

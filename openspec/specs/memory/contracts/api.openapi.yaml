@@ -44,12 +44,12 @@ paths:
       summary: Set Codex Import
       tags:
       - memory
-  /api/v1/memory/sync/curate:
+  /api/v1/memory/sync/curation/enable:
     post:
       description: |-
-        **Curate now**: start the agent headless with a prompt to consolidate
-        its own memory.
-      operationId: curate_now_api_v1_memory_sync_curate_post
+        **Turn on** an agent's own curation (Claude Code's Auto Dream) in its
+        settings, backed up first.
+      operationId: enable_curation_api_v1_memory_sync_curation_enable_post
       parameters:
       - in: header
         name: x-coffer-token
@@ -78,7 +78,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CurateOut'
+                $ref: '#/components/schemas/CurationEnableOut'
           description: Successful Response
         '422':
           content:
@@ -92,7 +92,59 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
-      summary: Curate Now
+      summary: Enable Curation
+      tags:
+      - memory
+  /api/v1/memory/sync/curation/handoff:
+    post:
+      description: |-
+        **Curate now**: the prompt that asks the agent to consolidate its memory
+        in a terminal the person watches. Claude Code only: Codex consolidates
+        whenever its memories are on.
+      operationId: curation_handoff_api_v1_memory_sync_curation_handoff_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurateIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurationHandoffOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Curation Handoff
       tags:
       - memory
   /api/v1/memory/sync/entries:
@@ -393,26 +445,45 @@ components:
       - agent_type
       title: CurateIn
       type: object
-    CurateOut:
+    CurationEnableOut:
       properties:
-        started:
-          title: Started
+        changed:
+          title: Changed
           type: boolean
       required:
-      - started
-      title: CurateOut
+      - changed
+      title: CurationEnableOut
+      type: object
+    CurationHandoffOut:
+      description: '**Curate now**: the prompt the page starts the agent with in a terminal.'
+      properties:
+        handoff:
+          $ref: '#/components/schemas/HandoffOut'
+      required:
+      - handoff
+      title: CurationHandoffOut
       type: object
     CurationStateOut:
       properties:
         curation:
           title: Curation
           type: string
+        last_curated_at:
+          default: ''
+          title: Last Curated At
+          type: string
         memory:
           title: Memory
+          type: string
+        source:
+          default: ''
+          title: Source
           type: string
       required:
       - memory
       - curation
+      - source
+      - last_curated_at
       title: CurationStateOut
       type: object
     EntryCopyOut:
@@ -462,6 +533,18 @@ components:
       required:
       - error
       title: ErrorResponse
+      type: object
+    HandoffOut:
+      description: |-
+        A chore for the person's agent. ``prompt`` is the whole text to copy or
+        to pre-fill a new conversation with; Coffer never sends it itself.
+      properties:
+        prompt:
+          title: Prompt
+          type: string
+      required:
+      - prompt
+      title: HandoffOut
       type: object
     HubEntryDetailOut:
       description: One memory with its text and, per local agent, where it is held.

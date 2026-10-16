@@ -1002,7 +1002,9 @@
       "memory_sync_undone_count_one": "Removed {{count}} memory Coffer synced into the agents",
       "memory_sync_undone_count_other": "Removed {{count}} memories Coffer synced into the agents",
       "memory_curation_requested": "Asked an agent to tidy its own memory",
-      "memory_curation_requested_agent": "Asked {{agent}} to tidy its own memory"
+      "memory_curation_requested_agent": "Asked {{agent}} to tidy its own memory",
+      "memory_curation_enabled": "Turned on an agent's own memory tidying",
+      "memory_curation_enabled_agent": "Turned on {{agent}}'s own memory tidying"
     },
     "capType": {
       "tool": "tool",
@@ -3628,7 +3630,8 @@
       "hint": {
         "claude_code": {
           "memory": "Turn auto memory on in Claude Code’s /memory.",
-          "curation": "Check Auto Dream in Claude Code’s /memory."
+          "curation": "Auto Dream is a Claude Code preview: it tidies a project's memory in the background once a day has passed and you have opened a few sessions there.",
+          "curationUnknown": "Check Auto Dream in Claude Code’s /memory."
         },
         "codex": {
           "memory": "Turn memories on in Codex: memories = true under [features] in config.toml.",
@@ -3641,8 +3644,22 @@
       },
       "curateNow": "Curate now",
       "curateNowFor": "Curate now: {{agent}}",
-      "curateStarted": "{{agent}} is curating its memory",
-      "curateNotStarted": "Couldn't start {{agent}}"
+      "curationSource": {
+        "default": "account default",
+        "setting": "set in settings.json"
+      },
+      "lastCurated": "Last ran",
+      "neverCurated": "Has not run on this machine yet",
+      "enableCuration": {
+        "button": "Turn on",
+        "title": "Turn on Auto Dream?",
+        "body": "Coffer adds \"autoDreamEnabled\": true to {{path}} and keeps a backup of the file. Auto Dream is not in Claude Code’s documentation yet and may change.",
+        "confirm": "Turn on",
+        "failed": "Couldn't turn Auto Dream on",
+        "done": "Auto Dream is on for new Claude Code sessions",
+        "already": "Auto Dream was already on"
+      },
+      "curateNowHint": "Opens Claude Code in your terminal to tidy the memory folders Coffer wrote into; you see and confirm each change."
     },
     "codexImport": {
       "label": "Codex imports Claude Code’s memories itself",

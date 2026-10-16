@@ -110,18 +110,11 @@ class Machine:
             previews=PreviewStore(lambda: self.root / "memory-sync-preview.json"),
             threshold=self.threshold,
         )
-        self.launched: list[tuple[str, str, str]] = []
-
-        async def _launch(agent_type: str, config_dir: str, home: str) -> bool:
-            self.launched.append((agent_type, config_dir, home))
-            return True
-
         self.view = MemorySyncView(
             self.service,
             machine=lambda: self.machine_id,
             home=lambda: self.home,
             audit=self.audit,
-            launch=_launch,
         )
 
     async def _list(self) -> list[AgentSource]:

@@ -181,7 +181,7 @@ sequenceDiagram
 | 技能 | `skill_imported`、`skill_updated`、`skill_update_merged`、`skill_bound`、`skill_unbound`、`skill_relinked`、`skill_drift_remediated`、`skill_adopted`、`skill_unmanaged_deleted` |
 | 命令行工具 | `cli_tool_added`、`cli_tool_edited`、`cli_tool_removed` |
 | 知识 | `knowledge_written`、`knowledge_edited`、`knowledge_deleted` |
-| 记忆 | `memory_synced`、`memory_sync_undone`、`memory_curation_requested`、`memory_hook_removed` |
+| 记忆 | `memory_synced`、`memory_sync_undone`、`memory_curation_requested`、`memory_curation_enabled`、`memory_hook_removed` |
 | 消息渠道 | `channel_pairing_issued`、`channel_paired`、`channel_person_removed`、`channel_reply_withdrawn` |
 | 保险库文件 | `vault_file_edited`（人手动编辑、以 `disk` 提交）、`vault_file_restored` |
 | 保险库同步 | `sync_run`、`sync_confirmed`、`sync_rejected`、`sync_rolled_back`、`sync_machine_removed`、`sync_plaintext_pushed`、`master_key_exported`、`master_key_imported` |

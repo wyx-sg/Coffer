@@ -10,7 +10,14 @@
 // Transport via the typed client (.agents/frontend.md §4); wire types in
 // `memoryTypes.ts`, aliases of the generated contract.
 import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
-import type { CurateResult, HubEntryDetail, HubEntryList, MemorySyncReport, MemorySyncState } from "./memoryTypes";
+import type {
+  CurationHandoff,
+  CurationEnableResult,
+  HubEntryDetail,
+  HubEntryList,
+  MemorySyncReport,
+  MemorySyncState,
+} from "./memoryTypes";
 
 export * from "./memoryTypes";
 
@@ -56,7 +63,16 @@ export function getEntry(id: string): Promise<HubEntryDetail> {
   );
 }
 
-/** Curate now: start the agent without a terminal, asking it to consolidate its own memory. */
-export function curate(agentType: string): Promise<CurateResult> {
-  return unwrap(getApiClient().POST("/memory/sync/curate", { body: { agent_type: agentType } }));
+/** Turn on: write the agent's own curation switch (Claude Code's Auto Dream) into its settings. */
+export function enableCuration(agentType: string): Promise<CurationEnableResult> {
+  return unwrap(
+    getApiClient().POST("/memory/sync/curation/enable", { body: { agent_type: agentType } }),
+  );
+}
+
+/** Curate now: the prompt that asks the agent to consolidate its memory in a terminal. */
+export function curationHandoff(agentType: string): Promise<CurationHandoff> {
+  return unwrap(
+    getApiClient().POST("/memory/sync/curation/handoff", { body: { agent_type: agentType } }),
+  );
 }

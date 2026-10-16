@@ -1002,7 +1002,9 @@
       "memory_sync_undone_count_one": "移除了 Coffer 同步进各智能体的 {{count}} 条记忆",
       "memory_sync_undone_count_other": "移除了 Coffer 同步进各智能体的 {{count}} 条记忆",
       "memory_curation_requested": "请一个智能体整理它自己的记忆",
-      "memory_curation_requested_agent": "请 {{agent}} 整理它自己的记忆"
+      "memory_curation_requested_agent": "请 {{agent}} 整理它自己的记忆",
+      "memory_curation_enabled": "打开了一个智能体自己的记忆整理",
+      "memory_curation_enabled_agent": "打开了 {{agent}} 自己的记忆整理"
     },
     "capType": {
       "tool": "工具",
@@ -3628,7 +3630,8 @@
       "hint": {
         "claude_code": {
           "memory": "在 Claude Code 的 /memory 中开启自动记忆。",
-          "curation": "在 Claude Code 的 /memory 中查看 Auto Dream。"
+          "curation": "Auto Dream 是 Claude Code 的预览功能：某个项目过了一天、你在里面开过几次会话后，它会在后台整理这个项目的记忆。",
+          "curationUnknown": "在 Claude Code 的 /memory 中查看 Auto Dream。"
         },
         "codex": {
           "memory": "在 Codex 中开启记忆：在 config.toml 的 [features] 下设置 memories = true。",
@@ -3641,8 +3644,22 @@
       },
       "curateNow": "立即整理",
       "curateNowFor": "立即整理：{{agent}}",
-      "curateStarted": "{{agent}} 正在整理它的记忆",
-      "curateNotStarted": "无法启动 {{agent}}"
+      "curationSource": {
+        "default": "账号默认",
+        "setting": "settings.json 中设置"
+      },
+      "lastCurated": "上次运行",
+      "neverCurated": "在这台机器上还没运行过",
+      "enableCuration": {
+        "button": "打开",
+        "title": "打开 Auto Dream？",
+        "body": "Coffer 会在 {{path}} 里加上 \"autoDreamEnabled\": true，并保留这个文件的备份。Auto Dream 还没写进 Claude Code 的文档，以后可能会变。",
+        "confirm": "打开",
+        "failed": "没能打开 Auto Dream",
+        "done": "新的 Claude Code 会话会启用 Auto Dream",
+        "already": "Auto Dream 本来就是开着的"
+      },
+      "curateNowHint": "在终端里打开 Claude Code，整理 Coffer 写入过的记忆文件夹；每一步你都能看到并确认。"
     },
     "codexImport": {
       "label": "Codex 自己导入 Claude Code 的记忆",

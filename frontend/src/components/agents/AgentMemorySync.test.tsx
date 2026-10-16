@@ -22,9 +22,13 @@ import { AgentMemorySync } from "./AgentMemorySync";
 vi.mock("@/lib/api/memory", () => ({
   getSyncState: vi.fn(),
   setCodexImport: vi.fn(),
-  curate: vi.fn(),
+  curationHandoff: vi.fn(),
+  enableCuration: vi.fn(),
 }));
 const api = await import("@/lib/api/memory");
+
+const openTerminal = vi.fn();
+vi.mock("@/lib/hooks/useTerminals", () => ({ useOpenInTerminal: () => openTerminal }));
 
 const feature = { on: true };
 vi.mock("@/lib/hooks/useFeatures", () => ({ useFeatureEnabled: () => feature.on }));
@@ -34,7 +38,7 @@ function agent(type: string, over: Partial<SyncAgent> = {}): SyncAgent {
     agent: type,
     agent_type: type,
     copies: { written: 0 },
-    curation: { memory: "on", curation: "on" },
+    curation: { memory: "on", curation: "on", source: "", last_curated_at: "" },
     writer: { state: "ok", reason: "", path: "" },
     ...over,
   };
@@ -77,7 +81,7 @@ beforeEach(() => {
     state([
       agent("claude_code", {
         copies: { written: 2, edited: 1 },
-        curation: { memory: "on", curation: "off" },
+        curation: { memory: "on", curation: "off", source: "", last_curated_at: "" },
       }),
       agent("codex", { copies: { written: 1 } }),
     ]),
@@ -90,7 +94,7 @@ describe("AgentMemorySync", () => {
     const section = await screen.findByTestId("memory-sync-section");
     expect(section).toHaveTextContent("Auto memory on");
     expect(section).toHaveTextContent("Auto Dream off");
-    expect(section).toHaveTextContent("Check Auto Dream in Claude Code’s /memory.");
+    expect(section).toHaveTextContent("Auto Dream is a Claude Code preview");
     expect(section).toHaveTextContent("2 copies");
     expect(section).toHaveTextContent("1 edited by the agent");
     expect(within(section).getByRole("link", { name: /Open Memory/ })).toHaveAttribute(
@@ -115,26 +119,75 @@ describe("AgentMemorySync", () => {
     await waitFor(() => expect(api.setCodexImport).toHaveBeenCalledWith(true));
   });
 
-  test("Curate now starts that agent and says so", async () => {
-    vi.mocked(api.curate).mockResolvedValue({ started: true });
+  acceptance("memory", "Curate now opens Claude Code in a terminal", async () => {
+    vi.mocked(api.curationHandoff).mockResolvedValue({ handoff: { prompt: "Please consolidate" } });
+    openTerminal.mockResolvedValue(true);
     renderSection("claude_code");
     fireEvent.click(await screen.findByRole("button", { name: "Curate now: Claude Code" }));
-    await waitFor(() => expect(api.curate).toHaveBeenCalledWith("claude_code"));
-    expect(await screen.findByText("Claude Code is curating its memory")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(openTerminal).toHaveBeenCalledWith(
+        { agent: "claude_code", prompt: "Please consolidate" },
+        expect.objectContaining({ label: "Copy prompt" }),
+      ),
+    );
+    expect(api.curationHandoff).toHaveBeenCalledWith("claude_code");
   });
 
-  test("an agent that could not start is said to have failed", async () => {
-    vi.mocked(api.curate).mockResolvedValue({ started: false });
+  test("Codex is not offered Curate now: it consolidates on its own", async () => {
     renderSection("codex");
-    fireEvent.click(await screen.findByRole("button", { name: "Curate now: Codex" }));
-    expect(await screen.findByText("Couldn't start Codex")).toBeInTheDocument();
+    const section = await screen.findByTestId("memory-sync-section");
+    expect(within(section).queryByRole("button", { name: /Curate now/ })).toBeNull();
+  });
+
+  acceptance("memory", "the person turns Claude Code's Auto Dream on", async () => {
+    vi.mocked(api.getSyncState).mockResolvedValue(
+      state([
+        agent("claude_code", {
+          curation: { memory: "on", curation: "off", source: "default", last_curated_at: "" },
+          writer: { state: "ok", reason: "", path: "/Users/me/.claude" },
+        }),
+      ]),
+    );
+    vi.mocked(api.enableCuration).mockResolvedValue({ changed: true });
+    renderSection("claude_code");
+    const section = await screen.findByTestId("memory-sync-section");
+    expect(section).toHaveTextContent("Auto Dream off · account default");
+    expect(section).toHaveTextContent("Has not run on this machine yet");
+    fireEvent.click(within(section).getByRole("button", { name: "Turn on" }));
+    const dialog = await screen.findByRole("dialog", { name: "Turn on Auto Dream?" });
+    expect(dialog).toHaveTextContent('"autoDreamEnabled": true');
+    fireEvent.click(within(dialog).getByRole("button", { name: "Turn on" }));
+    await waitFor(() => expect(api.enableCuration).toHaveBeenCalledWith("claude_code"));
+    expect(
+      await screen.findByText("Auto Dream is on for new Claude Code sessions"),
+    ).toBeInTheDocument();
+  });
+
+  test("Auto Dream that is on says when it last ran and offers no switch", async () => {
+    vi.mocked(api.getSyncState).mockResolvedValue(
+      state([
+        agent("claude_code", {
+          curation: {
+            memory: "on",
+            curation: "on",
+            source: "setting",
+            last_curated_at: "2026-10-15T03:00:00Z",
+          },
+        }),
+      ]),
+    );
+    renderSection("claude_code");
+    const section = await screen.findByTestId("memory-sync-section");
+    expect(section).toHaveTextContent("Auto Dream on · set in settings.json");
+    expect(section).toHaveTextContent("Last ran");
+    expect(within(section).queryByRole("button", { name: "Turn on" })).toBeNull();
   });
 
   test("a writer that cannot write says so, and there is nothing to curate", async () => {
     vi.mocked(api.getSyncState).mockResolvedValue(
       state([
         agent("codex", {
-          curation: { memory: "off", curation: "off" },
+          curation: { memory: "off", curation: "off", source: "", last_curated_at: "" },
           writer: { state: "off", reason: "memories are off", path: "" },
         }),
       ]),
@@ -144,7 +197,7 @@ describe("AgentMemorySync", () => {
     expect(section).toHaveTextContent("Nothing written: its memory is off");
     expect(section).toHaveTextContent("memories are off");
     expect(section).toHaveTextContent(/memories = true under \[features\]/);
-    expect(within(section).getByRole("button", { name: "Curate now: Codex" })).toBeDisabled();
+    expect(within(section).queryByRole("button", { name: /Curate now/ })).toBeNull();
   });
 
   test("nothing shows while the memory feature is off", async () => {

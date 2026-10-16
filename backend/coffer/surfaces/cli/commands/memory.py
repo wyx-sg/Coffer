@@ -76,9 +76,18 @@ SPECS = [
     RouteCommand(
         "memory curate",
         "POST",
-        "/memory/sync/curate",
+        "/memory/sync/curation/handoff",
         _UI + "Curate now",
-        "Ask an agent to consolidate its own memory now. Body: agent_type.",
+        "The prompt that asks Claude Code to consolidate its memory; give it to the agent. "
+        "Body: agent_type.",
+        body=True,
+    ),
+    RouteCommand(
+        "memory curation-enable",
+        "POST",
+        "/memory/sync/curation/enable",
+        _UI + "agent · Memory · Turn on (Auto Dream)",
+        "Turn on an agent's own curation in its settings, backed up first. Body: agent_type.",
         body=True,
     ),
 ]
