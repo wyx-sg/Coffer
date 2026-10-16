@@ -105,7 +105,7 @@ Coffer MUST read the native memory of each **registered** agent, from a path der
 - **AND** nothing is read from the unregistered directory
 
 ### Requirement: Keep every agent's memories in a hub in the vault
-Coffer MUST keep every memory that a registered agent on any of the person's machines wrote for itself as one Markdown file in the vault, under `vault/memory/global/` or `vault/memory/projects/<project>/`. Each file MUST carry frontmatter naming its origin (machine id, agent type and the source's own identity), its `type` (`user`, `feedback`, `project` or `reference`), its `title`, a one-line `description`, `created_at` and `updated_at`, and the memory's text as its body. A memory typed `user`, and a memory learned outside any repository, MUST be filed under `global`. The hub is vault content, so vault sync carries it to the person's other machines like any other vault file ([vault-sync](../vault-sync/spec.md)).
+Coffer MUST keep every memory that a registered agent on any of the person's machines wrote for itself as one Markdown file in the vault, under `vault/memory/global/` or `vault/memory/projects/<project>/`. Each file MUST carry frontmatter naming its origin (machine id, agent type and the source's own identity), its `type` (`user`, `feedback`, `project` or `reference`), its `title`, a one-line `description`, `created_at` and `updated_at`, and the memory's text as its body. A memory MUST be filed where its agent filed it, whatever its type: one learned in a repository under that repository's project, and one with no working directory (Codex's profile, a Codex task group that names none) under `global`. The hub is vault content, so vault sync carries it to the person's other machines like any other vault file ([vault-sync](../vault-sync/spec.md)).
 
 #### Scenario: an agent's memory becomes one hub file
 - **GIVEN** a registered Claude Code with one `feedback` memory file in the memory directory of a checkout of `github.com/acme/payments`
@@ -114,9 +114,16 @@ Coffer MUST keep every memory that a registered agent on any of the person's mac
 - **AND** the change is one vault commit naming the memory sync as its writer
 
 #### Scenario: a memory about the person is filed under global
-- **GIVEN** a Claude Code memory typed `user` learned in a repository, and a Codex profile entry
+- **GIVEN** a Claude Code memory typed `user` learned in a directory inside no repository, a Claude Code memory typed `user` learned in a checkout of `github.com/acme/payments`, and a Codex profile entry
 - **WHEN** memory syncs
-- **THEN** both are filed under `vault/memory/global/`
+- **THEN** the first and the profile entry are filed under `vault/memory/global/`
+- **AND** the memory learned in the checkout is filed under that project
+
+#### Scenario: a Codex preference follows the repository its task worked in
+- **GIVEN** a Codex task group whose `applies_to` names a scratch chat directory and, beside it, a checkout of `github.com/acme/payments`, with a `User preferences` bullet; and a task group that names only the scratch directory
+- **WHEN** memory syncs
+- **THEN** the first group's preference is filed under `github.com-acme-payments`
+- **AND** the second group's preference is filed under `global`
 
 #### Scenario: the hub travels with vault sync
 - **GIVEN** two machines syncing one vault, and a hub entry published on the first
@@ -124,7 +131,7 @@ Coffer MUST keep every memory that a registered agent on any of the person's mac
 - **THEN** the second machine holds the same hub file
 
 ### Requirement: Identify a project by a key that does not depend on the machine
-A project in the hub MUST be named by its repository's `origin` URL, normalised (scheme, credentials and a trailing `.git` dropped, lower-cased host), and by the repository directory's name when it has no `origin`. A main checkout, its worktrees and another clone with the same `origin` MUST resolve to one project, on one machine or across machines. A memory learned in a directory that is not inside a repository MUST be filed under `global` only when its type is `user`, and otherwise MUST NOT be published.
+A project in the hub MUST be named by its repository's `origin` URL, normalised (scheme, credentials and a trailing `.git` dropped, lower-cased host), and by the repository directory's name when it has no `origin`. A main checkout, its worktrees and another clone with the same `origin` MUST resolve to one project, on one machine or across machines. A memory whose agent names several working directories MUST be filed under the first of them inside a repository. A memory learned only in directories that are not inside a repository MUST be filed under `global` when its type is `user`, and otherwise MUST NOT be published.
 
 #### Scenario: two clones on two machines share one project
 - **GIVEN** a checkout of `git@github.com:acme/payments.git` at `/Users/a/src/payments` on one machine and of `https://github.com/acme/payments` at `/home/b/work/pay` on another
@@ -186,7 +193,7 @@ For each project checked out on this machine, Coffer MUST write each hub entry t
 - **THEN** it holds the 30 newest, then one line saying 15 more Coffer memories are in the directory
 
 ### Requirement: Write global memories into a Claude Code global project and point at them from a rules file
-Coffer MUST write every `global` hub entry that did not come from this machine's Claude Code as a project memory file, in the same form as a project's copy, into the memory folder of a project of its own, `<config_dir>/projects/-coffer-global/memory/` (no session runs there, so Claude Code never opens it by itself). Because Claude Code loads only the rules directory in every session, Coffer MUST also write `<config_dir>/rules/coffer-memory.md`, a file it owns entirely, saying at its top that Coffer writes it, where the global memories are and that a file is to be read when its title is relevant, then listing one line per memory (title, description and the path of its file), newest first and bounded at 25 KB. The rules file MUST NOT hold a memory's text.
+Coffer MUST write every `global` hub entry that did not come from this machine's Claude Code as a project memory file, in the same form as a project's copy, into the memory folder of a project of its own, `<config_dir>/projects/-coffer-global/memory/` (no session runs there, so Claude Code never opens it by itself). Because Claude Code loads only the rules directory in every session, Coffer MUST also write `<config_dir>/rules/coffer-memory.md`, a file it owns entirely, saying at its top that Coffer writes it, where the global memories are and that a file is to be read when its title is relevant, then listing one line per memory (title, description and the path of its file), newest first and bounded at 25 KB. Where a description begins with its title (a Codex memory, titled by its first clause), the line MUST NOT repeat the title; the same holds for the lines of the `MEMORY.md` block. The rules file MUST NOT hold a memory's text.
 
 #### Scenario: a Codex profile reaches every Claude Code session
 - **GIVEN** a `global` hub entry from Codex stating the person's preferred language
@@ -227,7 +234,7 @@ A hub entry MUST NOT be written into the agent it came from on the machine it ca
 - **THEN** machine A writes it into Codex only, and machine B writes it into both Claude Code and Codex
 
 ### Requirement: Never republish Coffer's own copies
-A copy Coffer wrote MUST be recognised when its agent's memory is read back and MUST NOT become a hub entry: on Claude Code by its `coffer_` file name and `coffer:` block, the marked block and the rules file; on Codex by the extension folder and by the `[via Coffer]` tag on content Codex derived from it. When an agent's own memory changes only by text already covered by copies Coffer delivered to that agent, Coffer MUST record the new text against the hub entry without publishing a change, so an agent's rewording of what it absorbed does not circulate.
+A copy Coffer wrote MUST be recognised when its agent's memory is read back and MUST NOT become a hub entry: on Claude Code by its `coffer_` file name and `coffer:` block, the marked block and the rules file; on Codex by the extension folder and by the `[via Coffer]` tag on content Codex derived from it (a tagged bullet is skipped whole; in the prose of the user profile, the tagged sentence is dropped and the rest read). When an agent's own memory changes only by text already covered by copies Coffer delivered to that agent, Coffer MUST record the new text against the hub entry without publishing a change, so an agent's rewording of what it absorbed does not circulate.
 
 #### Scenario: a copy read back is not published
 - **GIVEN** a `coffer_` copy Coffer wrote into Claude Code, and a Codex `MEMORY.md` bullet tagged `[via Coffer]`

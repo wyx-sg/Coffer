@@ -215,13 +215,11 @@ def _read_groups(text: str, summary_text: str) -> tuple[RawEntry, ...]:
     terms_by_title = _match_terms_to_groups(summary_text, (g.title for g in groups))
     entries: list[RawEntry] = []
     for entry in groups:
-        # A group can route to more than one cwd (`applies_to: cwd=A and B`);
-        # attributing every entry to all of them would give the same anchor two
-        # homes and blur which partition a note built from it belongs to (see
-        # "Distil each raw entry into a note mechanically"), so — same as the
-        # un-ambiguous, overwhelmingly common single-cwd case — the first
-        # recorded cwd is the one project a group's entries are filed under. A
-        # group with none files under "" (global).
+        # A group can route to more than one cwd (`applies_to: cwd=A (work in
+        # B)`): Codex's app runs each chat in a scratch directory and names the
+        # repository worked on beside it. An entry gets one home, so every cwd
+        # is carried and publishing files the entry under the first inside a
+        # repository. A group with none files under "" (global).
         project_root = entry.cwds[0] if entry.cwds else ""
         search_terms = terms_by_title.get(entry.title, ())
         for heading, entry_type in _GROUP_SECTIONS.items():
@@ -236,6 +234,7 @@ def _read_groups(text: str, summary_text: str) -> tuple[RawEntry, ...]:
                         body=bullet,
                         anchor=_anchor(entry.title, heading, bullet),
                         project_root=project_root,
+                        other_roots=entry.cwds[1:],
                         search_terms=search_terms,
                     )
                 )
@@ -244,7 +243,7 @@ def _read_groups(text: str, summary_text: str) -> tuple[RawEntry, ...]:
 
 def _read_summary(text: str) -> tuple[RawEntry, ...]:
     entries: list[RawEntry] = []
-    profile = section_text(text, _PROFILE_HEADING).strip()
+    profile = _without_coffer(section_text(text, _PROFILE_HEADING)).strip()
     if profile:
         entries.append(
             RawEntry(
@@ -330,6 +329,33 @@ def _title_tokens(title: str) -> frozenset[str]:
         for token in _TOKEN_SPLIT_RE.split(title.lower())
         if token and token not in _TITLE_STOPWORDS
     )
+
+
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?\u3002\uff01\uff1f])\s+")
+
+
+def _without_coffer(text: str) -> str:
+    """``text`` without the sentences Codex derived from Coffer's copies.
+
+    Codex tags what it derives from them `[via Coffer]` (see the extension's
+    instructions). A tagged bullet is skipped whole; the profile is prose, so
+    a tagged sentence in it is dropped and the rest kept, or Coffer would
+    publish back, as Codex's, what it delivered."""
+    lines = []
+    for line in text.split("\n"):
+        if VIA_COFFER not in line:
+            lines.append(line)
+            continue
+        kept: list[str] = []
+        for sentence in _SENTENCE_SPLIT_RE.split(line):
+            if VIA_COFFER not in sentence:
+                kept.append(sentence)
+            elif not sentence.replace(VIA_COFFER, "").strip(" .;,") and kept:
+                # "Sentence. [via Coffer]": the tag stands after what it marks.
+                kept.pop()
+        if kept:
+            lines.append(" ".join(kept))
+    return "\n".join(lines)
 
 
 def _bullet_title(bullet: str) -> str:

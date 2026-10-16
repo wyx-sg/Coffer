@@ -215,12 +215,45 @@ def _index_lines(
     for target, name in rows[:BLOCK_CAP]:
         entry = target.entry
         origin = AGENT_LABELS.get(entry.origin.agent, entry.origin.agent)
-        desc = one_line(entry.description or entry.title, 150)
-        lines.append(f"- [{one_line(entry.title, 80)}]({name}) — {desc} (from {origin})")
+        title, gloss = _title_and_rest(entry.title, entry.description, 150)
+        link = f"[{one_line(title, 80)}]({name})" if title else f"[{gloss}]({name})"
+        gloss = gloss.lstrip(_SEPARATORS) if title else ""
+        tail = f" — {gloss}" if gloss else ""
+        lines.append(f"- {link}{tail} (from {origin})")
     rest = len(rows) - BLOCK_CAP
     if rest > 0:
         lines.append(f"- …and {rest} more Coffer memories in this folder ({COPY_PREFIX}*.md)")
     return lines
+
+
+#: What a title's remainder can open with to follow the title directly.
+_JOINERS = (";", ",", ".", ":", " ")
+#: Separators trimmed off a remainder that is shown on its own.
+_SEPARATORS = " ;,.:->"
+
+
+def _title_and_rest(title: str, description: str, limit: int) -> tuple[str, str]:
+    """``title`` and what ``description`` adds to it, each on one line.
+
+    A Codex memory has no title of its own: its title is the first clause of its
+    text, and its description is the whole text, so printing both repeats that
+    clause. When the description begins with the title, only the remainder is
+    returned (``""`` when there is none); when the title is a cut-off stem of the
+    description, the title is dropped (``""``) and the description returned."""
+    t, d = one_line(title, 10_000), one_line(description, 10_000)
+    if not d or d == t:
+        return t, ""
+    if d.startswith(t):
+        rest = d[len(t) :]
+        if not rest.strip():
+            return t, ""
+        # Keep the separator that joined the clause to the rest ("; ", " -> ").
+        return t, (" " if rest[0] == " " else "") + one_line(rest, limit)
+    for ellipsis in ("...", "…"):
+        stem = t[: -len(ellipsis)].rstrip() if t.endswith(ellipsis) else ""
+        if stem and d.startswith(stem):
+            return "", one_line(d, limit)
+    return t, one_line(d, limit)
 
 
 def _render_rules(
@@ -245,12 +278,16 @@ def _render_rules(
     listed = 0
     for target, path in rows:
         entry = target.entry
-        description = one_line(entry.description, 200)
-        line = (
-            f"- **{one_line(entry.title, 120)}**"
-            + (f": {description}" if description else "")
-            + f" ({path})\n"
-        )
+        title, gloss = _title_and_rest(entry.title, entry.description, 200)
+        if not title:
+            line = f"- {gloss} ({path})\n"
+        else:
+            sep = "" if gloss[:1] in _JOINERS else ": "
+            line = (
+                f"- **{one_line(title, 120)}**"
+                + (f"{sep}{gloss}" if gloss else "")
+                + f" ({path})\n"
+            )
         if size + len(line.encode("utf-8")) > RULES_MAX_BYTES:
             break
         parts.append(line)

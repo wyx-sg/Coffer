@@ -35,8 +35,8 @@ from coffer.domain.memory import absorption
 from coffer.domain.memory.errors import UnreadableMemory
 from coffer.domain.memory.hub import (
     CLAUDE_CODE,
-    TYPE_USER,
     HubEntry,
+    TYPE_USER,
     Origin,
     entry_id,
     one_line,
@@ -302,20 +302,25 @@ def _publish_source(
 
 def _place(raw: RawEntry, ctx: PublishContext) -> tuple[str, list[str]] | None:
     """``(project key, repository roots)`` for an entry; ``""`` is global.
-    ``None`` when the entry is not published."""
+    ``None`` when the entry is not published.
+
+    An entry stays where its agent filed it, whatever its type: under the
+    first of its directories inside a repository, as that repository's
+    project. An entry with no directory is global, and so is a memory about
+    the person learned outside any repository; anything else learned outside
+    one (a scratch directory) is not published."""
     if not raw.project_root:
         return "", []
-    checkout = ctx.project_of(raw.project_root)
-    roots = []
-    if checkout is not None:
-        roots = [checkout.root]
-        if raw.project_root.rstrip("/") != checkout.root.rstrip("/"):
-            roots.append(raw.project_root)
+    for directory in (raw.project_root, *raw.other_roots):
+        checkout = ctx.project_of(directory)
+        if checkout is not None:
+            roots = [checkout.root]
+            if directory.rstrip("/") != checkout.root.rstrip("/"):
+                roots.append(directory)
+            return checkout.key, roots
     if raw.type == TYPE_USER:
-        return "", roots
-    if checkout is None:
-        return None
-    return checkout.key, roots
+        return "", []
+    return None
 
 
 __all__ = [

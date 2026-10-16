@@ -80,15 +80,24 @@ async def test_an_agent_memory_becomes_one_hub_file(
 async def test_a_memory_about_the_person_is_filed_under_global(
     tmp_path: pathlib.Path, payments: pathlib.Path
 ) -> None:
+    scratch = tmp_path / "Documents" / "notes"
+    scratch.mkdir(parents=True)
     a = Machine("machine-a", tmp_path / "a")
+    claude = a.claude()
     cc_project(
-        a.claude(),
-        payments,
+        claude,
+        scratch,
         {
             "user_lang.md": cc_file(
                 "Replies in Chinese", "The person reads Chinese", "user", "Reply in Chinese."
             )
         },
+    )
+    # Filed by Claude Code under a project: it stays there, whatever its type.
+    cc_project(
+        claude,
+        payments,
+        {"user_pr.md": cc_file("Small PRs here", "In payments", "user", "Keep PRs small.")},
     )
     a.codex(
         memory_md="",
@@ -96,9 +105,38 @@ async def test_a_memory_about_the_person_is_filed_under_global(
     )
     await a.sync()
 
-    folders = {p.parent.name for p in hub_files(_vault())}
-    assert folders == {"global"}
-    assert {e.origin.agent for e in _entries()} == {"claude_code", "codex"}
+    by_title = {e.title: e for e in _entries()}
+    assert by_title["Replies in Chinese"].is_global
+    assert by_title["User Profile"].is_global
+    assert not by_title["Small PRs here"].is_global
+
+
+@pytest.mark.acceptance(
+    spec="memory", scenario="a Codex preference follows the repository its task worked in"
+)
+async def test_a_codex_preference_follows_the_repository_its_task_worked_in(
+    tmp_path: pathlib.Path, payments: pathlib.Path
+) -> None:
+    chat = tmp_path / "Documents" / "Codex" / "2026-10-14" / "chat"
+    chat.mkdir(parents=True)
+    a = Machine("machine-a", tmp_path / "a")
+    a.codex(
+        memory_md=(
+            "# Task Group: payments retry work\n"
+            f"applies_to: cwd={chat} (payments implementation in {payments}); reuse_rule=x\n\n"
+            "## User preferences\n- when retrying, the user wanted backoff capped at 30s\n\n"
+            "# Task Group: appraisal drafts\n"
+            f"applies_to: cwd={chat}; reuse_rule=x\n\n"
+            "## User preferences\n- keep appraisal drafts under one page\n"
+        ),
+    )
+    await a.sync()
+
+    by_title = {e.title: e for e in _entries()}
+    assert by_title["when retrying, the user wanted backoff capped at 30s"].project == (
+        "github.com/acme/payments"
+    )
+    assert by_title["keep appraisal drafts under one page"].is_global
 
 
 @pytest.mark.acceptance(spec="memory", scenario="two clones on two machines share one project")

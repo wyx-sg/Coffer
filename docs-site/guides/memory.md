@@ -56,8 +56,8 @@ The hub is `vault/memory/` in your vault, one Markdown file per memory:
 ```
 
 - **A project is its repository.** A project is named by its repository's `origin` URL (`github.com/acme/payments`), or by the repository's directory name when it has no remote. A main checkout, its worktrees and another clone of the same repository — on this machine or another — are one project.
-- **What is about you is `global`.** A memory about you rather than a project (type `user`: your preferences, Codex's profile) is filed under `global`, whichever repository it came from.
-- **Scratch folders are not projects.** A memory learned in a directory that is not inside a repository is published only when it is about you, under `global`.
+- **A memory stays where its agent put it.** A memory your agent learned in a repository is filed under that project, even when it is a preference of yours: a preference Codex noted while working on one task belongs to that task's project. Codex's profile of you is filed under `global`. When a Codex task ran in a scratch chat folder and names the repository it worked on, the memory goes to that repository.
+- **Scratch folders are not projects.** A memory learned only in directories that are not inside a repository is published only when it is about you, under `global`.
 - **Paths travel.** When a memory is published, its repository's folder is written as `<repo>` and your home folder as `~`. When it is written into an agent, they expand to where the project is checked out on that machine and to that machine's home.
 
 Each file's frontmatter names where the memory came from (the machine, the agent and the agent's own file), its `type`, `title`, one-line `description` and when it was created and last updated; the body is the memory as the agent wrote it. Only the machine and agent a memory came from ever change or delete its hub file: when the agent drops the memory, its hub file goes too.

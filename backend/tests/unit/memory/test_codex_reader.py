@@ -319,3 +319,24 @@ def test_a_long_bullet_gets_a_trimmed_handle_and_keeps_its_whole_body(
     assert len(entry.title) == 100
     assert entry.title.endswith("...")
     assert entry.body == long_bullet
+
+
+def test_the_profile_drops_what_codex_derived_from_coffers_copies(tmp_path: pathlib.Path) -> None:
+    config_dir = _write_codex_memories(tmp_path)
+    summary = config_dir / "memories" / "memory_summary.md"
+    summary.write_text(
+        summary.read_text(encoding="utf-8").replace(
+            "The user likes concise Chinese replies and worktree isolation.",
+            "The user likes concise Chinese replies. They work on Coffer [via Coffer]. "
+            "They prefer squash merges. [via Coffer]\nThey use a Mac.",
+        ),
+        encoding="utf-8",
+    )
+    reader = CodexMemoryReader()
+
+    profile = next(
+        e for e in reader.read(_summary_source(reader, config_dir)) if e.title == "User Profile"
+    )
+
+    assert profile.body == "The user likes concise Chinese replies.\nThey use a Mac."
+    assert "[via Coffer]" not in profile.description

@@ -57,7 +57,8 @@ async def test_a_codex_memory_reaches_claude_code(
     index = (memory / "MEMORY.md").read_text(encoding="utf-8")
     assert index.startswith(own)
     block = index[index.index(BLOCK_BEGIN) : index.index(BLOCK_END)]
-    assert f"]({copy.name}) —" in block and "(from Codex)" in block
+    # The description only adds a full stop to the title, so the line has no gloss.
+    assert f"]({copy.name}) (from Codex)" in block
     backups = list(config_backups_dir().rglob("MEMORY.md.coffer-backup-*"))
     assert backups and backups[0].read_text(encoding="utf-8") == own
 
