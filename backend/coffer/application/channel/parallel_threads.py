@@ -149,8 +149,11 @@ async def _thread_entry(ctx: CommandContext, row: ChannelThreadConversation) -> 
     running = commands.running_in(ctx.binding.resource.uid, ctx.chat_id, row.thread_id)
     bound = row.active_conversation_id
     waiting = len(commands._turns.pending(bound)) if bound is not None else 0
+    held = commands._turns.held(bound) if bound is not None else 0
     if running is not None:
         state = "running"
+    elif held:
+        state = f"{held} on hold"
     elif waiting:
         state = f"{waiting} waiting"
     else:

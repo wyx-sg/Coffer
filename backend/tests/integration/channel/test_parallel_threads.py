@@ -196,7 +196,7 @@ async def test_status_in_a_direct_chat_lists_its_parallel_threads(env: ChannelEn
         "🧵#1 deploy check · Coffer Assistant · running"
     )
 
-    # A message behind the running turn shows as queued once the turn is gone.
+    # A message behind the running turn shows as on hold once a stop ends it.
     await env.processor.on_message(inbound("tg", "owner", "next", thread_id="t1"))
     await env.processor.on_message(inbound("tg", "owner", "/stop", thread_id="t1"))
     await wait_until(
@@ -206,7 +206,7 @@ async def test_status_in_a_direct_chat_lists_its_parallel_threads(env: ChannelEn
     await env.processor.on_message(inbound("tg", "owner", "/status"))
     assert adapter.texts()[-1].splitlines()[-1] == (
         "Parallel threads (2): 🧵#2 write docs · Codex · idle; "
-        "🧵#1 deploy check · Coffer Assistant · 1 waiting"
+        "🧵#1 deploy check · Coffer Assistant · 1 on hold"
     )
     gated.release.set()
 

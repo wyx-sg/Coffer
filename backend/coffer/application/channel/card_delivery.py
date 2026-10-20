@@ -2,7 +2,8 @@
 
 Why the tap half exists: a card offers choices (``model:``,
 ``dir:``, ``resume:``, ``agent:``) and actions (``cmd:<name>``, which runs
-exactly what typing ``/<name>`` would). Each tap is owner-gated by the
+exactly what typing ``/<name>`` would; ``held:`` settles the messages a stop
+held). Each tap is owner-gated by the
 processor and routed here to the same function the typed command calls (spec
 channels "Offer choices and actions as owner-gated cards").
 
@@ -25,12 +26,14 @@ from typing import TYPE_CHECKING
 
 from coffer.application.channel import model_switch, new_conversation
 from coffer.application.channel.agent_routing import routable_choices
-from coffer.application.channel.command_cards import PICK_AGENT, current_help_card
+from coffer.application.channel.command_cards import PICK_AGENT
 from coffer.application.channel.command_context import deliver_card
 from coffer.application.channel.dir_switch import apply_dir, current_dir_card
+from coffer.application.channel.held_queue import HELD_KIND, apply_held
 from coffer.application.channel.reply_tracking import WITHDRAW_KIND
 from coffer.application.channel.resume_switch import apply_resume, current_resume_card
 from coffer.application.channel.selection_cards import (
+    DEFAULT_CHOICE,
     SelectionCard,
     is_page_turn,
     parse_page_turn,
@@ -81,6 +84,11 @@ async def dispatch_card_tap(ctx: CommandContext, data: str) -> None:
         # The 🗑 under a reply (spec channels "Withdraw a bot reply on the owner's command").
         await ctx.commands.withdrawal.tap(ctx, value)
         return
+    if kind == HELD_KIND:
+        # Continue or Discard under a stopped line or a `/status` card (spec
+        # channels "Continue or discard the messages a stop held").
+        await apply_held(ctx, value)
+        return
     if kind == "cmd":
         # Exactly what typing it would do — a name not on the roster is ignored.
         if command_name(f"/{value}") is not None:
@@ -97,10 +105,13 @@ async def dispatch_card_tap(ctx: CommandContext, data: str) -> None:
             return
         await new_conversation.apply_agent(ctx, value)
     elif kind == "model":
-        await model_switch.apply_model(ctx, value)
+        if value == DEFAULT_CHOICE:
+            await model_switch.clear_model(ctx)
+        else:
+            await model_switch.apply_model(ctx, value)
     elif kind == "dir":
         directories = ctx.binding.directories
-        if value == "default":
+        if value == DEFAULT_CHOICE:
             await apply_dir(ctx, None)
         elif value.isdigit() and int(value) < len(directories):
             await apply_dir(ctx, directories[int(value)])
@@ -226,8 +237,6 @@ async def _current_card(
         return await new_conversation.current_agent_card(ctx, page=page)
     if kind == "resume":
         return await current_resume_card(ctx, page=page)
-    if kind == "help":
-        return current_help_card(group=ctx.chat_kind == "group", page=page)
     return None
 
 

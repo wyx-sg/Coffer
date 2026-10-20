@@ -76,7 +76,7 @@ async def test_a_command_button_runs_the_command_it_names(env: ChannelEnv) -> No
     _chat, text, buttons = adapter.cards[-1]
     assert "Coffer Assistant · Default model" in text
     # Nothing is running, so there is nothing to stop.
-    assert [b.value for b in buttons] == ["cmd:new", "cmd:model", "cmd:resume", "cmd:dir"]
+    assert [b.value for b in buttons] == ["cmd:model", "cmd:dir"]
 
 
 @pytest.mark.acceptance(spec="channels", scenario="/new answers with a one-line card")
@@ -136,7 +136,11 @@ async def test_model_no_arg_renders_card_from_suggestions(env: ChannelEnv) -> No
     await env.processor.on_message(inbound("tg", "owner", "/model"))
 
     [(_chat, _text, buttons)] = adapter.cards
-    assert [b.value for b in buttons] == ["model:claude-opus-4-8", "model:claude-haiku-4-5"]
+    assert [b.value for b in buttons] == [
+        "model:default",
+        "model:claude-opus-4-8",
+        "model:claude-haiku-4-5",
+    ]
 
 
 async def test_model_no_arg_falls_back_to_text_without_suggestions(env: ChannelEnv) -> None:
@@ -378,6 +382,8 @@ async def test_a_failed_card_rewrite_does_not_break_the_switch(env: ChannelEnv) 
 
 
 CATALOGUE = [f"model-{i}" for i in range(29)]
+#: The card's options in order: the Default first, then the catalogue.
+OPTIONS = ["model:default", *(f"model:{m}" for m in CATALOGUE)]
 
 
 async def _model_card_channel(env: ChannelEnv) -> tuple[Resource, FakeChannelAdapter]:
@@ -409,7 +415,7 @@ async def test_next_rewrites_the_same_card_with_the_following_page(env: ChannelE
     await wait_until(lambda: len(adapter.card_updates) == 1)
     chat_id, message_id, text, buttons, title = adapter.card_updates[0]
     assert (chat_id, message_id, title) == ("owner", "card-1", "Model")
-    assert _page_values(buttons) == [f"model:model-{i}" for i in range(PAGE_SIZE, 2 * PAGE_SIZE)]
+    assert _page_values(buttons) == OPTIONS[PAGE_SIZE : 2 * PAGE_SIZE]
     assert "Page 2/" in text
     assert len(adapter.cards) == sent_before, "a page turn must not post a second card"
 
@@ -427,7 +433,7 @@ async def test_prev_and_next_walk_the_whole_catalogue(env: ChannelEnv) -> None:
     await wait_until(lambda: len(adapter.card_updates) == 2)
 
     _chat, _mid, text, buttons, _title = adapter.card_updates[-1]
-    assert _page_values(buttons) == [f"model:model-{i}" for i in range(PAGE_SIZE)]
+    assert _page_values(buttons) == OPTIONS[:PAGE_SIZE]
     assert "Page 1/" in text
     # Back on the first page there is nothing before it to offer.
     assert [b.value for b in buttons if is_page_turn(b.value)] == ["page:model:0", "page:model:1"]
@@ -435,7 +441,7 @@ async def test_prev_and_next_walk_the_whole_catalogue(env: ChannelEnv) -> None:
 
 async def test_the_last_page_offers_no_next(env: ChannelEnv) -> None:
     _resource, adapter = await _model_card_channel(env)
-    last = (len(CATALOGUE) + PAGE_SIZE - 1) // PAGE_SIZE - 1
+    last = (len(OPTIONS) + PAGE_SIZE - 1) // PAGE_SIZE - 1
 
     await env.processor.on_callback(
         tap_event("tg", "owner", f"page:model:{last}", platform_message_id="card-1")
@@ -523,7 +529,7 @@ async def test_a_failed_page_turn_posts_the_page_as_a_fresh_card(env: ChannelEnv
 
     await wait_until(lambda: len(adapter.cards) == sent_before + 1)
     _chat, text, buttons = adapter.cards[-1]
-    assert _page_values(buttons) == [f"model:model-{i}" for i in range(PAGE_SIZE, 2 * PAGE_SIZE)]
+    assert _page_values(buttons) == OPTIONS[PAGE_SIZE : 2 * PAGE_SIZE]
     assert "Page 2/" in text
 
 

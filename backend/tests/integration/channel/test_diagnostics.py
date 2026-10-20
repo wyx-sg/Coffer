@@ -126,7 +126,7 @@ async def test_a_group_help_answers_the_asker_alone(env: ChannelEnv) -> None:
         )
     )
 
-    assert any(text.startswith("/new") for _chat, text in adapter.sent)
+    assert any("\n/new [agent]" in text for _chat, text in adapter.sent)
     target = adapter.sent_ephemeral[-1]
     assert target is not None
     assert (target.receiver_id, target.ephemeral_message_id) == ("4242", "77")

@@ -12,11 +12,7 @@ from __future__ import annotations
 
 import os
 
-from coffer.application.channel.command_cards import (
-    STATUS_ACTIONS,
-    command_card,
-    help_card,
-)
+from coffer.application.channel.command_cards import STATUS_ACTIONS, command_card
 from coffer.application.channel.selection_cards import (
     CALLBACK_MAX_BYTES,
     MAX_CARD_BUTTONS,
@@ -29,6 +25,7 @@ from coffer.application.channel.selection_cards import (
     path_label,
     resume_card,
 )
+from coffer.domain.channel.envelopes import ChoiceButton
 
 
 def _values(card: SelectionCard) -> list[str]:
@@ -53,39 +50,40 @@ class TestShortListsAreNotPaged:
         assert "Page" not in card.text
 
     def test_a_catalogue_that_fits_is_shown_whole(self):
-        card = model_card(current=None, picks=[f"m{i}" for i in range(MAX_CARD_BUTTONS)])
+        # The catalogue plus the Default option, exactly one card's worth.
+        card = model_card(current=None, picks=[f"m{i}" for i in range(MAX_CARD_BUTTONS - 1)])
 
         assert _nav(card) == []
         assert len(card.buttons) == MAX_CARD_BUTTONS
         assert card.pages == 1
 
     def test_one_past_the_fit_starts_paging(self):
-        card = model_card(current=None, picks=[f"m{i}" for i in range(MAX_CARD_BUTTONS + 1)])
+        card = model_card(current=None, picks=[f"m{i}" for i in range(MAX_CARD_BUTTONS)])
 
         assert card.pages == 2
-        assert _choices(card) == [f"model:m{i}" for i in range(PAGE_SIZE)]
+        assert _choices(card) == ["model:default", *(f"model:m{i}" for i in range(PAGE_SIZE - 1))]
 
     def test_the_short_catalogue_is_shown_whole(self):
         card = model_card(current=None, picks=["sonnet", "opus"])
 
-        assert _values(card) == ["model:sonnet", "model:opus"]
+        assert _values(card) == ["model:default", "model:sonnet", "model:opus"]
 
     def test_a_button_shows_the_model_name_and_carries_the_id(self):
         labels = {"fable": "Fable 5.1", "claude-fable-5-1[1m]": "Fable 1M"}
         card = model_card(current="fable", picks=list(labels), labels=labels)
 
-        assert [b.label for b in card.buttons] == ["✓ Fable 5.1", "Fable 1M"]
-        assert _values(card) == ["model:fable", "model:claude-fable-5-1[1m]"]
+        assert [b.label for b in card.buttons] == ["Default", "✓ Fable 5.1", "Fable 1M"]
+        assert _values(card) == ["model:default", "model:fable", "model:claude-fable-5-1[1m]"]
 
     def test_the_current_model_is_not_duplicated(self):
         card = model_card(current="sonnet", picks=["sonnet", "opus", "haiku"])
 
-        assert _values(card) == ["model:sonnet", "model:opus", "model:haiku"]
+        assert _values(card) == ["model:default", "model:sonnet", "model:opus", "model:haiku"]
 
     def test_an_oversized_callback_is_still_dropped(self):
         card = model_card(current=None, picks=["ok", "x" * 100])
 
-        assert _values(card) == ["model:ok"]
+        assert _values(card) == ["model:default", "model:ok"]
 
 
 class TestPaging:
@@ -101,7 +99,7 @@ class TestPaging:
                 break
             page += 1
 
-        assert seen == [f"model:m{i}" for i in range(29)]
+        assert seen == ["model:default", *(f"model:m{i}" for i in range(29))]
 
     def test_the_first_page_offers_next_but_no_prev(self):
         card = model_card(current=None, picks=[f"m{i}" for i in range(29)], page=0)
@@ -170,7 +168,8 @@ class TestTheTickStaysHonest:
         card = model_card(current=None, picks=[f"m{i}" for i in range(29)], page=3)
 
         assert "Current: Default model" in card.text
-        assert "✓" not in card.text
+        # The Default option carries the tick, on page one; this page says so.
+        assert "✓ Default model is on page 1" in card.text
 
     def test_a_current_model_outside_the_catalogue_is_still_named(self):
         # `/model something-exotic` pins a name the catalogue never listed.
@@ -225,26 +224,28 @@ def _commands(card: SelectionCard) -> list[str]:
 
 
 class TestTheCommandCard:
-    def test_the_help_card_is_paged_over_every_direct_command(self):
-        first = help_card(text="/new", group=False)
-
-        assert first.title == "Commands"
-        assert first.pages == 3
-        assert _commands(first) == ["cmd:new", "cmd:stop", "cmd:model", "cmd:dir"]
-        last = help_card(text="/new", group=False, page=2)
-        assert _commands(last) == ["cmd:help"]
-        assert "Page 3/3" in last.text
-
-    def test_a_group_help_card_fits_one_page(self):
-        card = help_card(text="/new", group=True)
-
-        assert card.pages == 1
-        assert [b.label for b in card.buttons] == ["New", "Stop", "Del", "Help"]
-
     def test_the_status_card_carries_its_actions(self):
         card = command_card(title="Status", text="Idle", actions=STATUS_ACTIONS)
 
-        assert [b.label for b in card.buttons] == ["Stop", "New", "Model", "Resume", "Dir"]
+        assert [b.label for b in card.buttons] == ["Model", "Dir"]
+
+    def test_the_status_card_leads_with_what_applies_now(self):
+        stop = ChoiceButton(label="Stop", value="cmd:stop")
+        card = command_card(title="Status", text="Running", actions=STATUS_ACTIONS, lead=[stop])
+
+        assert [b.label for b in card.buttons] == ["Stop", "Model", "Dir"]
+
+
+class TestTheModelDefault:
+    def test_default_is_ticked_when_no_model_is_pinned(self):
+        card = model_card(current=None, picks=["sonnet", "opus"])
+
+        assert [b.label for b in card.buttons] == ["✓ Default", "sonnet", "opus"]
+
+    def test_default_is_not_ticked_under_a_pinned_model(self):
+        card = model_card(current="opus", picks=["sonnet", "opus"])
+
+        assert [b.label for b in card.buttons] == ["Default", "sonnet", "✓ opus"]
 
 
 def test_a_resume_button_is_cut_to_fit_and_ticks_the_current_one() -> None:

@@ -66,53 +66,53 @@ COMMAND_ROSTER: tuple[ChannelCommand, ...] = (
     ChannelCommand(
         "new",
         "[agent]",
-        "Start a fresh conversation [agent]",
-        "开始新对话 [agent]",
+        "Start a fresh conversation, optionally on another agent",
+        "开始新对话，可指定换一个智能体",  # noqa: RUF001
     ),
     ChannelCommand("stop", "", "Stop what\u2019s running", "停止正在运行的任务"),
     ChannelCommand(
+        "status",
+        "",
+        "What\u2019s running, and the agent, model and directory in use",
+        "正在运行什么，以及当前的智能体、模型和目录",  # noqa: RUF001
+        dm_only=True,
+    ),
+    ChannelCommand(
         "model",
         "[name]",
-        "Pick a model",
-        "选择模型",
+        "Switch the model",
+        "切换模型",
         dm_only=True,
     ),
     ChannelCommand(
         "dir",
         "[path|name]",
-        "Pick the working directory",
-        "选择工作目录",
-        dm_only=True,
-    ),
-    ChannelCommand(
-        "status",
-        "",
-        "What is running, threads",
-        "正在运行的内容与线程",
+        "Switch the working directory",
+        "切换工作目录",
         dm_only=True,
     ),
     ChannelCommand(
         "resume",
         "[n]",
-        "Go back to a conversation",
-        "回到某个历史对话",
+        "Go back to an earlier conversation",
+        "回到之前的对话",
         dm_only=True,
     ),
     ChannelCommand(
         "thread",
         "[title]",
-        "Open a parallel thread",
-        "开启并行线程",
+        "Open a parallel conversation beside this chat",
+        "在旁边开一个并行对话",
         dm_only=True,
     ),
     ChannelCommand(
         "del",
         "",
-        "Withdraw a reply",
-        "撤回一条回复",
+        "Withdraw my latest reply (reply to one of mine to pick it)",
+        "撤回我最近的一条回复（引用某条回复可指定撤回它）",  # noqa: RUF001
         group_private=True,
     ),
-    ChannelCommand("help", "", "Commands", "命令列表", group_private=True),
+    ChannelCommand("help", "", "This list of commands", "命令列表", group_private=True),
 )
 
 #: The one line a group gets when it sends a direct-chat-only command, in English
@@ -215,9 +215,17 @@ def menu_entries(*, group: bool) -> tuple[ChannelCommand, ...]:
 
 
 def help_text(*, group: bool = False) -> str:
-    """The ``/help`` body, rendered from the roster: every command with its
-    arguments on one line (a group's help lists only the group commands), then
-    what anything else is. The one-line descriptions live in the platform's own
-    command menu (Telegram)."""
-    heads = [f"/{c.name} {c.args}".rstrip() for c in menu_entries(group=group)]
-    return " · ".join(heads) + "\nAnything else is a message to the agent."
+    """The ``/help`` body, rendered from the roster: a heading, then one line per
+    command — its typed form with arguments and what it does — then what anything
+    else is (spec channels "List the commands with /help"). A group's help lists
+    only the group commands and says where the others work."""
+    lines = ["**Commands**"]
+    lines += [
+        f"/{c.name} {c.args}".rstrip() + f" \u2014 {c.description}"
+        for c in menu_entries(group=group)
+    ]
+    lines.append("")
+    if group:
+        lines.append("The other commands work in a private chat with me.")
+    lines.append("Anything else goes to the agent as a message.")
+    return "\n".join(lines)

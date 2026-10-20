@@ -1,6 +1,6 @@
 ---
 title: Channel commands
-description: The nine channel commands, how each behaves in direct chats, threads and groups, how settings stick to a chat, and the command menus and selection cards.
+description: The nine channel commands, how each behaves in direct chats, threads and groups, how settings stick to a chat, messages on hold after /stop, and the command menus and selection cards.
 ---
 
 # Channel commands
@@ -12,14 +12,14 @@ The table lists the nine words. How each reads, where it works and the cards it 
 | Command | What it does |
 | --- | --- |
 | `/new [agent]` | Start a fresh conversation with this chat's settings. With an agent name, switch to that agent. |
-| `/stop` | Interrupt the running turn and pause the queue. The answer names the conversation — “⏹ Stopping “Fix login”…” — and is edited into “⏹ Stopped “Fix login” after 12s · 3 tools.” where the platform can edit a message, or followed by that line where it cannot; messages queued behind the turn are reported as on hold until you send again. With nothing running it answers “Nothing is running.”. A question waiting on you is cancelled and its card reads “⏹ Stopped”. |
+| `/stop` | Interrupt the running turn and pause the queue. The answer names the conversation — “⏹ Stopping “Fix login”…” — and is edited into “⏹ Stopped “Fix login” after 12s · 3 tools.” where the platform can edit a message, or followed by that line where it cannot. Messages queued behind the turn are held, with **Continue** and **Discard** buttons (see [Messages on hold after /stop](#messages-on-hold-after-stop)). With nothing running it answers “Nothing is running.”. A question waiting on you is cancelled and its card reads “⏹ Stopped”. |
+| `/status` | What this chat is running, as a card with the buttons that act on it. |
 | `/model [name]` | Show or set the model. |
 | `/dir [path\|name]` | Show or switch the working directory, in a fresh conversation. |
-| `/status` | What this chat is running, as a card with quick actions. |
 | `/resume [n]` | Reopen an earlier conversation from this chat. |
 | `/thread [title]` | In a direct chat, open a parallel conversation in its own thread. |
 | `/del` | Owner only. Withdraw the bot's reply: quote one of its messages and send `/del` to withdraw that whole reply, or send it bare to withdraw the bot's most recent reply in this chat or thread. |
-| `/help` | List the commands, with a button for each, paged (the four group commands in a group), under the title **Commands**. |
+| `/help` | List the commands, one per line with what each does (the four group commands in a group). No buttons. |
 
 In a group only `/new`, `/stop`, `/help` and `/del` work; the other five work only in a direct chat (see [Where each command works](#where-each-command-works)). `/start`, which a Telegram start link sends, answers like `/help`. `/new` and `/stop` take effect even while a turn is running. A command first releases any messages still waiting out their pause, so they run before it; `/stop` discards them instead.
 
@@ -41,9 +41,9 @@ Names are the ones you see, never internal ids. An agent is its display name or 
 | --- | --- | --- | --- | --- |
 | `/new [agent]` | ✓ | ✓ | ✓ | SeaTalk: sets the group's default agent; bare shows it |
 | `/stop` | ✓ | ✓ | ✓ | SeaTalk: stops every turn running in the group |
+| `/status` | ✓, with the parallel threads | ✓ | Direct chat only | Direct chat only |
 | `/model` | ✓ | ✓ | Direct chat only | Direct chat only |
 | `/dir` | ✓ | ✓ | Direct chat only | Direct chat only |
-| `/status` | ✓, with the parallel threads | ✓ | Direct chat only | Direct chat only |
 | `/resume` | ✓ | ✓ | Direct chat only | Direct chat only |
 | `/thread` | ✓ | ✓ | Direct chat only | Direct chat only |
 | `/del` | ✓ | ✓ | ✓ | ✓ |
@@ -77,7 +77,7 @@ This is why `/new` is safe to use often: it clears the context, not your choices
 
 - `/model <name>` sets the model. A name the agent's catalogue does not list is passed to the agent's CLI as is, so you can use a model the picker does not show; a name the agent cannot run comes back as the CLI's own error on the next turn.
 - Whatever word follows `/model` is a model name, `high` or `max` included; the only reserved word is `default`. `/model default` clears the model, returning to the agent's own default. Coffer has no reasoning-effort setting.
-- Bare `/model` shows the model in effect. On a platform with buttons it is a card: tap a model. The answer is one line, “Model: Claude Sonnet 5.5 — from your next message”.
+- Bare `/model` shows the model in effect. On a platform with buttons it is a card: tap a model, or **Default** (first on the card, ticked while no model is set) to do what `/model default` does. The answer is one line, “Model: Claude Sonnet 5.5 — from your next message”.
 
 ## Working directory
 
@@ -99,15 +99,41 @@ Every conversation a chat opens is remembered for that chat. `/resume` lists up 
 
 Only conversations this chat opened are offered — never one from the web page or from another chat — and a conversation deleted since is left out.
 
-## Status and help cards
+## Status, help and the /new card {#status-and-help-cards}
 
-`/status` answers in words, not ids, under the title **Status**: the conversation's title (or its `🧵#N` mark); one line with the agent, the model and the directory; then **Running**, **Running · 2 waiting** or **Idle**. In a direct chat it also lists the parallel threads on one line, each with whether it is running, waiting or idle.
+`/status` answers in words, not ids, under the title **Status**: the conversation's title (or its `🧵#N` mark); one line with the agent, the model and the directory; then **Running**, **Running · 2 waiting**, **⏸ 2 on hold** or **Idle**. In a direct chat it also lists the parallel threads on one line, each with whether it is running, has messages waiting or on hold, or is idle. On a platform with buttons it is a card carrying only the buttons that act on what it shows: **Stop** while a turn runs, **Continue** and **Discard** while messages are on hold, then **Model** and **Dir**.
 
-In a direct chat `/help` lists the commands on one line, `/new [agent] · /stop · /model [name] · /dir [path|name] · /status · /resume [n] · /thread [title] · /del · /help`, and says that anything else is a message to the agent. In a group it lists only `/new [agent] · /stop · /del · /help`.
+`/help` is a list to read, with no buttons. In a direct chat:
+
+```
+Commands
+/new [agent] — Start a fresh conversation, optionally on another agent
+/stop — Stop what’s running
+/status — What’s running, and the agent, model and directory in use
+/model [name] — Switch the model
+/dir [path|name] — Switch the working directory
+/resume [n] — Go back to an earlier conversation
+/thread [title] — Open a parallel conversation beside this chat
+/del — Withdraw my latest reply (reply to one of mine to pick it)
+/help — This list of commands
+
+Anything else goes to the agent as a message.
+```
+
+In a group it lists only `/new`, `/stop`, `/del` and `/help`, and adds “The other commands work in a private chat with me.” On a platform with no command menu (SeaTalk), `/help` is how you see what the bot accepts; on Telegram the commands in the list can be tapped too.
 
 `/new` answers with one line — "🆕 New conversation · Codex · Default model · ~/src/coffer" — and, on a platform with buttons, **Agent**, **Model** and **Dir** buttons in a direct chat and only the **Agent** button in a group. **Agent** offers the agents this channel may drive; a tap starts a fresh conversation on it, as `/new <agent>` does.
 
-On a platform with buttons, `/status` is a card with **New**, **Model**, **Resume** and **Dir** buttons, and **Stop** while a turn runs; `/help` is a card with a button for every command the chat may use — all nine in a direct chat, the four group commands in a group — paged four to a page with **← Prev** and **Next →**. A tap does exactly what typing the command in that chat does, so remembering `/status` is enough to reach every action. On a platform with no command menu (SeaTalk), `/help` is how you see what the bot accepts.
+A command button does exactly what typing the command in that chat does.
+
+## Messages on hold after /stop {#messages-on-hold-after-stop}
+
+Messages you sent while a turn was running wait in a queue. `/stop` stops the turn and holds that queue, so nothing you queued fires into the turn you just stopped. The stopped line says how many are held — “⏸ 2 queued messages are on hold.” — with two buttons:
+
+- **Continue** runs them, in the order you sent them (“▶ Continuing 2 queued messages.”).
+- **Discard** throws them away (“🗑 Discarded 2 queued messages.”); what you send next runs on its own.
+
+Sending any message also continues them, ahead of the new one. Where the platform can edit the “Stopping…” message (Telegram) the buttons sit on that message; elsewhere (SeaTalk) the held line follows the reply as its own card. `/status` shows **⏸ 2 on hold** and the same two buttons for as long as they are held. A tap after they were already continued or discarded answers “Nothing is on hold any more.”.
 
 ## Group defaults on SeaTalk
 
@@ -122,19 +148,19 @@ On SeaTalk every @mention in a group's main chat roots a fresh thread, so a sett
 
 Telegram shows a command menu; Coffer registers it from the same list the help and the typo check use, so the three never disagree. Private chats get all nine commands; groups get only `/new`, `/stop`, `/del` and `/help`, the ones that control the group's own conversation. Each menu is registered in English and Chinese. In a group, a menu tap arrives as `/status@your_bot`, which Coffer treats as `/status`. SeaTalk has no command menu, so it has a single surface: send `/help`, and a command that is only for a direct chat answers with the one-line private notice.
 
-The English descriptions are:
+They are the same lines `/help` shows. The English descriptions are:
 
 | Command | Menu description |
 | --- | --- |
-| `/new` | Start a fresh conversation [agent] |
+| `/new` | Start a fresh conversation, optionally on another agent |
 | `/stop` | Stop what’s running |
-| `/model` | Pick a model |
-| `/dir` | Pick the working directory |
-| `/status` | What is running, threads |
-| `/resume` | Go back to a conversation |
-| `/thread` | Open a parallel thread |
-| `/del` | Withdraw a reply |
-| `/help` | Commands |
+| `/status` | What’s running, and the agent, model and directory in use |
+| `/model` | Switch the model |
+| `/dir` | Switch the working directory |
+| `/resume` | Go back to an earlier conversation |
+| `/thread` | Open a parallel conversation beside this chat |
+| `/del` | Withdraw my latest reply (reply to one of mine to pick it) |
+| `/help` | This list of commands |
 
 ## Selection cards
 

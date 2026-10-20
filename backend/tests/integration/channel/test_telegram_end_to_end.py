@@ -153,7 +153,7 @@ async def test_a_group_command_answer_goes_to_the_asker_alone(env: ChannelEnv) -
         assert answer["chat_id"] == str(_GROUP_ID)
         assert answer["ephemeral_message_parameters"] == {"receiver_user_id": _OWNER_ID}
         assert answer["reply_parameters"]["ephemeral_message_id"] == 77
-        assert answer["text"].startswith("/new")
+        assert answer["text"].startswith("<b>Commands</b>\n/new")
 
         # A direct-chat command's decline line is the asker's own business too:
         # it goes privately, as text — a card with buttons would be an ordinary

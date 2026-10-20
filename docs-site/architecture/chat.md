@@ -68,7 +68,7 @@ Per-conversation state lives in one record: the event bus, the in-flight turn, t
 1. Check that the conversation exists (404 otherwise).
 2. If no turn is active, the queue is not paused and the queue is empty, start the turn now.
 3. Otherwise append a pending entry (text, attachments, title hint and an optional start hook, which a channel uses to render the turn) to the queue and broadcast `queue_changed`.
-4. Sending a message clears the paused flag, so a plain send after an interrupt resumes the held queue.
+4. Sending a message clears the paused flag, so a plain send after an interrupt resumes the held queue. A channel's Continue does the same without a message (`resume_held`); its Discard empties the held queue and clears the flag (`drop_held`).
 
 Starting a turn reserves the conversation's slot synchronously, before the orchestrator yields to anything else, so two concurrent sends cannot both start a turn. It then asks the registry for the conversation's provider, has it build an adapter and spawns the detached turn task. When that task finishes, the orchestrator pops the head of the queue and starts its turn.
 
@@ -305,7 +305,7 @@ The commands a phone can send are a small, closed vocabulary: `/new [agent]`, `/
 - **An allow-list for `/dir`.** A channel's configuration lists the directories `/dir` may reach (each admitting the directories beneath it), beside the default directory new conversations start in (the default agent configuration's `cwd`); with none listed, `/dir` is off. The agent runs with full permissions, so which folders a phone can aim it at is decided at the computer, in advance, and never widened from chat.
 - **Per-thread history.** Every conversation a thread opens is recorded against that thread. `/resume` reads only that history, so a chat can return to its own earlier conversations and never reach one from the web or from another chat, even with a forged button value.
 - **Group main chat on SeaTalk.** A SeaTalk @mention in a group's main chat roots a new thread, so a setting sent there would configure a thread nobody continues. The transport marks such a message as the group's main chat, and a command there writes the group's defaults instead; `/stop` there interrupts every turn in the group.
-- **Cards carry actions.** `/status` and `/help` are cards with Stop, New, Model, Resume and Dir buttons. A button carries the command's name, and a tap runs exactly what typing it runs, through the same owner gate as a message.
+- **Cards carry only the actions that apply.** `/status` is a card with Model and Dir buttons, Stop while a turn runs, and Continue and Discard while a stop holds queued messages; `/help` is text with no buttons. A command button carries the command's name, and a tap runs exactly what typing it runs, through the same owner gate as a message. Continue and Discard carry the stopped conversation's id and act on its held queue (`TurnOrchestrator.resume_held` / `drop_held`), only for a conversation of that chat thread.
 
 ### Where a conversation goes after the chat
 

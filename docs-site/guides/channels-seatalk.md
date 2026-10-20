@@ -74,7 +74,7 @@ Check the connection: the channel's header reads *WebSocket connected* when it i
 
 1. On the channel's **Overview** choose **Generate pairing code**.
 2. In SeaTalk, open a direct chat with the bot and send the eight-character code.
-3. The bot confirms and sends the help card once. SeaTalk has no command menu, so this card is how the bot shows what it accepts; send `/help` to see it again.
+3. The bot confirms and sends the command list once. SeaTalk has no command menu, so this list is how the bot shows what it accepts; send `/help` to see it again.
 
 SeaTalk has no start links, so you type the code. It is single-use, expires after one hour, and is invalidated after 10 wrong guesses.
 
@@ -140,7 +140,7 @@ If the bot is removed from a group or the group is disbanded, that group's sessi
 
 ## Cards
 
-In a direct chat a bare `/model`, `/dir` or `/resume` answers with an interactive card, and `/status` carries **New**, **Model**, **Resume** and **Dir** buttons (and **Stop** while a turn runs). `/help` carries a button for every command the chat may use (paged), nine in a direct chat and the four group commands in a group; `/new` carries **Agent**, **Model** and **Dir** in a direct chat and only **Agent** in a group. A tap on one of those does exactly what typing the command does. A question the agent asks arrives as a card too, with one button per option on its own line (multi-select options toggle a `✓`, and **Submit** sends); a tap or a typed reply is the answer, and the card is rewritten to `✓ Answered: …` afterwards.
+In a direct chat a bare `/model`, `/dir` or `/resume` answers with an interactive card, and `/status` carries **Model** and **Dir** buttons (with **Stop** first while a turn runs, and **Continue** and **Discard** while messages are on hold after `/stop`). `/help` is a plain list, one command per line, with no buttons. After `/stop`, messages that were queued behind the turn are held, and a card with **Continue** and **Discard** follows the reply; `/new` carries **Agent**, **Model** and **Dir** in a direct chat and only **Agent** in a group. A tap on one of those does exactly what typing the command does. A question the agent asks arrives as a card too, with one button per option on its own line (multi-select options toggle a `✓`, and **Submit** sends); a tap or a typed reply is the answer, and the card is rewritten to `✓ Answered: …` afterwards.
 
 - Buttons are laid out in up to three rows. Short labels share a row; a long one such as "Claude Code" gets its own.
 - A card has at most six buttons; longer lists page with **← Prev** and **Next →**.

@@ -66,7 +66,11 @@ PAGE_SIZE = MAX_CARD_BUTTONS - 2
 
 #: The card kinds that can be paged — closed and explicit, so a page value
 #: naming anything else is dropped rather than re-rendered.
-PAGED_KINDS: frozenset[str] = frozenset({"model", "collection", "resume", "dir", "agent", "help"})
+PAGED_KINDS: frozenset[str] = frozenset({"model", "collection", "resume", "dir", "agent"})
+
+
+#: The value of a card's Default option (``model:default``, ``dir:default``).
+DEFAULT_CHOICE = "default"
 
 
 def callback_fits(value: str) -> bool:
@@ -211,7 +215,7 @@ def model_card(
     """Pick the model the agent's CLI runs from the next message.
 
     ``current`` is ``None`` when no model is pinned, in which case the body says
-    the CLI's own default is in effect and no option carries the tick.
+    the CLI's own default is in effect and the Default option carries the tick.
 
     ``picks`` is the agent's whole model catalogue, and the whole of it is now
     browsable: a long catalogue becomes pages rather than a truncated handful.
@@ -232,12 +236,23 @@ def model_card(
         for name in dict.fromkeys(picks)
         if callback_fits(f"model:{name}")
     ]
+    if options:
+        # First, the CLI's own default — the tap form of `/model default`, as
+        # the directory card has its own Default. First, so a chat on the
+        # default opens the card on page one with its tick in view. A catalogue
+        # with nothing to tap stays no card at all: the text answer says more.
+        default = ChoiceButton(
+            label=tick("Default", current is None),
+            value=f"model:{DEFAULT_CHOICE}",
+            selected=current is None,
+        )
+        options.insert(0, default)
     return paginate(
         kind="model",
         title="Model",
         header=f"Current: {shown}\nTap a model (or send /model <name>):",
         options=options,
-        current_value=f"model:{current}" if current else None,
+        current_value=f"model:{current}" if current else f"model:{DEFAULT_CHOICE}",
         current_label=names.get(current or "") or current or default_label,
         page=page,
     )
@@ -284,11 +299,13 @@ def dir_card(
         at_default = current is None or current == default
         options.append(
             ChoiceButton(
-                label=tick("Default", at_default), value="dir:default", selected=at_default
+                label=tick("Default", at_default),
+                value=f"dir:{DEFAULT_CHOICE}",
+                selected=at_default,
             )
         )
         if at_default:
-            current_value = "dir:default"
+            current_value = f"dir:{DEFAULT_CHOICE}"
     return paginate(
         kind="dir",
         title="Working directory",

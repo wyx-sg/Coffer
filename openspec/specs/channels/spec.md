@@ -166,7 +166,7 @@ any previous peer, and the sender receives a three-line confirmation — "✅
 Paired — you own <bot>.", that only the owner can use it and how to use it in a
 group, and how to see the commands ("send /help", or on Telegram "tap /") —
 where <bot> is the channel's name on SeaTalk and `@username` on Telegram. The
-help card (see "Offer the commands as a help card") follows the confirmation
+command list (see "List the commands with /help") follows the confirmation
 automatically. All other senders
 MUST be ignored silently: a stranger messaging the bot produces zero observable
 response and zero turns, while the owner's traffic is unaffected, so the bot
@@ -183,7 +183,7 @@ pairing again rebinds the channel to the new sender.
 #### Scenario: pair by sending the code
 - **GIVEN** an issued pairing code
 - **WHEN** a sender messages the bot with exactly that code
-- **THEN** the sender becomes the channel's peer and receives the confirmation "✅ Paired — you own <bot>." followed by the help card
+- **THEN** the sender becomes the channel's peer and receives the confirmation "✅ Paired — you own <bot>." followed by the command list
 - **AND** the pairing is audited and the code cannot be reused
 
 #### Scenario: an expired or wrong code does not pair
@@ -281,12 +281,12 @@ those five is answered with one line in English and Chinese saying it works in a
 private chat with the bot, delivered privately to the sender where the platform
 can (see "Keep non-answer chatter private in a group"), and does nothing else —
 it is not passed to the agent as a message. A group's `/help` lists only the
-four group commands, and a card offered in a group (the `/new` card, the help
-card) carries no button for a direct-chat command.
+four group commands, and a card offered in a group (the `/new` card) carries no
+button for a direct-chat command.
 `/new [agent]` starts a fresh conversation with the chat's settings (see "Keep a chat's agent, model and directory across its conversations" and "Switch the agent with /new"),
 `/stop` interrupts the running turn, `/status` reports the chat's state (see
 "Report the chat's state as a status card") and `/help` lists the commands (see
-"Offer the commands as a help card") and `/del` withdraws a bot reply (see
+"List the commands with /help") and `/del` withdraws a bot reply (see
 "Withdraw a bot reply on the owner's command"). `/stop` and `/new` take effect even while
 a turn is running; other messages join the conversation's pending queue (spec
 `chat`) and run in order, a burst of them arriving as one
@@ -323,7 +323,7 @@ the agent").
 - **WHEN** the peer sends `/stop`
 - **THEN** the turn ends as interrupted and the chat is responsive again
 - **AND** the answer names the conversation it stops ("⏹ Stopping “<title>”…"), and where the platform can edit a message it is edited into "⏹ Stopped “<title>” after 12s." (the turn's real duration) instead of a second message being sent
-- **AND** when messages were queued behind the turn, the stopped line adds "⏸ N queued messages are on hold — send anything to continue."
+- **AND** when messages were queued behind the turn, the stopped line adds "⏸ N queued messages are on hold", with Continue and Discard where the transport has buttons (see "Continue or discard the messages a stop held") and "— send anything to continue." where it has none
 
 #### Scenario: /stop with no turn in flight says so
 - **GIVEN** a paired chat whose conversation has finished its last turn
@@ -350,8 +350,9 @@ the agent").
 #### Scenario: a group's help lists only the group commands
 - **GIVEN** a paired group and a paired direct chat
 - **WHEN** the owner sends `/help` in each
-- **THEN** the group's answer lists `/new`, `/stop`, `/del` and `/help` only, with a button for each of those four
+- **THEN** the group's answer lists `/new`, `/stop`, `/del` and `/help` only, and says the other commands work in a private chat with the bot
 - **AND** the direct chat's answer lists all nine commands
+- **AND** neither answer carries a button
 
 #### Scenario: /new answers with a one-line card
 - **GIVEN** a paired chat on a button-capable transport with two agents the channel may drive
@@ -646,8 +647,8 @@ line, and nothing more: a failure says what happened and ends "Send it again to
 retry." (never an error code), an interrupt ends "⏹ Stopped after 12s." — the
 turn's real duration, and the tool count when tools ran. After a `/stop` that
 line names what was stopped — "⏹ Stopped “<title>” after 12s · 3 tools." — and,
-when messages were queued behind the turn, says they are on hold until the next
-message; where the platform can edit a message it replaces the "⏹ Stopping
+when messages were queued behind the turn, says they are on hold (see "Continue
+or discard the messages a stop held"); where the platform can edit a message it replaces the "⏹ Stopping
 “<title>”…" the `/stop` sent instead of following it, and `/stop` with no turn
 in flight answers "Nothing is running.". A turn error
 is reported to the IM chat as a short notice and the channel stays up. A clean
@@ -1574,8 +1575,7 @@ and the per-command privacy flag (see "Keep non-answer chatter private in a
 group") are all rendered from one roster, so adding a command is one entry plus
 its handler, with no second list to forget. Each entry carries its description
 in English and Chinese, and whether it works only in a direct chat — which keeps it out of a group's menu and help. A platform with no menu API (SeaTalk) introduces
-the commands through the help card instead (see "Offer the commands as a help
-card"). Copy the owner already wrote, and the bot's name, are their branding
+the commands through `/help` instead (see "List the commands with /help"). Copy the owner already wrote, and the bot's name, are their branding
 decision and MUST NOT be overwritten.
 
 #### Scenario: the command menu matches the commands that exist
@@ -1722,9 +1722,12 @@ realizes the interactive-button capability that
 
 Two kinds of button exist. A **choice** carries `model:`, `dir:`,
 `resume:` or `collection:` and applies that choice. A **command button** carries
-`cmd:<name>` — the Stop, New, Model, Resume and Dir buttons of the status and
-help cards — and a tap runs exactly what typing `/<name>` in that chat or thread
-runs.
+`cmd:<name>` — the Stop, Model and Dir buttons of the status card and the Model
+and Dir buttons of the `/new` card — and a tap runs exactly what typing `/<name>`
+in that chat or thread runs. The Continue and Discard buttons (`held:`) settle
+the messages a stop held (see "Continue or discard the messages a stop held").
+A card carries only the buttons that act on what it shows; `/help` is a list to
+read and carries none.
 
 The card payload MUST follow each platform's published shape, which each child
 spec states. A card the platform refuses is not the end of the command: the
@@ -1742,8 +1745,8 @@ A card carries a **bounded number of buttons** — six, navigation included. A
 choice list longer than that bound is **paginated**: the card shows four choices
 plus `← Prev` / `Next →`, and a navigation tap **rewrites the same message** at
 the next window through the same `supports_card_update` path an applied choice
-uses. One rule serves every card — the `/help` command buttons and the `/resume`
-list as much as the `/model` list, a numbered list showing on each page only the
+uses. One rule serves every card — the `/resume` list as much as the `/model`
+list, a numbered list showing on each page only the
 lines of its own entries — and a handful of models or directories render
 with no navigation chrome at all.
 
@@ -1816,7 +1819,7 @@ further conversations beside it deliberately:
   root message or topic name (on SeaTalk, the bot's reply in the thread of the owner's `/thread` message), the conversation's title on the web, and `/status`
   both inside it and in the direct chat.
 - `/status` in the direct chat says how many parallel threads the chat has and
-  lists each one's mark, agent, and whether a turn is running, waiting, or idle,
+  lists each one's mark, agent, and whether a turn is running, messages wait or are on hold, or it is idle,
   newest first.
 - `/thread` works only in a direct chat; in a group it is declined (see
   "Answer the conversation commands from any paired chat"), because every group
@@ -1990,46 +1993,90 @@ is refused. A conversation deleted since is left out.
 `/status` MUST answer what the chat is running in words a person reads, under
 the title "Status": the conversation's title (or its parallel mark); one line
 with the agent by its display name, the model by the name its button shows, and the working directory (under the home directory as
-`~/…`); then "Running", "Running · n waiting", "n waiting" or "Idle"; in a
-direct chat, one "Parallel threads (n):" line naming each with its agent and its state (see "Open
+`~/…`); then "Running", "Running · n waiting", "n waiting", "⏸ n on hold" (the
+messages a stop held, see "Continue or discard the messages a stop held") or
+"Idle"; in a direct chat, one "Parallel threads (n):" line naming each with its
+agent and its state — running, n on hold, n waiting or idle (see "Open
 parallel conversations beside a direct chat"). It shows no conversation or agent
-ids. Where the transport has buttons it is a card whose buttons — Stop while a
-turn runs, then New, Model, Resume, Dir — run those commands, so a user who
-remembers one word reaches every action by tapping; elsewhere it is text.
+ids. Where the transport has buttons it is a card carrying only the buttons that
+act on what it shows: Stop while a turn runs, Continue and Discard while
+messages are on hold, then Model and Dir, which change the model and directory
+it names; elsewhere it is text.
 In a group where the answer can be delivered to the asker alone (see "Keep
 non-answer chatter private in a group") it is sent that way, as text: a card is
-always an ordinary message the whole room would see. The same holds for the
-help card.
+always an ordinary message the whole room would see.
 
 #### Scenario: /status shows names, not ids, with action buttons
 - **GIVEN** a paired chat on a button-capable transport with an active
   conversation
 - **WHEN** the owner sends `/status`
 - **THEN** a card titled "Status" names the conversation, the agent by display name, the model
-  and the directory, carries the New, Model, Resume and Dir buttons —
-  and Stop too while a turn runs — and contains no conversation id
+  and the directory, carries the Model and Dir buttons —
+  and Stop first while a turn runs — and contains no conversation id
 
-### Requirement: Offer the commands as a help card
-`/help` MUST list the commands from the roster on one line, each with its
-arguments, then say that anything else is a message to the agent; where the
-transport has buttons it is a card titled "Commands" carrying a button for every
-command the chat may use — all nine in a direct chat, `/new`, `/stop`, `/del` and
-`/help` in a group — paged like any card whose buttons do not fit one page (see
-"Offer choices and actions as owner-gated cards"), and a command button runs that
-command. The help card is sent automatically right after pairing succeeds (pairing is a direct chat). A
-platform with no command menu (SeaTalk) shows what the bot accepts through
-`/help`.
+### Requirement: List the commands with /help
+`/help` MUST answer with the commands from the roster as a list to read: a
+"Commands" heading, then one line per command the chat may use — its typed form
+with its arguments, a dash, and what it does, in the words the platform's own
+command menu shows — then that anything else goes to the agent as a message. A
+direct chat's list has all nine commands; a group's has `/new`, `/stop`, `/del`
+and `/help` and says the other commands work in a private chat with the bot. It
+carries no buttons, on any transport: the commands are typed (and, on Telegram,
+tapped in the text and in the platform's command menu), and a button per command
+made a card too long for one page. The list is sent automatically right after
+pairing succeeds (pairing is a direct chat). A platform with no command menu
+(SeaTalk) shows what the bot accepts through `/help`.
 
-#### Scenario: /help is a card with a button for every command, paged
+#### Scenario: /help lists one command per line, with no buttons
 - **GIVEN** a paired direct chat on a button-capable transport
 - **WHEN** the owner sends `/help`
-- **THEN** a card lists the commands and carries the first page of a button for every one of the nine commands
-- **AND** Next rewrites the same card with the following commands, so every command is reachable
+- **THEN** the answer is text, one line per command naming it, its arguments and what it does, for all nine commands
+- **AND** it carries no button
 
-#### Scenario: the help card follows pairing
+#### Scenario: the command list follows pairing
 - **GIVEN** an unpaired channel with an issued pairing code
 - **WHEN** the owner pairs by sending the code
-- **THEN** the pairing is confirmed and the help card listing every command follows it
+- **THEN** the pairing is confirmed and the list of every command follows it
+
+### Requirement: Continue or discard the messages a stop held
+A `/stop` holds the messages queued behind the stopped turn (spec `chat` "Pause
+the pending queue on interrupt"); the owner MUST be able to settle them from the
+chat both ways. Sending anything resumes them in order, as before; where the
+transport has buttons, the stopped line also carries **Continue** (run them, in
+order) and **Discard** (throw them away; what is sent next runs on its own). On a
+platform that edits the "⏹ Stopping…" message into the stopped line, the buttons
+ride that message; elsewhere the stopped line goes with the reply and "⏸ N queued
+messages are on hold." follows it as a card with the two buttons. While messages
+are on hold, `/status` counts them ("⏸ n on hold") and carries the same two
+buttons (see "Report the chat's state as a status card").
+
+A button names the conversation whose messages it settles, because after `/new`
+the held messages still belong to the conversation that was stopped. A tap is
+honoured only for a conversation of that chat thread's own history; a tap on a
+conversation with nothing on hold any more — already continued, discarded, or
+resumed by a message — answers "Nothing is on hold any more." and changes
+nothing.
+
+#### Scenario: a stop that holds messages offers Continue and Discard
+- **GIVEN** a button-capable transport with a turn running and one message queued behind it
+- **WHEN** the owner sends `/stop`
+- **THEN** the stopped line names what stopped, and "⏸ 1 queued message is on hold." comes with Continue and Discard buttons
+
+#### Scenario: Continue runs the held messages in order
+- **GIVEN** one message held by a stop
+- **WHEN** the owner taps Continue
+- **THEN** the chat answers "▶ Continuing 1 queued message." and the held message runs
+- **AND** a later tap on either button answers "Nothing is on hold any more."
+
+#### Scenario: Discard drops the held messages
+- **GIVEN** one message held by a stop
+- **WHEN** the owner taps Discard, then sends a new message
+- **THEN** the chat answers "🗑 Discarded 1 queued message.", the held message never runs, and the new message does
+
+#### Scenario: /status counts the messages a stop held
+- **GIVEN** one message held by a stop
+- **WHEN** the owner sends `/status`
+- **THEN** the state line reads "⏸ 1 on hold" and the card carries Continue, Discard, Model and Dir
 
 ### Requirement: Set a group's defaults from its main chat
 On a platform where every @mention in a group's main chat roots a fresh thread
@@ -2232,7 +2279,9 @@ the chat (see "Keep a chat's agent, model and directory across its conversations
   page holding the model in effect. Each button shows the model's **name**, not
   its raw id, and the tap still carries the id: a model with no name shows its
   id, and a 1M-context variant says "1M", so `fable` and `claude-fable-5-1[1m]`
-  read as two different choices. Tapping a model sets it,
+  read as two different choices. The card's first option is **Default**,
+  ticked while no model is set; tapping it does what `/model default` does.
+  Tapping a model sets it,
   answered "Model: <model> — from your next message". With no catalogue it falls back to the text report.
 
 #### Scenario: /model switches the model for the next turn
@@ -2249,7 +2298,7 @@ the chat (see "Keep a chat's agent, model and directory across its conversations
 
 #### Scenario: /model default clears the model
 - **GIVEN** a conversation with a model set from chat
-- **WHEN** the peer sends `/model default`
+- **WHEN** the peer sends `/model default`, or taps Default on the `/model` card
 - **THEN** the conversation and the chat carry no model, so the agent's own
   default applies from the next turn and in the next conversation
 
