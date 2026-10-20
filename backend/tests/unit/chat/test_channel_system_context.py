@@ -37,7 +37,7 @@ def test_names_the_platform_and_chat_kind_and_keeps_the_evidence() -> None:
         "You are replying in a SeaTalk group thread (the ops channel), most likely"
     )
     assert "Do not narrate your steps" in text
-    assert "Short never means dropping evidence" in text
+    assert "Keep the evidence" in text
     assert "verbatim" in text
     assert "cannot click permission or confirmation dialogs" in text
 
@@ -66,7 +66,8 @@ def test_the_telegram_note_says_its_rich_markdown_renders() -> None:
 def test_asks_for_outcome_first_details_png_and_coffer_ask() -> None:
     text = channel_system_context(_SEATALK_GROUP_THREAD)
 
-    assert "The first line is the outcome in one sentence" in text
+    assert "Lead with the answer in one or two plain sentences" in text
+    assert "ask whether they want it as a file" in text
     assert "only what you write after your last tool call is sent" in text.lower()
     assert "as a PNG file" in text
     assert "call `coffer__ask`" in text
@@ -89,14 +90,14 @@ def test_only_a_collapsing_transport_is_asked_for_a_details_section() -> None:
 
 
 def test_the_note_stays_short_because_it_rides_on_every_turn() -> None:
-    assert len(channel_system_context(_SEATALK_GROUP_THREAD).split()) < 260
+    assert len(channel_system_context(_SEATALK_GROUP_THREAD).split()) < 320
 
 
 def test_an_unresolvable_channel_keeps_the_guidance() -> None:
     text = channel_system_context(None)
 
     assert text.startswith("You are replying in a chat channel")
-    assert "Short never means dropping evidence" in text
+    assert "Keep the evidence" in text
     assert "`coffer__ask`" in text
 
 
@@ -162,7 +163,7 @@ def test_a_platform_that_reads_threads_names_the_tool() -> None:
     assert "`coffer__channel_read_thread`" in text
     assert "[Message origin]" in text
     assert "coffer__channel_read_thread" not in channel_system_context(_SEATALK_GROUP_THREAD)
-    assert len(text.split()) < 260
+    assert len(text.split()) < 320
 
 
 def test_the_style_stays_last_after_the_thread_tool_line() -> None:

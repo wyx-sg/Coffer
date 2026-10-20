@@ -63,6 +63,9 @@ class ReplyTracker:
     send_reply: SendReply
     reply_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     ids: list[str] = field(default_factory=list)
+    #: Buttons the reply carries beyond the 🗑 — the full-report button of a
+    #: reply the agent was asked to shorten (``reply_rewrite``).
+    extra: list[ChoiceButton] = field(default_factory=list)
 
     @classmethod
     def for_turn(
@@ -86,13 +89,17 @@ class ReplyTracker:
         )
 
     def buttons(self) -> list[ChoiceButton]:
-        """The 🗑 button a group reply carries, where the transport has buttons and
-        can withdraw at all; none in a direct chat (the owner is alone there and has
+        """The buttons the reply carries, where the transport has buttons: any
+        ``extra`` ones, then the 🗑 of a group reply on a transport that can
+        withdraw at all; no 🗑 in a direct chat (the owner is alone there and has
         ``/del``)."""
         caps = self.capabilities
-        if self.chat_kind == "group" and caps.supports_buttons and caps.withdraw_window_hours > 0:
-            return [trash_button(self.reply_id)]
-        return []
+        if not caps.supports_buttons:
+            return []
+        out = list(self.extra)
+        if self.chat_kind == "group" and caps.withdraw_window_hours > 0:
+            out.append(trash_button(self.reply_id))
+        return out
 
     def note(self, sent: SentMessage | None) -> None:
         """A message of the reply went out: remember it. A transport that cannot

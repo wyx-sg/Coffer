@@ -18,8 +18,9 @@ Application layer only: no infrastructure import here.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from coffer.application.channel.bot_label import bot_name
@@ -28,6 +29,7 @@ from coffer.application.channel.inbound_burst import InboundBurst
 from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.question_card import parse_callback
 from coffer.application.channel.question_flow import QuestionPort, handle_tap
+from coffer.application.channel.reply_rewrite import FULL_REPORT_KIND, FULL_REPORT_REQUEST
 from coffer.application.channel.reply_tracking import WITHDRAW_KIND
 from coffer.application.channel.store_ports import ChannelPeerRepoPort
 from coffer.application.channel.turn_driver import SessionAccessor
@@ -35,6 +37,7 @@ from coffer.domain.channel.commands import command_name
 from coffer.domain.channel.envelopes import (
     InboundCallback,
     InboundLifecycle,
+    InboundMessage,
     InboundStop,
 )
 
@@ -80,6 +83,10 @@ class InboundEvents:
     #: (see "Ask the owner in the chat and take the answer back to the agent").
     #: ``None`` ignores such taps.
     questions: QuestionPort | None = None
+    #: The processor's own message path (``InboundProcessor.on_message``): a tap
+    #: on a reply's full-report button is the owner asking for it in words, and
+    #: goes through every gate a typed message does. ``None`` ignores such taps.
+    on_message: Callable[[InboundMessage], Awaitable[None]] | None = None
 
     async def on_callback(
         self, binding: ChannelBinding, cb: InboundCallback, *, conversation_thread_id: str
@@ -125,6 +132,9 @@ class InboundEvents:
                 return
         if cb.data.startswith(_OLD_REPLY_PREFIX):
             return  # a button of the retired NEEDS YOU: sentinel — nothing to answer
+        if cb.data.startswith(f"{FULL_REPORT_KIND}:"):
+            await self._ask_full_report(cb)
+            return
         tap = parse_callback(cb.data)
         if tap is not None:
             if self.questions is not None:
@@ -159,6 +169,29 @@ class InboundEvents:
             thread_id=cb.thread_id,
             conversation_thread_id=conversation_thread_id,
             card_message_id=cb.platform_message_id,
+        )
+
+    async def _ask_full_report(self, cb: InboundCallback) -> None:
+        """The full-report button under a shortened reply (spec channels "Ask for
+        the short version of a reply too long for a chat"): the agent still holds
+        the full answer in its session, so the tap becomes the owner's message
+        asking for it as a file — Coffer keeps no reply text to send itself."""
+        if self.on_message is None:
+            return
+        await self.on_message(
+            InboundMessage(
+                channel=cb.channel,
+                chat_id=cb.chat_id,
+                sender_display=cb.sender_display,
+                text=FULL_REPORT_REQUEST,
+                platform_message_id="",
+                timestamp=datetime.now(tz=UTC),
+                sender_id=cb.sender_id,
+                sender_mention_id=cb.sender_mention_id,
+                sender_mention_email=cb.sender_mention_email,
+                chat_kind=cb.chat_kind,
+                thread_id=cb.thread_id,
+            )
         )
 
     async def on_lifecycle(self, binding: ChannelBinding, event: InboundLifecycle) -> None:

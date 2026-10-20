@@ -101,3 +101,28 @@ def test_a_group_step_line_names_only_the_tool() -> None:
     status.result("t1", "Read", error=False)
 
     assert status.block(0.0).splitlines()[-1] == "✅ Read"
+
+
+def test_narration_the_agent_marked_is_left_out_of_the_answer() -> None:
+    reply = ReplyText()
+    reply.add("I'll check the sheet first.")
+    assert reply.end_message(commentary=True) == "I'll check the sheet first."
+    reply.add("The sheet is ready.")
+    reply.end_message(commentary=False)
+    assert reply.tail == "The sheet is ready."
+    assert reply.answer() == "The sheet is ready."
+
+
+def test_messages_of_one_segment_join_as_paragraphs() -> None:
+    reply = ReplyText()
+    reply.add("Part one.")
+    reply.end_message(commentary=False)
+    reply.add("Part two.")
+    assert reply.answer() == "Part one.\n\nPart two."
+
+
+def test_a_turn_of_narration_only_still_replies() -> None:
+    reply = ReplyText()
+    reply.add("Looking.")
+    reply.end_message(commentary=True)
+    assert reply.answer() == "Looking."

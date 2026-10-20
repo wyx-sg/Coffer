@@ -696,12 +696,17 @@ and how to send a file (`MEDIA:/absolute/path` on its own line). Where the
 running transport can read threads, it also names `coffer__channel_read_thread`
 for a thread's earlier messages, with its arguments taken from the origin block.
 
-Coffer's default reply style asks for a reply shaped for a phone: do not narrate
-steps (Coffer already shows that it is working); the first line is the outcome
-in one sentence, because it becomes the notification; at most about 15 lines;
-code blocks under 30 lines, longer logs attached as files; diagrams and charts as
-PNG files, never as source; and concise never drops evidence — an
-investigation's key log lines, error messages and IDs are quoted verbatim.
+Coffer's default reply style asks for a reply that reads like a person texting
+a colleague: the answer first, in one or two plain sentences, because the first
+line becomes the notification; no process — no narrated steps (Coffer already
+shows that it is working), no list of what was checked, no spelled-out
+assumptions or caveats, and something the agent could not do is mentioned only
+when it changes what the reader does next; about 8 lines at most, with a list
+only for three or more parallel items; a full report only as a file, offered
+first ("do you want the full report?") and sent as Markdown when the reader says
+yes or asked for it up front; logs over 30 lines as files, diagrams as PNG
+files, never as source; and short never drops evidence — the key log line,
+error or ID is quoted verbatim.
 
 Web-UI turns are unaffected — the append rides only on a conversation whose
 `channel_uid` is set. A channel that has been deleted, or is not running, still
@@ -724,7 +729,8 @@ a Reply Style the Owner Can Rewrite](../../../docs/decisions/channel-prompt-fixe
 
 #### Scenario: the note asks for the answer's shape
 - **WHEN** a channel turn's note is composed with Coffer's default reply style
-- **THEN** it asks for the outcome in one first sentence, says only the text
+- **THEN** it asks for the answer in one or two plain sentences first, a full
+  report only as a file the reader is asked about first, says only the text
   after the last tool call is sent, and asks for diagrams as PNG files and a
   `coffer__ask` call when the agent needs the owner's answer
 
@@ -2436,7 +2442,12 @@ tail shows only text written after the last tool call. The final reply, on every
 transport, MUST carry only the answer: the text written after the last tool
 call. A turn that wrote nothing after its last tool call replies with the last
 text it did write, so an answer is never lost to a trailing tool call.
-Narration never reaches the final message.
+Narration never reaches the final message. An agent that marks its own messages
+as narration (Codex's `commentary` phase, carried as `MessageEnd.commentary`)
+has those messages moved into the `💬` line and left out of the reply wherever
+they stand, even after the last tool call; messages the agent wrote between two
+tool events join the reply as paragraphs. A turn that wrote nothing but
+narration replies with its last words.
 
 A channel setting `show_steps` (default on) hides the step lines and keeps the
 header and narration — useful in a busy group. It is edited on the Channels
@@ -2484,6 +2495,12 @@ block drops the step lines, then the header.
 #### Scenario: the step lines are hidden in the channel's settings
 - **WHEN** the owner switches the channel's step lines off in its settings, then on again
 - **THEN** the channel's `show_steps` setting is off, then on again
+
+#### Scenario: narration the agent marked never reaches the reply
+- **GIVEN** a turn whose agent marks a message as narration, calls a tool, marks
+  another message after it as narration, then writes its answer
+- **WHEN** the reply is delivered
+- **THEN** it holds the answer alone
 
 ### Requirement: Mention the asker in a group answer
 A group answer MUST name who it is for, and notify them. In a group, the bot's
@@ -2844,3 +2861,47 @@ the channel's status settings.
 - **THEN** the fields started from the default and the rewrite, nothing was saved
   before Save, and the saved configuration carries the direct style and an empty
   group style with every other setting and ref as it was
+
+### Requirement: Ask for the short version of a reply too long for a chat
+A reply that finished cleanly but is too long to read as a chat message — more
+than 20 lines with text, or more than 1,500 characters, not counting `MEDIA:`
+lines or a `## Details` section the transport collapses — MUST NOT be sent.
+Instead Coffer asks the same conversation, in a follow-up turn of its own, to say
+it again short: only the conclusion and what the reader needs to act on, in at
+most 5 lines and the same language, ending by asking whether they want the full
+report as a file. The follow-up's text opens with `[Coffer]`, never names the
+conversation, and runs through the conversation's ordinary queue; its reply is
+rendered into the same chat and thread, and is never held back again however
+long it is. Cutting the long reply would leave half a message, and Coffer keeps
+no reply text to send later; the agent still holds the full answer in its
+session.
+
+The follow-up's reply carries a **📄 Full report** button where the transport
+has buttons. A tap by the owner is the owner asking, in a message of its own,
+"Send me the full report as a Markdown file." — through every gate a typed
+message passes — and the agent answers it with the file. A tap by anyone else
+asks nothing.
+
+A failed or stopped turn's reply goes out as it always did, with its notice. When
+a message is already waiting in the conversation's queue, the long reply goes
+out as it is: the waiting message would run first and make "your last reply"
+mean something else. See [A Long Channel Reply Is Rewritten Short by the
+Agent](../../../docs/decisions/long-channel-reply-is-rewritten-short.md).
+
+#### Scenario: a reply too long for a chat is said again short
+- **GIVEN** a channel whose agent answers in 40 lines
+- **WHEN** the turn ends cleanly
+- **THEN** the 40 lines are not sent, the conversation is asked in a turn opening
+  with `[Coffer] Your last reply (40 lines)` for the short version, and that
+  reply arrives carrying the **📄 Full report** button
+
+#### Scenario: the full-report button asks the agent for the file
+- **GIVEN** a shortened reply carrying the **📄 Full report** button
+- **WHEN** the owner taps it
+- **THEN** the conversation runs a turn asking "Send me the full report as a
+  Markdown file." and its answer is delivered
+
+#### Scenario: the short version is never shortened again
+- **GIVEN** an agent whose short version is still 40 lines
+- **WHEN** the follow-up turn ends
+- **THEN** its reply is delivered as it is and no further turn is asked for
