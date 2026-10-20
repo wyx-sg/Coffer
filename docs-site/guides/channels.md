@@ -81,12 +81,14 @@ Send the bot a message. The first message opens a conversation on the channel's 
   A step line in a direct chat adds the agent's own one-line description or the file name, never the raw command. In a group it names only the tool (`⏳ Bash`), because everyone there reads it.
 
   **Show step lines**, on the channel's **Settings** tab under **Replies and conversations**, turns the step list off and keeps only the status header and the 💬 line, which is useful in a busy group. Only Telegram channels have it, because a SeaTalk chat shows no steps.
-- The reply is only what the agent wrote after its last tool call, on every platform; what it said between steps is not sent. A turn that ends on a tool call replies with the last thing the agent wrote.
+- The reply is only what the agent wrote after its last tool call, on every platform; what it said between steps is not sent. Text the agent itself marks as passing commentary (Codex does) is left out too, wherever it stands. A turn that ends on a tool call replies with the last thing the agent wrote.
 - A turn that fails or is stopped ends with a one-line summary: the outcome, tool count, duration and tokens. A turn that succeeds sends no summary; the reply is the signal.
 
 ### What the reply looks like
 
-Coffer tells the agent which platform and kind of chat it is in and what renders there, and asks it for a reply shaped for a phone: the outcome in the first sentence (it is what the notification shows), no step-by-step narration, the whole answer after its last tool call, and diagrams as images. Where the chat can collapse text, it is also asked to put anything long under a `## Details` heading. Coffer then fits the reply to the chat:
+Coffer tells the agent which platform and kind of chat it is in and what renders there, and asks it to write the way a person texts a colleague: the answer first, in one or two plain sentences (the first line is what the notification shows), no step-by-step narration or list of caveats, a few lines at most, the whole answer after its last tool call, and diagrams as images. When a detailed report is needed, the agent gives the conclusion and asks whether you want the full report; say yes and it arrives as a Markdown file. Where the chat can collapse text, it is also asked to put anything long under a `## Details` heading. Coffer then fits the reply to the chat:
+
+- **Too long for a chat** — a reply of more than 20 lines or 1,500 characters (files and a collapsed Details section not counted) is not sent. Coffer asks the agent, in the same conversation, to say it again in a few lines and to offer the full report; that short reply arrives with a **📄 Full report** button, and tapping it asks the agent for the file. The short reply takes a little longer, because the agent writes it after the long one. A turn that failed or was stopped sends what it has, as before; so does a turn with another message of yours already waiting behind it.
 
 - **Details** — on Telegram, a `## Details` section arrives collapsed. SeaTalk cannot collapse text, so there the reply arrives whole.
 - **Tables and logs** — SeaTalk cannot show a table, so each row becomes a bullet (`- **checkout** · failed · 3DS timeout`); a table bigger than 12 rows or 4 columns keeps its first five rows and arrives whole as a `.csv` file. A code block longer than 30 lines keeps its first three lines and arrives whole as a file.
@@ -97,7 +99,7 @@ Coffer tells the agent which platform and kind of chat it is in and what renders
 Every turn from a channel carries instructions from Coffer, after the agent's own system prompt. They come in two parts, and the channel's **Settings** tab shows both, for direct chats and for group chats:
 
 - **Channel note** (read-only). How this channel works: which platform and kind of chat the agent is in, what renders there, that only what it writes after its last tool call is sent, how to send a file (`MEDIA:/absolute/path`), how to ask you with buttons (`coffer__ask`), that it cannot click dialogs on your computer, and, where the platform allows it, how to read a thread's earlier messages. Coffer writes it for each channel and keeps it up to date, and you cannot edit it, because changing its wording can quietly stop files or questions from working.
-- **Reply style** (yours to rewrite). How a reply should read: no step-by-step narration, the outcome in the first sentence, at most about 15 lines, short code blocks, diagrams as images, and evidence quoted verbatim. Until you change it, it shows **Default** and follows Coffer's default, including future improvements to it.
+- **Reply style** (yours to rewrite). How a reply should read: like a person texting, the answer first in one or two sentences, no step-by-step narration or caveat lists, about 8 lines at most, a full report only as a file it offers first, diagrams as images, and the key evidence quoted verbatim. Until you change it, it shows **Default** and follows Coffer's default, including future improvements to it.
 
 A channel keeps one reply style per kind of chat, because a group usually wants different manners from a private chat:
 

@@ -24,6 +24,7 @@ import contextlib
 import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, Protocol
 
 from coffer.application.channel.conversation_ops import (
@@ -33,6 +34,7 @@ from coffer.application.channel.conversation_ops import (
 )
 from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.reply_tracking import ReplyTracker
+from coffer.application.channel.rewrite_turn import start_rewrite
 from coffer.application.channel.store_ports import (
     ChannelPeer,
     ChannelPeerRepoPort,
@@ -123,6 +125,8 @@ class QueuedInbound:
     #: turn (``reply_to_message_id`` is the last one's). Each of them carries the
     #: turn's progress marks, so none is left on its receipt mark.
     earlier_message_ids: tuple[str, ...] = ()
+    #: Coffer's follow-up asking for a too-long reply again, short (``reply_rewrite``).
+    rewrite: bool = False
 
 
 class TurnPort(Protocol):
@@ -328,6 +332,9 @@ class TurnDriver:
         tracker = ReplyTracker.for_turn(
             self._replies, binding, peer.chat_id, item.thread_id, item.chat_kind, _send_card
         )
+        # A reply too long for the chat is said again short by a follow-up turn.
+        render = partial(self._spawn_render, binding, peer)
+        rewrite = partial(start_rewrite, self._turns, conversation_id, item, render=render)
         renderer = TurnRenderer(
             channel=binding.resource.name,
             adapter=adapter,
@@ -342,6 +349,8 @@ class TurnDriver:
             mention_user_name=item.mention_user_name,
             show_steps=binding.show_steps,
             tracker=tracker,
+            rewrite=None if item.rewrite else rewrite,
+            offer_full_report=item.rewrite,
         )
         outcome: TurnOutcome = "failed"
         try:

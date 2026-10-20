@@ -4,6 +4,7 @@ Each class carries a ``type`` discriminator whose value identifies the event:
 
   TurnStarted      → ``turn_start``
   TextDelta        → ``text_delta``
+  MessageEnd       → ``message_end``
   ToolCall         → ``tool_call``
   ToolResult       → ``tool_result``
   TurnDone         → ``turn_done``
@@ -34,6 +35,22 @@ class TextDelta:
 
     text: str
     type: Literal["text_delta"] = "text_delta"
+
+
+@dataclass(frozen=True)
+class MessageEnd:
+    """The agent finished one message of its turn — the text since the previous
+    ``MessageEnd`` or tool event is complete.
+
+    ``commentary`` is true when the agent itself marked the message as mid-turn
+    narration ("I'll check the logs first") rather than answer text (Codex's
+    ``phase: commentary``). A surface that shows only the answer leaves such a
+    message out. An agent that marks no phase never sets it, and an adapter that
+    cannot tell where one message ends emits no ``MessageEnd`` at all.
+    """
+
+    commentary: bool = False
+    type: Literal["message_end"] = "message_end"
 
 
 @dataclass(frozen=True)
@@ -129,6 +146,7 @@ class QuestionClosed:
 AgentEvent = (
     TurnStarted
     | TextDelta
+    | MessageEnd
     | ToolCall
     | ToolResult
     | TurnDone

@@ -365,6 +365,15 @@ only when asked (`include_partial_messages`), and it then delivers BOTH the
 increments and the finished assistant message, so the adapter MUST subtract
 what it already emitted and send the reply exactly once.
 
+Every tool the agent runs MUST arrive as a tool call and its result — for Codex
+not only commands and file changes but MCP tools, dynamic tools, sub-agent
+calls, web searches and image tools, an MCP tool named
+`mcp__<server>__<tool>` as Claude Code names it — because a tool event is what
+separates the narration before it from the answer after it. Where the agent
+says where one of its messages ends and whether it is narration, the adapter
+MUST pass that on as `MessageEnd` (`commentary` set for Codex's `commentary`
+phase; a message with no phase is answer text).
+
 A turn MUST run against the config directory of its type's one agent
 ([agent-registry](../agent-registry/spec.md) "Keep one agent per type, named by
 it") — the same one whose models the pickers offer
@@ -393,6 +402,14 @@ proxy.
 - **WHEN** a turn runs on each
 - **THEN** the Claude Code process is started with `CLAUDE_CONFIG_DIR` set to the agent's `config_dir`, and the Codex app-server with `CODEX_HOME` set to its `config_dir`, the rest of the daemon's environment intact
 - **AND** a turn on an agent whose `config_dir` is its type's standard location starts its process with the environment untouched
+
+#### Scenario: every Codex tool separates narration from the answer
+- **GIVEN** a Codex turn that writes a commentary message, calls an MCP tool, and
+  writes its final answer
+- **WHEN** its notifications are mapped
+- **THEN** the commentary message ends with `MessageEnd(commentary=true)`, the MCP
+  tool arrives as a tool call named `mcp__<server>__<tool>` with its result, and
+  the final answer's message ends with `MessageEnd(commentary=false)`
 
 ### Requirement: Express a turn as typed events in memory
 System MUST express a turn as a sequence of typed events covering, at minimum,

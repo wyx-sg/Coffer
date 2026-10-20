@@ -7,8 +7,9 @@ channel-prompt-fixed-note-and-editable-style).
   renders there, how a file is sent, how to ask the owner, what it cannot click.
   Coffer keeps it; the owner sees it but cannot edit it, because a wrong word
   here breaks a feature (a file never sent, a question never asked).
-- The **reply style** is how a reply should read: outcome first, short, no
-  narration, evidence kept. Coffer ships a default; the owner may rewrite it
+- The **reply style** is how a reply should read: like a person texting — the
+  answer first, a few lines, no process, a full report only as a file on
+  request, evidence kept. Coffer ships a default; the owner may rewrite it
   per chat kind, and an untouched one follows Coffer's default as it changes.
 
 Pure text: the chat adapters compose a turn from it, and the Channels page shows
@@ -33,13 +34,15 @@ __all__ = [
 #: Coffer's reply style for a phone chat. The same for both chat kinds today;
 #: :func:`default_reply_style` is the one place that would split them.
 DEFAULT_REPLY_STYLE = (
-    "Do not narrate your steps; Coffer already shows that you are working. The "
-    "first line is the outcome in one sentence (it becomes the notification); "
-    "then at most about 15 lines. Keep code blocks under 30 lines and attach "
-    "longer logs or diffs as a file. Draw a diagram or chart as a PNG file and "
-    "attach it, never as diagram source. Short never means dropping evidence: "
-    "quote the few log lines, errors and IDs that prove a finding verbatim, in "
-    "code blocks."
+    "Write like a person texting a colleague. Lead with the answer in one or two "
+    "plain sentences; the first line becomes the notification. Do not narrate your "
+    "steps, list what you checked, or spell out your own assumptions and caveats; "
+    "mention what you could not do only if it changes what the reader does next. "
+    "About 8 lines at most; a list only for three or more parallel items. If a "
+    "full report is needed, give the conclusion and ask whether they want it as a "
+    "file; when they say yes, or asked up front, send it as a Markdown file. Send "
+    "logs over 30 lines as a file, and a diagram as a PNG file, never as source. "
+    "Keep the evidence: quote the key log line, error or ID verbatim."
 )
 
 #: The line that sets the reply style apart from the channel note above it.

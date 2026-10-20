@@ -9,7 +9,10 @@ de-dup / unknown → ``[]`` rules. Mirrors ``map_sdk_message`` semantics.
 
 from __future__ import annotations
 
+import pytest
+
 from coffer.domain.chat.events import (
+    MessageEnd,
     TextDelta,
     ToolCall,
     ToolResult,
@@ -204,3 +207,73 @@ def test_only_one_terminal_emitted() -> None:
         "error", {"error": {"message": "late"}, "willRetry": False}, state
     )
     assert second == []
+
+
+def test_agent_message_completed_ends_the_message_with_its_phase() -> None:
+    state = CodexParseState()
+    commentary = map_codex_notification(
+        "item/completed",
+        {"item": {"type": "agentMessage", "id": "m1", "text": "Checking.", "phase": "commentary"}},
+        state,
+    )
+    final = map_codex_notification(
+        "item/completed",
+        {"item": {"type": "agentMessage", "id": "m2", "text": "Done.", "phase": "final_answer"}},
+        state,
+    )
+    legacy = map_codex_notification(
+        "item/completed", {"item": {"type": "agentMessage", "id": "m3", "text": "x"}}, state
+    )
+    assert commentary == [MessageEnd(commentary=True)]
+    assert final == [MessageEnd(commentary=False)]
+    assert legacy == [MessageEnd(commentary=False)]
+
+
+@pytest.mark.acceptance(
+    spec="chat", scenario="every Codex tool separates narration from the answer"
+)
+def test_mcp_tool_call_is_a_tool_call_named_like_claude_codes() -> None:
+    state = CodexParseState()
+    events = map_codex_notification(
+        "item/completed",
+        {
+            "item": {
+                "type": "mcpToolCall",
+                "id": "t1",
+                "server": "sheets",
+                "tool": "read_range",
+                "arguments": {"range": "A1:B2"},
+                "status": "completed",
+            }
+        },
+        state,
+    )
+    assert events == [
+        ToolCall(
+            tool_use_id="t1", tool_name="mcp__sheets__read_range", tool_input={"range": "A1:B2"}
+        ),
+        ToolResult(
+            tool_use_id="t1",
+            tool_name="mcp__sheets__read_range",
+            output={"status": "completed"},
+            error=None,
+        ),
+    ]
+
+
+def test_a_failed_dynamic_tool_and_a_web_search_are_tool_calls() -> None:
+    state = CodexParseState()
+    failed = map_codex_notification(
+        "item/completed",
+        {"item": {"type": "dynamicToolCall", "id": "d1", "tool": "lookup", "success": False}},
+        state,
+    )
+    search = map_codex_notification(
+        "item/completed", {"item": {"type": "webSearch", "id": "w1", "query": "codex"}}, state
+    )
+    assert failed[1] == ToolResult(
+        tool_use_id="d1", tool_name="lookup", output=None, error="lookup failed"
+    )
+    assert search[0] == ToolCall(
+        tool_use_id="w1", tool_name="webSearch", tool_input={"query": "codex"}
+    )

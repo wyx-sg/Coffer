@@ -131,6 +131,7 @@ class InboundProcessor:
             session=self._session,
             burst=self._burst,
             questions=questions,
+            on_message=self.on_message,
         )
 
     # -- runtime registry ------------------------------------------------

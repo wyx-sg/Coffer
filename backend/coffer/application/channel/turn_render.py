@@ -34,6 +34,7 @@ from typing import Any
 
 from coffer.application.channel.ports import ChannelAdapter
 from coffer.application.channel.question_flow import QuestionChat, forget_conversation
+from coffer.application.channel.reply_rewrite import full_report_button, measure, too_long
 from coffer.application.channel.reply_tracking import ReplyTracker
 from coffer.application.channel.stop_notice import take as take_stop_notice
 from coffer.application.channel.turn_finish import (
@@ -48,6 +49,7 @@ from coffer.application.channel.turn_surface import TurnSurface, typing_heartbea
 from coffer.application.channel.turn_text import clip_stream_preview, with_mention
 from coffer.application.runtime.supervisor import spawn
 from coffer.domain.chat.events import (
+    MessageEnd,
     QuestionAsked,
     QuestionClosed,
     TextDelta,
@@ -107,6 +109,13 @@ class TurnRenderer:
     #: What the reply was delivered as, filed for ``/del`` and the 🗑 button; ``None``
     #: (a renderer built without a ledger) tracks nothing.
     tracker: ReplyTracker | None = None
+    #: Asked when a cleanly finished reply is too long for a chat, with its line
+    #: count: starts the follow-up turn that says it again short and returns
+    #: whether it did. The long reply is then not sent (see ``reply_rewrite``).
+    #: ``None`` sends every reply as it is — the follow-up turn's own renderer.
+    rewrite: Callable[[int], Awaitable[bool]] | None = None
+    #: This turn IS that follow-up: its reply carries the full-report button.
+    offer_full_report: bool = False
     heartbeat_seconds: float = _TYPING_HEARTBEAT_SECONDS
     tick_seconds: float = _STATUS_TICK_SECONDS
     _status: TurnStatus = field(init=False)
@@ -150,6 +159,13 @@ class TurnRenderer:
                 if isinstance(event, TextDelta):
                     self._reply.add(event.text)
                     await self._text_update()
+                elif isinstance(event, MessageEnd):
+                    narration = self._reply.end_message(commentary=event.commentary)
+                    if narration.strip():
+                        # Text the agent marked as narration: up into the status
+                        # block, out of the answer.
+                        self._status.narrate(narration)
+                        await self._refresh(clock=False)
                 elif isinstance(event, ToolCall):
                     tool_ids.add(event.tool_use_id)
                     self._close_segment()
@@ -175,6 +191,11 @@ class TurnRenderer:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await ticker
         end = TurnEnd(stop_reason, error, len(tool_ids), self.now() - started, tokens)
+        answer = self._reply.answer()
+        if await self._shortened(answer, end):
+            return end.outcome
+        if self.offer_full_report and self.tracker is not None:
+            self.tracker.extra.append(full_report_button())
         stop_line, stop_noted = await self._rewrite_stop_notice(end)
         await deliver_reply(
             adapter=self.adapter,
@@ -184,13 +205,36 @@ class TurnRenderer:
             surface=self._surface,
             send=self.send,
             mention=self._with_mention,
-            text=self._reply.answer(),
+            text=answer,
             end=end,
             stop_noted=stop_noted,
             stop_line=stop_line,
             tracker=self.tracker,
         )
         return end.outcome
+
+    async def _shortened(self, answer: str, end: TurnEnd) -> bool:
+        """Hand a reply too long for a chat to the follow-up turn that says it
+        short, instead of sending it; ``True`` when that turn took it over. Only
+        a clean finish is held back: a failed or stopped turn's partial answer
+        goes out with its notice, as it always did."""
+        collapses = self.adapter.capabilities.collapses_details
+        if (
+            self.rewrite is None
+            or not end.clean
+            or not too_long(answer, collapses_details=collapses)
+        ):
+            return False
+        lines, _ = measure(answer, collapses_details=collapses)
+        try:
+            taken = await self.rewrite(lines)
+        except Exception:
+            return False
+        if taken:
+            # The live surface was this turn's scaffolding; the follow-up opens its own.
+            with contextlib.suppress(Exception):
+                await self._surface.close("")
+        return taken
 
     def _questions(self) -> QuestionChat:
         return QuestionChat(

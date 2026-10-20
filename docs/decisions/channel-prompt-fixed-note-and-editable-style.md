@@ -60,9 +60,10 @@ edited prompt when Coffer's own text improves.
 The append becomes two parts. The **channel note** — where the agent is, what
 renders, `MEDIA:`, `coffer__ask`, the last-tool-call rule, no clicking dialogs,
 the thread tool — is generated per channel and chat kind as before and shown
-on the Settings tab read-only. The **reply style** — no narration, outcome
-first, about 15 lines, code blocks under 30 lines, diagrams as PNG, evidence
-verbatim — is a default text Coffer ships. Each chat kind of each channel
+on the Settings tab read-only. The **reply style** — write like a person
+texting, the answer first in one or two sentences, no process or caveat lists,
+about 8 lines, a full report only as a file offered first, diagrams as PNG,
+evidence verbatim — is a default text Coffer ships. Each chat kind of each channel
 either follows the default (stored empty) or holds the owner's rewrite. The
 turn carries the note, then `Reply style:` and the style in force.
 
@@ -160,7 +161,10 @@ A channel turn's system-prompt append is the channel note followed by
 - Adding an instruction a feature depends on means adding it to the channel
   note, not the default style; otherwise channels with a rewrite never get it.
 - Changing `DEFAULT_REPLY_STYLE` changes its fingerprint, which flags every
-  rewritten style on the Settings tab until its owner saves it again.
+  rewritten style on the Settings tab until its owner saves it again. A reply
+  that ignores the style and runs too long is caught after the fact, whatever
+  style is in force: see [A Long Channel Reply Is Rewritten Short by the
+  Agent](long-channel-reply-is-rewritten-short.md).
 - The config keys changed (`*_system_prompt` → `*_reply_style`). Channels are
   machine-local ([Channels Are Machine-Local Resources](channels-are-machine-local-resources.md)),
   so the migration runs on the one machine that holds the channel; REST callers
