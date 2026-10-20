@@ -153,14 +153,14 @@ Nine words are Coffer's commands. Everything else you type — including other t
 | Command | What it does |
 | --- | --- |
 | `/new [agent]` | Start a fresh conversation with this chat's settings. With an agent name, switch to that agent. |
-| `/stop` | Interrupt the running turn and pause the queue. |
+| `/stop` | Interrupt the running turn and hold the messages queued behind it, with **Continue** and **Discard** buttons. |
+| `/status` | What this chat is running, as a card with the buttons that act on it. |
 | `/model [name]` | Show or set the model. |
 | `/dir [path\|name]` | Show or switch the working directory, in a fresh conversation. |
-| `/status` | What this chat is running, as a card with quick actions. |
 | `/resume [n]` | Reopen an earlier conversation from this chat. |
 | `/thread [title]` | In a direct chat, open a parallel conversation in its own thread. |
 | `/del` | Owner only. Withdraw the bot's reply: quote it and send `/del`, or send it bare for the most recent one. |
-| `/help` | List the commands, with a button for each, paged. |
+| `/help` | List the commands, one per line with what each does. |
 
 In a group only `/new`, `/stop`, `/help` and `/del` work, because they control the group's own conversation and replies. `/model`, `/dir`, `/status`, `/resume` and `/thread` work only in a direct chat with the bot; sent in a group they get one private line, "This command works in a private chat with me.", and nothing else happens. To save something into [knowledge](/guides/knowledge#from-a-chat-ask-your-agent) from a chat, ask the agent.
 

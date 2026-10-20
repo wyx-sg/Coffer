@@ -378,5 +378,5 @@ async def test_status_while_a_turn_runs_counts_the_waiting_and_offers_stop(
 
     _chat, text, buttons = adapter.cards[-1]
     assert text.splitlines()[2] == "Running · 1 waiting"
-    assert [b.label for b in buttons] == ["Stop", "New", "Model", "Resume", "Dir"]
+    assert [b.label for b in buttons] == ["Stop", "Model", "Dir"]
     gated.release.set()

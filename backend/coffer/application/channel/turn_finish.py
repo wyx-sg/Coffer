@@ -28,6 +28,7 @@ __all__ = [
     "TurnOutcome",
     "deliver_reply",
     "failure_line",
+    "held_line",
     "stopped_line",
 ]
 
@@ -77,17 +78,32 @@ def failure_line(message: str) -> str:
     return f"⚠️ {reason}. Send it again to retry."
 
 
-def stopped_line(duration: float, *, title: str = "", tool_count: int = 0, held: int = 0) -> str:
+def held_line(held: int, *, tappable: bool = False) -> str:
+    """``⏸ 2 queued messages are on hold.`` — what a stop left waiting. Without
+    Continue and Discard buttons beside it, it says how to go on."""
+    noun = "message is" if held == 1 else "messages are"
+    line = f"⏸ {held} queued {noun} on hold"
+    return f"{line}." if tappable else f"{line} — send anything to continue."
+
+
+def stopped_line(
+    duration: float,
+    *,
+    title: str = "",
+    tool_count: int = 0,
+    held: int = 0,
+    tappable: bool = False,
+) -> str:
     """``⏹ Stopped “Fix login” after 12s · 3 tools.`` — what was stopped, that it
-    did stop, and, when messages were queued behind it, that they wait."""
+    did stop, and, when messages were queued behind it, that they wait
+    (``tappable``: Continue and Discard ride with the line)."""
     what = f" “{title}”" if title else ""
     line = f"⏹ Stopped{what} after {format_elapsed(duration)}"
     if tool_count:
         line += f" · {tool_count} tool" + ("" if tool_count == 1 else "s")
     line += "."
     if held:
-        noun = "message is" if held == 1 else "messages are"
-        line += f"\n⏸ {held} queued {noun} on hold — send anything to continue."
+        line += "\n" + held_line(held, tappable=tappable)
     return line
 
 

@@ -1,16 +1,18 @@
-"""`/status` and `/help` — the two cards that end in the five actions (spec
-channels "Report the chat's state as a status card" and "Offer the commands as
-a help card").
+"""`/status` and `/help` (spec channels "Report the chat's state as a status
+card" and "List the commands with /help").
 
 `/status` names things, never ids: the conversation's title (or a parallel
 thread's mark), then one line with the agent, model and directory by
-the names a person reads, and whether a turn is running or how many wait, then
-the chat's parallel threads (spec channels "Open parallel conversations beside
-a direct chat"). `/status` works only in a direct chat; the help card lists
-only the group commands in a group. The status card carries Stop (while a turn
-runs), New, Model, Resume and Dir as ``cmd:`` buttons, the help card New, Stop,
-Model, Status and Resume; a transport without buttons, or one that refuses the
-card, gets the same body as text.
+the names a person reads, and whether a turn is running, how many messages wait,
+or how many a stop left on hold, then the chat's parallel threads (spec channels
+"Open parallel conversations beside a direct chat"). `/status` works only in a
+direct chat. Its card carries only what acts on what it shows: Stop while a turn
+runs, Continue and Discard while messages are on hold, then Model and Dir; a
+transport without buttons, or one that refuses the card, gets the same body as
+text.
+
+`/help` is text — one line per command — with no buttons: a list to read, not
+a menu to tap (the platform's own command menu is that, where it has one).
 
 Application layer only: no infrastructure import here.
 """
@@ -19,14 +21,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coffer.application.channel.command_cards import (
-    STATUS_ACTIONS,
-    command_card,
-    help_card,
-)
+from coffer.application.channel.command_cards import STATUS_ACTIONS, command_card
 from coffer.application.channel.command_text import settings_line
+from coffer.application.channel.held_queue import held_buttons, held_state
 from coffer.application.channel.parallel_threads import thread_lines
 from coffer.domain.channel.commands import help_text
+from coffer.domain.channel.envelopes import ChoiceButton
 
 if TYPE_CHECKING:
     from coffer.application.channel.command_context import CommandContext
@@ -35,15 +35,18 @@ __all__ = ["cmd_help", "cmd_status"]
 
 
 async def cmd_help(ctx: CommandContext, _text: str = "") -> None:
-    """The roster as text, with a button per command where the transport has buttons."""
-    group = ctx.chat_kind == "group"
-    body = help_text(group=group)
-    await ctx.answer(help_card(text=body, group=group), body)
+    """The roster as text, one line per command."""
+    await ctx.say(help_text(group=ctx.chat_kind == "group"))
 
 
-def _state(running: bool, queued: int) -> str:
-    """``Running · 2 waiting``, ``Running``, ``2 waiting`` or ``Idle``."""
-    parts = (["Running"] if running else []) + ([f"{queued} waiting"] if queued else [])
+def _state(running: bool, queued: int, held: int) -> str:
+    """``Running · 2 waiting``, ``Running``, ``2 waiting``, ``⏸ 2 on hold``
+    (also after ``Running`` while the stopped turn winds down) or ``Idle``."""
+    parts = ["Running"] if running else []
+    if held:
+        parts.append(held_state(held))
+    elif queued:
+        parts.append(f"{queued} waiting")
     return " · ".join(parts) or "Idle"
 
 
@@ -60,13 +63,18 @@ async def cmd_status(ctx: CommandContext, _text: str = "") -> None:
     running = ctx.session is not None and ctx.session.running_conversation_id is not None
     # The queue is the conversation's own (spec chat "Queue messages sent during
     # a turn") — the same one the web's pending chips show.
-    queued = len(ctx.commands._turns.pending(bound)) if bound is not None else 0
+    turns = ctx.commands._turns
+    queued = len(turns.pending(bound)) if bound is not None else 0
+    held = turns.held(bound) if bound is not None else 0
     lines = [
         title,
         await settings_line(ctx.commands, settings),
-        _state(running, queued),
+        _state(running, queued, held),
     ]
     lines += await thread_lines(ctx)
     body = "\n".join(lines)
-    actions = [a for a in STATUS_ACTIONS if running or a[1] != "stop"]
-    await ctx.answer(command_card(title="Status", text=body, actions=actions), f"Status\n{body}")
+    lead = [ChoiceButton(label="Stop", value="cmd:stop")] if running else []
+    if held and bound is not None:
+        lead += held_buttons(bound)
+    card = command_card(title="Status", text=body, actions=STATUS_ACTIONS, lead=lead)
+    await ctx.answer(card, f"Status\n{body}")

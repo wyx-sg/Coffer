@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "apply_model",
+    "clear_model",
     "cmd_model",
     "current_model_card",
     "say_model",
@@ -47,7 +48,7 @@ async def cmd_model(ctx: CommandContext, text: str) -> None:
         await _show(ctx)
         return
     if len(words) == 1 and words[0].lower() == "default":
-        await _clear(ctx)
+        await clear_model(ctx)
         return
     await apply_model(ctx, await _match_model(ctx, " ".join(words)))
 
@@ -123,7 +124,8 @@ async def say_model(ctx: CommandContext) -> None:
     await ctx.say(f"Model: {shown}{_where(ctx)}")
 
 
-async def _clear(ctx: CommandContext) -> None:
+async def clear_model(ctx: CommandContext) -> None:
+    """Back to the agent's default model — `/model default` and the card's Default."""
     if await _set(ctx, model=None):
         settings = await ctx.settings()
         shown = await default_model_text(ctx.commands, settings.agent)

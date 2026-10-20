@@ -209,6 +209,8 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`channel-attachments`](channel-attachments.md) | Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send |
 | [`channel-prompt-fixed-note-and-editable-style`](channel-prompt-fixed-note-and-editable-style.md) | A Channel's System Prompt Is a Fixed Channel Note Plus a Reply Style the Owner Can Rewrite |
 | [`long-channel-reply-is-rewritten-short`](long-channel-reply-is-rewritten-short.md) | A Long Channel Reply Is Rewritten Short by the Agent |
+| [`channel-help-is-a-list-and-cards-carry-only-their-own-actions`](channel-help-is-a-list-and-cards-carry-only-their-own-actions.md) | Channel `/help` Is a List to Read, and a Card Carries Only the Buttons That Act on It |
+| [`held-channel-messages-are-continued-or-discarded`](held-channel-messages-are-continued-or-discarded.md) | Held Channel Messages Are Settled by Continue and Discard |
 | [`chat-attachment-uploads`](chat-attachment-uploads.md) | The Chat Page Uploads a File First and Sends Its Id, Into a Sibling Media Directory |
 | [`seatalk-websocket-inbound`](seatalk-websocket-inbound.md) | SeaTalk Inbound Is One Outbound WebSocket, Through an Operator-Supplied SDK |
 | [`telegram-long-polling`](telegram-long-polling.md) | Telegram Inbound Is a Long Poll That Commits the Offset After Dispatch |

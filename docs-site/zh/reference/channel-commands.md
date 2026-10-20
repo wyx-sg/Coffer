@@ -1,6 +1,6 @@
 ---
 title: 渠道命令
-description: 九个渠道命令、各命令在直接聊天、线程和群组中的行为、设置如何跟着聊天走，以及命令菜单和选择卡片。
+description: 九个渠道命令、各命令在直接聊天、线程和群组中的行为、设置如何跟着聊天走、/stop 后暂停的消息，以及命令菜单和选择卡片。
 ---
 
 # 渠道命令 {#channel-commands}
@@ -12,14 +12,14 @@ description: 九个渠道命令、各命令在直接聊天、线程和群组中�
 | 命令 | 作用 |
 | --- | --- |
 | `/new [agent]` | 用这个聊天的设置开始一个新对话。带上智能体名则切换到那个智能体。 |
-| `/stop` | 中断正在运行的轮次，并暂停队列。回复会写明停的是哪个对话——「⏹ Stopping “Fix login”…」；在能编辑消息的平台上它会被原地改成「⏹ Stopped “Fix login” after 12s · 3 tools.」，不能编辑的平台则另发这一行；排在它后面的消息会注明正在暂停、等你再发一条时继续。没有在运行的轮次时回复「Nothing is running.」。正在等你回答的问题会被取消，它的卡片显示「⏹ Stopped」。 |
+| `/stop` | 中断正在运行的轮次，并暂停队列。回复会写明停的是哪个对话——「⏹ Stopping “Fix login”…」；在能编辑消息的平台上它会被原地改成「⏹ Stopped “Fix login” after 12s · 3 tools.」，不能编辑的平台则另发这一行；排在它后面的消息会被暂停，并带 **Continue** 和 **Discard** 两个按钮（见[/stop 后暂停的消息](#messages-on-hold-after-stop)）。没有在运行的轮次时回复「Nothing is running.」。正在等你回答的问题会被取消，它的卡片显示「⏹ Stopped」。 |
+| `/status` | 这个聊天正在运行什么，以卡片显示，只带对它有用的按钮。 |
 | `/model [name]` | 查看或设置模型。 |
 | `/dir [path\|name]` | 查看或切换工作目录，切换会开一个新对话。 |
-| `/status` | 这个聊天正在运行什么，以带快捷操作的卡片显示。 |
 | `/resume [n]` | 重新打开这个聊天之前的一个对话。 |
 | `/thread [title]` | 在私聊中，在单独的话题里打开一个并行对话。 |
 | `/del` | 仅所有者可用。撤回机器人的回复：引用机器人的某条消息并发送 `/del`，撤回那条消息所属的整个回复；不引用直接发送，则撤回机器人在这个聊天（或话题）里最近的一条回复。 |
-| `/help` | 列出命令，每个命令一个按钮并分页（群组里只有四个群命令），卡片标题为 **Commands**。 |
+| `/help` | 列出命令，一行一个并写明作用（群组里只有四个群命令），不带按钮。 |
 
 在群组里只有 `/new`、`/stop`、`/help` 和 `/del` 可用；其余五个只能在私聊里用（见[各命令在哪里可用](#where-each-command-works)）。Telegram 的 start 链接会发送 `/start`，它的回答和 `/help` 一样。`/new` 和 `/stop` 即使在轮次运行时也会立即生效。命令会先放行所有还在停顿等待中的消息，让它们在命令之前运行；`/stop` 则会丢弃它们。
 
@@ -41,9 +41,9 @@ description: 九个渠道命令、各命令在直接聊天、线程和群组中�
 | --- | --- | --- | --- | --- |
 | `/new [agent]` | ✓ | ✓ | ✓ | SeaTalk：设置群组的默认智能体；不带参数则显示它 |
 | `/stop` | ✓ | ✓ | ✓ | SeaTalk：停止群组里正在运行的所有轮次 |
+| `/status` | ✓，并列出并行话题 | ✓ | 仅限私聊 | 仅限私聊 |
 | `/model` | ✓ | ✓ | 仅限私聊 | 仅限私聊 |
 | `/dir` | ✓ | ✓ | 仅限私聊 | 仅限私聊 |
-| `/status` | ✓，并列出并行话题 | ✓ | 仅限私聊 | 仅限私聊 |
 | `/resume` | ✓ | ✓ | 仅限私聊 | 仅限私聊 |
 | `/thread` | ✓ | ✓ | 仅限私聊 | 仅限私聊 |
 | `/del` | ✓ | ✓ | ✓ | ✓ |
@@ -77,7 +77,7 @@ description: 九个渠道命令、各命令在直接聊天、线程和群组中�
 
 - `/model <name>` 设置模型。智能体目录里没有的名字会原样传给智能体的 CLI，所以你可以用选择器里没显示的模型；智能体跑不了的名字，会在下一个轮次以 CLI 自己的报错返回。
 - `/model` 后面的任何词都是模型名，`high`、`max` 也不例外；唯一保留的词是 `default`。`/model default` 清除模型，回到智能体自己的默认值。Coffer 没有推理强度设置。
-- 不带参数的 `/model` 显示当前生效的模型。在支持按钮的平台上，它是一张卡片：点一个模型即可。回答只有一行：「Model: Claude Sonnet 5.5 — from your next message」。
+- 不带参数的 `/model` 显示当前生效的模型。在支持按钮的平台上，它是一张卡片：点一个模型即可；卡片第一项是 **Default**（没设模型时打勾），点它等于 `/model default`。回答只有一行：「Model: Claude Sonnet 5.5 — from your next message」。
 
 ## 工作目录 {#working-directory}
 
@@ -99,15 +99,41 @@ description: 九个渠道命令、各命令在直接聊天、线程和群组中�
 
 只提供这个聊天自己打开过的对话，从不包括来自网页或其他聊天的对话，之后被删掉的对话也不会列出。
 
-## 状态和帮助卡片 {#status-and-help-cards}
+## 状态、帮助和 /new 卡片 {#status-and-help-cards}
 
-`/status` 用文字而不是 id 回答，标题是 **Status**：对话的标题（或它的 `🧵#N` 标记）；一行写着智能体、模型和目录；然后是 **Running**、**Running · 2 waiting** 或 **Idle**。在私聊里，它还在一行里列出并行话题，每个标明是在运行、等待还是空闲。
+`/status` 用文字而不是 id 回答，标题是 **Status**：对话的标题（或它的 `🧵#N` 标记）；一行写着智能体、模型和目录；然后是 **Running**、**Running · 2 waiting**、**⏸ 2 on hold** 或 **Idle**。在私聊里，它还在一行里列出并行话题，每个标明是在运行、有消息在等、有消息暂停，还是空闲。在支持按钮的平台上它是一张卡片，只带对卡片内容有用的按钮：轮次运行时有 **Stop**，有暂停的消息时有 **Continue** 和 **Discard**，然后是 **Model** 和 **Dir**。
 
-在私聊里，`/help` 在一行里列出所有命令，`/new [agent] · /stop · /model [name] · /dir [path|name] · /status · /resume [n] · /thread [title] · /del · /help`，并说明其他任何内容都是发给智能体的消息。在群组里它只列出 `/new [agent] · /stop · /del · /help`。
+`/help` 是一份用来看的清单，不带按钮。私聊里是：
+
+```
+Commands
+/new [agent] — Start a fresh conversation, optionally on another agent
+/stop — Stop what’s running
+/status — What’s running, and the agent, model and directory in use
+/model [name] — Switch the model
+/dir [path|name] — Switch the working directory
+/resume [n] — Go back to an earlier conversation
+/thread [title] — Open a parallel conversation beside this chat
+/del — Withdraw my latest reply (reply to one of mine to pick it)
+/help — This list of commands
+
+Anything else goes to the agent as a message.
+```
+
+群组里只列 `/new`、`/stop`、`/del` 和 `/help`，并加一句「The other commands work in a private chat with me.」。对没有命令菜单的平台（SeaTalk），发 `/help` 就能看到机器人接受什么；在 Telegram 上清单里的命令也可以直接点。
 
 `/new` 回复一行「🆕 New conversation · Codex · Default model · ~/src/coffer」，在支持按钮的平台上还带 **Agent**、**Model** 和 **Dir** 按钮（群组里只有 **Agent** 按钮）。**Agent** 列出这个消息渠道可以驱动的智能体；点一个就在它上面开始新对话，和 `/new <agent>` 一样。
 
-在支持按钮的平台上，`/status` 是一张带 **New**、**Model**、**Resume** 和 **Dir** 按钮的卡片，轮次运行时还有 **Stop**；`/help` 是一张带按钮的卡片，聊天里能用的每个命令各一个（私聊九个，群组四个群命令），每页四个，用 **← Prev** 和 **Next →** 翻页。点按钮的效果和在那个聊天里输入对应命令完全一样，所以记住 `/status` 就能到达所有操作。对没有命令菜单的平台（SeaTalk），发 `/help` 就能看到机器人接受什么。
+点命令按钮的效果和在那个聊天里输入对应命令完全一样。
+
+## /stop 后暂停的消息 {#messages-on-hold-after-stop}
+
+轮次运行时你发的消息会排队等着。`/stop` 停下轮次的同时会暂停这个队列，免得你排着的消息马上冲进刚停下的对话。停止那一行会写明暂停了几条——「⏸ 2 queued messages are on hold.」——并带两个按钮：
+
+- **Continue** 按你发送的顺序把它们跑完（「▶ Continuing 2 queued messages.」）。
+- **Discard** 把它们丢掉（「🗑 Discarded 2 queued messages.」），之后你发的消息照常单独运行。
+
+再发任何一条消息也会继续它们，排在新消息前面。能编辑「Stopping…」那条消息的平台（Telegram）上，按钮就在那条消息上；其他平台（SeaTalk）上，暂停的那一行作为单独的卡片跟在回复后面。暂停期间 `/status` 也显示 **⏸ 2 on hold** 和同样两个按钮。已经继续或丢掉之后再点，会回复「Nothing is on hold any more.」。
 
 ## SeaTalk 上的群组默认值 {#group-defaults-on-seatalk}
 
@@ -122,19 +148,19 @@ description: 九个渠道命令、各命令在直接聊天、线程和群组中�
 
 Telegram 会显示命令菜单；Coffer 用帮助和错拼检查所用的同一份列表来注册它，所以三者永远一致。私聊里有全部九个命令；群组里只有 `/new`、`/stop`、`/del` 和 `/help`，这些是控制群自己对话的命令。每个菜单都用英文和中文各注册一遍。在群组里，从菜单点的命令会以 `/status@your_bot` 的形式到达，Coffer 把它当作 `/status`。SeaTalk 没有命令菜单，只有一个入口：发 `/help` 即可，仅限私聊的命令会得到那一行私下的提示。
 
-英文描述如下（中文菜单含义相同）：
+它们就是 `/help` 里显示的那几行。英文描述如下（中文菜单含义相同）：
 
 | 命令 | 菜单描述 |
 | --- | --- |
-| `/new` | Start a fresh conversation [agent] |
+| `/new` | Start a fresh conversation, optionally on another agent |
 | `/stop` | Stop what’s running |
-| `/model` | Pick a model |
-| `/dir` | Pick the working directory |
-| `/status` | What is running, threads |
-| `/resume` | Go back to a conversation |
-| `/thread` | Open a parallel thread |
-| `/del` | Withdraw a reply |
-| `/help` | Commands |
+| `/status` | What’s running, and the agent, model and directory in use |
+| `/model` | Switch the model |
+| `/dir` | Switch the working directory |
+| `/resume` | Go back to an earlier conversation |
+| `/thread` | Open a parallel conversation beside this chat |
+| `/del` | Withdraw my latest reply (reply to one of mine to pick it) |
+| `/help` | This list of commands |
 
 ## 选择卡片 {#selection-cards}
 

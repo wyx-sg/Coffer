@@ -363,8 +363,8 @@ class InboundProcessor:
             "Only you can use it. To use it in a group, add it there and @mention it.\n"
             f"Try a question, or {hint}.",
         )
-        # The help card follows the confirmation (spec channels "Offer the
-        # commands as a help card"): a paired chat starts with the commands in
+        # The command list follows the confirmation (spec channels "List the
+        # commands with /help"): a paired chat starts with the commands in
         # front of it. Pairing is a direct chat, so it is the full list.
         await self._commands.handle(
             binding,

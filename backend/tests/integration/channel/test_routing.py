@@ -146,7 +146,7 @@ async def test_group_help_command_reply_routes_to_group_and_thread(env: ChannelE
     assert len(adapter.sent) == 1
     chat_id, text = adapter.sent[0]
     assert chat_id == "grp-1"
-    assert text.startswith("/new")
+    assert text.startswith("**Commands**\n/new")
     assert adapter.sent_routed[0] == (chat_id, text, "th-1", "group")
 
 

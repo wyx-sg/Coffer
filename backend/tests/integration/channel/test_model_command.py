@@ -119,6 +119,7 @@ async def test_a_model_card_button_shows_the_models_name(env: ChannelEnv) -> Non
 
     [(_chat, _text, buttons)] = adapter.cards
     assert [(b.label, b.value) for b in buttons] == [
+        ("✓ Default", "model:default"),
         ("fable", "model:fable"),
         ("Fable 1M", "model:claude-fable-5-1[1m]"),
     ]

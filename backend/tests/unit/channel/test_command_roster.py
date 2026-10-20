@@ -39,7 +39,9 @@ def test_a_group_menu_offers_the_group_set() -> None:
 
 
 def test_a_group_help_lists_only_the_group_commands() -> None:
-    assert help_text(group=True).splitlines()[0] == "/new [agent] · /stop · /del · /help"
+    commands = [line.split()[0] for line in help_text(group=True).splitlines() if line[:1] == "/"]
+    assert commands == ["/new", "/stop", "/del", "/help"]
+    assert "The other commands work in a private chat with me." in help_text(group=True)
     assert "/model" in help_text() and "/thread" in help_text()
 
 
@@ -51,11 +53,14 @@ def test_the_direct_chat_commands_are_dm_only() -> None:
 
 
 def test_help_text_lists_every_command_with_its_arguments() -> None:
-    rendered = help_text()
+    lines = help_text().splitlines()
+    # One line per command: its typed form, its arguments, what it does.
     for command in COMMAND_ROSTER:
-        assert f"/{command.name}" in rendered
-    assert rendered.startswith("/new [agent] · /stop · /model [name] · ")
-    assert rendered.splitlines()[-1] == "Anything else is a message to the agent."
+        typed = f"/{command.name} {command.args}".rstrip()
+        assert f"{typed} \u2014 {command.description}" in lines
+    assert lines[0] == "**Commands**"
+    assert lines[1] == "/new [agent] \u2014 Start a fresh conversation, optionally on another agent"
+    assert lines[-1] == "Anything else goes to the agent as a message."
 
 
 def test_names_returns_typed_forms() -> None:

@@ -358,9 +358,11 @@ def _models_route(env: _Env) -> list[dict[str, object]]:
 
 async def _card_options(env: _Env) -> list[str]:
     """The model ids the channel ``/model`` card offers as buttons, from the same
-    answer the card is built over (``suggest``)."""
+    answer the card is built over (``suggest``) — the card's own Default, which
+    names no model, aside."""
     card = model_card(current=None, picks=await env.catalogue.suggest("claude_code"))
-    return [b.value.removeprefix("model:") for b in card.buttons if b.value.startswith("model:")]
+    values = [b.value for b in card.buttons if b.value.startswith("model:")]
+    return [v.removeprefix("model:") for v in values if v != "model:default"]
 
 
 @pytest.mark.acceptance(

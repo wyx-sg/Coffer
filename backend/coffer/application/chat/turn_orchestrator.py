@@ -100,6 +100,38 @@ class TurnOrchestrator:
         state = peek(conversation_id)
         return [m.text for m in state.queue] if state is not None else []
 
+    def held(self, conversation_id: str) -> int:
+        """How many pending messages an interrupt holds (0 when the queue runs)."""
+        state = peek(conversation_id)
+        return len(state.queue) if state is not None and state.paused else 0
+
+    async def resume_held(self, conversation_id: str) -> int:
+        """Release the messages an interrupt held, in order; how many were held.
+
+        Spec chat "Pause the pending queue on interrupt": the owner resumes the
+        held queue — by sending anything, or by asking for exactly this."""
+        state = peek(conversation_id)
+        if state is None or not state.paused or not state.queue:
+            return 0
+        count = len(state.queue)
+        state.paused = False
+        await self._maybe_advance(conversation_id)
+        return count
+
+    def drop_held(self, conversation_id: str) -> int:
+        """Throw away the messages an interrupt held; how many there were.
+
+        The turn that is still finishing, if any, is untouched; the queue is no
+        longer paused, so what is sent next runs as usual."""
+        state = peek(conversation_id)
+        if state is None or not state.paused or not state.queue:
+            return 0
+        count = len(state.queue)
+        state.queue.clear()
+        state.paused = False
+        evict_if_idle(conversation_id)
+        return count
+
     # ------------------------------------------------------------------
     # The entry point for a message
     # ------------------------------------------------------------------

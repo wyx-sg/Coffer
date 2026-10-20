@@ -32,6 +32,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from coffer.application.channel.held_queue import held_buttons
 from coffer.application.channel.ports import ChannelAdapter
 from coffer.application.channel.question_flow import QuestionChat, forget_conversation
 from coffer.application.channel.reply_rewrite import full_report_button, measure, too_long
@@ -42,12 +43,14 @@ from coffer.application.channel.turn_finish import (
     TurnEnd,
     TurnOutcome,
     deliver_reply,
+    held_line,
     stopped_line,
 )
 from coffer.application.channel.turn_status import LIVE_SEPARATOR, ReplyText, TurnStatus
 from coffer.application.channel.turn_surface import TurnSurface, typing_heartbeat
 from coffer.application.channel.turn_text import clip_stream_preview, with_mention
 from coffer.application.runtime.supervisor import spawn
+from coffer.domain.channel.envelopes import ChoiceButton
 from coffer.domain.chat.events import (
     MessageEnd,
     QuestionAsked,
@@ -125,6 +128,8 @@ class TurnRenderer:
     #: (a step, the status tick), never with answer text: text then only APPENDS
     #: to the snapshot on screen, which the surface may write at its fast cadence.
     _clock: float = field(init=False, default=0.0)
+    #: The held line and its Continue and Discard, owed after the reply.
+    _held_card: tuple[str, list[ChoiceButton]] | None = field(init=False, default=None)
 
     async def consume(self, queue: asyncio.Queue[Any]) -> TurnOutcome:
         """Render the turn; return how it ended (``done`` / ``failed`` /
@@ -211,6 +216,7 @@ class TurnRenderer:
             stop_line=stop_line,
             tracker=self.tracker,
         )
+        await self._send_held_card()
         return end.outcome
 
     async def _shortened(self, answer: str, end: TurnEnd) -> bool:
@@ -253,22 +259,49 @@ class TurnRenderer:
     async def _rewrite_stop_notice(self, end: TurnEnd) -> tuple[str | None, bool]:
         """The stopped line a ``/stop`` asked for, and whether it already went
         out by editing the "⏹ Stopping “title”…" message in place. ``(None,
-        False)`` when no ``/stop`` stopped this turn."""
+        False)`` when no ``/stop`` stopped this turn.
+
+        Messages the stop held get Continue and Discard (spec channels "Continue
+        or discard the messages a stop held"): on the edited line itself, or —
+        where the line can only ride the reply as text — on a card of their own
+        that follows the reply (``_held_card``)."""
         notice = take_stop_notice(self.conversation_id)
         if notice is None or end.outcome != "stopped":
             return None, False
-        line = stopped_line(
-            end.duration, title=notice.title, tool_count=end.tool_count, held=notice.held
+        buttons = (
+            held_buttons(self.conversation_id)
+            if notice.held and self.adapter.capabilities.supports_buttons
+            else []
         )
-        if not notice.message_id:
-            return line, False
-        try:
-            await self.adapter.update_card(
-                notice.chat_id, notice.message_id, line, [], chat_kind=notice.chat_kind
-            )
-        except Exception:
-            return line, False
-        return line, True
+        line = stopped_line(
+            end.duration,
+            title=notice.title,
+            tool_count=end.tool_count,
+            held=notice.held,
+            tappable=bool(buttons),
+        )
+        if notice.message_id:
+            try:
+                await self.adapter.update_card(
+                    notice.chat_id, notice.message_id, line, buttons, chat_kind=notice.chat_kind
+                )
+            except Exception:
+                pass
+            else:
+                return line, True
+        if buttons and self.send_card is not None:
+            self._held_card = (held_line(notice.held, tappable=True), buttons)
+            line = stopped_line(end.duration, title=notice.title, tool_count=end.tool_count)
+        return line, False
+
+    async def _send_held_card(self) -> None:
+        """Continue and Discard under the held line, after the reply."""
+        if self._held_card is None or self.send_card is None:
+            return
+        text, buttons = self._held_card
+        self._held_card = None
+        with contextlib.suppress(Exception):
+            await self.send_card(text, buttons)
 
     def _close_segment(self) -> None:
         """A tool event: the text before it was narration — it moves up into

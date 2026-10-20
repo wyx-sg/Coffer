@@ -217,7 +217,9 @@ its own.
 ### Requirement: Pause the pending queue on interrupt
 Interrupting a turn MUST also **pause** the pending queue: the current turn
 stops with its partial output delivered to the chat, and queued messages are held rather than
-auto-run until the owner resumes them. The next message from the channel resumes the held queue.
+auto-run until the owner resumes them. The next message from the channel resumes the held queue;
+the owner can also resume or drop it without sending one (spec channels "Continue or discard the
+messages a stop held").
 
 #### Scenario: a stop from the chat holds the queued messages
 - **GIVEN** a turn running with a channel message queued behind it,
