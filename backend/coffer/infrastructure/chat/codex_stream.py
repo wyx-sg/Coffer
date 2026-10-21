@@ -8,17 +8,16 @@ import pathlib
 from collections.abc import AsyncIterator
 from typing import Any
 
-from coffer.domain.chat.attachment import Attachment
+from coffer.domain.chat.attachment import Attachment, attachment_line
 from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient
 
 
 def attachment_note(att: Attachment) -> str:
-    """The prompt line naming one attachment; a pruned file degrades to a note that
-    it could not be read (spec channels "Hand inbound attachments to the turn as
-    references"), as the Claude adapter does."""
-    if not pathlib.Path(att.path).is_file():
-        return f"[Attached file '{att.filename}' could not be read]"
-    return f"[The user attached a file '{att.filename}', saved at {att.path}.]"
+    """The ``[Attachments]`` line naming one attachment by its ``#n`` and where it
+    came from, with the path Codex opens it at; a pruned file degrades to a note
+    that it could not be read (spec channels "Hand inbound attachments to the turn
+    as references"), as the Claude adapter does."""
+    return attachment_line(att, readable=pathlib.Path(att.path).is_file())
 
 
 async def notifications_until_eof(

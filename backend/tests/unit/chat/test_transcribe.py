@@ -45,7 +45,7 @@ async def test_audio_is_transcribed_and_other_files_are_kept() -> None:
     kept, transcripts = await transcribe_audio_attachments(attachments, transcriber)
 
     # The audio became a transcript and is dropped from the attachments…
-    assert transcripts == ["change the time to 11:18"]
+    assert transcripts == [(attachments[0], "change the time to 11:18")]
     assert transcriber.calls == ["/tmp/voice.ogg"]
     # …while the image is kept to be materialised as an image block.
     assert [a.filename for a in kept] == ["photo.png"]
@@ -72,9 +72,16 @@ async def test_empty_transcript_falls_back_to_the_audio_file() -> None:
 
 
 def test_prompt_with_transcripts_folds_voice_into_the_text() -> None:
+    voice = Attachment(
+        path="/m/v.ogg", mime="audio/ogg", filename="voice.ogg", number=3, source="a thread message"
+    )
     assert prompt_with_transcripts("hello", []) == "hello"
-    folded = prompt_with_transcripts("what did they say?", ["change the time"])
-    assert folded.startswith("what did they say?")
-    assert "[Voice message transcript]" in folded
+    folded = prompt_with_transcripts("what did they say?", [(voice, "change the time")])
+    assert folded == (
+        "what did they say?\n\n"
+        "[Voice message transcript #3 from a thread message: voice.ogg]\n"
+        "change the time\n"
+        "[End of voice message transcript]"
+    )
     # With no caption, the transcript is the whole prompt.
-    assert prompt_with_transcripts("", ["hi"]).startswith("[Voice message transcript]")
+    assert prompt_with_transcripts("", [(voice, "hi")]).startswith("[Voice message transcript")

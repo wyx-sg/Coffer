@@ -210,7 +210,8 @@ async def test_owner_mention_in_a_thread_folds_fetched_history_into_the_turn(
     assert user_text.startswith("[Thread messages]")
     assert "Alice: what's the status?" in user_text
     assert "Bob: waiting on the deploy" in user_text
-    assert user_text.endswith("@bot summarize this thread")
+    assert "[End of thread messages]\n\n[User message]" in user_text
+    assert user_text.endswith("@bot summarize this thread\n[End of user message]")
 
 
 @pytest.mark.acceptance(spec="channels", scenario="thread-history images reach a vision agent")

@@ -25,11 +25,13 @@ from coffer.domain.channel.envelopes import (
     ChoiceButton,
     InboundAttachment,
     InboundCallback,
+    InboundMessage,
     ReactionSet,
     SentMessage,
 )
 from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.domain.channel.thread_messages import ThreadMessage, ThreadRead
+from coffer.domain.channel.turn_content import ContextBlock, MessageContent, render_turn
 
 #: The progress marks a reacting fake declares unless a test names others —
 #: Telegram's, so a reacting fake reads like the transport it stands in for.
@@ -384,3 +386,11 @@ class FakeLiveText:
         if self.message_id:
             await self._adapter.delete_message(self._chat_id, self.message_id)
         return text
+
+
+def rendered_record(msg: InboundMessage) -> str:
+    """``msg``'s forwarded record as the turn renders it (spec channels "Flatten
+    forwarded chat records into the turn") — a transport hands over the record's
+    lines, the core lays them out."""
+    record = ContextBlock(kind="forwarded", items=msg.forwarded_items, media=msg.attachments)
+    return render_turn("", [MessageContent(blocks=(record,))])[0]

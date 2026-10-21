@@ -25,7 +25,13 @@ import pathlib
 from collections.abc import Sequence
 from typing import Protocol
 
-from coffer.domain.chat.attachment import DOCUMENT_EXTENSIONS, DOCUMENT_MIMES, Attachment
+from coffer.domain.chat.attachment import (
+    DOCUMENT_EXTENSIONS,
+    DOCUMENT_MIMES,
+    Attachment,
+    attachment_label,
+)
+from coffer.domain.turn_markers import DOCUMENT, DOCUMENT_END, block, neutralise
 
 _logger = logging.getLogger(__name__)
 
@@ -77,31 +83,35 @@ def default_document_extractor() -> DocumentExtractor | None:
 
 async def extract_document_attachments(
     attachments: Sequence[Attachment], extractor: DocumentExtractor | None
-) -> tuple[list[Attachment], list[tuple[str, str]]]:
-    """Split ``attachments`` into (the non-document ones to keep, ``(filename,
+) -> tuple[list[Attachment], list[tuple[Attachment, str]]]:
+    """Split ``attachments`` into (the non-document ones to keep, ``(attachment,
     text)`` extracts of the document ones). With no extractor — or when extraction
     yields nothing — a document is kept as an attachment so the agent still
     receives the file path (degrades, never wedges the turn)."""
     if extractor is None:
         return list(attachments), []
     kept: list[Attachment] = []
-    extracts: list[tuple[str, str]] = []
+    extracts: list[tuple[Attachment, str]] = []
     for att in attachments:
         if _is_document(att):
             text = (await extractor.extract(att.path)).strip()
             if text:
-                extracts.append((att.filename, text))
+                extracts.append((att, text))
                 continue
         kept.append(att)
     return kept, extracts
 
 
-def prompt_with_document_text(prompt: str, extracts: Sequence[tuple[str, str]]) -> str:
-    """Fold extracted document text into the turn's prompt, each labelled with its
-    filename so the agent knows where it came from."""
+def prompt_with_document_text(prompt: str, extracts: Sequence[tuple[Attachment, str]]) -> str:
+    """Fold extracted document text into the turn's prompt, each in its own block
+    naming the attachment it came from (``[Document #2 from …: report.pdf]``);
+    the document's text passes the forgery guard."""
     if not extracts:
         return prompt
-    docs = "\n\n".join(f"[Document: {name}]\n{text}" for name, text in extracts)
+    docs = "\n\n".join(
+        block(f"{DOCUMENT} {attachment_label(att)}", DOCUMENT_END, [neutralise(text)])
+        for att, text in extracts
+    )
     return f"{prompt}\n\n{docs}".strip() if prompt else docs
 
 

@@ -74,7 +74,15 @@ async def test_an_inbound_attachment_reaches_the_turn_as_a_reference(
 
     # The adapter is given path, mime and filename; the bytes stay in the media dir.
     assert recorder.attachments == [
-        (Attachment(path=str(image), mime="image/png", filename="photo.png"),)
+        (
+            Attachment(
+                path=str(image),
+                mime="image/png",
+                filename="photo.png",
+                number=1,
+                source="the user's message",
+            ),
+        )
     ]
     assert image.read_bytes() == _BYTES
     assert all("FAKE-IMAGE-BYTES" not in p for p in recorder.prompts)

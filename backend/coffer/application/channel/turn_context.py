@@ -15,6 +15,7 @@ what was posted since. Older messages stay one tool call away
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import cast
@@ -29,9 +30,9 @@ from coffer.application.channel.store_ports import (
     ThreadCursorPort,
 )
 from coffer.domain.channel.envelopes import InboundAttachment, InboundMessage
-from coffer.domain.channel.rich_content import ForwardedItem, flatten_context, quote_prefix
+from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.domain.channel.thread_messages import ThreadMessage
-from coffer.domain.chat.attachment import Attachment
+from coffer.domain.channel.turn_content import ContextBlock
 
 __all__ = [
     "READ_THREAD_TOOL",
@@ -50,9 +51,6 @@ READ_THREAD_TOOL = "coffer__channel_read_thread"
 #: never claimed (its conversation failed to open), stops counting after this —
 #: the next conversation must not start mid-thread on a stale mark.
 PENDING_TTL = timedelta(minutes=10)
-
-_SEED_TITLE = "Thread messages"
-_NEW_TITLE = "New thread messages since your last turn in this thread"
 
 
 def older_messages_note(
@@ -78,7 +76,7 @@ def _since(messages: Sequence[ThreadMessage], cursor: ThreadCursor) -> list[Thre
 
 
 class ThreadContextFolder:
-    """Folds a message's quote and its thread's slice into the turn text."""
+    """Reads the blocks that ground a message: its thread's slice and its quote."""
 
     def __init__(
         self,
@@ -99,41 +97,38 @@ class ThreadContextFolder:
         self,
         binding: ChannelBinding,
         msg: InboundMessage,
-        text: str,
-        attachments: tuple[Attachment, ...],
         *,
         conversation_thread_id: str,
-    ) -> tuple[str, tuple[Attachment, ...]]:
-        """Return ``text`` and ``attachments`` with the thread and the quote folded in.
+    ) -> tuple[ContextBlock, ...]:
+        """The blocks that ground ``msg``: its thread's slice, then the message it
+        quotes — the order the turn reads them in, right above the message itself,
+        so "repeat this" or "as above" points at something the agent can see.
 
-        The turn reads, top to bottom: the thread's slice, the quoted message as
-        ``> sender: …`` lines, then the message itself — so "repeat this" or "as
-        above" points at something the agent can actually see. Every image/file
-        those messages carry is appended to ``attachments`` (see "Download the
-        media a thread's messages carry"). Either read degrading to nothing
-        leaves the turn as it was.
+        Each block carries the images/files its messages hold (see "Download the
+        media a thread's messages carry"). A quote the platform inlined on the
+        update (``msg.quoted_items``) needs no read. Either read degrading to
+        nothing leaves its block out.
         """
+        blocks: list[ContextBlock] = []
+        if msg.quoted_items:
+            blocks.append(ContextBlock(kind="quote", items=msg.quoted_items))
         if not binding.adapter.capabilities.supports_history_fetch:
-            return text, attachments
+            return tuple(blocks)
         fetcher = cast(ContextFetchPort, binding.adapter)
-        fetched: list[InboundAttachment] = []
-        if msg.quoted_message_id:
-            # The quote is the reference the message leans on, so it sits right above it.
+        if msg.quoted_message_id and not msg.quoted_items:
             items, quoted_atts = await fetcher.fetch_quoted(msg.quoted_message_id)
-            quote = "".join(quote_prefix(it.sender, it.text) for it in items)
-            text = f"{quote}{text}".rstrip("\n") if quote else text
-            fetched.extend(quoted_atts)
+            if items or quoted_atts:
+                blocks.append(
+                    ContextBlock(kind="quote", items=tuple(items), media=tuple(quoted_atts))
+                )
         if msg.thread_id:
             # Ground the turn in the thread's own conversation — in a DM just as much
             # as in a group: ``chat_kind`` only picks which endpoint the adapter
             # calls. Group-MAIN chatter is never read.
-            ctx, thread_atts = await self._thread(fetcher, binding, msg, conversation_thread_id)
-            if ctx:
-                text = f"{ctx}\n\n{text}" if text else ctx
-            fetched[:0] = thread_atts
-        return text, attachments + tuple(
-            Attachment(path=a.path, mime=a.mime, filename=a.filename) for a in fetched
-        )
+            thread = await self._thread(fetcher, binding, msg, conversation_thread_id)
+            if thread is not None and not thread.empty:
+                blocks.insert(0, thread)
+        return tuple(blocks)
 
     async def _thread(
         self,
@@ -141,7 +136,7 @@ class ThreadContextFolder:
         binding: ChannelBinding,
         msg: InboundMessage,
         conversation_thread_id: str,
-    ) -> tuple[str, list[InboundAttachment]]:
+    ) -> ContextBlock | None:
         uid = binding.resource.uid
         conversation = await predict_conversation(
             self._conversations,
@@ -157,12 +152,12 @@ class ThreadContextFolder:
         stale = cursor is not None and self._now() - cursor.updated_at > PENDING_TTL
         if key == PENDING_CONVERSATION and stale:
             cursor = None
-        media: list[InboundAttachment] = []
-        block, read_ok = "", True
+        block: ContextBlock | None = None
+        read_ok = True
         # A message that roots a fresh thread at itself (thread_id == its own id)
         # holds nothing else yet — nothing to read, only a place to mark.
         if msg.thread_id != msg.platform_message_id:
-            block, media, read_ok = await self._slice(fetcher, binding, msg, cursor)
+            block, read_ok = await self._slice(fetcher, binding, msg, cursor)
         if read_ok:
             now = self._now()
             await self._cursors.put(
@@ -176,7 +171,7 @@ class ThreadContextFolder:
                     updated_at=now,
                 )
             )
-        return block, media
+        return block
 
     async def _slice(
         self,
@@ -184,20 +179,20 @@ class ThreadContextFolder:
         binding: ChannelBinding,
         msg: InboundMessage,
         cursor: ThreadCursor | None,
-    ) -> tuple[str, list[InboundAttachment], bool]:
-        """The folded block, its media, and whether the read succeeded."""
+    ) -> tuple[ContextBlock | None, bool]:
+        """The folded block (with its media), and whether the read succeeded."""
         read = await fetcher.fetch_thread(msg.chat_id, msg.thread_id, chat_kind=msg.chat_kind)
         if read.failed:
-            return "", [], False
+            return None, False
         others = [m for m in read.messages if m.message_id != msg.platform_message_id]
         if cursor is None:
             # First turn of this conversation here: the thread's latest messages,
             # its replies included — this conversation has not seen any of them.
-            picked, title = others, _SEED_TITLE
+            picked, new_since = others, False
         else:
             # The conversation's own session holds everything up to its last turn
             # here, and its own replies; only what others posted since is news.
-            picked, title = [], _NEW_TITLE
+            picked, new_since = [], True
             for message in _since(others, cursor):
                 if message.from_bot or await self._replies.find_by_message(
                     binding.resource.uid, msg.chat_id, message.message_id
@@ -206,14 +201,32 @@ class ThreadContextFolder:
                 picked.append(message)
         omitted = max(0, len(picked) - THREAD_FOLD_LIMIT)
         shown = picked[omitted:]
-        items: list[ForwardedItem] = [item for m in shown for item in m.items]
+        items = [item for m in shown for item in _timed(m)]
+        notes: list[str] = []
         if read.window_note and cursor is None:
-            items.append(ForwardedItem(sender="note", text=read.window_note))
+            notes.append(read.window_note)
         if omitted and shown:
-            note = older_messages_note(binding, msg, omitted, shown[0].message_id)
-            items.append(ForwardedItem(sender="note", text=note))
+            notes.append(older_messages_note(binding, msg, omitted, shown[0].message_id))
         media: list[InboundAttachment] = []
         for message in shown:
             if message.has_media:
                 media.extend(await fetcher.fetch_message_media(message))
-        return flatten_context(items, title=title), media, True
+        return (
+            ContextBlock(
+                kind="thread",
+                items=tuple(items),
+                media=tuple(media),
+                new_since=new_since,
+                notes=tuple(notes),
+            ),
+            True,
+        )
+
+
+def _timed(message: ThreadMessage) -> tuple[ForwardedItem, ...]:
+    """A thread message's lines, the one-line message stamped with when it was
+    sent. A forwarded record's leaves keep their own times: the thread message's
+    is when it was forwarded, not when they were written."""
+    if len(message.items) == 1 and message.items[0].sent_at is None and message.sent_at:
+        return (dataclasses.replace(message.items[0], sent_at=message.sent_at),)
+    return message.items

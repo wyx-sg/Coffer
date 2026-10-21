@@ -689,6 +689,8 @@ ignore_imports = [
     # A channel's config stores the owner's rewrite of the reply style and
     # settles it against Coffer's default, which is chat's text.
     "coffer.domain.channel.config -> coffer.domain.chat.channel_prompt",
+    # A rendered turn hands its files over as chat's numbered ``Attachment``.
+    "coffer.domain.channel.turn_content -> coffer.domain.chat.attachment",
     # The Settings tab shows the very text a turn is composed from.
     "coffer.surfaces.http.channel_prompt_preview -> coffer.domain.chat.channel_prompt",
 ]

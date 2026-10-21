@@ -146,7 +146,47 @@ Coffer 会告诉智能体它在哪个平台、哪种聊天里，以及那里能�
 
 话题的样子取决于平台。在 SeaTalk 上，它是你自己那条 `/thread` 消息的线程：机器人在里面回复，你也在里面说话。在 Telegram 上，它是一个私聊话题，需要在 BotFather 里为机器人打开 Threaded Mode。在群组里，每个话题本来就是独立的对话，所以不需要 `/thread`。
 
-每个轮次都会告诉智能体它在一个聊天渠道上：回复要简洁，但支撑结论的关键日志行、错误和 ID 要原样引用，而且它无法点击你电脑上的对话框。每个轮次开头还有一个 `[Message origin]` 块，写明平台、渠道（名称和 id，`coffer__channel_read_thread` 用的是这个 id）、聊天、话题和发送者，这样智能体能回答「这是哪个群？」，也能把平台工具调用对准正确的聊天。智能体和在你终端里一样，带着它自己的记忆进入轮次，其中包括[记忆同步](/zh/guides/memory)从你其他智能体复制过来的内容。
+每个轮次都会告诉智能体它在一个聊天渠道上：回复要简洁，但支撑结论的关键日志行、错误和 ID 要原样引用，而且它无法点击你电脑上的对话框。每个轮次开头还有一个 `[Message origin]` 块，写明平台、渠道（名称和 id，`coffer__channel_read_thread` 用的是这个 id）、聊天、话题和发送者，这样智能体能回答「这是哪个群？」，也能把平台工具调用对准正确的聊天。智能体和在你终端里一样，带着它自己的记忆进入轮次，其中包括[记忆同步](/zh/guides/memory)从你其他智能体复制过来的内容。轮次其余部分的样子见[智能体读到的内容](#what-the-agent-reads)。
+
+### 智能体读到的内容 {#what-the-agent-reads}
+
+一个轮次交给智能体的是一段文字，其中每一部分都放在自己的块里：块以一行标题开头、以一行结束标记收尾，智能体因此总能分清谁写了什么。在合并消息的等待时间内先转发一段聊天记录、再发「这个要做什么」、再发一张照片，读起来是这样：
+
+```text
+[Message origin]
+platform: seatalk
+channel: "work bot" (id: 3f2a…)
+chat: direct (id: 177203)
+from: yuxing.wu@sea.com (id: 177203) · sent: 2026-10-21 08:15 UTC
+[End of message origin]
+
+[Forwarded chat record — forwarded by the user; written by others]
+xingz@sea.com · 2026-10-21 07:15 UTC: [Tech] Buyer campaign resource optimisation
+xingz@sea.com · 2026-10-21 07:16 UTC: 背景
+    Buyer team 的资源已经没有 budget 了。
+xingz@sea.com · 2026-10-21 07:17 UTC: [image] → attachment #1
+xingz@sea.com · 2026-10-21 07:18 UTC: [voice] unavailable — the model cannot read audio
+[End of forwarded chat record]
+
+[User message 1/2]
+这个要做什么
+[End of user message]
+
+[User message 2/2]
+(sent an image → attachment #2)
+[End of user message]
+
+[Attachments]
+#1 from the forwarded record: photo.png (image, saved at ~/.coffer/content/channel-media/…)
+#2 from the user's message 2/2: photo.png (image, saved at ~/.coffer/content/channel-media/…)
+[End of attachments]
+```
+
+- **顺序**固定为：消息来源、话题里的消息、被引用的消息、转发的记录，最后是你自己的一条或几条消息。合并成一个轮次的多条消息编号为 `[User message 1/N]` 等；单独一条转发是一段记录，不算你的消息。
+- **只写来源，不写指令。**转发记录的标题只说明是你转发的、由别人写的。智能体怎么处理它，取决于你自己写了什么。
+- **每一行**带上平台给出的发送时间；话题里你自己的消息标有 `(owner)`。一条长消息的后续行缩进四个空格；引用的每一行都保留 `> `。
+- **文件在整个轮次里统一编号**，带着文件的那一行会指向它（`→ attachment #1`）。每个文件都写明来自哪里：你的消息、转发的记录、被引用的消息或话题里的消息。Claude Code 直接看到的图片，紧挨着上方标有它的编号。语音和视频会写明模型无法读取。
+- **无法伪造边界。**任何人输入的、以这些标记（`[End of user message]`、`[User message]` 等）开头的行，前面会加一个反斜杠，变成 `\[End of user message]`，所以只有 Coffer 自己写的行才能开始或结束一个块。
 
 ## 命令 {#commands}
 
@@ -210,9 +250,9 @@ Coffer 会告诉智能体它在哪个平台、哪种聊天里，以及那里能�
 - 在群主聊天里，回答会放进以你那条消息为根的话题里，从不发在主聊天。在话题里，机器人就在那个话题里回复。
 - 每个话题是一个独立的对话，有自己的智能体、历史和队列，所以多个话题可以并行运行。
 - 群组里的回答挂在提问的那条消息上：在 Telegram 上，它作为对那条消息的回复发送；在 SeaTalk 上，以那条消息为根的话题就是挂载点，回答会 @ 你。
-- 你引用一条消息时，被引用的发送者和文字会以 `> sender: …` 行的形式并入轮次，放在你的文字上方。
+- 你引用一条消息时，被引用的发送者和文字会以 `> sender: …` 行的形式放进一个 `[Quoted message — …]` 块并入轮次，位于你的消息上方。
 - 在能读取话题历史的平台上（SeaTalk），话题里的轮次会带上话题的一部分。一个对话在那里的第一个轮次，带上话题最近的 20 条消息及其中的图片和文件；这个对话之后的每个轮次，只带上自它上一轮以来其他人发的消息，没有就什么都不带。较早的消息被略去时，会有一行说明，智能体可以用 `coffer__channel_read_thread` 按需读取，只限你已配对的聊天，且从不读群组主聊天。Telegram 没有历史接口，所以在那里这个工具会直接说明。
-- 转发的聊天记录会被展平成一个 `[Forwarded chat record]` 块。
+- 转发的聊天记录会被展平成一个 `[Forwarded chat record — …]` 块，每条消息一行（见[智能体读到的内容](#what-the-agent-reads)）。
 
 有两项消息渠道设置调节机器人在群组里何时回答。它们只改变机器人何时回答，从不改变谁可以驱动它。
 
@@ -244,7 +284,7 @@ Coffer 会记住每条回复由哪些平台消息组成，只记到这个时限�
 | 你发送的 | 智能体收到的 |
 | --- | --- |
 | 照片或贴纸 | Claude Code 能看到图片。Codex 拿到文件路径。 |
-| PDF、Office 文档、epub 或 rtf | 提取出的文字，放在一个 `[Document: <name>]` 块里。无法提取时给文件路径。 |
+| PDF、Office 文档、epub 或 rtf | 提取出的文字，放在一个 `[Document #n from …: <name>]` 块里。无法提取时给文件路径。 |
 | 语音消息或音频 | 在**设置 › 通用 → 语音转文字**下打开了**语音转文字**时，是转写文本。否则是音频文件。 |
 | 其他任何文件 | 文件路径。 |
 | 位置、联系人名片 | 没有可下载的内容：机器人会请你发文字、照片或文件。 |

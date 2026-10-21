@@ -24,7 +24,12 @@ from coffer.application.audit_service import AuditService
 from coffer.application.channel.bot_label import bot_handle
 from coffer.application.channel.commands import ChannelCommands
 from coffer.application.channel.ephemeral import safe_send
-from coffer.application.channel.inbound_burst import BurstPart, InboundBurst, window_for
+from coffer.application.channel.inbound_burst import (
+    BurstPart,
+    InboundBurst,
+    message_content,
+    window_for,
+)
 from coffer.application.channel.inbound_commands import route_slash
 from coffer.application.channel.inbound_events import InboundEvents
 from coffer.application.channel.inbound_gate import group_peer
@@ -59,7 +64,7 @@ from coffer.domain.channel.envelopes import (
     InboundStop,
 )
 from coffer.domain.channel.rich_content import format_origin
-from coffer.domain.chat.attachment import Attachment, attachment_note
+from coffer.domain.chat.attachment import Attachment
 
 __all__ = ["ChannelBinding", "InboundProcessor"]
 
@@ -224,7 +229,8 @@ class InboundProcessor:
         # spec chat "Keep the conversation index without its text": taken where the
         # person's own message is still intact — before the context blocks below fold
         # in, and from this message's own files.
-        title_hint = conversation_title_hint(text, attachments)
+        record = next((i.text for i in msg.forwarded_items if not i.media_ref), "")
+        title_hint = conversation_title_hint(text or record, attachments)
         # A command (or a near miss of one) is decided on the message's OWN text,
         # before any thread history is folded in (see ``inbound_commands``).
         if await route_slash(
@@ -253,10 +259,9 @@ class InboundProcessor:
             return
         # The thread it landed in and the message it quotes ground the turn
         # (see "Ground a turn in the message it quotes").
-        text, attachments = await self._context.fold(
-            binding, msg, text, attachments, conversation_thread_id=conv_thread
-        )
-        if not text and not attachments:
+        blocks = await self._context.fold(binding, msg, conversation_thread_id=conv_thread)
+        content = message_content(msg, text, blocks)
+        if content.empty:
             # An empty envelope with nothing downloadable (a sticker, a location,
             # a media type the transport does not extract) — and no thread
             # history/images to ground a turn on either.
@@ -268,11 +273,10 @@ class InboundProcessor:
                 chat_kind=msg.chat_kind,
             )
             return
-        # "Open every turn with its message origin": provenance (platform, chat, thread,
-        # sender) rides on every turn, added after command detection and the empty
-        # check; the message id is what the receipt/completion reactions target and
-        # the mention id what a group answer opens with ("Mention the asker in a group
-        # answer"). A media message with no caption still needs non-blank text.
+        # "Open every turn with its message origin": provenance rides on every turn,
+        # added after command detection and the empty check; the message id is what
+        # the receipt/completion reactions target and the mention id what a group
+        # answer opens with ("Mention the asker in a group answer").
         item = QueuedInbound(
             text="",
             attachments=attachments,
@@ -296,7 +300,7 @@ class InboundProcessor:
                     channel=binding.resource.name,
                     channel_id=binding.resource.uid,
                 ),
-                body=text or attachment_note(attachments),
+                content=content,
                 item=item,
                 window=window_for(binding, msg),
             ),

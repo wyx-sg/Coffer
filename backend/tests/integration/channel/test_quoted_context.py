@@ -49,7 +49,12 @@ async def test_a_main_chat_mention_quoting_a_message_carries_its_body(env: Chann
     assert adapter.fetch_thread_calls == []
     turn = await _user_turn(env)
     assert "quoted message: mq-1" in turn  # the origin block still names it
-    assert turn_body(turn) == "> alice@example.com: 讲个笑话\n@bot repeat this msg"
+    assert turn_body(turn) == (
+        "[Quoted message — the message the user is replying to]\n"
+        "> alice@example.com: 讲个笑话\n"
+        "[End of quoted message]\n\n"
+        "[User message]\n@bot repeat this msg\n[End of user message]"
+    )
 
 
 async def test_a_quote_inside_a_thread_sits_between_the_thread_and_the_message(
@@ -76,8 +81,10 @@ async def test_a_quote_inside_a_thread_sits_between_the_thread_and_the_message(
     await wait_until(lambda: "Hello world" in adapter.texts())
 
     assert turn_body(await _user_turn(env)) == (
-        "[Thread messages]\nbob@example.com: status?\n\n"
-        "> alice@example.com: [image] x\n@bot what is this"
+        "[Thread messages]\nbob@example.com: status?\n[End of thread messages]\n\n"
+        "[Quoted message — the message the user is replying to]\n"
+        "> alice@example.com: [image] x\n[End of quoted message]\n\n"
+        "[User message]\n@bot what is this\n[End of user message]"
     )
 
 

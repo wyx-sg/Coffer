@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import unicodedata
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from typing import Any
 
 from coffer.domain.channel.envelopes import ChoiceButton
-from coffer.domain.channel.rich_content import ForwardedItem, flatten_forwarded
+from coffer.domain.channel.rich_content import ForwardedItem, unavailable
+from coffer.infrastructure.channel.seatalk_media_refs import media_ref
 
 __all__ = [
     "CARD_BUTTONS_PER_GROUP",
@@ -20,8 +22,8 @@ __all__ = [
     "CARD_DESCRIPTION_MAX_CHARS",
     "CARD_TITLE_MAX_CHARS",
     "collect_forwarded_items",
+    "combined_forwarded_items",
     "dedup_key",
-    "flatten_combined_forwarded",
     "interactive_card",
     "mentions_others",
     "message_to_item",
@@ -151,18 +153,21 @@ def split_to_byte_limit(chunk: str, byte_limit: int) -> list[str]:
 
 
 def message_to_item(msg: dict[str, Any]) -> ForwardedItem:
-    """Map one SeaTalk thread message dict to a :class:`ForwardedItem`.
+    """Map one SeaTalk message dict to a :class:`ForwardedItem`.
 
-    Used by ``fetch_thread`` and the group-forwarded-record renderer —
-    one mapping for every place SeaTalk hands us a message dict to flatten
-    into text. A nested ``combined_forwarded_chat_history`` entry collapses
-    to the ``[forwarded chat record]`` stand-in here; callers that want the
-    nested leaves flattened use :func:`flatten_combined_forwarded`, which
-    recurses before falling back to this single-line mapping.
+    One mapping for every place SeaTalk hands us a message dict to flatten into
+    a turn — a forwarded record's leaves, a thread's messages, a quoted message.
+    A media entry carries its file link as ``media_ref`` (the same link the
+    downloader saves it under), so the turn can point the line at the file
+    instead of the link; ``text`` is what the line says when the download did
+    not happen. A type no agent reads (voice, video, a sticker…) says so rather
+    than standing as a bare ``[tag]``. A nested record collapses to a stand-in
+    here; :func:`collect_forwarded_items` recurses before reaching this.
     """
-    sender = str((msg.get("sender") or {}).get("email") or "unknown")
+    sender = msg.get("sender") or {}
     tag = str(msg.get("tag", ""))
-    text = f"[{tag}]"
+    ref = media_ref(msg, tag)
+    label = f"[{tag}]"
     if tag == "text":
         # Group history/thread messages use "plain_text"; single-chat
         # messages (elsewhere in this adapter) use "content" — support both.
@@ -171,12 +176,21 @@ def message_to_item(msg: dict[str, Any]) -> ForwardedItem:
     elif tag == "image":
         text = f"[image] {(msg.get('image') or {}).get('content', '')}"
     elif tag == "file":
-        text = f"[file] {(msg.get('file') or {}).get('filename', '')}"
+        label = text = f"[file] {(msg.get('file') or {}).get('filename', '')}"
     elif tag == "combined_forwarded_chat_history":
-        # A short stand-in — recursion into the nested history is handled by
-        # ``collect_forwarded_items`` before this fallback is ever reached.
         text = "[forwarded chat record]"
-    return ForwardedItem(sender=sender, text=text)
+    else:
+        text = unavailable(tag)
+    sent = msg.get("message_sent_time")
+    return ForwardedItem(
+        sender=str(sender.get("email") or "unknown"),
+        text=text,
+        sender_id=str(sender.get("employee_code") or ""),
+        media_ref=ref.url if ref is not None else "",
+        media_label=label if ref is not None else "",
+        # Where the payload says when (thread messages do); never invented.
+        sent_at=datetime.fromtimestamp(sent, tz=UTC) if isinstance(sent, int | float) else None,
+    )
 
 
 def collect_forwarded_items(content: Sequence[Any]) -> list[ForwardedItem]:
@@ -202,9 +216,8 @@ def collect_forwarded_items(content: Sequence[Any]) -> list[ForwardedItem]:
     return items
 
 
-def flatten_combined_forwarded(message: dict[str, Any]) -> str:
-    """Flatten a top-level ``combined_forwarded_chat_history`` message body
-    into the ``[Forwarded chat record]`` text block.
+def combined_forwarded_items(message: dict[str, Any]) -> tuple[ForwardedItem, ...]:
+    """The leaves of a top-level ``combined_forwarded_chat_history`` message.
 
     Shared by both inbound paths that can receive a forwarded record as the
     whole message — the 1:1 DM (``message_from_bot_subscriber``) and the
@@ -215,7 +228,7 @@ def flatten_combined_forwarded(message: dict[str, Any]) -> str:
     :func:`collect_forwarded_items`).
     """
     content = (message.get("combined_forwarded_chat_history") or {}).get("content") or []
-    return flatten_forwarded(collect_forwarded_items(content))
+    return tuple(collect_forwarded_items(content))
 
 
 def strip_group_mentions(plain_text: str, mentioned_list: Sequence[Any] | None) -> str:

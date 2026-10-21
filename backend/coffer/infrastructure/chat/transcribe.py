@@ -19,7 +19,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Protocol
 
-from coffer.domain.chat.attachment import Attachment
+from coffer.domain.chat.attachment import Attachment, attachment_label
+from coffer.domain.turn_markers import VOICE_TRANSCRIPT, VOICE_TRANSCRIPT_END, block, neutralise
 
 
 class Transcriber(Protocol):
@@ -31,30 +32,38 @@ class Transcriber(Protocol):
 
 async def transcribe_audio_attachments(
     attachments: Sequence[Attachment], transcriber: Transcriber | None
-) -> tuple[list[Attachment], list[str]]:
+) -> tuple[list[Attachment], list[tuple[Attachment, str]]]:
     """Split ``attachments`` into (the non-audio ones to keep, transcripts of the
     audio ones). With no transcriber — or when transcription yields nothing —
     audio is kept as an attachment so the agent still receives the file path."""
     if transcriber is None:
         return list(attachments), []
     kept: list[Attachment] = []
-    transcripts: list[str] = []
+    transcripts: list[tuple[Attachment, str]] = []
     for att in attachments:
         if att.mime.startswith("audio/"):
             text = (await transcriber.transcribe(att.path)).strip()
             if text:
-                transcripts.append(text)
+                transcripts.append((att, text))
                 continue
         kept.append(att)
     return kept, transcripts
 
 
-def prompt_with_transcripts(prompt: str, transcripts: Sequence[str]) -> str:
-    """Fold voice transcripts into the turn's text prompt (labelled so the agent
-    knows they came from speech)."""
+def prompt_with_transcripts(prompt: str, transcripts: Sequence[tuple[Attachment, str]]) -> str:
+    """Fold voice transcripts into the turn's text prompt, each in its own block
+    that names the attachment it was heard from (so the agent knows it came from
+    speech, and whose); the transcript passes the forgery guard."""
     if not transcripts:
         return prompt
-    voice = "\n\n".join(f"[Voice message transcript]\n{t}" for t in transcripts)
+    voice = "\n\n".join(
+        block(
+            f"{VOICE_TRANSCRIPT} {attachment_label(att)}",
+            VOICE_TRANSCRIPT_END,
+            [neutralise(text)],
+        )
+        for att, text in transcripts
+    )
     return f"{prompt}\n\n{voice}".strip() if prompt else voice
 
 

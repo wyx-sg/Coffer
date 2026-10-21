@@ -120,7 +120,7 @@ async def test_dm_message_inside_a_thread_fetches_that_thread_s_context(
     conversations = await env.conversations()
     user_text = "".join(env.user_texts(conversations[0].id))
     assert "Owner: what did we decide?" in user_text
-    assert user_text.endswith("remind me")
+    assert user_text.endswith("remind me\n[End of user message]")
 
 
 async def test_threadless_dm_fetches_no_context(env: ChannelEnv) -> None:

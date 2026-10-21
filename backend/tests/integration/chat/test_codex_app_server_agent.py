@@ -427,12 +427,27 @@ async def test_cancel_while_the_app_server_starts_closes_the_session():
     assert sessions[0].closed is True
 
 
+@pytest.mark.acceptance(
+    spec="channels", scenario="each attachment is named by its number and where it came from"
+)
 @pytest.mark.asyncio
 async def test_a_pruned_attachment_degrades_to_a_could_not_be_read_note(tmp_path: Any):
-    gone = Attachment(path=str(tmp_path / "gone.png"), mime="image/png", filename="gone.png")
+    gone = Attachment(
+        path=str(tmp_path / "gone.png"),
+        mime="image/png",
+        filename="gone.png",
+        number=1,
+        source="the forwarded record",
+    )
     kept_file = tmp_path / "kept.txt"
     kept_file.write_text("x")
-    kept = Attachment(path=str(kept_file), mime="text/plain", filename="kept.txt")
+    kept = Attachment(
+        path=str(kept_file),
+        mime="text/plain",
+        filename="kept.txt",
+        number=2,
+        source="the user's message",
+    )
     server = FakeCodexAppServer(frames=_basic_frames())
     adapter = _adapter(_Factory(server))
 
@@ -440,8 +455,14 @@ async def test_a_pruned_attachment_degrades_to_a_could_not_be_read_note(tmp_path
     await asyncio.wait_for(_collect_stream(stream), timeout=5)
 
     text = next(p for m, p in server.requests if m == "turn/start")["input"][0]["text"]
-    assert "Attached file 'gone.png' could not be read" in text
-    assert f"saved at {kept_file}" in text
+    # Each attachment is named by its #n and source inside the [Attachments] block.
+    assert text == (
+        "look\n\n[Attachments]\n"
+        "#1 from the forwarded record: gone.png — could not be read "
+        "(the file is no longer on disk)\n"
+        f"#2 from the user's message: kept.txt (saved at {kept_file})\n"
+        "[End of attachments]"
+    )
 
 
 @pytest.mark.asyncio
@@ -855,7 +876,7 @@ async def test_pdf_reaches_codex_as_extracted_text() -> None:
     # …and its text was folded into the turn/start prompt as a labelled block.
     turn_params = next(p for m, p in server.requests if m == "turn/start")
     sent = turn_params["input"][0]["text"]
-    assert "[Document: report.pdf]" in sent
+    assert "[Document from the user's message: report.pdf]" in sent
     assert "Quarterly revenue was $4.2M." in sent
     # The path-note fallback is NOT used — the agent gets text, not a binary path.
     assert "saved at" not in sent

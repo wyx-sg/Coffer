@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from coffer.domain.channel.rich_content import ForwardedItem
+
 
 @dataclass(frozen=True)
 class InboundAttachment:
@@ -22,6 +24,10 @@ class InboundAttachment:
     path: str  # absolute local path the transport downloaded the bytes to
     mime: str  # e.g. "image/jpeg", "application/pdf", "audio/ogg"
     filename: str  # best-effort original / synthesized name
+    #: The transport's key for the media this was downloaded from (SeaTalk: the
+    #: file link; Telegram: the saved path) — what a ``ForwardedItem.media_ref``
+    #: names, so a forwarded or thread line can point at this file. "" for none.
+    ref: str = ""
 
 
 @dataclass(frozen=True)
@@ -76,6 +82,16 @@ class InboundMessage:
     # A forwarded chat record — rarely the whole ask, so the burst buffer waits
     # longer for the words that follow it ("Take a burst of messages as one turn").
     forwarded: bool = False
+    #: The forwarded record's messages, when ``forwarded``; ``text`` then holds
+    #: only the person's own words ("" when they wrote none), and every one of
+    #: ``attachments`` came from the record (spec channels "Flatten forwarded
+    #: chat records into the turn").
+    forwarded_items: tuple[ForwardedItem, ...] = ()
+    #: The quoted message, on a platform that inlines it on the update itself
+    #: (Telegram's ``reply_to_message``); one that delivers only an id leaves
+    #: this empty and sets ``quoted_message_id`` (spec channels "Ground a turn in
+    #: the message it quotes").
+    quoted_items: tuple[ForwardedItem, ...] = ()
     attachments: tuple[InboundAttachment, ...] = ()  # photos/files/voice, if any
     ephemeral_id: str = ""  # set when the message itself was ephemeral (only the
     # sender and the bot can see it); it is the handle that lets the bot answer

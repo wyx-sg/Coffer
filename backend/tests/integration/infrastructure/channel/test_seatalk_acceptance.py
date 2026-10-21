@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 from coffer.application.channel.ports import AdapterCallbacks
 from coffer.domain.channel.envelopes import ChoiceButton, InboundLifecycle
 from coffer.infrastructure.channel.seatalk_parse import interactive_card
+from tests.support.channel import rendered_record
 
 from .conftest import FakeSeaTalk, RecordingCallbacks, make_seatalk_adapter
 
@@ -211,8 +212,8 @@ async def test_an_image_two_forwards_deep_is_downloaded(
     [att] = msg.attachments
     assert att.mime.startswith("image/")
     assert pathlib.Path(att.path).read_bytes() == fake_seatalk.file_bytes
-    assert msg.text.startswith("[Forwarded chat record]")
-    assert "b@example.com: look at this" in msg.text
+    assert rendered_record(msg).startswith("[Forwarded chat record")
+    assert "b@example.com: look at this" in rendered_record(msg)
 
 
 # -- threads ---------------------------------------------------------------------
