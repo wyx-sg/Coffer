@@ -25,6 +25,11 @@ from coffer.infrastructure.vault.home import local_root
 from coffer.infrastructure.vault.json_store import JsonStore
 
 LEDGER_VERSION = 1
+#: Bumped whenever the sync starts to file or classify what the readers return
+#: differently. A ledger written under another revision forgets its source
+#: digests, so the next sync re-reads every source once instead of skipping them
+#: as unchanged and leaving the old filing in the hub.
+READER_REVISION = 2
 
 
 def ledger_path() -> Path:
@@ -70,6 +75,7 @@ class Ledger:
 def _to_dict(ledger: Ledger) -> dict[str, Any]:
     return {
         "version": LEDGER_VERSION,
+        "reader_revision": READER_REVISION,
         "previewed": ledger.previewed,
         "codex_imports_claude": ledger.codex_imports_claude,
         "sources": {p: asdict(s) for p, s in ledger.sources.items()},
@@ -97,7 +103,8 @@ def _from_dict(raw: dict[str, Any]) -> Ledger:
     ledger.previewed = bool(raw.get("previewed", False))
     imports = raw.get("codex_imports_claude")
     ledger.codex_imports_claude = imports if isinstance(imports, bool) else None
-    for path, src in (raw.get("sources") or {}).items():
+    current = raw.get("reader_revision") == READER_REVISION
+    for path, src in (raw.get("sources") or {}).items() if current else ():
         if isinstance(src, dict):
             ledger.sources[str(path)] = SourceRecord(
                 digest=str(src.get("digest", "")),
