@@ -59,7 +59,7 @@ Neither reader opens session transcripts or rollouts as a source. The Claude Cod
 
 A reader that cannot parse its source fails **loudly and in isolation**: that agent publishes nothing in that sync, the Memory page names the path and the reason, the other agent is still read, and entries it published earlier stay in the hub rather than being deleted.
 
-A source whose digest matches the one in the ledger is skipped. Losing the ledger only costs a full re-read.
+A source whose digest matches the one in the ledger is skipped. Losing the ledger only costs a full re-read. A ledger written under another reader revision (bumped when the sync starts to file memories differently) forgets its digests the same way, so one sync re-files everything already in the hub.
 
 ## Writing into each agent
 
