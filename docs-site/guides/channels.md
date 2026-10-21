@@ -140,7 +140,9 @@ A conversation you delete on the Conversations page (or whose session you delete
 
 ### Parallel conversations
 
-A direct chat is one conversation. To run a second task beside it without mixing contexts, send `/thread [title]`. The bot opens a thread marked `🧵#N title`, and whatever you send inside that thread runs in a conversation of its own. The mark is the thread's name in the chat, the conversation's title on the Conversations page, and the title of `/status` inside it. `/status` in the direct chat lists the parallel threads on one line, each with whether it is running, has messages waiting, or is idle.
+A direct chat is one conversation. To run a second task beside it without mixing contexts, send `/thread [title]`. The bot opens a thread marked `🧵#N title`, and whatever you send inside that thread runs in a conversation of its own. The mark is the thread's name in the chat, the conversation's title on the Conversations page, and the title of `/status` inside it. `/status` in the direct chat lists the open parallel threads on one line, each with whether it is running, has messages waiting, or is idle.
+
+When the task is done, send `/close` inside the thread. A thread nobody has used for 24 hours closes on its own, without a message. A closed thread drops out of `/status`, its conversation stays on the Conversations page, and a message sent in it is answered with a note that it is closed: send `/resume` there to reopen it, or `/thread` for a new one. See [Closing a parallel thread](/reference/channel-commands#closing-a-parallel-thread).
 
 How the thread appears depends on the platform. On SeaTalk it is the thread of your own `/thread` message: the bot answers inside it, and you reply there. On Telegram it is a private-chat topic, which needs the bot's Threaded Mode turned on in BotFather. In a group, every thread is already its own conversation, so `/thread` is not needed there.
 
@@ -148,7 +150,7 @@ Each turn tells the agent it is on a chat channel: keep replies concise but quot
 
 ## Commands
 
-Nine words are Coffer's commands. Everything else you type — including other text that starts with `/` — is a message for the agent.
+Ten words are Coffer's commands. Everything else you type — including other text that starts with `/` — is a message for the agent.
 
 | Command | What it does |
 | --- | --- |
@@ -159,10 +161,11 @@ Nine words are Coffer's commands. Everything else you type — including other t
 | `/dir [path\|name]` | Show or switch the working directory, in a fresh conversation. |
 | `/resume [n]` | Reopen an earlier conversation from this chat. |
 | `/thread [title]` | In a direct chat, open a parallel conversation in its own thread. |
+| `/close` | Inside a parallel thread, close it. |
 | `/del` | Owner only. Withdraw the bot's reply: quote it and send `/del`, or send it bare for the most recent one. |
 | `/help` | List the commands, one per line with what each does. |
 
-In a group only `/new`, `/stop`, `/help` and `/del` work, because they control the group's own conversation and replies. `/model`, `/dir`, `/status`, `/resume` and `/thread` work only in a direct chat with the bot; sent in a group they get one private line, "This command works in a private chat with me.", and nothing else happens. To save something into [knowledge](/guides/knowledge#from-a-chat-ask-your-agent) from a chat, ask the agent.
+In a group only `/new`, `/stop`, `/help` and `/del` work, because they control the group's own conversation and replies. `/model`, `/dir`, `/status`, `/resume`, `/thread` and `/close` work only in a direct chat with the bot; sent in a group they get one private line, "This command works in a private chat with me.", and nothing else happens. To save something into [knowledge](/guides/knowledge#from-a-chat-ask-your-agent) from a chat, ask the agent.
 
 The full reference, with where each command works, is at [Channel commands](/reference/channel-commands).
 

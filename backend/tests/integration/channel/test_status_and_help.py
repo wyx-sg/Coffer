@@ -65,7 +65,7 @@ async def test_help_lists_one_command_per_line_with_no_buttons(env: ChannelEnv) 
     lines = text.splitlines()
     assert lines[0] == "**Commands**"
     assert lines[1] == "/new [agent] \u2014 Start a fresh conversation, optionally on another agent"
-    assert sum(line.startswith("/") for line in lines) == 9
+    assert sum(line.startswith("/") for line in lines) == 10
 
 
 async def test_help_without_buttons_is_the_roster_as_text(env: ChannelEnv) -> None:
@@ -110,5 +110,5 @@ async def test_a_groups_help_lists_only_the_group_commands(env: ChannelEnv) -> N
     # The /new card in a group offers Agent alone, and is the only card.
     [new_card] = adapter.cards
     assert [b.label for b in new_card[2]] == ["Agent"]
-    # A direct chat gets all nine.
-    assert sum(line[:1] == "/" for line in help_text().splitlines()) == 9
+    # A direct chat gets all ten.
+    assert sum(line[:1] == "/" for line in help_text().splitlines()) == 10

@@ -6,7 +6,7 @@ not a design choice (spec channels "Register the bot's command menu and
 profile from one roster"). Everything is derived from :data:`COMMAND_ROSTER`
 here, so nothing can disagree; a new command is one entry plus its handler.
 
-Nine words are reserved and nothing else (spec channels "Pass unreserved slash
+Ten words are reserved and nothing else (spec channels "Pass unreserved slash
 text to the agent"): a text is a command only when its first word names an
 entry here, a near-miss of one answers "Did you mean", and anything else that
 starts with ``/`` — a path, an agent's own ``/compact`` — is a message for the
@@ -103,6 +103,13 @@ COMMAND_ROSTER: tuple[ChannelCommand, ...] = (
         "[title]",
         "Open a parallel conversation beside this chat",
         "在旁边开一个并行对话",
+        dm_only=True,
+    ),
+    ChannelCommand(
+        "close",
+        "",
+        "Close this parallel thread",
+        "关闭这个并行对话",
         dm_only=True,
     ),
     ChannelCommand(

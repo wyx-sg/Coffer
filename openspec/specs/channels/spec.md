@@ -269,15 +269,15 @@ when the platform rate-limits outbound sends, sends back off and retry.
   from its input, because everyone in the group reads it
 
 ### Requirement: Answer the conversation commands from any paired chat
-Nine words are Coffer's commands in a paired chat, and nothing else: `/new`,
-`/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/del` and `/help`
-(`/start` is a hidden alias of `/help`). They are split by chat type. In a
-**direct chat** all nine work. In a **group** only `/new`, `/stop`, `/del` and
+Ten words are Coffer's commands in a paired chat, and nothing else: `/new`,
+`/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/close`, `/del` and
+`/help` (`/start` is a hidden alias of `/help`). They are split by chat type. In a
+**direct chat** all ten work. In a **group** only `/new`, `/stop`, `/del` and
 `/help` work — they
 control the group's own conversation — and `/model`, `/dir`, `/status`,
-`/resume` and `/thread` work only in a direct chat: sent in a group by the owner
+`/resume`, `/thread` and `/close` work only in a direct chat: sent in a group by the owner
 (see "Act in a group only on an addressed message from the owner"), one of
-those five is answered with one line in English and Chinese saying it works in a
+those six is answered with one line in English and Chinese saying it works in a
 private chat with the bot, delivered privately to the sender where the platform
 can (see "Keep non-answer chatter private in a group"), and does nothing else —
 it is not passed to the agent as a message. A group's `/help` lists only the
@@ -305,7 +305,7 @@ one conversation never overlap.
 
 The commands that configure the conversation the chat is bound to are specified
 in their own requirements — `/model` in "Switch the model from chat", `/dir` in "Choose the working directory from chat", `/resume` in
-"Resume an earlier conversation from chat", and `/thread` in "Open parallel conversations beside a direct chat".
+"Resume an earlier conversation from chat", and `/thread` and `/close` in "Open parallel conversations beside a direct chat".
 All of them live on one roster (see "Register the bot's command menu and profile
 from one roster"), so none of the lists derived from it can go stale, and every
 other text that starts with `/` is a message (see "Pass unreserved slash text to
@@ -351,7 +351,7 @@ the agent").
 - **GIVEN** a paired group and a paired direct chat
 - **WHEN** the owner sends `/help` in each
 - **THEN** the group's answer lists `/new`, `/stop`, `/del` and `/help` only, and says the other commands work in a private chat with the bot
-- **AND** the direct chat's answer lists all nine commands
+- **AND** the direct chat's answer lists all ten commands
 - **AND** neither answer carries a button
 
 #### Scenario: /new answers with a one-line card
@@ -1818,12 +1818,33 @@ further conversations beside it deliberately:
   `🧵#N title` (title defaulting to `Task`) wherever it is shown: the thread's
   root message or topic name (on SeaTalk, the bot's reply in the thread of the owner's `/thread` message), the conversation's title on the web, and `/status`
   both inside it and in the direct chat.
-- `/status` in the direct chat says how many parallel threads the chat has and
-  lists each one's mark, agent, and whether a turn is running, messages wait or are on hold, or it is idle,
-  newest first.
-- `/thread` works only in a direct chat; in a group it is declined (see
-  "Answer the conversation commands from any paired chat"), because every group
-  thread is already its own conversation.
+- `/status` in the direct chat says how many open parallel threads the chat has
+  and lists each one's mark, agent, and whether a turn is running, messages wait or are on hold, or it is idle,
+  newest first. A closed thread is neither counted nor listed.
+- `/close` sent inside a parallel thread closes it and answers "🔒 Closed
+  `🧵#N title`. Send /thread in the chat to open a new one." It never stops or
+  drops anything: while a turn runs there it answers "A turn is running here —
+  send /stop first, then /close.", and while messages are queued or on hold it
+  asks for them to be run or discarded first. Sent in the direct chat itself or
+  in a thread `/thread` did not open, it answers "Use /close inside a parallel
+  thread." and does nothing.
+- A parallel thread idle for 24 hours — no turn running, nothing queued or on
+  hold, and no turn started or ended in its conversation (nor the thread opened
+  or reopened) for the whole window — is closed by a periodic sweep, silently:
+  nothing is sent to the chat.
+- A closed thread keeps its row, so its number is never given out again, and
+  its conversation stays in the Conversations list with its history. A message
+  sent in it runs nothing and never joins the direct chat's conversation: it is
+  answered inside that thread with "🔒 This thread is closed. Send /resume here
+  to reopen it, or /thread in the chat to open a new one." `/status`, `/help`,
+  `/stop`, `/del`, `/close`, `/thread` and `/resume` still work there (`/status`
+  reads `Closed` as its state); `/new`, `/model` and `/dir` get the same notice.
+  `/resume` there lists the thread's conversations with none ticked as in
+  effect, and resuming one reopens the thread, its answer adding "🔓 This thread
+  is open again."
+- `/thread` and `/close` work only in a direct chat; in a group they are
+  declined (see "Answer the conversation commands from any paired chat"),
+  because every group thread is already its own conversation.
 
 A thread in a direct chat that `/thread` did not open is, on a platform where
 such threads are casual replies, part of the direct chat's conversation. It is
@@ -1839,6 +1860,34 @@ still answered inside that thread.
 - **GIVEN** a direct chat with two parallel threads, one of them running a turn
 - **WHEN** the owner sends `/status` in the direct chat
 - **THEN** the answer says there are two parallel threads and lists both marks, each with its agent and its state
+
+#### Scenario: /close closes the parallel thread it is sent in
+- **GIVEN** a direct chat with two parallel threads, neither running a turn
+- **WHEN** the owner sends `/close` inside the first one
+- **THEN** it answers that `🧵#1` is closed, its conversation stays in the Conversations list with its history
+- **AND** `/status` in the direct chat counts and lists only the second thread, and the next `/thread` is numbered `🧵#3`
+
+#### Scenario: /close in a thread running a turn asks for /stop first
+- **GIVEN** a parallel thread running a turn
+- **WHEN** the owner sends `/close` inside it
+- **THEN** it answers "A turn is running here — send /stop first, then /close." and the thread stays open
+
+#### Scenario: a message in a closed thread is answered there and runs nothing
+- **GIVEN** a direct chat with a closed parallel thread
+- **WHEN** the owner sends a message inside that thread
+- **THEN** the closed-thread notice is answered inside it, no turn runs, and nothing reaches the direct chat's own conversation
+
+#### Scenario: an idle parallel thread closes on its own
+- **GIVEN** a parallel thread whose conversation has had no turn for more than 24 hours
+- **WHEN** the sweep runs
+- **THEN** the thread is closed without any message to the chat, and a later message in it gets the closed-thread notice
+- **AND** a thread running a turn, or idle for less than 24 hours, stays open
+
+#### Scenario: /resume inside a closed thread reopens it
+- **GIVEN** a parallel thread the sweep closed
+- **WHEN** the owner sends `/resume 1` inside it
+- **THEN** it answers that the conversation is resumed and that the thread is open again
+- **AND** the thread is listed by `/status` again, and the next message there continues that conversation
 
 ### Requirement: Switch the agent with /new
 The owner MUST be able to switch which agent answers in a chat with `/new
@@ -1870,7 +1919,7 @@ an agent the channel may no longer drive is refused with nothing changed.
   names, and the active conversation is unchanged
 
 ### Requirement: Pass unreserved slash text to the agent
-Only Coffer's nine commands (see "Answer the conversation commands from any
+Only Coffer's ten commands (see "Answer the conversation commands from any
 paired chat") MUST be taken out of the conversation. Any other text starting
 with `/` — an agent's own command such as `/compact` or a skill invoked as
 `/review`, or a message that opens with a path such as `/Users/me/app crashes` —
@@ -2019,7 +2068,7 @@ always an ordinary message the whole room would see.
 "Commands" heading, then one line per command the chat may use — its typed form
 with its arguments, a dash, and what it does, in the words the platform's own
 command menu shows — then that anything else goes to the agent as a message. A
-direct chat's list has all nine commands; a group's has `/new`, `/stop`, `/del`
+direct chat's list has all ten commands; a group's has `/new`, `/stop`, `/del`
 and `/help` and says the other commands work in a private chat with the bot. It
 carries no buttons, on any transport: the commands are typed (and, on Telegram,
 tapped in the text and in the platform's command menu), and a button per command
@@ -2030,7 +2079,7 @@ pairing succeeds (pairing is a direct chat). A platform with no command menu
 #### Scenario: /help lists one command per line, with no buttons
 - **GIVEN** a paired direct chat on a button-capable transport
 - **WHEN** the owner sends `/help`
-- **THEN** the answer is text, one line per command naming it, its arguments and what it does, for all nine commands
+- **THEN** the answer is text, one line per command naming it, its arguments and what it does, for all ten commands
 - **AND** it carries no button
 
 #### Scenario: the command list follows pairing

@@ -845,6 +845,7 @@ async def test_start_registers_the_full_command_menu(fake_telegram: FakeTelegram
             "status",
             "resume",
             "thread",
+            "close",
             "del",
             "help",
         }

@@ -6,7 +6,10 @@ first, at most 100, a page at a time: nothing opened on the web or in another ch
 and a tap is checked against the same history before anything is rebound, so
 a forged or stale button can never reach another chat's conversation. A
 conversation deleted since is skipped. `/resume n` and a tap rebind the thread
-to the chosen conversation; its next message continues it.
+to the chosen conversation; its next message continues it. In a closed
+parallel thread the conversation it is bound to is offered too, and resuming
+any of them opens the thread again (spec channels "Open parallel conversations
+beside a direct chat").
 
 Application layer only: no infrastructure import here.
 """
@@ -50,7 +53,11 @@ async def _entries(ctx: CommandContext) -> tuple[list[Any], str | None]:
         except ConversationNotFound:
             continue
     row = await threads.get(ctx.resource_uid, ctx.chat_id, ctx.conversation_thread_id)
-    return found, row.active_conversation_id if row is not None else None
+    if row is None or row.parallel_closed:
+        # Nothing is in effect in a closed thread: its own conversation is one
+        # to resume like any other.
+        return found, None
+    return found, row.active_conversation_id
 
 
 def _title(conversation: Any) -> str:
@@ -109,8 +116,9 @@ async def apply_resume(ctx: CommandContext, conversation_id: str) -> None:
 
 
 async def _rebind(ctx: CommandContext, conversation: Any) -> None:
-    await ctx.commands._threads.set_active_conversation(
-        ctx.resource_uid, ctx.chat_id, ctx.conversation_thread_id, str(conversation.id)
-    )
+    threads, where = ctx.commands._threads, (ctx.resource_uid, ctx.chat_id)
+    await threads.set_active_conversation(*where, ctx.conversation_thread_id, str(conversation.id))
+    reopened = await threads.reopen_parallel(*where, ctx.conversation_thread_id)
     agent = agent_display(ctx.commands._agents, conversation.agent_key)
-    await ctx.say(f"↩️ Resumed \u201c{_title(conversation)}\u201d with {agent}.")
+    note = " 🔓 This thread is open again." if reopened else ""
+    await ctx.say(f"↩️ Resumed \u201c{_title(conversation)}\u201d with {agent}.{note}")

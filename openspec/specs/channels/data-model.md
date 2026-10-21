@@ -185,6 +185,7 @@ already running".
 | `chat_kind`              | TEXT NULL                                    | `direct` / `group` — which send path reaches the thread; NULL until a message there records it                |
 | `preferred_model`        | TEXT NULL                                    | the thread's sticky model (`/model`); rides only while the sticky agent is the one in effect                  |
 | `preferred_cwd`          | TEXT NULL                                    | the thread's sticky working directory (`/dir`), one of the channel's `directories` or beneath one             |
+| `parallel_closed_at`     | DATETIME (UTC) NULL                          | when `/close` or the idle sweep closed the parallel thread; NULL while open; cleared by `/resume` inside it    |
 
 Constraints: `UNIQUE (resource_uid, chat_id, thread_id)`; index on `resource_uid`.
 
@@ -200,13 +201,18 @@ of its own ("Key conversation identity by channel, chat and thread"): a
 parallel thread (a row with a `parallel_ordinal`), or any private-chat topic on
 a transport whose direct-chat threads are deliberate (Telegram). A casual
 reply-in-thread in a SeaTalk direct chat keys to the chat's `""` row. The
-ordinal is `max + 1` over the chat's rows, so a number is never reused after
-its conversation is replaced ("Open parallel conversations beside a direct chat").
+ordinal is `max + 1` over the chat's rows, closed ones included, so a number is
+never reused after its conversation is replaced or the thread is closed ("Open
+parallel conversations beside a direct chat"). A closed row keeps keying its
+thread to itself, so a message there is answered with the closed notice rather
+than folded into the direct chat. `updated_at` is bumped by every write to the
+row (closing and reopening included); the idle sweep takes the later of it and
+the bound conversation's own `updated_at`.
 
 `parallel_ordinal` and `parallel_title` are nullable: a direct-chat thread row
 without an ordinal is a casual reply, which is what folds it into the direct
-chat's conversation. `chat_kind` and the three `preferred_*` settings are
-nullable too.
+chat's conversation. `chat_kind`, the three `preferred_*` settings and
+`parallel_closed_at` are nullable too.
 
 A group's `thread_id=""` row doubles as the **group's defaults** ("Set a
 group's defaults from its main chat"): a group thread with no setting of its own

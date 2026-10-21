@@ -126,6 +126,16 @@ class ChannelThreadConversation:
     #: the agent's own default (model) or the channel's (directory).
     preferred_model: str | None = None
     preferred_cwd: str | None = None
+    #: When the parallel thread was closed — by `/close` or by the idle sweep
+    #: (spec channels "Open parallel conversations beside a direct chat").
+    #: ``None`` while it is open, and on every row that is not a parallel thread.
+    #: A closed row stays, so its number is never given out again.
+    parallel_closed_at: datetime | None = None
+
+    @property
+    def parallel_closed(self) -> bool:
+        """Whether this is a parallel thread that has been closed."""
+        return self.parallel_ordinal is not None and self.parallel_closed_at is not None
 
     @property
     def parallel_mark(self) -> str | None:
@@ -245,9 +255,10 @@ class ChannelThreadConversationRepoPort(Protocol):
 
     async def next_parallel_ordinal(self, resource_uid: str, chat_id: str) -> int:
         """The number the chat's next parallel thread gets: ``max + 1`` over the
-        chat's rows, so a number is never reused after a conversation is replaced
-        (see "Open parallel conversations beside a direct chat"). Read before the
-        thread exists, because the thread's root message carries its mark."""
+        chat's rows, closed ones included, so a number is never reused after a
+        conversation is replaced or the thread is closed (see "Open parallel
+        conversations beside a direct chat"). Read before the thread exists,
+        because the thread's root message carries its mark."""
         ...
 
     async def open_parallel(
@@ -258,9 +269,26 @@ class ChannelThreadConversationRepoPort(Protocol):
         ...
 
     async def list_parallel(
-        self, resource_uid: str, chat_id: str
+        self, resource_uid: str, chat_id: str, *, include_closed: bool = False
     ) -> list[ChannelThreadConversation]:
-        """The chat's parallel threads, newest (highest ordinal) first."""
+        """The chat's parallel threads, newest (highest ordinal) first — the
+        open ones only, unless ``include_closed``."""
+        ...
+
+    async def close_parallel(self, resource_uid: str, chat_id: str, thread_id: str) -> bool:
+        """Close parallel thread ``thread_id`` of this chat, leaving its row (and
+        so its number), its conversation and its history in place. ``True`` when
+        an open parallel thread was closed; ``False`` when there was none."""
+        ...
+
+    async def reopen_parallel(self, resource_uid: str, chat_id: str, thread_id: str) -> bool:
+        """Open a closed parallel thread again (`/resume` inside it), restarting
+        its idle window. ``True`` when a closed one was reopened."""
+        ...
+
+    async def open_parallel_threads(self) -> list[ChannelThreadConversation]:
+        """Every open parallel thread of every channel — what the idle sweep
+        walks."""
         ...
 
 

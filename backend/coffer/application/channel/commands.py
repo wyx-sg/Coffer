@@ -1,5 +1,5 @@
 """The channel's reserved commands: /new /stop /model /dir /status /resume
-/thread /del /help (spec channels "Answer the conversation commands from any
+/thread /close /del /help (spec channels "Answer the conversation commands from any
 paired chat", and the requirements each command cites in its own module).
 
 The roster itself — which words are reserved, their help text and menus — is
@@ -53,6 +53,7 @@ _HANDLERS: dict[str, _Handler] = {
     "status": status_card.cmd_status,
     "resume": resume_switch.cmd_resume,
     "thread": parallel_threads.cmd_thread,
+    "close": parallel_threads.cmd_close,
     "del": withdraw.cmd_del,
     "help": status_card.cmd_help,
 }

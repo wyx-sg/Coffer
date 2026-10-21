@@ -24,6 +24,7 @@ from sqlalchemy import (
     delete,
     func,
     select,
+    update,
 )
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
@@ -58,6 +59,10 @@ class ChannelThreadConversationModel(Base):
     # every other row.
     parallel_ordinal: Mapped[int | None] = mapped_column(Integer, nullable=True)
     parallel_title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # When `/close` or the idle sweep closed it; NULL while open (the row stays).
+    parallel_closed_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
     # "direct" / "group": which send path reaches the thread.
     chat_kind: Mapped[str | None] = mapped_column(String, nullable=True)
     # The thread's sticky model and working directory.
@@ -112,6 +117,7 @@ def _thread_to_domain(row: ChannelThreadConversationModel) -> ChannelThreadConve
         chat_kind=row.chat_kind,
         preferred_model=row.preferred_model,
         preferred_cwd=row.preferred_cwd,
+        parallel_closed_at=_tz(row.parallel_closed_at) if row.parallel_closed_at else None,
     )
 
 
@@ -196,20 +202,44 @@ class ChannelThreadConversationRepo:
         )
 
     async def list_parallel(
-        self, resource_uid: str, chat_id: str
+        self, resource_uid: str, chat_id: str, *, include_closed: bool = False
     ) -> list[ChannelThreadConversation]:
+        model = ChannelThreadConversationModel
+        where = [model.resource_uid == resource_uid, model.chat_id == chat_id]
+        if not include_closed:
+            where.append(model.parallel_closed_at.is_(None))
+        return await self._parallel(*where)
+
+    async def close_parallel(self, resource_uid: str, chat_id: str, thread_id: str) -> bool:
+        return await self._closed_at(resource_uid, chat_id, thread_id, datetime.now(tz=UTC))
+
+    async def reopen_parallel(self, resource_uid: str, chat_id: str, thread_id: str) -> bool:
+        return await self._closed_at(resource_uid, chat_id, thread_id, None)
+
+    async def _closed_at(self, uid: str, chat_id: str, thread_id: str, at: datetime | None) -> bool:
+        """Close (``at``) or reopen (``None``) a parallel thread that is the other
+        way now; bumping ``updated_at`` restarts the idle window on a reopen."""
+        model = ChannelThreadConversationModel
+        was = model.parallel_closed_at.is_(None) if at else model.parallel_closed_at.is_not(None)
         async with self._sm() as session:
-            rows = (
-                await session.execute(
-                    select(ChannelThreadConversationModel)
-                    .where(
-                        ChannelThreadConversationModel.resource_uid == resource_uid,
-                        ChannelThreadConversationModel.chat_id == chat_id,
-                        ChannelThreadConversationModel.parallel_ordinal.is_not(None),
-                    )
-                    .order_by(ChannelThreadConversationModel.parallel_ordinal.desc())
-                )
-            ).scalars()
+            result = await session.execute(
+                update(model)
+                .where(model.resource_uid == uid, model.chat_id == chat_id, was)
+                .where(model.thread_id == thread_id, model.parallel_ordinal.is_not(None))
+                .values(parallel_closed_at=at, updated_at=datetime.now(tz=UTC))
+            )
+            await session.commit()
+            return bool(getattr(result, "rowcount", 0))
+
+    async def open_parallel_threads(self) -> list[ChannelThreadConversation]:
+        return await self._parallel(ChannelThreadConversationModel.parallel_closed_at.is_(None))
+
+    async def _parallel(self, *where: Any) -> list[ChannelThreadConversation]:
+        """The parallel-thread rows matching ``where``, highest number first."""
+        model = ChannelThreadConversationModel
+        stmt = select(model).where(model.parallel_ordinal.is_not(None), *where)
+        async with self._sm() as session:
+            rows = (await session.execute(stmt.order_by(model.parallel_ordinal.desc()))).scalars()
             return [_thread_to_domain(row) for row in rows]
 
     # -- history ---------------------------------------------------------------

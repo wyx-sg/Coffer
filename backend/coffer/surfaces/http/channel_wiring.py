@@ -30,8 +30,11 @@ from coffer.application.channel.ports import ChannelAdapter, ChannelBinding
 from coffer.application.channel.prompt_note import ChannelNoteReader
 from coffer.application.channel.runtime import ChannelRuntime
 from coffer.application.channel.service import ChannelService
+from coffer.application.channel.thread_sweep import ParallelThreadSweep
 from coffer.application.channel.thread_tool import ThreadReader, channel_read_thread_tool
 from coffer.application.chat import questions
+from coffer.application.chat.turn_state import is_running
+from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.channel.config import parse_channel_config
 from coffer.domain.channel.envelopes import ChannelCapabilities
 from coffer.domain.chat.question import QuestionBlock
@@ -288,6 +291,16 @@ def wire_channel_kind(
         channel_read_thread_tool(ThreadReader(resolve=running_channel, peers=peers))
     )
     set_credential_check(build_credential_check(resource_svc, materialize))
+    # Parallel threads idle for a day close on their own (spec channels "Open
+    # parallel conversations beside a direct chat"); cancelled by the
+    # supervisor's sweep at shutdown, before the database goes.
+    sweep = ParallelThreadSweep(
+        threads=threads,
+        conversations=chat.chat_service,
+        turns=chat.orchestrator,
+        is_running=is_running,
+    )
+    spawn_restarting(sweep.run, name="channel-thread-sweep")
     return runtime
 
 

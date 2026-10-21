@@ -97,7 +97,7 @@ async def test_a_non_dict_get_me_degrades_to_an_empty_identity() -> None:
 # -- register_profile ---------------------------------------------------------
 
 
-_PRIVATE = {"new", "stop", "model", "dir", "status", "resume", "thread", "del", "help"}
+_PRIVATE = {"new", "stop", "model", "dir", "status", "resume", "thread", "close", "del", "help"}
 _GROUP = {"new", "stop", "del", "help"}
 
 

@@ -84,7 +84,7 @@ Coffer registers the bot's command menus with Telegram every time the channel st
 
 | Where | Commands in the menu |
 | --- | --- |
-| Private chats | All nine: `/new`, `/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/del`, `/help` |
+| Private chats | All ten: `/new`, `/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/close`, `/del`, `/help` |
 | Groups | `/new`, `/stop`, `/del`, `/help` |
 
 Each menu is registered twice, with English descriptions and with Chinese ones, so a Telegram client set to Chinese shows the Chinese menu. The hidden `/start` is never listed.
