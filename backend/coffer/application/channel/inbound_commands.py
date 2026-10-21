@@ -1,6 +1,6 @@
 """Deciding whether an inbound message is a command, and running it.
 
-Nine words are reserved and nothing else (spec channels "Pass unreserved slash
+Ten words are reserved and nothing else (spec channels "Pass unreserved slash
 text to the agent"): a text-only message whose first word names a roster entry
 is a command; one whose first word is a near miss of one (``/stpo``) is
 answered ``Did you mean /stop?`` and runs nothing; anything else — ``/compact``,

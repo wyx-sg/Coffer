@@ -1,13 +1,13 @@
 ---
 title: 渠道命令
-description: 九个渠道命令、各命令在直接聊天、线程和群组中的行为、设置如何跟着聊天走、/stop 后暂停的消息，以及命令菜单和选择卡片。
+description: 十个渠道命令、各命令在直接聊天、线程和群组中的行为、设置如何跟着聊天走、/stop 后暂停的消息，以及命令菜单和选择卡片。
 ---
 
 # 渠道命令 {#channel-commands}
 
-有九个词是 Coffer 的命令。你输入的其他所有内容，包括别的以 `/` 开头的文字，都是发给智能体的消息。
+有十个词是 Coffer 的命令。你输入的其他所有内容，包括别的以 `/` 开头的文字，都是发给智能体的消息。
 
-下表列出九个词。每个命令的读法、可用位置和卡片见下文。如何配对并开始聊天，请看[消息渠道](/zh/guides/channels)。
+下表列出十个词。每个命令的读法、可用位置和卡片见下文。如何配对并开始聊天，请看[消息渠道](/zh/guides/channels)。
 
 | 命令 | 作用 |
 | --- | --- |
@@ -18,10 +18,11 @@ description: 九个渠道命令、各命令在直接聊天、线程和群组中�
 | `/dir [path\|name]` | 查看或切换工作目录，切换会开一个新对话。 |
 | `/resume [n]` | 重新打开这个聊天之前的一个对话。 |
 | `/thread [title]` | 在私聊中，在单独的话题里打开一个并行对话。 |
+| `/close` | 在并行对话里发，关闭它（见[关闭并行对话](#closing-a-parallel-thread)）。 |
 | `/del` | 仅所有者可用。撤回机器人的回复：引用机器人的某条消息并发送 `/del`，撤回那条消息所属的整个回复；不引用直接发送，则撤回机器人在这个聊天（或话题）里最近的一条回复。 |
 | `/help` | 列出命令，一行一个并写明作用（群组里只有四个群命令），不带按钮。 |
 
-在群组里只有 `/new`、`/stop`、`/help` 和 `/del` 可用；其余五个只能在私聊里用（见[各命令在哪里可用](#where-each-command-works)）。Telegram 的 start 链接会发送 `/start`，它的回答和 `/help` 一样。`/new` 和 `/stop` 即使在轮次运行时也会立即生效。命令会先放行所有还在停顿等待中的消息，让它们在命令之前运行；`/stop` 则会丢弃它们。
+在群组里只有 `/new`、`/stop`、`/help` 和 `/del` 可用；其余六个只能在私聊里用（见[各命令在哪里可用](#where-each-command-works)）。Telegram 的 start 链接会发送 `/start`，它的回答和 `/help` 一样。`/new` 和 `/stop` 即使在轮次运行时也会立即生效。命令会先放行所有还在停顿等待中的消息，让它们在命令之前运行；`/stop` 则会丢弃它们。
 
 ## 命令的读法 {#how-the-commands-read}
 
@@ -35,7 +36,7 @@ description: 九个渠道命令、各命令在直接聊天、线程和群组中�
 
 ## 各命令在哪里可用 {#where-each-command-works}
 
-`/new`、`/stop`、`/help` 和 `/del` 控制的是群自己的对话和它的回复，所以在群里可用。`/model`、`/dir`、`/status`、`/resume` 和 `/thread` 配置或查看的是你和机器人自己的聊天，所以只能在私聊里用。
+`/new`、`/stop`、`/help` 和 `/del` 控制的是群自己的对话和它的回复，所以在群里可用。`/model`、`/dir`、`/status`、`/resume`、`/thread` 和 `/close` 配置或查看的是你和机器人自己的聊天，所以只能在私聊里用。
 
 | 命令 | 私聊 | 并行话题 | 群组话题 | 群主聊天 |
 | --- | --- | --- | --- | --- |
@@ -46,8 +47,9 @@ description: 九个渠道命令、各命令在直接聊天、线程和群组中�
 | `/dir` | ✓ | ✓ | 仅限私聊 | 仅限私聊 |
 | `/resume` | ✓ | ✓ | 仅限私聊 | 仅限私聊 |
 | `/thread` | ✓ | ✓ | 仅限私聊 | 仅限私聊 |
+| `/close` | 拒绝：不是并行对话 | ✓ | 仅限私聊 | 仅限私聊 |
 | `/del` | ✓ | ✓ | ✓ | ✓ |
-| `/help` | ✓，列出全部九个 | ✓ | ✓，列出四个群命令 | ✓，列出四个群命令 |
+| `/help` | ✓，列出全部十个 | ✓ | ✓，列出四个群命令 | ✓，列出四个群命令 |
 
 所有者在群里发了仅限私聊的命令时，在平台支持私下发送的情况下，只会私下回给发送者一行「This command works in a private chat with me.」，什么都不做：不交给智能体，也不设置任何东西。`/help`、`/del`、这行提示和任何「Did you mean」纠正是群里仅有的私密回答；`/new` 和 `/stop` 会改变全群共享的东西，所以保持公开可见。
 
@@ -59,7 +61,7 @@ description: 九个渠道命令、各命令在直接聊天、线程和群组中�
 
 ## 其他斜杠文字交给智能体 {#other-slash-text-goes-to-the-agent}
 
-只有上面九个词会被从对话里拿出来。`/compact`、`/review` 这样的技能，或者以路径开头的消息，比如 `/Users/me/app crashes on start`，都和其他消息一样送到智能体那里，所以智能体自己的斜杠命令在手机上照样能用。
+只有上面十个词会被从对话里拿出来。`/compact`、`/review` 这样的技能，或者以路径开头的消息，比如 `/Users/me/app crashes on start`，都和其他消息一样送到智能体那里，所以智能体自己的斜杠命令在手机上照样能用。
 
 和某个命令只差一点的词，比如 `/stpo`、`/stat`、`/threads`，会得到一行 `Unknown command /stpo. Did you mean /stop? Send /help for all commands.` 这样的回答，什么都不运行。短命令（四个字母及以下）容许错一个字母，长命令容许错两个；相邻两个字母对调算错一个。
 
@@ -99,9 +101,17 @@ description: 九个渠道命令、各命令在直接聊天、线程和群组中�
 
 只提供这个聊天自己打开过的对话，从不包括来自网页或其他聊天的对话，之后被删掉的对话也不会列出。
 
+## 关闭并行对话 {#closing-a-parallel-thread}
+
+[并行对话](/zh/guides/channels#parallel-conversations)会一直开着，直到被关闭。在它里面发 `/close`，会回答「🔒 Closed 🧵#2 Task. Send /thread in the chat to open a new one.」。这个话题的对话仍留在对话页面上，历史都在，它的编号也不会再分给别的话题。`/close` 不会替你停掉任何东西：那里有轮次在运行时，它回答「A turn is running here — send /stop first, then /close.」；有消息在排队或暂停时，它请你先让它们运行或丢弃。在私聊本身，或在一个不是 `/thread` 打开的话题回复里发，它回答「Use /close inside a parallel thread.」。
+
+24 小时没人用的并行对话会自动关闭：这一整天里没有轮次在运行、没有排队或暂停的消息，也没有轮次开始或结束。关闭时不会发任何消息。
+
+私聊里的 `/status` 只列出并计数还开着的话题。在已关闭的话题里发消息，什么都不运行，也绝不会并入私聊自己的对话；那个话题里会回答「🔒 This thread is closed. Send /resume here to reopen it, or /thread in the chat to open a new one.」。`/status`、`/help`、`/stop`、`/del`、`/close`、`/thread` 和 `/resume` 在那里照常可用，`/status` 的状态显示 **Closed**；`/new`、`/model` 和 `/dir` 得到同样的提示。在已关闭的话题里发 `/resume`，会列出它的对话且都不打勾；恢复其中一个就会重新打开这个话题：回答里多一句「🔓 This thread is open again.」，你在那里的下一条消息接着那个对话。
+
 ## 状态、帮助和 /new 卡片 {#status-and-help-cards}
 
-`/status` 用文字而不是 id 回答，标题是 **Status**：对话的标题（或它的 `🧵#N` 标记）；一行写着智能体、模型和目录；然后是 **Running**、**Running · 2 waiting**、**⏸ 2 on hold** 或 **Idle**。在私聊里，它还在一行里列出并行话题，每个标明是在运行、有消息在等、有消息暂停，还是空闲。在支持按钮的平台上它是一张卡片，只带对卡片内容有用的按钮：轮次运行时有 **Stop**，有暂停的消息时有 **Continue** 和 **Discard**，然后是 **Model** 和 **Dir**。
+`/status` 用文字而不是 id 回答，标题是 **Status**：对话的标题（或它的 `🧵#N` 标记）；一行写着智能体、模型和目录；然后是 **Running**、**Running · 2 waiting**、**⏸ 2 on hold** 或 **Idle**。在私聊里，它还在一行里列出还开着的并行话题，每个标明是在运行、有消息在等、有消息暂停，还是空闲。在支持按钮的平台上它是一张卡片，只带对卡片内容有用的按钮：轮次运行时有 **Stop**，有暂停的消息时有 **Continue** 和 **Discard**，然后是 **Model** 和 **Dir**。
 
 `/help` 是一份用来看的清单，不带按钮。私聊里是：
 
@@ -114,6 +124,7 @@ Commands
 /dir [path|name] — Switch the working directory
 /resume [n] — Go back to an earlier conversation
 /thread [title] — Open a parallel conversation beside this chat
+/close — Close this parallel thread
 /del — Withdraw my latest reply (reply to one of mine to pick it)
 /help — This list of commands
 
@@ -146,7 +157,7 @@ Anything else goes to the agent as a message.
 
 ## 命令菜单 {#command-menus}
 
-Telegram 会显示命令菜单；Coffer 用帮助和错拼检查所用的同一份列表来注册它，所以三者永远一致。私聊里有全部九个命令；群组里只有 `/new`、`/stop`、`/del` 和 `/help`，这些是控制群自己对话的命令。每个菜单都用英文和中文各注册一遍。在群组里，从菜单点的命令会以 `/status@your_bot` 的形式到达，Coffer 把它当作 `/status`。SeaTalk 没有命令菜单，只有一个入口：发 `/help` 即可，仅限私聊的命令会得到那一行私下的提示。
+Telegram 会显示命令菜单；Coffer 用帮助和错拼检查所用的同一份列表来注册它，所以三者永远一致。私聊里有全部十个命令；群组里只有 `/new`、`/stop`、`/del` 和 `/help`，这些是控制群自己对话的命令。每个菜单都用英文和中文各注册一遍。在群组里，从菜单点的命令会以 `/status@your_bot` 的形式到达，Coffer 把它当作 `/status`。SeaTalk 没有命令菜单，只有一个入口：发 `/help` 即可，仅限私聊的命令会得到那一行私下的提示。
 
 它们就是 `/help` 里显示的那几行。英文描述如下（中文菜单含义相同）：
 
@@ -159,6 +170,7 @@ Telegram 会显示命令菜单；Coffer 用帮助和错拼检查所用的同一�
 | `/dir` | Switch the working directory |
 | `/resume` | Go back to an earlier conversation |
 | `/thread` | Open a parallel conversation beside this chat |
+| `/close` | Close this parallel thread |
 | `/del` | Withdraw my latest reply (reply to one of mine to pick it) |
 | `/help` | This list of commands |
 

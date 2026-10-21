@@ -19,7 +19,7 @@ from coffer.domain.channel.commands import (
     near_miss,
 )
 
-_ALL = {"new", "stop", "model", "dir", "status", "resume", "thread", "del", "help"}
+_ALL = {"new", "stop", "model", "dir", "status", "resume", "thread", "close", "del", "help"}
 
 
 @pytest.mark.acceptance(
@@ -46,7 +46,7 @@ def test_a_group_help_lists_only_the_group_commands() -> None:
 
 
 def test_the_direct_chat_commands_are_dm_only() -> None:
-    for command in ("/model", "/dir", "/status", "/resume", "/thread", "/Model opus"):
+    for command in ("/model", "/dir", "/status", "/resume", "/thread", "/close", "/Model opus"):
         assert is_dm_only(command)
     for command in ("/new", "/stop", "/help", "/start", "/compact"):
         assert not is_dm_only(command)

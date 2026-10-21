@@ -420,6 +420,6 @@ listed.
 #### Scenario: private chats get every command and groups the group set, in English and Chinese
 - **GIVEN** a Telegram channel starting
 - **WHEN** it registers its menus
-- **THEN** the private-chat scope lists all nine commands and the group scope
+- **THEN** the private-chat scope lists all ten commands and the group scope
   lists new, stop, del and help, each once in English and once
   with `language_code` `zh`

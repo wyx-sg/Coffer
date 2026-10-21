@@ -29,7 +29,11 @@ from coffer.application.channel.inbound_commands import route_slash
 from coffer.application.channel.inbound_events import InboundEvents
 from coffer.application.channel.inbound_gate import group_peer
 from coffer.application.channel.pairing import PairingManager, claim_pairing
-from coffer.application.channel.parallel_threads import resolve_conversation_thread_id
+from coffer.application.channel.parallel_threads import (
+    answer_closed,
+    conversation_thread_of,
+    route_thread,
+)
 from coffer.application.channel.ports import AgentCatalogPort, ChannelBinding, ModelSuggestionPort
 from coffer.application.channel.question_flow import QuestionPort, answer_message
 from coffer.application.channel.store_ports import (
@@ -209,13 +213,14 @@ class InboundProcessor:
                 return
         # Which conversation this message joins; ``msg.thread_id`` stays where the
         # reply goes (see "Key conversation identity by channel, chat and thread").
-        conv_thread = await resolve_conversation_thread_id(
-            self._threads, binding, msg.chat_id, chat_kind=msg.chat_kind, thread_id=msg.thread_id
-        )
+        route = await route_thread(self._threads, binding, msg)
+        conv_thread = route.conversation_thread_id
         text = msg.text.strip()
         attachments = tuple(
             Attachment(path=a.path, mime=a.mime, filename=a.filename) for a in msg.attachments
         )
+        if route.closed and await answer_closed(binding, msg, text, bool(attachments)):
+            return  # A closed parallel thread runs nothing; it says so.
         # spec chat "Keep the conversation index without its text": taken where the
         # person's own message is still intact — before the context blocks below fold
         # in, and from this message's own files.
@@ -302,9 +307,7 @@ class InboundProcessor:
         binding = self._bindings.get(cb.channel)
         if binding is None:
             return
-        conv_thread = await resolve_conversation_thread_id(
-            self._threads, binding, cb.chat_id, chat_kind=cb.chat_kind, thread_id=cb.thread_id
-        )
+        conv_thread = await conversation_thread_of(self._threads, binding, cb)
         await self._events.on_callback(binding, cb, conversation_thread_id=conv_thread)
 
     async def on_lifecycle(self, event: InboundLifecycle) -> None:
@@ -321,13 +324,7 @@ class InboundProcessor:
         binding = self._bindings.get(event.channel)
         if binding is None:
             return
-        conv_thread = await resolve_conversation_thread_id(
-            self._threads,
-            binding,
-            event.chat_id,
-            chat_kind=event.chat_kind,
-            thread_id=event.thread_id,
-        )
+        conv_thread = await conversation_thread_of(self._threads, binding, event)
         await self._burst.drop((event.channel, event.chat_id, event.thread_id))
         await self._events.on_stop(
             binding,

@@ -5,8 +5,9 @@ card" and "List the commands with /help").
 thread's mark), then one line with the agent, model and directory by
 the names a person reads, and whether a turn is running, how many messages wait,
 or how many a stop left on hold, then the chat's parallel threads (spec channels
-"Open parallel conversations beside a direct chat"). `/status` works only in a
-direct chat. Its card carries only what acts on what it shows: Stop while a turn
+"Open parallel conversations beside a direct chat"), the open ones only; in a
+closed thread its state reads ``Closed``. `/status` works only in a direct
+chat. Its card carries only what acts on what it shows: Stop while a turn
 runs, Continue and Discard while messages are on hold, then Model and Dir; a
 transport without buttons, or one that refuses the card, gets the same body as
 text.
@@ -66,10 +67,13 @@ async def cmd_status(ctx: CommandContext, _text: str = "") -> None:
     turns = ctx.commands._turns
     queued = len(turns.pending(bound)) if bound is not None else 0
     held = turns.held(bound) if bound is not None else 0
+    # A closed parallel thread runs nothing more (see "Open parallel
+    # conversations beside a direct chat"), so its state is just that.
+    closed = row is not None and row.parallel_closed
     lines = [
         title,
         await settings_line(ctx.commands, settings),
-        _state(running, queued, held),
+        "Closed" if closed else _state(running, queued, held),
     ]
     lines += await thread_lines(ctx)
     body = "\n".join(lines)

@@ -1,11 +1,15 @@
-"""Parallel conversations beside a direct chat: `/thread`, the `/status` lines
-listing them, and the one rule that decides which conversation a direct-chat
-thread belongs to.
+"""Parallel conversations beside a direct chat: `/thread` and `/close`, the
+`/status` lines listing them, and the one rule that decides which conversation
+a direct-chat thread belongs to.
 
 A direct chat is one conversation. The owner opens further ones beside it with
 `/thread`, each a thread of the direct chat numbered per chat and shown
 everywhere by its mark ``🧵#N title`` (spec channels "Open parallel
-conversations beside a direct chat"); `/status` in the direct chat lists them.
+conversations beside a direct chat"); `/status` in the direct chat lists the
+open ones. `/close` inside one closes it, and so does the idle sweep
+(``thread_sweep``); a closed thread keeps its number and its conversation, a
+message sent in it is answered with :data:`CLOSED_NOTICE` and runs nothing, and
+`/resume` inside it reopens it (``resume_switch``).
 
 Application layer only: no infrastructure import here.
 """
@@ -13,19 +17,23 @@ Application layer only: no infrastructure import here.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Protocol
 
 from coffer.application.channel.command_text import agent_display, settings_in_effect
 from coffer.application.channel.conversation_ops import (
     explain_conversation_error,
     open_conversation,
 )
+from coffer.application.channel.ephemeral import safe_send
 from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.store_ports import (
     ChannelThreadConversation,
     ChannelThreadConversationRepoPort,
     parallel_mark,
 )
+from coffer.domain.channel.commands import command_name
+from coffer.domain.channel.envelopes import InboundMessage
 from coffer.domain.channel.errors import ParallelThreadUnavailable
 from coffer.domain.errors import CofferError
 
@@ -33,10 +41,15 @@ if TYPE_CHECKING:
     from coffer.application.channel.command_context import CommandContext
 
 __all__ = [
+    "CLOSED_NOTICE",
     "DEFAULT_TITLE",
     "THREAD_BODY",
+    "ThreadRoute",
+    "answer_closed",
+    "cmd_close",
     "cmd_thread",
-    "resolve_conversation_thread_id",
+    "conversation_thread_of",
+    "route_thread",
     "thread_lines",
 ]
 
@@ -51,31 +64,83 @@ _TITLE_MAX = 60
 _LIST_MAX = 20
 #: What follows the mark on the thread's root message or first topic message.
 THREAD_BODY = "A parallel conversation with its own context. Reply in this thread to talk in it."
+#: What a message sent in a closed parallel thread is answered with.
+CLOSED_NOTICE = (
+    "🔒 This thread is closed. Send /resume here to reopen it, "
+    "or /thread in the chat to open a new one."
+)
+#: The commands that still run in a closed thread: they report, take a reply
+#: back, open a new thread, or — `/resume` — reopen this one. Every other
+#: message there, the commands that would open a conversation in it (`/new`,
+#: `/model`, `/dir`) included, gets :data:`CLOSED_NOTICE`.
+_CLOSED_THREAD_COMMANDS = frozenset({"status", "help", "del", "stop", "close", "thread", "resume"})
 
 
-async def resolve_conversation_thread_id(
-    threads: ChannelThreadConversationRepoPort,
-    binding: ChannelBinding,
-    chat_id: str,
-    *,
-    chat_kind: str,
-    thread_id: str,
-) -> str:
-    """Which of the chat's conversations a message in ``thread_id`` belongs to
+class _Place(Protocol):
+    """Where an inbound event happened — a message, a card tap, a stop."""
+
+    @property
+    def chat_id(self) -> str: ...
+    @property
+    def chat_kind(self) -> str: ...
+    @property
+    def thread_id(self) -> str: ...
+
+
+@dataclass(frozen=True)
+class ThreadRoute:
+    """Which conversation thread a message keys to, and whether that is a
+    closed parallel thread (answered with :data:`CLOSED_NOTICE`, never a turn)."""
+
+    conversation_thread_id: str
+    closed: bool = False
+
+
+async def route_thread(
+    threads: ChannelThreadConversationRepoPort, binding: ChannelBinding, place: _Place
+) -> ThreadRoute:
+    """Which of the chat's conversations a message in ``place.thread_id`` belongs to
     (see "Key conversation identity by channel, chat and thread").
 
     A group thread is its own. A direct-chat thread is its own when `/thread`
     opened it, or when the transport's direct-chat threads only exist because
     someone created one (Telegram's private-chat topics). Every other direct-chat
     thread is a casual reply and keys to the direct chat's ``""`` conversation —
-    it is still answered inside that thread, which is ``thread_id``'s job.
+    it is still answered inside that thread, which is ``thread_id``'s job. A
+    closed parallel thread keeps keying to itself, so nothing said there ever
+    lands in the direct chat's own conversation.
     """
-    if not thread_id or chat_kind == "group":
-        return thread_id
+    thread_id = place.thread_id
+    if not thread_id or place.chat_kind == "group":
+        return ThreadRoute(thread_id)
+    row = await threads.get(binding.resource.uid, place.chat_id, thread_id)
+    if row is not None and row.parallel_closed:
+        return ThreadRoute(thread_id, closed=True)
     if not binding.adapter.capabilities.direct_threads_are_replies:
-        return thread_id
-    row = await threads.get(binding.resource.uid, chat_id, thread_id)
-    return thread_id if row is not None and row.parallel_ordinal is not None else ""
+        return ThreadRoute(thread_id)
+    return ThreadRoute(thread_id if row is not None and row.parallel_ordinal is not None else "")
+
+
+async def conversation_thread_of(
+    threads: ChannelThreadConversationRepoPort, binding: ChannelBinding, place: _Place
+) -> str:
+    """:func:`route_thread`'s conversation thread alone."""
+    return (await route_thread(threads, binding, place)).conversation_thread_id
+
+
+async def answer_closed(
+    binding: ChannelBinding, msg: InboundMessage, text: str, has_attachments: bool
+) -> bool:
+    """Answer a message sent in a closed parallel thread with
+    :data:`CLOSED_NOTICE`, inside that thread; ``True`` when it was answered and
+    must run nothing. A command that still works there is let through."""
+    name = None if has_attachments else command_name(text)
+    if name in _CLOSED_THREAD_COMMANDS:
+        return False
+    await safe_send(
+        binding, msg.chat_id, CLOSED_NOTICE, thread_id=msg.thread_id, chat_kind=msg.chat_kind
+    )
+    return True
 
 
 async def cmd_thread(ctx: CommandContext, text: str) -> None:
@@ -130,11 +195,38 @@ async def _open_thread(ctx: CommandContext, title: str) -> str:
     return ""
 
 
+async def cmd_close(ctx: CommandContext, _text: str = "") -> None:
+    """`/close` inside a parallel thread: close it. Its conversation and history
+    stay; a running turn or queued messages are never dropped by it — the owner
+    stops or settles them first."""
+    threads = ctx.commands._threads
+    row = None
+    if ctx.conversation_thread_id:
+        row = await threads.get(ctx.resource_uid, ctx.chat_id, ctx.conversation_thread_id)
+    if row is None or row.parallel_mark is None:
+        await ctx.say("Use /close inside a parallel thread.")
+        return
+    if row.parallel_closed:
+        await ctx.say(f"{row.parallel_mark} is already closed.")
+        return
+    bound = row.active_conversation_id
+    running = ctx.session is not None and ctx.session.running_conversation_id is not None
+    if running:
+        await ctx.say("A turn is running here — send /stop first, then /close.")
+        return
+    if bound is not None and ctx.commands._turns.pending(bound):
+        await ctx.say("Messages are still queued here — let them run or discard them, then /close.")
+        return
+    await threads.close_parallel(ctx.resource_uid, ctx.chat_id, row.thread_id)
+    await ctx.say(f"🔒 Closed {row.parallel_mark}. Send /thread in the chat to open a new one.")
+
+
 async def thread_lines(ctx: CommandContext) -> list[str]:
-    """The `/status` line for a direct chat's parallel threads — their count, then
-    each one's mark, agent and state, newest first:
+    """The `/status` line for a direct chat's open parallel threads — their
+    count, then each one's mark, agent and state, newest first:
     ``Parallel threads (2): 🧵#3 title · Codex · running; 🧵#2 title · Claude Code · idle``
-    — at most 20 named, with the rest counted. Empty when the chat has none."""
+    — at most 20 named, with the rest counted. Empty when the chat has none open;
+    a closed thread is never listed or counted."""
     rows = await ctx.commands._threads.list_parallel(ctx.resource_uid, ctx.chat_id)
     if not rows:
         return []

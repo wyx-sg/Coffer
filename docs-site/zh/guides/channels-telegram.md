@@ -84,7 +84,7 @@ Coffer 会对每个较新的 Bot API 能力（富文本消息、草稿、富文�
 
 | 位置 | 菜单里的命令 |
 | --- | --- |
-| 私聊 | 全部九个：`/new`、`/stop`、`/model`、`/dir`、`/status`、`/resume`、`/thread`、`/del`、`/help` |
+| 私聊 | 全部十个：`/new`、`/stop`、`/model`、`/dir`、`/status`、`/resume`、`/thread`、`/close`、`/del`、`/help` |
 | 群组 | `/new`、`/stop`、`/del`、`/help` |
 
 每个菜单注册两遍，一遍英文描述，一遍中文描述，所以设成中文的 Telegram 客户端会显示中文菜单。隐藏的 `/start` 从不列出。
