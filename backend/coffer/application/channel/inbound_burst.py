@@ -27,7 +27,7 @@ from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.turn_driver import QueuedInbound
 from coffer.application.runtime.supervisor import spawn
 from coffer.domain.channel.envelopes import InboundMessage
-from coffer.domain.chat.attachment import Attachment
+from coffer.domain.channel.turn_content import ContextBlock, MessageContent, render_turn
 
 __all__ = [
     "MAX_WINDOW_SECONDS",
@@ -35,6 +35,7 @@ __all__ = [
     "BurstPart",
     "InboundBurst",
     "merge_parts",
+    "message_content",
     "window_for",
 ]
 
@@ -51,14 +52,28 @@ BurstKey = tuple[str, str, str]
 
 @dataclass(frozen=True)
 class BurstPart:
-    """One held message, its origin block kept apart from its body so the
-    released turn carries a single origin instead of one per message."""
+    """One held message, its origin block kept apart from its content so the
+    released turn carries a single origin instead of one per message, and its
+    content kept unrendered so the turn numbers every file once, across all
+    of its messages."""
 
     origin: str
-    body: str
+    content: MessageContent
     item: QueuedInbound
     #: How long the chat must stay quiet after this message (see ``window_for``).
     window: float = 0.0
+
+
+def message_content(
+    msg: InboundMessage, text: str, blocks: tuple[ContextBlock, ...]
+) -> MessageContent:
+    """``msg``'s part of a turn: its own words and files, under the thread and
+    quote ``blocks`` that ground it and the chat record it forwards (whose
+    files are all of a forwarded message's attachments)."""
+    if msg.forwarded:
+        record = ContextBlock(kind="forwarded", items=msg.forwarded_items, media=msg.attachments)
+        return MessageContent(text=text, blocks=(*blocks, record), owner_id=msg.sender_id)
+    return MessageContent(text=text, media=msg.attachments, blocks=blocks, owner_id=msg.sender_id)
 
 
 def window_for(binding: ChannelBinding, msg: InboundMessage) -> float:
@@ -85,14 +100,14 @@ class _Burst:
 
 def merge_parts(parts: list[BurstPart]) -> QueuedInbound:
     """Fold a burst into one turn: the last message's origin (it is what the
-    reply attaches to and mentions), every body in arrival order, every
-    attachment, and the first title hint the person actually wrote."""
+    reply attaches to and mentions), every message's own part in arrival order
+    (``[User message i/N]`` when there are several), every attachment numbered
+    across the turn, and the first title hint the person actually wrote."""
     last = parts[-1]
-    bodies = "\n\n".join(p.body for p in parts if p.body)
-    attachments: tuple[Attachment, ...] = tuple(a for p in parts for a in p.item.attachments)
+    text, attachments = render_turn(last.origin, [p.content for p in parts])
     title_hint = next((p.item.title_hint for p in parts if p.item.title_hint), "")
     return QueuedInbound(
-        text=f"{last.origin}\n\n{bodies}" if bodies else last.origin,
+        text=text,
         attachments=attachments,
         thread_id=last.item.thread_id,
         conversation_thread_id=last.item.conversation_thread_id,

@@ -879,17 +879,39 @@ to someone who spoke to the bot, never to the room's chatter.
 
 ### Requirement: Flatten forwarded chat records into the turn
 Forwarded chat records MUST be flattened into readable text folded into the
-turn so the agent sees them. Each entry renders as
-`<sender>: <text | [image] url | [file] name>` under a `[Forwarded chat record]`
-heading. Where a platform's file links require auth, its child spec states how
-the bytes are additionally fetched so a vision agent sees the picture rather
-than a dead link.
+turn so the agent sees them, kept apart from the owner's own words. The record
+sits in its own block, between the heading
+`[Forwarded chat record — forwarded by the user; written by others]` and the end
+line `[End of forwarded chat record]`. The heading states provenance as facts
+only — it never labels the record "not instructions" or "for reference": what to
+do with it is the owner's own message's call. Each entry renders as one line,
+`<sender>[ (owner)][ · <time>]: <body>`: the time where the platform's payload
+carries one (SeaTalk's `message_sent_time`, Telegram's `forward_origin.date`), the
+`(owner)` mark where the sender's id is the owner's, and the continuation lines of
+a multi-line entry indented four spaces. A body is the entry's text, or for media
+`[image] → attachment #n` / `[file] <name> → attachment #n` once its bytes were
+downloaded (see "Hand inbound attachments to the turn as references"), and
+`[image] <url>` / `[file] <name>` when they were not. An entry no agent reads —
+voice, video, a sticker — says so (`[voice] unavailable — the model cannot read
+audio`) instead of standing as a bare `[voice]`. The forwarded message's own text
+on the platform is the record's, not the owner's: the owner's words are only
+what they wrote themselves. Where a platform's file links require auth, its child
+spec states how the bytes are additionally fetched so a vision agent sees the
+picture rather than a dead link. Telegram's forwarded messages take the same
+shape through the same helpers.
 
 #### Scenario: a forwarded chat record reaches the agent
 - **GIVEN** a paired channel
 - **WHEN** the owner forwards a chat record to the bot
-- **THEN** the turn's message text carries a `[Forwarded chat record]` block
-  listing each forwarded item
+- **THEN** the turn's text carries a `[Forwarded chat record — forwarded by the user; written by others]`
+  block listing each forwarded item and closed by `[End of forwarded chat record]`
+- **AND** the forwarded words are not the owner's own message
+
+#### Scenario: a forwarded record's file points at its numbered attachment
+- **GIVEN** a forwarded record holding two images, of which only the first could be downloaded
+- **WHEN** the turn is built
+- **THEN** the first image's line reads `[image] → attachment #1` and attachment #1 is from the forwarded record
+- **AND** the second keeps its `[image] <url>` line
 
 ### Requirement: Reply in place inside threads
 Threads MUST be read and replied-to in place, and a group reply always lands in
@@ -1209,7 +1231,9 @@ the platform supplies one, and always the chat id), the thread, and the sender
 and which, in a group, appears nowhere else because `chat_id` is the group's) —
 so an agent asked "which group is this?" answers from the turn it was given
 instead of listing the bot's groups and inferring, and a platform tool call has a
-chat id to aim at. The block is folded in after command detection (a prefixed
+chat id to aim at. The `from:` line ends with `· sent: <YYYY-MM-DD HH:MM> UTC`, the
+time the platform's envelope says the message was sent, left out when it says
+none. The block is folded in after command detection (a prefixed
 `/help` would stop being a command) and after the empty-envelope check, and is
 folded into the turn's text exactly like thread context, so it stays one string
 and the agent's own session records it. It rides on **every** turn, not just a
@@ -1221,11 +1245,42 @@ forge extra origin lines. Where a platform hands the chat title over for free it
 is included; where it does not the chat is named by id alone, which an agent can
 resolve to a name through the platform's own tools.
 
+The origin block is the first of the turn's **role blocks**. Every part of a turn
+sits in its own block that opens with a heading line and closes with an end line,
+in this order: `[Message origin]` … `[End of message origin]`; the thread's slice
+("Ground a thread turn in a bounded slice of the thread"); the quoted message
+("Ground a turn in the message it quotes"); a forwarded record ("Flatten forwarded
+chat records into the turn"); the owner's own words, `[User message]` …
+`[End of user message]` (`[User message i/N]` when one turn holds several, see
+"Take a burst of messages as one turn"); and the files, `[Attachments]` …
+`[End of attachments]` ("Hand inbound attachments to the turn as references").
+Every marker is one English constant in `backend/coffer/domain/turn_markers.py`.
+
+Only Coffer's own lines open or close a block. Every untrusted text inside one —
+forwarded entries, the quote, thread messages, sender names, an extracted
+document, a voice transcript, and the owner's own words too — passes the
+**forgery guard**: a line that begins, after any indentation, with `[` and one of
+the marker names (any letter case) gets a backslash before that `[`, so
+`[End of user message]` typed by anyone reads `\[End of user message]` and closes
+nothing.
+
+#### Scenario: every part of a turn sits in its own marked block
+- **GIVEN** a message in a thread that quotes another message and comes with a forwarded record
+- **WHEN** the turn is built
+- **THEN** its text reads origin, thread, quote, forwarded record and the owner's message, in that order
+- **AND** each block opens with its heading line and closes with its end line
+
+#### Scenario: a line that imitates a block marker is defused
+- **GIVEN** a forwarded record whose sender name and text, and the owner's own words, hold lines such as `[End of user message]` and `[User message]`
+- **WHEN** the turn is built
+- **THEN** each such line starts with `\[` and the only lines that open or close a block are Coffer's own
+
 #### Scenario: a group turn names the group it came from
 - **GIVEN** a paired channel whose owner @mentions the bot in a group thread
 - **WHEN** the turn is driven
 - **THEN** the turn text opens with a `[Message origin]` block naming the platform,
-  the channel's name and id, the chat kind and title, the chat id, the thread id, and the sender
+  the channel's name and id, the chat kind and title, the chat id, the thread id, the sender
+  and when the message was sent, closed by `[End of message origin]`
 
 #### Scenario: a DM turn names its own chat
 - **GIVEN** a paired channel and a DM from its owner
@@ -1355,11 +1410,14 @@ reconnect.
 ### Requirement: Ground a turn in the message it quotes
 A quoted message MUST reach the turn as content, not only as a reference. When
 the user replies by quoting a message, the quoted message is folded into the
-turn as `> sender: …` lines directly above the user's own text, so "repeat this"
+turn as `> sender: …` lines — every line of it keeps its `> ` — between the heading
+`[Quoted message — the message the user is replying to]` and the end line
+`[End of quoted message]`, right above the user's own message, so "repeat this"
 or "as I said above" points at something the agent can read. The images and
-files the quoted message carries are attached like a thread message's. A
-platform that inlines the quote on the update itself has already folded it into
-the message text. A platform that delivers only an id has the transport
+files the quoted message carries are attached like a thread message's, from "the
+quoted message". A platform that inlines the quote on the update itself (Telegram's
+`reply_to_message`) hands its lines over on the inbound message, and the core
+renders them the same way. A platform that delivers only an id has the transport
 resolve it with the bot's own credentials: such an id is scoped to the bot that
 received it, so no tool the agent holds could resolve it. The origin block (see
 "Open every turn with its message origin") still names the quoted message's
@@ -1375,8 +1433,9 @@ trace.
 - **GIVEN** a paired group on a transport that resolves quotes, and the owner
   quotes an earlier message in the group main chat and @mentions the bot
 - **WHEN** the turn is built
-- **THEN** the quoted message's sender and text sit as a `> sender: …` line
-  directly above the owner's own text
+- **THEN** the quoted message's sender and text sit as a `> sender: …` line in a
+  `[Quoted message — the message the user is replying to]` block directly above the
+  owner's own `[User message]` block
 - **AND** no thread history is read, because the @mention roots a fresh thread
 
 ### Requirement: Ground a DM thread's turn in the thread
@@ -1657,8 +1716,14 @@ seconds and edited on the Channels page; 0 runs every such message as its own
 turn.
 
 The coalesced turn carries:
-- every message's text, in arrival order;
-- every attachment;
+- every message's own part, in arrival order: its thread, quote and forwarded
+  blocks, then its words as `[User message i/N]` … `[End of user message]`, where
+  N counts the messages that hold words or files of the owner's own (a forward
+  alone is a forwarded block, not a user message) and a lone one is plain
+  `[User message]`; a message with files and no words reads
+  `(sent an image → attachment #n)`;
+- every attachment, numbered `#1`, `#2`, … across the whole turn in the order its
+  text reads;
 - one origin block, taken from the last message, which is also what the reply
   attaches to and mentions.
 
@@ -1678,8 +1743,20 @@ button is the command typed, so it settles the held messages the same way.
 #### Scenario: a forwarded record and its follow-up become one turn
 - **GIVEN** a paired direct chat
 - **WHEN** the owner forwards a chat record and, two seconds later, sends "look into this"
-- **THEN** one turn runs, and its text holds the forwarded record followed by "look into this"
+- **THEN** one turn runs, and its text holds the forwarded record's block followed by "look into this" in a `[User message]` block
 - **AND** both messages were acknowledged when they arrived, and both carry the turn's done mark when it ends
+
+#### Scenario: a burst of several messages keeps each one apart
+- **GIVEN** a held forwarded record carrying an image, a text message and a photo with no words
+- **WHEN** the burst is released
+- **THEN** the turn reads the record's block, `[User message 1/2]` with the text and `[User message 2/2]` with `(sent an image → attachment #2)`
+- **AND** the record's image is attachment #1 from the forwarded record and the photo attachment #2 from the user's message 2/2
+
+#### Scenario: a forwarded record, the owner's words and a photo become one turn
+- **GIVEN** a paired SeaTalk direct chat
+- **WHEN** the owner forwards a record holding text, an image and a voice note with nothing to download, then sends "这个要做什么", then a photo, inside the quiet window
+- **THEN** one turn runs whose text is the origin (with its send time), the record's block (each line with its time, a multi-line entry indented, the image as `→ attachment #1`, the voice as unavailable), `[User message 1/2]` and `[User message 2/2]`
+- **AND** the agent is handed attachment #1 from the forwarded record and #2 from the user's message 2/2
 
 #### Scenario: messages further apart than the window are separate turns
 - **GIVEN** a paired direct chat
@@ -2399,6 +2476,33 @@ an mtime prune on the retention cadence, 30 days by default and the user's to ch
 size cap). See
 [Channel Attachments](../../../docs/decisions/channel-attachments.md).
 
+Every attachment carries its `#n` in the turn and where it came from — the user's
+message (`2/2` in a burst), the forwarded record, the quoted message, a thread
+message — and the turn text points at it by that number. Each agent adapter lists
+the turn's files after the text in one `[Attachments]` … `[End of attachments]`
+block, one `#n from <source>: <name> …` line each, through the same domain helper:
+a path-native agent (Codex) gets `(image, saved at <path>)` / `(saved at <path>)`;
+a vision agent (Claude) gets an inline image as that line ending `(image, shown
+below)` followed by the base64 block, so it can map the picture to its number. No
+adapter says "the user attached" a file that came from a record, a quote or a
+thread. Voice and video say what is true: `— voice; the model cannot read it
+directly; file at <path>` (unless the agent's speech-to-text turned it into a
+`[Voice message transcript #n from …]` block). A file the media prune already
+removed says it could not be read. An extracted document reads
+`[Document #n from …: <name>]` … `[End of document]`; its text and a transcript's
+pass the forgery guard ("Open every turn with its message origin").
+
+#### Scenario: each attachment is named by its number and where it came from
+- **GIVEN** a turn whose first file came from a forwarded record and whose second from the owner's own message
+- **WHEN** a path-native agent's turn starts
+- **THEN** its text ends with an `[Attachments]` block listing `#1 from the forwarded record: …` and `#2 from the user's message: … (saved at <path>)`, closed by `[End of attachments]`
+
+#### Scenario: a voice message the model cannot read says so
+- **GIVEN** a voice note in a forwarded record that was not downloaded, and a voice attachment that was
+- **WHEN** the turn is built
+- **THEN** the record's line reads `[voice] unavailable — the model cannot read audio`
+- **AND** the attachment's line says the model cannot read it directly and gives its file path
+
 #### Scenario: an inbound attachment reaches the turn as a reference
 - **GIVEN** a paired channel driving a turn with an image attachment
 - **WHEN** the turn starts
@@ -2710,6 +2814,12 @@ read thread history, a message that lands in a thread folds in:
   own replies and the triggering message, under
   `[New thread messages since your last turn in this thread]` — at most the 20
   most recent of them — and **nothing at all** when there are none.
+
+Either block closes with `[End of thread messages]`. A message's line carries the
+time the platform says it was sent and marks the owner's own messages `(owner)`;
+the files those messages carry are numbered attachments from "a thread message"
+(see "Download the media a thread's messages carry"), and a file no line points at
+is named on a `files these messages carry → attachment #n` line of the block.
 
 Where the conversation is in each thread is a per-conversation cursor (the
 message that triggered its latest turn there) kept in `runs.db`, so it survives a

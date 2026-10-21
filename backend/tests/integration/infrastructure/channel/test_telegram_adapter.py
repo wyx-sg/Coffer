@@ -18,6 +18,7 @@ from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.telegram import TelegramAdapter
 from coffer.infrastructure.channel.telegram_draft import TelegramDraftLiveText
 from coffer.infrastructure.channel.telegram_profile import BotIdentity
+from tests.support.channel import rendered_record
 
 from .conftest import (
     FakeSeaTalk,
@@ -669,9 +670,9 @@ async def test_group_reply_to_bot_is_addressed(fake_telegram: FakeTelegram) -> N
         await adapter.stop()
     msg = recorder.messages[0]
     assert msg.addressed is True
-    # The quoted reply-to-bot context is folded into the text.
-    assert msg.text.splitlines()[0] == "> mybot: which agent?"
-    assert msg.text.splitlines()[-1] == "yes please"
+    # The quoted reply-to-bot context rides apart from the person's own words.
+    assert [(q.sender, q.text) for q in msg.quoted_items] == [("mybot", "which agent?")]
+    assert msg.text == "yes please"
 
 
 async def test_forum_topic_message_carries_thread_id(fake_telegram: FakeTelegram) -> None:
@@ -708,8 +709,12 @@ async def test_forwarded_message_text_starts_with_forwarded_marker(
     finally:
         await adapter.stop()
     msg = recorder.messages[0]
-    assert msg.text.startswith("[Forwarded chat record]")
-    assert "Alice: original text" in msg.text
+    # The forwarded words are the record's, not the person's own.
+    assert msg.text == ""
+    record = rendered_record(msg)
+    assert record.startswith("[Forwarded chat record — forwarded by the user; written by others]")
+    assert "Alice: original text" in record
+    assert record.endswith("[End of forwarded chat record]")
 
 
 async def test_private_message_is_direct_and_always_addressed(fake_telegram: FakeTelegram) -> None:

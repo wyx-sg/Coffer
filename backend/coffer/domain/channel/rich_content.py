@@ -1,54 +1,62 @@
-"""Pure helpers that flatten rich inbound content (forwarded records, fetched
-thread/recent history, quoted replies) and the message's own provenance into
-readable text folded into a turn prompt. No platform schema — adapters map their
-payloads to these shapes first."""
+"""Pure helpers for the provenance and the other people's messages a channel turn
+carries: the ``[Message origin]`` block, and :class:`ForwardedItem`, the one shape
+every forwarded record, thread message and quote is mapped to before
+:mod:`turn_content` renders it. No platform schema — adapters map their payloads
+to these shapes first."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
+from typing import TYPE_CHECKING
 
-from coffer.domain.channel.envelopes import InboundMessage
+from coffer.domain.turn_markers import ORIGIN, ORIGIN_END, block, when
+
+if TYPE_CHECKING:  # envelopes names ForwardedItem at runtime
+    from coffer.domain.channel.envelopes import InboundMessage
 
 __all__ = [
     "ForwardedItem",
-    "flatten_context",
-    "flatten_forwarded",
     "format_origin",
-    "quote_prefix",
+    "one_line",
+    "unavailable",
 ]
+
+#: The media a model cannot read, by the platform's message type.
+_UNREADABLE = {"voice": "audio", "audio": "audio", "video": "video"}
+
+
+def unavailable(tag: str) -> str:
+    """What a line says in place of a message the turn cannot carry —
+    ``[voice] unavailable — the model cannot read audio`` — rather than a bare
+    ``[voice]`` that reads as if something were there to look at."""
+    what = _UNREADABLE.get(tag)
+    if what:
+        return f"[{tag}] unavailable — the model cannot read {what}"
+    return f"[{tag}] unavailable — this message type is not passed to the model"
 
 
 @dataclass(frozen=True)
 class ForwardedItem:
+    """One message of someone else's, as a line of the turn text."""
+
     sender: str
-    text: str  # rendered body: text, or "[image] <url>" / "[file] <name>"
-
-
-def _render(items: Sequence[ForwardedItem], title: str) -> str:
-    if not items:
-        return ""
-    lines = [f"[{title}]"]
-    lines += [f"{it.sender or 'unknown'}: {it.text}" for it in items]
-    return "\n".join(lines)
-
-
-def flatten_forwarded(
-    items: Sequence[ForwardedItem], *, title: str = "Forwarded chat record"
-) -> str:
-    return _render(items, title)
-
-
-def flatten_context(items: Sequence[ForwardedItem], *, title: str) -> str:
-    return _render(items, title)
-
-
-def quote_prefix(sender: str, text: str) -> str:
-    """``text`` as a quote block. Every line is marked, not just the first: an
-    unmarked second line would read as the asker's own words — including an
-    instruction someone else wrote."""
-    first, *rest = text.split("\n") or [""]
-    return "".join([f"> {sender or 'unknown'}: {first}\n", *(f"> {line}\n" for line in rest)])
+    #: The rendered body: text, or ``[image] <url>`` / ``[file] <name>`` /
+    #: ``[voice] unavailable — …`` — what the line says when its media did not
+    #: reach the turn.
+    text: str
+    #: The platform's stable id of the sender, where it supplies one; a sender
+    #: whose id is the asker's is marked ``(owner)``.
+    sender_id: str = ""
+    #: The transport's key for the media this item carries ("" for none) — the
+    #: same key its downloaded ``InboundAttachment.ref`` carries, so the line can
+    #: point at ``→ attachment #n`` instead of a link the agent cannot open.
+    media_ref: str = ""
+    #: What the line says in place of ``text`` once that media was downloaded:
+    #: ``[image]``, ``[file] report.pdf``, ``[voice]``.
+    media_label: str = ""
+    #: When it was sent, where the platform's payload says so.
+    sent_at: datetime | None = None
 
 
 #: A group title is chat-member-settable, so it is clipped before it reaches the
@@ -56,7 +64,7 @@ def quote_prefix(sender: str, text: str) -> str:
 _DISPLAY_MAX = 120
 
 
-def _one_line(value: str) -> str:
+def one_line(value: str) -> str:
     """Collapse an untrusted display string onto one safe line.
 
     A group title (and a sender's display name) is set by people in the chat, so
@@ -70,7 +78,7 @@ def _one_line(value: str) -> str:
 
 
 def _channel_line(name: str, uid: str) -> str:
-    shown = _one_line(name)
+    shown = one_line(name)
     if not uid:
         return f"channel: {shown}"
     return f'channel: "{shown}" (id: {uid})' if shown else f"channel: (id: {uid})"
@@ -93,10 +101,9 @@ def format_origin(
     several channels. Lines with nothing to say are omitted rather than
     rendered empty.
     """
-    title = _one_line(msg.chat_title)
+    title = one_line(msg.chat_title)
     chat = f'{msg.chat_kind} "{title}"' if title else msg.chat_kind
     lines = [
-        "[Message origin]",
         f"platform: {platform}",
         *([_channel_line(channel, channel_id)] if channel or channel_id else []),
         f"chat: {chat} (id: {msg.chat_id})",
@@ -114,9 +121,15 @@ def format_origin(
     # the identity that does not change under a rename. In a DM the id happens to
     # equal chat_id, but in a group chat_id is the GROUP's — without this line the
     # sender's own id appears nowhere at all.
-    sender = _one_line(msg.sender_display)
-    sender_id = _one_line(msg.sender_id)
+    sender = one_line(msg.sender_display)
+    sender_id = one_line(msg.sender_id)
+    # When the platform says the message was sent; omitted when it says nothing.
+    sent = when(msg.timestamp)
+    sent_part = [f"sent: {sent}"] if sent else []
     if sender or sender_id:
         who = sender or "unknown"
-        lines.append(f"from: {who} (id: {sender_id})" if sender_id else f"from: {who}")
-    return "\n".join(lines)
+        frm = f"from: {who} (id: {sender_id})" if sender_id else f"from: {who}"
+        lines.append(" · ".join([frm, *sent_part]))
+    else:
+        lines.extend(sent_part)
+    return block(ORIGIN, ORIGIN_END, lines)

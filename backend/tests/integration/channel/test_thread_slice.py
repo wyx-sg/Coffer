@@ -37,6 +37,11 @@ def _message(n: int, sender: str = "alice@x.com", *, from_bot: bool = False) -> 
     )
 
 
+def _line(n: int, sender: str = "alice@x.com") -> str:
+    """How message ``n`` reads in the folded block: sender, when it was sent, text."""
+    return f"{sender} · {_T0 + timedelta(minutes=n):%Y-%m-%d %H:%M} UTC: message {n}"
+
+
 def _trigger(n: int) -> ThreadMessage:
     """The owner's own @mention, as the thread read returns it."""
     return _message(n, "owner@x.com")
@@ -93,12 +98,12 @@ async def test_the_first_turn_folds_the_latest_twenty_and_names_the_tool(env: Ch
     [text] = await _turns(env, 1)
 
     assert text.startswith("[Thread messages]")
-    assert "alice@x.com: message 5" in text
-    assert "alice@x.com: message 24" in text
-    assert "alice@x.com: message 4\n" not in text
+    assert _line(5, "alice@x.com") in text
+    assert _line(24, "alice@x.com") in text
+    assert _line(4, "alice@x.com") + "\n" not in text
     # The triggering message is the turn itself, not part of its context.
     assert "message 25" not in text
-    shown = [line for line in text.splitlines() if line.startswith("alice@x.com:")]
+    shown = [line for line in text.splitlines() if line.startswith("alice@x.com ·")]
     assert len(shown) == THREAD_FOLD_LIMIT
     note = next(line for line in text.splitlines() if line.startswith("note:"))
     assert "5 earlier messages in this thread are not shown" in note
@@ -108,7 +113,7 @@ async def test_the_first_turn_folds_the_latest_twenty_and_names_the_tool(env: Ch
         and 'thread_id "th-1"' in note
         and 'before "m-5"' in note
     )
-    assert text.endswith("@bot sum it up")
+    assert text.endswith("@bot sum it up\n[End of user message]")
 
 
 @pytest.mark.acceptance(
@@ -132,10 +137,10 @@ async def test_a_later_turn_folds_only_the_new_messages(env: ChannelEnv) -> None
     await _mention(env, "@bot and now?", "m-6")
     first, second = await _turns(env, 2)
 
-    assert "bob@x.com: message 1" in first
+    assert _line(1, "bob@x.com") in first
     assert second.startswith("[New thread messages since your last turn in this thread]")
-    assert "carol@x.com: message 4" in second
-    assert "bob@x.com: message 5" in second
+    assert _line(4, "carol@x.com") in second
+    assert _line(5, "bob@x.com") in second
     for already_seen in ("message 0", "message 1", "message 2", "message 3", "message 6"):
         assert already_seen not in second
     assert "note:" not in second
@@ -216,7 +221,7 @@ async def test_new_conversation_is_seeded_again(env: ChannelEnv) -> None:
 
     assert len(await env.conversations()) == 2
     assert texts[-1].startswith("[Thread messages]")
-    assert "alice@x.com: message 0" in texts[-1]
+    assert _line(0, "alice@x.com") in texts[-1]
 
 
 @pytest.mark.acceptance(spec="channels", scenario="the thread cursor survives a daemon restart")

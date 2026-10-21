@@ -22,7 +22,7 @@ import logging
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
-from coffer.domain.chat.attachment import Attachment
+from coffer.domain.chat.attachment import Attachment, attachments_block
 from coffer.domain.chat.events import (
     SESSION_IN_USE,
     SESSION_IN_USE_MESSAGE,
@@ -271,7 +271,7 @@ class CodexAppServerAdapter:
         if attachments:
             # Codex is path-native (no inline image blocks over its app-server
             # RPC): hand it the on-disk paths so it can open them with its tools.
-            notes = "\n".join(attachment_note(a) for a in attachments)
+            notes = attachments_block([attachment_note(a) for a in attachments])
             prompt = f"{prompt}\n\n{notes}".strip() if prompt else notes
         if not prompt:
             yield TurnError(code="empty_prompt", message="no user message to send")

@@ -9,6 +9,7 @@ import dataclasses
 import pytest
 
 from coffer.application.channel import inbound_burst
+from coffer.domain.channel.rich_content import ForwardedItem
 
 from .conftest import (
     ChannelEnv,
@@ -49,8 +50,9 @@ async def test_a_forwarded_record_and_its_follow_up_run_as_one_turn(
     resource, adapter = await env.paired_channel()
     _with_windows(env, text=0.05, forward=2.0)
     record = dataclasses.replace(
-        inbound("tg", "owner", "Forwarded chat record\nalice: the build is red"),
+        inbound("tg", "owner", ""),
         forwarded=True,
+        forwarded_items=(ForwardedItem(sender="alice", text="the build is red"),),
         platform_message_id="pm-1",
     )
     await env.processor.on_message(record)
@@ -68,7 +70,12 @@ async def test_a_forwarded_record_and_its_follow_up_run_as_one_turn(
     assert conversation_id is not None
     await wait_until(lambda: env.orchestrator.pending(conversation_id) == [])
     turns = await _user_turns(env, conversation_id)
-    assert turns == ["Forwarded chat record\nalice: the build is red\n\nlook into this"]
+    assert turns == [
+        "[Forwarded chat record — forwarded by the user; written by others]\n"
+        "alice: the build is red\n"
+        "[End of forwarded chat record]\n\n"
+        "[User message]\nlook into this\n[End of user message]"
+    ]
 
 
 async def test_a_command_releases_the_held_burst_first(

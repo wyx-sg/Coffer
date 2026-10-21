@@ -9,6 +9,9 @@ import pytest
 from coffer.application.channel import inbound_burst
 from coffer.application.channel.inbound_burst import BurstPart, InboundBurst, merge_parts
 from coffer.application.channel.turn_driver import QueuedInbound
+from coffer.domain.channel.envelopes import InboundAttachment
+from coffer.domain.channel.rich_content import ForwardedItem
+from coffer.domain.channel.turn_content import ContextBlock, MessageContent
 from coffer.domain.chat.attachment import Attachment
 
 KEY = ("chan", "chat", "")
@@ -20,13 +23,24 @@ def _real_window_cap(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(inbound_burst, "MAX_WINDOW_SECONDS", 60.0)
 
 
-def _part(body: str, *, msg_id: str = "", window: float = 0.02, **item: Any) -> BurstPart:
+def _part(
+    body: str,
+    *,
+    msg_id: str = "",
+    window: float = 0.02,
+    content: MessageContent | None = None,
+    **item: Any,
+) -> BurstPart:
     return BurstPart(
         origin=f"[origin {msg_id}]",
-        body=body,
+        content=content or MessageContent(text=body),
         item=QueuedInbound(text="", reply_to_message_id=msg_id, **item),
         window=window,
     )
+
+
+def _user(text: str, tag: str = "") -> str:
+    return f"[User message{tag}]\n{text}\n[End of user message]"
 
 
 def _collector() -> tuple[list[QueuedInbound], Any]:
@@ -38,17 +52,47 @@ def _collector() -> tuple[list[QueuedInbound], Any]:
     return released, on_flush
 
 
-def test_merge_keeps_one_origin_every_body_and_every_attachment() -> None:
-    a = Attachment(path="/tmp/a.png", mime="image/png", filename="a.png")
+@pytest.mark.acceptance(
+    spec="channels", scenario="a burst of several messages keeps each one apart"
+)
+def test_merge_keeps_one_origin_every_message_and_numbers_every_attachment() -> None:
+    chart = InboundAttachment(path="/m/chart.png", mime="image/png", filename="chart.png", ref="u1")
+    photo = InboundAttachment(path="/m/photo.png", mime="image/png", filename="photo.png")
+    record = MessageContent(
+        blocks=(
+            ContextBlock(
+                kind="forwarded",
+                items=(
+                    ForwardedItem("xingz@sea.com", "see the chart"),
+                    ForwardedItem(
+                        "xingz@sea.com", "[image] u1", media_ref="u1", media_label="[image]"
+                    ),
+                ),
+                media=(chart,),
+            ),
+        )
+    )
     merged = merge_parts(
         [
-            _part("record", msg_id="m1", attachments=(a,), window=0.08),
+            _part("", msg_id="m1", content=record, window=0.08),
             _part("look into this", msg_id="m2", title_hint="look into this"),
+            _part("", msg_id="m3", content=MessageContent(media=(photo,))),
         ]
     )
-    assert merged.text == "[origin m2]\n\nrecord\n\nlook into this"
-    assert merged.attachments == (a,)
-    assert merged.reply_to_message_id == "m2"
+    assert merged.text == (
+        "[origin m3]\n\n"
+        "[Forwarded chat record — forwarded by the user; written by others]\n"
+        "xingz@sea.com: see the chart\n"
+        "xingz@sea.com: [image] → attachment #1\n"
+        "[End of forwarded chat record]\n\n"
+        f"{_user('look into this', ' 1/2')}\n\n"
+        f"{_user('(sent an image → attachment #2)', ' 2/2')}"
+    )
+    assert merged.attachments == (
+        Attachment("/m/chart.png", "image/png", "chart.png", 1, "the forwarded record"),
+        Attachment("/m/photo.png", "image/png", "photo.png", 2, "the user's message 2/2"),
+    )
+    assert merged.reply_to_message_id == "m3"
     assert merged.title_hint == "look into this"
 
 
@@ -60,7 +104,9 @@ async def test_a_message_inside_the_window_joins_the_burst() -> None:
     burst.add(KEY, None, _part("look into this", msg_id="m2"))
     await burst.settled()
     assert len(released) == 1
-    assert released[0].text.endswith("record\n\nlook into this")
+    assert released[0].text.endswith(
+        f"{_user('record', ' 1/2')}\n\n{_user('look into this', ' 2/2')}"
+    )
 
 
 async def test_messages_further_apart_than_the_window_are_separate() -> None:
@@ -70,7 +116,10 @@ async def test_messages_further_apart_than_the_window_are_separate() -> None:
     await burst.settled()  # the window ran out before the next message
     burst.add(KEY, None, _part("two", msg_id="m2"))
     await burst.settled()
-    assert [r.text for r in released] == ["[origin m1]\n\none", "[origin m2]\n\ntwo"]
+    assert [r.text for r in released] == [
+        f"[origin m1]\n\n{_user('one')}",
+        f"[origin m2]\n\n{_user('two')}",
+    ]
 
 
 async def test_other_keys_do_not_merge() -> None:
@@ -79,7 +128,7 @@ async def test_other_keys_do_not_merge() -> None:
     burst.add(KEY, None, _part("dm"))
     burst.add(("chan", "chat", "t1"), None, _part("thread"))
     await burst.settled()
-    assert sorted(r.text.split("\n\n")[1] for r in released) == ["dm", "thread"]
+    assert sorted(r.text.split("\n\n")[1] for r in released) == [_user("dm"), _user("thread")]
 
 
 async def test_flush_releases_now_and_awaits_the_submission() -> None:

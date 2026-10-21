@@ -160,6 +160,12 @@ async def _collect(
 # ---------------------------------------------------------------------------
 
 
+def _inner(content: Any) -> list[dict[str, Any]]:
+    """The attachment blocks between ``[Attachments]`` and its end line."""
+    start = content.index({"type": "text", "text": "[Attachments]"})
+    return list(content[start + 1 : -1])
+
+
 def test_build_content_is_the_plain_prompt_without_attachments() -> None:
     # No attachments → unchanged behaviour: the content is the bare string.
     assert ClaudeSdkAgentAdapter._build_content("hello", []) == "hello"
@@ -172,13 +178,27 @@ def test_build_content_is_the_plain_prompt_without_attachments() -> None:
 def test_build_content_inlines_an_image_as_a_base64_block(tmp_path: Any) -> None:
     img = tmp_path / "photo.png"
     img.write_bytes(_PNG_BYTES)
-    att = Attachment(path=str(img), mime="image/png", filename="photo.png")
+    att = Attachment(
+        path=str(img),
+        mime="image/png",
+        filename="photo.png",
+        number=1,
+        source="the forwarded record",
+    )
 
     content = ClaudeSdkAgentAdapter._build_content("what is this?", [att])
 
     assert isinstance(content, list)
     assert content[0] == {"type": "text", "text": "what is this?"}
-    image = content[1]
+    # The [Attachments] block names the image by its number and source, right
+    # above the inline image, so the turn text's "→ attachment #1" resolves.
+    assert content[1] == {"type": "text", "text": "[Attachments]"}
+    assert content[2] == {
+        "type": "text",
+        "text": "#1 from the forwarded record: photo.png (image, shown below)",
+    }
+    assert content[-1] == {"type": "text", "text": "[End of attachments]"}
+    image = content[3]
     assert image["type"] == "image"
     assert image["source"]["type"] == "base64"
     assert image["source"]["media_type"] == "image/png"
@@ -195,8 +215,8 @@ def test_build_content_hands_off_a_non_vision_file_by_path(tmp_path: Any) -> Non
 
     # A non-vision file is not inlined — the agent gets its path to open.
     assert isinstance(content, list)
-    assert content[0]["type"] == "text"
-    assert str(data) in content[0]["text"]
+    assert _inner(content)[0]["type"] == "text"
+    assert str(data) in _inner(content)[0]["text"]
 
 
 def test_build_content_does_not_inline_an_unsupported_image_format(tmp_path: Any) -> None:
@@ -209,8 +229,8 @@ def test_build_content_does_not_inline_an_unsupported_image_format(tmp_path: Any
     content = ClaudeSdkAgentAdapter._build_content("", [att])
 
     assert isinstance(content, list)
-    assert content[0]["type"] == "text"
-    assert str(heic) in content[0]["text"]
+    assert _inner(content)[0]["type"] == "text"
+    assert str(heic) in _inner(content)[0]["text"]
 
 
 @pytest.mark.acceptance(
@@ -226,9 +246,10 @@ def test_build_content_inlines_a_mislabelled_image_under_its_sniffed_type(tmp_pa
     content = ClaudeSdkAgentAdapter._build_content("", [att])
 
     assert isinstance(content, list)
-    assert content[0]["type"] == "image"
-    assert content[0]["source"]["media_type"] == "image/jpeg"
-    assert base64.b64decode(content[0]["source"]["data"]) == _JPEG_BYTES
+    image = _inner(content)[1]
+    assert image["type"] == "image"
+    assert image["source"]["media_type"] == "image/jpeg"
+    assert base64.b64decode(image["source"]["data"]) == _JPEG_BYTES
 
 
 def test_build_content_hands_an_image_over_the_inline_ceiling_off_by_path(
@@ -242,8 +263,9 @@ def test_build_content_hands_an_image_over_the_inline_ceiling_off_by_path(
     content = ClaudeSdkAgentAdapter._build_content("look", [att])
 
     assert isinstance(content, list)
-    assert [b["type"] for b in content] == ["text", "text"]
-    assert str(img) in content[1]["text"]
+    assert content[0] == {"type": "text", "text": "look"}
+    assert [b["type"] for b in _inner(content)] == ["text"]
+    assert str(img) in _inner(content)[0]["text"]
 
 
 def test_build_content_inlines_an_image_exactly_at_the_inline_ceiling(tmp_path: Any) -> None:
@@ -254,8 +276,8 @@ def test_build_content_inlines_an_image_exactly_at_the_inline_ceiling(tmp_path: 
     content = ClaudeSdkAgentAdapter._build_content("", [att])
 
     assert isinstance(content, list)
-    assert content[0]["type"] == "image"
-    assert len(content[0]["source"]["data"]) == INLINE_IMAGE_MAX_BYTES
+    assert _inner(content)[1]["type"] == "image"
+    assert len(_inner(content)[1]["source"]["data"]) == INLINE_IMAGE_MAX_BYTES
 
 
 def test_build_content_hands_off_an_image_whose_bytes_are_not_an_image(tmp_path: Any) -> None:
@@ -266,8 +288,8 @@ def test_build_content_hands_off_an_image_whose_bytes_are_not_an_image(tmp_path:
     content = ClaudeSdkAgentAdapter._build_content("", [att])
 
     assert isinstance(content, list)
-    assert content[0]["type"] == "text"
-    assert str(img) in content[0]["text"]
+    assert _inner(content)[0]["type"] == "text"
+    assert str(img) in _inner(content)[0]["text"]
 
 
 def test_build_content_notes_an_attachment_whose_file_is_gone(tmp_path: Any) -> None:
@@ -275,7 +297,15 @@ def test_build_content_notes_an_attachment_whose_file_is_gone(tmp_path: Any) -> 
 
     content = ClaudeSdkAgentAdapter._build_content("", [att])
 
-    assert content == [{"type": "text", "text": "[Attached file 'gone.png' could not be read]"}]
+    assert content == [
+        {"type": "text", "text": "[Attachments]"},
+        {
+            "type": "text",
+            "text": "from the user's message: gone.png — could not be read "
+            "(the file is no longer on disk)",
+        },
+        {"type": "text", "text": "[End of attachments]"},
+    ]
 
 
 def test_build_content_no_longer_inlines_a_pdf_as_a_document_block(tmp_path: Any) -> None:
@@ -290,8 +320,8 @@ def test_build_content_no_longer_inlines_a_pdf_as_a_document_block(tmp_path: Any
     content = ClaudeSdkAgentAdapter._build_content("", [att])
 
     assert isinstance(content, list)
-    assert content[0]["type"] == "text"
-    assert str(pdf) in content[0]["text"]
+    assert _inner(content)[0]["type"] == "text"
+    assert str(pdf) in _inner(content)[0]["text"]
     assert not any(b.get("type") == "document" for b in content)
 
 
@@ -320,7 +350,8 @@ async def test_pdf_reaches_claude_as_extracted_text_not_a_document_block(tmp_pat
     # The extracted PDF text is a labelled text block…
     text_blocks = [b["text"] for b in content if b.get("type") == "text"]
     joined = "\n".join(text_blocks)
-    assert "[Document: report.pdf]" in joined
+    assert "[Document from the user's message: report.pdf]" in joined
+    assert "[End of document]" in joined
     assert "Quarterly revenue was $4.2M." in joined
     # …no document/binary block was sent for the PDF…
     assert not any(b.get("type") == "document" for b in content)

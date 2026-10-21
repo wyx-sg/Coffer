@@ -8,19 +8,21 @@ what already arrived on the update itself.
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from datetime import UTC, datetime
 from typing import Any
 
 from coffer.domain.channel.envelopes import InboundAttachment, InboundMessage
-from coffer.domain.channel.rich_content import ForwardedItem, flatten_forwarded, quote_prefix
+from coffer.domain.channel.rich_content import ForwardedItem
 
 __all__ = [
     "addressed_and_text",
     "build_inbound_message",
     "command_target",
+    "forwarded_items",
     "is_group",
-    "prepend_context",
+    "quoted_items",
 ]
 
 #: ``/cmd@botname`` — the form Telegram's own menu inserts in a group, and the
@@ -202,20 +204,56 @@ def _is_forwarded(message: dict[str, Any]) -> bool:
     return bool(message.get("forward_origin"))
 
 
-def prepend_context(message: dict[str, Any], text: str) -> str:
-    """Fold forwarded-record framing and/or a quoted-reply line into ``text``,
-    mirroring how SeaTalk's adapter builds the same context for a turn prompt."""
-    body = text
-    if _is_forwarded(message):
-        body = flatten_forwarded([ForwardedItem(sender=_forward_sender_name(message), text=body)])
+def _sent_at(value: Any) -> datetime | None:
+    return datetime.fromtimestamp(value, tz=UTC) if isinstance(value, int) and value else None
+
+
+def _media_label(att: InboundAttachment) -> str:
+    if att.mime.startswith("image/"):
+        return "[image]"
+    if att.mime.startswith("audio/"):
+        return "[voice]"
+    return f"[file] {att.filename}"
+
+
+def forwarded_items(
+    message: dict[str, Any], text: str, attachments: tuple[InboundAttachment, ...]
+) -> tuple[ForwardedItem, ...]:
+    """A forwarded message as the record's lines: its text, then one line per
+    file it carries (each pointing at the downloaded file through ``ref``) —
+    the same shape a SeaTalk record has, rendered by the same helpers."""
+    origin = message.get("forward_origin")
+    sent_at = _sent_at(origin.get("date")) if isinstance(origin, dict) else None
+    sender = _forward_sender_name(message)
+    items = [ForwardedItem(sender=sender, text=text, sent_at=sent_at)] if text else []
+    for att in attachments:
+        label = _media_label(att)
+        items.append(
+            ForwardedItem(
+                sender=sender, text=label, media_ref=att.ref, media_label=label, sent_at=sent_at
+            )
+        )
+    return tuple(items)
+
+
+def quoted_items(message: dict[str, Any]) -> tuple[ForwardedItem, ...]:
+    """The message this one replies to, inlined on the update itself (the Bot API
+    cannot fetch it later), as the quote's lines."""
     reply = message.get("reply_to_message")
-    if isinstance(reply, dict):
-        reply_text = reply.get("text") or reply.get("caption")
-        if reply_text:
-            sender = reply.get("from") or {}
-            sender_name = str(sender.get("first_name") or sender.get("username") or "")
-            body = f"{quote_prefix(sender_name, str(reply_text))}{body}"
-    return body.strip()
+    if not isinstance(reply, dict):
+        return ()
+    reply_text = reply.get("text") or reply.get("caption")
+    if not reply_text:
+        return ()
+    sender = reply.get("from") or {}
+    return (
+        ForwardedItem(
+            sender=str(sender.get("first_name") or sender.get("username") or ""),
+            text=str(reply_text),
+            sender_id=str(sender.get("id") or ""),
+            sent_at=_sent_at(reply.get("date")),
+        ),
+    )
 
 
 def _replied_to_id(message: dict[str, Any]) -> str:
@@ -259,7 +297,11 @@ def build_inbound_message(
             )
     elif named is not None:
         raw = named[1]
-    text = prepend_context(message, raw)
+    # Each file's own key is its saved path, which a forwarded line points at.
+    attachments = tuple(dataclasses.replace(a, ref=a.ref or a.path) for a in attachments)
+    forwarded = _is_forwarded(message)
+    # A forwarded message's words are the record's, not the person's own.
+    text = "" if forwarded else raw.strip()
     if notes:
         # An attachment that could not be fetched is stated in the turn text, so the answer can
         # acknowledge it instead of ignoring a file the user watched themselves send.
@@ -284,7 +326,9 @@ def build_inbound_message(
         mentions_others=mentions_other,
         thread_id=str(message.get("message_thread_id") or ""),
         replies_to_message_id=_replied_to_id(message),
-        forwarded=_is_forwarded(message),
+        forwarded=forwarded,
+        forwarded_items=forwarded_items(message, raw.strip(), attachments) if forwarded else (),
+        quoted_items=quoted_items(message),
         attachments=attachments,
         # Present when the user sent an ephemeral command, and the
         # handle that lets the bot answer them privately in the group.

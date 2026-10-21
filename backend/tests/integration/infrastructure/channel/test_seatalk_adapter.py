@@ -23,6 +23,7 @@ from coffer.infrastructure.channel.seatalk_send import (
     SEATALK_MENTION_EMAIL_TEMPLATE,
     SEATALK_MENTION_TEMPLATE,
 )
+from tests.support.channel import rendered_record
 
 from .conftest import FakeSeaTalk, RecordingCallbacks, make_seatalk_adapter
 
@@ -479,7 +480,10 @@ async def test_handle_event_forwarded_record_downloads_images(
     finally:
         await adapter.stop()
     [msg] = recorder.messages
-    assert "j@x.com: see chart:" in msg.text  # text still flattened
+    assert msg.text == ""  # a forward has no words of its own
+    assert "j@x.com: see chart:" in rendered_record(msg)
+    # The downloaded image is pointed at, not left as the dead link.
+    assert "j@x.com: [image] → attachment #1" in rendered_record(msg)
     assert fake_seatalk.file_downloads == ["chart1"]  # ?seq=2 is a query param
     [att] = msg.attachments
     assert att.mime == "image/png"
@@ -1041,7 +1045,17 @@ async def test_message_to_item_maps_non_text_tags() -> None:
     )
 
     other_item = message_to_item({"sender": {}, "tag": "sticker"})
-    assert (other_item.sender, other_item.text) == ("unknown", "[sticker]")
+    assert (other_item.sender, other_item.text) == (
+        "unknown",
+        "[sticker] unavailable — this message type is not passed to the model",
+    )
+    # A downloadable voice note carries its link, so the turn can point at it.
+    voice = message_to_item(
+        {"tag": "voice", "voice": {"content": "https://o.io/file/v1"}, "message_sent_time": 5}
+    )
+    assert voice.text == "[voice] unavailable — the model cannot read audio"
+    assert (voice.media_ref, voice.media_label) == ("https://o.io/file/v1", "[voice]")
+    assert voice.sent_at is not None
 
     # single-chat text uses "content" instead of group's "plain_text"
     single_chat_item = message_to_item(
@@ -1095,10 +1109,12 @@ async def test_handle_event_forwarded_record_flattens_into_text(fake_seatalk: Fa
     finally:
         await adapter.stop()
     [msg] = recorder.messages
-    assert msg.text.startswith("[Forwarded chat record]")
-    assert "john.phuatd@shopee.com: Do you see this issue?" in msg.text
-    assert "[image] https://cdn.example.com/img.png" in msg.text
-    assert "yuxing.wu@shopee.com: let me check" in msg.text
+    assert rendered_record(msg).startswith("[Forwarded chat record")
+    # Each leaf carries its own send time in the payload, so its line shows it.
+    record = rendered_record(msg)
+    assert "john.phuatd@shopee.com · 2024-06-10 06:13 UTC: Do you see this issue?" in record
+    assert "[image] https://cdn.example.com/img.png" in record
+    assert "yuxing.wu@shopee.com · 2024-06-10 06:13 UTC: let me check" in record
     assert msg.thread_id == ""
 
 
@@ -1168,12 +1184,13 @@ async def test_handle_event_nested_forwarded_record_recurses(
     finally:
         await adapter.stop()
     [msg] = recorder.messages
-    assert msg.text.startswith("[Forwarded chat record]")
-    assert "john.phuatd@shopee.com: Do you see this issue?" in msg.text
-    assert "[image] https://cdn.example.com/i.png" in msg.text
-    assert "yuxing.wu@shopee.com: let me check" in msg.text
+    assert rendered_record(msg).startswith("[Forwarded chat record")
+    record = rendered_record(msg)
+    assert "john.phuatd@shopee.com · 2024-06-10 06:13 UTC: Do you see this issue?" in record
+    assert "[image] https://cdn.example.com/i.png" in record
+    assert "yuxing.wu@shopee.com · 2024-06-10 06:13 UTC: let me check" in record
     # The placeholder must NOT leak through — the whole point of recursing.
-    assert "[forwarded chat record]" not in msg.text
+    assert "[forwarded chat record]" not in rendered_record(msg)
 
 
 # -- group / @mention inbound (Task 6) ----------------------------------------
@@ -1329,9 +1346,9 @@ async def test_handle_event_group_forwarded_record_flattens_into_text(
     finally:
         await adapter.stop()
     [msg] = recorder.messages
-    assert msg.text.startswith("[Forwarded chat record]")
-    assert "john.phuatd@shopee.com: Do you see this issue?" in msg.text
-    assert "yuxing.wu@shopee.com: let me check" in msg.text
+    assert rendered_record(msg).startswith("[Forwarded chat record")
+    assert "john.phuatd@shopee.com: Do you see this issue?" in rendered_record(msg)
+    assert "yuxing.wu@shopee.com: let me check" in rendered_record(msg)
     assert msg.chat_kind == "group"
     assert msg.addressed is True
     assert msg.chat_id == "gid-1"

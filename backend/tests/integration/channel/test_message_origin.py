@@ -9,12 +9,17 @@ sender — on every turn, so an agent switch or a resumed session never loses it
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.thread_tool import ThreadReader
 
 from .conftest import ChannelEnv, FakeChannelAdapter, inbound, wait_until
+
+#: When the test messages were sent, as the origin block's ``sent:`` reads it.
+_SENT = datetime(2026, 10, 21, 8, 15, tzinfo=UTC)
 
 
 async def _user_texts(env: ChannelEnv) -> list[str]:
@@ -37,6 +42,7 @@ async def test_group_turn_carries_the_chat_id_title_thread_and_sender(env: Chann
             sender_id="owner-1",
             sender_display="yuxing.wu@shopee.com",
             thread_id="th-1",
+            timestamp=_SENT,
         )
     )
     await wait_until(lambda: "Hello world" in adapter.texts())
@@ -47,9 +53,12 @@ async def test_group_turn_carries_the_chat_id_title_thread_and_sender(env: Chann
         f'channel: "tg" (id: {resource.uid})\n'
         'chat: group "account-campaign-reaction" (id: grp-1)\n'
         "thread: th-1\n"
-        "from: yuxing.wu@shopee.com (id: owner-1)\n"
+        "from: yuxing.wu@shopee.com (id: owner-1) · sent: 2026-10-21 08:15 UTC\n"
+        "[End of message origin]\n"
         "\n"
-        "@bot which group is this?"
+        "[User message]\n"
+        "@bot which group is this?\n"
+        "[End of user message]"
     )
 
 
@@ -57,12 +66,13 @@ async def test_group_turn_carries_the_chat_id_title_thread_and_sender(env: Chann
 async def test_dm_turn_carries_a_direct_origin_block(env: ChannelEnv) -> None:
     resource, adapter = await env.paired_channel()
 
-    await env.processor.on_message(inbound("tg", "owner", "hi"))
+    await env.processor.on_message(inbound("tg", "owner", "hi", timestamp=_SENT))
     await wait_until(lambda: "Hello world" in adapter.texts())
 
     assert (await _user_texts(env))[0] == (
         f'[Message origin]\nplatform: telegram\nchannel: "tg" (id: {resource.uid})\n'
-        "chat: direct (id: owner)\nfrom: Owner (id: owner)\n\nhi"
+        "chat: direct (id: owner)\nfrom: Owner (id: owner) · sent: 2026-10-21 08:15 UTC\n"
+        "[End of message origin]\n\n[User message]\nhi\n[End of user message]"
     )
 
 
@@ -80,7 +90,9 @@ async def test_origin_is_repeated_on_later_turns_not_just_the_first(env: Channel
     texts = await _user_texts(env)
     assert len(texts) == 2
     assert all(t.startswith("[Message origin]") for t in texts)
-    assert texts[0].endswith("\n\nfirst") and texts[1].endswith("\n\nsecond")
+    end = "[End of message origin]\n\n[User message]\n"
+    assert texts[0].endswith(f"{end}first\n[End of user message]")
+    assert texts[1].endswith(f"{end}second\n[End of user message]")
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a slash command keeps its leading slash")

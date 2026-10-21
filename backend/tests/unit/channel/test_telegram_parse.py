@@ -1,14 +1,19 @@
 """Unit tests for the pure Telegram inbound parsing helpers (Task 8): group
 detection, @mention/reply addressing, and forwarded/quoted-reply framing."""
 
+from datetime import UTC, datetime
+
 import pytest
 
+from coffer.domain.channel.envelopes import InboundAttachment
+from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.infrastructure.channel.telegram_parse import (
     _mentions_other,
     addressed_and_text,
     build_inbound_message,
+    forwarded_items,
     is_group,
-    prepend_context,
+    quoted_items,
 )
 
 BOT_ID = 999
@@ -168,50 +173,62 @@ def test_addressed_and_text_handles_none_bot_identity():
     assert out == text
 
 
-# -- prepend_context: forward -----------------------------------------------
+# -- forwarded record and quoted reply ----------------------------------------
+# (the shared ForwardedItem shape, rendered by the same helpers as SeaTalk's)
 
 
-def test_prepend_context_flattens_forward_origin_user():
+def _photo() -> InboundAttachment:
+    return InboundAttachment(path="/m/p.jpg", mime="image/jpeg", filename="p.jpg")
+
+
+def test_a_forward_becomes_the_records_lines_not_the_persons_words():
     message = _message(
-        forward_origin={"type": "user", "sender_user": {"first_name": "Alice"}},
+        text="hello there",
+        forward_origin={"type": "user", "sender_user": {"first_name": "Alice"}, "date": 1718000000},
     )
-    out = prepend_context(message, "hello there")
-    assert out.splitlines()[0] == "[Forwarded chat record]"
-    assert "Alice: hello there" in out
+    built = build_inbound_message(
+        message, (_photo(),), channel="tg", bot_id=None, bot_username=None
+    )
+    assert built.forwarded and built.text == ""
+    assert [(i.sender, i.text, i.media_ref, i.media_label) for i in built.forwarded_items] == [
+        ("Alice", "hello there", "", ""),
+        ("Alice", "[image]", "/m/p.jpg", "[image]"),
+    ]
+    assert built.forwarded_items[0].sent_at == datetime.fromtimestamp(1718000000, tz=UTC)
+    # Each file's key is its saved path, which the record's line points at.
+    assert built.attachments[0].ref == "/m/p.jpg"
 
 
 def test_the_pre_bot_api_7_forward_fields_are_not_read():
     message = _message(forward_from={"first_name": "Bob"})
-    assert prepend_context(message, "old style forward") == "old style forward"
-
-
-def test_prepend_context_no_forward_or_reply_is_unchanged():
-    message = _message()
-    assert prepend_context(message, "plain text") == "plain text"
-
-
-# -- prepend_context: quoted reply -------------------------------------------
-
-
-def test_prepend_context_quotes_reply_text():
-    message = _message(
-        reply_to_message={"from": {"first_name": "Sam"}, "text": "original message"},
+    assert forwarded_items(message, "old style forward", ()) == (
+        ForwardedItem(sender="", text="old style forward"),
     )
-    out = prepend_context(message, "my reply")
-    assert out.splitlines()[0] == "> Sam: original message"
-    assert out.splitlines()[-1] == "my reply"
+    built = build_inbound_message(
+        {**message, "text": "old style forward"}, (), channel="tg", bot_id=None, bot_username=None
+    )
+    assert built.text == "old style forward" and not built.forwarded
 
 
-def test_prepend_context_combines_forward_and_reply():
+def test_a_reply_inlines_the_quoted_message():
     message = _message(
+        reply_to_message={"from": {"first_name": "Sam", "id": 5}, "text": "original message"},
+    )
+    assert quoted_items(message) == (
+        ForwardedItem(sender="Sam", text="original message", sender_id="5"),
+    )
+    assert quoted_items(_message()) == ()
+
+
+def test_a_forwarded_reply_carries_both_the_record_and_the_quote():
+    message = _message(
+        text="hi",
         forward_origin={"type": "user", "sender_user": {"first_name": "Bob"}},
         reply_to_message={"from": {"first_name": "Sam"}, "text": "original message"},
     )
-    out = prepend_context(message, "hi")
-    lines = out.splitlines()
-    assert lines[0] == "> Sam: original message"
-    assert lines[1] == "[Forwarded chat record]"
-    assert "Bob: hi" in out
+    built = build_inbound_message(message, (), channel="tg", bot_id=None, bot_username=None)
+    assert [i.text for i in built.quoted_items] == ["original message"]
+    assert [(i.sender, i.text) for i in built.forwarded_items] == [("Bob", "hi")]
 
 
 # -- build_inbound_message: mentions_others -----------------------------------

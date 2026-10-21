@@ -128,11 +128,11 @@ The bot never reads recent messages from a group's main chat. SeaTalk does not g
 
 ### Quoted messages
 
-When you reply by quoting a message, Coffer looks the quoted message up with the bot's own secrets and folds it into the turn as `> sender: …` lines above your text, with its images and files attached. SeaTalk gives a message a different id for each app, so only the bot that received the quote can resolve it; the agent's own tools could not. If the lookup fails, the turn runs on your message alone.
+When you reply by quoting a message, Coffer looks the quoted message up with the bot's own secrets and folds it into the turn as `> sender: …` lines in a `[Quoted message — …]` block above your message, with its images and files attached as numbered attachments from the quoted message. SeaTalk gives a message a different id for each app, so only the bot that received the quote can resolve it; the agent's own tools could not. If the lookup fails, the turn runs on your message alone.
 
 ### Forwarded chat history
 
-A forwarded chat record is flattened into a `[Forwarded chat record]` block, one line per message. Images inside it, including records forwarded inside other records, are downloaded and attached, so a vision agent sees the pictures rather than links it cannot open.
+A forwarded chat record is flattened into a `[Forwarded chat record — …]` block, one line per message with the time SeaTalk gives for it. Images and files inside it, including records forwarded inside other records, are downloaded and attached, and their lines point at them (`[image] → attachment #1`), so a vision agent sees the pictures rather than links it cannot open. A voice or video message in the record says the model cannot read it. See [What the agent reads](/guides/channels#what-the-agent-reads).
 
 ### Group events
 

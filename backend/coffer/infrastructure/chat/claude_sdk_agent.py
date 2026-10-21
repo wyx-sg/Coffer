@@ -38,7 +38,7 @@ from coffer.domain.chat.events import (
     TurnStarted,
 )
 from coffer.infrastructure.chat.adapter_support import ParseState, SessionSink
-from coffer.infrastructure.chat.claude_sdk_attachments import attachment_block
+from coffer.infrastructure.chat.claude_sdk_attachments import attachments_content
 from coffer.infrastructure.chat.claude_sdk_mapping import ClaudeParseState, map_sdk_message
 from coffer.infrastructure.chat.claude_sdk_questions import permission_for
 from coffer.infrastructure.chat.document_extract import (
@@ -239,7 +239,7 @@ class ClaudeSdkAgentAdapter:
         blocks: list[dict[str, Any]] = []
         if prompt:
             blocks.append({"type": "text", "text": prompt})
-        blocks.extend(attachment_block(att) for att in attachments)
+        blocks.extend(attachments_content(attachments))
         return blocks
 
     async def _connect(

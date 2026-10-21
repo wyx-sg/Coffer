@@ -147,6 +147,7 @@ def inbound(
     attachments: Sequence[InboundAttachment] = (),
     quoted_message_id: str = "",
     group_main: bool = False,
+    timestamp: datetime | None = None,
 ) -> InboundMessage:
     return InboundMessage(
         channel=uid_of(channel),
@@ -155,7 +156,7 @@ def inbound(
         text=text,
         platform_message_id=platform_message_id,
         ephemeral_id=ephemeral_id,
-        timestamp=datetime.now(tz=UTC),
+        timestamp=timestamp or datetime.now(tz=UTC),
         # A direct chat's id IS its person's id on both platforms, so a DM
         # message that names no sender is the chat's own person; a group message
         # that names none stays anonymous (the group gate refuses it).
@@ -173,19 +174,29 @@ def inbound(
 
 
 ORIGIN_HEADER = "[Message origin]"
+ORIGIN_END = "[End of message origin]"
+USER_OPEN = "[User message]"
+USER_CLOSE = "[End of user message]"
 
 
 def turn_body(text: str) -> str:
     """The user's own text from a turn prompt, with the origin block ("Open every
-    turn with its message origin") stripped.
+    turn with its message origin") stripped and a lone ``[User message]`` block
+    unwrapped.
 
     Every turn now opens with a provenance block; tests about queueing,
     ordering, threading and history assert on what the user actually typed, not
-    on that header (``test_message_origin.py`` owns the header itself).
+    on that header (``test_message_origin.py`` owns the header itself). A turn
+    that carries more than the person's one message (a thread, a quote, a
+    burst) comes back with its blocks intact.
     """
-    if not text.startswith(ORIGIN_HEADER):
-        return text
-    return text.split("\n\n", 1)[1]
+    if text.startswith(ORIGIN_HEADER):
+        text = text.split(f"{ORIGIN_END}\n\n", 1)[1] if ORIGIN_END in text else ""
+    if text.startswith(f"{USER_OPEN}\n") and text.endswith(f"\n{USER_CLOSE}"):
+        inner = text[len(USER_OPEN) + 1 : -len(USER_CLOSE) - 1]
+        if USER_CLOSE not in inner:
+            return inner
+    return text
 
 
 def tap_event(

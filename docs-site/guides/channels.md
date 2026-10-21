@@ -146,7 +146,47 @@ When the task is done, send `/close` inside the thread. A thread nobody has used
 
 How the thread appears depends on the platform. On SeaTalk it is the thread of your own `/thread` message: the bot answers inside it, and you reply there. On Telegram it is a private-chat topic, which needs the bot's Threaded Mode turned on in BotFather. In a group, every thread is already its own conversation, so `/thread` is not needed there.
 
-Each turn tells the agent it is on a chat channel: keep replies concise but quote the key log lines, errors and IDs behind a finding verbatim, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the channel (its name and its id, which `coffer__channel_read_thread` takes), the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. The agent brings its own memory to the turn, as in your terminal, including what [memory sync](/guides/memory) copied in from your other agents.
+Each turn tells the agent it is on a chat channel: keep replies concise but quote the key log lines, errors and IDs behind a finding verbatim, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the channel (its name and its id, which `coffer__channel_read_thread` takes), the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. The agent brings its own memory to the turn, as in your terminal, including what [memory sync](/guides/memory) copied in from your other agents. What the rest of the turn looks like is under [What the agent reads](#what-the-agent-reads).
+
+### What the agent reads {#what-the-agent-reads}
+
+A turn hands the agent one text, with every part in its own block that opens with a heading line and closes with an end line, so the agent always knows who wrote what. A forward of a chat record, then "这个要做什么", then a photo, sent inside the grouping pause, reads:
+
+```text
+[Message origin]
+platform: seatalk
+channel: "work bot" (id: 3f2a…)
+chat: direct (id: 177203)
+from: yuxing.wu@sea.com (id: 177203) · sent: 2026-10-21 08:15 UTC
+[End of message origin]
+
+[Forwarded chat record — forwarded by the user; written by others]
+xingz@sea.com · 2026-10-21 07:15 UTC: [Tech] Buyer campaign resource optimisation
+xingz@sea.com · 2026-10-21 07:16 UTC: 背景
+    Buyer team 的资源已经没有 budget 了。
+xingz@sea.com · 2026-10-21 07:17 UTC: [image] → attachment #1
+xingz@sea.com · 2026-10-21 07:18 UTC: [voice] unavailable — the model cannot read audio
+[End of forwarded chat record]
+
+[User message 1/2]
+这个要做什么
+[End of user message]
+
+[User message 2/2]
+(sent an image → attachment #2)
+[End of user message]
+
+[Attachments]
+#1 from the forwarded record: photo.png (image, saved at ~/.coffer/content/channel-media/…)
+#2 from the user's message 2/2: photo.png (image, saved at ~/.coffer/content/channel-media/…)
+[End of attachments]
+```
+
+- **The order** is always the origin, the thread's messages, the quoted message, a forwarded record, then your own message or messages. Several messages grouped into one turn are numbered `[User message 1/N]` and so on; a forward on its own is a record, not one of your messages.
+- **Provenance, not instructions.** A forwarded record's heading says only that you forwarded it and others wrote it. What the agent does with it is up to what you write.
+- **Lines** carry the time the platform gives for each message and `(owner)` on your own messages in a thread. A long message continues on lines indented four spaces; every line of a quote keeps its `> `.
+- **Files are numbered** across the whole turn, and a line points at the file it carries (`→ attachment #1`). Each file says where it came from: your message, the forwarded record, the quoted message or a thread message. A picture Claude Code sees inline is labelled with its number right above it. Voice and video say that the model cannot read them.
+- **No forged boundaries.** A line anyone typed that begins with one of these markers (`[End of user message]`, `[User message]`, …) gets a backslash in front, `\[End of user message]`, so only Coffer's own lines open or close a block.
 
 ## Commands
 
@@ -210,9 +250,9 @@ Add the bot to a group to use it there.
 - In the group's main chat, the answer goes into a thread rooted at your message, never into the main chat. Inside a thread, the bot replies in that thread.
 - Each thread is its own conversation with its own agent, history and queue, so threads run concurrently.
 - A group answer is attached to the message that asked: on Telegram it is sent as a reply to that message; on SeaTalk the thread rooted at that message is the attachment, and the answer @mentions you.
-- When you quote a message, the quoted sender and text are folded into the turn as `> sender: …` lines above your text.
+- When you quote a message, the quoted sender and text are folded into the turn as `> sender: …` lines in a `[Quoted message — …]` block above your message.
 - On a platform that can read a thread's history (SeaTalk), a turn in a thread carries part of the thread. A conversation's first turn there gets the thread's 20 most recent messages with their images and files; each later turn of that conversation gets only the messages others posted since its previous turn there, or nothing. Where older messages were left out, a note says so, and the agent reads them on demand with `coffer__channel_read_thread`, only in chats you have paired and never a group's main chat. Telegram has no history API, so the tool says so there.
-- A forwarded chat record is flattened into a `[Forwarded chat record]` block.
+- A forwarded chat record is flattened into a `[Forwarded chat record — …]` block, one line per message (see [What the agent reads](#what-the-agent-reads)).
 
 Two channel settings tune when the bot answers in a group. They change when the bot answers, never who may drive it.
 
@@ -244,7 +284,7 @@ Send photos, files, voice messages and other media as you would to a person. Eac
 | You send | The agent receives |
 | --- | --- |
 | A photo or sticker | Claude Code sees the image. Codex gets the file path. |
-| A PDF, office document, epub or rtf | The extracted text, in a `[Document: <name>]` block. If extraction is unavailable, the file path. |
+| A PDF, office document, epub or rtf | The extracted text, in a `[Document #n from …: <name>]` block. If extraction is unavailable, the file path. |
 | A voice message or audio | A transcript, when **Speech to text** is on under **Settings › General → Speech to text**. Otherwise the audio file. |
 | Any other file | The file path. |
 | A location, a contact card | Nothing to download: the bot asks for text, a photo or a file. |

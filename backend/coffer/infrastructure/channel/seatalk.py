@@ -39,8 +39,8 @@ from coffer.infrastructure.channel.seatalk_media import (
     send_outbound_media,
 )
 from coffer.infrastructure.channel.seatalk_parse import (
+    combined_forwarded_items,
     dedup_key,
-    flatten_combined_forwarded,
     mentions_others,
     strip_group_mentions,
 )
@@ -115,8 +115,6 @@ class SeaTalkAdapter:
             text = ""
             if tag == "text":
                 text = str((message.get("text") or {}).get("content", ""))
-            elif tag == "combined_forwarded_chat_history":
-                text = flatten_combined_forwarded(message)
             await self._callbacks.on_message(
                 InboundMessage(
                     channel=self._name,
@@ -132,6 +130,7 @@ class SeaTalkAdapter:
                     # fetches the body through ``fetch_quoted``.
                     quoted_message_id=str(message.get("quoted_message_id") or ""),
                     forwarded=tag == "combined_forwarded_chat_history",
+                    forwarded_items=combined_forwarded_items(message),
                     attachments=await media_attachments(
                         self._client, self._media_dir, self._transport.ensure_token, message
                     ),
@@ -143,14 +142,12 @@ class SeaTalkAdapter:
             message = event.get("message") or {}
             sender = message.get("sender") or {}
             tag = str(message.get("tag", ""))
-            if tag == "combined_forwarded_chat_history":
-                # Same flattening as the DM path (a bare plain_text lookup would drop it).
-                plain_text = flatten_combined_forwarded(message)
-            else:
-                body = message.get("text") or {}
-                plain_text = strip_group_mentions(
-                    str(body.get("plain_text", "")), body.get("mentioned_list")
-                )
+            # A forwarded record has no text of its own; its leaves ride as
+            # ``forwarded_items``, as on the DM path.
+            body = message.get("text") or {}
+            plain_text = strip_group_mentions(
+                str(body.get("plain_text", "")), body.get("mentioned_list")
+            )
             message_id = str(message.get("message_id", ""))
             # A group reply lands in a thread: an in-thread @mention carries its root id, a
             # main-chat one ("") roots a thread at itself and is marked (spec channels/seatalk
@@ -184,6 +181,7 @@ class SeaTalkAdapter:
                     group_main=not in_thread,
                     quoted_message_id=str(message.get("quoted_message_id") or ""),
                     forwarded=tag == "combined_forwarded_chat_history",
+                    forwarded_items=combined_forwarded_items(message),
                     attachments=await media_attachments(
                         self._client, self._media_dir, self._transport.ensure_token, message
                     ),

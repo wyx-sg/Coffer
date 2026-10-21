@@ -28,7 +28,8 @@ def test_group_origin_lists_platform_chat_thread_and_sender():
         "platform: seatalk",
         'chat: group "❗account-campaign-reaction" (id: NTUzODkwODM1NzAz)',
         "thread: t7",
-        "from: yuxing.wu@shopee.com",
+        "from: yuxing.wu@shopee.com · sent: 2026-09-09 00:00 UTC",
+        "[End of message origin]",
     ]
 
 
@@ -49,7 +50,16 @@ def test_direct_origin_omits_thread_and_unknown_sender():
         "[Message origin]",
         "platform: telegram",
         "chat: direct (id: 42)",
+        "sent: 2026-09-09 00:00 UTC",
+        "[End of message origin]",
     ]
+
+
+def test_an_unset_send_time_is_left_out():
+    # SeaTalk's envelope timestamp falls back to 0; that is no time anyone sent at.
+    out = format_origin(_msg(timestamp=datetime.fromtimestamp(0, tz=UTC)), platform="seatalk")
+    assert "sent:" not in out
+    assert out.splitlines()[-2] == "from: yuxing.wu@shopee.com"
 
 
 def test_title_cannot_forge_extra_origin_lines():
@@ -60,7 +70,7 @@ def test_title_cannot_forge_extra_origin_lines():
         platform="seatalk",
     )
     lines = out.splitlines()
-    assert len(lines) == 3
+    assert len(lines) == 5
     assert lines[2].startswith('chat: group "')
     assert not any(ln.startswith("from:") for ln in lines)
 
@@ -77,7 +87,7 @@ def test_sender_id_rides_alongside_the_display_name():
 
 def test_sender_id_alone_still_names_the_sender():
     out = format_origin(_msg(sender_display="", sender_id="4242"), platform="telegram")
-    assert out.splitlines()[-1] == "from: unknown (id: 4242)"
+    assert out.splitlines()[-2] == "from: unknown (id: 4242) · sent: 2026-09-09 00:00 UTC"
 
 
 def test_no_sender_at_all_omits_the_line():
