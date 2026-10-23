@@ -154,7 +154,7 @@ describe("SkillRequiresTab", () => {
     },
   );
 
-  test("a secret is shown by the name the person gave it and links to its entry", async () => {
+  acceptance("web-ui", "the requires tab names a secret by its label", async () => {
     api.list.mockResolvedValue({ items: [], warnings: [] });
     vi.mocked(secretsApi.list).mockResolvedValue({
       refs: [{ ref: "secret/s-1a2b", label: "Shopee account" }],
