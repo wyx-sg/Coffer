@@ -25,6 +25,7 @@ import { translateApiError } from "@/lib/api/errors";
 import type { SkillOut } from "@/lib/api/skills";
 import { oldestCheck, relativeTime } from "@/lib/clis/format";
 import { useCheckClis, useClis } from "@/lib/hooks/useClis";
+import { useSecrets } from "@/lib/hooks/useSecrets";
 import { joinNames } from "@/lib/skills/names";
 import { toolHref } from "@/lib/skills/toolLinks";
 import type { StatusTone } from "@/lib/statusTone";
@@ -47,6 +48,9 @@ export function SkillRequiresTab({ skill }: Props) {
   const commands = skill.requires.map((req) => ({ req, cli: byCommand.get(req.command) }));
   const checked = oldestCheck(commands.flatMap((r) => (r.cli ? [r.cli] : [])));
   const secrets = skill.requires_secrets ?? [];
+  // A declared secret is its uid; the person knows it by the name they gave it.
+  const secretRows = useSecrets(secrets.length > 0);
+  const labelOf = new Map((secretRows.data?.refs ?? []).map((r) => [r.ref, r.label]));
   const tools = skill.requires_tools ?? [];
   const skills = skill.requires_skills ?? [];
   const code = <code className="font-mono" />;
@@ -161,22 +165,27 @@ export function SkillRequiresTab({ skill }: Props) {
           testId="skill-requires-secrets"
           intro={<Trans i18nKey="skills.requires.secretsIntro" components={{ code }} />}
         >
-          {secrets.map((secret) => (
-            <SkillRequireRow
-              key={secret.name}
-              name={secret.name}
-              note={profileNote(t, secret.profiles)}
-              state={
-                <StatusWord tone={secret.is_set ? "ok" : "warn"}>
-                  {secret.is_set
-                    ? t("skills.requires.secretSet")
-                    : t("skills.requires.secretMissing", { name: secret.name })}
-                </StatusWord>
-              }
-              to="/secrets"
-              linkLabel={t("skills.requires.viewInSecrets")}
-            />
-          ))}
+          {secrets.map((secret) => {
+            const ref = `secret/${secret.name}`;
+            return (
+              <SkillRequireRow
+                key={secret.name}
+                name={labelOf.get(ref) || secret.name}
+                note={profileNote(t, secret.profiles)}
+                state={
+                  <StatusWord tone={secret.is_set ? "ok" : "warn"}>
+                    {secret.is_set
+                      ? t("skills.requires.secretSet")
+                      : t("skills.requires.secretMissing", {
+                          name: labelOf.get(ref) || secret.name,
+                        })}
+                  </StatusWord>
+                }
+                to={`/secrets/${encodeURIComponent(ref)}`}
+                linkLabel={t("skills.requires.viewInSecrets")}
+              />
+            );
+          })}
         </Group>
       ) : null}
       {tools.length > 0 ? (

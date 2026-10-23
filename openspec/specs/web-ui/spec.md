@@ -3037,6 +3037,9 @@ the tools a skill requires"), each with its state and a link to its page — and
 name column is as wide as its longest name. **Check** re-checks the commands. The rows carry no
 install, copy-command or login step and no hand-off of their own: one banner
 carries a single hand-off to an agent for every command that needs the person. A
+secret is named by the label the person gave it on the Secrets page (its id only
+when it has none), and its link MUST open that secret's own entry
+(`/secrets/secret%2F<id>`), selected. A
 secret that is not set MUST read "secret <name> is not set" and open the Secrets
 page, with no hand-off to an agent, because setting a secret is the person's task.
 A library row whose most urgent item is such a secret MUST read "Needs secret
@@ -3125,8 +3128,14 @@ validates its source inline and MUST carry the Available to reach control.
 #### Scenario: the requires tab lists a skill's secrets and opens Secrets for a missing one
 - **GIVEN** a skill declaring the command `jq` and the secrets `GITHUB_TOKEN`, which is set, and `NPM_TOKEN`, which is not
 - **WHEN** the user opens its Requires tab
-- **THEN** below the commands `GITHUB_TOKEN` reads Set and `NPM_TOKEN` reads "secret NPM_TOKEN is not set" with Open Secrets, which opens `/secrets`
+- **THEN** below the commands `GITHUB_TOKEN` reads Set and `NPM_TOKEN` reads "secret NPM_TOKEN is not set" with View in Secrets, which opens that secret's entry at `/secrets/secret%2FNPM_TOKEN`
 - **AND** the secrets offer no Copy prompt and no command
+
+#### Scenario: the requires tab names a secret by its label
+- **GIVEN** a skill declaring the secret `s-1a2b`, which the person named "Shopee account"
+- **WHEN** the user opens its Requires tab
+- **THEN** the row reads "Shopee account", not `s-1a2b`
+- **AND** View in Secrets opens `/secrets/secret%2Fs-1a2b`, with that secret selected
 
 #### Scenario: the requires tab says a skill that declared nothing is unknown
 - **GIVEN** a skill whose files carry no `requires` key

@@ -26,6 +26,9 @@ vi.mock("@/lib/api/clis", () => ({
 const { clisApi } = await import("@/lib/api/clis");
 const api = vi.mocked(clisApi);
 
+vi.mock("@/lib/api/secret", () => ({ secretsApi: { list: vi.fn() } }));
+const { secretsApi } = await import("@/lib/api/secret");
+
 function Where() {
   return <div data-testid="where">{useLocation().pathname}</div>;
 }
@@ -147,9 +150,21 @@ describe("SkillRequiresTab", () => {
       expect(within(section).queryByRole("button", { name: "Copy prompt" })).toBeNull();
       expect(within(section).queryByText(/coffer /)).toBeNull();
       fireEvent.click(within(missing).getByRole("link", { name: "View in Secrets" }));
-      expect(screen.getByTestId("where")).toHaveTextContent("/secrets");
+      expect(screen.getByTestId("where")).toHaveTextContent("/secrets/secret%2FNPM_TOKEN");
     },
   );
+
+  test("a secret is shown by the name the person gave it and links to its entry", async () => {
+    api.list.mockResolvedValue({ items: [], warnings: [] });
+    vi.mocked(secretsApi.list).mockResolvedValue({
+      refs: [{ ref: "secret/s-1a2b", label: "Shopee account" }],
+    } as never);
+    renderTab("sk-named", [], [{ name: "s-1a2b", is_set: true, profiles: [] }]);
+    expect(await screen.findByText("Shopee account")).toBeInTheDocument();
+    expect(screen.queryByText("s-1a2b")).toBeNull();
+    fireEvent.click(screen.getByRole("link", { name: "View in Secrets" }));
+    expect(screen.getByTestId("where")).toHaveTextContent("/secrets/secret%2Fs-1a2b");
+  });
 
   test("a skill that declares only secrets lists them without an empty state", async () => {
     api.list.mockResolvedValue({ items: [], warnings: [] });
