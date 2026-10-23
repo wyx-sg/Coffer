@@ -144,6 +144,18 @@ async def open_conversation(
     return str(conv.id)
 
 
+def rolls_over_when_idle(thread_id: str, idle_hours: float, idle_for: timedelta) -> bool:
+    """Whether idle time opens a new conversation for this key (spec channels
+    "Open a new conversation after an idle period").
+
+    Only a key with no thread of its own rolls over: a direct chat (its casual
+    replies-in-thread included) and a group whose main chat is one conversation.
+    A thread — a group thread, a forum topic, a parallel thread — is its own
+    boundary: coming back to it means carrying on, and `/new` there starts
+    over."""
+    return thread_id == "" and idle_hours > 0 and idle_for > timedelta(hours=idle_hours)
+
+
 def idle_notice(idle_hours: float) -> str:
     """The one line a chat is told when idle time rolled it into a new conversation."""
     return f"🆕 Started a new conversation after {idle_hours:g} h idle."
@@ -165,8 +177,8 @@ async def ensure_conversation(
     nothing usable to continue.
 
     "Nothing usable" is two cases: the conversation was deleted, or the thread
-    sat idle longer than ``idle_hours`` (spec channels "Open a new conversation
-    after an idle period"; 0 never rolls over). Only the idle case speaks, through
+    is a key without a thread that sat idle longer than ``idle_hours`` (see
+    :func:`rolls_over_when_idle`; 0 never rolls over). Only the idle case speaks, through
     ``say``: the old conversation stays in the list and the owner should know why
     the agent no longer remembers it.
 
@@ -179,7 +191,7 @@ async def ensure_conversation(
         except ConversationNotFound:
             current = None
         if current is not None:
-            if idle_hours > 0 and now() - current.updated_at > timedelta(hours=idle_hours):
+            if rolls_over_when_idle(thread_id, idle_hours, now() - current.updated_at):
                 opened = await open_conversation(
                     conversations, threads, binding, peer, thread_id, chat_kind=chat_kind
                 )
@@ -224,7 +236,7 @@ async def predict_conversation(
         current = await conversations.get_conversation(row.active_conversation_id)
     except ConversationNotFound:
         return None
-    if idle_hours > 0 and now() - current.updated_at > timedelta(hours=idle_hours):
+    if rolls_over_when_idle(thread_id, idle_hours, now() - current.updated_at):
         return None
     return row.active_conversation_id
 

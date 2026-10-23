@@ -3,10 +3,10 @@
 **Status**: Accepted
 **Date**: 2026-09-28
 **Deciders**: Yuxing Wu
-**Related**: spec channels ("Key conversation identity by channel, chat and thread", "Open parallel conversations beside a direct chat", "Open a new conversation after an idle period", "Keep DM, group-main and thread turns apart", "Reply in place inside threads");
+**Related**: spec channels ("Key conversation identity by channel, chat and thread", "Open parallel conversations beside a direct chat", "Keep DM, group-main and thread turns apart", "Reply in place inside threads");
 spec channels/seatalk ("Identify a thread by its root message", "Open a parallel thread under the owner's /thread message");
 spec channels/telegram ("Open a parallel thread as a private-chat topic");
-[A Channel Turn Folds a Bounded Slice of Its Thread, Read by the Transport](channel-thread-context-is-a-bounded-slice.md), [A Burst of Channel Messages Is One Turn](a-burst-of-channel-messages-is-one-turn.md), [Channels Are Thin Transport Adapters](channel-adapter-framework.md), [Channel Switches](channel-switches-structural-vs-parametric.md), [Channel Owner Gate](channel-owner-gate.md);
+[Idle Time Rolls Over a Direct Chat's Conversation, but Never a Thread's](idle-time-rolls-over-a-direct-chat-but-never-a-thread.md), [A Channel Turn Folds a Bounded Slice of Its Thread, Read by the Transport](channel-thread-context-is-a-bounded-slice.md), [A Burst of Channel Messages Is One Turn](a-burst-of-channel-messages-is-one-turn.md), [Channels Are Thin Transport Adapters](channel-adapter-framework.md), [Channel Switches](channel-switches-structural-vs-parametric.md), [Channel Owner Gate](channel-owner-gate.md);
 research note [IM agent bridges](../research/im-agent-bridges.md) ("Session scope is a configuration axis");
 PRs #245, #439
 
@@ -31,8 +31,9 @@ shares one session across DMs), cc-connect's `session_scope`, and a session
 per thread or forum topic in ccgram, OpenACP and both Slack integrations
 ([IM agent bridges](../research/im-agent-bridges.md)).
 
-A conversation also needs a lifetime: a chat left alone for weeks should not
-answer its next question inside a stale session.
+How long a conversation lives once it is keyed — when idle time opens a new
+one — is its own decision:
+[Idle Time Rolls Over a Direct Chat's Conversation, but Never a Thread's](idle-time-rolls-over-a-direct-chat-but-never-a-thread.md).
 
 ## Options Considered
 
@@ -66,11 +67,11 @@ on the web, and in `/status`. In a group `/thread` is refused: every group threa
 is already its own conversation.
 
 **Lifetime.** A message opens a new conversation for its key, exactly as `/new`
-does (the sticky settings carry over), when the active one has been idle longer
-than the channel's `new_conversation_after_idle_hours` (default 24; 0 never
-does) — the chat is told in one line — or when the owner deleted it, which is
-announced nowhere because deleting was the owner's own act. The old conversation
-stays in the conversation list. The idle clock is per key.
+does (the sticky settings carry over), when the owner deleted the active one —
+announced nowhere, because deleting was the owner's own act — or, for a key
+without a thread, when idle time rolls it over (see
+[the idle ADR](idle-time-rolls-over-a-direct-chat-but-never-a-thread.md)). The
+old conversation stays in the conversation list.
 
 Pros: concurrent group threads never collide on one turn lock, and one bot can
 run different agents in different threads; a direct chat keeps the one context
@@ -79,7 +80,7 @@ one command and each is visibly numbered.
 
 Cons: in a direct chat, two unrelated questions asked as casual
 replies-in-thread share one session; the person has to know `/thread` exists.
-A conversation rolled over by idleness starts cold (`/resume` brings the old one
+A direct chat rolled over by idleness starts cold (`/resume` brings the old one
 back).
 
 Wins because it follows the platforms' own unit of conversation in groups and
@@ -139,19 +140,6 @@ would have to handle each scope.
 Loses because one owner per channel leaves one sensible default, and `/thread`
 covers the remaining case per message rather than per channel.
 
-### Option F — One conversation per key that lives until the owner ends it
-
-The key's conversation stays active until `/new`, whatever its age.
-
-Pros: nothing happens the owner did not ask for.
-
-Cons: the first message after a long break is answered inside a stale session
-whose context window is full of old work. An owner who wants this has it:
-`new_conversation_after_idle_hours = 0`.
-
-Loses because a long-running chat needs a boundary the owner does not have to
-remember to draw.
-
 ## Decision
 
 A channel conversation is identified by `(channel, chat, thread)` in
@@ -161,16 +149,14 @@ conversation. A direct chat is one conversation: its threads join it, except a
 parallel thread opened with `/thread` (or, on a transport where a direct-chat
 thread only exists when someone creates it, every such thread), which is its own
 conversation and carries the mark `🧵#N title`. A message opens a new
-conversation for its key when the active one was deleted or has been idle past
-`new_conversation_after_idle_hours`.
+conversation for its key when the active one was deleted, or, for a key without
+a thread, has been idle past `new_conversation_after_idle_hours`.
 
 Rules a future change must respect:
 
 - Anything that selects a conversation, a session or a sticky choice keys on
   `conversation_thread_id`; anything that sends keys on `thread_id`.
 - A parallel thread's ordinal is never reused within a chat.
-- Idle time is measured per key, so each group or parallel thread rolls over
-  on its own.
 
 ## Consequences
 
@@ -178,7 +164,6 @@ Rules a future change must respect:
   parallel threads, run independently.
 - A new transport declares whether a direct-chat thread is a reply
   (`direct_threads_are_replies`) and implements `open_thread` for `/thread`.
-- A quiet chat does not carry a stale session.
 - Enforced by: `channel_thread_conversations` and its `parallel_ordinal` and
   `parallel_title` columns (`infrastructure/channel/thread_persistence.py`),
   `application/channel/conversation_ops.py`,

@@ -254,8 +254,9 @@ class ChannelBinding:
     wait_after_forward_seconds: float = 5.0
     # "Show a turn's working state as one status line": list the step lines.
     show_steps: bool = True
-    # "Open a new conversation after an idle period": a chat idle longer than this
-    # many hours opens a new conversation on its next message; 0 never does.
+    # "Open a new conversation after an idle period": a direct chat (or a group
+    # that is one conversation) idle longer than this many hours opens a new
+    # conversation on its next message; 0 never does. Threads never roll over.
     new_conversation_after_idle_hours: float = 24.0
     # The channel's framework-level ``scope`` off the row (ADR
     # per-agent-resource-scope), rewritten into agent KEYS by the gate

@@ -1183,13 +1183,19 @@ A channel MUST open a new conversation when the owner's next message reaches a
 chat whose active conversation has been idle longer than the channel's
 `new_conversation_after_idle_hours` (default 24, from 0 to 8760; 0 never does).
 Idle time is measured from the conversation's last activity, in hours. It
-applies to every conversation a channel keeps, per key: a direct chat's
-conversation and each group thread's or parallel thread's own (see "Key
-conversation identity by channel, chat and thread"). The old conversation stays
-where it was, in the conversation list; the chat is told in one short line,
-`🆕 Started a new conversation after 24 h idle.`, before the answer. The new
-conversation opens exactly as `/new` opens one, so the chat's sticky agent,
-model and directory carry over (see "Keep a chat's agent, model and directory across its conversations").
+applies only to a conversation that has no thread of its own: a direct chat's
+(its casual replies-in-thread included) and that of a group whose main chat is
+one conversation (a Telegram group without topics). A thread is its own
+boundary, so a conversation keyed to a thread — a group thread, a forum topic, a
+parallel thread or a Telegram private-chat topic (see "Key conversation identity
+by channel, chat and thread") — is never rolled over by idle time: coming back to
+it continues it, and `/new` there starts over. A parallel thread is closed by
+idle time instead (see "Open parallel conversations beside a direct chat"). The
+old conversation stays where it was, in the conversation list; the chat is told
+in one short line, `🆕 Started a new conversation after 24 h idle.`, before the
+answer. The new conversation opens exactly as `/new` opens one, so the chat's
+sticky agent, model and directory carry over (see "Keep a chat's agent, model
+and directory across its conversations").
 
 The setting is edited on the Channels page, on the channel's Settings tab, and
 the channel's status reports it.
@@ -1211,10 +1217,15 @@ the channel's status reports it.
 - **WHEN** the owner sends a message
 - **THEN** the message joins that conversation
 
-#### Scenario: the idle period applies to each group thread's conversation
-- **GIVEN** two threads of one group, each with its own conversation, one idle past the period and one not
-- **WHEN** the owner messages both threads
-- **THEN** only the idle thread opens a new conversation
+#### Scenario: a group thread idle past the configured hours keeps its conversation
+- **GIVEN** a group thread whose conversation was last active 30 hours ago, on a channel with the default 24
+- **WHEN** the owner messages the bot in that thread
+- **THEN** the message joins that thread's conversation and nothing is announced
+
+#### Scenario: a group that is one conversation rolls over like a direct chat
+- **GIVEN** a group without threads whose conversation was last active 30 hours ago, on a channel with the default 24
+- **WHEN** the owner messages the bot in the group
+- **THEN** a new conversation becomes the group's active one and the group is told `Started a new conversation after 24 h idle`
 
 #### Scenario: the idle period comes from the channel's settings
 - **WHEN** a channel config omits `new_conversation_after_idle_hours`, sets it to 0, or sets it below 0 or above 8760
