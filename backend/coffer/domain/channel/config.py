@@ -105,10 +105,11 @@ class _CommonChannelFields(BaseModel):
     # lists the turn's step lines under its header. Off keeps the header (time,
     # step count) and the narration line and hides the steps — e.g. in a group.
     show_steps: bool = True
-    # "Open a new conversation after an idle period": a chat whose active
-    # conversation has been idle longer than this many hours opens a NEW
-    # conversation on the owner's next message (the old one stays in the list).
-    # 0 never rolls a conversation over.
+    # "Open a new conversation after an idle period": a direct chat, or a group
+    # whose main chat is one conversation, whose active conversation has been
+    # idle longer than this many hours opens a NEW conversation on the owner's
+    # next message (the old one stays in the list). A thread — group thread,
+    # forum topic, parallel thread — never rolls over. 0 never rolls over.
     new_conversation_after_idle_hours: float = Field(default=24.0, ge=0, le=8760)
     # The working directories `/dir` may switch a conversation into (spec
     # channels "Choose the working directory from chat"): absolute paths, each

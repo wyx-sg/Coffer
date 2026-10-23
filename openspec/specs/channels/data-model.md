@@ -20,7 +20,7 @@ ChannelConfig (discriminator: channel_type)
 │   ├── wait_after_text_seconds: float = 1.5     # burst quiet window after text (0–60)
 │   ├── wait_after_forward_seconds: float = 5.0  # …after a forward or bare files (0–60)
 │   ├── show_steps: bool = True             # step lines under the live status line
-│   ├── new_conversation_after_idle_hours: float = 24.0  # idle hours before a chat's next message opens a new conversation (0–8760; 0 = never)
+│   ├── new_conversation_after_idle_hours: float = 24.0  # idle hours before a direct chat's (or a thread-less group's) next message opens a new conversation; threads never roll over (0–8760; 0 = never)
 │   ├── directories: list[str] = []         # absolute paths `/dir` may switch into (≤32)
 │   ├── direct_reply_style: str = ""        # owner's reply style for direct chats + their threads ("" = Coffer's default; ≤6000, trimmed)
 │   ├── group_reply_style: str = ""         # owner's reply style for group main chats + threads (same rules)

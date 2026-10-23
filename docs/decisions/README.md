@@ -202,6 +202,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`channels-are-machine-local-resources`](channels-are-machine-local-resources.md) | Channels Are Machine-Local Resources, Like Agents |
 | [`channel-owner-gate`](channel-owner-gate.md) | A Channel Answers Only Its Paired Owner, and Fails Closed in Groups |
 | [`channel-conversation-identity`](channel-conversation-identity.md) | A Channel Conversation Is Keyed by (Channel, Chat, Thread); a Direct Chat Is One Conversation Until `/thread` Opens Another |
+| [`idle-time-rolls-over-a-direct-chat-but-never-a-thread`](idle-time-rolls-over-a-direct-chat-but-never-a-thread.md) | Idle Time Rolls Over a Direct Chat's Conversation, but Never a Thread's |
 | [`channel-thread-context-is-a-bounded-slice`](channel-thread-context-is-a-bounded-slice.md) | A Channel Turn Folds a Bounded Slice of Its Thread, Read by the Transport |
 | [`a-burst-of-channel-messages-is-one-turn`](a-burst-of-channel-messages-is-one-turn.md) | A Burst of Channel Messages Is One Turn, Released After a Per-Channel Quiet Window |
 | [`channel-switches-structural-vs-parametric`](channel-switches-structural-vs-parametric.md) | Channel Switches: the Agent Opens a New Conversation, the Model Applies Next Turn |

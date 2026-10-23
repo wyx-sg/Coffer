@@ -80,37 +80,52 @@ async def test_zero_hours_never_rolls_a_conversation_over(env: ChannelEnv) -> No
     assert await env.active_conversation(resource) == first
 
 
+def _group(thread: str, text: str) -> object:
+    return inbound(
+        "tg",
+        "grp-1",
+        text,
+        chat_kind="group",
+        addressed=True,
+        sender_id="owner",
+        thread_id=thread,
+    )
+
+
 @pytest.mark.acceptance(
-    spec="channels", scenario="the idle period applies to each group thread's conversation"
+    spec="channels", scenario="a group thread idle past the configured hours keeps its conversation"
 )
-async def test_the_idle_period_applies_per_thread(env: ChannelEnv) -> None:
+async def test_a_group_thread_never_rolls_over(env: ChannelEnv) -> None:
     resource, adapter = await env.paired_channel()
-
-    def msg(thread: str, text: str) -> object:
-        return inbound(
-            "tg",
-            "grp-1",
-            text,
-            chat_kind="group",
-            addressed=True,
-            sender_id="owner",
-            thread_id=thread,
-        )
-
-    for thread in ("t1", "t2"):
-        await env.processor.on_message(msg(thread, "hi"))  # type: ignore[arg-type]
-    await wait_until(lambda: adapter.texts().count("Hello world") >= 2)
+    await env.processor.on_message(_group("t1", "hi"))  # type: ignore[arg-type]
+    await wait_until(lambda: adapter.texts().count("Hello world") >= 1)
     t1 = await env.active_conversation(resource, "grp-1", "t1")
-    t2 = await env.active_conversation(resource, "grp-1", "t2")
-    assert t1 and t2 and t1 != t2
+    assert t1
     await _age(env, t1, 30)
 
-    await env.processor.on_message(msg("t1", "again"))  # type: ignore[arg-type]
-    await env.processor.on_message(msg("t2", "again"))  # type: ignore[arg-type]
-    await wait_until(lambda: adapter.texts().count("Hello world") >= 4)
+    await env.processor.on_message(_group("t1", "again"))  # type: ignore[arg-type]
+    await wait_until(lambda: adapter.texts().count("Hello world") >= 2)
 
-    assert await env.active_conversation(resource, "grp-1", "t1") != t1
-    assert await env.active_conversation(resource, "grp-1", "t2") == t2
+    assert await env.active_conversation(resource, "grp-1", "t1") == t1
+    assert not any(NOTICE in text for text in adapter.texts())
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a group that is one conversation rolls over like a direct chat"
+)
+async def test_a_group_main_chat_rolls_over(env: ChannelEnv) -> None:
+    resource, adapter = await env.paired_channel()
+    await env.processor.on_message(_group("", "hi"))  # type: ignore[arg-type]
+    await wait_until(lambda: adapter.texts().count("Hello world") >= 1)
+    main = await env.active_conversation(resource, "grp-1", "")
+    assert main
+    await _age(env, main, 30)
+
+    await env.processor.on_message(_group("", "again"))  # type: ignore[arg-type]
+    await wait_until(lambda: adapter.texts().count("Hello world") >= 2)
+
+    assert await env.active_conversation(resource, "grp-1", "") != main
+    assert any(NOTICE in text for text in adapter.texts())
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a message with an empty sender id is refused")

@@ -4210,7 +4210,7 @@
       },
       "idle": {
         "label": "Start a new conversation after",
-        "hint": "A message after this long a quiet spell starts fresh. 0 never does.",
+        "hint": "In a direct chat, a message after this long a quiet spell starts fresh. Threads carry on. 0 never starts fresh.",
         "unit": "h",
         "invalid": "Enter a number of hours from {{min}} to {{max}}."
       },
