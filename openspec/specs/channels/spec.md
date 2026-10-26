@@ -2773,7 +2773,15 @@ turn. Nothing MUST be posted in the owner's name. Once the question is answered 
 cancelled, every card of it MUST be rewritten in place to
 "✓ Answered: <answer> · HH:MM" ("Stopped" when cancelled); where the platform
 cannot rewrite it, that line is sent as a reply. The card is itself a new
-message, so it notifies the owner however long the turn has run.
+message, so it notifies the owner however long the turn has run. In a group the
+card MUST open by @mentioning whoever sent the message the turn answers, as a
+reply does ("Mention the asker in a group answer"), and MUST carry the 🗑 of a
+group reply ("Withdraw a bot reply on the owner's command"), filed on its own and
+kept once the card is rewritten. A question that outlives its turn (spec chat
+"Keep a question open past the turn that asked it") keeps its card and buttons;
+a tap or a text reply answers it the same way, its card is rewritten, and the
+answer goes to the agent as the owner's next message, starting a turn in that
+chat or thread.
 
 #### Scenario: a tap answers the agent without a message from the owner
 - **GIVEN** a SeaTalk card "❓ Apply this change to staging?" with Yes and No
@@ -2809,6 +2817,17 @@ message, so it notifies the owner however long the turn has run.
 - **GIVEN** a pending question card in a chat
 - **WHEN** the owner stops the turn
 - **THEN** the card reads "Stopped" with its buttons gone
+
+#### Scenario: a group question card mentions the asker and carries a trash button
+- **GIVEN** a question raised in a SeaTalk group turn the owner started
+- **WHEN** its card goes out and is later answered
+- **THEN** the card opens with an @mention of the owner and carries the options and 🗑
+- **AND** the answered card keeps the 🗑, which withdraws that card
+
+#### Scenario: a question outlives a turn that finished without waiting
+- **GIVEN** a Codex turn in Telegram that asked "Apply this change to staging?" and finished without waiting
+- **WHEN** the owner taps Yes after the turn ended
+- **THEN** the card reads "✓ Answered: Yes · HH:MM" and a new turn starts with the question and "Yes" as its message
 
 ### Requirement: Ground a thread turn in a bounded slice of the thread
 A thread turn MUST fold a bounded slice of its thread, never the whole thread,

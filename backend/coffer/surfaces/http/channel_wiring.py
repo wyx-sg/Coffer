@@ -111,6 +111,9 @@ class ChatQuestions:
     ) -> QuestionBlock | None:
         return await questions.answer_pending_with_text(conversation_id, text, via=via, by=by)
 
+    def outlived_turn(self, question_id: str) -> bool:
+        return questions.outlived_turn(question_id)
+
 
 async def _ingest_websocket_event(channel_uid: str, envelope: dict[str, Any]) -> None:
     """Hand a websocket-delivered event to the channel's one ingest entry point.

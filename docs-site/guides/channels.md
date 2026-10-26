@@ -122,6 +122,10 @@ A question that allows several options shows them as toggles: each tap puts a `�
 
 Questions are answered here, in the chat; the Conversations page has no answer card. Once the question is answered, or the turn is stopped, its card is rewritten in place to `✓ Answered: Yes · 11:42` (`⏹ Stopped` after a stop) and its buttons go away; where the platform cannot rewrite the message, that line is sent as a reply instead.
 
+In a group the card opens by @mentioning you, so the question notifies you like a reply does, and it carries the same 🗑 as a reply; the 🗑 stays after the card is rewritten and withdraws only that card.
+
+Some agents end their turn without waiting for the answer (Codex can do this). The question then stays open: its card keeps its buttons, and the conversation still shows "Needs you". Answer it the same way whenever you get to it, and your answer goes to the agent as your next message, which starts a new turn that carries on from there. A new question from the agent replaces one still open, and an open question is dropped after 24 hours or when Coffer restarts.
+
 ### Grouping messages
 
 Messages sent in quick succession are one question. The channel waits for a short pause after each message before it starts the turn: 1.5 seconds after text, 5 seconds after a forwarded chat record or files with no text. Anything you send inside that pause joins the same turn. So you can forward a record and then type "look into this", and the agent answers once, having seen both. Each message is still acknowledged the moment it arrives.

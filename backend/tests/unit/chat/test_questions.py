@@ -455,6 +455,97 @@ async def test_a_turn_that_ends_cancels_a_question_still_pending() -> None:
     assert not questions.needs_you("c1")
 
 
+class NotWaitingAdapter(AskingAdapter):
+    """Asks the way Codex's code mode does: the ask runs in the background and
+    the turn finishes without waiting for the answer."""
+
+    async def _gen(self) -> AsyncIterator[AgentEvent]:
+        yield TurnStarted()
+        ask = asker_for(self.conversation_id)
+        assert ask is not None
+
+        async def asking() -> None:
+            self.outcome = await ask(self.ask_input)
+
+        self.task = asyncio.create_task(asking())
+        while questions.pending_question_for(self.conversation_id) is None:
+            await asyncio.sleep(0)
+        yield TextDelta(text="Asked; waiting on you.")
+        yield _DONE
+
+
+@pytest.mark.acceptance(
+    spec="chat", scenario="a question still open when its turn finishes stays open"
+)
+async def test_a_question_open_when_its_turn_finishes_outlives_it() -> None:
+    orchestrator, chat, provider = _make()
+    provider.build_adapter = lambda cid: _built(
+        provider, NotWaitingAdapter(cid, YES_NO, as_tool="x")
+    )  # type: ignore[method-assign,assignment]
+    conv = await chat.create_conversation(agent_key="builtin")
+    queue = await start_turn(orchestrator, conv.id, "go")
+    events = await _drain(queue)
+
+    assert not any(isinstance(e, QuestionClosedEvent) for e in events)
+    block = questions.pending_question_for(conv.id)
+    assert block is not None and questions.needs_you(conv.id)
+    assert questions.outlived_turn(block.question_id)
+    assert questions.token_for(conv.id) is None
+    # Whatever still awaited the ask is told the turn ended; the answer comes later.
+    adapter = provider.adapters[0]
+    await adapter.task
+    assert adapter.outcome is not None and not adapter.outcome.answered
+    assert adapter.outcome.message == questions.MSG_TURN_ENDED
+
+    answered = await questions.answer_question(
+        conv.id, block.question_id, [AnswerInput(selected=["Yes"])], via="ch", by="owner"
+    )
+    assert answered.status == "answered"
+    assert not questions.needs_you(conv.id)
+
+
+@pytest.mark.acceptance(
+    spec="chat", scenario="a new question supersedes one an ended turn left open"
+)
+async def test_a_new_question_supersedes_an_outlived_one() -> None:
+    old = questions.register_turn("c1")
+    waiter = asyncio.create_task(questions.raise_question(old.token, YES_NO))
+    for _ in range(50):
+        await asyncio.sleep(0)
+    await questions.close_turn(old, keep_open=True)
+    await waiter
+    first = questions.pending_question_for("c1")
+    assert first is not None
+
+    new = questions.register_turn("c1")
+    seen: list[AgentEvent] = []
+
+    async def sink(event: AgentEvent) -> None:
+        seen.append(event)
+
+    new.on_event = sink
+    asking = asyncio.create_task(questions.raise_question(new.token, TWO))
+    for _ in range(50):
+        await asyncio.sleep(0)
+
+    closed = [e for e in seen if isinstance(e, QuestionClosedEvent)]
+    assert [(e.question.question_id, e.question.status) for e in closed] == [
+        (first.question_id, "cancelled")
+    ]
+    current = questions.pending_question_for("c1")
+    assert current is not None and current.question_id != first.question_id
+    await questions.close_turn(new)
+    await asking
+
+
+def _built(provider: _AskingProvider, adapter: AskingAdapter) -> Any:
+    async def build() -> AskingAdapter:
+        provider.adapters.append(adapter)
+        return adapter
+
+    return build()
+
+
 async def test_a_daemon_shutdown_cancels_the_pending_question() -> None:
     orchestrator, chat, _provider = _make()
     conv = await chat.create_conversation(agent_key="builtin")

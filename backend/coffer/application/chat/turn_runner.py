@@ -149,9 +149,16 @@ async def run_turn_task(
 
     async def finish() -> None:
         if turn is not None:
-            # The turn is over: whatever it still waits on can no longer be
-            # answered, and the reply must say so.
-            await questions.close_turn(turn)
+            # The turn is over. Stopped or failed, whatever it still waits on can
+            # no longer be answered and the reply says so; finished on its own,
+            # an open question stays open and its answer becomes the next
+            # message (spec chat "Keep a question open past the turn that asked it").
+            finished = (
+                error_event is None
+                and final_done is not None
+                and final_done.stop_reason != "interrupted"
+            )
+            await questions.close_turn(turn, keep_open=finished)
         try:
             await chat.end_turn(conversation_id)
         except Exception:

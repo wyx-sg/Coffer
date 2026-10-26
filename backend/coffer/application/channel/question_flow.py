@@ -16,6 +16,12 @@ channel kind never imports the chat kind.
   answers. The ticks live here, keyed by the question, not on the platform.
 * A text message in the chat is the answer while a question is pending
   (``answer_with_text``): it never becomes a turn.
+* In a group a card opens by @mentioning whoever asked, like the reply does,
+  and carries the reply's 🗑 (its own ledger entry), which it keeps once closed.
+* A question still open when its turn finishes outlives it (spec chat "Keep a
+  question open past the turn that asked it"): its cards stay, and once it is
+  answered in full the answer is handed back as the text of the owner's next
+  message (``late_answer_text``), which starts a turn like any other.
 
 Nothing is ever posted in the owner's name.
 """
@@ -35,10 +41,12 @@ from coffer.application.channel.question_card import (
     card_buttons,
     closed_body,
     closed_line,
+    late_answer_text,
 )
+from coffer.application.channel.reply_tracking import ReplyTracker
 from coffer.application.channel.store_ports import ChannelPeer, ChannelThreadConversationRepoPort
 from coffer.application.channel.turn_finish import SendCard
-from coffer.domain.channel.envelopes import InboundMessage, SentMessage
+from coffer.domain.channel.envelopes import ChoiceButton, InboundMessage, SentMessage
 from coffer.domain.chat.errors import QuestionAnswerInvalid, QuestionClosed
 from coffer.domain.chat.question import QuestionAnswer, QuestionBlock
 
@@ -47,8 +55,8 @@ __all__ = [
     "QuestionPort",
     "answer_message",
     "answer_with_text",
-    "forget_conversation",
     "handle_tap",
+    "settle_conversation",
 ]
 
 _logger = logging.getLogger(__name__)
@@ -82,6 +90,10 @@ class QuestionPort(Protocol):
         ``None`` when nothing is pending."""
         ...
 
+    def outlived_turn(self, question_id: str) -> bool:
+        """Whether the open question outlived the turn that asked it."""
+        ...
+
 
 @dataclass
 class _Cards:
@@ -99,15 +111,46 @@ class _Cards:
     ticked: dict[int, set[int]] = field(default_factory=dict)
     #: Questions answered from this chat (the rest were answered in Coffer).
     from_chat: set[int] = field(default_factory=set)
+    #: The 🗑 of each card, by question index, kept through every rewrite.
+    trash: dict[int, list[ChoiceButton]] = field(default_factory=dict)
+    #: Opens a card's text with the asker's @mention; ``None``: no mention.
+    mention: Callable[[str], str] | None = None
+
+    #: The turn that asked has finished and the question is still open.
+    outlived: bool = False
+    #: The sender of these cards, kept for a question that outlives its turn.
+    chat: QuestionChat | None = None
+
+    def mentioned(self, body: str) -> str:
+        return self.mention(body) if self.mention is not None else body
 
 
 _CARDS: dict[str, _Cards] = {}
 
 
-def forget_conversation(conversation_id: str) -> None:
-    """Drop what is held for a conversation (its turn ended)."""
-    for question_id in [q for q, c in _CARDS.items() if c.conversation_id == conversation_id]:
-        del _CARDS[question_id]
+def settle_conversation(conversation_id: str, *, keep: bool) -> None:
+    """A turn of the conversation ended: the cards still open outlive it
+    (``keep``: it finished on its own) or are dropped (stopped or failed)."""
+    for question_id, cards in list(_CARDS.items()):
+        if cards.conversation_id != conversation_id or cards.outlived:
+            continue
+        if keep:
+            cards.outlived = True
+        else:
+            del _CARDS[question_id]
+
+
+async def _settle_late(cards: _Cards, block: QuestionBlock) -> str:
+    """An answer to a question that outlived its turn: no renderer is there to
+    show it, so the cards are rewritten (and the next one sent) here. The
+    follow-up text once the question is answered in full, else ``""``."""
+    if cards.chat is None:
+        return ""
+    if block.status == "answered":
+        await cards.chat.closed(block)
+        return late_answer_text(block)
+    await cards.chat.asked(block)
+    return ""
 
 
 @dataclass
@@ -120,6 +163,12 @@ class QuestionChat:
     chat_kind: str
     send: Callable[[str], Awaitable[None]]
     send_card: SendCard | None = None
+    #: Opens a card by @mentioning whoever asked, as the reply does (see
+    #: ``turn_text.with_mention``).
+    mention: Callable[[str], str] | None = None
+    #: A fresh ledger entry for one card, so its 🗑 withdraws that card alone;
+    #: ``None`` (a renderer built without a ledger) gives cards no 🗑.
+    new_tracker: Callable[[], ReplyTracker] | None = None
 
     async def asked(self, block: QuestionBlock) -> bool:
         """The turn raised ``block`` or one of its questions was answered: show
@@ -131,7 +180,9 @@ class QuestionChat:
             cards = _CARDS[block.question_id] = _Cards(
                 block, self.conversation_id, self.chat_id, self.chat_kind
             )
+            cards.mention = self.mention
         cards.block = block
+        cards.chat = self
         for index, answer in enumerate(block.answers):
             await self._rewrite(cards, index, closed_line_for(cards, index, block, answer))
         index = block.next_index
@@ -157,17 +208,23 @@ class QuestionChat:
     async def _send_card(self, cards: _Cards, index: int) -> None:
         block = cards.block
         buttons = self.send_card is not None and self.adapter.capabilities.supports_buttons
-        body = card_body(block, index, buttons=buttons)
+        body = cards.mentioned(card_body(block, index, buttons=buttons))
+        tracker = self.new_tracker() if buttons and self.new_tracker is not None else None
+        trash = tracker.buttons() if tracker is not None else []
         sent: SentMessage | None = None
         try:
             if buttons and self.send_card is not None:
-                sent = await self.send_card(body, card_buttons(block, index))
+                sent = await self.send_card(body, [*card_buttons(block, index), *trash])
             else:
                 await self.send(body)
         except Exception:
             _logger.warning("channel.question.card_failed", exc_info=True)
             return
         cards.sent[index] = sent.message_id if sent is not None else ""
+        if tracker is not None and trash:
+            cards.trash[index] = trash
+            tracker.note(sent)
+            await tracker.commit()
 
     async def _rewrite(self, cards: _Cards, index: int, line: str) -> None:
         """Rewrite question ``index``'s card to ``line`` in place; where the
@@ -182,8 +239,8 @@ class QuestionChat:
                 await self.adapter.update_card(
                     self.chat_id,
                     message_id,
-                    closed_body(cards.block, index, line),
-                    [],
+                    cards.mentioned(closed_body(cards.block, index, line)),
+                    cards.trash.get(index, []),
                     chat_kind=self.chat_kind,
                 )
                 return
@@ -216,8 +273,10 @@ async def handle_tap(
     message_id: str,
     via: str,
     by: str,
-) -> None:
+) -> str:
     """The owner tapped a question button (already owner-gated by the caller).
+    Returns the follow-up message an answer to a question that outlived its
+    turn becomes, else ``""``.
 
     A stale tap — the question closed, its cards gone — changes nothing. A
     single-choice option answers; a multi-select option toggles its tick on the
@@ -225,18 +284,18 @@ async def handle_tap(
     happens)."""
     cards = _CARDS.get(tap.question_id)
     if cards is None or not 0 <= tap.index < len(cards.block.questions):
-        return
+        return ""
     block = cards.block
     if tap.index != block.next_index:
-        return
+        return ""
     spec = block.questions[tap.index]
     ticked = cards.ticked.setdefault(tap.index, set())
     if tap.option is None:
         if not spec.multi_select or not ticked:
-            return
+            return ""
         selected = [o.label for i, o in enumerate(spec.options) if i in ticked]
     elif not 0 <= tap.option < len(spec.options):
-        return
+        return ""
     elif spec.multi_select:
         ticked.symmetric_difference_update({tap.option})
         if adapter.capabilities.supports_card_update:
@@ -244,18 +303,19 @@ async def handle_tap(
                 await adapter.update_card(
                     chat_id,
                     cards.sent.get(tap.index) or message_id,
-                    card_body(block, tap.index),
-                    card_buttons(block, tap.index, ticked),
+                    cards.mentioned(card_body(block, tap.index)),
+                    [*card_buttons(block, tap.index, ticked), *cards.trash.get(tap.index, [])],
                     chat_kind=chat_kind,
                 )
             except Exception:
                 _logger.info("channel.question.toggle_failed", exc_info=True)
-        return
+        return ""
     else:
         selected = [spec.options[tap.option].label]
     cards.from_chat.add(tap.index)
+    late = port.outlived_turn(tap.question_id)
     try:
-        await port.answer(
+        answered = await port.answer(
             cards.conversation_id,
             tap.question_id,
             selected=selected,
@@ -266,6 +326,8 @@ async def handle_tap(
         )
     except (QuestionClosed, QuestionAnswerInvalid):
         cards.from_chat.discard(tap.index)
+        return ""
+    return await _settle_late(cards, answered) if late else ""
 
 
 async def answer_with_text(
@@ -276,25 +338,31 @@ async def answer_with_text(
     via: str,
     by: str,
     say: Callable[[str], Awaitable[None]],
-) -> bool:
+) -> str | None:
     """Take ``text`` as the answer of the conversation's pending question.
-    ``False`` when nothing is pending — the caller then treats the text as an
-    ordinary message. An answer that does not fit (too long) is told to the chat
+    ``None`` when nothing is pending — the caller then treats the text as an
+    ordinary message. Taken, it returns ``""``, or — for the last answer to a
+    question that outlived its turn — the follow-up message the caller sends in
+    the text's place. An answer that does not fit (too long) is told to the chat
     with ``say`` and still counts as taken."""
     block = port.pending_question_for(conversation_id)
     if block is None:
-        return False
+        return None
     cards = _CARDS.get(block.question_id)
     if cards is not None:
         cards.from_chat.add(block.next_index)
+    late = port.outlived_turn(block.question_id)
     try:
-        return await port.answer_text(conversation_id, text, via=via, by=by) is not None
+        answered = await port.answer_text(conversation_id, text, via=via, by=by)
     except QuestionAnswerInvalid as e:
         await say(f"⚠️ {e}")
-        return True
+        return ""
     except QuestionClosed:
         # Answered a moment before: this text is a message like any other.
-        return False
+        return None
+    if answered is None:
+        return None
+    return await _settle_late(cards, answered) if late and cards is not None else ""
 
 
 async def answer_message(
@@ -305,12 +373,12 @@ async def answer_message(
     msg: InboundMessage,
     text: str,
     conversation_thread_id: str,
-) -> bool:
-    """``True`` when the owner's message ``text`` answered the question the
-    chat's conversation is waiting on (so it is not a message for the agent)."""
+) -> str | None:
+    """Whether the owner's message ``text`` answered the question the chat's
+    conversation is waiting on, as ``answer_with_text`` says it."""
     row = await threads.get(binding.resource.uid, peer.chat_id, conversation_thread_id)
     if row is None or row.active_conversation_id is None:
-        return False
+        return None
 
     async def say(line: str) -> None:
         await safe_send(

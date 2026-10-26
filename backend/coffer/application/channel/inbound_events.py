@@ -138,7 +138,7 @@ class InboundEvents:
         tap = parse_callback(cb.data)
         if tap is not None:
             if self.questions is not None:
-                await handle_tap(
+                follow_up = await handle_tap(
                     self.questions,
                     tap,
                     adapter=binding.adapter,
@@ -148,6 +148,9 @@ class InboundEvents:
                     via=binding.resource.uid,
                     by=cb.sender_display or "owner",
                 )
+                if follow_up:
+                    # The turn that asked has ended: the answer starts the next.
+                    await self._as_owner(cb, follow_up)
             return
         kind, _, value = cb.data.partition(":")
         name = command_name(f"/{value}") if kind == "cmd" and value else None
@@ -176,6 +179,11 @@ class InboundEvents:
         the short version of a reply too long for a chat"): the agent still holds
         the full answer in its session, so the tap becomes the owner's message
         asking for it as a file — Coffer keeps no reply text to send itself."""
+        await self._as_owner(cb, FULL_REPORT_REQUEST)
+
+    async def _as_owner(self, cb: InboundCallback, text: str) -> None:
+        """A tap that stands for a message from the owner: ``text`` goes in
+        through the ordinary inbound path, from the chat and thread tapped in."""
         if self.on_message is None:
             return
         await self.on_message(
@@ -183,7 +191,7 @@ class InboundEvents:
                 channel=cb.channel,
                 chat_id=cb.chat_id,
                 sender_display=cb.sender_display,
-                text=FULL_REPORT_REQUEST,
+                text=text,
                 platform_message_id="",
                 timestamp=datetime.now(tz=UTC),
                 sender_id=cb.sender_id,

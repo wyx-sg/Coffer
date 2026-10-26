@@ -18,7 +18,7 @@ import pytest
 
 from coffer.application.chat import questions
 from coffer.application.chat.questions import AnswerInput
-from tests.unit.chat.test_questions import TWO, YES_NO, AskingAdapter
+from tests.unit.chat.test_questions import TWO, YES_NO, AskingAdapter, NotWaitingAdapter
 
 from .conftest import (
     ChannelEnv,
@@ -252,3 +252,129 @@ async def test_a_tap_on_a_retired_reply_button_does_nothing(env: ChannelEnv) -> 
     assert questions.pending_question_for(conversation_id) is not None
     assert adapter.card_updates == []
     assert await _user_texts(env, conversation_id) == ["go"]
+
+
+_MENTION = "<at id={user_id}/>"
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a group question card mentions the asker and carries a trash button"
+)
+async def test_a_group_card_mentions_the_asker_and_keeps_its_trash_button(
+    env: ChannelEnv,
+) -> None:
+    _asking(env, YES_NO)
+    resource = await env.register_channel()
+    adapter = env.bind(
+        resource,
+        FakeChannelAdapter(
+            supports_buttons=True,
+            supports_card_update=True,
+            withdraw_window_hours=48,
+            withdraw_removes=True,
+            mention_template=_MENTION,
+        ),
+    )
+    await env.pair(resource, "owner", sender_id=_OWNER)
+    await env.processor.on_message(
+        inbound(
+            "tg",
+            "grp-1",
+            "@bot go",
+            chat_kind="group",
+            sender_id=_OWNER,
+            sender_mention_id="m-7",
+            thread_id="t1",
+        )
+    )
+    await wait_until(lambda: bool(adapter.cards))
+
+    [(_chat_id, text, buttons)] = adapter.cards
+    assert text.startswith("<at id=m-7/> ❓ Apply this change to staging?")
+    assert [b.label for b in buttons] == ["Yes", "No", "🗑"]
+    trash = buttons[-1]
+
+    await env.processor.on_callback(
+        tap_event(
+            "tg", "grp-1", buttons[0].value, sender_id=_OWNER, chat_kind="group", thread_id="t1"
+        )
+    )
+    await wait_until(lambda: bool(adapter.card_updates))
+    [(_c, _mid, closed, closed_buttons, _t)] = adapter.card_updates[:1]
+    assert closed.startswith("<at id=m-7/> Apply this change to staging?")
+    assert closed_buttons == [trash]
+
+    await env.processor.on_callback(
+        tap_event("tg", "grp-1", trash.value, sender_id=_OWNER, chat_kind="group", thread_id="t1")
+    )
+    assert adapter.withdrawn
+
+
+def _asking_without_waiting(env: ChannelEnv) -> list[Any]:
+    """The first turn asks the way Codex's code mode does and finishes without
+    waiting; every later turn is the ordinary scripted reply."""
+    built: list[Any] = []
+    ordinary = env.provider.build_adapter
+
+    async def build(conversation_id: str) -> Any:
+        if built:
+            return await ordinary(conversation_id)
+        adapter = NotWaitingAdapter(conversation_id, YES_NO, as_tool="mcp__coffer__coffer__ask")
+        built.append(adapter)
+        return _RecordingAdapter(adapter, env.provider, conversation_id)
+
+    env.provider.build_adapter = build  # type: ignore[method-assign]
+    return built
+
+
+async def _outlived_card(env: ChannelEnv) -> tuple[Any, FakeChannelAdapter, str]:
+    _asking_without_waiting(env)
+    resource = await env.register_channel()
+    adapter = env.bind(
+        resource, FakeChannelAdapter(supports_buttons=True, supports_card_update=True)
+    )
+    await env.pair(resource, "owner", sender_id=_OWNER)
+    await env.processor.on_message(inbound("tg", "owner", "go", sender_id=_OWNER))
+    await wait_until(lambda: any("Asked; waiting on you." in t for t in adapter.texts()))
+    conversation_id = await env.active_conversation(resource)
+    assert conversation_id is not None
+    await wait_until(lambda: questions.token_for(conversation_id) is None)
+    return resource, adapter, conversation_id
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a question outlives a turn that finished without waiting"
+)
+async def test_a_tap_after_the_turn_ended_answers_and_starts_the_next_turn(
+    env: ChannelEnv,
+) -> None:
+    _resource, adapter, conversation_id = await _outlived_card(env)
+
+    # The turn is over, the card still asks: not rewritten, buttons still there.
+    assert adapter.card_updates == []
+    assert questions.needs_you(conversation_id)
+    [(_chat_id, _text, buttons)] = adapter.cards
+
+    await _tap(env, buttons[0].value, platform_message_id="m1")
+    await wait_until(lambda: len(env.user_texts(conversation_id)) == 2)
+
+    [(_c, _mid, closed, closed_buttons, _t)] = adapter.card_updates
+    assert re.fullmatch(rf"Apply this change to staging\?\n\n✓ Answered: Yes · {_TIME}", closed)
+    assert closed_buttons == []
+    follow_up = env.user_texts(conversation_id)[1]
+    assert "your turn ended before I answered" in follow_up
+    assert "❓ Apply this change to staging?\n→ Yes" in follow_up
+    await wait_until(lambda: "Hello world" in adapter.texts())
+
+
+async def test_a_text_reply_after_the_turn_ended_starts_the_next_turn(env: ChannelEnv) -> None:
+    _resource, adapter, conversation_id = await _outlived_card(env)
+
+    await env.processor.on_message(
+        inbound("tg", "owner", "only staging", sender_id=_OWNER, platform_message_id="pm-2")
+    )
+    await wait_until(lambda: len(env.user_texts(conversation_id)) == 2)
+
+    assert "→ only staging" in env.user_texts(conversation_id)[1]
+    assert re.search(rf"✓ Answered: only staging · {_TIME}$", adapter.card_updates[0][2])
+    assert not questions.needs_you(conversation_id)

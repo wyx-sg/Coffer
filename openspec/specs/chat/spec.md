@@ -306,9 +306,11 @@ its state: pending, answered (the answers, which channel they were given in, by
 whom and when) or cancelled. The turn MUST stay running while the question is
 pending. The first answer MUST win: a later answer to a closed question is
 refused with `QUESTION_CLOSED` and changes nothing. Stopping the turn, the turn
-ending or the daemon shutting down MUST cancel a pending question, and the agent
-is told no answer came. The answers MUST go back to the agent as the tool's
-result; nothing is added to the conversation as the owner's message. A question
+failing or the daemon shutting down MUST cancel a pending question, and the agent
+is told no answer came; a turn that finishes on its own leaves it open (see "Keep
+a question open past the turn that asked it"). The answers MUST go back to the
+agent as the tool's result; nothing is added to the conversation as the owner's
+message. A question
 is stored nowhere: it is asked and answered in the channel ([channels](../channels/spec.md)
 "Ask the owner in the chat and take the chat's answer back to the agent") and does not survive a daemon restart.
 
@@ -327,6 +329,29 @@ is stored nowhere: it is asked and answered in the channel ([channels](../channe
 - **GIVEN** a turn waiting on a pending question
 - **WHEN** the owner presses Stop
 - **THEN** the question is cancelled and the agent is told the owner stopped the task
+
+### Requirement: Keep a question open past the turn that asked it
+An agent may end its turn without waiting for its question's answer (Codex's code
+mode runs `coffer__ask` in a background cell and moves on). A question still
+pending when its turn finishes on its own — not stopped, not failed — MUST stay
+pending: the conversation still waits on the owner, and whatever awaited the ask
+is told the turn ended and the answer comes as the next message. Once such a
+question is answered in full, the answer MUST reach the agent as the
+conversation's next message — the questions with their answers — which starts a
+turn like any other. A new question raised in the conversation MUST cancel one an
+earlier turn left open. A question left open is given up on after 24 hours, and
+like every question it does not survive a daemon restart.
+
+#### Scenario: a question still open when its turn finishes stays open
+- **GIVEN** a Codex turn that called `coffer__ask` and finished without waiting
+- **WHEN** the turn ends
+- **THEN** the conversation still needs the owner and the question is still pending
+- **AND** once the owner answers "Yes", the conversation's next turn runs with the question and "Yes"
+
+#### Scenario: a new question supersedes one an ended turn left open
+- **GIVEN** a question an ended turn left open
+- **WHEN** a later turn of the conversation asks a new question
+- **THEN** the old question is cancelled and the new one is pending
 
 ### Requirement: Show which conversations wait on you
 A conversation with a pending question MUST carry `needs_you` in the list, read from the turn's in-memory state, and its
