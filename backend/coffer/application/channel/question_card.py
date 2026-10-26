@@ -31,6 +31,7 @@ __all__ = [
     "card_buttons",
     "closed_body",
     "closed_line",
+    "late_answer_text",
     "local_time",
     "parse_callback",
 ]
@@ -145,3 +146,18 @@ def closed_line(answer: QuestionAnswer | None, *, web: bool, moment: str | None)
 def closed_body(block: QuestionBlock, index: int, line: str) -> str:
     """A rewritten card: what it asked, then how it ended — no buttons, no footer."""
     return "\n\n".join([*_head(block, index), block.questions[index].question, line])
+
+
+def late_answer_text(block: QuestionBlock) -> str:
+    """What the agent is sent when the owner answers a question after the turn
+    that asked it has ended: the questions with their answers, so the next turn
+    goes on from there."""
+    lines = [
+        "You asked me this earlier and your turn ended before I answered. "
+        "Here is my answer; carry on from there."
+    ]
+    if block.context:
+        lines.append(block.context)
+    for spec, answer in zip(block.questions, block.answers, strict=False):
+        lines.append(f"❓ {spec.question}\n→ {answer.display()}")
+    return "\n\n".join(lines)

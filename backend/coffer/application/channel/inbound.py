@@ -247,16 +247,15 @@ class InboundProcessor:
             return
         # A question is waiting on the owner in this chat: the words are the
         # answer, not a message (see "Ask the owner in the chat and take the
-        # answer back to the agent").
-        if (
-            text
-            and not attachments
-            and self._questions is not None
-            and await answer_message(
+        # answer back to the agent") — unless the turn that asked has ended,
+        # when the answer goes on as this message's text.
+        if text and not attachments and self._questions is not None:
+            follow_up = await answer_message(
                 self._questions, self._threads, binding, peer, msg, text, conv_thread
             )
-        ):
-            return
+            if follow_up == "":
+                return
+            text = follow_up or text
         # The thread it landed in and the message it quotes ground the turn
         # (see "Ground a turn in the message it quotes").
         blocks = await self._context.fold(binding, msg, conversation_thread_id=conv_thread)

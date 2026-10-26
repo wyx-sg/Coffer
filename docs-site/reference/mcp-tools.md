@@ -110,7 +110,9 @@ An entry also carries `outputSchema` when the upstream tool declares one, and
 Asks the owner a question in the middle of a task and waits. The turn pauses; the
 question shows on the [Conversations](/guides/chat) page (and as a card in the chat, for a
 conversation a [channel](/guides/channels) drives); the call returns when the owner answers
-in either place, when they stop the task, or after 24 hours. It takes the shape of Claude
+in either place, when they stop the task, when the turn ends without waiting for the call,
+or after 24 hours. A turn that ends without waiting leaves the question open: the owner can
+still answer it, and the answer arrives as the conversation's next message. It takes the shape of Claude
 Code's own `AskUserQuestion`, which Coffer turns into the same question inside a Coffer
 conversation.
 
@@ -153,8 +155,8 @@ The owner can always type their own answer instead of choosing an option.
 ```
 
 `selected` holds the chosen labels and `text` the owner's own words (either may be empty,
-not both). When no answer came (the owner stopped the task, or 24 hours passed) the result
-is `{"answered": false, "message": "…"}`. A malformed ask fails with `isError: true` and a
+not both). When no answer came (the owner stopped the task, the turn ended first, or 24
+hours passed) the result is `{"answered": false, "message": "…"}`. A malformed ask fails with `isError: true` and a
 message saying what to fix.
 
 ## coffer\_\_channel\_read\_thread {#coffer-channel-read-thread}

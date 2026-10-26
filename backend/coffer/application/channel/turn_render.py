@@ -34,7 +34,7 @@ from typing import Any
 
 from coffer.application.channel.held_queue import held_buttons
 from coffer.application.channel.ports import ChannelAdapter
-from coffer.application.channel.question_flow import QuestionChat, forget_conversation
+from coffer.application.channel.question_flow import QuestionChat, settle_conversation
 from coffer.application.channel.reply_rewrite import full_report_button, measure, too_long
 from coffer.application.channel.reply_tracking import ReplyTracker
 from coffer.application.channel.stop_notice import take as take_stop_notice
@@ -190,12 +190,16 @@ class TurnRenderer:
                     await self._question_asked(event)
                 elif isinstance(event, QuestionClosed):
                     await self._questions().closed(event.question)
+        except BaseException:
+            settle_conversation(self.conversation_id, keep=False)
+            raise
         finally:
-            forget_conversation(self.conversation_id)
             ticker.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await ticker
         end = TurnEnd(stop_reason, error, len(tool_ids), self.now() - started, tokens)
+        # A question still open when the turn finished on its own outlives it.
+        settle_conversation(self.conversation_id, keep=end.outcome == "done")
         answer = self._reply.answer()
         if await self._shortened(answer, end):
             return end.outcome
@@ -250,6 +254,8 @@ class TurnRenderer:
             chat_kind=self.chat_kind,
             send=self.send,
             send_card=self.send_card,
+            mention=self._with_mention,
+            new_tracker=self.tracker.fresh if self.tracker is not None else None,
         )
 
     async def _question_asked(self, event: QuestionAsked) -> None:

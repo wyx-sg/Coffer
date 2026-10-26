@@ -12,7 +12,10 @@ asks through ``coffer__ask`` (the gateway calls :meth:`QuestionService.ask`) or
 through Claude Code's ``AskUserQuestion`` (the adapter's ``can_use_tool`` calls
 ``ask_owner``); both end in :func:`raise_question`, which publishes
 ``QuestionAsked`` on the turn and blocks until the question is answered, cancelled
-or 24 hours pass. :func:`answer_question` is the one place an answer is taken —
+or 24 hours pass. A turn that finishes while its question is still open leaves it
+open (``close_turn(keep_open=True)``): the question outlives the turn and its
+answer becomes the conversation's next message (spec chat "Keep a question open
+past the turn that asked it"). :func:`answer_question` is the one place an answer is taken —
 the channels call it — and the first answer wins: it is
 a synchronous check-and-set, so a second one finds the question closed and gets
 ``QuestionClosed``.
@@ -35,10 +38,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import secrets
+import time
 import uuid
-from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass, replace
+from collections.abc import Sequence
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -51,8 +54,15 @@ from coffer.application.chat.question_listeners import (
     notify_progress,
     notify_raised,
 )
-from coffer.application.runtime import correlation
-from coffer.application.turn_ask import TURN_TOKEN_ENV
+from coffer.application.chat.question_turns import (
+    _TURN_BY_CONVERSATION,
+    _TURNS,
+    TurnContext,
+    register_turn,
+    token_for,
+    turn_env,
+    turn_is_live,
+)
 from coffer.domain.chat.errors import QuestionAnswerInvalid, QuestionClosed
 from coffer.domain.chat.events import (
     AgentEvent,
@@ -76,23 +86,10 @@ EXPIRY_SECONDS = 24 * 60 * 60
 MSG_STOPPED = "The owner stopped the task."
 MSG_NO_ANSWER = "The owner did not answer."
 MSG_EXPIRED = "No answer: the owner did not answer within 24 hours."
-
-#: Publishes one event on the turn that asked (the runner fans it out to the bus
-#: and the channel renderer).
-EventSink = Callable[[AgentEvent], Awaitable[None]]
-
-
-@dataclass
-class TurnContext:
-    """What a live turn token names."""
-
-    token: str
-    conversation_id: str
-    turn_id: str
-    on_event: EventSink | None = None
-    #: Told ``True`` when the turn starts waiting on a question and ``False``
-    #: when the last one closes (the runner suspends its idle watchdog).
-    on_waiting: Callable[[bool], None] | None = None
+MSG_TURN_ENDED = (
+    "The turn ended before the owner answered. The question stays open; their "
+    "answer will arrive as the next message."
+)
 
 
 @dataclass
@@ -101,6 +98,9 @@ class _Pending:
     ctx: TurnContext
     closed: asyncio.Future[QuestionBlock]
     message: str = MSG_NO_ANSWER
+    #: The turn that asked has finished; the question waits on without it.
+    outlived: bool = False
+    asked_at: float = field(default_factory=time.monotonic)
 
 
 @dataclass(frozen=True)
@@ -121,8 +121,6 @@ class QuestionOutcome:
     message: str = ""
 
 
-_TURNS: dict[str, TurnContext] = {}
-_TURN_BY_CONVERSATION: dict[str, TurnContext] = {}
 _PENDING: dict[str, _Pending] = {}
 
 
@@ -131,45 +129,30 @@ _PENDING: dict[str, _Pending] = {}
 # ---------------------------------------------------------------------------
 
 
-def register_turn(conversation_id: str) -> TurnContext:
-    """Mint the token of a turn that is starting and register it."""
-    ctx = TurnContext(
-        token=secrets.token_hex(16),
-        conversation_id=conversation_id,
-        turn_id=correlation.new_id(),
-    )
-    _TURNS[ctx.token] = ctx
-    _TURN_BY_CONVERSATION[conversation_id] = ctx
-    return ctx
-
-
-def turn_env(conversation_id: str) -> dict[str, str]:
-    """The environment a turn's agent process gets: its token, when one is live."""
-    token = token_for(conversation_id)
-    return {TURN_TOKEN_ENV: token} if token else {}
-
-
-def token_for(conversation_id: str) -> str | None:
-    """The token of the conversation's live turn, for the adapter's environment."""
-    ctx = _TURN_BY_CONVERSATION.get(conversation_id)
-    return ctx.token if ctx is not None else None
-
-
 def release_turn(ctx: TurnContext) -> None:
     """End the turn's registration and cancel its pending questions, without
-    publishing (the synchronous last resort; :func:`close_turn` publishes)."""
-    for pending in [p for p in _PENDING.values() if p.ctx is ctx]:
+    publishing (the synchronous last resort; :func:`close_turn` publishes). A
+    question that outlived the turn stays."""
+    for pending in [p for p in _PENDING.values() if p.ctx is ctx and not p.outlived]:
         _finish(pending, "cancelled", MSG_STOPPED)
     _TURNS.pop(ctx.token, None)
     if _TURN_BY_CONVERSATION.get(ctx.conversation_id) is ctx:
         del _TURN_BY_CONVERSATION[ctx.conversation_id]
 
 
-async def close_turn(ctx: TurnContext) -> None:
+async def close_turn(ctx: TurnContext, *, keep_open: bool = False) -> None:
     """The turn is ending: cancel its pending questions (publishing each
-    ``QuestionClosed``) and unregister the token."""
+    ``QuestionClosed``) and unregister the token. ``keep_open`` (the turn
+    finished on its own, not stopped or failed): they stay open instead, and
+    whatever still awaits one is told the turn ended."""
     for pending in [p for p in _PENDING.values() if p.ctx is ctx]:
-        await _close(pending, "cancelled", MSG_STOPPED)
+        if keep_open:
+            pending.outlived = True
+            pending.message = MSG_TURN_ENDED
+            if not pending.closed.done():
+                pending.closed.set_result(pending.block)
+        else:
+            await _close(pending, "cancelled", MSG_STOPPED)
     release_turn(ctx)
 
 
@@ -188,8 +171,26 @@ def clear_all() -> None:
 # ---------------------------------------------------------------------------
 
 
+def outlived_turn(question_id: str) -> bool:
+    """Whether the open question ``question_id`` outlived the turn that asked it,
+    so an answer to it has no turn to go back to."""
+    pending = _PENDING.get(question_id)
+    return pending is not None and pending.outlived
+
+
+def _expire_outlived() -> None:
+    """Give up on questions that outlived their turn by more than a day."""
+    now = time.monotonic()
+    for pending in [p for p in _PENDING.values() if p.outlived]:
+        if now - pending.asked_at > EXPIRY_SECONDS:
+            block = _finish(pending, "cancelled", MSG_EXPIRED)
+            if block is not None:
+                notify_closed(pending.ctx.conversation_id, block)
+
+
 def pending_question_for(conversation_id: str) -> QuestionBlock | None:
     """The oldest question the conversation is waiting on, if any."""
+    _expire_outlived()
     for pending in _PENDING.values():
         if pending.ctx.conversation_id == conversation_id:
             return pending.block
@@ -232,11 +233,14 @@ def _finish(pending: _Pending, status: str, message: str) -> QuestionBlock | Non
     return pending.block
 
 
-async def _close(pending: _Pending, status: str, message: str) -> None:
+async def _close(
+    pending: _Pending, status: str, message: str, *, on: TurnContext | None = None
+) -> None:
+    """Close ``pending`` and say so on its turn (``on``: the live turn instead)."""
     block = _finish(pending, status, message)
     if block is None:
         return
-    await _publish(pending.ctx, QuestionClosedEvent(question=block))
+    await _publish(on or pending.ctx, QuestionClosedEvent(question=block))
     notify_closed(pending.ctx.conversation_id, block)
 
 
@@ -251,6 +255,11 @@ async def raise_question(token: str, arguments: dict[str, Any]) -> QuestionOutco
     if ctx is None:
         raise ValueError("this turn is not running any more")
     context, specs = parse_ask_input(arguments)
+    # A new question supersedes one an earlier turn left open: the owner is asked
+    # this one now, and its card is closed on the turn that is running.
+    for old in [p for p in _PENDING.values() if p.outlived]:
+        if old.ctx.conversation_id == ctx.conversation_id:
+            await _close(old, "cancelled", MSG_STOPPED, on=ctx)
     block = QuestionBlock(question_id=uuid.uuid4().hex, questions=specs, context=context)
     pending = _Pending(block=block, ctx=ctx, closed=asyncio.get_running_loop().create_future())
     _PENDING[block.question_id] = pending
@@ -307,6 +316,7 @@ async def answer_question(
     uid; ``by`` names who answered. Raises ``QuestionAnswerInvalid`` for an
     answer that does not fit.
     """
+    _expire_outlived()
     pending = _PENDING.get(question_id)
     if pending is None or pending.ctx.conversation_id != conversation_id:
         raise QuestionClosed(question_id)
@@ -359,11 +369,6 @@ async def cancel_conversation_questions(conversation_id: str) -> None:
         await _close(pending, "cancelled", MSG_STOPPED)
 
 
-def turn_is_live(token: str | None) -> bool:
-    """Whether ``token`` names a turn that is running now."""
-    return token is not None and token in _TURNS
-
-
 __all__ = [
     "EXPIRY_SECONDS",
     "AnswerInput",
@@ -378,6 +383,7 @@ __all__ = [
     "clear_all",
     "close_turn",
     "needs_you",
+    "outlived_turn",
     "pending_question_for",
     "raise_question",
     "register_turn",

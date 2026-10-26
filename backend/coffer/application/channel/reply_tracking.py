@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 
 from coffer.application.channel.ports import ChannelBinding
@@ -87,6 +87,11 @@ class ReplyTracker:
             capabilities=binding.adapter.capabilities,
             send_reply=send_reply,
         )
+
+    def fresh(self) -> ReplyTracker:
+        """A tracker for another reply into the same chat — a question's card,
+        which its own 🗑 withdraws apart from the turn's answer."""
+        return replace(self, reply_id=uuid.uuid4().hex, ids=[], extra=[])
 
     def buttons(self) -> list[ChoiceButton]:
         """The buttons the reply carries, where the transport has buttons: any
