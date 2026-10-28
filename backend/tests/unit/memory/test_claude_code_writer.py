@@ -12,10 +12,12 @@ from coffer.domain.memory.hub import CODEX, TYPE_USER, HubEntry, Origin
 from coffer.domain.memory.sync_plan import CopyRecord, Target
 from coffer.infrastructure.memory.writers.claude_code import (
     GLOBAL_ROOT,
-    RULES_LINE_TEXT,
-    RULES_MAX_BYTES,
     ClaudeCodeMemoryWriter,
     memory_dir,
+)
+from coffer.infrastructure.memory.writers.claude_code_lines import (
+    RULES_LINE_TEXT,
+    RULES_MAX_BYTES,
 )
 
 #: A preference from Codex's summary, and a bullet of one of its task groups.
