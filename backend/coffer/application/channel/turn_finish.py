@@ -1,7 +1,7 @@
 """The end of a turn: the reply delivered, and the outcome it ended with.
 
 Split out of ``turn_render`` (at its size budget). One pass turns what the agent
-wrote into what the chat receives: ``MEDIA:`` sentinels uploaded, the error /
+wrote into what the chat receives: ``MEDIA:`` sentinels uploaded after the reply, the error /
 stop / limit notice appended, the live surface closed (or none to close) and the
 body sent as new messages, and the compact summary of a turn that did not end
 normally.
@@ -16,7 +16,13 @@ from typing import Any, Literal, Protocol
 from coffer.application.channel.ports import ChannelAdapter
 from coffer.application.channel.reply_shape import ReplyFile, shape_reply
 from coffer.application.channel.reply_tracking import ReplyTracker
-from coffer.application.channel.turn_media import deliver_media, send_reply_files
+from coffer.application.channel.turn_media import (
+    MediaFile,
+    attachment_lines,
+    send_media_files,
+    send_reply_files,
+    take_media,
+)
 from coffer.application.channel.turn_status import format_elapsed
 from coffer.application.channel.turn_surface import TurnSurface
 from coffer.domain.channel.envelopes import ChoiceButton, SentMessage
@@ -147,17 +153,11 @@ async def _deliver_reply(
     scaffolding: closing it hands the body back, and the body goes out as new
     messages, so the mention is in the message that creates the reply.
     """
-    media_sent = 0
+    media: tuple[MediaFile, ...] = ()
     files: tuple[ReplyFile, ...] = ()
     if text:
-        text, media_sent = await deliver_media(
-            adapter,
-            chat_id,
-            text,
-            thread_id=thread_id,
-            chat_kind=chat_kind,
-            on_sent=tracker.note_file if tracker is not None else None,
-        )
+        # The agent's files go out after the reply, so the reply leads.
+        text, media = take_media(adapter, text)
         # What this chat cannot show becomes bullets and files (see "Shape a
         # reply for what the chat can show").
         caps = adapter.capabilities
@@ -168,6 +168,11 @@ async def _deliver_reply(
             attach=caps.supports_media,
         )
         text, files = shaped.body, shaped.files
+        if not caps.media_captions and any(f.caption for f in media):
+            # A file message here has no caption: the reply names its files
+            # rather than a text message following each one.
+            listing = attachment_lines(media)
+            text = f"{text}\n\n{listing}" if text else listing
     if end.error is not None:
         # What the agent streamed before failing is still the user's — a stalled
         # or dropped turn often has most of an answer in it.
@@ -180,29 +185,33 @@ async def _deliver_reply(
         body = f"{text}\n\n{notice}" if text else notice
     elif end.stop_reason == "interrupted":
         notice = stop_line or stopped_line(end.duration, tool_count=end.tool_count)
-        if stop_noted and not text:
-            await surface.close("")
-            return
         body = text if stop_noted else f"{text}\n\n{notice}" if text else notice
-    elif not text and media_sent:
-        # The uploaded file(s) are the reply — no placeholder text, but the live
-        # surface still has to be closed.
-        await surface.close("")
-        return
+    elif not text and media:
+        # The uploaded file(s) are the reply — no placeholder text.
+        body = ""
     else:
         body = text or "(the agent returned no text)"
-    mentioned = mention(body)
-    leftover = await surface.close(mentioned)
-    if leftover:
+    if body:
+        leftover = await surface.close(mention(body))
+        if leftover:
+            if tracker is not None:
+                await tracker.send(leftover)
+            else:
+                await send(leftover)
+    else:
+        # The live surface still has to be closed.
+        await surface.close("")
+    on_sent = tracker.note_file if tracker is not None else None
+    failed = await send_media_files(
+        adapter, chat_id, media, thread_id=thread_id, chat_kind=chat_kind, on_sent=on_sent
+    )
+    if failed:
+        names = ", ".join(f"'{f.name}'" for f in failed)
+        note = f"⚠️ Couldn't send {names}."
         if tracker is not None:
-            await tracker.send(leftover)
+            await tracker.send(note)
         else:
-            await send(leftover)
+            await send(note)
     await send_reply_files(
-        adapter,
-        chat_id,
-        files,
-        thread_id=thread_id,
-        chat_kind=chat_kind,
-        on_sent=tracker.note_file if tracker is not None else None,
+        adapter, chat_id, files, thread_id=thread_id, chat_kind=chat_kind, on_sent=on_sent
     )

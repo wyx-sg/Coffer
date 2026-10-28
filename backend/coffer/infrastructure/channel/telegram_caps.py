@@ -44,6 +44,7 @@ def telegram_capabilities(features: FeatureSet) -> ChannelCapabilities:
         supports_card_update=True,  # editMessageText rewrites text + keyboard
         edits_text=True,
         supports_media=True,
+        media_captions=True,  # sendDocument / sendPhoto take a caption
         supports_reactions=True,
         reactions=TELEGRAM_REACTIONS,
         mention_template=TELEGRAM_MENTION_TEMPLATE,

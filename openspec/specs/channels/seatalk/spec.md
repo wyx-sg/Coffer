@@ -356,8 +356,9 @@ a vision agent sees the actual picture and not just a link.
 and the adapter declares `supports_media` true, so an agent's `MEDIA:` sentinel
 returns a file into the same chat **and thread** the turn came from
 ([channels](../spec.md) "Return outbound media into the originating thread"). An
-image is delivered as an `image` message and anything else as a `file` message;
-any caption follows as a threaded text message.
+image is delivered as an `image` message and anything else as a `file` message.
+SeaTalk's file message has no caption field, so the adapter declares
+`media_captions` false and the reply names the file instead.
 
 #### Scenario: SeaTalk outbound media is delivered into the originating thread
 - **GIVEN** a paired SeaTalk channel and a group-thread turn whose reply
@@ -366,8 +367,7 @@ any caption follows as a threaded text message.
 - **THEN** SeaTalk receives the file's bytes inline (an image as an `image`
   message, otherwise a `file` message) in that same group and thread — not the
   group main chat — because `supports_media` is true and `send_media` routes on
-  the turn's chat_kind + thread_id; any caption follows as a threaded text
-  message
+  the turn's chat_kind + thread_id; no caption message follows it
 
 ### Requirement: Identify a thread by its root message
 **A thread's id MUST be its root message's id.** An @mention inside a thread

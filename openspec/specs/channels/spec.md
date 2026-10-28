@@ -781,8 +781,13 @@ The agent MUST send a file back to the user only by an explicit opt-in: a
 line-anchored sentinel `MEDIA:/absolute/path` (optionally
 `MEDIA:/absolute/path | caption`), told to it by the system note of "Tell a
 channel-driven agent it is on a chat channel". On a transport that declares
-`supports_media`, the channel uploads that file (an image extension as an inline
-photo, otherwise a document) and strips the line from the delivered text;
+`supports_media`, the channel strips the line from the delivered text and
+uploads that file after the reply (an image extension as an inline photo,
+otherwise a document). The caption rides on the file where the transport's file
+message carries one (`media_captions`); elsewhere the reply ends with one
+`📎 name — caption` line per file whenever any file has a caption, and no text
+message follows a file. A file that fails to upload is said in a short
+follow-up line;
 ordinary prose — including a legitimate markdown image `![alt](path)` written
 only to reference a file — is not this syntax and is never uploaded, and a
 sentinel whose file is missing, relative, or oversized is left as text. The
@@ -796,6 +801,14 @@ never collides with normal markdown.
 - **THEN** the file is uploaded (an image as a photo, otherwise a document) and the
   sentinel line is removed from the text; ordinary prose — including a markdown
   image `![alt](path)` — is not this syntax and is not uploaded
+
+#### Scenario: files follow the reply, which names them where a file has no caption
+- **GIVEN** a media-capable channel whose file messages carry no caption, and an
+  agent reply with two `MEDIA:` lines, one with `| caption`
+- **WHEN** the turn's reply is delivered
+- **THEN** the reply goes out first, ending with a `📎 name — caption` line for
+  the captioned file and a `📎 name` line for the other
+- **AND** both files are uploaded after it, with no text message of their own
 
 ### Requirement: Transcribe inbound voice only when the user opted in
 An inbound voice message MUST drive a turn as a transcript. The built-in agents

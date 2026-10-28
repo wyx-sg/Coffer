@@ -70,26 +70,16 @@ async def send_outbound_media(
     chat_id: str,
     path: str,
     *,
-    caption: str | None,
     thread_id: str,
     chat_kind: str,
 ) -> str:
-    """Upload one local file, then its caption, through ``send`` (the adapter's
-    ``_send(chat_id, message, thread_id, chat_kind)`` router — so both land in
+    """Upload one local file through ``send`` (the adapter's
+    ``_send(chat_id, message, thread_id, chat_kind)`` router — so it lands in
     the same chat_kind + thread the turn came from — "Return outbound media into the originating
-    thread"). SeaTalk file messages carry no caption field, so a non-empty caption follows as a
-    short threaded text message. Returns the last platform message id."""
+    thread"). SeaTalk file messages carry no caption field; the reply names the
+    file instead (``media_captions`` is false). Returns the platform message id."""
     result = await send(chat_id, build_outbound_media_message(path), thread_id, chat_kind)
-    last = str(result.get("message_id", ""))
-    if caption:
-        follow = await send(
-            chat_id,
-            {"tag": "text", "text": {"format": 1, "content": caption}},
-            thread_id,
-            chat_kind,
-        )
-        last = str(follow.get("message_id", "")) or last
-    return last
+    return str(result.get("message_id", ""))
 
 
 # content-type → file suffix for the saved attachment (best-effort; SeaTalk

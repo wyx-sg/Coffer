@@ -155,7 +155,7 @@ SeaTalk 能附带的一切都会驱动一个轮次：图片、文件和文档、
 - 打开语音转文字时（**设置 › 通用 → 语音转文字**），语音会被转写；否则智能体拿到的是音频文件。
 - 文件保留它的真实文件名。
 
-智能体用一行 `MEDIA:/absolute/path` 把文件发回来。它会以图片或文件消息的形式出现在同一个聊天和线程里，说明文字作为随后的一条消息。见[消息渠道 → 回传文件](/zh/guides/channels#sending-files-back)。
+智能体用一行 `MEDIA:/absolute/path` 把文件发回来。它会在回复之后，以图片或文件消息的形式出现在同一个聊天和线程里。SeaTalk 的文件消息没有说明文字，所以回复末尾会为每个文件加一行 `📎 文件名 — 说明`。见[消息渠道 → 回传文件](/zh/guides/channels#sending-files-back)。
 
 ## 轮换 App Secret {#rotate-the-app-secret}
 

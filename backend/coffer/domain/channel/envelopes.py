@@ -154,6 +154,9 @@ class ChannelCapabilities:
     # message. See "Show a turn's progress on one live surface".
     supports_live_text: bool = False
     supports_media: bool = False  # outbound file/photo upload (send_media)
+    # A file message carries its own caption (Telegram). Without it the reply
+    # names its files and their captions instead (SeaTalk).
+    media_captions: bool = False
     supports_history_fetch: bool = False  # can fetch recent/thread messages for context
     supports_reactions: bool = False  # emoji reaction on a message (set_reaction),
     # used for the progress marks of "Acknowledge receipt and completion by

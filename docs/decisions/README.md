@@ -213,6 +213,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`channel-help-is-a-list-and-cards-carry-only-their-own-actions`](channel-help-is-a-list-and-cards-carry-only-their-own-actions.md) | Channel `/help` Is a List to Read, and a Card Carries Only the Buttons That Act on It |
 | [`held-channel-messages-are-continued-or-discarded`](held-channel-messages-are-continued-or-discarded.md) | Held Channel Messages Are Settled by Continue and Discard |
 | [`a-question-outlives-the-turn-that-asked-it`](a-question-outlives-the-turn-that-asked-it.md) | A Question Outlives the Turn That Asked It, and Its Answer Starts the Next Turn |
+| [`a-reply-names-its-files-and-they-follow-it`](a-reply-names-its-files-and-they-follow-it.md) | A Channel Reply Names Its Files, and the Files Follow It |
 | [`chat-attachment-uploads`](chat-attachment-uploads.md) | The Chat Page Uploads a File First and Sends Its Id, Into a Sibling Media Directory |
 | [`seatalk-websocket-inbound`](seatalk-websocket-inbound.md) | SeaTalk Inbound Is One Outbound WebSocket, Through an Operator-Supplied SDK |
 | [`telegram-long-polling`](telegram-long-polling.md) | Telegram Inbound Is a Long Poll That Commits the Offset After Dispatch |
