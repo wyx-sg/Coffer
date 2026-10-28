@@ -91,7 +91,7 @@ async def test_stopping_is_edited_into_the_result_where_the_platform_can_edit(
     assert not any(t.startswith("⏹ Stopped") for t in adapter.texts())
 
 
-@pytest.mark.acceptance(spec="channels", scenario="/stop with no turn in flight says so")
+@pytest.mark.acceptance(spec="channels", scenario="/stop with no turn in flight does nothing")
 async def test_stop_after_the_reply_is_silent(env: ChannelEnv) -> None:
     # The chat still has its conversation bound, but its turn has finished:
     # there is nothing to stop, and a "Stopping…" would never be resolved.
