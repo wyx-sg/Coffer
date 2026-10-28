@@ -155,7 +155,7 @@ Everything SeaTalk can attach drives a turn: images, files and documents, video,
 - Voice is transcribed when speech to text is on (**Settings › General → Speech to text**); otherwise the agent gets the audio file.
 - A file keeps its real filename.
 
-The agent sends a file back with a `MEDIA:/absolute/path` line. It arrives as an image or file message in the same chat and thread, with any caption as a following message. See [Channels → Sending files back](/guides/channels#sending-files-back).
+The agent sends a file back with a `MEDIA:/absolute/path` line. It arrives as an image or file message in the same chat and thread, right after the reply. A SeaTalk file message has no caption, so the reply ends with a `📎 name — caption` line for each file instead. See [Channels → Sending files back](/guides/channels#sending-files-back).
 
 ## Rotate the app secret
 

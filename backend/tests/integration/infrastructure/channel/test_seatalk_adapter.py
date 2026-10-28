@@ -663,11 +663,9 @@ async def test_send_media_non_image_posts_file_message(
     assert "thread_id" not in body["message"]  # no thread → no thread field
 
 
-async def test_send_media_caption_follows_as_threaded_text(
-    fake_seatalk: FakeSeaTalk, tmp_path: Any
-) -> None:
-    """A caption is sent as a following short text message, threaded the same
-    way (SeaTalk file/image messages carry no caption field)."""
+async def test_send_media_sends_the_file_alone(fake_seatalk: FakeSeaTalk, tmp_path: Any) -> None:
+    """SeaTalk file/image messages carry no caption field, and no text message
+    follows the file: the reply names it instead (``media_captions`` is false)."""
     img = tmp_path / "chart.png"
     img.write_bytes(b"PNGDATA")
     adapter = make_seatalk_adapter(fake_seatalk)
@@ -678,14 +676,9 @@ async def test_send_media_caption_follows_as_threaded_text(
     finally:
         await adapter.stop()
     bodies = [body for body, _ in fake_seatalk.group_chat_calls]
-    assert len(bodies) == 2  # file first, then the caption text
+    assert len(bodies) == 1
     assert bodies[0]["message"]["tag"] == "image"
     assert bodies[0]["message"]["thread_id"] == "t1"
-    assert bodies[1]["message"] == {
-        "tag": "text",
-        "text": {"format": 1, "content": "here it is"},
-        "thread_id": "t1",
-    }
 
 
 async def test_send_text_direct_still_uses_single_chat(fake_seatalk: FakeSeaTalk) -> None:

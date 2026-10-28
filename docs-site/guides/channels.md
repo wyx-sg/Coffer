@@ -307,7 +307,7 @@ The agent sends you a file by writing a line of its own:
 MEDIA:/Users/you/reports/q3-chart.png | Q3 revenue by region
 ```
 
-The line must start with `MEDIA:` followed by an absolute path, optionally with `| caption`. The channel uploads the file into the same chat and thread the turn came from — an image as a photo, anything else as a document — and removes the line from the reply. A path that is missing, relative or over 50 MB is left as text. Ordinary Markdown such as `![chart](chart.png)` is never uploaded. The channel note tells the agent about this syntax, so you can simply ask for the file.
+The line must start with `MEDIA:` followed by an absolute path, optionally with `| caption`. The channel removes the line from the reply and uploads the file right after the reply, into the same chat and thread the turn came from — an image as a photo, anything else as a document. On Telegram the caption rides on the file. On SeaTalk a file message has no caption, so the reply ends with one `📎 name — caption` line per file and the files follow it on their own. If a file fails to upload, a short line says so. A path that is missing, relative or over 50 MB is left as text. Ordinary Markdown such as `![chart](chart.png)` is never uploaded. The channel note tells the agent about this syntax, so you can simply ask for the file.
 
 ## Notifications
 

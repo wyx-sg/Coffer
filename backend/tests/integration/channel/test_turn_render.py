@@ -261,7 +261,8 @@ async def test_direct_progress_line_never_shows_a_raw_command_or_guessed_argumen
 async def test_reply_file_sentinel_uploads_and_is_stripped(tmp_path) -> None:  # type: ignore[no-untyped-def]
     img = tmp_path / "invite.png"
     img.write_bytes(b"PNG-bytes")
-    adapter = FakeChannelAdapter(supports_edit=False)
+    # A transport whose file messages carry a caption (Telegram).
+    adapter = FakeChannelAdapter(supports_edit=False, media_captions=True)
     events = [
         # A MEDIA: sentinel line with an optional `| caption`.
         TextDelta(text=f"here you go\n\nMEDIA:{img} | the invitation"),
@@ -274,6 +275,62 @@ async def test_reply_file_sentinel_uploads_and_is_stripped(tmp_path) -> None:  #
     assert adapter.media == [("owner", str(img), "the invitation", True)]
     # …and the sentinel line was removed from the delivered text.
     assert adapter.sent[0] == ("owner", "here you go")
+
+
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="files follow the reply, which names them where a file has no caption",
+)
+async def test_reply_names_its_files_and_they_follow_it(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    # SeaTalk: a file message has no caption. The reply goes first and lists each
+    # file with its caption; the files follow it bare, not one text per file.
+    users = tmp_path / "users.csv"
+    users.write_text("a,b\n")
+    events_csv = tmp_path / "events.csv"
+    events_csv.write_text("c,d\n")
+    adapter = FakeChannelAdapter(supports_edit=False)
+    uploaded_after: list[int] = []
+    upload = adapter.send_media
+
+    async def send_media(*args, **kwargs):  # type: ignore[no-untyped-def]
+        uploaded_after.append(len(adapter.sent))
+        return await upload(*args, **kwargs)
+
+    adapter.send_media = send_media  # type: ignore[method-assign]
+    events = [
+        TextDelta(text=f"All 412 checked.\n\nMEDIA:{users} | per-user results\nMEDIA:{events_csv}"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events)
+
+    assert adapter.sent == [
+        ("owner", "All 412 checked.\n\n📎 users.csv — per-user results\n📎 events.csv")
+    ]
+    assert adapter.media == [
+        ("owner", str(users), None, False),
+        ("owner", str(events_csv), None, False),
+    ]
+    assert uploaded_after == [1, 1]
+
+
+async def test_a_file_that_fails_to_upload_is_said(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    doc = tmp_path / "report.csv"
+    doc.write_text("x\n")
+    adapter = FakeChannelAdapter(supports_edit=False)
+
+    async def send_media(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise RuntimeError("upload refused")
+
+    adapter.send_media = send_media  # type: ignore[method-assign]
+    events = [
+        TextDelta(text=f"done\n\nMEDIA:{doc}"),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events)
+
+    assert adapter.sent == [("owner", "done"), ("owner", "⚠️ Couldn't send 'report.csv'.")]
 
 
 async def test_reply_file_sentinel_without_caption_uses_filename(tmp_path) -> None:  # type: ignore[no-untyped-def]
@@ -371,7 +428,7 @@ async def test_sentinel_path_with_spaces_is_delivered(tmp_path) -> None:  # type
 
     await _render(adapter, events)
 
-    assert adapter.media == [("owner", str(img), "chart", True)]
+    assert adapter.media == [("owner", str(img), None, True)]
 
 
 @pytest.mark.acceptance(
@@ -412,7 +469,9 @@ async def test_media_returned_in_a_group_thread_is_uploaded_into_that_thread(
     queue.put_nowait(None)
     await renderer.consume(queue)
 
-    assert adapter.media_routed == [("gid-1", str(img), "chart", True, "t1", "group")]
+    assert adapter.media_routed == [("gid-1", str(img), None, True, "t1", "group")]
+    # The caption rode in the reply, which went into the same thread first.
+    assert adapter.sent_routed[0][1:] == ("📎 chart.png — chart", "t1", "group")
 
 
 # ---------------------------------------------------------------------------

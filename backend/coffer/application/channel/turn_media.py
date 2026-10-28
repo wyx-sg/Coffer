@@ -15,6 +15,7 @@ import pathlib
 import re
 import tempfile
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 
 from coffer.application.channel.ports import ChannelAdapter
 from coffer.application.channel.reply_shape import ReplyFile
@@ -72,25 +73,29 @@ def _deliverable(path: str) -> bool:
         return False
 
 
-async def deliver_media(
-    adapter: ChannelAdapter,
-    chat_id: str,
-    text: str,
-    *,
-    thread_id: str = "",
-    chat_kind: str = "direct",
-    on_sent: OnFileSent | None = None,
-) -> tuple[str, int]:
-    """Handle each ``MEDIA:`` sentinel line whose file exists; return the text
-    with the handled lines removed and how many files were uploaded.
+@dataclass(frozen=True)
+class MediaFile:
+    """A file an agent's ``MEDIA:`` line hands the user, with the line's caption."""
 
-    On a media-capable channel the file is uploaded and the sentinel line
-    stripped; on a channel without file support the line is replaced with a plain
-    note so the user never sees a raw local path for a file that was never
-    delivered.
+    path: str
+    caption: str = ""
+
+    @property
+    def name(self) -> str:
+        return pathlib.Path(self.path).name
+
+
+def take_media(adapter: ChannelAdapter, text: str) -> tuple[str, tuple[MediaFile, ...]]:
+    """Take each ``MEDIA:`` sentinel line whose file exists out of ``text``;
+    return the text without those lines and the files to upload after the reply.
+
+    The files are uploaded only once the reply has gone out (``send_media_files``),
+    so the reply leads and its files follow it. On a channel without file
+    support the line is replaced with a plain note instead, so the user never
+    sees a raw local path for a file that was never delivered.
     """
     supports = adapter.capabilities.supports_media
-    sent = 0
+    files: list[MediaFile] = []
     out = text
     for match in _MEDIA_MARKER.finditer(text):
         path = (match.group("path") or "").strip()
@@ -105,12 +110,40 @@ async def deliver_media(
                 1,
             ).strip()
             continue
+        files.append(MediaFile(path=path, caption=caption))
+        out = out.replace(match.group(0), "", 1).strip()
+    return out, tuple(files)
+
+
+def attachment_lines(files: Sequence[MediaFile]) -> str:
+    """``📎 report.csv — what it is``, one line per file: where a file message
+    cannot carry its own caption, the reply names its files instead of a text
+    message following each one."""
+    return "\n".join(f"📎 {f.name} — {f.caption}" if f.caption else f"📎 {f.name}" for f in files)
+
+
+async def send_media_files(
+    adapter: ChannelAdapter,
+    chat_id: str,
+    files: Sequence[MediaFile],
+    *,
+    thread_id: str = "",
+    chat_kind: str = "direct",
+    on_sent: OnFileSent | None = None,
+) -> tuple[MediaFile, ...]:
+    """Upload the files ``take_media`` took, after the reply. A caption rides on
+    the file only where the transport's file messages carry one; elsewhere the
+    reply already named it. Return the files that failed to upload."""
+    caps = adapter.capabilities
+    failed: list[MediaFile] = []
+    for file in files:
         try:
             # sendPhoto caps at 10 MB; a larger image goes as a document.
             as_photo = (
-                _is_image_path(path) and pathlib.Path(path).stat().st_size <= _PHOTO_MAX_BYTES
+                _is_image_path(file.path)
+                and pathlib.Path(file.path).stat().st_size <= _PHOTO_MAX_BYTES
             )
-            if adapter.capabilities.supports_typing:
+            if caps.supports_typing:
                 # An upload of any size shows a busy signal; saying WHAT it is
                 # busy with beats claiming to type while a file goes up.
                 with contextlib.suppress(Exception):
@@ -122,8 +155,8 @@ async def deliver_media(
                     )
             sent_file = await adapter.send_media(
                 chat_id,
-                path,
-                caption=caption or None,
+                file.path,
+                caption=(file.caption or None) if caps.media_captions else None,
                 as_photo=as_photo,
                 thread_id=thread_id,
                 chat_kind=chat_kind,
@@ -131,10 +164,8 @@ async def deliver_media(
             if on_sent is not None:
                 on_sent(sent_file)
         except Exception:
-            continue  # leave the line in place so the intent is still visible
-        sent += 1
-        out = out.replace(match.group(0), "", 1).strip()
-    return out, sent
+            failed.append(file)
+    return tuple(failed)
 
 
 async def send_reply_files(

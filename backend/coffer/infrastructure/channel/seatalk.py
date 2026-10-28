@@ -353,10 +353,12 @@ class SeaTalkAdapter:
         ``send_outbound_media``): an image (by extension) as a SeaTalk ``image``
         message, else a ``file`` message (base64 content), routed through
         ``_send`` into the same chat_kind + thread the turn came from.
-        ``as_photo`` is unused — SeaTalk picks preview-vs-attachment by tag."""
-        del as_photo
+        ``as_photo`` is unused — SeaTalk picks preview-vs-attachment by tag, and
+        ``caption`` too: a SeaTalk file message has none, so the reply names the
+        file instead (``media_captions`` is false)."""
+        del as_photo, caption
         message_id = await send_outbound_media(
-            self._send, chat_id, path, caption=caption, thread_id=thread_id, chat_kind=chat_kind
+            self._send, chat_id, path, thread_id=thread_id, chat_kind=chat_kind
         )
         return SentMessage(message_id=message_id)
 

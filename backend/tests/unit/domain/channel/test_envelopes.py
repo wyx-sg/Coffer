@@ -48,6 +48,7 @@ def test_channel_capabilities_carries_strategy_fields():
     # "Show a turn's progress on one live surface").
     assert caps.supports_live_text is False  # default off; transports opt in
     assert caps.supports_media is False  # default off; media-capable transports opt in
+    assert caps.media_captions is False  # a file message carries no caption unless opted in
     assert caps.supports_reactions is False  # default off; reaction-capable transports opt in
     # SeaTalk can rewrite a delivered interactive card (never a text message).
     assert caps.supports_card_update is False  # default off; transports opt in
@@ -66,6 +67,7 @@ def test_channel_capabilities_carries_strategy_fields():
         "edits_text",
         "supports_live_text",
         "supports_media",
+        "media_captions",
         "supports_history_fetch",
         "supports_reactions",
         "reactions",
