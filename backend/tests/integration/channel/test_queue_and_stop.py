@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from coffer.application.channel.turn_driver import DROPPED_NOTICE, queued_notice
+from coffer.application.channel.turn_driver import DROPPED_NOTICE
 from coffer.application.chat.turn_orchestrator import active_turns
 from coffer.domain.channel.envelopes import InboundStop
 from coffer.domain.chat.events import (
@@ -91,8 +91,8 @@ async def test_stopping_is_edited_into_the_result_where_the_platform_can_edit(
     assert not any(t.startswith("⏹ Stopped") for t in adapter.texts())
 
 
-@pytest.mark.acceptance(spec="channels", scenario="/stop with no turn in flight says so")
-async def test_stop_after_the_reply_says_nothing_is_running(env: ChannelEnv) -> None:
+@pytest.mark.acceptance(spec="channels", scenario="/stop with no turn in flight does nothing")
+async def test_stop_after_the_reply_is_silent(env: ChannelEnv) -> None:
     # The chat still has its conversation bound, but its turn has finished:
     # there is nothing to stop, and a "Stopping…" would never be resolved.
     resource, adapter = await env.paired_channel()
@@ -102,9 +102,11 @@ async def test_stop_after_the_reply_says_nothing_is_running(env: ChannelEnv) -> 
     assert await env.active_conversation(resource) is not None
     await wait_until(lambda: not active_turns())
 
+    before = list(adapter.texts())
+
     await env.processor.on_message(inbound("tg", "owner", "/stop"))
 
-    assert adapter.texts()[-1] == "Nothing is running."
+    assert adapter.texts() == before
     assert "⏹ Stopping…" not in adapter.texts()
 
 
@@ -221,9 +223,8 @@ async def test_eleventh_queued_message_is_dropped_with_the_reason(env: ChannelEn
     queued = [f"q{i}" for i in range(1, 11)]
     for text in queued:  # fill the queue to its bound of 10
         await env.send(inbound("tg", "owner", text))
-    # Each waiting message is told its place in the queue, and none is dropped.
-    notices = [t for t in adapter.texts() if t.startswith("⏳ Queued")]
-    assert notices == [queued_notice() for _ in range(10)]
+    # Waiting messages get no queue notice, and none is dropped.
+    assert not any(t.startswith("⏳ Queued") for t in adapter.texts())
     assert DROPPED_NOTICE not in adapter.texts()
 
     await env.send(inbound("tg", "owner", "overflow"))
@@ -335,12 +336,13 @@ async def test_platform_stop_control_interrupts_like_a_typed_stop(env: ChannelEn
     assert gated.runs == ["long job"]
 
 
-async def test_platform_stop_with_nothing_running_says_so(env: ChannelEnv) -> None:
+async def test_platform_stop_with_nothing_running_is_silent(env: ChannelEnv) -> None:
     _resource, adapter = await env.paired_channel()
+    before = list(adapter.texts())
 
     await env.processor.on_stop(InboundStop(channel=uid_of("tg"), chat_id="owner"))
 
-    assert "Nothing is running." in adapter.texts()
+    assert adapter.texts() == before
 
 
 async def test_platform_stop_from_an_unpaired_chat_is_ignored(env: ChannelEnv) -> None:
@@ -352,14 +354,15 @@ async def test_platform_stop_from_an_unpaired_chat_is_ignored(env: ChannelEnv) -
     assert adapter.sent == []
 
 
-async def test_platform_stop_in_a_thread_answers_in_that_thread(env: ChannelEnv) -> None:
+async def test_platform_stop_in_a_thread_with_nothing_running_is_silent(env: ChannelEnv) -> None:
     _resource, adapter = await env.paired_channel(chat_id="-100group")
+    before = list(adapter.sent_routed)
 
     await env.processor.on_stop(
         InboundStop(channel=uid_of("tg"), chat_id="-100group", thread_id="8", chat_kind="group")
     )
 
-    assert ("-100group", "Nothing is running.", "8", "group") in adapter.sent_routed
+    assert adapter.sent_routed == before
 
 
 async def test_status_while_a_turn_runs_counts_the_waiting_and_offers_stop(

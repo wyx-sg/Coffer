@@ -57,22 +57,15 @@ __all__ = [
     "Session",
     "TurnDriver",
     "TurnPort",
-    "queued_notice",
 ]
 
 _logger = logging.getLogger(__name__)
 
 #: How many messages may wait behind a running turn (see "Answer the conversation
-#: commands from any paired chat"): up to this many are queued and told "Queued (n)";
+#: commands from any paired chat"): up to this many are queued silently;
 #: only one arriving past it is dropped, with the reason. The web composer is not
 #: bounded; a chat's flood is.
 QUEUE_MAX = 10
-
-
-def queued_notice() -> str:
-    """What a message that joined the queue behind a running one is told. The
-    limit is mentioned only when a message is actually dropped over it."""
-    return "⏳ Queued — runs when the current one finishes."
 
 
 #: What a message arriving with the queue already full is told: dropped, and why.
@@ -204,10 +197,10 @@ class TurnDriver:
 
         The turn starts now when the conversation is idle, else waits its turn behind
         the messages already pending — web and channel alike, in arrival order (spec
-        chat "Queue messages sent during a turn"). A message that waits is told its
-        notice ("Queued"); past ``QUEUE_MAX`` pending the message is dropped and the
-        chat told why (see "Answer the conversation commands from any paired chat"): a
-        flood must not pile up forever.
+        chat "Queue messages sent during a turn"). A message that waits is not
+        answered (it runs in turn); past ``QUEUE_MAX`` pending the message is
+        dropped and the chat told why (see "Answer the conversation commands from any
+        paired chat"): a flood must not pile up forever.
         """
 
         async def _say(text: str) -> None:
@@ -248,7 +241,7 @@ class TurnDriver:
             # message, so a conversation still under its placeholder title is
             # named after what the person asked and not after a header every
             # channel turn shares (spec chat "Keep the conversation index without its text").
-            queued = await self._turns.enqueue_message(
+            await self._turns.enqueue_message(
                 conversation_id,
                 item.text,
                 attachments=item.attachments,
@@ -258,8 +251,6 @@ class TurnDriver:
         except CofferError as e:
             await _say(failure_line(str(e)))
             return
-        if queued:
-            await _say(queued_notice())
 
     def _spawn_render(
         self,
