@@ -706,9 +706,9 @@ already shows that it is working), no list of what was checked, no spelled-out
 assumptions or caveats, and something the agent could not do is mentioned only
 when it changes what the reader does next; when it needs something from the
 person, everything asked at once; about 8 lines at most, with a list
-only for three or more parallel items; a full report only as a file, offered
-first ("do you want the full report?") and sent as Markdown when the reader says
-yes or asked for it up front; logs over 30 lines as files, diagrams as PNG
+only for three or more parallel items; a full report only as a Markdown file,
+and only when the reader asks for it — the reply never ends by offering one;
+logs over 30 lines as files, diagrams as PNG
 files, never as source; and short never drops evidence — the key log line,
 error or ID is quoted verbatim.
 
@@ -734,7 +734,8 @@ a Reply Style the Owner Can Rewrite](../../../docs/decisions/channel-prompt-fixe
 #### Scenario: the note asks for the answer's shape
 - **WHEN** a channel turn's note is composed with Coffer's default reply style
 - **THEN** it asks for the answer in one or two plain sentences first, a full
-  report only as a file the reader is asked about first, says only the text
+  report only as a file and only when asked for, never offered at the end of a
+  reply, says only the text
   after the last tool call is sent, and asks for diagrams as PNG files and for
   every question to the person in one message of the reply
 
@@ -3053,8 +3054,8 @@ than 20 lines with text, or more than 1,500 characters, not counting `MEDIA:`
 lines or a `## Details` section the transport collapses — MUST NOT be sent.
 Instead Coffer asks the same conversation, in a follow-up turn of its own, to say
 it again short: only the conclusion and what the reader needs to act on, in at
-most 5 lines and the same language, ending by asking whether they want the full
-report as a file. The follow-up's text opens with `[Coffer]`, never names the
+most 5 lines and the same language, without offering the full report — the
+button below it does that. The follow-up's text opens with `[Coffer]`, never names the
 conversation, and runs through the conversation's ordinary queue; its reply is
 rendered into the same chat and thread, and is never held back again however
 long it is. Cutting the long reply would leave half a message, and Coffer keeps

@@ -120,7 +120,32 @@ owner's message "Send me the full report as a Markdown file."
 - A long answer costs one extra turn; a full report costs one more.
 - The agent's session holds Coffer's `[Coffer]` note between the long answer and
   the short one; the agent is told not to mention it.
-- The button is a card on SeaTalk (as the 🗑 of a group reply already is); a
-  transport without buttons still gets the question in the text.
+- The button is a card on SeaTalk (as the 🗑 of a group reply already is); on a
+  transport without buttons the reader asks for the file in words.
 - The reply style remains the first line of defence; this only catches what it
   missed.
+
+## Addendum (2026-10-28): the button is the only offer
+
+The short version no longer ends by asking whether the reader wants the full
+report, and Coffer's default reply style no longer asks for that question
+either: a full report is sent only when the reader asks for one. Three places
+had said three things — the reply style asked the agent to offer the report,
+the vault skills that write investigation reports said to send it only on
+request, and the short version carried both the question and the button — and
+the agent picked one at random.
+
+- **Offer in the text and the button (before).** Pros: works on a transport
+  without buttons. Cons: the same offer twice under a short reply, and a
+  form-letter line at the end of every report.
+- **Only on request, the button under a too-long reply (chosen).** Pros: one
+  rule everywhere; replies end on their answer, as a person's would; the
+  button still gives a one-tap way to the file where it matters. Cons: a reader
+  who wants the full report of a short reply must ask in words.
+- **Always attach the file.** Pros: no extra turn. Cons: a file under most
+  investigation replies, nearly all unread.
+
+Comparable products: Claude in Slack and Devin answer in the thread and keep
+the long material behind a link or a page the reader opens on demand; neither
+ends a reply by asking whether to send more.
+

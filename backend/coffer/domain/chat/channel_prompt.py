@@ -9,7 +9,7 @@ channel-prompt-fixed-note-and-editable-style).
   a wrong word here breaks a feature (a file never sent, a tool never named).
 - The **reply style** is how a reply should read: like a person texting — the
   answer first, a few lines, no process, nothing repeated back, questions asked
-  all at once, a full report only as a file on request, evidence kept. Coffer
+  all at once, a full report only as a file when asked for, evidence kept. Coffer
   ships a default; the owner may rewrite it per chat kind, and an untouched one
   follows Coffer's default as it changes.
 
@@ -42,11 +42,10 @@ DEFAULT_REPLY_STYLE = (
     "and caveats; mention what you could not do only if it changes what the reader "
     "does next. Need something from them? Ask for all of it at once, then stop. "
     "About 8 lines at most; a list only for three or more "
-    "parallel items. If a full report is needed, give the conclusion and ask "
-    "whether they want it as a file; when they say yes, or asked up front, send it "
-    "as a Markdown file. Send logs over 30 lines as a file, and a diagram as a PNG "
-    "file, never as source. Keep the evidence: quote the key log line, error or ID "
-    "verbatim."
+    "parallel items. Send a full report only when they ask for one, as a Markdown "
+    "file; never end a reply by offering it. Send logs over 30 lines as a file, "
+    "and a diagram as a PNG file, never as source. Keep the evidence: quote the "
+    "key log line, error or ID verbatim."
 )
 
 #: The line that sets the reply style apart from the channel note above it.
