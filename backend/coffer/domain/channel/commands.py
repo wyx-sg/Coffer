@@ -24,7 +24,6 @@ from dataclasses import dataclass
 __all__ = [
     "COMMAND_ROSTER",
     "DM_ONLY_NOTICE",
-    "HIDDEN_ALIASES",
     "ChannelCommand",
     "command_name",
     "help_text",
@@ -127,10 +126,6 @@ COMMAND_ROSTER: tuple[ChannelCommand, ...] = (
 #: chat"). Delivered privately to the sender; the command itself does nothing.
 DM_ONLY_NOTICE = "This command works in a private chat with me. / 此命令请在与我的私聊中使用。"
 
-#: Typed forms that run a roster command but are never listed: ``/start`` is
-#: what Telegram's start button and pairing link send.
-HIDDEN_ALIASES: dict[str, str] = {"start": "help"}
-
 _HEAD = re.compile(r"^/([A-Za-z0-9_]+)$")
 
 
@@ -143,7 +138,6 @@ def command_name(text: str) -> str | None:
     """The roster name ``text`` invokes (``"/Model opus"`` → ``"model"``), or
     ``None`` when its first word is not a reserved command.
 
-    Hidden aliases resolve to what they stand for (``/start`` → ``help``).
     """
     words = text.split()
     if not words:
@@ -152,7 +146,6 @@ def command_name(text: str) -> str | None:
     if match is None:
         return None
     head = match.group(1).lower()
-    head = HIDDEN_ALIASES.get(head, head)
     return head if any(c.name == head for c in COMMAND_ROSTER) else None
 
 
