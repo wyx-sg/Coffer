@@ -41,6 +41,7 @@ export function ChannelReceivingFields({
   const [group, setGroup] = useState<ChannelGroupDraft>(() => ({
     requireMention: settings.require_mention,
     ignoreOtherMentions: settings.ignore_other_mentions,
+    othersCanAsk: settings.others_can_ask,
   }));
   const afterText = useSettingDraft(String(settings.wait_after_text_seconds), parseBurstWait, (v) =>
     save({ wait_after_text_seconds: v }),
@@ -62,6 +63,7 @@ export function ChannelReceivingFields({
           save({
             require_mention: honoursRequireMention(channelType) ? next.requireMention : undefined,
             ignore_other_mentions: next.ignoreOtherMentions,
+            others_can_ask: next.othersCanAsk,
           });
         }}
       />

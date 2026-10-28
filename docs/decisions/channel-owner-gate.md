@@ -197,3 +197,11 @@ Rules a future change must respect:
   `application/channel/inbound_gate.py`,
   `application/channel/agent_routing.py`, `application/channel/wanted.py`,
   `application/channel/kind.py`.
+
+## Addendum (2026-10-28): others may ask, read-only
+
+A group an owner has addressed the bot in now answers other named members too,
+read-only, while the channel's `others_can_ask` setting is on (the default).
+Their turn's origin says they are not an owner, and the agent is told to make no
+change for them; commands and taps stay owner-only. See [Others in a Group May
+Ask the Bot, Read-Only, by Instruction](others-in-a-group-may-ask-read-only.md).

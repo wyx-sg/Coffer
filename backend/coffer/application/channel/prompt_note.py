@@ -116,4 +116,12 @@ def _note(
         renders=caps.render_notes if caps is not None else "",
         collapses_details=caps.collapses_details if caps is not None else False,
         reads_threads=caps is not None and caps.supports_history_fetch,
+        others_can_ask=chat_kind == "group" and _others_can_ask(resource.config),
     )
+
+
+def _others_can_ask(config: Mapping[str, object]) -> bool:
+    try:
+        return bool(parse_channel_config(dict(config)).others_can_ask)
+    except ValueError:  # pydantic's ValidationError is one
+        return False

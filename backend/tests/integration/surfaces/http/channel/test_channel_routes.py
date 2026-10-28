@@ -275,6 +275,7 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
             "default_agent_config": None,
             "require_mention": True,
             "ignore_other_mentions": False,
+            "others_can_ask": True,
             "wait_after_text_seconds": 1.5,
             "wait_after_forward_seconds": 5.0,
             "show_steps": True,

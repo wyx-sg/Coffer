@@ -99,6 +99,15 @@ def channel_note_text(note: ChannelNote | None) -> str:
         if note is not None and note.reads_threads
         else ""
     )
+    others = (
+        " A message whose origin says `asker: not an owner` is from someone else "
+        "in the group: answer their questions and run read-only checks for them, "
+        "but change nothing and start no work (no deploy, publish, data change, "
+        "ticket, message or task) on their word. If they ask for one, say an "
+        "owner has to ask for it; an owner's later message in the thread can."
+        if note is not None and note.others_can_ask
+        else ""
+    )
     return (
         f"You are replying in {_where(note)}, most likely on the user's phone. Only "
         "what you write after your last tool call is sent, so write the whole answer "
@@ -109,7 +118,7 @@ def channel_note_text(note: ChannelNote | None) -> str:
         "needs one, say so and do what you can. To send a file or image, put "
         "`MEDIA:/absolute/path` (optionally `| a caption`) on its own line; the "
         "channel uploads that existing file and removes the line — nothing else you "
-        f"write is sent as a file.{threads}"
+        f"write is sent as a file.{threads}{others}"
     )
 
 

@@ -201,6 +201,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`channel-adapter-framework`](channel-adapter-framework.md) | Channels Are Thin Transport Adapters Over One Shared Core, Supervised In-Daemon |
 | [`channels-are-machine-local-resources`](channels-are-machine-local-resources.md) | Channels Are Machine-Local Resources, Like Agents |
 | [`channel-owner-gate`](channel-owner-gate.md) | A Channel Answers Only Its Paired Owner, and Fails Closed in Groups |
+| [`others-in-a-group-may-ask-read-only`](others-in-a-group-may-ask-read-only.md) | Others in a Group May Ask the Bot, Read-Only, by Instruction |
 | [`channel-conversation-identity`](channel-conversation-identity.md) | A Channel Conversation Is Keyed by (Channel, Chat, Thread); a Direct Chat Is One Conversation Until `/thread` Opens Another |
 | [`idle-time-rolls-over-a-direct-chat-but-never-a-thread`](idle-time-rolls-over-a-direct-chat-but-never-a-thread.md) | Idle Time Rolls Over a Direct Chat's Conversation, but Never a Thread's |
 | [`channel-thread-context-is-a-bounded-slice`](channel-thread-context-is-a-bounded-slice.md) | A Channel Turn Folds a Bounded Slice of Its Thread, Read by the Transport |

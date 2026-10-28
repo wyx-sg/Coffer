@@ -21,7 +21,7 @@ import logging
 from collections.abc import Sequence
 
 from coffer.application.audit_service import AuditService
-from coffer.application.channel.bot_label import bot_handle
+from coffer.application.channel.bot_label import bot_handle, bot_name
 from coffer.application.channel.commands import ChannelCommands
 from coffer.application.channel.ephemeral import safe_send
 from coffer.application.channel.inbound_burst import (
@@ -196,15 +196,18 @@ class InboundProcessor:
         binding = self._bindings.get(msg.channel)
         if binding is None:
             return
+        is_owner = True
         if msg.chat_kind == "group":
-            peer = await group_peer(self._peers, binding, msg)
-            if peer is None:
+            asker = await group_peer(self._peers, binding, msg)
+            if asker is None:
                 return
+            peer, is_owner = asker.peer, asker.is_owner
         else:
-            peer = await self._peers.get_by_chat(binding.resource.uid, msg.chat_id)
-            if peer is None:
+            direct = await self._peers.get_by_chat(binding.resource.uid, msg.chat_id)
+            if direct is None:
                 await self._maybe_pair(binding, msg)
                 return
+            peer = direct
             if not msg.sender_id or peer.sender_id != msg.sender_id:
                 # Right chat, wrong member (or a message whose sender the transport
                 # could not name) — ignore silently, exactly as the group gate does:
@@ -227,6 +230,17 @@ class InboundProcessor:
         # in, and from this message's own files.
         record = next((i.text for i in msg.forwarded_items if not i.media_ref), "")
         title_hint = conversation_title_hint(text or record, attachments)
+        if not is_owner and text.startswith("/"):
+            # Commands steer the owner's conversation (agent, model, stop,
+            # withdraw); someone who may only ask gets one line and no turn.
+            await safe_send(
+                binding,
+                msg.chat_id,
+                f"🚫 Commands are for {bot_name(binding)}\u2019s owners.",
+                thread_id=msg.thread_id,
+                chat_kind=msg.chat_kind,
+            )
+            return
         # A command (or a near miss of one) is decided on the message's OWN text,
         # before any thread history is folded in (see ``inbound_commands``).
         if await route_slash(
@@ -283,6 +297,7 @@ class InboundProcessor:
                     platform=binding.channel_type,
                     channel=binding.resource.name,
                     channel_id=binding.resource.uid,
+                    asker_is_owner=is_owner,
                 ),
                 content=content,
                 item=item,

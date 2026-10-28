@@ -33,7 +33,8 @@ async def test_a_second_person_pairs_and_both_are_served_and_a_stranger_is_not(
     await env.processor.on_message(inbound("tg", "dm-x", "let me in", sender_id="x"))
     assert len(adapter.sent) == before  # a stranger gets nothing
 
-    # A group: either person may address the bot, a stranger is told once.
+    # A group: either person may address the bot; a stranger in a group no
+    # owner brought it into is told once.
     await env.processor.on_message(
         inbound("tg", "grp", "@bot hi", chat_kind="group", sender_id="b", thread_id="t1")
     )
@@ -41,7 +42,7 @@ async def test_a_second_person_pairs_and_both_are_served_and_a_stranger_is_not(
         lambda: any(r[0] == "grp" and r[1] == "Hello world" for r in adapter.sent_routed)
     )
     await env.processor.on_message(
-        inbound("tg", "grp", "@bot hi", chat_kind="group", sender_id="x", thread_id="t2")
+        inbound("tg", "grp-2", "@bot hi", chat_kind="group", sender_id="x", thread_id="t2")
     )
     assert "owners can use it here" in adapter.sent[-1][1]
 

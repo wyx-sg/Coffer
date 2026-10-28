@@ -249,6 +249,8 @@ class ChannelBinding:
     # from the channel config.
     require_mention: bool = True
     ignore_other_mentions: bool = False
+    # "Let others in a group ask the bot", from the channel config.
+    others_can_ask: bool = True
     # Quiet windows of "Take a burst of messages as one turn", from the channel config.
     wait_after_text_seconds: float = 1.5
     wait_after_forward_seconds: float = 5.0

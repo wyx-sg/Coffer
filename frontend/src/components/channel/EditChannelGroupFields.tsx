@@ -1,7 +1,8 @@
 // frontend/src/components/channel/EditChannelGroupFields.tsx
 // The group half of a channel's Settings tab — spec channels "Configure when the
-// bot answers in a group": require-mention and ignore-messages-that-@-someone-
-// else, two plain config bools. Only the switches a platform honours are
+// bot answers in a group" and "Let others in a group ask the bot":
+// require-mention, ignore-messages-that-@-someone-else and others-can-ask,
+// plain config bools. Only the switches a platform honours are
 // shown: SeaTalk delivers a group message to the bot only when it @mentions
 // the bot, so require-mention has nothing to gate there and is Telegram-only.
 import { useId } from "react";
@@ -11,10 +12,11 @@ import { SettingRow } from "@/components/settings/SettingsLayout";
 import { Switch } from "@/components/ui/switch";
 import { honoursRequireMention } from "@/lib/channels/editChannel";
 
-/** The two group-gating switches, as the form holds them. */
+/** The group-gating switches, as the form holds them. */
 export interface ChannelGroupDraft {
   requireMention: boolean;
   ignoreOtherMentions: boolean;
+  othersCanAsk: boolean;
 }
 
 function SwitchRow({
@@ -68,6 +70,12 @@ export function EditChannelGroupFields({
         help={t("channels.edit.groups.ignoreOtherMentionsHint")}
         checked={draft.ignoreOtherMentions}
         onCheckedChange={(ignoreOtherMentions) => onChange({ ignoreOtherMentions })}
+      />
+      <SwitchRow
+        label={t("channels.edit.groups.othersCanAsk")}
+        help={t("channels.edit.groups.othersCanAskHint")}
+        checked={draft.othersCanAsk}
+        onCheckedChange={(othersCanAsk) => onChange({ othersCanAsk })}
       />
     </>
   );

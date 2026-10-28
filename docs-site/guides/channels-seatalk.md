@@ -108,7 +108,7 @@ Before the first attempt there is no connection state: the daemon starts a chann
 
 1. Add the bot to the group.
 2. @mention it. SeaTalk delivers only @mentions to a bot; other group messages never reach Coffer.
-3. The owner's first @mention registers the group as a peer of the channel. A mention from anyone else gets a short "not authorized" reply.
+3. The owner's first @mention registers the group as a peer of the channel. After that, others in the group can @mention the bot and get answers, read-only; with **Let others in the group ask** off, or before the owner's first mention, a mention from anyone else gets a short "not authorized" reply. See [Others in the group](/guides/channels#others-in-the-group).
 
 Where the answer goes:
 
