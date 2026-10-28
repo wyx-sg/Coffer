@@ -16,6 +16,7 @@ import { toneTextClass } from "@/lib/statusColors";
 import { cn } from "@/lib/utils";
 import { CofferUseBadge } from "./CofferUseBadge";
 import { ProviderMark } from "./ProviderMark";
+import { useScrollIntoViewWhenCurrent } from "@/lib/hooks/useScrollIntoViewWhenCurrent";
 
 interface Props {
   provider: Provider;
@@ -40,6 +41,7 @@ function useKindLabel(provider: Provider): string {
 }
 
 export function ProviderListRow({ provider, use, selected, problem }: Props) {
+  const rowRef = useScrollIntoViewWhenCurrent<HTMLAnchorElement>(selected);
   const { t } = useTranslation();
   const offer = useOfferLabel(provider);
   const kind = useKindLabel(provider);
@@ -47,6 +49,7 @@ export function ProviderListRow({ provider, use, selected, problem }: Props) {
   return (
     <Link
       to={`/model-providers/${encodeURIComponent(provider.uid)}`}
+      ref={rowRef}
       aria-current={selected ? "page" : undefined}
       data-testid="provider-row"
       className={cn(

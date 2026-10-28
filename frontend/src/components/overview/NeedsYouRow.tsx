@@ -2,9 +2,10 @@
 //
 // A dot, the item's name (a link to its page) over its kind, the daemon's
 // reason as one sentence, when it started, and exactly one action opening the
-// page — or the tab — where the person deals with it: a missing secret on
-// Secrets, a memory hook changed by hand in the agent's settings on that
-// agent's Hooks tab (lib/overview/attention). Every row carries the hand-off
+// page — or the tab — where the person deals with it, with the item itself
+// selected there: a missing secret open on Secrets, a store folder no skill
+// claims under Skills' Not in your library, a stopped sync round on its review
+// page (lib/overview/attention). Every row carries the hand-off
 // split button, Hand off to <Agent> ▾ with Copy prompt behind it (AgentHandoff; the
 // daemon gives every item a hand-off prompt), and a ⋯ holding Ignore, which
 // takes the item off the Overview, the sidebar badges and the menu-bar count

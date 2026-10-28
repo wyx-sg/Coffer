@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import type { SecretItem } from "./secretListView";
 import { citersOf } from "./secretRows";
+import { useScrollIntoViewWhenCurrent } from "@/lib/hooks/useScrollIntoViewWhenCurrent";
 
 interface Props {
   item: SecretItem;
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export function SecretListRow({ item, to, current, selecting, checked, onCheckedChange }: Props) {
+  const rowRef = useScrollIntoViewWhenCurrent<HTMLAnchorElement>(current);
   const { t } = useTranslation();
   const { row } = item;
   const uses = citersOf(row).length;
@@ -50,6 +52,7 @@ export function SecretListRow({ item, to, current, selecting, checked, onChecked
       </span>
       <Link
         to={to}
+        ref={rowRef}
         aria-current={current ? "page" : undefined}
         className="flex min-h-9 min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1.5 pr-2.5 text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring"
       >

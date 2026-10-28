@@ -297,7 +297,7 @@ You set the value yourself on the [Secrets page](/guides/secrets), and allow `co
 coffer run --secret GITHUB_TOKEN=coffer://secret/<id> -- gh issue list
 ```
 
-The skill's **Requires** tab lists each declared secret below its commands, as **Set** or "secret `<name>` is not set" with **View in Secrets**, which opens that secret's own entry. A secret shows under the name you gave it on the Secrets page (its id only if it has no name). Coffer answers that from the secret store by id alone and never reads the value. A skill with a secret that is not set also says so in its row and in a banner above its tabs, and appears on the Overview's **Needs you** list, whose action opens the Secrets page. As with commands, the skill is delivered whether or not its secrets are set.
+The skill's **Requires** tab lists each declared secret below its commands, as **Set** or "secret `<name>` is not set" with **View in Secrets**, which opens that secret's own entry. A secret shows under the name you gave it on the Secrets page (its id only if it has no name). Coffer answers that from the secret store by id alone and never reads the value. A skill with a secret that is not set also says so in its row and in a banner above its tabs, and appears on the Overview's **Needs you** list, whose action opens that secret on the Secrets page. As with commands, the skill is delivered whether or not its secrets are set.
 
 ## Tools a skill needs
 
