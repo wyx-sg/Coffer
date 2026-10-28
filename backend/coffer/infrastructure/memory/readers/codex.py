@@ -110,6 +110,7 @@ from coffer.domain.agent.codex_memory import (
 from coffer.domain.memory.errors import UnreadableMemory
 from coffer.domain.memory.hub import TYPE_PROJECT, TYPE_USER
 from coffer.domain.memory.reader import RawEntry, SourceFile
+from coffer.infrastructure.memory.codex_identity import PROFILE_ANCHOR
 from coffer.infrastructure.memory.writers.codex import VIA_COFFER
 
 _MEMORY_NAME = "MEMORY.md"
@@ -251,7 +252,7 @@ def _read_summary(text: str) -> tuple[RawEntry, ...]:
                 description=profile,
                 type=TYPE_USER,
                 body=profile,
-                anchor="profile::user-profile",
+                anchor=PROFILE_ANCHOR,
                 project_root="",
             )
         )

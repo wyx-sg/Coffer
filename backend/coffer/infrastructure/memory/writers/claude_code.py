@@ -15,8 +15,11 @@ rules file").
 - **Global memories** are written the same way into a project folder of their
   own, :data:`GLOBAL_ROOT`'s, which no session opens by itself; so
   ``<config_dir>/rules/coffer-memory.md``, a file Coffer owns that Claude Code
-  loads in every session, says where they are and indexes them. The file never
-  holds their text.
+  loads in every session, says where they are. It lists the standing memories
+  (about the person, or how they work) one short line each, and names the task
+  groups the rest were learned in; that folder's ``MEMORY.md`` block lists every
+  memory under its group, uncapped, for a session to read when a topic matches.
+  The rules file never holds their text.
 """
 
 from __future__ import annotations
@@ -36,26 +39,21 @@ from coffer.domain.memory.native_writer import (
 from coffer.domain.memory.sync_plan import STATE_WRITTEN, CopyRecord, Target
 from coffer.infrastructure.memory import native_files
 from coffer.infrastructure.memory.frontmatter import render_frontmatter
+from coffer.infrastructure.memory.writers.claude_code_lines import (
+    BLOCK_CAP,
+    COPY_PREFIX,
+    INDEX_NAME,
+    global_index_lines,
+    index_lines,
+    render_rules,
+)
 
-#: Every copy's file name starts with this.
-COPY_PREFIX = "coffer_"
-INDEX_NAME = "MEMORY.md"
 RULES_NAME = "coffer-memory.md"
 BLOCK_BEGIN = "<!-- coffer:memory-sync:begin -->"
 BLOCK_END = "<!-- coffer:memory-sync:end -->"
-#: Lines the block lists before naming the rest (of Claude Code's 200).
-BLOCK_CAP = 30
 #: The pseudo project global memories are filed under: Claude Code names a
 #: project's memory folder after its root, and no session runs here.
 GLOBAL_ROOT = "/coffer-global"
-#: The rules file's index size bound; the newest memories first.
-RULES_MAX_BYTES = 25 * 1024
-
-RULES_HEADER = (
-    "# Memories from your other agents\n\n"
-    "Coffer writes this file. Do not edit it: change the memory in the agent that "
-    "wrote it, and Coffer brings the change here.\n"
-)
 
 
 def is_coffer_copy(name: str, frontmatter: Mapping[str, Any]) -> bool:
@@ -161,18 +159,21 @@ class ClaudeCodeMemoryWriter:
             by_dir.setdefault(pathlib.Path(path).parent, [])
             if rec.state == STATE_WRITTEN and rec.entry in targets:
                 by_dir[pathlib.Path(path).parent].append((path, rec))
+        global_folder = memory_dir(config_dir, GLOBAL_ROOT)
         for folder, live in sorted(by_dir.items()):
             index = folder / INDEX_NAME
             current = native_files.read(index) or ""
-            lines = _index_lines(live, targets)
+            if folder == global_folder:
+                lines = global_index_lines(live, targets)
+            else:
+                lines = index_lines(live, targets)
             new = replace_block(current, lines)
             if new != current:
                 out.append(AuxWrite(str(index), new or None, backup=bool(current)))
         rules = rules_path(config_dir)
-        folder = memory_dir(config_dir, GLOBAL_ROOT)
-        live_global = by_dir.get(folder, [])
+        live_global = by_dir.get(global_folder, [])
         if live_global:
-            out.append(AuxWrite(str(rules), _render_rules(folder, live_global, targets)))
+            out.append(AuxWrite(str(rules), render_rules(global_folder, live_global, targets)))
         elif rules.exists():
             out.append(AuxWrite(str(rules), None))
         return out
@@ -201,102 +202,6 @@ def _block_folders(config_dir: str) -> list[pathlib.Path]:
     except OSError:
         return []
     return [d for d in dirs if BLOCK_BEGIN in (native_files.read(d / INDEX_NAME) or "")]
-
-
-def _index_lines(
-    live: Sequence[tuple[str, CopyRecord]], targets: Mapping[str, Target]
-) -> list[str]:
-    rows = sorted(
-        ((targets[rec.entry], pathlib.Path(path).name) for path, rec in live),
-        key=lambda row: (row[0].entry.updated_at, row[1]),
-        reverse=True,
-    )
-    lines = []
-    for target, name in rows[:BLOCK_CAP]:
-        entry = target.entry
-        origin = AGENT_LABELS.get(entry.origin.agent, entry.origin.agent)
-        title, gloss = _title_and_rest(entry.title, entry.description, 150)
-        link = f"[{one_line(title, 80)}]({name})" if title else f"[{gloss}]({name})"
-        gloss = gloss.lstrip(_SEPARATORS) if title else ""
-        tail = f" — {gloss}" if gloss else ""
-        lines.append(f"- {link}{tail} (from {origin})")
-    rest = len(rows) - BLOCK_CAP
-    if rest > 0:
-        lines.append(f"- …and {rest} more Coffer memories in this folder ({COPY_PREFIX}*.md)")
-    return lines
-
-
-#: What a title's remainder can open with to follow the title directly.
-_JOINERS = (";", ",", ".", ":", " ")
-#: Separators trimmed off a remainder that is shown on its own.
-_SEPARATORS = " ;,.:->"
-
-
-def _title_and_rest(title: str, description: str, limit: int) -> tuple[str, str]:
-    """``title`` and what ``description`` adds to it, each on one line.
-
-    A Codex memory has no title of its own: its title is the first clause of its
-    text, and its description is the whole text, so printing both repeats that
-    clause. When the description begins with the title, only the remainder is
-    returned (``""`` when there is none); when the title is a cut-off stem of the
-    description, the title is dropped (``""``) and the description returned."""
-    t, d = one_line(title, 10_000), one_line(description, 10_000)
-    if not d or d == t:
-        return t, ""
-    if d.startswith(t):
-        rest = d[len(t) :]
-        if not rest.strip():
-            return t, ""
-        # Keep the separator that joined the clause to the rest ("; ", " -> ").
-        return t, (" " if rest[0] == " " else "") + one_line(rest, limit)
-    for ellipsis in ("...", "…"):
-        stem = t[: -len(ellipsis)].rstrip() if t.endswith(ellipsis) else ""
-        if stem and d.startswith(stem):
-            return "", one_line(d, limit)
-    return t, one_line(d, limit)
-
-
-def _render_rules(
-    folder: pathlib.Path,
-    live: Sequence[tuple[str, CopyRecord]],
-    targets: Mapping[str, Target],
-) -> str:
-    """Where the global memories are, and one line per memory pointing at its
-    file. Every session loads this, so it holds no memory text."""
-    rows = sorted(
-        ((targets[rec.entry], path) for path, rec in live),
-        key=lambda row: (row[0].entry.updated_at, row[1]),
-        reverse=True,
-    )
-    header = (
-        RULES_HEADER
-        + f"\nThe memories below are about the person, or were learned outside any project. "
-        f"Their files are in `{folder}`; read one when its title is relevant to the task.\n\n"
-    )
-    parts = [header]
-    size = len(header.encode("utf-8"))
-    listed = 0
-    for target, path in rows:
-        entry = target.entry
-        title, gloss = _title_and_rest(entry.title, entry.description, 200)
-        if not title:
-            line = f"- {gloss} ({path})\n"
-        else:
-            sep = "" if gloss[:1] in _JOINERS else ": "
-            line = (
-                f"- **{one_line(title, 120)}**"
-                + (f"{sep}{gloss}" if gloss else "")
-                + f" ({path})\n"
-            )
-        if size + len(line.encode("utf-8")) > RULES_MAX_BYTES:
-            break
-        parts.append(line)
-        size += len(line.encode("utf-8"))
-        listed += 1
-    rest = len(rows) - listed
-    if rest > 0:
-        parts.append(f"\n_{rest} older memories are not listed here to keep this file short._\n")
-    return "".join(parts)
 
 
 __all__ = [

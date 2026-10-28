@@ -77,7 +77,8 @@ async def test_a_codex_profile_reaches_every_claude_code_session(
     global_memory = cc / "projects" / "-coffer-global" / "memory"
     assert "Coffer writes this file" in rules
     # The rules file points at the memory; the text is in the global folder.
-    assert str(global_memory / "coffer_prefers-replies-in-chinese.md") in rules
+    assert f"`{global_memory}`" in rules
+    assert "(coffer_prefers-replies-in-chinese.md)" in rules
     assert "Prefers replies in Chinese" in next(global_memory.glob("coffer_*.md")).read_text(
         encoding="utf-8"
     )

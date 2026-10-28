@@ -212,7 +212,7 @@ The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by 
 | `projects/<project>/memory/coffer_<slug>.md` | One copy per memory another agent or machine learned, in Claude Code's memory format plus a `coffer:` block naming its origin. Left alone once Claude Code edits or removes it. | Memory sync, for a project checked out on this machine. See [Memory](/guides/memory#what-coffer-writes-into-each-agent). |
 | `projects/<project>/memory/MEMORY.md` | One line per copy between `<!-- coffer:memory-sync:begin -->` and `<!-- coffer:memory-sync:end -->`, at most 30; the rest of the file is never changed. Created when missing. | Memory sync. |
 | `projects/-coffer-global/memory/` | The `global` memories from your other agents and machines, in the same form as a project's copies (the folder of a project of its own that no session opens). | Memory sync. |
-| `rules/coffer-memory.md` | Where the `global` memories are, and one line per memory (title, description, path), in a file Coffer owns. | Memory sync. |
+| `rules/coffer-memory.md` | Where the `global` memories are, one line per memory about you or how you work, and the names of the tasks the rest were learned in, in a file Coffer owns (at most 8 KB). | Memory sync. |
 | `skills/<name>` | A symlink to `~/.coffer/vault/skills/<name>` (a copy where symlinks are unavailable). | Delivering a skill to the agent. See [Skills](/guides/skills). |
 
 ### Codex

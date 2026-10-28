@@ -66,7 +66,7 @@ back from its own machine.
 
 | Agent | Project memories | Global memories |
 |---|---|---|
-| Claude Code | `<config_dir>/projects/<slug>/memory/coffer_<title-slug>.md`, plus a block in that folder's `MEMORY.md` between `<!-- coffer:memory-sync:begin -->` and `<!-- coffer:memory-sync:end -->` (newest first, at most 30 lines, the rest counted) | a copy per memory in `<config_dir>/projects/-coffer-global/memory/`, and `<config_dir>/rules/coffer-memory.md` listing them (title, description, path; no text), at most 25 KB |
+| Claude Code | `<config_dir>/projects/<slug>/memory/coffer_<title-slug>.md`, plus a block in that folder's `MEMORY.md` between `<!-- coffer:memory-sync:begin -->` and `<!-- coffer:memory-sync:end -->` (newest first, at most 30 lines, the rest counted) | a copy per memory in `<config_dir>/projects/-coffer-global/memory/`, whose `MEMORY.md` block lists them all by Codex task group, uncapped, and `<config_dir>/rules/coffer-memory.md` (no text, at most 8 KB): the folder, one line per standing memory (title and description cut to 120 characters, file name), and the task groups by name and count |
 | Codex | `<config_dir>/memories/extensions/coffer/resources/<id>-<title-slug>.md`, with `instructions.md` beside them | the same folder |
 
 A Claude Code copy carries `coffer: {entry, from, synced_at}` in its
