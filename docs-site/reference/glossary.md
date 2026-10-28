@@ -67,7 +67,7 @@ it. See [Model providers](/guides/providers).
 ### Built-in tool
 
 An MCP tool Coffer itself provides, listed with the reserved `coffer__` prefix alongside
-upstream tools. There are three: `coffer__search_tools`, always listed, and `coffer__ask` and
+upstream tools. There are two: `coffer__search_tools`, always listed, and
 `coffer__channel_read_thread`, listed only inside a turn Coffer runs. See
 [MCP tools](/reference/mcp-tools).
 

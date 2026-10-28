@@ -128,7 +128,7 @@ def test_conversation_get_rename_delete_roundtrip() -> None:
         assert data["title"] == "New conversation"
         assert (data["cwd"], data["session_id"]) == ("/work/app", "sess-1")
         assert data["channel_binding"]["channel_uid"] == "chan-1"
-        assert (data["running"], data["needs_you"]) == (False, False)
+        assert data["running"] is False
         assert "preview" not in data and "archived_at" not in data
 
         # Patch — rename

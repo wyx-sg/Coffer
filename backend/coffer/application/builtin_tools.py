@@ -50,7 +50,7 @@ class BuiltinTool:
     #: feature").
     feature: str | None = None
     #: Offered only inside a turn Coffer runs — to a session whose requests carry
-    #: a live ``X-Coffer-Turn`` token — like ``coffer__ask``. Elsewhere the tool is
+    #: a live ``X-Coffer-Turn`` token. Elsewhere the tool is
     #: neither listed nor found, so a terminal session never sees it.
     turn_scoped: bool = False
 

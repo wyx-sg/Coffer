@@ -18,7 +18,7 @@ from sse_starlette.sse import EventSourceResponse
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.gateway_inflight import RequestCancelled
 from coffer.application.runtime import correlation
-from coffer.application.turn_ask import TURN_HEADER
+from coffer.application.turn_scope import TURN_HEADER
 from coffer.domain.errors import CofferError
 from coffer.domain.mcp.jsonrpc_errors import (
     INTERNAL_ERROR,

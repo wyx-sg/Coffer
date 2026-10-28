@@ -114,6 +114,7 @@ sequenceDiagram
 任务保证：
 
 - **没有为轮次写入任何东西。** 任务只记录智能体报告的会话 id，并在开始和结束时更新对话的 `updated_at`。回复本身只以事件的形式存在，以及存在于智能体自己的会话里。
+- **没有提问对话框。** 智能体需要所有者提供什么时，在回复里问并结束这一轮；所有者的下一条消息开启下一轮。Claude Code 运行时 `AskUserQuestion` 在 `disallowed_tools` 里，因为没有人在它的命令行前回答那个对话框（ADR [ask-in-the-reply-not-in-a-card](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/ask-in-the-reply-not-in-a-card.md)）。
 - **空闲看门狗。** 智能体可能卡住而不死：一个挂起的工具，或一个等着没人会回答的提示的 CLI。如果 `COFFER_TURN_IDLE_TIMEOUT_SECONDS`（默认 `300`；`0` 禁用）内没有事件到达，适配器事件流内部的等待会被取消。这会运行适配器自己的取消路径，中断并终止子进程。轮次随后以 `turn_error` `turn_timeout` 结束。
 - **没有悄无声息的完成。** 如果适配器的流没有 `turn_done` 或 `turn_error` 就结束了，任务会自己发出 `turn_error` `stream_ended`。它不依赖适配器来做这件事，因为在半句话被截断的回复上打一个对勾是撒谎。
 - **恰好一个终结事件。** 终结事件之后才到的取消会在不受进一步取消影响的情况下重新运行定稿，并且不再发出任何东西。
@@ -149,8 +150,6 @@ stateDiagram-v2
 | `tool_result` | `tool_use_id`、`tool_name`、`output`、`error`、`duration_ms`（由轮次运行器补上） | 适配器 |
 | `turn_done` | `prompt_tokens`、`completion_tokens`、`stop_reason` | 适配器，或在打断时由轮次任务发出 |
 | `turn_error` | `code`、`message` | 适配器或轮次任务 |
-| `question_asked` | `question`（待回答的块；多问题提问每答完一题会再发一次） | 问题服务，在智能体通过 `coffer__ask` 或 `AskUserQuestion` 提问时 |
-| `question_closed` | `question`（块当前的样子） | 问题服务，在问题全部答完或被取消时 |
 | `queue_changed` | `pending`（有序文字） | 仅编排器 |
 
 对话总线只在内存里把每个事件扇出到每个订阅者队列，并为晚到的订阅者保留两样东西：
@@ -211,7 +210,7 @@ Codex 适配器通过 `codex app-server` 驱动 Codex：stdio 上的 JSON-RPC 2.
 
 智能体在自己的系统提示词之上收到的附加内容，都在一个地方组合，两个提供方共用，顺序始终如下：
 
-1. 对于由消息渠道驱动的对话，消息渠道的系统提示词，分两部分（ADR [channel-prompt-fixed-note-and-editable-style](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-prompt-fixed-note-and-editable-style.md)）。**渠道说明**写明平台、会话类型和消息渠道，说明那里能渲染哪些 Markdown，只有最后一次工具调用之后的完整答案才会发出，在传输层会折叠时把长内容放在 `## Details` 下，用 `MEDIA:` 行发文件，需要所有者回答时调用 `coffer__ask`；运行中的传输层能读取会话串时，还会写明 `coffer__channel_read_thread`。接着在一行 `Reply style:` 之后是这个对话聊天类型（私聊或群聊）的**回复风格**：消息渠道配置里所有者改写的版本，或者 Coffer 的默认风格（像人发消息一样：先用一两句给出答案，不讲过程、不列顾虑，大约 8 行，完整报告只在先问过之后以文件发送，图表用 PNG 文件，证据原文引用）。两部分都在 `coffer.domain.chat.channel_prompt` 里组合，消息渠道的设置标签页也渲染同一份文字，所以页面上看到的就是智能体收到的。对话层并不为此导入消息渠道类型：消息渠道类型发布一个读取器，返回这段说明所需的信息，由对话的会话串记录、已保存的配置和运行中传输层声明的能力构建。读取器在每个轮次都读取配置，两个适配器每个轮次（无论是否续接）都会发送组合好的上下文，所以修改从下一个轮次起生效。
+1. 对于由消息渠道驱动的对话，消息渠道的系统提示词，分两部分（ADR [channel-prompt-fixed-note-and-editable-style](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-prompt-fixed-note-and-editable-style.md)）。**渠道说明**写明平台、会话类型和消息渠道，说明那里能渲染哪些 Markdown，只有最后一次工具调用之后的完整答案才会发出，在传输层会折叠时把长内容放在 `## Details` 下，用 `MEDIA:` 行发文件，需要所有者回答时在回复里问、所有问题放在一条消息里；运行中的传输层能读取会话串时，还会写明 `coffer__channel_read_thread`。接着在一行 `Reply style:` 之后是这个对话聊天类型（私聊或群聊）的**回复风格**：消息渠道配置里所有者改写的版本，或者 Coffer 的默认风格（像人发消息一样：先用一两句给出答案，不讲过程、不列顾虑，大约 8 行，完整报告只在先问过之后以文件发送，图表用 PNG 文件，证据原文引用）。两部分都在 `coffer.domain.chat.channel_prompt` 里组合，消息渠道的设置标签页也渲染同一份文字，所以页面上看到的就是智能体收到的。对话层并不为此导入消息渠道类型：消息渠道类型发布一个读取器，返回这段说明所需的信息，由对话的会话串记录、已保存的配置和运行中传输层声明的能力构建。读取器在每个轮次都读取配置，两个适配器每个轮次（无论是否续接）都会发送组合好的上下文，所以修改从下一个轮次起生效。
 2. 在每个轮次上，一段模型说明：写明 Coffer 让智能体用的是哪个模型，或者说明正在用智能体自己的默认模型，并附几个备选。智能体看不到 Coffer 的选择，被问到时会自己编一个，所以这段说明写明它优先于智能体自己的猜测。
 
 任何轮次都不带 Coffer 给的记忆。智能体只通过自己的原生记忆获得记忆，[记忆同步](/zh/architecture/memory)会把你其他智能体学到的东西写进这份记忆，无论轮次在这里运行还是在你的终端里运行。
@@ -347,7 +346,7 @@ Coffer 通过智能体本身读取和修改智能体自己的会话，从不解�
 
 ### 一个会话，一个地方 {#one-session-one-place}
 
-在 Web 上，轮次正在运行或在等待提问的行会先打开一个对话框：在消息渠道里回答，或者停止轮次（普通的打断，它也会取消提问），然后打开终端。反过来，消息渠道的轮次在恢复原生会话之前，轮次平台会问有没有守护进程自己进程树之外的进程，在参数里带着这个会话 id。如果有，轮次不会开始，聊天里会被告知该会话在终端里打开着；Codex 自己的「active writer」拒绝也会映射到同样的回复。在智能体自己的列表里选出来打开的会话，参数里没有 id，是看不到的；Codex 的写入锁仍然保护 Codex。
+在 Web 上，轮次正在运行的行会先打开一个对话框：在消息渠道里继续，或者停止轮次（普通的打断），然后打开终端。反过来，消息渠道的轮次在恢复原生会话之前，轮次平台会问有没有守护进程自己进程树之外的进程，在参数里带着这个会话 id。如果有，轮次不会开始，聊天里会被告知该会话在终端里打开着；Codex 自己的「active writer」拒绝也会映射到同样的回复。在智能体自己的列表里选出来打开的会话，参数里没有 id，是看不到的；Codex 的写入锁仍然保护 Codex。
 
 ## 并发规则 {#concurrency-rules}
 

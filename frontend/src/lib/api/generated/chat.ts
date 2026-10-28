@@ -154,11 +154,6 @@ export interface components {
             /** Id */
             id: string;
             /**
-             * Needs You
-             * @default false
-             */
-            needs_you: boolean;
-            /**
              * Running
              * @default false
              */

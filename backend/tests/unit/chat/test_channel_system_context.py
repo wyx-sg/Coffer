@@ -36,7 +36,7 @@ def test_names_the_platform_and_chat_kind_and_keeps_the_evidence() -> None:
     assert text.startswith(
         "You are replying in a SeaTalk group thread (the ops channel), most likely"
     )
-    assert "Do not narrate your steps" in text
+    assert "Don't narrate your steps" in text
     assert "Keep the evidence" in text
     assert "verbatim" in text
     assert "cannot click permission or confirmation dialogs" in text
@@ -63,14 +63,15 @@ def test_the_telegram_note_says_its_rich_markdown_renders() -> None:
 
 
 @pytest.mark.acceptance(spec="channels", scenario="the note asks for the answer's shape")
-def test_asks_for_outcome_first_details_png_and_coffer_ask() -> None:
+def test_asks_for_outcome_first_details_png_and_questions_in_the_reply() -> None:
     text = channel_system_context(_SEATALK_GROUP_THREAD)
 
     assert "Lead with the answer in one or two plain sentences" in text
     assert "ask whether they want it as a file" in text
     assert "only what you write after your last tool call is sent" in text.lower()
     assert "as a PNG file" in text
-    assert "call `coffer__ask`" in text
+    assert "ask in your reply, all questions in one message" in text
+    assert "coffer__ask" not in text
     assert "NEEDS YOU" not in text
     assert "`MEDIA:/absolute/path`" in text
 
@@ -98,7 +99,7 @@ def test_an_unresolvable_channel_keeps_the_guidance() -> None:
 
     assert text.startswith("You are replying in a chat channel")
     assert "Keep the evidence" in text
-    assert "`coffer__ask`" in text
+    assert "ask in your reply" in text
 
 
 @pytest.mark.acceptance(
@@ -140,7 +141,7 @@ def test_a_rewrite_keeps_every_feature_instruction() -> None:
 
     text = channel_system_context(note)
 
-    assert "call `coffer__ask`" in text
+    assert "ask in your reply" in text
     assert "`MEDIA:/absolute/path`" in text
     assert "only what you write after your last tool call is sent" in text.lower().lower()
     assert "cannot click permission or confirmation dialogs" in text

@@ -34,7 +34,6 @@ from typing import Any
 
 from coffer.application.channel.held_queue import held_buttons
 from coffer.application.channel.ports import ChannelAdapter
-from coffer.application.channel.question_flow import QuestionChat, settle_conversation
 from coffer.application.channel.reply_rewrite import full_report_button, measure, too_long
 from coffer.application.channel.reply_tracking import ReplyTracker
 from coffer.application.channel.stop_notice import take as take_stop_notice
@@ -53,8 +52,6 @@ from coffer.application.runtime.supervisor import spawn
 from coffer.domain.channel.envelopes import ChoiceButton
 from coffer.domain.chat.events import (
     MessageEnd,
-    QuestionAsked,
-    QuestionClosed,
     TextDelta,
     ToolCall,
     ToolResult,
@@ -89,9 +86,8 @@ class TurnRenderer:
     chat_id: str
     conversation_id: str
     send: Callable[[str], Awaitable[None]]  # owner-bound safe send
-    # The same, for a message with buttons — a question's card (see "Ask the
-    # owner in the chat and take the answer back to the agent"); None sends the
-    # question as text.
+    # The same, for a message with buttons — the card of the messages a stop
+    # held; None sends its line as text.
     send_card: SendCard | None = None
     now: Callable[[], float] = time.monotonic  # injectable clock (turn duration)
     # Where in the chat this turn's reply belongs: non-empty ``thread_id``
@@ -186,20 +182,11 @@ class TurnRenderer:
                         tokens = (event.prompt_tokens or 0) + (event.completion_tokens or 0)
                 elif isinstance(event, TurnError):
                     error = event
-                elif isinstance(event, QuestionAsked):
-                    await self._question_asked(event)
-                elif isinstance(event, QuestionClosed):
-                    await self._questions().closed(event.question)
-        except BaseException:
-            settle_conversation(self.conversation_id, keep=False)
-            raise
         finally:
             ticker.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await ticker
         end = TurnEnd(stop_reason, error, len(tool_ids), self.now() - started, tokens)
-        # A question still open when the turn finished on its own outlives it.
-        settle_conversation(self.conversation_id, keep=end.outcome == "done")
         answer = self._reply.answer()
         if await self._shortened(answer, end):
             return end.outcome
@@ -245,22 +232,6 @@ class TurnRenderer:
             with contextlib.suppress(Exception):
                 await self._surface.close("")
         return taken
-
-    def _questions(self) -> QuestionChat:
-        return QuestionChat(
-            adapter=self.adapter,
-            conversation_id=self.conversation_id,
-            chat_id=self.chat_id,
-            chat_kind=self.chat_kind,
-            send=self.send,
-            send_card=self.send_card,
-            mention=self._with_mention,
-            new_tracker=self.tracker.fresh if self.tracker is not None else None,
-        )
-
-    async def _question_asked(self, event: QuestionAsked) -> None:
-        """The agent asked the owner and the turn waits: its card goes out."""
-        await self._questions().asked(event.question)
 
     async def _rewrite_stop_notice(self, end: TurnEnd) -> tuple[str | None, bool]:
         """The stopped line a ``/stop`` asked for, and whether it already went

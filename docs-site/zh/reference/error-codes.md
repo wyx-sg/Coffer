@@ -205,8 +205,6 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `UNKNOWN_AGENT` | 400 | 对话所用的智能体没有注册智能体提供方。 | 从 `GET /api/v1/agent-providers` 中选择一个智能体。 |
 | `SESSION_IN_USE` | 409 | 这一轮要恢复的会话正在 Coffer 之外的终端里打开。渠道会把它显示成一条回复；该消息不会重试。 | 在那个终端里继续，或发送 `/thread` 开始一个新对话。 |
 | `AGENT_CONFIG_REJECTED` | 400 | 智能体拒绝了对话的配置，例如未知的模型，或者该类型没有 Coffer 管理的智能体。`details.reason` 是一个简短的标记，如 `model_not_found` 或 `agent_not_managed`。 | 选择该智能体提供的模型，或在「智能体」页面添加该智能体。 |
-| `QUESTION_CLOSED` | 409 | 对智能体所提问题的回答来晚了：该问题已被回答（先到的回答生效）、已取消，或其任务已结束。没有任何改动。 | 刷新对话；卡片会显示已采用的回答。 |
-| `QUESTION_ANSWER_INVALID` | 422 | 回答与问题不符：选了问题没有的选项、单选问题选了多个选项，或根本没有回答。 | 从选项中选择，或输入回答。 |
 | `CHANNEL_NOT_PAIRED` | 409 | 该消息渠道没有可发送的已配对聊天。 | 在消息渠道的页面上配对它。见[消息渠道](/zh/guides/channels)。 |
 | `CHANNEL_PERSON_NOT_FOUND` | 404 | 该消息渠道上没有与所指名字匹配的已配对的人。 | 在消息渠道的页面上列出已配对的人，再用其中一个的 id。 |
 | `CHANNEL_NOT_RUNNING` | 409 | 该消息渠道的适配器没有运行（已禁用或仍在启动）。 | 启用该渠道并等待它连上。 |

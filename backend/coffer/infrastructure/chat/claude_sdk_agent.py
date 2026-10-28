@@ -23,11 +23,8 @@ from typing import Any, Protocol
 from claude_agent_sdk import (
     ClaudeAgentOptions,
     ClaudeSDKClient,
-    PermissionResult,
-    ToolPermissionContext,
 )
 
-from coffer.application.chat.question_agents import AskOwner
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
     STREAM_ENDED,
@@ -40,7 +37,6 @@ from coffer.domain.chat.events import (
 from coffer.infrastructure.chat.adapter_support import ParseState, SessionSink
 from coffer.infrastructure.chat.claude_sdk_attachments import attachments_content
 from coffer.infrastructure.chat.claude_sdk_mapping import ClaudeParseState, map_sdk_message
-from coffer.infrastructure.chat.claude_sdk_questions import permission_for
 from coffer.infrastructure.chat.document_extract import (
     DocumentExtractor,
     extract_document_attachments,
@@ -53,6 +49,9 @@ from coffer.infrastructure.chat.transcribe import (
 )
 
 _logger = logging.getLogger(__name__)
+
+#: Claude Code's multiple-choice dialog, which a Coffer turn turns off.
+ASK_USER_QUESTION = "AskUserQuestion"
 
 
 class ClaudeSdkSession(Protocol):
@@ -140,7 +139,6 @@ class ClaudeSdkAgentAdapter:
         system_context: str | None = None,
         transcriber: Transcriber | None = None,
         document_extractor: DocumentExtractor | None = None,
-        ask_owner: AskOwner | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -151,10 +149,6 @@ class ClaudeSdkAgentAdapter:
         self._system_context = system_context
         self._transcriber = transcriber
         self._document_extractor = document_extractor
-        # Raises a Coffer question for Claude Code's own ``AskUserQuestion`` (spec
-        # chat "Pause a turn on a question for the owner"); ``None`` outside a
-        # turn Coffer registered, leaving the CLI's own handling of the tool.
-        self._ask_owner = ask_owner
         #: The model the turn ran on, as the CLI reported it; filled in while the
         #: turn streams.
         self.model_id: str | None = None
@@ -186,11 +180,6 @@ class ClaudeSdkAgentAdapter:
                 exc_info=True,
             )
 
-    async def _can_use_tool(
-        self, tool_name: str, tool_input: dict[str, Any], _context: ToolPermissionContext
-    ) -> PermissionResult:
-        return await permission_for(self._ask_owner, tool_name, tool_input)
-
     def _build_options(self, *, resume: str | None) -> ClaudeAgentOptions:
         # Run with full permissions — Coffer does not gate individual tool calls;
         # the paired owner driving the conversation is the trust boundary.
@@ -211,8 +200,10 @@ class ClaudeSdkAgentAdapter:
             # bundled CLI over anything on PATH, so that bites only an install
             # whose bundled binary is missing and whose PATH ``claude`` is stale.
             include_partial_messages=True,
-            # Only ever consulted for ``AskUserQuestion`` (see ``_can_use_tool``).
-            can_use_tool=self._can_use_tool if self._ask_owner is not None else None,
+            # Nobody is at the CLI to answer its multiple-choice dialog: the agent
+            # asks in its reply and the answer comes as the next message (spec
+            # chat "Ask the owner in the reply, not in a dialog").
+            disallowed_tools=[ASK_USER_QUESTION],
         )
         if self._env is not None:
             opts.env = self._env

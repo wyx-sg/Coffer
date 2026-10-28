@@ -16,15 +16,15 @@ from typing import TYPE_CHECKING
 
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.agent.service import AgentService
-from coffer.application.chat.question_agents import QuestionService
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.application.chat.turn_runner import DEFAULT_TURN_IDLE_TIMEOUT_SECONDS
+from coffer.application.chat.turn_tokens import TurnLiveness
 from coffer.application.provider.introspection import ModelIntrospectionService
 from coffer.application.provider.targets import connection_for_agent
 from coffer.application.resource_service import ResourceService
-from coffer.application.turn_ask import set_turn_ask
+from coffer.application.turn_scope import set_turn_live
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.chat.channel_note import ChannelNote
@@ -268,9 +268,9 @@ def wire_chat(
     #    kind's ``ModelCatalogPort`` — the one seam that crosses a kind, so
     #    the chat surface never imports the agent kind.
     set_chat_service(chat_svc)
-    # ``coffer__ask``: the gateway offers it to a session whose X-Coffer-Turn token
-    # names a live turn, and serves it through this port.
-    set_turn_ask(QuestionService())
+    # The gateway offers its turn-scoped tools to a session whose X-Coffer-Turn
+    # token names a live turn, and asks through this port.
+    set_turn_live(TurnLiveness())
     set_introspection_service(introspection_svc)
     set_turn_orchestrator(orchestrator)
     set_agent_registry(registry)

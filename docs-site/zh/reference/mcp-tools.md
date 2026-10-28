@@ -15,10 +15,9 @@ schema 和返回结果，Coffer 聚合的上游工具、资源和提示词的命
 | 工具 | 用途 | 何时存在 |
 | --- | --- | --- |
 | [`coffer__search_tools`](#coffer-search-tools) | 按意图对上游工具目录排序。 | 始终存在。 |
-| [`coffer__ask`](#coffer-ask) | 向所有者提问并等待回答。 | 仅在 Coffer 运行的对话轮次内。 |
 | [`coffer__channel_read_thread`](#coffer-channel-read-thread) | 一页一页地读取聊天会话串里较早的消息。 | 仅在 Coffer 运行的对话轮次内。 |
 
-完整列表就这三个。Coffer 的知识、记忆和它自己的记录都没有对应工具：
+完整列表就这两个。没有向所有者提问的工具：智能体在回复里问，所有者的下一条消息就是答案。Coffer 的知识、记忆和它自己的记录都没有对应工具：
 智能体用自己的文件工具修改和读取知识，通过自己的原生记忆获得记忆，用 `coffer` 命令行读记录。见
 [不用工具处理知识、记忆和日志](#memory-and-logs-without-a-tool)。
 
@@ -96,58 +95,11 @@ BM25，依据每个工具的服务器、名称、描述和参数；用中文、�
 }
 ```
 
-## coffer\_\_ask {#coffer-ask}
-
-在任务进行中向所有者提问并等待。这一轮对话暂停；问题显示在[对话](/zh/guides/chat)页面
-（对由[渠道](/zh/guides/channels)驱动的对话，还会作为卡片发到聊天里）；所有者在任一处回答、
-停止任务、这一轮没等调用返回就结束，或过了 24 小时，调用才返回。这一轮没等就结束时，问题保持打开：
-所有者仍可回答，答案会作为对话的下一条消息送达。它的形状与 Claude Code 自己的 `AskUserQuestion` 一致，
-在 Coffer 对话里 Coffer 会把后者变成同样的问题。
-
-它是**按轮次限定**的：Coffer 为每个它运行对话轮次的智能体进程设置一个随机的
-`COFFER_TURN_TOKEN`；shim 把它作为 `X-Coffer-Turn` 头发出，网关只在头里指向一个当前正在运行的轮次的会话中列出
-`coffer__ask`。在终端里启动的智能体永远看不到它，直接调用会得到「coffer__ask 只能在 Coffer 对话内使用」
-（`isError: true`）。因此握手说明和内置服务器页面都不提这个工具。Coffer 写进 Codex `config.toml` 的
-`coffer` 条目会透传该变量（`env_vars`），并允许一次工具调用运行一整天（`tool_timeout_sec = 86400`）。
-
-### 输入 {#input-1}
-
-| 属性 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `context` | string | 否 | 显示在问题上方的 Markdown：摘要、diff、路径。 |
-| `questions` | array | 是 | 一到四个问题。 |
-
-每个问题：
-
-| 属性 | 类型 | 必填 | 说明 |
-| --- | --- | --- | --- |
-| `header` | string | 是 | 简短标签。 |
-| `question` | string | 是 | 问题本身。 |
-| `options` | array | 是 | 两到四个选项，每个 `{label, description?}`。同一问题内标签不重复。 |
-| `multi_select` | boolean | 否 | 允许所有者选多个。默认 `false`。 |
-
-所有者始终可以输入自己的回答，而不选选项。
-
-### 结果 {#result-1}
-
-```json
-{
-  "answered": true,
-  "answers": [
-    { "header": "Apply", "question": "Apply this change to staging?", "selected": ["Yes"], "text": null }
-  ]
-}
-```
-
-`selected` 是选中的标签，`text` 是所有者自己输入的话（二者可以有一个为空，但不会同时为空）。
-没有得到回答时（所有者停止了任务、这一轮先结束了，或过了 24 小时），结果是 `{"answered": false, "message": "…"}`。
-格式不对的提问会以 `isError: true` 失败，并附上要修正的内容。
-
 ## coffer\_\_channel\_read\_thread {#coffer-channel-read-thread}
 
 一页一页地读取一个聊天会话串里的消息，最新的一页在前。[消息渠道](/zh/guides/channels#groups-and-threads)上会话串里的轮次只带上会话串最近的消息（或者只带上自该对话在那里上一轮以来的新消息）；略去较早的消息时，它的上下文末尾有一行说明，写明这个工具和要传入的 `before`。其余参数由智能体从轮次的 `[Message origin]` 块里抄过来。
 
-它只通过本机上运行着的消息渠道读取，只读取该消息渠道已配对的聊天里的会话串（你和机器人的私聊，或你已经 @ 过机器人的群组），从不读取聊天的主历史。返回消息上的图片和文件用机器人的凭据下载，结果里给出它们的本地路径。在没有历史接口的 Telegram 上，调用会失败并说明这一点。它和 `coffer__ask` 一样是**按轮次限定**的：只在 `X-Coffer-Turn` 头指向一个正在运行的轮次的会话中列出并提供，所以在终端里启动的智能体永远看不到它，握手说明也不提它。在能读取会话串的平台上，轮次的渠道提示会告诉智能体这个工具。
+它只通过本机上运行着的消息渠道读取，只读取该消息渠道已配对的聊天里的会话串（你和机器人的私聊，或你已经 @ 过机器人的群组），从不读取聊天的主历史。返回消息上的图片和文件用机器人的凭据下载，结果里给出它们的本地路径。在没有历史接口的 Telegram 上，调用会失败并说明这一点。它是**按轮次限定**的：Coffer 为每个它运行轮次的智能体进程设置一个随机的 `COFFER_TURN_TOKEN`，shim 把它作为 `X-Coffer-Turn` 头发出，这个工具只在头里指向一个正在运行的轮次的会话中列出并提供，所以在终端里启动的智能体永远看不到它，握手说明也不提它。Coffer 写进 Codex `config.toml` 的 `coffer` 条目会透传该变量（`env_vars`），并允许一次工具调用运行一整天（`tool_timeout_sec = 86400`）。在能读取会话串的平台上，轮次的渠道提示会告诉智能体这个工具。
 
 ### 输入 {#input-2}
 

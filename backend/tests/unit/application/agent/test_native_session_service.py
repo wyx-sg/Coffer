@@ -96,7 +96,6 @@ class _Conversations:
         self.link = SessionConversation(
             "conv-1",
             running=True,
-            needs_you=False,
             channel=SessionChannel("chan-1", "SeaTalk", "chat-9", "seatalk"),
         )
 

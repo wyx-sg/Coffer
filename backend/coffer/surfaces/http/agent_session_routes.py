@@ -14,7 +14,7 @@ and ``DELETE`` deletes the session in the agent's own store.
 Nothing here is audited (spec agent-registry "Audit every agent lifecycle
 event"): the listing is read-only, and rename and delete are the agent's own act
 on its own record. A session that a channel conversation points at also carries
-that conversation (``conversation_id``, ``running``, ``needs_you``,
+that conversation (``conversation_id``, ``running``,
 ``channel_binding``); renaming it retitles the conversation and deleting it
 cancels the conversation's turn and removes its index row.
 
@@ -95,8 +95,6 @@ class AgentSessionOut(BaseModel):
     conversation_id: str | None = None
     #: A turn is in flight on the session's conversation right now.
     running: bool = False
-    #: A question the agent asked on the session's conversation waits for the owner.
-    needs_you: bool = False
     #: The conversation's channel binding; null when no conversation points here.
     channel_binding: SessionChannelOut | None = None
 
@@ -174,7 +172,6 @@ def _row(s: NativeSession, conv: SessionConversation | None) -> AgentSessionOut:
         last_activity_at=s.last_activity_at,
         conversation_id=conv.conversation_id if conv is not None else None,
         running=conv.running if conv is not None else False,
-        needs_you=conv.needs_you if conv is not None else False,
         channel_binding=_binding(conv.channel) if conv is not None else None,
     )
 
@@ -190,7 +187,6 @@ def _listed_row(row: ListedSession) -> AgentSessionRowOut:
         last_activity_at=row.last_activity_at,
         conversation_id=conv.conversation_id if conv is not None else None,
         running=conv.running if conv is not None else False,
-        needs_you=conv.needs_you if conv is not None else False,
         channel_binding=_binding(conv.channel) if conv is not None else None,
     )
 

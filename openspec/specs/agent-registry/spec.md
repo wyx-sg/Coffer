@@ -930,7 +930,7 @@ The agent detail page's **Sessions** tab MUST list the agent's native sessions
 ("List an agent's native sessions through the agent") as rows of the same kind the
 Conversations page uses ([chat](../chat/spec.md) "Show every agent's sessions on the Conversations page"), without the
 channel column unless the session is a channel conversation's: title, working directory and last
-activity, with the channel, the Running / Needs you mark and an inline **Stop** when it is. A search
+activity, with the channel, the Running mark and an inline **Stop** when it is. A search
 box over title and working directory filters the list in the server, and the list pages by
 cursor as it is scrolled. The main part of a row's split button **Open in
 <terminal> ▾** MUST open the session in the preferred terminal exactly as

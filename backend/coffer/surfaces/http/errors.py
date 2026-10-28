@@ -179,11 +179,6 @@ _STATUS: dict[str, int] = {
     "CONVERSATION_NOT_FOUND": 404,
     "UNKNOWN_AGENT": 400,
     "AGENT_CONFIG_REJECTED": 400,
-    # a question the agent asked the owner (spec chat "Pause a turn on a question
-    # for the owner"): a second answer to a closed question conflicts with the
-    # first; an answer that does not fit its question is a bad body.
-    "QUESTION_CLOSED": 409,
-    "QUESTION_ANSWER_INVALID": 422,
     # channels (spec channels)
     "CHANNEL_NOT_PAIRED": 409,
     "CHANNEL_PERSON_NOT_FOUND": 404,

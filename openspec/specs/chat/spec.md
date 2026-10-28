@@ -297,73 +297,26 @@ being handed over as a file attachment.
 - **THEN** its text is extracted and folded into the prompt; with no extractor
   available the document is handed over as a file instead.
 
-### Requirement: Pause a turn on a question for the owner
-A question an agent raises in a turn — through `coffer__ask`, or through Claude
-Code's own `AskUserQuestion`, which the Claude Code adapter MUST intercept before
-it runs and turn into the same question — MUST be held in memory as the
-conversation's pending question, with its context, its questions and options, and
-its state: pending, answered (the answers, which channel they were given in, by
-whom and when) or cancelled. The turn MUST stay running while the question is
-pending. The first answer MUST win: a later answer to a closed question is
-refused with `QUESTION_CLOSED` and changes nothing. Stopping the turn, the turn
-failing or the daemon shutting down MUST cancel a pending question, and the agent
-is told no answer came; a turn that finishes on its own leaves it open (see "Keep
-a question open past the turn that asked it"). The answers MUST go back to the
-agent as the tool's result; nothing is added to the conversation as the owner's
-message. A question
-is stored nowhere: it is asked and answered in the channel ([channels](../channels/spec.md)
-"Ask the owner in the chat and take the chat's answer back to the agent") and does not survive a daemon restart.
+### Requirement: Ask the owner in the reply, not in a dialog
+An agent that needs something from the owner before it can go on MUST ask in its
+own reply and end its turn; the owner's answer reaches it as the conversation's
+next message, which starts a turn like any other. Coffer MUST NOT hold a pending
+question or pause a turn waiting on the owner, and MUST NOT give the agent a tool
+that does: Claude Code's `AskUserQuestion` MUST be turned off for every turn
+Coffer runs (no one is at the CLI to answer it), and the gateway offers no
+asking tool. The channel note tells the agent to put every question in that one
+message ([channels](../channels/spec.md) "Tell a channel-driven agent it is on a
+chat channel"); see ADR ask-in-the-reply-not-in-a-card.
 
-#### Scenario: AskUserQuestion waits for the owner and gets the answer
-- **GIVEN** a Claude Code turn in a channel conversation
-- **WHEN** Claude Code calls `AskUserQuestion` with the options "Yes" and "No", and the owner answers "Yes" in the chat
-- **THEN** the conversation's question went from pending to answered "Yes" via that channel
-- **AND** Claude Code receives "Yes" as its answer and carries on, and no user message was added
+#### Scenario: Claude Code runs without AskUserQuestion
+- **GIVEN** a Claude Code turn Coffer runs
+- **WHEN** the turn's options are built
+- **THEN** `AskUserQuestion` is among the disallowed tools
 
-#### Scenario: the second answer to one question is refused
-- **GIVEN** a question answered "Yes" by tapping its card in SeaTalk
-- **WHEN** a later reply "No" is sent for it
-- **THEN** the request is refused with `QUESTION_CLOSED` and the answer stays "Yes"
-
-#### Scenario: stopping a turn cancels its question
-- **GIVEN** a turn waiting on a pending question
-- **WHEN** the owner presses Stop
-- **THEN** the question is cancelled and the agent is told the owner stopped the task
-
-### Requirement: Keep a question open past the turn that asked it
-An agent may end its turn without waiting for its question's answer (Codex's code
-mode runs `coffer__ask` in a background cell and moves on). A question still
-pending when its turn finishes on its own — not stopped, not failed — MUST stay
-pending: the conversation still waits on the owner, and whatever awaited the ask
-is told the turn ended and the answer comes as the next message. Once such a
-question is answered in full, the answer MUST reach the agent as the
-conversation's next message — the questions with their answers — which starts a
-turn like any other. A new question raised in the conversation MUST cancel one an
-earlier turn left open. A question left open is given up on after 24 hours, and
-like every question it does not survive a daemon restart.
-
-#### Scenario: a question still open when its turn finishes stays open
-- **GIVEN** a Codex turn that called `coffer__ask` and finished without waiting
-- **WHEN** the turn ends
-- **THEN** the conversation still needs the owner and the question is still pending
-- **AND** once the owner answers "Yes", the conversation's next turn runs with the question and "Yes"
-
-#### Scenario: a new question supersedes one an ended turn left open
-- **GIVEN** a question an ended turn left open
-- **WHEN** a later turn of the conversation asks a new question
-- **THEN** the old question is cancelled and the new one is pending
-
-### Requirement: Show which conversations wait on you
-A conversation with a pending question MUST carry `needs_you` in the list, read from the turn's in-memory state, and its
-row MUST show the status "Needs you" (warning colour) where a running one shows
-"Running", in its usual place by time — no separate group or filter. The sidebar
-MUST NOT carry a count for it.
-
-#### Scenario: a waiting conversation is marked
-- **GIVEN** two conversations, one waiting on a question
-- **WHEN** the Conversations page renders
-- **THEN** that row shows "Needs you" and the other does not
-- **AND** once the question is answered the status goes away
+#### Scenario: an answer arrives as the next message
+- **GIVEN** a turn whose reply ended with a question to the owner
+- **WHEN** the owner sends "only the read replica"
+- **THEN** a new turn runs with that text as its message, like any other message
 
 ### Requirement: Run Claude Code and Codex as subprocess providers on the type's one agent
 System MUST ship subprocess-backed agent providers for Claude Code and Codex.
@@ -568,8 +521,7 @@ terminal"). The list has a header row naming its columns — **Title**, **Source
 **Directory**, **Last active** — above rows grouped by day (**Today**, **Yesterday**, **Earlier**;
 the group titles carry no counts), newest activity first; a column the list does not show has no
 heading. A row MUST show the title, a
-status word (**Running** with a success-coloured dot while a turn runs; **Needs you** with a
-warning dot while the agent waits for an answer, when the session is a channel conversation's),
+status word (**Running** with a success-coloured dot while a turn runs),
 its **source** (for a channel conversation the platform's logo and name with where in the chat it
 lives — `SeaTalk · DM`, a group by its name when Coffer knows it, a thread or topic rather than the
 chat's main timeline, a parallel thread as `DM · Thread 2`; for any other session **This Mac**), the
@@ -663,11 +615,11 @@ suggestions page, which it does not have.
 - **THEN** the turn stops, its streamed text having reached the chat
 - **AND** the queued message is held rather than auto-run
 
-#### Scenario: running and waiting rows are marked from the daemon's turn state
-- **GIVEN** a conversation whose turn is in flight and another that waits on a question
+#### Scenario: running rows are marked from the daemon's turn state
+- **GIVEN** a conversation whose turn is in flight and another that is idle
 - **WHEN** the list renders
-- **THEN** the first row reads Running with an inline Stop and the second reads Needs you
-- **AND** both flags come from the daemon's in-memory turn state
+- **THEN** the first row reads Running with an inline Stop and the second shows no status
+- **AND** the flag comes from the daemon's in-memory turn state
 
 ### Requirement: Open a conversation in the terminal
 A row of the Conversations page MUST hand its session to the agent's own
@@ -715,28 +667,27 @@ the same behaviour. Pressing the row itself MUST NOT open a terminal or do anyth
 - **THEN** a toast shows the reason and offers Copy command
 
 ### Requirement: Ask before opening a session that is running
-A session whose turn is running, or that is waiting on a question for the owner,
-MUST NOT be opened in a terminal without asking. Opening such a row — from the
-Conversations page or from Agent › Sessions — MUST first open a dialog that says the
-conversation is busy and offers two choices: **Answer in <platform>**, which closes the
-dialog and does nothing else, and **Stop the turn and continue in the terminal**,
-which interrupts the turn exactly as the row's Stop does (the pending question is
-cancelled and the agent is told the owner stopped) and then opens the terminal.
-A session that is neither running nor waiting opens at once.
+A session whose turn is running MUST NOT be opened in a terminal without asking.
+Opening such a row — from the Conversations page or from Agent › Sessions — MUST
+first open a dialog that says the conversation is busy and offers two choices:
+**Continue in <platform>**, which closes the dialog and does nothing else, and
+**Stop the turn and continue in the terminal**, which interrupts the turn exactly
+as the row's Stop does and then opens the terminal. A session that is not
+running opens at once.
 
 #### Scenario: a running conversation asks before it opens
 - **GIVEN** a conversation whose turn is running
 - **WHEN** the user presses its row
-- **THEN** a dialog offers Answer in the channel's platform and Stop the turn and continue in the terminal, and no terminal has opened
+- **THEN** a dialog offers Continue in the channel's platform and Stop the turn and continue in the terminal, and no terminal has opened
 
 #### Scenario: stopping the turn then opens the terminal
-- **GIVEN** the dialog over a conversation waiting on a question
+- **GIVEN** the dialog over a running conversation
 - **WHEN** the user chooses Stop the turn and continue in the terminal
-- **THEN** the turn is interrupted, the question is cancelled, and the terminal opens on the session
+- **THEN** the turn is interrupted and the terminal opens on the session
 
-#### Scenario: answering in the chat leaves the session alone
+#### Scenario: staying in the chat leaves the session alone
 - **GIVEN** the same dialog
-- **WHEN** the user chooses Answer in the chat
+- **WHEN** the user chooses Continue in the chat
 - **THEN** the dialog closes, the turn keeps running and no terminal opens
 
 ### Requirement: Rename and delete a conversation through its agent

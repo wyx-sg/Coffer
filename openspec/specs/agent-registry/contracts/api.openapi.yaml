@@ -2137,10 +2137,6 @@ components:
             type: string
           - type: 'null'
           title: Last Activity At
-        needs_you:
-          default: false
-          title: Needs You
-          type: boolean
         running:
           default: false
           title: Running
@@ -2159,7 +2155,6 @@ components:
       - last_activity_at
       - conversation_id
       - running
-      - needs_you
       - channel_binding
       title: AgentSessionOut
       type: object
@@ -2207,10 +2202,6 @@ components:
             type: string
           - type: 'null'
           title: Last Activity At
-        needs_you:
-          default: false
-          title: Needs You
-          type: boolean
         running:
           default: false
           title: Running
@@ -2231,7 +2222,6 @@ components:
       - last_activity_at
       - conversation_id
       - running
-      - needs_you
       - channel_binding
       - agent_key
       title: AgentSessionRowOut

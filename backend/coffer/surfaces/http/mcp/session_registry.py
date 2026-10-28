@@ -165,7 +165,7 @@ async def reap_idle_sessions(max_idle_seconds: float = _DEFAULT_IDLE_TIMEOUT_S) 
     """
     now = time.monotonic()
     # A session with a request in flight is not idle, however long it has run: a
-    # ``coffer__ask`` waits on the owner for hours.
+    # long tool call is still activity.
     stale = [
         sid
         for sid, last in list(_LAST_ACTIVITY.items())

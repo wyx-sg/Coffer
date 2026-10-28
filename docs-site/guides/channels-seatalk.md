@@ -140,7 +140,7 @@ If the bot is removed from a group or the group is disbanded, that group's sessi
 
 ## Cards
 
-In a direct chat a bare `/model`, `/dir` or `/resume` answers with an interactive card, and `/status` carries **Model** and **Dir** buttons (with **Stop** first while a turn runs, and **Continue** and **Discard** while messages are on hold after `/stop`). `/help` is a plain list, one command per line, with no buttons. After `/stop`, messages that were queued behind the turn are held, and a card with **Continue** and **Discard** follows the reply; `/new` carries **Agent**, **Model** and **Dir** in a direct chat and only **Agent** in a group. A tap on one of those does exactly what typing the command does. A question the agent asks arrives as a card too, with one button per option on its own line (multi-select options toggle a `✓`, and **Submit** sends); a tap or a typed reply is the answer, and the card is rewritten to `✓ Answered: …` afterwards.
+In a direct chat a bare `/model`, `/dir` or `/resume` answers with an interactive card, and `/status` carries **Model** and **Dir** buttons (with **Stop** first while a turn runs, and **Continue** and **Discard** while messages are on hold after `/stop`). `/help` is a plain list, one command per line, with no buttons. After `/stop`, messages that were queued behind the turn are held, and a card with **Continue** and **Discard** follows the reply; `/new` carries **Agent**, **Model** and **Dir** in a direct chat and only **Agent** in a group. A tap on one of those does exactly what typing the command does.
 
 - Buttons are laid out in up to three rows. Short labels share a row; a long one such as "Claude Code" gets its own.
 - A card has at most six buttons; longer lists page with **← Prev** and **Next →**.

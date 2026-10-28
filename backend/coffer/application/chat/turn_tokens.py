@@ -1,22 +1,18 @@
-"""The turns a question can be raised on: each running turn's token, which the
-adapter puts into its agent process's environment as ``COFFER_TURN_TOKEN``.
+"""The turns Coffer is running, by token: each running turn's token, which the
+adapter puts into its agent process's environment as ``COFFER_TURN_TOKEN``. The
+shim forwards it as ``X-Coffer-Turn``, which is how the gateway knows a session
+belongs to a Coffer turn and offers it the turn-scoped built-in tools.
 
-Split out of :mod:`questions` (at its size budget), which re-exports it.
+Process-global and in memory: a turn's token lives exactly as long as the turn.
 """
 
 from __future__ import annotations
 
 import secrets
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from coffer.application.runtime import correlation
-from coffer.application.turn_ask import TURN_TOKEN_ENV
-from coffer.domain.chat.events import AgentEvent
-
-#: Publishes one event on the turn that asked (the runner fans it out to the bus
-#: and the channel renderer).
-EventSink = Callable[[AgentEvent], Awaitable[None]]
+from coffer.application.turn_scope import TURN_TOKEN_ENV
 
 
 @dataclass
@@ -26,10 +22,6 @@ class TurnContext:
     token: str
     conversation_id: str
     turn_id: str
-    on_event: EventSink | None = None
-    #: Told ``True`` when the turn starts waiting on a question and ``False``
-    #: when the last one closes (the runner suspends its idle watchdog).
-    on_waiting: Callable[[bool], None] | None = None
 
 
 _TURNS: dict[str, TurnContext] = {}
@@ -46,6 +38,19 @@ def register_turn(conversation_id: str) -> TurnContext:
     _TURNS[ctx.token] = ctx
     _TURN_BY_CONVERSATION[conversation_id] = ctx
     return ctx
+
+
+def release_turn(ctx: TurnContext) -> None:
+    """The turn is over: its token no longer names a live turn."""
+    _TURNS.pop(ctx.token, None)
+    if _TURN_BY_CONVERSATION.get(ctx.conversation_id) is ctx:
+        del _TURN_BY_CONVERSATION[ctx.conversation_id]
+
+
+def clear_all() -> None:
+    """Forget every turn (test teardown only)."""
+    _TURNS.clear()
+    _TURN_BY_CONVERSATION.clear()
 
 
 def turn_env(conversation_id: str) -> dict[str, str]:
@@ -65,10 +70,19 @@ def turn_is_live(token: str | None) -> bool:
     return token is not None and token in _TURNS
 
 
+class TurnLiveness:
+    """The chat kind's side of :class:`coffer.application.turn_scope.TurnLivePort`."""
+
+    def is_live(self, token: str | None) -> bool:
+        return turn_is_live(token)
+
+
 __all__ = [
-    "EventSink",
     "TurnContext",
+    "TurnLiveness",
+    "clear_all",
     "register_turn",
+    "release_turn",
     "token_for",
     "turn_env",
     "turn_is_live",

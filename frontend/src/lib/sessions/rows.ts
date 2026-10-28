@@ -20,7 +20,6 @@ export interface SessionRowData {
   /** ISO timestamp of the last activity; null when the agent did not say. */
   activityAt: string | null;
   running: boolean;
-  needsYou: boolean;
   channel: SessionChannel | null;
   /** The agent's registry key; set where the list spans agents (Conversations). */
   agentKey: string | null;
@@ -35,7 +34,6 @@ export function sessionRow(s: AgentSession | AgentSessionRow): SessionRowData {
     cwd: s.cwd,
     activityAt: s.last_activity_at ?? s.created_at,
     running: s.running,
-    needsYou: s.needs_you,
     channel: s.channel_binding,
     agentKey: "agent_key" in s ? s.agent_key : null,
   };

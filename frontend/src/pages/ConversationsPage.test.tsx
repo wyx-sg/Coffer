@@ -272,37 +272,18 @@ describe("Conversations list", () => {
     expect(row("Yesterday one")).toHaveTextContent("/work/web");
   });
 
-  acceptance("chat", "a waiting conversation is marked", async () => {
-    listed({ ...today, running: true, needs_you: true }, yesterday);
-    renderPage();
-    await screen.findByText("Today one");
-    // Waiting on the owner outranks Running.
-    expect(row("Today one")).toHaveTextContent("Needs you");
-    expect(row("Today one")).not.toHaveTextContent("Running");
-    expect(row("Yesterday one")).not.toHaveTextContent("Needs you");
-    // Once the question is answered the status goes away.
-    listed({ ...today, running: true, needs_you: false }, yesterday);
-    window.dispatchEvent(new Event("visibilitychange"));
-    await waitFor(() => expect(row("Today one")).not.toHaveTextContent("Needs you"));
-  });
-
   acceptance(
     "chat",
-    "running and waiting rows are marked from the daemon's turn state",
+    "running rows are marked from the daemon's turn state",
     async () => {
-      listed(
-        { ...today, running: true },
-        { ...yesterday, needs_you: true },
-        { ...earlier, running: false },
-      );
+      listed({ ...today, running: true }, yesterday, { ...earlier, running: false });
       renderPage();
       await screen.findByText("Today one");
       expect(row("Today one")).toHaveTextContent("Running");
       expect(
         within(row("Today one")).getByRole("button", { name: "Stop Today one" }),
       ).toBeVisible();
-      expect(row("Yesterday one")).toHaveTextContent("Needs you");
-      expect(row("Earlier one")).not.toHaveTextContent(/Running|Needs you/);
+      expect(row("Earlier one")).not.toHaveTextContent("Running");
       expect(within(row("Earlier one")).queryByRole("button", { name: /^Stop/ })).toBeNull();
     },
   );
@@ -787,14 +768,6 @@ describe("Opening a conversation in the terminal", () => {
       session_id: "abc-123",
       running: true,
     });
-    const waiting = makeSessionRow({
-      conversation_id: "w",
-      title: "Waiting one",
-      cwd: "/work/api",
-      session_id: "def-456",
-      running: true,
-      needs_you: true,
-    });
 
     acceptance("chat", "a running conversation asks before it opens", async () => {
       listed(running);
@@ -803,9 +776,9 @@ describe("Opening a conversation in the terminal", () => {
       fireEvent.click(openButton("Busy one"));
       const dialog = await screen.findByRole("dialog");
       expect(dialog).toHaveTextContent(
-        "This turn is running in SeaTalk. Answer in SeaTalk, or stop this turn and continue in the terminal.",
+        "This turn is running in SeaTalk. Keep using SeaTalk, or stop this turn and continue in the terminal.",
       );
-      expect(within(dialog).getByRole("button", { name: "Answer in SeaTalk" })).toBeVisible();
+      expect(within(dialog).getByRole("button", { name: "Continue in SeaTalk" })).toBeVisible();
       expect(
         within(dialog).getByRole("button", { name: "Stop the turn and continue in the terminal" }),
       ).toBeVisible();
@@ -815,36 +788,35 @@ describe("Opening a conversation in the terminal", () => {
 
     acceptance("chat", "stopping the turn then opens the terminal", async () => {
       chat.interruptTurn.mockResolvedValue(undefined);
-      listed(waiting);
+      listed(running);
       renderPage();
-      await screen.findByText("Waiting one");
-      fireEvent.click(openButton("Waiting one"));
+      await screen.findByText("Busy one");
+      fireEvent.click(openButton("Busy one"));
       const dialog = await screen.findByRole("dialog");
-      expect(dialog).toHaveTextContent("This turn is waiting for your answer in SeaTalk.");
       fireEvent.click(
         within(dialog).getByRole("button", { name: "Stop the turn and continue in the terminal" }),
       );
       // The turn is interrupted exactly as the row's Stop does, then the terminal opens.
       await waitFor(() => expect(openTerminal).toHaveBeenCalledTimes(1));
-      expect(chat.interruptTurn.mock.calls[0][0]).toBe("w");
+      expect(chat.interruptTurn.mock.calls[0][0]).toBe("r");
       expect(chat.interruptTurn.mock.invocationCallOrder[0]).toBeLessThan(
         openTerminal.mock.invocationCallOrder[0],
       );
       expect(openTerminal).toHaveBeenCalledWith({
         agent: "claude_code",
         cwd: "/work/api",
-        resume: "def-456",
+        resume: "abc-123",
         terminal: null,
       });
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     });
 
-    acceptance("chat", "answering in the chat leaves the session alone", async () => {
-      listed(waiting);
+    acceptance("chat", "staying in the chat leaves the session alone", async () => {
+      listed(running);
       renderPage();
-      await screen.findByText("Waiting one");
-      fireEvent.click(openButton("Waiting one"));
-      fireEvent.click(await screen.findByRole("button", { name: "Answer in SeaTalk" }));
+      await screen.findByText("Busy one");
+      fireEvent.click(openButton("Busy one"));
+      fireEvent.click(await screen.findByRole("button", { name: "Continue in SeaTalk" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
       expect(chat.interruptTurn).not.toHaveBeenCalled();
       expect(openTerminal).not.toHaveBeenCalled();

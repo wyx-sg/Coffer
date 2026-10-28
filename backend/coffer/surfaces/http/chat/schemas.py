@@ -76,6 +76,3 @@ class ConversationOut(BaseModel):
     session_id: str | None = None
     #: A turn is in flight right now.
     running: bool = False
-    #: A question the agent asked is waiting for the owner's answer (spec chat
-    #: "Show which conversations wait on you").
-    needs_you: bool = False

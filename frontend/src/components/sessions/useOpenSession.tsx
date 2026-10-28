@@ -97,7 +97,7 @@ export function useOpenSession(agentType?: AgentType): SessionOpener {
   const open = useCallback(
     (row: SessionRowData, terminal?: string) => {
       if (!canOpen(row)) return;
-      if (row.running || row.needsYou) setPending({ row, terminal });
+      if (row.running) setPending({ row, terminal });
       else void start(row, terminal);
     },
     [canOpen, start],
@@ -111,9 +111,7 @@ export function useOpenSession(agentType?: AgentType): SessionOpener {
       open={busy !== null}
       onOpenChange={(next) => !next && setPending(null)}
       title={t("sessions.busy.title")}
-      description={t(busy?.needsYou ? "sessions.busy.waiting" : "sessions.busy.running", {
-        platform,
-      })}
+      description={t("sessions.busy.running", { platform })}
       cancelLabel={t("sessions.busy.answer", { platform })}
       confirmLabel={t("sessions.busy.stop")}
       pendingLabel={t("sessions.busy.stopping")}

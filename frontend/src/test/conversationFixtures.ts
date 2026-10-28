@@ -26,7 +26,6 @@ export function makeSession(overrides: Partial<AgentSession> = {}): AgentSession
     conversation_id: null,
     channel_binding: null,
     running: false,
-    needs_you: false,
     ...overrides,
   };
 }
@@ -43,7 +42,6 @@ export function makeSessionRow(overrides: Partial<AgentSessionRow> = {}): AgentS
     last_activity_at: "2026-01-01T00:00:00Z",
     channel_binding: makeBinding(),
     running: false,
-    needs_you: false,
     ...overrides,
   };
 }

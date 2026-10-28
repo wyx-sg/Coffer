@@ -149,7 +149,7 @@ _TOOL_ITEMS = {
 
 def _tool_name(item: dict[str, Any]) -> str:
     """The name a tool item shows as: ``mcp__<server>__<tool>`` for an MCP tool
-    (Claude Code's spelling, so ``coffer__ask`` is recognised either way), the
+    (Claude Code's spelling, so a tool reads the same from either agent), the
     tool's own name for a dynamic or sub-agent tool, else its item type."""
     item_type = item.get("type")
     if item_type not in _TOOL_ITEMS:

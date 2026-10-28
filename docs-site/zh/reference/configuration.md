@@ -104,7 +104,7 @@ Coffer 从不从自己的环境读取这些变量；它为子进程设置它们�
 | `CODEX_HOME` | Codex 的轮次 | 当已注册智能体的配置目录不是 `~/.codex` 时，让 Codex 指向它。 |
 | `COFFER_GIT_TOKEN`、`COFFER_GIT_USERNAME` | 保险库同步期间的 `git` | 同步远端的令牌及据远端主机推导出的、随之发送的用户名，由 credential helper 在运行时读取，所以令牌永远不会出现在 `argv` 中或磁盘上。 |
 | `COFFER_GIT_PROTOCOL`、`COFFER_GIT_HOST` | 保险库同步期间的 `git` | 同步远端自己的协议和主机。只有当 git 询问的正是这个源时，credential helper 才交出令牌，所以重定向到别的主机永远拿不到它。 |
-| `COFFER_TURN_TOKEN` | Claude Code 和 Codex 的轮次 | 一个标识本轮次的随机令牌。MCP shim 把它作为 `X-Coffer-Turn` 请求头转发，网关据此只在 Coffer 运行的轮次里列出 `coffer__ask` 和 `coffer__channel_read_thread`。 |
+| `COFFER_TURN_TOKEN` | Claude Code 和 Codex 的轮次 | 一个标识本轮次的随机令牌。MCP shim 把它作为 `X-Coffer-Turn` 请求头转发，网关据此只在 Coffer 运行的轮次里列出 `coffer__channel_read_thread`。 |
 | `COFFER_CHANNEL_TURN` | 由渠道驱动的 Claude Code 和 Codex 轮次 | `1`，标明这个智能体进程在回答一个[渠道](/zh/guides/channels)轮次。 |
 | `COFFER_DAEMON_PREDECESSOR_PID` | 守护进程自行重启时启动的接替进程 | 被接替的守护进程的 pid；接替进程等它退出后再绑定端口。 |
 | `PATH`、`HOME` | 开机自启服务 | 安装服务时从你的登录 shell 采集，这样守护进程能找到 `npx`、`uvx` 等上游启动器。 |

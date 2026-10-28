@@ -1,5 +1,5 @@
 """The shim names the Coffer-run turn its agent process belongs to (spec
-mcp-gateway "Let an agent ask the owner a question during a Coffer turn").
+mcp-gateway "Offer turn-scoped tools only inside a Coffer turn").
 
 A turn's agent process has ``COFFER_TURN_TOKEN`` in its environment; the shim
 forwards it as ``X-Coffer-Turn`` on every request to ``/mcp`` — including the
@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from coffer.application.turn_ask import TURN_HEADER, TURN_TOKEN_ENV
+from coffer.application.turn_scope import TURN_HEADER, TURN_TOKEN_ENV
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.surfaces.shim.main import _Bridge
 
@@ -36,7 +36,7 @@ def test_the_environment_names_the_header_and_the_variable() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway", scenario="an agent in a Coffer turn sees and calls coffer__ask"
+    spec="mcp-gateway", scenario="an agent in a Coffer turn carries its turn token"
 )
 def test_the_turn_token_rides_every_request(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(TURN_TOKEN_ENV, "abc123")
@@ -52,7 +52,7 @@ def test_the_turn_token_rides_every_request(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway", scenario="coffer__ask is not offered outside a Coffer turn"
+    spec="mcp-gateway", scenario="a session outside a Coffer turn gets no turn-scoped tools"
 )
 def test_no_turn_token_means_no_header(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(TURN_TOKEN_ENV, raising=False)
