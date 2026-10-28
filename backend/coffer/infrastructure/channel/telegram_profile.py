@@ -86,7 +86,7 @@ def menu_commands(*, group: bool = False, chinese: bool = False) -> list[dict[st
 
     Generated from the same roster the help text is, so the two cannot drift
     apart: every command in a private chat, only ``/new``, ``/stop`` and ``/help``
-    in a group (``/start`` is an alias, never listed).
+    in a group.
     ``chinese`` picks each entry's Chinese line for the ``zh`` menu.
 
     An asker-only command is registered as ephemeral ("Keep non-answer chatter

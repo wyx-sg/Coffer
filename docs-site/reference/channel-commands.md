@@ -22,7 +22,7 @@ The table lists the ten words. How each reads, where it works and the cards it a
 | `/del` | Owner only. Withdraw the bot's reply: quote one of its messages and send `/del` to withdraw that whole reply, or send it bare to withdraw the bot's most recent reply in this chat or thread. |
 | `/help` | List the commands, one per line with what each does (the four group commands in a group). No buttons. |
 
-In a group only `/new`, `/stop`, `/help` and `/del` work; the other six work only in a direct chat (see [Where each command works](#where-each-command-works)). `/start`, which a Telegram start link sends, answers like `/help`. `/new` and `/stop` take effect even while a turn is running. A command first releases any messages still waiting out their pause, so they run before it; `/stop` discards them instead.
+In a group only `/new`, `/stop`, `/help` and `/del` work; the other six work only in a direct chat (see [Where each command works](#where-each-command-works)). `/new` and `/stop` take effect even while a turn is running. A command first releases any messages still waiting out their pause, so they run before it; `/stop` discards them instead.
 
 ## How the commands read
 

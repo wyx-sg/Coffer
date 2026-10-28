@@ -9,7 +9,7 @@ injected ports — no per-processor state.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -156,11 +156,6 @@ def rolls_over_when_idle(thread_id: str, idle_hours: float, idle_for: timedelta)
     return thread_id == "" and idle_hours > 0 and idle_for > timedelta(hours=idle_hours)
 
 
-def idle_notice(idle_hours: float) -> str:
-    """The one line a chat is told when idle time rolled it into a new conversation."""
-    return f"🆕 Started a new conversation after {idle_hours:g} h idle."
-
-
 async def ensure_conversation(
     conversations: ConversationPort,
     threads: ChannelThreadConversationRepoPort,
@@ -170,7 +165,6 @@ async def ensure_conversation(
     *,
     chat_kind: str | None = None,
     idle_hours: float = 0,
-    say: Callable[[str], Awaitable[None]] | None = None,
     now: Callable[[], datetime] = lambda: datetime.now(tz=UTC),
 ) -> str:
     """Return this thread's active conversation, opening a new one when there is
@@ -178,9 +172,8 @@ async def ensure_conversation(
 
     "Nothing usable" is two cases: the conversation was deleted, or the thread
     is a key without a thread that sat idle longer than ``idle_hours`` (see
-    :func:`rolls_over_when_idle`; 0 never rolls over). Only the idle case speaks, through
-    ``say``: the old conversation stays in the list and the owner should know why
-    the agent no longer remembers it.
+    :func:`rolls_over_when_idle`; 0 never rolls over). The idle case is silent: the
+    old conversation stays in the list.
 
     ``chat_kind`` (when the caller knows it) is remembered on the thread and on
     the conversation's history row."""
@@ -195,8 +188,6 @@ async def ensure_conversation(
                 opened = await open_conversation(
                     conversations, threads, binding, peer, thread_id, chat_kind=chat_kind
                 )
-                if say is not None:
-                    await say(idle_notice(idle_hours))
                 return opened
             if chat_kind and row.chat_kind != chat_kind:
                 await threads.note_chat_kind(

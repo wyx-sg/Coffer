@@ -271,7 +271,7 @@ when the platform rate-limits outbound sends, sends back off and retry.
 ### Requirement: Answer the conversation commands from any paired chat
 Ten words are Coffer's commands in a paired chat, and nothing else: `/new`,
 `/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/close`, `/del` and
-`/help` (`/start` is a hidden alias of `/help`). They are split by chat type. In a
+`/help`. They are split by chat type. In a
 **direct chat** all ten work. In a **group** only `/new`, `/stop`, `/del` and
 `/help` work — they
 control the group's own conversation — and `/model`, `/dir`, `/status`,
@@ -1207,9 +1207,8 @@ parallel thread or a Telegram private-chat topic (see "Key conversation identity
 by channel, chat and thread") — is never rolled over by idle time: coming back to
 it continues it, and `/new` there starts over. A parallel thread is closed by
 idle time instead (see "Open parallel conversations beside a direct chat"). The
-old conversation stays where it was, in the conversation list; the chat is told
-in one short line, `🆕 Started a new conversation after 24 h idle.`, before the
-answer. The new conversation opens exactly as `/new` opens one, so the chat's
+old conversation stays where it was, in the conversation list; the chat is not
+told, the answer simply comes from the new conversation. The new conversation opens exactly as `/new` opens one, so the chat's
 sticky agent, model and directory carry over (see "Keep a chat's agent, model
 and directory across its conversations").
 
@@ -1220,7 +1219,7 @@ the channel's status reports it.
 - **GIVEN** a paired chat whose active conversation was last active 25 hours ago, on a channel with the default 24
 - **WHEN** the owner sends a message
 - **THEN** a new conversation becomes the chat's active one and answers the message
-- **AND** the chat is told `Started a new conversation after 24 h idle`
+- **AND** the chat is not told that a new conversation was opened
 - **AND** the old conversation is still in the conversation list
 
 #### Scenario: a chat active within the idle period keeps its conversation
@@ -1241,7 +1240,7 @@ the channel's status reports it.
 #### Scenario: a group that is one conversation rolls over like a direct chat
 - **GIVEN** a group without threads whose conversation was last active 30 hours ago, on a channel with the default 24
 - **WHEN** the owner messages the bot in the group
-- **THEN** a new conversation becomes the group's active one and the group is told `Started a new conversation after 24 h idle`
+- **THEN** a new conversation becomes the group's active one and the group is not told
 
 #### Scenario: the idle period comes from the channel's settings
 - **WHEN** a channel config omits `new_conversation_after_idle_hours`, sets it to 0, or sets it below 0 or above 8760

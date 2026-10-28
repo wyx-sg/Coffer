@@ -71,7 +71,7 @@ async def test_help_lists_one_command_per_line_with_no_buttons(env: ChannelEnv) 
 async def test_help_without_buttons_is_the_roster_as_text(env: ChannelEnv) -> None:
     _resource, adapter = await env.paired_channel()
 
-    await env.processor.on_message(inbound("tg", "owner", "/start"))
+    await env.processor.on_message(inbound("tg", "owner", "/help"))
 
     assert adapter.texts() == [help_text()]
 

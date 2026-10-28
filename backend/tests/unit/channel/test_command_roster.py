@@ -67,8 +67,8 @@ def test_names_returns_typed_forms() -> None:
     assert names() == {f"/{n}" for n in _ALL}
 
 
-def test_start_is_a_hidden_alias_of_help() -> None:
-    assert command_name("/start") == "help"
+def test_start_is_not_a_command() -> None:
+    assert command_name("/start") is None
     assert "start" not in {c.name for c in COMMAND_ROSTER}
 
 

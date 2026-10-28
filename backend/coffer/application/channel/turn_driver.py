@@ -224,7 +224,6 @@ class TurnDriver:
                 item.conversation_thread_id,
                 chat_kind=item.chat_kind,
                 idle_hours=binding.new_conversation_after_idle_hours,
-                say=_say,
             )
         except CofferError as e:
             # e.g. the default agent is unknown/misconfigured: say so in the chat.

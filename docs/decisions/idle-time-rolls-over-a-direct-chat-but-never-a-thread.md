@@ -148,8 +148,10 @@ Rules a future change must respect:
 ## Consequences
 
 - Returning to a group thread, a forum topic or a parallel thread continues its
-  conversation; the `🆕 Started a new conversation after 24 h idle.` line is seen
-  only in a direct chat or a thread-less group.
+  conversation; only a direct chat or a thread-less group rolls
+  over, and it does so silently (the `🆕 Started a new conversation after 24 h
+  idle.` line was removed: the answer itself shows the new conversation, and
+  the old one stays in the list).
 - Long-lived threads rely on the agents' own compaction and on `/new`.
 - Enforced by `rolls_over_when_idle` in
   `backend/coffer/application/channel/conversation_ops.py`, used by
