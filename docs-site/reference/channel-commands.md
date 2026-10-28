@@ -12,7 +12,7 @@ The table lists the ten words. How each reads, where it works and the cards it a
 | Command | What it does |
 | --- | --- |
 | `/new [agent]` | Start a fresh conversation with this chat's settings. With an agent name, switch to that agent. |
-| `/stop` | Interrupt the running turn and pause the queue. The answer names the conversation — “⏹ Stopping “Fix login”…” — and is edited into “⏹ Stopped “Fix login” after 12s · 3 tools.” where the platform can edit a message, or followed by that line where it cannot. Messages queued behind the turn are held, with **Continue** and **Discard** buttons (see [Messages on hold after /stop](#messages-on-hold-after-stop)). With nothing running it answers “Nothing is running.”. |
+| `/stop` | Interrupt the running turn and pause the queue. The answer names the conversation — “⏹ Stopping “Fix login”…” — and is edited into “⏹ Stopped “Fix login” after 12s · 3 tools.” where the platform can edit a message, or followed by that line where it cannot. Messages queued behind the turn are held, with **Continue** and **Discard** buttons (see [Messages on hold after /stop](#messages-on-hold-after-stop)). With nothing running it does nothing. |
 | `/status` | What this chat is running, as a card with the buttons that act on it. |
 | `/model [name]` | Show or set the model. |
 | `/dir [path\|name]` | Show or switch the working directory, in a fresh conversation. |

@@ -187,13 +187,6 @@ class ChannelCommands:
         # to stop: "Stopping…" there would never become "Stopped after …".
         stopped = target is not None and self._turns.interrupt_turn(target)
         if not stopped or target is None:
-            await send(
-                binding,
-                peer.chat_id,
-                "Nothing is running.",
-                chat_kind=chat_kind,
-                thread_id=thread_id,
-            )
             return
         # Say which conversation is stopping; the turn's end says it stopped.
         title = await self._title(target)
@@ -235,7 +228,6 @@ class ChannelCommands:
         """`/stop` in a SeaTalk group's main chat: every turn in the group."""
         running = self.running_in_chat(ctx.binding.resource.uid, ctx.chat_id)
         if not running:
-            await ctx.say("Nothing is running in this group.")
             return
         titles = [await self._title(conversation_id) for conversation_id in running]
         for conversation_id in running:

@@ -291,8 +291,7 @@ button for a direct-chat command.
 a turn is running; other messages join the conversation's pending queue (spec
 `chat`) and run in order, a burst of them arriving as one
 turn (see "Take a burst of messages as one turn"). A message that joins the
-queue behind a running turn MUST be answered "⏳ Queued — runs when the current
-one finishes." Up to 10 may wait; only a message arriving while 10 already wait
+queue behind a running turn gets no reply of its own; it runs in turn. Up to 10 may wait; only a message arriving while 10 already wait
 is dropped, and the chat MUST be told it was dropped and why (the only place the
 limit is mentioned).
 `/new` MUST answer with a one-line card — "🆕 New conversation · <agent> ·
@@ -325,10 +324,10 @@ the agent").
 - **AND** the answer names the conversation it stops ("⏹ Stopping “<title>”…"), and where the platform can edit a message it is edited into "⏹ Stopped “<title>” after 12s." (the turn's real duration) instead of a second message being sent
 - **AND** when messages were queued behind the turn, the stopped line adds "⏸ N queued messages are on hold", with Continue and Discard where the transport has buttons (see "Continue or discard the messages a stop held") and "— send anything to continue." where it has none
 
-#### Scenario: /stop with no turn in flight says so
+#### Scenario: /stop with no turn in flight does nothing
 - **GIVEN** a paired chat whose conversation has finished its last turn
 - **WHEN** the peer sends `/stop`
-- **THEN** the chat answers "Nothing is running." and never "⏹ Stopping…"
+- **THEN** the chat is told nothing, in particular never "⏹ Stopping…"
 
 #### Scenario: messages during a turn are queued in order
 - **GIVEN** a turn in progress
@@ -338,7 +337,7 @@ the agent").
 #### Scenario: the queue is bounded and overflow is reported
 - **GIVEN** a turn in progress
 - **WHEN** the peer sends ten more messages, each after the quiet window of the one before has closed (so none merges into another), and then an eleventh
-- **THEN** each of the ten is answered "⏳ Queued — runs when the current one finishes.", and all ten run in order
+- **THEN** none of the ten is answered with a queue notice, and all ten run in order
 - **AND** the eleventh is dropped and the peer is told that ten were already waiting
 
 #### Scenario: a direct-chat command in a group is declined with one line
@@ -650,7 +649,7 @@ line names what was stopped — "⏹ Stopped “<title>” after 12s · 3 tools.
 when messages were queued behind the turn, says they are on hold (see "Continue
 or discard the messages a stop held"); where the platform can edit a message it replaces the "⏹ Stopping
 “<title>”…" the `/stop` sent instead of following it, and `/stop` with no turn
-in flight answers "Nothing is running.". A turn error
+in flight is silent. A turn error
 is reported to the IM chat as a short notice and the channel stays up. A clean
 success MUST send **no** closing line — the reply itself is the completion
 signal, a new message that notifies however long the turn ran, so a fact line

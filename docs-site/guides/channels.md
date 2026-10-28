@@ -124,7 +124,7 @@ Messages sent in quick succession are one question. The channel waits for a shor
 
 Both pauses are per-channel settings: on the channel's **Settings** tab under **Receiving messages** (**Wait after a text message** and **Wait after a forward or files**). Each takes 0 to 60 seconds; 0 answers every such message on its own.
 
-Messages you send while a turn is running wait in the conversation's queue and run in order — one queue per conversation, shared by everything that sends to it. A burst sent during a turn joins the queue as one entry. Each message that waits is answered "⏳ Queued (n)", n being how many now wait. Up to 10 may wait; a message sent while 10 already wait is dropped, and the bot says so and why.
+Messages you send while a turn is running wait in the conversation's queue and run in order — one queue per conversation, shared by everything that sends to it. A burst sent during a turn joins the queue as one entry. A message that waits gets no reply of its own; it runs when its turn comes. Up to 10 may wait; a message sent while 10 already wait is dropped, and the bot says so and why.
 
 ### When a chat has been quiet
 

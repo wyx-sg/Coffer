@@ -113,8 +113,9 @@ async def test_a_group_thread_inherits_the_groups_defaults(env: ChannelEnv) -> N
 )
 async def test_stop_in_the_main_chat_stops_every_turn_in_the_group(env: ChannelEnv) -> None:
     resource, adapter = await _channel(env)
+    before = list(adapter.texts())
     await env.processor.on_message(_main("/stop", "m-0"))
-    assert adapter.texts()[-1] == "Nothing is running in this group."
+    assert adapter.texts() == before
 
     gated = GatedAdapter()
     env.provider.adapter = gated
