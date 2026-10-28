@@ -87,7 +87,7 @@ Coffer 会对每个较新的 Bot API 能力（富文本消息、草稿、富文�
 | 私聊 | 全部十个：`/new`、`/stop`、`/model`、`/dir`、`/status`、`/resume`、`/thread`、`/close`、`/del`、`/help` |
 | 群组 | `/new`、`/stop`、`/del`、`/help` |
 
-每个菜单注册两遍，一遍英文描述，一遍中文描述，所以设成中文的 Telegram 客户端会显示中文菜单。隐藏的 `/start` 从不列出。
+每个菜单注册两遍，一遍英文描述，一遍中文描述，所以设成中文的 Telegram 客户端会显示中文菜单。
 
 从群组菜单点的命令会以 `/status@my_coffer_bot` 的形式到达。Coffer 把它当作发给本机器人的 `/status`，所以即使群组要求 @ 提及，它也会回答。点名另一个机器人的命令（比如 `/status@some_other_bot`）不是给它的，会被忽略。
 

@@ -271,7 +271,7 @@ when the platform rate-limits outbound sends, sends back off and retry.
 ### Requirement: Answer the conversation commands from any paired chat
 Ten words are Coffer's commands in a paired chat, and nothing else: `/new`,
 `/stop`, `/model`, `/dir`, `/status`, `/resume`, `/thread`, `/close`, `/del` and
-`/help` (`/start` is a hidden alias of `/help`). They are split by chat type. In a
+`/help`. They are split by chat type. In a
 **direct chat** all ten work. In a **group** only `/new`, `/stop`, `/del` and
 `/help` work — they
 control the group's own conversation — and `/model`, `/dir`, `/status`,

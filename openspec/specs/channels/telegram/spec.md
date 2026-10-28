@@ -414,8 +414,7 @@ direct chat (see [channels](../spec.md) "Answer the conversation commands from
 any paired chat"). Each scope is registered
 twice, once with no `language_code` (the English descriptions) and once with
 `zh` (the Chinese ones), so a Chinese Telegram client shows Chinese
-descriptions. The hidden `/start` is never
-listed.
+descriptions.
 
 #### Scenario: private chats get every command and groups the group set, in English and Chinese
 - **GIVEN** a Telegram channel starting
