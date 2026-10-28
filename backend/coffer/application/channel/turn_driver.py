@@ -197,9 +197,9 @@ class TurnDriver:
 
         The turn starts now when the conversation is idle, else waits its turn behind
         the messages already pending — web and channel alike, in arrival order (spec
-        chat "Queue messages sent during a turn"). A message that waits is not answered (it runs in turn);
-        past ``QUEUE_MAX`` pending the message is dropped and the
-        chat told why (see "Answer the conversation commands from any paired chat"): a
+        chat "Queue messages sent during a turn"). A message that waits is not
+        answered (it runs in turn); past ``QUEUE_MAX`` pending the message is
+        dropped and the chat told why (see "Answer the conversation commands from any paired chat"): a
         flood must not pile up forever.
         """
 
