@@ -79,7 +79,7 @@ def is_own_notification(params: dict[str, Any], state: CodexParseState) -> bool:
         thread_id = (params.get("thread") or {}).get("id")
     if thread_id is None:
         return True
-    return thread_id == state.thread_id
+    return bool(thread_id == state.thread_id)
 
 
 def map_codex_notification(
