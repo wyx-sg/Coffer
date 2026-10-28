@@ -104,7 +104,7 @@ Coffer never reads these from its own environment; it sets them for child proces
 | `CODEX_HOME` | Codex turns | Points Codex at a registered agent's config directory when it is not `~/.codex`. |
 | `COFFER_GIT_TOKEN`, `COFFER_GIT_USERNAME` | `git` during vault sync | The sync remote's token and the username derived from the remote's host, read by a credential helper at run time so the token never appears in `argv` or on disk. |
 | `COFFER_GIT_PROTOCOL`, `COFFER_GIT_HOST` | `git` during vault sync | The sync remote's own protocol and host. The credential helper hands the token over only when git asks for exactly that origin, so a redirect to another host never receives it. |
-| `COFFER_TURN_TOKEN` | Claude Code and Codex turns | A random token naming the turn. The MCP shim forwards it as the `X-Coffer-Turn` header, which is how the gateway lists `coffer__ask` and `coffer__channel_read_thread` only inside a turn Coffer runs. |
+| `COFFER_TURN_TOKEN` | Claude Code and Codex turns | A random token naming the turn. The MCP shim forwards it as the `X-Coffer-Turn` header, which is how the gateway lists `coffer__channel_read_thread` only inside a turn Coffer runs. |
 | `COFFER_CHANNEL_TURN` | Claude Code and Codex turns a channel drives | `1`, marking the agent process as answering a [channel](/guides/channels) turn. |
 | `COFFER_DAEMON_PREDECESSOR_PID` | the successor a daemon starts when it restarts itself | The pid of the daemon being replaced; the successor waits for it to exit before it binds the port. |
 | `PATH`, `HOME` | the login service | Captured from your login shell when you install the service, so the daemon can find `npx`, `uvx` and other upstream launchers. |

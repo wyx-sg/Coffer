@@ -42,7 +42,6 @@ so a longer page costs no more queries.
 | Field | Meaning |
 | --- | --- |
 | `running` | A turn is in flight right now — the orchestrator's in-process state. |
-| `needs_you` | A question waits on the owner (see "Show which conversations wait on you"). In-memory turn state, never stored. |
 | `cwd` | The directory the conversation runs in, read from `agent_config`. |
 | `has_session` | A native session id is stored. The id itself is not on the wire; the daemon uses it to build the resume command (see "Open a conversation in the terminal"). |
 | `channel_binding.platform` | The channel's type key (`seatalk` / `telegram`); null once the channel is deleted. |
@@ -85,10 +84,9 @@ other code is the agent adapter's.
 
 Held per conversation in one process-global dict, never in the database (see
 "Release turn state nobody needs"): the event bus with its replay buffer, the
-in-flight turn, the pending message queue, the queue's pause flag and the
-pending question (its context, the questions and their state; see "Pause a turn
-on a question for the owner"). A daemon restart therefore drops uncommitted
-queued messages and open questions; a shutdown stops in-flight turns itself
+in-flight turn with its turn token, the pending message queue and the queue's
+pause flag. A daemon restart therefore drops uncommitted queued messages; a
+shutdown stops in-flight turns itself
 before the database closes, and a daemon that dies outright leaves nothing
 behind: the next channel message resumes the agent's session. A conversation's
 state exists only while a turn, a queued message or a subscriber needs it.
@@ -105,7 +103,6 @@ than being re-derived from history. `path` is never emitted to the wire.
 | `CONVERSATION_NOT_FOUND` | Any operation naming a conversation that does not exist. |
 | `UNKNOWN_AGENT` | A turn names an `agent_key` no provider answers for (see "Distinguish a missing agent path from a bad turn body"). A *subresource path* for the same key is 404 instead. |
 | `AGENT_CONFIG_REJECTED` | The named agent refuses the configuration — e.g. a `cwd` that is not an existing directory — or no enabled managed agent of the type exists (`reason` `agent_not_managed`). |
-| `QUESTION_CLOSED` | A question is answered after it was answered, cancelled or lost with a restart. |
 
 ## What points at a conversation from outside
 

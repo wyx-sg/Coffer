@@ -75,8 +75,8 @@ list-changed notifications) between clients and upstream MCP servers.
 - **Built-in tools.** Coffer's own built-in tools under the reserved `coffer__` prefix MUST be exactly
   `coffer__search_tools`, which MUST always be advertised in
   `tools/list`, plus — only for a session whose requests carry the `X-Coffer-Turn` token of a turn
-  Coffer is running — the turn-scoped `coffer__ask` (see "Let an agent ask the owner a question during a Coffer turn")
-  and `coffer__channel_read_thread` ([channels](../channels/spec.md) "Read a thread's earlier messages on demand").
+  Coffer is running (see "Offer turn-scoped tools only inside a Coffer turn") — the turn-scoped
+  `coffer__channel_read_thread` ([channels](../channels/spec.md) "Read a thread's earlier messages on demand").
   A call to any other `coffer__` name MUST be
   answered as an unknown tool, and so MUST a call to `coffer__channel_read_thread` outside a turn.
 - **Built-in tool retrieval.** `coffer__search_tools`
@@ -1096,29 +1096,25 @@ of use").
 - **THEN** the lines come newest first across both files, Coffer's marked `coffer` with their time and the server's marked `stderr`
 - **AND** the limited read holds two lines and says more exist
 
-### Requirement: Let an agent ask the owner a question during a Coffer turn
-The gateway MUST offer the built-in tool `coffer__ask` to an MCP session whose
-requests carry the `X-Coffer-Turn` token of a turn Coffer is running, and only to
-such a session. Its input MUST take an optional markdown `context` and one to four
-questions, each with a short `header`, the `question`, two to four options (a
-`label` and an optional `description`) and `multi_select`. A call MUST raise the
-question on that turn's conversation (spec chat "Pause a turn on a question for
-the owner") and return only when every question is answered — with the chosen
-labels and any free-text answer per question — or when the question is cancelled
-or 24 hours pass, with a result saying no answer came. The shim MUST forward the
-agent process's `COFFER_TURN_TOKEN` as `X-Coffer-Turn`, and the Codex
-configuration Coffer writes for its `coffer` server MUST pass that variable
-through and allow a tool call to run for 24 hours.
+### Requirement: Offer turn-scoped tools only inside a Coffer turn
+Every agent process Coffer spawns for a turn MUST carry the turn's random token
+in `COFFER_TURN_TOKEN`, valid exactly while that turn runs. The shim MUST forward
+it as `X-Coffer-Turn` on every request, and the Codex configuration Coffer writes
+for its `coffer` server MUST pass that variable through (and allow a tool call to
+run for 24 hours, past Codex's 60-second default). The gateway MUST list and
+serve its turn-scoped built-in tools only to a session whose requests carry the
+token of a turn Coffer is running now; to any other session they are neither
+listed nor found.
 
-#### Scenario: an agent in a Coffer turn sees and calls coffer__ask
+#### Scenario: an agent in a Coffer turn carries its turn token
 - **GIVEN** a turn Coffer runs, whose agent process has `COFFER_TURN_TOKEN` set
-- **WHEN** the agent lists Coffer's tools and calls `coffer__ask` with one question and the options Yes and No
-- **THEN** `coffer__ask` is in the list, and the call returns "Yes" once the owner answers Yes
+- **WHEN** the shim sends the agent's requests
+- **THEN** every request carries the token as `X-Coffer-Turn`, and the Codex entry Coffer writes passes the variable through
 
-#### Scenario: coffer__ask is not offered outside a Coffer turn
+#### Scenario: a session outside a Coffer turn gets no turn-scoped tools
 - **GIVEN** an agent session started in a terminal, with no turn token
 - **WHEN** it lists Coffer's tools
-- **THEN** `coffer__ask` is not among them, and a direct call is answered that asking works only inside a Coffer conversation
+- **THEN** no request carries `X-Coffer-Turn` and no turn-scoped tool is among them
 
 ### Requirement: Hand a failing MCP call's diagnosis to an agent
 A call whose server never answered — it failed without the upstream returning a

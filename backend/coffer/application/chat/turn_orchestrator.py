@@ -31,7 +31,7 @@ import asyncio
 import logging
 from collections.abc import Callable, Sequence
 
-from coffer.application.chat import questions
+from coffer.application.chat import turn_tokens
 from coffer.application.chat.ports import SessionInUsePort
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
@@ -308,8 +308,8 @@ class TurnOrchestrator:
         state.active = active
         # The turn's token, minted before the adapter is built: the provider puts
         # it into the agent process's environment (``COFFER_TURN_TOKEN``) so the
-        # agent's ``coffer__ask`` calls resolve to this turn.
-        turn = questions.register_turn(conversation_id)
+        # gateway offers the agent's MCP session this turn's turn-scoped tools.
+        turn = turn_tokens.register_turn(conversation_id)
         try:
             conv = await self._chat.get_conversation(conversation_id)
             session_id = conv.agent_config.session_id
@@ -328,7 +328,7 @@ class TurnOrchestrator:
             )
         except BaseException as exc:
             # Anything failed before the task spawned — release the reservation.
-            questions.release_turn(turn)
+            turn_tokens.release_turn(turn)
             if state.active is active:
                 state.active = None
             if primary_queue is not None:

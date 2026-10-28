@@ -300,9 +300,9 @@ Coffer 从不写 Claude Code 自己的清单文件。当 `claude` CLI 不在 `PA
 
 打开一行会在文件树里显示该库的文件，并带只读预览。开启[记忆同步](/zh/guides/memory)时，这些库里还有 Coffer 从你其他智能体写入的副本：Claude Code 是 `coffer_*.md` 文件和 `MEMORY.md` 里的一个标记区块，Codex 是 `memories/extensions/coffer/`。Coffer 同步了什么、每份副本写到了哪里，在**记忆**页上查看。
 
-**会话** tab 列出智能体自己的会话——你在终端或应用里跑的，以及[消息渠道](/zh/guides/channels)发起的——带标题、智能体、工作目录和最近活动时间。Coffer 向智能体自己要这份列表（Claude Code 的会话列表，Codex 的 `thread/list`），不解析智能体的文件。搜索匹配标题和目录。属于某个消息渠道对话的会话还会显示它的消息渠道，轮次运行时显示**运行中**，等你回答时显示**等你处理**，并带行内**停止**。
+**会话** tab 列出智能体自己的会话——你在终端或应用里跑的，以及[消息渠道](/zh/guides/channels)发起的——带标题、智能体、工作目录和最近活动时间。Coffer 向智能体自己要这份列表（Claude Code 的会话列表，Codex 的 `thread/list`），不解析智能体的文件。搜索匹配标题和目录。属于某个消息渠道对话的会话还会显示它的消息渠道，轮次运行时显示**运行中**，并带行内**停止**。
 
-打开一行，就在你的首选终端里、会话所在的目录恢复这个会话：Claude Code 是 `claude --resume <id>`，Codex 是 `codex resume <id>`。分体按钮的**复制命令**是给 Coffer 不认识的终端用的替代方式。运行中的轮次或等待中的提问会先询问：在消息渠道里回答，或停止轮次并在终端中继续。在**设置 › 通用 › 首选终端**里选择终端；见[对话](/zh/guides/chat#open-in-terminal)。
+打开一行，就在你的首选终端里、会话所在的目录恢复这个会话：Claude Code 是 `claude --resume <id>`，Codex 是 `codex resume <id>`。分体按钮的**复制命令**是给 Coffer 不认识的终端用的替代方式。运行中的轮次会先询问：在消息渠道里继续，或停止轮次并在终端中继续。在**设置 › 通用 › 首选终端**里选择终端；见[对话](/zh/guides/chat#open-in-terminal)。
 
 **⋯** 菜单有**重命名**和**删除…**，都由智能体对它自己的会话执行（Claude Code 的 `rename_session` 和 `delete_session`，Codex 的 `thread/name/set` 和 `thread/delete`）。删除会先确认，而且是永久的。删除某个消息渠道对话在用的会话，也会移除该对话的那一行，消息渠道的下一条消息会开始一个新的。如果会话已经不存在，错误是 `NATIVE_SESSION_NOT_FOUND`，刷新列表即可。无法列出会话的智能体类型会返回 `AGENT_TYPE_UNSUPPORTED`。
 

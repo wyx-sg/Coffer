@@ -5,13 +5,13 @@ description: List every agent session wherever it started, resume one in your te
 
 # Conversations {#conversations}
 
-The **Conversations** page lists every session of every managed agent, Claude Code or Codex, wherever it was started: in a terminal, by an [IM channel](/guides/channels), or from **New conversation** on this page. It is a list, not a chat client: pressing a row's **Open in *terminal*** button resumes that session in your own terminal, where the agent's own interface takes over. This guide covers the list, starting a new conversation, opening a row, what a running turn or a waiting question means for opening, renaming and deleting, and where the conversation itself is kept.
+The **Conversations** page lists every session of every managed agent, Claude Code or Codex, wherever it was started: in a terminal, by an [IM channel](/guides/channels), or from **New conversation** on this page. It is a list, not a chat client: pressing a row's **Open in *terminal*** button resumes that session in your own terminal, where the agent's own interface takes over. This guide covers the list, starting a new conversation, opening a row, what a running turn means for opening, renaming and deleting, and where the conversation itself is kept.
 
 ## What Conversations is for {#what-conversations-is-for}
 
 Coffer's part is the turn platform that lets an IM channel reach an agent on this machine: you message the bot from your phone, Coffer runs the turn on Claude Code through the Claude Agent SDK or on Codex through `codex app-server`, and the answer comes back to the chat. Coffer does not put a model of its own in between, and it has no chat window of its own. The Claude desktop app, the Codex app and the agents' terminals already are chat clients.
 
-What the page adds is one place to find every session, including the ones your phone started. You see which sessions exist, which one is running, which one waits for you, and you pick one up at your desk.
+What the page adds is one place to find every session, including the ones your phone started. You see which sessions exist, which one is running, and you pick one up at your desk.
 
 ::: info Web UI and REST
 The list is reachable from the Conversations page and over the REST API at `/api/v1/agent-sessions`.
@@ -49,18 +49,16 @@ The daemon builds the command itself from the session id, directory and agent, s
 
 ### One session, one place {#running-or-waiting}
 
-A session should run in one place at a time. When a row's turn is running, or the agent is waiting for your answer, the open button asks first:
+A session should run in one place at a time. When a row's turn is running, the open button asks first:
 
-- **Answer in *platform*** (or wait): leave the turn where it is and use the channel.
+- **Continue in *platform***: leave the turn where it is and use the channel.
 - **Stop this turn and continue in the terminal**: stops the turn exactly like **Stop**, tells the agent you stopped it, then opens the terminal.
 
 In the other direction, when a channel message arrives for a session that is open in a terminal, Coffer does not start a turn. The chat replies that the session is open in a terminal: continue there, or send `/thread` to start a new one. Coffer finds that out by looking for a process whose arguments carry the session id, so a session you opened by picking it inside the agent's own list is not seen; Codex refuses a second writer on its own.
 
 ## Answer a question from the agent {#answer-a-question}
 
-When an agent needs a decision it asks through `coffer__ask` (or Claude Code's own `AskUserQuestion`), and its turn pauses until you answer. You answer in the channel, on the card or by replying in the chat, as [Channels](/guides/channels) describes. The conversation's row shows **Needs you**, and Overview lists it under **Needs you**.
-
-The page has no answer card and no reply box. If you would rather answer at your desk, use the row's split button: it asks first, and **Stop this turn and continue in the terminal** ends the question (the agent is told you stopped it) and resumes the session in your terminal. The question itself is kept in the daemon's memory only; a daemon restart drops an open one.
+When an agent needs something from you before it can go on, it asks in its reply, with every question in that one message, and ends its turn. Answer by replying as you would to a person (in a group, @mention the bot); your reply starts the next turn and the agent carries on from there. Nothing waits in between: there is no question card, and a turn never sits paused on you. Claude Code's own multiple-choice dialog (`AskUserQuestion`) is turned off in turns Coffer runs, because nobody is at the CLI to answer it.
 
 ## Send while a turn runs {#send-while-a-turn-runs}
 
@@ -100,7 +98,7 @@ The files are pruned after the **Attachments** retention window (30 days after t
 
 `/conversations` lists every session of every managed agent, wherever it was started: in a terminal, by a channel, or from **New conversation**. Newest activity first; a conversation moves to the top when a turn starts in it, not only when one ends. The list reads 30 sessions and loads more as you scroll, and it shows no total, because Codex cannot count its sessions without reading all of them. Above the rows sits a header naming the columns, **Title**, **Source**, **Agent**, **Directory** and **Last active**, and the rows are grouped under **Today**, **Yesterday** and **Earlier**. Each row shows:
 
-- the title, with a status word on a channel's conversation: **Running** (a green dot) while a turn is in progress, **Needs you** (an amber dot) while the agent is waiting for your answer;
+- the title, with **Running** (a green dot) beside a channel's conversation while a turn is in progress;
 - the **source**: for a channel's conversation the platform's logo and the place in its chat, such as `SeaTalk · DM`, `SeaTalk · DM · Thread 2` for a parallel thread, `SeaTalk · coffer-dev › thread` or `Telegram · Group › topic`; a session no channel started shows **This Mac**;
 - the **agent**, the working **directory** and the **time of the last activity** (the clock for today and yesterday, a date such as `Sep 22` for earlier);
 - an inline **Stop** while a turn runs, the split button (**Open in *terminal* ▾**), and a **⋯** menu. These are always shown.
@@ -151,7 +149,7 @@ A channel turn runs against the config directory of the registered agent of its 
 
 On top of the agent's own system prompt, Coffer appends, in this order:
 
-1. A note that the agent is on a chat channel — how to send files, ask you with buttons, and that it cannot click dialogs on your computer — then, under "Reply style:", the channel's reply style for this chat kind: Coffer's default, or your rewrite of it (see [The system prompt and your reply style](/guides/channels#your-own-system-prompts)).
+1. A note that the agent is on a chat channel — how to send files, to ask you in its reply with every question in one message, and that it cannot click dialogs on your computer — then, under "Reply style:", the channel's reply style for this chat kind: Coffer's default, or your rewrite of it (see [The system prompt and your reply style](/guides/channels#your-own-system-prompts)).
 2. The note naming the model Coffer put the agent on.
 
 A session you open from the Conversations page, or start with **New conversation**, runs in your terminal, outside Coffer, so it gets neither note. Memory reaches the agent the same way in both: through the agent's own memory, which [memory sync](/guides/memory) fills with what your other agents learned.
@@ -162,7 +160,7 @@ A channel turn runs Claude Code with `bypassPermissions` and Codex with `approva
 
 ## How it works {#how-it-works}
 
-A channel message starts or queues a turn in the daemon. The turn's output is a stream of typed events (`turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_done`, `turn_error`, `question_asked` and `question_closed`) that the channel renders into the chat. The stream lives in memory while the turn runs and nothing is stored from it; the web UI does not subscribe to it. For the design, see [Chat and turns](/architecture/chat).
+A channel message starts or queues a turn in the daemon. The turn's output is a stream of typed events (`turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_done`, and `turn_error`) that the channel renders into the chat. The stream lives in memory while the turn runs and nothing is stored from it; the web UI does not subscribe to it. For the design, see [Chat and turns](/architecture/chat).
 
 ## Troubleshooting {#troubleshooting}
 

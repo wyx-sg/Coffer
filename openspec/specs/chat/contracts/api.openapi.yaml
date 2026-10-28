@@ -340,10 +340,6 @@ components:
         id:
           title: Id
           type: string
-        needs_you:
-          default: false
-          title: Needs You
-          type: boolean
         running:
           default: false
           title: Running
@@ -370,7 +366,6 @@ components:
       - cwd
       - session_id
       - running
-      - needs_you
       title: ConversationOut
       type: object
     ConversationPatch:

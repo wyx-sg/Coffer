@@ -13,7 +13,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Response, status
 
 from coffer.application.chat.ports import ChannelPlacesPort
-from coffer.application.chat.questions import needs_you
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.application.chat.turn_state import is_running
@@ -60,7 +59,6 @@ def _conv_out(conv: Conversation, extras: Extras) -> ConversationOut:
         cwd=conv.agent_config.cwd,
         session_id=conv.agent_config.session_id,
         running=is_running(conv.id),
-        needs_you=needs_you(conv.id),
     )
 
 

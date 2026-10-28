@@ -40,7 +40,6 @@ from coffer.application.channel.parallel_threads import (
     route_thread,
 )
 from coffer.application.channel.ports import AgentCatalogPort, ChannelBinding, ModelSuggestionPort
-from coffer.application.channel.question_flow import QuestionPort, answer_message
 from coffer.application.channel.store_ports import (
     ChannelPeerRepoPort,
     ChannelThreadConversationRepoPort,
@@ -87,7 +86,6 @@ class InboundProcessor:
         model_suggestions: ModelSuggestionPort,
         replies: ReplyLedgerPort,
         cursors: ThreadCursorPort,
-        questions: QuestionPort | None = None,
     ) -> None:
         self._peers = peers
         self._threads = threads
@@ -95,7 +93,6 @@ class InboundProcessor:
         self._conversations = conversations
         self._turns = turns
         self._audit = audit
-        self._questions = questions
         self._context = ThreadContextFolder(
             threads=threads, conversations=conversations, cursors=cursors, replies=replies
         )
@@ -139,7 +136,6 @@ class InboundProcessor:
             stop_chat_sessions=self._stop_chat_sessions,
             session=self._session,
             burst=self._burst,
-            questions=questions,
             on_message=self.on_message,
         )
 
@@ -245,17 +241,6 @@ class InboundProcessor:
             conversation_thread_id=conv_thread,
         ):
             return
-        # A question is waiting on the owner in this chat: the words are the
-        # answer, not a message (see "Ask the owner in the chat and take the
-        # answer back to the agent") — unless the turn that asked has ended,
-        # when the answer goes on as this message's text.
-        if text and not attachments and self._questions is not None:
-            follow_up = await answer_message(
-                self._questions, self._threads, binding, peer, msg, text, conv_thread
-            )
-            if follow_up == "":
-                return
-            text = follow_up or text
         # The thread it landed in and the message it quotes ground the turn
         # (see "Ground a turn in the message it quotes").
         blocks = await self._context.fold(binding, msg, conversation_thread_id=conv_thread)

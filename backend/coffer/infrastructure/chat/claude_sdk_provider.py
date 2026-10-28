@@ -13,9 +13,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from typing import Any
 
-from coffer.application.chat import questions
+from coffer.application.chat import turn_tokens
 from coffer.application.chat.ports import AgentAdapter
-from coffer.application.chat.question_agents import asker_for
 from coffer.application.chat.service import ConversationRepo
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
@@ -145,10 +144,9 @@ class ClaudeSdkProvider:
         # Overrides only: the SDK merges ``options.env`` over the daemon's own
         # environment itself. Empty for the default config dir.
         home_env = dict(await self._resolve_home_env()) if self._resolve_home_env else {}
-        # The turn's token: the shim in the agent's MCP entry forwards it so
-        # ``coffer__ask`` reaches this turn (spec mcp-gateway "Let an agent ask the
-        # owner a question during a Coffer turn").
-        home_env.update(questions.turn_env(conversation_id))
+        # The turn's token: the shim in the agent's MCP entry forwards it, so the
+        # gateway offers this turn's turn-scoped tools.
+        home_env.update(turn_tokens.turn_env(conversation_id))
 
         return ClaudeSdkAgentAdapter(
             cwd=config.cwd,
@@ -157,7 +155,6 @@ class ClaudeSdkProvider:
             extra={"model": config.model},
             session_factory=self._session_factory,
             on_session=_save_session,
-            ask_owner=asker_for(conversation_id),
             system_context=system_context,
             # Claude cannot hear audio. A voice attachment is transcribed by the
             # user's configured connection, or handed over untouched when there

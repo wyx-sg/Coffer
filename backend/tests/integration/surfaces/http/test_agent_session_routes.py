@@ -251,11 +251,11 @@ def test_a_listed_session_carries_the_conversation_pointing_at_it(
 
     assert linked["session_id"] == SID
     assert linked["conversation_id"] == conv_id
-    assert linked["running"] is True and linked["needs_you"] is False
+    assert linked["running"] is True
     assert linked["channel_binding"]["channel_uid"] == "chan-1"
     assert linked["channel_binding"]["chat_id"] == "chat-9"
     assert plain["conversation_id"] is None and plain["running"] is False
-    assert plain["needs_you"] is False and plain["channel_binding"] is None
+    assert plain["channel_binding"] is None
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="an unknown session is not found")

@@ -4,13 +4,14 @@ owner rewrite a channel's reply style"; ADR
 channel-prompt-fixed-note-and-editable-style).
 
 - The **channel note** is how the channel works: where the agent is, what
-  renders there, how a file is sent, how to ask the owner, what it cannot click.
-  Coffer keeps it; the owner sees it but cannot edit it, because a wrong word
-  here breaks a feature (a file never sent, a question never asked).
+  renders there, how a file is sent, how to ask for what it needs, what it
+  cannot click. Coffer keeps it; the owner sees it but cannot edit it, because
+  a wrong word here breaks a feature (a file never sent, a tool never named).
 - The **reply style** is how a reply should read: like a person texting — the
-  answer first, a few lines, no process, a full report only as a file on
-  request, evidence kept. Coffer ships a default; the owner may rewrite it
-  per chat kind, and an untouched one follows Coffer's default as it changes.
+  answer first, a few lines, no process, nothing repeated back, questions asked
+  all at once, a full report only as a file on request, evidence kept. Coffer
+  ships a default; the owner may rewrite it per chat kind, and an untouched one
+  follows Coffer's default as it changes.
 
 Pure text: the chat adapters compose a turn from it, and the Channels page shows
 the same text, so what the owner reads is what the agent gets.
@@ -35,14 +36,17 @@ __all__ = [
 #: :func:`default_reply_style` is the one place that would split them.
 DEFAULT_REPLY_STYLE = (
     "Write like a person texting a colleague. Lead with the answer in one or two "
-    "plain sentences; the first line becomes the notification. Do not narrate your "
-    "steps, list what you checked, or spell out your own assumptions and caveats; "
-    "mention what you could not do only if it changes what the reader does next. "
-    "About 8 lines at most; a list only for three or more parallel items. If a "
-    "full report is needed, give the conclusion and ask whether they want it as a "
-    "file; when they say yes, or asked up front, send it as a Markdown file. Send "
-    "logs over 30 lines as a file, and a diagram as a PNG file, never as source. "
-    "Keep the evidence: quote the key log line, error or ID verbatim."
+    "plain sentences; the first line becomes the notification. Don't repeat back "
+    'what they just said ("Got it: ..."); use it. Don\'t '
+    "narrate your steps, list what you checked, or spell out your own assumptions "
+    "and caveats; mention what you could not do only if it changes what the reader "
+    "does next. Need something from them? Ask for all of it at once, then stop. "
+    "About 8 lines at most; a list only for three or more "
+    "parallel items. If a full report is needed, give the conclusion and ask "
+    "whether they want it as a file; when they say yes, or asked up front, send it "
+    "as a Markdown file. Send logs over 30 lines as a file, and a diagram as a PNG "
+    "file, never as source. Keep the evidence: quote the key log line, error or ID "
+    "verbatim."
 )
 
 #: The line that sets the reply style apart from the channel note above it.
@@ -99,10 +103,9 @@ def channel_note_text(note: ChannelNote | None) -> str:
     return (
         f"You are replying in {_where(note)}, most likely on the user's phone. Only "
         "what you write after your last tool call is sent, so write the whole answer "
-        f"there.{details}{renders} If you need the person to confirm or choose "
-        "before you continue, call `coffer__ask`: the question reaches them in this "
-        "chat as buttons and their answer comes back to you. Wait for it, or end "
-        "your turn silently; the answer comes next. You cannot click "
+        f"there.{details}{renders} To get something from the person, ask in your "
+        "reply, all questions in one message, and end your turn; the answer comes "
+        "next. You cannot click "
         "permission or confirmation dialogs on the user's computer; if something "
         "needs one, say so and do what you can. To send a file or image, put "
         "`MEDIA:/absolute/path` (optionally `| a caption`) on its own line; the "

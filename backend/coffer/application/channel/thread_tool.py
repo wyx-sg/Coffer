@@ -9,7 +9,7 @@ running channel's own transport, only a thread of a chat that channel has paired
 never a chat's main history: a thread id is required, and the transport has no
 read for anything else.
 
-It is turn-scoped, like ``coffer__ask``: listed to and served for only an MCP
+It is turn-scoped: listed to and served for only an MCP
 session inside a turn Coffer runs, so an agent started in a terminal never sees
 it. Application layer only; the composition root registers it in the
 ``BuiltinToolRegistry``.

@@ -14,7 +14,6 @@ like an agent's and its pairings are ``local/channel-peers.json``.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
@@ -32,12 +31,10 @@ from coffer.application.channel.runtime import ChannelRuntime
 from coffer.application.channel.service import ChannelService
 from coffer.application.channel.thread_sweep import ParallelThreadSweep
 from coffer.application.channel.thread_tool import ThreadReader, channel_read_thread_tool
-from coffer.application.chat import questions
 from coffer.application.chat.turn_state import is_running
 from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.channel.config import parse_channel_config
 from coffer.domain.channel.envelopes import ChannelCapabilities
-from coffer.domain.chat.question import QuestionBlock
 from coffer.domain.resource import Resource
 from coffer.domain.secrets import SecretDestination, channel_destination
 from coffer.infrastructure.channel.avatar_store import FileAvatarStore
@@ -77,42 +74,6 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from coffer.application.resource_service import ResourceService
-
-
-class ChatQuestions:
-    """The chat platform's questions, as the channel core's port (the channel
-    kind never imports the chat kind; this composition root does)."""
-
-    def pending_question_for(self, conversation_id: str) -> QuestionBlock | None:
-        return questions.pending_question_for(conversation_id)
-
-    async def answer(
-        self,
-        conversation_id: str,
-        question_id: str,
-        *,
-        selected: Sequence[str],
-        text: str | None,
-        via: str,
-        by: str,
-        index: int | None,
-    ) -> QuestionBlock:
-        return await questions.answer_question(
-            conversation_id,
-            question_id,
-            [questions.AnswerInput(selected=selected, text=text)],
-            via=via,
-            by=by,
-            index=index,
-        )
-
-    async def answer_text(
-        self, conversation_id: str, text: str, *, via: str, by: str
-    ) -> QuestionBlock | None:
-        return await questions.answer_pending_with_text(conversation_id, text, via=via, by=by)
-
-    def outlived_turn(self, question_id: str) -> bool:
-        return questions.outlived_turn(question_id)
 
 
 async def _ingest_websocket_event(channel_uid: str, envelope: dict[str, Any]) -> None:
@@ -165,9 +126,6 @@ def wire_channel_kind(
         # How far each conversation has seen each thread (spec channels "Ground a
         # thread turn in a bounded slice of the thread").
         cursors=cursors,
-        # Questions an agent asks the owner (spec channels "Ask the owner in the
-        # chat and take the chat's answer back to the agent").
-        questions=ChatQuestions(),
     )
 
     # ``materialize_async`` is the resolver's own off-the-loop path;

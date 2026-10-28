@@ -12,7 +12,7 @@ description: 十个渠道命令、各命令在直接聊天、线程和群组中�
 | 命令 | 作用 |
 | --- | --- |
 | `/new [agent]` | 用这个聊天的设置开始一个新对话。带上智能体名则切换到那个智能体。 |
-| `/stop` | 中断正在运行的轮次，并暂停队列。回复会写明停的是哪个对话——「⏹ Stopping “Fix login”…」；在能编辑消息的平台上它会被原地改成「⏹ Stopped “Fix login” after 12s · 3 tools.」，不能编辑的平台则另发这一行；排在它后面的消息会被暂停，并带 **Continue** 和 **Discard** 两个按钮（见[/stop 后暂停的消息](#messages-on-hold-after-stop)）。没有在运行的轮次时回复「Nothing is running.」。正在等你回答的问题会被取消，它的卡片显示「⏹ Stopped」。 |
+| `/stop` | 中断正在运行的轮次，并暂停队列。回复会写明停的是哪个对话——「⏹ Stopping “Fix login”…」；在能编辑消息的平台上它会被原地改成「⏹ Stopped “Fix login” after 12s · 3 tools.」，不能编辑的平台则另发这一行；排在它后面的消息会被暂停，并带 **Continue** 和 **Discard** 两个按钮（见[/stop 后暂停的消息](#messages-on-hold-after-stop)）。没有在运行的轮次时回复「Nothing is running.」。 |
 | `/status` | 这个聊天正在运行什么，以卡片显示，只带对它有用的按钮。 |
 | `/model [name]` | 查看或设置模型。 |
 | `/dir [path\|name]` | 查看或切换工作目录，切换会开一个新对话。 |

@@ -714,11 +714,6 @@ export interface components {
             /** Last Activity At */
             last_activity_at: string | null;
             /**
-             * Needs You
-             * @default false
-             */
-            needs_you: boolean;
-            /**
              * Running
              * @default false
              */
@@ -752,11 +747,6 @@ export interface components {
             cwd: string | null;
             /** Last Activity At */
             last_activity_at: string | null;
-            /**
-             * Needs You
-             * @default false
-             */
-            needs_you: boolean;
             /**
              * Running
              * @default false

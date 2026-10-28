@@ -28,7 +28,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Sequence
 
-from coffer.application.chat import questions
+from coffer.application.chat import turn_tokens
 from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_state import ActiveTurn, release_active
@@ -38,8 +38,6 @@ from coffer.domain.chat.events import (
     STREAM_ENDED_MESSAGE,
     TURN_TIMEOUT,
     AgentEvent,
-    ToolCall,
-    ToolResult,
     TurnDone,
     TurnError,
 )
@@ -59,13 +57,6 @@ DAEMON_STOPPED = "daemon_stopped"
 DAEMON_STOPPED_MESSAGE = "Coffer stopped before the turn finished"
 
 
-def _is_ask_tool(name: str) -> bool:
-    """Claude Code's own dialog tool, or ``coffer__ask`` under whatever
-    server prefix the agent gives it: both are rendered as the question block,
-    not as a tool card."""
-    return name == "AskUserQuestion" or name.endswith("coffer__ask")
-
-
 def _reported_model(adapter: AgentAdapter) -> str | None:
     """The model the adapter says the turn ran on; optional, read best-effort."""
     try:
@@ -75,43 +66,19 @@ def _reported_model(adapter: AgentAdapter) -> str | None:
     return model if isinstance(model, str) and model else None
 
 
-class _IdleWatch:
-    """The idle watchdog's deadline, which a pending question for the owner
-    suspends: silence while the turn waits on a person is not a wedge (the
-    question has its own 24-hour expiry)."""
-
-    def __init__(self, idle_timeout: float | None) -> None:
-        self.idle_timeout = idle_timeout
-        self.paused = False
-        self.timeout: asyncio.Timeout | None = None
-
-    def waiting(self, waiting_on_owner: bool) -> None:
-        """The turn started, or stopped, waiting on the owner."""
-        self.paused = waiting_on_owner
-        if self.timeout is not None and self.idle_timeout is not None:
-            when = (
-                None if waiting_on_owner else asyncio.get_running_loop().time() + self.idle_timeout
-            )
-            self.timeout.reschedule(when)
-
-
-async def _next_event(events: AsyncIterator[AgentEvent], watch: _IdleWatch) -> AgentEvent:
+async def _next_event(events: AsyncIterator[AgentEvent], idle_timeout: float | None) -> AgentEvent:
     """The adapter's next event, or ``TimeoutError`` after ``idle_timeout``
-    seconds of silence (none while the turn waits on the owner).
+    seconds of silence.
 
     The timeout cancels the wait *inside* the adapter's generator, so the
     adapter's own ``CancelledError`` handling runs — the same path a user
     interrupt takes — before the ``TimeoutError`` surfaces here. An external
     cancellation (interrupt, delete) still arrives as ``CancelledError``.
     """
-    if watch.idle_timeout is None:
+    if idle_timeout is None:
         return await events.__anext__()
-    async with asyncio.timeout(None if watch.paused else watch.idle_timeout) as timeout:
-        watch.timeout = timeout
-        try:
-            return await events.__anext__()
-        finally:
-            watch.timeout = None
+    async with asyncio.timeout(idle_timeout):
+        return await events.__anext__()
 
 
 async def run_turn_task(
@@ -123,7 +90,7 @@ async def run_turn_task(
     prompt: str,
     attachments: Sequence[Attachment] = (),
     idle_timeout: float | None = DEFAULT_TURN_IDLE_TIMEOUT_SECONDS,
-    turn: questions.TurnContext | None = None,
+    turn: turn_tokens.TurnContext | None = None,
 ) -> None:
     """Async task body: drive the adapter and publish its events.
 
@@ -137,41 +104,17 @@ async def run_turn_task(
     final_done: TurnDone | None = None
     error_event: TurnError | None = None
 
-    ask_tool_ids: set[str] = set()
-    watch = _IdleWatch(idle_timeout)
-    if turn is not None:
-        turn.on_waiting = watch.waiting
-
-    async def on_question(event: AgentEvent) -> None:
-        # A question the agent raised (or that closed): in the channel
-        # renderer's queue.
-        emit(event)
-
     async def finish() -> None:
-        if turn is not None:
-            # The turn is over. Stopped or failed, whatever it still waits on can
-            # no longer be answered and the reply says so; finished on its own,
-            # an open question stays open and its answer becomes the next
-            # message (spec chat "Keep a question open past the turn that asked it").
-            finished = (
-                error_event is None
-                and final_done is not None
-                and final_done.stop_reason != "interrupted"
-            )
-            await questions.close_turn(turn, keep_open=finished)
         try:
             await chat.end_turn(conversation_id)
         except Exception:
             log.warning("Could not bump conversation %s after its turn", conversation_id)
 
     try:
-        if turn is not None:
-            turn.on_event = on_question
-
         events = (await adapter.run_turn(prompt, attachments)).__aiter__()
         while True:
             try:
-                event = await _next_event(events, watch)
+                event = await _next_event(events, idle_timeout)
             except StopAsyncIteration:
                 break
             except TimeoutError:
@@ -190,11 +133,6 @@ async def run_turn_task(
                 )
                 emit(error_event)
                 break
-            if isinstance(event, ToolCall) and _is_ask_tool(event.tool_name):
-                ask_tool_ids.add(event.tool_use_id)
-                continue
-            if isinstance(event, ToolResult) and event.tool_use_id in ask_tool_ids:
-                continue
             emit(event)
             if isinstance(event, TurnDone):
                 final_done = event
@@ -260,7 +198,7 @@ async def run_turn_task(
         await finish()
     finally:
         if turn is not None:
-            questions.release_turn(turn)
+            turn_tokens.release_turn(turn)
         # Ownership-checked release — only our own entry, so a racing start that
         # registered a fresh turn is not lost.
         release_active(conversation_id, active)

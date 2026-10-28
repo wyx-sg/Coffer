@@ -45,7 +45,7 @@ Coffer 在界面、CLI、API 和文档中使用的术语，按英文字母顺序
 
 ### 内置工具（Built-in tool） {#built-in-tool}
 
-Coffer 自己提供的 MCP 工具，以保留前缀 `coffer__` 与上游工具一起列出：共有三个：始终列出的 `coffer__search_tools`，以及只在 Coffer 运行的轮次里才列出的 `coffer__ask` 和 `coffer__channel_read_thread`。见 [MCP 工具](/zh/reference/mcp-tools)。
+Coffer 自己提供的 MCP 工具，以保留前缀 `coffer__` 与上游工具一起列出：共有两个：始终列出的 `coffer__search_tools`，以及只在 Coffer 运行的轮次里才列出的 `coffer__channel_read_thread`。见 [MCP 工具](/zh/reference/mcp-tools)。
 
 ## C {#c}
 

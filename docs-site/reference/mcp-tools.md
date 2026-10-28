@@ -17,10 +17,9 @@ integrations against Coffer. For how the gateway works internally, see
 | Tool | Purpose | Present when |
 | --- | --- | --- |
 | [`coffer__search_tools`](#coffer-search-tools) | Rank the upstream tool catalogue against an intent. | Always. |
-| [`coffer__ask`](#coffer-ask) | Ask the owner a question and wait for the answer. | Only inside a turn Coffer runs. |
 | [`coffer__channel_read_thread`](#coffer-channel-read-thread) | Read a chat thread's earlier messages, page by page. | Only inside a turn Coffer runs. |
 
-Those three are the whole list. Coffer's knowledge, memory and its own records have no
+Those two are the whole list. There is no tool for asking the owner a question: an agent asks in its reply, and the owner's next message is the answer. Coffer's knowledge, memory and its own records have no
 tool: agents change and read knowledge with their own file tools, reach memory through their
 own native memory, and read the records with the `coffer` command line. See
 [Knowledge, memory and logs without a tool](#memory-and-logs-without-a-tool).
@@ -105,60 +104,6 @@ An entry also carries `outputSchema` when the upstream tool declares one, and
 }
 ```
 
-## coffer\_\_ask {#coffer-ask}
-
-Asks the owner a question in the middle of a task and waits. The turn pauses; the
-question shows on the [Conversations](/guides/chat) page (and as a card in the chat, for a
-conversation a [channel](/guides/channels) drives); the call returns when the owner answers
-in either place, when they stop the task, when the turn ends without waiting for the call,
-or after 24 hours. A turn that ends without waiting leaves the question open: the owner can
-still answer it, and the answer arrives as the conversation's next message. It takes the shape of Claude
-Code's own `AskUserQuestion`, which Coffer turns into the same question inside a Coffer
-conversation.
-
-It is **turn-scoped**: Coffer starts every agent process it runs a turn on with a random
-`COFFER_TURN_TOKEN`; the shim sends it as the `X-Coffer-Turn` header, and the gateway lists
-`coffer__ask` only in a session whose header names a turn that is running now. An agent
-started in a terminal never sees it, and a direct call there is answered "coffer__ask works
-only inside a Coffer conversation" (`isError: true`). The tool is not named in the
-handshake instructions or on the built-in server's page for that reason. The `coffer` entry
-Coffer writes into Codex's `config.toml` passes the variable through (`env_vars`) and
-allows a tool call to run for a day (`tool_timeout_sec = 86400`).
-
-### Input
-
-| Property | Type | Required | Description |
-| --- | --- | --- | --- |
-| `context` | string | no | Markdown shown above the questions: a summary, a diff, a path. |
-| `questions` | array | yes | One to four questions. |
-
-Each question:
-
-| Property | Type | Required | Description |
-| --- | --- | --- | --- |
-| `header` | string | yes | A short label. |
-| `question` | string | yes | The question. |
-| `options` | array | yes | Two to four options, each `{label, description?}`. Labels differ within a question. |
-| `multi_select` | boolean | no | Let the owner pick several options. Default `false`. |
-
-The owner can always type their own answer instead of choosing an option.
-
-### Result
-
-```json
-{
-  "answered": true,
-  "answers": [
-    { "header": "Apply", "question": "Apply this change to staging?", "selected": ["Yes"], "text": null }
-  ]
-}
-```
-
-`selected` holds the chosen labels and `text` the owner's own words (either may be empty,
-not both). When no answer came (the owner stopped the task, the turn ended first, or 24
-hours passed) the result is `{"answered": false, "message": "…"}`. A malformed ask fails with `isError: true` and a
-message saying what to fix.
-
 ## coffer\_\_channel\_read\_thread {#coffer-channel-read-thread}
 
 Reads a chat thread's messages page by page, newest page first. A thread turn on a
@@ -171,9 +116,12 @@ It reads only through a channel running on this machine, only a thread of a chat
 has paired (your direct chat with the bot, or a group you have addressed the bot in), and never
 a chat's main history. Images and files on the returned messages are downloaded with the bot's
 credentials, and the result gives their local paths. On Telegram, which has no history API,
-the call fails saying so. Like `coffer__ask` it is **turn-scoped**: listed and served only in a
-session whose `X-Coffer-Turn` header names a live turn, so an agent started in a terminal never
-sees it, and the handshake instructions do not name it. The channel note of a turn on a
+the call fails saying so. It is **turn-scoped**: Coffer starts every agent process it runs a
+turn on with a random `COFFER_TURN_TOKEN`, the shim sends it as the `X-Coffer-Turn` header, and
+the tool is listed and served only in a session whose header names a live turn. An agent started
+in a terminal never sees it, and the handshake instructions do not name it. The `coffer` entry
+Coffer writes into Codex's `config.toml` passes the variable through (`env_vars`) and allows a
+tool call to run for a day (`tool_timeout_sec = 86400`). The channel note of a turn on a
 platform that can read threads tells the agent about it.
 
 ### Input {#input-2}

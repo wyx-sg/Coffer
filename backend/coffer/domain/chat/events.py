@@ -9,8 +9,6 @@ Each class carries a ``type`` discriminator whose value identifies the event:
   ToolResult       → ``tool_result``
   TurnDone         → ``turn_done``
   TurnError        → ``turn_error``
-  QuestionAsked    → ``question_asked``
-  QuestionClosed   → ``question_closed``
 """
 
 from __future__ import annotations
@@ -19,7 +17,6 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from coffer.domain.chat.errors import SESSION_IN_USE_MESSAGE as SESSION_IN_USE_MESSAGE
-from coffer.domain.chat.question import QuestionBlock
 
 
 @dataclass(frozen=True)
@@ -123,34 +120,4 @@ class TurnError:
     type: Literal["turn_error"] = "turn_error"
 
 
-@dataclass(frozen=True)
-class QuestionAsked:
-    """The agent asked the owner a question and the turn is waiting (spec chat
-    "Pause a turn on a question for the owner"). Carries the pending block;
-    sent again, with the same ``question_id``, each time one question of a
-    several-question ask is answered and the rest still wait."""
-
-    question: QuestionBlock
-    type: Literal["question_asked"] = "question_asked"
-
-
-@dataclass(frozen=True)
-class QuestionClosed:
-    """A question left the pending state — answered (in full), or cancelled.
-    Carries the block as it now stands."""
-
-    question: QuestionBlock
-    type: Literal["question_closed"] = "question_closed"
-
-
-AgentEvent = (
-    TurnStarted
-    | TextDelta
-    | MessageEnd
-    | ToolCall
-    | ToolResult
-    | TurnDone
-    | TurnError
-    | QuestionAsked
-    | QuestionClosed
-)
+AgentEvent = TurnStarted | TextDelta | MessageEnd | ToolCall | ToolResult | TurnDone | TurnError

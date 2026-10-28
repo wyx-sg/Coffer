@@ -156,8 +156,8 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
             format=ConfigFileFormat.TOML,
             entry_style=McpEntryStyle.COMMAND_MAP,
             # Codex hands an MCP server only a default environment and cuts a
-            # tool call off after 60 s: pass the turn token through and let
-            # ``coffer__ask`` wait a day.
+            # tool call off after 60 s: pass the turn token through and let a
+            # long tool call run.
             entry_extras=(
                 ("env_vars", (TURN_TOKEN_ENV,)),
                 ("tool_timeout_sec", 24 * 60 * 60),

@@ -15,7 +15,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from typing import Any
 
-from coffer.application.chat import questions
+from coffer.application.chat import turn_tokens
 from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.service import ConversationRepo
 from coffer.domain.chat.agent_config import AgentConfig
@@ -139,9 +139,9 @@ class CodexAppServerProvider:
         overrides: dict[str, str] = (
             dict(await self._resolve_home_env()) if self._resolve_home_env else {}
         )
-        # The turn's token, for ``coffer__ask`` (the ``coffer`` entry in Codex's
-        # config passes ``COFFER_TURN_TOKEN`` through to the shim).
-        overrides.update(questions.turn_env(conversation_id))
+        # The turn's token, for the turn-scoped tools (the ``coffer`` entry in
+        # Codex's config passes ``COFFER_TURN_TOKEN`` through to the shim).
+        overrides.update(turn_tokens.turn_env(conversation_id))
         env = {**os.environ, **overrides} if overrides else None
         system_context = await compose_system_context(
             agent_key=self.agent_key,

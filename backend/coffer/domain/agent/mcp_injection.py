@@ -61,8 +61,7 @@ class McpInjectionSpec:
     format: ConfigFileFormat
     entry_style: McpEntryStyle = McpEntryStyle.COMMAND_MAP
     #: Further fields of the entry, as ``(key, value)`` pairs: the Codex entry
-    #: passes the turn token through to the shim (``env_vars``) and lets a tool
-    #: call run for 24 hours (``tool_timeout_sec``) — a ``coffer__ask`` waits on
-    #: the owner (spec mcp-gateway "Let an agent ask the owner a question during
-    #: a Coffer turn").
+    #: passes the turn token through to the shim (``env_vars``, spec mcp-gateway
+    #: "Offer turn-scoped tools only inside a Coffer turn") and lets a tool call
+    #: run for 24 hours (``tool_timeout_sec``), past Codex's 60 s default.
     entry_extras: tuple[tuple[str, Any], ...] = ()

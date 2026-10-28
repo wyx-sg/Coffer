@@ -159,7 +159,7 @@ async def test_a_stale_or_missing_agent_uid_is_drift_and_is_repaired(
 
 
 #: What Codex's ``coffer`` entry holds besides the uid: the turn token passed
-#: through to the shim and a tool call allowed to wait a day on the owner.
+#: through to the shim and a long tool call allowed to run.
 _CODEX_ENTRY: dict[str, Any] = {
     "command": "/bin/shim",
     "env_vars": ["COFFER_TURN_TOKEN"],
@@ -169,14 +169,14 @@ _CODEX_ENTRY: dict[str, Any] = {
 
 @pytest.mark.acceptance(
     spec="mcp-gateway",
-    scenario="an agent in a Coffer turn sees and calls coffer__ask",
+    scenario="an agent in a Coffer turn carries its turn token",
 )
-async def test_a_codex_entry_without_the_ask_settings_is_repaired(
+async def test_a_codex_entry_without_the_turn_settings_is_repaired(
     isolated_home: IsolatedHome,
 ) -> None:
-    """An entry an older Coffer wrote (uid right, nothing else) would cut a
-    ``coffer__ask`` off after Codex's 60 s default and hide the turn token from
-    the shim: it is drift, and the repair writes both settings."""
+    """An entry an older Coffer wrote (uid right, nothing else) would cut a long
+    tool call off after Codex's 60 s default and hide the turn token from the
+    shim: it is drift, and the repair writes both settings."""
     codex = fake_agent_dir(isolated_home, AgentType.CODEX)
     agent = _agent("u-codex", AgentType.CODEX)
     path = codex.write(

@@ -157,11 +157,7 @@ export function SessionRow({
         ) : (
           <>
             <TruncatedText text={row.title} className="text-sm font-label text-text" />
-            {row.needsYou ? (
-              <StatusWord tone="warn" className="shrink-0">
-                {t("sessions.row.needsYou")}
-              </StatusWord>
-            ) : row.running ? (
+            {row.running ? (
               <StatusWord tone="ok" className="shrink-0">
                 {t("sessions.row.running")}
               </StatusWord>

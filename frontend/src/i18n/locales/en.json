@@ -2001,8 +2001,6 @@
     "UPSTREAM_UNAVAILABLE": "Upstream server is unreachable — check its command or URL, then run Test connection",
     "ADOPT_SECRET_REF_EXISTS": "Adopting only creates new secrets — one of these names is already stored or is a standalone secret",
     "SECRET_BINDING_REJECTED": "That destination was refused in the Coffer app, so nothing was sent. Change the destination, or ask again from the Secrets page.",
-    "QUESTION_CLOSED": "That question was already answered, or its task has stopped, so this answer wasn't sent.",
-    "QUESTION_ANSWER_INVALID": "That answer doesn't fit the question. Choose from the options, or type your own answer.",
     "SECRET_BINDING_PENDING": "That secret is waiting for approval in the Coffer app before it is sent here.",
     "PRESENCE_GRANT_INVALID": "The approval could not be verified. Try again from the Coffer app.",
     "APPROVAL_NOT_FOUND": "That approval no longer exists.",
@@ -3789,7 +3787,6 @@
       "rename": "Rename",
       "delete": "Delete…",
       "titleAria": "Title",
-      "needsYou": "Needs you",
       "running": "Running",
       "stop": "Stop",
       "stopAria": "Stop {{title}}",
@@ -3812,9 +3809,8 @@
     "busy": {
       "title": "This session is busy",
       "chat": "the chat",
-      "running": "This turn is running in {{platform}}. Answer in {{platform}}, or stop this turn and continue in the terminal.",
-      "waiting": "This turn is waiting for your answer in {{platform}}. Answer in {{platform}}, or stop this turn and continue in the terminal.",
-      "answer": "Answer in {{platform}}",
+      "running": "This turn is running in {{platform}}. Keep using {{platform}}, or stop this turn and continue in the terminal.",
+      "answer": "Continue in {{platform}}",
       "stop": "Stop the turn and continue in the terminal",
       "stopping": "Stopping…",
       "failed": "Couldn’t stop the turn"

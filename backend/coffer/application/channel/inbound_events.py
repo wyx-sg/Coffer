@@ -27,8 +27,6 @@ from coffer.application.channel.bot_label import bot_name
 from coffer.application.channel.commands import ChannelCommands, SafeSend
 from coffer.application.channel.inbound_burst import InboundBurst
 from coffer.application.channel.ports import ChannelBinding
-from coffer.application.channel.question_card import parse_callback
-from coffer.application.channel.question_flow import QuestionPort, handle_tap
 from coffer.application.channel.reply_rewrite import FULL_REPORT_KIND, FULL_REPORT_REQUEST
 from coffer.application.channel.reply_tracking import WITHDRAW_KIND
 from coffer.application.channel.store_ports import ChannelPeerRepoPort
@@ -58,6 +56,8 @@ EXTERNAL_GROUP_WARNING = (
 #: The callback namespace the retired ``NEEDS YOU:`` buttons used; old cards in a
 #: chat may still carry it, and a tap on one does nothing.
 _OLD_REPLY_PREFIX = "reply:"
+#: The same for the retired question cards' buttons.
+_OLD_ASK_PREFIX = "ask:"
 
 
 @dataclass(frozen=True)
@@ -79,10 +79,6 @@ class InboundEvents:
     #: command runs, which settles whatever the chat is still holding first
     #: (``inbound_commands.route_slash``).
     burst: InboundBurst
-    #: The chat platform's questions: a tap on a question's button answers it
-    #: (see "Ask the owner in the chat and take the answer back to the agent").
-    #: ``None`` ignores such taps.
-    questions: QuestionPort | None = None
     #: The processor's own message path (``InboundProcessor.on_message``): a tap
     #: on a reply's full-report button is the owner asking for it in words, and
     #: goes through every gate a typed message does. ``None`` ignores such taps.
@@ -130,27 +126,10 @@ class InboundEvents:
                 return
             if not cb.sender_id or peer.sender_id != cb.sender_id:
                 return
-        if cb.data.startswith(_OLD_REPLY_PREFIX):
-            return  # a button of the retired NEEDS YOU: sentinel — nothing to answer
+        if cb.data.startswith((_OLD_REPLY_PREFIX, _OLD_ASK_PREFIX)):
+            return  # a button of a retired card (NEEDS YOU:, a question) — nothing to answer
         if cb.data.startswith(f"{FULL_REPORT_KIND}:"):
             await self._ask_full_report(cb)
-            return
-        tap = parse_callback(cb.data)
-        if tap is not None:
-            if self.questions is not None:
-                follow_up = await handle_tap(
-                    self.questions,
-                    tap,
-                    adapter=binding.adapter,
-                    chat_id=cb.chat_id,
-                    chat_kind=cb.chat_kind,
-                    message_id=cb.platform_message_id,
-                    via=binding.resource.uid,
-                    by=cb.sender_display or "owner",
-                )
-                if follow_up:
-                    # The turn that asked has ended: the answer starts the next.
-                    await self._as_owner(cb, follow_up)
             return
         kind, _, value = cb.data.partition(":")
         name = command_name(f"/{value}") if kind == "cmd" and value else None

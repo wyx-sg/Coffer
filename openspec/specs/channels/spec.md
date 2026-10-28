@@ -690,19 +690,22 @@ headings, links or tables; Telegram: its rich Markdown, tables included). It
 says only what the agent writes after its last tool call is sent, so the whole
 answer goes there; only where the transport collapses one
 (`collapses_details`, Telegram), to put anything long under a `## Details`
-heading; to call `coffer__ask` when it needs a yes or a choice before it goes on
-(see "Ask the owner in the chat and take the chat's answer back to the agent");
-that it cannot click permission or confirmation dialogs on the user's computer;
+heading; when it needs something from the person to go on, to ask in its reply,
+every question in that one message, and end its turn, since the answer comes as
+the next message ([chat](../chat/spec.md) "Ask the owner in the reply, not in a
+dialog"); that it cannot click permission or confirmation dialogs on the user's computer;
 and how to send a file (`MEDIA:/absolute/path` on its own line). Where the
 running transport can read threads, it also names `coffer__channel_read_thread`
 for a thread's earlier messages, with its arguments taken from the origin block.
 
 Coffer's default reply style asks for a reply that reads like a person texting
 a colleague: the answer first, in one or two plain sentences, because the first
-line becomes the notification; no process — no narrated steps (Coffer already
-shows that it is working), no list of what was checked, no spelled-out
+line becomes the notification; nothing repeated back — no "Got it" and no
+restating what the person just said; no process — no narrated steps (Coffer
+already shows that it is working), no list of what was checked, no spelled-out
 assumptions or caveats, and something the agent could not do is mentioned only
-when it changes what the reader does next; about 8 lines at most, with a list
+when it changes what the reader does next; when it needs something from the
+person, everything asked at once; about 8 lines at most, with a list
 only for three or more parallel items; a full report only as a file, offered
 first ("do you want the full report?") and sent as Markdown when the reader says
 yes or asked for it up front; logs over 30 lines as files, diagrams as PNG
@@ -732,8 +735,8 @@ a Reply Style the Owner Can Rewrite](../../../docs/decisions/channel-prompt-fixe
 - **WHEN** a channel turn's note is composed with Coffer's default reply style
 - **THEN** it asks for the answer in one or two plain sentences first, a full
   report only as a file the reader is asked about first, says only the text
-  after the last tool call is sent, and asks for diagrams as PNG files and a
-  `coffer__ask` call when the agent needs the owner's answer
+  after the last tool call is sent, and asks for diagrams as PNG files and for
+  every question to the person in one message of the reply
 
 #### Scenario: only a transport that collapses details is asked for a details section
 - **GIVEN** a Telegram direct chat and a SeaTalk group thread
@@ -1381,8 +1384,7 @@ Receipt and progress MUST be acknowledged, capability-gated (never by transport
 type). On a `supports_reactions` transport the owner's own message carries one
 reaction that follows the turn: a **received** mark the moment it arrives (a
 message queued behind a running turn keeps it), a **working** mark when its turn
-starts, and one of **done** (a clean finish, including one that ends on a
-question for the owner), **failed** (an error) or
+starts, and one of **done** (a clean finish), **failed** (an error) or
 **stopped** (interrupted) when it ends. Which emoji each stage uses is the
 transport's declared `reactions` set, because a platform may accept only a fixed
 list — each child spec names its own. A reaction replaces the previous one, so
@@ -2773,75 +2775,6 @@ only shouting. Five constraints bound it.
 - **THEN** no snapshot of the surface carries the mention, and the reply — a new
   message — opens with it exactly once
 
-### Requirement: Ask the owner in the chat and take the chat's answer back to the agent
-A question raised in a channel conversation (spec chat "Pause a turn on a question
-for the owner") MUST go out in that chat, one card per question in order: the
-context (a diff as a code block), "❓ <question>", the options — with their
-descriptions listed in the body when any has one — as up to four equal buttons,
-and "Or reply with your answer.". A multi-select question's buttons MUST toggle a
-✓ in place and a **Submit** button sends the choice. A tap MUST be owner-gated
-like every card tap. The owner's next text message in that chat or thread while
-the question is pending MUST be taken as the answer and not start or queue a
-turn. Nothing MUST be posted in the owner's name. Once the question is answered or
-cancelled, every card of it MUST be rewritten in place to
-"✓ Answered: <answer> · HH:MM" ("Stopped" when cancelled); where the platform
-cannot rewrite it, that line is sent as a reply. The card is itself a new
-message, so it notifies the owner however long the turn has run. In a group the
-card MUST open by @mentioning whoever sent the message the turn answers, as a
-reply does ("Mention the asker in a group answer"), and MUST carry the 🗑 of a
-group reply ("Withdraw a bot reply on the owner's command"), filed on its own and
-kept once the card is rewritten. A question that outlives its turn (spec chat
-"Keep a question open past the turn that asked it") keeps its card and buttons;
-a tap or a text reply answers it the same way, its card is rewritten, and the
-answer goes to the agent as the owner's next message, starting a turn in that
-chat or thread.
-
-#### Scenario: a tap answers the agent without a message from the owner
-- **GIVEN** a SeaTalk card "❓ Apply this change to staging?" with Yes and No
-- **WHEN** the owner taps Yes
-- **THEN** the agent receives "Yes", the card reads "✓ Answered: Yes · 11:42", and no message is sent as the owner
-
-#### Scenario: a text reply answers the pending question
-- **GIVEN** a pending question in the owner's Telegram chat
-- **WHEN** the owner sends "only the read replica"
-- **THEN** the agent receives that text as the answer and no new turn starts
-
-#### Scenario: a multi-select question is answered with Submit in the chat
-- **GIVEN** a SeaTalk card for a multi-select question with three options
-- **WHEN** the owner taps two options and then Submit
-- **THEN** the two buttons showed a ✓ before Submit, and the agent receives both labels
-
-#### Scenario: a question with described options lists them in the card
-- **GIVEN** a question whose options "Yes, apply" and "No, keep" each have a description
-- **WHEN** its card goes out
-- **THEN** the body lists "• Yes, apply — <description>" and "• No, keep — <description>" under the question, with one button per option and "Or reply with your answer."
-
-#### Scenario: several questions go out one card at a time
-- **GIVEN** an ask of two questions in a SeaTalk chat
-- **WHEN** the owner answers the first
-- **THEN** its card reads "✓ Answered: <answer> · HH:MM" and only then does the second question's card go out
-
-#### Scenario: a non-owner's tap is refused
-- **GIVEN** a question card in a paired group
-- **WHEN** a member who is not the owner taps an option
-- **THEN** the group is told only the bot’s owners can use it and the question stays pending
-
-#### Scenario: stopping a turn rewrites the pending card
-- **GIVEN** a pending question card in a chat
-- **WHEN** the owner stops the turn
-- **THEN** the card reads "Stopped" with its buttons gone
-
-#### Scenario: a group question card mentions the asker and carries a trash button
-- **GIVEN** a question raised in a SeaTalk group turn the owner started
-- **WHEN** its card goes out and is later answered
-- **THEN** the card opens with an @mention of the owner and carries the options and 🗑
-- **AND** the answered card keeps the 🗑, which withdraws that card
-
-#### Scenario: a question outlives a turn that finished without waiting
-- **GIVEN** a Codex turn in Telegram that asked "Apply this change to staging?" and finished without waiting
-- **WHEN** the owner taps Yes after the turn ended
-- **THEN** the card reads "✓ Answered: Yes · HH:MM" and a new turn starts with the question and "Yes" as its message
-
 ### Requirement: Ground a thread turn in a bounded slice of the thread
 A thread turn MUST fold a bounded slice of its thread, never the whole thread,
 and never what the conversation it runs in already saw. On a transport that can
@@ -2918,8 +2851,9 @@ that reads them, and the platform's note on what it cannot return. It reads only
 through a channel running on this machine, only a thread of a chat that channel
 has paired (the owner's direct chat, or a group the owner has addressed the bot
 in), and never a chat's main history. On a platform with no history API it
-fails saying so. It is turn-scoped like `coffer__ask`: listed to and served for
-only an MCP session inside a turn Coffer runs.
+fails saying so. It is turn-scoped ([mcp-gateway](../mcp-gateway/spec.md) "Offer
+turn-scoped tools only inside a Coffer turn"): listed to and served for only an
+MCP session inside a turn Coffer runs.
 
 #### Scenario: an agent pages back through a thread with the tool
 - **GIVEN** a paired group thread of eight messages on a transport that can read
@@ -3051,7 +2985,7 @@ the channel's status settings.
 #### Scenario: a rewritten style cannot remove how the channel works
 - **GIVEN** a channel whose direct-chat reply style is a rewrite
 - **WHEN** a direct-chat turn's system prompt is composed
-- **THEN** it still says how to call `coffer__ask`, how to send a file with
+- **THEN** it still says to ask in the reply, how to send a file with
   `MEDIA:`, that only the text after the last tool call is sent and that it
   cannot click dialogs
 

@@ -104,7 +104,6 @@ class SessionConversation:
 
     conversation_id: str
     running: bool
-    needs_you: bool
     channel: SessionChannel | None = None
 
 

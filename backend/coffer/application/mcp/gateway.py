@@ -26,7 +26,6 @@ from coffer.application.mcp.gateway_aggregate_lists import (
     list_prompts_across,
     list_resources_across,
 )
-from coffer.application.mcp.gateway_ask import dispatch_turn_ask, turn_is_live, with_ask_tool
 from coffer.application.mcp.gateway_builtin import (
     agent_actor_label,
     dispatch_builtin_tool,
@@ -66,7 +65,7 @@ from coffer.application.mcp.tool_exposure import exposure_overrides
 from coffer.application.mcp.upstream_auth import UpstreamAuthMonitor
 from coffer.application.resource_service import ResourceService
 from coffer.application.runtime.supervisor import spawn
-from coffer.application.turn_ask import ASK_TOOL_NAME, TurnAskPort
+from coffer.application.turn_scope import TurnLivePort, turn_is_live
 from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.jsonrpc_errors import INVALID_REQUEST, METHOD_NOT_FOUND, JsonRpcError
 
@@ -96,7 +95,7 @@ class MCPGatewaySession:
         builtin_tools: BuiltinToolRegistry | None = None,
         tiering: TieringConfig | None = None,
         auth_monitor: UpstreamAuthMonitor | None = None,
-        turn_ask: TurnAskPort | None = None,
+        turn_live: TurnLivePort | None = None,
     ) -> None:
         self.id = session_id or str(uuid.uuid4())
         self._auth_monitor = auth_monitor
@@ -121,7 +120,7 @@ class MCPGatewaySession:
         # The agent's launch cwd (params._meta["coffer/cwd"]), threaded into built-in calls.
         self._session_cwd: str | None = None
         # The turn's ``X-Coffer-Turn`` token (set per request); turn-scoped tools need it live.
-        self._turn_ask = turn_ask
+        self._turn_live = turn_live
         self.turn_token: str | None = None
         # Servers whose notifications this session already subscribed to.
         self._notification_subscriptions: set[str] = set()
@@ -276,7 +275,7 @@ class MCPGatewaySession:
     @property
     def _builtin(self) -> BuiltinToolRegistry:
         """The built-ins this session sees now: turn-scoped ones only inside a live turn."""
-        return self._registry.view(in_turn=turn_is_live(self._turn_ask, self.turn_token))
+        return self._registry.view(in_turn=turn_is_live(self._turn_live, self.turn_token))
 
     async def _handle_tools_list(self) -> dict[str, Any]:
         servers, hidden, exposure, _ = await self._servers_and_hidden()
@@ -293,7 +292,7 @@ class MCPGatewaySession:
             degraded=self._degraded,
         )
         self.last_hidden_count = listing.hidden_count
-        return {"tools": with_ask_tool(listing.tools, self._turn_ask, self.turn_token)}
+        return {"tools": listing.tools}
 
     # --- tools/call, resources/read, prompts/get (delegated to gateway_handlers) ---
 
@@ -318,10 +317,6 @@ class MCPGatewaySession:
                 servers=servers,
                 hidden=hidden,
                 **self._log_ctx,
-            )
-        if name == ASK_TOOL_NAME:
-            return await dispatch_turn_ask(
-                params=params, port=self._turn_ask, token=self.turn_token, **self._log_ctx
             )
         if self._builtin.is_builtin(name):
             params = await self._inject_session_context(name, params)

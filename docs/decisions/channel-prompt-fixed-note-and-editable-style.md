@@ -9,8 +9,8 @@
 
 Every turn that comes from a chat channel carries a system-prompt append that
 Coffer writes: where the agent is (SeaTalk group thread, Telegram direct chat),
-what Markdown renders there, how to send a file (`MEDIA:/absolute/path`), how
-to ask the owner with buttons (`coffer__ask`), that only the text after the
+what Markdown renders there, how to send a file (`MEDIA:/absolute/path`), to ask the
+owner in the reply with every question in one message, that only the text after the
 last tool call is sent, that it cannot click dialogs on the computer, and how a
 reply should read (outcome first, about 15 lines, no narrated steps, evidence
 quoted verbatim). The owner could add instructions of their own, per chat kind,
@@ -23,8 +23,7 @@ told, and could not change any of it — only pile instructions on top, some of
 which contradicted it ("answer in detail" after "at most about 15 lines").
 
 Coffer's text is not one kind of thing. About half of it is a **contract** with
-the channel: the agent sends a file only by writing the `MEDIA:` line, a
-question reaches the owner as buttons only through `coffer__ask`, a reply
+the channel: the agent sends a file only by writing the `MEDIA:` line, a reply
 written before the last tool call is never sent. Change those words and a
 feature stops working with no error anywhere. It also varies with the running
 transport (what renders, whether `## Details` collapses, whether threads can be
@@ -58,7 +57,7 @@ edited prompt when Coffer's own text improves.
 ### Option A — Split it: the channel note is shown read-only, the reply style is editable with a default (chosen)
 
 The append becomes two parts. The **channel note** — where the agent is, what
-renders, `MEDIA:`, `coffer__ask`, the last-tool-call rule, no clicking dialogs,
+renders, `MEDIA:`, asking in the reply, the last-tool-call rule, no clicking dialogs,
 the thread tool — is generated per channel and chat kind as before and shown
 on the Settings tab read-only. The **reply style** — write like a person
 texting, the answer first in one or two sentences, no process or caveat lists,
@@ -106,8 +105,8 @@ it, and the stored text replaces Coffer's on every turn.
 
 - Pros: maximum freedom; one field, one concept; the pattern most chat
   front-ends use.
-- Cons: deleting or rewording the `MEDIA:` or `coffer__ask` lines silently
-  breaks sending files and asking questions, and nothing tells the owner why.
+- Cons: deleting or rewording the `MEDIA:` line silently
+  breaks sending files, and nothing tells the owner why.
   The note is generated per transport (what renders, details, threads), so a
   saved copy freezes one transport's state and is wrong after a capability
   change. Every improvement to the text stops reaching a channel the moment it

@@ -98,8 +98,8 @@ Coffer tells the agent which platform and kind of chat it is in and what renders
 
 Every turn from a channel carries instructions from Coffer, after the agent's own system prompt. They come in two parts, and the channel's **Settings** tab shows both, for direct chats and for group chats:
 
-- **Channel note** (read-only). How this channel works: which platform and kind of chat the agent is in, what renders there, that only what it writes after its last tool call is sent, how to send a file (`MEDIA:/absolute/path`), how to ask you with buttons (`coffer__ask`), that it cannot click dialogs on your computer, and, where the platform allows it, how to read a thread's earlier messages. Coffer writes it for each channel and keeps it up to date, and you cannot edit it, because changing its wording can quietly stop files or questions from working.
-- **Reply style** (yours to rewrite). How a reply should read: like a person texting, the answer first in one or two sentences, no step-by-step narration or caveat lists, about 8 lines at most, a full report only as a file it offers first, diagrams as images, and the key evidence quoted verbatim. Until you change it, it shows **Default** and follows Coffer's default, including future improvements to it.
+- **Channel note** (read-only). How this channel works: which platform and kind of chat the agent is in, what renders there, that only what it writes after its last tool call is sent, how to send a file (`MEDIA:/absolute/path`), to ask you in its reply with every question in one message, that it cannot click dialogs on your computer, and, where the platform allows it, how to read a thread's earlier messages. Coffer writes it for each channel and keeps it up to date, and you cannot edit it, because changing its wording can quietly stop files from being sent.
+- **Reply style** (yours to rewrite). How a reply should read: like a person texting, the answer first in one or two sentences, nothing repeated back (no "Got it"), no step-by-step narration or caveat lists, everything it needs from you asked at once, about 8 lines at most, a full report only as a file it offers first, diagrams as images, and the key evidence quoted verbatim. Until you change it, it shows **Default** and follows Coffer's default, including future improvements to it.
 
 A channel keeps one reply style per kind of chat, because a group usually wants different manners from a private chat:
 
@@ -116,15 +116,7 @@ A change applies from the next message, in every conversation of that kind, with
 
 ### Questions for you
 
-When the agent needs a yes or a choice before it goes on — a change it is about to make, say — it asks, and the turn waits for you. The question arrives as one card: what the agent wants you to see (a summary, a diff as a code block), then `❓` and the question, then up to four buttons, one to a line, with each option's description listed above them when it has one, and "Or reply with your answer." underneath. Tap an option, or just type your answer as the next message in that chat or thread: your text is the answer, it is not sent to the agent as a new message, and no turn starts. Nothing is ever posted in your name.
-
-A question that allows several options shows them as toggles: each tap puts a `✓` on that button, and **Submit** sends the ticked ones (Submit with nothing ticked does nothing). When one ask holds several questions, the next card goes out only after you answer the previous one. In a group, only the channel's owner can answer; anyone else's tap is refused and the question stays open. On a platform without buttons the options are listed in the message and you type the answer.
-
-Questions are answered here, in the chat; the Conversations page has no answer card. Once the question is answered, or the turn is stopped, its card is rewritten in place to `✓ Answered: Yes · 11:42` (`⏹ Stopped` after a stop) and its buttons go away; where the platform cannot rewrite the message, that line is sent as a reply instead.
-
-In a group the card opens by @mentioning you, so the question notifies you like a reply does, and it carries the same 🗑 as a reply; the 🗑 stays after the card is rewritten and withdraws only that card.
-
-Some agents end their turn without waiting for the answer (Codex can do this). The question then stays open: its card keeps its buttons, and the conversation still shows "Needs you". Answer it the same way whenever you get to it, and your answer goes to the agent as your next message, which starts a new turn that carries on from there. A new question from the agent replaces one still open, and an open question is dropped after 24 hours or when Coffer restarts.
+When the agent needs something from you before it goes on, it asks at the end of its reply, every question in that one message, and ends its turn. Reply as you would to a colleague (in a group, @mention the bot, since only those messages reach it); your reply is the next message and starts the next turn. There are no question buttons: a quick yes is typed. If you answer only part, the agent asks again for the part still missing.
 
 ### Grouping messages
 

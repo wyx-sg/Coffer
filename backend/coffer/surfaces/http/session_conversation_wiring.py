@@ -16,7 +16,6 @@ from coffer.application.agent.agent_sessions_listing import AgentSessionsListing
 from coffer.application.agent.native_session_service import NativeSessionService
 from coffer.application.agent.service import AgentService
 from coffer.application.chat.conversation_repo import Narrowing
-from coffer.application.chat.questions import needs_you
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.application.chat.turn_state import is_running
@@ -66,7 +65,6 @@ def session_conversation(conv: Conversation, extras: Extras) -> SessionConversat
     return SessionConversation(
         conversation_id=conv.id,
         running=is_running(conv.id),
-        needs_you=needs_you(conv.id),
         channel=channel,
     )
 

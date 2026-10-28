@@ -11,8 +11,8 @@ from typing import Any
 import pytest
 from starlette.testclient import TestClient
 
-from coffer.application.chat import questions
-from coffer.application.turn_ask import TURN_HEADER
+from coffer.application.chat import turn_tokens
+from coffer.application.turn_scope import TURN_HEADER
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 from tests.support.mcp_wire import INIT_PARAMS
@@ -22,9 +22,9 @@ _TOOL = "coffer__channel_read_thread"
 
 @pytest.fixture(autouse=True)
 def _clean() -> Iterator[None]:
-    questions.clear_all()
+    turn_tokens.clear_all()
     yield
-    questions.clear_all()
+    turn_tokens.clear_all()
 
 
 def _mcp(client: TestClient, headers: dict[str, str], method: str, params: Any = None) -> Any:
@@ -54,7 +54,7 @@ def test_the_tool_is_listed_and_served_only_inside_a_turn(
     with TestClient(create_app()) as client:
         set_active_token("test-token")
         base = {"X-Coffer-Token": "test-token"}
-        turn = questions.register_turn("conv-1")
+        turn = turn_tokens.register_turn("conv-1")
         in_turn = {**base, TURN_HEADER: turn.token}
 
         def names(headers: dict[str, str]) -> set[str]:
@@ -64,7 +64,7 @@ def test_the_tool_is_listed_and_served_only_inside_a_turn(
         listed_in_terminal = names(base)
         served = _mcp(client, in_turn, "tools/call", {"name": _TOOL, "arguments": args})
         refused = _mcp(client, base, "tools/call", {"name": _TOOL, "arguments": args})
-        questions.release_turn(turn)
+        turn_tokens.release_turn(turn)
 
     assert _TOOL in listed_in_turn
     assert _TOOL not in listed_in_terminal

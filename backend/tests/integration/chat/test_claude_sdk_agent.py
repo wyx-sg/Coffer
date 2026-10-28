@@ -740,6 +740,17 @@ async def test_adapter_runs_with_bypass_permissions():
     assert factory.last_options.cwd == "/tmp"
 
 
+@pytest.mark.acceptance(spec="chat", scenario="Claude Code runs without AskUserQuestion")
+@pytest.mark.asyncio
+async def test_adapter_runs_without_ask_user_question():
+    # Nobody is at the CLI to answer its dialog; the agent asks in its reply.
+    factory = _Factory(_basic_messages())
+    adapter = _adapter(factory)
+    await _collect(adapter, _user_turn("hi"))
+    assert factory.last_options is not None
+    assert "AskUserQuestion" in factory.last_options.disallowed_tools
+
+
 # ---------------------------------------------------------------------------
 # Cancellation
 # ---------------------------------------------------------------------------

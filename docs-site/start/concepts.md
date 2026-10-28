@@ -94,7 +94,7 @@ Besides upstream tools, the gateway always offers Coffer's own tool, prefixed `c
 | --- | --- |
 | `coffer__search_tools` | Ranks the full upstream catalogue against a plain-language query and returns real tool schemas the agent can then call. |
 
-Inside a turn Coffer runs (from the **Conversations** page or a channel), the session also gets two turn-scoped tools: `coffer__ask`, which asks you a question and waits for the answer, and `coffer__channel_read_thread`, which reads a chat thread's earlier messages. An agent started in a terminal never sees them.
+Inside a turn Coffer runs (from the **Conversations** page or a channel), the session also gets a turn-scoped tool, `coffer__channel_read_thread`, which reads a chat thread's earlier messages. An agent started in a terminal never sees it. When an agent needs something from you, it asks in its reply and your next message is the answer; there is no ask tool.
 
 There is no knowledge, memory or log tool. Agents read and change knowledge pages, which are Markdown files, with their own file tools, reach memory through their own native memory, and Coffer's records are read with `coffer log audit|mcp|daemon`.
 

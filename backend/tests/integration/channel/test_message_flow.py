@@ -144,3 +144,32 @@ async def test_dangling_active_conversation_is_recreated_on_next_message(
     assert fresh is not None
     assert fresh != old_conversation
     assert env.user_texts(fresh) == ["second"]
+
+
+@pytest.mark.acceptance(spec="chat", scenario="an answer arrives as the next message")
+async def test_an_answer_to_a_question_in_the_reply_starts_the_next_turn(
+    env: ChannelEnv,
+) -> None:
+    env.provider.adapter = FakeAgentAdapter(
+        [
+            TurnStarted(),
+            TextDelta(text="Which database: the primary or only the read replica?"),
+            TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+        ]
+    )
+    _resource, adapter = await env.paired_channel()
+
+    await env.processor.on_message(inbound("tg", "owner", "check the slow queries"))
+    await wait_until(lambda: any("read replica?" in t for t in adapter.texts()))
+
+    # The question was plain reply text: no card, nothing pending.
+    assert not adapter.cards
+    await env.processor.on_message(inbound("tg", "owner", "only the read replica"))
+
+    conversations = await env.conversations()
+    await wait_until(lambda: len(env.user_texts(conversations[0].id)) == 2)
+    assert len(conversations) == 1
+    assert env.user_texts(conversations[0].id) == [
+        "check the slow queries",
+        "only the read replica",
+    ]
