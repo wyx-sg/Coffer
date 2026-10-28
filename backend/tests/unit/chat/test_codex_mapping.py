@@ -21,6 +21,7 @@ from coffer.domain.chat.events import (
 )
 from coffer.infrastructure.chat.codex_mapping import (
     CodexParseState,
+    is_own_notification,
     map_codex_notification,
 )
 
@@ -277,3 +278,19 @@ def test_a_failed_dynamic_tool_and_a_web_search_are_tool_calls() -> None:
     assert search[0] == ToolCall(
         tool_use_id="w1", tool_name="webSearch", tool_input={"query": "codex"}
     )
+
+
+def test_own_notification_is_the_turns_thread_or_names_none() -> None:
+    state = CodexParseState(thread_id="t")
+    assert is_own_notification({"threadId": "t", "delta": "x"}, state)
+    assert is_own_notification({"thread": {"id": "t"}}, state)
+    assert is_own_notification({"delta": "x"}, state)
+    # Codex's memory agent or a sub-agent on the same app-server.
+    assert not is_own_notification({"threadId": "memory-agent", "delta": "x"}, state)
+    assert not is_own_notification({"thread": {"id": "memory-agent"}}, state)
+
+
+def test_a_thread_named_before_the_turns_own_is_known_is_another_threads() -> None:
+    state = CodexParseState()
+    assert not is_own_notification({"thread": {"id": "memory-agent"}}, state)
+    assert not is_own_notification({"threadId": "memory-agent", "turn": {"id": "u"}}, state)

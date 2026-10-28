@@ -200,7 +200,7 @@ Codex 适配器通过 `codex app-server` 驱动 Codex：stdio 上的 JSON-RPC 2.
 2. 用存储的线程 id 执行 `thread/resume`，或者 `thread/start`。Coffer 的系统上下文放在 `developerInstructions` 里，它是追加到 Codex 的基础指令上，不会替换它们。被拒绝的续接会回退一次到 `thread/start`。
 3. `turn/start`，带上提示词。Coffer 不传 `effort`，所以 Codex 按它自己配置里的推理强度运行。
 
-通知被映射为平台事件。取消时，适配器发送 `turn/interrupt`，保存线程 id 并关闭进程。
+通知被映射为平台事件，但只映射本轮次自己线程的通知，也就是 `thread/start` 或 `thread/resume` 返回的那个线程。同一个 app-server 上还跑着 Codex 后台的记忆整理智能体，以及本轮次派生的子智能体，各自在自己的线程上；它们的文字不是回复，它们的 `turn/completed` 也不会结束本轮次。取消时，适配器发送 `turn/interrupt`，保存线程 id 并关闭进程。
 
 ::: details 为什么每个轮次一个子进程，而不是池化的智能体
 两个适配器都为每个轮次开一个新会话，并续接智能体自己存储的会话。智能体的状态在智能体自己的文件里，而不在一个 Coffer 需要监管、做健康检查、并在守护进程重启后恢复的常驻进程里。代价是每个轮次都要启动进程。好处是崩溃或卡住的智能体只影响一个轮次，守护进程重启时除了进行中的轮次什么都不会丢。

@@ -364,6 +364,39 @@ async def test_adapter_streams_events_and_persists_thread_id():
     assert factory.session.closed is True
 
 
+@pytest.mark.acceptance(spec="chat", scenario="another Codex thread's reply stays out of the turn")
+@pytest.mark.asyncio
+async def test_another_threads_text_and_completion_stay_out_of_the_reply():
+    # Codex runs its memory consolidation agent (and any sub-agent) on the same
+    # app-server: that thread's text is not the reply, and its turn/completed
+    # does not end this turn.
+    foreign = [
+        _Frame("thread/start", "thread/started", {"thread": {"id": "memory-agent"}}),
+        _Frame(
+            "turn/start",
+            "item/agentMessage/delta",
+            {"threadId": "memory-agent", "turnId": "m1", "itemId": "x", "delta": "memo"},
+        ),
+        _Frame(
+            "turn/start",
+            "turn/completed",
+            {"threadId": "memory-agent", "turn": {"id": "m1", "status": "completed"}},
+        ),
+    ]
+    saved: list[str] = []
+
+    async def on_session(sid: str) -> None:
+        saved.append(sid)
+
+    server = FakeCodexAppServer(frames=foreign + _basic_frames())
+    adapter = _adapter(_Factory(server), on_session=on_session)
+    events = await asyncio.wait_for(_collect(adapter, _user_turn("hi")), timeout=5)
+
+    assert [e.text for e in events if isinstance(e, TextDelta)] == ["Hello"]
+    assert [type(e) for e in events].count(TurnDone) == 1
+    assert saved == ["thread-1"]
+
+
 @pytest.mark.asyncio
 async def test_adapter_reports_the_model_the_thread_runs_on():
     server = FakeCodexAppServer(frames=_basic_frames(), model="gpt-test-5")
