@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import type { Cli } from "@/lib/api/clis";
 import { neededByCount, neededTotal, serverNames } from "@/lib/clis/format";
 import { cn } from "@/lib/utils";
+import { useScrollIntoViewWhenCurrent } from "@/lib/hooks/useScrollIntoViewWhenCurrent";
 
 interface Props {
   cli: Cli;
@@ -54,11 +55,13 @@ const TONE = {
 } as const;
 
 export function CliRow({ cli, selected, onOpen }: Props) {
+  const rowRef = useScrollIntoViewWhenCurrent<HTMLButtonElement>(selected);
   const line = useStatusLine(cli);
   return (
     <li>
       <button
         type="button"
+        ref={rowRef}
         aria-current={selected ? "page" : undefined}
         onClick={onOpen}
         className={cn(

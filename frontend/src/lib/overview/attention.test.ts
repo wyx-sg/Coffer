@@ -2,6 +2,7 @@
 import { describe, expect, test } from "vitest";
 
 import type { AttentionItem } from "@/lib/hooks/useAttention";
+import { acceptance } from "@/test/acceptance";
 import {
   actionIcon,
   actionLabelKey,
@@ -73,13 +74,43 @@ describe("pages", () => {
     expect(itemPage(item({ kind: "skill", uid: null }))).toBe("/skills");
   });
 
+  test("a skill-store folder no skill claims opens selected under Not in your library", () => {
+    const orphan = item({
+      kind: "skill",
+      uid: null,
+      title: "coffer-communicating-at-work",
+      reason_code: "orphan_master",
+      action: { verb: "review", method: "GET", path: "/api/v1/reconcile/plan", body: null },
+    });
+    expect(itemPage(orphan)).toBe("/skills?orphan=coffer-communicating-at-work");
+    expect(actionPage(orphan)).toBe("/skills?orphan=coffer-communicating-at-work");
+  });
+
+  test("a stopped sync round opens its own review page", () => {
+    const sync = (reason_code: string) => itemPage(item({ kind: "sync", uid: "f1", reason_code }));
+    expect(sync("sync_conflicts")).toBe("/sync/conflicts");
+    expect(sync("sync_join_choices")).toBe("/sync/conflicts?mode=join");
+    expect(sync("sync_deletions_held")).toBe("/sync/deletions");
+    expect(sync("sync_plaintext_found")).toBe("/sync");
+  });
+
   test("an agent whose type is not known yet opens the agent list", () => {
     expect(itemPage(item({ kind: "agent", uid: "a1" }))).toBe("/agents");
   });
 
   test("a missing secret is added on the Secrets page, the name still opens the server", () => {
-    const secret = item({ reason_code: "mcp_missing_secret", uid: "m1" });
-    expect(actionPage(secret)).toBe("/secrets");
+    const secret = item({
+      reason_code: "mcp_missing_secret",
+      uid: "m1",
+      action: {
+        verb: "set_secret",
+        method: "POST",
+        path: "/api/v1/secrets",
+        body: { ref: "gh/token" },
+      },
+    });
+    expect(actionPage(secret)).toBe("/secrets/gh%2Ftoken");
+    expect(actionPage({ ...secret, action: { ...secret.action, body: null } })).toBe("/secrets");
     expect(itemPage(secret)).toBe("/mcp-servers/github");
   });
 
@@ -94,8 +125,14 @@ describe("pages", () => {
       uid: "s1",
       title: "gh-triage",
       reason_code: "skill_missing_secret",
+      action: {
+        verb: "set_secret",
+        method: "POST",
+        path: "/api/v1/secrets",
+        body: { ref: "GH_TOKEN" },
+      },
     });
-    expect(actionPage(secret)).toBe("/secrets");
+    expect(actionPage(secret)).toBe("/secrets/GH_TOKEN");
     expect(itemPage(secret)).toBe("/skills/gh-triage");
   });
 });
@@ -220,4 +257,30 @@ test("a provider's endpoint is checked again in place; its rejected key opens it
   });
   expect(inPlaceVerb(rejected)).toBeNull();
   expect(actionPage(rejected)).toBe("/model-providers/cn-1");
+});
+
+acceptance("web-ui", "a needs-you row opens with its item selected", () => {
+  const orphan = item({
+    kind: "skill",
+    uid: null,
+    title: "notes-helper",
+    reason_code: "orphan_master",
+    action: { verb: "review", method: "GET", path: "/api/v1/reconcile/plan", body: null },
+  });
+  const secret = item({
+    kind: "skill",
+    uid: "s1",
+    title: "gh-triage",
+    reason_code: "skill_missing_secret",
+    action: {
+      verb: "set_secret",
+      method: "POST",
+      path: "/api/v1/secrets",
+      body: { ref: "GH_TOKEN" },
+    },
+  });
+  const conflicts = item({ kind: "sync", uid: "f1", title: "Sync", reason_code: "sync_conflicts" });
+  expect(actionPage(orphan)).toBe("/skills?orphan=notes-helper");
+  expect(actionPage(secret)).toBe("/secrets/GH_TOKEN");
+  expect(actionPage(conflicts)).toBe("/sync/conflicts");
 });

@@ -23,6 +23,7 @@ import { toneTextClass } from "@/lib/statusColors";
 import type { StatusTone } from "@/lib/statusTone";
 import { openRowTarget } from "@/lib/rowClick";
 import { cn } from "@/lib/utils";
+import { useScrollIntoViewWhenCurrent } from "@/lib/hooks/useScrollIntoViewWhenCurrent";
 
 interface Props {
   skill: SkillOut;
@@ -119,6 +120,7 @@ export function SkillLibraryRow({
   onCheckedChange,
   onOpen,
 }: Props) {
+  const rowRef = useScrollIntoViewWhenCurrent<HTMLAnchorElement>(current);
   const { t } = useTranslation();
   // Built-in skills are never a problem to fix.
   const attention = (skill.builtin ? [] : skillAttention(skill, clis, drift))[0];
@@ -150,6 +152,7 @@ export function SkillLibraryRow({
         to={to}
         data-row-open
         onClick={onOpen}
+        ref={rowRef}
         aria-current={current ? "page" : undefined}
         className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-2 pr-2.5 text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring"
       >

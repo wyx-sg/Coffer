@@ -2376,7 +2376,14 @@ first: one row per item of the attention list ([resource-framework](../resource-
 "Report what needs a person across every kind"), most severe first and then
 oldest, each with its resource and kind, the reason in a sentence, since when
 where that is known, and exactly one action that opens the page — or the tab —
-where the item is dealt with. The action reads what it does for that kind and
+where the item is dealt with. The name and the action MUST land on the item
+itself, never on a list the person has to search: its detail page with its row
+selected in the list (and scrolled into view), a skill-store folder no skill
+claims open under the Skills page's **Not in your library**, a missing secret
+open on Secrets, a stopped sync round on its own review page (conflicts,
+held deletions, a first join's differing files). Only an item that names no
+single thing (all missing secrets on this Mac, a check that failed) opens its
+area's page. The action reads what it does for that kind and
 reason, not the bare verb — a channel's check is **Reconnect channel**, sync's
 review **Review held changes** — behind a
 small icon for its verb (a key for a secret, an eye for a review, a plug for connecting,
@@ -2435,6 +2442,11 @@ for what agents share follows.
 - **GIVEN** two failing MCP servers, one failing for five hours and one for two, a skill whose link drifted an hour ago, and an agent the user has not connected
 - **WHEN** the user opens Overview
 - **THEN** Needs you lists the older failing server first, then the other, then the skill, then the agent, each with its reason, since when where that is known, and one action opening the page or tab where it is dealt with
+
+#### Scenario: a needs-you row opens with its item selected
+- **GIVEN** a folder in Coffer's skill store that no skill claims, a skill whose secret is not set, and a sync round stopped on conflicts
+- **WHEN** the user follows each row's action from Needs you
+- **THEN** the folder opens selected under Not in your library, the secret opens on Secrets, and the conflicts open on their review page
 
 #### Scenario: health tiles carry the numbers and lines of Overview's board
 - **GIVEN** two agents where one is not connected, a reconnecting channel, a knowledge collection edited a minute ago, nine memories in the hub last synced 14 minutes ago, a sync round that ended 4 minutes ago with one commit behind, a command that is not logged in, and a secret nothing uses

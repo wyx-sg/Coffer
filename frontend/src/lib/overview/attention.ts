@@ -4,7 +4,9 @@
 // resource-framework "Report what needs a person across every kind") sorted
 // most severe first, then oldest first, and each row links to the page where
 // the person can act on it. The action's `method`/`path` name a daemon route,
-// not a page, so the page is chosen here from the item's kind and reason.
+// not a page, so the page is chosen here from the item's kind and reason:
+// the page with the item itself selected (its detail page, the orphan folder,
+// the secret, the review page), never a list the person has to search.
 import { Eye, KeyRound, Plug, RefreshCw, Wrench, type LucideIcon } from "lucide-react";
 
 import type { AttentionItem } from "@/lib/hooks/useAttention";
@@ -93,19 +95,42 @@ function detailPage(item: AttentionItem, agentType: string | undefined): string 
   return detail({ uid: item.uid, title: item.title, agentType });
 }
 
-/** The page an item's name opens: its detail page, its kind's list, or
- *  Activity. `agentType` is the type of the agent an agent item is about. */
+/** A skill folder that no library skill claims (the reconciler's orphan). */
+const ORPHAN_SKILL = "orphan_master";
+
+/** Sync's stops each open their own review page, not the Sync page above them. */
+const SYNC_PAGES: Record<string, string> = {
+  sync_conflicts: "/sync/conflicts",
+  sync_join_choices: "/sync/conflicts?mode=join",
+  sync_deletions_held: "/sync/deletions",
+};
+
+/** The page an item's name opens, with the item itself selected there: its
+ *  detail page, the orphan folder on Skills, a sync stop's review page;
+ *  otherwise its kind's list, or Activity. `agentType` is the type of the agent an agent item is about. */
 export function itemPage(item: AttentionItem, agentType?: string): string {
   if (item.kind === "secret" && SECRETS_PAGE_REASONS.has(item.reason_code)) return "/secrets";
+  if (item.kind === "skill" && item.reason_code === ORPHAN_SKILL) {
+    return `/skills?orphan=${encode(item.title)}`;
+  }
+  if (item.kind === "sync" && SYNC_PAGES[item.reason_code]) return SYNC_PAGES[item.reason_code];
   const page = PAGES[item.kind];
   if (!page) return "/activity";
   return detailPage(item, agentType) ?? page.list;
 }
 
-/** The page an item's one action opens — a missing secret is added on Secrets. */
+/** The secret an item's action would set (`body.ref`), if it names one. */
+function secretRef(item: AttentionItem): string | null {
+  const ref = item.action.body?.ref;
+  return typeof ref === "string" && ref ? ref : null;
+}
+
+/** The page an item's one action opens — a missing secret is added on
+ *  Secrets, with that secret open. */
 export function actionPage(item: AttentionItem, agentType?: string): string {
   if (item.reason_code === "mcp_missing_secret" || item.reason_code === "skill_missing_secret") {
-    return "/secrets";
+    const ref = secretRef(item);
+    return ref ? `/secrets/${encode(ref)}` : "/secrets";
   }
   return itemPage(item, agentType);
 }

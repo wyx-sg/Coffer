@@ -13,6 +13,7 @@ import { channelHeading, useChannelStateWords } from "./channelLabels";
 import type { ChannelView } from "@/lib/channels/channelState";
 import { channelPlatform } from "@/lib/channels/channelState";
 import { PlatformMark } from "./PlatformMark";
+import { useScrollIntoViewWhenCurrent } from "@/lib/hooks/useScrollIntoViewWhenCurrent";
 
 interface Props {
   channel: ResourceOut;
@@ -22,12 +23,14 @@ interface Props {
 }
 
 export function ChannelListRow({ channel, view, to, current }: Props) {
+  const rowRef = useScrollIntoViewWhenCurrent<HTMLAnchorElement>(current);
   const words = useChannelStateWords();
   const { line } = words(view);
   return (
     <li>
       <Link
         to={to}
+        ref={rowRef}
         aria-current={current ? "page" : undefined}
         data-testid="channel-row"
         data-state={view.state}

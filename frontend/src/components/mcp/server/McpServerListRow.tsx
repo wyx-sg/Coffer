@@ -23,6 +23,7 @@ import { STATUS_TONE } from "@/lib/statusTone";
 import { openRowTarget } from "@/lib/rowClick";
 import { cn } from "@/lib/utils";
 import { serverState, shortTime, transportOf, type ServerState } from "@/lib/mcp/serverState";
+import { useScrollIntoViewWhenCurrent } from "@/lib/hooks/useScrollIntoViewWhenCurrent";
 
 interface Props {
   resource: ResourceOut;
@@ -111,6 +112,7 @@ export function McpServerListRow({
   checked,
   onCheckedChange,
 }: Props) {
+  const rowRef = useScrollIntoViewWhenCurrent<HTMLAnchorElement>(current);
   const { t } = useTranslation();
   const state = serverState(resource, detail);
   const label = resource.name;
@@ -139,6 +141,7 @@ export function McpServerListRow({
       <Link
         to={to}
         data-row-open
+        ref={rowRef}
         aria-current={current ? "page" : undefined}
         className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-2 pr-2.5 text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring"
       >
