@@ -199,8 +199,8 @@ class TurnDriver:
         the messages already pending — web and channel alike, in arrival order (spec
         chat "Queue messages sent during a turn"). A message that waits is not
         answered (it runs in turn); past ``QUEUE_MAX`` pending the message is
-        dropped and the chat told why (see "Answer the conversation commands from any paired chat"): a
-        flood must not pile up forever.
+        dropped and the chat told why (see "Answer the conversation commands from any
+        paired chat"): a flood must not pile up forever.
         """
 
         async def _say(text: str) -> None:
