@@ -1,6 +1,6 @@
 # Global Memories Live in a Claude Code Project of Their Own, Pointed at From a Rules File
 
-**Status**: Accepted
+**Status**: Accepted; what the rules file lists is amended by [The Claude Code Rules File Lists Only Standing Memories](the-claude-code-rules-file-lists-only-standing-memories.md)
 **Date**: 2026-10-13
 **Deciders**: Yuxing Wu
 **Related**: [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), research note [agent memory](../research/agent-memory.md), spec memory "Write global memories into a Claude Code global project and point at them from a rules file"

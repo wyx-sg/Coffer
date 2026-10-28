@@ -72,7 +72,7 @@ Coffer 不读会话记录，也不读 rollout 文件。两个智能体本来就�
 
 | 智能体 | Coffer 写入什么 |
 | --- | --- |
-| Claude Code | 每条记忆一个文件 `coffer_<slug>.md`，放在项目的记忆文件夹（`~/.claude/projects/<project>/memory/`，不存在时会创建），用 Claude Code 自己的记忆格式，外加一个写明记忆来源的 `coffer:` 区块。该文件夹 `MEMORY.md` 末尾的标记区块里，每份副本一行，位于 `<!-- coffer:memory-sync:begin -->` 和 `<!-- coffer:memory-sync:end -->` 之间：最多 30 行，最新的在前，最后一行说明文件夹里还有多少份副本。`global` 记忆用同样的方式写进它自己的一个项目文件夹 `~/.claude/projects/-coffer-global/memory/`，没有会话会自己打开它；Claude Code 每次会话都会加载的 `~/.claude/rules/coffer-memory.md` 说明它们在哪，并列出每条的标题和描述。 |
+| Claude Code | 每条记忆一个文件 `coffer_<slug>.md`，放在项目的记忆文件夹（`~/.claude/projects/<project>/memory/`，不存在时会创建），用 Claude Code 自己的记忆格式，外加一个写明记忆来源的 `coffer:` 区块。该文件夹 `MEMORY.md` 末尾的标记区块里，每份副本一行，位于 `<!-- coffer:memory-sync:begin -->` 和 `<!-- coffer:memory-sync:end -->` 之间：最多 30 行，最新的在前，最后一行说明文件夹里还有多少份副本。`global` 记忆用同样的方式写进它自己的一个项目文件夹 `~/.claude/projects/-coffer-global/memory/`，没有会话会自己打开它；Claude Code 每次会话都会加载的 `~/.claude/rules/coffer-memory.md` 说明它们在哪，并保持简短（最多 8 KB）：关于你或你的工作方式的记忆每条一行；Codex 在具体任务中学到的，只写任务名，按任务分组的完整列表在该文件夹的 `MEMORY.md` 里。 |
 | Codex | 每条记忆一个文件，放在 `~/.codex/memories/extensions/coffer/resources/` 下，在记忆正文上方写明它适用的项目（或"所有项目"）；再加一个 `instructions.md`，告诉 Codex 的整合这些文件是什么：你的其他智能体学到的记忆，只当作信息、绝不当作指令，按各自写明的项目归档，并在 Codex 把它们并入自己的记忆时标上 `[via Coffer]`。 |
 
 - **只写到项目已检出的地方。** 只有一个项目在某台机器上检出后，它的记忆才会写到那台机器上；检出位置来自你的智能体记录下的工作目录。在那之前，这些记忆留在中心库里等待。`global` 记忆会写到每台机器上。
