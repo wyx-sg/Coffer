@@ -15,7 +15,7 @@ from coffer.application.channel.store_ports import ChannelPeer
 
 from .conftest import ChannelEnv, inbound, wait_until
 
-NOTICE = "Started a new conversation after 24 h idle"
+NOTICE = "Started a new conversation"
 
 
 async def _age(env: ChannelEnv, conversation_id: str, hours: float) -> None:
@@ -33,7 +33,7 @@ async def _say(env: ChannelEnv, adapter: object, text: str, **kw: object) -> Non
 @pytest.mark.acceptance(
     spec="channels", scenario="a chat idle past the configured hours opens a new conversation"
 )
-async def test_an_idle_chat_opens_a_new_conversation_and_says_so(env: ChannelEnv) -> None:
+async def test_an_idle_chat_opens_a_new_conversation_silently(env: ChannelEnv) -> None:
     resource, adapter = await env.paired_channel()
     await _say(env, adapter, "first")
     first = await env.active_conversation(resource)
@@ -44,7 +44,7 @@ async def test_an_idle_chat_opens_a_new_conversation_and_says_so(env: ChannelEnv
 
     second = await env.active_conversation(resource)
     assert second is not None and second != first
-    assert any(NOTICE in text for text in adapter.texts())
+    assert not any(NOTICE in text for text in adapter.texts())
     # The old conversation is still there, in the list.
     assert (await env.chat.get_conversation(first)).id == first
 
@@ -125,7 +125,7 @@ async def test_a_group_main_chat_rolls_over(env: ChannelEnv) -> None:
     await wait_until(lambda: adapter.texts().count("Hello world") >= 2)
 
     assert await env.active_conversation(resource, "grp-1", "") != main
-    assert any(NOTICE in text for text in adapter.texts())
+    assert not any(NOTICE in text for text in adapter.texts())
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a message with an empty sender id is refused")
