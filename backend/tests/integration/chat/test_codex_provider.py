@@ -91,7 +91,7 @@ def _basic_frames() -> list[_Frame]:
 
 
 def _make_factory() -> tuple[_Factory, FakeCodexAppServer]:
-    server = FakeCodexAppServer(frames=_basic_frames())
+    server = FakeCodexAppServer(thread_id="thread-99", frames=_basic_frames())
     return _Factory(server), server
 
 

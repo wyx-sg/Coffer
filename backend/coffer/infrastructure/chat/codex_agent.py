@@ -41,6 +41,7 @@ from coffer.infrastructure.chat.codex_app_server import (
 from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient, CodexRpcError
 from coffer.infrastructure.chat.codex_mapping import (
     CodexParseState,
+    is_own_notification,
     map_codex_notification,
 )
 from coffer.infrastructure.chat.codex_stream import attachment_note, notifications_until_eof
@@ -236,6 +237,7 @@ class CodexAppServerAdapter:
             await rpc.request("initialize", {"clientInfo": _CLIENT_INFO, "capabilities": None})
             await rpc.notify("initialized")
             thread_id = await self._open_thread(rpc, state)
+            state.thread_id = thread_id or None
         except Exception as exc:
             if _is_active_writer(exc):
                 raise _SessionBusyError from exc
@@ -291,6 +293,10 @@ class CodexAppServerAdapter:
             # ``stream_ended`` error).
             try:
                 async for method, params in notifications_until_eof(rpc):
+                    if not is_own_notification(params, state):
+                        # Another thread on this app-server (Codex's memory
+                        # agent, a sub-agent): its text is not this reply.
+                        continue
                     events = map_codex_notification(method, params, state)
                     self.model_id = state.model or self.model_id
                     for event in events:

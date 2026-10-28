@@ -27,6 +27,12 @@ Mapping rules (§A):
 Exactly one terminal (``TurnDone``/``TurnError``) is emitted per turn: once
 ``state.terminal_emitted`` is set, later terminal-eligible notifications map to
 ``[]``.
+
+One app-server carries more threads than the turn's own: Codex starts its
+background memory consolidation agent there, and sub-agents the turn spawns run
+as threads of their own. :func:`is_own_notification` keeps only the turn's
+thread, so another thread's text never becomes the reply and its
+``turn/completed`` never ends the turn.
 """
 
 from __future__ import annotations
@@ -50,12 +56,30 @@ class CodexParseState:
     """Mutable state threaded through Codex notification mapping for one turn."""
 
     session_id: str | None = None
+    #: The thread this turn runs on, once ``thread/start|resume`` answered.
+    thread_id: str | None = None
     #: The model the thread runs on, as the app-server reported it.
     model: str | None = None
     turn_id: str | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     terminal_emitted: bool = False
+
+
+def is_own_notification(params: dict[str, Any], state: CodexParseState) -> bool:
+    """Whether a notification belongs to this turn's thread.
+
+    A notification that names no thread (process-wide) is kept. One that names
+    a thread before the turn's own is known is another thread's: the turn's own
+    notifications only start after ``turn/start``, which is sent once the
+    thread id is known, and ``thread/start|resume`` already return that id.
+    """
+    thread_id = params.get("threadId")
+    if thread_id is None:
+        thread_id = (params.get("thread") or {}).get("id")
+    if thread_id is None:
+        return True
+    return bool(thread_id == state.thread_id)
 
 
 def map_codex_notification(

@@ -200,7 +200,7 @@ Each turn spawns an app-server process, resolving `codex` on `PATH`. The process
 2. `thread/resume` with the stored thread id, or `thread/start`. Coffer's system context rides in `developerInstructions`, which adds to Codex's base instructions and does not replace them. A rejected resume falls back once to `thread/start`.
 3. `turn/start` with the prompt. Coffer sends no `effort`, so Codex runs at the effort its own configuration names.
 
-Notifications are mapped to platform events. On cancellation, the adapter sends `turn/interrupt`, persists the thread id and closes the process.
+Notifications are mapped to platform events, but only those of the turn's own thread, the one `thread/start` or `thread/resume` returned. The same app-server also runs Codex's background memory consolidation agent and any sub-agent the turn spawns, each on a thread of its own; their text is not the reply, and their `turn/completed` does not end the turn. On cancellation, the adapter sends `turn/interrupt`, persists the thread id and closes the process.
 
 ::: details Why a subprocess per turn rather than a pooled agent
 Both adapters open a fresh session per turn and resume the agent's own stored session. The agent's state lives in the agent's own files, not in a long-lived process Coffer would have to supervise, health-check and recover after a daemon restart. The cost is process start-up per turn. The benefit is that a crashed or wedged agent affects exactly one turn, and a daemon restart loses nothing except the in-flight turn.

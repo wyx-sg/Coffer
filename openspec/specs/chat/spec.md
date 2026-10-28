@@ -354,6 +354,14 @@ says where one of its messages ends and whether it is narration, the adapter
 MUST pass that on as `MessageEnd` (`commentary` set for Codex's `commentary`
 phase; a message with no phase is answer text).
 
+One Codex app-server carries more threads than the turn's own: Codex runs its
+background memory consolidation agent there, and each sub-agent the turn spawns
+is a thread of its own. The adapter MUST map only the notifications of the
+thread `thread/start` or `thread/resume` returned (and those that name no
+thread); another thread's text MUST NOT join the reply and its
+`turn/completed` MUST NOT end the turn. A sub-agent's work reaches the reply
+the way Codex means it to, through the parent's own messages.
+
 A turn MUST run against the config directory of its type's one agent
 ([agent-registry](../agent-registry/spec.md) "Keep one agent per type, named by
 it") — the same one whose models the pickers offer
@@ -369,6 +377,11 @@ for the standard location the environment MUST be left as the daemon's own, so
 the process behaves as when the user runs the CLI themselves. No provider key
 rides the environment: an API-key connection is reached through Coffer's model
 proxy.
+
+#### Scenario: another Codex thread's reply stays out of the turn
+- **GIVEN** a Codex turn whose app-server also runs its memory consolidation agent on another thread
+- **WHEN** that thread streams text and completes before the turn has answered
+- **THEN** none of its text is in the reply, the turn keeps running, and the reply is the turn's own answer
 
 #### Scenario: a streamed reply reaches the consumer exactly once
 - **GIVEN** a Claude Code turn whose SDK delivers the reply as streamed increments and then as the finished assistant message
