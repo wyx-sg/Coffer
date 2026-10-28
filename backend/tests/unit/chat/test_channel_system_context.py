@@ -67,7 +67,8 @@ def test_asks_for_outcome_first_details_png_and_questions_in_the_reply() -> None
     text = channel_system_context(_SEATALK_GROUP_THREAD)
 
     assert "Lead with the answer in one or two plain sentences" in text
-    assert "ask whether they want it as a file" in text
+    assert "Send a full report only when they ask for one" in text
+    assert "never end a reply by offering it" in text
     assert "only what you write after your last tool call is sent" in text.lower()
     assert "as a PNG file" in text
     assert "ask in your reply, all questions in one message" in text

@@ -72,9 +72,9 @@ def rewrite_prompt(lines: int) -> str:
     return (
         f"[Coffer] Your last reply ({lines} lines) was too long for a chat, so it "
         "was not sent. Write it again for the chat: only the conclusion and what "
-        "the reader needs to act on, in at most 5 lines, in the same language. End "
-        "by asking whether they want the full report as a file. Do not call tools "
-        "and do not mention this note."
+        "the reader needs to act on, in at most 5 lines, in the same language. Do "
+        "not offer the full report; a button under your reply does. Do not call "
+        "tools and do not mention this note."
     )
 
 

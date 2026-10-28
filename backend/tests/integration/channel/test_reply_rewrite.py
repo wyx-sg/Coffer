@@ -28,7 +28,7 @@ from coffer.domain.chat.events import (
 from .conftest import ChannelEnv, FakeChannelAdapter, inbound, tap_event, wait_until
 
 _LONG = "\n".join(f"- finding {i}: something the reader did not need" for i in range(40))
-_SHORT = "The sheet is ready. Want the full report as a file?"
+_SHORT = "The sheet is ready; two rows need your review."
 _DONE = TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn")
 
 
