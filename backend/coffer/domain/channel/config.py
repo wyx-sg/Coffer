@@ -96,6 +96,10 @@ class _CommonChannelFields(BaseModel):
     # it also mentions the bot, so the bot never butts into human-aimed traffic.
     require_mention: bool = True
     ignore_other_mentions: bool = False
+    # "Let others in a group ask the bot": in a group an owner has registered,
+    # anyone else who @mentions the bot gets an answer, read-only — questions
+    # and checks, never a change or a task. Off, only owners are answered.
+    others_can_ask: bool = True
     # The quiet windows of "Take a burst of messages as one turn", in seconds: how
     # long to wait after a text message, and after a forwarded record or files with
     # no text, before the held burst runs. 0 runs every message as its own turn.

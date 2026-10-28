@@ -85,7 +85,12 @@ def _channel_line(name: str, uid: str) -> str:
 
 
 def format_origin(
-    msg: InboundMessage, *, platform: str, channel: str = "", channel_id: str = ""
+    msg: InboundMessage,
+    *,
+    platform: str,
+    channel: str = "",
+    channel_id: str = "",
+    asker_is_owner: bool = True,
 ) -> str:
     """Render a turn's own provenance as a context block.
 
@@ -132,4 +137,9 @@ def format_origin(
         lines.append(" · ".join([frm, *sent_part]))
     else:
         lines.extend(sent_part)
+    # "Let others in a group ask the bot": the agent's only way to know the
+    # sender is not an owner, and so may only ask (the channel note says what
+    # that allows).
+    if not asker_is_owner:
+        lines.append("asker: not an owner (read-only)")
     return block(ORIGIN, ORIGIN_END, lines)

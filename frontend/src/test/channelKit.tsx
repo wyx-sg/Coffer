@@ -47,6 +47,7 @@ export function makeSettings(channel: ResourceOut): ChannelSettings {
     default_agent_config: null,
     require_mention: true,
     ignore_other_mentions: false,
+    others_can_ask: true,
     wait_after_text_seconds: 1.5,
     wait_after_forward_seconds: 5,
     show_steps: true,

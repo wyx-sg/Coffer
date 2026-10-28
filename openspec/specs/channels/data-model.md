@@ -17,6 +17,7 @@ ChannelConfig (discriminator: channel_type)
 │   ├── default_agent_config: dict | None
 │   ├── require_mention: bool = True        # group gating
 │   ├── ignore_other_mentions: bool = False # group gating
+│   ├── others_can_ask: bool = True         # others in a registered group may ask, read-only
 │   ├── wait_after_text_seconds: float = 1.5     # burst quiet window after text (0–60)
 │   ├── wait_after_forward_seconds: float = 5.0  # …after a forward or bare files (0–60)
 │   ├── show_steps: bool = True             # step lines under the live status line

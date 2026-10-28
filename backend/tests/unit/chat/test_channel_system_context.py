@@ -182,3 +182,17 @@ def test_the_style_stays_last_after_the_thread_tool_line() -> None:
 
     assert text.index("coffer__channel_read_thread") < text.index("Reply style:")
     assert text.endswith("\nName the ticket number first.")
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a group note says what someone else's turn allows"
+)
+def test_a_group_where_others_can_ask_says_what_their_turn_allows() -> None:
+    group = ChannelNote(name="ops", platform="SeaTalk", chat_kind="group", others_can_ask=True)
+    text = channel_system_context(group)
+
+    assert "`asker: not an owner`" in text
+    assert "read-only checks" in text
+    assert "an owner has to ask for it" in text
+    assert text.index("not an owner") < text.index("Reply style:")
+    assert "not an owner" not in channel_system_context(_SEATALK_GROUP_THREAD)

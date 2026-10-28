@@ -393,6 +393,11 @@ export interface components {
              */
             new_conversation_after_idle_hours: number;
             /**
+             * Others Can Ask
+             * @default true
+             */
+            others_can_ask: boolean;
+            /**
              * Require Mention
              * @default true
              */
@@ -477,6 +482,11 @@ export interface components {
              * @default 24
              */
             new_conversation_after_idle_hours: number;
+            /**
+             * Others Can Ask
+             * @default true
+             */
+            others_can_ask: boolean;
             /**
              * Require Mention
              * @default true

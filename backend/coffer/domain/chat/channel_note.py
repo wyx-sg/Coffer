@@ -41,3 +41,6 @@ class ChannelNote:
     #: The transport can read a thread's earlier messages, so the agent is told
     #: the tool that does (``coffer__channel_read_thread``).
     reads_threads: bool = False
+    #: A group where others than the owners may ask (spec channels "Let others
+    #: in a group ask the bot"), so the agent is told what such a turn allows.
+    others_can_ask: bool = False

@@ -27,6 +27,7 @@ def make_binding(
         adapter=adapter,
         require_mention=parsed.require_mention,
         ignore_other_mentions=parsed.ignore_other_mentions,
+        others_can_ask=parsed.others_can_ask,
         wait_after_text_seconds=parsed.wait_after_text_seconds,
         wait_after_forward_seconds=parsed.wait_after_forward_seconds,
         show_steps=parsed.show_steps,

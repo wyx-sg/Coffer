@@ -1,12 +1,14 @@
 """The person gate for a group message: who may drive a turn from a shared chat
-(spec channels "Act in a group only on an addressed message from the owner" and
-"Configure when the bot answers in a group").
+(spec channels "Act in a group only on an addressed message from the owner",
+"Let others in a group ask the bot" and "Configure when the bot answers in a
+group").
 
 Split out of ``inbound`` for that module's size budget. Application layer only.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from coffer.application.channel.bot_label import bot_name
@@ -15,14 +17,23 @@ from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.store_ports import ChannelPeer, ChannelPeerRepoPort
 from coffer.domain.channel.envelopes import InboundMessage
 
-__all__ = ["group_peer"]
+__all__ = ["GroupAsker", "group_peer"]
+
+
+@dataclass(frozen=True, slots=True)
+class GroupAsker:
+    """Who a group turn is for: the group's peer row, and whether the sender is
+    one of the channel's owners. Anyone else may only ask (read-only)."""
+
+    peer: ChannelPeer
+    is_owner: bool
 
 
 async def group_peer(
     peers: ChannelPeerRepoPort, binding: ChannelBinding, msg: InboundMessage
-) -> ChannelPeer | None:
-    """The group's peer row when ``msg`` may drive a turn, else ``None`` (after
-    answering an unpaired sender, the one refusal said aloud)."""
+) -> GroupAsker | None:
+    """Who ``msg`` drives a turn for, else ``None`` (after answering an unpaired
+    sender who may not ask, the one refusal said aloud)."""
     if binding.require_mention and not msg.addressed:
         # Un-addressed group chatter (no @mention/reply-to-bot) is
         # never a turn — a bot must not speak up uninvited in a group
@@ -42,6 +53,16 @@ async def group_peer(
         # @mention cannot bootstrap pairing; only the DM/pairing-code flow can.
         return None
     if not msg.sender_id or msg.sender_id not in paired:
+        # "Let others in a group ask the bot": someone else's addressed message
+        # in a group an owner already registered is answered, read-only. A
+        # group no owner has spoken in stays closed — the bot answers no group
+        # its owner never brought it into.
+        # A sender the transport could not name is refused all the same: an
+        # answer is always to someone.
+        if binding.others_can_ask and msg.addressed and msg.sender_id:
+            registered = await peers.get_by_chat(binding.resource.uid, msg.chat_id)
+            if registered is not None:
+                return GroupAsker(peer=registered, is_owner=False)
         # A group chat is shared, unlike a DM's 1:1 chat_id match — an
         # empty sender_id here (the transport failed to supply one)
         # must never fall through as "assume it's the owner": that
@@ -74,4 +95,4 @@ async def group_peer(
             sender_id=msg.sender_id,
         )
         await peers.upsert(peer)
-    return peer
+    return GroupAsker(peer=peer, is_owner=True)

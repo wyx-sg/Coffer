@@ -47,6 +47,8 @@ export interface ChannelEditValues {
   require_mention?: boolean;
   /** Drop a group message that also @mentions another user. */
   ignore_other_mentions?: boolean;
+  /** In a group an owner registered, answer anyone else's questions, read-only. */
+  others_can_ask?: boolean;
   /** Quiet window (seconds) after a text message before the burst runs as one
    *  turn. Undefined leaves the stored value alone. */
   wait_after_text_seconds?: number;
@@ -171,6 +173,7 @@ export function planChannelEdit(input: ChannelEditInput): ChannelEditPlan {
     setIfChanged(nextConfig, config, "require_mention", values.require_mention);
   }
   setIfChanged(nextConfig, config, "ignore_other_mentions", values.ignore_other_mentions);
+  setIfChanged(nextConfig, config, "others_can_ask", values.others_can_ask);
   setIfChanged(nextConfig, config, "wait_after_text_seconds", values.wait_after_text_seconds);
   setIfChanged(nextConfig, config, "wait_after_forward_seconds", values.wait_after_forward_seconds);
   setIfChanged(nextConfig, config, "show_steps", values.show_steps);
