@@ -20,10 +20,13 @@ CHUNK_LIMIT = 3500  # paragraph-chunking budget, in characters
 #: SeaTalk's own markdown (``format: 1``) has bold, italic, inline code, fences
 #: and lists; a heading is demoted to bold, a link to ``label (url)``, and a
 #: table is turned into bullet rows plus an attached CSV by ``reply_shape``.
+#: A mention tag the agent writes passes through untouched (``render._MENTION_TAG``),
+#: and a thread's lines name each sender by email, so the agent can @ anyone there.
 SEATALK_RENDER_NOTES = (
-    "This chat renders bold, italic, inline code, code fences, and bullet or "
-    "numbered lists. It does NOT render headings (they show as bold), links (write "
-    "the URL itself) or tables (write one bullet per row)."
+    "This chat renders bold, italic, inline code, code fences and lists. It does "
+    "NOT render headings (they show as bold), links (write the URL itself) or "
+    "tables (write one bullet per row). @mention a person with "
+    '`<mention-tag target="seatalk://user?email=EMAIL"/>`.'
 )
 
 SEATALK_CAPABILITIES = ChannelCapabilities(

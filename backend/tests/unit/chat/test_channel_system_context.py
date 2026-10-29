@@ -50,6 +50,7 @@ def test_the_seatalk_note_says_headings_links_and_tables_do_not_render() -> None
 
     assert "It does NOT render headings (they show as bold), links (write the URL itself)" in text
     assert "tables (write one bullet per row)" in text
+    assert '`<mention-tag target="seatalk://user?email=EMAIL"/>`' in text
 
 
 def test_the_telegram_note_says_its_rich_markdown_renders() -> None:
