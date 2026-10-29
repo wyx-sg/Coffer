@@ -688,7 +688,9 @@ names **where** the agent is — the platform, the chat kind (direct chat, group
 chat, group thread) and the channel by its current label — and **what renders
 there**, in the sentence or two the running transport declares as its
 `render_notes` (SeaTalk: bold, italic, inline code, code fences and lists, but no
-headings, links or tables; Telegram: its rich Markdown, tables included). It
+headings, links or tables, and how to @mention a person by email with SeaTalk's
+`<mention-tag>`, which a thread's lines already name each sender by; Telegram:
+its rich Markdown, tables included). It
 says only what the agent writes after its last tool call is sent, so the whole
 answer goes there; only where the transport collapses one
 (`collapses_details`, Telegram), to put anything long under a `## Details`
@@ -731,8 +733,9 @@ a Reply Style the Owner Can Rewrite](../../../docs/decisions/channel-prompt-fixe
 #### Scenario: the note lists what renders on the platform the turn is on
 - **GIVEN** a SeaTalk group-thread conversation on a running channel
 - **WHEN** its turn's note is composed
-- **THEN** it says the turn is in a SeaTalk group thread and that headings, links
-  and tables do not render there (write one bullet per row)
+- **THEN** it says the turn is in a SeaTalk group thread, that headings, links
+  and tables do not render there (write one bullet per row), and how to
+  @mention a person by email
 
 #### Scenario: the note asks for the answer's shape
 - **WHEN** a channel turn's note is composed with Coffer's default reply style

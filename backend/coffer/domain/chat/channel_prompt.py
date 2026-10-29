@@ -116,7 +116,7 @@ def channel_note_text(note: ChannelNote | None) -> str:
         "several 1, 2, 3), and end your turn; the answer comes "
         "next. You cannot click "
         "permission or confirmation dialogs on the user's computer; if something "
-        "needs one, say so and do what you can. To send a file or image, put "
+        "needs one, say so and do what you can. To send a file, put "
         "`MEDIA:/absolute/path` (optionally `| a caption`) on its own line; the "
         "channel uploads that existing file and removes the line — nothing else you "
         f"write is sent as a file.{threads}{others}"
