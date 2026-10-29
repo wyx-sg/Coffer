@@ -72,6 +72,7 @@ def test_asks_for_outcome_first_details_png_and_questions_in_the_reply() -> None
     assert "only what you write after your last tool call is sent" in text.lower()
     assert "as a PNG file" in text
     assert "ask in your reply, all questions in one message" in text
+    assert "set apart below what you did (number several 1, 2, 3)" in text
     assert "coffer__ask" not in text
     assert "NEEDS YOU" not in text
     assert "`MEDIA:/absolute/path`" in text
