@@ -116,7 +116,7 @@ A change applies from the next message, in every conversation of that kind, with
 
 ### Questions for you
 
-When the agent needs something from you before it goes on, it asks at the end of its reply, every question in that one message, and ends its turn. Reply as you would to a colleague (in a group, @mention the bot, since only those messages reach it); your reply is the next message and starts the next turn. There are no question buttons: a quick yes is typed. If you answer only part, the agent asks again for the part still missing.
+When the agent needs something from you before it goes on, it asks at the end of its reply, every question in that one message, in its own paragraph after what it has done (several questions numbered 1, 2, 3), and ends its turn. Reply as you would to a colleague (in a group, @mention the bot, since only those messages reach it); your reply is the next message and starts the next turn. There are no question buttons: a quick yes is typed. If you answer only part, the agent asks again for the part still missing.
 
 ### Grouping messages
 

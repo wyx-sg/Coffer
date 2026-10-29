@@ -693,7 +693,8 @@ says only what the agent writes after its last tool call is sent, so the whole
 answer goes there; only where the transport collapses one
 (`collapses_details`, Telegram), to put anything long under a `## Details`
 heading; when it needs something from the person to go on, to ask in its reply,
-every question in that one message, and end its turn, since the answer comes as
+every question in that one message, in its own paragraph after what was done and
+numbered 1, 2, 3 when there are several, and end its turn, since the answer comes as
 the next message ([chat](../chat/spec.md) "Ask the owner in the reply, not in a
 dialog"); that it cannot click permission or confirmation dialogs on the user's computer;
 and how to send a file (`MEDIA:/absolute/path` on its own line). Where the
@@ -739,7 +740,8 @@ a Reply Style the Owner Can Rewrite](../../../docs/decisions/channel-prompt-fixe
   report only as a file and only when asked for, never offered at the end of a
   reply, says only the text
   after the last tool call is sent, and asks for diagrams as PNG files and for
-  every question to the person in one message of the reply
+  every question to the person in one message of the reply, in its own
+  paragraph after what was done, several questions numbered 1, 2, 3
 
 #### Scenario: only a transport that collapses details is asked for a details section
 - **GIVEN** a Telegram direct chat and a SeaTalk group thread
