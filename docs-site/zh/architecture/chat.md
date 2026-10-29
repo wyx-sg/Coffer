@@ -21,7 +21,7 @@ description: Coffer 怎样在 Claude Code 或 Codex 上为即时通讯消息渠�
 
 **随便发，排队，从不拒绝。** 轮次运行期间发的消息会进入每个对话一个的 FIFO 待处理队列。每条排队的消息成为它自己的轮次，消息不会合并。消息渠道每个对话最多接受十条待处理消息；第十一条会被丢弃并说明原因（见[入站流水线](#the-inbound-pipeline)）。
 
-**一个会话同一时间只在一个地方运行。** 在终端里打开的会话和写入同一个会话的消息渠道轮次，会让这个会话分叉。轮次恢复一个会话之前，守护进程会查找有没有终端已经把它打开了，如果有，就告诉消息渠道，而不是启动轮次（见[一个会话，一个地方](#one-session-one-place)）。
+**一个会话同一时间只在一个地方运行，Coffer 的轮次会把它接管过来。** 在终端里打开的会话和写入同一个会话的消息渠道轮次，会让这个会话分叉。消息渠道是离开电脑时用的，没人能去关终端，所以轮次恢复一个会话之前，守护进程会结束打开着它的终端，并让 Codex 后台服务放开它还占着的 Codex 会话。只有 Coffer 不去关闭的占用者（比如 Codex 应用）才会让这条消息被拒绝（见[一个会话，一个地方](#one-session-one-place)和 ADR [A Coffer Turn Takes Over a Session Open Elsewhere](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/a-coffer-turn-takes-over-a-session-open-elsewhere.md)）。
 
 **适配器自成一体。** 编排器只给适配器轮次的提示词和附件，别的什么都不给。适配器自带模型、工具和配置。增加第三个智能体，意味着注册一个提供方和一个适配器。对话索引、编排器和消息渠道都不用变。
 
@@ -346,7 +346,13 @@ Coffer 通过智能体本身读取和修改智能体自己的会话，从不解�
 
 ### 一个会话，一个地方 {#one-session-one-place}
 
-在 Web 上，轮次正在运行的行会先打开一个对话框：在消息渠道里继续，或者停止轮次（普通的打断），然后打开终端。反过来，消息渠道的轮次在恢复原生会话之前，轮次平台会问有没有守护进程自己进程树之外的进程，在参数里带着这个会话 id。如果有，轮次不会开始，聊天里会被告知该会话在终端里打开着；Codex 自己的「active writer」拒绝也会映射到同样的回复。在智能体自己的列表里选出来打开的会话，参数里没有 id，是看不到的；Codex 的写入锁仍然保护 Codex。
+在 Web 上，轮次正在运行的行会先打开一个对话框：在消息渠道里继续，或者停止轮次（普通的打断），然后打开终端。
+
+反过来，轮次会接管会话。恢复原生会话之前，轮次平台会结束守护进程自己进程树之外、参数里带着这个会话 id 的每个进程（先 SIGTERM，五秒后 SIGKILL）；守护进程自己的子进程永远不动。在智能体自己的列表里选出来打开的会话，参数里没有 id，这一步看不到。Codex 由写入锁兜底：app-server 对 `thread/resume` 回 `-32600`「already has an active writer」时，适配器会把这个会话放开一次再恢复，绝不改开一个新会话代替它。
+
+- **Codex 后台服务**（`codex app-server --managed-daemon`）。新版 Codex CLI 会连到这个共享服务上，所以终端关掉后，会话还加载在服务里、拿着锁；如果关终端时那一轮正在等批准，它永远不会卸载。适配器连到它的控制套接字（`$CODEX_HOME/app-server-control/app-server-control.sock`，WebSocket 上的 JSON-RPC），查 `thread/loaded/list`，用 `thread/resume` 加入会话，打断还在进行的那一轮，发 `thread/unsubscribe`，然后轮询直到服务卸载这个会话。Codex 会在会话没有订阅者、也没有在运行之后 60 秒（`thread_unload_delay_secs`）卸载它，所以这种情况下回复会晚一分钟左右；最多等 90 秒。
+- **自带内嵌 app-server 的终端 `codex`。** 打开着 `$CODEX_HOME/thread-writer-locks/<id>.lock` 的那个进程会像上面的终端一样被结束。
+- **其他占用者**，比如 Codex 应用或编辑器自己的 `codex app-server`，或者仍连在后台服务上的终端，都不去动。轮次不会开始，聊天里会被告知该会话在 Coffer 无法关闭的其他应用里打开着。
 
 ## 并发规则 {#concurrency-rules}
 

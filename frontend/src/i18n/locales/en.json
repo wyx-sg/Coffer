@@ -2062,7 +2062,7 @@
     "PROVIDER_PROTOCOL_RETIRED": "The ollama protocol is no longer offered — add a local Ollama runtime on its Anthropic or OpenAI wire instead",
     "FS_TERMINAL_INVALID": "That session can’t be opened in a terminal",
     "FS_TERMINAL_FAILED": "The terminal couldn’t be started. Check the preferred terminal in Settings › General.",
-    "SESSION_IN_USE": "This session is open in a terminal. Continue there, or start a new one.",
+    "SESSION_IN_USE": "This session is open in another app that Coffer can't close, such as the Codex app or an editor. Close it there, or start a new one.",
     "APPROVAL_TARGET_CHANGED": "The destination changed while you were approving. Check the new target and approve again.",
     "CUSTOM_TOOL_ARGUMENTS_INVALID": "Some arguments don't match the tool's schema; nothing was sent.",
     "CUSTOM_TOOL_ENVIRONMENT_DISABLED": "That environment is off. Turn it on, or choose another.",

@@ -40,6 +40,8 @@ dependencies = [
     # rather than relying on it arriving transitively.
     "httpx2>=2.7",
     "psutil>=5.9",
+    # A WebSocket client for Codex's background app-server control socket.
+    "websockets>=14",
     "tomlkit>=0.13",
     "pyyaml>=6.0",
     # Document → text, for exactly two callers, which is what Contract 7

@@ -379,6 +379,7 @@ dependencies = [
     { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "watchfiles" },
+    { name = "websockets" },
 ]
 
 [package.optional-dependencies]
@@ -445,6 +446,7 @@ requires-dist = [
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.52.4" },
     { name = "watchfiles", specifier = ">=1.0,<2.0" },
+    { name = "websockets", specifier = ">=14" },
 ]
 provides-extras = ["dev"]
 

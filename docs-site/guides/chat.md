@@ -54,7 +54,11 @@ A session should run in one place at a time. When a row's turn is running, the o
 - **Continue in *platform***: leave the turn where it is and use the channel.
 - **Stop this turn and continue in the terminal**: stops the turn exactly like **Stop**, tells the agent you stopped it, then opens the terminal.
 
-In the other direction, when a channel message arrives for a session that is open in a terminal, Coffer does not start a turn. The chat replies that the session is open in a terminal: continue there, or send `/thread` to start a new one. Coffer finds that out by looking for a process whose arguments carry the session id, so a session you opened by picking it inside the agent's own list is not seen; Codex refuses a second writer on its own.
+In the other direction, when a message arrives for a session that is open somewhere else, Coffer takes the session over so you can carry on from your phone:
+
+- **A terminal** running `claude --resume <id>` or `codex resume <id>` is closed, even if it is in the middle of something, and the turn continues the same session.
+- **Codex's background service.** Recent Codex versions keep sessions in a shared background service, which can hold on to a session after you close the terminal. Coffer asks it to let go: it stops whatever that session was still doing there and waits for the service to release it, so that reply comes about a minute later than usual.
+- **The Codex app or an editor** is left alone. The chat replies that the session is open in another app that Coffer can't close: close it there, or send `/thread` to start a new one.
 
 ## Answer a question from the agent {#answer-a-question}
 

@@ -36,6 +36,9 @@ before assuming something is absent.
 - **`typer`** + **`rich`** (CLI), **`structlog`** (logging), **`psutil`**,
   **`tomlkit`**, **`pyyaml`** (agent-native config files), **`sse-starlette`** +
   **`watchfiles`** (streamed turns, file watching).
+- **`websockets`** — the client for Codex's background app-server control
+  socket, used to free a thread it holds
+  (`infrastructure/chat/codex_thread_release.py`).
 - **`markitdown[docx,pdf,pptx,xls,xlsx]`** — inbound **channel attachment → text**
   (`infrastructure/chat/document_extract.py`) and **uploaded document → Markdown
   file** (`infrastructure/knowledge/converters/markitdown_converter.py`). Those

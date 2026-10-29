@@ -1,14 +1,9 @@
 """App-server-backed Codex adapter — drive Codex via ``codex app-server``.
 
-This adapter drives Codex through the bidirectional ``codex app-server`` JSON-RPC
-protocol (NDJSON over stdio) rather than shelling out to ``codex exec --json``.
-Codex runs with full permissions (``never`` ask,
-``danger-full-access``): Coffer does not gate individual tool calls — the owner
-driving the conversation is the trust boundary.
-
-This mirrors ``ClaudeSdkAgentAdapter`` structurally: a single ``asyncio.Queue``
-fed by a ``pump()`` task (streamed notifications); ``_stream`` drains the queue
-and yields the platform's ``AgentEvent``s.
+JSON-RPC (NDJSON over stdio), not ``codex exec --json``. Codex runs with full
+permissions (``never`` ask, ``danger-full-access``): the owner driving the
+conversation is the trust boundary. Like ``ClaudeSdkAgentAdapter``, a ``pump()``
+task feeds one ``asyncio.Queue`` that ``_stream`` drains into ``AgentEvent``s.
 
 Only stdlib ``asyncio`` + ``json`` are used (via ``CodexRpcClient``); the
 ``codex_agent`` module imports no third-party dependency (Contract 9).
@@ -19,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from typing import Any
 
 from coffer.domain.chat.attachment import Attachment, attachments_block
@@ -67,6 +62,9 @@ _INTERRUPT_TIMEOUT_SECONDS = 5.0
 #: JSON-RPC client info Coffer announces in the ``initialize`` handshake.
 _CLIENT_INFO = {"name": "coffer", "title": None, "version": "0"}
 
+#: Frees a thread another Codex process holds; True when a retry may succeed.
+ThreadRelease = Callable[[str], Awaitable[bool]]
+
 
 class _ConnectError(Exception):
     """The app-server could not open a thread for this turn."""
@@ -89,16 +87,12 @@ def _is_active_writer(exc: BaseException) -> bool:
 class CodexAppServerAdapter:
     """One turn of an app-server-backed Codex agent.
 
-    Mirrors ``ClaudeSdkAgentAdapter``: an injected ``session_factory`` seam, a
-    ``run_turn`` that returns ``self._stream(...)``, best-effort logged session
-    (thread id) persistence, and ``CancelledError`` cleanup that interrupts the
-    turn + closes the session and still persists the thread id. ``system_context``
-    also mirrors the SDK adapter's append: it rides on ``thread/start``'s and
-    ``thread/resume``'s ``developerInstructions`` field, the app-server
-    protocol's equivalent of Claude's ``system_prompt.append`` — additive
-    alongside Codex's own base instructions, never replacing them. Composing
-    that string (channel and model context) is the calling provider's job,
-    same as for Claude; this adapter only ever forwards it unchanged.
+    Mirrors ``ClaudeSdkAgentAdapter``: an injected ``session_factory`` seam,
+    best-effort logged session (thread id) persistence, and ``CancelledError``
+    cleanup that interrupts the turn, closes the session and still persists the
+    thread id. ``system_context`` rides on ``developerInstructions``, the
+    app-server's equivalent of Claude's ``system_prompt.append``: additive to
+    Codex's own instructions. The provider composes it; this adapter forwards it.
     """
 
     def __init__(
@@ -113,8 +107,10 @@ class CodexAppServerAdapter:
         system_context: str | None = None,
         transcriber: Transcriber | None = None,
         document_extractor: DocumentExtractor | None = None,
+        release_thread: ThreadRelease | None = None,
     ) -> None:
         self._cwd = cwd
+        self._release_thread = release_thread
         self._resume = resume_session
         self._extra = extra
         self._session_factory = session_factory
@@ -199,9 +195,7 @@ class CodexAppServerAdapter:
             thread_params["developerInstructions"] = self._system_context
         if self._resume:
             try:
-                thread = await rpc.request(
-                    "thread/resume", {**thread_params, "threadId": self._resume}
-                )
+                thread = await self._resume_thread(rpc, {**thread_params, "threadId": self._resume})
                 self._note_model(thread, state)
                 return (thread.get("thread") or {}).get("id") or self._resume
             except CodexRpcError as exc:
@@ -223,6 +217,18 @@ class CodexAppServerAdapter:
             # Normally ``thread/started`` reports it too; the result is enough.
             state.session_id = thread_id
         return thread_id
+
+    async def _resume_thread(self, rpc: CodexRpcClient, params: dict[str, Any]) -> dict[str, Any]:
+        """``thread/resume``; a thread another Codex process holds is taken over
+        once (spec chat "Take over a session open elsewhere") and resumed again."""
+        try:
+            return await rpc.request("thread/resume", params)
+        except CodexRpcError as exc:
+            if not _is_active_writer(exc) or self._release_thread is None:
+                raise
+            if not await self._release_thread(params["threadId"]):
+                raise
+        return await rpc.request("thread/resume", params)
 
     async def _drive_handshake(
         self, rpc: CodexRpcClient, prompt: str, state: CodexParseState
@@ -334,8 +340,8 @@ class CodexAppServerAdapter:
             try:
                 turn_id = await self._drive_handshake(rpc, prompt, state)
             except _SessionBusyError:
-                # Codex's own writer lock (spec chat "Run a session in one place
-                # at a time"): the same refusal as a session open in a terminal.
+                # Codex's writer lock, held by something that could not be taken
+                # over (spec chat "Take over a session open elsewhere").
                 state.terminal_emitted = True
                 yield TurnError(code=SESSION_IN_USE, message=SESSION_IN_USE_MESSAGE)
                 return

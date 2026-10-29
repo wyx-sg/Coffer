@@ -752,38 +752,47 @@ composition root, because it may not import it.
 - **WHEN** it is renamed or deleted
 - **THEN** the operation is rejected as not found
 
-### Requirement: Run a session in one place at a time
-A native session MUST be continued in one place at a time. Before a channel turn
-resumes a conversation's native session, the turn platform MUST ask whether any
-process outside the daemon's own process tree has that session id among its
-arguments (a terminal running `claude --resume <id>` or `codex resume <id>`). If one
-has, the turn MUST NOT start, and the channel replies "This session is open in a
-terminal — continue there, or send /thread to start a new one." Codex's own refusal —
-its app-server answering JSON-RPC error `-32600`, "already has an active writer" —
-MUST be mapped to the same refusal and the same reply. A process the daemon started
-for a turn is part of the daemon's own tree and never counts. The check sees a
-session started with its id on the command line; a session opened by picking it
-inside the agent's own picker is not seen, and only Codex's writer lock protects it.
+### Requirement: Take over a session open elsewhere
+A native session MUST be continued in one place at a time, and a Coffer turn
+MUST take it over from wherever else it is open rather than be refused. Before a
+turn resumes a conversation's native session, the turn platform MUST end every
+process outside the daemon's own process tree that has that session id among its
+arguments (a terminal running `claude --resume <id>` or `codex resume <id>`):
+SIGTERM, then SIGKILL after five seconds. A process the daemon started for a
+turn is part of the daemon's own tree and MUST never be ended. When Codex
+refuses the resume because another process holds the thread's writer lock
+(JSON-RPC error `-32600`, "already has an active writer"), the Codex adapter
+MUST free the thread once and resume it again, never starting a fresh thread in
+its place: when Codex's shared background app-server (`codex app-server
+--managed-daemon`) has the thread loaded, the adapter MUST join the thread
+through that server's control socket, interrupt a turn left running there,
+unsubscribe, and wait up to 90 seconds for the server to unload it; otherwise,
+when the lock holder is a terminal `codex`, it MUST be ended like a terminal
+above. A holder that is neither, such as the Codex app's or an editor's own
+`codex app-server`, MUST be left alone. When the session cannot be freed, the
+turn MUST NOT start and the chat is told "This session is open in another app
+that Coffer can't close, such as the Codex app or an editor — close it there, or
+send /thread to start a new one." The message is not retried or held.
 
-#### Scenario: a session open in a terminal refuses the channel turn
+#### Scenario: a session open in a terminal is taken over
 - **GIVEN** a conversation whose native session id is in the arguments of a terminal process outside the daemon
 - **WHEN** the peer sends a message
-- **THEN** the turn does not start and the chat is told "This session is open in a terminal — continue there, or send /thread to start a new one."
+- **THEN** the terminal process is ended and the turn runs on the same session
 
-#### Scenario: the daemon's own turn does not count
+#### Scenario: the daemon's own turn is never ended
 - **GIVEN** a conversation whose session is held by a process the daemon started for a turn
 - **WHEN** the next message arrives
-- **THEN** it joins the pending queue as usual and no refusal is sent
+- **THEN** that process is not ended and the message joins the pending queue as usual
 
-#### Scenario: a session whose terminal closed runs again
-- **GIVEN** the refused conversation after the terminal process has exited
+#### Scenario: a Codex session held by Codex's background app-server is taken over
+- **GIVEN** a Codex thread that Codex's background app-server still has loaded after its terminal closed, with a turn left running
+- **WHEN** a Coffer turn resumes it and Codex answers "already has an active writer"
+- **THEN** the turn left running is interrupted, the background app-server unloads the thread, and the turn resumes the same thread
+
+#### Scenario: a session Coffer cannot take over refuses the turn
+- **GIVEN** a session that stays held after the takeover, such as a Codex thread open in the Codex app
 - **WHEN** the peer sends a message
-- **THEN** the turn starts
-
-#### Scenario: Codex's active-writer error is the same refusal
-- **GIVEN** a Codex session that another process holds, answering `-32600` "already has an active writer"
-- **WHEN** a channel turn resumes it
-- **THEN** the chat gets the same reply and no turn error is shown
+- **THEN** the turn does not start and the chat is told "This session is open in another app that Coffer can't close, such as the Codex app or an editor — close it there, or send /thread to start a new one."
 
 ### Requirement: Keep the conversation index without its text
 Coffer MUST keep an index of conversations and nothing of what was said in them.

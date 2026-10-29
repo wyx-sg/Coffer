@@ -21,7 +21,7 @@ There is also a cost constraint. Coffer drives two agents and two IM platforms, 
 
 **Send freely; queue, never reject.** A message sent while a turn is running joins a per-conversation FIFO pending queue. Each queued message becomes its own turn. Messages are not merged. A channel accepts up to ten pending messages per conversation; the eleventh is dropped with the reason (see [the inbound pipeline](#the-inbound-pipeline)).
 
-**One session runs in one place.** A session open in a terminal and a channel turn writing to the same session would fork it. Before a turn resumes a session, the daemon looks for a terminal that has it open and, if one does, the channel is told so instead of starting the turn (see [One session, one place](#one-session-one-place)).
+**One session runs in one place, and a Coffer turn takes it over.** A session open in a terminal and a channel turn writing to the same session would fork it. A channel is used away from the computer, where nobody can close the terminal, so before a turn resumes a session the daemon ends the terminal that has it open, and frees a Codex thread that Codex's background app-server still holds. Only a holder Coffer does not close, such as the Codex app, turns the message away (see [One session, one place](#one-session-one-place) and the ADR [A Coffer Turn Takes Over a Session Open Elsewhere](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/a-coffer-turn-takes-over-a-session-open-elsewhere.md)).
 
 **The adapter is self-contained.** The orchestrator gives an adapter the turn's prompt and attachments, and nothing else. The adapter brings its own model, tools and configuration. Adding a third agent means registering one provider and one adapter. The conversation index, the orchestrator and the channels do not change.
 
@@ -346,7 +346,13 @@ Asking an agent is the slow part of this read: Codex answers `thread/list` in ab
 
 ### One session, one place {#one-session-one-place}
 
-From the web, a row whose turn is running opens a dialog first: continue in the channel, or stop the turn (the ordinary interrupt) and then open the terminal. In the other direction, before a channel turn resumes a native session, the turn platform asks whether a process outside the daemon's own tree carries the session id in its arguments. If one does, the turn does not start and the chat is told the session is open in a terminal; Codex's own "active writer" refusal is mapped to the same reply. A session opened by picking it inside the agent's own list has no id in its arguments and is not seen; Codex's writer lock still protects Codex.
+From the web, a row whose turn is running opens a dialog first: continue in the channel, or stop the turn (the ordinary interrupt) and then open the terminal.
+
+In the other direction, a turn takes the session over. Before it resumes a native session, the turn platform ends every process outside the daemon's own tree that carries the session id in its arguments (SIGTERM, then SIGKILL after five seconds); the daemon's own children are never touched. A session opened by picking it inside the agent's own list has no id in its arguments and is not seen here. For Codex the writer lock catches it: when the app-server answers `thread/resume` with `-32600` "already has an active writer", the adapter frees the thread once and resumes it again, never starting a fresh thread in its place.
+
+- **Codex's background app-server** (`codex app-server --managed-daemon`). Recent Codex CLIs attach to this shared server, so a thread stays loaded there, holding the lock, after the terminal closes; with a turn left waiting on an approval it never unloads. The adapter connects to its control socket (`$CODEX_HOME/app-server-control/app-server-control.sock`, JSON-RPC over a WebSocket), checks `thread/loaded/list`, joins the thread with `thread/resume`, interrupts a turn still in progress, sends `thread/unsubscribe`, and polls until the server unloads the thread. Codex does that 60 seconds (`thread_unload_delay_secs`) after the thread has no subscriber and nothing running, so this answer comes about a minute late; the wait is capped at 90 seconds.
+- **A terminal `codex` with its own embedded app-server.** The process holding `$CODEX_HOME/thread-writer-locks/<id>.lock` among its open files is ended like a terminal above.
+- **Anything else**, such as the Codex app's or an editor's own `codex app-server`, or a terminal still attached to the background server, is left alone. The turn does not start and the chat is told the session is open in another app that Coffer can't close.
 
 ## Concurrency rules
 
