@@ -90,6 +90,22 @@ def _to_session(info: Any) -> NativeSession:
     )
 
 
+def _message_text(message: Any) -> str:
+    """The text of one transcript message: its string content, or its text
+    blocks joined (a user message that carries only tool results has none)."""
+    content = message.get("content") if isinstance(message, dict) else None
+    if isinstance(content, str):
+        return content.strip()
+    if not isinstance(content, list):
+        return ""
+    parts = [
+        block.get("text", "")
+        for block in content
+        if isinstance(block, dict) and block.get("type") == "text"
+    ]
+    return "\n".join(p for p in parts if isinstance(p, str)).strip()
+
+
 def _matches(session: NativeSession, needle: str) -> bool:
     return needle in session.title.lower() or needle in (session.cwd or "").lower()
 
@@ -143,6 +159,29 @@ class ClaudeNativeSessions:
 
     async def delete(self, config_dir: pathlib.Path, session_id: str) -> None:
         await asyncio.to_thread(self._call, claude_agent_sdk.delete_session, config_dir, session_id)
+
+    async def tail(
+        self, config_dir: pathlib.Path, session_id: str, cwd: str | None
+    ) -> tuple[str, str]:
+        """The last message a person sent into the session and the last reply
+        it gave, as text; ``""`` for either that is not there. Read from the
+        session's own transcript, for the daily report (Coffer keeps no copy)."""
+
+        def work() -> list[Any]:
+            with _config_dir_env(config_dir):
+                return list(claude_agent_sdk.get_session_messages(session_id, directory=cwd))
+
+        messages = await asyncio.to_thread(work)
+        asked = answered = ""
+        for message in messages:
+            text = _message_text(getattr(message, "message", None))
+            if not text:
+                continue
+            if getattr(message, "type", "") == "user":
+                asked = text
+            elif getattr(message, "type", "") == "assistant":
+                answered = text
+        return asked, answered
 
     @staticmethod
     def _call(fn: Callable[..., None], config_dir: pathlib.Path, *args: str) -> None:

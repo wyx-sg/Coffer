@@ -13,7 +13,7 @@ The table lists the ten words. How each reads, where it works and the cards it a
 | --- | --- |
 | `/new [agent]` | Start a fresh conversation with this chat's settings. With an agent name, switch to that agent. |
 | `/stop` | Interrupt the running turn and pause the queue. The answer names the conversation — “⏹ Stopping “Fix login”…” — and is edited into “⏹ Stopped “Fix login” after 12s · 3 tools.” where the platform can edit a message, or followed by that line where it cannot. Messages queued behind the turn are held, with **Continue** and **Discard** buttons (see [Messages on hold after /stop](#messages-on-hold-after-stop)). With nothing running it does nothing. |
-| `/status` | What this chat is running, as a card with the buttons that act on it. |
+| `/status` | What this chat is running and the scheduled tasks waiting in it, as a card with the buttons that act on it. |
 | `/model [name]` | Show or set the model. |
 | `/dir [path\|name]` | Show or switch the working directory, in a fresh conversation. |
 | `/resume [n]` | Reopen an earlier conversation from this chat. |
@@ -111,7 +111,7 @@ A parallel thread nobody has used for 24 hours closes on its own: no turn runnin
 
 ## Status, help and the /new card {#status-and-help-cards}
 
-`/status` answers in words, not ids, under the title **Status**: the conversation's title (or its `🧵#N` mark); one line with the agent, the model and the directory; then **Running**, **Running · 2 waiting**, **⏸ 2 on hold** or **Idle**. In a direct chat it also lists the open parallel threads on one line, each with whether it is running, has messages waiting or on hold, or is idle. On a platform with buttons it is a card carrying only the buttons that act on what it shows: **Stop** while a turn runs, **Continue** and **Discard** while messages are on hold, then **Model** and **Dir**.
+`/status` answers in words, not ids, under the title **Status**: the conversation's title (or its `🧵#N` mark); one line with the agent, the model and the directory; then **Running**, **Running · 2 waiting**, **⏸ 2 on hold** or **Idle**. In a direct chat it also lists the open parallel threads on one line, each with whether it is running, has messages waiting or on hold, or is idle. On a platform with buttons it is a card carrying only the buttons that act on what it shows: **Stop** while a turn runs, **Continue** and **Discard** while messages are on hold, then **Model** and **Dir**. Under **Scheduled:** it lists the [scheduled tasks](/guides/scheduled-tasks) waiting in the conversation, soonest first (`⏰ 1. 16:00 Check the deploy`, at most five, the rest counted), each with a **Cancel ⏰1** button that removes the task.
 
 `/help` is a list to read, with no buttons. In a direct chat:
 

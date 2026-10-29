@@ -84,9 +84,9 @@ participant in convergence rather than a surface of its own.
 - **THEN** each is a link to a route the app serves
 - **AND** none is marked as coming soon or not yet implemented
 
-### Requirement: Keep the sidebar to its fourteen entries
+### Requirement: Keep the sidebar to its fifteen entries
 The sidebar's entries MUST be exactly these, at these routes: one ungrouped entry
-and five groups — fourteen today, and no fifteenth without a spec change.
+and five groups — fifteen today, and no sixteenth without a spec change.
 Settings is not an entry: it is a modal opened from the sidebar footer (see
 "Open Settings as a modal from the sidebar footer"). Usage is not an entry:
 it is a tab of Model providers (see provider-switching "Show metered usage on a
@@ -108,6 +108,7 @@ owned by no feature and is always there:
  RUN
   Conversations    /conversations     — every agent's sessions, wherever they started, each opened in the agent's own terminal
   Channels         /channels          — the IM bots agents answer on
+  Scheduled tasks  /scheduled-tasks   — turns Coffer starts on its own in a chat, and Coffer's own background work
  CAPABILITIES
   MCP servers      /mcp-servers       — the aggregated upstream servers
   Custom tools     /custom-tools      — HTTP APIs Coffer serves to agents as tools, in groups
@@ -129,15 +130,15 @@ owned by no feature and is always there:
 - **WHEN** they navigate to `http://localhost:5173/` in a real browser
 - **THEN** the index renders the Overview page at `/`, with the sidebar and main content area, within 2 seconds
 - **AND** the main content shows the Overview page (no generic error card)
-- **AND** the sidebar lists exactly Coffer's operational surfaces — Overview; Agents, Model providers; Conversations, Channels; MCP servers, Custom tools, Skills, CLIs; Knowledge, Memory; Secrets, Activity, Sync — with Overview under no heading and the rest grouped under "Agents", "Run", "Capabilities", "Context" and "System" headings, with no other entry
+- **AND** the sidebar lists exactly Coffer's operational surfaces — Overview; Agents, Model providers; Conversations, Channels, Scheduled tasks; MCP servers, Custom tools, Skills, CLIs; Knowledge, Memory; Secrets, Activity, Sync — with Overview under no heading and the rest grouped under "Agents", "Run", "Capabilities", "Context" and "System" headings, with no other entry
 - **AND** no navigation entry is Settings; a labelled Settings row sits at the bottom of the sidebar
 
 #### Scenario: a switched-off feature leaves the sidebar
 - **GIVEN** a sidebar entry owned by a registered experimental feature that is switched off
 - **WHEN** the app shell is rendered
 - **THEN** the sidebar leaves that entry out and lists every other entry under its heading
-- **AND** with every feature switched on, the sidebar lists all fourteen entries
-- **AND** with both features switched off, it lists only Overview, Agents, Model providers, Conversations, Channels, MCP servers, Custom tools, Skills, CLIs, Secrets, Activity and Sync
+- **AND** with every feature switched on, the sidebar lists all fifteen entries
+- **AND** with both features switched off, it lists only Overview, Agents, Model providers, Conversations, Channels, Scheduled tasks, MCP servers, Custom tools, Skills, CLIs, Secrets, Activity and Sync
 
 ### Requirement: Call a surface by one name everywhere
 A surface MUST carry one name in every place it is named — sidebar, page header,
@@ -1635,7 +1636,7 @@ A new entry MUST join the group that names what the user comes to it for, and no
 group may grow past five entries; growth that is more of an existing thing — one
 more agent, channel or custom tool — is a row inside that thing's page, not an
 entry. A group whose every entry is left out (see "Keep the sidebar to its
-fourteen entries") MUST leave its heading out too, so no heading stands over
+fifteen entries") MUST leave its heading out too, so no heading stands over
 nothing. The decision and the options it was weighed against are in
 [The Sidebar Is Grouped by What the Person Comes to Do](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md).
 
@@ -1643,7 +1644,7 @@ nothing. The decision and the options it was weighed against are in
 - **GIVEN** the app shell is rendered with every experimental feature switched on
 - **WHEN** the sidebar lists its entries
 - **THEN** Overview comes first, under no heading, and the rest sit under five headings in the order Agents, Run, Capabilities, Context, System
-- **AND** Agents holds Agents then Model providers, Run holds Conversations then Channels, Capabilities holds MCP servers, Custom tools, Skills and CLIs, Context holds Knowledge then Memory, and System holds Secrets, Activity and Sync
+- **AND** Agents holds Agents then Model providers, Run holds Conversations, Channels then Scheduled tasks, Capabilities holds MCP servers, Custom tools, Skills and CLIs, Context holds Knowledge then Memory, and System holds Secrets, Activity and Sync
 
 #### Scenario: a group with every entry switched off leaves the sidebar
 - **GIVEN** a group whose every entry is owned by a registered experimental feature that is switched off
@@ -2082,7 +2083,7 @@ secret capability's, specified with it.
 - **THEN** the first save stores only the notes and writes no value, the second replaces the value without showing the old one, and the reference stays the same
 
 ### Requirement: Open Settings as a modal from the sidebar footer
-Settings MUST NOT be a navigation entry: it is not one of the sidebar's fourteen
+Settings MUST NOT be a navigation entry: it is not one of the sidebar's fifteen
 entries and belongs to no group. It MUST open as a large modal over the current
 page from three places: a labelled **Settings** row — a gear icon and the word
 Settings, not an icon-only button — at the bottom of the sidebar; the ⌘,
@@ -2113,7 +2114,7 @@ close it and return to the page underneath.
 - **GIVEN** the user on `/mcp-servers`
 - **WHEN** they click the labelled Settings row at the bottom of the sidebar
 - **THEN** the Settings modal opens on General, the URL reads `/settings/general`, and the MCP servers list stays rendered underneath
-- **AND** the Settings row shows as active while the modal is open and not after it closes, and the fourteen navigation entries do not include Settings
+- **AND** the Settings row shows as active while the modal is open and not after it closes, and the fifteen navigation entries do not include Settings
 
 #### Scenario: the collapsed rail keeps Settings as a gear with a tooltip
 - **GIVEN** the sidebar collapsed to its icon rail

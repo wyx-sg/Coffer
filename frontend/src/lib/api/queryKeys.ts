@@ -130,6 +130,13 @@ export const channelStatusKey = (uid: string) => ["channels", uid, "status"] as 
 export const channelAvatarKey = (uid: string, senderId: string) =>
   ["channels", uid, "avatar", senderId] as const;
 
+// --- scheduled tasks — `scheduled_task` resources, read through their own list ---
+
+export const scheduledTasksKey = ["scheduledTasks"] as const;
+export const scheduledTaskRunsKey = (uid: string) => ["scheduledTasks", uid, "runs"] as const;
+/** The paired chats a new task may run in (spec channels "Manage scheduled tasks from the Scheduled tasks page"). */
+export const scheduledTaskChatsKey = ["scheduledTasks", "chats"] as const;
+
 // --- daemon ----------------------------------------------------------------
 
 export const daemonStatusKey = ["daemon", "status"] as const;
@@ -248,6 +255,8 @@ export function ownListKeysForKind(kind: string): readonly QueryKey[] {
       return [knowledgeCollectionsKey];
     case "channel":
       return [channelsKey];
+    case "scheduled_task":
+      return [scheduledTasksKey];
     case "mcp_server":
       return [mcpStatusesKey, customToolsKey];
     default:

@@ -230,6 +230,7 @@
     "forward": "Forward",
     "agents": "Agents",
     "channels": "Channels",
+    "scheduledTasks": "Scheduled tasks",
     "activity": "Activity",
     "modelProviders": "Model providers",
     "sync": "Sync",
@@ -1899,6 +1900,14 @@
         "notFoundTitle": "This secret no longer exists",
         "notFoundBody": "No secret is stored as <mono>{{id}}</mono>. It was deleted.",
         "back": "Back to secrets"
+      },
+      "scheduledTasks": {
+        "plural": "scheduled tasks",
+        "singular": "task",
+        "filterHelp": "Filters names, prompts and channels.",
+        "notFoundTitle": "This task no longer exists",
+        "notFoundBody": "No scheduled task has the id <mono>{{id}}</mono>. It was deleted or ran its last time.",
+        "back": "Back to Scheduled tasks"
       }
     }
   },
@@ -6843,5 +6852,238 @@
     "added": "Added a value for {{name}}",
     "replace": "Replace",
     "keep": "Keep current key"
+  },
+  "scheduledTasks": {
+    "title": "Scheduled tasks",
+    "subtitle": "Turns Coffer starts in a chat on its own: your tasks, follow-ups agents booked, and Coffer's own background work.",
+    "newTask": "New task",
+    "search": "Filter tasks",
+    "on": "On",
+    "off": "Off",
+    "pause": "Pause",
+    "resume": "Resume",
+    "menu": "More for {{name}}",
+    "empty": {
+      "title": "No scheduled tasks yet",
+      "body": "A task asks an agent something in one of your chats at the time you choose: a morning summary, a weekly check. Agents can also book follow-ups in a thread."
+    },
+    "list": {
+      "mine": "My tasks",
+      "followUps": "Follow-ups",
+      "internal": "Coffer internal",
+      "none": "None yet.",
+      "noMatch": "No task matches.",
+      "pausedLine": "Paused",
+      "failedLine": "Last run failed · {{reason}}",
+      "nextLine": "{{when}} · next {{next}}"
+    },
+    "state": {
+      "running": "Running now",
+      "ready": "Scheduled",
+      "paused": "Paused",
+      "failed": "Failing",
+      "done": "Done"
+    },
+    "schedule": {
+      "onceAt": "Once, {{when}}",
+      "hourlyAt": "Every hour at :{{minute}}",
+      "dailyAt": "Every day at {{time}}",
+      "weekdaysAt": "Weekdays at {{time}}",
+      "weeklyAt": "Every {{day}} at {{time}}",
+      "cron": "Cron {{expr}}",
+      "manual": "Only when run by hand"
+    },
+    "outcome": {
+      "running": "Running",
+      "replied": "Replied",
+      "silent": "Nothing to say",
+      "skipped": "Skipped",
+      "failed": "Failed",
+      "stopped": "Stopped"
+    },
+    "chatKind": {
+      "direct": "direct chat",
+      "group": "group"
+    },
+    "runNow": {
+      "action": "Run now",
+      "started": "Started. The reply goes to the task's chat."
+    },
+    "delete": {
+      "action": "Delete",
+      "title": "Delete {{name}}?",
+      "body": "It will not run again. Its run history stays until the retention period ends.",
+      "pending": "Deleting…",
+      "failed": "Couldn’t delete {{name}}"
+    },
+    "detail": {
+      "next": "next {{next}}",
+      "what": "What it does",
+      "continues": "Carries on the chat's conversation",
+      "freshDefault": "A fresh conversation, with the channel's agent",
+      "kind": "Kind",
+      "dailyReport": "The daily report: written from today's channel conversations",
+      "followUp": "Follow-up {{index}}, booked by an agent for {{who}}",
+      "theOwner": "you"
+    },
+    "runs": {
+      "title": "History",
+      "help": "Every run: when it ran, how it ended and why. Runs are kept for 90 days.",
+      "none": "It hasn't run yet.",
+      "byHand": "run by hand",
+      "late": "late, was due {{due}}"
+    },
+    "dialog": {
+      "title": "New scheduled task",
+      "editTitle": "Edit {{name}}",
+      "body": "At the time you choose, Coffer sends the prompt to an agent in the chat, and the reply goes there.",
+      "name": "Name",
+      "namePlaceholder": "Named after the prompt when left empty",
+      "chat": "Chat",
+      "chatPlaceholder": "Choose a chat",
+      "chatHint": "A chat you already use with a bot.",
+      "noChats": "No paired chats yet. Message one of your bots first, then come back.",
+      "when": "When",
+      "weekday": "Day",
+      "time": "Time",
+      "minute": "Minute",
+      "at": "Date and time",
+      "cron": "Cron expression",
+      "kind": {
+        "daily": "Every day",
+        "weekdays": "Weekdays",
+        "weekly": "Every week",
+        "hourly": "Every hour",
+        "once": "Once",
+        "cron": "Cron",
+        "manual": "Only by hand"
+      },
+      "localTime": "In this Mac's local time.",
+      "cronHint": "Five fields: minute hour day month weekday, in local time.",
+      "manualHint": "Runs only when you press Run now.",
+      "prompt": "Prompt",
+      "promptPlaceholder": "Summarise yesterday's open pull requests",
+      "promptHint": "If there is nothing to report, the agent can stay silent and nothing is sent.",
+      "session": "Conversation",
+      "fresh": "Fresh each run",
+      "continue": "Carry on the chat's",
+      "agent": "Agent",
+      "model": "Model",
+      "cwd": "Directory",
+      "channelDefault": "Channel default",
+      "catchUp": "Catch up",
+      "catchUpHint": "A run missed while the Mac slept or Coffer was off runs once, late.",
+      "submit": "Create task",
+      "addFailed": "Couldn’t create the task",
+      "editFailed": "Couldn’t save the task"
+    },
+    "dailyReport": {
+      "title": "Daily report",
+      "help": "Once a day, a short message to you about this channel's conversations. A day with none sends nothing.",
+      "off": "Off",
+      "on": "Every day at {{time}}",
+      "set": "Set up",
+      "save": "Save",
+      "time": "Time",
+      "open": "Open task",
+      "saved": "Daily report set for {{time}}.",
+      "failed": "Couldn’t set the daily report"
+    },
+    "internal": {
+      "title": "Status",
+      "help": "Coffer's own background work. It runs by itself; nothing here can be changed.",
+      "showAll": "Show all ({{count}} more)",
+      "showFewer": "Show fewer",
+      "failedLine": "Last pass failed",
+      "lastLine": "{{mode}} · last {{last}}",
+      "mode": {
+        "event": "Wakes on changes",
+        "event+fallback": "Wakes on changes, or on a timer",
+        "on-demand": "Runs when asked",
+        "timer": "Runs on a timer"
+      },
+      "state": {
+        "waiting": "Waiting",
+        "running": "Running",
+        "parked": "Parked"
+      },
+      "wakes": "Wakes",
+      "last": "Last pass",
+      "next": "Next pass",
+      "runs": "Passes",
+      "runsCount": "{{runs}} · {{failures}} failed",
+      "took": "took {{ms}} ms",
+      "failed": "failed"
+    },
+    "workers": {
+      "sync-worker": {
+        "name": "Sync",
+        "description": "Pushes and pulls the vault with your other Macs."
+      },
+      "memory-sync": {
+        "name": "Memory sync",
+        "description": "Copies memories between the hub and each agent's own memory."
+      },
+      "retention-worker": {
+        "name": "Retention",
+        "description": "Deletes old activity and run records past their keep time."
+      },
+      "reconciler": {
+        "name": "Reconciler",
+        "description": "Writes each agent's config files to match the vault."
+      },
+      "vault-scanner": {
+        "name": "Vault scanner",
+        "description": "Notices files changed in the vault outside Coffer."
+      },
+      "scheduled-tasks": {
+        "name": "Scheduled tasks",
+        "description": "Starts each of your scheduled tasks on time."
+      },
+      "provider-health": {
+        "name": "Provider health",
+        "description": "Checks that each model provider answers."
+      },
+      "skill-source-updates": {
+        "name": "Skill source updates",
+        "description": "Looks for new versions of skills from their sources."
+      },
+      "release-check": {
+        "name": "Update check",
+        "description": "Looks for a new Coffer release."
+      },
+      "channel-runtime": {
+        "name": "Channel connections",
+        "description": "Keeps each IM bot connected."
+      },
+      "channel-thread-sweep": {
+        "name": "Channel thread sweep",
+        "description": "Forgets chat threads nobody has used for a long time."
+      },
+      "usage-ingest": {
+        "name": "Usage import",
+        "description": "Reads token usage from the agents' logs."
+      },
+      "price-refresh": {
+        "name": "Price refresh",
+        "description": "Fetches current model prices."
+      },
+      "attention-watch": {
+        "name": "Attention watch",
+        "description": "Works out what needs you on the Overview."
+      },
+      "knowledge-sweep": {
+        "name": "Knowledge sweep",
+        "description": "Keeps the knowledge collections' indexes fresh."
+      },
+      "model-proxy": {
+        "name": "Model proxy",
+        "description": "Runs the local proxy agents reach providers through."
+      },
+      "mcp-session-reaper": {
+        "name": "MCP session cleanup",
+        "description": "Closes MCP sessions nobody has used for a while."
+      }
+    }
   }
 }

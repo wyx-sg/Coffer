@@ -15,6 +15,7 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from coffer.application.runtime.cancellation import raise_if_stopping
+from coffer.application.runtime.workers import TimedWorker
 from coffer.application.upkeep_clock import PASS_CLOCK, PassClock
 from coffer.application.upkeep_schedule import (
     DEFAULT_INTERVALS,
@@ -48,19 +49,26 @@ class MemorySyncWorker:
         self._clock = clock
 
     async def run_forever(self) -> None:
-        while True:
-            self._clock.running(MEMORY_SYNC)
-            try:
-                await self.run_once()
-            except asyncio.CancelledError:
-                raise
-            except MemorySyncRunning:
-                logger.debug("memory.sync_worker.already_running")
-            except Exception as exc:
-                raise_if_stopping(exc)
-                logger.warning("memory.sync_worker.pass_failed", exc_info=True)
-            self._clock.waiting(MEMORY_SYNC)
-            await wait_for_next_pass(self._read_interval, default_s=DEFAULT_INTERVALS[MEMORY_SYNC])
+        report = TimedWorker("memory-sync")
+        try:
+            while True:
+                self._clock.running(MEMORY_SYNC)
+                try:
+                    with report.pass_():
+                        await self.run_once()
+                except asyncio.CancelledError:
+                    raise
+                except MemorySyncRunning:
+                    logger.debug("memory.sync_worker.already_running")
+                except Exception as exc:
+                    raise_if_stopping(exc)
+                    logger.warning("memory.sync_worker.pass_failed", exc_info=True)
+                self._clock.waiting(MEMORY_SYNC)
+                default = DEFAULT_INTERVALS[MEMORY_SYNC]
+                report.sleeping(float(await self._read_interval() or default))
+                await wait_for_next_pass(self._read_interval, default_s=default)
+        finally:
+            report.close()
 
     async def run_once(self) -> None:
         if not await self._is_enabled():

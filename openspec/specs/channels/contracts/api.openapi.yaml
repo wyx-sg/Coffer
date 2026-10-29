@@ -365,6 +365,287 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Channel Status
+  /api/v1/scheduled-tasks:
+    get:
+      operationId: list_tasks_api_v1_scheduled_tasks_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledTaskListOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: List Tasks
+    post:
+      operationId: create_task_api_v1_scheduled_tasks_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduledTaskIn'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledTaskOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Create Task
+  /api/v1/scheduled-tasks/chats:
+    get:
+      description: The chats a new task may run in.
+      operationId: list_task_chats_api_v1_scheduled_tasks_chats_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskChatListOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: List Task Chats
+  /api/v1/scheduled-tasks/daily-report:
+    put:
+      description: Make the daily report task from its template, or move the one there is.
+      operationId: set_daily_report_api_v1_scheduled_tasks_daily_report_put
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DailyReportIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledTaskOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Set Daily Report
+  /api/v1/scheduled-tasks/{uid}:
+    get:
+      operationId: get_task_api_v1_scheduled_tasks__uid__get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledTaskOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Get Task
+  /api/v1/scheduled-tasks/{uid}/run:
+    post:
+      description: Run the task once, now, whatever its schedule.
+      operationId: run_task_now_api_v1_scheduled_tasks__uid__run_post
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledRunOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Run Task Now
+  /api/v1/scheduled-tasks/{uid}/runs:
+    get:
+      operationId: list_task_runs_api_v1_scheduled_tasks__uid__runs_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          maximum: 200
+          minimum: 1
+          title: Limit
+          type: integer
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledRunListOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: List Task Runs
 components:
   schemas:
     ChannelCommandOut:
@@ -604,6 +885,58 @@ components:
       - detail
       title: CredentialCheckOut
       type: object
+    CronSchedule:
+      additionalProperties: false
+      description: A five-field cron expression, in local time.
+      properties:
+        expr:
+          title: Expr
+          type: string
+        kind:
+          const: cron
+          default: cron
+          title: Kind
+          type: string
+      required:
+      - expr
+      title: CronSchedule
+      type: object
+    DailyReportIn:
+      properties:
+        agent:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent
+        channel:
+          minLength: 1
+          title: Channel
+          type: string
+        time:
+          default: '18:00'
+          pattern: ^([01]\d|2[0-3]):[0-5]\d$
+          title: Time
+          type: string
+      required:
+      - channel
+      title: DailyReportIn
+      type: object
+    DailySchedule:
+      additionalProperties: false
+      description: Every day at ``time`` (local).
+      properties:
+        kind:
+          const: daily
+          default: daily
+          title: Kind
+          type: string
+        time:
+          title: Time
+          type: string
+      required:
+      - time
+      title: DailySchedule
+      type: object
     ErrorDetail:
       properties:
         code:
@@ -646,6 +979,23 @@ components:
       - prompt
       title: HandoffOut
       type: object
+    HourlySchedule:
+      additionalProperties: false
+      description: Every hour, at ``minute`` past.
+      properties:
+        kind:
+          const: hourly
+          default: hourly
+          title: Kind
+          type: string
+        minute:
+          default: 0
+          maximum: 59.0
+          minimum: 0.0
+          title: Minute
+          type: integer
+      title: HourlySchedule
+      type: object
     InboundInfoOut:
       description: |-
         A SeaTalk channel's websocket connection — the one road its events take.
@@ -676,6 +1026,17 @@ components:
       - websocket_error
       title: InboundInfoOut
       type: object
+    ManualSchedule:
+      additionalProperties: false
+      description: 'No times at all: the task runs when someone asks it to.'
+      properties:
+        kind:
+          const: manual
+          default: manual
+          title: Kind
+          type: string
+      title: ManualSchedule
+      type: object
     NotifyIn:
       properties:
         chat_id:
@@ -700,6 +1061,23 @@ components:
       required:
       - sent
       title: NotifyOut
+      type: object
+    OnceSchedule:
+      additionalProperties: false
+      description: One run at ``at``, an instant with its offset. The task ends after it.
+      properties:
+        at:
+          format: date-time
+          title: At
+          type: string
+        kind:
+          const: once
+          default: once
+          title: Kind
+          type: string
+      required:
+      - at
+      title: OnceSchedule
       type: object
     PairingCodeIn:
       properties:
@@ -737,6 +1115,264 @@ components:
       required:
       - running
       title: RestartOut
+      type: object
+    ScheduledRunListOut:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ScheduledRunOut'
+          title: Items
+          type: array
+      required:
+      - items
+      title: ScheduledRunListOut
+      type: object
+    ScheduledRunOut:
+      properties:
+        catch_up:
+          title: Catch Up
+          type: boolean
+        conversation_id:
+          title: Conversation Id
+          type: string
+        due_at:
+          format: date-time
+          title: Due At
+          type: string
+        finished_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Finished At
+        outcome:
+          enum:
+          - running
+          - replied
+          - silent
+          - skipped
+          - failed
+          - stopped
+          title: Outcome
+          type: string
+        reason:
+          title: Reason
+          type: string
+        run_id:
+          title: Run Id
+          type: string
+        started_at:
+          format: date-time
+          title: Started At
+          type: string
+        task_name:
+          title: Task Name
+          type: string
+        task_uid:
+          title: Task Uid
+          type: string
+        trigger:
+          enum:
+          - schedule
+          - manual
+          title: Trigger
+          type: string
+      required:
+      - run_id
+      - task_uid
+      - task_name
+      - due_at
+      - started_at
+      - finished_at
+      - outcome
+      - reason
+      - catch_up
+      - trigger
+      - conversation_id
+      title: ScheduledRunOut
+      type: object
+    ScheduledTaskConfig:
+      additionalProperties: false
+      description: '``Resource.config`` of a ``scheduled_task``.'
+      properties:
+        agent:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Agent
+        catch_up:
+          default: true
+          title: Catch Up
+          type: boolean
+        chain_index:
+          default: 1
+          minimum: 1.0
+          title: Chain Index
+          type: integer
+        chain_started_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Chain Started At
+        chat:
+          $ref: '#/components/schemas/TaskChat'
+        cwd:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cwd
+        material:
+          default: none
+          enum:
+          - none
+          - channel_day
+          title: Material
+          type: string
+        mention:
+          anyOf:
+          - $ref: '#/components/schemas/TaskMention'
+          - type: 'null'
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+        origin:
+          default: owner
+          enum:
+          - owner
+          - agent
+          title: Origin
+          type: string
+        prompt:
+          maxLength: 8000
+          minLength: 1
+          title: Prompt
+          type: string
+        schedule:
+          discriminator:
+            mapping:
+              cron: '#/components/schemas/CronSchedule'
+              daily: '#/components/schemas/DailySchedule'
+              hourly: '#/components/schemas/HourlySchedule'
+              manual: '#/components/schemas/ManualSchedule'
+              once: '#/components/schemas/OnceSchedule'
+              weekdays: '#/components/schemas/WeekdaysSchedule'
+              weekly: '#/components/schemas/WeeklySchedule'
+            propertyName: kind
+          oneOf:
+          - $ref: '#/components/schemas/OnceSchedule'
+          - $ref: '#/components/schemas/HourlySchedule'
+          - $ref: '#/components/schemas/DailySchedule'
+          - $ref: '#/components/schemas/WeekdaysSchedule'
+          - $ref: '#/components/schemas/WeeklySchedule'
+          - $ref: '#/components/schemas/CronSchedule'
+          - $ref: '#/components/schemas/ManualSchedule'
+          title: Schedule
+        session:
+          default: fresh
+          enum:
+          - continue
+          - fresh
+          title: Session
+          type: string
+        template:
+          default: ''
+          enum:
+          - ''
+          - daily_report
+          title: Template
+          type: string
+      required:
+      - schedule
+      - prompt
+      - chat
+      title: ScheduledTaskConfig
+      type: object
+    ScheduledTaskIn:
+      properties:
+        config:
+          $ref: '#/components/schemas/ScheduledTaskConfig'
+        description:
+          default: ''
+          title: Description
+          type: string
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+      required:
+      - config
+      title: ScheduledTaskIn
+      type: object
+    ScheduledTaskListOut:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ScheduledTaskOut'
+          title: Items
+          type: array
+      required:
+      - items
+      title: ScheduledTaskListOut
+      type: object
+    ScheduledTaskOut:
+      properties:
+        channel_name:
+          title: Channel Name
+          type: string
+        config:
+          $ref: '#/components/schemas/ScheduledTaskConfig'
+        created_at:
+          format: date-time
+          title: Created At
+          type: string
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        enabled:
+          title: Enabled
+          type: boolean
+        last_run:
+          anyOf:
+          - $ref: '#/components/schemas/ScheduledRunOut'
+          - type: 'null'
+        name:
+          title: Name
+          type: string
+        next_run:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Next Run
+        running:
+          title: Running
+          type: boolean
+        uid:
+          title: Uid
+          type: string
+        updated_at:
+          format: date-time
+          title: Updated At
+          type: string
+      required:
+      - uid
+      - name
+      - description
+      - enabled
+      - config
+      - created_at
+      - updated_at
+      - channel_name
+      - last_run
+      - next_run
+      - running
+      title: ScheduledTaskOut
       type: object
     SeaTalkChannelConfig:
       additionalProperties: false
@@ -869,6 +1505,102 @@ components:
       - state
       - secret_ref
       title: SecretApprovalOut
+      type: object
+    TaskChat:
+      additionalProperties: false
+      description: |-
+        Where the task's turn runs and its reply goes: one chat of one channel.
+
+        ``thread_id`` is where the reply is posted; ``conversation_thread_id`` is
+        which of the chat's conversations it joins — the two differ for a casual
+        reply-in-thread in a direct chat, exactly as for a message that arrived
+        there (spec channels "Key conversation identity by channel, chat and thread").
+      properties:
+        channel:
+          minLength: 1
+          title: Channel
+          type: string
+        chat_id:
+          minLength: 1
+          title: Chat Id
+          type: string
+        chat_kind:
+          default: direct
+          enum:
+          - direct
+          - group
+          title: Chat Kind
+          type: string
+        conversation_thread_id:
+          default: ''
+          title: Conversation Thread Id
+          type: string
+        thread_id:
+          default: ''
+          title: Thread Id
+          type: string
+      required:
+      - channel
+      - chat_id
+      title: TaskChat
+      type: object
+    TaskChatListOut:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/TaskChatOut'
+          title: Items
+          type: array
+      required:
+      - items
+      title: TaskChatListOut
+      type: object
+    TaskChatOut:
+      description: 'A chat a task may run in: one the owner uses with a channel''s bot.'
+      properties:
+        channel:
+          title: Channel
+          type: string
+        channel_name:
+          title: Channel Name
+          type: string
+        chat_id:
+          title: Chat Id
+          type: string
+        chat_kind:
+          enum:
+          - direct
+          - group
+          title: Chat Kind
+          type: string
+        label:
+          title: Label
+          type: string
+      required:
+      - channel
+      - channel_name
+      - chat_id
+      - chat_kind
+      - label
+      title: TaskChatOut
+      type: object
+    TaskMention:
+      additionalProperties: false
+      description: Whom a group reply opens by @mentioning — whoever asked for the follow-up.
+      properties:
+        email:
+          default: ''
+          title: Email
+          type: string
+        name:
+          default: ''
+          title: Name
+          type: string
+        user_id:
+          default: ''
+          title: User Id
+          type: string
+      title: TaskMention
       type: object
     TelegramChannelConfig:
       additionalProperties: false
@@ -1009,4 +1741,42 @@ components:
       required:
       - platform
       title: ValidateCredentialsIn
+      type: object
+    WeekdaysSchedule:
+      additionalProperties: false
+      description: Monday to Friday at ``time`` (local).
+      properties:
+        kind:
+          const: weekdays
+          default: weekdays
+          title: Kind
+          type: string
+        time:
+          title: Time
+          type: string
+      required:
+      - time
+      title: WeekdaysSchedule
+      type: object
+    WeeklySchedule:
+      additionalProperties: false
+      description: 'Once a week: ``weekday`` (0 is Monday) at ``time`` (local).'
+      properties:
+        kind:
+          const: weekly
+          default: weekly
+          title: Kind
+          type: string
+        time:
+          title: Time
+          type: string
+        weekday:
+          maximum: 6.0
+          minimum: 0.0
+          title: Weekday
+          type: integer
+      required:
+      - time
+      - weekday
+      title: WeeklySchedule
       type: object

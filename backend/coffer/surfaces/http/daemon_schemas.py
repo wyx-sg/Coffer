@@ -35,16 +35,17 @@ class TaskCrashOut(BaseModel):
 
 
 class WorkerOut(BaseModel):
-    """One background worker built on the shared wakeable loop: how it is
-    woken and what it did last (ADR background-workers-wake-on-events)."""
+    """One background worker: how it is woken and what it did last (ADR
+    background-workers-wake-on-events). Most are built on the shared wakeable
+    loop; a plain timer loop reports through ``TimedWorker``."""
 
     #: A fixed name (``reconciler``, ``vault-scanner``), never a channel,
     #: server or chat: this route needs no token.
     name: str
     #: ``event`` — only an event wakes it; ``event+fallback`` — an event, or a
     #: fallback timer that catches a lost one; ``on-demand`` — parked with no
-    #: timer while nothing needs it.
-    mode: Literal["event", "event+fallback", "on-demand"]
+    #: timer while nothing needs it; ``timer`` — runs, then sleeps a fixed while.
+    mode: Literal["event", "event+fallback", "on-demand", "timer"]
     state: Literal["waiting", "running", "parked"]
     #: Runs since it started, and how many of them raised.
     runs: int

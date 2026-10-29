@@ -56,6 +56,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer channel`](/reference/cli/channel) | Messaging channels: status, pairing, people, notify, restart. |
 | [`coffer knowledge`](/reference/cli/knowledge) | Knowledge collections (documents are plain files you edit directly). |
 | [`coffer skill`](/reference/cli/skill) | Skills: import, update, delivery to agents, sources. |
+| [`coffer task`](/reference/cli/task) | Scheduled tasks: list, add, run now, runs, pause, the daily report. |
 | [`coffer agent`](/reference/cli/agent) | Manage coding agents: add, connect, their MCP entries, plugins and sessions. |
 | [`coffer provider`](/reference/cli/provider) | Model providers: connections, prices, switching agents' models. |
 | [`coffer model`](/reference/cli/model) | Ask a model endpoint which models it serves, or test it. |

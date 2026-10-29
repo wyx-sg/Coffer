@@ -8,6 +8,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from coffer.application.runtime.cancellation import raise_if_stopping
+from coffer.application.runtime.workers import TimedWorker
 
 if TYPE_CHECKING:
     from coffer.application.retention_service import RetentionService
@@ -47,12 +48,18 @@ class RetentionWorker:
 
     async def run(self) -> None:
         """Run until stop() is called."""
-        while not self._stop.is_set():
-            await self._safe_prune()
-            try:
-                await asyncio.wait_for(self._stop.wait(), timeout=self._interval)
-            except TimeoutError:
-                continue
+        report = TimedWorker("retention-worker")
+        try:
+            while not self._stop.is_set():
+                with report.pass_():
+                    await self._safe_prune()
+                report.sleeping(self._interval)
+                try:
+                    await asyncio.wait_for(self._stop.wait(), timeout=self._interval)
+                except TimeoutError:
+                    continue
+        finally:
+            report.close()
 
     async def _safe_prune(self) -> None:
         try:

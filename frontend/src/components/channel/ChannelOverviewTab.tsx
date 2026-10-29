@@ -1,8 +1,9 @@
 // frontend/src/components/channel/ChannelOverviewTab.tsx
 // A channel's Overview, one column: who can use it (the paired owners: add,
 // remove), which agents it drives — the default agent a new conversation
-// starts on and the shared reach control for the agents it may drive — and one
-// link to the conversations it started. It lists no messages and no
+// starts on and the shared reach control for the agents it may drive — the
+// daily report (off, or a time each day), and one link to the conversations it
+// started. It lists no messages and no
 // conversations: Conversations, filtered by this channel, is where those are read.
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -25,6 +26,7 @@ import { storedDefaultModel } from "@/lib/channels/editChannel";
 import { useAgentModelList } from "@/lib/hooks/useAgentModelList";
 import { useAgentResolvedDefault } from "@/lib/hooks/useAgentModels";
 import { CHANNEL_KIND } from "@/lib/hooks/useChannels";
+import { ChannelDailyReportSection } from "./ChannelDailyReportSection";
 import { ChannelPeopleList } from "./ChannelPeopleList";
 
 function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
@@ -131,6 +133,8 @@ export function ChannelOverviewTab({
           <ScopeControl kind={CHANNEL_KIND} uid={channel.uid} enabled={channel.enabled} />
         </Row>
       </SettingsSection>
+
+      <ChannelDailyReportSection channelUid={channel.uid} />
 
       <Link
         to={channelConversationsHref(channel.uid)}

@@ -19,6 +19,7 @@ the ADRs the research informs. What Coffer decided, and why, lives in
 | [Provider switching](./provider-switching.md) | Switching the model provider, endpoint and key a coding agent uses | `provider-switching` |
 | [Agent chat clients](./agent-chat-clients.md) | GUIs that drive locally installed agent CLIs as chat | `chat` |
 | [IM agent bridges](./im-agent-bridges.md) | Driving a local coding agent from an IM app | `channels` |
+| [Scheduled agent tasks](./scheduled-agent-tasks.md) | Agent turns that start on their own at a time: owner tasks, agent follow-ups, periodic reports | `channels`, `daemon` |
 | [Knowledge curation](./knowledge-curation.md) | Plain-Markdown knowledge bases co-maintained by people and an LLM | `knowledge` |
 | [Knowledge structures](./knowledge-structures.md) | How agent knowledge is structured (raw sources, compiled pages, links, indexes, lint) and how history and sources are shown | `knowledge` |
 | [Agent memory](./agent-memory.md) | Capturing, consolidating and re-delivering what agents learn across sessions | `memory` |

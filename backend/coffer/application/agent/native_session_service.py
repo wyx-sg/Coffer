@@ -74,6 +74,12 @@ class NativeSessionSource(Protocol):
 
     async def delete(self, config_dir: pathlib.Path, session_id: str) -> None: ...
 
+    async def tail(
+        self, config_dir: pathlib.Path, session_id: str, cwd: str | None
+    ) -> tuple[str, str]:
+        """The last message a person sent into the session and the last reply."""
+        ...
+
 
 class SessionConversations(Protocol):
     """The turn platform's conversations, as the sessions tab needs them.
@@ -178,6 +184,13 @@ class NativeSessionService:
         await source.delete(cfg.resolved_config_dir(), session_id)
         if sync_index and self._conversations is not None:
             await self._conversations.forget(session_id)
+
+    async def tail(self, agent_uid: str, session_id: str, cwd: str | None) -> tuple[str, str]:
+        """The end of one session — what was last asked and last answered — read
+        from the agent's own record (the daily report's material)."""
+        _require_id(session_id)
+        _agent, cfg, source = await self._resolve(agent_uid)
+        return await source.tail(cfg.resolved_config_dir(), session_id, cwd)
 
     async def _resolve(self, agent_uid: str) -> tuple[Resource, AgentConfig, NativeSessionSource]:
         agent = await self._agents.get(agent_uid)

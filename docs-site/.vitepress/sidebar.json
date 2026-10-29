@@ -42,7 +42,8 @@
         { "text": { "en": "Conversations", "zh": "对话" }, "link": "/guides/chat" },
         { "text": { "en": "Channels", "zh": "消息渠道" }, "link": "/guides/channels" },
         { "text": { "en": "Telegram", "zh": "Telegram" }, "link": "/guides/channels-telegram" },
-        { "text": { "en": "SeaTalk", "zh": "SeaTalk" }, "link": "/guides/channels-seatalk" }
+        { "text": { "en": "SeaTalk", "zh": "SeaTalk" }, "link": "/guides/channels-seatalk" },
+        { "text": { "en": "Scheduled tasks", "zh": "定时任务" }, "link": "/guides/scheduled-tasks" }
       ]
     },
     {

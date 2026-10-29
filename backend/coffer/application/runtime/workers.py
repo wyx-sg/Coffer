@@ -14,8 +14,11 @@ channel, server or chat.
 
 from __future__ import annotations
 
+import contextlib
 import enum
 import threading
+import time
+from collections.abc import Iterator
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -32,6 +35,8 @@ class WorkerMode(enum.StrEnum):
     EVENT_FALLBACK = "event+fallback"
     #: Parked with no timer while nothing needs it.
     ON_DEMAND = "on-demand"
+    #: On a timer only: a plain loop that runs, then sleeps a fixed while.
+    TIMER = "timer"
 
 
 @dataclass(frozen=True)
@@ -123,4 +128,48 @@ def workers() -> WorkerRegistry:
     return _WORKERS
 
 
-__all__ = ["WorkerMode", "WorkerRecord", "WorkerRegistry", "WorkerState", "workers"]
+class TimedWorker:
+    """The report of a plain timer loop — one not built on ``WakeableLoop`` —
+    so the daemon's status, and the Scheduled tasks page's "Coffer internal"
+    list, show it beside the others (spec daemon "Report each background
+    worker's schedule on the status").
+
+    The loop wraps each pass in :meth:`pass_` and says how long it will sleep
+    with :meth:`sleeping`; :meth:`close` (in its ``finally``) stops the report.
+    """
+
+    def __init__(self, name: str, registry: WorkerRegistry | None = None) -> None:
+        self._name = name
+        self._registry = registry or _WORKERS
+        self._token = self._registry.register(name, WorkerMode.TIMER)
+
+    @contextlib.contextmanager
+    def pass_(self) -> Iterator[None]:
+        self._registry.started(self._name, self._token)
+        began = time.monotonic()
+        ok = False
+        try:
+            yield
+            ok = True
+        finally:
+            self._registry.finished(
+                self._name, self._token, ok=ok, seconds=time.monotonic() - began
+            )
+            self._registry.waiting(self._name, self._token, None)
+
+    def sleeping(self, seconds: float | None) -> None:
+        """It sleeps ``seconds`` now (``None``: until something else wakes it)."""
+        self._registry.waiting(self._name, self._token, seconds)
+
+    def close(self) -> None:
+        self._registry.drop(self._name, self._token)
+
+
+__all__ = [
+    "TimedWorker",
+    "WorkerMode",
+    "WorkerRecord",
+    "WorkerRegistry",
+    "WorkerState",
+    "workers",
+]

@@ -6,7 +6,8 @@ thread's mark), then one line with the agent, model and directory by
 the names a person reads, and whether a turn is running, how many messages wait,
 or how many a stop left on hold, then the chat's parallel threads (spec channels
 "Open parallel conversations beside a direct chat"), the open ones only; in a
-closed thread its state reads ``Closed``. `/status` works only in a direct
+closed thread its state reads ``Closed``, then the scheduled tasks waiting in
+the conversation, each with a Cancel button. `/status` works only in a direct
 chat. Its card carries only what acts on what it shows: Stop while a turn
 runs, Continue and Discard while messages are on hold, then Model and Dir; a
 transport without buttons, or one that refuses the card, gets the same body as
@@ -26,6 +27,7 @@ from coffer.application.channel.command_cards import STATUS_ACTIONS, command_car
 from coffer.application.channel.command_text import settings_line
 from coffer.application.channel.held_queue import held_buttons, held_state
 from coffer.application.channel.parallel_threads import thread_lines
+from coffer.application.channel.status_tasks import task_lines
 from coffer.domain.channel.commands import help_text
 from coffer.domain.channel.envelopes import ChoiceButton
 
@@ -76,9 +78,14 @@ async def cmd_status(ctx: CommandContext, _text: str = "") -> None:
         "Closed" if closed else _state(running, queued, held),
     ]
     lines += await thread_lines(ctx)
+    # What waits to run here (spec channels "List and cancel a chat's
+    # scheduled tasks from /status").
+    scheduled, cancels = await task_lines(ctx)
+    lines += scheduled
     body = "\n".join(lines)
     lead = [ChoiceButton(label="Stop", value="cmd:stop")] if running else []
     if held and bound is not None:
         lead += held_buttons(bound)
+    lead += cancels
     card = command_card(title="Status", text=body, actions=STATUS_ACTIONS, lead=lead)
     await ctx.answer(card, f"Status\n{body}")

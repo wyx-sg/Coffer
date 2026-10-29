@@ -281,6 +281,15 @@ def build_prunable_registry() -> PrunableRegistry:
             description="History of converge rounds against the sync remote.",
         )
     )
+    registry.register(
+        PrunableTable(
+            name="scheduled_task_runs",
+            timestamp_column="started_at",
+            default_retention_days=90,
+            display_name="Scheduled Task Runs",
+            description="Every run of every scheduled task: when, and how it ended.",
+        )
+    )
     register_usage_retention(registry)
     return registry
 

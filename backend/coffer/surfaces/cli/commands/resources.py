@@ -18,6 +18,7 @@ KINDS = {
     "channel": ("channel", "Channels", "channel"),
     "knowledge": ("knowledge", "Knowledge", "collection"),
     "skill": ("skill", "Skills", "skill"),
+    "task": ("scheduled_task", "Scheduled tasks", "task"),
 }
 
 SPECS: list[RouteCommand] = [
@@ -28,7 +29,7 @@ SPECS: list[RouteCommand] = [
         "every page · its list",
         "Resources of every kind, or of one.",
         query=(
-            Q("kind", "mcp_server, agent, skill, knowledge, memory, provider, channel"),
+            Q("kind", "mcp_server, agent, skill, knowledge, provider, channel, scheduled_task"),
             Q("name"),
         ),
         columns=("kind", "name", "enabled", "uid"),
@@ -95,24 +96,27 @@ SPECS: list[RouteCommand] = [
 
 for group, (kind, page, noun) in KINDS.items():
     named = {"uid": kind}
+    if kind != "scheduled_task":  # a task's list and show are its own (with next runs)
+        SPECS += [
+            RouteCommand(
+                f"{group} list",
+                "GET",
+                "/resources",
+                f"{page} · list",
+                f"Every {noun}.",
+                fixed_query={"kind": kind},
+                columns=("name", "enabled", "description", "uid"),
+            ),
+            RouteCommand(
+                f"{group} show",
+                "GET",
+                "/resources/{uid}",
+                f"{page} · open a {noun}",
+                f"One {noun}: its config, reach and state.",
+                names=named,
+            ),
+        ]
     SPECS += [
-        RouteCommand(
-            f"{group} list",
-            "GET",
-            "/resources",
-            f"{page} · list",
-            f"Every {noun}.",
-            fixed_query={"kind": kind},
-            columns=("name", "enabled", "description", "uid"),
-        ),
-        RouteCommand(
-            f"{group} show",
-            "GET",
-            "/resources/{uid}",
-            f"{page} · open a {noun}",
-            f"One {noun}: its config, reach and state.",
-            names=named,
-        ),
         RouteCommand(
             f"{group} update",
             "PATCH",
@@ -153,6 +157,9 @@ for group, (kind, page, noun) in KINDS.items():
                 f"Switch a {noun} off.",
                 names=named,
             ),
+        ]
+    if kind not in ("knowledge", "scheduled_task"):  # a task reaches no agent
+        SPECS.append(
             RouteCommand(
                 f"{group} reach",
                 "PUT",
@@ -161,8 +168,8 @@ for group, (kind, page, noun) in KINDS.items():
                 f"Set the agents a {noun} reaches. Body: scope ({{agents: [uid…]}} or null).",
                 names=named,
                 body=True,
-            ),
-        ]
+            )
+        )
     if kind in ("channel",):
         SPECS.append(
             RouteCommand(

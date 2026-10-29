@@ -47,6 +47,7 @@ GROUP_HELP: dict[str, str] = {
     "secret": "Secrets: list, store, delete, reveal in the app, import, approvals.",
     "settings": "Settings: approvals, secret storage, features, data, upkeep.",
     "skill": "Skills: import, update, delivery to agents, sources.",
+    "task": "Scheduled tasks: list, add, run now, runs, pause, the daily report.",
     "sync": "Vault sync: remote, rounds, machines, conflicts.",
     "usage": "Model usage and cost.",
     "vault": "The vault's history and the hand edits it refused.",

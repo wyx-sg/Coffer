@@ -32,6 +32,7 @@ from typing import Any
 
 import httpx
 
+from coffer.application.runtime.workers import TimedWorker
 from coffer.infrastructure.daemon.atomic_write import write_json_0600
 from coffer.infrastructure.daemon.config import config_path
 
@@ -248,14 +249,20 @@ class ReleaseCheck:
             return
         self._stop.clear()
         delay = first_delay
-        while not self._stop.is_set():
-            with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(self._stop.wait(), timeout=delay)
-            if self._stop.is_set():
-                return
-            if self._enabled():
-                await self.check_now()
-            delay = interval
+        report = TimedWorker("release-check")
+        try:
+            while not self._stop.is_set():
+                report.sleeping(delay)
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(self._stop.wait(), timeout=delay)
+                if self._stop.is_set():
+                    return
+                if self._enabled():
+                    with report.pass_():
+                        await self.check_now()
+                delay = interval
+        finally:
+            report.close()
 
     def stop(self) -> None:
         self._stop.set()

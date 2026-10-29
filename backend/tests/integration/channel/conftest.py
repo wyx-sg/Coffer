@@ -413,6 +413,9 @@ class ChannelEnv:
     #: a second runtime over these identical parts.
     adapter_factory: Any
     created_adapters: list[FakeChannelAdapter] = field(default_factory=list)
+    #: The kinds ``resources`` knows, so a test can register one more (the
+    #: scheduled-task kind, wired beside the channel's in the daemon).
+    kinds: dict[str, Any] = field(default_factory=dict)
 
     async def conversations(self) -> list[Conversation]:
         """Every conversation the channels opened, newest activity first."""
@@ -713,6 +716,7 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         service=service,
         websockets=websockets,
         created_adapters=created_adapters,
+        kinds=kinds,
     )
 
 

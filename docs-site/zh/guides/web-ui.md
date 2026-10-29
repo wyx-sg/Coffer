@@ -44,6 +44,7 @@ Coffer 的 Web 界面是你管理保险库里一切的地方：智能体、MCP �
 | 智能体 | **模型提供商** | `/model-providers` | 厂商的接入地址和它们的 API 密钥，也就是智能体所用的模型，在**提供商** tab 里；经过它们的请求花了多少，在**用量** tab 里（`?tab=usage`）。见[模型提供商](/zh/guides/providers)和[用量](/zh/guides/usage)。 |
 | 运行 | **对话** | `/conversations` | 每个智能体的所有会话，无论从哪里开始——在终端里、由消息渠道或来自新建对话——合成一个列表：标题、来源、智能体、目录和最近活动；带搜索、按来源和智能体的筛选，以及每行上一个在你的终端里恢复会话的按钮。见[对话](/zh/guides/chat)。 |
 | 运行 | **消息渠道** | `/channels` | 让你在 IM 里和智能体对话的 Telegram 和 SeaTalk 机器人：配置、连接状态和设置；每个都链接到它发起的对话。见[消息渠道](/zh/guides/channels)。 |
+| 运行 | **定时任务** | `/scheduled-tasks` | 智能体到点在你的某个聊天里运行的任务、智能体约好的跟进和每日汇报，每个都有运行记录和**立即运行**；下面以只读方式列出 Coffer 自己的后台工作。见[定时任务](/zh/guides/scheduled-tasks)。 |
 | 能力 | **MCP 服务器** | `/mcp-servers` | Coffer 聚合在一个端点后面的上游 MCP 服务器。见 [MCP 服务器](/zh/guides/mcp-servers)。 |
 | 能力 | **自定义工具** | `/custom-tools` | 智能体作为工具调用的 HTTP API 请求，见[自定义工具](/zh/guides/custom-tools)。 |
 | 能力 | **技能** | `/skills` | Coffer 投递给智能体的技能库。见[技能](/zh/guides/skills)。 |

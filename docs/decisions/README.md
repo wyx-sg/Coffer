@@ -218,6 +218,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`a-reply-names-its-files-and-they-follow-it`](a-reply-names-its-files-and-they-follow-it.md) | A Channel Reply Names Its Files, and the Files Follow It |
 | [`chat-attachment-uploads`](chat-attachment-uploads.md) | The Chat Page Uploads a File First and Sends Its Id, Into a Sibling Media Directory |
 | [`seatalk-websocket-inbound`](seatalk-websocket-inbound.md) | SeaTalk Inbound Is One Outbound WebSocket, Through an Operator-Supplied SDK |
+| [`scheduled-tasks-are-turns-coffer-starts-in-a-chat`](scheduled-tasks-are-turns-coffer-starts-in-a-chat.md) | Scheduled Tasks Are Turns Coffer Starts in a Chat; Follow-Ups and the Daily Report Are Kinds of Task |
 | [`telegram-long-polling`](telegram-long-polling.md) | Telegram Inbound Is a Long Poll That Commits the Offset After Dispatch |
 
 ### Skills, knowledge & memory

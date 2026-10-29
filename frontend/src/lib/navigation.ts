@@ -6,9 +6,9 @@
 //
 // The sidebar is grouped by what the person comes to do (ADR
 // sidebar-grouped-by-what-the-person-comes-to-do): Overview under no heading,
-// then Agents · Run · Capabilities · Context · System — fourteen entries, and no
-// fifteenth without a spec change (spec web-ui "Keep the sidebar to its
-// fourteen entries"). Settings is not an entry: it is a modal opened from the
+// then Agents · Run · Capabilities · Context · System — fifteen entries, and no
+// sixteenth without a spec change (spec web-ui "Keep the sidebar to its
+// fifteen entries"). Settings is not an entry: it is a modal opened from the
 // labelled row in the sidebar footer, from ⌘, and from the palette.
 import {
   Activity,
@@ -16,6 +16,7 @@ import {
   Bot,
   Box,
   Brain,
+  CalendarClock,
   Database,
   FlaskConical,
   IdCard,
@@ -72,6 +73,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     entries: [
       { to: "/conversations", labelKey: "nav.conversations", icon: MessageSquare },
       { to: "/channels", labelKey: "nav.channels", icon: Radio },
+      { to: "/scheduled-tasks", labelKey: "nav.scheduledTasks", icon: CalendarClock },
     ],
   },
   {
