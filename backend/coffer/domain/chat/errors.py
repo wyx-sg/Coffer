@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from coffer.domain.error_base import CofferError
 
-#: What the chat is told when a session is open in a terminal (spec chat "Run a
-#: session in one place at a time"), word for word.
+#: What the chat is told when a session is open somewhere Coffer could not take
+#: it over from (spec chat "Take over a session open elsewhere"), word for word.
 SESSION_IN_USE_MESSAGE = (
-    "This session is open in a terminal — continue there, or send /thread to start a new one."
+    "This session is open in another app that Coffer can't close, such as the Codex app"
+    " or an editor — close it there, or send /thread to start a new one."
 )
 
 
@@ -25,9 +26,10 @@ class ConversationNotFound(CofferError):  # noqa: N818
 
 
 class SessionInUse(CofferError):  # noqa: N818
-    """A turn would resume a native session that is open outside the daemon (a
-    terminal); it is refused rather than forked (spec chat "Run a session in one
-    place at a time"). Raised only to a caller that has no chat to tell."""
+    """A turn would resume a native session that is open outside the daemon in a
+    process that could not be ended; it is refused rather than forked (spec chat
+    "Take over a session open elsewhere"). Raised only to a caller that has no
+    chat to tell."""
 
     code = "SESSION_IN_USE"
 

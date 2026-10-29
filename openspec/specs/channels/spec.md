@@ -207,8 +207,8 @@ conversation service, turn orchestrator (spec `chat`). The conversation is an or
 conversation has been deleted, the peer's next message creates a fresh
 conversation with the thread's agent — its sticky agent (chosen with `/new <agent>`, see "Switch the agent with /new") while that
 agent is still inside the channel's scope, else the channel's default agent — opened with the thread's other remembered settings (see "Keep a chat's agent, model and directory across its conversations"); when the daemon restarts mid-turn, the orphaned turn is gone and the channel
-conversation simply continues on the next message, resuming the agent's own session. A message for a session that is open in a terminal is
-refused as [chat](../chat/spec.md) "Run a session in one place at a time" says.
+conversation simply continues on the next message, resuming the agent's own session. A message for a session that is open elsewhere, such as in a
+terminal, takes that session over as [chat](../chat/spec.md) "Take over a session open elsewhere" says.
 
 #### Scenario: a paired message gets an agent reply
 - **GIVEN** a paired channel whose default agent is available

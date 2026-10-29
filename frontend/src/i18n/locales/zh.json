@@ -2062,7 +2062,7 @@
     "PROVIDER_PROTOCOL_RETIRED": "不再提供 ollama 协议——请改用本地 Ollama 运行时的 Anthropic 或 OpenAI 协议添加",
     "FS_TERMINAL_INVALID": "无法在终端中打开该会话",
     "FS_TERMINAL_FAILED": "无法启动终端。请检查设置 › 通用中的首选终端。",
-    "SESSION_IN_USE": "该会话已在终端中打开。请在那里继续，或开始一个新会话。",
+    "SESSION_IN_USE": "该会话在 Coffer 无法关闭的其他应用里打开着，比如 Codex 应用或编辑器。请在那里关掉它，或开始一个新会话。",
     "APPROVAL_TARGET_CHANGED": "批准过程中目标发生了变化。请检查新的目标后重新批准。",
     "CUSTOM_TOOL_ARGUMENTS_INVALID": "部分参数不符合工具的 schema，没有发出任何请求。",
     "CUSTOM_TOOL_ENVIRONMENT_DISABLED": "该环境已关闭。请打开它，或选择其他环境。",

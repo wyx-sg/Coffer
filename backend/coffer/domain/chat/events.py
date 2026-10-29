@@ -100,10 +100,10 @@ STREAM_ENDED_MESSAGE = "the agent stopped responding before finishing the turn"
 #: then terminated); the partial reply is kept.
 TURN_TIMEOUT = "turn_timeout"
 
-#: ``TurnError.code`` when a native session is open somewhere else (a terminal
-#: running ``claude --resume <id>`` or ``codex resume <id>``) and the turn was
-#: refused instead of forking it (spec chat "Run a session in one place at a
-#: time"). The message is what the chat is told, word for word.
+#: ``TurnError.code`` when a native session is open somewhere Coffer could not
+#: take it over from (the Codex app, an editor) and the turn was refused instead
+#: of forking it (spec chat "Take over a session open elsewhere"). The message
+#: is what the chat is told, word for word.
 SESSION_IN_USE = "session_in_use"
 
 

@@ -32,7 +32,7 @@ import logging
 from collections.abc import Callable, Sequence
 
 from coffer.application.chat import turn_tokens
-from coffer.application.chat.ports import SessionInUsePort
+from coffer.application.chat.ports import SessionTakeoverPort
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_runner import (
@@ -77,13 +77,13 @@ class TurnOrchestrator:
         chat_service: ChatService,
         registry: AgentProviderRegistry,
         idle_timeout: float | None = DEFAULT_TURN_IDLE_TIMEOUT_SECONDS,
-        session_in_use: SessionInUsePort | None = None,
+        session_takeover: SessionTakeoverPort | None = None,
     ) -> None:
         self._chat = chat_service
         self._registry = registry
-        # Asked before a turn resumes a native session (spec chat "Run a session
-        # in one place at a time"); ``None`` never refuses.
-        self._session_in_use = session_in_use
+        # Frees a native session open in a terminal before a turn resumes it
+        # (spec chat "Take over a session open elsewhere"); ``None`` never asks.
+        self._session_takeover = session_takeover
         # How long a turn may go without producing an event before the watchdog
         # cancels it (``turn_runner``); ``None`` disables the watchdog.
         self._idle_timeout = idle_timeout
@@ -294,7 +294,8 @@ class TurnOrchestrator:
         a start that raced ``stop_all_turns`` changes nothing and spawns nothing.
 
         Returns ``True`` when the turn started and ``False`` when it was refused
-        because its native session is open outside the daemon: the message's
+        because its native session is open outside the daemon in a process that
+        could not be ended: the message's
         renderer (``on_start``) is handed a stream that carries the refusal and
         ends. A message with no renderer raises ``SessionInUse`` instead."""
         if is_stopping():
@@ -315,8 +316,8 @@ class TurnOrchestrator:
             session_id = conv.agent_config.session_id
             if (
                 session_id
-                and self._session_in_use is not None
-                and await self._session_in_use.in_use(session_id)
+                and self._session_takeover is not None
+                and not await self._session_takeover.release(session_id)
             ):
                 raise SessionInUse(session_id)
             provider = self._registry.get(conv.agent_key)

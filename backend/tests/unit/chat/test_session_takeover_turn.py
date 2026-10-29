@@ -1,6 +1,6 @@
-"""A turn that would resume a session open in a terminal is refused, not started.
+"""A turn first takes over a session open elsewhere; one it cannot free is refused.
 
-Spec chat "Run a session in one place at a time". The in-use port is a fake.
+Spec chat "Take over a session open elsewhere". The takeover port is a fake.
 """
 
 from __future__ import annotations
@@ -26,14 +26,14 @@ from .test_turn_orchestrator_with_fake_adapter import drain_queue
 SID = "550e8400-e29b-41d4-a716-446655440000"
 
 
-class _InUse:
+class _Takeover:
     def __init__(self, busy: bool) -> None:
         self.busy = busy
         self.asked: list[str] = []
 
-    async def in_use(self, session_id: str) -> bool:
+    async def release(self, session_id: str) -> bool:
         self.asked.append(session_id)
-        return self.busy
+        return not self.busy
 
 
 async def _setup(busy: bool, *, session_id: str | None = SID):
@@ -46,18 +46,16 @@ async def _setup(busy: bool, *, session_id: str | None = SID):
     )
     registry, _ = make_registry(adapter)
     chat = ChatService(conversations=repo, registry=registry)
-    port = _InUse(busy)
-    orchestrator = TurnOrchestrator(chat_service=chat, registry=registry, session_in_use=port)
+    port = _Takeover(busy)
+    orchestrator = TurnOrchestrator(chat_service=chat, registry=registry, session_takeover=port)
     conv = await chat.create_conversation(agent_key="builtin", channel_uid="c", peer_chat_id="p")
     if session_id is not None:
         await chat.set_agent_config(conv.id, AgentConfig(session_id=session_id))
     return orchestrator, adapter, port, conv.id
 
 
-@pytest.mark.acceptance(
-    spec="chat", scenario="a session open in a terminal refuses the channel turn"
-)
-async def test_a_session_open_elsewhere_ends_the_turn_with_the_refusal_and_runs_nothing() -> None:
+@pytest.mark.acceptance(spec="chat", scenario="a session Coffer cannot take over refuses the turn")
+async def test_a_session_that_cannot_be_freed_ends_the_turn_with_the_refusal() -> None:
     orchestrator, adapter, port, conv_id = await _setup(busy=True)
 
     queue = await start_turn(orchestrator, conv_id, "hello")
@@ -81,8 +79,8 @@ async def test_the_refused_message_is_not_retried_or_held() -> None:
     assert isinstance(events[-1], TurnDone)
 
 
-@pytest.mark.acceptance(spec="chat", scenario="a session whose terminal closed runs again")
-async def test_a_free_session_runs_the_turn() -> None:
+@pytest.mark.acceptance(spec="chat", scenario="a session open in a terminal is taken over")
+async def test_a_freed_session_runs_the_turn() -> None:
     orchestrator, adapter, _port, conv_id = await _setup(busy=False)
 
     events = await drain_queue(await start_turn(orchestrator, conv_id, "hello"))

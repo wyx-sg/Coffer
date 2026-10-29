@@ -190,11 +190,11 @@ class ConversationSessionsPort(Protocol):
     async def delete(self, agent_key: str, session_id: str) -> None: ...
 
 
-class SessionInUsePort(Protocol):
-    """Whether a native session is being continued somewhere else (spec chat
-    "Run a session in one place at a time")."""
+class SessionTakeoverPort(Protocol):
+    """Frees a native session that is open somewhere else, so a turn can continue
+    it (spec chat "Take over a session open elsewhere")."""
 
-    async def in_use(self, session_id: str) -> bool:
-        """True when a process outside the daemon's own process tree has
-        ``session_id`` among its arguments."""
+    async def release(self, session_id: str) -> bool:
+        """End every process outside the daemon's own process tree that has
+        ``session_id`` among its arguments; True when none is left."""
         ...

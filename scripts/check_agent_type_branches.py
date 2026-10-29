@@ -47,6 +47,7 @@ FACET_IMPLEMENTATIONS = (
     PACKAGE_DIR / "infrastructure" / "memory" / "readers",
     PACKAGE_DIR / "infrastructure" / "chat" / "claude_sdk_provider.py",
     PACKAGE_DIR / "infrastructure" / "chat" / "codex_provider.py",
+    PACKAGE_DIR / "infrastructure" / "chat" / "codex_thread_release.py",
     PACKAGE_DIR / "infrastructure" / "chat" / "drivers.py",
 )
 

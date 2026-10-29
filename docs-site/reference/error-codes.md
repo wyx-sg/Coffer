@@ -210,7 +210,7 @@ give the status each code is actually sent with.
 | --- | --- | --- | --- |
 | `CONVERSATION_NOT_FOUND` | 404 | No conversation with that id. | Refresh the conversation list. |
 | `UNKNOWN_AGENT` | 400 | No agent provider is registered for the conversation's agent. | Choose an agent from `GET /api/v1/agent-providers`. |
-| `SESSION_IN_USE` | 409 | A turn would resume a session that is open in a terminal outside Coffer. Channels show this as a reply instead; the message is not retried. | Continue in that terminal, or send `/thread` to start a new conversation. |
+| `SESSION_IN_USE` | 409 | A turn would resume a session that is open in another app Coffer does not close, such as the Codex app or an editor (a terminal is closed instead). Channels show this as a reply instead; the message is not retried. | Close the session in that app, or send `/thread` to start a new conversation. |
 | `AGENT_CONFIG_REJECTED` | 400 | The agent rejected the conversation's config, for example an unknown model, or no agent of that type is managed by Coffer. `details.reason` is a short token such as `model_not_found` or `agent_not_managed`. | Pick a model the agent offers, or add the agent on the Agents page. |
 | `CHANNEL_NOT_PAIRED` | 409 | The channel has no paired chat to send to. | Pair it from the channel's page. See [Channels](/guides/channels). |
 | `CHANNEL_PERSON_NOT_FOUND` | 404 | No paired person on the channel matches the one named. | List the people on the channel's page and use one of their ids. |

@@ -942,7 +942,7 @@ async def _collect_stream(stream: Any) -> list[Any]:
 _ACTIVE_WRITER = "thread t-1 already has an active writer"
 
 
-@pytest.mark.acceptance(spec="chat", scenario="Codex's active-writer error is the same refusal")
+@pytest.mark.acceptance(spec="chat", scenario="a session Coffer cannot take over refuses the turn")
 @pytest.mark.parametrize("failing", ["thread/resume", "turn/start"])
 @pytest.mark.asyncio
 async def test_an_active_writer_error_is_the_session_in_use_refusal(failing: str):
