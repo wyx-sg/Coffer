@@ -1359,11 +1359,13 @@
       "saveFailed": "Couldn’t save the change: {{reason}}",
       "names": {
         "knowledge": "Knowledge",
-        "memory": "Memory"
+        "memory": "Memory",
+        "scheduled_tasks": "Scheduled tasks"
       },
       "descriptions": {
         "knowledge": "Notes and documents that agents can look up, kept as plain files you can edit.",
-        "memory": "What each agent remembers, synced into your other agents' own memory."
+        "memory": "What each agent remembers, synced into your other agents' own memory.",
+        "scheduled_tasks": "Turns Coffer starts on its own in a chat: your scheduled tasks, follow-ups agents book, and the daily report."
       },
       "source": {
         "pin": "Pinned by COFFER_FEATURES — change it where the daemon is started",
@@ -6928,10 +6930,12 @@
     },
     "runs": {
       "title": "History",
-      "help": "Every run: when it ran, how it ended and why. Runs are kept for 90 days.",
+      "help": "Every run: when it ran, how it ended and why, and the conversation it used. Open that conversation in a terminal to read the run or carry it on. Runs are kept for 90 days.",
       "none": "It hasn't run yet.",
       "byHand": "run by hand",
-      "late": "late, was due {{due}}"
+      "late": "late, was due {{due}}",
+      "conversation": "Conversation: {{title}}",
+      "conversationGone": "Its conversation has been removed."
     },
     "dialog": {
       "title": "New scheduled task",

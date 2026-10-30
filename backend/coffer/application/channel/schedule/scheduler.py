@@ -70,8 +70,13 @@ class TaskScheduler:
         runner: TaskRunner,
         notify: Notify | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(tz=UTC),
+        enabled: Callable[[], bool] = lambda: True,
     ) -> None:
         self._resources = resources
+        #: Whether the ``scheduled_tasks`` feature is on: while it is off no
+        #: task runs, and a slot that passed is caught up or skipped as any
+        #: missed slot is once it is switched back on.
+        self._enabled = enabled
         self._runs = runs
         self._runner = runner
         self._notify = notify
@@ -123,6 +128,9 @@ class TaskScheduler:
         return next_slot(config.schedule, last or task.created_at)
 
     async def _pass(self, _poked: bool) -> None:
+        if not self._enabled():
+            self._next_due = None
+            return
         now = self._clock()
         earliest: datetime | None = None
         for task in await self._resources.list(kind=KIND):

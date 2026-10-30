@@ -45,7 +45,7 @@ def home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[pa
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59789")
     monkeypatch.delenv(daemon_config.FEATURES_ENV, raising=False)
     (tmp_path / ".coffer").mkdir(parents=True, exist_ok=True)
-    # Every feature is off until switched on: start from both on, so a test
+    # Every feature is off until switched on: start from all on, so a test
     # that switches one off is switching off what a person had switched on.
     enable_all_in_config()
     prior = feature_dependencies._feature_service
@@ -167,9 +167,9 @@ def test_a_stored_setting_for_a_retired_feature_is_ignored(home: pathlib.Path) -
     with _client() as c:
         assert c.get("/api/v1/sync/status").status_code == 200
         listed = c.get("/api/v1/daemon/features").json()["features"]
-        assert [f["key"] for f in listed] == ["knowledge", "memory"]
+        assert [f["key"] for f in listed] == ["knowledge", "memory", "scheduled_tasks"]
         status = c.get("/api/v1/daemon/status").json()
-    assert set(status["features"]) == {"knowledge", "memory"}
+    assert set(status["features"]) == {"knowledge", "memory", "scheduled_tasks"}
 
 
 @pytest.mark.acceptance(
@@ -362,7 +362,7 @@ def test_the_status_names_this_machine_and_every_registered_feature(home: pathli
     assert status["machine_id"]
     assert status["machine_name"] == daemon_config.read_machine_name()
     assert "channel" not in status
-    assert status["features"] == {"knowledge": True, "memory": False}
+    assert status["features"] == {"knowledge": True, "memory": False, "scheduled_tasks": True}
 
 
 # --- graduated features ----------------------------------------------------------
@@ -396,11 +396,12 @@ def test_sync_and_models_switches_are_removed_and_their_routes_always_answer(
         _assert_disabled(c.get(_ROUTE_OF["memory"]), "memory")
         listed = c.get("/api/v1/daemon/features").json()["features"]
         status = c.get("/api/v1/daemon/status").json()
-    assert [f["key"] for f in listed] == ["knowledge", "memory"]
-    assert status["features"] == {"knowledge": True, "memory": False}
+    assert [f["key"] for f in listed] == ["knowledge", "memory", "scheduled_tasks"]
+    assert status["features"] == {"knowledge": True, "memory": False, "scheduled_tasks": True}
     assert _daemon_config(home)["features"] == {
         "knowledge": True,
         "memory": True,
+        "scheduled_tasks": True,
         "from_newer_build": True,
     }
     unknown = {

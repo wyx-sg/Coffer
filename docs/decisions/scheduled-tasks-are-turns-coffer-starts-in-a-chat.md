@@ -119,6 +119,71 @@ A follow-up waits for a webhook instead of a time.
 - **Run every missed slot.** A week asleep would fire seven reports at once.
 - **Never catch up.** A Mac that sleeps through 18:00 every day never reports.
 
+### Reading a run back (added 2026-10-30)
+
+The owner asked that every run show the conversation it used, and open it to
+read or carry on. Comparable products split the same way:
+
+| Product | Run row links to its session | Can carry it on |
+| --- | --- | --- |
+| Claude Code Desktop scheduled tasks | yes: a History row opens the session the run started | yes, it is an ordinary session |
+| Claude Code routines (cloud) | yes: "click any run to read it as a full session" | yes, "keep the conversation going" |
+| Devin scheduled sessions | yes: Past Sessions, each opens its session view | yes |
+| Cursor Automations | a run shows its tool calls and output | not documented |
+| Codex automations | standalone runs are new chats, thread automations return to their chat | the chat is ordinary |
+| Hermes, OpenClaw | a CLI run list, output saved to a file | no |
+
+- **A — the run row names its conversation and opens it in the terminal
+  (chosen).** The history already keeps the conversation id; the runs route
+  adds the conversation's title, agent, native session and whether a turn is
+  running, and the row reuses the Conversations page's Open in <terminal>
+  split button and busy dialog. Coffer has no conversation view of its own
+  (the transcript stays in the agent's session), so "read it and carry it on"
+  is resuming that session, exactly as from the Conversations page. A run
+  whose conversation was removed says so; a skipped run started none.
+- **B — a transcript view inside the page.** Would need Coffer to read and
+  render agent transcripts, which it deliberately does not keep.
+- **C — only link to the Conversations page filtered to the chat.** One more
+  click and loses which run used which conversation (a `continue` task shares
+  one).
+
+### Rollout (added 2026-10-30)
+
+- **Behind an experimental switch, off by default (chosen).** The owner asked
+  for it. Scheduled tasks start turns nobody typed, spend tokens on a timer
+  and let agents book their own follow-ups, so a person should opt in on each
+  Mac. Comparable products ship the same way: Claude Code routines are a
+  research preview, Cursor Automations are "still under development", Hermes
+  keeps agent self-scheduling off until `allow_agent_scheduling` is set. The
+  `scheduled_tasks` feature owns the `/api/v1/scheduled-tasks` routes and the
+  `scheduled_task` kind; while it is off the scheduler starts nothing, the
+  three tools leave every turn, `/status` lists no task, and the page and the
+  Daily report card are hidden. Tasks and history are kept, and a slot missed
+  while off is caught up or skipped as any missed slot.
+- **Always on.** Simpler, but every Mac would carry a feature that starts
+  turns on its own before it is proven.
+- **A separate switch for agent follow-ups only (Hermes' split).** The whole
+  feature is already opt-in; a second switch would add a state the page and
+  `/status` must explain for little gain. Revisit when the feature graduates.
+
+### Checks against comparable products (2026-10-30)
+
+Re-reading the products' docs found the rest of the design in line, with
+these choices kept on purpose:
+
+- **Shortest repeat: 15 minutes.** Claude Code Desktop and routines refuse
+  anything under an hour; Codex allows minutes. A follow-up chain and an
+  hourly check are real uses, and 15 minutes keeps a runaway cron from
+  spending a turn a minute.
+- **No cap on tasks running at once.** Claude Code Desktop skips a run while
+  other scheduled tasks are running. Coffer's runs are turns in different
+  chats, which already run side by side when people write; a cap would skip
+  reports for no reason the owner can see. Revisit if a busy morning shows
+  load.
+- **Failures.** Devin marks a schedule Error after consecutive failures and mails on failure
+  only; Hermes nudges after three. Coffer pauses a repeating task after three
+  failures in a row and always sends a failure to the chat.
+
 ## Decision
 
 A scheduled task is a machine-local `scheduled_task` resource whose run is a
@@ -143,7 +208,9 @@ Rules a change must keep:
   skipped and recorded. A failed run is not retried (a turn has side effects);
   a repeating task that fails three runs in a row is paused and the chat told.
 - **History.** Every run is a row in `scheduled_task_runs` (runs.db): when it
-  was due, started and ended, how it ended and why; pruned by retention.
+  was due, started and ended, how it ended and why, and the conversation it
+  used; pruned by retention. The page names that conversation and opens its
+  session in the terminal, to read the run or carry it on.
 - **Who may schedule.** Three turn-scoped tools —
   `coffer__schedule_task`, `coffer__scheduled_tasks`,
   `coffer__cancel_scheduled_task` — exist only inside a channel turn. In a turn
@@ -155,6 +222,9 @@ Rules a change must keep:
 - **The daily report** is made from a template on the Channels page, sent to
   the owner's direct chat, written from material read at run time (option A
   above); a day with no channel conversations sends nothing.
+- **Experimental.** The `scheduled_tasks` feature is off until the owner
+  switches it on, per Mac; off, nothing runs, the tools are withdrawn and the
+  surfaces are hidden, and nothing is deleted.
 - **Coffer's own work.** Every background worker reports to the worker
   registry (a plain timer loop through `TimedWorker`), and the Scheduled tasks
   page lists them read-only beside the owner's tasks.
@@ -173,3 +243,6 @@ Rules a change must keep:
 - Deleting a channel deletes its tasks and their history.
 - External-event triggers, if added, start the same task kind; they need no new
   run rules.
+- While experimental, the feature carries gates in the registry, the scheduler,
+  the tool registry, `/status` and the web UI; graduating it deletes them and
+  adds `scheduled_tasks` to the graduated table.

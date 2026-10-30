@@ -1116,6 +1116,42 @@ components:
       - running
       title: RestartOut
       type: object
+    RunConversationOut:
+      description: |-
+        The conversation a run used, as the history opens it: the agent's native
+        session resumes in a terminal, where the run can be read and carried on.
+      properties:
+        agent_key:
+          title: Agent Key
+          type: string
+        conversation_id:
+          title: Conversation Id
+          type: string
+        cwd:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cwd
+        running:
+          title: Running
+          type: boolean
+        session_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Session Id
+        title:
+          title: Title
+          type: string
+      required:
+      - conversation_id
+      - title
+      - agent_key
+      - session_id
+      - cwd
+      - running
+      title: RunConversationOut
+      type: object
     ScheduledRunListOut:
       properties:
         items:
@@ -1132,6 +1168,10 @@ components:
         catch_up:
           title: Catch Up
           type: boolean
+        conversation:
+          anyOf:
+          - $ref: '#/components/schemas/RunConversationOut'
+          - type: 'null'
         conversation_id:
           title: Conversation Id
           type: string
@@ -1189,6 +1229,7 @@ components:
       - catch_up
       - trigger
       - conversation_id
+      - conversation
       title: ScheduledRunOut
       type: object
     ScheduledTaskConfig:

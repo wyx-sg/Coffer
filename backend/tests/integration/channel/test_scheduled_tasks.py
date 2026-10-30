@@ -16,12 +16,14 @@ from datetime import timedelta
 
 import pytest
 
+from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel import turn_origin
 from coffer.application.channel.schedule.kind import KIND
+from coffer.application.channel.schedule.tools import schedule_tools
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import StorageClass
 from coffer.domain.turn_markers import SCHEDULED
-from coffer.surfaces.http.schedule_wiring import ScheduleWiring
+from coffer.surfaces.http.schedule_wiring import ScheduleWiring, _Chats, _GatedChatTasks
 
 from .conftest import ChannelEnv, default_reply_adapter, inbound, wait_until
 from .scheduling import START, build_scheduling, daily, task_config
@@ -326,6 +328,26 @@ async def test_the_history_says_how_each_run_ended(
     assert rows[0].conversation_id and rows[1].reason
 
 
+@pytest.mark.acceptance(spec="channels", scenario="a run's conversation opens from its history")
+async def test_the_history_names_each_run_s_conversation(
+    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = build_scheduling(env, monkeypatch)
+    channel, _ = await env.paired_channel()
+    task = await s.tasks.create(None, task_config(channel), actor="t")
+    s.clock.advance(timedelta(minutes=30))
+    await s.tick()
+    (row,) = await s.settled(task.uid)
+    chats = _Chats(env.resources, env.peers, env.threads, s.runs, env.chat)
+    found = await chats.conversations({row.conversation_id, ""})
+    conv = found[row.conversation_id]
+    assert conv["conversation_id"] == row.conversation_id
+    assert conv["agent_key"] and "session_id" in conv and conv["running"] is False
+    # A conversation removed since is left out; the row keeps its id.
+    await env.chat.remove_conversation(row.conversation_id)
+    assert await chats.conversations({row.conversation_id}) == {}
+
+
 @pytest.mark.acceptance(
     spec="channels", scenario="a run interrupted by a stop is closed on the next start"
 )
@@ -370,3 +392,49 @@ async def test_run_now_runs_a_paused_task_once(
     await wait_until(lambda: "ran by hand" in adapter.texts())
     assert "started by hand" in env.raw_prompts(run.conversation_id)[0]
     assert not (await env.resources.get(task.uid)).enabled
+
+
+# --- the experimental feature ---------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="experimental-features", scenario="scheduled tasks off runs nothing and lists nothing"
+)
+async def test_scheduled_tasks_off_runs_nothing_and_lists_nothing(
+    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = build_scheduling(env, monkeypatch)
+    switch = {"on": False}
+    s.scheduler._enabled = lambda: switch["on"]
+    channel, _ = await env.paired_channel()
+    task = await s.tasks.create(None, task_config(channel), actor="t")
+    s.clock.advance(timedelta(minutes=30))
+    await s.tick()
+    assert await s.history(task.uid) == []
+    gated = _GatedChatTasks(s.tasks, lambda: switch["on"])
+    assert await gated.waiting(channel.uid, "owner", "") == []
+    assert await gated.cancel(task.uid, actor="t") is None
+    # Switched on: the slot that just passed runs, late, within its grace.
+    switch["on"] = True
+    assert [w.uid for w in await gated.waiting(channel.uid, "owner", "")] == [task.uid]
+    await s.tick()
+    (row,) = await s.settled(task.uid)
+    assert row.outcome == "replied"
+
+
+@pytest.mark.acceptance(
+    spec="experimental-features", scenario="scheduled tasks off closes their routes and tools"
+)
+def test_scheduled_tasks_off_withdraws_the_tools(
+    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = build_scheduling(env, monkeypatch)
+    switch = {"on": False}
+    registry = BuiltinToolRegistry(feature_enabled=lambda key: switch["on"])
+    for tool in schedule_tools(s.tools):
+        registry.register(tool)
+    names = {"coffer__schedule_task", "coffer__scheduled_tasks", "coffer__cancel_scheduled_task"}
+    turn = registry.view(in_turn=True)
+    assert not any(turn.is_builtin(n) for n in names)
+    switch["on"] = True
+    assert all(registry.view(in_turn=True).is_builtin(n) for n in names)

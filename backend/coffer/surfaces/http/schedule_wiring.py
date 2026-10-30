@@ -12,6 +12,7 @@ tool call came from).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -33,20 +34,26 @@ from coffer.application.channel.schedule.runner import TaskRunner
 from coffer.application.channel.schedule.scheduler import TaskScheduler
 from coffer.application.channel.schedule.tasks import TaskService
 from coffer.application.channel.schedule.tools import ScheduleTools, schedule_tools
+from coffer.application.channel.status_tasks import WaitingTaskLine
 from coffer.application.channel.store_ports import (
     ChannelPeerRepoPort,
     ChannelThreadConversationRepoPort,
 )
 from coffer.application.chat import turn_tokens
+from coffer.application.chat.service import ChatService
+from coffer.application.chat.turn_state import is_running
 from coffer.application.resource_service import ResourceService
 from coffer.application.runtime.supervisor import spawn_restarting
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.channel.scheduled_run import ScheduledRun
 from coffer.domain.channel.scheduled_task import ScheduledTaskConfig
+from coffer.domain.chat.errors import ConversationNotFound
+from coffer.domain.features import SCHEDULED_TASKS
 from coffer.domain.resource import Resource
 from coffer.infrastructure.channel.persistence import ScheduledRunRepo
 from coffer.surfaces.http.chat_wiring import ChatWiring
 from coffer.surfaces.http.event_wiring import EventStream
+from coffer.surfaces.http.feature_dependencies import get_feature_service_optional
 from coffer.surfaces.http.schedule_routes import set_schedule_services
 
 if TYPE_CHECKING:
@@ -93,6 +100,28 @@ class _SessionTails:
         return SessionTail(asked="", answered="")
 
 
+class _GatedChatTasks:
+    """``ChatTasksPort`` that lists and cancels nothing while the
+    ``scheduled_tasks`` feature is off (spec experimental-features "Close every
+    surface of a switched-off feature")."""
+
+    def __init__(self, tasks: TaskService, enabled: Callable[[], bool]) -> None:
+        self._tasks = tasks
+        self._enabled = enabled
+
+    async def waiting(
+        self, channel_uid: str, chat_id: str, conversation_thread_id: str
+    ) -> list[WaitingTaskLine]:
+        if not self._enabled():
+            return []
+        return await self._tasks.waiting(channel_uid, chat_id, conversation_thread_id)
+
+    async def cancel(self, uid: str, *, actor: str) -> str | None:
+        if not self._enabled():
+            return None
+        return await self._tasks.cancel(uid, actor=actor)
+
+
 class _Chats:
     """What the page reads beside the tasks: the chats a task may run in, the
     channels' names, a task's run history."""
@@ -103,7 +132,9 @@ class _Chats:
         peers: ChannelPeerRepoPort,
         threads: ChannelThreadConversationRepoPort,
         runs: ScheduledRunRepo,
+        chat: ChatService,
     ) -> None:
+        self._chat = chat
         self._resources = resources
         self._peers = peers
         self._threads = threads
@@ -132,6 +163,25 @@ class _Chats:
     async def runs_of(self, task_uid: str, limit: int) -> list[ScheduledRun]:
         return await self._runs.for_task(task_uid, limit=limit)
 
+    async def conversations(self, ids: set[str]) -> dict[str, dict[str, Any]]:
+        """The conversations runs used, by id, as the history opens them; one
+        removed since (or a run that started none) is absent."""
+        found: dict[str, dict[str, Any]] = {}
+        for cid in ids - {""}:
+            try:
+                conv = await self._chat.get_conversation(cid)
+            except ConversationNotFound:
+                continue
+            found[cid] = {
+                "conversation_id": conv.id,
+                "title": conv.title,
+                "agent_key": conv.agent_key,
+                "session_id": conv.agent_config.session_id,
+                "cwd": conv.agent_config.cwd,
+                "running": is_running(conv.id),
+            }
+        return found
+
 
 def wire_scheduled_tasks(
     app: FastAPI,
@@ -148,7 +198,7 @@ def wire_scheduled_tasks(
 ) -> ScheduleWiring:
     runs = ScheduledRunRepo(sm)
     tails = _SessionTails(resource_svc, sessions) if sessions is not None else None
-    chats = _Chats(resource_svc, peers, threads, runs)
+    chats = _Chats(resource_svc, peers, threads, runs, chat.chat_service)
     holder: dict[str, TaskService] = {}
 
     async def material(task: Resource, now: datetime) -> str:
@@ -209,7 +259,16 @@ def wire_scheduled_tasks(
         driver=lambda: processor.turn_driver,
         material=material,
     )
-    scheduler = TaskScheduler(resources=resource_svc, runs=runs, runner=runner, notify=notify)
+    features = get_feature_service_optional()
+
+    def enabled() -> bool:
+        # An app assembled without ``create_app`` has no feature service;
+        # there the tasks run, as every gate there lets everything through.
+        return features is None or features.is_enabled(SCHEDULED_TASKS)
+
+    scheduler = TaskScheduler(
+        resources=resource_svc, runs=runs, runner=runner, notify=notify, enabled=enabled
+    )
     tasks = TaskService(
         resources=resource_svc,
         runs=runs,
@@ -226,8 +285,9 @@ def wire_scheduled_tasks(
         return await peers.get_by_chat(channel_uid, chat_id) is not None
 
     app.state.kinds[KIND] = make_scheduled_task_kind(channels=channel_uids, paired=paired)
-    # `/status` lists and cancels what waits in its conversation.
-    processor.commands.scheduled = tasks
+    # `/status` lists and cancels what waits in its conversation, while the
+    # feature is on.
+    processor.commands.scheduled = _GatedChatTasks(tasks, enabled)
     builtin_tools_list = schedule_tools(
         ScheduleTools(
             tasks=tasks, resources=resource_svc, conversation_of=turn_tokens.conversation_of
@@ -239,5 +299,8 @@ def wire_scheduled_tasks(
     # A task created, edited, paused or removed (here, on the page, by sync or
     # by hand) brings the next pass forward.
     events.late_sinks.append(scheduler.on_changed)
+    # Switching the feature on brings the first pass forward.
+    if features is not None:
+        features.subscribe(lambda key, _on: scheduler.poke() if key == SCHEDULED_TASKS else None)
     spawn_restarting(scheduler.serve, name="scheduled-tasks")
     return ScheduleWiring(tasks=tasks, scheduler=scheduler, runs=runs, resources=resource_svc)

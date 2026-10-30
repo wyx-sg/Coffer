@@ -1359,11 +1359,13 @@
       "saveFailed": "无法保存这次更改：{{reason}}",
       "names": {
         "knowledge": "知识",
-        "memory": "记忆"
+        "memory": "记忆",
+        "scheduled_tasks": "定时任务"
       },
       "descriptions": {
         "knowledge": "智能体可以查阅的笔记和文档，以可直接编辑的普通文件保存。",
-        "memory": "每个智能体记住的东西，同步到你其他智能体自己的记忆中。"
+        "memory": "每个智能体记住的东西，同步到你其他智能体自己的记忆中。",
+        "scheduled_tasks": "Coffer 按时在聊天里自己发起的对话：你设的定时任务、智能体约的跟进，以及每日汇报。"
       },
       "source": {
         "pin": "由 COFFER_FEATURES 固定——请在启动守护进程的地方修改",
@@ -6928,10 +6930,12 @@
     },
     "runs": {
       "title": "运行记录",
-      "help": "每次运行：何时运行、结果如何、原因。记录保留 90 天。",
+      "help": "每次运行：何时运行、结果如何、原因，以及用的是哪个对话。在终端里打开那个对话，可以查看这次运行，也可以接着聊。记录保留 90 天。",
       "none": "还没有运行过。",
       "byHand": "手动运行",
-      "late": "迟到，原定 {{due}}"
+      "late": "迟到，原定 {{due}}",
+      "conversation": "对话：{{title}}",
+      "conversationGone": "这次运行的对话已被删除。"
     },
     "dialog": {
       "title": "新建定时任务",

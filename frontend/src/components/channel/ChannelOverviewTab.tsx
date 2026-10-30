@@ -25,6 +25,7 @@ import type { ResourceOut } from "@/lib/api/resources";
 import { storedDefaultModel } from "@/lib/channels/editChannel";
 import { useAgentModelList } from "@/lib/hooks/useAgentModelList";
 import { useAgentResolvedDefault } from "@/lib/hooks/useAgentModels";
+import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { CHANNEL_KIND } from "@/lib/hooks/useChannels";
 import { ChannelDailyReportSection } from "./ChannelDailyReportSection";
 import { ChannelPeopleList } from "./ChannelPeopleList";
@@ -63,6 +64,10 @@ export function ChannelOverviewTab({
   onDefaultModelChange,
 }: Props) {
   const { t } = useTranslation();
+  // The daily report is a scheduled task: its card is there only while the
+  // experimental feature is on (spec experimental-features "Close the
+  // scheduled tasks feature's surfaces").
+  const dailyReport = useFeatureEnabled("scheduled_tasks") === true;
   const people = status?.people ?? [];
   const defaultAgent =
     typeof channel.config.default_agent === "string" ? channel.config.default_agent : "";
@@ -134,7 +139,7 @@ export function ChannelOverviewTab({
         </Row>
       </SettingsSection>
 
-      <ChannelDailyReportSection channelUid={channel.uid} />
+      {dailyReport ? <ChannelDailyReportSection channelUid={channel.uid} /> : null}
 
       <Link
         to={channelConversationsHref(channel.uid)}

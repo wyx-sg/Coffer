@@ -1,19 +1,42 @@
 // src/components/scheduled-tasks/TaskRuns.tsx — an open task's History: every run, newest first, with how it ended and why.
 //
 // A row is when the run started (and when it was due, for a late or skipped
-// one), the outcome pill, and the reason the daemon gave.
+// one), the outcome pill, the reason the daemon gave, and the conversation the
+// run used: its title, and the same Open in <terminal> split button a session
+// row has, which resumes that session to read the run or carry it on (spec
+// channels "Keep every scheduled run in the task's history").
 import { useTranslation } from "react-i18next";
 
 import { RelativeTime } from "@/components/RelativeTime";
 import { Section } from "@/components/Section";
+import { SessionOpenButton } from "@/components/sessions/SessionOpenButton";
+import { useOpenSession } from "@/components/sessions/useOpenSession";
 import { StatusPill } from "@/components/status/StatusPill";
+import type { ScheduledRun } from "@/lib/api/scheduledTasks";
 import { useScheduledTaskRuns } from "@/lib/hooks/useScheduledTasks";
 import { OUTCOME_TONE } from "@/lib/scheduledTasks/format";
+import type { SessionRowData } from "@/lib/sessions/rows";
 import { formatMoment } from "@/lib/time";
+
+/** The run's conversation as a session row, for the opener. */
+function sessionOf(conversation: NonNullable<ScheduledRun["conversation"]>): SessionRowData {
+  return {
+    id: conversation.session_id ?? conversation.conversation_id,
+    sessionId: conversation.session_id,
+    conversationId: conversation.conversation_id,
+    title: conversation.title,
+    cwd: conversation.cwd,
+    activityAt: null,
+    running: conversation.running,
+    channel: null,
+    agentKey: conversation.agent_key,
+  };
+}
 
 export function TaskRuns({ uid }: { uid: string }) {
   const { t, i18n } = useTranslation();
   const { data, isPending } = useScheduledTaskRuns(uid);
+  const opener = useOpenSession();
   const runs = data ?? [];
   return (
     <Section title={t("scheduledTasks.runs.title")} help={t("scheduledTasks.runs.help")}>
@@ -45,11 +68,33 @@ export function TaskRuns({ uid }: { uid: string }) {
                 {run.reason ? (
                   <span className="block break-words text-text-muted">{run.reason}</span>
                 ) : null}
+                {run.conversation ? (
+                  <span className="block truncate text-text-muted">
+                    {t("scheduledTasks.runs.conversation", { title: run.conversation.title })}
+                  </span>
+                ) : run.conversation_id ? (
+                  <span className="block text-text-subtle">
+                    {t("scheduledTasks.runs.conversationGone")}
+                  </span>
+                ) : null}
               </span>
+              {run.conversation ? (
+                <span className="shrink-0">
+                  <SessionOpenButton
+                    row={sessionOf(run.conversation)}
+                    openable={opener.canOpen(sessionOf(run.conversation))}
+                    terminalLabel={opener.terminalLabel}
+                    otherTerminals={opener.otherTerminals}
+                    onOpen={opener.open}
+                    onCopyCommand={opener.copyCommand}
+                  />
+                </span>
+              ) : null}
             </li>
           ))}
         </ul>
       )}
+      {opener.dialog}
     </Section>
   );
 }

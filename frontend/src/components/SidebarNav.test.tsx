@@ -21,6 +21,7 @@ import { appRoutes } from "@/router";
 const ALL_ON: Record<string, boolean> = {
   knowledge: true,
   memory: true,
+  scheduled_tasks: true,
 };
 const features = vi.fn((): Record<string, boolean> | null => ALL_ON);
 vi.mock("@/lib/hooks/useFeatures", async (importOriginal) => ({
@@ -240,6 +241,7 @@ const hrefs = () =>
 const OWNED: Record<string, string[]> = {
   knowledge: ["/knowledge"],
   memory: ["/memory"],
+  scheduled_tasks: ["/scheduled-tasks"],
 };
 
 describe("a switched-off experimental feature", () => {
@@ -264,7 +266,7 @@ describe("a switched-off experimental feature", () => {
   );
 
   acceptance("web-ui", "a switched-off feature leaves the sidebar", () => {
-    features.mockReturnValue({ knowledge: false, memory: false });
+    features.mockReturnValue({ knowledge: false, memory: false, scheduled_tasks: false });
     renderNav();
 
     expect(hrefs()).toEqual([
@@ -273,7 +275,6 @@ describe("a switched-off experimental feature", () => {
       "/model-providers",
       "/conversations",
       "/channels",
-      "/scheduled-tasks",
       "/mcp-servers",
       "/custom-tools",
       "/skills",
@@ -301,7 +302,7 @@ describe("a switched-off experimental feature", () => {
     features.mockReturnValue(null);
     renderNav();
 
-    expect(hrefs()).toHaveLength(13);
+    expect(hrefs()).toHaveLength(12);
     expect(hrefs()).not.toContain("/knowledge");
   });
 });

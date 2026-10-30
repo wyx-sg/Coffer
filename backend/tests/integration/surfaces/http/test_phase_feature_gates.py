@@ -23,7 +23,9 @@ _switch = gates._switch
 _assert_disabled = gates._assert_disabled
 
 
-@pytest.mark.parametrize(("key", "kind"), [("knowledge", "knowledge")])
+@pytest.mark.parametrize(
+    ("key", "kind"), [("knowledge", "knowledge"), ("scheduled_tasks", "scheduled_task")]
+)
 def test_a_kind_an_experimental_feature_owns_is_out_of_reach_while_it_is_off(
     home: pathlib.Path, key: str, kind: str
 ) -> None:
@@ -128,3 +130,13 @@ def test_knowledge_off_re_renders_the_guide_without_its_knowledge_sections(
 
         _switch(c, "knowledge", True)
         assert kind_gates._guide(home) == before
+
+
+def test_scheduled_tasks_off_closes_their_routes(home: pathlib.Path) -> None:
+    """The REST half of spec experimental-features "Close the scheduled tasks
+    feature's surfaces"; the tools half is in the channel tests."""
+    daemon_config.write_feature_setting("scheduled_tasks", False)
+    with _client() as c:
+        _assert_disabled(c.get("/api/v1/scheduled-tasks"), "scheduled_tasks")
+        _switch(c, "scheduled_tasks", True)
+        assert c.get("/api/v1/scheduled-tasks").status_code == 200

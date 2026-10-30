@@ -48,19 +48,21 @@ class ExperimentalFeature:
     kinds: tuple[str, ...] = ()
 
 
-#: The two experimental features (spec experimental-features "Declare the
+#: The three experimental features (spec experimental-features "Declare the
 #: experimental features in one registry"). Everything else — the shell, the
 #: overview, Agents, the MCP gateway and its custom tools, Skills, Secrets,
 #: Activity, Settings, Conversations, Channels, vault sync and Model providers
 #: — is always on and owns no entry.
 #:
-#: ``knowledge`` — the knowledge collections. ``memory`` — agent memory. Each
+#: ``knowledge`` — the knowledge collections. ``memory`` — agent memory.
+#: ``scheduled_tasks`` — scheduled tasks, follow-ups and the daily report. Each
 #: is off until the person switches it on, on this machine. A feature joins by
 #: adding one entry here and tagging its other surfaces with its key; it leaves
 #: by deleting that entry and every gate that names it, and by adding one entry
 #: to ``GRADUATED_FEATURES`` or ``RETIRED_FEATURES`` below.
 KNOWLEDGE = "knowledge"
 MEMORY = "memory"
+SCHEDULED_TASKS = "scheduled_tasks"
 
 EXPERIMENTAL_FEATURES: tuple[ExperimentalFeature, ...] = (
     ExperimentalFeature(
@@ -71,6 +73,11 @@ EXPERIMENTAL_FEATURES: tuple[ExperimentalFeature, ...] = (
     ExperimentalFeature(
         key=MEMORY,
         route_prefixes=("/api/v1/memory",),
+    ),
+    ExperimentalFeature(
+        key=SCHEDULED_TASKS,
+        route_prefixes=("/api/v1/scheduled-tasks",),
+        kinds=("scheduled_task",),
     ),
 )
 

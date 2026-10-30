@@ -9,6 +9,8 @@ A **scheduled task** is a turn Coffer starts by itself: at the time you choose, 
 
 Every task is on the **Scheduled tasks** page (Run › Scheduled tasks), with its history. The same page shows Coffer's own background work, read-only.
 
+Scheduled tasks are an [experimental feature](/guides/experimental-features): switch them on in **Settings → Features** first. While they are off, no task runs and agents cannot book follow-ups; your tasks and their history are kept.
+
 ## What a task is
 
 A task holds:
@@ -88,7 +90,7 @@ Turn **Catch up** off on a task to skip every missed run instead.
 - **Follow-ups**: the ones agents booked.
 - **Coffer internal**: Coffer's own background work — sync, memory sync, cleaning up old records, keeping agents' config files in line, starting scheduled tasks, and more — with how each is woken and when it last ran. **Show all** lists every worker. Nothing here can be changed: these settings live on their own pages.
 
-Open a task for its header (**Run now**, **Pause** or **Resume**, **Edit**, and **⋯ › Delete**), what it does, and **History**: every run, newest first, with how it ended — **Replied**, **Nothing to say**, **Skipped**, **Failed**, **Stopped** — and why. Runs are kept for 90 days by default; change it in Settings › Data.
+Open a task for its header (**Run now**, **Pause** or **Resume**, **Edit**, and **⋯ › Delete**), what it does, and **History**: every run, newest first, with how it ended — **Replied**, **Nothing to say**, **Skipped**, **Failed**, **Stopped** — and why. A run that used a conversation names it, with **Open in** your terminal: that resumes the agent's session, so you can read what the run did and carry the conversation on. Runs are kept for 90 days by default; change it in Settings › Data.
 
 ## Related
 

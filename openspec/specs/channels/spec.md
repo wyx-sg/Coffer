@@ -3154,6 +3154,10 @@ Read-Only](../../../docs/decisions/others-in-a-group-may-ask-read-only.md).
   a note where others may not ask says none of it
 
 ### Requirement: Keep scheduled tasks as machine-local resources
+Scheduled tasks are the experimental feature `scheduled_tasks`: every
+requirement on them below holds while it is switched on, and while it is off
+they are closed as [experimental-features](../experimental-features/spec.md)
+"Close the scheduled tasks feature's surfaces" says.
 A scheduled task MUST be a resource of kind `scheduled_task`, kept beside the
 channel it runs in on this machine (`local/resources/scheduled_task/<uid>.json`)
 and never synced, since it names a chat of a machine-local channel. Its config
@@ -3296,12 +3300,24 @@ ran in. A row a stopped daemon left `running` MUST be closed `failed` when the
 daemon next starts. The rows are pruned by the retention worker
 (`scheduled_task_runs`, 90 days by default). `GET
 /api/v1/scheduled-tasks/{uid}/runs` and `coffer task runs` list a task's rows,
-newest first.
+newest first. Each listed row MUST carry the conversation it ran in, with that
+conversation's title, agent, native session and whether a turn is running on
+it, or none when the run started no conversation or it has since been removed.
+On the Scheduled tasks page every history row with a conversation MUST show its
+title and an Open in <terminal> button that resumes its session, the same
+button, menu and busy dialog as a row of the Conversations page, so the owner
+can read the run and carry it on.
 
 #### Scenario: a run's history row says how it ended
 - **GIVEN** a task that ran twice: once it replied, once it was skipped as missed
 - **WHEN** its history is listed
 - **THEN** two rows are listed newest first, one `replied` with its conversation and one `skipped` with the reason
+
+#### Scenario: a run's conversation opens from its history
+- **GIVEN** a task with two runs: the conversation of one still exists, the other's has been removed
+- **WHEN** the owner opens the task on the Scheduled tasks page
+- **THEN** the first row names its conversation with an Open in <terminal> button, and pressing it resumes that conversation's session in the terminal
+- **AND** the second row says its conversation has been removed, with nothing to open
 
 #### Scenario: a run interrupted by a stop is closed on the next start
 - **GIVEN** a run that was `running` when the daemon stopped

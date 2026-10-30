@@ -1,4 +1,4 @@
-// src/lib/features.ts — the two experimental features the web UI knows by name.
+// src/lib/features.ts — the three experimental features the web UI knows by name.
 //
 // The daemon's registry decides which features exist and what state each is in
 // (spec experimental-features); this file is the web UI's half: the keys, and —
@@ -8,14 +8,15 @@
 // description of a key live in the locale files under `settings.features.names`
 // / `.descriptions`.
 
-/** The two experimental features, in registry order. */
-export type FeatureKey = "knowledge" | "memory";
+/** The three experimental features, in registry order. */
+export type FeatureKey = "knowledge" | "memory" | "scheduled_tasks";
 
 /** The feature that owns the page of a resource kind (an audit entry's
  *  `resource_kind`, a secret citer's `kind`); a kind not listed is always on. */
 const FEATURE_OF_KIND: Readonly<Record<string, FeatureKey>> = {
   knowledge: "knowledge",
   memory: "memory",
+  scheduled_task: "scheduled_tasks",
 };
 
 export function featureOfKind(kind: string): FeatureKey | undefined {

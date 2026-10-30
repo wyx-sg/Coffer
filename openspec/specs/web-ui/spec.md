@@ -96,8 +96,8 @@ every CLI a skill requires on the CLIs page". An
 entry whose experimental feature is switched off (spec
 [experimental-features](../experimental-features/spec.md) "Close every surface of a switched-off feature")
 MUST be left out, and MUST appear on the next render after the feature is
-switched on. Knowledge belongs to `knowledge` and Memory to `memory`; every
-other entry, Model providers, Sync, Conversations and Channels included, is
+switched on. Knowledge belongs to `knowledge`, Memory to `memory` and
+Scheduled tasks to `scheduled_tasks`; every other entry, Model providers, Sync, Conversations and Channels included, is
 owned by no feature and is always there:
 
 ```
@@ -138,7 +138,7 @@ owned by no feature and is always there:
 - **WHEN** the app shell is rendered
 - **THEN** the sidebar leaves that entry out and lists every other entry under its heading
 - **AND** with every feature switched on, the sidebar lists all fifteen entries
-- **AND** with both features switched off, it lists only Overview, Agents, Model providers, Conversations, Channels, Scheduled tasks, MCP servers, Custom tools, Skills, CLIs, Secrets, Activity and Sync
+- **AND** with every feature switched off, it lists only Overview, Agents, Model providers, Conversations, Channels, MCP servers, Custom tools, Skills, CLIs, Secrets, Activity and Sync
 
 ### Requirement: Call a surface by one name everywhere
 A surface MUST carry one name in every place it is named — sidebar, page header,

@@ -57,6 +57,7 @@ export function ScheduledTasksPage() {
       <div className={cn(PAGE_BLEED_HEAD, "flex shrink-0 flex-col gap-1.5 pb-5")}>
         <PageHeader
           title={t("scheduledTasks.title")}
+          experimental
           subtitle={t("scheduledTasks.subtitle")}
           actions={
             <Button onClick={() => setAdding(true)}>

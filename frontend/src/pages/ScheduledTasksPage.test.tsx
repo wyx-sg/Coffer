@@ -8,7 +8,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { DaemonWorker } from "@/lib/api/daemon";
-import type { ScheduledTask } from "@/lib/api/scheduledTasks";
+import type { ScheduledRun, ScheduledTask } from "@/lib/api/scheduledTasks";
 import { acceptance } from "@/test/acceptance";
 import { ScheduledTasksPage } from "./ScheduledTasksPage";
 
@@ -24,6 +24,7 @@ vi.mock("@/lib/api/scheduledTasks", () => ({
   },
 }));
 vi.mock("@/lib/api/daemon", () => ({ daemonApi: { status: vi.fn() } }));
+vi.mock("@/lib/api/fs", () => ({ fsApi: { listTerminals: vi.fn(), openTerminal: vi.fn() } }));
 vi.mock("@/lib/api/resources", () => ({
   resourcesApi: { update: vi.fn(), enable: vi.fn(), disable: vi.fn(), remove: vi.fn() },
 }));
@@ -31,6 +32,7 @@ const { scheduledTasksApi } = await import("@/lib/api/scheduledTasks");
 const api = vi.mocked(scheduledTasksApi);
 const { daemonApi } = await import("@/lib/api/daemon");
 const { resourcesApi } = await import("@/lib/api/resources");
+const { fsApi } = await import("@/lib/api/fs");
 
 function task(over: Partial<ScheduledTask> & { uid: string; name: string }): ScheduledTask {
   return {
@@ -121,6 +123,8 @@ function rows(region: string): string[] {
 beforeEach(() => {
   api.list.mockResolvedValue([MORNING, FOLLOW_UP]);
   api.runs.mockResolvedValue([]);
+  vi.mocked(fsApi.listTerminals).mockResolvedValue([]);
+  vi.mocked(fsApi.openTerminal).mockResolvedValue(undefined as never);
   api.chats.mockResolvedValue([
     {
       channel: "ch-1",
@@ -165,6 +169,47 @@ describe("ScheduledTasksPage", () => {
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Pause" }));
     await waitFor(() => expect(resourcesApi.disable).toHaveBeenCalledWith("t-1"));
+  });
+
+  acceptance("channels", "a run's conversation opens from its history", async () => {
+    const run = (id: string, over: Partial<ScheduledRun>): ScheduledRun => ({
+      run_id: id,
+      task_uid: "t-1",
+      task_name: "Morning summary",
+      due_at: "2026-10-29T09:00:00Z",
+      started_at: "2026-10-29T09:00:00Z",
+      finished_at: "2026-10-29T09:02:00Z",
+      outcome: "replied",
+      reason: "",
+      catch_up: false,
+      trigger: "schedule",
+      conversation_id: "",
+      conversation: null,
+      ...over,
+    });
+    api.runs.mockResolvedValue([
+      run("r-2", {
+        conversation_id: "c-2",
+        conversation: {
+          conversation_id: "c-2",
+          title: "Open pull requests",
+          agent_key: "claude_code",
+          session_id: "s-2",
+          cwd: "/work",
+          running: false,
+        },
+      }),
+      run("r-1", { conversation_id: "c-1" }),
+    ]);
+    renderPage();
+    expect(await screen.findByText("Conversation: Open pull requests")).toBeInTheDocument();
+    expect(screen.getByText("Its conversation has been removed.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Open in/ }));
+    await waitFor(() =>
+      expect(fsApi.openTerminal).toHaveBeenCalledWith(
+        expect.objectContaining({ agent: "claude_code", cwd: "/work", resume: "s-2" }),
+      ),
+    );
   });
 
   acceptance("channels", "the page creates a task in a chosen chat", async () => {

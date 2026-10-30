@@ -11,7 +11,8 @@ All three are turn-scoped: offered only inside a turn Coffer runs, and told by
 the gateway which turn is calling (``TURN_ARGUMENT``), so the chat, the thread
 and the asker come from the turn itself and never from what the agent copied
 out of its prompt. A turn someone who may only ask started schedules nothing,
-and neither does a run of a repeating task.
+and neither does a run of a repeating task. While the ``scheduled_tasks``
+experimental feature is off the three are withdrawn from every turn.
 
 Application layer only; the composition root registers them.
 """
@@ -33,6 +34,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.turn_scope import TURN_ARGUMENT
 from coffer.domain.channel.schedule import Schedule
 from coffer.domain.errors import CofferError
+from coffer.domain.features import SCHEDULED_TASKS
 
 __all__ = ["ScheduleTools", "parse_after", "parse_at", "schedule_tools"]
 
@@ -219,6 +221,7 @@ def schedule_tools(tools: ScheduleTools) -> list[BuiltinTool]:
             input_schema=_SCHEDULE_SCHEMA,
             handler=tools.schedule,
             turn_scoped=True,
+            feature=SCHEDULED_TASKS,
         ),
         BuiltinTool(
             name="scheduled_tasks",
@@ -226,6 +229,7 @@ def schedule_tools(tools: ScheduleTools) -> list[BuiltinTool]:
             input_schema=_TURN_ONLY,
             handler=tools.list_here,
             turn_scoped=True,
+            feature=SCHEDULED_TASKS,
         ),
         BuiltinTool(
             name="cancel_scheduled_task",
@@ -233,5 +237,6 @@ def schedule_tools(tools: ScheduleTools) -> list[BuiltinTool]:
             input_schema=_CANCEL_SCHEMA,
             handler=tools.cancel,
             turn_scoped=True,
+            feature=SCHEDULED_TASKS,
         ),
     ]

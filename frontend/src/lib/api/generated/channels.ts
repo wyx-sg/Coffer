@@ -536,6 +536,25 @@ export interface components {
             /** Running */
             running: boolean;
         };
+        /**
+         * RunConversationOut
+         * @description The conversation a run used, as the history opens it: the agent's native
+         *     session resumes in a terminal, where the run can be read and carried on.
+         */
+        RunConversationOut: {
+            /** Agent Key */
+            agent_key: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /** Cwd */
+            cwd: string | null;
+            /** Running */
+            running: boolean;
+            /** Session Id */
+            session_id: string | null;
+            /** Title */
+            title: string;
+        };
         /** ScheduledRunListOut */
         ScheduledRunListOut: {
             /** Items */
@@ -545,6 +564,7 @@ export interface components {
         ScheduledRunOut: {
             /** Catch Up */
             catch_up: boolean;
+            conversation: components["schemas"]["RunConversationOut"] | null;
             /** Conversation Id */
             conversation_id: string;
             /**

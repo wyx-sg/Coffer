@@ -27,6 +27,7 @@ const AGENT = {
 beforeEach(() => {
   callMock.mockImplementation(async (path: string) => {
     const p = path.split("?")[0];
+    if (p === "/daemon/status") return { features: { scheduled_tasks: false } };
     if (p === "/agents") return { items: [AGENT] };
     if (p === "/agents/u-cc") return AGENT;
     if (p === "/agent-providers/claude_code/models")

@@ -257,7 +257,7 @@ To delete your data as well, tick **Also delete my data** in the dialog; Coffer 
 
 ## Experimental features
 
-Every build carries the same capabilities. Two of them are experimental — Knowledge and Memory — and start switched off, in a stable release and a source build alike. Sync and Model providers are regular features, always on. Switch one on from Settings → Features. See [Experimental features](/guides/experimental-features).
+Every build carries the same capabilities. Three of them are experimental — Knowledge, Memory and Scheduled tasks — and start switched off, in a stable release and a source build alike. Sync and Model providers are regular features, always on. Switch one on from Settings → Features. See [Experimental features](/guides/experimental-features).
 
 ## Next steps
 

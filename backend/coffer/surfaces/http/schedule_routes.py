@@ -47,6 +47,20 @@ def _tasks() -> TaskService:
     return _WIRED.tasks  # type: ignore[no-any-return]
 
 
+class RunConversationOut(BaseModel):
+    """The conversation a run used, as the history opens it: the agent's native
+    session resumes in a terminal, where the run can be read and carried on."""
+
+    conversation_id: str
+    title: str
+    agent_key: str
+    #: The agent's native session; null until a turn has run on it.
+    session_id: str | None
+    cwd: str | None
+    #: A turn is under way on it now (this run's or a later one).
+    running: bool
+
+
 class ScheduledRunOut(BaseModel):
     run_id: str
     task_uid: str
@@ -61,6 +75,9 @@ class ScheduledRunOut(BaseModel):
     catch_up: bool
     trigger: Literal["schedule", "manual"]
     conversation_id: str
+    #: The conversation it used, in the history only; null for a run that
+    #: never started one, or whose conversation has since been removed.
+    conversation: RunConversationOut | None = None
 
 
 class ScheduledTaskOut(BaseModel):
@@ -116,7 +133,7 @@ class DailyReportIn(BaseModel):
     agent: str | None = None
 
 
-def run_out(run: ScheduledRun) -> ScheduledRunOut:
+def run_out(run: ScheduledRun, conversation: RunConversationOut | None = None) -> ScheduledRunOut:
     return ScheduledRunOut(
         run_id=run.run_id,
         task_uid=run.task_uid,
@@ -129,6 +146,7 @@ def run_out(run: ScheduledRun) -> ScheduledRunOut:
         catch_up=run.catch_up,
         trigger=run.trigger,
         conversation_id=run.conversation_id,
+        conversation=conversation,
     )
 
 
@@ -193,8 +211,21 @@ async def get_task(uid: str) -> ScheduledTaskOut:
 async def list_task_runs(
     uid: str, limit: int = Query(default=50, ge=1, le=200)
 ) -> ScheduledRunListOut:
-    runs = await _WIRED.chats.runs_of(uid, limit) if _WIRED.chats is not None else []
-    return ScheduledRunListOut(items=[run_out(r) for r in runs])
+    if _WIRED.chats is None:
+        return ScheduledRunListOut(items=[])
+    runs = await _WIRED.chats.runs_of(uid, limit)
+    found = await _WIRED.chats.conversations({r.conversation_id for r in runs})
+    return ScheduledRunListOut(
+        items=[
+            run_out(
+                r,
+                RunConversationOut(**found[r.conversation_id])
+                if r.conversation_id in found
+                else None,
+            )
+            for r in runs
+        ]
+    )
 
 
 @router.post("/{uid}/run", response_model=ScheduledRunOut, status_code=status.HTTP_202_ACCEPTED)

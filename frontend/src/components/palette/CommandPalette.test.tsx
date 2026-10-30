@@ -29,7 +29,7 @@ const MCP: Row[] = [{ uid: "u-gh", name: "octo-bridge" }];
 const SKILLS = [{ uid: "s-pdf", name: "pdf", bindings: [] }];
 const COLLECTIONS: Row[] = [{ uid: "k-notes", name: "team-notes" }];
 
-const ALL_ON = { knowledge: true, memory: true };
+const ALL_ON = { knowledge: true, memory: true, scheduled_tasks: true };
 const ALL_OFF = { knowledge: false, memory: false };
 let features: Record<string, boolean>;
 let daemonUp: boolean;

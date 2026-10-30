@@ -73,7 +73,12 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     entries: [
       { to: "/conversations", labelKey: "nav.conversations", icon: MessageSquare },
       { to: "/channels", labelKey: "nav.channels", icon: Radio },
-      { to: "/scheduled-tasks", labelKey: "nav.scheduledTasks", icon: CalendarClock },
+      {
+        to: "/scheduled-tasks",
+        labelKey: "nav.scheduledTasks",
+        icon: CalendarClock,
+        feature: "scheduled_tasks",
+      },
     ],
   },
   {
