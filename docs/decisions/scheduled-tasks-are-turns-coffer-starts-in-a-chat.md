@@ -133,19 +133,30 @@ read or carry on. Comparable products split the same way:
 | Codex automations | standalone runs are new chats, thread automations return to their chat | the chat is ordinary |
 | Hermes, OpenClaw | a CLI run list, output saved to a file | no |
 
-- **A — the run row names its conversation and opens it in the terminal
-  (chosen).** The history already keeps the conversation id; the runs route
-  adds the conversation's title, agent, native session and whether a turn is
-  running, and the row reuses the Conversations page's Open in <terminal>
-  split button and busy dialog. Coffer has no conversation view of its own
-  (the transcript stays in the agent's session), so "read it and carry it on"
-  is resuming that session, exactly as from the Conversations page. A run
-  whose conversation was removed says so; a skipped run started none.
+- **A — the run row names its conversation and opens it in place.** The
+  history already keeps the conversation id; the runs route adds the
+  conversation's title, agent, native session and whether a turn is running,
+  and the row reuses the Conversations page's Open in <terminal> split button
+  and busy dialog. Coffer has no conversation view of its own (the transcript
+  stays in the agent's session), so "read it and carry it on" is resuming
+  that session. Shipped first, then replaced by D at the owner's review: it
+  made a second place that opens conversations.
 - **B — a transcript view inside the page.** Would need Coffer to read and
   render agent transcripts, which it deliberately does not keep.
-- **C — only link to the Conversations page filtered to the chat.** One more
-  click and loses which run used which conversation (a `continue` task shares
-  one).
+- **C — link to the Conversations page filtered to the chat.** Loses which run
+  used which conversation (a `continue` task shares one), and a filter to a
+  single row hides the rest of the list.
+- **D — the conversation's title links to the Conversations page, which
+  selects that row in its full list and opens it (chosen).** The owner's call:
+  conversations open from one place, where their running state, Stop, Rename
+  and Delete already are. `/conversations?open=<conversation id>` shows the
+  unfiltered list, pages on until the row is listed, marks it current, scrolls
+  to it and opens it once, then drops the parameter. Costs a page change on
+  every open, and a long list may load several pages first (a run's
+  conversation is usually recent, so it is near the top). Products with their
+  own session view (Claude Code, Devin) open the session from the run row;
+  Coffer's equivalent of a session view is the Conversations row, so the link
+  lands there.
 
 ### Rollout (added 2026-10-30)
 
@@ -209,8 +220,9 @@ Rules a change must keep:
   a repeating task that fails three runs in a row is paused and the chat told.
 - **History.** Every run is a row in `scheduled_task_runs` (runs.db): when it
   was due, started and ended, how it ended and why, and the conversation it
-  used; pruned by retention. The page names that conversation and opens its
-  session in the terminal, to read the run or carry it on.
+  used; pruned by retention. The page names that conversation as a link to
+  the Conversations page, which selects it and opens its session in the
+  terminal, to read the run or carry it on.
 - **Who may schedule.** Three turn-scoped tools —
   `coffer__schedule_task`, `coffer__scheduled_tasks`,
   `coffer__cancel_scheduled_task` — exist only inside a channel turn. In a turn

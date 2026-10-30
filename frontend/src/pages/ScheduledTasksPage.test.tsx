@@ -24,7 +24,6 @@ vi.mock("@/lib/api/scheduledTasks", () => ({
   },
 }));
 vi.mock("@/lib/api/daemon", () => ({ daemonApi: { status: vi.fn() } }));
-vi.mock("@/lib/api/fs", () => ({ fsApi: { listTerminals: vi.fn(), openTerminal: vi.fn() } }));
 vi.mock("@/lib/api/resources", () => ({
   resourcesApi: { update: vi.fn(), enable: vi.fn(), disable: vi.fn(), remove: vi.fn() },
 }));
@@ -32,7 +31,6 @@ const { scheduledTasksApi } = await import("@/lib/api/scheduledTasks");
 const api = vi.mocked(scheduledTasksApi);
 const { daemonApi } = await import("@/lib/api/daemon");
 const { resourcesApi } = await import("@/lib/api/resources");
-const { fsApi } = await import("@/lib/api/fs");
 
 function task(over: Partial<ScheduledTask> & { uid: string; name: string }): ScheduledTask {
   return {
@@ -123,8 +121,6 @@ function rows(region: string): string[] {
 beforeEach(() => {
   api.list.mockResolvedValue([MORNING, FOLLOW_UP]);
   api.runs.mockResolvedValue([]);
-  vi.mocked(fsApi.listTerminals).mockResolvedValue([]);
-  vi.mocked(fsApi.openTerminal).mockResolvedValue(undefined as never);
   api.chats.mockResolvedValue([
     {
       channel: "ch-1",
@@ -202,14 +198,10 @@ describe("ScheduledTasksPage", () => {
       run("r-1", { conversation_id: "c-1" }),
     ]);
     renderPage();
-    expect(await screen.findByText("Conversation: Open pull requests")).toBeInTheDocument();
+    const link = await screen.findByRole("link", { name: "Open pull requests" });
+    expect(link).toHaveAttribute("href", "/conversations?open=c-2");
     expect(screen.getByText("Its conversation has been removed.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /^Open in/ }));
-    await waitFor(() =>
-      expect(fsApi.openTerminal).toHaveBeenCalledWith(
-        expect.objectContaining({ agent: "claude_code", cwd: "/work", resume: "s-2" }),
-      ),
-    );
+    expect(screen.queryByRole("button", { name: /^Open in/ })).toBeNull();
   });
 
   acceptance("channels", "the page creates a task in a chosen chat", async () => {

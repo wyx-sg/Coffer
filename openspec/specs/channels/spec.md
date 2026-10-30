@@ -3304,9 +3304,10 @@ newest first. Each listed row MUST carry the conversation it ran in, with that
 conversation's title, agent, native session and whether a turn is running on
 it, or none when the run started no conversation or it has since been removed.
 On the Scheduled tasks page every history row with a conversation MUST show its
-title and an Open in <terminal> button that resumes its session, the same
-button, menu and busy dialog as a row of the Conversations page, so the owner
-can read the run and carry it on.
+title as a link to the Conversations page, which lands on that conversation in
+its full list and opens it there ([chat](../chat/spec.md) "Open a conversation
+in the terminal"), so the owner can read the run and carry it on. The history
+row has no open button of its own: conversations open from one place.
 
 #### Scenario: a run's history row says how it ended
 - **GIVEN** a task that ran twice: once it replied, once it was skipped as missed
@@ -3316,7 +3317,7 @@ can read the run and carry it on.
 #### Scenario: a run's conversation opens from its history
 - **GIVEN** a task with two runs: the conversation of one still exists, the other's has been removed
 - **WHEN** the owner opens the task on the Scheduled tasks page
-- **THEN** the first row names its conversation with an Open in <terminal> button, and pressing it resumes that conversation's session in the terminal
+- **THEN** the first row names its conversation as a link to `/conversations?open=<conversation id>`, and the row has no Open in <terminal> button of its own
 - **AND** the second row says its conversation has been removed, with nothing to open
 
 #### Scenario: a run interrupted by a stop is closed on the next start

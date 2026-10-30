@@ -3774,6 +3774,7 @@
       "emptyTitle": "No conversations yet",
       "emptyBody": "Sessions appear here once an agent has one: started in a terminal, by a channel, or with New conversation.",
       "noMatches": "No conversations match",
+      "openMissing": "The conversation you followed a link to is no longer in this list.",
       "clearFilters": "Clear filters",
       "unavailable_one": "Couldn’t read {{agents}}’s sessions",
       "unavailable_other": "Couldn’t read the sessions of {{agents}}"
@@ -6930,11 +6931,11 @@
     },
     "runs": {
       "title": "History",
-      "help": "Every run: when it ran, how it ended and why, and the conversation it used. Open that conversation in a terminal to read the run or carry it on. Runs are kept for 90 days.",
+      "help": "Every run: when it ran, how it ended and why, and the conversation it used. Its title takes you to that conversation on the Conversations page, where it opens in a terminal so you can read the run or carry it on. Runs are kept for 90 days.",
       "none": "It hasn't run yet.",
       "byHand": "run by hand",
       "late": "late, was due {{due}}",
-      "conversation": "Conversation: {{title}}",
+      "conversation": "Conversation:",
       "conversationGone": "Its conversation has been removed."
     },
     "dialog": {
