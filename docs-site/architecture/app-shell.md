@@ -5,7 +5,7 @@ description: How the web UI's frame is organised — the sidebar grouped by inte
 
 # App shell
 
-The app shell is the frame every page of the web UI sits in: the sidebar, the command palette, the Settings window, the title bar and the split views. None of it is a feature of its own, but every feature is reached through it, so its rules decide whether the product feels like one thing or like fourteen pages stitched together. This page explains those rules and the reasons behind them. For how to use the shell, see the [Web UI guide](/guides/web-ui).
+The app shell is the frame every page of the web UI sits in: the sidebar, the command palette, the Settings window, the title bar and the split views. None of it is a feature of its own, but every feature is reached through it, so its rules decide whether the product feels like one thing or like fifteen pages stitched together. This page explains those rules and the reasons behind them. For how to use the shell, see the [Web UI guide](/guides/web-ui).
 
 ## Principles
 
@@ -17,19 +17,19 @@ The app shell is the frame every page of the web UI sits in: the sidebar, the co
 
 ## The sidebar is grouped by what you come to do
 
-The sidebar has fourteen entries: **Overview** on top under no heading, then five groups.
+The sidebar has fifteen entries: **Overview** on top under no heading, then five groups.
 
 | Group | Entries | The question it answers |
 | --- | --- | --- |
 | Agents | Agents, Model providers | Which agents do I have, and which models do they run on? |
-| Run | Conversations, Channels | How do I put an agent to work — directly or from IM? |
+| Run | Conversations, Channels, Scheduled tasks | How do I put an agent to work — directly, from IM, or at a time? |
 | Capabilities | MCP servers, Custom tools, Skills, CLIs | What can my agents do? |
 | Context | Knowledge, Memory | What do my agents know? |
 | System | Secrets, Activity, Sync | How do I look after Coffer and what every part shares? |
 
 The earlier sidebar grouped by role — agents as consumers, a large Resources group of what they consume, and System. It was accurate, but it was the architecture's view: a person looking for "where do I add a tool" had to know that tools, skills, knowledge and channels are all resources. Grouping by intent puts the answer under the question. It also keeps every group short: none has more than four entries, so each heading is scannable at a glance, and the rule that no group passes five tells the next change where a new entry belongs or when the grouping must be revisited.
 
-Two placements follow from intent rather than from type. **Model providers** sits with Agents because a provider is each agent's model configuration, chosen from the agent's own Change model form. What requests through providers cost is its second tab, **Usage**, not a sidebar entry of its own. **Conversations and Channels** stay two entries in one group: Conversations is every conversation Coffer runs, whatever started it, and Channels is only setup and connection status.
+Two placements follow from intent rather than from type. **Model providers** sits with Agents because a provider is each agent's model configuration, chosen from the agent's own Change model form. What requests through providers cost is its second tab, **Usage**, not a sidebar entry of its own. **Conversations and Channels** stay two entries in one group: Conversations is every conversation Coffer runs, whatever started it, and Channels is only setup and connection status. **Scheduled tasks** sits after them because a task is a turn Coffer starts in one of your chats at a time, and the same page lists Coffer's own background work.
 
 **Overview** belongs to no group because it summarises all of them, and it is the landing page at `/`. **Settings** is not an entry at all (see [below](#settings-is-a-modal-with-an-address)).
 
@@ -37,7 +37,7 @@ The alternatives — keeping the role groups, one big Resources group, a flat li
 
 ### Experimental entries
 
-An entry can belong to an [experimental feature](/guides/experimental-features). The sidebar does not decide whether one is on; it asks the feature switch and follows it. A switched-off feature's entry is left out entirely rather than greyed, a group left with no entries drops its heading, and its **Experimental** mark sits beside the page's title and in Settings › Features, not on the sidebar row (the collapsed rail's tooltip still says so). Knowledge belongs to `knowledge` and Memory to `memory`; every other entry, Sync, Model providers (with its Usage tab), Conversations and Channels included, is always there. A deep link into a switched-off feature's page lands on the not-found page, and its sections inside other pages are left out the same way, with no notice and no switch-on button. Settings has a tab of its own for the switches, **Features**, in every build.
+An entry can belong to an [experimental feature](/guides/experimental-features). The sidebar does not decide whether one is on; it asks the feature switch and follows it. A switched-off feature's entry is left out entirely rather than greyed, a group left with no entries drops its heading, and its **Experimental** mark sits beside the page's title and in Settings › Features, not on the sidebar row (the collapsed rail's tooltip still says so). Knowledge belongs to `knowledge` and Memory to `memory`; every other entry, Sync, Model providers (with its Usage tab), Conversations, Channels and Scheduled tasks included, is always there. A deep link into a switched-off feature's page lands on the not-found page, and its sections inside other pages are left out the same way, with no notice and no switch-on button. Settings has a tab of its own for the switches, **Features**, in every build.
 
 ## One list of names and routes
 

@@ -29,7 +29,7 @@ const MCP: Row[] = [{ uid: "u-gh", name: "octo-bridge" }];
 const SKILLS = [{ uid: "s-pdf", name: "pdf", bindings: [] }];
 const COLLECTIONS: Row[] = [{ uid: "k-notes", name: "team-notes" }];
 
-const ALL_ON = { knowledge: true, memory: true };
+const ALL_ON = { knowledge: true, memory: true, scheduled_tasks: true };
 const ALL_OFF = { knowledge: false, memory: false };
 let features: Record<string, boolean>;
 let daemonUp: boolean;
@@ -153,9 +153,9 @@ describe("CommandPalette", () => {
     renderPalette();
     await settled();
     const pages = () => within(group("Pages")).getAllByRole("option");
-    // An empty query lists every page: 14 sidebar entries + 6 Settings tabs.
+    // An empty query lists every page: 15 sidebar entries + 6 Settings tabs.
     const count = pages().length;
-    expect(count).toBe(20);
+    expect(count).toBe(21);
     const seen: string[] = [];
     for (let i = 0; i < count; i += 1) {
       fireEvent.click(screen.getByText("reopen"));
@@ -232,7 +232,7 @@ describe("CommandPalette", () => {
     callAnswers["/skills"] = () => Promise.reject(new ApiError("INTERNAL_ERROR", "boom"));
     renderPalette();
     await settled();
-    expect(within(group("Pages")).getAllByRole("option")).toHaveLength(20);
+    expect(within(group("Pages")).getAllByRole("option")).toHaveLength(21);
     type("o");
     expect(within(group("Skills")).getByText("Skill: couldn't load the list")).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /pdf/ })).not.toBeInTheDocument();
@@ -300,7 +300,7 @@ describe("CommandPalette", () => {
       "Secrets",
       "octo-bridge",
     ]);
-    expect(within(group("Pages")).getAllByRole("option")).toHaveLength(20);
+    expect(within(group("Pages")).getAllByRole("option")).toHaveLength(21);
   });
 
   acceptance("web-ui", "a skill result names the agents that get it", async () => {

@@ -171,6 +171,10 @@ from coffer.infrastructure.channel.reply_persistence import (  # noqa: E402
     ChannelReplyModel,
     ChannelReplyRepo,
 )
+from coffer.infrastructure.channel.schedule_run_persistence import (  # noqa: E402
+    ScheduledRunModel,
+    ScheduledRunRepo,
+)
 from coffer.infrastructure.channel.thread_persistence import (  # noqa: E402
     ChannelThreadConversationModel,
     ChannelThreadConversationRepo,
@@ -189,5 +193,7 @@ __all__ = [
     "ChannelThreadCursorModel",
     "ChannelThreadCursorRepo",
     "ChannelThreadHistoryModel",
+    "ScheduledRunModel",
+    "ScheduledRunRepo",
     "peers_path",
 ]

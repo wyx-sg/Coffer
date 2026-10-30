@@ -32,6 +32,7 @@ const TITLE_KEY_BY_ROUTE: Record<string, string> = {
   "/model-providers": "providers.title",
   "/conversations": "conversations.title",
   "/channels": "channels.title",
+  "/scheduled-tasks": "scheduledTasks.title",
   "/mcp-servers": "resources.title",
   "/custom-tools": "customTools.title",
   "/skills": "skills.title",
@@ -68,7 +69,7 @@ describe("a surface carries one name in the sidebar and on its page", () => {
   const entries = sidebarEntries();
 
   test("every sidebar entry has a known page title", () => {
-    expect(entries).toHaveLength(14);
+    expect(entries).toHaveLength(15);
     expect(entries.map((e) => e.to).sort()).toEqual(Object.keys(TITLE_KEY_BY_ROUTE).sort());
   });
 

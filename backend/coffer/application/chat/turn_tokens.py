@@ -65,6 +65,12 @@ def token_for(conversation_id: str) -> str | None:
     return ctx.token if ctx is not None else None
 
 
+def conversation_of(token: str | None) -> str | None:
+    """The conversation whose live turn ``token`` names, or ``None``."""
+    ctx = _TURNS.get(token) if token is not None else None
+    return ctx.conversation_id if ctx is not None else None
+
+
 def turn_is_live(token: str | None) -> bool:
     """Whether ``token`` names a turn that is running now."""
     return token is not None and token in _TURNS
@@ -81,6 +87,7 @@ __all__ = [
     "TurnContext",
     "TurnLiveness",
     "clear_all",
+    "conversation_of",
     "register_turn",
     "release_turn",
     "token_for",

@@ -42,7 +42,7 @@ export default defineConfig({
         COFFER_DAEMON_EXIT_WITH_PID: String(process.pid),
         COFFER_CORS_ORIGINS: `${VITE_ORIGIN},http://127.0.0.1:${DOCS_VITE_PORT}`,
         // The docs show every page, experimental ones included.
-        COFFER_E2E_FEATURES: "knowledge=on,memory=on",
+        COFFER_E2E_FEATURES: "knowledge=on,memory=on,scheduled_tasks=on",
       },
     },
     {

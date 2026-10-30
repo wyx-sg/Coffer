@@ -3,7 +3,7 @@
 ## Purpose
 
 Ship one build that carries every capability, and let each person decide which
-of the not-yet-proven ones to try. A registry names the two experimental
+of the not-yet-proven ones to try. A registry names the three experimental
 features; each is off until the person switches it on, and the choice is made
 per machine. A switched-off feature looks absent on every surface and loses
 nothing it holds. The choice of feature gates over a separate release branch
@@ -14,13 +14,14 @@ is recorded in
 
 ### Requirement: Declare the experimental features in one registry
 Coffer MUST declare its experimental features in one registry, and every
-surface MUST take the list from it. The registry names exactly two features,
+surface MUST take the list from it. The registry names exactly three features,
 in this order:
 
 | Key | What it closes | REST prefixes | Kinds |
 | --- | --- | --- | --- |
 | `knowledge` | Knowledge | `/api/v1/knowledge` | `knowledge` |
 | `memory` | Memory | `/api/v1/memory` | — |
+| `scheduled_tasks` | Scheduled tasks | `/api/v1/scheduled-tasks` | `scheduled_task` |
 
 Everything else is always on: the shell, the Overview, Agents, the MCP gateway
 and its custom tools, Skills, Secrets, Activity, Settings, Conversations,
@@ -41,11 +42,11 @@ key the registry does not name and no table lists MUST be ignored by every read
 — logged, never listed — and MUST NOT fail anything. A `features` object a
 person already holds is kept as it is.
 
-#### Scenario: the registry names the two experimental features
+#### Scenario: the registry names the three experimental features
 - **GIVEN** a running daemon
 - **WHEN** `GET /api/v1/daemon/features` is requested
-- **THEN** the route lists exactly `knowledge` and `memory`, in that order, each with its state and what decided it
-- **AND** the daemon status `features` map names the same two keys
+- **THEN** the route lists exactly `knowledge`, `memory` and `scheduled_tasks`, in that order, each with its state and what decided it
+- **AND** the daemon status `features` map names the same three keys
 
 #### Scenario: a stored setting for a feature the registry does not name is ignored
 - **GIVEN** a daemon config whose `features` object holds a key the registry does not name
@@ -281,7 +282,7 @@ card.
 #### Scenario: settings carry the Features tab
 - **GIVEN** a running daemon
 - **WHEN** the user opens Settings → Features
-- **THEN** the tab lists `knowledge` and `memory` with name, Experimental mark, description, state and what decided it
+- **THEN** the tab lists `knowledge`, `memory` and `scheduled_tasks` with name, Experimental mark, description, state and what decided it
 - **AND** the Settings tab list is General, Security, Data, Daemon, Features and About
 
 #### Scenario: the features tab switches a feature
@@ -300,7 +301,8 @@ feature is experimental in the tooltip of the collapsed rail ("Knowledge ·
 Experimental"). The expanded row carries no tag beside its label — the
 Experimental tag stays on the feature's page title and in Settings › Features —
 and an entry no registered feature owns MUST NOT say it at all. The entries owned
-by a feature are Knowledge (`knowledge`) and Memory (`memory`).
+by a feature are Knowledge (`knowledge`), Memory (`memory`) and Scheduled
+tasks (`scheduled_tasks`).
 
 #### Scenario: a collapsed rail's tooltip says a feature's entry is experimental
 - **GIVEN** a sidebar entry owned by a registered feature that is switched on
@@ -330,3 +332,29 @@ turn, whether the feature is on or off
 - **WHEN** the memory sync worker's round comes due
 - **THEN** it skips the round and syncs nothing
 - **AND** once `memory` is switched on, the next round runs
+
+### Requirement: Close the scheduled tasks feature's surfaces
+While `scheduled_tasks` is off, `/api/v1/scheduled-tasks` MUST answer 404
+`FEATURE_DISABLED` and the kind-agnostic resource routes MUST refuse and leave
+out `scheduled_task` resources; the scheduler MUST start no run, Run now
+included; `coffer__schedule_task`, `coffer__scheduled_tasks` and
+`coffer__cancel_scheduled_task` MUST be absent from every turn; `/status` in a
+chat MUST list no task and its Cancel buttons MUST cancel nothing; and the web
+UI MUST hide the Scheduled tasks entry and page and the Daily report card on a
+channel's Overview. Switching it off MUST keep every task and its history;
+switching it on again MUST bring the scheduler's next pass forward with no
+daemon restart, and a slot that passed while it was off is caught up once or
+skipped and recorded, as any missed slot is ([channels](../channels/spec.md)
+"Catch up a missed run once, within its grace").
+
+#### Scenario: scheduled tasks off closes their routes and tools
+- **GIVEN** `scheduled_tasks` off
+- **WHEN** a route under `/api/v1/scheduled-tasks` is requested, and a channel turn lists its tools
+- **THEN** the route answers 404 `FEATURE_DISABLED` naming `scheduled_tasks`
+- **AND** the turn is offered none of the three scheduling tools
+
+#### Scenario: scheduled tasks off runs nothing and lists nothing
+- **GIVEN** `scheduled_tasks` off and an enabled task whose slot has come
+- **WHEN** the scheduler's pass runs, and `/status` is sent in the task's chat
+- **THEN** no run starts and `/status` lists no task
+- **AND** once `scheduled_tasks` is switched on, the next pass considers the task again

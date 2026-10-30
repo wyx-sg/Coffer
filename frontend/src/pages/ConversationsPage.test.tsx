@@ -296,6 +296,42 @@ describe("Conversations list", () => {
     await waitFor(() => expect(chat.interruptTurn.mock.calls[0][0]).toBe("t"));
   });
 
+  acceptance("chat", "a link lands on its conversation and opens it", async () => {
+    const target = makeSessionRow({
+      session_id: "s-9",
+      conversation_id: "c-9",
+      title: "Morning summary",
+      cwd: "/work/ops",
+      last_activity_at: at(3, 9),
+    });
+    sessions.listAll.mockImplementation(async (opts: { cursor?: string | null }) =>
+      opts.cursor
+        ? { sessions: [target], next_cursor: null, unavailable: [] }
+        : { sessions: [today, yesterday], next_cursor: "c1", unavailable: [] },
+    );
+    renderPage("/conversations?open=c-9");
+    // The full list, paged on until the row shows; nothing is filtered out.
+    expect(await screen.findByText("Morning summary")).toBeInTheDocument();
+    expect(screen.getByText("Today one")).toBeInTheDocument();
+    await waitFor(() => expect(rowOf("s-9")).toHaveAttribute("aria-current", "true"));
+    await waitFor(() =>
+      expect(openTerminal).toHaveBeenCalledWith(
+        expect.objectContaining({ agent: "claude_code", cwd: "/work/ops", resume: "s-9" }),
+      ),
+    );
+    // The parameter is dropped, so a reload does not open it again.
+    await waitFor(() => expect(loc()).toBe("/conversations"));
+    expect(openTerminal).toHaveBeenCalledTimes(1);
+  });
+
+  test("a link to a conversation that is gone says so", async () => {
+    renderPage("/conversations?open=gone");
+    expect(
+      await screen.findByText("The conversation you followed a link to is no longer in this list."),
+    ).toBeInTheDocument();
+    expect(openTerminal).not.toHaveBeenCalled();
+  });
+
   test("the list pages by cursor", async () => {
     const more = makeSessionRow({
       session_id: "m",

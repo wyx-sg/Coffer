@@ -191,8 +191,9 @@ coffer__search_tools(query: string, top_k?: integer = 5, 1..20)
 | --- | --- |
 | `coffer__search_tools` | 网关自己（网关自有） |
 | `coffer__channel_read_thread` | 消息渠道功能（按轮次限定） |
+| `coffer__schedule_task`、`coffer__scheduled_tasks`、`coffer__cancel_scheduled_task` | 定时任务，属于消息渠道功能（按轮次限定） |
 
-`coffer__search_tools` 由网关自己持有，始终存在。`coffer__channel_read_thread` 由消息渠道功能注册为按轮次限定，所以只有处在正在运行的 Coffer 轮次内的会话才能看到或调用它。一个令牌是否指向正在运行的轮次，由对话类型通过组合根交给网关的一个端口来回答，所以网关不导入任何对话代码。没有向所有者提问的内置工具：智能体在回复里问（ADR [ask-in-the-reply-not-in-a-card](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/ask-in-the-reply-not-in-a-card.md)）。对任何其他 `coffer__` 名字的调用都会落到上游路由，并像一个未知工具那样失败。知识和记忆没有内置工具：智能体用自己的文件工具修改知识，把记忆放在自己的原生记忆里，所以注册表里没有对应任何一个的工具。
+`coffer__search_tools` 由网关自己持有，始终存在。`coffer__channel_read_thread` 由消息渠道功能注册为按轮次限定，所以只有处在正在运行的 Coffer 轮次内的会话才能看到或调用它；三个定时任务工具也是如此，它们为轮次所在的聊天安排、列出和取消[定时任务](/zh/architecture/chat#scheduled-turns)。一个令牌是否指向正在运行的轮次，由对话类型通过组合根交给网关的一个端口来回答，所以网关不导入任何对话代码。没有向所有者提问的内置工具：智能体在回复里问（ADR [ask-in-the-reply-not-in-a-card](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/ask-in-the-reply-not-in-a-card.md)）。对任何其他 `coffer__` 名字的调用都会落到上游路由，并像一个未知工具那样失败。知识和记忆没有内置工具：智能体用自己的文件工具修改知识，把记忆放在自己的原生记忆里，所以注册表里没有对应任何一个的工具。
 
 内置工具的处理函数运行之前，网关会按上面所说设置 `agent`。当工具的 schema 声明了 `cwd` 属性而客户端没填时，它还会填上 `cwd`。处理函数的返回值被包装成一个 MCP 工具结果：`content` 里是 JSON 文本，`structuredContent` 里是同一个对象，`isError: false`。处理函数内部的异常会变成带内的 `isError: true` 结果，而不是 JSON-RPC 错误，这样模型能读到它并自我纠正。文本会显示 Coffer 编写的错误和无效值错误的消息，其他异常只显示异常的类型名。工具的具体行为见 [MCP 工具](/zh/reference/mcp-tools)。
 

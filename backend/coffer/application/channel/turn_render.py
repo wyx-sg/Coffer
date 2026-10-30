@@ -50,6 +50,7 @@ from coffer.application.channel.turn_surface import TurnSurface, typing_heartbea
 from coffer.application.channel.turn_text import clip_stream_preview, with_mention
 from coffer.application.runtime.supervisor import spawn
 from coffer.domain.channel.envelopes import ChoiceButton
+from coffer.domain.channel.scheduled_task import SILENT_MARK
 from coffer.domain.chat.events import (
     MessageEnd,
     TextDelta,
@@ -115,6 +116,12 @@ class TurnRenderer:
     rewrite: Callable[[int], Awaitable[bool]] | None = None
     #: This turn IS that follow-up: its reply carries the full-report button.
     offer_full_report: bool = False
+    #: A scheduled run's turn: a clean reply opening with ``[SILENT]`` is not
+    #: sent (spec channels "Stay silent when a scheduled run has nothing to say").
+    silent_mark: bool = False
+    #: Set once the turn ended silent, and its error's message when it failed.
+    silenced: bool = field(init=False, default=False)
+    error_text: str = field(init=False, default="")
     heartbeat_seconds: float = _TYPING_HEARTBEAT_SECONDS
     tick_seconds: float = _STATUS_TICK_SECONDS
     _status: TurnStatus = field(init=False)
@@ -187,7 +194,13 @@ class TurnRenderer:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await ticker
         end = TurnEnd(stop_reason, error, len(tool_ids), self.now() - started, tokens)
+        self.error_text = error.message if error is not None else ""
         answer = self._reply.answer()
+        if self.silent_mark and end.clean and answer.lstrip().startswith(SILENT_MARK):
+            self.silenced = True
+            with contextlib.suppress(Exception):
+                await self._surface.close("")
+            return end.outcome
         if await self._shortened(answer, end):
             return end.outcome
         if self.offer_full_report and self.tracker is not None:

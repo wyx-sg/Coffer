@@ -138,6 +138,29 @@ class CodexNativeSessions:
     async def delete(self, config_dir: pathlib.Path, session_id: str) -> None:
         await self._call(config_dir, "thread/delete", {"threadId": session_id}, session_id)
 
+    async def tail(
+        self, config_dir: pathlib.Path, session_id: str, _cwd: str | None
+    ) -> tuple[str, str]:
+        """The last message a person sent into the thread and the last reply it
+        gave (``thread/read`` with its turns), for the daily report; ``""`` for
+        either that is not there."""
+        result = await self._call(
+            config_dir, "thread/read", {"threadId": session_id, "includeTurns": True}, session_id
+        )
+        thread = result.get("thread")
+        turns = thread.get("turns") if isinstance(thread, dict) else None
+        asked = answered = ""
+        for turn in turns if isinstance(turns, list) else []:
+            items = turn.get("items") if isinstance(turn, dict) else None
+            for item in items if isinstance(items, list) else []:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("type") == "userMessage":
+                    asked = _user_text(item) or asked
+                elif item.get("type") == "agentMessage" and isinstance(item.get("text"), str):
+                    answered = item["text"].strip() or answered
+        return asked, answered
+
     # --- internals -----------------------------------------------------------
 
     async def _call(
@@ -171,6 +194,18 @@ class CodexNativeSessions:
         await rpc.request("initialize", {"clientInfo": _CLIENT_INFO, "capabilities": None})
         await rpc.notify("initialized")
         return await rpc.request(method, params)
+
+
+def _user_text(item: dict[str, Any]) -> str:
+    content = item.get("content")
+    if not isinstance(content, list):
+        return ""
+    parts = [
+        part.get("text", "")
+        for part in content
+        if isinstance(part, dict) and part.get("type") == "text"
+    ]
+    return "\n".join(p for p in parts if isinstance(p, str)).strip()
 
 
 def _cursor_of(position: list[Any] | None) -> str | None:

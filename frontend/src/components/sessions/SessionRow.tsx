@@ -14,7 +14,8 @@
 // yet shows a muted "Not started" in the split button's place, with the reason
 // in a tooltip. The Source
 // column names the channel a conversation came from, and "This Mac" for a
-// session no channel started.
+// session no channel started. A link from elsewhere (a scheduled run's
+// History) lands on one row: it is marked selected and scrolled into view.
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Laptop, Pencil, Square, Trash2 } from "lucide-react";
@@ -56,6 +57,8 @@ interface Props {
   /** Stops the turn running on the row (only a running row shows Stop). */
   onStop?: (row: SessionRowData) => void;
   stopping?: boolean;
+  /** The row a link landed on (`/conversations?open=`): marked and scrolled into view. */
+  selected?: boolean;
 }
 
 export function SessionRow({
@@ -72,12 +75,17 @@ export function SessionRow({
   onDelete,
   onStop,
   stopping = false,
+  selected = false,
 }: Props) {
   const { t, i18n } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(row.title);
   const [saving, setSaving] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const self = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (selected) self.current?.scrollIntoView?.({ block: "center" });
+  }, [selected]);
 
   // The menu returns focus to its trigger as it closes; take it back once it has.
   useEffect(() => {
@@ -136,11 +144,15 @@ export function SessionRow({
 
   return (
     <li
+      ref={self}
       data-session={row.id}
+      aria-current={selected ? "true" : undefined}
       className={cn(
         "group/row grid min-h-14 items-center gap-x-3 border-t border-border-subtle py-2 pl-3.5 pr-2.5 transition-colors duration-fast",
         GRID[columns],
-        "hover:bg-surface-hover focus-within:bg-surface-hover",
+        selected
+          ? "bg-surface-selected"
+          : "hover:bg-surface-hover focus-within:bg-surface-hover",
       )}
     >
       <div className="flex min-w-0 items-center gap-2.5">

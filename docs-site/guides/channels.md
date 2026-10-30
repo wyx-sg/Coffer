@@ -192,7 +192,7 @@ Ten words are Coffer's commands. Everything else you type — including other te
 | --- | --- |
 | `/new [agent]` | Start a fresh conversation with this chat's settings. With an agent name, switch to that agent. |
 | `/stop` | Interrupt the running turn and hold the messages queued behind it, with **Continue** and **Discard** buttons. |
-| `/status` | What this chat is running, as a card with the buttons that act on it. |
+| `/status` | What this chat is running and the scheduled tasks waiting in it, as a card with the buttons that act on it. |
 | `/model [name]` | Show or set the model. |
 | `/dir [path\|name]` | Show or switch the working directory, in a fresh conversation. |
 | `/resume [n]` | Reopen an earlier conversation from this chat. |
@@ -316,6 +316,12 @@ The line must start with `MEDIA:` followed by an absolute path, optionally with 
 ## Notifications
 
 Coffer can push a message to the paired owner with no inbound message, through `POST /api/v1/channels/{uid}/notify`. The request goes to the owner's direct chat unless it names another paired chat, such as a group; a chat the channel is not paired to is refused. On the channel's page, **Send test** sends a test message — editable, **Test message from Coffer** by default — to the owner's direct chat; it starts no turn. Notifying a channel with no paired owner fails and sends nothing.
+
+## Scheduled tasks and the daily report {#scheduled-tasks}
+
+A bot can also speak first, at a time: a [scheduled task](/guides/scheduled-tasks) runs a prompt in one of your chats on a schedule, and an agent can book a follow-up in the thread it is answering ("I'll check again once the deploy is out") and come back to whoever asked. In a direct chat, `/status` lists what waits in the conversation, with a **Cancel** button per task.
+
+The channel's **Overview** has a **Daily report** card: once a day, at the time you pick (18:00 by default), a short message to your direct chat about that day's conversations on this channel. A day with no conversations sends nothing. See [The daily report](/guides/scheduled-tasks#the-daily-report).
 
 ## Manage channels
 

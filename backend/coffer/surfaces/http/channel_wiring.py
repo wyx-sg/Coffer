@@ -63,12 +63,14 @@ from coffer.surfaces.http.channel_routes import (
 from coffer.surfaces.http.chat.dependencies import set_channel_note_reader, set_channel_places
 from coffer.surfaces.http.chat_wiring import ChatWiring
 from coffer.surfaces.http.event_wiring import EventStream
+from coffer.surfaces.http.schedule_wiring import wire_scheduled_tasks
 from coffer.surfaces.http.secret_boundary_wiring import (
     on_approval_applied,
     register_resource_destination,
 )
 from coffer.surfaces.http.secret_composition import boundary_resolver
 from coffer.surfaces.http.vault_composition import VaultStores
+from coffer.surfaces.http.workspace_dependencies import get_native_session_service
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -198,8 +200,24 @@ def wire_channel_kind(
     avatars = PersonAvatars(store=FileAvatarStore(), peers=peers, adapter_of=runtime.adapter)
     set_channel_avatars(avatars)
 
+    # Turns Coffer starts on its own in a paired chat (spec channels "Run a
+    # scheduled task in the chat it names").
+    schedule = wire_scheduled_tasks(
+        app,
+        resource_svc=resource_svc,
+        sm=sm,
+        peers=peers,
+        threads=threads,
+        processor=processor,
+        chat=chat,
+        sessions=get_native_session_service(),
+        builtin_tools=builtin_tools,
+        events=events,
+    )
+
     async def on_delete(channel: Resource) -> None:
         await runtime.evict(channel)
+        await schedule.forget_channel(channel.uid)
         avatars.forget(channel.uid)
         peers.forget(channel.uid)
         # The history rows name the channel by uid and nothing cascades from

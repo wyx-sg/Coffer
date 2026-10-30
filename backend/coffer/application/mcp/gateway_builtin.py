@@ -24,6 +24,7 @@ from coffer.application.mcp.gateway_tool_search import (
 from coffer.application.mcp.ports import MCPInvocationRepoPort
 from coffer.application.resource_service import ResourceService
 from coffer.application.runtime import correlation
+from coffer.application.turn_scope import TURN_ARGUMENT
 from coffer.domain.errors import ResourceNotFound, UpstreamUnavailable
 from coffer.domain.mcp.capability import BUILTIN_SERVER_UID, MCPInvocation
 
@@ -56,6 +57,8 @@ async def dispatch_builtin_tool(
     try:
         args = params.get("arguments") or {}
         result = await tool.handler(args)
+        # The turn's token opened the call; it is no part of what the call said.
+        args = {k: v for k, v in args.items() if k != TURN_ARGUMENT}
         duration_ms = int((clock() - started).total_seconds() * 1000)
         await _log(
             invocations,
@@ -86,7 +89,14 @@ async def dispatch_builtin_tool(
             session_id=session_id,
             agent_uid=session_agent_uid,
             content=call_content(
-                {"arguments": params.get("arguments"), "error": f"{type(exc).__name__}: {exc}"}
+                {
+                    "arguments": {
+                        k: v
+                        for k, v in (params.get("arguments") or {}).items()
+                        if k != TURN_ARGUMENT
+                    },
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
             ),
         )
         # Per the MCP spec, TOOL-execution failures are in-band ``isError``
@@ -221,6 +231,7 @@ def inject_session_context(
     *,
     session_cwd: str | None,
     agent_label: str | None,
+    turn_token: str | None = None,
 ) -> dict[str, Any]:
     """Thread what the session knows about its caller into a built-in call.
 
@@ -246,6 +257,11 @@ def inject_session_context(
     args.pop(AGENT_ARGUMENT, None)
     if agent_label:
         args[AGENT_ARGUMENT] = agent_label
+    # The turn a turn-scoped tool is called from is the gateway's to say, like
+    # the agent: whatever the client sent under that name is dropped.
+    args.pop(TURN_ARGUMENT, None)
+    if tool.turn_scoped and turn_token:
+        args[TURN_ARGUMENT] = turn_token
     props = tool.input_schema.get("properties", {})
     if isinstance(props, dict):
         session_values = {"cwd": session_cwd}
@@ -316,7 +332,14 @@ async def dispatch_tool_search(
             session_id=session_id,
             agent_uid=session_agent_uid,
             content=call_content(
-                {"arguments": params.get("arguments"), "error": f"{type(exc).__name__}: {exc}"}
+                {
+                    "arguments": {
+                        k: v
+                        for k, v in (params.get("arguments") or {}).items()
+                        if k != TURN_ARGUMENT
+                    },
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
             ),
         )
         return {"content": [{"type": "text", "text": _tool_error_text(exc)}], "isError": True}

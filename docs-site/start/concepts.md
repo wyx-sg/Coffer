@@ -146,7 +146,7 @@ Guide: [Activity and audit](/guides/activity). Architecture: [Observability](/ar
 
 ## Experimental features
 
-A capability that is not ready for everyone yet ships as an experimental feature: it starts switched off and you switch it on, machine by machine. Switching one off makes it look absent — its pages, commands and `coffer__` tools disappear — but deletes nothing. When a feature is ready it graduates and loses its switch. Two features are experimental: Knowledge and Memory. Settings → Features lists them. Sync and Model providers have graduated and are always on.
+A capability that is not ready for everyone yet ships as an experimental feature: it starts switched off and you switch it on, machine by machine. Switching one off makes it look absent — its pages, commands and `coffer__` tools disappear — but deletes nothing. When a feature is ready it graduates and loses its switch. Three features are experimental: Knowledge, Memory and Scheduled tasks. Settings → Features lists them. Sync and Model providers have graduated and are always on.
 
 Guide: [Experimental features](/guides/experimental-features).
 

@@ -41,7 +41,7 @@ port:    38470
 pid:     41822
 ```
 
-`status` is `ready` while the daemon serves and `draining` while it shuts down, or `setup` while it waits for git — then the command also prints why and a prompt for your agent (see [Coffer needs git](/guides/troubleshooting#coffer-needs-git)). There is no earlier phase to see: the daemon opens its port only once it has finished starting. Two [experimental features](/guides/experimental-features), Knowledge and Memory, are off until you switch them on. Add `--json` for scripts.
+`status` is `ready` while the daemon serves and `draining` while it shuts down, or `setup` while it waits for git — then the command also prints why and a prompt for your agent (see [Coffer needs git](/guides/troubleshooting#coffer-needs-git)). There is no earlier phase to see: the daemon opens its port only once it has finished starting. Three [experimental features](/guides/experimental-features), Knowledge, Memory and Scheduled tasks, are off until you switch them on. Add `--json` for scripts.
 
 With no daemon running, `coffer daemon status` prints `status:  not running` (`{"status": "stopped"}` under `--json`) and exits 3. It does not start a daemon, so its answer never changes what it reports on; use `coffer daemon start` for that.
 

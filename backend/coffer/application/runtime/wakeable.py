@@ -8,7 +8,9 @@ log a failure and carry on. :class:`WakeableLoop` is that loop, written once
 * :meth:`~WakeableLoop.poke` wakes it; pokes that arrive before or during the
   settle are one run.
 * ``fallback`` seconds without a poke run it anyway, to catch an event that was
-  lost; ``None`` means it waits for a poke only.
+  lost; ``None`` means it waits for a poke only. It may be a function, asked
+  each time the loop goes to sleep: a worker whose next run is a moment it can
+  name (the scheduled tasks) sleeps exactly until then.
 * :meth:`~WakeableLoop.set_demand` ``(False)`` parks it with no timer at all,
   until demand comes back.
 
@@ -30,6 +32,8 @@ _log = logging.getLogger(__name__)
 
 #: One run. ``True`` when a poke woke it, ``False`` when the fallback did.
 RunOnce = Callable[[bool], Awaitable[object]]
+#: Seconds until the fallback run, or ``None`` for none — fixed, or asked anew.
+Fallback = float | None | Callable[[], float | None]
 
 
 class WakeableLoop:
@@ -40,7 +44,7 @@ class WakeableLoop:
         name: str,
         run_once: RunOnce,
         *,
-        fallback: float | None,
+        fallback: Fallback,
         settle: float = 0.0,
         mode: WorkerMode | None = None,
         failure_event: str = "runtime.worker.failed",
@@ -61,7 +65,7 @@ class WakeableLoop:
 
     @property
     def fallback(self) -> float | None:
-        return self._fallback
+        return self._fallback() if callable(self._fallback) else self._fallback
 
     def poke(self) -> None:
         """Something changed: run once, after the settle."""
@@ -115,9 +119,10 @@ class WakeableLoop:
                 # Due once the settle is over.
                 self._registry.waiting(self.name, token, self._settle)
                 return True
-            self._registry.waiting(self.name, token, self._fallback)
+            fallback = self.fallback
+            self._registry.waiting(self.name, token, fallback)
             try:
-                await asyncio.wait_for(self._stir.wait(), timeout=self._fallback)
+                await asyncio.wait_for(self._stir.wait(), timeout=fallback)
             except TimeoutError:
                 return False
 

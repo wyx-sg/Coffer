@@ -1944,8 +1944,9 @@ components:
       type: object
     WorkerOut:
       description: |-
-        One background worker built on the shared wakeable loop: how it is
-        woken and what it did last (ADR background-workers-wake-on-events).
+        One background worker: how it is woken and what it did last (ADR
+        background-workers-wake-on-events). Most are built on the shared wakeable
+        loop; a plain timer loop reports through ``TimedWorker``.
       properties:
         failures:
           title: Failures
@@ -1971,6 +1972,7 @@ components:
           - event
           - event+fallback
           - on-demand
+          - timer
           title: Mode
           type: string
         name:

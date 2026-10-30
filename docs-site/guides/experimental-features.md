@@ -1,31 +1,33 @@
 ---
 title: Experimental features
-description: The two capabilities that ship switched off — Knowledge and Memory — how to switch each one on per machine from Settings or COFFER_FEATURES, and what a switched-off feature looks like.
+description: The three capabilities that ship switched off — Knowledge, Memory and Scheduled tasks — how to switch each one on per machine from Settings or COFFER_FEATURES, and what a switched-off feature looks like.
 ---
 
 # Experimental features
 
-Coffer ships one build with every capability in it. A few capabilities are not proven yet, so they start **switched off** and you decide, machine by machine, which ones to try. This page explains the two experimental features and what you see while one is off.
+Coffer ships one build with every capability in it. A few capabilities are not proven yet, so they start **switched off** and you decide, machine by machine, which ones to try. This page explains the three experimental features and what you see while one is off.
 
 A stable release and a build from source behave the same way here: every experimental feature is off until you switch it on.
 
-## The two features
+## The three features
 
 | Key | Name | What it covers |
 | --- | --- | --- |
 | `knowledge` | Knowledge | The Knowledge page and its files, and the knowledge sections of the `coffer-guide` skill. |
 | `memory` | Memory | The Memory page and memory sync, which carries each agent's memories into your other agents' own memory. |
+| `scheduled_tasks` | Scheduled tasks | The Scheduled tasks page, the scheduler, the follow-up tools agents use in a channel turn, tasks in `/status`, and the Daily report card on a channel's Overview. |
 
 Everything else is always on: the app shell, Overview, Agents, model providers, the local model proxy and Usage, the MCP gateway and custom tools, Skills, Secrets, Activity, Sync, Settings, Conversations and Channels. The agent list and its model catalogue, the speech-to-text settings, the vault and an agent's own transcripts and memory files are not gated either.
 
 ### How the features relate
 
-Neither feature needs the other. When one is off, the other keeps working:
+No feature needs another. When one is off, the others keep working:
 
 | When this is off | What happens |
 | --- | --- |
-| `knowledge` | The Knowledge page and its API are gone, the `coffer-guide` skill has no knowledge catalogue, the knowledge sweep skips. Memory is unaffected. |
-| `memory` | The Memory page and its API are gone and memory sync does not run. Copies already written stay in your agents as ordinary memory they own (see [Turning memory off](/guides/memory#turning-memory-off)). Knowledge is unaffected. |
+| `knowledge` | The Knowledge page and its API are gone, the `coffer-guide` skill has no knowledge catalogue, the knowledge sweep skips. The others are unaffected. |
+| `memory` | The Memory page and its API are gone and memory sync does not run. Copies already written stay in your agents as ordinary memory they own (see [Turning memory off](/guides/memory#turning-memory-off)). The others are unaffected. |
+| `scheduled_tasks` | The Scheduled tasks page and its API are gone, no task runs, agents are not offered the follow-up tools, `/status` lists no tasks and the Daily report card leaves a channel's Overview. Every task and its history is kept; switched on again, a slot missed meanwhile is caught up once or skipped, like any missed slot. Channels and conversations are unaffected. |
 
 ### Graduated features
 
@@ -33,7 +35,7 @@ Vault sync and model providers (with the local model proxy, Usage and the projec
 
 ## Switch a feature on or off
 
-Every feature is off by default. You switch it on for this machine on the Settings page, or pin it with `COFFER_FEATURES` (below). **Settings → Features** lists the two features, each with an **Experimental** mark, a one-line description and an on/off switch. The tab is in every build. If the feature is pinned (below), the switch is disabled and says so. **Reset to default** returns a feature to off, and **Decided by** shows whether a pin, this machine's setting or the default decided it.
+Every feature is off by default. You switch it on for this machine on the Settings page, or pin it with `COFFER_FEATURES` (below). **Settings → Features** lists the three features, each with an **Experimental** mark, a one-line description and an on/off switch. The tab is in every build. If the feature is pinned (below), the switch is disabled and says so. **Reset to default** returns a feature to off, and **Decided by** shows whether a pin, this machine's setting or the default decided it.
 
 A switch takes effect at once, with no restart, and is kept in `~/.coffer/daemon-config.json` on this machine only. It never syncs, so switching a feature on in your laptop leaves your desktop as it was. The same switch is `PUT /api/v1/daemon/features/{key}`, and `DELETE` on that path returns it to off.
 

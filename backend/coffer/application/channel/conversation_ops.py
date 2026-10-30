@@ -9,7 +9,7 @@ injected ports — no per-processor state.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -91,6 +91,7 @@ async def open_conversation(
     thread_id: str = "",
     *,
     chat_kind: str | None = None,
+    prefer: Mapping[str, str | None] | None = None,
 ) -> str:
     """Create a conversation from this thread's sticky settings + channel defaults
     (resolver) and make it the thread's active conversation (see "Key conversation
@@ -101,7 +102,12 @@ async def open_conversation(
     turns in different threads never collide on one conversation. A group
     thread with no setting of its own takes the group's defaults, which live on
     the group's ``""`` row (see "Set a group's defaults from its main chat").
-    The conversation is recorded in the thread's history, which `/resume` lists."""
+    The conversation is recorded in the thread's history, which `/resume` lists.
+
+    ``prefer`` overrides individual ``preferred_*`` settings for this one
+    conversation without making them sticky: a scheduled task that names its
+    own agent, model or directory opens on them (spec channels "Run a scheduled
+    task in the chat it names")."""
     row = await threads.get(binding.resource.uid, peer.chat_id, thread_id)
     kind = chat_kind or (row.chat_kind if row is not None else None)
     group = None
@@ -109,7 +115,8 @@ async def open_conversation(
         group = await threads.get(binding.resource.uid, peer.chat_id, "")
 
     def pick(field: str) -> str | None:
-        return inherited_setting(row, group, field)
+        chosen = (prefer or {}).get(field)
+        return chosen or inherited_setting(row, group, field)
 
     spec = resolve_conversation_spec(
         default_agent=binding.default_agent,

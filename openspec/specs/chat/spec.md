@@ -652,11 +652,19 @@ Copy command. An open the daemon refuses shows its
 reason in a toast beside Copy command as the way out. Agent › Sessions rows use the same row and
 the same behaviour. Pressing the row itself MUST NOT open a terminal or do anything else: only the split button opens a session ([agent-registry](../agent-registry/spec.md) "Open an agent's sessions from its Sessions tab").
 
+A link elsewhere in the web UI that points at one conversation (a scheduled run's History, [channels](../channels/spec.md) "Keep every scheduled run in the task's history") MUST go to `/conversations?open=<conversation id>`. The page MUST then show its full, unfiltered list, load later pages until that conversation's row is listed, select the row (marked as current and scrolled into view) and open it exactly as its split button would, once, then drop `open` from the address so a reload does not open it again. A conversation that is no longer listed is reported in one quiet line, and nothing opens.
+
 #### Scenario: a row opens its session in the preferred terminal
 - **GIVEN** a Claude Code session `abc-123` in `/work/api` and a preferred terminal
 - **WHEN** the user presses the row, and then the main part of its split button
 - **THEN** pressing the row asks the daemon for nothing, and the button asks it to open `claude --resume abc-123` in `/work/api` in that terminal, for the session's agent
 - **AND** a Codex session is opened as `codex resume <id>` the same way
+
+#### Scenario: a link lands on its conversation and opens it
+- **GIVEN** a conversation `c-9` whose row is on the list's second page, and a preferred terminal
+- **WHEN** the user follows a link to `/conversations?open=c-9`
+- **THEN** the full list shows, the second page loads, and the row of `c-9` is selected and opened in the preferred terminal once
+- **AND** the address becomes `/conversations`
 
 #### Scenario: the ▾ menu opens the session in another terminal once
 - **GIVEN** a session and iTerm as the preferred terminal

@@ -1,4 +1,4 @@
-"""The non-REST gates of the two experimental features, one unit each.
+"""The non-REST gates of the experimental features, one unit each.
 
 Spec experimental-features: a switched-off feature closes every surface, not
 only its routes. The REST, kind, CLI and tool gates are exercised through the
@@ -15,6 +15,7 @@ from coffer.domain.features import (
     EXPERIMENTAL_FEATURES,
     KNOWLEDGE,
     MEMORY,
+    SCHEDULED_TASKS,
     feature_keys,
 )
 
@@ -41,4 +42,4 @@ def test_every_registered_feature_owns_a_surface() -> None:
     """A feature with neither a route prefix nor a kind would close nothing."""
     for feature in EXPERIMENTAL_FEATURES:
         assert feature.route_prefixes, feature.key
-    assert feature_keys() == (KNOWLEDGE, MEMORY)
+    assert feature_keys() == (KNOWLEDGE, MEMORY, SCHEDULED_TASKS)

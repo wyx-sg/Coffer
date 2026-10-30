@@ -17,6 +17,7 @@ MODULES = (
     "providers",
     "mcp_servers",
     "channels",
+    "scheduled_tasks",
     "clis",
     "skills",
     "knowledge",

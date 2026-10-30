@@ -14,6 +14,12 @@ from typing import Protocol
 
 from coffer.domain.channel_turn import TURN_HEADER, TURN_TOKEN_ENV
 
+#: The argument a turn-scoped built-in tool is handed the calling turn's token
+#: under. The gateway sets it from the session's ``X-Coffer-Turn`` header and
+#: drops any value the client sent, so a tool can ask the kind that runs turns
+#: which turn is calling (``coffer__schedule_task`` books in that turn's thread).
+TURN_ARGUMENT = "_coffer_turn"
+
 
 class TurnLivePort(Protocol):
     """What the gateway needs from the kind that runs turns."""
@@ -40,6 +46,7 @@ def turn_is_live(port: TurnLivePort | None, token: str | None) -> bool:
 
 
 __all__ = [
+    "TURN_ARGUMENT",
     "TURN_HEADER",
     "TURN_TOKEN_ENV",
     "TurnLivePort",
