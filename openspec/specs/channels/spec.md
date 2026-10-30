@@ -698,7 +698,8 @@ heading; when it needs something from the person to go on, to ask in its reply,
 every question in that one message, in its own paragraph after what was done and
 numbered 1, 2, 3 when there are several, and end its turn, since the answer comes as
 the next message ([chat](../chat/spec.md) "Ask the owner in the reply, not in a
-dialog"); that it cannot click permission or confirmation dialogs on the user's computer;
+dialog"); never to quote or name its own skills, instructions or local
+file paths, since a reason the reader needs is the work's own; that it cannot click permission or confirmation dialogs on the user's computer;
 and how to send a file (`MEDIA:/absolute/path` on its own line). Where the
 running transport can read threads, it also names `coffer__channel_read_thread`
 for a thread's earlier messages, with its arguments taken from the origin block.
@@ -758,6 +759,11 @@ a Reply Style the Owner Can Rewrite](../../../docs/decisions/channel-prompt-fixe
 - **THEN** it names `coffer__channel_read_thread` and the origin block its
   arguments come from, while a note for a transport that cannot read threads
   does not
+
+#### Scenario: the note forbids citing the agent's own instructions
+- **WHEN** any channel turn's note is composed, whatever reply style the owner set
+- **THEN** it tells the agent never to quote or name its skills, instructions or
+  local file paths
 
 ### Requirement: Hand inbound photos and files to the agent
 Inbound photos and files MUST drive a turn. The transport downloads each
