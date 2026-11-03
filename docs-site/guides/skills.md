@@ -110,6 +110,8 @@ Skills → Add skill → From Git → Repository URL, and optionally Branch or t
 
 Coffer clones the repository with this machine's own `git`, resolves the branch, tag or commit you gave (the default branch when you gave none) to one commit, and looks for skills in the folder you named by the same rule as an archive. A GitHub folder address such as `https://github.com/acme/agent-skills/tree/main/terraform-plan` is read as the repository, the branch and the folder.
 
+The clone keeps the repository's history but not every version of every file, and the files of the folder you named are downloaded in one request, so a large skill collection is quick to add. If git still reports an object it could not get, Coffer clones the repository once more in full and takes the files from that. One add, update check or change of source may take up to 5 minutes in all; past that it is stopped and refused with a message saying so, and nothing is written.
+
 The skill is **pinned** to the commit it was copied from. It does not change when the repository does; see [Update a skill from its repository](#update-a-skill-from-its-repository).
 
 ::: info Which repositories Coffer can reach
@@ -451,7 +453,9 @@ For the resource model behind enable and reach, see [Resource framework](/archit
 
 **An agent does not see a skill.** Check that the skill is enabled and that its reach includes the agent (the skill's **Reach** button). Then use **Check copies** to see whether its link is missing or blocked by a foreign folder.
 
-**Adding a skill from Git fails.** The dialog shows git's own message. `could not read Username` or `Permission denied (publickey)` means this machine's git has no credential for that repository: check that `git clone <url>` works in a terminal first. A ref or folder that does not exist is named in the message too.
+**Adding a skill from Git fails.** The dialog shows git's own message. `could not read Username` or `Permission denied (publickey)` means this machine's git has no credential for that repository: check that `git clone <url>` works in a terminal first. A ref or folder that does not exist is named in the message too. `did not finish within 300 s` means the repository took longer than 5 minutes to read: try again, or check this machine's network to the host.
+
+**`coffer skill stage-git` exits 13 with `CLI_REQUEST_TIMEOUT`.** The daemon is running but had not answered when the command stopped waiting. It may still finish, and a staged import is kept for an hour: run the command again with a longer wait, `coffer --request-timeout 600 skill stage-git …`.
 
 **An archive is refused.** The message names the entries that could write outside the archive, the symlinks, or the size cap it would pass. Re-create the archive from the skill's folder itself.
 

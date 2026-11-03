@@ -11,6 +11,7 @@ from coffer import __version__
 from coffer.surfaces.cli import (
     _client,
     _io,
+    _waits,
     cli_cmd,
     commands,
     config_cmd,
@@ -47,6 +48,14 @@ def root(
         help="On an error, also show the request behind it (method, path, status) "
         "and, for an unexpected one, the traceback.",
     ),
+    request_timeout: float | None = typer.Option(
+        None,
+        "--request-timeout",
+        min=1.0,
+        help="Seconds to wait for the daemon's answer to each request, replacing the "
+        "command's own wait (15 s for most commands, longer for ones that reach the "
+        "network or run git).",
+    ),
     _version: bool = typer.Option(
         False,
         "--version",
@@ -59,6 +68,7 @@ def root(
     ctx.ensure_object(dict)
     ctx.obj["verbose"] = verbose
     _io.set_verbose(verbose)
+    _waits.set_override(request_timeout)
 
 
 groups.set_root(app)
@@ -91,8 +101,9 @@ def run() -> None:
     A daemon that stops answering after a command built its client surfaces as
     an ``httpx.TransportError`` from wherever the request was made — refused
     before the request, or dropped, reset or timed out during it; it is
-    reported here, once, as exit 3 with a message rather than a traceback (spec
-    mcp-gateway "Manage MCP servers as resources").
+    reported here, once, by what happened (``_transport``) with a message
+    rather than a traceback (spec mcp-gateway "Manage MCP servers as
+    resources").
     """
     try:
         app()

@@ -8,6 +8,7 @@ audit and the approval of a new secret destination come with it.
 
 from __future__ import annotations
 
+from coffer.surfaces.cli import _waits
 from coffer.surfaces.cli._route_command import Q, RouteCommand, mount
 
 M = {"uid": "mcp_server"}
@@ -36,6 +37,7 @@ SPECS = [
         "Exits 7 when the answer says ok: false.",
         body=True,
         outcome="ok",
+        wait=_waits.NETWORK_S,
     ),
     RouteCommand(
         "mcp status",

@@ -13,7 +13,7 @@ from typing import Any
 
 import typer
 
-from coffer.surfaces.cli import _io
+from coffer.surfaces.cli import _io, _waits
 from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli.commands.custom_tool_common import (
     GROUPS,
@@ -150,6 +150,7 @@ def create(
             GROUPS + "/openapi",
             as_json=as_json,
             body=_read_document(from_openapi, as_json=as_json),
+            timeout=_waits.NETWORK_S,
         )
         chosen = set(operation or [op["key"] for op in reading["operations"]])
         unknown = chosen - {op["key"] for op in reading["operations"]}
@@ -289,7 +290,11 @@ def import_read(
             "CLI_INVALID_INPUT", "give --url or --file", ExitCode.INVALID_INPUT, as_json=as_json
         )
     reading = _io.call(
-        "POST", GROUPS + "/openapi", as_json=as_json, body=_read_document(source, as_json=as_json)
+        "POST",
+        GROUPS + "/openapi",
+        as_json=as_json,
+        body=_read_document(source, as_json=as_json),
+        timeout=_waits.NETWORK_S,
     )
 
     def human(r: dict[str, Any]) -> None:
@@ -332,6 +337,7 @@ def reimport_preview(
         group_path(name) + "/reimport/preview",
         as_json=as_json,
         body=_reimport_body(file, as_json=as_json),
+        timeout=_waits.NETWORK_S,
     )
 
     def human(p: dict[str, Any]) -> None:
@@ -360,7 +366,9 @@ def reimport_apply(
     """Apply a re-import: removed tools go, chosen additions arrive switched on,
     kept tools keep their switch, and every environment is kept as it is."""
     body = {**_reimport_body(file, as_json=as_json), "add": list(add or [])}
-    applied = _io.call("POST", group_path(name) + "/reimport", as_json=as_json, body=body)
+    applied = _io.call(
+        "POST", group_path(name) + "/reimport", as_json=as_json, body=body, timeout=_waits.NETWORK_S
+    )
     _io.emit(applied, as_json=as_json, human=show_group)
 
 

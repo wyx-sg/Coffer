@@ -57,6 +57,8 @@ flowchart LR
 
 Coffer 运行本机自己的 `git`，把仓库克隆到暂存区，把你给出的 ref 解析为一个提交——先按分支，再按标签，再按提交，没给时用默认分支——并且只检出你指定的那个文件夹。GitHub 文件夹地址（`…/tree/<ref>/<path>`）会被一次性解读为这三者。
 
+克隆是部分克隆（`--filter=blob:none`）：它包含所有提交和目录树，这是比较提交所需要的，但不含文件内容。检出之前，Coffer 先列出这个文件夹缺少的对象（`git rev-list --objects --missing=print`，不会下载任何东西），再用一次 `git fetch --stdin` 把它们一起取回——这正是 git 自己按需拉取时运行的命令，只是一次取完而不是每个文件一次。否则限定路径的检出会为每个文件单独往返一次网络：一个 290 个文件的技能要 96 s，在 Apple Git 2.50 上还会以 "in the commit graph file but not in the object database" 失败。这些临时克隆不运行自动 gc、维护任务，也不写 commit-graph。之后仍报告缺少对象时，回退一次，改用不带过滤的克隆。一次操作——暂存、更新检查、更换来源、更新交接、记录合并——总共最多 300 s；超时后结束 git 进程，操作被拒绝。ADR [git-source-partial-clone-prefetch](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/git-source-partial-clone-prefetch.md)。
+
 Git 运行时不弹提示，也不使用来自 Coffer 的凭据。它能访问任何公开仓库；如果本机的 git 已经持有某个私有仓库的凭据——凭据助手或 SSH 密钥——也能访问那个私有仓库，因为 Coffer 保留用户自己的 git 配置不变。Coffer 自己不存储任何 Git 密钥。只允许 `https`、`http`、`ssh`、`git` 和 `file` 传输，不拉取子模块，不运行 Hook，耗时太久的克隆会被停止。git 打印的任何消息，在显示之前都会去掉 URL 中的密钥。带用户名或密码的 URL 会被直接拒绝，因为来源 URL 会存进保险库、技能自己的元数据和 API 响应。
 
 仓库地址不经过 [SSRF 防护](/zh/architecture/security#outbound-requests)：它是你自己指定的端点，由 `git` 子进程获取，方式与保险库同步远端相同，而公司自己的 Git 主机通常位于防护会拒绝的私有地址上。

@@ -16,7 +16,7 @@ import httpx
 import typer
 
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli import _io
+from coffer.surfaces.cli import _io, _waits
 from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(help="Check an MCP server")
@@ -79,10 +79,12 @@ def test_cmd(
     verbose = bool((ctx.obj or {}).get("verbose", False))
     with _io.client(as_json=as_json) as c:
         uid = resolve_uid(c, "mcp_server", name, verbose=verbose, as_json=as_json)
-        refreshed = c.post(f"/resources/mcp_server/{uid}/refresh")
+        refreshed = c.post(
+            f"/resources/mcp_server/{uid}/refresh", timeout=_waits.timeout(_waits.NETWORK_S)
+        )
         if refreshed.status_code == 404:
             _cli_client.check(refreshed, verbose=verbose, as_json=as_json)
-        r = c.post(f"/resources/mcp_server/{uid}/test")
+        r = c.post(f"/resources/mcp_server/{uid}/test", timeout=_waits.timeout(_waits.NETWORK_S))
         _cli_client.check(r, verbose=verbose, as_json=as_json)
     data = r.json()
     if as_json:

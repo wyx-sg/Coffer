@@ -7,6 +7,7 @@ its preview, undo, the Codex import switch and curation are commands.
 
 from __future__ import annotations
 
+from coffer.surfaces.cli import _waits
 from coffer.surfaces.cli._route_command import Q, RouteCommand, mount
 
 _UI = "Memory · "
@@ -25,6 +26,7 @@ SPECS = [
         "/memory/sync/run",
         _UI + "Sync now",
         "Sync memory now.",
+        wait=_waits.NETWORK_S,
     ),
     RouteCommand(
         "memory preview-write",

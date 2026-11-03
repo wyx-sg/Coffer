@@ -33,7 +33,7 @@ from typing import Any, NoReturn
 import httpx
 import typer
 
-from coffer.surfaces.cli import _client
+from coffer.surfaces.cli import _client, _transport, _waits
 from coffer.surfaces.cli._options import ExitCode
 
 #: ``coffer --verbose``, set once by the root callback for the whole command.
@@ -198,6 +198,11 @@ def call(
 ) -> Any:
     """One request to the daemon (started on demand), its JSON answer or an exit.
 
+    ``timeout`` is how long to wait for the answer (``_waits``); without one
+    the quick wait applies, and ``coffer --request-timeout`` replaces either.
+    No answer is reported by what happened (``_transport``), never as a crash
+    when the daemon simply took longer.
+
     ``files`` and ``form`` send a multipart upload, as the page's file picker does."""
     with client(as_json=as_json) as c:
         kwargs: dict[str, Any] = {}
@@ -205,20 +210,15 @@ def call(
             kwargs["params"] = {k: v for k, v in params.items() if v is not None}
         if body is not None:
             kwargs["json"] = body
-        if timeout is not None:
-            kwargs["timeout"] = timeout
+        kwargs["timeout"] = _waits.timeout(timeout)
         if files is not None:
             kwargs["files"] = dict(files)
             kwargs["data"] = dict(form or {})
         try:
             r = c.request(method, path, **kwargs)
-        except httpx.TransportError:
-            fail(
-                "DAEMON_UNREACHABLE",
-                "daemon not reachable — it may have crashed; check ~/.coffer/logs/daemon.log",
-                ExitCode.DAEMON_UNREACHABLE,
-                as_json=as_json,
-            )
+        except httpx.TransportError as err:
+            code, message, exit_code, details = _transport.classify(err)
+            fail(code, message, exit_code, as_json=as_json, details=details)
         return check(r, as_json=as_json)
 
 

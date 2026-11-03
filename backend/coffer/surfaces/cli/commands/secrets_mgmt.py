@@ -9,6 +9,7 @@ the desktop app after the person's presence check, and importing a key is
 
 from __future__ import annotations
 
+from coffer.surfaces.cli import _waits
 from coffer.surfaces.cli._route_command import RouteCommand, mount
 
 _UI = "Secrets · "
@@ -36,6 +37,7 @@ SPECS = [
         "/secrets/scan",
         _UI + "Find plaintext secrets",
         "Find plaintext secrets in skills and MCP servers (values are never shown).",
+        wait=_waits.NETWORK_S,
     ),
     RouteCommand(
         "secret import",

@@ -74,9 +74,15 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.1 (/Users/you/.coffe
 
 ### "daemon not reachable — it may have crashed"
 
-**Cause.** The CLI found a daemon, then lost the connection mid-request.
+**Cause.** Nothing answered on the daemon's port (`DAEMON_UNREACHABLE`), or the daemon took the request and the connection closed before it answered (`DAEMON_CONNECTION_LOST`, "the daemon closed the connection before answering").
 
 **Fix.** Run `coffer daemon status`. If it prints `not running`, run `coffer daemon start`, then read `daemon.log` for what ended the previous one.
+
+### "the daemon did not answer … within N s"
+
+**Cause.** The daemon is running, but the command stopped waiting before it answered (`CLI_REQUEST_TIMEOUT`, exit 13). Most commands wait 15 s; ones that reach the network wait 90 s, and ones that run git over the network (adding or checking a skill from Git, a sync round) wait 330 s. The operation may still finish.
+
+**Fix.** Check the result before retrying (for example `coffer skill list` or `coffer sync status`), or run the command again with a longer wait: `coffer --request-timeout 600 <command> …`.
 
 ## Agents and tools
 

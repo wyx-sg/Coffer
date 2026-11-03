@@ -29,6 +29,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `--verbose, -v` <span class="cli-chip">option</span> | flag |  | On an error, also show the request behind it (method, path, status) and, for an unexpected one, the traceback. |
+| `--request-timeout` <span class="cli-chip">option</span> | float (1.0-) |  | Seconds to wait for the daemon's answer to each request, replacing the command's own wait (15 s for most commands, longer for ones that reach the network or run git). |
 | `--version` <span class="cli-chip">option</span> | flag |  | Print Coffer's version and exit. |
 | `--install-completion` <span class="cli-chip">option</span> | flag |  | Install completion for the current shell. |
 | `--show-completion` <span class="cli-chip">option</span> | flag |  | Show completion for the current shell, to copy it or customize the installation. |

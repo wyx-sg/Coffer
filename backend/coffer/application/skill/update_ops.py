@@ -80,7 +80,8 @@ async def check(svc: SkillSourceService, skill: Resource) -> SourceStatus:
     status = await _status(svc, skill)
     now = _now()
     stage_id, stage_dir = svc.staging.new_dir()
-    try:
+
+    async def read() -> SourceStatus:
         repo = stage_dir / "repo"
         await svc.git.clone(source.url, repo)
         latest = await svc.git.resolve(repo, source.ref, url=source.url)
@@ -96,7 +97,7 @@ async def check(svc: SkillSourceService, skill: Resource) -> SourceStatus:
                 if await svc.git.has_commit(repo, source.commit)
                 else 0
             )
-        status = status.with_(
+        return status.with_(
             checked_at=now,
             last_success_at=now,
             error=None,
@@ -105,6 +106,9 @@ async def check(svc: SkillSourceService, skill: Resource) -> SourceStatus:
             files_changed=files,
             commits=subjects,
         )
+
+    try:
+        status = await svc.bounded(read())
     except SkillSourceUnreachable as exc:
         status = status.with_(checked_at=now, error=exc.git_message)
     finally:

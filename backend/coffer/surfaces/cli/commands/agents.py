@@ -8,6 +8,7 @@ files and are read with the reader's own tools; the listings are commands.
 
 from __future__ import annotations
 
+from coffer.surfaces.cli import _waits
 from coffer.surfaces.cli._route_command import Q, RouteCommand, mount
 
 A = {"uid": "agent"}
@@ -151,6 +152,7 @@ SPECS = [
         "What importing these entries would register. Body: entries[{agent_uid, name, "
         "source, new_name}].",
         body=True,
+        wait=_waits.NETWORK_S,
     ),
     RouteCommand(
         "agent mcp-import apply",
@@ -160,6 +162,7 @@ SPECS = [
         "Register the entries as Coffer MCP servers. Body as for plan.",
         body=True,
         pending=True,
+        wait=_waits.NETWORK_S,
     ),
     # Plugins.
     RouteCommand(

@@ -110,6 +110,8 @@ Skills → Add skill → From Git → Repository URL, and optionally Branch or t
 
 Coffer 用这台机器自己的 `git` 克隆仓库，把你给出的分支、标签或提交（没给就用默认分支）解析为一个具体的提交，然后按与压缩包相同的规则，在你指定的文件夹里查找技能。像 `https://github.com/acme/agent-skills/tree/main/terraform-plan` 这样的 GitHub 文件夹地址，会被解读为仓库、分支和文件夹。
 
+克隆会保留仓库的历史，但不下载每个文件的每个版本；你指定的文件夹里的文件用一次请求取回，所以大的技能合集也能很快添加。如果 git 仍然报告有取不到的对象，Coffer 会再完整克隆一次，从那份克隆里取文件。一次添加、更新检查或更换来源总共最多 5 分钟，超过就停止并报错说明原因，什么都不写入。
+
 技能被**固定**在它拷贝时所用的那个提交上。仓库变了，它也不会变；见[从仓库更新技能](#update-a-skill-from-its-repository)。
 
 ::: info Coffer 能访问哪些仓库
@@ -451,7 +453,9 @@ Coffer 不通过 MCP 暴露任何技能工具。两个受支持的智能体都�
 
 **智能体看不到某个技能。** 检查技能是否已启用、其生效范围是否包含该智能体（技能的 **生效范围** 按钮）。然后用 **检查副本**，看它的链接是否缺失或被一个外来的文件夹挡住。
 
-**从 Git 添加技能失败。** 对话框会显示 git 自己的报错信息。`could not read Username` 或 `Permission denied (publickey)` 表示这台机器的 git 没有该仓库的凭据：先在终端里确认 `git clone <url>` 能成功。不存在的 ref 或文件夹也会在信息中指出。
+**从 Git 添加技能失败。** 对话框会显示 git 自己的报错信息。`could not read Username` 或 `Permission denied (publickey)` 表示这台机器的 git 没有该仓库的凭据：先在终端里确认 `git clone <url>` 能成功。不存在的 ref 或文件夹也会在信息中指出。`did not finish within 300 s` 表示读取仓库超过了 5 分钟：重试一次，或检查这台机器到仓库主机的网络。
+
+**`coffer skill stage-git` 以 13 退出，报 `CLI_REQUEST_TIMEOUT`。** 守护进程在运行，只是命令停止等待时它还没回答。操作可能仍会完成，暂存的导入会保留一小时：用更长的等待重新运行，`coffer --request-timeout 600 skill stage-git …`。
 
 **压缩包被拒绝。** 信息会列出可能写到压缩包之外的条目、符号链接，或它会超出的大小上限。直接从技能的文件夹重新打一个压缩包。
 

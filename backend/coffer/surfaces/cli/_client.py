@@ -20,6 +20,7 @@ from coffer.infrastructure.daemon.pid_lock import DaemonInfo, read
 from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
 from coffer.infrastructure.daemon.version_skew import skew_warning
 from coffer.infrastructure.vault.home import daemon_json_path
+from coffer.surfaces.cli import _waits
 from coffer.surfaces.cli._options import ExitCode
 
 # How long (seconds) to wait for a spawned daemon to answer. The same budget as
@@ -211,7 +212,7 @@ def client_or_exit(
                 # resource-framework "Audit every lifecycle change").
                 "X-Coffer-Actor": "cli",
             },
-            timeout=15,
+            timeout=_waits.timeout(),
         ),
         info,
     )
@@ -252,13 +253,11 @@ def render_http_error(
         _io.render_failure(code, message, int(exit_code), as_json=False, details=details)
         return exit_code
     if isinstance(err, httpx.TransportError):
-        # Refused, reset, closed without a response or timed out: from the
-        # CLI's side each is the daemon not answering.
-        typer.echo(
-            "daemon not reachable — it may have crashed; check ~/.coffer/logs/daemon.log",
-            err=True,
-        )
-        exit_code = ExitCode.DAEMON_UNREACHABLE
+        # Refused, dropped or not answered in time: each is said as what it is.
+        from coffer.surfaces.cli import _transport
+
+        _code, message, exit_code, _details = _transport.classify(err)
+        typer.echo(message, err=True)
     else:
         typer.echo(f"unexpected error: {err}", err=True)
         exit_code = ExitCode.GENERIC

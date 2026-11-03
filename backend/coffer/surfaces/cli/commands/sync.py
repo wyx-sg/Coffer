@@ -13,7 +13,7 @@ import time
 import typer
 
 from coffer.domain.sync.stops import Answer
-from coffer.surfaces.cli import _io
+from coffer.surfaces.cli import _io, _waits
 from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli._route_command import Q, RouteCommand, mount
 from coffer.surfaces.cli.groups import group
@@ -38,6 +38,7 @@ SPECS = [
         "/sync/run",
         _UI + "Sync now",
         "Run one round now and print how it ended (waits for it).",
+        wait=_waits.GIT_S,
     ),
     RouteCommand(
         "sync continue",
@@ -45,6 +46,7 @@ SPECS = [
         "/sync/continue",
         _UI + "Continue",
         "Continue a round that stopped for you.",
+        wait=_waits.GIT_S,
     ),
     RouteCommand(
         "sync runs",
@@ -75,6 +77,7 @@ SPECS = [
         "/sync/runs/{run_id}/rollback",
         _UI + "a round · Roll back",
         "Roll a round back.",
+        wait=_waits.GIT_S,
     ),
     RouteCommand(
         "sync remote set",
@@ -84,6 +87,7 @@ SPECS = [
         "Set the remote. Body: url, branch, secret_ref, include_secret, enabled, interval_seconds.",
         body=True,
         pending=True,
+        wait=_waits.GIT_S,
     ),
     RouteCommand(
         "sync remote check",
@@ -92,6 +96,7 @@ SPECS = [
         _UI + "Set up · Check",
         "Check a remote before saving it. Body: url, branch, secret_ref.",
         body=True,
+        wait=_waits.GIT_S,
     ),
     RouteCommand(
         "sync remote delete",
@@ -106,6 +111,7 @@ SPECS = [
         "/sync/remote/restore",
         _UI + "Restore from the remote",
         "Rebuild the remote from this machine's vault.",
+        wait=_waits.GIT_S,
     ),
     RouteCommand(
         "sync join-preview",
@@ -114,7 +120,14 @@ SPECS = [
         _UI + "Join · review",
         "What joining the remote's vault would change here.",
     ),
-    RouteCommand("sync join", "POST", "/sync/join", _UI + "Join", "Join the remote's vault."),
+    RouteCommand(
+        "sync join",
+        "POST",
+        "/sync/join",
+        _UI + "Join",
+        "Join the remote's vault.",
+        wait=_waits.GIT_S,
+    ),
     RouteCommand(
         "sync join-choices",
         "GET",
@@ -200,6 +213,7 @@ SPECS = [
         "/sync/hold/confirm",
         _UI + "held · Apply",
         "Apply the held changes.",
+        wait=_waits.GIT_S,
     ),
     RouteCommand(
         "sync hold-restore",
@@ -207,6 +221,7 @@ SPECS = [
         "/sync/hold/restore",
         _UI + "held · Restore",
         "Put back what the held round would delete.",
+        wait=_waits.GIT_S,
     ),
     RouteCommand(
         "sync pending-diff",
@@ -230,6 +245,7 @@ SPECS = [
         "/sync/plaintext/push-anyway",
         _UI + "a plaintext secret · Push anyway",
         "Push although a file holds plaintext.",
+        wait=_waits.GIT_S,
     ),
     RouteCommand(
         "sync machines", "GET", "/sync/machines", _UI + "Machines", "Every machine in the vault."
@@ -263,6 +279,7 @@ SPECS = [
         _UI + "Move the vault",
         "Move the vault's files out of a synchronised folder. Body: to.",
         body=True,
+        wait=_waits.GIT_S,
     ),
 ]
 

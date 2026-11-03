@@ -121,6 +121,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | --- | --- |
 | [`resource-framework-upfront`](resource-framework-upfront.md) | The Resource Framework Is Core Domain, Designed Before the Second Kind |
 | [`command-line-parity-with-the-web-ui`](command-line-parity-with-the-web-ui.md) | Every Web UI and Desktop Operation Has a `coffer` Command Over the Same Route |
+| [`cli-request-wait-budgets`](cli-request-wait-budgets.md) | Each CLI Command Waits as Long as Its Route Needs, and Says Why an Answer Did Not Come |
 | [`kind-plugin-contract`](kind-plugin-contract.md) | A Kind Plugs In as One Frozen Record of Optional Hooks: Validators Before the Write, Reactions After |
 | [`identity-is-the-uid-inside-the-file`](identity-is-the-uid-inside-the-file.md) | A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label |
 | [`names-visible-to-agents-are-fixed`](names-visible-to-agents-are-fixed.md) | Names Visible to Agents Are Fixed |
@@ -226,6 +227,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | --- | --- |
 | [`cross-platform-skill-delivery`](cross-platform-skill-delivery.md) | Skills Reach an Agent as a Directory Link to One Master Folder |
 | [`coffer-ships-its-own-skill`](coffer-ships-its-own-skill.md) | Coffer Ships Its Own Manual as a Skill Resource |
+| [`git-source-partial-clone-prefetch`](git-source-partial-clone-prefetch.md) | A Git Skill's Folder Is Fetched in One Request From a Partial Clone, With One Full-Clone Fallback |
 | [`knowledge-is-plain-files`](knowledge-is-plain-files.md) | Knowledge Is a Directory of Markdown Files, Not an Index |
 | [`tidying-knowledge-is-the-agents-job`](tidying-knowledge-is-the-agents-job.md) | Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change |
 | [`knowledge-is-a-wiki-of-pages-compiled-from-kept-sources`](knowledge-is-a-wiki-of-pages-compiled-from-kept-sources.md) | Knowledge Is a Wiki of Pages Compiled From Kept Sources |

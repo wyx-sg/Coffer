@@ -8,7 +8,7 @@ from typing import Any
 
 import typer
 
-from coffer.surfaces.cli import _io
+from coffer.surfaces.cli import _io, _waits
 from coffer.surfaces.cli._options import ExitCode
 
 GROUPS = "/custom-tools"
@@ -16,6 +16,11 @@ GROUPS = "/custom-tools"
 
 def group_path(name: str) -> str:
     return f"{GROUPS}/{name}"
+
+
+def send_out(path: str, body: dict[str, Any], *, as_json: bool) -> Any:
+    """A test or preview: it calls the tool's API, so it waits as a network call does."""
+    return _io.call("POST", path, as_json=as_json, body=body, timeout=_waits.NETWORK_S)
 
 
 def read_group(name: str, *, as_json: bool) -> dict[str, Any]:
@@ -202,6 +207,7 @@ __all__ = [
     "pairs",
     "read_group",
     "rows_of",
+    "send_out",
     "set_rules",
     "show_group",
     "show_preview",

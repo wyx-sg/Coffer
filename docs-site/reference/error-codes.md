@@ -339,7 +339,7 @@ is printed on standard error as `{"error": {"code", "message", "details"}, "exit
 | `0` | OK | Success. |
 | `1` | Generic | Any other failure, including `FEATURE_DISABLED` (switch the feature on in **Settings → Features**). |
 | `2` | Invalid usage | A bad argument or option combination. |
-| `3` | Daemon unreachable | The daemon could not be started or stopped answering; the CLI suggests checking `~/.coffer/logs/daemon.log`. |
+| `3` | Daemon unreachable | The daemon could not be started, nothing accepted the connection (`DAEMON_UNREACHABLE`), or the connection closed before it answered (`DAEMON_CONNECTION_LOST`); the CLI suggests checking `~/.coffer/logs/daemon.log`. A daemon that is running but slow to answer exits `13` instead. |
 | `4` | Not found | The daemon answered `404`. |
 | `5` | Conflict | The daemon answered `409`. |
 | `6` | Invalid input | The daemon answered `400` or `422`, or the command's own input did not parse (`CLI_INVALID_INPUT`). A custom-tool test whose arguments break the schema exits here, with one error per field. |
@@ -349,7 +349,7 @@ is printed on standard error as `{"error": {"code", "message", "details"}, "exit
 | `10` | Waiting for git | The daemon is running but waits for git: none was found, or it is older than 2.40. The command printed why and a prompt for your agent before sending anything. See [Coffer needs git](/guides/troubleshooting#coffer-needs-git). |
 | `11` | Presence not confirmed | A step handed to the desktop app's presence check (`coffer approval approve`, `coffer secret reveal`, `coffer secret backup-key`) was cancelled, failed or timed out, or the daemon refused the grant (`PRESENCE_GRANT_INVALID`). Every approval stays pending. |
 | `12` | Desktop app unavailable | The step needs the desktop app, which is not running and could not be started here (no app, not a Mac, or `--no-launch`): `CLI_APP_UNAVAILABLE`. Nothing was approved. Open the app and run the command again. |
-| `13` | Wait timed out | A wait ended before the operation finished: `coffer sync wait` ran past its `--timeout` (`CLI_WAIT_TIMEOUT`). The round may still be running; check `coffer sync status`. |
+| `13` | Wait timed out | A wait ended before the operation finished: `coffer sync wait` ran past its `--timeout` (`CLI_WAIT_TIMEOUT`), or the daemon did not answer a request within the command's wait (`CLI_REQUEST_TIMEOUT`). The operation may still be running; check its result, or pass `coffer --request-timeout <seconds>`. |
 
 ### Codes the command line sets
 
@@ -360,7 +360,9 @@ Besides the daemon's codes, which pass through unchanged, a command names these 
 | `CLI_INVALID_INPUT` | `6` | The command's own input is not valid: `--data` or `--args` is not JSON, `@file` cannot be read, `--set` is not `key=value`, or a flag's value is malformed. Nothing was sent. |
 | `CLI_APP_UNAVAILABLE` | `12` | The desktop app is not running and could not be started. |
 | `CLI_WAIT_TIMEOUT` | `13` | `coffer sync wait` ran past its `--timeout` before the operation finished. |
-| `DAEMON_UNREACHABLE` | `3` | The daemon could not be started, or stopped answering mid-request. |
+| `CLI_REQUEST_TIMEOUT` | `13` | The daemon is running but did not answer within the command's wait: 15 s for most commands, 90 s for one that reaches the network, 330 s for one that runs git over the network, or the `--request-timeout` given. `details` carry `method`, `path` and `waited_s`. The operation may still finish. |
+| `DAEMON_UNREACHABLE` | `3` | The daemon could not be started, or nothing accepted the connection. |
+| `DAEMON_CONNECTION_LOST` | `3` | The daemon took the request and the connection closed before it answered; it may have restarted or crashed. `details` carry `method` and `path`. |
 | `DAEMON_WAITING_FOR_GIT` | `10` | The daemon is running but waits for git. `details.handoff` carries the prompt for your agent. |
 | `CLI_DESKTOP_REQUEST_FAILED` | `1` | The desktop app could not carry out a request handed to it: `coffer app update …`, or `coffer update` / `coffer uninstall` when Coffer runs as the desktop app. |
 | `CLI_UPDATE_SOURCE` | `2` | `coffer update` on a source checkout: upgrade it with `git pull` instead. |

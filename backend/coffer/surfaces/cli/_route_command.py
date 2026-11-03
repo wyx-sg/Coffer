@@ -71,6 +71,10 @@ class RouteCommand:
     fixed_query: Mapping[str, str] = field(default_factory=dict)
     #: Body fields always sent, under what ``--data``/``--set`` give.
     fixed_body: Mapping[str, Any] = field(default_factory=dict)
+    #: How long to wait for the answer, in seconds, when the route reaches the
+    #: network or runs git (``_waits.NETWORK_S``, ``_waits.GIT_S``); ``None``
+    #: is the quick wait every other command has.
+    wait: float | None = None
 
 
 def _py(name: str) -> str:
@@ -169,7 +173,9 @@ def build(spec: RouteCommand) -> Callable[..., None]:
             given = kwargs.get(_py(q.name))
             params_out[q.name] = (given or None) if q.flag else given
         params_out.update(spec.fixed_query)
-        answer = _io.call(spec.method, route, as_json=as_json, params=params_out, body=body)
+        answer = _io.call(
+            spec.method, route, as_json=as_json, params=params_out, body=body, timeout=spec.wait
+        )
         _io.emit(answer, as_json=as_json, human=_human(spec))
         if spec.pending:
             _io.report_pending(answer, as_json=as_json)
