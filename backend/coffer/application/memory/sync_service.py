@@ -48,7 +48,9 @@ from coffer.domain.memory.reader import MemoryReader
 from coffer.domain.memory.sync_plan import PREVIEW_THRESHOLD, AgentPlan, CopyOp
 from coffer.infrastructure.memory import checkouts as checkout_map
 from coffer.infrastructure.memory.hub_store import HubStore
+from coffer.infrastructure.memory.sorted_store import OUTCOME_MEMORY, SortedRecord, SortedStore
 from coffer.infrastructure.memory.sync_ledger import Ledger, LedgerStore, PreviewStore
+from coffer.infrastructure.memory.task_material import is_task_material
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +70,7 @@ class AuditPort(Protocol):
 AgentLister = Callable[[], Awaitable[Sequence[AgentSource]]]
 
 
-def _now() -> str:
+def now_iso() -> str:
     return datetime.now(tz=UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
@@ -94,7 +96,8 @@ class MemorySyncService:
         hub: HubStore | None = None,
         ledger: LedgerStore | None = None,
         previews: PreviewStore | None = None,
-        now: Callable[[], str] = _now,
+        sorted_store: SortedStore | None = None,
+        now: Callable[[], str] = now_iso,
         threshold: int = PREVIEW_THRESHOLD,
         stop_automatic: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
@@ -108,10 +111,14 @@ class MemorySyncService:
         self.hub = hub or HubStore()
         self.ledger = ledger or LedgerStore()
         self.previews = previews or PreviewStore()
+        self.sortings = sorted_store or SortedStore(self.hub.writer_factory)
         self._now = now
         self._threshold = threshold
         self._lock = asyncio.Lock()
         self._stop_automatic = stop_automatic
+
+    def now(self) -> str:
+        return self._now()
 
     @property
     def running(self) -> bool:
@@ -197,6 +204,7 @@ class MemorySyncService:
         if published.changes:
             self.hub.apply(published.changes, _summary(published.changes), actor)
             hub = self.hub.entries()
+        self.sortings.prune(hub.keys(), actor)
 
         planned = self._plan(agents, hub, ledger, report)
         ops = [op for p in planned for op in p.plan.ops]
@@ -268,6 +276,7 @@ class MemorySyncService:
             for d in checkout_map.recorded_dirs(local.agent_type, local.config_dir)
         ]
         here = checkout_map.checkouts(dirs)
+        stay_home = task_material_ids(hub, self.sortings.records())
         planned: list[_Planned] = []
         for local in locals_:
             writer = self._writers.get(local.agent_type)
@@ -286,6 +295,7 @@ class MemorySyncService:
                     checkouts=here,
                     home=self._home(),
                     codex_imports_claude=bool(ledger.codex_imports_claude),
+                    stay_home=stay_home,
                 )
                 report.held_back[spot.agent_type] = targets.held_back
                 planned.append(
@@ -305,6 +315,28 @@ def report_key(local: LocalAgent) -> str:
     if local.location_name:
         return f"{local.agent_type}#{local.location_name}"
     return local.agent_type
+
+
+def task_material_ids(
+    hub: Mapping[str, HubEntry], sorted_records: Mapping[str, SortedRecord]
+) -> frozenset[str]:
+    """The entries that reach only their own agent: task material not sorted
+    back into memory (spec memory "Keep task material with its own agent until
+    it is sorted")."""
+    return frozenset(
+        entry_id
+        for entry_id, entry in hub.items()
+        if is_task_material(entry)
+        and getattr(sorted_records.get(entry_id), "outcome", "") != OUTCOME_MEMORY
+    )
+
+
+def to_sort_ids(
+    hub: Mapping[str, HubEntry], sorted_records: Mapping[str, SortedRecord]
+) -> list[str]:
+    """The task material no one has sorted yet, newest first."""
+    waiting = [e for e in hub.values() if is_task_material(e) and e.id not in sorted_records]
+    return [e.id for e in sorted(waiting, key=lambda e: e.updated_at, reverse=True)]
 
 
 def planned_globals(planned: Sequence[_Planned]) -> dict[str, int]:

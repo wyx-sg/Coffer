@@ -7,7 +7,8 @@
 // below shows each memory: its title and one-line description, its type, the
 // agent and machine it came from, and when it last changed. A copy state shows
 // on a row only when it is worth a look (waiting for the next sync, edited or
-// removed by the agent's own curation); a written copy says nothing. Search,
+// removed by the agent's own curation); a written copy says nothing. A memory
+// its agent filed as task notes, not yet sorted, says "To sort". Search,
 // and source filter the list (the table's own toolbar). A row opens the memory in the drawer.
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -36,12 +37,17 @@ interface Props {
 }
 
 /** What a row calls out about its copies: one quiet word per agent. */
-function Notes({ copies }: { copies: Record<string, string> }) {
+function Notes({ copies, toSort }: { copies: Record<string, string>; toSort: boolean }) {
   const { t } = useTranslation();
   const notes = notableCopies(copies);
-  if (notes.length === 0) return null;
+  if (notes.length === 0 && !toSort) return null;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-0.5">
+      {toSort ? (
+        <StatusWord tone="off" className="text-2xs">
+          {t("memory.toSort.badge")}
+        </StatusWord>
+      ) : null}
       {notes.map(([agent, state]) => (
         <StatusWord key={agent} tone={state === "pending" ? "off" : "warn"} className="text-2xs">
           {t(`memory.note.${state}`, { agent: agentTypeLabel(agent) })}
@@ -79,7 +85,7 @@ export function MemoryList({
           {e.description ? (
             <TruncatedText text={e.description} className="text-xs text-text-muted" />
           ) : null}
-          <Notes copies={e.copies} />
+          <Notes copies={e.copies} toSort={e.to_sort} />
         </div>
       ),
     },

@@ -1,5 +1,5 @@
 """The port each agent's memory writer implements (spec memory "Write the hub
-into Claude Code's native memory", "Write the hub into Codex's memory
+into Claude Code as text it loads", "Write the hub into Codex's memory
 extension").
 
 Two agents, two writers, written as two ("Reintroduce no retired memory

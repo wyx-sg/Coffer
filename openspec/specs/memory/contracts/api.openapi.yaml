@@ -151,13 +151,13 @@ paths:
     get:
       operationId: list_entries_api_v1_memory_sync_entries_get
       parameters:
-      - description: A project key; empty for global memories.
+      - description: A project key; empty or `global` for global memories.
         in: query
         name: project
         required: false
         schema:
           default: ''
-          description: A project key; empty for global memories.
+          description: A project key; empty or `global` for global memories.
           title: Project
           type: string
       - in: header
@@ -346,6 +346,102 @@ paths:
       summary: Sync Now
       tags:
       - memory
+  /api/v1/memory/sync/sort/handoff:
+    post:
+      description: |-
+        **Sort into knowledge**: the prompt that asks Claude Code, in a terminal
+        the person watches, to sort the waiting task material.
+      operationId: sort_handoff_api_v1_memory_sync_sort_handoff_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SortHandoffOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Sort Handoff
+      tags:
+      - memory
+  /api/v1/memory/sync/sorted:
+    post:
+      description: |-
+        Record where the person's agent sorted memories; 404 for an id not in
+        the hub.
+      operationId: mark_sorted_api_v1_memory_sync_sorted_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SortedIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SortedOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Mark Sorted
+      tags:
+      - memory
   /api/v1/memory/sync/state:
     get:
       operationId: sync_state_api_v1_memory_sync_state_get
@@ -378,6 +474,41 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Sync State
+      tags:
+      - memory
+  /api/v1/memory/sync/to-sort:
+    get:
+      description: The task material no one has sorted yet, newest first.
+      operationId: to_sort_api_v1_memory_sync_to_sort_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ToSortOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: To Sort
       tags:
       - memory
   /api/v1/memory/sync/undo:
@@ -643,6 +774,10 @@ components:
         title:
           title: Title
           type: string
+        to_sort:
+          default: false
+          title: To Sort
+          type: boolean
         type:
           title: Type
           type: string
@@ -660,6 +795,7 @@ components:
       - created_at
       - updated_at
       - copies
+      - to_sort
       title: HubEntryOut
       type: object
     MemorySyncReportOut:
@@ -720,6 +856,10 @@ components:
         running:
           title: Running
           type: boolean
+        to_sort:
+          default: 0
+          title: To Sort
+          type: integer
       required:
       - running
       - last_synced_at
@@ -730,7 +870,53 @@ components:
       - projects
       - global_memories
       - machine
+      - to_sort
       title: MemorySyncStateOut
+      type: object
+    SortHandoffOut:
+      description: '**Sort into knowledge**: the prompt the page starts Claude Code with.'
+      properties:
+        handoff:
+          $ref: '#/components/schemas/HandoffOut'
+      required:
+      - handoff
+      title: SortHandoffOut
+      type: object
+    SortedIn:
+      properties:
+        ids:
+          items:
+            type: string
+          minItems: 1
+          title: Ids
+          type: array
+        outcome:
+          enum:
+          - knowledge
+          - skill
+          - memory
+          - drop
+          title: Outcome
+          type: string
+        where:
+          default: ''
+          title: Where
+          type: string
+      required:
+      - ids
+      - outcome
+      title: SortedIn
+      type: object
+    SortedOut:
+      properties:
+        ids:
+          items:
+            type: string
+          title: Ids
+          type: array
+      required:
+      - ids
+      title: SortedOut
       type: object
     SyncAgentOut:
       properties:
@@ -815,6 +1001,43 @@ components:
       - agents
       - checked_out
       title: SyncProjectOut
+      type: object
+    ToSortEntryOut:
+      properties:
+        id:
+          title: Id
+          type: string
+        origin_agent:
+          title: Origin Agent
+          type: string
+        project:
+          default: ''
+          title: Project
+          type: string
+        title:
+          title: Title
+          type: string
+        updated_at:
+          title: Updated At
+          type: string
+      required:
+      - id
+      - title
+      - project
+      - origin_agent
+      - updated_at
+      title: ToSortEntryOut
+      type: object
+    ToSortOut:
+      properties:
+        entries:
+          items:
+            $ref: '#/components/schemas/ToSortEntryOut'
+          title: Entries
+          type: array
+      required:
+      - entries
+      title: ToSortOut
       type: object
     WriterStatusOut:
       properties:

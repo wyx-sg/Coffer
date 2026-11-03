@@ -120,6 +120,11 @@ class HubStore:
     def __init__(self, writer: Callable[[], VaultWriter] = vault_writer) -> None:
         self._writer = writer
 
+    @property
+    def writer_factory(self) -> Callable[[], VaultWriter]:
+        """The vault writer this store commits through, for a sibling store."""
+        return self._writer
+
     def root(self) -> pathlib.Path:
         return self._writer().repo.root / MEMORY
 

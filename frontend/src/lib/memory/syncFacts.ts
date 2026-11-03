@@ -110,7 +110,9 @@ export function parseSummary(raw: Record<string, unknown>): SyncSummary {
 const COPY_STATES = [
   "origin",
   "written",
+  "block",
   "rules",
+  "stays_home",
   "pending",
   "held_back",
   "deferred",
@@ -120,9 +122,12 @@ const COPY_STATES = [
 export type CopyState = (typeof COPY_STATES)[number];
 
 const COPY_TONE: Record<CopyState, StatusTone> = {
-  // Written into the agent, as a copy or into Claude Code's rules file.
+  // Written into the agent: a copy, or text in Claude Code's project block or rules file.
   written: "ok",
+  block: "ok",
   rules: "ok",
+  // Task notes stay with the agent that filed them until they are sorted.
+  stays_home: "off",
   // Nothing to do, or the agent's own business: none of these is a problem.
   origin: "off",
   pending: "off",

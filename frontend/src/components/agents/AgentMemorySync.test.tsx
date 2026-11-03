@@ -56,6 +56,7 @@ function state(agents: SyncAgent[]): MemorySyncState {
     preview: null,
     projects: [],
     running: false,
+    to_sort: 0,
   };
 }
 
@@ -132,6 +133,13 @@ describe("AgentMemorySync", () => {
       ),
     );
     expect(api.curationHandoff).toHaveBeenCalledWith("claude_code");
+  });
+
+  test("Claude Code with no copies says its memories go in as text", async () => {
+    vi.mocked(api.getSyncState).mockResolvedValue(state([agent("claude_code"), agent("codex")]));
+    renderSection("claude_code");
+    const section = await screen.findByTestId("memory-sync-section");
+    expect(section).toHaveTextContent("As text in each project's MEMORY.md and a rules file");
   });
 
   test("Codex is not offered Curate now: it consolidates on its own", async () => {

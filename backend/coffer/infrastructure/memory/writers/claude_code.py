@@ -1,25 +1,24 @@
-"""Writes hub entries into Claude Code's own memory (spec memory "Write the hub
-into Claude Code's native memory", "Write global memories into a Claude Code
-rules file").
+"""Writes hub entries into Claude Code as text it loads (spec memory "Write the
+hub into Claude Code as text it loads", ADR
+claude-code-reads-other-agents-memories-as-text).
 
-- **Project memories** go to ``<config_dir>/projects/<slug>/memory/``, the
-  directory Claude Code itself keeps for a repository root (``slug`` is
+Claude Code loads a project's ``MEMORY.md`` (its first 200 lines) in every
+session in that project, and every file under ``<config_dir>/rules/`` in every
+session; it opens a memory's own file only when the model decides to, which in
+practice it does not. So Coffer writes no file per memory:
+
+- **Project memories** go, as text, into a marked block at the end of the
+  project's ``MEMORY.md`` in ``<config_dir>/projects/<slug>/memory/``, the
+  directory Claude Code keeps for a repository root (``slug`` is
   :func:`coffer.domain.agent.native_memory.encode_slug` of the root, shared by
-  every worktree of it), as one topic file per memory, ``coffer_<slug>.md``,
-  in Claude Code's own frontmatter (``name``, ``description``,
-  ``metadata.type``) plus a ``coffer:`` block naming the hub entry.
-- **The index**: one line per copy inside a marked block at the end of that
-  directory's ``MEMORY.md``, newest first, at most :data:`BLOCK_CAP` lines and
-  then one line naming the rest. Only the bytes between the markers change;
-  the file is backed up before each change.
-- **Global memories** are written the same way into a project folder of their
-  own, :data:`GLOBAL_ROOT`'s, which no session opens by itself; so
-  ``<config_dir>/rules/coffer-memory.md``, a file Coffer owns that Claude Code
-  loads in every session, says where they are. It lists the standing memories
-  (about the person, or how they work) one short line each, and names the task
-  groups the rest were learned in; that folder's ``MEMORY.md`` block lists every
-  memory under its group, uncapped, for a session to read when a topic matches.
-  The rules file never holds their text.
+  every worktree of it). Only the bytes between the markers change; the file
+  is backed up before each change.
+- **Global memories** go, as text, into ``<config_dir>/rules/coffer-memory.md``,
+  a file Coffer owns.
+
+Copies earlier builds wrote (``coffer_*.md`` files, and a ``-coffer-global``
+project) are no longer targets, so the first sync removes the ones still as
+written and empties their blocks.
 """
 
 from __future__ import annotations
@@ -37,23 +36,21 @@ from coffer.domain.memory.native_writer import (
     WriteLocation,
     WriterStatus,
 )
-from coffer.domain.memory.sync_plan import STATE_WRITTEN, CopyRecord, Target
+from coffer.domain.memory.sync_plan import CopyRecord, Target
 from coffer.infrastructure.memory import native_files
 from coffer.infrastructure.memory.frontmatter import render_frontmatter
 from coffer.infrastructure.memory.writers.claude_code_lines import (
-    BLOCK_CAP,
     COPY_PREFIX,
     INDEX_NAME,
-    global_index_lines,
-    index_lines,
+    block_lines,
     render_rules,
 )
 
 RULES_NAME = "coffer-memory.md"
 BLOCK_BEGIN = "<!-- coffer:memory-sync:begin -->"
 BLOCK_END = "<!-- coffer:memory-sync:end -->"
-#: The pseudo project global memories are filed under: Claude Code names a
-#: project's memory folder after its root, and no session runs here.
+#: The pseudo project earlier builds filed global memories under; its copies
+#: and block are removed by the first sync.
 GLOBAL_ROOT = "/coffer-global"
 
 
@@ -113,7 +110,8 @@ class ClaudeCodeMemoryWriter:
         return WriterStatus(STATUS_OK, config_dir)
 
     def wants(self, target: Target) -> bool:
-        return True
+        # Every memory reaches Claude Code through a block or the rules file.
+        return False
 
     def path_for(self, config_dir: str, target: Target, taken: set[str]) -> str:
         folder = memory_dir(config_dir, target.root or GLOBAL_ROOT)
@@ -156,29 +154,26 @@ class ClaudeCodeMemoryWriter:
         global_targets: Sequence[Target],
     ) -> list[AuxWrite]:
         out: list[AuxWrite] = []
-        # Every folder holding a block, so one whose last copy went is emptied.
-        by_dir: dict[pathlib.Path, list[tuple[str, CopyRecord]]] = {
+        # Every folder holding a block, so one whose last memory went is emptied.
+        by_dir: dict[pathlib.Path, list[Target]] = {
             folder: [] for folder in _block_folders(config_dir)
         }
-        for path, rec in copies.items():
-            by_dir.setdefault(pathlib.Path(path).parent, [])
-            if rec.state == STATE_WRITTEN and rec.entry in targets:
-                by_dir[pathlib.Path(path).parent].append((path, rec))
-        global_folder = memory_dir(config_dir, GLOBAL_ROOT)
-        for folder, live in sorted(by_dir.items()):
+        everywhere: list[Target] = []
+        for target in global_targets:
+            if target.root:
+                by_dir.setdefault(memory_dir(config_dir, target.root), []).append(target)
+            else:
+                everywhere.append(target)
+        for folder, held in sorted(by_dir.items()):
             index = folder / INDEX_NAME
             current = native_files.read(index) or ""
-            if folder == global_folder:
-                lines = global_index_lines(live, targets)
-            else:
-                lines = index_lines(live, targets)
+            lines = block_lines(held, held[0].entry.project) if held else []
             new = replace_block(current, lines)
             if new != current:
                 out.append(AuxWrite(str(index), new or None, backup=bool(current)))
         rules = rules_path(config_dir)
-        live_global = by_dir.get(global_folder, [])
-        if live_global:
-            out.append(AuxWrite(str(rules), render_rules(global_folder, live_global, targets)))
+        if everywhere:
+            out.append(AuxWrite(str(rules), render_rules(everywhere)))
         elif rules.exists():
             out.append(AuxWrite(str(rules), None))
         return out
@@ -211,7 +206,6 @@ def _block_folders(config_dir: str) -> list[pathlib.Path]:
 
 __all__ = [
     "BLOCK_BEGIN",
-    "BLOCK_CAP",
     "BLOCK_END",
     "COPY_PREFIX",
     "RULES_NAME",

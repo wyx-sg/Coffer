@@ -21,6 +21,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
+import { AgentMemoryCopies as Copies } from "@/components/agents/AgentMemoryCopies";
 import { CodexImportSetting } from "@/components/memory/CodexImportSetting";
 import { RelativeTime } from "@/components/RelativeTime";
 import { StatusWord } from "@/components/status/StatusWord";
@@ -131,64 +132,6 @@ function EnableCuration({ agent }: { agent: SyncAgent }) {
         }
       />
     </div>
-  );
-}
-
-type Writer = SyncAgent["writer"];
-type CopyCounts = SyncAgent["copies"];
-
-/** What Coffer holds in one place it writes into, or why it cannot write there. */
-function CopiesIn({ writer, copies }: { writer: Writer; copies: CopyCounts }) {
-  const { t } = useTranslation();
-  if (writer.state !== "ok") {
-    return (
-      <div className="flex flex-col gap-0.5">
-        <StatusWord tone={writer.state === "off" ? "off" : "warn"}>
-          {t(`memory.agents.writer.${writer.state === "off" ? "off" : "blocked"}`)}
-        </StatusWord>
-        <span className="text-xs text-text-muted [overflow-wrap:anywhere]">
-          {[writer.reason, writer.path && abbreviateHomePath(writer.path)]
-            .filter(Boolean)
-            .join(" · ")}
-        </span>
-      </div>
-    );
-  }
-  const edited = copies.edited ?? 0;
-  const removed = copies.removed ?? 0;
-  const byAgent = [
-    edited > 0 ? t("memory.agents.edited", { count: edited }) : null,
-    removed > 0 ? t("memory.agents.removed", { count: removed }) : null,
-  ].filter(Boolean);
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-sm tabular-nums">
-        {t("memory.agents.written", { count: copies.written ?? 0 })}
-      </span>
-      {byAgent.length > 0 ? (
-        <span className="text-xs text-text-muted">{byAgent.join(" · ")}</span>
-      ) : null}
-    </div>
-  );
-}
-
-/** The copies: one line per memory folder when the agent has more than one
- *  (Codex's `memories/` and `memories_v2/`), each with its own state, so a
- *  folder Coffer cannot write into shows beside the ones it can. */
-function Copies({ agent }: { agent: SyncAgent }) {
-  const locations = agent.locations ?? [];
-  if (locations.length <= 1) return <CopiesIn writer={agent.writer} copies={agent.copies} />;
-  return (
-    <ul className="flex flex-col gap-2" data-testid="memory-sync-locations">
-      {locations.map((loc) => (
-        <li key={loc.path} className="flex flex-col gap-0.5">
-          <span className="font-mono text-xs text-text-muted [overflow-wrap:anywhere]">
-            {abbreviateHomePath(loc.path)}
-          </span>
-          <CopiesIn writer={loc.writer} copies={loc.copies ?? {}} />
-        </li>
-      ))}
-    </ul>
   );
 }
 

@@ -298,7 +298,7 @@ Coffer 从不写 Claude Code 自己的清单文件。当 `claude` CLI 不在 `PA
 - **Claude Code：** 每个项目一个库，位于 `<config_dir>/projects/<slug>/memory/`，标注真实的项目目录。
 - **Codex：** 全局的 `<config_dir>/memories/MEMORY.md`，按它把任务组路由到的项目拆成每项目一行；v2 记忆是 `<config_dir>/memories_v2/memory_summary.md`，按其中列出的工作所在的项目每项目一行。
 
-打开一行会在文件树里显示该库的文件，并带只读预览。开启[记忆同步](/zh/guides/memory)时，这些库里还有 Coffer 从你其他智能体写入的副本：Claude Code 是 `coffer_*.md` 文件和 `MEMORY.md` 里的一个标记区块，Codex 是它每个记忆文件夹里的 `extensions/coffer/`。Coffer 同步了什么、每份副本写到了哪里，在**记忆**页上查看。
+打开一行会在文件树里显示该库的文件，并带只读预览。开启[记忆同步](/zh/guides/memory)时，这些库里还有 Coffer 从你其他智能体写入的内容：Claude Code 是 `MEMORY.md` 里的一个标记区块（全局记忆写在 `~/.claude/rules/coffer-memory.md`），Codex 是它每个记忆文件夹里的 `extensions/coffer/`。Coffer 同步了什么、每份副本写到了哪里，在**记忆**页上查看。
 
 **会话** tab 列出智能体自己的会话——你在终端或应用里跑的，以及[消息渠道](/zh/guides/channels)发起的——带标题、智能体、工作目录和最近活动时间。Coffer 向智能体自己要这份列表（Claude Code 的会话列表，Codex 的 `thread/list`），不解析智能体的文件。搜索匹配标题和目录。属于某个消息渠道对话的会话还会显示它的消息渠道，轮次运行时显示**运行中**，并带行内**停止**。
 

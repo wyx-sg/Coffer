@@ -12,7 +12,7 @@ ever report its own error.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 from coffer.application.agent.attention import AgentAttentionSource
 from coffer.application.agent.auto_detect import AutoDetectService
@@ -21,6 +21,7 @@ from coffer.application.attention import AttentionSource
 from coffer.application.channel.attention import ChannelAttentionSource
 from coffer.application.channel.service import ChannelService
 from coffer.application.mcp.attention import McpAttentionSource
+from coffer.application.memory.attention import MemoryAttentionSource
 from coffer.application.provider.attention import HealthPort, ProviderAttentionSource
 from coffer.application.resource_service import ResourceService
 from coffer.application.secret.attention import PendingApprovalsPort, SecretAttentionSource
@@ -48,6 +49,7 @@ def build_attention_sources(
     protections_on: Callable[[], bool] | None = None,
     approvals: PendingApprovalsPort | None = None,
     provider_health: HealthPort | None = None,
+    memory_to_sort: Callable[[], Awaitable[int]] | None = None,
 ) -> list[AttentionSource]:
     """Every kind's source, in the order the Overview groups them."""
     sources: list[AttentionSource] = []
@@ -79,6 +81,8 @@ def build_attention_sources(
         sources.append(SyncAttentionSource(sync=sync_service))
     if cli_service is not None:
         sources.append(CliAttentionSource(cli_service))
+    if memory_to_sort is not None:
+        sources.append(MemoryAttentionSource(memory_to_sort))
     if protections_on is not None:
         sources.append(
             SecretAttentionSource(
@@ -98,6 +102,14 @@ class _LiveApprovals:
         from coffer.surfaces.http.secret_boundary_wiring import get_secret_boundary
 
         return get_secret_boundary().list(status=status)
+
+
+async def _memory_to_sort() -> int:
+    """How many memories wait to be sorted; 0 while the memory sync is not wired."""
+    from coffer.surfaces.http.memory.sync_dependencies import get_sync_view_optional
+
+    view = get_sync_view_optional()
+    return 0 if view is None else len(await view.to_sort())
 
 
 def lifespan_attention_sources(
@@ -132,6 +144,7 @@ def lifespan_attention_sources(
         protections_on=lambda: not get_secret_boundary().off_by_choice(),
         approvals=_LiveApprovals(),
         provider_health=get_provider_health_service_optional(),
+        memory_to_sort=_memory_to_sort,
     )
 
 

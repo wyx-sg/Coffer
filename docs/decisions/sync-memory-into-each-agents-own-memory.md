@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-10-09
 **Deciders**: Yuxing Wu
-**Related**: [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md), design principle [Pull, not push](../../docs-site/architecture/design-principles.md#pull-not-push), research note [agent memory](../research/agent-memory.md), OpenSpec change `sync-memory-into-agents`
+**Related**: [Claude Code Reads Other Agents' Memories as Text It Loads](claude-code-reads-other-agents-memories-as-text.md), [Memory Is About the Person, Knowledge Is About the World](memory-is-about-the-person-knowledge-is-about-the-world.md), [Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change](tidying-knowledge-is-the-agents-job.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md), design principle [Pull, not push](../../docs-site/architecture/design-principles.md#pull-not-push), research note [agent memory](../research/agent-memory.md), OpenSpec change `sync-memory-into-agents`
 
 ## Context
 
@@ -120,14 +120,15 @@ into a session itself.**
    the one it came from on the machine it came from. A project's entries are
    written only where the project is checked out on that machine; `global`
    entries are written everywhere.
-   - **Claude Code**: one topic file per memory, `coffer_<slug>.md`, in the
-     project's memory directory (created when missing), in Claude Code's own
-     frontmatter format plus a `coffer:` provenance block; and one line per
-     copy inside a marked block of that directory's `MEMORY.md`
-     (`<!-- coffer:memory-sync:begin -->` … `end`), capped at 30 lines, newest
-     first, the last line pointing at the rest. Global memories go to
+   - **Claude Code**: the text Claude Code loads by itself, never a file per
+     memory: a project's memories in a marked block of that project's
+     `MEMORY.md` (`<!-- coffer:memory-sync:begin -->` … `end`), global ones in
      `~/.claude/rules/coffer-memory.md`, a file Coffer owns, which Claude Code
-     loads in every session. `MEMORY.md` is backed up before Coffer changes it.
+     loads in every session; each bounded. `MEMORY.md` is backed up before
+     Coffer changes it. (Rewritten 2026-11-03 by
+     [Claude Code Reads Other Agents' Memories as Text It Loads](claude-code-reads-other-agents-memories-as-text.md);
+     the first design wrote one `coffer_<slug>.md` topic file per memory, which
+     no session opened.)
    - **Codex**: one resource per memory under
      `~/.codex/memories/extensions/coffer/resources/`, with no timestamp prefix
      (Codex prunes timestamp-named resources after seven days, which it would
@@ -142,7 +143,8 @@ into a session itself.**
    then on: Coffer stops updating it and does not recreate it.
 5. **Echo.** A copy Coffer wrote is recognised when read back — by its file
    name and `coffer:` block on Claude Code, by the `[via Coffer]` tag on Codex
-   — and never becomes a hub entry. When an agent folds a copy into a memory of
+   — and never becomes a hub entry. Claude Code's marked block and rules file
+   are Coffer's own and are not read back. When an agent folds a copy into a memory of
    its own, that memory is the agent's and syncs like any other; to keep
    rewording from circulating, a changed source whose added text is already
    covered by what Coffer delivered to that agent updates the hub entry's

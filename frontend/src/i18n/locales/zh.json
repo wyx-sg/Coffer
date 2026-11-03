@@ -1004,7 +1004,13 @@
       "memory_curation_requested": "请一个智能体整理它自己的记忆",
       "memory_curation_requested_agent": "请 {{agent}} 整理它自己的记忆",
       "memory_curation_enabled": "打开了一个智能体自己的记忆整理",
-      "memory_curation_enabled_agent": "打开了 {{agent}} 自己的记忆整理"
+      "memory_curation_enabled_agent": "打开了 {{agent}} 自己的记忆整理",
+      "memory_sort_requested": "请 Claude Code 把任务笔记从记忆里整理出去",
+      "memory_sort_requested_count_one": "请 Claude Code 整理 {{count}} 条任务笔记",
+      "memory_sort_requested_count_other": "请 Claude Code 整理 {{count}} 条任务笔记",
+      "memory_sorted": "记录了记忆的整理结果",
+      "memory_sorted_count_one": "记录了 {{count}} 条记忆整理到{{outcome}}",
+      "memory_sorted_count_other": "记录了 {{count}} 条记忆整理到{{outcome}}"
     },
     "capType": {
       "tool": "工具",
@@ -3587,6 +3593,7 @@
       "edited_other": "{{count}} 份被智能体修改",
       "removed_one": "{{count}} 份被智能体移除",
       "removed_other": "{{count}} 份被智能体移除",
+      "asText": "以原文写进各项目的 MEMORY.md 和一个规则文件",
       "writer": {
         "off": "未写入：它的记忆已关闭",
         "blocked": "未写入"
@@ -3712,7 +3719,9 @@
       "held_back": "暂缓",
       "deferred": "由 Codex 导入",
       "edited": "被智能体修改",
-      "removed": "被智能体移除"
+      "removed": "被智能体移除",
+      "block": "在项目记忆中",
+      "stays_home": "留在原智能体"
     },
     "scopes": {
       "label": "记忆范围",
@@ -3747,6 +3756,19 @@
       "openAgent": "打开 {{agent}} 的记忆设置",
       "blocked_one": "{{count}} 个智能体没法写入",
       "blocked_other": "{{count}} 个智能体没法写入"
+    },
+    "toSort": {
+      "line_one": "{{count}} 条记忆像任务笔记，等你整理",
+      "line_other": "{{count}} 条记忆像任务笔记，等你整理",
+      "hint": "这些是智能体按任务笔记记下的，Coffer 先让它们留在写下它的智能体里。整理会在终端里打开 Claude Code，把外部系统的事放进知识库，固定步骤做成技能，关于你的留作记忆。",
+      "button": "整理到知识库",
+      "badge": "待整理"
+    },
+    "sortOutcome": {
+      "knowledge": "知识库",
+      "skill": "技能",
+      "memory": "记忆",
+      "drop": "不保留"
     }
   },
   "conversations": {
@@ -4985,6 +5007,7 @@
       "skill": "技能",
       "channel": "消息渠道",
       "knowledge": "知识",
+      "memory": "记忆",
       "sync": "同步",
       "reconcile": "智能体配置",
       "cli": "命令行工具",

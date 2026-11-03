@@ -3,8 +3,8 @@
 // Request helpers for the memory sync (`/api/v1/memory/sync/*`, spec memory
 // "Manage memory sync in the web UI and on the command line"): its state, Sync now, the pending
 // preview's Write and Cancel, Undo sync…, the person's answer to "Codex
-// imports Claude Code's memories itself", one project's memories and Curate
-// now. The sync's switch and interval are the internal engine's `memory_sync`
+// imports Claude Code's memories itself", one project's memories, Curate
+// now and Sort into knowledge. The sync's switch and interval are the internal engine's `memory_sync`
 // pass (`internalEngineApi.setUpkeep`), not a route here.
 //
 // Transport via the typed client (.agents/frontend.md §4); wire types in
@@ -12,6 +12,7 @@
 import { getApiClient, unwrap, unwrapVoid } from "@/lib/api/client";
 import type {
   CurationHandoff,
+  SortHandoff,
   CurationEnableResult,
   HubEntryDetail,
   HubEntryList,
@@ -75,4 +76,10 @@ export function curationHandoff(agentType: string): Promise<CurationHandoff> {
   return unwrap(
     getApiClient().POST("/memory/sync/curation/handoff", { body: { agent_type: agentType } }),
   );
+}
+
+/** Sort into knowledge: the prompt that hands the task notes waiting to be
+ *  sorted to Claude Code in a terminal. */
+export function sortHandoff(): Promise<SortHandoff> {
+  return unwrap(getApiClient().POST("/memory/sync/sort/handoff"));
 }

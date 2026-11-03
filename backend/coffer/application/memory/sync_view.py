@@ -13,8 +13,6 @@ import asyncio
 import pathlib
 from collections import Counter, defaultdict
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
-from typing import Any
 
 from coffer.application.memory.sync_locations import (
     LocationRow,
@@ -22,20 +20,33 @@ from coffer.application.memory.sync_locations import (
     location_rows,
     summed,
 )
+from coffer.application.memory.sync_prompts import claude_curation_prompt, sort_prompt
 from coffer.application.memory.sync_report import preview_summary
-from coffer.application.memory.sync_service import AuditPort, MemorySyncService
+from coffer.application.memory.sync_rows import (
+    AgentRow,
+    CopyLocation,
+    EntryDetail,
+    EntryRow,
+    ProjectRow,
+    SyncState,
+)
+from coffer.application.memory.sync_service import (
+    AuditPort,
+    MemorySyncService,
+    task_material_ids,
+    to_sort_ids,
+)
 from coffer.application.memory.sync_write import LocalAgent
 from coffer.domain.audit import AuditEventType
-from coffer.domain.handoff import Handoff, render_handoff
+from coffer.domain.errors import ResourceNotFound
 from coffer.domain.memory.hub import CLAUDE_CODE, CODEX, HubEntry, project_folder
 from coffer.domain.memory.portable import from_portable
 from coffer.domain.memory.sync_plan import STATE_WRITTEN
 from coffer.infrastructure.memory import checkouts as checkout_map
-from coffer.infrastructure.memory.curation import CurationState, curation_state, enable_curation
+from coffer.infrastructure.memory.curation import curation_state, enable_curation
+from coffer.infrastructure.memory.sorted_store import SortedRecord
 from coffer.infrastructure.memory.writers.claude_code import (
-    BLOCK_BEGIN,
-    BLOCK_END,
-    COPY_PREFIX,
+    memory_dir,
     rules_path,
 )
 
@@ -44,69 +55,13 @@ COPY_ORIGIN = "origin"
 COPY_HELD_BACK = "held_back"
 COPY_DEFERRED = "deferred"
 COPY_RULES = "rules"
+#: Written as text into the project's ``MEMORY.md`` block (Claude Code).
+COPY_BLOCK = "block"
+#: Task material another agent filed: it stays with that agent until sorted.
+COPY_STAYS_HOME = "stays_home"
 COPY_PENDING = "pending"
-
-
-@dataclass(frozen=True)
-class AgentRow:
-    agent: str
-    agent_type: str
-    #: The first location that cannot be written, else the first location's.
-    writer: dict[str, str]
-    curation: CurationState
-    #: Summed over the locations.
-    copies: dict[str, int]
-    locations: list[LocationRow] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class ProjectRow:
-    key: str
-    folder: str
-    memories: int
-    agents: dict[str, int]
-    checked_out: str | None
-
-
-@dataclass(frozen=True)
-class SyncState:
-    running: bool
-    last_synced_at: str
-    last_report: dict[str, Any]
-    preview: dict[str, Any] | None
-    codex_imports_claude: bool | None
-    agents: list[AgentRow]
-    projects: list[ProjectRow]
-    global_memories: int
-    machine: str
-
-
-@dataclass(frozen=True)
-class EntryRow:
-    entry: HubEntry
-    #: ``agent type → copy state`` on this machine.
-    copies: dict[str, str] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class CopyLocation:
-    """Where one local agent holds a memory: its copy's state and file."""
-
-    agent_type: str
-    state: str
-    #: The file on this machine: the agent's own (the origin), Coffer's copy,
-    #: or the rules file; ``""`` when there is none here.
-    path: str = ""
-
-
-@dataclass(frozen=True)
-class EntryDetail:
-    """One memory with its text (paths expanded for this machine) and, per
-    local agent, where it is held."""
-
-    entry: HubEntry
-    body: str
-    copies: list[CopyLocation]
+#: How many waiting memories the sort hand-off lists by name.
+SORT_PROMPT_MAX = 60
 
 
 class MemorySyncView:
@@ -137,8 +92,13 @@ class MemorySyncView:
     async def state(self) -> SyncState:
         agents = await self._svc.local_agents()
         # The ledger, hub and preview are files on disk: read them off the loop.
-        ledger, hub, pending = await asyncio.to_thread(
-            lambda: (self._svc.ledger.load(), self._svc.hub.entries(), self._svc.previews.load())
+        ledger, hub, pending, sortings = await asyncio.to_thread(
+            lambda: (
+                self._svc.ledger.load(),
+                self._svc.hub.entries(),
+                self._svc.previews.load(),
+                self._svc.sortings.records(),
+            )
         )
         here = await self._checkouts(agents)
         rows = []
@@ -186,6 +146,7 @@ class MemorySyncView:
             projects=projects,
             global_memories=globals_,
             machine=self._machine(),
+            to_sort=len(to_sort_ids(hub, sortings)),
         )
 
     async def _copies_by_entry(
@@ -211,24 +172,32 @@ class MemorySyncView:
         machine = self._machine()
         by_entry = await self._copies_by_entry(agents)
         states = {e: {t: v[0] for t, v in m.items()} for e, m in by_entry.items()}
+        hub, sortings = await asyncio.to_thread(
+            lambda: (self._svc.hub.entries(), self._svc.sortings.records())
+        )
+        home_only = task_material_ids(hub, sortings)
+        waiting = set(to_sort_ids(hub, sortings))
         out = []
-        for entry in sorted(
-            self._svc.hub.entries().values(), key=lambda e: e.updated_at, reverse=True
-        ):
+        for entry in sorted(hub.values(), key=lambda e: e.updated_at, reverse=True):
             if entry.project != project:
                 continue
             copies = {
-                a.agent_type: _copy_state(entry, a, machine, here, states, imports) for a in agents
+                a.agent_type: _copy_state(entry, a, machine, here, states, imports, home_only)
+                for a in agents
             }
-            out.append(EntryRow(entry=entry, copies=copies))
+            out.append(EntryRow(entry=entry, copies=copies, to_sort=entry.id in waiting))
         return out
 
     async def entry(self, entry_id: str) -> EntryDetail | None:
         """One memory's text and, per local agent, its copy's state and file
         ("Manage memory sync in the web UI and on the command line")."""
-        entry = self._svc.hub.entries().get(entry_id)
+        hub, sortings = await asyncio.to_thread(
+            lambda: (self._svc.hub.entries(), self._svc.sortings.records())
+        )
+        entry = hub.get(entry_id)
         if entry is None:
             return None
+        home_only = task_material_ids(hub, sortings)
         agents = await self._svc.local_agents()
         imports = self._svc.ledger.load().codex_imports_claude
         here = await self._checkouts(agents)
@@ -237,12 +206,12 @@ class MemorySyncView:
         states = {entry.id: {t: v[0] for t, v in held.items()}}
         copies = []
         for a in agents:
-            state = _copy_state(entry, a, machine, here, states, imports)
+            state = _copy_state(entry, a, machine, here, states, imports, home_only)
             copies.append(
                 CopyLocation(
                     agent_type=a.agent_type,
                     state=state,
-                    path=_copy_path(entry, a, state, held.get(a.agent_type)),
+                    path=_copy_path(entry, a, state, held.get(a.agent_type), here),
                 )
             )
         body = from_portable(entry.body, repo_root=here.get(entry.project), home=self._home())
@@ -274,6 +243,47 @@ class MemorySyncView:
         )
         return claude_curation_prompt(folders, str(rules_path(local.config_dir)))
 
+    async def to_sort(self) -> list[HubEntry]:
+        """The task material no one has sorted yet, newest first."""
+        hub, sortings = await asyncio.to_thread(
+            lambda: (self._svc.hub.entries(), self._svc.sortings.records())
+        )
+        return [hub[i] for i in to_sort_ids(hub, sortings)]
+
+    async def sort_handoff(self, actor: str) -> str:
+        """**Sort into knowledge**: the prompt that asks the person's agent, in a
+        terminal they watch, to sort the waiting task material."""
+        waiting = await self.to_sort()
+        root = self._svc.hub.root()
+        shown = waiting[:SORT_PROMPT_MAX]
+        await self._audit.record(
+            AuditEventType.MEMORY_SORT_REQUESTED.value,
+            actor=actor,
+            details={"memories": len(waiting)},
+        )
+        return sort_prompt(
+            [(e, str(root / e.path)) for e in shown], str(root), len(waiting) - len(shown)
+        )
+
+    async def mark_sorted(
+        self, entry_ids: list[str], outcome: str, where: str, actor: str
+    ) -> list[str]:
+        """Record that the person's agent sorted ``entry_ids``; answer the ids
+        recorded. An id not in the hub is refused (``ResourceNotFound`` upstream)."""
+        hub = await asyncio.to_thread(self._svc.hub.entries)
+        missing = [i for i in entry_ids if i not in hub]
+        if missing:
+            raise ResourceNotFound(f"memory {missing[0]}")
+        now = self._svc.now()
+        records = [SortedRecord(i, outcome, where, now, actor) for i in dict.fromkeys(entry_ids)]
+        await asyncio.to_thread(self._svc.sortings.record, records, actor)
+        await self._audit.record(
+            AuditEventType.MEMORY_SORTED.value,
+            actor=actor,
+            details={"memories": len(records), "outcome": outcome, "where": where},
+        )
+        return [r.id for r in records]
+
     async def enable_curation(self, agent_type: str, actor: str) -> bool:
         """**Turn on** the agent's own curation in its settings (Claude Code's
         Auto Dream), backed up first; answer whether a setting was written."""
@@ -291,38 +301,6 @@ class MemorySyncView:
         return changed
 
 
-def claude_curation_prompt(folders: list[str], rules: str) -> str:
-    """The hand-off that asks Claude Code to curate its memory the way Auto
-    Dream would, folder by folder, with the person watching."""
-    listed = folders or ["(none yet: Coffer has written no copies on this machine)"]
-    return render_handoff(
-        Handoff(
-            task=(
-                "Please consolidate your auto-memory folders below, the way your own "
-                "background memory consolidation (Auto Dream) would."
-            ),
-            facts=(
-                *(f"Memory folder: {folder}" for folder in listed),
-                f"Files named {COPY_PREFIX}*.md were copied in by Coffer from my other "
-                "agents; they are memories like your own.",
-                f"Between {BLOCK_BEGIN} and {BLOCK_END} in each MEMORY.md, and all of "
-                f"{rules}, is Coffer's index: Coffer rewrites it on every sync.",
-            ),
-            steps=(
-                "Work one folder at a time: read its MEMORY.md and memory files, then tell "
-                "me what you plan to merge, rewrite or delete before you change anything.",
-                "Merge duplicates (a Coffer copy that says what one of your own memories "
-                "says can be folded into yours and the copy deleted), drop what is "
-                "contradicted or stale, and turn relative dates into absolute ones.",
-                "Keep the part of MEMORY.md outside Coffer's markers short, and leave "
-                "Coffer's markers, what is between them and the rules file as they are.",
-                "Change nothing outside these folders. At the end, list each folder with "
-                "how many memory files it had before and after.",
-            ),
-        )
-    )
-
-
 def _copy_state(
     entry: HubEntry,
     agent: LocalAgent,
@@ -330,9 +308,12 @@ def _copy_state(
     here: Mapping[str, str],
     copies: Mapping[str, Mapping[str, str]],
     codex_imports: bool | None,
+    home_only: frozenset[str] = frozenset(),
 ) -> str:
     if entry.origin.machine == machine and entry.origin.agent == agent.agent_type:
         return COPY_ORIGIN
+    if entry.id in home_only and entry.origin.agent != agent.agent_type:
+        return COPY_STAYS_HOME
     if agent.agent_type == CODEX and entry.origin.agent == CLAUDE_CODE and codex_imports:
         return COPY_DEFERRED
     if entry.project and entry.project not in here:
@@ -340,12 +321,18 @@ def _copy_state(
     state = copies.get(entry.id, {}).get(agent.agent_type)
     if state:
         return state
-    if not entry.project and agent.agent_type == CLAUDE_CODE:
-        return COPY_RULES
+    if agent.agent_type == CLAUDE_CODE:
+        return COPY_BLOCK if entry.project else COPY_RULES
     return COPY_PENDING
 
 
-def _copy_path(entry: HubEntry, agent: LocalAgent, state: str, held: tuple[str, str] | None) -> str:
+def _copy_path(
+    entry: HubEntry,
+    agent: LocalAgent,
+    state: str,
+    held: tuple[str, str] | None,
+    here: Mapping[str, str],
+) -> str:
     """The file that holds ``entry`` in ``agent`` here, if any."""
     if state == COPY_ORIGIN:
         source = entry.origin.source
@@ -354,17 +341,21 @@ def _copy_path(entry: HubEntry, agent: LocalAgent, state: str, held: tuple[str, 
         return str(pathlib.Path(agent.config_dir) / source.split("::", 1)[0])
     if state == COPY_RULES:
         return str(rules_path(agent.config_dir))
+    if state == COPY_BLOCK and entry.project in here:
+        return str(memory_dir(agent.config_dir, here[entry.project]) / "MEMORY.md")
     if held is not None:
         return held[1]
     return ""
 
 
 __all__ = [
+    "COPY_BLOCK",
     "COPY_DEFERRED",
     "COPY_HELD_BACK",
     "COPY_ORIGIN",
     "COPY_PENDING",
     "COPY_RULES",
+    "COPY_STAYS_HOME",
     "AgentRow",
     "CopyLocation",
     "EntryDetail",

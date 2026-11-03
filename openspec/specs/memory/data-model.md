@@ -20,9 +20,11 @@ settings document (spec internal-engine).
 ~/.coffer/vault/memory/
 ├── global/                          # memories about the person
 │   └── <id>.md
-└── projects/
-    └── github.com-acme-payments/    # one folder per project key
-        └── <id>.md
+├── projects/
+│   └── github.com-acme-payments/    # one folder per project key
+│       └── <id>.md
+└── sorted/                          # one record per task-material memory sorted
+    └── <id>.md
 ```
 
 The hub is in the vault, so vault sync carries it to every machine. Each
@@ -57,6 +59,30 @@ updated_at: 2026-10-09T06:00:00Z
 - An entry whose text the bundled plaintext detector flags is withheld and
   never written to the hub.
 
+## Task material and sorted records
+
+An entry is **task material** when its agent filed it as task notes: a Codex
+memory whose identity names a task group, or a Claude Code memory typed
+`reference` ("Flag the memories an agent filed as task material"). Nothing is
+stored for the flag; it is read from `origin` and `type`. Task material is not
+written into an agent of another type until it is sorted back into memory.
+
+A sorting is one file, `vault/memory/sorted/<id>.md`, written by
+`coffer memory sorted` as one vault commit by the writer `memory-sync`:
+
+```yaml
+---
+id: 3f2a91c4de55b071
+outcome: knowledge          # knowledge | skill | memory | drop
+where: shopee-account/pages/ia-sheet.md
+sorted_at: 2026-11-03T09:00:00Z
+---
+```
+
+A record stays when its memory is reworded and is deleted by the next sync once
+its memory has left the hub. A memory is **to sort** while it is task material
+and has no record.
+
 ## Copies in the agents
 
 What a sync writes into each agent on this machine. A project's memories are
@@ -66,12 +92,12 @@ back from its own machine.
 
 | Agent | Project memories | Global memories |
 |---|---|---|
-| Claude Code | `<config_dir>/projects/<slug>/memory/coffer_<title-slug>.md`, plus a block in that folder's `MEMORY.md` between `<!-- coffer:memory-sync:begin -->` and `<!-- coffer:memory-sync:end -->` (newest first, at most 30 lines, the rest counted) | a copy per memory in `<config_dir>/projects/-coffer-global/memory/`, whose `MEMORY.md` block lists them all by Codex task group, uncapped, and `<config_dir>/rules/coffer-memory.md` (no text, at most 8 KB): the folder, one line per standing memory (title and description cut to 120 characters, file name), and the task groups by name and count |
+| Claude Code | a block at the end of `<config_dir>/projects/<slug>/memory/MEMORY.md` between `<!-- coffer:memory-sync:begin -->` and `<!-- coffer:memory-sync:end -->`: one line per memory with its text (at most 800 characters) and the agent it came from, newest first, at most 4 KB, the rest counted | `<config_dir>/rules/coffer-memory.md`: the same lines, Codex's User Profile first, at most 8 KB, the rest counted |
 | Codex | `<config_dir>/memories/extensions/coffer/resources/<id>-<title-slug>.md`, with `instructions.md` beside them | the same folder |
 
-A Claude Code copy carries `coffer: {entry, from, synced_at}` in its
-frontmatter; readers skip every file named `coffer_*` that carries it, the
-marked block, the rules file, everything under Codex's `extensions/`, and any
+Claude Code gets no file per memory. A `coffer_*` copy an earlier build wrote
+carries `coffer: {entry, from, synced_at}` in its frontmatter; readers skip
+every such file, the marked block, the rules file, everything under Codex's `extensions/`, and any
 Codex bullet tagged `[via Coffer]` ("Never republish Coffer's own copies").
 Codex writes nothing while its `memories` feature is off.
 
@@ -106,8 +132,9 @@ Codex writes nothing while its `memories` feature is off.
 `~/.coffer/local/memory-sync-preview.json` holds a pending preview: the copy
 changes a first or large sync (more than 50 copies) would make. **Write**
 applies exactly that plan; **Cancel** drops it; a newer sync replaces it.
-Losing the ledger costs one preview, never an agent's own memory: every
-existing `coffer_` file is recognised by its `coffer.entry`.
+Losing the ledger costs one preview, never an agent's own memory: Coffer's
+block and rules file are rewritten whole, and a Codex resource is named by its
+entry id.
 
 ## Undo
 
@@ -123,4 +150,6 @@ memory and the hub stay.
 | `memory_synced` | a sync changed the hub or a copy | the person, or `system:memory-sync-worker` |
 | `memory_sync_undone` | Undo sync | the person |
 | `memory_curation_requested` | Curate now | the person |
+| `memory_sort_requested` | Sort into knowledge | the person |
+| `memory_sorted` | `coffer memory sorted` recorded a sorting | the person, through their agent |
 | `memory_hook_removed` | the upgrade took the retired hook out of one agent | `system:upgrade` |

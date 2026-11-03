@@ -51,7 +51,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 ├── state/cli-tools/tools.json
 ├── knowledge/<collection>/             # README.md, pages/, sources/, assets/, hidden .inbox/
 ├── skills/<name>/                      # skill master folders
-├── memory/                             # the memory hub: global/ and projects/<project>/
+├── memory/                             # the memory hub: global/, projects/<project>/ and sorted/
 ├── secret/<ref>.enc
 ├── machines/<machine id>.json
 └── .git/
@@ -72,7 +72,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `knowledge/<collection>/assets/` | 从上传的文档里取出的图片，每次上传一个文件夹，由对应的来源链接。 | 守护进程 | 是 | **不能。** 来源要显示这些图片。 |
 | `knowledge/<collection>/.inbox/` | 投放区：智能体或另一台机器放在这里的 Markdown 文件，会被下一次扫描（一分钟内）收编并作为来源保留到 `sources/` 下，之后这个文件就不在了。 | 你、你的智能体、守护进程 | 是 | 不能：尚未收编的文件会丢失。 |
 | `skills/<name>/` | 托管技能的主副本：`SKILL.md`、其他文件，以及 `.coffer.meta.json`（Coffer 的元数据）。智能体拿到的是指向这个目录的符号链接。 | 你、守护进程 | 是 | **不能。** 删掉目录会让投递给智能体的链接失效。 |
-| `memory/` | [记忆](/zh/guides/memory)中心库：你任意一台机器上的智能体为自己写下的每条记忆一个 Markdown 文件，放在 `global/` 或 `projects/<project>/` 下（项目是仓库的远端，`[A-Za-z0-9._-]` 之外的字符都换成 `-`）。Frontmatter 写明来源机器、智能体和来源文件；文本里的路径存为 `<repo>` 和 `~`。只有条目来源的那台机器会修改它。 | 记忆同步 | 是 | 每台机器会在下次同步时重新发布自己智能体的记忆；另一台机器的记忆只能由那台机器重新发布。 |
+| `memory/` | [记忆](/zh/guides/memory)中心库：你任意一台机器上的智能体为自己写下的每条记忆一个 Markdown 文件，放在 `global/` 或 `projects/<project>/` 下（项目是仓库的远端，`[A-Za-z0-9._-]` 之外的字符都换成 `-`）；`sorted/` 下是你整理过的每条任务笔记的记录（去向和时间）。Frontmatter 写明来源机器、智能体和来源文件；文本里的路径存为 `<repo>` 和 `~`。只有条目来源的那台机器会修改它。 | 记忆同步 | 是 | 每台机器会在下次同步时重新发布自己智能体的记忆；另一台机器的记忆只能由那台机器重新发布。 |
 | `secret/<ref>.enc` | 一个密钥的 Fernet 密文，权限 `0600`。从不包含主密钥本身。除非同步远端允许携带密钥，否则不进仓库。 | 守护进程 | 仅在 `--with-secret` 时 | **不能。** 密钥就没了。 |
 | `machines/<machine id>.json` | 每台参与同步的机器一个描述文件：名称、操作系统、主机名、Coffer 版本、上一轮同步、上次收敛的提交、密钥指纹、智能体及其插件。 | 同步（每台机器只写自己的） | 是 | 在**同步**页面的机器列表里用**退役**移除另一台机器。 |
 | `.git/` | 上面所有文件的历史。每轮同步前的快照是 `refs/tags/coffer/pre-apply/` 下的标签。`.git/info/exclude` 列出仓库忽略的内容。 | 守护进程 | 同步的就是这些提交 | **不能。** 所有版本和回滚能力都会丢失。 |
@@ -92,7 +92,7 @@ description: Coffer 在 ~/.coffer 下保存的每个文件和目录，以及它�
 | `local/secret/` | 仅限本机的密文，比如模型代理的令牌。 | 守护进程 | 从不 | 代理令牌会重新生成；使用提供商的智能体会重新读取自己的令牌。 |
 | `local/secret/plaintext-ignored.json` | 你说过不是密钥的值的指纹，这样它们不会再被标出来。不保存值本身。 | 守护进程 | 从不 | 这些值会再次被标出来。 |
 | `local/secret-boundary/` | `bindings.json`、`approvals.json`、`settings.json`、`times.json`、`last-used.json`：每个密钥被批准发往哪个目的地、待处理的审批、密钥边界的开关、每个密钥首次存到本机的时间和最近一次被使用的时间。 | 守护进程 | 从不 | 每个密钥都要重新等待审批。 |
-| `local/memory-sync.json` | 记忆同步的账本：每个来源的摘要、Coffer 写进本机智能体的每份副本及其状态（已写入、被智能体修改或移除）、交付内容的指纹、Codex 导入开关、本机是否确认过预览、上次同步及其报告。 | 守护进程 | 从不 | 可以：下次同步会根据 `coffer_` 文件重新推出它，并先给出预览。 |
+| `local/memory-sync.json` | 记忆同步的账本：每个来源的摘要、Coffer 写进本机智能体的每份副本及其状态（已写入、被智能体修改或移除）、交付内容的指纹、Codex 导入开关、本机是否确认过预览、上次同步及其报告。 | 守护进程 | 从不 | 可以：下次同步会重写 Coffer 的区块和规则文件，并先给出预览。 |
 | `local/knowledge-originals/` | 你在这台 Mac 上传到知识里的文件，同样的内容只存一份，以 SHA-256 命名。来源会记下它的原文件；只有这台 Mac 上有这个文件。 | 守护进程 | 从不 | 原文件没了；来源和它的图片仍在保险库里。 |
 | `local/memory-sync-preview.json` | 一次首次或大量的记忆同步，正在记忆页上等待**写入**或**取消**。 | 守护进程 | 从不 | 可以：下次同步会重新规划。 |
 | `local/sync/remote.json` | 唯一的同步远端：URL、分支、推送用密钥引用、是否携带密钥、间隔、是否暂停。 | 守护进程 | 从不 | 本机忘掉这个远端。 |
@@ -209,10 +209,8 @@ Coffer 只会为你要求的事写入已注册智能体自己的配置目录：�
 | --- | --- | --- |
 | `~/.claude.json`（非默认目录时在配置目录内） | `mcpServers.coffer`：`{"command": "~/.coffer/bin/coffer-mcp-shim", "args": ["--agent-uid", "<uid>"]}`，shim 路径为绝对路径。 | 把智能体连接到 Coffer 时。见[智能体](/zh/guides/agents#connect-an-agent-to-coffer)。 |
 | `settings.json` | `apiKeyHelper` 设为 `<absolute path to coffer> proxy token --agent-uid <agent uid>`（例如 `/Users/you/.coffer/bin/coffer …`；只有找不到 CLI 时才用裸的 `coffer`），它会打印该智能体的本地代理令牌；`env.ANTHROPIC_BASE_URL` 设为模型代理的 `http://127.0.0.1:<proxy port>/anthropic`；把 `127.0.0.1,localhost` 追加到 `env.NO_PROXY`；以及模型相关的键（`model`、`env.ANTHROPIC_DEFAULT_<TIER>_MODEL`、`modelPicker`）。从不写入提供商的 API 密钥。 | 把智能体切换到某个模型提供商时。见[模型提供商](/zh/guides/providers)。 |
-| `projects/<project>/memory/coffer_<slug>.md` | 另一个智能体或另一台机器学到的每条记忆一份副本，使用 Claude Code 的记忆格式，外加一个写明来源的 `coffer:` 区块。一旦 Claude Code 修改或移除它，Coffer 就不再动它。 | 记忆同步，针对本机已检出的项目。见[记忆](/zh/guides/memory#what-coffer-writes-into-each-agent)。 |
-| `projects/<project>/memory/MEMORY.md` | 在 `<!-- coffer:memory-sync:begin -->` 和 `<!-- coffer:memory-sync:end -->` 之间每份副本一行，最多 30 行；文件的其余部分从不改动。不存在时创建。 | 记忆同步。 |
-| `projects/-coffer-global/memory/` | 来自你其他智能体和机器的 `global` 记忆，形式和项目副本相同（一个没有会话会打开的、自成一体的项目文件夹）。 | 记忆同步。 |
-| `rules/coffer-memory.md` | 说明 `global` 记忆在哪，关于你或你的工作方式的记忆每条一行，其余记忆只写出它们来自的任务名，放在一个归 Coffer 所有的文件里（最多 8 KB）。 | 记忆同步。 |
+| `projects/<project>/memory/MEMORY.md` | 你的其他智能体和机器为这个项目学到的每条记忆的原文，每条一行，位于 `<!-- coffer:memory-sync:begin -->` 和 `<!-- coffer:memory-sync:end -->` 之间，最多 4 KB；文件的其余部分从不改动。不存在时创建。 | 记忆同步，针对本机已检出的项目。见[记忆](/zh/guides/memory#what-coffer-writes-into-each-agent)。 |
+| `rules/coffer-memory.md` | 你的其他智能体和机器学到的每条 `global` 记忆的原文，每条一行，Codex 对你的画像排第一，放在一个归 Coffer 所有的文件里（最多 8 KB）。 | 记忆同步。 |
 | `skills/<name>` | 指向 `~/.coffer/vault/skills/<name>` 的符号链接（不支持符号链接时为副本）。 | 向智能体投递技能时。见[技能](/zh/guides/skills)。 |
 
 ### Codex {#codex}

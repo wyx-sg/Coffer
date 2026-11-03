@@ -1,6 +1,6 @@
 """The two native-memory writers: Claude Code, Codex.
 
-See spec memory "Write the hub into Claude Code's native memory" and "Write
+See spec memory "Write the hub into Claude Code as text it loads" and "Write
 the hub into Codex's memory extension". Two writers written as two, on
 purpose: a third agent earns an abstraction over them, and not before (see
 "Reintroduce no retired memory mechanism")."""

@@ -161,8 +161,21 @@ class Machine:
 
 
 def hub_files(vault: pathlib.Path) -> list[pathlib.Path]:
+    """The hub's memory files (not the sorting records beside them)."""
     root = vault / "memory"
-    return sorted(p for p in root.rglob("*.md")) if root.is_dir() else []
+    if not root.is_dir():
+        return []
+    return sorted(p for p in root.rglob("*.md") if p.relative_to(root).parts[0] != "sorted")
+
+
+def resources(codex: pathlib.Path) -> list[pathlib.Path]:
+    """The copies Coffer wrote into Codex's memory extension."""
+    folder = codex / "memories" / "extensions" / "coffer" / "resources"
+    return sorted(folder.glob("*.md")) if folder.is_dir() else []
+
+
+#: A Codex summary holding one preference, which reaches Claude Code's rules file.
+CHINESE = "## User preferences\n- Prefers replies in Chinese.\n"
 
 
 __all__ = [

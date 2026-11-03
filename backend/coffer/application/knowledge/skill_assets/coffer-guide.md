@@ -77,6 +77,20 @@ keep. Each one's section in the catalogue names its own path and its own rules
 file. Read it the same way; write in it only by those rules, never by this
 file's, and do not tidy, upload into or drop files for the inbox of one.
 
+### Memory, knowledge or a skill
+
+Your own memory is for the developer: who they are, how they want you to work
+(preferences, corrections, what they approve), and a project's current state
+that the repository does not record. Knowledge is for the world: how an
+outside system, team or process works, its pitfalls, anything that needs a
+source, goes stale or is worth sharing. A fixed sequence of steps they repeat
+is a skill. Ask in that order: would it still hold for someone else (no:
+memory); is it about an outside system or does it need a source (yes:
+knowledge); is it a procedure (yes: skill). What the repository already says,
+and a one-off request, belong nowhere. Coffer keeps a memory you filed as task
+notes away from the developer's other agents until it is sorted, so write such
+a fact into a page instead.
+
 ### Writing a page
 
 When you learn something durable — a fact about a service, a convention this

@@ -7,6 +7,7 @@
 import {
   Book,
   Bot,
+  Brain,
   Box,
   CircleDot,
   IdCard,
@@ -35,6 +36,7 @@ const KINDS: Record<string, KindMeta> = {
   skill: { labelKey: "overview.kinds.skill", icon: Sparkle, identifier: true },
   channel: { labelKey: "overview.kinds.channel", icon: Radio, identifier: false },
   knowledge: { labelKey: "overview.kinds.knowledge", icon: Book, identifier: false },
+  memory: { labelKey: "overview.kinds.memory", icon: Brain, identifier: false },
   sync: { labelKey: "overview.kinds.sync", icon: RefreshCw, identifier: false },
   sync_remote: { labelKey: "overview.kinds.sync", icon: RefreshCw, identifier: false },
   reconcile: { labelKey: "overview.kinds.reconcile", icon: Workflow, identifier: false },
