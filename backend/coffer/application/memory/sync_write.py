@@ -20,6 +20,7 @@ while it is still exactly what Coffer wrote.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import logging
 import pathlib
 from collections.abc import Mapping, Sequence
@@ -27,7 +28,7 @@ from dataclasses import dataclass, field
 
 from coffer.domain.memory import absorption
 from coffer.domain.memory.hub import CLAUDE_CODE, CODEX, HubEntry
-from coffer.domain.memory.native_writer import AuxWrite, NativeWriter
+from coffer.domain.memory.native_writer import AuxWrite, NativeWriter, WriteLocation
 from coffer.domain.memory.portable import from_portable
 from coffer.domain.memory.sync_plan import (
     ACTION_REMOVE,
@@ -49,17 +50,42 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class LocalAgent:
-    """A registered agent on this machine, as the writer needs it."""
+    """A registered agent on this machine, as the writer needs it: the agent
+    itself, or (from :meth:`at`) one of its writer's locations."""
 
     agent: str
     agent_type: str
     config_dir: str
+    #: The writer location's name ("" for the agent's first location).
+    location_name: str = ""
+    #: The writer location's path ("" until :meth:`at` sets it).
+    location_path: str = ""
+
+    @property
+    def base_key(self) -> str:
+        return f"{self.agent_type}@{self.config_dir}"
 
     @property
     def key(self) -> str:
-        """What the ledger files this agent's copies under: two agents of one
-        type (two Claude Code config directories) keep apart."""
-        return f"{self.agent_type}@{self.config_dir}"
+        """What the ledger files this location's copies under: two agents of
+        one type (two Claude Code config directories), and two memory folders
+        of one Codex, keep apart. The first location keeps the agent's key."""
+        if self.location_name:
+            return f"{self.base_key}#{self.location_name}"
+        return self.base_key
+
+    @property
+    def where(self) -> str:
+        """The path the writer's methods take."""
+        return self.location_path or self.config_dir
+
+    def at(self, location: WriteLocation) -> LocalAgent:
+        return dataclasses.replace(self, location_name=location.name, location_path=location.path)
+
+
+def located(writer: NativeWriter, local: LocalAgent) -> list[LocalAgent]:
+    """``local`` once per location its writer writes into."""
+    return [local.at(loc) for loc in writer.locations(local.config_dir)]
 
 
 @dataclass
@@ -112,7 +138,7 @@ def plan_agent(
         local.agent_type,
         targets.copies,
         ledger.agent_copies(local.key),
-        path_for=lambda target, taken: writer.path_for(local.config_dir, target, taken),
+        path_for=lambda target, taken: writer.path_for(local.where, target, taken),
         render=writer.render,
         digest_of=native_files.digest,
     )
@@ -170,7 +196,7 @@ def apply_ops(
         )
         ledger.deliver(local.agent_type, absorption.fingerprints(op.content))
         (done.written if op.action == ACTION_WRITE else done.updated).append(op)
-    for aux in writer.aux(local.config_dir, copies, targets.by_entry(), targets.globals):
+    for aux in writer.aux(local.where, copies, targets.by_entry(), targets.globals):
         if _apply_aux(aux):
             done.aux.append(aux.path)
     for target in targets.globals:
@@ -205,7 +231,7 @@ def undo_agent(writer: NativeWriter, local: LocalAgent, ledger: Ledger) -> Appli
                     local.agent_type, ACTION_REMOVE, path, rec.entry, rec.entry_updated_at, "", ""
                 )
             )
-    for aux in writer.undo(local.config_dir, copies):
+    for aux in writer.undo(local.where, copies):
         if _apply_aux(aux):
             done.aux.append(aux.path)
     _prune_empty(writer, local)
@@ -217,7 +243,7 @@ def _prune_empty(writer: NativeWriter, local: LocalAgent) -> None:
     """Remove Codex's extension folders Coffer made, once they are empty."""
     if local.agent_type != CODEX:
         return
-    folder = extension_dir(local.config_dir)
+    folder = extension_dir(local.where)
     for d in (folder / "resources", folder):
         with contextlib.suppress(OSError):
             d.rmdir()
@@ -228,6 +254,7 @@ __all__ = [
     "Applied",
     "LocalAgent",
     "apply_ops",
+    "located",
     "plan_agent",
     "targets_for",
     "undo_agent",

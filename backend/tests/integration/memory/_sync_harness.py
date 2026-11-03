@@ -68,12 +68,30 @@ def codex_dir(
     summary_md: str = "",
     *,
     memories_on: bool = True,
+    v1: bool = True,
+    v2_summary_md: str | None = None,
+    rollouts: dict[str, str] | None = None,
 ) -> pathlib.Path:
-    memories = config_dir / "memories"
-    memories.mkdir(parents=True, exist_ok=True)
-    (memories / "MEMORY.md").write_text(memory_md, encoding="utf-8")
-    if summary_md:
-        (memories / "memory_summary.md").write_text(summary_md, encoding="utf-8")
+    """A Codex config directory: v1 memory (``memories/``) unless ``v1`` is
+    false, and v2 memory (``memories_v2/``) when ``v2_summary_md`` is given,
+    with one rollout summary per ``rollouts`` entry (file name → cwd)."""
+    config_dir.mkdir(parents=True, exist_ok=True)
+    if v1:
+        memories = config_dir / "memories"
+        memories.mkdir(parents=True, exist_ok=True)
+        (memories / "MEMORY.md").write_text(memory_md, encoding="utf-8")
+        if summary_md:
+            (memories / "memory_summary.md").write_text(summary_md, encoding="utf-8")
+    if v2_summary_md is not None:
+        v2 = config_dir / "memories_v2"
+        (v2 / "rollout_summaries").mkdir(parents=True, exist_ok=True)
+        (v2 / "memory_summary.md").write_text(v2_summary_md, encoding="utf-8")
+        for name, cwd in (rollouts or {}).items():
+            (v2 / "rollout_summaries" / name).write_text(
+                f"thread_id: t-{name}\nupdated_at: 2026-11-02T09:22:08+00:00\n"
+                f"rollout_path: /sessions/{name}.jsonl\ncwd: {cwd}\n\nWhat happened.\n",
+                encoding="utf-8",
+            )
     flag = "true" if memories_on else "false"
     (config_dir / "config.toml").write_text(f"[features]\nmemories = {flag}\n", encoding="utf-8")
     return config_dir

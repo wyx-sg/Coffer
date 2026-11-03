@@ -37,7 +37,12 @@ def test_layout_for_claude_code_is_projects_memory() -> None:
 
 def test_layout_for_codex_is_global_task_grouped() -> None:
     layout = native_memory_layout_for(AgentType.CODEX)
-    assert layout == CodexGlobalLayout(memory_subdir="memories", index_file="MEMORY.md")
+    assert layout == CodexGlobalLayout(
+        memory_subdir="memories",
+        index_file="MEMORY.md",
+        v2_subdir="memories_v2",
+        v2_index_file="memory_summary.md",
+    )
 
 
 def test_decode_absolute_slug() -> None:

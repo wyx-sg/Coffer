@@ -1,4 +1,5 @@
-"""Infra reader for Codex's global task-grouped memory (``memories/MEMORY.md``).
+"""Infra reader for Codex's global task-grouped memory (``memories/MEMORY.md``)
+and its v2 memory (``memories_v2/memory_summary.md``).
 
 The Codex counterpart to ``native_memory_store.py``. Codex keeps one document
 routing many projects via per-Task-Group ``cwd`` annotations (parsed by
@@ -13,8 +14,15 @@ from __future__ import annotations
 import os
 import pathlib
 
-from coffer.domain.agent.codex_memory import CodexMemoryEntry, parse_codex_memory
+from coffer.domain.agent.codex_memory import (
+    CodexMemoryEntry,
+    parse_codex_memory,
+    parse_codex_v2_topics,
+)
 from coffer.domain.agent.native_memory import ScannedStore
+from coffer.infrastructure.agent_files.codex_rollout_summaries import rollout_cwd
+
+_V2_INDEX = "memory_summary.md"
 
 
 def _read_entries(memories_dir: pathlib.Path, index_file: str) -> list[CodexMemoryEntry]:
@@ -36,7 +44,11 @@ def codex_stores(memories_dir: pathlib.Path, index_file: str) -> list[ScannedSto
     cwds contributes to each. Returns ``[]`` when the document is absent.
     """
     counts: dict[str, int] = {}
-    for entry in _read_entries(memories_dir, index_file):
+    if index_file == _V2_INDEX:
+        # v2: one row per cwd its topics' rollout summaries name, a topic each.
+        for cwd in _v2_cwds(memories_dir):
+            counts[cwd] = counts.get(cwd, 0) + 1
+    for entry in _read_entries(memories_dir, index_file) if index_file != _V2_INDEX else []:
         for cwd in entry.cwds:
             counts[cwd] = counts.get(cwd, 0) + 1
     return [
@@ -48,6 +60,19 @@ def codex_stores(memories_dir: pathlib.Path, index_file: str) -> list[ScannedSto
         )
         for cwd, count in counts.items()
     ]
+
+
+def _v2_cwds(folder: pathlib.Path) -> list[str]:
+    try:
+        text = (folder / _V2_INDEX).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    out = []
+    for topic in parse_codex_v2_topics(text):
+        cwd = rollout_cwd(folder, topic.rollout_file)
+        if cwd:
+            out.append(cwd)
+    return out
 
 
 __all__ = ["codex_stores"]

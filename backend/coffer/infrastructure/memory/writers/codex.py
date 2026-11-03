@@ -1,13 +1,22 @@
 """Writes hub entries into Codex's memory extension (spec memory "Write the hub
-into Codex's memory extension").
+into Codex's memory extension", "Write into every memory folder Codex reads").
+
+Codex keeps one memory folder per memory version side by side in its config
+directory: ``memories/`` (v1) and ``memories_v2/`` (v2, which Codex Desktop
+0.163 and later reads). Which one a session reads is Codex's choice, made per
+profile and, in the app, per thread, so the writer does what Codex's own
+import from Claude Code does: it writes the same extension into every memory
+folder that is there. A ``memories_v<N>`` folder Coffer does not know is
+listed as a location of its own that writes nothing, so the Memory page says
+Codex moved on before memory silently stops arriving.
 
 Codex's memory pipeline (``codex-rs/memories/write``, not in the user docs)
-reads ``<config_dir>/memories/extensions/<name>/instructions.md`` and every
+reads ``<memory folder>/extensions/<name>/instructions.md`` and every
 ``extensions/<name>/resources/*.md`` as primary inputs of its phase-2
 consolidation, and reads a resource that disappeared as a signal to forget
 it. Its pruner (``codex-rs/memories/write/src/extensions/prune.rs``) deletes
 resources whose file name begins with a ``%Y-%m-%dT%H-%M-%S`` timestamp after
-seven days, so a resource here is named ``<entry id>-<slug>.md``: hex, never a
+fourteen days, so a resource here is named ``<entry id>-<slug>.md``: hex, never a
 timestamp.
 
 The writer refuses a layout it does not recognise (a ``memories/`` folder
@@ -18,6 +27,7 @@ Codex's ``memories`` feature is off in ``config.toml``.
 from __future__ import annotations
 
 import pathlib
+import re
 import tomllib
 from collections.abc import Mapping, Sequence
 
@@ -28,6 +38,7 @@ from coffer.domain.memory.native_writer import (
     STATUS_OK,
     STATUS_UNRECOGNISED,
     AuxWrite,
+    WriteLocation,
     WriterStatus,
 )
 from coffer.domain.memory.sync_plan import CopyRecord, Target
@@ -55,12 +66,37 @@ for itself while working with them.
 """
 
 
-def memories_dir(config_dir: str) -> pathlib.Path:
-    return pathlib.Path(config_dir) / "memories"
+#: The memory folders Coffer knows, oldest first. The first one's location
+#: has no name, so copies filed before v2 keep their ledger key.
+MEMORY_FOLDERS = ("memories", "memories_v2")
+_VERSIONED_FOLDER = re.compile(r"memories_v(\d+)")
+#: What tells a memory folder Codex itself set up: its consolidated output,
+#: or the folder of per-session summaries it makes before the first one.
+_LAYOUT_MARKERS = ("MEMORY.md", "memory_summary.md", "rollout_summaries")
 
 
-def extension_dir(config_dir: str) -> pathlib.Path:
-    return memories_dir(config_dir) / "extensions" / EXTENSION
+def memory_folders(config_dir: str) -> list[pathlib.Path]:
+    """The memory folders Coffer knows that are there, oldest first."""
+    base = pathlib.Path(config_dir)
+    return [base / name for name in MEMORY_FOLDERS if (base / name).is_dir()]
+
+
+def unknown_memory_folders(config_dir: str) -> list[pathlib.Path]:
+    """``memories_v<N>`` folders newer than any Coffer knows."""
+    try:
+        children = list(pathlib.Path(config_dir).iterdir())
+    except OSError:
+        return []
+    return sorted(
+        c
+        for c in children
+        if c.is_dir() and _VERSIONED_FOLDER.fullmatch(c.name) and c.name not in MEMORY_FOLDERS
+    )
+
+
+def extension_dir(location: str) -> pathlib.Path:
+    """Coffer's extension inside one memory folder."""
+    return pathlib.Path(location) / "extensions" / EXTENSION
 
 
 def memories_enabled(config_dir: str) -> bool | None:
@@ -84,29 +120,46 @@ class CodexMemoryWriter:
 
     agent_type = "codex"
 
-    def status(self, config_dir: str) -> WriterStatus:
-        if not pathlib.Path(config_dir).is_dir():
+    def locations(self, config_dir: str) -> tuple[WriteLocation, ...]:
+        """Every memory folder that is there, then any newer one Coffer does
+        not know. With none there, the v1 folder, so the status says why."""
+        folders = memory_folders(config_dir) or [pathlib.Path(config_dir) / MEMORY_FOLDERS[0]]
+        folders += unknown_memory_folders(config_dir)
+        return tuple(
+            WriteLocation("" if f.name == MEMORY_FOLDERS[0] else f.name, str(f)) for f in folders
+        )
+
+    def status(self, location: str) -> WriterStatus:
+        folder = pathlib.Path(location)
+        config_dir = str(folder.parent)
+        if not folder.parent.is_dir():
             return WriterStatus(STATUS_MISSING, config_dir, "the config directory is not there")
         if not memories_enabled(config_dir):
             return WriterStatus(
                 STATUS_OFF,
-                str(pathlib.Path(config_dir) / "config.toml"),
+                str(folder.parent / "config.toml"),
                 "Codex's memories feature is off",
             )
-        folder = memories_dir(config_dir)
-        if not any((folder / name).is_file() for name in ("MEMORY.md", "memory_summary.md")):
+        if folder.name not in MEMORY_FOLDERS:
             return WriterStatus(
                 STATUS_UNRECOGNISED,
                 str(folder),
-                "no MEMORY.md or memory_summary.md: not the memory layout Coffer writes into",
+                "a Codex memory folder newer than this Coffer knows: update Coffer",
+            )
+        if not any((folder / name).exists() for name in _LAYOUT_MARKERS):
+            return WriterStatus(
+                STATUS_UNRECOGNISED,
+                str(folder),
+                "no MEMORY.md, memory_summary.md or rollout_summaries: "
+                "not the memory layout Coffer writes into",
             )
         return WriterStatus(STATUS_OK, str(folder))
 
     def wants(self, target: Target) -> bool:
         return True
 
-    def path_for(self, config_dir: str, target: Target, taken: set[str]) -> str:
-        folder = extension_dir(config_dir) / "resources"
+    def path_for(self, location: str, target: Target, taken: set[str]) -> str:
+        folder = extension_dir(location) / "resources"
         base = f"{target.entry.id}-{title_slug(target.entry.title)}"
         path = str(folder / f"{base}.md")
         n = 2
@@ -133,29 +186,31 @@ class CodexMemoryWriter:
 
     def aux(
         self,
-        config_dir: str,
+        location: str,
         copies: Mapping[str, CopyRecord],
         targets: Mapping[str, Target],
         global_targets: Sequence[Target],
     ) -> list[AuxWrite]:
-        path = extension_dir(config_dir) / "instructions.md"
+        path = extension_dir(location) / "instructions.md"
         if copies:
             return [AuxWrite(str(path), INSTRUCTIONS)]
         if path.exists():
             return [AuxWrite(str(path), None)]
         return []
 
-    def undo(self, config_dir: str, copies: Mapping[str, CopyRecord]) -> list[AuxWrite]:
-        path = extension_dir(config_dir) / "instructions.md"
+    def undo(self, location: str, copies: Mapping[str, CopyRecord]) -> list[AuxWrite]:
+        path = extension_dir(location) / "instructions.md"
         return [AuxWrite(str(path), None)] if path.exists() else []
 
 
 __all__ = [
     "EXTENSION",
     "INSTRUCTIONS",
+    "MEMORY_FOLDERS",
     "VIA_COFFER",
     "CodexMemoryWriter",
     "extension_dir",
-    "memories_dir",
     "memories_enabled",
+    "memory_folders",
+    "unknown_memory_folders",
 ]

@@ -49,13 +49,27 @@ class CurationStateOut(BaseModel):
     last_curated_at: str = ""
 
 
+class SyncLocationOut(BaseModel):
+    """One place the agent's writer writes into (Codex: one per memory folder)."""
+
+    #: ``""`` for the agent's first location, else the folder's name.
+    name: str = ""
+    path: str
+    writer: WriterStatusOut
+    #: How many copies this machine holds in this location, by state.
+    copies: dict[str, int] = Field(default_factory=dict)
+
+
 class SyncAgentOut(BaseModel):
     agent: str
     agent_type: str
+    #: The first location that cannot be written, else the first location's.
     writer: WriterStatusOut
     curation: CurationStateOut
-    #: How many copies this machine holds in the agent, by state.
+    #: How many copies this machine holds in the agent, by state, summed over
+    #: its locations.
     copies: dict[str, int] = Field(default_factory=dict)
+    locations: list[SyncLocationOut] = Field(default_factory=list)
 
 
 class SyncProjectOut(BaseModel):
@@ -177,6 +191,15 @@ def _state(state: SyncState) -> MemorySyncStateOut:
                     last_curated_at=a.curation.last_curated_at,
                 ),
                 copies=a.copies,
+                locations=[
+                    SyncLocationOut(
+                        name=loc.name,
+                        path=loc.path,
+                        writer=WriterStatusOut(**loc.writer),
+                        copies=loc.copies,
+                    )
+                    for loc in a.locations
+                ],
             )
             for a in state.agents
         ],

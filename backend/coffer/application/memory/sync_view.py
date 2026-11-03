@@ -18,7 +18,7 @@ from typing import Any
 
 from coffer.application.memory.sync_report import preview_summary
 from coffer.application.memory.sync_service import AuditPort, MemorySyncService
-from coffer.application.memory.sync_write import LocalAgent
+from coffer.application.memory.sync_write import LocalAgent, located
 from coffer.domain.audit import AuditEventType
 from coffer.domain.handoff import Handoff, render_handoff
 from coffer.domain.memory.hub import CLAUDE_CODE, CODEX, HubEntry, project_folder
@@ -42,12 +42,34 @@ COPY_PENDING = "pending"
 
 
 @dataclass(frozen=True)
+class LocationRow:
+    """One place the agent's writer writes into: Codex's memory folders."""
+
+    name: str
+    path: str
+    writer: dict[str, str]
+    copies: dict[str, int]
+
+
+@dataclass(frozen=True)
 class AgentRow:
     agent: str
     agent_type: str
+    #: The first location that cannot be written, else the first location's.
     writer: dict[str, str]
     curation: CurationState
+    #: Summed over the locations.
     copies: dict[str, int]
+    locations: list[LocationRow] = field(default_factory=list)
+
+
+def agent_copies_everywhere(ledger: Any, local: LocalAgent) -> dict[str, Any]:
+    """Every copy the ledger holds for ``local``, in any of its locations."""
+    out: dict[str, Any] = {}
+    for key, copies in ledger.copies.items():
+        if key == local.base_key or key.startswith(f"{local.base_key}#"):
+            out.update(copies)
+    return out
 
 
 @dataclass(frozen=True)
@@ -135,17 +157,38 @@ class MemorySyncView:
         rows = []
         for a in agents:
             writer = self._svc.writers.get(a.agent_type)
-            status = writer.status(a.config_dir) if writer else None
-            states = Counter(r.state for r in ledger.agent_copies(a.key).values())
+            locations = []
+            for spot in located(writer, a) if writer is not None else []:
+                assert writer is not None
+                status = writer.status(spot.where)
+                locations.append(
+                    LocationRow(
+                        name=spot.location_name,
+                        path=spot.where,
+                        writer={
+                            "state": status.state,
+                            "path": status.path,
+                            "reason": status.reason,
+                        },
+                        copies=dict(
+                            Counter(r.state for r in ledger.agent_copies(spot.key).values())
+                        ),
+                    )
+                )
+            blocked = [loc for loc in locations if loc.writer["state"] != "ok"]
+            total: Counter[str] = Counter()
+            for loc in locations:
+                total.update(loc.copies)
             rows.append(
                 AgentRow(
                     agent=a.agent,
                     agent_type=a.agent_type,
-                    writer={"state": status.state, "path": status.path, "reason": status.reason}
-                    if status
+                    writer=(blocked or locations)[0].writer
+                    if locations
                     else {"state": "unsupported", "path": "", "reason": ""},
                     curation=curation_state(a.agent_type, a.config_dir),
-                    copies=dict(states),
+                    copies=dict(total),
+                    locations=locations,
                 )
             )
         by_project: dict[str, Counter[str]] = defaultdict(Counter)
@@ -188,7 +231,7 @@ class MemorySyncView:
         ledger = self._svc.ledger.load()
         out: dict[str, dict[str, tuple[str, str]]] = defaultdict(dict)
         for a in agents:
-            for path, rec in ledger.agent_copies(a.key).items():
+            for path, rec in agent_copies_everywhere(ledger, a).items():
                 current = out[rec.entry].get(a.agent_type)
                 if current is None or current[0] != STATE_WRITTEN:
                     out[rec.entry][a.agent_type] = (rec.state, path)
@@ -361,6 +404,7 @@ __all__ = [
     "CopyLocation",
     "EntryDetail",
     "EntryRow",
+    "LocationRow",
     "MemorySyncView",
     "ProjectRow",
     "SyncState",

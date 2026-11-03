@@ -65,10 +65,22 @@ class CodexGlobalLayout:
     Unlike the per-project :class:`NativeMemoryLayout`, one document routes many
     projects via per-Task-Group ``cwd`` annotations (see
     ``coffer.domain.agent.codex_memory.parse_codex_memory``). The infrastructure
-    layer parses it into one store row per distinct cwd."""
+    layer parses it into one store row per distinct cwd.
+
+    Codex's v2 memory sits beside it (``<config_dir>/<v2_subdir>/<v2_index_file>``,
+    ``~/.codex/memories_v2/memory_summary.md``): one summary whose topics point
+    at rollout summaries, each of which names its cwd in its header."""
 
     memory_subdir: str
     index_file: str
+    v2_subdir: str = ""
+    v2_index_file: str = ""
+
+    def index_for(self, store: Path, config_dir: Path) -> str:
+        """The file that is the store in ``store`` (one of the two folders)."""
+        if self.v2_subdir and store == config_dir / self.v2_subdir:
+            return self.v2_index_file
+        return self.index_file
 
 
 def native_memory_layout_for(
@@ -83,7 +95,12 @@ def native_memory_layout_for(
     if agent_type is AgentType.CLAUDE_CODE:
         return NativeMemoryLayout(projects_subdir="projects", memory_subdir="memory")
     if agent_type is AgentType.CODEX:
-        return CodexGlobalLayout(memory_subdir="memories", index_file="MEMORY.md")
+        return CodexGlobalLayout(
+            memory_subdir="memories",
+            index_file="MEMORY.md",
+            v2_subdir="memories_v2",
+            v2_index_file="memory_summary.md",
+        )
     return None
 
 
@@ -114,7 +131,8 @@ def is_native_memory_dir(
     if layout is None:
         return False
     if isinstance(layout, CodexGlobalLayout):
-        return candidate == config_dir / layout.memory_subdir
+        folders = [layout.memory_subdir, *([layout.v2_subdir] if layout.v2_subdir else [])]
+        return any(candidate == config_dir / folder for folder in folders)
     return (
         candidate.name == layout.memory_subdir
         and candidate.parent.parent == config_dir / layout.projects_subdir

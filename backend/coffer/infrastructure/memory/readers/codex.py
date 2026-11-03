@@ -1,5 +1,22 @@
 """Reads Codex's distilled memory: `MEMORY.md` task groups and a profile.
 
+## Two memory versions
+
+Codex keeps v1 memory in `memories/` and v2 memory in `memories_v2/`, side by
+side, and Codex Desktop picks one per thread (spec memory "Read Codex's v2
+memory"). Both are read while both are there. v2 has no `MEMORY.md`: its
+`memory_summary.md` is the whole consolidated memory, so from it this reader
+takes the profile, the preferences, each `## General Tips` paragraph (in v1
+they restate `MEMORY.md`; in v2 there is nothing they restate) and each topic
+bullet of `## What's in Memory`. A topic is filed under the working directory
+in the header of the rollout summary it points at, the first lines of that
+file and nothing else. While a v2 summary is there, it is the profile's
+source, and v1's summary yields only the preferences v2 does not state word
+for word. During Codex's dual write the same piece of work can arrive twice,
+once as v1 task-group bullets and once as a v2 topic: accepted, because the
+two are different text and Coffer does no content-level dedup (see the ADR
+"Follow Codex's memory into every version folder").
+
 Two files matter, both under `<config_dir>/memories/`:
 
 - `MEMORY.md` — repeated `# Task Group: <name>` sections, each carrying an
@@ -104,17 +121,22 @@ from collections.abc import Iterable
 from coffer.domain.agent.codex_memory import (
     parse_codex_memory,
     parse_codex_summary_topics,
+    parse_codex_v2_topics,
     section_bullets,
     section_text,
 )
 from coffer.domain.memory.errors import UnreadableMemory
 from coffer.domain.memory.hub import TYPE_PROJECT, TYPE_USER
 from coffer.domain.memory.reader import RawEntry, SourceFile
-from coffer.infrastructure.memory.codex_identity import PROFILE_ANCHOR
+from coffer.infrastructure.agent_files.codex_rollout_summaries import rollout_cwd
+from coffer.infrastructure.memory.codex_identity import PROFILE_ANCHOR, V2_TOPICS_HEADING
 from coffer.infrastructure.memory.writers.codex import VIA_COFFER
 
 _MEMORY_NAME = "MEMORY.md"
 _SUMMARY_NAME = "memory_summary.md"
+_V1_FOLDER = "memories"
+_V2_FOLDER = "memories_v2"
+_TIPS_HEADING = "General Tips"
 
 # The three per-group bullet lists this reader turns into entries, and the
 # type each maps to. "User preferences" is the person's own standing
@@ -158,10 +180,14 @@ class CodexMemoryReader:
     agent_type = "codex"
 
     def sources(self, config_dir: str) -> tuple[SourceFile, ...]:
-        memories_dir = pathlib.Path(config_dir) / "memories"
+        base = pathlib.Path(config_dir)
         out: list[SourceFile] = []
-        for name in (_MEMORY_NAME, _SUMMARY_NAME):
-            file = memories_dir / name
+        files = (
+            base / _V1_FOLDER / _MEMORY_NAME,
+            base / _V1_FOLDER / _SUMMARY_NAME,
+            base / _V2_FOLDER / _SUMMARY_NAME,
+        )
+        for file in files:
             try:
                 digest = hashlib.sha256(file.read_bytes()).hexdigest()
             except OSError:
@@ -179,8 +205,10 @@ class CodexMemoryReader:
         except (OSError, UnicodeDecodeError) as exc:
             raise UnreadableMemory(source.path, str(exc)) from exc
 
+        if path.name == _SUMMARY_NAME and path.parent.name == _V2_FOLDER:
+            return _read_summary_v2(text, path.parent)
         if path.name == _SUMMARY_NAME:
-            return _read_summary(text)
+            return _read_summary(text, _v2_summary_beside(path))
         if path.name == _MEMORY_NAME:
             return _read_groups(text, _sibling_summary(path))
         raise UnreadableMemory(source.path, f"unrecognised Codex memory file {path.name!r}")
@@ -242,9 +270,22 @@ def _read_groups(text: str, summary_text: str) -> tuple[RawEntry, ...]:
     return tuple(entries)
 
 
-def _read_summary(text: str) -> tuple[RawEntry, ...]:
+def _v2_summary_beside(v1_summary: pathlib.Path) -> str | None:
+    """The v2 summary next to a v1 one's folder, or ``None`` when there is none."""
+    try:
+        return (v1_summary.parent.parent / _V2_FOLDER / _SUMMARY_NAME).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def _read_summary(text: str, v2_text: str | None = None) -> tuple[RawEntry, ...]:
+    """A v1 summary. With a v2 summary beside it, the profile is v2's and only
+    the preferences v2 does not state word for word are read here."""
     entries: list[RawEntry] = []
     profile = _without_coffer(section_text(text, _PROFILE_HEADING)).strip()
+    stated = set(section_bullets(v2_text, _PROFILE_PREFS_HEADING)) if v2_text is not None else set()
+    if v2_text is not None:
+        profile = ""
     if profile:
         entries.append(
             RawEntry(
@@ -257,7 +298,7 @@ def _read_summary(text: str) -> tuple[RawEntry, ...]:
             )
         )
     for bullet in section_bullets(text, _PROFILE_PREFS_HEADING):
-        if VIA_COFFER in bullet:
+        if VIA_COFFER in bullet or bullet in stated:
             continue
         entries.append(
             RawEntry(
@@ -274,6 +315,50 @@ def _read_summary(text: str) -> tuple[RawEntry, ...]:
     # for it would be exactly the guess "Read Claude Code and Codex memory with
     # their search terms" exists to avoid.
     return tuple(entries)
+
+
+def _read_summary_v2(text: str, folder: pathlib.Path) -> tuple[RawEntry, ...]:
+    """A v2 summary: the profile and preferences as v1's are read, then each
+    General Tips paragraph and each What's in Memory topic."""
+    entries = list(_read_summary(text))
+    for paragraph in _paragraphs(section_text(text, _TIPS_HEADING)):
+        if VIA_COFFER in paragraph:
+            continue
+        entries.append(
+            RawEntry(
+                title=_bullet_title(paragraph),
+                description=paragraph,
+                type=TYPE_PROJECT,
+                body=paragraph,
+                anchor=_anchor("profile", _TIPS_HEADING, paragraph),
+                project_root="",
+            )
+        )
+    for topic in parse_codex_v2_topics(text):
+        if VIA_COFFER in topic.body:
+            continue
+        entries.append(
+            RawEntry(
+                title=_bullet_title(topic.text),
+                description=topic.text,
+                type=TYPE_PROJECT,
+                body=topic.body,
+                anchor=_anchor(topic.scope or "memory", V2_TOPICS_HEADING, topic.body),
+                project_root=_topic_cwd(folder, topic.rollout_file),
+            )
+        )
+    return tuple(entries)
+
+
+def _paragraphs(text: str) -> list[str]:
+    return [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+
+
+def _topic_cwd(folder: pathlib.Path, rollout_file: str) -> str:
+    """The working directory a v2 topic was learned in: the ``cwd:`` line of
+    the header of the rollout summary it points at. Only the header is read,
+    the summary's account is not ("Read no transcripts or rollouts")."""
+    return rollout_cwd(folder, rollout_file)
 
 
 def _match_terms_to_groups(
