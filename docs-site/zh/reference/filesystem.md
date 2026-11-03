@@ -222,7 +222,7 @@ Coffer 只会为你要求的事写入已注册智能体自己的配置目录：�
 | `config.toml` | `[mcp_servers.coffer]`，`command` 设为 shim，`args = ["--agent-uid", "<uid>"]`。 | 把智能体连接到 Coffer 时。 |
 | `config.toml` | `model_provider = "coffer"`；一个 `[model_providers.coffer]` 表，其中 `base_url` 设为模型代理的 `http://127.0.0.1:<proxy port>/openai/v1`，`supports_websockets = false`，`requires_openai_auth = false`，以及一条 `auth` 命令（以绝对路径调用 `coffer`，`args = ["proxy", "token", "--agent-uid", "<agent uid>"]`）；还有指向下面模型目录的 `model_catalog_json`。从不写入提供商的 API 密钥。 | 把智能体切换到某个模型提供商时。 |
 | `coffer-model-catalog.json` | 提供商精选的模型列表，让 Codex 自己的模型选择器能显示它。关闭提供商时删除。 | 把智能体切换到某个模型提供商时。 |
-| `memories/extensions/coffer/` | `instructions.md`（告诉 Codex 的整合这些文件是什么）和 `resources/<id>-<slug>.md`（另一个智能体或另一台机器学到的每条记忆一个）。Codex 的记忆关闭时什么都不写。 | 记忆同步。见[记忆](/zh/guides/memory#what-coffer-writes-into-each-agent)。 |
+| `memories/extensions/coffer/`、`memories_v2/extensions/coffer/` | 每个存在的 Codex 记忆文件夹里各一个。`instructions.md`（告诉 Codex 的整合这些文件是什么）和 `resources/<id>-<slug>.md`（另一个智能体或另一台机器学到的每条记忆一个）。Codex 的记忆关闭时什么都不写。 | 记忆同步。见[记忆](/zh/guides/memory#what-coffer-writes-into-each-agent)。 |
 | `skills/<name>` | 指向 `~/.coffer/vault/skills/<name>` 的符号链接。 | 向智能体投递技能时。 |
 
 Coffer 通过 `coffer` 服务器键，以及运行 `coffer` CLI（裸名或任意路径）加 `proxy token` 的 `apiKeyHelper` 来识别自己的条目，并且只删除这些。其他条目——你自己的 MCP 服务器、你的 Hook、你的 `env`——保持原样。在智能体的记忆里，Coffer 只写上面列出的文件和标记区块，从不写智能体自己写的记忆；记忆页上的**撤销同步…**会移除它们。升级后首次启动时，守护进程会移除早期版本装在 `settings.json` 和 `hooks.json` 里的 `: coffer-memory` Hook 条目。

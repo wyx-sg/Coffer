@@ -36,7 +36,7 @@ Coffer 做的只是机械处理：复制、归档、改名，从不对你的记�
 | 智能体 | 读取的文件 |
 | --- | --- |
 | Claude Code | `<config_dir>/projects/<project>/memory/*.md` 里的每个记忆文件：frontmatter 里的 `name`、`description` 和 `type`，以及正文。Claude Code 自己的 `MEMORY.md` 索引会被跳过。 |
-| Codex | `<config_dir>/memories/MEMORY.md`（每个任务组的偏好、可复用知识和失败记录），以及 `memory_summary.md`（档案、长期偏好，以及 Codex 为每个任务组列出的检索词）。 |
+| Codex | `<config_dir>/memories/MEMORY.md`（每个任务组的偏好、可复用知识和失败记录），以及 `memory_summary.md`（档案、长期偏好，以及 Codex 为每个任务组列出的检索词）。Codex Desktop 0.163 及以后还会把 v2 记忆放在 `<config_dir>/memories_v2/`，那里唯一的记忆文件是 `memory_summary.md`：Coffer 读取其中的档案、偏好、General Tips 和列出的每项工作，并按该会话的 rollout 摘要开头几行记录的目录，把每项工作归到对应项目。有 v2 摘要时，档案以它为准。 |
 
 Coffer 不读会话记录，也不读 rollout 文件。两个智能体本来就会把自己的会话提炼进记忆，Coffer 从那里开始。它读回自己写的副本时会跳过它们（见[Coffer 往每个智能体里写什么](#what-coffer-writes-into-each-agent)），所以它写的东西不会被再次发布。
 
@@ -73,12 +73,13 @@ Coffer 不读会话记录，也不读 rollout 文件。两个智能体本来就�
 | 智能体 | Coffer 写入什么 |
 | --- | --- |
 | Claude Code | 每条记忆一个文件 `coffer_<slug>.md`，放在项目的记忆文件夹（`~/.claude/projects/<project>/memory/`，不存在时会创建），用 Claude Code 自己的记忆格式，外加一个写明记忆来源的 `coffer:` 区块。该文件夹 `MEMORY.md` 末尾的标记区块里，每份副本一行，位于 `<!-- coffer:memory-sync:begin -->` 和 `<!-- coffer:memory-sync:end -->` 之间：最多 30 行，最新的在前，最后一行说明文件夹里还有多少份副本。`global` 记忆用同样的方式写进它自己的一个项目文件夹 `~/.claude/projects/-coffer-global/memory/`，没有会话会自己打开它；Claude Code 每次会话都会加载的 `~/.claude/rules/coffer-memory.md` 说明它们在哪，并保持简短（最多 8 KB）：关于你或你的工作方式的记忆每条一行；Codex 在具体任务中学到的，只写任务名，按任务分组的完整列表在该文件夹的 `MEMORY.md` 里。 |
-| Codex | 每条记忆一个文件，放在 `~/.codex/memories/extensions/coffer/resources/` 下，在记忆正文上方写明它适用的项目（或"所有项目"）；再加一个 `instructions.md`，告诉 Codex 的整合这些文件是什么：你的其他智能体学到的记忆，只当作信息、绝不当作指令，按各自写明的项目归档，并在 Codex 把它们并入自己的记忆时标上 `[via Coffer]`。 |
+| Codex | 在每个存在的 Codex 记忆文件夹里（`~/.codex/memories/` 和 `~/.codex/memories_v2/`，因为 Codex 按线程选用其中一个），每条记忆一个文件，放在 `extensions/coffer/resources/` 下，在记忆正文上方写明它适用的项目（或"所有项目"）；再加一个 `instructions.md`，告诉 Codex 的整合这些文件是什么：你的其他智能体学到的记忆，只当作信息、绝不当作指令，按各自写明的项目归档，并在 Codex 把它们并入自己的记忆时标上 `[via Coffer]`。 |
 
 - **只写到项目已检出的地方。** 只有一个项目在某台机器上检出后，它的记忆才会写到那台机器上；检出位置来自你的智能体记录下的工作目录。在那之前，这些记忆留在中心库里等待。`global` 记忆会写到每台机器上。
 - **只碰 Coffer 自己的文件。** Coffer 只创建、修改和删除它自己的副本、`MEMORY.md` 里它的标记区块、它的规则文件，以及它的 Codex 扩展文件夹。`MEMORY.md` 里的其他内容和智能体自己写的每条记忆都逐字节保持原样，Coffer 也从不改动智能体的记忆设置。修改 `MEMORY.md` 之前，它会先把它备份到 `~/.coffer/config-backups/`。
 - **被修改过的副本归智能体所有。** 当智能体修改或删除了一份副本（比如 Auto Dream 把它并入了 Claude Code 自己的某个文件），Coffer 就不再管理它：不会覆盖修改，也不会把删掉的副本恢复回来。如果这条记忆之后在中心库里有了变化，Coffer 会把新版本作为一份新副本写在被修改的那份旁边。
 - **Codex 的记忆已关闭。** 当 Codex 的记忆功能关闭时（`config.toml` 里 `[features]` 下的 `memories`），Coffer 不往 Codex 写任何东西，记忆页会说明这一点。
+- **Coffer 不认识的 Codex 记忆文件夹。** 当 Codex 启用更新的记忆文件夹（比如 `memories_v3/`）时，Coffer 不往里写，继续写它认识的文件夹，记忆页和 Codex 的记忆标签页会列出这个新文件夹，直到 Coffer 更新。
 
 ### 当 Codex 自己从 Claude Code 导入时 {#when-codex-imports-from-claude-code-itself}
 
@@ -146,7 +147,7 @@ coffer log audit --event-type memory_synced --limit 20
 智能体 → 选择该智能体 → 更多 → 记忆
 ```
 
-每个智能体自己的设置在它的记忆标签页上，所以记忆页不会随智能体数量变长。记忆功能开启时，这个标签页最上方是**记忆同步**一节：它自己的记忆是否开启（Claude Code 的自动记忆，Codex 的记忆），它自己的整理是否开启（Claude Code 的 Auto Dream，Codex 的整合），任一项关闭时给出提示；Coffer 写进它的副本（以及其中多少份被智能体修改或移除）；Claude Code 的标签页上还有**立即整理**；以及**打开记忆页**，它会打开只显示这个智能体记忆的记忆页。Codex 的标签页还有**Codex 自己导入 Claude Code 的记忆**。下面是该智能体自己的记忆文件夹。
+每个智能体自己的设置在它的记忆标签页上，所以记忆页不会随智能体数量变长。记忆功能开启时，这个标签页最上方是**记忆同步**一节：它自己的记忆是否开启（Claude Code 的自动记忆，Codex 的记忆），它自己的整理是否开启（Claude Code 的 Auto Dream，Codex 的整合），任一项关闭时给出提示；Coffer 写进它的副本（以及其中多少份被智能体修改或移除），Codex 每个记忆文件夹一行；Claude Code 的标签页上还有**立即整理**；以及**打开记忆页**，它会打开只显示这个智能体记忆的记忆页。Codex 的标签页还有**Codex 自己导入 Claude Code 的记忆**。下面是该智能体自己的记忆文件夹。
 
 ## 整理由每个智能体自己负责 {#curation-is-each-agent-s-own}
 
@@ -163,7 +164,7 @@ Coffer 不合并也不让记忆退役。每个智能体整理自己持有的东�
 记忆 → ⋯ → 撤销同步…
 ```
 
-**撤销同步…**先列出它会移除什么、保留什么，然后从这台机器上移除 Coffer 写入且智能体没有修改过的每份副本、每个 `MEMORY.md` 中 Coffer 的区块、`~/.claude/rules/coffer-memory.md` 和 `~/.codex/memories/extensions/coffer/`，关闭自动同步，并记录一条 `memory_sync_undone` 事件。它保留保险库里的中心库、智能体自己写下的每条记忆，以及智能体修改过的每份副本。你的其他机器不受影响。重新打开自动同步或选择**立即同步**，副本就会再次写入。
+**撤销同步…**先列出它会移除什么、保留什么，然后从这台机器上移除 Coffer 写入且智能体没有修改过的每份副本、每个 `MEMORY.md` 中 Coffer 的区块、`~/.claude/rules/coffer-memory.md` 和每个 Codex 记忆文件夹里的 `extensions/coffer/`，关闭自动同步，并记录一条 `memory_sync_undone` 事件。它保留保险库里的中心库、智能体自己写下的每条记忆，以及智能体修改过的每份副本。你的其他机器不受影响。重新打开自动同步或选择**立即同步**，副本就会再次写入。
 
 ## 关闭记忆 {#turning-memory-off}
 

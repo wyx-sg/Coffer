@@ -38,8 +38,8 @@ class WriterStatus:
 
 @dataclass(frozen=True)
 class WriteLocation:
-    """One place a writer writes into for an agent (spec memory "Write into
-    every memory folder Codex reads").
+    """One place a writer writes into for an agent (spec memory "Write the hub
+    into Codex's memory extension").
 
     Claude Code has one: its config directory. Codex keeps one memory folder
     per memory version side by side (``memories/``, ``memories_v2/``) and a

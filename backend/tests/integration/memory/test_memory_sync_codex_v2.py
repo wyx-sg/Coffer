@@ -1,5 +1,5 @@
-"""Codex's two memory versions (spec memory "Write into every memory folder
-Codex reads", "Read Codex's v2 memory").
+"""Codex's two memory versions (spec memory "Write the hub into Codex's
+memory extension", "Read Codex's v2 memory").
 
 Codex keeps v1 memory in ``memories/`` and v2 memory in ``memories_v2/``, and
 Codex Desktop picks one per thread, so Coffer writes its extension into each

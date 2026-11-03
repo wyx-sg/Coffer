@@ -243,6 +243,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`curate-claude-memory-in-the-open`](curate-claude-memory-in-the-open.md) | Curate Claude Code's Memory in the Open, and Turn Auto Dream On Only When Asked |
 | [`codex-memory-identity-is-content-with-rewrite-carry-over`](codex-memory-identity-is-content-with-rewrite-carry-over.md) | A Codex Memory Is Identified by Its Content, and a Rewrite Keeps the Identity |
 | [`memory-page-lists-memories-by-scope`](memory-page-lists-memories-by-scope.md) | The Memory Page Lists the Memories by Scope; the Sync Shows Only When It Needs the Person |
+| [`follow-codex-memory-into-every-version-folder`](follow-codex-memory-into-every-version-folder.md) | Follow Codex's Memory Into Every Version Folder It Keeps |
 
 ### Sync & secrets
 

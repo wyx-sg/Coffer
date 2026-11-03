@@ -1,5 +1,5 @@
 """Writes hub entries into Codex's memory extension (spec memory "Write the hub
-into Codex's memory extension", "Write into every memory folder Codex reads").
+into Codex's memory extension").
 
 Codex keeps one memory folder per memory version side by side in its config
 directory: ``memories/`` (v1) and ``memories_v2/`` (v2, which Codex Desktop

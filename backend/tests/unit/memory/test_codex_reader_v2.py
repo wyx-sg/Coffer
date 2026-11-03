@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import pathlib
 
+import pytest
+
 from coffer.domain.agent.codex_memory import parse_codex_v2_topics
 from coffer.domain.memory.hub import TYPE_PROJECT, TYPE_USER
 from coffer.domain.memory.reader import RawEntry
@@ -99,6 +101,9 @@ def test_v2_yields_profile_preferences_tips_and_topics(tmp_path: pathlib.Path) -
     assert by_title["SPB-66270 buffered UserID history"].anchor.startswith("Historic programs::")
 
 
+@pytest.mark.acceptance(
+    spec="memory", scenario="with v2 beside it, v1's summary gives only what v2 does not say"
+)
 def test_with_v2_beside_it_v1_gives_only_what_v2_does_not_say(tmp_path: pathlib.Path) -> None:
     v1 = _read(_codex(tmp_path, v1_summary=V1_SUMMARY))["memories/memory_summary.md"]
     assert [e.body for e in v1] == ["Only v1 knows this."]

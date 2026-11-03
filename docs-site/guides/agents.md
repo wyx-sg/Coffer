@@ -296,9 +296,9 @@ Under **Model**, Coffer tests the provider with the chosen model by itself, the 
 The **Memory** tab lists the agent's own memory stores, read-only:
 
 - **Claude Code:** one store per project at `<config_dir>/projects/<slug>/memory/`, labelled with the real project directory.
-- **Codex:** the global `<config_dir>/memories/MEMORY.md`, split into one row per project it routes task groups to.
+- **Codex:** the global `<config_dir>/memories/MEMORY.md`, split into one row per project it routes task groups to, and, for v2 memory, `<config_dir>/memories_v2/memory_summary.md`, one row per project its listed work was done in.
 
-Opening a row shows the store's files in a file tree with a read-only preview. While [memory sync](/guides/memory) is on, the stores also hold the copies Coffer wrote from your other agents: `coffer_*.md` files and a marked block in `MEMORY.md` for Claude Code, `memories/extensions/coffer/` for Codex. What Coffer syncs, and where each copy went, is on the **Memory** page.
+Opening a row shows the store's files in a file tree with a read-only preview. While [memory sync](/guides/memory) is on, the stores also hold the copies Coffer wrote from your other agents: `coffer_*.md` files and a marked block in `MEMORY.md` for Claude Code, `extensions/coffer/` in each of Codex's memory folders. What Coffer syncs, and where each copy went, is on the **Memory** page.
 
 The **Sessions** tab lists the agent's own sessions — the ones you ran in a terminal or an app, and the ones a [channel](/guides/channels) started — with title, agent, working directory and last activity. Coffer asks the agent itself for the list (Claude Code's session listing, Codex's `thread/list`) and does not parse the agent's files. Search matches the title and the directory. A session that belongs to a channel conversation also shows its channel, **Running** while its turn runs, with an inline **Stop**.
 
