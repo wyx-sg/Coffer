@@ -5,15 +5,13 @@ The sync's state, **Sync now**, the pending preview's **Write** and
 **Cancel**, **Undo sync…**, the person's answer to "Codex imports Claude
 Code's memories itself", the hub's memories for one project with where each
 was written here, one memory's text with the file each agent holds it in,
-**Curate now**, and **Turn on** for an agent's own curation.
+**Curate now**, **Turn on** for an agent's own curation, and **Sort into
+knowledge** with the record of what was sorted.
 """
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, Depends, Query, Response
-from pydantic import BaseModel, Field
 
 from coffer.application.memory.sync_report import SyncReport
 from coffer.application.memory.sync_service import MemorySyncService
@@ -23,149 +21,34 @@ from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor
 from coffer.surfaces.http.handoff_schemas import HandoffOut
 from coffer.surfaces.http.memory.sync_dependencies import get_sync_service, get_sync_view
+from coffer.surfaces.http.memory.sync_schemas import (
+    CodexImportIn,
+    CurateIn,
+    CurationEnableOut,
+    CurationHandoffOut,
+    CurationStateOut,
+    EntryCopyOut,
+    HubEntryDetailOut,
+    HubEntryListOut,
+    HubEntryOut,
+    MemorySyncReportOut,
+    MemorySyncStateOut,
+    SortedIn,
+    SortedOut,
+    SortHandoffOut,
+    SyncAgentOut,
+    SyncLocationOut,
+    SyncProjectOut,
+    ToSortEntryOut,
+    ToSortOut,
+    WriterStatusOut,
+)
 
 router = APIRouter(
     prefix="/api/v1/memory/sync",
     tags=["memory"],
     dependencies=[Depends(require_token)],
 )
-
-
-class WriterStatusOut(BaseModel):
-    state: str
-    path: str = ""
-    reason: str = ""
-
-
-class CurationStateOut(BaseModel):
-    #: ``on`` / ``off`` / ``unknown``: the agent's own memory.
-    memory: str
-    #: ``on`` / ``off`` / ``unknown``: the agent's own curation.
-    curation: str
-    #: ``setting`` (the agent's own setting says so), ``default`` (the
-    #: vendor's default for the account), or ``""`` when unknown.
-    source: str = ""
-    #: When the agent's curation last ran on this machine, ``""`` if never seen.
-    last_curated_at: str = ""
-
-
-class SyncLocationOut(BaseModel):
-    """One place the agent's writer writes into (Codex: one per memory folder)."""
-
-    #: ``""`` for the agent's first location, else the folder's name.
-    name: str = ""
-    path: str
-    writer: WriterStatusOut
-    #: How many copies this machine holds in this location, by state.
-    copies: dict[str, int] = Field(default_factory=dict)
-
-
-class SyncAgentOut(BaseModel):
-    agent: str
-    agent_type: str
-    #: The first location that cannot be written, else the first location's.
-    writer: WriterStatusOut
-    curation: CurationStateOut
-    #: How many copies this machine holds in the agent, by state, summed over
-    #: its locations.
-    copies: dict[str, int] = Field(default_factory=dict)
-    locations: list[SyncLocationOut] = Field(default_factory=list)
-
-
-class SyncProjectOut(BaseModel):
-    key: str
-    folder: str
-    memories: int
-    #: How many of the project's memories each agent type published.
-    agents: dict[str, int] = Field(default_factory=dict)
-    #: The project's checkout on this machine, or ``null`` (held back).
-    checked_out: str | None = None
-
-
-class MemorySyncStateOut(BaseModel):
-    running: bool
-    last_synced_at: str = ""
-    last_report: dict[str, Any] = Field(default_factory=dict)
-    preview: dict[str, Any] | None = None
-    codex_imports_claude: bool | None = None
-    agents: list[SyncAgentOut] = Field(default_factory=list)
-    projects: list[SyncProjectOut] = Field(default_factory=list)
-    global_memories: int = 0
-    machine: str = ""
-
-
-class MemorySyncReportOut(BaseModel):
-    """What one sync, write or undo did (the ``memory_synced`` details)."""
-
-    details: dict[str, Any] = Field(default_factory=dict)
-    summary: dict[str, Any] = Field(default_factory=dict)
-
-
-class HubEntryOut(BaseModel):
-    id: str
-    title: str
-    description: str
-    type: str
-    project: str = ""
-    origin_machine: str
-    origin_agent: str
-    created_at: str
-    updated_at: str
-    #: ``agent type → copy state`` on this machine (``written``, ``edited``,
-    #: ``removed``, ``held_back``, ``deferred``, ``rules``, ``origin``,
-    #: ``pending``).
-    copies: dict[str, str] = Field(default_factory=dict)
-
-
-class HubEntryListOut(BaseModel):
-    project: str
-    entries: list[HubEntryOut] = Field(default_factory=list)
-
-
-class EntryCopyOut(BaseModel):
-    agent_type: str
-    #: The copy's state here (as in ``HubEntryOut.copies``).
-    state: str
-    #: The file that holds the memory in this agent here; ``""`` when none.
-    path: str = ""
-
-
-class HubEntryDetailOut(BaseModel):
-    """One memory with its text and, per local agent, where it is held."""
-
-    id: str
-    title: str
-    description: str
-    type: str
-    project: str = ""
-    origin_machine: str
-    origin_agent: str
-    created_at: str
-    updated_at: str
-    #: The memory's text, its paths expanded for this machine. Read only.
-    body: str
-    copies: list[EntryCopyOut] = Field(default_factory=list)
-
-
-class CodexImportIn(BaseModel):
-    #: ``true`` when Codex imports Claude Code's memories itself, ``null`` to forget.
-    value: bool | None = None
-
-
-class CurateIn(BaseModel):
-    agent_type: str
-
-
-class CurationHandoffOut(BaseModel):
-    """**Curate now**: the prompt the page starts the agent with in a terminal."""
-
-    handoff: HandoffOut
-
-
-class CurationEnableOut(BaseModel):
-    #: Whether a setting was written (``false`` when it was already on, or the
-    #: agent has no switch for it).
-    changed: bool
 
 
 def _report(report: SyncReport) -> MemorySyncReportOut:
@@ -215,6 +98,7 @@ def _state(state: SyncState) -> MemorySyncStateOut:
         ],
         global_memories=state.global_memories,
         machine=state.machine,
+        to_sort=state.to_sort,
     )
 
 
@@ -271,9 +155,10 @@ async def set_codex_import(
 
 @router.get("/entries", response_model=HubEntryListOut)
 async def list_entries(
-    project: str = Query("", description="A project key; empty for global memories."),
+    project: str = Query("", description="A project key; empty or `global` for global memories."),
     view: MemorySyncView = Depends(get_sync_view),  # noqa: B008
 ) -> HubEntryListOut:
+    project = "" if project == "global" else project
     rows = await view.entries(project)
     return HubEntryListOut(
         project=project,
@@ -289,6 +174,7 @@ async def list_entries(
                 created_at=r.entry.created_at,
                 updated_at=r.entry.updated_at,
                 copies=r.copies,
+                to_sort=r.to_sort,
             )
             for r in rows
         ],
@@ -335,6 +221,46 @@ async def curation_handoff(
     if prompt is None:
         raise ResourceNotFound(f"a curation hand-off for {body.agent_type}")
     return CurationHandoffOut(handoff=HandoffOut(prompt=prompt))
+
+
+@router.get("/to-sort", response_model=ToSortOut)
+async def to_sort(
+    view: MemorySyncView = Depends(get_sync_view),  # noqa: B008
+) -> ToSortOut:
+    """The task material no one has sorted yet, newest first."""
+    return ToSortOut(
+        entries=[
+            ToSortEntryOut(
+                id=e.id,
+                title=e.title or e.description,
+                project=e.project,
+                origin_agent=e.origin.agent,
+                updated_at=e.updated_at,
+            )
+            for e in await view.to_sort()
+        ]
+    )
+
+
+@router.post("/sort/handoff", response_model=SortHandoffOut)
+async def sort_handoff(
+    view: MemorySyncView = Depends(get_sync_view),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> SortHandoffOut:
+    """**Sort into knowledge**: the prompt that asks Claude Code, in a terminal
+    the person watches, to sort the waiting task material."""
+    return SortHandoffOut(handoff=HandoffOut(prompt=await view.sort_handoff(actor)))
+
+
+@router.post("/sorted", response_model=SortedOut)
+async def mark_sorted(
+    body: SortedIn,
+    view: MemorySyncView = Depends(get_sync_view),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> SortedOut:
+    """Record where the person's agent sorted memories; 404 for an id not in
+    the hub."""
+    return SortedOut(ids=await view.mark_sorted(body.ids, body.outcome, body.where, actor))
 
 
 @router.post("/curation/enable", response_model=CurationEnableOut)

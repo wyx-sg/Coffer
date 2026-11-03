@@ -16,7 +16,7 @@ Knowledge is what a developer has learned about their working environment: which
 - **Hand-maintained links rot.** In the same corpus, 343 of 398 internal file references were dead, each one a file name written into prose and broken by a later rename.
 - **Free-form documents do not compound.** When every upload stood alone as one more document, was rewritten in place as it was tidied into the rest, and documents were forbidden to name each other, a collection grew as a pile of carriers rather than as subjects: nothing recorded which uploads had been folded in, nothing traced a statement to its origin, and an agent found related material only by grepping for words.
 
-Knowledge is also distinct from [memory](/architecture/memory). Knowledge is about the world and arrives because someone put it there. It is organised by collection and pulled through a skill. Memory is about the user and their projects. It accrues on its own in each agent's native memory, and Coffer syncs it between the agents.
+Knowledge is also distinct from [memory](/architecture/memory). Knowledge is about the world and arrives because someone put it there. It is organised by collection and pulled through a skill. Memory is about the user, how to work with them and their projects' state. It accrues on its own in each agent's native memory, and Coffer syncs it between the agents. What an agent filed in its memory as task notes (how an outside system or team works) belongs here: the Memory page's **Sort into knowledge** hands it to Claude Code, which writes it into a collection inside a tidy, naming the memory in each page's `evidence` as `memory: <id>`.
 
 ## Design decisions
 

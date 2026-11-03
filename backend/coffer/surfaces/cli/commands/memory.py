@@ -63,7 +63,7 @@ SPECS = [
         "/memory/sync/entries",
         _UI + "a project's memories",
         "A project's memories with their origin and where each was written.",
-        query=(Q("project", "The project key, or global"),),
+        query=(Q("project", "The project key, or `global`"),),
         rows="entries",
         columns=("title", "origin_agent", "origin_machine", "type"),
     ),
@@ -82,6 +82,32 @@ SPECS = [
         _UI + "Curate now",
         "The prompt that asks Claude Code to consolidate its memory; give it to the agent. "
         "Body: agent_type.",
+        body=True,
+    ),
+    RouteCommand(
+        "memory to-sort",
+        "GET",
+        "/memory/sync/to-sort",
+        _UI + "memories to sort",
+        "The memories your agents filed as task notes that no one has sorted yet.",
+        rows="entries",
+        columns=("id", "title", "origin_agent", "project"),
+    ),
+    RouteCommand(
+        "memory sort",
+        "POST",
+        "/memory/sync/sort/handoff",
+        _UI + "Sort into knowledge",
+        "The prompt that asks Claude Code to sort the waiting task notes into knowledge, "
+        "a skill, memory or nothing; give it to the agent.",
+    ),
+    RouteCommand(
+        "memory sorted",
+        "POST",
+        "/memory/sync/sorted",
+        _UI + "Sort into knowledge (recorded by the agent)",
+        "Record where memories were sorted. Body: ids, outcome (knowledge, skill, memory, "
+        "drop), where.",
         body=True,
     ),
     RouteCommand(

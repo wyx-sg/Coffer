@@ -1004,7 +1004,13 @@
       "memory_curation_requested": "Asked an agent to tidy its own memory",
       "memory_curation_requested_agent": "Asked {{agent}} to tidy its own memory",
       "memory_curation_enabled": "Turned on an agent's own memory tidying",
-      "memory_curation_enabled_agent": "Turned on {{agent}}'s own memory tidying"
+      "memory_curation_enabled_agent": "Turned on {{agent}}'s own memory tidying",
+      "memory_sort_requested": "Asked Claude Code to sort task notes out of memory",
+      "memory_sort_requested_count_one": "Asked Claude Code to sort {{count}} task note out of memory",
+      "memory_sort_requested_count_other": "Asked Claude Code to sort {{count}} task notes out of memory",
+      "memory_sorted": "Recorded memories as sorted",
+      "memory_sorted_count_one": "Recorded {{count}} memory as sorted into {{outcome}}",
+      "memory_sorted_count_other": "Recorded {{count}} memories as sorted into {{outcome}}"
     },
     "capType": {
       "tool": "tool",
@@ -3587,6 +3593,7 @@
       "edited_other": "{{count}} edited by the agent",
       "removed_one": "{{count}} removed by the agent",
       "removed_other": "{{count}} removed by the agent",
+      "asText": "As text in each project's MEMORY.md and a rules file",
       "writer": {
         "off": "Nothing written: its memory is off",
         "blocked": "Nothing written"
@@ -3712,7 +3719,9 @@
       "held_back": "Held back",
       "deferred": "Codex imports it",
       "edited": "Edited by agent",
-      "removed": "Removed by agent"
+      "removed": "Removed by agent",
+      "block": "In project memory",
+      "stays_home": "Stays with its agent"
     },
     "scopes": {
       "label": "Memory scopes",
@@ -3747,6 +3756,19 @@
       "openAgent": "Open {{agent}}'s memory",
       "blocked_one": "{{count}} agent cannot be written into",
       "blocked_other": "{{count}} agents cannot be written into"
+    },
+    "toSort": {
+      "line_one": "{{count}} memory looks like task notes and waits to be sorted",
+      "line_other": "{{count}} memories look like task notes and wait to be sorted",
+      "hint": "Your agents filed these as task notes, so Coffer keeps them with the agent that wrote them. Sorting asks Claude Code, in your terminal, to move what is about outside systems into knowledge, procedures into skills, and to keep what is about you as memory.",
+      "button": "Sort into knowledge",
+      "badge": "To sort"
+    },
+    "sortOutcome": {
+      "knowledge": "knowledge",
+      "skill": "a skill",
+      "memory": "memory",
+      "drop": "nothing"
     }
   },
   "conversations": {
@@ -4985,6 +5007,7 @@
       "skill": "Skill",
       "channel": "Channel",
       "knowledge": "Knowledge",
+      "memory": "Memory",
       "sync": "Sync",
       "reconcile": "Agent config",
       "cli": "CLI",

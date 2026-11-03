@@ -155,6 +155,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/memory/sync/sort/handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sort Handoff
+         * @description **Sort into knowledge**: the prompt that asks Claude Code, in a terminal
+         *     the person watches, to sort the waiting task material.
+         */
+        post: operations["sort_handoff_api_v1_memory_sync_sort_handoff_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory/sync/sorted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Sorted
+         * @description Record where the person's agent sorted memories; 404 for an id not in
+         *     the hub.
+         */
+        post: operations["mark_sorted_api_v1_memory_sync_sorted_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/memory/sync/state": {
         parameters: {
             query?: never;
@@ -164,6 +206,26 @@ export interface paths {
         };
         /** Sync State */
         get: operations["sync_state_api_v1_memory_sync_state_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory/sync/to-sort": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * To Sort
+         * @description The task material no one has sorted yet, newest first.
+         */
+        get: operations["to_sort_api_v1_memory_sync_to_sort_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -339,6 +401,11 @@ export interface components {
             project: string;
             /** Title */
             title: string;
+            /**
+             * To Sort
+             * @default false
+             */
+            to_sort: boolean;
             /** Type */
             type: string;
             /** Updated At */
@@ -391,6 +458,38 @@ export interface components {
             projects: components["schemas"]["SyncProjectOut"][];
             /** Running */
             running: boolean;
+            /**
+             * To Sort
+             * @default 0
+             */
+            to_sort: number;
+        };
+        /**
+         * SortHandoffOut
+         * @description **Sort into knowledge**: the prompt the page starts Claude Code with.
+         */
+        SortHandoffOut: {
+            handoff: components["schemas"]["HandoffOut"];
+        };
+        /** SortedIn */
+        SortedIn: {
+            /** Ids */
+            ids: string[];
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "knowledge" | "skill" | "memory" | "drop";
+            /**
+             * Where
+             * @default
+             */
+            where?: string;
+        };
+        /** SortedOut */
+        SortedOut: {
+            /** Ids */
+            ids: string[];
         };
         /** SyncAgentOut */
         SyncAgentOut: {
@@ -439,6 +538,27 @@ export interface components {
             key: string;
             /** Memories */
             memories: number;
+        };
+        /** ToSortEntryOut */
+        ToSortEntryOut: {
+            /** Id */
+            id: string;
+            /** Origin Agent */
+            origin_agent: string;
+            /**
+             * Project
+             * @default
+             */
+            project: string;
+            /** Title */
+            title: string;
+            /** Updated At */
+            updated_at: string;
+        };
+        /** ToSortOut */
+        ToSortOut: {
+            /** Entries */
+            entries: components["schemas"]["ToSortEntryOut"][];
         };
         /** WriterStatusOut */
         WriterStatusOut: {
@@ -599,7 +719,7 @@ export interface operations {
     list_entries_api_v1_memory_sync_entries_get: {
         parameters: {
             query?: {
-                /** @description A project key; empty for global memories. */
+                /** @description A project key; empty or `global` for global memories. */
                 project?: string;
             };
             header?: {
@@ -801,6 +921,92 @@ export interface operations {
             };
         };
     };
+    sort_handoff_api_v1_memory_sync_sort_handoff_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SortHandoffOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    mark_sorted_api_v1_memory_sync_sorted_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SortedIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SortedOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     sync_state_api_v1_memory_sync_state_get: {
         parameters: {
             query?: never;
@@ -819,6 +1025,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MemorySyncStateOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    to_sort_api_v1_memory_sync_to_sort_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToSortOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

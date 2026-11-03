@@ -12,18 +12,19 @@ Every agent the developer runs keeps its own memory, and none of them can see an
 
 **The hub is vault content.** Vault sync carries it to the person's other machines, so a memory one agent learned on one machine reaches every agent on every machine. A project is named by its repository's normalised `origin`, and the paths in a memory are stored portably, so a memory written in one checkout reads true in another.
 
-**Each agent reads the copies the way it reads its own memory.** For Claude Code that is a `coffer_` topic file per memory, a short marked block in the project's `MEMORY.md`, and a rules file for global memories; for Codex it is a memory extension folder. Coffer delivers nothing into a session itself: no hook, no index at session start, no retrieval at prompt time.
+**Each agent reads the copies the way it reads its own memory.** For Claude Code that is text it loads by itself: the memories of a project in a marked block of that project's `MEMORY.md`, and the global ones in a rules file; Claude Code opens a memory's own file only when its model chooses to, which in practice it does not, so Coffer writes no file per memory there. For Codex it is a memory extension folder, which Codex's consolidation absorbs. Coffer delivers nothing into a session itself: no hook, no index at session start, no retrieval at prompt time.
 
 **Coffer does the mechanical work and nothing else.** It publishes, writes and removes copies; it never merges, rewords or judges a memory, and it never touches a memory an agent wrote. Judgement stays with each agent's own curation (Codex consolidation, Claude Code's Auto Dream), which now sees the other agents' memories beside its own; a copy the agent edited or removed is the agent's, and is not written again. **Curate now** asks an agent to run its curation at once.
 
-**Memory is not knowledge.** [Knowledge](../knowledge/spec.md) holds what the user or an agent **wrote down about the world**; this layer holds what agents **learned while working**: the user's preferences, a project's decisions, a trap already hit.
+**Memory is about the person; knowledge is about the world.** Memory holds who the person is, how to work with them, and a project's current state. [Knowledge](../knowledge/spec.md) holds how outside systems, teams and processes work: what needs a source, goes stale or is worth sharing. A fixed sequence of steps is a [skill](../skill-manager/spec.md). Agents still write task notes into their own memory, so Coffer flags the memories an agent filed as task material, keeps them with that agent, and on request hands them to the person's agent to sort into knowledge, a skill, memory or nothing.
 
 | | Memory | Knowledge |
 | --- | --- | --- |
-| Where it comes from | agents' native memories | the human uploads it, or writes it with an agent |
+| Holds | the person, how to work with them, a project's state | outside systems, teams, processes, their pitfalls |
+| Where it comes from | agents' native memories | the human uploads it, or writes it with an agent; task notes sorted out of memory |
 | Partitioned by | project (and `global`) | collection |
 | Who authors the stored text | the agent that learned it; Coffer copies it as it stands | the human or an agent, directly |
-| Reaches an agent by | **push**: a copy in the agent's own memory | **pull**: the agent reaches for it |
+| Reaches an agent by | **push**: text or a copy in the agent's own memory | **pull**: the agent reaches for it |
 | Tidied by | each agent's own curation | an agent on request (Tidy) |
 
 The first sync on a machine, and any sync that would change more than 50 copies, waits as a **preview** the person writes or cancels, and **Undo sync** removes every copy Coffer wrote that the agent has not edited. The page and the `coffer memory` commands manage the sync; neither reads or writes a memory's text.
@@ -178,41 +179,61 @@ A memory whose text holds something shaped like a secret (an API key, a token, a
 - **WHEN** memory syncs
 - **THEN** no hub entry is written for it, and the sync's Activity entry lists it as withheld by agent and source path only
 
-### Requirement: Write the hub into Claude Code's native memory
-For each project checked out on this machine, Coffer MUST write each hub entry that did not come from this machine's Claude Code into that project's Claude Code memory directory (`<config_dir>/projects/<project>/memory/`, created when missing, named the way Claude Code names it for the repository's root), as one topic file named `coffer_<slug>.md`, in Claude Code's own frontmatter format (`name`, `description`, `metadata.type`) plus a `coffer:` block naming the hub entry and its origin agent. It MUST keep one line per copy inside a marked block of that directory's `MEMORY.md`, between `<!-- coffer:memory-sync:begin -->` and `<!-- coffer:memory-sync:end -->`: at most 30 lines, newest first, the last line naming how many more copies sit in the directory when there are more. Coffer MUST back `MEMORY.md` up before changing it and MUST NOT change anything in it outside the marked block.
+### Requirement: Write the hub into Claude Code as text it loads
+Coffer MUST write each hub entry that did not come from this machine's Claude Code into Claude Code as text Claude Code loads by itself, and MUST NOT write a file per memory. A project's entries MUST go, for each project checked out on this machine, into a marked block at the end of that project's `MEMORY.md` (in `<config_dir>/projects/<project>/memory/`, created when missing, named the way Claude Code names it for the repository's root), between `<!-- coffer:memory-sync:begin -->` and `<!-- coffer:memory-sync:end -->`, so they load only in sessions in that project. `global` entries MUST go into `<config_dir>/rules/coffer-memory.md`, a file Coffer owns entirely, which Claude Code loads in every session and which says at its top that Coffer writes it. Each memory MUST be one line holding its text (its title in front when the text does not open with it, at most 800 characters) and the agent it came from; Codex's User Profile MUST come first, then the newest memory first. The block MUST stay within 4 KB and the rules file within 8 KB; memories that do not fit MUST be counted in a last line naming the `coffer memory entries` command that lists them. Coffer MUST back `MEMORY.md` up before changing it and MUST NOT change anything in it outside the marked block. Copies an earlier build wrote as `coffer_` files, and its `-coffer-global` project, are no longer targets, so the next sync removes the ones still as written and empties their blocks.
 
-#### Scenario: a Codex memory reaches Claude Code
-- **GIVEN** a hub entry Codex published for `github.com-acme-payments`, and that repository checked out at `/Users/a/src/payments` with Claude Code registered
+#### Scenario: a project's memories reach only that project
+- **GIVEN** a hub entry from Codex for `github.com-acme-payments`, sorted back into memory, that repository checked out with Claude Code registered, and another checked-out project
 - **WHEN** memory syncs
-- **THEN** Claude Code's memory directory for `/Users/a/src/payments` holds `coffer_<slug>.md` with the entry's name, description and type, and its `MEMORY.md` lists it inside the marked block
-- **AND** every line of `MEMORY.md` outside the block is byte-identical to before, and a backup of the previous `MEMORY.md` exists
+- **THEN** the marked block of the payments project's `MEMORY.md` holds the memory's text, and the other project's `MEMORY.md` and the rules file do not
+- **AND** every line of `MEMORY.md` outside the block is byte-identical to before, a backup of the previous `MEMORY.md` exists, and no `coffer_` file is written
 
-#### Scenario: the marked block is capped
-- **GIVEN** 45 copies written into one project's Claude Code memory directory
+#### Scenario: the marked block is bounded
+- **GIVEN** 45 memories of 250 characters for one project
 - **WHEN** the marked block is rendered
-- **THEN** it holds the 30 newest, then one line saying 15 more Coffer memories are in the directory
-
-### Requirement: Write global memories into a Claude Code global project and point at them from a rules file
-Coffer MUST write every `global` hub entry that did not come from this machine's Claude Code as a project memory file, in the same form as a project's copy, into the memory folder of a project of its own, `<config_dir>/projects/-coffer-global/memory/` (no session runs there, so Claude Code never opens it by itself). Because Claude Code loads only the rules directory in every session, Coffer MUST also write `<config_dir>/rules/coffer-memory.md`, a file it owns entirely, saying at its top that Coffer writes it, where the global memories are (the folder written once) and that a file is to be read when its line is relevant. It MUST list each **standing** memory (every one but a bullet of a Codex `MEMORY.md` task group), Codex's User Profile first and the rest newest first, as one line of at most 120 characters of title and description plus its file name. It MUST NOT list a task-group memory; instead one line, bounded at 2 KB, names each task group with its count and points at the global folder's `MEMORY.md`, whose Coffer block lists every global memory under its group (the standing ones first), without the 30-line cap. The rules file MUST stay within 8 KB; standing memories that do not fit are counted in a line pointing at that `MEMORY.md`. Where a description begins with its title (a Codex memory, titled by its first clause), the line MUST NOT repeat the title; the same holds for the lines of the `MEMORY.md` block. The rules file MUST NOT hold a memory's text.
+- **THEN** it holds the newest of them within 4 KB, then one line counting the rest and naming `coffer memory entries --project github.com/acme/payments`
 
 #### Scenario: a Codex profile reaches every Claude Code session
 - **GIVEN** a `global` hub entry from Codex stating the person's preferred language
 - **WHEN** memory syncs
-- **THEN** the global project's memory folder holds a copy of that entry
-- **AND** `<config_dir>/rules/coffer-memory.md` names the global folder and lists that entry with the file name of the copy, and does not hold its text
-- **AND** no other project's `MEMORY.md` is changed for it
-
-#### Scenario: a Codex task memory is named by its topic, not listed
-- **GIVEN** `global` hub entries from Codex: a summary preference and two bullets of the task group "IA sheet"
-- **WHEN** the rules file is rendered
-- **THEN** it lists the preference on one line
-- **AND** it does not list either bullet, and names "IA sheet (2)" among the topics
-- **AND** the global folder's `MEMORY.md` block lists both bullets under an "IA sheet" heading
+- **THEN** `<config_dir>/rules/coffer-memory.md` holds that entry's text
+- **AND** no project's `MEMORY.md` is changed for it, and no `-coffer-global` project is made
 
 #### Scenario: the rules file stays bounded
-- **GIVEN** 200 standing `global` hub entries
+- **GIVEN** 40 `global` hub entries of 400 characters
 - **WHEN** the rules file is rendered
-- **THEN** it is at most 8 KB, holds the newest of them, and counts the rest in a line pointing at the global folder's `MEMORY.md`
+- **THEN** it is at most 8 KB, holds the newest of them, and counts the rest in a line naming `coffer memory entries --project global`
+
+### Requirement: Flag the memories an agent filed as task material
+Coffer MUST flag a hub entry as **task material** from where its agent filed it, judging no text: a Codex memory whose identity names a task group (a bullet of a `MEMORY.md` task group, or a project's item of the newer summary's "What's in Memory"), and a Claude Code memory typed `reference`. Codex's profile, preferences and general tips and Claude Code's `user`, `feedback` and `project` memories MUST NOT be flagged.
+
+#### Scenario: task material is flagged from where it was filed
+- **GIVEN** a Codex task-group bullet, Codex's User Profile and one of its preferences, and Claude Code memories typed `reference`, `user`, `feedback` and `project`
+- **WHEN** each is checked
+- **THEN** only the task-group bullet and the `reference` memory are task material
+
+### Requirement: Keep task material with its own agent until it is sorted
+A hub entry flagged as task material MUST NOT be written into an agent of another type until it is sorted back into memory; it MUST still be written into its own agent type on the person's other machines. A copy of it already written into another agent MUST be removed by the next sync, as any copy that is no longer a target. The Memory page MUST show such a copy's state as staying with its own agent.
+
+#### Scenario: task material stays with its own agent until it is sorted
+- **GIVEN** a Codex task-group bullet and a Claude Code `reference` memory for a project checked out with both agents
+- **WHEN** memory syncs
+- **THEN** neither is written into the other agent, and the page counts two memories to sort
+- **AND** once the Codex one is recorded as sorted into memory and the Claude Code one into knowledge, the next sync writes the Codex one into Claude Code only, and nothing waits to be sorted
+
+### Requirement: Sort task material into knowledge on request
+The Memory page MUST count the task material no one has sorted yet and offer **Sort into knowledge**, which MUST open Claude Code in the person's terminal with a prompt that lists each waiting memory's hub file and asks it to show, before changing anything, where each belongs (knowledge with the collection and page, a skill, memory, or nothing), then, once the person agrees, to write knowledge inside one `coffer knowledge tidy-start` / `tidy-finish` per collection with `memory: <id>` in the page's `evidence`, to draft a skill and import it only when the person agrees, to edit or delete no agent's memory, and to record each memory it handled with `coffer memory sorted`. It MUST record a `memory_sort_requested` event. Recording a sorting MUST write one file per memory under `vault/memory/sorted/<id>.md` naming the outcome (`knowledge`, `skill`, `memory` or `drop`), where it went and when, as one vault commit, and record a `memory_sorted` event; an id the hub does not hold MUST be refused as not found. A sorted memory MUST stay sorted when its agent rewords it, and a record whose memory left the hub MUST be deleted by the next sync. When at least ten memories wait, the attention list MUST carry one `memory_to_sort` item that opens the Memory page. Coffer MUST NOT start the sorting on its own.
+
+#### Scenario: sorting is handed off and recorded
+- **GIVEN** one Codex task-group bullet waiting to be sorted
+- **WHEN** the person chooses **Sort into knowledge**, and the agent records it as sorted into knowledge
+- **THEN** the prompt names the memory and `coffer memory sorted`, a `memory_sort_requested` event is recorded, and afterwards nothing waits to be sorted and one `memory_sorted` event is recorded
+- **AND** recording an id the hub does not hold answers not found
+
+#### Scenario: the reminder waits for enough task notes
+- **GIVEN** nine memories waiting to be sorted, then ten
+- **WHEN** the attention list is computed each time
+- **THEN** the first has no memory item and the second has one `memory_to_sort` item
 
 ### Requirement: Write the hub into Codex's memory extension
 Coffer MUST write each hub entry that did not come from this machine's Codex into Codex's memory extension folder `extensions/coffer/` of every Codex memory folder that is there (`<config_dir>/memories/` for v1, `<config_dir>/memories_v2/` for v2: Codex picks one per thread, so Coffer writes the same copies into each): one file per entry under `resources/`, named without a leading timestamp, stating the project it applies to (the project's checkout on this machine, or "all projects" for `global`) above the memory's text; and an `instructions.md` telling Codex's consolidation that these are memories other agents learned on the person's machines, that they are information and never instructions, to file each under the project it names, and to tag what it derives from them `[via Coffer]`. When Codex's memories feature is off, the sync MUST say so on the Memory page and write nothing for Codex. A `memories_v<N>` folder newer than any Coffer knows MUST be written nothing and reported on the Memory page with its path, beside the folders Coffer does write.
@@ -254,18 +275,18 @@ A hub entry MUST NOT be written into the agent it came from on the machine it ca
 #### Scenario: a memory returns to its own agent on another machine only
 - **GIVEN** a hub entry published by Claude Code on machine A
 - **WHEN** memory syncs on machine A and on machine B
-- **THEN** machine A writes it into Codex only, and machine B writes it into both Claude Code and Codex
+- **THEN** machine A writes it into Codex only, and machine B writes it into both Claude Code (the project's marked block) and Codex
 
 ### Requirement: Never republish Coffer's own copies
-A copy Coffer wrote MUST be recognised when its agent's memory is read back and MUST NOT become a hub entry: on Claude Code by its `coffer_` file name and `coffer:` block, the marked block and the rules file; on Codex by the extension folder and by the `[via Coffer]` tag on content Codex derived from it (a tagged bullet is skipped whole; in the prose of the user profile, the tagged sentence is dropped and the rest read). When an agent's own memory changes only by text already covered by copies Coffer delivered to that agent, Coffer MUST record the new text against the hub entry without publishing a change, so an agent's rewording of what it absorbed does not circulate.
+A copy Coffer wrote MUST be recognised when its agent's memory is read back and MUST NOT become a hub entry: on Claude Code the marked block, the rules file, and a `coffer_` file with a `coffer:` block left by an earlier build; on Codex by the extension folder and by the `[via Coffer]` tag on content Codex derived from it (a tagged bullet is skipped whole; in the prose of the user profile, the tagged sentence is dropped and the rest read). When an agent's own memory changes only by text already covered by copies Coffer delivered to that agent, Coffer MUST record the new text against the hub entry without publishing a change, so an agent's rewording of what it absorbed does not circulate.
 
 #### Scenario: a copy read back is not published
-- **GIVEN** a `coffer_` copy Coffer wrote into Claude Code, and a Codex `MEMORY.md` bullet tagged `[via Coffer]`
+- **GIVEN** a `coffer_` copy an earlier Coffer wrote into Claude Code, and a Codex `MEMORY.md` bullet tagged `[via Coffer]`
 - **WHEN** memory syncs
 - **THEN** neither produces a hub entry
 
 #### Scenario: an absorbed copy does not circulate
-- **GIVEN** Claude Code's own memory gained, in one of its own files, only sentences Coffer had delivered to it from a Codex hub entry
+- **GIVEN** Claude Code's own memory gained, in one of its own files, only a sentence Coffer had written into its rules file from a Codex hub entry
 - **WHEN** memory syncs
 - **THEN** no hub entry is created or changed for that addition
 
@@ -281,12 +302,12 @@ Coffer MUST NOT create, change, move or delete any file in an agent's memory oth
 A copy whose content no longer matches what Coffer last wrote MUST NOT be overwritten, and a copy the agent removed MUST NOT be recreated, for as long as its hub entry is unchanged. When the hub entry changes, Coffer MUST write the new version as a new copy rather than over the agent's edit. Removing a copy MUST NOT delete its hub entry.
 
 #### Scenario: a copy Auto Dream merged away is not brought back
-- **GIVEN** a `coffer_` copy that Claude Code's own curation merged into one of its memories and deleted
+- **GIVEN** a copy in Codex's extension folder that Codex's own curation absorbed and deleted
 - **WHEN** memory syncs and the hub entry has not changed
 - **THEN** the copy is not recreated and the hub entry stays
 
 #### Scenario: a copy the agent edited is not overwritten
-- **GIVEN** a `coffer_` copy whose body the agent edited
+- **GIVEN** a copy in Codex's extension folder whose body the agent edited
 - **WHEN** memory syncs
 - **THEN** the file keeps the agent's edit
 
@@ -296,7 +317,7 @@ When Codex's own import from Claude Code is on with automatic updates on this ma
 #### Scenario: Codex's own import turns the Claude Code to Codex direction off
 - **GIVEN** Codex's import from Claude Code on with automatic updates, and a hub entry from Claude Code
 - **WHEN** memory syncs
-- **THEN** no resource is written for it in Codex's extension folder, Codex's memories are still written into Claude Code, and Codex's Memory tab says Codex imports Claude Code's memories itself
+- **THEN** no resource is written for it in Codex's extension folder, and Codex's Memory tab says Codex imports Claude Code's memories itself
 
 ### Requirement: Preview a first or large sync
 The first sync on a machine, and any sync that would write more copies than a threshold (50 by default), MUST NOT write into any agent until the person confirms it on the Memory page, which lists per agent and project how many copies would be written, updated and removed, folded to those counts until opened (a group that removes anything starts open), and opened lists each memory with what the sync would do to its copy; a memory it would write or update opens in the memory drawer. Publishing to the hub MUST proceed without waiting.
@@ -328,12 +349,12 @@ Every sync that changed anything MUST record one `memory_synced` audit event wit
 **Undo sync…** on the Memory page MUST, after a confirmation naming what it removes, delete every copy Coffer wrote on this machine that the agent has not changed, the marked block from each `MEMORY.md`, the Claude Code rules file and the Codex extension folder, turn automatic sync off, and record a `memory_sync_undone` event. It MUST NOT delete hub entries or anything an agent wrote itself.
 
 #### Scenario: undo removes Coffer's copies and nothing else
-- **GIVEN** copies written into both agents, one of which the agent edited
+- **GIVEN** two copies written into Codex, one of which Codex edited, and a rules file written into Claude Code
 - **WHEN** the person confirms **Undo sync…**
-- **THEN** every unedited copy, the marked blocks, the rules file and the extension folder are gone, the edited copy remains, the hub is unchanged and automatic sync is off
+- **THEN** the unedited copy, the marked blocks and the rules file are gone, the edited copy remains, the agent's own files and the hub are unchanged and automatic sync is off
 
 ### Requirement: Show each agent's own curation and ask it to curate now
-Each registered agent's Memory tab MUST show, while the memory feature is on, whether the agent's own memory and its own curation are on (Claude Code's auto memory and Auto Dream; Codex's memories feature), with a hint to turn either on when it is off, and the copies Coffer wrote into it on this machine (and how many the agent has since edited or removed), or why Coffer cannot write into it. For Claude Code it MUST say whether Auto Dream's state comes from `autoDreamEnabled` in `settings.json` or from the account default Claude Code caches, and when Auto Dream last ran on this machine. While Auto Dream is off, **Turn on** MUST, only after the person confirms, add `"autoDreamEnabled": true` to Claude Code's `settings.json` with a backup of the file and nothing else in it changed, and record a `memory_curation_enabled` event; Coffer MUST NOT change that setting unasked. The Memory page MUST NOT list the agents; it MUST count an agent Coffer cannot write into among what needs the person, linking to that agent's Memory tab. **Curate now**, offered on Claude Code only, MUST open Claude Code in the person's terminal with a prompt that lists the memory folders Coffer wrote into on this machine and asks it to consolidate them, and MUST record a `memory_curation_requested` event; Codex MUST NOT offer it, since its consolidation runs on its own.
+Each registered agent's Memory tab MUST show, while the memory feature is on, whether the agent's own memory and its own curation are on (Claude Code's auto memory and Auto Dream; Codex's memories feature), with a hint to turn either on when it is off, and the copies Coffer wrote into it on this machine (and how many the agent has since edited or removed), or why Coffer cannot write into it. For Claude Code it MUST say whether Auto Dream's state comes from `autoDreamEnabled` in `settings.json` or from the account default Claude Code caches, and when Auto Dream last ran on this machine. While Auto Dream is off, **Turn on** MUST, only after the person confirms, add `"autoDreamEnabled": true` to Claude Code's `settings.json` with a backup of the file and nothing else in it changed, and record a `memory_curation_enabled` event; Coffer MUST NOT change that setting unasked. The Memory page MUST NOT list the agents; it MUST count an agent Coffer cannot write into among what needs the person, linking to that agent's Memory tab. **Curate now**, offered on Claude Code only, MUST open Claude Code in the person's terminal with a prompt that lists the memory folders Coffer wrote into on this machine and asks it to consolidate them the way Auto Dream would, leaving Coffer's block and rules file as they are, and MUST record a `memory_curation_requested` event; Codex MUST NOT offer it, since its consolidation runs on its own.
 
 #### Scenario: an agent's curation state is shown
 - **GIVEN** Claude Code with auto memory on and Auto Dream off, and Codex with memories on
@@ -348,7 +369,7 @@ Each registered agent's Memory tab MUST show, while the memory feature is on, wh
 - **AND** records a `memory_curation_enabled` event
 
 #### Scenario: Curate now opens Claude Code in a terminal
-- **GIVEN** Claude Code holding copies Coffer wrote into two project memory folders
+- **GIVEN** Claude Code holding Coffer's blocks in two project memory folders
 - **WHEN** the person chooses **Curate now** on its Memory tab
 - **THEN** Claude Code opens in the person's terminal with a prompt naming both folders
 - **AND** a `memory_curation_requested` event is recorded, and Codex's tab offers no **Curate now**
@@ -386,10 +407,10 @@ The Memory page MUST show the sync switch and interval, **Sync now**, when memor
 #### Scenario: memory sync is managed on the command line
 - **GIVEN** the `coffer memory` command group
 - **WHEN** its commands are listed
-- **THEN** they are `state`, `sync`, `preview-write`, `preview-cancel`, `undo`, `codex-import`, `entries`, `show` and `curate`, one per operation of the page, `show` reads one memory's text and none writes it
+- **THEN** they are `state`, `sync`, `preview-write`, `preview-cancel`, `undo`, `codex-import`, `entries`, `show`, `curate`, `curation-enable`, `to-sort`, `sort` and `sorted`, one per operation of the pages, `show` reads one memory's text and none writes it
 
 ### Requirement: Audit every sync, undo and curation request
-Every sync that changed something, every undo, every curation request and every hook removal on upgrade MUST record an audit event with its actor. An agent's own change to its memory is not a Coffer act and is not audited.
+Every sync that changed something, every undo, every curation request, every sort request, every recorded sorting and every hook removal on upgrade MUST record an audit event with its actor. An agent's own change to its memory is not a Coffer act and is not audited.
 
 #### Scenario: audit a requested sync with its actor
 - **GIVEN** a registered agent with native memory to publish
@@ -397,7 +418,7 @@ Every sync that changed something, every undo, every curation request and every 
 - **THEN** exactly one `memory_synced` event names that user as its actor, beside any the daemon's own worker recorded under its own actor
 
 ### Requirement: Add no table or resource kind
-This layer MUST add **no table of its own** and no resource kind. The hub is files in the vault; what a machine wrote into its agents is recorded in one machine-local file, `local/memory-sync.json`.
+This layer MUST add **no table of its own** and no resource kind. The hub and the sorting records are files in the vault; what a machine wrote into its agents is recorded in one machine-local file, `local/memory-sync.json`.
 
 #### Scenario: keep the hub and the ledger as files only
 - **GIVEN** a history database upgraded to head
@@ -428,11 +449,11 @@ A Codex memory's hub id MUST NOT depend on its bullet's position. Its source ide
 ### Requirement: Read Codex's v2 memory
 The Codex reader MUST also read Codex's v2 memory, `<config_dir>/memories_v2/memory_summary.md`, beside v1. v2 has no `MEMORY.md`; from its summary the reader takes the User Profile, each User preferences bullet, each General Tips paragraph (global, standing) and each topic of `What's in Memory`, which Codex groups under a named project scope. A topic MUST be filed under the `cwd:` recorded in the header of the rollout summary it points at, and global when it points at none or the header records none; its identity MUST name its scope, so a topic reads as task material the way a v1 task-group bullet does. While a v2 summary is there, the profile MUST come from v2 only, and v1's summary MUST yield only the preferences v2 does not state word for word.
 
-#### Scenario: a Codex v2 topic reaches Claude Code
+#### Scenario: a Codex v2 topic reaches Claude Code once sorted into memory
 - **GIVEN** Codex with only v2 memory, whose summary lists a topic pointing at a rollout summary recorded in a project checked out here, plus a preference and a General Tips paragraph
 - **WHEN** memory syncs
-- **THEN** Claude Code's memory folder for that project holds a copy of the topic with its details
-- **AND** the rules file lists the preference and the tip
+- **THEN** the rules file holds the preference and the tip, and the topic waits to be sorted, written into no Claude Code memory
+- **AND** once the topic is recorded as sorted into memory, the next sync writes it with its details into the marked block of that project's `MEMORY.md`
 
 #### Scenario: with v2 beside it, v1's summary gives only what v2 does not say
 - **GIVEN** v1 and v2 summaries with different profiles, one shared preference and one preference only v1 states

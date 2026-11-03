@@ -1,5 +1,5 @@
 """Write: the hub into this machine's agents (spec memory "Write the hub into
-Claude Code's native memory", "Write the hub into Codex's memory extension").
+Claude Code as text it loads", "Write the hub into Codex's memory extension").
 
 For each registered agent here whose writer can write, every hub entry is a
 target except:
@@ -9,7 +9,9 @@ target except:
 - a project's entry while the project is not checked out here ("Write a
   project's memories only where it is checked out");
 - a Claude Code entry for Codex while Codex imports Claude Code's memories
-  itself ("Defer to Codex's own import from Claude Code").
+  itself ("Defer to Codex's own import from Claude Code");
+- task material another agent filed, until it is sorted back into memory
+  ("Keep task material with its own agent until it is sorted").
 
 The copies are planned against the ledger by
 :func:`coffer.domain.memory.sync_plan.plan_copies` and applied here, each
@@ -23,7 +25,7 @@ import contextlib
 import dataclasses
 import logging
 import pathlib
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, Sequence, Set
 from dataclasses import dataclass, field
 
 from coffer.domain.memory import absorption
@@ -108,10 +110,15 @@ def targets_for(
     checkouts: Mapping[str, str],
     home: str,
     codex_imports_claude: bool,
+    stay_home: Set[str] = frozenset(),
 ) -> AgentTargets:
+    """Every hub entry ``agent_type`` here should hold. ``stay_home`` names the
+    entries that reach only the agent type they came from."""
     out = AgentTargets()
     for entry in sorted(hub.values(), key=lambda e: e.id):
         if entry.origin.machine == machine and entry.origin.agent == agent_type:
+            continue
+        if entry.id in stay_home and entry.origin.agent != agent_type:
             continue
         if agent_type == CODEX and entry.origin.agent == CLAUDE_CODE and codex_imports_claude:
             continue

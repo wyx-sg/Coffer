@@ -206,9 +206,8 @@ async def test_a_path_follows_the_repository_to_another_machine(tmp_path: pathli
     (entry,) = _entries()
     assert "<repo>/ledger/retry.py" in entry.body
     assert "~/.config/tool.toml" in entry.body
-    copies = list((b_cc / "projects").rglob("coffer_*.md"))
-    assert len(copies) == 1
-    text = copies[0].read_text(encoding="utf-8")
+    (index,) = list((b_cc / "projects").rglob("MEMORY.md"))
+    text = index.read_text(encoding="utf-8")
     assert f"{other}/ledger/retry.py" in text
     assert f"{tmp_path / 'b-home'}/.config/tool.toml" in text
 

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-10-16
 **Deciders**: Yuxing Wu
-**Related**: [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [Global Memories Live in a Claude Code Project of Their Own](global-memories-in-claude-code-live-in-a-global-project.md), spec memory "Keep every agent's memories in a hub in the vault"
+**Related**: [Sync Memory Into Each Agent's Own Memory Through a Hub in the Vault](sync-memory-into-each-agents-own-memory.md), [Claude Code Reads Other Agents' Memories as Text It Loads](claude-code-reads-other-agents-memories-as-text.md), spec memory "Keep every agent's memories in a hub in the vault"
 
 ## Context
 

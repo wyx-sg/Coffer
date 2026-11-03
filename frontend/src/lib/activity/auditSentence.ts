@@ -164,6 +164,19 @@ const BUILDERS: Record<string, Builder> = {
   memory_sync_undone: memorySyncUndone,
   memory_curation_requested: agentField("agent_type"),
   memory_curation_enabled: agentField("agent_type"),
+  memory_sort_requested: (f) => {
+    const count = f.num("memories");
+    return count ? { v: "count", p: { count } } : null;
+  },
+  memory_sorted: (f, { t }) => {
+    const count = f.num("memories");
+    const raw = f.str("outcome");
+    if (!count || !raw) return null;
+    return {
+      v: "count",
+      p: { count, outcome: t(`memory.sortOutcome.${raw}`, { defaultValue: raw }) },
+    };
+  },
   provider_transcribe_default_set: withResource((f, { resource }) => {
     const from = f.str("from");
     return from && from !== resource ? { v: "from", p: { from } } : null;

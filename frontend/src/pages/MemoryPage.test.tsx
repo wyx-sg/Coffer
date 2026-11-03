@@ -32,8 +32,12 @@ vi.mock("@/lib/api/memory", () => ({
   listEntries: vi.fn(),
   getEntry: vi.fn(),
   curate: vi.fn(),
+  sortHandoff: vi.fn(),
 }));
 const api = await import("@/lib/api/memory");
+
+const openTerminal = vi.fn();
+vi.mock("@/lib/hooks/useTerminals", () => ({ useOpenInTerminal: () => openTerminal }));
 
 vi.mock("@/lib/hooks/useInternalEngine", () => ({
   useInternalEngineConfig: () => ({ data: undefined }),
@@ -82,6 +86,7 @@ function state(over: Partial<MemorySyncState> = {}): MemorySyncState {
       },
     ],
     running: false,
+    to_sort: 0,
     ...over,
   };
 }
@@ -98,6 +103,7 @@ function entry(over: Partial<HubEntry>): HubEntry {
     created_at: new Date(Date.now() - 3 * HOUR).toISOString(),
     updated_at: new Date(Date.now() - HOUR).toISOString(),
     copies: { claude_code: "origin", codex: "written" },
+    to_sort: false,
     ...over,
   };
 }
@@ -431,5 +437,36 @@ describe("MemoryPage — undo", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Undo sync" }));
     expect(await within(dialog).findByText("Couldn't undo the sync")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+});
+
+describe("MemoryPage — task notes to sort", () => {
+  test("nothing to sort shows no reminder", async () => {
+    renderPage();
+    await screen.findByTestId("memory-list");
+    expect(screen.queryByTestId("memory-to-sort")).toBeNull();
+  });
+
+  acceptance("memory", "sorting is handed off and recorded", async () => {
+    vi.mocked(api.getSyncState).mockResolvedValue(state({ to_sort: 3 }));
+    vi.mocked(api.listEntries).mockResolvedValue({
+      project: "",
+      entries: [entry({ to_sort: true, copies: { claude_code: "origin", codex: "stays_home" } })],
+    });
+    vi.mocked(api.sortHandoff).mockResolvedValue({ handoff: { prompt: "Sort these" } });
+    openTerminal.mockResolvedValue(true);
+    renderPage();
+    const line = await screen.findByTestId("memory-to-sort");
+    expect(line).toHaveTextContent("3 memories look like task notes and wait to be sorted");
+    expect(rowOf(await screen.findByTestId("memory-list"), "Run make verify")).toHaveTextContent(
+      "To sort",
+    );
+    fireEvent.click(within(line).getByRole("button", { name: "Sort into knowledge" }));
+    await waitFor(() =>
+      expect(openTerminal).toHaveBeenCalledWith(
+        { agent: "claude_code", prompt: "Sort these" },
+        expect.objectContaining({ label: "Copy prompt" }),
+      ),
+    );
   });
 });

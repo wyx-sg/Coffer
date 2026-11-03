@@ -21,6 +21,10 @@ def get_sync_service() -> MemorySyncService:
     return _service
 
 
+def get_sync_view_optional() -> MemorySyncView | None:
+    return _view
+
+
 def get_sync_view() -> MemorySyncView:
     if _view is None:
         raise RuntimeError("memory sync view not initialised")

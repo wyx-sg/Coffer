@@ -8,7 +8,9 @@
 // interval), when memory last synced and syncs next, and a ⋯ menu with Undo
 // sync…; under it one banner counts what waits on the person (a first or large
 // sync to confirm, a source the last sync could not read, a memory it
-// withheld, an agent whose own memory is off so nothing is written into it).
+// withheld, an agent whose own memory is off so nothing is written into it),
+// and under it a quiet line counting the memories the agents filed as task
+// notes, with **Sort into knowledge**.
 // Each agent's own memory and curation live on its Memory tab. Below, the
 // scopes — global memories, then the hub's projects — beside the open scope's
 // memories (`?scope=`); a memory opens in a drawer
@@ -26,6 +28,7 @@ import { MemoryList } from "@/components/memory/MemoryList";
 import { MemoryPageEmpty } from "@/components/memory/MemoryPageEmpty";
 import { MemoryNeedsYou } from "@/components/memory/MemoryNeedsYou";
 import { MemoryScopeList } from "@/components/memory/MemoryScopeList";
+import { MemoryToSort } from "@/components/memory/MemoryToSort";
 import { MemorySyncButton } from "@/components/memory/MemorySyncButton";
 import { MemorySyncClock } from "@/components/memory/MemorySyncClock";
 import { UndoSyncDialog } from "@/components/memory/UndoSyncDialog";
@@ -153,6 +156,7 @@ export function MemoryPage() {
             }}
           />
         ) : null}
+        {state && !noAgents ? <MemoryToSort count={state.to_sort} /> : null}
       </div>
 
       {error || noAgents ? (
