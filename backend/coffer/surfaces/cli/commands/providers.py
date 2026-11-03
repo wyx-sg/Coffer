@@ -8,6 +8,7 @@ argument a shell history keeps.
 
 from __future__ import annotations
 
+from coffer.surfaces.cli import _waits
 from coffer.surfaces.cli._route_command import RouteCommand, mount
 
 P = {"uid": "provider"}
@@ -66,6 +67,7 @@ SPECS = [
         "Overview · Needs you · Check",
         "List a connection's models now and keep its health verdict.",
         names=P,
+        wait=_waits.NETWORK_S,
     ),
     RouteCommand(
         "provider delete-preview",
@@ -91,6 +93,7 @@ SPECS = [
         "Prices of the given models on this connection. Body: models.",
         names=P,
         body=True,
+        wait=_waits.NETWORK_S,
     ),
     RouteCommand(
         "provider windows",
@@ -101,6 +104,7 @@ SPECS = [
         "came from. Body: models.",
         names=P,
         body=True,
+        wait=_waits.NETWORK_S,
     ),
     RouteCommand(
         "provider transcribe-default",
@@ -117,6 +121,7 @@ SPECS = [
         _UI + "Add · detect a local runtime",
         "Find a local model runtime (Ollama, LM Studio). Body: base_url.",
         body=True,
+        wait=_waits.NETWORK_S,
     ),
     RouteCommand(
         "provider price-list show",
@@ -132,6 +137,7 @@ SPECS = [
         "Settings · Usage · Refresh prices",
         "Refresh the price list. Body: refresh (--set refresh=true).",
         body=True,
+        wait=_waits.NETWORK_S,
     ),
     RouteCommand(
         "provider switch preview",
@@ -149,6 +155,7 @@ SPECS = [
         "Agents · switch model · Switch",
         "Switch an agent type's model. Body as for preview, plus seen.",
         body=True,
+        wait=_waits.NETWORK_S,
     ),
     RouteCommand(
         "model list",
@@ -158,6 +165,7 @@ SPECS = [
         "Ask an endpoint which models it serves. Body: provider, base_url, secret_ref | "
         "secret_value, connection_uid.",
         body=True,
+        wait=_waits.NETWORK_S,
     ),
     RouteCommand(
         "model test",
@@ -168,6 +176,7 @@ SPECS = [
         "Exits 7 when the answer says ok: false.",
         body=True,
         outcome="ok",
+        wait=_waits.NETWORK_S,
     ),
 ]
 

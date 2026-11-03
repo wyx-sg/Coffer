@@ -86,18 +86,23 @@ def test_a_connection_dropped_mid_request_exits_3_with_a_message(
 
     assert exc.value.code == 3
     err = capsys.readouterr().err
-    assert err.count("daemon not reachable") == 1
+    assert err.count("closed the connection before answering") == 1
     assert "Traceback" not in err
 
 
-def test_render_http_error_maps_every_transport_error_to_daemon_unreachable(
+def test_render_http_error_says_which_transport_failure_it_was(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    for err in (
-        httpx.RemoteProtocolError("Server disconnected without sending a response."),
-        httpx.ReadError("connection reset"),
-        httpx.ReadTimeout("timed out"),
-    ):
+    """Refused and dropped exit 3; a wait that ran out is not a crash (exit 13)."""
+    cases = (
+        (httpx.ConnectError("refused"), 3, "daemon not reachable"),
+        (httpx.RemoteProtocolError("Server disconnected."), 3, "closed the connection"),
+        (httpx.ReadError("connection reset"), 3, "closed the connection"),
+        (httpx.ReadTimeout("timed out"), 13, "did not answer"),
+    )
+    for err, exit_code, words in cases:
         code = _cli_client.render_http_error(err, verbose=False)
-        assert code == _cli_client.ExitCode.DAEMON_UNREACHABLE
-        assert "daemon not reachable" in capsys.readouterr().err
+        assert int(code) == exit_code
+        out = capsys.readouterr().err
+        assert words in out
+        assert ("crashed" in out) is (exit_code == 3)

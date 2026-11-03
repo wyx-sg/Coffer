@@ -6,6 +6,7 @@ these ask the running daemon.
 
 from __future__ import annotations
 
+from coffer.surfaces.cli import _waits
 from coffer.surfaces.cli._route_command import RouteCommand, mount
 
 _UI = "Settings · Daemon · "
@@ -68,6 +69,7 @@ SPECS = [
         "/daemon/upgrade/check",
         "Settings · About · Check for updates (installer binaries)",
         "Check for a newer release of the installer's binaries now.",
+        wait=_waits.NETWORK_S,
     ),
     RouteCommand(
         "daemon upgrade-auto-check",
@@ -83,6 +85,7 @@ SPECS = [
         "/daemon/setup/check",
         "Setup · Check again",
         "Look for git again while the daemon waits in its setup state.",
+        wait=_waits.NETWORK_S,
     ),
     RouteCommand(
         "daemon upkeep",

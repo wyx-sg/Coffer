@@ -14,7 +14,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from typing import IO
+from collections.abc import Awaitable
+from typing import IO, TypeVar
 
 from coffer.application.runtime.cancellation import raise_if_stopping
 from coffer.application.runtime.supervisor import spawn
@@ -36,8 +37,17 @@ from coffer.application.upkeep_schedule import SLICE_S
 from coffer.domain.resource import Resource
 from coffer.domain.skill.source_status import SourceStatus
 from coffer.domain.skill.update_check import DEFAULT_CHOICE, UpdateCheckChoice, interval_of
+from coffer.domain.skill_source_errors import SkillSourceUnreachable
 
 logger = logging.getLogger(__name__)
+
+#: The longest one operation that reads a skill's Git repository may take, all
+#: its git commands together (spec skill-manager "Add skills from a Git
+#: repository"). The CLI waits a little longer than this, so the answer it gets
+#: is this deadline's error rather than its own timeout.
+GIT_OPERATION_DEADLINE_S = 300.0
+
+T = TypeVar("T")
 
 
 class SkillSourceService:
@@ -51,6 +61,7 @@ class SkillSourceService:
         update_check: UpdateCheckSettingPort | None = None,
         staging: StagingRegistry | None = None,
         size_limit_bytes: int = 50 * 1024 * 1024,
+        deadline_s: float = GIT_OPERATION_DEADLINE_S,
     ) -> None:
         self.skills = skills
         self.git = git
@@ -59,6 +70,19 @@ class SkillSourceService:
         self.update_check = update_check
         self.staging = staging or StagingRegistry()
         self.size_limit = size_limit_bytes
+        self.deadline_s = deadline_s
+
+    async def bounded(self, work: Awaitable[T]) -> T:
+        """``work`` under the overall Git deadline; past it, every git process
+        it started is killed and the operation is refused with
+        ``SKILL_SOURCE_UNREACHABLE``, its staging removed."""
+        try:
+            async with asyncio.timeout(self.deadline_s):
+                return await work
+        except TimeoutError as exc:
+            raise SkillSourceUnreachable(
+                f"reading the Git repository did not finish within {self.deadline_s:g} s"
+            ) from exc
 
     # ---------- staging an import ----------
 
@@ -69,7 +93,7 @@ class SkillSourceService:
         return await source_stage_ops.stage_archive(self, stream, filename)
 
     async def stage_git(self, url: str, ref: str | None, path: str | None) -> ImportStage:
-        return await source_stage_ops.stage_git(self, url, ref, path)
+        return await self.bounded(source_stage_ops.stage_git(self, url, ref, path))
 
     async def confirm(
         self, stage_id: str, *, names: list[str], replace: list[str], actor: str
@@ -107,14 +131,14 @@ class SkillSourceService:
         return self.update_check_choice()
 
     async def handoff(self, uid: str) -> update_ops.UpdateHandoff:
-        return await update_ops.handoff(self, await self.skills.get_skill(uid))
+        skill = await self.skills.get_skill(uid)
+        return await self.bounded(update_ops.handoff(self, skill))
 
     async def change_source(
         self, uid: str, url: str, ref: str | None, path: str | None
     ) -> source_change_ops.SourceChangePreview:
-        return await source_change_ops.preview_change(
-            self, await self.skills.get_skill(uid), url, ref, path
-        )
+        skill = await self.skills.get_skill(uid)
+        return await self.bounded(source_change_ops.preview_change(self, skill, url, ref, path))
 
     async def apply_change(self, uid: str, stage_id: str, *, actor: str) -> Resource:
         return await source_change_ops.apply_change(
@@ -122,9 +146,8 @@ class SkillSourceService:
         )
 
     async def mark_merged(self, uid: str, commit: str, *, actor: str) -> Resource:
-        return await update_merge.mark_merged(
-            self, await self.skills.get_skill(uid), commit, actor=actor
-        )
+        skill = await self.skills.get_skill(uid)
+        return await self.bounded(update_merge.mark_merged(self, skill, commit, actor=actor))
 
     def close(self) -> None:
         self.staging.close()

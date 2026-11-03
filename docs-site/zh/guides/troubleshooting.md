@@ -74,9 +74,15 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.1 (/Users/you/.coffe
 
 ### "daemon not reachable — it may have crashed" {#daemon-not-reachable-—-it-may-have-crashed}
 
-**原因。** 命令行找到了守护进程，然后在请求中途断开了连接。
+**原因。** 守护进程的端口上没有任何程序应答（`DAEMON_UNREACHABLE`），或者守护进程收下了请求，但连接在它回答前就断开了（`DAEMON_CONNECTION_LOST`，"the daemon closed the connection before answering"）。
 
 **解决办法。** 运行 `coffer daemon status`。如果它打印 `not running`，运行 `coffer daemon start`，然后读 `daemon.log`，看上一个守护进程是怎么结束的。
+
+### "the daemon did not answer … within N s" {#the-daemon-did-not-answer-within-n-s}
+
+**原因。** 守护进程在运行，但命令在它回答之前就停止了等待（`CLI_REQUEST_TIMEOUT`，退出码 13）。大多数命令等 15 秒；要访问网络的命令等 90 秒；通过网络运行 git 的命令（从 Git 添加或检查技能、同步）等 330 秒。操作可能仍会完成。
+
+**解决办法。** 重试前先确认结果（例如 `coffer skill list` 或 `coffer sync status`），或者用更长的等待重新运行：`coffer --request-timeout 600 <命令> …`。
 
 ## 智能体和工具 {#agents-and-tools}
 

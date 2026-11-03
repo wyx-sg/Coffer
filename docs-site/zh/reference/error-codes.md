@@ -323,7 +323,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `0` | OK | 成功。 |
 | `1` | Generic | 其他任何失败，包括 `FEATURE_DISABLED`（在**设置 → 功能**里开启该功能）。 |
 | `2` | Invalid usage | 参数或选项组合有误。 |
-| `3` | Daemon unreachable | 守护进程无法启动或不再应答；命令行会建议查看 `~/.coffer/logs/daemon.log`。 |
+| `3` | Daemon unreachable | 守护进程无法启动、没有任何程序接受连接（`DAEMON_UNREACHABLE`），或者连接在它回答前断开（`DAEMON_CONNECTION_LOST`）；命令行会建议查看 `~/.coffer/logs/daemon.log`。守护进程在运行只是回答得慢时，退出码是 `13`。 |
 | `4` | Not found | 守护进程返回了 `404`。 |
 | `5` | Conflict | 守护进程返回了 `409`。 |
 | `6` | Invalid input | 守护进程返回了 `400` 或 `422`，或者命令自己的输入无法解析（`CLI_INVALID_INPUT`）。参数违反 schema 的自定义工具测试在这里退出，每个字段一条错误。 |
@@ -333,7 +333,7 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `10` | Waiting for git | 守护进程在运行，但在等 git：没有找到，或版本低于 2.40。命令在发送任何请求之前打印了原因和一段给智能体的提示词。见 [Coffer 需要 git](/zh/guides/troubleshooting#coffer-needs-git)。 |
 | `11` | Presence not confirmed | 交给桌面应用在场验证的步骤（`coffer approval approve`、`coffer secret reveal`、`coffer secret backup-key`）被取消、失败或超时，或者守护进程拒绝了授权（`PRESENCE_GRANT_INVALID`）。每条审批都继续等待。 |
 | `12` | Desktop app unavailable | 这一步需要桌面应用，而它没在运行且在这里无法启动（没有应用、不是 Mac，或用了 `--no-launch`）：`CLI_APP_UNAVAILABLE`。什么都没批准。打开应用后再运行一次命令。 |
-| `13` | Wait timed out | 等待在操作完成之前就结束了：`coffer sync wait` 超过了它的 `--timeout`（`CLI_WAIT_TIMEOUT`）。这一轮可能仍在运行；用 `coffer sync status` 查看。 |
+| `13` | Wait timed out | 等待在操作完成之前就结束了：`coffer sync wait` 超过了它的 `--timeout`（`CLI_WAIT_TIMEOUT`），或者守护进程没有在命令的等待时间内回答请求（`CLI_REQUEST_TIMEOUT`）。操作可能仍在运行；先确认结果，或者加上 `coffer --request-timeout <秒数>`。 |
 
 ### 命令行自己设定的错误码 {#codes-the-command-line-sets}
 
@@ -344,7 +344,9 @@ description: Coffer 守护进程返回的每个错误码，及其 HTTP 状态、
 | `CLI_INVALID_INPUT` | `6` | 命令自己的输入无效：`--data` 或 `--args` 不是 JSON、`@file` 读不了、`--set` 不是 `key=value`，或某个参数的值格式不对。什么都没发送。 |
 | `CLI_APP_UNAVAILABLE` | `12` | 桌面应用没在运行，也无法启动。 |
 | `CLI_WAIT_TIMEOUT` | `13` | 操作完成之前 `coffer sync wait` 就超过了 `--timeout`。 |
-| `DAEMON_UNREACHABLE` | `3` | 守护进程无法启动，或在请求中途不再应答。 |
+| `CLI_REQUEST_TIMEOUT` | `13` | 守护进程在运行，但没有在命令的等待时间内回答：大多数命令 15 秒，访问网络的命令 90 秒，通过网络运行 git 的命令 330 秒，或者 `--request-timeout` 给出的时间。`details` 带有 `method`、`path` 和 `waited_s`。操作可能仍会完成。 |
+| `DAEMON_UNREACHABLE` | `3` | 守护进程无法启动，或没有任何程序接受连接。 |
+| `DAEMON_CONNECTION_LOST` | `3` | 守护进程收下了请求，但连接在它回答前断开了；它可能重启或崩溃了。`details` 带有 `method` 和 `path`。 |
 | `DAEMON_WAITING_FOR_GIT` | `10` | 守护进程在运行，但在等 git。`details.handoff` 带有给智能体的提示词。 |
 | `CLI_DESKTOP_REQUEST_FAILED` | `1` | 桌面应用无法执行交给它的请求：`coffer app update …`，或 Coffer 以桌面应用运行时的 `coffer update` / `coffer uninstall`。 |
 | `CLI_UPDATE_SOURCE` | `2` | 在源码检出上运行了 `coffer update`：请改用 `git pull` 升级。 |

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import typer
 
-from coffer.surfaces.cli import _io
+from coffer.surfaces.cli import _io, _waits
 from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli._route_command import Q, RouteCommand, mount
 from coffer.surfaces.cli.groups import group
@@ -146,6 +146,7 @@ SPECS = [
         _UI + "Import · a git repository",
         "Stage skills from a git repository. Body: url, ref, path.",
         body=True,
+        wait=_waits.GIT_S,
     ),
     RouteCommand(
         "skill stage-confirm",
@@ -169,6 +170,7 @@ SPECS = [
         _UI + "Source · Check for updates",
         "Ask the skill's source for a newer version.",
         names=S,
+        wait=_waits.GIT_S,
     ),
     RouteCommand(
         "skill source change",
@@ -178,6 +180,7 @@ SPECS = [
         "Stage the skill from another source. Body: url, ref, path.",
         names=S,
         body=True,
+        wait=_waits.GIT_S,
     ),
     RouteCommand(
         "skill source change-apply",
@@ -195,6 +198,7 @@ SPECS = [
         _UI + "Source · Ask an agent to merge",
         "The prompt that hands merging an upstream update to an agent.",
         names=S,
+        wait=_waits.GIT_S,
     ),
     RouteCommand(
         "skill source merged",
@@ -204,6 +208,7 @@ SPECS = [
         "Record that the upstream update was merged. Body: commit.",
         names=S,
         body=True,
+        wait=_waits.GIT_S,
     ),
     RouteCommand(
         "skill update-check show",

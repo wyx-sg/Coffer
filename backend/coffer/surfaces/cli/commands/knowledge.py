@@ -16,7 +16,7 @@ from pathlib import Path
 
 import typer
 
-from coffer.surfaces.cli import _io
+from coffer.surfaces.cli import _io, _waits
 from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli._route_command import Q, RouteCommand, mount
 from coffer.surfaces.cli.groups import group
@@ -180,6 +180,7 @@ def upload(
                 "POST",
                 "/knowledge/upload",
                 as_json=as_json,
+                timeout=_waits.NETWORK_S,
                 files={"file": (path.name, data)},
                 form={
                     "collection": collection,

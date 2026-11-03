@@ -8,6 +8,7 @@ a channel's own actions.
 
 from __future__ import annotations
 
+from coffer.surfaces.cli import _waits
 from coffer.surfaces.cli._route_command import RouteCommand, mount
 
 C = {"uid": "channel"}
@@ -29,6 +30,7 @@ SPECS = [
         _UI + "Restart",
         "Reconnect the channel.",
         names=C,
+        wait=_waits.NETWORK_S,
     ),
     RouteCommand(
         "channel notify",
@@ -38,6 +40,7 @@ SPECS = [
         "Send a message through the channel. Body: text, chat_id.",
         names=C,
         body=True,
+        wait=_waits.NETWORK_S,
     ),
     RouteCommand(
         "channel pairing start",
@@ -72,6 +75,7 @@ SPECS = [
         "Check a platform's credentials before saving. Body: platform, bot_token | "
         "app_id + app_secret, channel_uid.",
         body=True,
+        wait=_waits.NETWORK_S,
     ),
     RouteCommand(
         "conversation rename",

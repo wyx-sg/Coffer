@@ -40,7 +40,7 @@ class _Client:
     def get(self, path: str) -> _Response:
         return _Response(self.routes[path])
 
-    def post(self, path: str) -> _Response:
+    def post(self, path: str, **_kw: Any) -> _Response:
         return _Response(self.routes[path])
 
 

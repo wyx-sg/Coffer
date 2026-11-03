@@ -25,6 +25,7 @@ from coffer.surfaces.cli.commands.custom_tool_common import (
     json_arg,
     pairs,
     read_group,
+    send_out,
     set_rules,
     show_group,
     show_preview,
@@ -324,10 +325,10 @@ def test(
     body = {"arguments": _args(args, as_json=as_json), "environment": env}
     path = f"{group_path(name)}/tools/{tool}"
     if dry_run:
-        result = _io.call("POST", path + "/preview", as_json=as_json, body=body)
+        result = send_out(path + "/preview", body, as_json=as_json)
         _io.emit(result, as_json=as_json, human=show_preview)
         return
-    _report(_io.call("POST", path + "/test", as_json=as_json, body=body), as_json=as_json)
+    _report(send_out(path + "/test", body, as_json=as_json), as_json=as_json)
 
 
 @tools.command("test-draft")
@@ -354,12 +355,10 @@ def test_draft(
     set_rules(draft, response_rules, as_json=as_json)
     body = {"tool": draft, "arguments": _args(args, as_json=as_json), "environment": env}
     if dry_run:
-        result = _io.call("POST", group_path(name) + "/preview", as_json=as_json, body=body)
+        result = send_out(group_path(name) + "/preview", body, as_json=as_json)
         _io.emit(result, as_json=as_json, human=show_preview)
         return
-    _report(
-        _io.call("POST", group_path(name) + "/test", as_json=as_json, body=body), as_json=as_json
-    )
+    _report(send_out(group_path(name) + "/test", body, as_json=as_json), as_json=as_json)
 
 
 @tools.command("test-unsaved")
@@ -394,7 +393,7 @@ def test_unsaved(
     }
     if response is not None:
         body["response"] = json_arg(response, "--response", as_json=as_json)
-    _report(_io.call("POST", GROUPS + "/test", as_json=as_json, body=body), as_json=as_json)
+    _report(send_out(GROUPS + "/test", body, as_json=as_json), as_json=as_json)
 
 
 __all__ = ["tools"]
