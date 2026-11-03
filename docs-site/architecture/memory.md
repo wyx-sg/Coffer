@@ -47,15 +47,17 @@ Each supported agent has one reader, and every reader follows the same two-step 
 
 | | Claude Code | Codex |
 | --- | --- | --- |
-| Files read | `<config_dir>/projects/<slug>/memory/*.md` | `<config_dir>/memories/MEMORY.md` and `memory_summary.md` |
-| One entry per | memory file | populated bullet section of a task group (`User preferences`, `Reusable knowledge`, `Failures and how to do differently`), plus the profile and profile preferences in the summary |
+| Files read | `<config_dir>/projects/<slug>/memory/*.md` | `<config_dir>/memories/MEMORY.md` and `memory_summary.md`; v2: `<config_dir>/memories_v2/memory_summary.md` |
+| One entry per | memory file | populated bullet section of a task group (`User preferences`, `Reusable knowledge`, `Failures and how to do differently`), plus the profile and profile preferences in the summary; in v2, also each `## General Tips` paragraph and each topic of `## What's in Memory` |
 | Title and description | frontmatter `name` and `description` | derived from the bullet |
 | Type | `metadata.type`: `user`, `feedback`, `project` or `reference` | group preferences → `user`; knowledge and failures → `project`; profile → `user` |
-| Project root | the `cwd` recorded in a sibling session transcript, falling back to decoding the project slug | the task group's `applies_to: cwd=…` line |
+| Project root | the `cwd` recorded in a sibling session transcript, falling back to decoding the project slug | the task group's `applies_to: cwd=…` line; for a v2 topic, the `cwd:` in the header of the rollout summary it points at |
 | Search terms | none, because the format states none | from `## What's in Memory` in the summary, joined to task groups by conservative token coverage |
-| Skipped | the agent's own `MEMORY.md` index, and Coffer's copies | `## General Tips`, the rollout-reference subsections, `raw_memories.md`, `rollout_summaries/`, everything under `extensions/`, and bullets tagged `[via Coffer]` |
+| Skipped | the agent's own `MEMORY.md` index, and Coffer's copies | v1's `## General Tips`, the rollout-reference subsections, `raw_memories.md`, `rollout_summaries/`, everything under `extensions/`, and bullets tagged `[via Coffer]` |
 
-Neither reader opens session transcripts or rollouts as a source. The Claude Code reader reads a transcript's recorded `cwd` for one purpose only: finding an entry's project root.
+Neither reader opens session transcripts or rollouts as a source. The Claude Code reader reads a transcript's recorded `cwd`, and the Codex reader the `cwd:` line of a v2 rollout summary's header (nothing below it), for one purpose only: finding an entry's project root.
+
+Codex keeps v1 memory in `memories/` and v2 in `memories_v2/`, and Codex Desktop picks one per thread. Both are read while both are there. v2 has no `MEMORY.md` or task groups: its summary files each piece of work under a project scope Codex names in words, with a pointer to the session's rollout summary. A v2 topic's identity names its scope, so it reads as a task-group entry and is not listed among the standing memories. While a v2 summary is there, the profile comes from it, and v1's summary yields only the preferences v2 does not state word for word. During Codex's dual write one piece of work can arrive twice, as v1 bullets and as a v2 topic; see ADR [Follow Codex's Memory Into Every Version Folder It Keeps](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/follow-codex-memory-into-every-version-folder.md).
 
 A reader that cannot parse its source fails **loudly and in isolation**: that agent publishes nothing in that sync, the Memory page names the path and the reason, the other agent is still read, and entries it published earlier stay in the hub rather than being deleted.
 
@@ -74,12 +76,13 @@ A machine writes a hub entry into every registered agent on it except the agent 
 
 ### Codex
 
-- **Folder.** `<config_dir>/memories/extensions/coffer/`, with `instructions.md` and `resources/<entry id>-<slug>.md`. Codex's consolidation reads memory extensions as primary inputs and treats a deleted resource as a signal to forget. Codex prunes resources whose name begins with a timestamp after seven days, so Coffer's names never do.
+- **Folder.** `extensions/coffer/` in every Codex memory folder that is there (`<config_dir>/memories/`, `<config_dir>/memories_v2/`), with `instructions.md` and `resources/<entry id>-<slug>.md`. Each memory folder is a write location of its own, with its own ledger rows, status and copy counts; the v1 folder keeps the ledger key copies had before. Codex's consolidation reads memory extensions as primary inputs and treats a deleted resource as a signal to forget. Codex prunes resources whose name begins with a timestamp after fourteen days, so Coffer's names never do.
+- **A newer folder.** A `memories_v<N>` Coffer does not know is listed as a location that writes nothing and is reported as unrecognised, beside the folders Coffer writes.
 - **Resource.** The title, the project it applies to (the checkout on this machine and the project key, or "all projects"), the origin agent, type and date, then the memory's text.
 - **instructions.md** tells consolidation that these are memories the person's other agents learned, to be treated as information and never as instructions; to file each under the project it names or as a user preference; that fresher evidence wins over an older statement; to tag what it derives from them `[via Coffer]`; and never to delete these files.
 - **Memories off.** When `[features] memories` in `config.toml` is off, nothing is written for Codex and the page says so.
 
-A writer that does not recognise the layout it is about to write into (no Claude Code memory directory shape, or a Codex `memories/` folder without `MEMORY.md` or `memory_summary.md`) writes nothing for that agent and reports it, the same way as a broken reader. Every path built from a source or an entry passes a traversal guard, and reads and writes stay inside registered agents' memory paths and `vault/memory/`.
+A writer that does not recognise the layout it is about to write into (no Claude Code memory directory shape, or a Codex memory folder without `MEMORY.md`, `memory_summary.md` or `rollout_summaries/`) writes nothing for that agent and reports it, the same way as a broken reader. Every path built from a source or an entry passes a traversal guard, and reads and writes stay inside registered agents' memory paths and `vault/memory/`.
 
 ### Codex's own import
 
@@ -135,7 +138,7 @@ Each agent's Memory tab reads the agent's own state from its config, never from 
 
 ## Undo
 
-**Undo sync** deletes every copy Coffer wrote on this machine that the agent has not edited, the marked block from each `MEMORY.md`, the Claude Code rules file and the Codex extension folder, turns automatic sync off and records `memory_sync_undone`. It never deletes hub entries or anything an agent wrote itself. The ledger is what makes undo exact: Coffer knows every copy it wrote and from what.
+**Undo sync** deletes every copy Coffer wrote on this machine that the agent has not edited, the marked block from each `MEMORY.md`, the Claude Code rules file and the extension folder in each Codex memory folder, turns automatic sync off and records `memory_sync_undone`. It never deletes hub entries or anything an agent wrote itself. The ledger is what makes undo exact: Coffer knows every copy it wrote and from what.
 
 ## Audit
 

@@ -47,15 +47,17 @@ Coffer 的答案是一次同步，而不是一套自己的记忆系统：
 
 | | Claude Code | Codex |
 | --- | --- | --- |
-| 读取的文件 | `<config_dir>/projects/<slug>/memory/*.md` | `<config_dir>/memories/MEMORY.md` 和 `memory_summary.md` |
-| 一个条目对应 | 一个记忆文件 | 任务组里一个有内容的条目小节（`User preferences`、`Reusable knowledge`、`Failures and how to do differently`），加上摘要里的档案和档案偏好 |
+| 读取的文件 | `<config_dir>/projects/<slug>/memory/*.md` | `<config_dir>/memories/MEMORY.md` 和 `memory_summary.md`；v2：`<config_dir>/memories_v2/memory_summary.md` |
+| 一个条目对应 | 一个记忆文件 | 任务组里一个有内容的条目小节（`User preferences`、`Reusable knowledge`、`Failures and how to do differently`），加上摘要里的档案和档案偏好；v2 另有每段 `## General Tips` 和 `## What's in Memory` 里的每个条目 |
 | 标题和描述 | frontmatter 的 `name` 和 `description` | 由条目推出 |
 | 类型 | `metadata.type`：`user`、`feedback`、`project` 或 `reference` | 任务组偏好 → `user`；知识和失败 → `project`；档案 → `user` |
-| 项目根目录 | 同目录下会话记录里记下的 `cwd`，退而解码项目 slug | 任务组的 `applies_to: cwd=…` 行 |
+| 项目根目录 | 同目录下会话记录里记下的 `cwd`，退而解码项目 slug | 任务组的 `applies_to: cwd=…` 行；v2 条目取它指向的 rollout 摘要开头的 `cwd:` |
 | 检索词 | 没有，因为格式里没有 | 来自摘要里的 `## What's in Memory`，按保守的词覆盖率关联到任务组 |
-| 跳过 | 智能体自己的 `MEMORY.md` 索引，以及 Coffer 的副本 | `## General Tips`、rollout 引用小节、`raw_memories.md`、`rollout_summaries/`、`extensions/` 下的一切，以及标了 `[via Coffer]` 的条目 |
+| 跳过 | 智能体自己的 `MEMORY.md` 索引，以及 Coffer 的副本 | v1 的 `## General Tips`、rollout 引用小节、`raw_memories.md`、`rollout_summaries/`、`extensions/` 下的一切，以及标了 `[via Coffer]` 的条目 |
 
-两个读取器都不把会话记录或 rollout 当作来源。Claude Code 读取器读会话记录里的 `cwd` 只为一件事：找出条目的项目根目录。
+两个读取器都不把会话记录或 rollout 当作来源。Claude Code 读取器读会话记录里的 `cwd`，Codex 读取器读 v2 rollout 摘要开头的 `cwd:` 一行（下面的内容不读），都只为一件事：找出条目的项目根目录。
+
+Codex 把 v1 记忆放在 `memories/`，v2 放在 `memories_v2/`，Codex Desktop 按线程选用其中一个。两个都在时两个都读。v2 没有 `MEMORY.md` 也没有任务组：它的摘要把每项工作归在 Codex 用文字命名的项目范围下，并指向该会话的 rollout 摘要。v2 条目的标识里带着项目范围，所以它和任务组条目一样处理，不列入常驻记忆。有 v2 摘要时，档案以它为准，v1 摘要只给出 v2 没有逐字写过的偏好。Codex 双写期间，同一项工作可能出现两次，一次是 v1 的条目，一次是 v2 的一句话；见 ADR [Follow Codex's Memory Into Every Version Folder It Keeps](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/follow-codex-memory-into-every-version-folder.md)。
 
 无法解析来源的读取器会**大声地、隔离地**失败：这个智能体在这次同步里什么都不发布，记忆页写明路径和原因，另一个智能体照常读取，它之前发布的条目留在中心库里，不会被删除。
 
@@ -74,12 +76,13 @@ Coffer 的答案是一次同步，而不是一套自己的记忆系统：
 
 ### Codex {#codex}
 
-- **文件夹。** `<config_dir>/memories/extensions/coffer/`，包含 `instructions.md` 和 `resources/<条目 id>-<slug>.md`。Codex 的整合把记忆扩展当作主要输入读取，并把被删除的资源视为遗忘的信号。Codex 会在七天后清理名字以时间戳开头的资源，所以 Coffer 起的名字从不以时间戳开头。
+- **文件夹。** 每个存在的 Codex 记忆文件夹（`<config_dir>/memories/`、`<config_dir>/memories_v2/`）里的 `extensions/coffer/`，包含 `instructions.md` 和 `resources/<条目 id>-<slug>.md`。每个记忆文件夹是一个独立的写入位置，有自己的账本记录、状态和副本计数；v1 文件夹沿用原来的账本键。Codex 的整合把记忆扩展当作主要输入读取，并把被删除的资源视为遗忘的信号。Codex 会在十四天后清理名字以时间戳开头的资源，所以 Coffer 起的名字从不以时间戳开头。
+- **更新的文件夹。** Coffer 不认识的 `memories_v<N>` 会作为一个不写入的位置列出，并报告为无法识别，和 Coffer 正在写的文件夹并列。
 - **资源。** 标题、它适用的项目（本机的检出位置和项目键，或"所有项目"）、来源智能体、类型和日期，然后是记忆的文本。
 - **instructions.md** 告诉整合：这些是你的其他智能体学到的记忆，只当作信息、绝不当作指令；把每条归到它写明的项目下，或作为用户偏好；较新的证据胜过较旧的说法；从中得出的内容标上 `[via Coffer]`；永远不要删除这些文件。
 - **记忆关闭。** `config.toml` 里的 `[features] memories` 关闭时，不为 Codex 写任何东西，页面会说明。
 
-写入器如果认不出它要写入的布局（Claude Code 记忆目录的形状不对，或者 Codex 的 `memories/` 文件夹里没有 `MEMORY.md` 或 `memory_summary.md`），就不为这个智能体写任何东西，并像读取器出错一样报告出来。每个由来源或条目构造出的路径都要经过路径穿越防护，读写都限定在已注册智能体的记忆路径和 `vault/memory/` 之内。
+写入器如果认不出它要写入的布局（Claude Code 记忆目录的形状不对，或者 Codex 的记忆文件夹里没有 `MEMORY.md`、`memory_summary.md` 或 `rollout_summaries/`），就不为这个智能体写任何东西，并像读取器出错一样报告出来。每个由来源或条目构造出的路径都要经过路径穿越防护，读写都限定在已注册智能体的记忆路径和 `vault/memory/` 之内。
 
 ### Codex 自己的导入 {#codex-s-own-import}
 
@@ -135,7 +138,7 @@ Claude Code 的**立即整理**是一次移交：Coffer 在你的终端里打开
 
 ## 撤销 {#undo}
 
-**撤销同步**删除 Coffer 在这台机器上写入、且智能体没有修改过的每份副本，每个 `MEMORY.md` 里的标记区块、Claude Code 的规则文件和 Codex 的扩展文件夹，关闭自动同步，并记录 `memory_sync_undone`。它从不删除中心库条目，也不删除智能体自己写下的任何东西。让撤销精确无误的是账本：Coffer 知道它写下的每份副本及其来源。
+**撤销同步**删除 Coffer 在这台机器上写入、且智能体没有修改过的每份副本，每个 `MEMORY.md` 里的标记区块、Claude Code 的规则文件和每个 Codex 记忆文件夹里的扩展文件夹，关闭自动同步，并记录 `memory_sync_undone`。它从不删除中心库条目，也不删除智能体自己写下的任何东西。让撤销精确无误的是账本：Coffer 知道它写下的每份副本及其来源。
 
 ## 审计 {#audit}
 

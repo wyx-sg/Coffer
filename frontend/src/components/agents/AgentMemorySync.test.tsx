@@ -40,6 +40,7 @@ function agent(type: string, over: Partial<SyncAgent> = {}): SyncAgent {
     copies: { written: 0 },
     curation: { memory: "on", curation: "on", source: "", last_curated_at: "" },
     writer: { state: "ok", reason: "", path: "" },
+    locations: [],
     ...over,
   };
 }
@@ -198,6 +199,44 @@ describe("AgentMemorySync", () => {
     expect(section).toHaveTextContent("memories are off");
     expect(section).toHaveTextContent(/memories = true under \[features\]/);
     expect(within(section).queryByRole("button", { name: /Curate now/ })).toBeNull();
+  });
+
+  test("Codex shows each memory folder, a newer one it cannot write into among them", async () => {
+    const blocked = {
+      state: "unrecognised",
+      reason: "a Codex memory folder newer than this Coffer knows: update Coffer",
+      path: "/Users/me/.codex/memories_v3",
+    };
+    vi.mocked(api.getSyncState).mockResolvedValue(
+      state([
+        agent("codex", {
+          copies: { written: 6 },
+          writer: blocked,
+          locations: [
+            {
+              name: "",
+              path: "/Users/me/.codex/memories",
+              writer: { state: "ok", reason: "", path: "" },
+              copies: { written: 3 },
+            },
+            {
+              name: "memories_v2",
+              path: "/Users/me/.codex/memories_v2",
+              writer: { state: "ok", reason: "", path: "" },
+              copies: { written: 3 },
+            },
+            { name: "memories_v3", path: blocked.path, writer: blocked, copies: {} },
+          ],
+        }),
+      ]),
+    );
+    renderSection("codex");
+    const list = await screen.findByTestId("memory-sync-locations");
+    const rows = within(list).getAllByRole("listitem");
+    expect(rows).toHaveLength(3);
+    expect(rows[1]).toHaveTextContent("memories_v2");
+    expect(rows[1]).toHaveTextContent("3");
+    expect(rows[2]).toHaveTextContent("newer than this Coffer knows");
   });
 
   test("nothing shows while the memory feature is off", async () => {

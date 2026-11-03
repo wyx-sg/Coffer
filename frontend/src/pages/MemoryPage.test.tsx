@@ -49,6 +49,7 @@ function agent(type: string, over: Partial<SyncAgent> = {}): SyncAgent {
     copies: { written: 0 },
     curation: { memory: "on", curation: "on", source: "", last_curated_at: "" },
     writer: { state: "ok", reason: "", path: "" },
+    locations: [],
     ...over,
   };
 }

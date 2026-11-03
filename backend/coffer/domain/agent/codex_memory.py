@@ -157,6 +157,85 @@ def parse_codex_summary_topics(text: str) -> list[CodexSummaryTopic]:
     return topics
 
 
+#: The ``###`` heading Codex's v2 summary files older topics under; below it
+#: the ``####`` lines are project scopes rather than dates.
+_V2_OLDER_HEADING = "Older Memory Topics"
+# A v2 topic bullet: an optional ``rollout_summaries/<file>`` pointer, a dash,
+# then the sentence, and an optional trailing ``; thread_id=<id>``.
+_V2_POINTER_RE = re.compile(
+    r"^rollout_summaries/(?P<file>[^\s/]+\.md)\s+[\u2014\u2013-]+\s+(?P<rest>.*)$"
+)
+_V2_THREAD_RE = re.compile(r";?\s*thread_id=(?P<id>[^\s;]+)\s*$")
+
+
+@dataclass(frozen=True)
+class CodexV2Topic:
+    """One bullet of a v2 ``memory_summary.md``'s ``## What's in Memory``.
+
+    Codex's v2 memory (``~/.codex/memories_v2/``) has no ``MEMORY.md``: the
+    summary is the whole consolidated memory, and each piece of project work is
+    one bullet under ``### <project scope>`` and ``#### <date>``::
+
+        - rollout_summaries/<file> — <sentence>; thread_id=<id>
+          - <label>: <pointer>
+
+    The scope is a name Codex chose ("Account Jira delivery"), not a path; the
+    working directory is only in the pointed-to summary's header, which
+    ``infrastructure.agent_files.codex_rollout_summaries`` reads. Under
+    ``### Older Memory Topics`` the ``####`` line is the scope and there is no
+    date."""
+
+    scope: str
+    date: str
+    #: The ``rollout_summaries/`` file name, or ``""`` when none is given.
+    rollout_file: str
+    #: The sentence, without the pointer and the thread id.
+    text: str
+    #: The bullet as written, with its indented details.
+    body: str
+
+
+def parse_codex_v2_topics(text: str) -> list[CodexV2Topic]:
+    """The topic bullets of a v2 summary's ``## What's in Memory``."""
+    topics: list[CodexV2Topic] = []
+    h3 = h4 = ""
+    current: list[str] = []
+    meta: tuple[str, str, str, str] | None = None
+
+    def flush() -> None:
+        if meta is not None:
+            scope, date, file, sentence = meta
+            topics.append(CodexV2Topic(scope, date, file, sentence, "\n".join(current).strip()))
+
+    for line in section_text(text, _TOPICS_HEADING).splitlines():
+        if line.startswith("### "):
+            flush()
+            meta, current = None, []
+            h3, h4 = line[4:].strip(), ""
+            continue
+        if line.startswith("#### "):
+            flush()
+            meta, current = None, []
+            h4 = line[5:].strip()
+            continue
+        if line.startswith("- "):
+            flush()
+            bullet = line[2:].strip()
+            file = ""
+            pointer = _V2_POINTER_RE.match(bullet)
+            if pointer is not None:
+                file, bullet = pointer.group("file"), pointer.group("rest")
+            sentence = _V2_THREAD_RE.sub("", bullet).strip()
+            older = h3 == _V2_OLDER_HEADING
+            meta = (h4 if older else h3, "" if older else h4, file, sentence)
+            current = [line]
+            continue
+        if meta is not None and line.strip():
+            current.append(line)
+    flush()
+    return [t for t in topics if t.text]
+
+
 def section_text(block: str, heading: str) -> str:
     """The raw text under a ``## <heading>`` line in ``block``, up to the next
     ``#`` or ``##`` heading (or the end of ``block``).
@@ -187,8 +266,10 @@ def section_bullets(block: str, heading: str) -> list[str]:
 __all__ = [
     "CodexMemoryEntry",
     "CodexSummaryTopic",
+    "CodexV2Topic",
     "parse_codex_memory",
     "parse_codex_summary_topics",
+    "parse_codex_v2_topics",
     "section_bullets",
     "section_text",
 ]

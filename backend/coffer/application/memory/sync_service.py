@@ -34,6 +34,7 @@ from coffer.application.memory.sync_write import (
     AgentTargets,
     LocalAgent,
     apply_ops,
+    located,
     plan_agent,
     targets_for,
     undo_agent,
@@ -240,7 +241,14 @@ class MemorySyncService:
             writer = self._writers.get(local.agent_type)
             if writer is None:
                 continue
-            report.add_applied(local, undo_agent(writer, local, ledger))
+            spots = located(writer, local)
+            for spot in spots:
+                report.add_applied(spot, undo_agent(writer, spot, ledger))
+            # A memory folder that is gone took its copies with it.
+            kept = {spot.key for spot in spots}
+            for key in [k for k in ledger.copies if k.startswith(f"{local.base_key}#")]:
+                if key not in kept:
+                    ledger.copies[key] = {}
         ledger.previewed = False
         self.ledger.save(ledger)
         self.previews.clear()
@@ -265,29 +273,38 @@ class MemorySyncService:
             writer = self._writers.get(local.agent_type)
             if writer is None:
                 continue
-            status = writer.status(local.config_dir)
-            report.writers[local.agent_type] = status
-            if not status.ok:
-                continue
-            targets = targets_for(
-                local.agent_type,
-                writer,
-                hub,
-                machine=self._machine(),
-                checkouts=here,
-                home=self._home(),
-                codex_imports_claude=bool(ledger.codex_imports_claude),
-            )
-            report.held_back[local.agent_type] = targets.held_back
-            planned.append(
-                _Planned(local, writer, targets, plan_agent(writer, local, targets, ledger))
-            )
+            for spot in located(writer, local):
+                status = writer.status(spot.where)
+                report.writers[report_key(spot)] = status
+                if not status.ok:
+                    continue
+                targets = targets_for(
+                    spot.agent_type,
+                    writer,
+                    hub,
+                    machine=self._machine(),
+                    checkouts=here,
+                    home=self._home(),
+                    codex_imports_claude=bool(ledger.codex_imports_claude),
+                )
+                report.held_back[spot.agent_type] = targets.held_back
+                planned.append(
+                    _Planned(spot, writer, targets, plan_agent(writer, spot, targets, ledger))
+                )
         return planned
 
     async def _record(self, event: AuditEventType, actor: str, report: SyncReport) -> None:
         if not report.changed():
             return
         await self._audit.record(event.value, actor=actor, details=report.details())
+
+
+def report_key(local: LocalAgent) -> str:
+    """What a report files one location's writer status under: the agent type,
+    and the location's name after a ``#`` for any but the first."""
+    if local.location_name:
+        return f"{local.agent_type}#{local.location_name}"
+    return local.agent_type
 
 
 def planned_globals(planned: Sequence[_Planned]) -> dict[str, int]:

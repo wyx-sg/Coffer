@@ -34,6 +34,7 @@ from coffer.domain.memory.native_writer import (
     STATUS_MISSING,
     STATUS_OK,
     AuxWrite,
+    WriteLocation,
     WriterStatus,
 )
 from coffer.domain.memory.sync_plan import STATE_WRITTEN, CopyRecord, Target
@@ -101,6 +102,10 @@ class ClaudeCodeMemoryWriter:
     """``NativeWriter`` for Claude Code."""
 
     agent_type = "claude_code"
+
+    def locations(self, config_dir: str) -> tuple[WriteLocation, ...]:
+        """One location: the config directory itself."""
+        return (WriteLocation("", config_dir),)
 
     def status(self, config_dir: str) -> WriterStatus:
         if not pathlib.Path(config_dir).is_dir():

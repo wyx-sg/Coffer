@@ -8,7 +8,8 @@
 // on**, which writes the setting after a confirm), each with a hint to turn it
 // on, and the copies Coffer
 // wrote into it here (and how many the agent has since edited or removed), or
-// why Coffer cannot write into it. For Codex, the person's answer to "Codex
+// why Coffer cannot write into it; for Codex, one line per memory folder
+// (`memories/`, `memories_v2/`, and any newer one Coffer cannot write into yet). For Codex, the person's answer to "Codex
 // imports Claude Code's memories itself". **Curate now** (Claude Code only:
 // Codex consolidates on its own whenever its memories are on) opens the agent
 // in the person's terminal with the daemon's prompt to consolidate the memory
@@ -133,9 +134,12 @@ function EnableCuration({ agent }: { agent: SyncAgent }) {
   );
 }
 
-function Copies({ agent }: { agent: SyncAgent }) {
+type Writer = SyncAgent["writer"];
+type CopyCounts = SyncAgent["copies"];
+
+/** What Coffer holds in one place it writes into, or why it cannot write there. */
+function CopiesIn({ writer, copies }: { writer: Writer; copies: CopyCounts }) {
   const { t } = useTranslation();
-  const { writer, copies } = agent;
   if (writer.state !== "ok") {
     return (
       <div className="flex flex-col gap-0.5">
@@ -165,6 +169,26 @@ function Copies({ agent }: { agent: SyncAgent }) {
         <span className="text-xs text-text-muted">{byAgent.join(" · ")}</span>
       ) : null}
     </div>
+  );
+}
+
+/** The copies: one line per memory folder when the agent has more than one
+ *  (Codex's `memories/` and `memories_v2/`), each with its own state, so a
+ *  folder Coffer cannot write into shows beside the ones it can. */
+function Copies({ agent }: { agent: SyncAgent }) {
+  const locations = agent.locations ?? [];
+  if (locations.length <= 1) return <CopiesIn writer={agent.writer} copies={agent.copies} />;
+  return (
+    <ul className="flex flex-col gap-2" data-testid="memory-sync-locations">
+      {locations.map((loc) => (
+        <li key={loc.path} className="flex flex-col gap-0.5">
+          <span className="font-mono text-xs text-text-muted [overflow-wrap:anywhere]">
+            {abbreviateHomePath(loc.path)}
+          </span>
+          <CopiesIn writer={loc.writer} copies={loc.copies ?? {}} />
+        </li>
+      ))}
+    </ul>
   );
 }
 

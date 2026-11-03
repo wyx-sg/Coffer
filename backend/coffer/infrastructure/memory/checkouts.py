@@ -22,6 +22,7 @@ from coffer.domain.agent.codex_memory import parse_codex_memory
 from coffer.domain.agent.native_memory import encode_slug, resolve_project_slug
 from coffer.domain.memory.hub import CLAUDE_CODE, CODEX, hub_project_key
 from coffer.infrastructure.agent_files.claude_code_transcripts import cwd_from_transcripts
+from coffer.infrastructure.agent_files.codex_rollout_summaries import all_rollout_cwds
 from coffer.infrastructure.memory.repository import resolve_repository
 
 
@@ -51,12 +52,22 @@ def recorded_dirs(agent_type: str, config_dir: str) -> list[str]:
                 out.append(root)
         return out
     if agent_type == CODEX:
-        try:
-            text = (base / "memories" / "MEMORY.md").read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            return []
-        return [cwd for group in parse_codex_memory(text) for cwd in group.cwds]
+        return _codex_v1_dirs(base) + codex_v2_dirs(base / "memories_v2")
     return []
+
+
+def _codex_v1_dirs(base: pathlib.Path) -> list[str]:
+    try:
+        text = (base / "memories" / "MEMORY.md").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    return [cwd for group in parse_codex_memory(text) for cwd in group.cwds]
+
+
+def codex_v2_dirs(folder: pathlib.Path) -> list[str]:
+    """The working directories Codex's v2 memory recorded: the ``cwd:`` line
+    of each rollout summary's header (only the header is read)."""
+    return all_rollout_cwds(folder)
 
 
 def checkouts(directories: Iterable[str]) -> dict[str, str]:

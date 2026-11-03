@@ -1,5 +1,22 @@
 """Reads Codex's distilled memory: `MEMORY.md` task groups and a profile.
 
+## Two memory versions
+
+Codex keeps v1 memory in `memories/` and v2 memory in `memories_v2/`, side by
+side, and Codex Desktop picks one per thread (spec memory "Read Codex's v2
+memory"). Both are read while both are there. v2 has no `MEMORY.md`: its
+`memory_summary.md` is the whole consolidated memory, so from it this reader
+takes the profile, the preferences, each `## General Tips` paragraph (in v1
+they restate `MEMORY.md`; in v2 there is nothing they restate) and each topic
+bullet of `## What's in Memory`. A topic is filed under the working directory
+in the header of the rollout summary it points at, the first lines of that
+file and nothing else. While a v2 summary is there, it is the profile's
+source, and v1's summary yields only the preferences v2 does not state word
+for word. During Codex's dual write the same piece of work can arrive twice,
+once as v1 task-group bullets and once as a v2 topic: accepted, because the
+two are different text and Coffer does no content-level dedup (see the ADR
+"Follow Codex's Memory Into Every Version Folder It Keeps").
+
 Two files matter, both under `<config_dir>/memories/`:
 
 - `MEMORY.md` — repeated `# Task Group: <name>` sections, each carrying an
@@ -105,16 +122,23 @@ from coffer.domain.agent.codex_memory import (
     parse_codex_memory,
     parse_codex_summary_topics,
     section_bullets,
-    section_text,
 )
 from coffer.domain.memory.errors import UnreadableMemory
 from coffer.domain.memory.hub import TYPE_PROJECT, TYPE_USER
 from coffer.domain.memory.reader import RawEntry, SourceFile
-from coffer.infrastructure.memory.codex_identity import PROFILE_ANCHOR
+from coffer.infrastructure.memory.readers.codex_summary import (
+    anchor,
+    bullet_title,
+    read_summary,
+    read_summary_v2,
+    v2_summary_beside,
+)
 from coffer.infrastructure.memory.writers.codex import VIA_COFFER
 
 _MEMORY_NAME = "MEMORY.md"
 _SUMMARY_NAME = "memory_summary.md"
+_V1_FOLDER = "memories"
+_V2_FOLDER = "memories_v2"
 
 # The three per-group bullet lists this reader turns into entries, and the
 # type each maps to. "User preferences" is the person's own standing
@@ -132,9 +156,6 @@ _GROUP_SECTIONS = {
     "Reusable knowledge": TYPE_PROJECT,
     "Failures and how to do differently": TYPE_PROJECT,
 }
-
-_PROFILE_HEADING = "User Profile"
-_PROFILE_PREFS_HEADING = "User preferences"
 
 # Title-matching policy for joining a summary topic to a task group.
 _TOKEN_SPLIT_RE = re.compile(r"[^a-z0-9]+")
@@ -158,10 +179,14 @@ class CodexMemoryReader:
     agent_type = "codex"
 
     def sources(self, config_dir: str) -> tuple[SourceFile, ...]:
-        memories_dir = pathlib.Path(config_dir) / "memories"
+        base = pathlib.Path(config_dir)
         out: list[SourceFile] = []
-        for name in (_MEMORY_NAME, _SUMMARY_NAME):
-            file = memories_dir / name
+        files = (
+            base / _V1_FOLDER / _MEMORY_NAME,
+            base / _V1_FOLDER / _SUMMARY_NAME,
+            base / _V2_FOLDER / _SUMMARY_NAME,
+        )
+        for file in files:
             try:
                 digest = hashlib.sha256(file.read_bytes()).hexdigest()
             except OSError:
@@ -179,8 +204,10 @@ class CodexMemoryReader:
         except (OSError, UnicodeDecodeError) as exc:
             raise UnreadableMemory(source.path, str(exc)) from exc
 
+        if path.name == _SUMMARY_NAME and path.parent.name == _V2_FOLDER:
+            return read_summary_v2(text, path.parent)
         if path.name == _SUMMARY_NAME:
-            return _read_summary(text)
+            return read_summary(text, v2_summary_beside(path))
         if path.name == _MEMORY_NAME:
             return _read_groups(text, _sibling_summary(path))
         raise UnreadableMemory(source.path, f"unrecognised Codex memory file {path.name!r}")
@@ -229,50 +256,16 @@ def _read_groups(text: str, summary_text: str) -> tuple[RawEntry, ...]:
                     continue
                 entries.append(
                     RawEntry(
-                        title=_bullet_title(bullet),
+                        title=bullet_title(bullet),
                         description=bullet,
                         type=entry_type,
                         body=bullet,
-                        anchor=_anchor(entry.title, heading, bullet),
+                        anchor=anchor(entry.title, heading, bullet),
                         project_root=project_root,
                         other_roots=entry.cwds[1:],
                         search_terms=search_terms,
                     )
                 )
-    return tuple(entries)
-
-
-def _read_summary(text: str) -> tuple[RawEntry, ...]:
-    entries: list[RawEntry] = []
-    profile = _without_coffer(section_text(text, _PROFILE_HEADING)).strip()
-    if profile:
-        entries.append(
-            RawEntry(
-                title=_PROFILE_HEADING,
-                description=profile,
-                type=TYPE_USER,
-                body=profile,
-                anchor=PROFILE_ANCHOR,
-                project_root="",
-            )
-        )
-    for bullet in section_bullets(text, _PROFILE_PREFS_HEADING):
-        if VIA_COFFER in bullet:
-            continue
-        entries.append(
-            RawEntry(
-                title=_bullet_title(bullet),
-                description=bullet,
-                type=TYPE_USER,
-                body=bullet,
-                anchor=_anchor("profile", _PROFILE_PREFS_HEADING, bullet),
-                project_root="",
-            )
-        )
-    # No `search_terms` here on purpose: Codex states terms per *task group*,
-    # and the profile is about the person, not about any group. Inventing terms
-    # for it would be exactly the guess "Read Claude Code and Codex memory with
-    # their search terms" exists to avoid.
     return tuple(entries)
 
 
@@ -330,67 +323,3 @@ def _title_tokens(title: str) -> frozenset[str]:
         for token in _TOKEN_SPLIT_RE.split(title.lower())
         if token and token not in _TITLE_STOPWORDS
     )
-
-
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?\u3002\uff01\uff1f])\s+")
-
-
-def _without_coffer(text: str) -> str:
-    """``text`` without the sentences Codex derived from Coffer's copies.
-
-    Codex tags what it derives from them `[via Coffer]` (see the extension's
-    instructions). A tagged bullet is skipped whole; the profile is prose, so
-    a tagged sentence in it is dropped and the rest kept, or Coffer would
-    publish back, as Codex's, what it delivered."""
-    lines = []
-    for line in text.split("\n"):
-        if VIA_COFFER not in line:
-            lines.append(line)
-            continue
-        kept: list[str] = []
-        for sentence in _SENTENCE_SPLIT_RE.split(line):
-            if VIA_COFFER not in sentence:
-                kept.append(sentence)
-            elif not sentence.replace(VIA_COFFER, "").strip(" .;,") and kept:
-                # "Sentence. [via Coffer]": the tag stands after what it marks.
-                kept.pop()
-        if kept:
-            lines.append(" ".join(kept))
-    return "\n".join(lines)
-
-
-def _bullet_title(bullet: str) -> str:
-    """A short handle from a bullet's first clause.
-
-    Codex's bullets are freeform prose with no author-given title (unlike Claude
-    Code's frontmatter `name`). The first clause — up to the first `->`, `. ` or
-    `; ` — reads as a reasonable stand-in; the full bullet stays intact as the
-    description and the body, and the body is what lands verbatim under `.raw/`
-    (see "Keep raw entries verbatim and hidden"), so nothing is lost by a handle
-    that trims it. It is not trying to be a title a person will read: the note's
-    title is Coffer's to write, later, in the distil pass (see "Distil each raw entry into a note
-    mechanically").
-    """
-    clause = re.split(r"\s*->\s*|\.\s|;\s", bullet, maxsplit=1)[0].strip().rstrip(".")
-    if not clause:
-        clause = bullet.strip()
-    if len(clause) > 100:
-        clause = clause[:97].rstrip() + "..."
-    return clause
-
-
-def _anchor(group: str, heading: str, bullet: str) -> str:
-    """Stable identity for one bullet: group + section + content.
-
-    See "Let only aggregation write raw entries" (reproducible from an unchanged
-    source).
-
-    Two different bullets in the same section hash differently; the same bullet
-    re-read on a later sync hashes the same, which is the whole point — the
-    anchor is half of a note's provenance (see "Distil each raw entry into a note mechanically")
-    and the name a raw entry keeps under `.raw/`, so a note must still
-    point at the entry it was built from after MEMORY.md is regenerated with
-    this group's text unchanged.
-    """
-    digest = hashlib.sha256(bullet.encode("utf-8")).hexdigest()[:16]
-    return f"{group}::{heading}::{digest}"

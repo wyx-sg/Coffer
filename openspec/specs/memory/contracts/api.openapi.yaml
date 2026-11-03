@@ -747,6 +747,11 @@ components:
           type: object
         curation:
           $ref: '#/components/schemas/CurationStateOut'
+        locations:
+          items:
+            $ref: '#/components/schemas/SyncLocationOut'
+          title: Locations
+          type: array
         writer:
           $ref: '#/components/schemas/WriterStatusOut'
       required:
@@ -755,7 +760,32 @@ components:
       - writer
       - curation
       - copies
+      - locations
       title: SyncAgentOut
+      type: object
+    SyncLocationOut:
+      description: 'One place the agent''s writer writes into (Codex: one per memory folder).'
+      properties:
+        copies:
+          additionalProperties:
+            type: integer
+          title: Copies
+          type: object
+        name:
+          default: ''
+          title: Name
+          type: string
+        path:
+          title: Path
+          type: string
+        writer:
+          $ref: '#/components/schemas/WriterStatusOut'
+      required:
+      - name
+      - path
+      - writer
+      - copies
+      title: SyncLocationOut
       type: object
     SyncProjectOut:
       properties:

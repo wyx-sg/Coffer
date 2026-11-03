@@ -108,6 +108,12 @@ class AgentNativeMemoryService:
                 config_dir / layout.memory_subdir,
                 layout.index_file,
             )
+            if layout.v2_subdir:
+                scans = scans + await asyncio.to_thread(
+                    self._scanner.scan_codex_global,
+                    config_dir / layout.v2_subdir,
+                    layout.v2_index_file,
+                )
         else:
             # Claude Code: one row per project that has a memory/ dir.
             scans = await asyncio.to_thread(
@@ -163,7 +169,11 @@ class AgentNativeMemoryService:
         candidate = pathlib.Path(memory_dir).resolve()
         if not is_native_memory_dir(layout, cfg.resolved_config_dir().resolve(), candidate):
             raise ValueError(f"not a native memory store of this agent: {memory_dir!r}")
-        only = frozenset({layout.index_file}) if isinstance(layout, CodexGlobalLayout) else None
+        only = (
+            frozenset({layout.index_for(candidate, cfg.resolved_config_dir().resolve())})
+            if isinstance(layout, CodexGlobalLayout)
+            else None
+        )
         return candidate, only
 
     @staticmethod

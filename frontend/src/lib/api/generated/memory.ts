@@ -403,6 +403,26 @@ export interface components {
                 [key: string]: number;
             };
             curation: components["schemas"]["CurationStateOut"];
+            /** Locations */
+            locations: components["schemas"]["SyncLocationOut"][];
+            writer: components["schemas"]["WriterStatusOut"];
+        };
+        /**
+         * SyncLocationOut
+         * @description One place the agent's writer writes into (Codex: one per memory folder).
+         */
+        SyncLocationOut: {
+            /** Copies */
+            copies: {
+                [key: string]: number;
+            };
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Path */
+            path: string;
             writer: components["schemas"]["WriterStatusOut"];
         };
         /** SyncProjectOut */
