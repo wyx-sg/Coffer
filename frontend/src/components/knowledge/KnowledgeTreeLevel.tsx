@@ -96,12 +96,10 @@ export function KnowledgeTreeLevel({
     );
   }
 
-  // A stable sort: the root's Pages and Sources first, the rest as listed.
+  // A stable sort: the root's pages and sources first, the rest as listed.
   const directories = root
     ? [...data.directories].sort((a, b) => rootRank(a.name) - rootRank(b.name))
     : data.directories;
-  const folderLabel = (name: string) =>
-    root && rootRank(name) < WIKI_FOLDERS.length ? t(`knowledge.tree.${name}`) : name;
   if (directories.length === 0 && data.files.length === 0) {
     return (
       <p style={indentOf(depth)} className="py-1.5 text-xs text-text-subtle">
@@ -139,7 +137,7 @@ export function KnowledgeTreeLevel({
               ) : (
                 <Folder className={NAV_ICON} aria-hidden />
               )}
-              <span className={NAV_FOLDER}>{folderLabel(dir.name)}</span>
+              <span className={NAV_FOLDER}>{dir.name}</span>
             </button>
             {open ? (
               <KnowledgeTreeLevel
