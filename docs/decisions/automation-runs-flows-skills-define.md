@@ -38,6 +38,7 @@ on a trigger, under each agent's own permissions, never approving a tool call.
 - One runtime for every agent Coffer drives; flows are added as skills.
 - Coffer gains runtime-safety state in `runs.db` (leases, actions, model
   calls); business checkpoints stay in the workflow project.
-- Automation turns stop using full permissions.
+- Every scheduled run, in a chat or a workspace, stops using full permissions;
+  only turns a person sends from a chat keep them.
 - The generic scheduled-task requirements move from `channels` to a new
   `automation` spec.
