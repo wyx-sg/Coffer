@@ -1,6 +1,6 @@
 # Design: workflow automation
 
-Status: **draft for review** (2026-11-05). Nothing in this change is
+Status: **design approved by the owner** (2026-11-05: principle amendment, new `automation` spec, separate flow skill). Nothing in this change is
 implemented yet. Section 9 marks, for every capability, whether it is
 designed, implemented, tested or verified in a real run.
 
@@ -418,7 +418,7 @@ Code moves, not copies: `domain/channel/schedule.py`, `scheduled_task.py`,
 becomes a delivery port the channel package implements. The import-linter
 fence gets an `automation → channel` forbidden contract.
 
-## 7. Principle alignment (needs owner approval)
+## 7. Principle alignment (approved 2026-11-05)
 
 `principles.md:146` currently says Coffer has "no workflow or orchestration
 engine and no scheduler that starts agent runs". The branch already ships a
@@ -435,13 +435,13 @@ Proposed replacement for the last three sentences of "Not a second agent":
 > approves a tool call for them. Coffer's own background passes (sync rounds,
 > update checks) run on timers and start no agent.
 
-This change edits `principles.md` (en, zh) with that text only after the owner
-approves it; until then the branch is knowingly inconsistent and the PR says
-so.
+The owner approved it on 2026-11-05 and `principles.md` (en, zh) carries it;
+the knowledge pages that said "Coffer starts no agent run of its own" now
+scope that to tidying.
 
 ## 8. Migration of the developer follow-up prototype
 
-### 8.1 Where the flow goes (decision needed)
+### 8.1 Where the flow goes (decided 2026-11-05: its own flow skill)
 
 The prototype's scripts live in the vault skill `coffer-delegating-work`
 (`scripts/follow_delivery*`). Recommendation: move the flow into its own skill

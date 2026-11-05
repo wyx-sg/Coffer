@@ -1,6 +1,6 @@
 # Automation Runs Flows Skills Define
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-11-05
 **Deciders**: Yuxing (owner)
 **Related**: [Scheduled Tasks Are Turns Coffer Starts in a Chat](scheduled-tasks-are-turns-coffer-starts-in-a-chat.md), change `add-workflow-automation`

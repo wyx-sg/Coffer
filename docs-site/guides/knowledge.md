@@ -334,7 +334,7 @@ To hear what the agent would change before it changes anything, say so in the se
 
 ### Nothing tidies on its own
 
-Tidy runs only when you press it or ask your agent. Coffer starts no agent run of its own, so nothing spends your quota or opens a conversation you did not start.
+Tidy runs only when you press it or ask your agent. Tidying never starts an agent run on its own, so nothing spends your quota or opens a conversation you did not start.
 
 ::: info What leaves your machine
 Coffer sends nothing about your knowledge to any model. When you press Tidy, the files the agent reads go to that agent's own provider, as in any conversation with it.

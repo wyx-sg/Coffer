@@ -1,9 +1,9 @@
 ## 0. Decisions before code (owner review)
 
-- [ ] 0.1 Approve the principle amendment in design §7; then edit `docs-site/architecture/principles.md` and `docs-site/zh/architecture/principles.md`
-- [ ] 0.2 Approve the new capability spec `automation` (AGENTS.md §4: adding a spec pauses for the owner)
-- [ ] 0.3 Decide where the developer follow-up flow lives (design §8.1)
-- [ ] 0.4 Accept ADR `automation-runs-flows-skills-define` (status Proposed → Accepted)
+- [x] 0.1 Approve the principle amendment in design §7 (owner, 2026-11-05); edit `docs-site/architecture/principles.md` and `docs-site/zh/architecture/principles.md`
+- [x] 0.2 Approve the new capability spec `automation` (AGENTS.md §4: adding a spec pauses for the owner)
+- [x] 0.3 Decide where the developer follow-up flow lives (design §8.1): its own flow skill (owner, 2026-11-05)
+- [x] 0.4 Accept ADR `automation-runs-flows-skills-define` (status Proposed → Accepted)
 
 ## 1. Runtime core (no workflow yet)
 
