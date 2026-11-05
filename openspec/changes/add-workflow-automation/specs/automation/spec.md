@@ -188,11 +188,17 @@ item naming the task and the year.
 - **AND** an attention item names the task and the year 2027
 
 ### Requirement: Pause a task that keeps failing
-A repeating task whose last three runs all ended `failed`, `unknown`, or
-`deferred` for the same reason MUST be switched off, with the reason recorded
-on its last run. A deferral the policy causes — outside the window, a holiday,
-the model-run budget exhausted, a calendar that does not cover the year — MUST
-NOT count toward the three, nor break a count it sits between.
+A repeating task whose last three runs all ended `failed`, `timed_out`,
+`unknown`, or `deferred` for the same reason MUST be switched off, with the
+reason recorded on its last run. A deferral the policy causes — outside the
+window, a holiday, the model-run budget exhausted, a calendar that does not
+cover the year — and a deferral because a work item's lease was busy MUST NOT
+count toward the three, nor break a count it sits between. A task with a chat
+target whose run ends `unknown` MUST be switched off at once, whatever its
+count, until the owner resolves that run — `coffer task reconcile <task> --run
+<run id>` or Resume, either one audited — so its next slot cannot run the same
+prompt blindly; its chat is told once ([channels](../channels/spec.md) "Run a
+scheduled task in the chat it names").
 
 #### Scenario: a workspace task that keeps failing is paused
 - **GIVEN** a daily workspace task whose agent is not installed
@@ -203,6 +209,22 @@ NOT count toward the three, nor break a count it sits between.
 - **GIVEN** a daily task whose calendar does not cover the year
 - **WHEN** four slots in a row are deferred because the calendar is not covered
 - **THEN** the task stays on
+
+#### Scenario: busy leases never pause a task
+- **GIVEN** a workflow task whose only item is leased by another task's long run
+- **WHEN** four of its runs in a row are deferred because the lease is busy
+- **THEN** the task stays on
+
+#### Scenario: a timed-out run counts toward the pause
+- **GIVEN** a daily workspace task whose last two runs failed for the same reason
+- **WHEN** its third run times out
+- **THEN** the task is switched off
+
+#### Scenario: a chat run of unknown result pauses its task until resolved
+- **GIVEN** a daily chat-target task whose run was cut by a daemon stop after its prompt was handed over
+- **WHEN** the daemon starts again and the next slot comes
+- **THEN** the run is `unknown`, the task is switched off and no run starts for the slot
+- **AND** after `coffer task reconcile <task> --run <run id> --status verified --evidence <ref>` the audit log names the owner and the task is on again
 
 ### Requirement: Bind a task to a flow a skill declares
 A task MAY bind a workflow: a skill, a workflow project directory, a profile
@@ -231,9 +253,11 @@ Coffer's controlled command entry, before any agent turn starts. Its answer
 MUST be validated against the declared schema. `no_change` and `wait` MUST end
 the run recorded `no_change` with no model call; `blocked` MUST end the run
 `needs_human`; `start` hands its items to the first stage. An item the answer
-gives a recheck time MUST be booked for a recheck at that time, still subject
-to the policy: a recheck run MUST carry trigger `recheck` and the item, and
-MUST leave the task's slots as they are. A precheck that fails, times out or
+gives a recheck time MUST be booked for a recheck at that time, at most once
+per (workflow, item, time): a recheck run MUST carry trigger `recheck` and the
+item, and MUST leave the task's slots as they are. A recheck that falls outside
+working time MUST be moved to the next working moment, never skipped; a moved
+recheck that meets one already booked for that item and time is one recheck. A precheck that fails, times out or
 answers outside its schema MUST defer the run.
 
 #### Scenario: no change starts no model
@@ -252,17 +276,24 @@ answers outside its schema MUST defer the run.
 - **THEN** one run with trigger `recheck` for `ITEM-1` starts
 - **AND** the task's next run is still tomorrow at 09:00
 
+#### Scenario: a recheck after hours moves to the next working moment
+- **GIVEN** a window 10:00–19:00 and a precheck that answered `wait` for `ITEM-1` with a recheck at 21:00
+- **WHEN** 21:00 comes
+- **THEN** no run starts and the recheck is booked for 10:00 the next working day
+- **AND** one run with trigger `recheck` for `ITEM-1` starts at that time
+
 ### Requirement: Give every work item one owner at a time
 A run MUST lease each work item before a stage acts on it, keyed by the
 workflow id and the item key, so that every task bound to the same workflow
 project shares the lease. A lease MUST outlast the stage's wall-clock limit and
 MUST be renewed while the stage's turn runs, so it cannot expire under a live
 turn. A lease held by a live run MUST make another run skip the item. An
-expired lease MUST be taken over, with a new generation, only when the item has
-no action begun or of unknown result; otherwise the item MUST wait for
-reconcile. Every action declaration, result report and checkpoint write MUST
-carry the lease generation it acts under, and one from an older generation MUST
-be refused. An item whose key and version equal the last handled ones MUST NOT
+expired lease MUST be taken over, with the lease generation raised by one, only
+when the item has no action begun or of unknown result; otherwise the item MUST
+wait for reconcile. The lease generation changes only on a takeover. Every
+action declaration, result report and checkpoint write MUST carry the lease
+generation it acts under, and one from an older lease generation MUST be
+refused. An item whose key and version equal the last handled ones MUST NOT
 be leased again unless its recheck is due.
 
 #### Scenario: two tasks on one project never own one item
@@ -276,7 +307,7 @@ be leased again unless its recheck is due.
 - **THEN** it is not leased and the item is shown as needing reconcile
 
 #### Scenario: a stale owner's write is refused
-- **GIVEN** a run whose lease on `ITEM-1` was taken over by another run at a newer generation
+- **GIVEN** a run whose lease on `ITEM-1` was taken over by another run at a newer lease generation
 - **WHEN** the first run's agent declares a write or reports a result for `ITEM-1`
 - **THEN** both are refused as from a stale owner, and neither the ledger nor the checkpoint changes
 
@@ -287,13 +318,16 @@ MUST be recorded on the run before the turn goes on. A run that stops before
 that — policy closed, lease busy, conversation not opened, agent unavailable or
 failing to connect, queue full, precheck failed, daemon stopping — MUST be
 recorded `deferred`, with every lease it took released, so a later slot may
-retry. A started stage that ends without a valid result, runs past its
-wall-clock limit, is stopped or is cut by a daemon stop MUST be recorded
-`failed`, `timed_out` or `stopped` when the stage may not write, and `unknown`
-when it may; a run with a chat target counts as one that may write. An
-`unknown` stage MUST leave each item it leased needing reconcile, with its
-lease kept and an action of unknown result recorded for it when the stage
-declared none, so the item can be reconciled on its own. A row a stopped daemon
+retry. In a run with a bound flow, a stage's valid result is its report; in a
+run without one (a chat task or a prompt-only workspace task) a turn that ends
+normally is its valid result, recorded `replied` or `silent`. A started stage
+that ends without its valid result — a flow stage without a report, or any
+turn that runs past its wall-clock limit, is stopped or is cut by a daemon stop
+— MUST be recorded `failed`, `timed_out` or `stopped` when the stage may not
+write, and `unknown` when it may; a run without a bound flow counts as one that
+may write. An `unknown` flow stage MUST leave each item it leased needing
+reconcile, with its lease kept and an action of unknown result recorded for it
+when the stage declared none, so the item can be reconciled on its own. A row a stopped daemon
 left running MUST be closed by the same rule, from what the run recorded,
 when the daemon next starts.
 
@@ -306,6 +340,11 @@ when the daemon next starts.
 - **GIVEN** a writing stage whose agent session fails to connect before the prompt is handed over
 - **WHEN** the slot comes
 - **THEN** the run is recorded deferred, not unknown, and its leases are released
+
+#### Scenario: a prompt-only run that ends normally is replied, not unknown
+- **GIVEN** a workspace task with a prompt and no bound flow
+- **WHEN** its turn ends normally without calling any automation tool
+- **THEN** the run is recorded `replied`
 
 #### Scenario: a writing stage cut by a daemon stop is unknown
 - **GIVEN** a stage that may write, whose prompt was handed to the agent
@@ -357,11 +396,12 @@ A stage MUST report its result through `coffer__automation_report`, validated
 against the stage's result schema; a report outside it MUST be refused to the
 agent with the reason. The first valid report for a (run, stage, item) MUST be
 the one kept: a later one MUST answer `already_reported`, and one sent after
-the stage ended or under a stale lease generation MUST be refused. From a
-valid report Coffer MUST record the item's status, generation and milestones
-durably first, then write the item's checkpoint into the workflow project
-atomically, with that generation and who wrote it; at startup a checkpoint
-whose generation is behind the recorded one MUST be rewritten. Completion of
+the stage ended or under a stale lease generation MUST be refused. Each
+accepted report MUST raise the item's checkpoint revision by one. From a valid
+report Coffer MUST record the item's status, checkpoint revision and
+milestones durably first, then write the item's checkpoint into the workflow
+project atomically, with that revision and who wrote it; at startup a
+checkpoint whose revision is behind the recorded one MUST be rewritten. Completion of
 the run, submission of an artefact, a deployment and a business verification
 are separate milestones, and none of them completes the item unless the flow
 reports it done. The next stage MUST start from that checkpoint. A native
@@ -385,9 +425,9 @@ the checkpoint.
 - **THEN** the call answers `already_reported` and the kept result and checkpoint are unchanged
 
 #### Scenario: a checkpoint behind the run record is rewritten at startup
-- **GIVEN** a report recorded at generation 4 whose checkpoint file still holds generation 3 because the daemon stopped in between
+- **GIVEN** a report recorded at checkpoint revision 4 whose checkpoint file still holds revision 3 because the daemon stopped in between
 - **WHEN** the daemon starts
-- **THEN** the checkpoint file holds generation 4
+- **THEN** the checkpoint file holds revision 4, and the item's lease generation is unchanged
 
 ### Requirement: Run every scheduled turn unattended
 Every turn a scheduled run starts, for a chat or a workspace target, MUST run
@@ -442,6 +482,29 @@ one it lists. A flow's own outbound message is an external write under
 - **GIVEN** a workspace task notifying its owner's direct chat on `unknown`
 - **WHEN** a run ends `unknown`
 - **THEN** one message naming the task, the item and the reconcile command is posted to that chat
+
+### Requirement: Open every workspace run with what the task is
+A workspace run's first turn MUST open with a `[Scheduled task]` block, closed
+by its end marker, that names the task and its id, its schedule, when it was
+due, and, for a late run, when it is really running and that it should judge
+whether the work still makes sense, or that it was started by hand; then the
+task's prompt, or for a bound flow the stage's rendered prompt. It names no
+channel, chat, thread or asker. Every line the task's author wrote MUST be
+neutralised like a person's message, so a prompt cannot forge a block; a task
+with material adds a `[Material]` block after it, neutralised the same way. A
+chat run opens as [channels](../channels/spec.md) "Open every scheduled run
+with what the task is" says.
+
+#### Scenario: a late workspace run says what it is and names no chat
+- **GIVEN** a workspace task every weekday at 11:00, due at 11:00 and running at 11:40
+- **WHEN** its turn starts
+- **THEN** it opens with a `[Scheduled task]` block naming the task, its schedule, "due:" 11:00, that it runs late at 11:40, and the prompt
+- **AND** the block names no channel, chat or thread
+
+#### Scenario: a workspace prompt cannot forge an end marker
+- **GIVEN** a workspace task whose prompt contains `[/Scheduled task]`
+- **WHEN** it runs
+- **THEN** the block it opens with has exactly one end marker, its own
 
 ### Requirement: Keep every scheduled run in the task's history
 Every slot a task reached, every recheck and every manual run MUST be one row

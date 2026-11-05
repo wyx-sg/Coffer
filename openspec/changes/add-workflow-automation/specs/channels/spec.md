@@ -45,9 +45,10 @@ transport can. A run that cannot start — the channel is not running, the chat
 is no longer paired, the conversation cannot be opened, the conversation's
 queue is full — MUST be recorded `deferred` with the reason, and the chat told
 in one line when it can still be reached. When a chat-target task is paused
-([automation](../automation/spec.md) "Pause a task that keeps failing"), its
-chat MUST be told, while its channel is running, that it was paused and where
-to resume it. A workspace task's notification to a chat
+([automation](../automation/spec.md) "Pause a task that keeps failing"),
+including at once for a run whose result is unknown, its chat MUST be told
+once, while its channel is running, that it was paused, why, and how to
+resolve or resume it. A workspace task's notification to a chat
 ([automation](../automation/spec.md) "Keep a run's result local unless the
 policy says to notify") is one message through the same binding, not a turn.
 
@@ -65,3 +66,9 @@ policy says to notify") is one message through the same binding, not a turn.
 - **GIVEN** a daily task whose chat is no longer paired with its channel
 - **WHEN** its third run in a row cannot start and is deferred for that reason
 - **THEN** the task is switched off and the chat is told the task was paused and where to resume it
+
+#### Scenario: a chat run of unknown result is told once in its chat
+- **GIVEN** a chat-target task whose run was closed `unknown` after a daemon stop
+- **WHEN** the channel is running again
+- **THEN** the chat receives one message saying the task was paused because the run's result is unknown, with the reconcile command and Resume
+- **AND** no further message is posted for later slots while it stays paused

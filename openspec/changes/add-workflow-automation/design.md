@@ -233,7 +233,7 @@ manual trigger (`trigger`: `schedule | moved | recheck | manual`), and gains:
 `stage`, `stage_started_at` (§4.6), `stage_may_write` (the stage's `may_write`
 snapshotted when the stage starts; always true for a chat target), `moved_to`,
 the `deferred`/`unknown`/`no_change`/`needs_approval`/`timed_out`/`moved`
-outcomes, `precheck_decision`, `items` (keys with the lease generation each
+outcomes, `precheck_decision`, `items` (keys with the `lease_generation` each
 was taken at), `usage_status` (`reported | partial | unknown`),
 `idempotency_key`. Model calls go to `automation_model_calls`, rechecks to
 `automation_rechecks` (§4.2). Ids, times, outcomes and counts only — never what
@@ -244,7 +244,7 @@ an agent said.
 One JSON file per work item in the workflow project, under the directory the
 task's project declares (default `state/checkpoints/<item>.json`), written only
 by Coffer's checkpoint writer from a validated result: write-to-temp, fsync,
-rename, with `generation`, `updated_by {task, run, stage, agent}`. The flow's
+rename, with `checkpoint_revision`, `updated_by {task, run, stage, agent}`. The flow's
 own observation state (event log, source facts) stays wherever the flow keeps
 it and is the precheck's business.
 
@@ -285,7 +285,11 @@ was started.
 Each item's `recheck_after` books a row in `automation_rechecks(workflow_id,
 item_key, due_at, task_uid)`, unique on `(workflow_id, item_key, due_at)`. The
 scheduler scans it beside the slots and wakes for the earliest; a due recheck
-opens a run with `trigger = recheck` for that item, still policy-checked.
+opens a run with `trigger = recheck` for that item. A recheck that falls
+outside working time is moved to the next working moment, never skipped
+(a waiting item must be looked at again); the move rewrites its `due_at`, and
+one that lands on an existing `(workflow_id, item_key, due_at)` merges into
+it.
 Rechecks are not slots: they sit outside the slot unique index, `latest_slot`
 does not count them, and they never move a task's next slot. Rejected: a
 one-off internal slot on the task, which collided with the `(task_uid,
@@ -297,7 +301,11 @@ due_at)` index and shifted `latest_slot`.
 in the workflow project's manifest, so two tasks on one project share it.
 Fields: `state` (idle | leased | waiting | needs_reconcile | done),
 `last_version`, `owner {task, run, stage, agent}`, `lease_expires_at`,
-`generation`, `last_conversation_by_agent`. Acquire is one SQLite
+`lease_generation`, `checkpoint_revision`, `last_conversation_by_agent`.
+Two counters, kept apart: `lease_generation` fences owners and rises by one
+only on a takeover; `checkpoint_revision` rises by one per accepted report and
+makes the checkpoint file write idempotent. Rejected: one `generation` for
+both, which made every report look like a change of owner. Acquire is one SQLite
 `BEGIN IMMEDIATE` transaction returning `acquired`, `busy` or `reconcile`.
 
 - **TTL.** A lease's TTL is at least the stage's `stage_timeout_seconds` plus
@@ -305,11 +313,11 @@ Fields: `state` (idle | leased | waiting | needs_reconcile | done),
   turn's lease cannot expire; only a dead run's can.
 - **Takeover.** An expired lease whose item has any action `started` or
   `unknown` is never taken over (`reconcile`); one without is taken over with
-  `generation + 1`.
+  `lease_generation + 1`.
 - **Fencing.** `action_begin`, `action_end`, `automation_report` and the
-  checkpoint writer carry the generation the run leased at (the turn token
-  binds it) and are refused with `stale_owner` when the item's generation is
-  newer.
+  checkpoint writer carry the `lease_generation` the run leased at (the turn
+  token binds it) and are refused with `stale_owner` when the item's
+  `lease_generation` is newer.
 
 ### 4.4 Policy checks happen four times
 
@@ -348,20 +356,29 @@ Fields: `state` (idle | leased | waiting | needs_reconcile | done),
 ### 4.6 Not started vs started
 
 A stage is **started** once `stage_started_at` is set on the run row. The
-adapter sets it, durably, at the moment the prompt is actually handed to the
-agent: after the session connects and the send call returns or is accepted
-(Claude Code: after `_connect` and the query is sent; Codex: after the
-app-server session is up and `turn/start` is accepted). `TurnStarted` is not
-the signal — both adapters yield it before connecting (§1.2 G8). The same write
-snapshots the stage's `may_write` into `stage_may_write`; a chat-target run
-always records `true`, because its prompt may do anything the agent can.
+signal is a new chat-domain turn event, `PromptAccepted`, which each adapter
+emits at the moment the prompt is actually handed to the agent: after the
+session connects and the send call returns or is accepted (Claude Code: after
+`_connect` and the query is sent; Codex: after the app-server session is up
+and `turn/start` is accepted). `TurnStarted` is not the signal — both adapters
+yield it before connecting (§1.2 G8). Automation's run-recorder sink receives
+the event and persists `stage_started_at` synchronously, before the event
+stream goes on; no `infrastructure/chat` code writes a run row (§6). The same
+write snapshots the stage's `may_write` into `stage_may_write`; a run without a
+bound flow (a chat task or a prompt-only workspace task) always records
+`true`, because its prompt may do anything the agent can.
+
+What counts as the stage's valid result depends on the run. With a bound
+flow, it is the stage's report. Without one, no automation tool is offered or
+expected: a turn that ends normally (`TurnDone`) is the valid result, recorded
+`replied` or `silent`.
 
 Before that — policy closed, lease busy, conversation could not open, agent
 not installed or failing to connect, queue full, precheck failed, daemon
 stopping — the run is `deferred` and every lease it took is released: retrying
 is safe.
 
-After that, a turn that ends without a valid report, times out
+After that, a flow stage that ends without a valid report, or any turn that times out
 (`stage_timeout_seconds`, wall clock, interrupts the turn), is stopped, or is
 cut by a daemon stop:
 
@@ -371,8 +388,10 @@ cut by a daemon stop:
   `unknown`; for each leased item with no declared action Coffer records a
   synthetic `unknown` action `stage:<run>:<stage>:<item>`, so every item has
   something to reconcile; the item goes `needs_reconcile` and keeps its lease.
-  A chat-target run has no items, so its `unknown` outcome only tells the
-  owner to check the conversation.
+  A run without a flow has no items: a chat-target `unknown` run pauses its
+  task until the owner resolves it (`coffer task reconcile <task> --run <run
+  id>` or Resume, audited) and its chat is told once, so the next slot cannot
+  rerun the prompt blindly (§4.13).
 
 `close_interrupted` on startup reads `stage_started_at` and `stage_may_write`
 per row and applies the same rule instead of closing every row `failed`.
@@ -417,11 +436,12 @@ action.
 
 **Report.** `coffer__automation_report` keeps the first valid report per
 (run, stage, item); a later call answers `already_reported`; a call after the
-stage ended or from a stale lease generation is refused. Order: the item's
-status, milestones and new generation commit to `runs.db` first; then the
-checkpoint file is written idempotently for that generation (temp, fsync,
-rename; a file already at that generation is left alone). On startup Coffer
-rewrites every checkpoint whose recorded generation is ahead of the file's.
+stage ended or from a stale `lease_generation` is refused. Order: the item's
+status, milestones and `checkpoint_revision + 1` commit to `runs.db` first;
+then the checkpoint file is written idempotently for that revision (temp,
+fsync, rename; a file already at that revision is left alone). On startup
+Coffer rewrites every checkpoint whose recorded revision is ahead of the
+file's.
 Rejected: file first, which could leave a checkpoint `runs.db` never recorded.
 
 **Next stage.** The next stage's prompt is rendered with the item's checkpoint (§3.6), the
@@ -430,6 +450,12 @@ id is reused only when the stage's agent kind matches the item's last
 conversation of that kind and the stage is `continue`; otherwise a fresh
 conversation starts from the checkpoint. A session id is never passed to
 another agent kind.
+
+**Opening block.** A workspace run's first turn opens with a `[Scheduled task]` block — task name
+and id, schedule, due time, late or manual, then the prompt or rendered stage
+prompt, every author line neutralised, `[Material]` after it — and no channel,
+chat, thread or asker fields. The chat run's block stays channels'
+"Open every scheduled run with what the task is"; both share one renderer.
 
 ### 4.9 Cost and usage
 
@@ -473,11 +499,14 @@ change.
 ### 4.13 Pausing
 
 A repeating task is switched off after three runs in a row that ended
-`failed`, `unknown`, or `deferred` for the same non-policy reason (agent
-unavailable, conversation not opened, precheck failed, queue full). Policy
-deferrals — outside the window, a holiday, budget exhausted, calendar not
-covered — neither count nor reset the count: they are the policy working, not
-the task failing. A calendar that does not cover the year would otherwise
+`failed`, `timed_out`, `unknown`, or `deferred` for the same non-policy reason
+(agent unavailable, conversation not opened, precheck failed, queue full).
+Policy deferrals — outside the window, a holiday, budget exhausted, calendar
+not covered — and lease-`busy` deferrals neither count nor reset the count:
+they are the policy or another run working, not the task failing. A
+chat-target run that ends `unknown` pauses its task at once, whatever the
+count, until `coffer task reconcile <task> --run <run id>` or Resume (both
+audited). A calendar that does not cover the year would otherwise
 defer silently forever, so it raises a Coffer attention item (the same feed
 the Overview reads) naming the task and the year; it is not a chat message.
 For a chat target, the channel tells the chat it was paused (spec channels).
@@ -537,6 +566,7 @@ Import-linter contract (`backend/pyproject.toml`):
 | `automation → channel` forbidden | no `coffer.*.automation` module imports `coffer.domain.channel`, `coffer.application.channel`, `coffer.infrastructure.channel` or a channel surface; zero `ignore_imports` |
 | `channel → automation` allowed narrowly | `coffer.*.channel` may import `coffer.domain.automation` and `coffer.application.automation.ports`; the channel's chat-delivery adapter implements automation's `ChatDeliveryPort`; nothing else of automation |
 | Every other kind | `coffer.domain.automation`, `coffer.application.automation`, `coffer.infrastructure.automation` and the automation surfaces are added to the forbidden list of every other kind's "Cross-kind imports forbidden" contract (mcp, agent, skill, knowledge, chat, provider, memory, sync, secret, usage, model_proxy, vault) |
+| Stage start | the chat domain's `PromptAccepted` event is vocabulary automation may import; automation's run-recorder sink (in `application/automation`) persists `stage_started_at`. `infrastructure/chat` emits the event and never touches `runs.db` rows of automation |
 | Composition root | wires automation's ports to chat, skill, command-entry and channel adapters; the only place both sides meet |
 
 ## 7. Principle alignment (approved 2026-11-05)
@@ -631,18 +661,19 @@ acceptance tests on the scenarios of this change's deltas (`automation`,
 | --- | --- | --- |
 | A1 | No change starts no model | precheck `no_change` → run `no_change`, zero adapter calls, zero `automation_model_calls` |
 | A2 | Duplicate trigger | two passes and a restart for one slot → one run row; second Run now with the same key → same run; migration on a table with duplicate `(task_uid, due_at)` rows creates the index |
-| A3 | Interrupted run recovers | daemon stop after `stage_started_at` in a `may_write` stage, or in a chat-target run → row `unknown`; a stage without a report → synthetic `stage:<run>:<stage>:<item>` action `unknown`, item `needs_reconcile`; next slot does not run the item; per-item reconcile releases it |
+| A3 | Interrupted run recovers | daemon stop after `stage_started_at` in a `may_write` stage, or in a chat-target run → row `unknown`; a stage without a report → synthetic `stage:<run>:<stage>:<item>` action `unknown`, item `needs_reconcile`; next slot does not run the item; per-item reconcile releases it; a chat-target `unknown` run pauses its task until `reconcile --run` or Resume; a prompt-only run that ends normally → `replied` |
 | A4 | Unknown is never retried | lease expiry, a second task, a switch to another agent → the lease step answers `reconcile`, no turn starts; `action_begin` on the key also answers `reconcile`; outbox unchanged |
 | A5 | Proven not started is deferred | agent missing / connect failure before the prompt is handed over / queue full / precheck failure → `deferred`, `stage_started_at` null, leases released, next slot runs |
 | A6 | Cross-agent hand-over | inspect on agent A, execute on agent B → B's conversation is fresh, its prompt carries A's checkpoint, no session id crosses |
-| A7 | Time and policy | holiday → `skipped` or `moved`; a move reaching the next slot merges into one run; window closing mid-run → `action_begin` refused `outside_window`; uncovered year → `deferred` plus an attention item; a 02:30 slot on a spring-forward day runs once at 03:00; a recheck runs with `trigger = recheck` and leaves the next slot unchanged |
+| A7 | Time and policy | holiday → `skipped` or `moved`; a move reaching the next slot merges into one run; window closing mid-run → `action_begin` refused `outside_window`; uncovered year → `deferred` plus an attention item; a 02:30 slot on a spring-forward day runs once at 03:00; a recheck runs with `trigger = recheck` and leaves the next slot unchanged; a recheck after hours moves to the next working moment, never skipped |
 | A8 | Ledger states | same `report:<period>:<rev>` twice → second `already_done`; begin after `failed` → attempt 2; begin on `waiting_external` → `in_progress` |
 | A9 | Permissions | Claude Code: a denied tool → stage `needs_approval` naming it, Coffer's automation tools never denied; every adapter: chat and workspace runs start in the unattended mode, never the full-permission one |
 | A10 | Usage | adapter without tokens → call row `unknown`, run `usage_status = unknown`; `TurnDone.cost` and a proxy record with the turn's correlation header land on the run's call row |
-| A11 | Lease fencing | lease renewed by heartbeat while a turn runs past the base TTL; a stale generation's `action_begin`, report and checkpoint write → `stale_owner`, nothing changes |
-| A12 | Report edges | second report → `already_reported`; report after the stage ended → refused; checkpoint file behind `runs.db` → rewritten at startup |
-| A13 | Pausing | three non-policy deferrals with one reason → paused; four policy deferrals → still on |
-| A14 | Feature switch off | automation tools absent, items/actions/reconcile/precheck routes 404, no precheck or recheck runs, leases and ledger unchanged after switching on |
+| A11 | Lease fencing | lease renewed by heartbeat while a turn runs past the base TTL; a stale `lease_generation`'s `action_begin`, report and checkpoint write → `stale_owner`, nothing changes; reports raise `checkpoint_revision`, not `lease_generation` |
+| A12 | Report edges | second report → `already_reported`; report after the stage ended → refused; checkpoint file behind `runs.db` (`checkpoint_revision`) → rewritten at startup |
+| A13 | Pausing | three non-policy deferrals with one reason → paused; `timed_out` counts like `failed`; four policy or lease-`busy` deferrals → still on; chat-target `unknown` → paused at once, chat told once |
+| A14 | Feature switch off | automation tools absent, items/actions/both reconcile/precheck routes 404, no precheck or recheck runs, leases and ledger unchanged after switching on |
+| A15 | Opening and events | a workspace run opens with a `[Scheduled task]` block with no chat fields and one end marker; `PromptAccepted` is emitted only after connect and accept; scheduled chat turns start unattended while a person's turn keeps full permissions |
 
 ### 9.3 Real runs (receipts kept outside the repo)
 

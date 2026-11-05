@@ -22,7 +22,11 @@ flow is about.
 
 - A scheduled task MAY target a **workspace** instead of a chat: it runs
   without a paired chat, keeps its result locally, and notifies a chat only
-  when its policy says so. Chat tasks keep working as they do.
+  when its policy says so. Chat tasks keep entering their chat as they do, with
+three changes: their turns run unattended instead of with full permissions, a
+run that cannot start is recorded `deferred` instead of `failed`, and the
+pause rule is the one below (a run of unknown result pauses the task at once
+until the owner resolves it).
 - A schedule MAY name an IANA **timezone**; without one it keeps the machine's
   local wall clock.
 - A task MAY bind a **workflow**: a skill that declares an automation contract
@@ -77,8 +81,14 @@ flow is about.
 - **Model usage per run**: each model call with its stage, reason, agent,
   model and tokens/cost as the agent or the model proxy reports them, or
   `unknown`; proxy requests carry the turn's correlation header.
-- **Pausing** moves to `automation`: three `failed`, `unknown` or non-policy
-  `deferred` runs with one reason pause a task; policy deferrals never count.
+- **Pausing** moves to `automation`: three `failed`, `timed_out`, `unknown` or
+  non-policy `deferred` runs with one reason pause a task; policy and busy-lease
+  deferrals never count; a chat run of unknown result pauses its task at once
+  until `coffer task reconcile --run` or Resume.
+- A workspace run opens with a `[Scheduled task]` block naming the task, its
+  schedule and due time, with no chat fields.
+- The turn event vocabulary gains **prompt accepted**, emitted once the agent
+  has accepted the prompt; it marks a stage as started.
 - Duplicate triggers are refused durably: one run per (task, slot), and a
   manual run takes an idempotency key.
 - A new capability spec `automation` holds the runtime's requirements; the
@@ -94,7 +104,8 @@ flow is about.
 - Modified: `channels` (generic scheduled-task requirements move out; chat
   delivery becomes one target, run unattended), `experimental-features` (the
   `scheduled_tasks` switch closes the new routes and tools too and keeps the
-  leases and ledger).
+  leases and ledger), `chat` (full permissions only for a turn a person sends;
+  the prompt-accepted turn event).
 
 ## Impact
 
