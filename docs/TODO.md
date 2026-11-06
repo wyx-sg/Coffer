@@ -191,3 +191,45 @@ threads appending at once rarely conflict:
   values (principle IV), so it has to be Coffer. Nobody has needed it yet.
 - **Sketch:** reuse the scan's tick, review and apply steps. Doppler, Infisical
   and Vercel all import `.env` files. Draft: C4.
+
+## Vault sync
+
+All three come from the thread "梳理多机器同步的缺口和缺陷" (2026-11-06), whose
+discussion draft is `sync-review/讨论稿.md` in the project files. They matter
+once a second Mac syncs; on 2026-11-06 only one did (every round pulled 0 files).
+
+### Sync soon after a change, and when a Mac wakes
+
+- **Added:** 2026-11-06, from the thread "梳理多机器同步的缺口和缺陷"
+- **What:** a change reaches the remote a minute or two after it is made, and a
+  Mac that wakes or gets its network back pulls at once, instead of waiting up
+  to the hourly round.
+- **Why later:** with two Macs used in turn, an hour-old edit can be missing on
+  the other one and conflicts get likelier; with one Mac it changes nothing.
+- **Sketch:** per ADR background-workers-wake-on-events: a vault commit pokes
+  the sync worker, debounced 1–2 minutes; a wake/network-up event pulls; the
+  hourly round stays as the fallback. Not real-time. Syncthing aggregates
+  file events for 10 s and rescans hourly; Obsidian Sync and 1Password are
+  near-instant.
+
+### Help when a Mac is lost or retired
+
+- **Added:** 2026-11-06, from the thread "梳理多机器同步的缺口和缺陷"
+- **What:** retiring a Mac walks through revoking its access: revoke and replace
+  the push token at the Git host (with a link), and optionally rotate the
+  master key (re-encrypt every secret) so the old Mac's key opens nothing new.
+- **Why later:** retiring only removes the descriptor; the token and key stay
+  on that Mac. Matters only once there is a second Mac to lose.
+- **Sketch:** 1Password and Bitwarden deauthorise the device and rotate keys.
+  Key rotation needs its own ADR (every machine must import the new key).
+
+### Set up another Mac from one file
+
+- **Added:** 2026-11-06, from the thread "梳理多机器同步的缺口和缺陷"
+- **What:** the passphrase-protected `.cfk` backup can also carry the remote's
+  URL, branch, options and push token, so a new Mac joins by importing one file
+  and typing one passphrase.
+- **Why later:** today a second Mac needs a token, a secret, the URL and the key
+  file, each by hand; worth it the first time the owner adds a Mac.
+- **Sketch:** 1Password adds a device by QR code; Syncthing devices introduce
+  each other. The token must stay inside the passphrase-encrypted bundle.

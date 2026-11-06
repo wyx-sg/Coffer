@@ -917,6 +917,8 @@
       "sync_run_authFailed": "Sync stopped: the remote refused the secret",
       "sync_run_pausedCloudFolder": "Sync paused: the vault is inside a folder another tool syncs",
       "sync_run_remoteTooNew": "Sync stopped: a newer Coffer wrote the remote",
+      "sync_run_olderRemoteHasChanges": "Sync stopped: the older remote has changes this Mac has not pulled",
+      "sync_run_keyMismatch": "Sync stopped: another Mac has a different master key",
       "sync_run_plaintextFound": "Sync pushed nothing: a file holds a plaintext secret",
       "sync_run_failed": "Sync round failed",
       "token_rotated": "Access token rotated",
@@ -4372,6 +4374,10 @@
         "title": "The remote uses another vault layout",
         "body": "The repository was written by a Coffer with a different vault layout. Update Coffer on the machine that is behind, then sync again."
       },
+      "key_mismatch": {
+        "title": "Another Mac has a different master key",
+        "body": "This remote carries encrypted secrets, and they would not open on every Mac. Nothing syncs until the keys match: import the same master key on Settings › Security in the desktop app, then sync again."
+      },
       "failed": {
         "title": "The last round failed",
         "body": "The round stopped before it finished. Git's message is below."
@@ -4409,6 +4415,8 @@
         "auth_failed": "sign-in refused",
         "paused_cloud_folder": "paused (cloud folder)",
         "remote_too_new": "remote too new",
+        "older_remote_has_changes": "older remote has changes",
+        "key_mismatch": "key mismatch",
         "rolled_back": "rolled back",
         "failed": "failed"
       }
@@ -4756,6 +4764,7 @@
       "cloud_folder": "Paused",
       "git_missing": "Git missing",
       "layout": "Layout differs",
+      "key_mismatch": "Key differs",
       "failed": "Round failed",
       "to_push_one": "{{count}} change to push",
       "to_push_other": "{{count}} changes to push",
@@ -4854,6 +4863,8 @@
         "auth_failed": "Sign-in failed",
         "paused_cloud_folder": "Paused (cloud folder)",
         "remote_too_new": "Remote too new",
+        "older_remote_has_changes": "Older remote has changes",
+        "key_mismatch": "Master key differs",
         "rolled_back": "Rolled back",
         "failed": "Failed",
         "pulledPushFailed": "Pulled, push failed",

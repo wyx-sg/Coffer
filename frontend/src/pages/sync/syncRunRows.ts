@@ -39,6 +39,7 @@ const FOLDABLE = new Set([
   "waiting_on_edit",
   "join_required",
   "paused_cloud_folder",
+  "key_mismatch",
 ]);
 
 /** A round with nothing to say: its detail pane would be empty. */

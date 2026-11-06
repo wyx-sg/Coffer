@@ -917,6 +917,8 @@
       "sync_run_authFailed": "同步已停止：远端拒绝了这个密钥",
       "sync_run_pausedCloudFolder": "同步已暂停：保险库位于另一个工具同步的文件夹中",
       "sync_run_remoteTooNew": "同步已停止：远端由更新版本的 Coffer 写入",
+      "sync_run_olderRemoteHasChanges": "同步已停止：旧版远端有这台 Mac 还没拉取的改动",
+      "sync_run_keyMismatch": "同步已停止：另一台 Mac 的主密钥不同",
       "sync_run_plaintextFound": "同步未推送任何内容：有文件含明文密钥",
       "sync_run_failed": "同步失败",
       "token_rotated": "已轮换访问令牌",
@@ -4372,6 +4374,10 @@
         "title": "远端使用了另一种 vault 布局",
         "body": "这个仓库是由使用不同 vault 布局的 Coffer 写入的。请更新落后那台机器上的 Coffer，然后再同步。"
       },
+      "key_mismatch": {
+        "title": "另一台 Mac 的主密钥不同",
+        "body": "这个远端带着加密的密钥，主密钥不同的 Mac 打不开它们。主密钥一致之前不会同步任何东西：请在桌面应用的“设置 › 安全”里导入同一个主密钥，然后再同步。"
+      },
       "failed": {
         "title": "上一轮失败了",
         "body": "这一轮在完成前停止了。git 的消息见下方。"
@@ -4409,6 +4415,8 @@
         "auth_failed": "登录被拒",
         "paused_cloud_folder": "已暂停（云同步文件夹）",
         "remote_too_new": "远端版本过新",
+        "older_remote_has_changes": "旧版远端有未拉取的改动",
+        "key_mismatch": "主密钥不一致",
         "rolled_back": "已回滚",
         "failed": "失败"
       }
@@ -4756,6 +4764,7 @@
       "cloud_folder": "已暂停",
       "git_missing": "缺少 Git",
       "layout": "布局不一致",
+      "key_mismatch": "主密钥不一致",
       "failed": "本轮失败",
       "to_push_one": "{{count}} 项改动待推送",
       "to_push_other": "{{count}} 项改动待推送",
@@ -4854,6 +4863,8 @@
         "auth_failed": "登录失败",
         "paused_cloud_folder": "已暂停（云同步文件夹）",
         "remote_too_new": "远端版本过新",
+        "older_remote_has_changes": "旧版远端有未拉取的改动",
+        "key_mismatch": "主密钥不一致",
         "rolled_back": "已回滚",
         "failed": "失败",
         "pulledPushFailed": "已拉取，推送失败",

@@ -64,6 +64,8 @@ _PROBLEMS = {
     RoundStatus.PLAINTEXT_FOUND: "plaintext_found",
     RoundStatus.PAUSED_CLOUD_FOLDER: "cloud_folder",
     RoundStatus.REMOTE_TOO_NEW: "layout",
+    RoundStatus.OLDER_REMOTE_HAS_CHANGES: "layout",
+    RoundStatus.KEY_MISMATCH: "key_mismatch",
     RoundStatus.FAILED: "failed",
 }
 

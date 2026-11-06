@@ -19,6 +19,7 @@ export const PROBLEM_REASON: Partial<Record<SyncProblem["kind"], string>> = {
   waiting_approval: "sync_waiting_approval",
   cloud_folder: "sync_paused",
   layout: "sync_layout",
+  key_mismatch: "sync_key_mismatch",
 };
 
 export const STOP_REASON = { conflicts: "sync_conflicts", held: "sync_deletions_held" } as const;

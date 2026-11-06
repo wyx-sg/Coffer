@@ -1116,7 +1116,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "unreachable" | "auth_failed" | "waiting_approval" | "push_failed" | "plaintext_found" | "cloud_folder" | "layout" | "git_missing" | "failed";
+            kind: "unreachable" | "auth_failed" | "waiting_approval" | "push_failed" | "plaintext_found" | "cloud_folder" | "layout" | "key_mismatch" | "git_missing" | "failed";
             /** Message */
             message: string;
             /**
@@ -1283,7 +1283,7 @@ export interface components {
          * RoundStatus
          * @enum {string}
          */
-        RoundStatus: "nothing_to_do" | "pulled" | "pushed" | "pulled_and_pushed" | "push_failed" | "stopped" | "held" | "waiting_on_edit" | "join_required" | "joined" | "unreachable" | "auth_failed" | "paused_cloud_folder" | "remote_too_new" | "plaintext_found" | "rolled_back" | "failed";
+        RoundStatus: "nothing_to_do" | "pulled" | "pushed" | "pulled_and_pushed" | "push_failed" | "stopped" | "held" | "waiting_on_edit" | "join_required" | "joined" | "unreachable" | "auth_failed" | "paused_cloud_folder" | "remote_too_new" | "older_remote_has_changes" | "key_mismatch" | "plaintext_found" | "rolled_back" | "failed";
         /** StopStateOut */
         StopStateOut: {
             round: components["schemas"]["StoppedRoundOut"] | null;
