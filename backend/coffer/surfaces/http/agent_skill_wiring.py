@@ -66,8 +66,6 @@ from coffer.surfaces.http.agent_dependencies import (
 )
 from coffer.surfaces.http.agent_mcp_import_routes import set_mcp_import_service
 from coffer.surfaces.http.cli_wiring import wire_cli_requirements
-from coffer.surfaces.http.delivery_reports import register_delivery_reporter
-from coffer.surfaces.http.schemas import DeliveryResultOut
 from coffer.surfaces.http.skill_dependencies import (
     set_skill_secret_presence,
     set_skill_service,
@@ -325,16 +323,6 @@ def wire_agent_and_skill_kinds(
     set_agent_hooks_service(agent_hooks_svc)
     set_native_session_service(native_session_svc)
     set_skill_service(skill_svc)
-
-    async def _skill_delivery_report(skill: Resource) -> list[DeliveryResultOut]:
-        return [
-            DeliveryResultOut(
-                agent_uid=d.agent_uid, agent_name=d.agent_name, ok=d.ok, reason=d.reason
-            )
-            for d in await skill_svc.delivery_of(skill)
-        ]
-
-    register_delivery_reporter("skill", _skill_delivery_report)
 
     def _secret_set(name: str) -> bool:
         # A presence probe: it stats the ciphertext file, never decrypts.

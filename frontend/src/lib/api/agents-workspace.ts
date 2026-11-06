@@ -59,6 +59,3 @@ type AdoptSkillBody = SkillManager["schemas"]["AdoptBody"];
 /** @ui-only What adopting an unmanaged folder takes: the folder (a path parameter, not part of the body) plus the body. */
 export type AdoptSkillVars = AdoptSkillBody & { skill: string };
 
-/** One unmanaged skill for its read-only detail page: the list entry plus the
- *  SKILL.md `description` (null when the folder does not validate). */
-export type UnmanagedSkillDetailOut = SkillManager["schemas"]["UnmanagedSkillDetailOut"];

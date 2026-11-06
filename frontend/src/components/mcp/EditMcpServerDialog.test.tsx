@@ -47,7 +47,6 @@ const stdioResource: ResourceOut = {
     },
   },
   enabled: true,
-  delivery: null,
   toggleable: true,
   secrets_readable_by_local_processes: false,
   created_at: "2026-05-21T00:00:00Z",

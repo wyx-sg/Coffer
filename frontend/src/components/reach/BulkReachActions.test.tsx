@@ -257,25 +257,3 @@ acceptance(
     await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
   },
 );
-
-test("a scope that saved but could not be delivered to an agent is a failure of that item (4.3.31)", async () => {
-  put.mockImplementation(((uid: string) =>
-    Promise.resolve({
-      delivery:
-        uid === "u-skill-c"
-          ? [{ agent_uid: CODEX, agent_name: "codex", ok: false, reason: "~/.codex is read-only" }]
-          : [{ agent_uid: CODEX, agent_name: "codex", ok: true, reason: null }],
-    })) as never);
-  const onDone = mount();
-  openPanel();
-  fireEvent.click(choice(/chosen agents/i));
-  fireEvent.click(box("codex"));
-  apply();
-
-  const alert = await screen.findByRole("alert");
-  expect(alert).toHaveTextContent("Applied to 1 of 2");
-  expect(alert).toHaveTextContent("release-notes");
-  expect(alert).toHaveTextContent("~/.codex is read-only");
-  expect(toastError).not.toHaveBeenCalled();
-  expect(onDone).not.toHaveBeenCalled();
-});

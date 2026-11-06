@@ -94,7 +94,6 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
         >
           {(visible, select) => (
             <AgentOwnSkillRows
-              agentType={agent.type}
               rows={visible}
               select={select}
               onAdopt={setAdoptTarget}

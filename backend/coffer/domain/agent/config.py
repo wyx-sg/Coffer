@@ -111,12 +111,9 @@ class AgentConfig(BaseModel):
         return home_env(self.type, self.resolved_config_dir())
 
     def resolved_skill_dir(self) -> pathlib.Path:
-        """Where folder-mode skills are delivered: ``<config_dir>/<subpath>``.
-
-        The subpath comes from the agent's capability descriptor — ``skills``
-        for Claude Code and Codex. Non-folder delivery modes do not use this
-        path.
+        """Where skills are delivered: ``<config_dir>/skills`` for Claude Code,
+        ``~/.agents/skills`` for Codex (the descriptor's ``skill_home_subpath``).
         """
         from coffer.domain.agent.descriptor import descriptor_for
 
-        return self.resolved_config_dir() / descriptor_for(self.type).skill_subpath
+        return descriptor_for(self.type).skill_dir_for(self.resolved_config_dir())

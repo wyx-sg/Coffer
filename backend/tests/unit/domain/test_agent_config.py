@@ -20,16 +20,21 @@ def test_minimum_fields():
 def test_resolved_dirs_fall_back_to_type_default():
     cfg = AgentConfig(type=AgentType.CODEX)
     assert cfg.resolved_config_dir() == AgentType.CODEX.config_dir()
-    # Skills are delivered to <config_dir>/skills.
-    assert cfg.resolved_skill_dir() == AgentType.CODEX.config_dir() / "skills"
+    # Codex's skills are delivered to ~/.agents/skills, where Codex reads them.
+    assert cfg.resolved_skill_dir() == AgentType.CODEX.config_dir().parent / ".agents" / "skills"
+    claude = AgentConfig(type=AgentType.CLAUDE_CODE)
+    assert claude.resolved_skill_dir() == AgentType.CLAUDE_CODE.config_dir() / "skills"
 
 
 def test_resolved_dirs_use_config_dir_override(tmp_path):
     custom = tmp_path / "custom-cfg"
     custom.mkdir()
-    cfg = AgentConfig(type=AgentType.CODEX, config_dir=str(custom))
+    cfg = AgentConfig(type=AgentType.CLAUDE_CODE, config_dir=str(custom))
     assert cfg.resolved_config_dir() == pathlib.Path(str(custom))
     assert cfg.resolved_skill_dir() == pathlib.Path(str(custom)) / "skills"
+    # Codex reads ~/.agents/skills whatever its config dir is.
+    codex = AgentConfig(type=AgentType.CODEX, config_dir=str(custom))
+    assert codex.resolved_skill_dir() == AgentType.CODEX.config_dir().parent / ".agents" / "skills"
 
 
 def test_config_dir_must_be_absolute():

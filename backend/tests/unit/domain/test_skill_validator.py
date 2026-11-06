@@ -157,15 +157,19 @@ def test_size_limit_exceeded(tmp_path):
 
 
 @pytest.mark.acceptance(
-    spec="skill-manager", scenario="reject a skill with an over-long description"
+    spec="skill-manager", scenario="a skill with a description over 1024 characters is accepted"
 )
-def test_description_over_1024_chars_rejected(tmp_path):
-    """agentskills.io caps `description` at 1024 chars; over-long is a clean 422."""
+def test_description_over_1024_chars_accepted(tmp_path):
+    """Neither agent enforces agentskills.io's 1024 cap, so Coffer does not
+    either; the resource keeps the description cut to the cap."""
+    from coffer.domain.skill.config import stored_description
+
     skill = tmp_path / "skill"
-    _write_skill(skill, description="d" * 1025)
+    _write_skill(skill, description="d" * 2000)
     result = validate_skill_folder(skill)
-    assert isinstance(result, ValidationFailure)
-    assert result.reason == "skill_md_frontmatter_invalid"
+    assert isinstance(result, ValidationOk)
+    kept = stored_description(result.frontmatter.description)
+    assert len(kept) == 1024 and kept.endswith("…")
 
 
 @pytest.mark.acceptance(

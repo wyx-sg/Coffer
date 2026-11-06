@@ -37,11 +37,12 @@ logger = logging.getLogger(__name__)
 
 FOREIGN_LINK_REASON = "symlink points outside the master store"
 
-# Location labels by position in the resolver's ordered list: index 0 is
-# always `<config_dir>/skills`; any later entry is the agent product's
-# secondary standard location (today: Codex's `~/.agents/skills`).
-_LOC_PRIMARY = "skills"
-_LOC_SECONDARY = "agents_dir"
+# Location labels by path: `agents_dir` is the cross-tool `~/.agents/skills`
+# (where Codex reads personal skills and Coffer delivers them), `skills` an
+# agent's own `<config_dir>/skills`. The resolver's first entry is always the
+# delivery directory, whichever label it carries.
+_LOC_CONFIG = "skills"
+_LOC_AGENTS_DIR = "agents_dir"
 
 
 @dataclass(frozen=True)
@@ -70,8 +71,8 @@ class UnmanagedDetail:
     folder: pathlib.Path
 
 
-def _label(index: int) -> str:
-    return _LOC_PRIMARY if index == 0 else _LOC_SECONDARY
+def _label(loc: pathlib.Path) -> str:
+    return _LOC_AGENTS_DIR if loc.name == "skills" and loc.parent.name == ".agents" else _LOC_CONFIG
 
 
 def _scan(service: SkillService, agent: Resource) -> list[tuple[str, UnmanagedSkill]]:
@@ -83,10 +84,10 @@ def _scan(service: SkillService, agent: Resource) -> list[tuple[str, UnmanagedSk
     # link to it is as managed as a link into the master store.
     derived = (service._store.derived_root,)
     out: list[tuple[str, UnmanagedSkill]] = []
-    for i, loc in enumerate(locations):
+    for loc in locations:
         entries = scanner.scan_dir(loc)
         for u in classify(entries, master_root=master_root, also_managed=derived):
-            out.append((_label(i), u))
+            out.append((_label(loc), u))
     return out
 
 
@@ -170,11 +171,11 @@ async def adopt_unmanaged(
 
     Copy into master + register + deliver (via ``register_from_validated``),
     then remove the original folder and deliver the managed link to the
-    agent's canonical delivery location ``<config_dir>/skills/<name>`` —
-    in-place replacement when adopting from there, consolidation when
-    adopting from ``~/.agents/skills`` (the original is removed; Codex reads
-    both locations, so the skill stays visible). See spec skill-manager "Adopt an
-    unmanaged skill into the master store".
+    agent's delivery location (``<config_dir>/skills/<name>`` for Claude Code,
+    ``~/.agents/skills/<name>`` for Codex) — in-place replacement when adopting
+    from there, consolidation when adopting from the agent's other location
+    (the original is removed; Codex reads both, so the skill stays visible).
+    See spec skill-manager "Adopt an unmanaged skill into the master store".
     The delivery pass ``register_from_validated`` asks for leaves THIS agent
     alone while the original folder still occupies the link path (foreign
     content is never clobbered) — that is why the rmtree happens first and

@@ -54,7 +54,11 @@ def test_every_projection_entry_lands_through_the_allowlist(
             assert path == agent.path(entry.config_key)
         else:
             assert entry.subpath is not None
-            path = agent.config_dir / entry.subpath
+            path = (
+                agent.skills_dir
+                if entry.asset is AssetType.SKILL
+                else agent.config_dir / entry.subpath
+            )
             assert path.is_dir(), "a directory landing exists in a laid-out agent dir"
         assert _inside(path, agent.home)
 

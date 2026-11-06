@@ -6,10 +6,8 @@ removed either way. A stage is one directory under a per-daemon root in the
 system's temp space (never under ``~/.coffer``, so vault sync cannot see it)
 plus what was found there, held in memory under a random id:
 
-- an **import** stage (a folder, an archive or a Git checkout), confirmed into
-  one or more skills or cancelled;
-- a **source change** stage (the new source of a Git-imported skill, checked
-  out beside its current folder), applied or cancelled.
+an **import** stage (a folder, an archive or a Git checkout), confirmed into
+one or more skills or cancelled.
 
 A stage nobody confirms is removed an hour after it was made, on the next call
 that touches the registry. A daemon restart forgets them all, which is right:
@@ -27,7 +25,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
 
-from coffer.domain.skill.source import GitImportSource, ImportedSource
+from coffer.domain.skill.source import ImportedSource
 from coffer.domain.skill_source_errors import SkillStagingNotFound
 
 #: How long an unconfirmed stage is kept.
@@ -71,23 +69,7 @@ class ImportStage:
     created: float = field(default_factory=time.monotonic)
 
 
-@dataclass
-class SourceChangeStage:
-    """A new source for a Git-imported skill (``source_change_ops``), shown
-    against the current folder and taken or cancelled."""
-
-    id: str
-    skill_uid: str
-    dir: pathlib.Path
-    from_commit: str
-    to_commit: str
-    incoming: pathlib.Path
-    #: The ``GitImportSource`` the skill takes on when the stage is applied.
-    new_source: GitImportSource
-    created: float = field(default_factory=time.monotonic)
-
-
-Stage = ImportStage | SourceChangeStage
+Stage = ImportStage
 
 
 class StagingRegistry:
@@ -167,7 +149,6 @@ def remove_dir(path: pathlib.Path | None) -> None:
 __all__ = [
     "STAGE_TTL_S",
     "ImportStage",
-    "SourceChangeStage",
     "Stage",
     "StagedSkill",
     "StagingRegistry",

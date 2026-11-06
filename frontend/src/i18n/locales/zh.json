@@ -2241,7 +2241,6 @@
       }
     },
     "workspace": {
-      "skills": "技能",
       "mcp": {
         "detail": {
           "loadFailed": "无法加载该 MCP 服务器"
@@ -2284,7 +2283,6 @@
       }
     },
     "skillsTab": {
-      "unmanagedBadge": "未托管",
       "adopt": "纳入托管",
       "adoptSuccess": "已纳入托管 {{name}}",
       "search": "搜索技能",
@@ -2334,21 +2332,6 @@
         "reach": "可用范围",
         "reachHint": "谁能用到它。之后可在「技能」页修改。",
         "failedTitle": "无法纳入托管 {{name}}"
-      },
-      "unmanagedDetail": {
-        "invalidTitle": "不是有效的技能——该文件夹目前无法纳入托管",
-        "notFound": "该未托管技能已不在智能体的技能目录中。",
-        "readOnlyHint": "Coffer 会读取这个文件夹，但不管理它。采用它即可与你的其他智能体共享。",
-        "ownSkill": "{{agent}} 自己的技能",
-        "files_one": "{{count}} 个文件",
-        "files_other": "{{count}} 个文件",
-        "description": "描述",
-        "folder": "文件夹",
-        "foundIn": "位于",
-        "foundInSkills": "{{agent}} 的技能目录",
-        "foundInAgentsDir": "共享的 ~/.agents/skills 目录",
-        "filesLabel": "文件",
-        "viewFiles": "查看文件"
       },
       "bulk": {
         "label": "已选技能",
@@ -2855,7 +2838,6 @@
     "detail": {
       "updated": "更新于 {{when}}",
       "tabs": {
-        "overview": "概览",
         "files": "文件",
         "delivery": "投递",
         "requires": "依赖",
@@ -2882,13 +2864,13 @@
         "commandNotReady": "命令未就绪",
         "toolOff": "工具已关闭",
         "secretMissing": "密钥缺失",
-        "sourceUnreachable": "来源无法访问"
+        "sourceUnreachable": "来源无法访问",
+        "skillNotShared": "依赖技能未送达"
       }
     },
     "files": {
       "tree": "文件",
-      "lockBuiltin": "由 Coffer 写入 — 只读",
-      "lockNotMine": "不在你的库中 — 只读"
+      "lockBuiltin": "由 Coffer 写入 — 只读"
     },
     "checkCopies": "检查副本",
     "bulk": {
@@ -2991,7 +2973,6 @@
       "toolsIntro": "技能会调用的 MCP 服务器和自定义工具，在 SKILL.md 的 <code>tools:</code> 下声明。",
       "skillsIntro": "这个技能会加载的其他技能，在 SKILL.md 的 <code>metadata.requires</code> 下声明。",
       "checkedAgo": "在这台 Mac 上{{when}}检查过。",
-      "inProfiles": "在 profile {{profiles}} 中声明",
       "needsAtLeast": "需要 ≥ {{min}}",
       "viewInClis": "在命令行工具中查看",
       "viewInSecrets": "在密钥中查看",
@@ -3053,7 +3034,8 @@
       "needsSecret": "需要密钥 {{name}} · 未设置",
       "needsTool": "需要 {{name}} · {{state}}",
       "sourceUnreachable": "Git 来源无法访问",
-      "updateAvailable": "有可用更新 · Git"
+      "updateAvailable": "有可用更新 · Git",
+      "needsSkill": "需要技能 {{name}} · {{agents}} 没有"
     },
     "selection": {
       "title_one": "已选 {{count}} 个技能",
@@ -3118,7 +3100,10 @@
         }
       },
       "openTool": "打开 {{tool}}",
-      "unreachablePrompt": "Coffer 连不上技能 {{name}} 导入时所用的 Git 仓库 {{url}}。最近一次错误：{{error}}\n\n请检查这台机器的网络、VPN 或 git 凭据能否访问该仓库（例如运行 `git ls-remote {{url}}`），修好阻碍访问的问题，并告诉我你改了什么。不要改动技能本身。"
+      "unreachablePrompt": "Coffer 连不上技能 {{name}} 导入时所用的 Git 仓库 {{url}}。最近一次错误：{{error}}\n\n请检查这台机器的网络、VPN 或 git 凭据能否访问该仓库（例如运行 `git ls-remote {{url}}`），修好阻碍访问的问题，并告诉我你改了什么。不要改动技能本身。",
+      "skillNotShared": "{{name}} 会加载 {{dep}}，但 {{agents}} 拿不到它",
+      "skillNotSharedBody": "把 {{dep}} 的可达范围设成和 {{name}} 一样，或者缩小 {{name}} 的范围。",
+      "openSkill": "打开 {{name}}"
     },
     "copy": {
       "title": "：{{agent}} 中有文件夹挡住",
@@ -3156,38 +3141,10 @@
       "files_one": "{{count}} 个文件",
       "files_other": "{{count}} 个文件",
       "found": "发现于 {{day}}",
-      "body": "它在 Coffer 的技能目录里，但不在你的技能库中——是手动复制进来的，或是中断的导入留下的。添加它就有了范围和历史，也可以删除它。",
+      "body": "它在 Coffer 的技能目录里，但不在你的技能库中——是手动复制进来的，或是中断的导入留下的。添加它就有了范围和历史。要去掉它，在访达里删除，或者交给智能体。",
       "add": "添加到技能库",
-      "delete": "删除文件夹…",
-      "deleteTitle": "删除文件夹 {{name}}？",
-      "deleteBody": "Coffer 会把它从技能目录移到 ~/.coffer/content/backup/。",
-      "deleteConfirm": "删除文件夹",
       "gone": "没有名为“{{name}}”且不在技能库中的文件夹",
       "bannerTitle": "没有智能体会用到这个文件夹"
-    },
-    "source": {
-      "change": "更改来源…"
-    },
-    "changeSource": {
-      "title": "更改 {{name}} 的来源",
-      "now": "当前",
-      "check": "检查来源",
-      "checking": "正在检查…",
-      "take": "更改为 {{commit}}",
-      "noteForm": "目前还没有替换任何内容。",
-      "note": "当前版本会保留在保险库的历史中。",
-      "refHelp": "留空则使用默认分支。",
-      "pathHelp": "SKILL.md 所在的位置。在仓库顶层时留空。",
-      "noFiles": "新来源的文件与现在相同。",
-      "filesChange_one": "将有 {{count}} 个文件变化：",
-      "filesChange_other": "将有 {{count}} 个文件变化：",
-      "status": {
-        "added": "新增",
-        "removed": "删除",
-        "modified": "修改"
-      },
-      "done": "{{name}} 现在跟随 {{repo}}",
-      "failed": "无法更换来源"
     },
     "update": {
       "handoff": "交给 {{agent}} 更新",
@@ -3196,7 +3153,6 @@
       "mergedBody": "Coffer 会把该技能固定到 {{commit}}，文件保持智能体改完后的样子。请在更新已进入主文件夹后再这样做。",
       "mergedDone": "{{name}} 已固定到 {{commit}}",
       "mergedFailed": "无法记录合并",
-      "viewUpstream": "查看上游改动",
       "range": "提交",
       "copyRange": "复制提交范围"
     },
@@ -6697,7 +6653,7 @@
     "folder": {
       "label": "文件夹",
       "placeholder": "~/src/skills/my-skill",
-      "help": "顶层有 SKILL.md 的文件夹，或下一层文件夹里放着技能。"
+      "help": "顶层有 SKILL.md 的文件夹，或下面的文件夹里放着技能。"
     },
     "archive": {
       "label": "压缩包",
@@ -6746,7 +6702,7 @@
     "refusal": {
       "noSkillMd": "没有找到 SKILL.md",
       "unsafe": "压缩包里有不安全的条目",
-      "noSkillMdIn": "{{file}} 里没有 SKILL.md。Coffer 会查看顶层和下一层文件夹。",
+      "noSkillMdIn": "{{file}} 里没有 SKILL.md。Coffer 会查看顶层和下面各层文件夹。",
       "noSkillMdTop": "这个文件夹的顶层没有 SKILL.md，下一层有：",
       "useFolder": "使用那个文件夹",
       "unsafeBody": "没有解压任何内容。这些条目可能写到压缩包之外或链接到别处：",

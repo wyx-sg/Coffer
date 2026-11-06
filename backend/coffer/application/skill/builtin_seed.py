@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING
 from coffer.domain.audit import AuditEventType
 from coffer.domain.reconcile import Disposition, Outcome
 from coffer.domain.skill.builtin import is_builtin
-from coffer.domain.skill.config import SkillConfig
+from coffer.domain.skill.config import SkillConfig, stored_description
 from coffer.domain.skill.source import BuiltinSource
 from coffer.domain.skill.validator import ValidationFailure, validate_skill_folder
 
@@ -114,7 +114,7 @@ class BuiltinSkillSeed:
             source=BuiltinSource(),
             # The frontmatter's ``name`` is deliberately not stored: it is the
             # row's ``name``, and ``_write`` was handed that name to begin with.
-            skill_md_description=validation.frontmatter.description,
+            skill_md_description=stored_description(validation.frontmatter.description),
             version_hash=validation.skill_md_sha256,
             # Deliberately null: a timestamp differs on every machine and the
             # config converges, so storing one would make two vaults disagree

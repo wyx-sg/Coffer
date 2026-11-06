@@ -151,13 +151,11 @@ def test_every_git_source_command_waits_past_the_daemons_own_deadline() -> None:
     git_routes = [
         c
         for c in MOUNTED
-        if c.route == "/skills/stage/git"
-        or (c.route.startswith("/skills/{uid}/source/") and not c.route.endswith("/apply"))
+        if c.route == "/skills/stage/git" or c.route.startswith("/skills/{uid}/source/")
     ]
     assert {c.command for c in git_routes} == {
         "skill stage-git",
         "skill source check",
-        "skill source change",
         "skill source handoff",
         "skill source merged",
     }

@@ -3,6 +3,7 @@ reach and switch through the resource routes."""
 
 from __future__ import annotations
 
+import os
 import pathlib
 
 import pytest
@@ -102,7 +103,8 @@ def test_a_skill_is_scoped_switched_off_and_on_through_the_resource_routes(tmp_p
         uid = imported.json()["uid"]
         first_link, second_link = (
             first_dir / "skills" / "switch-me",
-            second_dir / "skills" / "switch-me",
+            # Codex's skills go to ~/.agents/skills.
+            pathlib.Path(os.environ["HOME"]) / ".agents" / "skills" / "switch-me",
         )
         assert first_link.exists() and second_link.exists()
 

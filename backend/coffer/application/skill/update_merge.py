@@ -30,24 +30,15 @@ if TYPE_CHECKING:
     from coffer.application.skill.source_service import SkillSourceService
 
 
-def _match(commit: str, pending: list[str]) -> str | None:
-    """The one pending commit ``commit`` names in full or by a unique prefix."""
-    wanted = commit.strip().lower()
-    if len(wanted) < 7:
-        return None
-    found = [c for c in dict.fromkeys(pending) if c.lower().startswith(wanted)]
-    return found[0] if len(found) == 1 else None
-
-
 async def mark_merged(
     svc: SkillSourceService, skill: Resource, commit: str, *, actor: str
 ) -> Resource:
     """Move the pin to ``commit`` without touching the master's files.
 
-    ``commit`` must be an update waiting for the skill: the ref's newest commit,
-    or one of the commits between the pin and it that change the skill's
-    folder. The repository is fetched again, so the pin's content hash is
-    that commit's own content.
+    ``commit`` must be the update the skill is offered, the ref's newest
+    commit, given in full: the hand-off asks the agent to merge exactly that
+    one. The repository is fetched again, so the pin's content hash is that
+    commit's own content.
     """
     source = update_ops.git_source_of(skill)
     stage_id, stage_dir = svc.staging.new_dir()
@@ -55,15 +46,9 @@ async def mark_merged(
         repo = stage_dir / "repo"
         await svc.git.clone(source.url, repo)
         latest = await svc.git.resolve(repo, source.ref, url=source.url)
-        pending: list[str] = []
-        if latest != source.commit:
-            pending.append(latest)
-            if await svc.git.has_commit(repo, source.commit):
-                found = await svc.git.commits(repo, source.commit, latest, source.subpath)
-                pending += [c.id for c in found]
-        target = _match(commit, [c for c in pending if c != source.commit])
-        if target is None:
+        if latest == source.commit or commit.strip().lower() != latest.lower():
             raise SkillUpdateNotPending(skill.name, commit)
+        target = latest
         folder = await svc.git.checkout(
             repo, target, source.subpath, stage_dir / "merged", url=source.url
         )
@@ -90,20 +75,10 @@ async def mark_merged(
         actor=actor,
         details={"from_commit": source.commit, "to_commit": target},
     )
-    if target == latest:
-        status = await svc.status_repo.get(skill.uid) or SourceStatus(skill_uid=skill.uid)
-        await svc.status_repo.put(
-            status.with_(
-                latest_commit=latest,
-                commits_ahead=0,
-                files_changed=0,
-                commits=(),
-            )
-        )
-    else:
-        # Merged against a commit upstream has since moved past: what is
-        # still ahead of the new pin is counted by a fresh check.
-        await update_ops.check(svc, updated)
+    status = await svc.status_repo.get(skill.uid) or SourceStatus(skill_uid=skill.uid)
+    await svc.status_repo.put(
+        status.with_(latest_commit=latest, commits_ahead=0, files_changed=0, commits=())
+    )
     return updated
 
 
