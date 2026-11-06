@@ -92,7 +92,7 @@ describe("EditGroupDialog", () => {
         expect(update).toHaveBeenCalledWith("billing", {
           description: group.description,
           timeout_seconds: 45,
-          response: { diagnostic_headers: [], rules: [] },
+          response: { rules: [] },
         }),
       );
       expect(secretsApi.set).not.toHaveBeenCalled();
@@ -105,9 +105,6 @@ describe("EditGroupDialog", () => {
     "a response rule is added to a group and a refused header keeps Save off",
     async () => {
       const dialog = open();
-      fireEvent.change(within(dialog).getByLabelText("Diagnostic headers"), {
-        target: { value: "X-Trace-Id, X-Error-Code" },
-      });
       fireEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
       fireEvent.change(within(dialog).getByLabelText("Header or field"), {
         target: { value: "X-Result-Code" },
@@ -132,7 +129,6 @@ describe("EditGroupDialog", () => {
           description: group.description,
           timeout_seconds: 30,
           response: {
-            diagnostic_headers: ["X-Trace-Id", "X-Error-Code"],
             rules: [
               {
                 source: "header",

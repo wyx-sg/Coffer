@@ -96,6 +96,8 @@ class McpEntry:
     is_coffer: bool = False
     matches_resource: str | None = None  # filled by the application layer
     cwd: str | None = None  # working directory a stdio server is started in
+    #: ``"type": "sse"``: the old HTTP+SSE transport, which Coffer cannot adopt.
+    legacy_sse: bool = False
     # Every other key the entry carries (``type``, ``timeout``, ``env_vars``…),
     # as plain Python values. repr=False for the same reason as env: a format
     # may keep a token here (Codex ``bearer_token``). compare=False: equality
@@ -218,6 +220,7 @@ def parse_entries(
                 enabled=enabled,
                 is_coffer=str(name) == COFFER_SERVER_KEY,
                 cwd=str(cwd) if cwd is not None else None,
+                legacy_sse=str(raw.get("type", "")).lower() == "sse",
                 extra={str(k): _plain(v) for k, v in raw.items() if str(k) not in _CONSUMED_KEYS},
                 raw={str(k): _plain(v) for k, v in raw.items()},
             )

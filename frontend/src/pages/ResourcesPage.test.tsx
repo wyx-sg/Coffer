@@ -288,7 +288,6 @@ describe("ResourcesPage", () => {
     statusOf.u1 = {
       status: "failing",
       last_error: "Connection refused",
-      failing_since: new Date().toISOString(),
     };
     statusOf.u2 = {
       status: "healthy",
@@ -308,7 +307,7 @@ describe("ResourcesPage", () => {
     });
     renderAt();
     const attention = await screen.findByRole("region", { name: "Needs attention" });
-    await within(attention).findByText(/Connection refused · since/);
+    await within(attention).findByText("Connection refused");
     expect(await within(attention).findByText("Secret missing · Linear key")).toBeInTheDocument();
     expect(within(attention).getByText("uvx isn't found on this machine")).toBeInTheDocument();
     const healthy = screen.getByRole("region", { name: "Healthy" });

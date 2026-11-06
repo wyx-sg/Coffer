@@ -55,7 +55,6 @@ const INVOCATION = {
   error_message: null,
   session_id: "s-1",
   agent_uid: "a-cc",
-  handoff: null,
 };
 
 const DAEMON_RECORD = {
@@ -651,21 +650,31 @@ test("a failed call opens with its error first", async () => {
   );
 });
 
-acceptance("web-ui", "an unanswered call and an environment error carry the hand-off", async () => {
+acceptance("web-ui", "an environment error carries the hand-off and a call does not", async () => {
   mockApi({
-    invocations: [
+    daemon: [
       {
-        ...INVOCATION,
-        status: "error",
-        error_message: "Connection refused",
-        handoff: { prompt: "Please find out why a call to github could not reach it" },
+        ...DAEMON_RECORD,
+        level: "error",
+        event: "upstream call failed server=github",
+        handoff: { prompt: "Please find out why the daemon logged this error" },
+        record: { ...DAEMON_RECORD.record, level: "error", logger: "mcp.gateway" },
       },
     ],
+    invocations: [{ ...INVOCATION, status: "error", error_message: "Connection refused" }],
   });
+  const { unmount } = render(wrap(<ActivityPage />, ["/activity?tab=daemon"]));
+  const row = (await screen.findByText(/upstream call failed/)).closest("tr")!;
+  fireEvent.click(row);
+  const buttons = within(row.nextElementSibling as HTMLElement).getAllByRole("button");
+  expect(buttons[0]).toHaveAccessibleName(/Hand off to|Copy prompt/);
+  unmount();
+
   render(wrap(<ActivityPage />, ["/activity?tab=mcp"]));
   fireEvent.click((await screen.findByText(target("github.search_issues"))).closest("tr")!);
-  const card = within(await drawer()).getByRole("alert");
-  expect(within(card).getAllByRole("button")[0]).toHaveAccessibleName(/Hand off to|Copy prompt/);
+  const panel = await drawer();
+  expect(within(within(panel).getByRole("alert")).queryByRole("button")).not.toBeInTheDocument();
+  expect(within(panel).getByRole("link", { name: "Open github" })).toBeInTheDocument();
   // The drawer's footer is the server's page; the old "Daemon log records" step is gone.
   expect(screen.queryByRole("button", { name: "Daemon log records" })).not.toBeInTheDocument();
 });

@@ -24,7 +24,6 @@ import type {
   CustomToolIn,
 } from "@/lib/api/customTools";
 import {
-  effectiveTimeout,
   enabledEnvironments,
   environmentSecret,
   requestPreview,
@@ -84,10 +83,7 @@ export function ToolTestSection(props: Props) {
   const named = args.filter((row) => row.name);
   const groupName = group ? group.name : "unsaved" in target ? target.unsaved.name : "";
   const secret = env ? environmentSecret(env) : null;
-  const timeout =
-    group && env
-      ? effectiveTimeout(group, env)
-      : { seconds: group?.timeout_seconds ?? props.timeoutSeconds ?? 30, source: "group" as const };
+  const timeoutSeconds = group?.timeout_seconds ?? props.timeoutSeconds ?? 30;
   const blocked = choice !== null && choice.choice.state !== "ok";
   const showPicker = group !== null && (enabled.length > 1 || (blocked && enabled.length > 0));
   const tool = draft();
@@ -112,7 +108,7 @@ export function ToolTestSection(props: Props) {
       unsaved.mutate({
         base_url: target.unsaved.base_url,
         headers: target.unsaved.headers,
-        timeout_seconds: timeout.seconds,
+        timeout_seconds: timeoutSeconds,
         tool,
         arguments: argValues,
       });
@@ -150,14 +146,7 @@ export function ToolTestSection(props: Props) {
       environment={group && env ? env.name : null}
       variables={variables}
       missingVariables={lines.missingVariables}
-      timeoutLine={
-        group && env
-          ? t(`customTools.preview.timeout.${timeout.source}`, {
-              seconds: timeout.seconds,
-              environment: env.name,
-            })
-          : t("customTools.preview.timeout.group", { seconds: timeout.seconds })
-      }
+      timeoutLine={t("customTools.preview.timeout.group", { seconds: timeoutSeconds })}
     />
   ) : null;
   const result = test.error ? (
@@ -170,9 +159,8 @@ export function ToolTestSection(props: Props) {
       method={method}
       group={groupName}
       secret={group ? secret : null}
-      timeoutSeconds={timeout.seconds}
-      timeoutEnvironment={timeout.source === "environment" ? (env?.name ?? null) : null}
-      onChangeTimeout={group && timeout.source === "group" ? props.onChangeTimeout : undefined}
+      timeoutSeconds={timeoutSeconds}
+      onChangeTimeout={group ? props.onChangeTimeout : undefined}
     />
   ) : (
     <p className="rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-text-muted">

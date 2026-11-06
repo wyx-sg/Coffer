@@ -22,26 +22,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/custom-tools/openapi": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Read Openapi
-         * @description Read a document into draft tools; saves nothing.
-         */
-        post: operations["read_openapi_api_v1_custom_tools_openapi_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/custom-tools/test": {
         parameters: {
             query?: never;
@@ -130,40 +110,6 @@ export interface paths {
          * @description The request a draft tool would send; sends nothing and reads no secret value.
          */
         post: operations["preview_draft_tool_api_v1_custom_tools__name__preview_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/custom-tools/{name}/reimport": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Apply Reimport */
-        post: operations["apply_reimport_api_v1_custom_tools__name__reimport_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/custom-tools/{name}/reimport/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Preview Reimport */
-        post: operations["preview_reimport_api_v1_custom_tools__name__reimport_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -799,8 +745,6 @@ export interface components {
             headers?: components["schemas"]["CustomToolHeaderIn"][];
             /** Name */
             name: string;
-            /** Timeout Seconds */
-            timeout_seconds?: number | null;
             /** Variables */
             variables?: {
                 [key: string]: string;
@@ -831,8 +775,6 @@ export interface components {
              * @enum {string}
              */
             secret_state: "none" | "present" | "missing" | "rejected" | "pending_approval";
-            /** Timeout Seconds */
-            timeout_seconds: number | null;
             /** Variables */
             variables: {
                 [key: string]: string;
@@ -841,7 +783,7 @@ export interface components {
         /**
          * CustomToolEnvironmentPatch
          * @description A partial change to one environment; ``headers`` and ``variables``
-         *     replace the whole list, and ``timeout_seconds: null`` uses the group's.
+         *     replace the whole list.
          */
         CustomToolEnvironmentPatch: {
             /** Base Url */
@@ -854,8 +796,6 @@ export interface components {
             headers?: components["schemas"]["CustomToolHeaderIn"][] | null;
             /** Name */
             name?: string | null;
-            /** Timeout Seconds */
-            timeout_seconds?: number | null;
             /** Variables */
             variables?: {
                 [key: string]: string;
@@ -880,7 +820,6 @@ export interface components {
             /** Name */
             name: string;
             response?: components["schemas"]["CustomToolResponse"];
-            source?: components["schemas"]["OpenApiSourceIn"] | null;
             /**
              * Timeout Seconds
              * @default 30
@@ -943,7 +882,6 @@ export interface components {
              * @enum {string}
              */
             secret_state: "none" | "present" | "missing" | "rejected" | "pending_approval";
-            source: components["schemas"]["OpenApiSourceOut"] | null;
             /** Timeout Seconds */
             timeout_seconds: number;
             /** Tools */
@@ -1006,7 +944,7 @@ export interface components {
         };
         /**
          * CustomToolIn
-         * @description One tool as a request writes it — and as an OpenAPI reading drafts it.
+         * @description One tool as a request writes it.
          */
         CustomToolIn: {
             /** Body Template */
@@ -1039,14 +977,10 @@ export interface components {
             method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
             /** Name */
             name: string;
-            /** Operation */
-            operation?: string | null;
             /** Path */
             path: string;
             /** Response Rules */
             response_rules?: components["schemas"]["CustomToolResponseRule"][] | null;
-            /** Source Text */
-            source_text?: string | null;
         };
         /** CustomToolOut */
         CustomToolOut: {
@@ -1081,8 +1015,6 @@ export interface components {
             method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
             /** Name */
             name: string;
-            /** Operation */
-            operation: string | null;
             /** Path */
             path: string;
             /** Response Rules */
@@ -1144,59 +1076,6 @@ export interface components {
             state: "none" | "present" | "missing" | "rejected" | "pending_approval";
         };
         /**
-         * CustomToolReimportChangeOut
-         * @description A kept tool whose request the spec changed.
-         */
-        CustomToolReimportChangeOut: {
-            /**
-             * Method
-             * @enum {string}
-             */
-            method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-            /** Name */
-            name: string;
-            /** New End Line */
-            new_end_line: number | null;
-            /** New Required */
-            new_required: string[];
-            /** New Start Line */
-            new_start_line: number | null;
-            /** New Text */
-            new_text: string | null;
-            /** Old Text */
-            old_text: string | null;
-            /** Operation */
-            operation: string;
-            /** Path */
-            path: string;
-            /** Request Changed */
-            request_changed: boolean;
-        };
-        /** CustomToolReimportIn */
-        CustomToolReimportIn: {
-            /** Add */
-            add?: string[];
-            /** Document */
-            document?: string | null;
-        };
-        /** CustomToolReimportPreviewOut */
-        CustomToolReimportPreviewOut: {
-            /** Added */
-            added: components["schemas"]["OpenApiOperationOut"][];
-            /** Changed */
-            changed: components["schemas"]["CustomToolReimportChangeOut"][];
-            /** Kept */
-            kept: string[];
-            /** Removed */
-            removed: string[];
-            /** Title */
-            title: string | null;
-            /** Version */
-            version: string | null;
-            /** Warnings */
-            warnings: string[];
-        };
-        /**
          * CustomToolRequestPreviewOut
          * @description What one call would send; nothing was sent and no secret was read.
          */
@@ -1211,11 +1090,6 @@ export interface components {
             method: string;
             /** Timeout Seconds */
             timeout_seconds: number;
-            /**
-             * Timeout Source
-             * @enum {string}
-             */
-            timeout_source: "environment" | "group";
             /** Url */
             url: string;
             /** Variables */
@@ -1228,8 +1102,6 @@ export interface components {
          * @description A group's response settings.
          */
         CustomToolResponse: {
-            /** Diagnostic Headers */
-            diagnostic_headers?: string[];
             /** Rules */
             rules?: components["schemas"]["CustomToolResponseRule"][];
         };
@@ -1434,7 +1306,6 @@ export interface components {
             environment: string | null;
             /** Error Message */
             error_message: string | null;
-            handoff: components["schemas"]["HandoffOut"] | null;
             /** Id */
             id: number;
             /** Resource Name */
@@ -1488,7 +1359,6 @@ export interface components {
             environment: string | null;
             /** Error Message */
             error_message: string | null;
-            handoff: components["schemas"]["HandoffOut"] | null;
             /** Id */
             id: number;
             /** Resource Name */
@@ -1720,14 +1590,12 @@ export interface components {
          * @description Cheap per-server status, derived from persisted state (no spawn).
          *
          *     Beside the state word, what the page says about it (spec mcp-gateway
-         *     "Explain a server's state on its page"): the last transport failure and
-         *     since when the server has been failing, the last successful call, and the
+         *     "Explain a server's state on its page"): the last transport failure, when
+         *     the last successful call was, and the
          *     first cited secret with no value on this machine. Each is null when
          *     nothing persisted says it.
          */
         McpServerStatusOut: {
-            /** Failing Since */
-            failing_since: string | null;
             /** Failure Reason */
             failure_reason: ("auth_rejected" | "unreachable" | "command_not_found" | "other") | null;
             handoff: components["schemas"]["HandoffOut"] | null;
@@ -1735,12 +1603,8 @@ export interface components {
             last_checked_at: string | null;
             /** Last Error */
             last_error: string | null;
-            /** Last Error At */
-            last_error_at: string | null;
             /** Last Ok At */
             last_ok_at: string | null;
-            /** Last Ok Capability */
-            last_ok_capability: string | null;
             /** Missing Runner */
             missing_runner: string | null;
             /** Missing Secret */
@@ -1886,102 +1750,6 @@ export interface components {
             description: string | null;
             /** Name */
             name: string;
-        };
-        /** OpenApiOperationOut */
-        OpenApiOperationOut: {
-            /** Key */
-            key: string;
-            source: components["schemas"]["OpenApiSourceTextOut"] | null;
-            /** Summary */
-            summary: string | null;
-            /** Tag */
-            tag: string | null;
-            tool: components["schemas"]["CustomToolIn"];
-        };
-        /**
-         * OpenApiReadIn
-         * @description A document to read: its URL (fetched through the SSRF guard) or its text.
-         */
-        OpenApiReadIn: {
-            /** Document */
-            document?: string | null;
-            /** Filename */
-            filename?: string | null;
-            /** Url */
-            url?: string | null;
-        };
-        /** OpenApiReadOut */
-        OpenApiReadOut: {
-            /** Auth Header */
-            auth_header: string | null;
-            /** Base Url */
-            base_url: string | null;
-            /** Description */
-            description: string | null;
-            /** Location */
-            location: string;
-            /** Operations */
-            operations: components["schemas"]["OpenApiOperationOut"][];
-            /**
-             * Source Kind
-             * @enum {string}
-             */
-            source_kind: "url" | "file";
-            /** Title */
-            title: string | null;
-            /** Version */
-            version: string | null;
-            /** Warnings */
-            warnings: string[];
-        };
-        /** OpenApiSourceIn */
-        OpenApiSourceIn: {
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "url" | "file";
-            /** Location */
-            location: string;
-            /** Skipped */
-            skipped?: string[];
-            /** Title */
-            title?: string | null;
-            /** Version */
-            version?: string | null;
-        };
-        /** OpenApiSourceOut */
-        OpenApiSourceOut: {
-            /**
-             * Fetched At
-             * Format: date-time
-             */
-            fetched_at: string;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "url" | "file";
-            /** Location */
-            location: string;
-            /** Skipped */
-            skipped: string[];
-            /** Title */
-            title: string | null;
-            /** Version */
-            version: string | null;
-        };
-        /**
-         * OpenApiSourceTextOut
-         * @description An operation's text in the document, for the viewer beside the list.
-         */
-        OpenApiSourceTextOut: {
-            /** End Line */
-            end_line: number;
-            /** Start Line */
-            start_line: number;
-            /** Text */
-            text: string;
         };
         /**
          * PreviewContentOut
@@ -2197,50 +1965,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomToolGroupOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    read_openapi_api_v1_custom_tools_openapi_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OpenApiReadIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OpenApiReadOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -2600,99 +2324,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomToolRequestPreviewOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    apply_reimport_api_v1_custom_tools__name__reimport_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
-            };
-            path: {
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CustomToolReimportIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CustomToolGroupOut"];
-                };
-            };
-            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Any other error, as Coffer's error envelope. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    preview_reimport_api_v1_custom_tools__name__reimport_preview_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-coffer-token"?: string | null;
-            };
-            path: {
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CustomToolReimportIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CustomToolReimportPreviewOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

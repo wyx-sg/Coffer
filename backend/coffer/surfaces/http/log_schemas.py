@@ -12,8 +12,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from coffer.surfaces.http.handoff_schemas import HandoffOut
-
 # --- Audit ---
 
 
@@ -89,11 +87,6 @@ class InvocationOut(BaseModel):
     agent_uid: str | None
     #: The environment a custom-tool call was made in; null for any other call.
     environment: str | None = None
-    #: For a call its server never answered (refused, timed out, would not
-    #: start): the chore of finding out why, for the person's agent. Null for
-    #: every other call — a success, a denial, or an upstream that answered
-    #: with its own error.
-    handoff: HandoffOut | None = None
 
 
 class CapturedPartOut(BaseModel):

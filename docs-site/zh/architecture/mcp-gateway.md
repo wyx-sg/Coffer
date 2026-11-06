@@ -21,7 +21,7 @@ description: Coffer 如何把每个注册的 MCP 服务器呈现为一个带命�
 | --- | --- |
 | Coffer 对下游是一个 MCP 服务器，对上游是一个 MCP 客户端。 | 每个智能体只需要一个配置条目，而网关可以在中间自由地改写、过滤和记录。 |
 | 每个下游会话都有自己的上游进程。 | MCP 是按会话的协议。在多个客户端之间共享一个上游会话，意味着要在网关里重新实现能力协商和通知路由。 |
-| 上游惰性拉起。 | 会话启动快，智能体从不碰的服务器不花任何成本。 |
+| 上游只在调用时启动；会话从每个服务器在本机上次给出的列表里回答。 | 会话启动快，智能体从不调用的服务器不花任何成本。 |
 | 名字改写为 `<server>__<name>` 和 `coffer://<server>/<uri>`。 | 两个都暴露 `search` 的服务器永远不会冲突。选 `__` 是因为 `:`、`.`、`/` 和 `-` 在上游工具名里都是合法字符。 |
 | 能力实时发现，只存偏好。 | 上游升级不会留下一份过期的 schema 副本。用户的启用或停用决定在升级和暂时消失之后依然保留。 |
 | 列出有预算，调用没有。 | 分层决定模型看到什么，从不决定模型能调用什么。 |
@@ -61,7 +61,7 @@ flowchart LR
   - `initialize` 由网关会话自己回答，`ping` 返回 `{}`。`initialize` 没有完成的会话上的请求回答 `-32600`。
   - 握手之后，`MCP-Protocol-Version` 头若写的不是约定的 `2025-06-18`，`POST` 和 `GET` 都回答 `400`；不带这个头的请求按约定版本处理（shim 不发这个头）。
   - 没有 `id` 的消息是通知，返回 `202`，没有响应体。`notifications/cancelled` 取消同一会话里的那个请求（见 [取消](#cancellation)）。
-  - 有 `id` 但没有 `method` 的消息，是客户端对服务器发起的请求（`sampling/createMessage` 或 `roots/list`）的回复。它会被匹配到正在等待它的那个服务器请求，并以不带响应体的 `202` 确认。
+  - 有 `id` 但没有 `method` 的消息，是客户端对服务器发起的请求（`sampling/createMessage`、`roots/list` 或 `elicitation/create`）的回复。它会被匹配到正在等待它的那个服务器请求，并以不带响应体的 `202` 确认。
   - 批量请求（顶层是数组）以 `-32600` 拒绝。
 - **`GET /mcp`** 打开一条 Server-Sent Events 流，用于服务器到客户端的消息。它要求带一个存活会话的 `Mcp-Session-Id`（否则 `404`）。打开着的流不算活动，不会让其会话躲过空闲回收器。消息在一个按会话的队列里等待，上限 1000 条。队列满时丢掉最旧的消息。
 
@@ -102,7 +102,7 @@ Coffer-MCP 安装（见 [智能体](/zh/guides/agents)）写入的 `coffer` 条�
 
 ## 发现与命名空间 {#discovery-and-namespacing}
 
-发现模块向上游请求 `tools/list`、`resources/list` 和 `prompts/list`。它按（会话、服务器、类型）把每张列表缓存 60 秒，并把名字改写进网关的命名空间：
+发现模块向上游请求 `tools/list`、`resources/list` 和 `prompts/list`；在网关会话里，它也可以从保存的目录（`derived.db` 里的 `mcp_catalogue`）回答：这是服务器在本机上次给出的完整列表，连同列出时服务器配置的 SHA-256 指纹一起保存。指纹相符、且会话没有连着这个服务器时就用保存的目录；否则去问服务器，并把它的回答存下来给下一个会话用。所以会话只在调用、读取或获取时才启动服务器，改了配置后的下一次列表会重新去问服务器。管理路由（服务器页面、刷新）总是实时去问。发现模块按（会话、服务器、类型）把每张列表缓存 60 秒，并把名字改写进网关的命名空间：
 
 | 能力 | 上游 | 呈现为 |
 | --- | --- | --- |
@@ -176,6 +176,7 @@ coffer__search_tools(query: string, top_k?: integer = 5, 1..20)
 
 - **分词。** 文本先做 NFKC 归一（全角字符变成普通字符），按 camelCase 边界切开，再转小写。`[a-z0-9]+` 连续串原样保留。中文、日文、韩文字符的连续串词与词之间没有空格，按相邻两个字切成相互重叠的词（查询账号 → 查询、询账、账号）；只有一个字的串保留这个字（[Tool Search Cuts CJK Text Into Bigrams](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-search-cuts-cjk-text-into-bigrams.md)）。名字文本是 `"<server> <tool>"`。先把命名空间切开，这样服务器 token 只算一次，而不是两次。
 - **词频。** 每个名字 token 加 `3.0`，每个描述 token 加 `1.0`，输入 schema 参数文本里的每个 token 加 `0.5`。参数文本是每个属性的名字、说明和字符串枚举值，嵌套对象和数组元素里的也算（[Tool Search Indexes Parameter Text](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-search-indexes-parameter-text.md)）。文档长度是名字和描述的权重之和；参数文本参与得分，但不算进长度。自定义工具分组的说明算进它每个工具的描述文本，并作为 `group_description` 随结果返回。
+- **精确名字优先。** 查询恰好是某个工具的名字——`server__tool` 或 `__` 之后的部分，不分大小写，不含空格——时，这个工具排在第一，排在所有得分结果之前（[Tool Search Puts an Exact Name First](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-search-puts-an-exact-name-first.md)）。
 - **得分。** 对工具中出现的每个不同查询词 `t`：
   `idf(t) = ln(1 + (N - df + 0.5) / (df + 0.5))`，这个词贡献
   `idf(t) · f · (k1 + 1) / (f + k1 · (1 - b + b · len / avg_len))`，其中 `k1 = 1.5`，`b = 0.75`。
@@ -281,7 +282,7 @@ stateDiagram-v2
 - **逐出。** 逐出不拿锁。它把代数计数器加一，并关闭当前连接。在逐出之后才完成的拉起会看到代数变了，于是关闭它的新连接并抛出异常。因此删除、停用或编辑一个服务器从不需要等一条慢吞吞的阶梯。删除 Hook 运行时注册还在，所以它先在整个进程里把这个服务器的 uid 标为退役：从此任何 supervisor 开始或完成的拉起——无论在已经逐出过的会话里，还是删除期间新开的会话里——都被拒绝或关闭，这种被逐出的启动既不重试也不计入退避。销毁会话时也会给每个条目的代数加一，所以还在进行中的拉起会关闭它建好的连接。这个类型的删除、停用和配置编辑 Hook 会把服务器从每个活动会话的 supervisor 中逐出，也从支撑管理路由的进程级 supervisor 中逐出。配置编辑之后，下一次调用会用新的命令、URL 或密钥引用拉起服务器；重新启用什么都不用做，因为下一次调用会重新拉起。
 - **崩溃恢复。** 在传输层失败的 `tools/call` 会逐出连接，下一次调用会重新拉起服务器。传输失败指任何不是 MCP 协议错误的异常，或说明连接已关闭的 MCP 错误。其他格式正确的 MCP 错误说明上游应答了，所以连接保留。超时也不逐出，一开始就没拿到连接的失败也不逐出。
 - **拆除。** stdio 关闭时最多等 10 秒让 SDK 自己关停，SDK 会从 SIGTERM 升级到 SIGKILL。连接自己的生命周期任务先关闭进程及其管道，然后连接杀掉为它记录的每个 PID 及其所有后代。每次拉起都会在 `~/.coffer/upstream-pids/` 下记录一个 PID 文件（PID 取自 SDK 创建的那个进程，而不是靠比对守护进程的其他子进程来猜），以服务器的 uid 为键。启动时，守护进程会清扫崩溃遗留的文件。
-- **日志。** 每个 stdio 上游的 stderr 写到它自己的文件 `~/.coffer/logs/upstream/<name>.log`，而不是 `daemon.log`。服务器环境里注入了密钥时，它的 stderr 经过一条由 Coffer 读取的管道进入文件：每个四个字符及以上的注入值在写盘前替换为 `••••••`，即使被拆在两次写入里、或在进程退出前一刻才打印也一样；Coffer 自己的启动、停止和错误行也同样遮盖。只遮盖与注入值完全相同的内容；服务器重新编码过的密钥不在此列。
+- **日志。** 每个 stdio 上游的 stderr 写到它自己的文件 `~/.coffer/logs/upstream/<name>.log`，而不是 `daemon.log`。服务器环境里注入了密钥时，它的 stderr 经过一条由 Coffer 读取的管道进入文件：每个四个字符及以上的注入值在写盘前替换为 `••••••`，即使被拆在两次写入里、或在进程退出前一刻才打印也一样；Coffer 自己的启动、停止和错误行也同样遮盖。只遮盖与注入值完全相同的内容；服务器重新编码过的密钥不在此列。服务器最后一行没写完时，Coffer 的行另起一行（经管道时由泵记录，否则读文件最后一个字节）。保留任务会删掉已不再注册的服务器的日志；SDK 的 `Session termination failed: 404` 警告（HTTP 上游已忘了这个会话）不写进 `daemon.log`。HTTP 服务器的静态 header 值为空时，注册和编辑都会被拒绝。
 
 守护进程还为管理路由运行一个进程级的 supervisor 和发现模块：`GET …/capabilities`、`POST …/refresh`、能力开关，以及行详情里的预览 `POST …/{uid}/resources/read` 和 `POST …/{uid}/prompts/get`。范围从不限制这些路由，所以你总能测试一个没有任何会话被允许看到的服务器。
 
@@ -305,7 +306,7 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 - `notifications/tools/list_changed`、`resources/list_changed` 和 `prompts/list_changed` 会使会话缓存里对应的部分失效，并转发给下游。
 - `notifications/resources/updated` 在把 URI 改写为 `coffer://<server>/…` 后转发。
 - `notifications/message` 和 `notifications/progress` 被丢掉。工具调用受该服务器的请求超时约束；Coffer 不向上游索要进度，所以没有什么会延长这个超时。
-- 上游发来的 `sampling/createMessage` 和 `roots/list` 通过 SSE 转给这个会话自己的客户端，并按 id 与客户端的回复匹配，超时 30 秒。SDK 在构造客户端会话时就固定了采样和 roots 的处理函数，所以 supervisor 在每个新连接启动之前就把会话的处理函数交给它，并且只在客户端于 `initialize` 时声明了采样或 roots 时才向上游提供；没声明的直接回答「不支持」，不去问客户端。HTTP 上游只有保留了通往客户端的回传通道才能发问（无状态的 Streamable HTTP 服务器不行）。
+- 上游发来的 `sampling/createMessage` 和 `roots/list` 通过 SSE 转给这个会话自己的客户端，并按 id 与客户端的回复匹配，超时 30 秒。`elicitation/create`（上游向人提问）也同样转发，只提供给声明了 elicitation 的客户端，最多等人回答 10 分钟，超时就替人回答 `cancel`。SDK 在构造客户端会话时就固定了采样和 roots 的处理函数，所以 supervisor 在每个新连接启动之前就把会话的处理函数交给它，并且只在客户端于 `initialize` 时声明了采样或 roots 时才向上游提供；没声明的直接回答「不支持」，不去问客户端。HTTP 上游只有保留了通往客户端的回传通道才能发问（无状态的 Streamable HTTP 服务器不行）。
 
 ### HTTP 上游的推送流 {#the-push-stream-of-an-http-upstream}
 
@@ -317,7 +318,7 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 
 ## 调用日志 {#invocation-logging}
 
-每一次被路由的调用，包括内置工具的调用，无论成功还是失败，都会写一行 `mcp_invocations`：哪项能力跑了、跑了多久、`status` 是什么（`ok`、`error`、`timeout` 或 `denied`）、来自哪个会话，以及会话上报了身份时是哪个智能体（`agent_uid`）。这一行的 `content` 保存调用的参数、结果或错误，自定义工具还保存它的 HTTP 请求和响应（见[调用内容](/zh/architecture/observability#call-content)）。`error_message` 列仍会简化成 Coffer 编写的摘要（对于上游返回的格式正确的 JSON-RPC 错误，只保留它的数字代码：`upstream answered with a JSON-RPC error (code -32602)`），因为上游的消息可能把密钥回显出来，比如一条引用了 key 的认证失败信息。内置工具以保留 uid `coffer` 记录。
+每一次被路由的调用，包括内置工具的调用，无论成功还是失败，都会写一行 `mcp_invocations`：哪项能力跑了、跑了多久、`status` 是什么（`ok`、`error`、`timeout` 或 `denied`）、来自哪个会话，以及会话上报了身份时是哪个智能体（`agent_uid`）。这一行的 `content` 保存调用的参数、结果或错误，自定义工具还保存它的 HTTP 请求和响应（见[调用内容](/zh/architecture/observability#call-content)）。`error_message` 列仍会简化成 Coffer 编写的摘要（对于上游返回的格式正确的 JSON-RPC 错误，只保留它的数字代码：`upstream answered with a JSON-RPC error (code -32602)`），因为上游的消息可能把密钥回显出来，比如一条引用了 key 的认证失败信息。连不上的上游仍会写明原因：HTTP 写网络失败的类型（`the connection was refused`、`the server's host name does not resolve`、`the TLS handshake failed`…）或它返回的状态（`the server answered HTTP 502`），由 `infrastructure/mcp/failure_detail.py` 分类，不引用异常原文；stdio 写 `the server exited`，再加上它在 stderr 上打印的最后一行，取自已遮盖的日志文件，再过一遍密钥清洗，截到 200 个字符。内置工具以保留 uid `coffer` 记录。
 
 这一行的各列、每个状态的确切含义、缓冲写入器和保留期，统一在 [可观测性](/zh/architecture/observability#the-mcp-invocation-log) 里描述。你可以按服务器读日志（`coffer log mcp --server <server>`），也可以跨所有服务器读（`coffer log mcp`）；见 [活动与审计](/zh/guides/activity)。
 
@@ -343,14 +344,14 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 
 ## 自定义工具：HTTP API 传输 {#custom-tools-the-http-api-transport}
 
-一个 **自定义工具组** 是传输方式为 `http_api` 的 `mcp_server`。它的配置包括一张工具列表、一个默认超时和一个或多个**环境**；每个环境有一个用户起的、在组内唯一的名字、一个绑定键、一个基础 URL、若干 header 行（明文，或带认证方案的密钥引用：只存凭据，方案在发请求时加上）、非敏感变量、一个开关和一个可选超时。每个工具是一个方法、一个路径模板、header、一个请求体模板、一份描述参数的 JSON Schema、一个开关和一个「会修改数据」标志。工具从不按环境复制。面向用户的部分见 [自定义工具指南](/zh/guides/custom-tools)。
+一个 **自定义工具组** 是传输方式为 `http_api` 的 `mcp_server`。它的配置包括一张工具列表、一个默认超时和一个或多个**环境**；每个环境有一个用户起的、在组内唯一的名字、一个绑定键、一个基础 URL、若干 header 行（明文，或带认证方案的密钥引用：只存凭据，方案在发请求时加上）、非敏感变量和一个开关；超时用组的。每个工具是一个方法、一个路径模板、header、一个请求体模板、一份描述参数的 JSON Schema、一个开关和一个「会修改数据」标志。工具从不按环境复制。面向用户的部分见 [自定义工具指南](/zh/guides/custom-tools)。
 
 ### 原则 {#principles}
 
 - **同一条流水线，最后一跳不同。** 智能体和上游之间的一切都是网关的常规路径。只有「连接」不一样：它是一个进程内适配器，实现与任何上游相同的连接契约（启动并 initialize、发送请求、关闭）。它根据配置回答 `tools/list`，在 `tools/call` 时发出 HTTP 请求；`resources/list` 和 `prompts/list` 回答 *method not found*，而发现模块本来就把这读作「没有」。
 - **值只能填充请求，不能改变请求的形状。** 请求渲染对每个路径占位符做不保留任何安全字符的百分号编码，参数缺失时丢掉对应的查询参数对，并用 JSON 值填充请求体模板（字符串里的文本做 JSON 转义）。不是路径的路径，或者 schema 没有声明的占位符，会在保存工具时被拒绝。
 - **密钥只有一条出路。** 它通过请求的 header 覆盖到达，在调用时通过受保护的解析器、针对「这个组的这个环境在它的基础 URL」这个目的地解析（启动时什么都不解析）；它最后添加，在所有工具 header 之后；从不跟随重定向，所以它永远不会到达没人配置过的主机；上游返回的任何内容里，它的值都会被遮盖成 `***`。
-- **天然有界。** 每次调用一个 HTTP 客户端，使用环境的超时，没有则用组的（1–300 s），以流式方式最多读 1 MiB 响应。
+- **天然有界。** 每次调用一个 HTTP 客户端，使用组的超时（1–300 s），以流式方式最多读 1 MiB 响应。
 - **不内置任何 API 的约定。** 响应是否成功由 HTTP 状态码（400 及以上失败）和组或工具声明的响应规则决定：每条规则读取状态码、某个响应头或某个 JSON Pointer 字段，并列出表示成功的值。规则不成立时，`200` 也会变成带内工具错误并记为 `error`；测试用同样的方式判断。携带凭据或 Cookie 的头永远不会被报告，也不能被规则读取。见[判断响应是否成功](/zh/guides/custom-tools#judging-the-answer)。
 - **发送之前就拒绝。** 未知、缺失或已关闭的环境、违反 schema 的参数，以及缺失、等待批准或被拒绝的密钥，都在任何上游请求之前被拒绝。
 
@@ -362,7 +363,6 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 | 按工具的闸门 | 网关，按会话 | 按会话计算被关掉的和超出生效范围的工具；`tools/list` 和 `coffer__search_tools` 丢掉它们，`tools/call` 以 `denied` 拒绝它们，与停用的能力形态相同。 |
 | 注解 | 每个发现的工具的注解，复制到它的列表条目 | 会修改数据的工具列为 `readOnlyHint: false, destructiveHint: true`，其他的列为 `readOnlyHint: true`；每个上游自己的注解也会透传。 |
 | 管理 | MCP 应用层包和自定义工具 REST 路由（`/api/v1/custom-tools/…`，环境在 `/{name}/environments` 下），自定义工具页面和 `coffer custom-tool` 命令都通过它们操作 | 每次写入都经过资源服务，所以校验、缺失密钥探测、审计和逐出活动连接都随之而来。 |
-| OpenAPI | MCP 领域包里的一个纯读取器，以及 MCP 基础设施包里的一个获取器 | 文档被读成草稿工具；URL 通过 SSRF 防护获取（5 MiB、20 s、重定向会重新检查）。 |
 
 ### 环境与保留参数 {#environments-and-the-reserved-argument}
 
@@ -372,7 +372,7 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 
 ### 参数校验 {#argument-validation}
 
-MCP 领域包里有一个纯 JSON Schema 校验器（只用标准库），有两个入口：保存工具时检查 schema（关键字类型、合法的正则表达式、可解析的本地 `$ref`），以及校验每次调用的参数，把每个失败以 `{path, keyword, message}` 返回。它覆盖 `type`（包括 OpenAPI 3.0 的 `nullable`）、`enum`、`const`、数值边界和 `multipleOf`、字符串长度和 `pattern`、`items`、`prefixItems`、数组边界、`uniqueItems`、`contains`、`properties`、`required`、`additionalProperties`、`patternProperties`、属性个数、`propertyNames`、`allOf`、`anyOf`、`oneOf`、`not`、`if`/`then`/`else`、`dependentRequired` 以及本地 `$ref`。MCP 调用、CLI 测试以及页面上的草稿和已保存工具测试都用同一个校验器；失败为 `CUSTOM_TOOL_ARGUMENTS_INVALID`（REST 上是 422，MCP 上是带内工具错误），永远到不了渲染这一步。
+MCP 领域包用 `jsonschema` 库的 draft 2020-12 校验器检查 schema（[Custom Tool Arguments Are Checked by the `jsonschema` Library](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/custom-tool-arguments-are-checked-by-the-jsonschema-library.md)），有两个入口：保存工具时检查 schema（draft 2020-12 元 schema、合法的正则表达式、可解析的本地 `$ref`；远程 `$ref` 会被拒绝，从不去获取），以及校验每次调用的参数，把每一处失败都以 `{path, keyword, message}` 返回，`required`、`dependentRequired` 和 `additionalProperties` 按每个参数各一条。两步之前，OpenAPI 3.0 的 `nullable`、draft-04 的布尔型排他边界和 draft-07 的数组形式 `items` 都会先改写成 draft 2020-12。MCP 调用、CLI 测试以及页面上的草稿测试和已保存测试都用同一个校验器；失败时是 `CUSTOM_TOOL_ARGUMENTS_INVALID`（REST 上是 422，MCP 上是带内的工具错误），不会进入渲染步骤。
 
 ### 密钥边界 {#the-secret-boundary}
 
@@ -388,7 +388,7 @@ MCP 领域包里有一个纯 JSON Schema 校验器（只用标准库），有两
 
 两个预览展示一个工具将会发送的请求，既不发送，也不读取任何密钥值：`POST /api/v1/custom-tools/{name}/tools/{tool}/preview` 用于已保存的工具，`POST /api/v1/custom-tools/{name}/preview` 用于已保存的组里的草稿工具。
 
-没有收到应答时，结果会说明是怎么失败的：`request`（请求无法构建）、`timeout`、`connect` 或 `blocked`。重新导入的预览还会指出保留下来、但请求被规格改变了的工具（新增了必填参数，或者方法、路径、请求体模板变了），而读取结果会带上每个操作的第一个 tag，方便导入表单对它们分组。
+没有收到应答时，结果会说明是怎么失败的：`request`（请求无法构建）、`timeout`、`connect` 或 `blocked`。
 
 ### 健康状况 {#health}
 
@@ -419,8 +419,8 @@ MCP 领域包里有一个纯 JSON Schema 校验器（只用标准库），有两
 | `surfaces/http/` | 会话工厂、按会话和进程级的 supervisor、回收器的环境变量开关、内置服务器的智能体列表 |
 | `application/mcp/` | 网关会话（握手、分发、订阅、销毁）、共享的调用流水线及其闸门、并行扇出、降级服务器重试、分层、内置工具分发和身份注入、`coffer__search_tools`、`initialize` 说明文字、通知和采样转发、进程监管、发现、自定义工具组和按工具的闸门 |
 | `application/` 根目录和 `application/secret/` | 内置工具注册表；密钥引用具体化 |
-| `domain/mcp/` | 命名空间、服务器配置、HTTP API 传输、它的环境和请求渲染、JSON Schema 校验器、OpenAPI 读取、简化版 BM25 排序器、分层策略 |
-| `infrastructure/mcp/` | stdio、HTTP 和 HTTP API 上游连接、测试探针、分发表、OpenAPI 获取、持久化、带缓冲的调用写入器 |
+| `domain/mcp/` | 命名空间、服务器配置、HTTP API 传输、它的环境和请求渲染、JSON Schema 检查、简化版 BM25 排序器、分层策略 |
+| `infrastructure/mcp/` | stdio、HTTP 和 HTTP API 上游连接、测试探针、分发表、持久化、带缓冲的调用写入器 |
 
 ## 相关 {#related}
 

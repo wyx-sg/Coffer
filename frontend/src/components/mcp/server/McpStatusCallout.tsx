@@ -19,9 +19,6 @@ import { McpCallout as Callout } from "./McpCallout";
 import { seconds, shortDate, shortTime, type ServerState } from "@/lib/mcp/serverState";
 import type { TestResult } from "./testResult";
 
-/** A clause that opens the sentence starts with a capital. */
-const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
 /** A callout's own action with the backend's hand-off beside it, when it has one. */
 function withHandoff(action: ReactNode, prompt: string | undefined) {
   if (!prompt) return action;
@@ -187,11 +184,6 @@ export function McpStatusCallout({
     );
   }
   if (state.kind === "failing") {
-    const facts: string[] = [];
-    if (detail?.last_error_at)
-      facts.push(t("mcp.page.lastErrorAt", { at: shortTime(detail.last_error_at) }));
-    if (detail?.failing_since)
-      facts.push(t("mcp.page.failingSince", { at: shortTime(detail.failing_since) }));
     return (
       <Callout
         tint="err"
@@ -200,17 +192,9 @@ export function McpStatusCallout({
         title={detail?.last_error ?? t("mcp.page.failingTitle")}
         action={withHandoff(viewLog, detail?.handoff?.prompt)}
       >
-        {facts.length > 0 ? `${sentence(facts.join(" · "))}. ` : ""}
         {t("mcp.page.failingBodyWho", { who, tools })}
         {detail?.last_ok_at
-          ? ` ${
-              detail.last_ok_capability
-                ? t("mcp.page.lastSuccess", {
-                    at: shortTime(detail.last_ok_at),
-                    tool: detail.last_ok_capability,
-                  })
-                : t("mcp.page.lastSuccessAt", { at: shortTime(detail.last_ok_at) })
-            }`
+          ? ` ${t("mcp.page.lastSuccessAt", { at: shortTime(detail.last_ok_at) })}`
           : ""}
       </Callout>
     );

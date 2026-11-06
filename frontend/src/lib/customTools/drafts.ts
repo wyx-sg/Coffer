@@ -20,7 +20,6 @@ export function draftOf(tool: CustomTool): CustomToolIn {
     input_schema: tool.input_schema,
     enabled: tool.enabled,
     changes_data: tool.changes_data,
-    operation: tool.operation,
   };
 }
 

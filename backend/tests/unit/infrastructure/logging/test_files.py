@@ -11,7 +11,9 @@ from coffer.infrastructure.logging.files import (
     log_dir,
     open_upstream_errlog,
     prune_log_dir,
+    write_coffer_line,
 )
+from coffer.infrastructure.mcp.stderr_mask import MaskedSink
 
 
 @pytest.fixture(autouse=True)
@@ -95,3 +97,61 @@ def test_prune_is_a_no_op_when_the_directory_does_not_exist(tmp_path, monkeypatc
 
 def test_log_dir_honours_the_env_override(_log_dir) -> None:
     assert log_dir() == _log_dir
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="a Coffer line after a server's unfinished line starts its own"
+)
+def test_a_coffer_line_after_an_unfinished_line_starts_its_own(_log_dir) -> None:
+    handle = open_upstream_errlog("slow")
+    assert handle is not None
+    try:
+        handle.write("Starting...")
+        handle.flush()
+        write_coffer_line(handle, "stop after the session ended")
+        write_coffer_line(handle, "start again")
+    finally:
+        handle.close()
+    lines = (_log_dir / "upstream" / "slow.log").read_text().splitlines()
+    assert lines[0] == "Starting..."
+    assert lines[1].endswith(" coffer stop after the session ended")
+    assert lines[2].endswith(" coffer start again")
+    assert len(lines) == 3
+
+
+def test_the_masking_pump_keeps_coffer_lines_on_their_own_line(_log_dir) -> None:
+    handle = open_upstream_errlog("masked")
+    assert handle is not None
+    try:
+        sink = MaskedSink(handle, ["s3cr3t-value"])
+        sink._emit(b"Loading")
+        write_coffer_line(sink, "stop")
+        assert not sink.ends_mid_line()
+    finally:
+        handle.close()
+    lines = (_log_dir / "upstream" / "masked.log").read_text().splitlines()
+    assert lines[0] == "Loading"
+    assert lines[1].endswith(" coffer stop")
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="a deleted server's log goes at the next retention run"
+)
+def test_a_deleted_servers_log_goes_at_the_next_prune(_log_dir) -> None:
+    upstream = _log_dir / "upstream"
+    upstream.mkdir()
+    for name in ("kept.log", "kept.log.1", "gone.log", "gone.log.1"):
+        (upstream / name).write_text("x\n")
+
+    removed = prune_log_dir(upstreams=["kept"])
+
+    assert removed == 2
+    assert sorted(p.name for p in upstream.iterdir()) == ["kept.log", "kept.log.1"]
+
+
+def test_without_server_names_no_recent_upstream_log_is_touched(_log_dir) -> None:
+    upstream = _log_dir / "upstream"
+    upstream.mkdir()
+    (upstream / "any.log").write_text("x\n")
+    assert prune_log_dir() == 0
+    assert (upstream / "any.log").exists()

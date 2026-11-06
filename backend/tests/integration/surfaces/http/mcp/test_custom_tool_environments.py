@@ -415,38 +415,6 @@ def test_the_invocation_log_names_the_environment(daemon: BoundaryDaemon, api: F
     assert "authorization" not in json.dumps(rows).lower()
 
 
-@pytest.mark.acceptance(spec="mcp-gateway", scenario="re-import keeps the group's environments")
-def test_reimport_keeps_every_environment(daemon: BoundaryDaemon, api: FakeHttpApi) -> None:
-    spec = {
-        "openapi": "3.1.0",
-        "info": {"title": "Billing", "version": "1"},
-        "servers": [{"url": "https://elsewhere.example"}],
-        "paths": {"/ping": {"get": {"operationId": "ping"}}},
-    }
-    daemon.store("secret/test-key", TEST_TOKEN)
-    r = daemon.client.post(
-        "/api/v1/custom-tools",
-        json={
-            "name": "billing",
-            "environments": [
-                _env("test", api.base_url + "/t", secret="test-key", variables={"region": "eu"}),
-                _env("live", api.base_url + "/l"),
-            ],
-            "tools": [{"name": "ping", "method": "GET", "path": "/ping", "operation": "GET /ping"}],
-            "source": {"kind": "file", "location": "openapi.json"},
-        },
-    )
-    assert r.status_code == 201, r.text
-    before = _approve_all(daemon, r.json())["environments"]
-    r = daemon.client.post(
-        "/api/v1/custom-tools/billing/reimport", json={"document": json.dumps(spec), "add": []}
-    )
-    assert r.status_code == 200, r.text
-    after = r.json()["environments"]
-    assert after == before
-    assert r.json()["pending_approvals"] == []
-
-
 @pytest.mark.acceptance(
     spec="mcp-gateway",
     scenario="invalid arguments are refused field by field with no upstream request",
@@ -502,14 +470,19 @@ def test_a_header_line_break_is_refused_before_the_secret_is_sent(
     assert TEST_TOKEN not in json.dumps(answer)
 
 
-def test_a_call_past_its_environments_timeout_is_an_error(
+def test_a_call_past_its_groups_timeout_is_an_error(
     daemon: BoundaryDaemon, api: FakeHttpApi
 ) -> None:
-    _group(
-        daemon,
-        [_env("uat", api.base_url, timeout_seconds=1)],
-        [{"name": "slow", "method": "GET", "path": "/slow"}],
+    r = daemon.client.post(
+        "/api/v1/custom-tools",
+        json={
+            "name": "billing",
+            "timeout_seconds": 1,
+            "environments": [_env("uat", api.base_url)],
+            "tools": [{"name": "slow", "method": "GET", "path": "/slow"}],
+        },
     )
+    assert r.status_code == 201, r.text
     started = time.monotonic()
     answer = Agent(daemon, CLAUDE).call("billing__slow", {"coffer_environment": "uat"})
     elapsed = time.monotonic() - started

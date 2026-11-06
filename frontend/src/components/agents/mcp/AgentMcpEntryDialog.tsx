@@ -81,7 +81,11 @@ export function AgentMcpEntryDialog({
               {t("common.close")}
             </Button>
             {duplicate === null ? (
-              <Button disabled={readOnly || !row} onClick={() => row && onAdopt(row)}>
+              <Button
+                disabled={readOnly || !row || row.entry.legacy_sse === true}
+                title={row?.entry.legacy_sse ? t("agents.mcpTab.sseCannotAdopt") : undefined}
+                onClick={() => row && onAdopt(row)}
+              >
                 {t("agents.mcpTab.adopt")}
               </Button>
             ) : null}

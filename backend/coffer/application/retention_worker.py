@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 from coffer.application.runtime.cancellation import raise_if_stopping
@@ -27,7 +27,7 @@ class RetentionWorker:
         self,
         service: RetentionService,
         interval_seconds: float = _DEFAULT_INTERVAL_SECONDS,
-        prune_logs: Callable[[], int] | None = None,
+        prune_logs: Callable[[], Awaitable[int]] | None = None,
         reclaim_space: Callable[[], int] | None = None,
     ) -> None:
         self._service = service
@@ -63,7 +63,7 @@ class RetentionWorker:
             # Injected so the application layer never reaches into
             # infrastructure directly; absent in tests that only cover tables.
             if self._prune_logs is not None:
-                result = {**result, "log_files": await asyncio.to_thread(self._prune_logs)}
+                result = {**result, "log_files": await self._prune_logs()}
             # Deleted rows only free pages inside runs.db; give them back to
             # the disk once they are most of the file.
             if self._reclaim_space is not None:

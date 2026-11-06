@@ -66,7 +66,6 @@ HTTP request itself (spec "Serve an HTTP API as a group of custom tools").
 | `headers`         | `dict[str, str]`         | plain header values; no `{argument}` hole; same secret regex as `env`                   |
 | `secret_refs`     | `dict[str, str]`         | `{header name: ref}`: headers whose whole value is a stored secret (no prefix); a header name appears once across `headers` and `secret_refs` |
 | `timeout_seconds` | `int`                    | default `30`; range `1–300`; per request                                                |
-| `source`          | `OpenApiSource \| None`  | where an import came from: `kind` (`url`/`file`), `location`, `title`, `version`, `fetched_at`, `skipped` operation keys |
 | `tools`           | `list[HttpApiTool]`      | unique names                                                                            |
 
 `HttpApiTool`:
@@ -82,8 +81,6 @@ HTTP request itself (spec "Serve an HTTP API as a group of custom tools").
 | `input_schema`  | `dict[str, Any]`        | JSON Schema object; every hole must be a declared property                   |
 | `enabled`       | `bool`                  | the tool's switch — travels with the config, like capability toggles         |
 | `changes_data`  | `bool \| None`          | `None` follows the method (on for all but GET); drives the MCP annotations   |
-| `operation`     | `str \| None`           | `"<METHOD> <path>"` of the imported operation, for re-import                 |
-| `source_text`   | `str \| None`           | the operation's text in the imported spec (at most 20 000 characters), so a re-import can show what changed |
 
 A tool has only its on/off switch (`enabled`); who can see it is its group's
 reach alone.

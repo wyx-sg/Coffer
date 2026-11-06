@@ -8,7 +8,10 @@ Coffer endpoint instead of editing each client's config. Coffer aggregates the u
 prompts behind one namespaced surface, lets the user curate what that surface exposes (some tools are
 dangerous, some redundant, some unwanted right now), keeps the agent able to choose well when the aggregated
 catalogue grows past what a model can reason over, and records which capability was called, when, for how
-long and with what outcome — never what was said. `mcp_server` was Coffer's first resource kind.
+long and with what outcome. By default it also records what each call sent and got back, with known secrets
+masked and each part cut at 16 KB; recording that content can be switched off per machine. `mcp_server` was
+Coffer's first resource kind. What an agent can do itself, Coffer leaves to it: an agent turns an API document
+into custom tools with the `coffer custom-tool` commands, so the gateway has no importer of its own.
 
 This spec owns the gateway, capability curation, the invocation record and the `coffer mcp test` command and the shim
 over them. The kind-agnostic lifecycle an `mcp_server` is managed through (immutable `uid`, fixed name, per-agent
@@ -68,6 +71,13 @@ in-process tool.
 The system MUST forward MCP `tools`, `resources`, and `prompts` capabilities (list, call/read/get, and
 list-changed notifications) between clients and upstream MCP servers.
 
+- **Lists without starting servers.** A session MUST answer a server's `tools/list`, `resources/list` and
+  `prompts/list` from the list that server last gave on this machine when it was given under the server's
+  current config and the session holds no connection to the server, and MUST start the server only when a
+  call, read or get needs it. A server never listed on this machine, one whose config changed since its last
+  list, and one the session is connected to are asked live, and every live answer is saved whole for the
+  next session (ADR session-subprocess-model, revision 2026-11-06). The management routes always ask live.
+
 - **Tools-only upstreams.** An upstream that implements only `tools` and replies with JSON-RPC `-32601`
   (METHOD_NOT_FOUND) for `resources/list` or `prompts/list` MUST be treated as having no resources / no
   prompts: the per-server capability view and the aggregate lists return that server's tools with an empty
@@ -89,7 +99,9 @@ list-changed notifications) between clients and upstream MCP servers.
   deterministic, local keyword ranker (BM25-lite over each tool's name, its description and its input
   schema's parameter names, parameter descriptions and enum values, weighted in that order) — no LLM, no
   embeddings, no network. A query in Chinese, Japanese or Korean MUST match tools described in that language: such text is
-  matched by overlapping character pairs, since it has no spaces between words. Results MUST be upstream-only (Coffer's own
+  matched by overlapping character pairs, since it has no spaces between words. A query that is exactly a
+  tool's name — its `<server>__<tool>` or the part after `__`, in any case, with no space — MUST return that
+  tool first, ahead of every scored result. Results MUST be upstream-only (Coffer's own
   `coffer__` built-ins excluded); each returned `name` is the same `<server>__<tool>` identifier the agent
   would call directly, with routing unchanged; and the invocation MUST be recorded in the invocation log like
   any other gateway call.
@@ -134,6 +146,11 @@ list-changed notifications) between clients and upstream MCP servers.
 - **WHEN** an agent calls `coffer__search_tools` with an intent query and a `top_k`,
 - **THEN** it receives at most `top_k` ranked real upstream tool schemas (upstream-only, with Coffer's own `coffer__` built-ins excluded), each named `<server>__<tool>`, the response reports `total_searched`, and the gateway records the invocation.
 
+#### Scenario: a query that is a tool's name returns that tool first
+- **GIVEN** a catalogue where `jira__get_issue_history` outscores `jira__get_issue` for the words "get issue"
+- **WHEN** an agent calls `coffer__search_tools` with `jira__get_issue`, `get_issue` or `JIRA__GET_ISSUE`
+- **THEN** `jira__get_issue` is the first result each time
+
 #### Scenario: advertise only Coffer's own built-in tools
 - **GIVEN** a client connected through coffer
 - **WHEN** it lists tools, and calls `coffer__recall`, `coffer__diagnose` and the former write tool
@@ -160,6 +177,11 @@ list-changed notifications) between clients and upstream MCP servers.
 - **GIVEN** an aggregated upstream tool whose name and description say only that it lists accounts, and whose input schema has a parameter `phone_list` described as 手机号列表 and a `status` parameter with the enum values `active` and `frozen`
 - **WHEN** an agent searches for "find a user by phone number", for "frozen", or for 按手机号查
 - **THEN** that tool is among the results each time, and first for the last two
+
+#### Scenario: a session lists a server's tools without starting it
+- **GIVEN** a stdio server one session has listed, and a second session
+- **WHEN** the second session lists its tools and resources, then calls one of its tools, and the server's config is then edited
+- **THEN** the second session's lists match the first's with no server started until the call, and the next session after the edit asks the server live and sees the new tools
 
 ### Requirement: Namespace every upstream capability
 The system MUST namespace every upstream capability with its server's name (`<server>__<tool>` for tools and
@@ -216,6 +238,8 @@ the existing name pattern and the ban on `__`, wherever the framework validates 
   only once the change is approved.
 - Registering a server with a name that already exists within the kind MUST be rejected with a clear error;
   a partial write is impossible.
+- Registering or editing an HTTP server with a static header whose value is empty MUST be refused naming the
+  header; a server saved earlier with one still loads, so it can be fixed.
 - Registering, listing, viewing, editing, enabling, disabling, scoping and deleting a server MUST be done
   on the MCP servers page, through the resource routes and with the `coffer mcp` commands that call
   them (`add`, `list`, `show`, `update`, `enable`, `disable`, `reach`, `delete`, `status`, `tools`,
@@ -284,6 +308,11 @@ of that session still under way.
 - **GIVEN** a session whose spawn of `fs` has started its child but has not finished starting
 - **WHEN** the session ends and the spawn then finishes
 - **THEN** the child is closed, the call fails as unavailable, and the ended session starts nothing more
+
+#### Scenario: an HTTP server's header with no value is refused when saved
+- **GIVEN** an HTTP server whose `X-Team` header has an empty value
+- **WHEN** it is registered, and when a registered server is edited to have one
+- **THEN** both are refused naming `X-Team`, and the registered server keeps its value
 
 ### Requirement: Support stdio and HTTP upstreams
 The system MUST support both stdio and HTTP MCP transports for upstream servers. An HTTP upstream MAY cite a
@@ -379,7 +408,8 @@ command for it either: which installer fits depends on the machine, so installin
 the person's agent (Principle IV, AI-Native). The server's status read
 (`GET /api/v1/resources/mcp_server/{uid}/status`), a failed test of it
 (`POST /api/v1/resources/mcp_server/{uid}/test`) and its `mcp_missing_launcher` attention item MUST each carry
-`handoff`, one prompt that names the server, the launcher, the command line the server is started with, the
+`handoff`: the server's one hand-off ("Hand a failing MCP server's diagnosis to an agent"), which for a
+missing launcher asks to install it and names the server, the launcher, the command line the server is started with, the
 `PATH` Coffer looks it up on and this machine's OS and architecture, asks for an install a process started
 from the GUI can find, and names `coffer mcp test <name>` to confirm. The command line MUST NOT carry a secret:
 an argument that follows a secret-named flag or looks like a token reads `<secret>`, and environment values
@@ -633,10 +663,7 @@ when it is saved, with nothing persisted.
 
 ### Requirement: Describe a custom-tool group
 A custom-tool group MUST carry an optional **description** saying what its API is
-for, set when the group is created (by hand or from an OpenAPI import) and
-changed later. Reading an OpenAPI document MUST return its `info.description`
-(trimmed, at most 2000 characters) so the import can start the new group with
-it. `coffer__search_tools` MUST score each of a group's tools against the
+for, set when the group is created and changed later. `coffer__search_tools` MUST score each of a group's tools against the
 group's description as well as the tool's own, and return the description
 beside each of the group's tools it finds as `group_description`. A tool's entry
 in `tools/list` MUST keep the tool's own description, with nothing added.
@@ -646,11 +673,6 @@ in `tools/list` MUST keep the tool's own description, with nothing added.
 - **WHEN** an agent calls `coffer__search_tools` with the query "weather forecast"
 - **THEN** `acme__list_items` is the first result, carrying the group's description as `group_description`
 - **AND** `tools/list` still offers `acme__list_items` with the description "List items"
-
-#### Scenario: an OpenAPI document's description is read for the new group
-- **GIVEN** an OpenAPI document whose `info.description` is set, and one without it
-- **WHEN** each is read for import
-- **THEN** the first returns that description, trimmed, and the second returns none
 
 ### Requirement: Make a custom tool's request in the gateway
 On `tools/call` for a custom tool the gateway MUST resolve the call's
@@ -662,15 +684,15 @@ or the host; each `{env:NAME}` filled with the environment's variable; a query
 pair whose hole's argument is absent dropped; the body template filled with JSON
 values, or, with no template, the unused arguments sent as a JSON object for
 POST, PUT and PATCH — add the environment's secret headers with each secret's
-value last, send it with the environment's timeout (the group's when it sets
-none) without following redirects, read at most 1 MiB of the response, and
+value last, send it with the group's timeout (one for every environment; an environment's
+own timeout, which older builds stored, is ignored) without following redirects, read at most 1 MiB of the response, and
 return one text result that starts with the HTTP status line. A status of 400 or
 more MUST be returned as an in-band tool error, and so MUST an answer that
 breaks one of the tool's response rules ("Judge a custom tool's answer by its
 group's response rules"); a redirect MUST be returned, not followed; a timeout
 MUST be recorded as `timeout`. After the status line the result MUST name the
-response headers the group asks to see ("Report what a custom tool's test
-reached") — every reported header when the call failed — then the broken rule,
+response headers the group's rules read — every reported header ("Report what a
+custom tool's test reached") when the call failed — then the broken rule,
 if any, and then the body, or `(empty body)` when the answer had none. The secret's value MUST NOT
 appear in the result, the tool's description or schema, or any log, invocation
 or audit record: an occurrence in the response is masked as `***`. Every call
@@ -710,68 +732,6 @@ but GET, and a person MAY turn it off or on for any tool.
 - **GIVEN** a stdio server whose tool declares `readOnlyHint: true`
 - **WHEN** an agent lists the gateway's tools
 - **THEN** the namespaced entry carries `readOnlyHint: true`
-
-### Requirement: Import custom tools from an OpenAPI document
-The system MUST read an OpenAPI 3.0 or 3.1 document, JSON or YAML, given as a
-file or fetched from a URL, into draft tools — one per operation, named from
-its `operationId`, with its path and query parameters as holes, its JSON
-request body as a `body` argument, and local `$ref`s resolved — and suggest
-the base URL from its `servers` and the header a credential goes in from its
-security schemes (`Authorization` for bearer, basic and OAuth; the key's name for
-an API key), which the form pre-fills as one header row with no value. Each
-draft operation MUST carry its text in the document with its first and last
-line, and its text is kept on the tool it becomes. A document that cannot be
-parsed MUST be refused with the line and column where it broke. A URL that does
-not answer — its host name does not resolve, the connection is refused, or it
-times out — MUST be refused with the distinct code `OPENAPI_UNREACHABLE`, the
-reason, and a hand-off prompt about checking the URL, the network, VPN or proxy
-(Principle IV, AI-Native). A URL typed into the import MUST pass the SSRF guard before it is fetched, and
-the document MUST be at most 5 MiB. The chosen operations become the tools of
-a new group, which records where the document came from and the operations
-left out. **Re-import** MUST read the source again and first preview the
-operations it would add, the tools it would remove and the ones it keeps,
-changing nothing; applying it MUST remove the removed tools, add the chosen
-added ones switched on, refresh each kept tool's request from the document and
-keep its switch and changes-data flag, and MUST keep every environment of the
-group with its base URL, headers, secret bindings and variables unchanged. A
-tool added by hand is never removed by a re-import.
-
-#### Scenario: an OpenAPI document becomes draft tools
-- **GIVEN** an OpenAPI 3.1 document with five operations, a server URL and a bearer security scheme
-- **WHEN** it is read for import
-- **THEN** five draft tools are returned with their methods, paths and argument schemas, the server URL as the base URL and `Authorization` as the suggested header
-- **AND** creating a group from three of them yields exactly those three tools, each switched on, and records the other two as left out
-
-#### Scenario: the import preview shows each operation's source
-- **GIVEN** an OpenAPI document written over several lines
-- **WHEN** it is read for import
-- **THEN** each operation carries its first and last line and its text in the document, and the tool drafted from it keeps that text
-
-#### Scenario: an unreadable spec says where it broke
-- **GIVEN** a JSON document with a missing comma on line 5, and a YAML document with an unclosed bracket
-- **WHEN** each is read for import
-- **THEN** each is refused as `OPENAPI_UNREADABLE` with the line and column where it broke
-
-#### Scenario: an unreachable spec URL says why
-- **GIVEN** an import URL whose host name does not resolve, one that refuses the connection, and one that times out
-- **WHEN** each is read for import
-- **THEN** each is refused as `OPENAPI_UNREACHABLE` with the reason `dns`, `refused` or `timeout` and a hand-off prompt naming the URL
-
-#### Scenario: an OpenAPI URL on a private address is refused
-- **GIVEN** an import URL whose host resolves to a loopback or private address
-- **WHEN** it is read for import
-- **THEN** the read is refused before any request is sent, and the refusal says to import the document as a file
-
-#### Scenario: re-import applies additions and removals keeping switches
-- **GIVEN** a group imported with three operations, one of them switched off, and a document that now drops one of them and adds a new one
-- **WHEN** re-import is previewed and then applied with the new operation chosen
-- **THEN** the preview names one operation to add and one tool to remove and nothing changed before applying
-- **AND** after applying, the dropped tool is gone, the new tool is on, and the kept tools keep their switch
-
-#### Scenario: re-import keeps the group's environments
-- **GIVEN** an imported group with environments `test` and `live`, each with its own base URL, secret header and variable
-- **WHEN** it is re-imported from a document whose `servers` name another URL
-- **THEN** both environments keep their base URL, headers, secret bindings and variables, and no approval is asked again
 
 ### Requirement: Wait for approval before a custom tool sends its secret
 Binding a stored secret to one of an environment's headers MUST be treated as a
@@ -824,8 +784,7 @@ Custom-tool groups MUST be managed through `/api/v1/custom-tools` — list
 failures in the last 24 hours, its environments and its tools), create (with
 tools and environments), read, change, delete, add / change / remove one tool,
 add / change / remove one environment, test a draft tool once without saving it,
-test a saved tool, read an OpenAPI document, and preview and apply a re-import —
-on the Custom tools page, which calls those routes, and with the `coffer
+and test a saved tool — on the Custom tools page, which calls those routes, and with the `coffer
 custom-tool` commands ("Manage custom tools from the command line"). Every test
 names its environment and returns the actual target it reached (method and URL
 with secret-looking query values redacted). The page MUST show each
@@ -861,7 +820,7 @@ call, and `idle` with no call in 24 hours.
 
 ### Requirement: Hand a failing custom tool group to an agent
 A group whose last call failed, and a test of a request that could not connect
-or timed out (for a saved or an unsaved group), MUST carry a hand-off prompt
+or timed out (for a saved or an unsaved group), MUST carry the group's one hand-off prompt
 that hands the network problem to an agent — the group, the method and URL with
 credentials and secret-looking query values redacted, the error and the machine;
 no header value — and no other result does. The prompt is written by the daemon,
@@ -952,28 +911,19 @@ The daemon MUST run a request of a custom-tool group that is not saved yet — i
 - **THEN** the first reports it could not connect and the second that the request could not be built, while a request the API answers reports no failure
 - **AND** only the one that could not connect carries a hand-off prompt
 
-### Requirement: List what a re-import changes in the tools it keeps
-A re-import's preview MUST name, besides the operations it would add and the tools it would remove, every kept tool whose operation the spec now describes differently — an argument it now requires, or a changed method, path or body template — with the operation's text as last imported and as it now reads (the old text is absent for a tool imported before Coffer kept it), and an OpenAPI reading MUST carry each operation's first tag, so the import form can group operations by it.
-
-#### Scenario: a re-import preview names the tools the spec changed
-- **GIVEN** a group imported from a spec whose `POST /invoices` took no arguments
-- **WHEN** the spec now requires a `currency` query argument there and the group is previewed for re-import
-- **THEN** the preview names `create_invoice` as changed with the new required argument `currency`, and the group's tools are unchanged
-
-#### Scenario: a re-import preview shows an operation's old and new text
-- **GIVEN** a group imported from a multi-line spec, and a spec whose `POST /invoices` request body now requires `currency`
-- **WHEN** the group is previewed for re-import
-- **THEN** the changed tool carries its operation key, the operation's old text, its new text and the new text's first and last line
-
 ### Requirement: Hand a failing MCP server's diagnosis to an agent
 Finding why a server will not start or answer depends on the machine, so a failing server MUST offer its
-diagnosis as a hand-off prompt for the person's agent (Principle IV, AI-Native). The status read of a
+diagnosis as a hand-off prompt for the person's agent (Principle IV, AI-Native). A server has ONE hand-off,
+whichever surface serves it: the same prompt, asking to install the launcher when it is not found here
+("Name a missing stdio launcher") and to find the cause otherwise, always carrying the newest real error
+("Name why an upstream failed in Coffer's words"). A single call carries no hand-off of its own; its server's
+is the one to use. The status read of a
 server that reads `failing` (and is not missing its launcher or a secret), a failed test of a registered
 server whose launcher resolves, and the `mcp_failing` attention item MUST carry `handoff`: one prompt naming
 the server, its transport and a config summary — the command line and working directory, or the URL — with
 the NAMES of its environment variables, headers and stored secrets and never their values, a URL's
 `user:pass@` and secret-named query values and any secret-looking argument reading `<secret>`; the error of
-the test or of the last failed call; at most the newest 20 lines the server printed on stderr (the test's
+the test or of the newest failed call (the attention item's too); at most the newest 20 lines the server printed on stderr (the test's
 own capture, else the server's log file, whose path it names), each passed through the same secret scrub;
 and this machine. Its steps MUST ask to find the cause (a missing environment variable, a wrong path, a
 package that won't start) and propose the fix before changing anything, MUST forbid reading or changing the
@@ -1005,18 +955,17 @@ person's own. `coffer mcp test <name> --prompt` MUST print a failed test's promp
 ### Requirement: Explain a server's state on its page
 A server's status read (`GET /api/v1/resources/mcp_server/{uid}/status`) MUST say, beside the state word,
 what the page needs to explain it, from persisted state only and without spawning the server: the last
-transport failure (its message and time) and since when the server has been failing — the newest run of
-calls that failed to reach it, where a `denied` call is skipped and a call the upstream answered, or one
-that succeeded, ends the run — or, with no such calls, the time of the failing test; the time and target
-of the last successful call; when the health record was last written; and the first secret the server's
+transport failure's message — the newest of the run of calls that failed to reach it, where a `denied` call
+is skipped and a call the upstream answered, or one that succeeded, ends the run; the time of the last
+successful call; when the health record was last written; and the first secret the server's
 transport cites that has no value on this machine, by the environment or header key that cites it and by
 the secret's own reference (a vault restored on a new machine carries references, not values). A secret's
 value is never read for this; a server that cites none never asks the secret store.
 
-#### Scenario: a failing server says its last error and since when
+#### Scenario: a failing server says its last error and when it last worked
 - **GIVEN** a server whose last calls are a success, a transport error, a denied call and a timeout, newest last
 - **WHEN** its status is read
-- **THEN** it reads failing with the timeout as the last error, failing since the transport error, and the earlier success as the last successful call with its tool
+- **THEN** it reads failing with the timeout as the last error and the earlier success's time as the last successful call, and carries no failing-since time, error time or last tool
 
 #### Scenario: a secret missing on this machine is named
 - **GIVEN** an HTTP server whose `Authorization` header cites a secret with no value in this machine's store
@@ -1086,7 +1035,9 @@ lines Coffer writes there when it starts the server, when a start fails (a launc
 a start that timed out) and when it stops it — through `GET /api/v1/resources/mcp_server/{uid}/log`,
 newest first, each line saying whether Coffer or the server wrote it and, for Coffer's lines, when. Only
 the tail is read, from the current file and then the one rolled aside. A server Coffer does not start
-(Streamable HTTP) has no log and answers none. Coffer's lines name the command and never a secret, which
+(Streamable HTTP) has no log and answers none. A Coffer line always starts a line of its own, even when
+the server's last output ended without a newline. A server's log file goes with the server: once no
+registered server has its name, the next retention run deletes it and its rolled-aside file. Coffer's lines name the command and never a secret, which
 reaches the server only through its environment; a value Coffer injected into that environment is masked in
 the file before it is written, whoever wrote the line (secret "Hold plaintext only in memory at the moment
 of use").
@@ -1096,6 +1047,16 @@ of use").
 - **WHEN** its log is read, and read again with a limit of two
 - **THEN** the lines come newest first across both files, Coffer's marked `coffer` with their time and the server's marked `stderr`
 - **AND** the limited read holds two lines and says more exist
+
+#### Scenario: a Coffer line after a server's unfinished line starts its own
+- **GIVEN** a server log whose last output is `Starting...` with no newline
+- **WHEN** Coffer writes its stop line
+- **THEN** the file holds `Starting...` and Coffer's line on two separate lines, through the masking pump too
+
+#### Scenario: a deleted server's log goes at the next retention run
+- **GIVEN** log files for two servers, one of which is no longer registered
+- **WHEN** the retention run prunes log files with the registered servers' names
+- **THEN** the unregistered server's file and its rolled-aside file are deleted and the other server's are kept
 
 ### Requirement: Offer turn-scoped tools only inside a Coffer turn
 Every agent process Coffer spawns for a turn MUST carry the turn's random token
@@ -1116,24 +1077,6 @@ listed nor found.
 - **GIVEN** an agent session started in a terminal, with no turn token
 - **WHEN** it lists Coffer's tools
 - **THEN** no request carries `X-Coffer-Turn` and no turn-scoped tool is among them
-
-### Requirement: Hand a failing MCP call's diagnosis to an agent
-A call whose server never answered — it failed without the upstream returning a
-result or a JSON-RPC error, or it timed out — MUST carry `handoff` on its
-invocation record: one prompt naming the server, the tool, the error (passed
-through the same secret scrub as a server's diagnosis), how many calls to that
-server failed in the last 24 hours, the session and the call's id, and this
-machine. Its steps MUST ask to find the cause and propose the fix before changing
-anything, MUST forbid reading or changing the secrets Coffer stores, and MUST name
-`coffer mcp test <name>`. It MUST NOT contain the call's arguments or result,
-which Coffer never stores. A call that succeeded, a denied call and a call the
-upstream answered with its own error carry no `handoff`.
-
-#### Scenario: an unanswered call carries a hand-off without arguments
-- **GIVEN** an errored call, a timed-out call, a successful call, a denied call and a call the upstream answered with an error result
-- **WHEN** the invocations are read
-- **THEN** the errored and timed-out calls carry a prompt naming the server, tool, error, session, call id and the count of the server's failures in the last 24 hours
-- **AND** the other three carry none
 
 ### Requirement: Read every failed call at once
 `GET /api/v1/mcp/invocations` MUST accept `status=failed` besides the four
@@ -1257,8 +1200,9 @@ ids stay ordinary arguments of the tool.
 
 ### Requirement: Validate a custom tool's arguments before any request
 A custom tool's argument schema MUST be checked as a JSON Schema when the tool is
-saved — its keywords well formed, its patterns valid regular expressions, its
-local `$ref`s resolvable — and a malformed schema refused with nothing saved.
+saved — valid against the draft 2020-12 meta-schema, its patterns valid
+regular expressions, its `$ref`s local and resolvable (a remote one is refused
+and never fetched) — and a malformed schema refused with nothing saved.
 Every request of a custom tool MUST validate its arguments against that schema
 before anything is sent, covering at least `type` (including OpenAPI 3.0
 `nullable`), `enum` and `const`, numeric bounds and `multipleOf`, string length
@@ -1298,8 +1242,7 @@ body template, argument schema, `changes_data` (a read-only `POST` may set
 `changes_data=false`) and its own response rules; set a group's response
 settings; add, update, rename, enable, disable and delete an
 environment and bind a secret to one of its headers; test a draft tool and a
-saved tool in a chosen environment; read an OpenAPI document; and preview and
-apply a re-import. A tool's definition, request template and schema MUST be
+saved tool in a chosen environment. A tool's definition, request template and schema MUST be
 accepted from flags, a file (`--data @file`) or standard input (`--data -`).
 Every command MUST offer `--json` and the exit codes of [resource-framework]
 "Offer every management operation on the command line". A command whose change
@@ -1319,11 +1262,6 @@ calls the upstream API itself.
 - **WHEN** a person renames one of its environments and switches a tool off on the Custom tools page, and an agent runs `coffer custom-tool group show <group> --json`
 - **THEN** the JSON carries the renamed environment and the tool switched off
 
-#### Scenario: an OpenAPI document is imported and re-imported from the command line
-- **GIVEN** an OpenAPI file with three operations
-- **WHEN** an agent runs `coffer custom-tool import read --file openapi.yaml --json`, creates a group from two operations with `coffer custom-tool group create --from-openapi openapi.yaml --operation <op> --operation <op>`, and later runs `coffer custom-tool reimport preview <group> --file openapi.yaml` and `coffer custom-tool reimport apply <group> --file openapi.yaml --add <op>`
-- **THEN** the read lists three draft tools, the group holds two, the preview names the one to add and changes nothing, and the apply adds it keeping every environment
-
 ### Requirement: Preview a custom tool's request without sending it
 The daemon MUST preview the request a custom tool would send — a saved tool with
 `POST /api/v1/custom-tools/{name}/tools/{tool}/preview` and a draft with
@@ -1335,8 +1273,7 @@ tool's environment on every call", the arguments checked by "Validate a custom
 tool's arguments before any request", and the request built by the gateway's own
 code ("Make a custom tool's request in the gateway"). It answers the chosen
 environment, the method, the final URL, every header as it would be sent, the
-rendered body, the timeout that applies and whose it is (the environment's own
-or the group's), and the environment's variables. A secret header MUST carry
+rendered body, the group's timeout, and the environment's variables. A secret header MUST carry
 `***` in place of the credential (behind its scheme, `Bearer ***`), its secret's
 id and name, its scheme and its state (`present`, `missing` or
 `pending_approval`, read from the store's presence and the approvals, never from
@@ -1348,9 +1285,9 @@ with `CUSTOM_TOOL_REQUEST_INVALID` (422, exit `6`). With `--json` the command
 prints the preview object as the route answers it.
 
 #### Scenario: a dry run shows each environment's request without sending it
-- **GIVEN** a group with environments `test` (the group's 30 s timeout, `region=eu-1`) and `live` (its own 7 s timeout, `region=us-1`), each with its own base URL, plain header and secret header, and a tool `POST /v1/{env:region}/search?cid={cid}` with a tool header and a body template
+- **GIVEN** a group with a 30 s timeout and environments `test` (`region=eu-1`) and `live` (`region=us-1`), each with its own base URL, plain header and secret header, and a tool `POST /v1/{env:region}/search?cid={cid}` with a tool header and a body template
 - **WHEN** the tool is previewed in `test` and in `live` with the same arguments
-- **THEN** each answer names its environment, its own base URL with its region and the query filled, its own plain header, the tool header, the rendered body, and 30 s from the group or 7 s from the environment
+- **THEN** each answer names its environment, its own base URL with its region and the query filled, its own plain header, the tool header, the rendered body, and the group's 30 s
 - **AND** the upstream receives nothing, and no secret value is read
 
 #### Scenario: a dry run names a secret header's secret but never its value
@@ -1371,36 +1308,30 @@ prints the preview object as the route answers it.
 
 ### Requirement: Report what a custom tool's test reached
 A test of a custom tool — saved, draft or of a group not saved yet — MUST
-return, beside the status, URL, body and environment, the response headers that
-help find the request on the API's side: `date`, `server`, `via`,
-`retry-after` and the request and trace ids (`x-request-id`, `request-id`,
-`x-correlation-id`, `x-trace-id`, `traceparent`, `x-b3-traceid`,
-`x-amzn-requestid`, `x-amzn-trace-id`, `x-amz-request-id`, `x-amz-cf-id`,
-`cf-ray`), names lower-cased, each value with the environment's secret values
-masked and cut at 256 characters. A group MAY name further headers to report
-(its **diagnostic headers**, at most 20), and every header a response rule reads
-is reported too; a header that carries credentials or cookies
+return, beside the status, URL, body and environment, every response header,
+names lower-cased. A header whose value is a credential or a cookie
 (`authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `set-cookie2`,
-`www-authenticate`, `proxy-authenticate`, `x-api-key`, `api-key`) MUST be
-refused when it is named and MUST never be reported. Every other header — a
-cookie, an auth challenge, anything neither listed nor named — MUST be left out.
-A test MUST also return the number of body bytes read. A test that got no answer
-returns no headers. The command line prints them after the status, and the
-Custom tools page shows them in the test's result. An agent's tool result names
-the group's diagnostic headers and the headers its rules read, and every
-reported header when the call failed.
+`x-api-key`, `api-key`) MUST be reported by name with `***` as its value; every
+other value MUST have the environment's secret values masked and be cut at 256
+characters. An auth challenge (`www-authenticate`, `proxy-authenticate`) is not
+a credential and is reported as sent. A test MUST also return the number of body
+bytes read. A test that got no answer returns no headers. The command line
+prints them after the status, and the Custom tools page shows them in the
+test's result. An agent's tool result names the headers its group's rules read,
+and every reported header when the call failed. A `diagnostic_headers` list in a
+group's response settings, which older builds stored, MUST be ignored.
 
-#### Scenario: a test reports the request id but no cookie or credential
+#### Scenario: a test reports every response header, a cookie's value masked
 - **GIVEN** an environment with a secret header, and an API that answers `403` with an HTML body, `X-Request-Id`, an `X-Trace-Id` that contains the secret's value, `Set-Cookie`, `WWW-Authenticate` and an unknown header
 - **WHEN** a draft tool is tested in that environment
-- **THEN** the result carries `x-request-id`, `x-trace-id` with the value masked, `server` and `date`
-- **AND** it carries no `set-cookie`, `www-authenticate` or unknown header, and neither the secret's value nor the cookie appears anywhere in it
+- **THEN** the result carries `x-request-id`, `x-trace-id` with the value masked, `server`, `date`, `www-authenticate` and the unknown header
+- **AND** it carries `set-cookie` as `***`, and neither the secret's value nor the cookie appears anywhere in it
 
-#### Scenario: a group's named headers reach the agent and a credential header cannot be named
-- **GIVEN** a group whose diagnostic headers name `X-Backend-Region`, and an API that answers `200` with `X-Backend-Region`, `Server` and a JSON body
-- **WHEN** an agent calls a tool, and a person then tries to add `Set-Cookie` to the group's diagnostic headers
-- **THEN** the agent's result names `x-backend-region` and not `server`, and a test reports both
-- **AND** the change naming `Set-Cookie` is refused as a validation error, and the group is unchanged
+#### Scenario: a successful call names only the headers its rules read
+- **GIVEN** a group with no response rules, and an API that answers `200` with `X-Backend-Region` (containing the secret's value), `Server`, `Set-Cookie`, `WWW-Authenticate` and a JSON body
+- **WHEN** an agent calls a tool, a test runs it, and a group saved with an old `diagnostic_headers` list is read
+- **THEN** the agent's result names no response header, and the test reports every one with the secret and the cookie masked
+- **AND** the old list is dropped and the group's response settings are its rules alone
 
 ### Requirement: Preview a resource or a prompt from the server page
 The daemon MUST read one of a registered server's resources, and fill one of its prompts with given arguments, for the server page's row details: `POST /resources/mcp_server/{uid}/resources/read` (a `uri`) and `POST /resources/mcp_server/{uid}/prompts/get` (a `name` and its `arguments`), over the same connection the capability listings use. A text body MUST be cut at 64 KB and marked cut; a binary body MUST be described by its MIME type and size and its bytes not sent. An error the server answers with MUST come back in the body's `error`, named by its JSON-RPC code and never by the server's own text (which can echo a credential), with no contents, and MUST NOT close the connection; a server that cannot be reached is `UPSTREAM_UNAVAILABLE`. A preview is the owner looking, not an agent calling: it MUST NOT be recorded as an invocation, and it works on a row that is switched off. `coffer mcp resource read` and `coffer mcp prompt get` call the same routes.
@@ -1491,6 +1422,40 @@ never asked, and the upstream is told the capability is not supported.
 - **GIVEN** a session whose client declared neither capability
 - **WHEN** it calls a tool that asks for sampling and one that asks for roots
 - **THEN** both tools report that the client refused, and the client is asked nothing
+
+### Requirement: Relay an upstream's elicitation to the client
+When an upstream sends `elicitation/create` during a request (it asks the person a question, such as a
+confirmation or a missing value), the gateway MUST pass it to the downstream client of the session the
+upstream connection belongs to, the same way as sampling, and return the client's answer (`accept` with
+content, `decline` or `cancel`) to the upstream. The gateway offers elicitation to an upstream only when the
+session's client declared it at `initialize`; otherwise the upstream is told it is not supported and the
+client is asked nothing. A person can take a while to answer, so the gateway waits up to 10 minutes and then
+answers `cancel` for them.
+
+#### Scenario: an upstream's question reaches the client that made the call
+- **GIVEN** a stdio server, and separately an HTTP server, whose tool asks the person for a name, two sessions whose clients declared elicitation and answer differently, and a third whose client did not
+- **WHEN** all three sessions call the tool
+- **THEN** each of the first two calls returns its own client's answer and each client is asked once, and the third call reports that the client refused while its client is asked nothing
+
+### Requirement: Name why an upstream failed in Coffer's words
+A call or a start that failed because the upstream could not be reached MUST record why, in a summary Coffer
+writes, never the upstream's own exception text (which can carry a URL with a secret in it). For an HTTP
+upstream the summary names the kind of failure (the host name does not resolve, the connection was refused,
+the TLS handshake failed, connecting timed out, the server stopped answering, the proxy refused) or the HTTP
+status the server answered with. For a stdio upstream whose process ended, it says the server exited and
+quotes the last line it printed on stderr: read from its log file, where injected values are already masked,
+scrubbed of anything shaped like a secret, and cut to 200 characters. This summary is the invocation's
+`error_message`, so the status read, the Overview and every hand-off show the same reason.
+
+#### Scenario: a call to a server that exited records what it printed last
+- **GIVEN** a stdio server that prints `fatal: out of memory with key sk-…` and exits during a call
+- **WHEN** the call fails
+- **THEN** the error says the server exited and quotes that line with the key replaced by `<secret>`
+
+#### Scenario: an HTTP server that cannot be reached is named by the kind of failure
+- **GIVEN** a URL nothing listens on, and a server that answers every request with HTTP 502
+- **WHEN** Coffer connects to each
+- **THEN** the first error says the connection was refused and the second that the server answered HTTP 502
 
 ### Requirement: Record invocations with redacted, bounded content
 The system MUST record an invocation entry for every tool call, resource read, and prompt fetch — its target,
@@ -1654,7 +1619,7 @@ group or tool whose rule is malformed — more than 10 rules, no success value, 
 status rule naming a header or a non-status value, a header rule naming a
 credential or cookie header ("Report what a custom tool's test reached"), a JSON
 rule whose name is not a JSON Pointer — MUST be refused when it is saved, with
-nothing persisted. The group's rules and diagnostic headers MUST be read and set
+nothing persisted. The group's rules MUST be read and set
 through the group's routes and `coffer custom-tool group create|update
 --response`, a tool's through the tool's routes and `coffer custom-tool tool
 add|update --response-rules`, and on the Custom tools page.

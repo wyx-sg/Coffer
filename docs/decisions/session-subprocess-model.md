@@ -159,3 +159,50 @@ What one session forwards:
   connections it describes ([MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream](mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md)).
 - An upstream's stderr goes to its own file under `~/.coffer/logs/upstream/`,
   not to `daemon.log`.
+
+## Revision 2026-11-06 — lists come from the saved catalogue; a call starts the server
+
+### Context
+
+"Spawned lazily" meant on first need, and the first need of every session was
+its `tools/list`, which the gateway fans out to every server the session can
+see. Each session therefore started every server, whether or not it called
+one. On the owner's Mac over 30 days, `seatalk` was started 1,142 times for 71
+calls; most servers were started only to be asked for a list they had given
+the session before with the same config.
+
+### Options considered
+
+- **A — Keep listing live (the previous design).** Simple and always current,
+  but every session pays every server's cold start and holds its process until
+  the session is reaped, for nothing in most sessions.
+- **B — Answer lists from what the server last listed on this machine (chosen).**
+  Every live list is saved, whole (descriptions, schemas, annotations), in
+  `derived.db` (`mcp_catalogue`), with a fingerprint of the server config it
+  was listed under. A session lists from it when the fingerprint matches and
+  the session holds no connection to the server; a call starts the server as
+  before. A server never listed here, or one whose config changed since, is
+  asked live, and so is a server the session is already connected to, whose
+  `list_changed` notifications keep the list current. Pros: a session starts
+  only the servers it calls; the list an agent sees is the one the server gave
+  under this config. Cons: an upstream that changes its tools without a
+  config change (an upgrade behind an unpinned `npx` or `uvx` command, a remote
+  HTTP server) is seen once a session connects to it and lists, or a call
+  fails; and a server that is down still lists its tools, so the failure shows
+  on the call, with its real reason, instead of as missing tools.
+- **C — Share lists across sessions in memory only.** Avoids the table, but the
+  first session after every daemon restart starts every server again, and
+  restarts are frequent (updates, sleep).
+- **D — Start every server once per daemon and share it.** Option B/D of this
+  ADR: rejected for the session-semantics reasons above.
+
+### Decision
+
+Option B. The management routes keep listing live (the server page's tabs and
+Refresh ask the server). The skill tells agents to pin `npx` and `uvx`
+versions, which keeps the fingerprint meaningful.
+
+### Consequences
+
+- `derived.db` gains `mcp_catalogue`; losing it costs one live list per server.
+- An edit of a server's config is its refresh: the next list asks the server.

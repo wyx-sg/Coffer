@@ -64,9 +64,15 @@ def start_background_workers(
     history_db: pathlib.Path | None,
     watch_knowledge: WatchKnowledge | None = None,
 ) -> BackgroundWorkers:
+    async def prune_logs() -> int:
+        # Every registered server keeps its log, enabled or not; a deleted
+        # one's file goes (spec mcp-gateway "Read a server's own log from its page").
+        names = [r.name for r in await resource_svc.list(kind="mcp_server")]
+        return await asyncio.to_thread(prune_log_dir, upstreams=names)
+
     retention_worker = RetentionWorker(
         retention_svc,
-        prune_logs=prune_log_dir,
+        prune_logs=prune_logs,
         reclaim_space=lambda: reclaim_free_pages(history_db),
     )
     retention_task = spawn_restarting(retention_worker.run, name="retention-worker")

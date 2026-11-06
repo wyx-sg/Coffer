@@ -1,7 +1,7 @@
 // src/components/custom-tools/GroupPane.tsx — the selected group: header and banners, then the tabs Overview
 // (definition, Last 24 hours, Requires, most-called tools) · Tools (the tools table with each tool's exposure) ·
 // Environments (one card each), the tab in the path (`/custom-tools/<group>/tools`; spec web-ui "Lay out every
-// detail page's tabs alike"); the tool drawer, Edit group, Re-import and Delete over it.
+// detail page's tabs alike"); the tool drawer, Edit group and Delete over it.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -24,7 +24,6 @@ import { GroupHeader } from "./GroupHeader";
 import { GroupBanners } from "./GroupBanners";
 import { GroupOverview } from "./GroupOverview";
 import { groupToolRows } from "./overviewRows";
-import { ReimportDialog } from "./ReimportDialog";
 import { ToolEditorDrawer } from "./ToolEditorDrawer";
 import { ToolsTable } from "./ToolsTable";
 
@@ -40,7 +39,6 @@ export function GroupPane({ name, onAddRequest }: Props) {
   const { data: group, isPending, error } = useCustomToolGroup(name);
   const [tool, setTool] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [reimportOpen, setReimportOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const { data: agents = [] } = useAgents();
   // A group is an `mcp_server`: its 24-hour summary and tiering are the server page's reads, by uid.
@@ -99,7 +97,6 @@ export function GroupPane({ name, onAddRequest }: Props) {
             summaryPending={summary.isPending}
             rows={rows}
             toolsHref={`${basePath}/tools`}
-            onReimport={() => setReimportOpen(true)}
           />
         </TabsContent>
         <TabsContent value="tools" className="pt-5">
@@ -123,9 +120,6 @@ export function GroupPane({ name, onAddRequest }: Props) {
         onEditGroup={() => setEditOpen(true)}
       />
       <EditGroupDialog group={group} open={editOpen} onOpenChange={setEditOpen} />
-      {group.source ? (
-        <ReimportDialog group={group} open={reimportOpen} onOpenChange={setReimportOpen} />
-      ) : null}
       <DeleteGroupDialog
         group={group}
         open={deleteOpen}

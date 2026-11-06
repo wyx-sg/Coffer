@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from coffer.application.mcp.custom_tool_handoff import request_test_handoff
+from coffer.application.mcp.custom_tool_handoff import group_handoff, test_outcome, test_request
 from coffer.application.mcp.custom_tool_ports import ToolTestOutcome
 from coffer.surfaces.http.handoff_schemas import HandoffOut
 from coffer.surfaces.http.mcp.custom_tool_response_schemas import (
@@ -18,13 +18,11 @@ def test_out(
 ) -> CustomToolTestOut:
     handoff = (
         HandoffOut(
-            prompt=request_test_handoff(
+            prompt=group_handoff(
                 group=group,
-                method=method,
-                url=o.url,
-                failure=o.failure,
-                error=o.error,
-                seconds=seconds,
+                request=test_request(method, o.url),
+                outcome=test_outcome(o.failure or "", seconds),
+                error=o.error if o.failure == "connect" else None,
                 machine=host_machine(),
             )
         )

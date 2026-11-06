@@ -5,7 +5,6 @@ import { describe, expect, test } from "vitest";
 import type { CustomToolEnvironment } from "@/lib/api/customTools";
 import {
   chooseEnvironment,
-  effectiveTimeout,
   environmentSecret,
   firstEnabled,
   requestPreview,
@@ -19,7 +18,6 @@ function env(overrides: Partial<CustomToolEnvironment>): CustomToolEnvironment {
     base_url: "https://test.example/api/",
     headers: [],
     variables: {},
-    timeout_seconds: null,
     secret_state: "none",
     pending_approvals: [],
     pending_secrets: [],
@@ -50,17 +48,6 @@ describe("chooseEnvironment", () => {
     expect(chooseEnvironment(group, "off")).toMatchObject({ state: "disabled", name: "off" });
     expect(chooseEnvironment(group, "gone")).toEqual({ state: "deleted", name: "gone" });
     expect(chooseEnvironment(group, "")).toEqual({ state: "none" });
-  });
-});
-
-test("the timeout is the environment's own, else the group's", () => {
-  expect(effectiveTimeout({ timeout_seconds: 30 }, { timeout_seconds: 7 })).toEqual({
-    seconds: 7,
-    source: "environment",
-  });
-  expect(effectiveTimeout({ timeout_seconds: 30 }, { timeout_seconds: null })).toEqual({
-    seconds: 30,
-    source: "group",
   });
 });
 

@@ -40,6 +40,9 @@ dependencies = [
     # rather than relying on it arriving transitively.
     "httpx2>=2.7",
     "psutil>=5.9",
+    # Custom tools validate their argument schemas with it (domain/mcp/json_schema);
+    # it also arrives through `mcp`, declared here because Coffer imports it.
+    "jsonschema>=4.18",
     # A WebSocket client for Codex's background app-server control socket.
     "websockets>=14",
     "tomlkit>=0.13",
@@ -81,6 +84,7 @@ dev = [
     "httpx>=0.28.1",
     "ruff>=0.16.0",
     "mypy>=2.3.0",
+    "types-jsonschema>=4.18",
     "types-psutil>=5.9",
     "types-PyYAML>=6.0",
     # import-linter + grimp: most platforms get the latest (grimp 3.x is a

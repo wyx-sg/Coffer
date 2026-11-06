@@ -167,15 +167,19 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | ADR | Decision |
 | --- | --- |
 | [`session-subprocess-model`](session-subprocess-model.md) | One Upstream Subprocess Set Per Downstream Client Session |
+| [`upstreams-speak-stdio-or-streamable-http`](upstreams-speak-stdio-or-streamable-http.md) | Upstreams Speak stdio or Streamable HTTP; the Old SSE Transport Stays With the Agent |
 | [`mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream`](mcp-capability-state-preferences-in-the-vault-lists-live-queried-from-upstream.md) | MCP Capability State: Preferences in the Vault, Lists Live-Queried From Upstream |
 | [`tool-overload-tier-the-list-search-the-rest`](tool-overload-tier-the-list-search-the-rest.md) | Tool Overload: List a Usage-Ranked Slice, Search the Rest |
 | [`tool-search-cuts-cjk-text-into-bigrams`](tool-search-cuts-cjk-text-into-bigrams.md) | Tool Search Cuts CJK Text Into Bigrams |
 | [`tool-search-indexes-parameter-text`](tool-search-indexes-parameter-text.md) | Tool Search Indexes Parameter Text |
+| [`tool-search-puts-an-exact-name-first`](tool-search-puts-an-exact-name-first.md) | Tool Search Puts an Exact Name First |
+| [`one-hand-off-per-server-or-group`](one-hand-off-per-server-or-group.md) | One Hand-Off per MCP Server or Custom Tool Group, Carrying the Real Error |
 | [`eval-capture-and-regression-gate`](eval-capture-and-regression-gate.md) | Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate |
 | [`record-tool-call-content-redacted-and-bounded`](record-tool-call-content-redacted-and-bounded.md) | Record Tool Call Content, Masked Where the Secrets Are Known and Cut at 16 KB |
 | [`custom-tool-pages-give-testing-and-environments-their-own-tabs`](custom-tool-pages-give-testing-and-environments-their-own-tabs.md) | A Custom Tool's Test and a Group's Environments Each Have Their Own Tab |
 | [`what-an-agent-fills-in-a-custom-tool-is-an-input`](what-an-agent-fills-in-a-custom-tool-is-an-input.md) | What an Agent Fills in a Custom Tool Is an Input; Query Parameters Are Only the URL's |
 | [`a-body-template-is-laid-out-by-its-tokens`](a-body-template-is-laid-out-by-its-tokens.md) | A Body Template Is Laid Out by Its Tokens, Never Parsed |
+| [`custom-tool-arguments-are-checked-by-the-jsonschema-library`](custom-tool-arguments-are-checked-by-the-jsonschema-library.md) | Custom Tool Arguments Are Checked by the `jsonschema` Library |
 
 ### Agents & providers
 
