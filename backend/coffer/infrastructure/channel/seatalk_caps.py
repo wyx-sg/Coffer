@@ -18,8 +18,8 @@ CHUNK_LIMIT = 3500  # paragraph-chunking budget, in characters
 #: What the agent is told renders here (spec channels "Tell a channel-driven
 #: agent it is on a chat channel"), read from ``render.markdown_to_seatalk``:
 #: SeaTalk's own markdown (``format: 1``) has bold, italic, inline code, fences
-#: and lists; a heading is demoted to bold, a link to ``label (url)``, and a
-#: table is turned into bullet rows plus an attached CSV by ``reply_shape``.
+#: and lists; a heading is demoted to bold and a link to ``label (url)``. It has
+#: no tables, so the agent is asked to write one bullet per row instead.
 #: A mention tag the agent writes passes through untouched (``render._MENTION_TAG``),
 #: and a thread's lines name each sender by email, so the agent can @ anyone there.
 SEATALK_RENDER_NOTES = (
@@ -30,11 +30,9 @@ SEATALK_RENDER_NOTES = (
 )
 
 SEATALK_CAPABILITIES = ChannelCapabilities(
-    # No live surface: while a turn runs the chat shows only the typing indicator
-    # (a heartbeat keeps it up), and the finished reply is one new message. The
-    # platform's stream re-types the whole message whenever anything already
-    # shown changes, so a growing status message flickered (spec channels/seatalk
-    # "Show only typing while a turn runs").
+    # While a turn runs the chat shows only the typing indicator (a heartbeat
+    # keeps it up), and the finished reply is one new message (spec
+    # channels/seatalk "Show only typing while a turn runs").
     # Both chat kinds: single_chat_typing and group_chat_typing. The group one
     # silently no-ops above 200 members (code 7003), so this promises an
     # attempt, never a delivered receipt.
@@ -53,10 +51,6 @@ SEATALK_CAPABILITIES = ChannelCapabilities(
     # Any DM message can root a thread, so a DM thread is a casual reply.
     direct_threads_are_replies=True,
     render_notes=SEATALK_RENDER_NOTES,
-    # A table arrives as raw pipes in a text message and fails in a card, and a
-    # 200-line log is a wall on a phone: both go out as files.
-    renders_tables=False,
-    max_inline_code_lines=30,
     # A SeaTalk bot cannot delete a message, but it can rewrite a card it sent for 7
     # days (``/messaging/v2/update``): a group reply is therefore a card (never
     # plain text, which cannot be rewritten) and "withdrawing" it rewrites it blank.

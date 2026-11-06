@@ -149,9 +149,7 @@ async def cmd_del(ctx: CommandContext, text: str) -> None:
             await ctx.say("That is not a reply I can withdraw.")
             return
     else:
-        # A group's main chat roots a thread per message, so "this thread" would
-        # never hold a reply: it looks across the whole chat.
-        thread = None if ctx.group_main or not ctx.thread_id else ctx.thread_id
+        thread = ctx.thread_id or None
         record = await ledger.latest(ctx.resource_uid, ctx.chat_id, thread)
         if record is None:
             await ctx.say("There is no reply of mine to withdraw here.")

@@ -19,9 +19,11 @@ app-server-backed (:mod:`codex_agent`) adapters both need:
 
 from __future__ import annotations
 
+import pathlib
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 
+from coffer.domain.chat.attachment import Attachment, attachment_line
 from coffer.domain.chat.channel_note import ChannelNote
 from coffer.domain.chat.channel_prompt import channel_prompt
 from coffer.domain.chat.errors import AgentConfigRejected
@@ -94,9 +96,18 @@ def model_system_context(current: str | None, available: Sequence[str]) -> str:
     )
 
 
+def attachment_note(att: Attachment) -> str:
+    """The ``[Attachments]`` line naming one attachment by its ``#n`` and where it
+    came from, with the path the agent opens it at; a pruned file degrades to a
+    note that it could not be read (spec channels "Hand inbound attachments to
+    the turn as references")."""
+    return attachment_line(att, readable=pathlib.Path(att.path).is_file())
+
+
 __all__ = [
     "ParseState",
     "SessionSink",
+    "attachment_note",
     "channel_system_context",
     "model_system_context",
 ]

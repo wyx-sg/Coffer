@@ -5,7 +5,7 @@
 **Deciders**: Yuxing Wu
 **Related**: spec chat ("Run Claude Code and Codex as subprocess providers on the type's one agent", "Keep each agent adapter self-contained", "End every adapter stream with a terminal event", "Retry a forgotten resume id once as a fresh session", "Express a turn as typed events");
 [Managed Agents Run With Full Permissions](managed-agents-run-with-full-permissions.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md),
-[Channel Attachments](channel-attachments.md), [Channel Live Surface Strategy](channel-live-surface-strategy.md),
+[Channel Attachments](channel-attachments.md), [A Channel Turn Posts Nothing Until It Is Done](channel-live-surface-strategy.md),
 [Model Catalogue Read From the Agent](model-catalogue-read-from-the-agent.md), [Session Subprocess Model](session-subprocess-model.md),
 [Agent Mechanisms Are Optional Facets on the Descriptor](agent-mechanisms-are-optional-facets-on-the-descriptor.md);
 research note [Agent chat clients](../research/agent-chat-clients.md); PRs #77, #82, #101, #146

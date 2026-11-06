@@ -166,7 +166,6 @@ Coffer 在仓库里忽略的东西写进 `.git/info/exclude`，从不写进一�
 
 ```text
 ~/.coffer/derived/
-├── channel-avatars/            已配对的人在平台上的头像，由各消息渠道的适配器拉取
 ├── derived.db                   MCP server and model provider health, skill deliveries, capability first/last seen
 ├── genai-prices.json            the refreshed model price list
 ├── reported-prices.json         prices a provider reported for its own models

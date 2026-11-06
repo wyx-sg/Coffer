@@ -4155,8 +4155,6 @@
       "groups": {
         "requireMention": "仅在被 @ 时回复",
         "requireMentionHint": "在群里保持沉默，直到有人 @ 它或回复它。关闭后会处理你在群里发的每一条消息，这需要先在 BotFather 里关闭机器人的隐私模式。",
-        "ignoreOtherMentions": "忽略同时 @ 了其他人的消息",
-        "ignoreOtherMentionsHint": "即使它们也 @ 了机器人。",
         "othersCanAsk": "允许群里其他人提问",
         "othersCanAskHint": "在你用过 bot 的群里，其他人 @ 它也能得到回答和只读查询。改动和派任务仍然只有你能发起。"
       },
@@ -4167,10 +4165,6 @@
         "waitAfterForward": "转发记录或附件后等待",
         "waitAfterForwardHint": "它们很少是完整的问题，所以多等一会儿。",
         "invalid": "请输入 {{min}} 到 {{max}} 之间的秒数。"
-      },
-      "replies": {
-        "showSteps": "显示步骤行",
-        "showStepsHint": "工作中在状态行下显示最近 3 个步骤。"
       },
       "idle": {
         "label": "闲置多久后开新对话",

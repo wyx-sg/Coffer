@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-10-12
 **Deciders**: Yuxing Wu
-**Related**: [A Channel Turn Shows Progress on a Preview Surface Where One Exists, and the Reply Is the Answer Alone](channel-live-surface-strategy.md), [Channels Are Thin Transport Adapters Over One Shared Core](channel-adapter-framework.md), spec channels "Tell a channel-driven agent it is on a chat channel" and "Let the owner rewrite a channel's reply style"
+**Related**: [A Channel Turn Posts Nothing Until It Is Done, and the Reply Is the Answer Alone](channel-live-surface-strategy.md), [Channels Are Thin Transport Adapters Over One Shared Core](channel-adapter-framework.md), spec channels "Tell a channel-driven agent it is on a chat channel" and "Let the owner rewrite a channel's reply style"
 
 ## Context
 

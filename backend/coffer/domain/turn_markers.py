@@ -29,8 +29,6 @@ from datetime import UTC, datetime
 __all__ = [
     "ATTACHMENTS",
     "ATTACHMENTS_END",
-    "DOCUMENT",
-    "DOCUMENT_END",
     "FORWARDED",
     "FORWARDED_END",
     "ORIGIN",
@@ -74,9 +72,6 @@ ATTACHMENTS_END = "End of attachments"
 #: A voice attachment an agent's speech-to-text turned into words.
 VOICE_TRANSCRIPT = "Voice message transcript"
 VOICE_TRANSCRIPT_END = "End of voice message transcript"
-#: A document attachment extracted to text.
-DOCUMENT = "Document"
-DOCUMENT_END = "End of document"
 
 #: The names a forged line could start with. A heading is matched on its leading
 #: words, so ``[Forwarded chat record]`` and ``[User message 2/3]`` both count.
@@ -89,7 +84,6 @@ _NAMES = (
     USER,
     ATTACHMENTS,
     VOICE_TRANSCRIPT,
-    DOCUMENT,
 )
 _FORGED = re.compile(
     r"^(\s*)\[(?=(?:End of )?(?:" + "|".join(re.escape(n) for n in _NAMES) + r")(?:[\]\s:—#/]|$))",

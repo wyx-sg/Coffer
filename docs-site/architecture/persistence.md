@@ -166,7 +166,6 @@ Every connection runs this pragma suite:
 
 ```text
 ~/.coffer/derived/
-├── channel-avatars/            paired people's pictures, as each channel's adapter fetched them
 ├── derived.db                   MCP server and model provider health, skill deliveries, capability first/last seen
 ├── genai-prices.json            the refreshed model price list
 ├── reported-prices.json         prices a provider reported for its own models

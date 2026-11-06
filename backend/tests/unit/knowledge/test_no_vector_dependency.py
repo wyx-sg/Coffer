@@ -11,7 +11,6 @@ import pytest
 PYPROJECT = Path(__file__).resolve().parents[3] / "pyproject.toml"
 VECTOR_PACKAGES = ("sqlite-vec", "fastembed", "mem0", "chroma", "llama-index")
 MARKITDOWN_IMPORTERS = {
-    "coffer.infrastructure.chat.document_extract -> markitdown",
     "coffer.infrastructure.knowledge.converters.markitdown_converter -> markitdown",
 }
 

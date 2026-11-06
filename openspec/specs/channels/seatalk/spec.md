@@ -207,7 +207,7 @@ name.
   it is escaped as usual.
 
 ### Requirement: Keep a typing heartbeat alive in DMs and group threads
-SeaTalk has **no reaction to ack with** and no live surface, so it MUST keep a
+SeaTalk has **no reaction to ack with**, so it MUST keep a
 periodic **typing heartbeat** alive (an ephemeral action, zero chat clutter) for
 the whole turn: it is the only sign of progress until the reply lands. It runs wherever the turn is, DM or
 group thread alike: SeaTalk has a thread-scoped group typing endpoint
@@ -289,11 +289,6 @@ core tells the owner privately.
 - **WHEN** it is withdrawn
 - **THEN** each card is rewritten through Update Message into a "🗑 Withdrawn" card with no buttons
 
-#### Scenario: a seatalk group turn does not stream
-- **GIVEN** a SeaTalk channel and a group turn
-- **WHEN** the capabilities are read
-- **THEN** no live surface is offered, withdrawing takes up to 168 hours, and withdrawing does not remove the message
-
 ### Requirement: Degrade card rewrites outside SeaTalk's update window
 A card rewrite ([channels](../spec.md) "Switch the agent with /new", [channels](../spec.md) "Offer choices and actions as owner-gated cards") reaches only
 **interactive cards, only within 7 days, only for the sending bot**. Outside that
@@ -342,7 +337,7 @@ thread read itself downloads nothing.
 Images carried by SeaTalk messages — a directly-sent image, or any image nested
 **recursively** inside a `combined_forwarded_chat_history` — MUST additionally be
 downloaded with the app token and attached to the turn ([channels](../spec.md) "Flatten forwarded chat records into the turn"), so
-a vision agent sees the actual picture and not just a link.
+the agent opens the actual picture and not just a link.
 
 #### Scenario: an image nested two forwards deep is downloaded
 - **GIVEN** a SeaTalk message whose forwarded chat history contains another forwarded record holding an image
@@ -547,31 +542,31 @@ conversation ([channels](../spec.md) "Key conversation identity by channel, chat
 - **WHEN** the owner taps a `/thread` button, or sends `/thread` inside a thread
 - **THEN** the bot posts the mark as a new direct-chat message, whose id is the thread's
 
-### Requirement: Mark a main-chat mention as the group's main chat
+### Requirement: Root a main-chat mention's thread at the message itself
 A SeaTalk @mention sent in a group's main chat carries no thread id, and the
-reply roots a new thread at the message itself. The transport MUST mark such a
-message as coming from the group's main chat, so the core can treat a command
-sent there as setting the group's defaults (spec channels "Set a group's
-defaults from its main chat"); a mention inside a thread is not marked.
+reply roots a new thread at the message itself. The transport MUST give such a
+message its own message id as its thread, so the message, and a command sent
+there, belong to that new thread like any other; a mention inside a thread keeps
+its thread.
 
-#### Scenario: a main-chat @mention is marked as group main
+#### Scenario: a main-chat @mention roots its thread at itself
 - **GIVEN** a SeaTalk channel receiving group @mention events
 - **WHEN** one arrives with no thread id and another arrives inside a thread
-- **THEN** the first is marked as the group's main chat with its own message id as
-  the thread, and the second is not marked
+- **THEN** the first has its own message id as its thread, and the second keeps
+  its thread
 
 ### Requirement: Show only typing while a turn runs
 A SeaTalk turn MUST show its progress through the typing indicator alone (see
-"Keep a typing heartbeat alive in DMs and group threads"): the transport
-declares no live surface (`supports_live_text` false), so nothing is posted
-while the turn runs and no message stream is ever opened. When the turn ends the
+"Keep a typing heartbeat alive in DMs and group threads"): like every channel
+([channels](../spec.md) "Send only the answer, once the turn is done") nothing
+is posted while the turn runs, and no message stream is ever opened. When the turn ends the
 reply goes out as new messages — in a direct chat, ordinary text messages
 rendered as SeaTalk markdown and cut at paragraph boundaries, every message after
 the first opening with its place, `(2/3)`; in a group, withdrawable cards (see
 "Send group replies as withdrawable cards").
 
 SeaTalk can stream a message, but its client re-types the whole message whenever
-a snapshot changes anything already on screen — a step line shifting, the clock
+a snapshot changes anything already on screen — the step count, the clock
 — so a reply that carries the turn's progress flickers on every step. And a
 message created when the turn began notifies nobody when it is finished, so a
 long turn needed a second message to say it had ended. Typing says the turn is
@@ -589,9 +584,3 @@ alive at no cost, and the answer, sent when it is ready, notifies.
 - **WHEN** it is sent
 - **THEN** it is cut at paragraph boundaries into messages headed `(2/3)`, `(3/3)`
   after the first
-
-#### Scenario: a seatalk transport offers no live surface
-- **WHEN** the SeaTalk transport's capabilities are read and a live surface is
-  asked for, in a direct chat or a group thread
-- **THEN** it declares none and opens none, and no stream request reaches the
-  platform

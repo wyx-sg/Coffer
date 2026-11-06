@@ -125,7 +125,6 @@ Everything under `derived/` is rebuilt from the rest, so deleting it (with the d
 
 | Path | Purpose | Rebuilt by |
 | --- | --- | --- |
-| `derived/channel-avatars/` | Pictures of the people paired with a channel, one file per person, fetched from the platform. | The next fetch |
 | `derived/derived.db` | MCP server health, which skill copies were delivered into which agent, when each upstream capability was first and last seen. Recreated when its schema version differs. | Health checks, skill delivery, the gateway |
 | `derived/genai-prices.json` | The model price list fetched from genai-prices, with when it was fetched. | The daily price refresh |
 | `derived/reported-prices.json` | The prices providers' APIs reported when their models were listed. | The next model listing |

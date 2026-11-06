@@ -2,9 +2,8 @@
 
 Every command — typed, or run by tapping a ``cmd:`` button — is about one
 conversation thread of one chat and answers into one place, which are not
-always the same: a SeaTalk group's main chat answers in the thread its message
-rooted but configures the group's defaults row (spec channels "Set a group's
-defaults from its main chat"). Bundling those into :class:`CommandContext`
+always the same: a parallel thread's command, for one, answers in its own
+thread. Bundling those into :class:`CommandContext`
 keeps each command module a function of ``(ctx, text)`` instead of a nine-
 argument signature repeated across a dozen functions.
 
@@ -114,11 +113,8 @@ class CommandContext:
     chat_kind: str
     #: Where the answer goes.
     thread_id: str
-    #: Which conversation thread the command is about — ``""`` for a SeaTalk
-    #: group's main chat, whose ``""`` row holds the group's defaults.
+    #: Which conversation thread the command is about.
     conversation_thread_id: str
-    #: The command was sent in a SeaTalk group's main chat (see module doc).
-    group_main: bool = False
     #: The card a tap came from, rewritten in place where the transport can.
     card_message_id: str = ""
     #: The message the command quotes (``/del`` withdraws that reply), and the
@@ -135,15 +131,13 @@ class CommandContext:
         return self.peer.chat_id
 
     async def settings(self) -> Settings:
-        """What this thread's next turn runs on — for a group's main chat, the
-        group's defaults (its ``""`` row, never a conversation)."""
+        """What this thread's next turn runs on."""
         return await settings_in_effect(
             self.commands,
             self.binding,
             self.peer,
             self.conversation_thread_id,
             chat_kind=self.chat_kind,
-            use_conversation=not self.group_main,
         )
 
     def but(self, **changes: Any) -> CommandContext:

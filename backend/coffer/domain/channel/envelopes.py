@@ -63,9 +63,6 @@ class InboundMessage:
     # events carry only ``group_id``) — the origin block then names the chat by id
     # alone ("Open every turn with its message origin")
     addressed: bool = True  # DMs always; group only when @mentioned / reply-to-bot
-    # group message @-mentions a non-bot user ("Configure when the bot answers
-    # in a group")
-    mentions_others: bool = False
     thread_id: str = ""  # non-empty when the message is inside a thread/topic
     # The message this one quotes/replies-to; "" when it quotes nothing. SeaTalk
     # delivers it on BOTH the DM (``message_from_bot_subscriber``) and the
@@ -97,12 +94,6 @@ class InboundMessage:
     # sender and the bot can see it); it is the handle that lets the bot answer
     # privately in a group without being an administrator ("Keep non-answer
     # chatter private in a group")
-    # True when a group message was sent in the group's MAIN chat on a platform
-    # whose every main-chat @mention roots a fresh thread (SeaTalk): ``thread_id``
-    # is then that new thread, and a command sent there configures the group's
-    # defaults instead of a thread nobody will continue (spec channels "Set a
-    # group's defaults from its main chat"). False everywhere else.
-    group_main: bool = False
 
 
 @dataclass(frozen=True)
@@ -127,13 +118,9 @@ class ReactionSet:
 class ChannelCapabilities:
     """What a transport can do; the core picks strategies from this.
 
-    The question the core asks about progress is ``supports_live_text`` — *is
-    there a surface I can keep updating while a turn runs?* ("Show a turn's
-    progress on one live surface"). Telegram answers yes, with a message draft or
-    one message it edits; SeaTalk answers no and shows only its typing indicator.
-    The core asks for a live-text handle (``open_live_text``) and never branches
-    on which mechanism is underneath, so there is no flag for "can rewrite a
-    delivered text message" — nothing would read it.
+    No transport shows a turn's progress: while it runs the chat shows only
+    receipt (a reaction or typing), and the finished reply is one new message
+    ("Reply once the turn is done").
     ``supports_card_update`` is the one narrower question: can an already-delivered
     *selection card* be rewritten? Without it a card keeps offering the option the
     user already took.
@@ -149,10 +136,6 @@ class ChannelCapabilities:
     # system line such as "Stopping…" is then rewritten into its result rather
     # than followed by a second message.
     edits_text: bool = False
-    # A surface the core can keep updating during a turn — a draft or an edited
-    # message (Telegram). It is scaffolding: the finished reply is always a new
-    # message. See "Show a turn's progress on one live surface".
-    supports_live_text: bool = False
     supports_media: bool = False  # outbound file/photo upload (send_media)
     # A file message carries its own caption (Telegram). Without it the reply
     # names its files and their captions instead (SeaTalk).
@@ -187,14 +170,10 @@ class ChannelCapabilities:
     # One or two sentences telling the agent what Markdown renders on this
     # transport (see "Tell a channel-driven agent it is on a chat channel").
     render_notes: str = ""
-    # "Shape a reply for what the chat can show": whether a markdown table
-    # renders (False → bullet rows + a CSV), how many lines a code block may
-    # keep inline (0 = any; more → attached as a file), and whether the
-    # transport collapses a ``## Details`` section itself (Telegram). Only such a
+    # "Shape a reply for what the chat can show": whether the transport
+    # collapses a ``## Details`` section itself (Telegram). Only such a
     # transport asks the agent for one ("Tell a channel-driven agent it is on a
     # chat channel"); elsewhere the reply goes out whole.
-    renders_tables: bool = True
-    max_inline_code_lines: int = 0
     collapses_details: bool = False
     # "Withdraw a bot reply on the owner's command": how many hours after it was
     # sent a bot message can still be taken back (Telegram's deleteMessage: 48;
@@ -294,25 +273,6 @@ class EphemeralTarget:
     receiver_id: str  # the member whose client shows the message
     ephemeral_message_id: str = ""  # the ephemeral message being answered
     callback_id: str = ""  # the card tap being answered
-
-
-@dataclass(frozen=True)
-class InboundStop:
-    """The user stopped the reply from the platform's own control.
-
-    Spec channels "Stop the turn from the platform's own stop control".
-
-    Telegram draws a stop button on a streamed draft; pressing it reports the
-    stopped draft rather than sending a message. It must reach the same
-    interrupt path a typed ``/stop`` does — a stop control the user can see but
-    that does not stop anything is worse than none at all.
-    """
-
-    channel: str  # the channel resource's uid (what its adapter is named by)
-    chat_id: str  # the chat whose reply was stopped
-    thread_id: str = ""  # the thread it was being generated in, if any
-    chat_kind: str = "direct"  # "direct" | "group" — so the acknowledgement
-    # routes back the way every other reply to this chat does
 
 
 @dataclass(frozen=True)

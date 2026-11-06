@@ -62,25 +62,7 @@ A direct chat paired by an older Coffer, before pairings recorded who the owner 
 Send the bot a message. The first message opens a conversation on the channel's default agent, in the Coffer-managed workspace `~/.coffer/content/workspace`, and every later message continues it. You can move a chat to another agent, model or directory with [commands](#commands).
 
 - A reaction (Telegram) or a typing indicator (SeaTalk) says the message was received.
-- On SeaTalk the typing indicator is all you see while the agent works; the answer then arrives as one new message. See [SeaTalk → How replies look](/guides/channels-seatalk#how-replies-look).
-- On Telegram, one status line sits at the top of a live preview while the agent works, and its clock keeps moving even during a long silent tool:
-
-  ```
-  ⏳ Working · 2m 14s · 7 steps
-  💬 Checking the deploy logs
-  +4 earlier
-  ✅ Read · checkout.spec.ts
-  ✅ Bash · rerun the 3DS test
-  ⏳ Grep · retry in e2e/
-  ─
-  The failure is the 3DS step: the sandbox answered after 30 s and…
-  ```
-
-  The `💬` line is what the agent last said before a tool call; the text it is writing now shows under the rule. The preview goes away when the turn ends and the reply is sent as a new message.
-
-  A step line in a direct chat adds the agent's own one-line description or the file name, never the raw command. In a group it names only the tool (`⏳ Bash`), because everyone there reads it.
-
-  **Show step lines**, on the channel's **Settings** tab under **Replies and conversations**, turns the step list off and keeps only the status header and the 💬 line, which is useful in a busy group. Only Telegram channels have it, because a SeaTalk chat shows no steps.
+- While the agent works you see only that reaction and the typing indicator; nothing is posted, edited or deleted. When the turn is done the answer arrives as one new message, like a person replying. To watch a turn as it runs, open its conversation in the web UI.
 - The reply is only what the agent wrote after its last tool call, on every platform; what it said between steps is not sent. Text the agent itself marks as passing commentary (Codex does) is left out too, wherever it stands. A turn that ends on a tool call replies with the last thing the agent wrote. A turn whose agent wrote no text sends no reply at all, not even a placeholder. In a chat the agent does not start background tasks; a sub-agent it runs in the foreground is waited for. If one still ends up in the background, the turn stays open until that sub-agent finishes and the agent writes its answer, up to four hours.
 - A turn that fails or is stopped ends with a one-line summary: the outcome, tool count, duration and tokens. A turn that succeeds sends no summary; the reply is the signal.
 
@@ -91,7 +73,7 @@ Coffer tells the agent which platform and kind of chat it is in and what renders
 - **Too long for a chat** — a reply of more than 20 lines or 1,500 characters (files and a collapsed Details section not counted) is not sent. Coffer asks the agent, in the same conversation, to say it again in a few lines; that short reply arrives with a **📄 Full report** button, and tapping it asks the agent for the file. Files the long reply sent with `MEDIA:` lines are not lost: they follow the short reply. The short reply takes a little longer, because the agent writes it after the long one. A turn that failed or was stopped sends what it has, as before; so does a turn with another message of yours already waiting behind it.
 
 - **Details** — on Telegram, a `## Details` section arrives collapsed. SeaTalk cannot collapse text, so there the reply arrives whole.
-- **Tables and logs** — SeaTalk cannot show a table, so each row becomes a bullet (`- **checkout** · failed · 3DS timeout`); a table bigger than 12 rows or 4 columns keeps its first five rows and arrives whole as a `.csv` file. A code block longer than 30 lines keeps its first three lines and arrives whole as a file.
+- **Tables and logs** — the reply arrives as the agent wrote it. The agent is told what the chat can show (SeaTalk has no tables, so it writes one bullet per row) and sends a long log as a file itself when that reads better.
 - **Long replies** — are never cut inside a code block, and every message after the first starts with its place, `(2/3)`. On Telegram those continuations arrive silently; only the first one notifies.
 
 ### The system prompt and your reply style {#your-own-system-prompts}
@@ -255,9 +237,8 @@ Two channel settings tune when the bot answers in a group. They change when the 
 | Setting | Default | Effect |
 | --- | --- | --- |
 | `require_mention` | on | The bot stays quiet in a group until someone @mentions it or replies to it. Turned off, it acts on every group message the owner sends. Telegram only: SeaTalk delivers a group message to a bot only when it @mentions the bot. |
-| `ignore_other_mentions` | off | A group message that also @mentions another person is left alone, even when it mentions the bot too. |
 
-**Web UI:** on the channel's **Settings** tab, use the switches under **Receiving messages**: **Answer only when @mentioned** (Telegram channels only) and **Ignore messages that @mention someone else**. They save as you flip them.
+**Web UI:** on the channel's **Settings** tab, use the switch under **Receiving messages**: **Answer only when @mentioned** (Telegram channels only). It saves as you flip it. A message that @mentions the bot is answered even when it also @mentions someone else.
 
 ### Others in the group {#others-in-the-group}
 
@@ -291,8 +272,7 @@ Send photos, files, voice messages and other media as you would to a person. Eac
 
 | You send | The agent receives |
 | --- | --- |
-| A photo or sticker | Claude Code sees the image. Codex gets the file path. |
-| A PDF, office document, epub or rtf | The extracted text, in a `[Document #n from …: <name>]` block. If extraction is unavailable, the file path. |
+| A photo, sticker, PDF or office document | The file path. The agent opens it with its own tools, as it would a file on your disk. |
 | A voice message or audio | A transcript, when **Speech to text** is on under **Settings › General → Speech to text**. Otherwise the audio file. |
 | Any other file | The file path. |
 | A location, a contact card | Nothing to download: the bot asks for text, a photo or a file. |
@@ -329,11 +309,11 @@ The header names the channel, its status (`SeaTalk app 8231 · WebSocket`), and 
 
 **Overview** is one column, with these sections stacked:
 
-- **Who can use it** — a bordered list of the paired owners, each with their picture on Telegram or SeaTalk (their initials when there is none), when they paired and **Remove**, and **Add owner** below it; an unpaired channel says nobody is paired yet, and the bot ignores every message until you pair.
+- **Who can use it** — a bordered list of the paired owners, each with their initials, when they paired and **Remove**, and **Add owner** below it; an unpaired channel says nobody is paired yet, and the bot ignores every message until you pair.
 - **Agents** — **Default agent** and **Default model** (each saved as soon as you pick it) and **Agents it may drive**, the channel's scope (see [Default agent and scope](#default-agent-and-scope)).
 - **Conversations from this channel →** — one link to the Conversations page filtered to this channel. The commands the bot answers are not listed here; see [Channel commands](/reference/channel-commands).
 
-**Settings** is one column of sections — **Connection**, **Receiving messages**, **Replies and conversations**, **System prompt** and **Working directories** — each setting with its own one-line explanation beneath it, and a **Delete channel** row at the bottom. It saves each change as you make it, with no Save button and no saved line: a typed value (a number, the name, the App ID) when you leave the field or press Enter, and only when it is valid and changed, so a number you are still typing never takes effect; a switch, a choice or a change to the directory list at once. A save that fails says so in a toast. The exception is **System prompt**, which shows, for **Direct chats** and **Group chats**, Coffer's read-only channel note and the reply style in force, and edits the reply styles through its **Edit** button and dialog (see [The system prompt and your reply style](#your-own-system-prompts)). **Connection** holds the channel's name, the SeaTalk **App ID**, the secret or token by its name (linking to its page on the Secrets page, with **Replace key…**); **Receiving messages** the @mention switches, **Let others in the group ask** and the two batching waits; **Replies and conversations** **Show step lines** and **Start a new conversation after**. **Working directories** lists the folders `/dir` may switch to — each row has **Set as default** and a remove ✕; the default's row reads *default* and has **Unset default**; with no default, new conversations start in Coffer's workspace, shown at the top of the list as *default · Coffer workspace*; a long list scrolls in its box. Every field starts from the settings the daemon reports for the channel, defaults included. A replaced secret is written under the reference the channel already uses and the daemon notices the new value and restarts the adapter on it by itself — also when you replace it with `coffer secret set` — so rotating a secret changes neither pairing nor binding. Deleting a channel stops the bot and removes its pairing; its conversations stay on the Conversations page.
+**Settings** is one column of sections — **Connection**, **Receiving messages**, **Replies and conversations**, **System prompt** and **Working directories** — each setting with its own one-line explanation beneath it, and a **Delete channel** row at the bottom. It saves each change as you make it, with no Save button and no saved line: a typed value (a number, the name, the App ID) when you leave the field or press Enter, and only when it is valid and changed, so a number you are still typing never takes effect; a switch, a choice or a change to the directory list at once. A save that fails says so in a toast. The exception is **System prompt**, which shows, for **Direct chats** and **Group chats**, Coffer's read-only channel note and the reply style in force, and edits the reply styles through its **Edit** button and dialog (see [The system prompt and your reply style](#your-own-system-prompts)). **Connection** holds the channel's name, the SeaTalk **App ID**, the secret or token by its name (linking to its page on the Secrets page, with **Replace key…**); **Receiving messages** the @mention switches, **Let others in the group ask** and the two batching waits; **Replies and conversations** **Start a new conversation after**. **Working directories** lists the folders `/dir` may switch to — each row has **Set as default** and a remove ✕; the default's row reads *default* and has **Unset default**; with no default, new conversations start in Coffer's workspace, shown at the top of the list as *default · Coffer workspace*; a long list scrolls in its box. Every field starts from the settings the daemon reports for the channel, defaults included. A replaced secret is written under the reference the channel already uses and the daemon notices the new value and restarts the adapter on it by itself — also when you replace it with `coffer secret set` — so rotating a secret changes neither pairing nor binding. Deleting a channel stops the bot and removes its pairing; its conversations stay on the Conversations page.
 
 The channel's page also warns about a setting on the platform that defeats the channel's configuration, such as Telegram privacy mode. To rotate a secret, use **Replace key…** under **Connection** on the **Settings** tab: **Enter a new value** overwrites the secret the channel already uses, **Use another secret** points the channel at another stored secret (the adapter restarts on it as well).
 
@@ -363,7 +343,7 @@ An agent that is tricked by a group member can still say something private. If y
 
 ## How it works
 
-The channel layer meets the agents only at the turn platform's seams — conversation creation and the turn event stream — so a new channel type is one adapter and touches no agent code, and a new agent is reachable from every channel with no channel change. Each adapter declares its capabilities (live text, edits, buttons, reactions, media), and the core chooses how to render a reply from those declarations, never from the platform's name. See [Chat and turns](/architecture/chat).
+The channel layer meets the agents only at the turn platform's seams — conversation creation and the turn event stream — so a new channel type is one adapter and touches no agent code, and a new agent is reachable from every channel with no channel change. Each adapter declares its capabilities (buttons, reactions, typing, media), and the core chooses how to render a reply from those declarations, never from the platform's name. See [Chat and turns](/architecture/chat).
 
 ## Related
 
@@ -374,4 +354,4 @@ The channel layer meets the agents only at the turn platform's seams — convers
 - [Vault sync](/guides/vault-sync) — what travels between machines; a channel does not.
 - [Security model](/architecture/security)
 - [Spec: channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md)
-- [Channel Adapter Framework](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md), [Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md)
+- [Channel Adapter Framework](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md), [Channel Attachments Are Saved Files, Handed to Every Agent by Path](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md)

@@ -22,7 +22,6 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from coffer.application.channel.agent_routing import effective_agent, routable_choices
-from coffer.application.channel.conversation_ops import inherited_setting
 from coffer.application.channel.selection_cards import path_label
 from coffer.domain.chat.errors import ConversationNotFound
 
@@ -32,7 +31,6 @@ if TYPE_CHECKING:
     from coffer.application.channel.store_ports import ChannelPeer
 
 __all__ = [
-    "GROUP_DEFAULT_SUFFIX",
     "NO_AGENT_IN_SCOPE",
     "Settings",
     "age",
@@ -47,10 +45,6 @@ __all__ = [
     "typable_name",
     "unknown_agent",
 ]
-
-#: What a setting sent in a SeaTalk group's main chat ends with (spec channels
-#: "Set a group's defaults from its main chat").
-GROUP_DEFAULT_SUFFIX = " — default for new threads in this group"
 
 #: What `/new <agent>` says when the channel's scope leaves it no agent to
 #: offer: every agent its scope names is one this machine has not added. It
@@ -137,18 +131,16 @@ async def settings_in_effect(
     conversation_thread_id: str,
     *,
     chat_kind: str,
-    use_conversation: bool = True,
 ) -> Settings:
     """The agent, model and directory in effect for this thread.
 
     The bound conversation, when there is one, is the truth — it is what the
-    next turn runs on. Without one (or with ``use_conversation=False``, for a
-    group's defaults row) it is what a fresh conversation would open with: the
-    thread's sticky settings, else the group's, else the channel's defaults
+    next turn runs on. Without one it is what a fresh conversation would open
+    with: the thread's sticky settings, else the channel's defaults
     (spec channels "Keep a chat's agent, model and directory across its conversations")."""
     threads = commands._threads
     row = await threads.get(binding.resource.uid, peer.chat_id, conversation_thread_id)
-    if use_conversation and row is not None and row.active_conversation_id is not None:
+    if row is not None and row.active_conversation_id is not None:
         try:
             conv = await commands._conversations.get_conversation(row.active_conversation_id)
         except ConversationNotFound:
@@ -157,12 +149,10 @@ async def settings_in_effect(
             cfg = await commands._conversations.get_agent_config(row.active_conversation_id)
             cwd = cfg.cwd or default_cwd(binding)
             return Settings(conv.agent_key, cfg.model, cwd, conv)
-    group = None
-    if conversation_thread_id and chat_kind == "group":
-        group = await threads.get(binding.resource.uid, peer.chat_id, "")
 
     def pick(field: str) -> str | None:
-        return inherited_setting(row, group, field)
+        value: str | None = getattr(row, field) if row is not None else None
+        return value
 
     agent = effective_agent(binding, pick("preferred_agent"))
     same = agent == pick("preferred_agent")

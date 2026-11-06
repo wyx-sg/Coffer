@@ -82,7 +82,6 @@ export function ChannelOverviewTab({
         headingLevel={3}
       >
         <ChannelPeopleList
-          channelUid={channel.uid}
           people={people}
           canAdd={status !== undefined}
           onAdd={onAdd}

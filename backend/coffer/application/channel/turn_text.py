@@ -1,15 +1,14 @@
 """Pure text helpers for the turn renderer.
 
-Split out of ``turn_render`` (at its size budget) the way ``turn_progress``
-already was: no I/O, no platform schema — just the two shaping decisions the
-renderer makes about the text it is about to hand a transport.
+Split out of ``turn_render`` (at its size budget): no I/O, no platform schema —
+just how the reply opens with an @mention of whoever asked.
 """
 
 from __future__ import annotations
 
 import re
 
-__all__ = ["clip_stream_preview", "mention_prefix", "with_mention"]
+__all__ = ["mention_prefix", "with_mention"]
 
 #: An id Coffer is willing to put INSIDE a platform's mention markup. Every id that
 #: reaches here is opaque and platform-issued (SeaTalk's ``seatalk_id`` is digits), so
@@ -110,14 +109,3 @@ def with_mention(
         user_name=user_name,
     )
     return f"{prefix} {body}" if prefix else body
-
-
-def clip_stream_preview(text: str, limit: int) -> str:
-    """Clip the accumulating reply to the platform's per-message limit for
-    an interim live update — a snapshot longer than the cap would be rejected.
-    Keep the TAIL (the most recent words) behind a leading ellipsis, so the user
-    watches the answer's latest text grow."""
-    if len(text) <= limit:
-        return text
-    marker = "…"
-    return marker + text[-(limit - len(marker)) :]

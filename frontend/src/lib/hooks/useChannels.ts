@@ -12,7 +12,6 @@ import { useTranslation } from "react-i18next";
 import { translateApiError } from "@/lib/api/errors";
 import { withInlineApproval } from "@/lib/inlineApproval";
 import {
-  getChannelPersonAvatar,
   getChannelStatus,
   notifyChannel,
   restartChannel,
@@ -29,7 +28,6 @@ import type { ChannelEditPlan, ChannelPlan } from "@/lib/channels/schema";
 import { useResources } from "@/lib/hooks/useResources";
 import { useToast } from "@/components/ui/toast";
 import {
-  channelAvatarKey,
   channelStatusKey,
   pendingApprovalsKey,
   resourcesKey,
@@ -57,21 +55,6 @@ export function useChannelStatus(uid: string, opts: { poll?: boolean } = {}) {
     // Non-polling consumers (the per-row paired cell on the list page) must
     // not re-fan-out N status requests on every navigation.
     staleTime: opts.poll ? 0 : 15_000,
-  });
-}
-
-/**
- * A paired person's picture (`data:` URL), or `null` while there is none — the
- * people list shows initials then. The daemon keeps the picture a day, so the
- * page asks once an hour rather than on every status poll.
- */
-export function useChannelPersonAvatar(uid: string, senderId: string) {
-  return useQuery({
-    queryKey: channelAvatarKey(uid, senderId),
-    queryFn: () => getChannelPersonAvatar(uid, senderId),
-    enabled: uid.length > 0 && senderId.length > 0,
-    staleTime: 60 * 60_000,
-    retry: false,
   });
 }
 

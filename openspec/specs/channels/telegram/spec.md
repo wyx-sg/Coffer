@@ -5,7 +5,7 @@ The Telegram half of Coffer's channel plane. Its parent,
 [`channels`](../spec.md), owns everything a channel does regardless of platform
 — pairing, the owner gate, commands, conversations, media policy, scope and
 machine binding. This spec owns what only Telegram's Bot API can answer: how
-events arrive, how a reply is rendered and grown in place, what a card is made
+events arrive, how a reply is rendered, what a card is made
 of, and which of the Bot API's newer surfaces Coffer reaches for when the server
 it talks to offers them.
 
@@ -18,16 +18,15 @@ end. The Bot API is spoken with `httpx` against the fixed host
 handful of methods and an SDK would buy nothing while adding an
 import-confinement contract.
 
-The Bot API carries a family of surfaces built for exactly this shape of bot: a
-message that streams while an agent generates it, a stop control the platform
-draws itself, structured rich text, and a group reply only one member can see.
-Coffer uses each one where the Bot API server it reaches offers it, and keeps its
-own hand-built equivalent — an edited message standing in for a stream, a typed
-`/stop`, an HTML subset standing in for markdown — as the fallback beneath it,
+The Bot API carries a family of surfaces built for exactly this shape of bot:
+structured rich text, and a group reply only one member can see. Coffer uses
+each one where the Bot API server it reaches offers it, and keeps its own
+hand-built equivalent — an HTML subset standing in for markdown, an ordinary
+group message — as the fallback beneath it,
 because the Bot API server a user reaches is not guaranteed to be new enough.
 Every capability here is therefore two mechanisms and a probe, not one mechanism
 ([channels](../spec.md) "Probe platform capabilities and latch off rejected ones"); a Coffer running against an older Bot API server degrades
-in formatting and liveness only, and every reply is still delivered.
+in formatting only, and every reply is still delivered.
 
 One disclosed Bot API parsing caveat is accepted and documented at its call
 site rather than specified away: only `entities` on a plain text message is
@@ -61,7 +60,7 @@ The adapter reconnects with exponential backoff and never crashes the daemon.
 On start the transport MUST read the bot's own identity from `getMe` and keep the
 two fields that change what it may do: the bot's username, and whether privacy
 mode leaves it able to read group messages. The Bot API surfaces introduced
-later than some servers carry — **rich messages, message drafts, ephemeral
+later than some servers carry — **rich messages and ephemeral
 messages** — are attempted once and latched off for the process on the
 platform's own rejection, per [channels](../spec.md) "Probe platform capabilities and latch off rejected ones".
 
@@ -135,62 +134,6 @@ replies as Telegram HTML chunked at 4000 characters" stays as the fallback that
 - **WHEN** a reply containing a heading and a table is delivered
 - **THEN** it is sent as a rich message carrying the markdown structure
 - **AND** on a server that refuses rich messages the same reply is delivered as HTML
-
-### Requirement: Use a deleted status message as the live scaffolding
-Telegram's live surface MUST be **scaffolding**, not the reply: a status message
-that is edited as the turn runs and **deleted** before the real answer is sent
-([channels](../spec.md) "Show a turn's progress on one live surface"). It opens
-only once the turn has run past the update interval — either tool activity opens it or the reply
-text does — so a reply that finishes sooner opens none and there is no create →
-delete → resend flicker; the 👀 receipt reaction ([channels](../spec.md) "Acknowledge receipt and completion by capability") has
-already said the message was heard. When the turn ends, the status message is
-deleted and the final reply is sent HTML-rendered and paragraph-chunked.
-
-#### Scenario: reply text streams into the editable status message as it arrives
-- **GIVEN** a paired channel on an adapter that can edit messages
-- **WHEN** the agent's reply text arrives in deltas during a turn
-- **THEN** the single status message shows tool-progress lines first, then is
-  edited in place with the accumulating reply text (plain, not HTML) so the user
-  watches the answer materialize; on finish the status message is deleted and the
-  final reply is sent once (HTML-rendered and paragraph-chunked)
-
-#### Scenario: a slow text-only reply streams into a status message
-- **GIVEN** a paired channel on an adapter that can edit messages
-- **WHEN** a text-only turn (no tool calls) keeps producing reply text past the
-  transport's update interval
-- **THEN** a status message is opened with the streaming reply text and edited in
-  place as the answer grows, then deleted on finish while the final reply is sent
-  once
-
-#### Scenario: a fast text-only reply opens no status message
-- **GIVEN** a paired channel on an adapter that can edit messages
-- **WHEN** a text-only turn completes within the transport's update interval
-- **THEN** no status message is opened (no create → delete → resend flicker) — only
-  the single final reply is sent
-
-### Requirement: Stream through a message draft in direct chats only
-Where the Bot API offers a **message draft**, the live-text handle
-([channels](../spec.md) "Stream through the platform's own surface where the chat has one") MUST drive that instead of rewriting a delivered message. A
-draft addresses a **private chat and has no group form**, so it is used only in
-DMs; a group keeps the status-message mechanism of "Use a deleted status message
-as the live scaffolding" rather than spending a refused call per snapshot.
-
-#### Scenario: a direct-chat turn streams into a message draft while a group turn edits a status message
-- **GIVEN** a Bot API server that offers message drafts
-- **WHEN** a turn's reply streams in a direct chat and another in a group
-- **THEN** the direct-chat progress is sent as message-draft updates with no status message to delete
-- **AND** the group progress uses an edited status message and makes no draft call
-
-### Requirement: Route the draft's stop button to the interrupt path
-A streamed draft MAY advertise the **stop button the platform draws**. When the
-user presses it the platform reports the stopped draft, and Coffer MUST route
-that to the same interrupt path as `/stop` ([channels](../spec.md) "Stop the turn from the platform's own stop control"). The button is
-advertised only where that route is wired.
-
-#### Scenario: pressing the draft's stop button interrupts the turn
-- **GIVEN** a direct-chat turn streaming into a draft that advertises the platform's stop button
-- **WHEN** the platform reports that the user stopped that draft
-- **THEN** the turn is interrupted through the same path as a typed `/stop`
 
 ### Requirement: Deliver group command output as ephemeral messages
 Where the Bot API offers **ephemeral messages** — a message only one member's
@@ -363,8 +306,7 @@ Every Telegram group answer MUST open with a real mention of the asker: an
 inline mention link `[<name>](tg://user?id=<from.id>)`, which rich messages and
 the HTML subset both render as a mention that notifies — it works for a member
 with no username. The id is the sender's `from.id`; the name is their display
-name. A direct answer carries none, and the silent status message carries none
-(it is deleted before the answer).
+name. A direct answer carries none.
 
 #### Scenario: a group answer mentions the asker by name
 - **GIVEN** a Telegram group message from a member named Alex with id 4242
@@ -385,24 +327,6 @@ reply's first is sent silently and opens with `(2/3)`.
 - **WHEN** it is delivered as a rich message
 - **THEN** that section is inside a `<details>` block summarised `Details`, and on
   the HTML fallback it is an expandable quotation in a numbered, silent message
-
-### Requirement: Show the working status in a direct chat's thinking block
-Where the Bot API offers `sendRichMessageDraft` (10.1; private chats only), a
-direct chat's draft MUST be a rich draft: the status header ([channels](../spec.md)
-"Show a turn's working state as one status line") in the draft-only
-`<tg-thinking>` block, the narration and step lines under it as a list, and the
-answer written so far as rich markdown. A server that does not know the method
-latches it off (see "Read the bot's identity from getMe and latch off
-unsupported surfaces") and the same snapshot goes out as the plain
-`sendMessageDraft`; a server without rich messages is not asked. Groups have no
-draft and keep the silent status message.
-
-#### Scenario: a direct chat's draft shows the status in its thinking block
-- **GIVEN** a Telegram server that offers rich drafts, and a direct chat's turn
-- **WHEN** its live snapshot is the status block and an answer
-- **THEN** one `sendRichMessageDraft` carries the header in `<tg-thinking>`, the
-  steps as a list and the answer as markdown, with the stop control, and no
-  plain draft is sent
 
 ### Requirement: Register command menus per chat scope and language
 The transport MUST register its command menus with `setMyCommands` per chat

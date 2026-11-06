@@ -71,14 +71,6 @@ def test_the_latch_is_one_way() -> None:
     assert feature.available is False
 
 
-def test_each_feature_latches_independently() -> None:
-    features = FeatureSet()
-    features.rich_messages.note_failure("tg", _refusal("method not found", 404))
-    assert features.rich_messages.available is False
-    assert features.message_drafts.available is True
-    assert features.ephemeral_messages.available is True
-
-
 def test_two_adapters_do_not_share_a_latch() -> None:
     # Two channels may point at different Bot API servers.
     first, second = FeatureSet(), FeatureSet()
@@ -111,3 +103,10 @@ def test_a_dollar_inside_a_fence_is_left_alone() -> None:
 @pytest.mark.parametrize("body", ["", "plain text", "no dollars here"])
 def test_text_without_dollars_is_returned_as_is(body: str) -> None:
     assert normalize_rich_markdown(body) == body
+
+
+def test_each_feature_latches_independently() -> None:
+    features = FeatureSet()
+    features.rich_messages.note_failure("tg", _refusal("method not found", 404))
+    assert features.rich_messages.available is False
+    assert features.ephemeral_messages.available is True

@@ -29,7 +29,6 @@ from coffer.domain.channel.envelopes import (
 )
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.domain.channel.thread_messages import ThreadMessage, ThreadRead
-from coffer.infrastructure.channel.seatalk_avatar import fetch_avatar
 from coffer.infrastructure.channel.seatalk_caps import SEATALK_CAPABILITIES
 from coffer.infrastructure.channel.seatalk_cards import update_interactive_card
 from coffer.infrastructure.channel.seatalk_history import SeaTalkContextReader
@@ -41,7 +40,6 @@ from coffer.infrastructure.channel.seatalk_media import (
 from coffer.infrastructure.channel.seatalk_parse import (
     combined_forwarded_items,
     dedup_key,
-    mentions_others,
     strip_group_mentions,
 )
 from coffer.infrastructure.channel.seatalk_send import send_text_pieces
@@ -150,8 +148,8 @@ class SeaTalkAdapter:
             )
             message_id = str(message.get("message_id", ""))
             # A group reply lands in a thread: an in-thread @mention carries its root id, a
-            # main-chat one ("") roots a thread at itself and is marked (spec channels/seatalk
-            # "Mark a main-chat mention as the group's main chat").
+            # main-chat one ("") roots a thread at itself (spec channels/seatalk "Root a
+            # main-chat mention's thread at the message itself").
             in_thread = str(message.get("thread_id", ""))
             await self._callbacks.on_message(
                 InboundMessage(
@@ -172,13 +170,7 @@ class SeaTalkAdapter:
                     sender_mention_email=str(sender.get("email", "")),
                     chat_kind="group",
                     addressed=True,
-                    # >1 distinct @mentioned username ⇒ a non-bot user was mentioned
-                    # alongside the bot (empty for a forwarded record).
-                    mentions_others=mentions_others(
-                        (message.get("text") or {}).get("mentioned_list")
-                    ),
                     thread_id=in_thread or message_id,
-                    group_main=not in_thread,
                     quoted_message_id=str(message.get("quoted_message_id") or ""),
                     forwarded=tag == "combined_forwarded_chat_history",
                     forwarded_items=combined_forwarded_items(message),
@@ -289,13 +281,6 @@ class SeaTalkAdapter:
             raise ChannelSendFailed(self._name, "single_chat returned no message_id")
         return sent.message_id
 
-    async def open_live_text(
-        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
-    ) -> None:
-        """No live surface (spec channels/seatalk "Show only typing while a turn
-        runs"): the typing heartbeat is the progress, the reply one new message."""
-        del chat_id, thread_id, chat_kind
-
     async def update_card(
         self,
         chat_id: str,
@@ -376,9 +361,6 @@ class SeaTalkAdapter:
     async def fetch_quoted(self, message_id: str) -> FetchedContext:
         """The quoted message — resolvable only with this bot's own token."""
         return await self._context.quoted(message_id)
-
-    async def fetch_avatar(self, sender_id: str) -> bytes | None:  # AvatarFetchPort
-        return await fetch_avatar(self._get, self._client, self._name, sender_id)
 
     # -- transport -------------------------------------------------------------
 

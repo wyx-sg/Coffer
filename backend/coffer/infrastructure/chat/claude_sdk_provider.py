@@ -34,7 +34,6 @@ from coffer.infrastructure.chat.claude_sdk_agent import (
     default_session_factory,
 )
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
-from coffer.infrastructure.chat.document_extract import default_document_extractor
 from coffer.infrastructure.chat.transcribe import Transcriber
 from coffer.infrastructure.platform.user_path import user_path_env, which_on_user_path
 
@@ -172,10 +171,6 @@ class ClaudeSdkProvider:
             # is none (spec channels "Transcribe inbound voice only when the
             # user opted in").
             transcriber=await self._transcriber(),
-            # A document (PDF/office file) is text-extracted so it reaches the
-            # agent as text rather than a vision/binary block (spec chat
-            # "Extract document attachments to text").
-            document_extractor=default_document_extractor(),
         )
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:

@@ -1,10 +1,9 @@
 """The end of a turn: the reply delivered, and the outcome it ended with.
 
 Split out of ``turn_render`` (at its size budget). One pass turns what the agent
-wrote into what the chat receives: ``MEDIA:`` sentinels uploaded after the reply, the error /
-stop / limit notice appended, the live surface closed (or none to close) and the
-body sent as new messages, and the compact summary of a turn that did not end
-normally.
+wrote into what the chat receives: ``MEDIA:`` sentinels uploaded after the reply,
+the error / stop / limit notice appended, the body sent as new messages, and the
+compact summary of a turn that did not end normally.
 """
 
 from __future__ import annotations
@@ -15,17 +14,14 @@ from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
 from coffer.application.channel.ports import ChannelAdapter
-from coffer.application.channel.reply_shape import ReplyFile, shape_reply
 from coffer.application.channel.reply_tracking import ReplyTracker
 from coffer.application.channel.turn_media import (
     MediaFile,
     attachment_lines,
     send_media_files,
-    send_reply_files,
     take_media,
 )
 from coffer.application.channel.turn_status import format_elapsed
-from coffer.application.channel.turn_surface import TurnSurface
 from coffer.domain.channel.envelopes import ChoiceButton, SentMessage
 from coffer.domain.chat.events import SESSION_IN_USE, TurnError
 
@@ -138,7 +134,6 @@ async def _deliver_reply(
     chat_id: str,
     thread_id: str,
     chat_kind: str,
-    surface: TurnSurface,
     send: Callable[[str], Awaitable[None]],
     mention: Callable[[str], str],
     text: str,
@@ -152,25 +147,14 @@ async def _deliver_reply(
     stop result, so the reply does not repeat it. ``stop_line``: that result,
     naming what was stopped, when a ``/stop`` asked for it.
 
-    The @mention is added HERE, to the body, exactly once. A live surface is
-    scaffolding: closing it hands the body back, and the body goes out as new
-    messages, so the mention is in the message that creates the reply.
+    The @mention is added HERE, to the body, exactly once, so it is in the
+    message that creates the reply.
     """
     media: tuple[MediaFile, ...] = ()
-    files: tuple[ReplyFile, ...] = ()
     if text:
         # The agent's files go out after the reply, so the reply leads.
         text, media = take_media(adapter, text)
-        # What this chat cannot show becomes bullets and files (see "Shape a
-        # reply for what the chat can show").
         caps = adapter.capabilities
-        shaped = shape_reply(
-            text,
-            renders_tables=caps.renders_tables,
-            max_inline_code_lines=caps.max_inline_code_lines,
-            attach=caps.supports_media,
-        )
-        text, files = shaped.body, shaped.files
         if not caps.media_captions and any(f.caption for f in media):
             # A file message here has no caption: the reply names its files
             # rather than a text message following each one.
@@ -201,15 +185,10 @@ async def _deliver_reply(
             )
         body = text
     if body:
-        leftover = await surface.close(mention(body))
-        if leftover:
-            if tracker is not None:
-                await tracker.send(leftover)
-            else:
-                await send(leftover)
-    else:
-        # The live surface still has to be closed.
-        await surface.close("")
+        if tracker is not None:
+            await tracker.send(mention(body))
+        else:
+            await send(mention(body))
     on_sent = tracker.note_file if tracker is not None else None
     failed = await send_media_files(
         adapter, chat_id, media, thread_id=thread_id, chat_kind=chat_kind, on_sent=on_sent
@@ -221,6 +200,3 @@ async def _deliver_reply(
             await tracker.send(note)
         else:
             await send(note)
-    await send_reply_files(
-        adapter, chat_id, files, thread_id=thread_id, chat_kind=chat_kind, on_sent=on_sent
-    )

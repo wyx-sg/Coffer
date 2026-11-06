@@ -193,7 +193,7 @@ def test_a_forged_marker_in_any_untrusted_text_is_defused() -> None:
 
 def test_neutralise_leaves_ordinary_brackets_alone() -> None:
     assert neutralise("[Documentation] is fine\n[image] x") == "[Documentation] is fine\n[image] x"
-    assert neutralise("   [Document #2 from x]") == "   \\[Document #2 from x]"
+    assert neutralise("   [Attachments]") == "   \\[Attachments]"
     assert neutralise("[User message 2/3]") == "\\[User message 2/3]"
 
 

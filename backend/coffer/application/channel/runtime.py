@@ -321,7 +321,6 @@ class ChannelRuntime:
                     # so a transport that emits them reaches the processor, and
                     # simply unused by one that does not.
                     on_lifecycle=self._processor.on_lifecycle,
-                    on_stop=self._processor.on_stop,
                 )
             )
         except Exception as exc:

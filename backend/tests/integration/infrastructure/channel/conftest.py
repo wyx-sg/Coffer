@@ -21,7 +21,6 @@ from coffer.domain.channel.envelopes import (
     InboundCallback,
     InboundLifecycle,
     InboundMessage,
-    InboundStop,
 )
 from coffer.infrastructure.channel.seatalk import SeaTalkAdapter
 from coffer.infrastructure.channel.telegram import TelegramAdapter
@@ -47,7 +46,6 @@ class RecordingCallbacks:
         self.messages: list[InboundMessage] = []
         self.callbacks: list[InboundCallback] = []
         self.lifecycles: list[InboundLifecycle] = []
-        self.stops: list[InboundStop] = []
 
     async def on_message(self, message: InboundMessage) -> None:
         self.messages.append(message)
@@ -58,15 +56,11 @@ class RecordingCallbacks:
     async def on_lifecycle(self, event: InboundLifecycle) -> None:
         self.lifecycles.append(event)
 
-    async def on_stop(self, stop: InboundStop) -> None:
-        self.stops.append(stop)
-
     def as_callbacks(self) -> AdapterCallbacks:
         return AdapterCallbacks(
             on_message=self.on_message,
             on_callback=self.on_callback,
             on_lifecycle=self.on_lifecycle,
-            on_stop=self.on_stop,
         )
 
 

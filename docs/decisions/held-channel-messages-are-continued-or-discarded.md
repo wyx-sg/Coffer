@@ -90,8 +90,4 @@ reads "⏸ n on hold" (a parallel thread "n on hold").
 
 - Discarded messages never reach the agent; the queued receipt the chat already
   showed for them is not withdrawn.
-- A stop in a SeaTalk group's main chat, which stops every turn in the group,
-  still lists what it stopped without per-conversation buttons; `/status` there
-  is a direct-chat command, so held messages in group threads are resumed by
-  the next message, as before.
 - The queue stays in memory: held messages still go with a daemon restart.

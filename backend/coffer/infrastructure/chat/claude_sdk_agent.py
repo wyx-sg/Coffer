@@ -26,7 +26,7 @@ from claude_agent_sdk import (
     ClaudeSDKClient,
 )
 
-from coffer.domain.chat.attachment import Attachment
+from coffer.domain.chat.attachment import Attachment, attachments_block
 from coffer.domain.chat.events import (
     STREAM_ENDED,
     STREAM_ENDED_MESSAGE,
@@ -35,14 +35,8 @@ from coffer.domain.chat.events import (
     TurnError,
     TurnStarted,
 )
-from coffer.infrastructure.chat.adapter_support import ParseState, SessionSink
-from coffer.infrastructure.chat.claude_sdk_attachments import attachments_content
+from coffer.infrastructure.chat.adapter_support import ParseState, SessionSink, attachment_note
 from coffer.infrastructure.chat.claude_sdk_mapping import ClaudeParseState, map_sdk_message
-from coffer.infrastructure.chat.document_extract import (
-    DocumentExtractor,
-    extract_document_attachments,
-    prompt_with_document_text,
-)
 from coffer.infrastructure.chat.transcribe import (
     Transcriber,
     prompt_with_transcripts,
@@ -147,7 +141,6 @@ class ClaudeSdkAgentAdapter:
         env: dict[str, str] | None = None,
         system_context: str | None = None,
         transcriber: Transcriber | None = None,
-        document_extractor: DocumentExtractor | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -157,7 +150,6 @@ class ClaudeSdkAgentAdapter:
         self._env = env
         self._system_context = system_context
         self._transcriber = transcriber
-        self._document_extractor = document_extractor
         #: The model the turn ran on, as the CLI reported it; filled in while the
         #: turn streams.
         self.model_id: str | None = None
@@ -198,8 +190,8 @@ class ClaudeSdkAgentAdapter:
             permission_mode="bypassPermissions",
             model=self._extra.get("model"),
             # Without this the SDK only yields whole ``AssistantMessage``s, so the
-            # entire reply arrives as one delta at the end of the turn and a chat
-            # channel's live surface has nothing to grow. With it the reply's text
+            # entire reply arrives as one delta at the end of the turn and the chat
+            # page's streamed reply has nothing to grow. With it the reply's text
             # increments stream as they are written; ``claude_sdk_mapping`` folds
             # them and the final message into one non-duplicating sequence.
             # It reaches the CLI as ``--include-partial-messages``, which the CLI
@@ -232,19 +224,14 @@ class ClaudeSdkAgentAdapter:
         return opts
 
     @staticmethod
-    def _build_content(
-        prompt: str, attachments: Sequence[Attachment]
-    ) -> str | list[dict[str, Any]]:
-        """The turn's user content: the plain prompt when there are no
-        attachments (unchanged behaviour), else a block list of the text plus
-        each materialised attachment."""
+    def _build_content(prompt: str, attachments: Sequence[Attachment]) -> str:
+        """The turn's user message: the prompt, then the ``[Attachments]`` block
+        naming each file by its path (spec channels "Hand inbound attachments to
+        the turn as references")."""
         if not attachments:
             return prompt
-        blocks: list[dict[str, Any]] = []
-        if prompt:
-            blocks.append({"type": "text", "text": prompt})
-        blocks.extend(attachments_content(attachments))
-        return blocks
+        notes = attachments_block([attachment_note(a) for a in attachments])
+        return f"{prompt}\n\n{notes}" if prompt else notes
 
     async def _connect(
         self, prompt: str | list[dict[str, Any]], *, resume: str | None
@@ -267,17 +254,12 @@ class ClaudeSdkAgentAdapter:
         self, prompt: str, attachments: Sequence[Attachment] = ()
     ) -> AsyncIterator[AgentEvent]:
         # Claude cannot hear audio: transcribe any voice attachment to text and
-        # fold it into the prompt. A document is text-extracted and folded in
-        # too ("Extract document attachments to text"), not sent as a binary
-        # block; the rest are materialised as content blocks.
+        # fold it into the prompt. Every other file, an image or a document,
+        # reaches the agent as its path, which it opens with its own tools.
         attachments, transcripts = await transcribe_audio_attachments(
             attachments, self._transcriber
         )
-        attachments, extracts = await extract_document_attachments(
-            attachments, self._document_extractor
-        )
         prompt = prompt_with_transcripts(prompt.strip(), transcripts)
-        prompt = prompt_with_document_text(prompt, extracts)
         content = self._build_content(prompt, attachments)
         if not content:
             yield TurnError(code="empty_prompt", message="no user message to send")

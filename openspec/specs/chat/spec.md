@@ -316,21 +316,6 @@ it never wedges or fails the turn.
 - **THEN** the audio is transcribed and folded into the prompt; with either half
   unset nothing is uploaded and the agent receives the file instead.
 
-### Requirement: Extract document attachments to text
-A document attachment (PDF, office formats, epub, rtf) MUST be extracted to
-text and folded into the turn's prompt the same way, so a path-native agent
-sees its content instead of a note about a binary it cannot parse, and a vision
-agent does not waste it as an image. Images stay vision-inlined and audio stays
-transcribed; only documents take this path. The extractor is an optional
-dependency — absent, or on any extraction failure, the document degrades to
-being handed over as a file attachment.
-
-#### Scenario: a PDF reaches a path-native agent as extracted text
-- **GIVEN** a document attachment on a turn,
-- **WHEN** the turn is built,
-- **THEN** its text is extracted and folded into the prompt; with no extractor
-  available the document is handed over as a file instead.
-
 ### Requirement: Ask the owner in the reply, not in a dialog
 An agent that needs something from the owner before it can go on MUST ask in its
 own reply and end its turn; the owner's answer reaches it as the conversation's
@@ -886,9 +871,8 @@ holds the conversation, and the native session id kept on the index row is the
 only link to it. A fresh session — a conversation's first turn, or the one retry
 after a forgotten resume id ("Retry a forgotten resume id once as a fresh session") —
 starts without history. An attachment travels with the turn that carries it,
-from the channel's media directory to the adapter, and is materialised there in the
-adapter's own native shape (a vision agent inlines an image, a path-native agent
-receives the path); the path itself MUST NOT reach the wire. Because Coffer keeps
+from the channel's media directory to the adapter, which hands the agent its
+path; the path itself MUST NOT reach the wire. Because Coffer keeps
 no copy, a conversation whose session the agent has since cleaned up (Claude Code
 removes sessions after `cleanupPeriodDays`) resumes as a fresh session.
 

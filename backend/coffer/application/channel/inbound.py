@@ -60,7 +60,6 @@ from coffer.domain.channel.envelopes import (
     InboundCallback,
     InboundLifecycle,
     InboundMessage,
-    InboundStop,
 )
 from coffer.domain.channel.rich_content import format_origin
 from coffer.domain.chat.attachment import Attachment
@@ -320,21 +319,6 @@ class InboundProcessor:
         if binding is None:
             return
         await self._events.on_lifecycle(binding, event)
-
-    async def on_stop(self, event: InboundStop) -> None:
-        """The user pressed the platform's own stop control (see
-        "Stop the turn from the platform's own stop control")."""
-        binding = self._bindings.get(event.channel)
-        if binding is None:
-            return
-        conv_thread = await conversation_thread_of(self._threads, binding, event)
-        await self._burst.drop((event.channel, event.chat_id, event.thread_id))
-        await self._events.on_stop(
-            binding,
-            event,
-            session=self._session(event.channel, event.chat_id, conv_thread),
-            conversation_thread_id=conv_thread,
-        )
 
     # -- pairing -----------------------------------------------------------
 

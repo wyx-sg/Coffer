@@ -110,24 +110,12 @@ def test_default_agent_override_kept():
     assert cfg.default_agent_config == {"model": "opus"}
 
 
-def test_group_gating_flags_default_on_both_channel_types():
-    """require_mention defaults on (group @mention required), and
-    ignore_other_mentions defaults off (opt-in), on both channel types (spec
-    channels "Configure when the bot answers in a group")."""
-    tg = parse_channel_config(TELEGRAM_CONFIG)
-    assert tg.require_mention is True
-    assert tg.ignore_other_mentions is False
-    st = parse_channel_config(SEATALK_CONFIG)
-    assert st.require_mention is True
-    assert st.ignore_other_mentions is False
-
-
-def test_group_gating_flags_are_configurable():
-    cfg = parse_channel_config(
-        {**TELEGRAM_CONFIG, "require_mention": False, "ignore_other_mentions": True}
-    )
-    assert cfg.require_mention is False
-    assert cfg.ignore_other_mentions is True
+def test_require_mention_defaults_on_and_is_configurable():
+    """spec channels "Configure when the bot answers in a group"."""
+    assert parse_channel_config(TELEGRAM_CONFIG).require_mention is True
+    assert parse_channel_config(SEATALK_CONFIG).require_mention is True
+    off = parse_channel_config({**TELEGRAM_CONFIG, "require_mention": False})
+    assert off.require_mention is False
 
 
 @pytest.mark.acceptance(
@@ -148,12 +136,6 @@ def test_quiet_windows_default_and_are_configurable():
         parse_channel_config({**TELEGRAM_CONFIG, "wait_after_forward_seconds": 61})
 
 
-def test_steps_are_shown_unless_the_channel_hides_them():
-    """spec channels "Show a turn's working state as one status line"."""
-    assert parse_channel_config(SEATALK_CONFIG).show_steps is True
-    assert parse_channel_config({**TELEGRAM_CONFIG, "show_steps": False}).show_steps is False
-
-
 def test_a_stored_config_with_the_retired_ping_threshold_still_parses():
     """The long-turn ping was removed; a config written before keeps loading,
     and the key is gone from what is read back (and so from the next write)."""
@@ -163,6 +145,16 @@ def test_a_stored_config_with_the_retired_ping_threshold_still_parses():
         assert "notify_after_seconds" not in parsed.model_dump()
         dumped = ChannelConfigModel.model_validate(stored).model_dump(mode="json")
         assert "notify_after_seconds" not in dumped
+
+
+def test_a_stored_config_with_the_retired_switches_still_parses():
+    """The "ignore other mentions" and "show steps" switches were removed; a
+    config written before keeps loading without them."""
+    retired = ("ignore_other_mentions", "show_steps")
+    for config in (SEATALK_CONFIG, TELEGRAM_CONFIG):
+        stored = {**config, "ignore_other_mentions": True, "show_steps": False}
+        dumped = ChannelConfigModel.model_validate(stored).model_dump(mode="json")
+        assert not any(key in dumped for key in retired)
 
 
 @pytest.mark.acceptance(
@@ -245,11 +237,9 @@ def test_root_model_round_trips_flat_dict():
         "default_agent": None,
         "default_agent_config": None,
         "require_mention": True,
-        "ignore_other_mentions": False,
         "others_can_ask": True,
         "wait_after_text_seconds": 1.5,
         "wait_after_forward_seconds": 5.0,
-        "show_steps": True,
         "new_conversation_after_idle_hours": 24.0,
         "directories": [],
         "direct_reply_style": "",
@@ -267,11 +257,9 @@ def test_root_model_round_trips_seatalk_dict():
         "default_agent": None,
         "default_agent_config": None,
         "require_mention": True,
-        "ignore_other_mentions": False,
         "others_can_ask": True,
         "wait_after_text_seconds": 1.5,
         "wait_after_forward_seconds": 5.0,
-        "show_steps": True,
         "new_conversation_after_idle_hours": 24.0,
         "directories": [],
         "direct_reply_style": "",

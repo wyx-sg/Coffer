@@ -8,13 +8,11 @@ topic. The Bot API is an in-process fake; nothing leaves the machine.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import pytest
 
 from coffer.application.channel.ports import AdapterCallbacks
-from coffer.application.chat.turn_orchestrator import active_turns
 from coffer.domain.channel.commands import DM_ONLY_NOTICE
 from coffer.domain.secret_errors import SecretMissing
 from coffer.infrastructure.channel.telegram import TelegramAdapter
@@ -24,7 +22,6 @@ from tests.integration.infrastructure.channel.conftest import (
 )
 
 from .conftest import ChannelEnv, wait_until
-from .test_queue_and_stop import GatedAdapter
 
 _BOT_ID = 999
 _OWNER_ID = 4242
@@ -46,7 +43,6 @@ async def _telegram_channel(
             on_message=env.processor.on_message,
             on_callback=env.processor.on_callback,
             on_lifecycle=env.processor.on_lifecycle,
-            on_stop=env.processor.on_stop,
         )
     )
     return resource, adapter
@@ -70,67 +66,6 @@ def _sent_texts(fake: FakeTelegram) -> list[str]:
         for m, p in fake.calls
         if m in ("sendMessage", "sendRichMessage")
     ]
-
-
-@pytest.mark.acceptance(
-    spec="channels/telegram", scenario="pressing the draft's stop button interrupts the turn"
-)
-async def test_the_drafts_stop_button_interrupts_the_running_turn(env: ChannelEnv) -> None:
-    fake = FakeTelegram()
-    fake.supports_drafts = True
-    gated = GatedAdapter()
-    env.provider.adapter = gated
-    resource, adapter = await _telegram_channel(env, fake, owner_chat=str(_OWNER_ID))
-    try:
-        await fake.update_batches.put(
-            [
-                {
-                    "update_id": 1,
-                    "message": {
-                        "message_id": 10,
-                        "date": 1718000000,
-                        "chat": {"id": _OWNER_ID, "type": "private"},
-                        "from": {"id": _OWNER_ID, "first_name": "Yu"},
-                        "text": "long job",
-                    },
-                }
-            ]
-        )
-        await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
-        conversation_id = await env.active_conversation(resource, str(_OWNER_ID))
-        assert conversation_id is not None
-        assert conversation_id in active_turns()
-
-        # The platform reports the user pressed the stop button it drew on the
-        # streamed draft — no text was typed.
-        await fake.update_batches.put(
-            [
-                {
-                    "update_id": 2,
-                    "stopped_message_generation": {
-                        "chat": {"id": _OWNER_ID, "type": "private"},
-                        "draft_id": 1,
-                    },
-                }
-            ]
-        )
-        # The same outcome a typed /stop produces: the turn is cancelled and the
-        # chat hears the same acknowledgement.
-        await wait_until(lambda: conversation_id not in active_turns())
-        # Telegram can edit a message, so "Stopping…" becomes the result in place.
-        await wait_until(
-            lambda: any(
-                str(p.get("text", "")).startswith("⏹ Stopped")
-                for m, p in fake.calls
-                if m == "editMessageText"
-            )
-        )
-        assert any("Stopping" in t for t in _sent_texts(fake))
-        assert not any(t.startswith("⏹ Stopped") for t in _sent_texts(fake))
-        assert not any("echo:" in t for t in _sent_texts(fake))
-    finally:
-        gated.release.set()
-        await adapter.stop()
 
 
 @pytest.mark.acceptance(

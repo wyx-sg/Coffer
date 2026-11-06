@@ -16,11 +16,9 @@ ChannelConfig (discriminator: channel_type)
 │   ├── default_agent: str | None = None    # uid of the agent resource this channel drives
 │   ├── default_agent_config: dict | None
 │   ├── require_mention: bool = True        # group gating
-│   ├── ignore_other_mentions: bool = False # group gating
 │   ├── others_can_ask: bool = True         # others in a registered group may ask, read-only
 │   ├── wait_after_text_seconds: float = 1.5     # burst quiet window after text (0–60)
 │   ├── wait_after_forward_seconds: float = 5.0  # …after a forward or bare files (0–60)
-│   ├── show_steps: bool = True             # step lines under the live status line
 │   ├── new_conversation_after_idle_hours: float = 24.0  # idle hours before a direct chat's (or a thread-less group's) next message opens a new conversation; threads never roll over (0–8760; 0 = never)
 │   ├── directories: list[str] = []         # absolute paths `/dir` may switch into (≤32)
 │   ├── direct_reply_style: str = ""        # owner's reply style for direct chats + their threads ("" = Coffer's default; ≤6000, trimmed)
@@ -144,17 +142,6 @@ deleting the channel removes it too. What a chat's live conversation is — and
 the agent a thread has stuck to — is not in it: those are `runs.db`'s thread
 tables below.
 
-## Pictures — `derived/channel-avatars/<channel>/<person>`
-
-Each paired person's picture on the platform, as the adapter fetched it (spec
-channels "Show each paired person's platform picture"). One file per channel
-and person, both named by a SHA-256 prefix (of the channel uid and of the
-`sender_id`), holding the image bytes alone: the type is read back from the
-bytes and the age from the file's modification time. It is the `derived`
-class: a copy of what the platform holds, never synced, and deleting it only
-costs a fetch. Removing a person deletes their file and deleting the channel its
-directory (`FileAvatarStore`, `infrastructure/channel/avatar_store.py`).
-
 ## `runs.db` — the thread tables
 
 The tables below are history and machine-local: they name
@@ -214,11 +201,6 @@ the bound conversation's own `updated_at`.
 without an ordinal is a casual reply, which is what folds it into the direct
 chat's conversation. `chat_kind`, the three `preferred_*` settings and
 `parallel_closed_at` are nullable too.
-
-A group's `thread_id=""` row doubles as the **group's defaults** ("Set a
-group's defaults from its main chat"): a group thread with no setting of its own
-opens with the group row's, except that a model chosen for another
-agent is not inherited.
 
 ### `channel_thread_history`
 
@@ -343,14 +325,12 @@ InboundCallback:    a selection-card tap: the opaque `data` value, callback_id,
                     owner-gated and answered in its own group/thread
 InboundLifecycle:   the bot's own standing in a chat changed — removed, or the
                     group turned external
-InboundStop:        the platform's own stop control was pressed
 ChoiceButton:       label + opaque value; a list of them renders as a card
 EphemeralTarget:    who a privately-delivered reply is addressed to
 SentMessage:        what a send returned — the last message's id and the ids of
                     every message the send produced — so a later rewrite or
                     withdrawal can address them
-ChannelCapabilities: supports_live_text,
-                    supports_card_update, supports_buttons, supports_typing,
+ChannelCapabilities: supports_card_update, supports_buttons, supports_typing,
                     supports_reactions, supports_media,
                     supports_history_fetch, max_message_chars,
                     withdraw_window_hours, withdraw_removes (can a bot message be
@@ -363,9 +343,9 @@ ChannelCapabilities: supports_live_text,
 ```
 
 Adapters translate platform payloads to/from these; the application core
-never sees a Telegram update or SeaTalk event shape. The core asks `supports_live_text`
-("is there a surface I can keep updating?"), never whether a delivered text message can be
-rewritten (see "Show a turn's progress on one live surface").
+never sees a Telegram update or SeaTalk event shape. Nothing in the record describes
+showing a turn's progress: no transport does (see "Send only the answer, once the turn
+is done").
 
 ## Audit events (spec channels)
 

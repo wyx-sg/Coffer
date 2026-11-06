@@ -2,8 +2,7 @@
 // The rows of a channel's Settings that shape its turns, one export per section
 // the tab draws (the tab owns the section cards; these are rows only):
 // `ChannelReceivingFields` — when it answers in a group and how long it waits
-// for a burst of messages to end; `ChannelReplyFields` — how a running turn shows
-// itself (the step lines, where the platform has a live status line) and when a
+// for a burst of messages to end; `ChannelReplyFields` — when a
 // chat starts a fresh conversation; `ChannelDirectoryFields` — its working directories. Switches and
 // list edits save at once; typed values save when the field is finished (blur
 // or Enter), and only when valid (useSettingDraft).
@@ -16,7 +15,6 @@ import type { ChannelSettings } from "@/lib/api/channels";
 import { parseBurstWait, parseIdleHours } from "./channelTurnSettings";
 import {
   honoursRequireMention,
-  showsStepLines,
   storedDefaultDirectory,
   type ChannelEditValues,
 } from "@/lib/channels/editChannel";
@@ -24,7 +22,6 @@ import { EditChannelBurstFields } from "./EditChannelBurstFields";
 import { EditChannelDirectoriesField } from "./EditChannelDirectoriesField";
 import { EditChannelGroupFields, type ChannelGroupDraft } from "./EditChannelGroupFields";
 import { EditChannelIdleField } from "./EditChannelIdleField";
-import { EditChannelReplyFields } from "./EditChannelReplyFields";
 import { useSettingDraft } from "./useSettingDraft";
 
 type Save = (values: Partial<ChannelEditValues>) => void;
@@ -40,7 +37,6 @@ export function ChannelReceivingFields({
 
   const [group, setGroup] = useState<ChannelGroupDraft>(() => ({
     requireMention: settings.require_mention,
-    ignoreOtherMentions: settings.ignore_other_mentions,
     othersCanAsk: settings.others_can_ask,
   }));
   const afterText = useSettingDraft(String(settings.wait_after_text_seconds), parseBurstWait, (v) =>
@@ -62,7 +58,6 @@ export function ChannelReceivingFields({
           setGroup(next);
           save({
             require_mention: honoursRequireMention(channelType) ? next.requireMention : undefined,
-            ignore_other_mentions: next.ignoreOtherMentions,
             others_can_ask: next.othersCanAsk,
           });
         }}
@@ -91,7 +86,6 @@ export function ChannelReceivingFields({
 }
 
 export function ChannelReplyFields({ settings, save }: { settings: ChannelSettings; save: Save }) {
-  const [showSteps, setShowSteps] = useState(() => settings.show_steps);
   const idle = useSettingDraft(
     String(settings.new_conversation_after_idle_hours),
     parseIdleHours,
@@ -100,15 +94,6 @@ export function ChannelReplyFields({ settings, save }: { settings: ChannelSettin
 
   return (
     <>
-      {showsStepLines(settings.channel_type) && (
-        <EditChannelReplyFields
-          showSteps={showSteps}
-          onChange={(next) => {
-            setShowSteps(next);
-            save({ show_steps: next });
-          }}
-        />
-      )}
       <div {...idle.commitProps}>
         <EditChannelIdleField value={idle.text} onChange={idle.change} />
       </div>

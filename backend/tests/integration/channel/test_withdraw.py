@@ -306,8 +306,6 @@ async def test_a_direct_reply_a_transport_cannot_withdraw_is_not_recorded(
     # SeaTalk-shaped: it can rewrite a card for 168 hours but cannot delete, so a
     # plain text reply in a direct chat is beyond its reach.
     adapter = FakeChannelAdapter(
-        supports_edit=False,
-        supports_live_text=False,
         supports_buttons=True,
         withdraw_window_hours=168,
         withdraw_removes=False,

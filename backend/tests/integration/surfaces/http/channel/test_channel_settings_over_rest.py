@@ -144,22 +144,21 @@ async def test_a_registered_channel_appears_in_the_list(ctx: _Ctx) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="the group-gating switches are edited in the Settings tab"
+    spec="channels", scenario="the group-gating switch is edited in the Settings tab"
 )
-async def test_gating_switches_change_and_nothing_else_does(ctx: _Ctx) -> None:
+async def test_gating_switch_changes_and_nothing_else_does(ctx: _Ctx) -> None:
     uid = (await _register(ctx))["uid"]
     before = await _config(ctx, uid)
     assert before.get("require_mention", True) is True
-    assert before.get("ignore_other_mentions", False) is False
 
-    r = await _patch(ctx, uid, require_mention=False, ignore_other_mentions=True)
+    r = await _patch(ctx, uid, require_mention=False)
     assert r.status_code == 200, r.text
     after = await _config(ctx, uid)
-    assert after["require_mention"] is False and after["ignore_other_mentions"] is True
+    assert after["require_mention"] is False
     assert after["bot_token_ref"] == _TG["bot_token_ref"]
-    assert {
-        k: v for k, v in after.items() if k not in ("require_mention", "ignore_other_mentions")
-    } == {k: v for k, v in before.items() if k not in ("require_mention", "ignore_other_mentions")}
+    assert {k: v for k, v in after.items() if k != "require_mention"} == {
+        k: v for k, v in before.items() if k != "require_mention"
+    }
 
 
 @pytest.mark.acceptance(
@@ -251,18 +250,6 @@ async def test_the_quiet_windows_are_edited_and_bounded(ctx: _Ctx) -> None:
     refused = await _patch(ctx, uid, wait_after_text_seconds=61)
     assert refused.status_code == 422, refused.text
     assert (await _config(ctx, uid))["wait_after_text_seconds"] == 0
-
-
-@pytest.mark.acceptance(
-    spec="channels", scenario="the step lines are hidden in the channel's settings"
-)
-async def test_step_lines_are_switched_off_then_on(ctx: _Ctx) -> None:
-    uid = (await _register(ctx))["uid"]
-    assert (await _config(ctx, uid)).get("show_steps", True) is True
-    assert (await _patch(ctx, uid, show_steps=False)).status_code == 200
-    assert (await _config(ctx, uid))["show_steps"] is False
-    assert (await _patch(ctx, uid, show_steps=True)).status_code == 200
-    assert (await _config(ctx, uid))["show_steps"] is True
 
 
 @pytest.mark.acceptance(

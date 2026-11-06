@@ -214,7 +214,7 @@ async def test_owner_mention_in_a_thread_folds_fetched_history_into_the_turn(
     assert user_text.endswith("@bot summarize this thread\n[End of user message]")
 
 
-@pytest.mark.acceptance(spec="channels", scenario="thread-history images reach a vision agent")
+@pytest.mark.acceptance(spec="channels", scenario="thread-history images reach the agent")
 async def test_thread_image_reaches_the_turn_as_an_attachment(
     env: ChannelEnv, tmp_path: Any
 ) -> None:
@@ -389,8 +389,6 @@ async def test_the_group_reply_mentions_the_sender_the_transport_named(env: Chan
     adapter = env.bind(
         resource,
         FakeChannelAdapter(
-            supports_edit=False,
-            supports_live_text=False,
             mention_template='<mention-tag target="seatalk://user?id={user_id}"/>',
         ),
     )

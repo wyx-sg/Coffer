@@ -36,7 +36,6 @@ from coffer.infrastructure.chat.codex_app_server import (
 )
 from coffer.infrastructure.chat.codex_thread_release import CodexThreadRelease, codex_home
 from coffer.infrastructure.chat.default_workspace import default_workspace_dir
-from coffer.infrastructure.chat.document_extract import default_document_extractor
 from coffer.infrastructure.chat.transcribe import Transcriber
 from coffer.infrastructure.platform.user_path import user_path_env, which_on_user_path
 
@@ -170,10 +169,6 @@ class CodexAppServerProvider:
             # is none (spec channels "Transcribe inbound voice only when the
             # user opted in").
             transcriber=await self._transcriber(),
-            # Codex is path-native and cannot parse a binary PDF; a document is
-            # text-extracted so it reaches the agent as text (spec chat "Extract
-            # document attachments to text").
-            document_extractor=default_document_extractor(),
             # A thread a terminal or Codex's background app-server still holds
             # is taken over (spec chat "Take over a session open elsewhere").
             release_thread=CodexThreadRelease(codex_home(env)),

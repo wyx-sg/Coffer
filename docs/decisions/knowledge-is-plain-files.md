@@ -267,8 +267,7 @@ Rules a future change must respect:
   read as "we decided against semantic search"; the constraint on its return is
   that it is a disposable sidecar over files that remain the truth.
 - **Enforcement.** `backend/pyproject.toml` import-linter contracts (the
-  dropped-engines ban; `markitdown` confined to the knowledge converters and the
-  channel's document extraction); path construction and the traversal guard in
+  dropped-engines ban; `markitdown` confined to the knowledge converter); path construction and the traversal guard in
   `backend/coffer/infrastructure/knowledge/paths.py`;
   spec knowledge "Store each collection as one tree of Markdown files",
   spec knowledge "Expose no knowledge tool",

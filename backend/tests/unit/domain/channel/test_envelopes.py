@@ -38,15 +38,18 @@ def test_inbound_message_value_equality():
     assert _inbound(text="other") != _inbound()
 
 
+def test_sent_message_is_frozen_handle():
+    sent = SentMessage(message_id="m9")
+    assert sent == SentMessage(message_id="m9")
+    with pytest.raises(FrozenInstanceError):
+        sent.message_id = "m10"  # type: ignore[misc]
+
+
 def test_channel_capabilities_carries_strategy_fields():
     caps = ChannelCapabilities(supports_typing=True, max_message_chars=4096)
     assert caps.supports_typing is True
     assert caps.max_message_chars == 4096
     assert caps.supports_buttons is False  # default off; transports opt in
-    # supports_live_text is the question the core asks (is there a surface I can
-    # keep updating?) — Telegram has one, SeaTalk none (spec channels
-    # "Show a turn's progress on one live surface").
-    assert caps.supports_live_text is False  # default off; transports opt in
     assert caps.supports_media is False  # default off; media-capable transports opt in
     assert caps.media_captions is False  # a file message carries no caption unless opted in
     assert caps.supports_reactions is False  # default off; reaction-capable transports opt in
@@ -65,7 +68,6 @@ def test_channel_capabilities_carries_strategy_fields():
         "supports_buttons",
         "supports_card_update",
         "edits_text",
-        "supports_live_text",
         "supports_media",
         "media_captions",
         "supports_history_fetch",
@@ -75,16 +77,7 @@ def test_channel_capabilities_carries_strategy_fields():
         "mention_email_template",
         "direct_threads_are_replies",
         "render_notes",
-        "renders_tables",
-        "max_inline_code_lines",
         "collapses_details",
         "withdraw_window_hours",
         "withdraw_removes",
     }
-
-
-def test_sent_message_is_frozen_handle():
-    sent = SentMessage(message_id="m9")
-    assert sent == SentMessage(message_id="m9")
-    with pytest.raises(FrozenInstanceError):
-        sent.message_id = "m10"  # type: ignore[misc]

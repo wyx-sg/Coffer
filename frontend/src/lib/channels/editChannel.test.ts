@@ -21,7 +21,6 @@ import {
   honoursRequireMention,
   normaliseDirectory,
   planChannelEdit,
-  showsStepLines,
   storedDefaultDirectory,
   storedDefaultModel,
 } from "@/lib/channels/editChannel";
@@ -139,28 +138,26 @@ describe("planChannelEdit", () => {
   describe("group gating", () => {
     const tgConfig = { channel_type: "telegram", bot_token_ref: "channel/tg/bot-token" };
 
-    test("telegram: flipping both switches writes both keys", () => {
+    test("telegram: flipping the switch writes its key", () => {
       const plan = planChannelEdit({
         ...TG,
         config: tgConfig,
-        values: { default_agent: AGENT_A, require_mention: false, ignore_other_mentions: true },
+        values: { default_agent: AGENT_A, require_mention: false },
       });
 
       expect(plan.config.require_mention).toBe(false);
-      expect(plan.config.ignore_other_mentions).toBe(true);
     });
 
     test("a switch left at the stored value writes nothing new", () => {
       const plan = planChannelEdit({
         ...TG,
-        config: { ...tgConfig, require_mention: true, ignore_other_mentions: true },
-        values: { default_agent: AGENT_A, require_mention: true, ignore_other_mentions: true },
+        config: { ...tgConfig, require_mention: true },
+        values: { default_agent: AGENT_A, require_mention: true },
       });
 
       expect(plan.config).toEqual({
         ...tgConfig,
         require_mention: true,
-        ignore_other_mentions: true,
         default_agent: AGENT_A,
       });
     });
@@ -171,11 +168,10 @@ describe("planChannelEdit", () => {
       const plan = planChannelEdit({
         ...ST,
         config: { channel_type: "seatalk", app_id: "a", app_secret_ref: "channel/st/app-secret" },
-        values: { default_agent: AGENT_A, require_mention: false, ignore_other_mentions: true },
+        values: { default_agent: AGENT_A, require_mention: false },
       });
 
       expect("require_mention" in plan.config).toBe(false);
-      expect(plan.config.ignore_other_mentions).toBe(true);
     });
   });
 
@@ -236,41 +232,6 @@ describe("planChannelEdit", () => {
       expect(parseBurstWait("-1")).toBeNull();
       expect(parseBurstWait("60.5")).toBeNull();
       expect(parseBurstWait("abc")).toBeNull();
-    });
-  });
-
-  describe("replies", () => {
-    // The step-lines setting (show_steps): list each step under the live status
-    // line, on a platform that has one.
-    const config = {
-      channel_type: "telegram",
-      bot_token_ref: "channel/tg/bot-token",
-      show_steps: true,
-    };
-
-    test("a value equal to the stored one is not rewritten", () => {
-      const plan = planChannelEdit({
-        ...TG,
-        config,
-        values: { default_agent: AGENT_A, show_steps: true },
-      });
-
-      expect(plan.config).toEqual({ ...config, default_agent: AGENT_A });
-    });
-
-    test("a changed value writes its key", () => {
-      const plan = planChannelEdit({
-        ...TG,
-        config,
-        values: { default_agent: AGENT_A, show_steps: false },
-      });
-
-      expect(plan.config.show_steps).toBe(false);
-    });
-
-    test("only a platform with a live status line shows step lines", () => {
-      expect(showsStepLines("telegram")).toBe(true);
-      expect(showsStepLines("seatalk")).toBe(false);
     });
   });
 

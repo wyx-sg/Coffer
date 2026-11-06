@@ -217,10 +217,11 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`channel-thread-context-is-a-bounded-slice`](channel-thread-context-is-a-bounded-slice.md) | A Channel Turn Folds a Bounded Slice of Its Thread, Read by the Transport |
 | [`a-burst-of-channel-messages-is-one-turn`](a-burst-of-channel-messages-is-one-turn.md) | A Burst of Channel Messages Is One Turn, Released After a Per-Channel Quiet Window |
 | [`channel-switches-structural-vs-parametric`](channel-switches-structural-vs-parametric.md) | Channel Switches: the Agent Opens a New Conversation, the Model Applies Next Turn |
-| [`channel-live-surface-strategy`](channel-live-surface-strategy.md) | A Channel Turn Shows Progress on a Preview Surface Where One Exists, and the Reply Is the Answer Alone |
-| [`channel-attachments`](channel-attachments.md) | Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send |
+| [`channel-live-surface-strategy`](channel-live-surface-strategy.md) | A Channel Turn Posts Nothing Until It Is Done, and the Reply Is the Answer Alone |
+| [`channel-attachments`](channel-attachments.md) | Channel Attachments Are Saved Files, Handed to Every Agent by Path |
 | [`channel-prompt-fixed-note-and-editable-style`](channel-prompt-fixed-note-and-editable-style.md) | A Channel's System Prompt Is a Fixed Channel Note Plus a Reply Style the Owner Can Rewrite |
 | [`long-channel-reply-is-rewritten-short`](long-channel-reply-is-rewritten-short.md) | A Long Channel Reply Is Rewritten Short by the Agent |
+| [`a-channel-reply-goes-out-as-the-agent-wrote-it`](a-channel-reply-goes-out-as-the-agent-wrote-it.md) | A Channel Reply Goes Out as the Agent Wrote It; Coffer Does Not Reshape Tables or Code |
 | [`channel-help-is-a-list-and-cards-carry-only-their-own-actions`](channel-help-is-a-list-and-cards-carry-only-their-own-actions.md) | Channel `/help` Is a List to Read, and a Card Carries Only the Buttons That Act on It |
 | [`held-channel-messages-are-continued-or-discarded`](held-channel-messages-are-continued-or-discarded.md) | Held Channel Messages Are Settled by Continue and Discard |
 | [`ask-in-the-reply-not-in-a-card`](ask-in-the-reply-not-in-a-card.md) | An Agent Asks the Owner in Its Reply, Not in a Question Card |

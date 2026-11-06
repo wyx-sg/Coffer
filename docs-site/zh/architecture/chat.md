@@ -226,8 +226,7 @@ Codex 适配器通过 `codex app-server` 驱动 Codex：stdio 上的 JSON-RPC 2.
 每个适配器随后按各自的形态物化附件，顺序如下：
 
 1. **音频**在指定了语音转文字连接时会被转写并折叠进提示词（见[内部引擎](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md)）。这默认是关的。这是用户内容唯一可能为转写离开机器的地方。没有连接，或者任何失败时，音频会作为普通文件交出。
-2. **文档**（PDF、Word、PowerPoint、Excel 等）由文档提取器转换成文字，它会延迟导入可选的 `markitdown` 库。库缺失或提取失败时，文档退化为文件附件。
-3. **其余一切：**只有通过内联检查时，Claude Code 才会内联收到图片（base64 图片块）：它的字节嗅探为 PNG、JPEG、GIF 或 WEBP，且 base64 编码后不超过 5 MB（Messages API 的单图上限）。块的媒体类型是嗅探到的类型，而不是存下的类型，所以被错标的消息渠道照片不会因为「图片与媒体类型不符」而被拒绝。任何其他文件，包括没通过任一检查的图片，都会变成一条写明保存路径的文字说明。Codex 通过 app-server 协议原生支持路径，所以总是收到路径说明，也就没有需要遵守的内联上限。
+2. **其余一切**（包括图片和文档）都会成为 `[Attachments]` 块里写明保存路径的一行，Claude Code 和 Codex 都一样。智能体用自己的工具打开文件；Coffer 不内联、不转换，因为能读磁盘文件的智能体不需要 Coffer 再做一个读取器。
 
 ## 消息渠道作为第二个界面 {#channels-as-a-second-surface}
 
@@ -235,18 +234,16 @@ Codex 适配器通过 `codex app-server` 驱动 Codex：stdio 上的 JSON-RPC 2.
 
 ### 共享核心之上的薄适配器 {#thin-adapters-over-a-shared-core}
 
-一个传输层只需实现消息渠道适配器契约：启动和停止；出站方面，发送文字、打开一个实时文字界面、编辑文字和更新卡片；入站方面，把平台事件规范化为四种信封（消息、按钮回调、生命周期事件和停止）；以及一份能力记录。配对、所有者关卡、命令、排队、对话映射和渲染策略都在共享核心里。核心根据能力选择行为，从不根据适配器的类型：
+一个传输层只需实现消息渠道适配器契约：启动和停止；出站方面，发送文字、更新卡片、表情回应和显示正在输入；入站方面，把平台事件规范化为三种信封（消息、按钮回调和生命周期事件）；以及一份能力记录。配对、所有者关卡、命令、排队、对话映射和渲染策略都在共享核心里。核心根据能力选择行为，从不根据适配器的类型：
 
 | 能力 | 核心问的问题 |
 | --- | --- |
-| 实时文字 | 有没有一个我能在轮次运行时持续更新的界面？ |
-| 编辑 | 传输层能否改写一条已经投递的消息？ |
 | 按钮 | 能否渲染可交互的选择卡片？ |
 | 卡片更新 | 能否改写一张已经投递的卡片？ |
 | 正在输入 | 能否显示正在输入指示？ |
 | 消息长度 | 一条出站消息最长可以多长？ |
 
-只有 Telegram 对实时文字回答「是」：它在消息草稿里，或在一条会被编辑、最后被删除的状态消息里显示进度。SeaTalk 回答「否」。它不能编辑或删除文字消息，而它的流式 API 会让进度本身成为回复，所以私聊里只显示输入中心跳，答案以一条新消息送达，像其他消息一样发出通知。一个共享的实时文字界面持有预览遵守的规则：调用平台的频率绝不超过传输层的缓冲间隔，记住上一个快照，并在一个界面第一次失败后就不再使用它。
+没有哪个传输层显示轮次的进度。轮次运行时，聊天里只有一个表情回应（传输层支持表情回应时）和正在输入提示，凡是能显示正在输入的传输层都由 3 秒一次的心跳维持它；答案以一条新消息送达，像其他消息一样发出通知（ADR [channel-live-surface-strategy](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-live-surface-strategy.md)）。想看轮次运行过程，所有者在 Web 界面里打开它的对话。
 
 ### 传输层 {#transports}
 
@@ -299,11 +296,10 @@ flowchart TD
 
 - **一份名册。** 命令放在一份名册里，每个条目带有它的英文和中文描述、以及是否出现在群菜单里、在群里是否可用。帮助文字、每个已注册的平台菜单、笔误防护和群规则都从它渲染，所以添加一个命令只需一个条目加它的处理函数，没有哪个列表会落后。笔误防护会对与某个命令相差一两处编辑的词回答「Did you mean …?」，而不是执行它或交给智能体，因为一个打错的 `/stop` 以消息形式到达智能体，会是最糟糕的结果。
 - **一套语法。** 不带参数的命令显示当前生效的值（传输层有按钮时显示为卡片），带参数就设置它，`default` 重置它。参数都是人能读懂的名字——智能体的显示名、模型的显示名、目录的基本名——从不是内部 key，也没有任何回答会打印 id。
-- **设置属于会话串，而不是对话。** 把 `(channel, chat, thread)` 映射到其活跃对话的那一行按会话串记录，也保存着该会话串选择的智能体、模型和工作目录。一个新对话——`/new`、`/dir`、被删除的对话被替换——会带着这些设置打开，所以清空上下文永远不会丢掉所有者的选择。在群里，群自己的那一行（thread id 为 `""`）保存群的默认值，群会话串没有设置的项就继承它，再回退到消息渠道的默认智能体和配置。
+- **设置属于会话串，而不是对话。** 把 `(channel, chat, thread)` 映射到其活跃对话的那一行按会话串记录，也保存着该会话串选择的智能体、模型和工作目录。一个新对话——`/new`、`/dir`、被删除的对话被替换——会带着这些设置打开，所以清空上下文永远不会丢掉所有者的选择。会话串没有设置的项回退到消息渠道的默认智能体和配置；群里的各个会话串互不继承。
 - **结构性与参数性。** 智能体会话绑定到它的智能体和目录，所以 `/new <agent>` 和 `/dir` 会开启新对话；模型每个轮次都重新读取，所以 `/model` 作用于同一对话的下一个轮次。为某个智能体选的模型在换智能体时会被清除，因为它指的东西另一个智能体根本不跑。
 - **`/dir` 的白名单。** 消息渠道的配置列出 `/dir` 能到达的目录（每个都允许其下的子目录），旁边是新对话开始时所在的默认目录（默认智能体配置的 `cwd`）；一个都没列时，`/dir` 关闭。智能体以完全权限运行，所以手机能把它指向哪些文件夹，是事先在电脑上决定的，从不在聊天里放宽。
 - **按会话串的历史。** 会话串开启的每个对话都记录在该会话串名下。`/resume` 只读这份历史，所以一个会话可以回到它自己之前的对话，但永远到达不了来自 Web 或另一个会话的对话，即使伪造了按钮值也不行。
-- **SeaTalk 上的群主聊天。** 在 SeaTalk 群的主聊天里 @ 机器人会开启一个新会话串，所以在那里发送的设置会配置一个没人会继续的会话串。传输层会把这类消息标记为群主聊天，在那里发出的命令改为写入群的默认值；在那里发 `/stop` 会打断群里的每个轮次。
 - **卡片只带用得上的操作。** `/status` 是带 Model 和 Dir 按钮的卡片，轮次运行时还有 Stop，停止后有排队消息被暂停时还有 Continue 和 Discard；`/help` 是不带按钮的文字。命令按钮带着命令的名字，点一下执行的和手动输入完全一样，并经过和消息相同的所有者关卡。Continue 和 Discard 带着被停止对话的 id，作用于它暂停的队列（`TurnOrchestrator.resume_held` / `drop_held`），只对这个聊天线程自己的对话生效。
 
 ### 聊天之后对话去哪里 {#where-a-conversation-goes-after-the-chat}
@@ -314,9 +310,9 @@ flowchart TD
 
 当消息渠道的消息到达队首时，编排器调用它的开始 Hook，并为那个轮次提供一个专用的事件队列。消息渠道的轮次渲染器消费它，工作沿四个接缝拆分：
 
-- **状态模型**（纯函数）。它统计这个轮次——已用时间、步骤和失败、最新的讲述——并绘制状态块：`⏳ Working · 2m 14s · 7 steps`，一行 `💬` 讲述，以及最新的三行步骤。在私聊里，每行步骤根据调用的输入描述这次调用（`✅ Read · wedding.json`）；在群组里只写工具名，因为输入里可能带着命令或查询。回复文字被保存为被工具调用分隔开的若干段：打开的那段是回答的尾部，已关闭的是讲述。在一段之内，智能体说明一条消息在哪里结束时（`MessageEnd`），每条消息分开保存；它标成过程话的消息（Codex 的 `commentary` 阶段）会移到 `💬` 那一行，永远不进回答。在每个传输层上，最终回复都是最后一次工具调用之后的回答文字；轮次以工具调用结束时，则是最后一段有回答文字的。为此，适配器会把智能体运行的每个工具都报告为工具调用：除了 Codex 的命令和文件修改，还有它的 MCP、动态工具、子智能体、网页搜索和图片条目。
-- **实时界面。** 有实时文字时，一个预览界面显示轮次的进度，它从不是回复。每个快照是状态块、一条 `─` 分隔线，然后是回答尾部；分隔线是与传输层的唯一约定，传输层裁剪的是回答而从不是状态块，并且可以把两者分开渲染（Telegram 的富草稿把头部放在 `<tg-thinking>` 里）。渲染器每 10 秒重绘一次，这是这些界面自己的保活节奏，所以在一个沉默的工具运行期间时钟也在走。每个界面只有一个写入者：轮次循环、计时器和保活都只是提交快照，每次平台写入都在同一把锁下进行，并发送提交过的最新快照。所以慢的写入不会被后来者抢先，保活也不会重发更旧的快照。在缓冲间隔内提交的快照不会被丢弃，而是在间隔结束时写出。平台每次更新都会替换整条消息，所以改动了已显示文字的快照会让整条消息重画：只有在已显示内容后面追加的快照按快速的缓冲间隔写出，其余的要等 2 秒的重绘间隔，期间提交的步骤合并成一次写入。头部的计时只随重绘前进（一个步骤、一次计时刷新），所以在它下面流式输出的回答始终只是追加。保活只在一整个间隔内没有别的写入时才重发。界面不带 @；轮次结束时作为新消息发出的回复在群组里带着它。没有实时文字时，输入中心跳就是唯一的进度。
-- **收尾。** `MEDIA:` 哨兵会被上传；会话显示不了的内容会根据能力改写：在会话不渲染表格的地方，表格改成列表加一个 CSV，超过传输层内联上限的代码改成文件。在传输层会折叠详情的地方，`## Details` 一节会被折叠，否则完整发送；给智能体的提示只在会折叠的地方要求这一节。回复以新消息发出，所以发出通知的就是它的到达。
+- **回答**（纯函数）。回复文字被保存为被工具调用分隔开的若干段：打开的那段是回答，已关闭的是讲述。在一段之内，智能体说明一条消息在哪里结束时（`MessageEnd`），每条消息分开保存；它标成过程话的消息（Codex 的 `commentary` 阶段）永远不进回答。在每个传输层上，最终回复都是最后一次工具调用之后的回答文字；轮次以工具调用结束时，则是最后一段有回答文字的。为此，适配器会把智能体运行的每个工具都报告为工具调用：除了 Codex 的命令和文件修改，还有它的 MCP、动态工具、子智能体、网页搜索和图片条目。
+- **运行时什么都不发。** 轮次结束前不发出、不编辑、不删除任何消息；输入中心跳是唯一的进度信号。
+- **收尾。** `MEDIA:` 哨兵会被上传；回复的其余部分按智能体写的原样发出（渠道说明已经告诉它这里能渲染什么）。在传输层会折叠详情的地方，`## Details` 一节会被折叠，否则完整发送；给智能体的提示只在会折叠的地方要求这一节。回复以新消息发出，所以发出通知的就是它的到达。
 - **短版。** 收尾之前，正常结束但超过 20 行或 1,500 字的回复会被扣下，驱动层在同一个对话里排一个以 `[Coffer]` 开头的追加轮次，请智能体用最多 5 行重说一遍，要不要完整报告交给按钮（ADR [long-channel-reply-is-rewritten-short](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/long-channel-reply-is-rewritten-short.md)）。它的回复带一个 **📄 Full report** 按钮，而且自己不会再被扣下。点这个按钮会变成所有者自己发的一条消息，请求以 Markdown 文件发送完整报告，所以和手打的文字经过同样的检查；Coffer 不保存回复文字，完整答案还在智能体自己的会话里。如果这个轮次后面已经有消息在排队，长回复照原样发出。
 - **传输层。** 适配器把 Markdown 转换成平台的格式，按消息长度上限分块且不切断代码围栏，为续篇编号 `(2/3)`，被拒绝的格式化消息改以纯文本重试，遇到限流就退避。其余部分它们声明为能力：表情回应集合（received、working、done、failed、stopped）、@ 模板（可以带 `{name}`），以及给智能体的渲染说明。
 
@@ -387,11 +383,11 @@ Coffer 通过智能体本身读取和修改智能体自己的会话，从不解�
 | `backend/coffer/application/fs/` | 在终端里打开智能体会话、终端适配器 |
 | `backend/coffer/surfaces/http/` | 对话、打断、智能体提供方、智能体会话和 `/fs/terminal` 路由，以及把它们接起来的组合 |
 | `backend/coffer/application/channel/` | 入站流水线、配对、命令、轮次驱动器、渲染器、运行时调和器 |
-| `backend/coffer/infrastructure/channel/` | Telegram 和 SeaTalk 传输层、实时文字界面、Markdown 渲染、媒体 |
+| `backend/coffer/infrastructure/channel/` | Telegram 和 SeaTalk 传输层、Markdown 渲染、媒体 |
 | `frontend/` | 「对话」和「会话」列表，以及交给终端 |
 
 ## 相关页面 {#related}
 
 - 规格：[chat](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/chat/spec.md)、[channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md)、[channels/telegram](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/telegram/spec.md)、[channels/seatalk](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/seatalk/spec.md)
-- 决策记录：[Chat Is a Single-Owner Live Mirror](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/chat-single-owner-live-mirror.md)、[Channel Adapter Framework](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md)、[Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md)、[SeaTalk Inbound Over WebSocket](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/seatalk-websocket-inbound.md)、[Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/managed-agents-run-with-full-permissions.md)
+- 决策记录：[Chat Is a Single-Owner Live Mirror](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/chat-single-owner-live-mirror.md)、[Channel Adapter Framework](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md)、[Channel Attachments Are Saved Files, Handed to Every Agent by Path](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md)、[SeaTalk Inbound Over WebSocket](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/seatalk-websocket-inbound.md)、[Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/managed-agents-run-with-full-permissions.md)
 - 页面：[守护进程与进程](/zh/architecture/daemon)、[持久化](/zh/architecture/persistence)、[记忆](/zh/architecture/memory)、[安全模型](/zh/architecture/security)、[对话指南](/zh/guides/chat)、[消息渠道指南](/zh/guides/channels)

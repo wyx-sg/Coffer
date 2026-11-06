@@ -31,20 +31,6 @@ async def test_outbound_calls_are_recorded_with_their_routing(
     assert adapter.stopped and not adapter.started
 
 
-async def test_live_text_edits_in_place_then_hands_back_the_final_text() -> None:
-    adapter = FakeChannelAdapter(supports_edit=True)
-    live = await adapter.open_live_text("c1")
-    assert live is not None
-    await live.update("Hel")
-    await live.update("Hello")
-    final = await live.close("Hello world")
-    assert final == "Hello world"
-    assert adapter.sent == [("c1", "Hel")]
-    assert adapter.edits == [("c1", "m1", "Hello")]
-    assert adapter.deleted == [("c1", "m1")]
-    assert await FakeChannelAdapter(supports_edit=False).open_live_text("c1") is None
-
-
 async def test_tap_delivers_a_callback_to_the_core() -> None:
     taps: list[InboundCallback] = []
 

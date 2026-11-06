@@ -47,10 +47,8 @@ dependencies = [
     "websockets>=14",
     "tomlkit>=0.13",
     "pyyaml>=6.0",
-    # Document → text, for exactly two callers, which is what Contract 7
-    # ("engine confinement") fences it to: inbound channel attachments (spec
-    # channels "Give documents to every agent as extracted text",
-    # ``infrastructure/chat``) and knowledge ingest
+    # Document → text, for exactly one caller, which is what Contract 7
+    # ("engine confinement") fences it to: knowledge ingest
     # (``infrastructure/knowledge/converters``, which turns an uploaded file
     # into a markdown knowledge file). What the knowledge layer no longer has
     # is an INDEX — nothing here embeds or retrieves (ADR
@@ -1146,21 +1144,18 @@ ignore_imports = [
     "coffer.infrastructure.persistence.migrations.env -> coffer.infrastructure.mcp.persistence",
 ]
 
-# Contract 7: converter confinement. ``markitdown`` has exactly two consumers —
-# ``infrastructure.chat.document_extract``, which turns an inbound channel
-# attachment into text (spec channels "Give documents to every agent as
-# extracted text"), and
+# Contract 7: converter confinement. ``markitdown`` has exactly one consumer —
 # ``infrastructure.knowledge.converters.markitdown_converter``, which turns an
 # uploaded document into a Markdown source (spec knowledge "Keep every upload as a
 # Markdown source"). The source is the whole ``coffer`` package,
 # so a package added later is covered without anyone remembering to list it;
-# the two consumers' own edges are the only ones ignored, which also removes
+# the consumer's own edge is the only one ignored, which also removes
 # every indirect chain through them. The vector-index and embedding SDKs it
 # also used to fence are gone from the dependency set entirely and are banned
 # by Contract 8 instead, so a reintroduction has to be a deliberate act. Coffer
 # no longer embeds anything at any layer.
 [[tool.importlinter.contracts]]
-name = "Engine confinement: markitdown is imported by the channel attachment extractor and the knowledge converter only"
+name = "Engine confinement: markitdown is imported by the knowledge converter only"
 type = "forbidden"
 source_modules = ["coffer"]
 forbidden_modules = [
@@ -1168,7 +1163,6 @@ forbidden_modules = [
     "docling",
 ]
 ignore_imports = [
-    "coffer.infrastructure.chat.document_extract -> markitdown",
     "coffer.infrastructure.knowledge.converters.markitdown_converter -> markitdown",
 ]
 

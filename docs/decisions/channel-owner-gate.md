@@ -53,17 +53,15 @@ whose sender id differs from the stored one is ignored silently too.
 
 1. `require_mention` (default on): an un-addressed message — no @mention, no
    reply to the bot — is dropped.
-2. `ignore_other_mentions` (opt-in): a message that @mentions another human is
-   dropped, so the bot never butts into traffic aimed at a person.
-3. The channel must have an owner sender id at all; a group @mention cannot
+2. The channel must have an owner sender id at all; a group @mention cannot
    bootstrap pairing.
-4. The message's sender id must equal the owner's. An **empty** sender id is
+3. The message's sender id must equal the owner's. An **empty** sender id is
    refused like a wrong one — a group is shared, so "the transport could not
    tell me who" must never mean "assume the owner". A refused addressed message
    gets a short "Not authorized" reply rather than silence, because the sender
    deliberately addressed the bot in front of others and silence reads as a
    broken bot.
-5. The owner's first addressed message in a group creates that group's own
+4. The owner's first addressed message in a group creates that group's own
    peer row, inheriting the owner's sender id, so the group has its own
    conversations separate from the owner's DM.
 
@@ -168,8 +166,8 @@ A channel has exactly one owner, bound by claiming a single-use pairing code
 from the owner's own account; the claim records the owner's platform sender id.
 Every inbound message and card tap is gated on that sender id. In a direct
 chat, anything not from the owner is ignored silently. In a group, the bot acts
-only on an addressed message (`require_mention`, default on; optionally
-`ignore_other_mentions`) whose sender id is proven to be the owner's; an
+only on an addressed message (`require_mention`, default on; a message that
+also @mentions a person is still answered) whose sender id is proven to be the owner's; an
 unproven or foreign sender is refused with a "Not authorized" reply. A
 channel's scope is the set of agents it may drive: it narrows `/new <agent>`, bounds
 the sticky agent, must contain the default agent, and a channel whose scope

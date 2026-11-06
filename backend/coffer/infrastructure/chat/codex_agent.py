@@ -29,7 +29,7 @@ from coffer.domain.chat.events import (
     TurnProgress,
     TurnStarted,
 )
-from coffer.infrastructure.chat.adapter_support import SessionSink
+from coffer.infrastructure.chat.adapter_support import SessionSink, attachment_note
 from coffer.infrastructure.chat.codex_app_server import (
     AppServerSessionFactory,
     CodexAppServerSession,
@@ -40,12 +40,7 @@ from coffer.infrastructure.chat.codex_mapping import (
     is_own_notification,
     map_codex_notification,
 )
-from coffer.infrastructure.chat.codex_stream import attachment_note, notifications_until_eof
-from coffer.infrastructure.chat.document_extract import (
-    DocumentExtractor,
-    extract_document_attachments,
-    prompt_with_document_text,
-)
+from coffer.infrastructure.chat.codex_stream import notifications_until_eof
 from coffer.infrastructure.chat.transcribe import (
     Transcriber,
     prompt_with_transcripts,
@@ -107,7 +102,6 @@ class CodexAppServerAdapter:
         env: dict[str, str] | None = None,
         system_context: str | None = None,
         transcriber: Transcriber | None = None,
-        document_extractor: DocumentExtractor | None = None,
         release_thread: ThreadRelease | None = None,
     ) -> None:
         self._cwd = cwd
@@ -119,7 +113,6 @@ class CodexAppServerAdapter:
         self._env = env
         self._system_context = system_context
         self._transcriber = transcriber
-        self._document_extractor = document_extractor
         #: The model the thread ran on, as the app-server reported it; filled in
         #: while the turn streams.
         self.model_id: str | None = None
@@ -265,18 +258,12 @@ class CodexAppServerAdapter:
     async def _stream(
         self, prompt: str, attachments: Sequence[Attachment] = ()
     ) -> AsyncIterator[AgentEvent]:
-        # Codex cannot hear audio: transcribe voice to text; extract documents
-        # to text (see "Extract document attachments to text" — Codex is
-        # path-native and cannot parse a binary PDF); keep other files as path
-        # notes.
+        # Codex cannot hear audio: transcribe voice to text; every other file
+        # reaches it as its path, which it opens with its own tools.
         attachments, transcripts = await transcribe_audio_attachments(
             attachments, self._transcriber
         )
-        attachments, extracts = await extract_document_attachments(
-            attachments, self._document_extractor
-        )
         prompt = prompt_with_transcripts(prompt.strip(), transcripts)
-        prompt = prompt_with_document_text(prompt, extracts)
         if attachments:
             # Codex is path-native (no inline image blocks over its app-server
             # RPC): hand it the on-disk paths so it can open them with its tools.

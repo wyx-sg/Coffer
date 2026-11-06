@@ -57,7 +57,7 @@ class _Agent:
 
 
 async def _setup(env: ChannelEnv, agent: _Agent, **caps: Any) -> FakeChannelAdapter:
-    adapter = FakeChannelAdapter(supports_edit=False, **caps)
+    adapter = FakeChannelAdapter(**caps)
     env.provider.adapter = agent
     resource = await env.register_channel("tg")
     env.bind(resource, adapter)
@@ -206,7 +206,7 @@ async def test_narration_the_agent_marked_never_reaches_the_reply(env: ChannelEn
             ):
                 yield event
 
-    adapter = FakeChannelAdapter(supports_edit=False)
+    adapter = FakeChannelAdapter()
     env.provider.adapter = _Narrating()
     resource = await env.register_channel("tg")
     env.bind(resource, adapter)

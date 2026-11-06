@@ -67,7 +67,6 @@ from coffer.infrastructure.persistence.engine import (
 )
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from tests.support.channel import FakeChannelAdapter as FakeChannelAdapter
-from tests.support.channel import FakeLiveText as FakeLiveText
 from tests.support.vault_stores import make_resource_repo
 from tests.support.waiting import wait_until  # noqa: F401  (re-exported to the channel tests)
 from tests.unit.chat.conftest import FakeAgentAdapter
@@ -139,13 +138,11 @@ def inbound(
     chat_kind: str = "direct",
     chat_title: str = "",
     addressed: bool = True,
-    mentions_others: bool = False,
     platform_message_id: str = "pm-1",
     ephemeral_id: str = "",
     sender_mention_id: str = "",
     attachments: Sequence[InboundAttachment] = (),
     quoted_message_id: str = "",
-    group_main: bool = False,
     timestamp: datetime | None = None,
 ) -> InboundMessage:
     return InboundMessage(
@@ -165,10 +162,8 @@ def inbound(
         chat_kind=chat_kind,
         chat_title=chat_title,
         addressed=addressed,
-        mentions_others=mentions_others,
         attachments=tuple(attachments),
         quoted_message_id=quoted_message_id,
-        group_main=group_main,
     )
 
 
@@ -539,7 +534,6 @@ class ChannelEnv:
         default_agent: str = "builtin",
         default_agent_config: dict[str, Any] | None = None,
         require_mention: bool = True,
-        ignore_other_mentions: bool = False,
         others_can_ask: bool = True,
         agent_scope: Scope | None = None,
         directories: Sequence[str] = (),
@@ -560,7 +554,6 @@ class ChannelEnv:
                 default_agent_config=default_agent_config,
                 adapter=adapter,
                 require_mention=require_mention,
-                ignore_other_mentions=ignore_other_mentions,
                 others_can_ask=others_can_ask,
                 agent_scope=agent_scope,
                 directories=tuple(directories),

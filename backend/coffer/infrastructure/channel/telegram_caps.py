@@ -11,12 +11,17 @@ from coffer.domain.channel.envelopes import ChannelCapabilities
 from coffer.infrastructure.channel.telegram_features import FeatureSet
 from coffer.infrastructure.channel.telegram_reactions import TELEGRAM_REACTIONS
 from coffer.infrastructure.channel.telegram_rich import RICH_MESSAGE_LIMIT
-from coffer.infrastructure.channel.telegram_text import TELEGRAM_MENTION_TEMPLATE
 
 __all__ = ["telegram_capabilities"]
 
 #: One ordinary message's chunk budget, when rich messages are unavailable.
 _CHUNK_LIMIT = 4000
+
+#: "Mention the asker in a group answer": Telegram's inline mention is a link to
+#: ``tg://user?id=<id>`` whose TEXT is shown — rich markdown and the HTML subset
+#: both render it as a mention that notifies, and it works for a member with no
+#: username. So it needs the display name as well as the id.
+TELEGRAM_MENTION_TEMPLATE = "[{name}](tg://user?id={user_id})"
 
 #: What the agent is told renders here (spec channels "Tell a channel-driven
 #: agent it is on a chat channel") — rich messages carry GitHub-flavoured
@@ -34,7 +39,6 @@ PLAIN_RENDER_NOTES = (
 def telegram_capabilities(features: FeatureSet) -> ChannelCapabilities:
     rich = features.rich_messages.available
     return ChannelCapabilities(
-        supports_live_text=True,  # the edit IS its live surface
         supports_typing=True,
         # "Render replies in the platform's rich format": a rich message carries 32k characters
         # against an ordinary message's 4k, so the chunk budget follows whether the platform

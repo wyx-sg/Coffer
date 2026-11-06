@@ -8,7 +8,6 @@ import pytest
 from coffer.domain.channel.envelopes import InboundAttachment
 from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.infrastructure.channel.telegram_parse import (
-    _mentions_other,
     addressed_and_text,
     build_inbound_message,
     forwarded_items,
@@ -231,50 +230,10 @@ def test_a_forwarded_reply_carries_both_the_record_and_the_quote():
     assert [(i.sender, i.text) for i in built.forwarded_items] == [("Bob", "hi")]
 
 
-# -- build_inbound_message: mentions_others -----------------------------------
-# (spec channels "Configure when the bot answers in a group")
-
-
 def _build(message):
     return build_inbound_message(
         message, (), channel="tg", bot_id=BOT_ID, bot_username=BOT_USERNAME
     )
-
-
-def test_mentions_others_false_when_only_bot_is_mentioned():
-    message = _message(
-        text="@mybot run",
-        entities=[{"type": "mention", "offset": 0, "length": len("@mybot")}],
-    )
-    assert _build(message).mentions_others is False
-
-
-def test_mentions_others_true_when_another_user_is_mentioned():
-    message = _message(
-        text="@someoneelse hey @mybot run",
-        entities=[
-            {"type": "mention", "offset": 0, "length": len("@someoneelse")},
-            {"type": "mention", "offset": 17, "length": len("@mybot")},
-        ],
-    )
-    assert _build(message).mentions_others is True
-
-
-def test_mentions_others_true_for_a_text_mention_of_a_different_user():
-    message = _message(
-        text="hey Sam run",
-        entities=[{"type": "text_mention", "offset": 4, "length": 3, "user": {"id": 1}}],
-    )
-    assert _build(message).mentions_others is True
-
-
-def test_mentions_others_false_in_a_dm():
-    message = _message(
-        chat={"id": 555, "type": "private"},
-        text="@someoneelse hi",
-        entities=[{"type": "mention", "offset": 0, "length": len("@someoneelse")}],
-    )
-    assert _build(message).mentions_others is False
 
 
 # -- UTF-16 entity offsets ----------------------------------------------------
@@ -304,13 +263,12 @@ def test_mention_after_an_emoji_is_still_matched() -> None:
     assert stripped == "🚀 deploy"
 
 
-def test_mention_of_another_user_after_an_emoji_is_seen_as_other() -> None:
+def test_mention_of_another_user_after_an_emoji_is_not_the_bot() -> None:
     text = "🎉 @someone look"
     offset = len("🎉 ".encode("utf-16-le")) // 2
     message = _mention_message(text, offset, len("@someone"))
     addressed, _ = addressed_and_text(message, text, bot_id=1, bot_username="mybot")
     assert addressed is False
-    assert _mentions_other(message, text, bot_id=1, bot_username="mybot") is True
 
 
 def test_mention_without_astral_characters_is_unchanged() -> None:
@@ -394,7 +352,6 @@ def test_a_command_naming_this_bot_is_the_bare_command_and_addressed() -> None:
     assert built.text == "/model opus"
     # Addressed even with no @mention and no reply: require_mention does not drop it.
     assert built.addressed is True
-    assert built.mentions_others is False
 
 
 def test_a_command_naming_this_bot_in_a_dm_is_the_bare_command() -> None:

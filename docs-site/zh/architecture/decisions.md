@@ -112,8 +112,8 @@ Coffer 保留三类设计文本，各司其职：
 | 消息渠道的轮次只折入所在线程的有界片段，由传输层读取 | [`channel-thread-context-is-a-bounded-slice`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-thread-context-is-a-bounded-slice.md) |
 | 一阵连发的渠道消息合成一轮，在按渠道设置的静默窗口后放出 | [`a-burst-of-channel-messages-is-one-turn`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/a-burst-of-channel-messages-is-one-turn.md) |
 | 消息渠道中的切换：换智能体开新对话，换模型下一轮生效 | [`channel-switches-structural-vs-parametric`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-switches-structural-vs-parametric.md) |
-| 消息渠道的轮次在有预览界面的平台上显示进度，回复只含答案 | [`channel-live-surface-strategy`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-live-surface-strategy.md) |
-| 消息渠道附件：字节存磁盘，消息里放引用，发送时按智能体具体化 | [`channel-attachments`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md) |
+| 消息渠道的轮次做完前不发任何消息，回复只含答案 | [`channel-live-surface-strategy`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-live-surface-strategy.md) |
+| 消息渠道附件存为文件，以路径交给每个智能体 | [`channel-attachments`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md) |
 | 对话页面先上传文件再发送其 id，文件存进一个同级的媒体目录 | [`chat-attachment-uploads`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/chat-attachment-uploads.md) |
 | SeaTalk 入站是一条出站 WebSocket，通过运维方提供的 SDK | [`seatalk-websocket-inbound`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/seatalk-websocket-inbound.md) |
 | Telegram 入站是长轮询，分发之后才提交 offset | [`telegram-long-polling`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/telegram-long-polling.md) |

@@ -44,7 +44,7 @@ into `dist/`. Three are single files; the shim is a one-folder build (see
 "Packaging the shim" below).
 The daemon spec carries its Alembic migrations and the built web UI
 (`frontend/dist`, shipped as `webui/`) as data files, and pins the modules
-imported lazily inside functions — `markitdown` and its document parsers,
+imported lazily inside functions — `markitdown` and its document parsers (the knowledge converter),
 and `openai` — in `hiddenimports`, because PyInstaller's
 static analysis cannot see them. The shim spec freezes only what its entry
 script imports and excludes the daemon's stacks, and every spec excludes the

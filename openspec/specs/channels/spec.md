@@ -224,13 +224,10 @@ terminal, takes that session over as [chat](../chat/spec.md) "Take over a sessio
 ### Requirement: Render replies by the adapter's declared capabilities
 Replies MUST render per channel capability — each adapter converts the agent's
 markdown into its platform's own format and chunks to its own limit, as its
-child spec states. A transport with a live surface shows a turn's progress on
-ONE surface (see "Show a turn's progress on one live surface"), its lines
-describing each call from its input (e.g. `⏳ Bash · list the desktop`,
-`✅ Read · wedding.json`). Capabilities are declared by the adapter, not
+child spec states. A turn's progress is never rendered (see "Send only the
+answer, once the turn is done"). Capabilities are declared by the adapter, not
 special-cased in the core: a `ChannelCapabilities` record states what the
-adapter can do — a live-updating surface via `supports_live_text`, rewriting a
-delivered selection card via `supports_card_update`, interactive
+adapter can do — rewriting a delivered selection card via `supports_card_update`, interactive
 buttons via `supports_buttons`, a typing indicator — and the core picks
 rendering strategies from it. When the platform rejects a formatted message the
 channel retries the same content as plain text before reporting failure, and
@@ -266,20 +263,6 @@ been delivered.
 - **WHEN** delivered through telegram and through a channel without rich text
 - **THEN** telegram receives HTML (falling back to plain text if rejected)
   and the other channel receives its declared format
-
-#### Scenario: channel progress lines describe each tool call from its input
-- **GIVEN** a paired channel on an adapter that can edit messages
-- **WHEN** the agent invokes a tool during a turn
-- **THEN** the call's step line in the status block names the tool and a short
-  descriptor drawn from its input (e.g. the Bash description, the file basename
-  for Read) in a direct chat; a raw command, or an argument of a tool it has no
-  rule for, is never used as the descriptor
-
-#### Scenario: a group's progress lines name only the tool
-- **GIVEN** a paired group chat on an adapter that can edit messages
-- **WHEN** the agent invokes a tool during a turn
-- **THEN** the call's step line in the status block names the tool and nothing
-  from its input, because everyone in the group reads it
 
 ### Requirement: Answer the conversation commands from any paired chat
 Ten words are Coffer's commands in a paired chat, and nothing else: `/new`,
@@ -378,8 +361,7 @@ read everything the owner keeps in Coffer, so the owner MUST be able to take any
 reply back. Two owner-only ways do it, and both end the same way. The command
 `/del` withdraws the reply it QUOTES (the platform's reply pointer or quote), the
 whole reply — every part a long answer was cut into and the files it carried — and `/del` with no quote withdraws the bot's most recent reply in
-that chat (in a thread, in that thread; in a group's main chat, anywhere in the
-group). It works in groups and in direct chats. And every bot reply in a group
+that chat (in a thread, in that thread). It works in groups and in direct chats. And every bot reply in a group
 carries a 🗑 button on its last text message, where the transport has buttons and
 can withdraw at all.
 
@@ -531,8 +513,8 @@ exception is the channel's two reply styles (see "Let the owner rewrite a
 channel's reply style"): they are prose, so their **System prompt** section
 shows them beside Coffer's read-only channel note and edits them through an
 **Edit** button and a dialog with Cancel and Save. They cover the channel's name, its type's plain settings (a
-SeaTalk app id), its two group-gating switches, `require_mention` and
-`ignore_other_mentions` (see "Configure when the bot answers in a group"), and
+SeaTalk app id), its group-gating switch, `require_mention` (see "Configure when the bot answers
+in a group"), and
 the rest of what this requirement and the others in this spec name as a channel
 setting. A secret is shown masked and replaced through its own dialog, **in
 place**: the new value MUST be written to the secret store under the ref the
@@ -588,10 +570,10 @@ and `PATCH /api/v1/resources/{uid}`.
 - **AND** the channel's configuration is then saved to the same channel with
   every ref unchanged, so nothing its pairing hangs off moves
 
-#### Scenario: the group-gating switches are edited in the Settings tab
-- **GIVEN** a registered channel with `require_mention` on and `ignore_other_mentions` off (the defaults)
-- **WHEN** the owner switches `require_mention` off and `ignore_other_mentions` on in the channel's Settings tab
-- **THEN** the saved configuration carries both changes and every other setting and ref as it was
+#### Scenario: the group-gating switch is edited in the Settings tab
+- **GIVEN** a registered channel with `require_mention` on (the default)
+- **WHEN** the owner switches `require_mention` off in the channel's Settings tab
+- **THEN** the saved configuration carries the change and every other setting and ref as it was
 
 #### Scenario: a channel's lifecycle and reach run through the resource routes
 - **GIVEN** a registered, enabled channel named `tg`
@@ -805,11 +787,9 @@ a Reply Style the Owner Can Rewrite](../../../docs/decisions/channel-prompt-fixe
 Inbound photos and files MUST drive a turn. The transport downloads each
 attachment to a Coffer-managed media dir; the bytes never enter the chat DB (Coffer stores
 no message at all; the agent's own session keeps the caption).
-For the turn, each attachment is handed to the agent adapter, which materialises
-it in its own native shape — a vision agent (Claude Code) inlines an image as a
-base64 content block it sees directly and a PDF as a document block; a
-path-native agent (Codex) and any non-vision file receive the on-disk path to
-open. This works for arbitrary file types, and generalises
+For the turn, each attachment is handed to the agent as its on-disk path — an
+image, a PDF or an office document alike — and the agent opens it with its own
+tools; Coffer neither inlines nor converts it. This works for arbitrary file types, and generalises
 to future modalities (a new type is a new mime, not a new schema). A sticker is
 a picture the user chose deliberately, so it is downloaded like any other
 attachment. Only a message with no text and nothing downloadable at all — a
@@ -822,12 +802,17 @@ or a file. See [Channel Attachments](../../../docs/decisions/channel-attachments
 - **THEN** the largest photo size is downloaded to the media dir and carried on
   the inbound message as an attachment, and the caption becomes the message text
 
-#### Scenario: an inbound image reaches a vision agent as an inline block
+#### Scenario: an inbound image reaches the agent as its path
 - **GIVEN** a turn carrying an image attachment
 - **WHEN** the Claude adapter builds the turn's content
-- **THEN** the image is a base64 `image` content block (a non-vision file becomes
-  a path pointer instead), so the bytes are sent inline for this turn only and
-  never stored in the chat database
+- **THEN** the image is named in the `[Attachments]` block with its number, where
+  it came from and the path it was saved at, and no bytes travel in the message
+
+#### Scenario: a document reaches the agent as its path
+- **GIVEN** a turn carrying a PDF for Claude Code or Codex
+- **WHEN** the adapter builds the turn
+- **THEN** the PDF is named in the `[Attachments]` block with the path it was
+  saved at, and its text is not extracted into the message
 
 ### Requirement: Send files back only through an explicit sentinel
 The agent MUST send a file back to the user only by an explicit opt-in: a
@@ -964,7 +949,7 @@ voice, video, a sticker — says so (`[voice] unavailable — the model cannot r
 audio`) instead of standing as a bare `[voice]`. The forwarded message's own text
 on the platform is the record's, not the owner's: the owner's words are only
 what they wrote themselves. Where a platform's file links require auth, its child
-spec states how the bytes are additionally fetched so a vision agent sees the
+spec states how the bytes are additionally fetched so the agent opens the
 picture rather than a dead link. Telegram's forwarded messages take the same
 shape through the same helpers.
 
@@ -1178,33 +1163,18 @@ alongside the flattened text, rather than surfacing only as an auth-gated
 `[image] <url>` the agent could not open. Messages the fold leaves out are not
 downloaded; a page the read tool returns has its own messages' media downloaded.
 
-#### Scenario: thread-history images reach a vision agent
+#### Scenario: thread-history images reach the agent
 - **GIVEN** a paired channel and a group thread whose own messages include an
   image (a directly-sent one and one nested in a forwarded record)
 - **WHEN** the owner @mentions the bot inside that thread
 - **THEN** the thread's images are downloaded and attached to the turn — reaching
-  the vision agent as real bytes, not a dead auth-gated file link
+  the agent as files it can open, not a dead auth-gated file link
 
 #### Scenario: only the folded messages' media is downloaded
 - **GIVEN** a thread of more than 20 earlier messages, the oldest and one of the
   newest carrying an image
 - **WHEN** the owner @mentions the bot in that thread for the first time
 - **THEN** only the newer message's image is downloaded
-
-### Requirement: Give documents to every agent as extracted text
-PDFs and office documents MUST reach every agent as extracted text, not as a
-vision input. A document attachment is text-extracted into a context block so
-path-native agents (Codex) and vision agents alike see its content; images stay
-vision-inlined for agents that support it.
-
-#### Scenario: a PDF reaches a path-native agent as extracted text
-- **GIVEN** a turn carrying a PDF (or office document) attachment for a
-  path-native agent (Codex)
-- **WHEN** the adapter prepares the turn
-- **THEN** the document is text-extracted and folded into the prompt as a
-  labelled `[Document: <name>]` block, and the document is not also sent as a
-  binary path note; when no extraction engine is available the document degrades
-  to a file path rather than wedging the turn
 
 ### Requirement: Return outbound media into the originating thread
 Outbound media MUST be thread-aware. On a `supports_media` transport an agent's
@@ -1335,8 +1305,8 @@ chat records into the turn"); the owner's own words, `[User message]` …
 Every marker is one English constant in `backend/coffer/domain/turn_markers.py`.
 
 Only Coffer's own lines open or close a block. Every untrusted text inside one —
-forwarded entries, the quote, thread messages, sender names, an extracted
-document, a voice transcript, and the owner's own words too — passes the
+forwarded entries, the quote, thread messages, sender names,
+a voice transcript, and the owner's own words too — passes the
 **forgery guard**: a line that begins, after any indentation, with `[` and one of
 the marker names (any letter case) gets a backslash before that `[`, so
 `[End of user message]` typed by anyone reads `\[End of user message]` and closes
@@ -1401,10 +1371,10 @@ same group/thread, not a DM.
 ### Requirement: Configure when the bot answers in a group
 Per-group inbound gating MUST be configurable. A channel may set
 require-mention (default on for groups — the bot answers only when @mentioned or
-replied-to) and ignore-messages-that-@-someone-else (opt-in — a group message
-that @mentions any non-bot user is dropped silently, even when it also mentions
-the bot) — so a bot sitting in a busy group answers only when it should. Both
-are plain config bools; the channel stays owner-gated regardless, so this is
+replied-to), so a bot sitting in a busy group answers only when it should. A
+message that @mentions the bot is answered even when it also @mentions someone
+else: whoever wrote it wanted the bot to see it. It is a plain config bool; the
+channel stays owner-gated regardless, so this is
 about *when* to answer, not *who* may drive turns. Who else may ask is "Let
 others in a group ask the bot".
 
@@ -1420,14 +1390,8 @@ others in a group ask the bot".
 - **THEN** it passes the mention gate and drives a turn (still owner-gated: a
   non-owner would be refused by the sender checks below the gate)
 
-#### Scenario: ignore_other_mentions drops a message that also @mentions a human
-- **GIVEN** a paired channel with `ignore_other_mentions` on
-- **WHEN** a group message @mentions the bot but also @mentions another user
-- **THEN** it is dropped silently — no reply and no turn — so the bot does not
-  butt into human-aimed traffic
-
-#### Scenario: ignore_other_mentions off still answers when @mentioned alongside a human
-- **GIVEN** a paired channel with `ignore_other_mentions` off (the default)
+#### Scenario: a message that @mentions the bot alongside a human is answered
+- **GIVEN** a paired channel
 - **WHEN** a group message @mentions the bot alongside another user
 - **THEN** the turn still runs — the extra human @mention does not suppress it
 
@@ -1441,7 +1405,9 @@ starts, and one of **done** (a clean finish), **failed** (an error) or
 transport's declared `reactions` set, because a platform may accept only a fixed
 list — each child spec names its own. A reaction replaces the previous one, so
 the message shows where the turn is now. A transport without reactions uses its
-typing/working signal as the receipt-and-progress cue instead. All best-effort —
+typing signal as the receipt cue instead, and every transport with a typing
+signal keeps it up while the turn runs (see "Send only the answer, once the
+turn is done"). All best-effort —
 a failed mark never breaks the turn.
 
 #### Scenario: receipt and completion are acked with reactions where supported
@@ -1585,9 +1551,8 @@ pairing (see "Pair exactly one owner with a single-use code") is the gate.
 
 ### Requirement: Probe platform capabilities and latch off rejected ones
 Platform capability MUST be probed, never assumed. Each platform carries a
-family of surfaces built for exactly this shape of bot — a message that streams
-while an agent generates it, a stop control the platform draws itself,
-structured rich text, and a group reply only one member can see. Coffer uses
+family of surfaces built for exactly this shape of bot — structured rich text
+and a group reply only one member can see, for example. Coffer uses
 each one where the platform it reaches offers it, and keeps its own hand-built
 equivalent as the fallback beneath it, because the platform version a user
 reaches is not guaranteed to be new enough; every such capability is therefore
@@ -1633,39 +1598,6 @@ passes a table through as raw pipes. The existing renderer stays as the fallback
 - **THEN** the reply is delivered in the platform's rich format with that
   structure intact, and a platform that rejects it falls back to the plain
   renderer without losing the reply.
-
-### Requirement: Stream through the platform's own surface where the chat has one
-A live reply MUST use the platform's own streaming surface **where there is one
-for that chat**. Where the platform can stream a partial message while it is
-generated, the live-text handle (see "Show a turn's progress on one live
-surface") drives that instead of rewriting a delivered message: no status
-message to delete, no rewrite of an already-delivered message, and no edit-rate
-ceiling on how often progress may show. A streaming surface the platform offers
-only in some chats is used only there; everywhere else the transport keeps the
-mechanism it had, rather than spending a refused call per snapshot to show
-nothing. A snapshot past whatever the surface may carry is clipped to its tail —
-the newest words are the ones being watched — because a refused snapshot would
-kill the progress indicator mid-reply.
-
-#### Scenario: a chat without the platform streaming surface keeps its old live mechanism
-- **GIVEN** a platform whose streaming surface exists only for direct chats
-- **WHEN** one turn runs in a direct chat and another in a group
-- **THEN** the direct-chat turn's progress is streamed through the platform surface
-- **AND** the group turn's progress uses the transport's previous live mechanism and makes no streaming-surface call
-
-### Requirement: Stop the turn from the platform's own stop control
-The platform's own stop control MUST end the turn. Where a live surface
-advertises a stop control the platform draws, Coffer MUST route the press to the
-same interrupt path as `/stop` — same turn cancellation, same queue pause, same
-user-visible outcome. A stop control the user can see but that does not stop
-anything is worse than none, so the button is only advertised on a transport
-where the route is wired.
-
-#### Scenario: a stop pressed on the platform's own control ends the turn
-- **GIVEN** a running turn whose live surface advertises a stop control,
-- **WHEN** the platform reports that the user stopped the generation,
-- **THEN** the turn is interrupted and the pending queue is paused, exactly as
-  a typed `/stop` would.
 
 ### Requirement: Keep non-answer chatter private in a group
 Chatter that is not the answer MUST stay private in a group. Command output and
@@ -2201,11 +2133,7 @@ with the agent by its display name, the model by the name its button shows, and 
 messages a stop held, see "Continue or discard the messages a stop held") or
 "Idle"; in a direct chat, one "Parallel threads (n):" line naming each with its
 agent and its state — running, n on hold, n waiting or idle (see "Open
-parallel conversations beside a direct chat"). While a turn runs it adds what
-the turn is doing: the status header (how long it has run and how many steps),
-the agent's latest words before a tool, and the step in hand, as the live
-preview shows them (see "Show a turn's working state as one status line"), so a
-platform with no live surface can still be asked. It shows no conversation or agent
+parallel conversations beside a direct chat"). It shows no conversation or agent
 ids. Where the transport has buttons it is a card carrying only the buttons that
 act on what it shows: Stop while a turn runs, Continue and Discard while
 messages are on hold, then Model and Dir, which change the model and directory
@@ -2221,12 +2149,6 @@ always an ordinary message the whole room would see.
 - **THEN** a card titled "Status" names the agent by display name, the model
   and the directory, shows no conversation title, carries the Model and Dir buttons —
   and Stop first while a turn runs — and contains no conversation id
-
-#### Scenario: /status says what a running turn is doing
-- **GIVEN** a direct chat whose turn has run for two minutes and three tools
-- **WHEN** the owner sends `/status`
-- **THEN** below "Running" it shows `⏳ Working · 2m … · 3 steps`, the agent's
-  latest words and the step in hand
 
 ### Requirement: List the commands with /help
 `/help` MUST answer with the commands from the roster as a list to read: a
@@ -2292,44 +2214,12 @@ nothing.
 - **WHEN** the owner sends `/status`
 - **THEN** the state line reads "⏸ 1 on hold" and the card carries Continue, Discard, Model and Dir
 
-### Requirement: Set a group's defaults from its main chat
-On a platform where every @mention in a group's main chat roots a fresh thread
-(SeaTalk), a command sent in the main chat MUST configure the group rather than
-that one-message thread: `/new <agent>` sets the group's default agent, which
-every new thread of the group inherits (see "Keep a chat's agent, model and directory across its conversations"), and the answer says so, while bare `/new` says what the
-defaults are; and `/stop` interrupts every turn running in that group and lists
-what it stopped. A thread's own settings still win inside it. `/model`, `/dir`,
-`/status` and `/resume` are direct-chat commands and set nothing here (see
-"Answer the conversation commands from any paired chat"). Where a group's main
-chat is itself one conversation (a Telegram group without topics) nothing
-changes: commands apply to that conversation.
-
-#### Scenario: an agent sent in a SeaTalk group's main chat becomes the default for new threads
-- **GIVEN** a paired SeaTalk group
-- **WHEN** the owner sends `@bot /new <agent>` in the group's main chat, and
-  later @mentions the bot with a question in the main chat
-- **THEN** the first answer says the agent is the default for new threads, and
-  the question's thread runs on that agent
-
-#### Scenario: /stop in a SeaTalk group's main chat stops every turn in the group
-- **GIVEN** a paired SeaTalk group with turns running in two of its threads
-- **WHEN** the owner sends `@bot /stop` in the group's main chat
-- **THEN** both turns are interrupted and the answer lists both
-
 ### Requirement: Shape a reply for what the chat can show
-A finished reply MUST pass one structure pass before the platform renderer,
-driven by the transport's declared capabilities, never its type:
+A finished reply MUST reach the platform renderer as the agent wrote it: Coffer
+does not rewrite tables into bullets or move long code blocks into files, because
+the agent is told what the chat renders (see "Tell a channel-driven agent it is
+on a chat channel") and writes for it. Only two things depend on the transport:
 
-- A transport that does not render tables (`renders_tables` false) receives each
-  table as one bullet per row, `- **checkout** · failed · 3DS timeout`; a table
-  of more than 12 rows or 4 columns keeps its first five rows as bullets and
-  goes out whole as an attached `.csv`.
-- A transport with `max_inline_code_lines` set receives a longer fenced block as
-  its first three lines plus a note, and the whole block as an attached file
-  (`.log`, `.diff`, `.txt` by the fence's language).
-- The files follow the answer, through the transport's ordinary file upload,
-  under their own names. A transport that cannot send files keeps everything in
-  the body instead.
 - A `## Details` section is the transport's to present: one that collapses it
   does so (see each child spec); on any other it goes out as ordinary text in
   the reply, cut into messages like the rest — never behind a card or a button.
@@ -2338,23 +2228,11 @@ driven by the transport's declared capabilities, never its type:
   every message after the first opens with its place, `(2/3)`, so a busy group
   can follow it.
 
-#### Scenario: a table becomes bullet rows where the chat cannot show tables
-- **GIVEN** a transport that does not render tables
-- **WHEN** a reply holds a three-column table of two rows
-- **THEN** it is delivered as two bullet rows, the first cell of each in bold, and
-  no file is attached
-
-#### Scenario: a long log is attached as a file
-- **GIVEN** a transport that keeps at most 30 lines of code inline
-- **WHEN** a reply holds a 40-line `log` block
-- **THEN** the reply keeps its first three lines and names `log-1.log`, which holds
-  all 40 lines
-
-#### Scenario: a table's CSV and a long log follow the answer as files
-- **GIVEN** a transport that renders no tables and keeps 30 lines of code inline
-- **WHEN** a reply holds a 20-row table and a 50-line log
-- **THEN** the answer is delivered first, then `table-1.csv` and `log-2.log` are
-  uploaded as documents
+#### Scenario: a table goes out as the agent wrote it
+- **GIVEN** a transport that does not edit messages
+- **WHEN** a reply is a two-column markdown table
+- **THEN** one text message carries the table exactly as written, and no file is
+  sent
 
 #### Scenario: a code block is never split across messages
 - **GIVEN** a reply longer than one message whose fenced block holds a blank line
@@ -2519,9 +2397,9 @@ the chat (see "Keep a chat's agent, model and directory across its conversations
 ### Requirement: Keep a chat's agent, model and directory across its conversations
 A chat thread MUST remember its settings — the agent, the model and the working directory — and a fresh conversation opened there, by
 `/new`, by a deleted conversation being replaced, or by `/dir`, MUST open with
-them. What the thread has not set falls back, in a group thread, to the group's
-defaults (see "Set a group's defaults from its main chat"), and then to the
-channel's own default agent and agent configuration. `/model default` and `/dir
+them. What the thread has not set falls back to the channel's own default agent
+and agent configuration: each group thread keeps its own settings, and a new one
+starts from the channel's. `/model default` and `/dir
 default` are the ways back to the defaults.
 
 A conversation `/dir` replaces MUST be deleted when no turn ever ran in it (it
@@ -2557,10 +2435,10 @@ agent drops it.
 - **AND** the second opens with no model but on the default directory
 - **AND** changing the channel's default agent removes the default model
 
-#### Scenario: a group thread inherits the group's defaults
-- **GIVEN** a group whose defaults name an agent
-- **WHEN** the owner starts a new thread in that group
-- **THEN** that thread's conversation opens on the group's agent
+#### Scenario: a new group thread starts from the channel's defaults
+- **GIVEN** a group thread where the owner switched the agent with `/new <agent>`
+- **WHEN** the owner starts another thread in that group
+- **THEN** that thread's conversation opens on the channel's default agent
 
 ### Requirement: Hand inbound attachments to the turn as references
 An inbound attachment MUST reach the turn that carries it as a **reference** —
@@ -2581,16 +2459,12 @@ message (`2/2` in a burst), the forwarded record, the quoted message, a thread
 message — and the turn text points at it by that number. Each agent adapter lists
 the turn's files after the text in one `[Attachments]` … `[End of attachments]`
 block, one `#n from <source>: <name> …` line each, through the same domain helper:
-a path-native agent (Codex) gets `(image, saved at <path>)` / `(saved at <path>)`;
-a vision agent (Claude) gets an inline image as that line ending `(image, shown
-below)` followed by the base64 block, so it can map the picture to its number. No
+every agent gets `(image, saved at <path>)` / `(saved at <path>)`. No
 adapter says "the user attached" a file that came from a record, a quote or a
 thread. Voice and video say what is true: `— voice; the model cannot read it
 directly; file at <path>` (unless the agent's speech-to-text turned it into a
 `[Voice message transcript #n from …]` block). A file the media prune already
-removed says it could not be read. An extracted document reads
-`[Document #n from …: <name>]` … `[End of document]`; its text and a transcript's
-pass the forgery guard ("Open every turn with its message origin").
+removed says it could not be read. A transcript passes the forgery guard ("Open every turn with its message origin").
 
 #### Scenario: each attachment is named by its number and where it came from
 - **GIVEN** a turn whose first file came from a forwarded record and whose second from the owner's own message
@@ -2633,156 +2507,49 @@ switch; the Overview MUST NOT raise a "not running" item for it.
 - **THEN** the status reports `running: false` and `starting: true`, and the Channels page shows it connecting
 - **AND** after the pass it is running and `starting` is false, while a start that failed leaves `starting` false
 
-### Requirement: Show each paired person's platform picture
-The people list on a channel's Overview SHALL show each paired person's picture
-on the platform beside their name, and their initials when there is no picture
-to show. The line under the name SHALL read "Owner · paired <date>". The picture
-MUST be asked of the channel's running adapter on this machine when the page
-first asks for it: Telegram's newest profile photo (`getUserProfilePhotos`), and
-SeaTalk's employee profile picture (`/contacts/v2/profile`, which needs the app's
-Get Employee Profile permission). It MUST be kept in a machine-local cache that
-is never synced, served from there for a day, and asked for again after that. A
-fetch that fails or is refused, and a person with no picture, MUST read as no
-picture, show initials, and not be asked again for an hour; a refused refresh
-leaves the cached picture in place. Only bytes that are a JPEG, PNG, GIF or WebP
-image of at most 2 MB are served. Removing the person or deleting the channel
-MUST drop their cached picture, and a person not paired to the channel has none.
+### Requirement: Show each paired person by name and initials
+The people list on a channel's Overview SHALL show each paired person's initials
+beside their name; Coffer fetches no picture from the platform. The line under
+the name SHALL read "Owner · paired <date>".
 
-#### Scenario: an owner row shows the person's platform picture or their initials
-- **GIVEN** a channel with two paired people, one with a picture on the platform and one without
+#### Scenario: an owner row shows the person's initials
+- **GIVEN** a channel with a paired person
 - **WHEN** the owner opens the channel's Overview
-- **THEN** the first person's row shows their picture and the other's shows their initials
-- **AND** the line under each name reads "Owner · paired <date>"
+- **THEN** the person's row shows their initials beside their name
+- **AND** the line under the name reads "Owner · paired <date>"
 
-#### Scenario: a paired person's picture is fetched once and kept a day
-- **GIVEN** a running channel and a paired person with a picture on the platform
-- **WHEN** the page asks for the picture twice, and again a day later after the person changed it
-- **THEN** the platform is asked once for the first two, and the day-old picture is replaced by the new one
+### Requirement: Send only the answer, once the turn is done
+Like a person replying, a channel MUST post nothing while a turn runs and send
+the answer as one new message when the turn is done. While the turn runs the
+chat shows only receipt: the reaction on the owner's message where the transport
+has reactions, and the typing indicator, kept alive on a heartbeat, where it has
+one (see "Acknowledge receipt and completion by capability"). There is no status
+message, no streamed preview and no draft: a running turn's steps, clock and
+partial answer are not shown anywhere in the chat. `/status` says whether a turn
+is running. All best-effort — a failed reaction or heartbeat never breaks the
+turn.
 
-#### Scenario: a person with no reachable picture keeps their initials
-- **GIVEN** a SeaTalk app without the Get Employee Profile permission
-- **WHEN** the page asks for a paired person's picture
-- **THEN** there is no picture and the row keeps the person's initials
-- **AND** the platform is not asked again for that person within the hour
+The reply MUST carry only the answer: the text written after the last tool
+call. Text the agent writes before a tool call is narration ("Let me check the
+logs") and never reaches the reply. A turn that wrote nothing after its last
+tool call replies with the last text it did write, so an answer is never lost to
+a trailing tool call. An agent that marks its own messages as narration (Codex's
+`commentary` phase, carried as `MessageEnd.commentary`) has those messages left
+out of the reply wherever they stand, even after the last tool call; messages
+the agent wrote between two tool events join the reply as paragraphs. A turn
+that wrote nothing but narration replies with its last words. A turn whose agent
+wrote no text at all sends no reply: no placeholder line is posted.
 
-#### Scenario: a paired person's picture is served from the running adapter
-- **GIVEN** a running channel with two paired people, one with a picture
-- **WHEN** a client reads `GET /api/v1/channels/{uid}/people/{sender_id}/avatar` for each, and for a sender who is not paired
-- **THEN** the first answers 200 with the image, the others 204
-- **AND** after the first person is removed their cached picture is gone
-
-### Requirement: Show a turn's progress on one live surface
-A turn's progress MUST show on a live surface where the transport has one —
-chosen from the adapter's declared capabilities, never its type. The capability
-the core asks about is `supports_live_text` ("is there a surface I can keep
-updating while this turn runs?"), whether the transport gets there through a
-message draft or by editing one message (Telegram). The core asks for a
-live-text handle and never branches on the mechanism underneath, so no
-capability says "can rewrite a delivered text message".
-
-A live surface is **scaffolding**, never the reply: when the turn ends it is
-closed (a draft expires, a status message is deleted) and the finished reply is
-sent as a new message. A reply created when the turn began would notify nobody
-when it ends, and a message that carries the turn's progress and then turns into
-the answer redraws itself on every step; the other IM-agent products show a
-running turn through typing or a status surface and keep their final message for
-the answer. A turn keeps at most ONE live surface, opened only once the turn has
-run past the update interval — either tool activity opens it or the reply text
-does — so a reply that finishes sooner opens none, avoiding a create → delete →
-resend flicker. A turn still thinking in silence opens it on the status line's
-first tick.
-
-The cadence of updates belongs to the TRANSPORT, which alone knows its own
-limits: the core offers every snapshot and each surface buffers to what it can
-sustain. A throttle added by the core on top hides that buffer completely and
-makes progress arrive a paragraph at a time. Interim snapshots are plain text
-clipped to the platform's per-message limit, keeping their newest words, so a
-long or half-written-markdown preview never breaks a platform parser or exceeds
-the cap.
-
-A transport with no live surface (SeaTalk) posts no interim traffic: its typing
-indication is the progress (see "Acknowledge receipt and completion by
-capability") and its final reply is the whole signal. All best-effort — a
-failed update, close, or heartbeat never breaks the turn.
-
-#### Scenario: the streamed reply preview is clipped to the platform limit
-- **GIVEN** a paired channel on an adapter that can edit messages
-- **WHEN** the accumulating reply text grows past the platform's per-message limit
-- **THEN** each interim edit is clipped to that limit (keeping the most recent
-  text behind a leading ellipsis) so the edit never fails, while the final reply
-  carries the full text
-
-#### Scenario: a transport with no live-text surface posts no interim status message
-- **GIVEN** a paired channel on an adapter that can neither edit nor stream and
-  declares no typing signal either, in a group/thread
-- **WHEN** a turn runs
-- **THEN** no interim signal is posted at all — only the final chunked reply
-  lands in the originating group/thread
-
-#### Scenario: a live surface is never the reply
-- **GIVEN** a paired channel on an adapter with a live surface
-- **WHEN** a turn runs a tool and then answers
-- **THEN** the surface shows the progress and is closed when the turn ends, and
-  the answer arrives as a new message after it
-
-### Requirement: Show a turn's working state as one status line
-While a turn runs on a transport with a live surface (see "Show a turn's
-progress on one live surface"), that surface MUST show one status block the
-reader can take in at a glance: a header saying that the turn is working, for how long,
-and how many steps it has taken (`⏳ Working · 2m 14s · 7 steps`, with the
-failed count when there is one); the agent's latest narration as a `💬` line;
-and the newest three step lines, older ones collapsed into `+N earlier`. A step
-line names the tool, plus a short descriptor from its input in a direct chat
-only; a group's step lines carry nothing from the input. The answer written so
-far follows under a rule. The header MUST keep ticking while nothing else
-happens — a long silent tool still shows time passing — on the cadence the live
-surfaces already keep alive at, so the tick costs no extra traffic.
-
-Text the agent writes before a tool call is narration ("Let me check the
-logs"): once the tool call arrives it moves up into the `💬` line and the answer
-tail shows only text written after the last tool call. The final reply, on every
-transport, MUST carry only the answer: the text written after the last tool
-call. A turn that wrote nothing after its last tool call replies with the last
-text it did write, so an answer is never lost to a trailing tool call.
-Narration never reaches the final message. An agent that marks its own messages
-as narration (Codex's `commentary` phase, carried as `MessageEnd.commentary`)
-has those messages moved into the `💬` line and left out of the reply wherever
-they stand, even after the last tool call; messages the agent wrote between two
-tool events join the reply as paragraphs. A turn that wrote nothing but
-narration replies with its last words.
-A turn whose agent wrote no text at all sends no reply: no placeholder line is
-posted, and the live surface is closed.
-
-A channel setting `show_steps` (default on) hides the step lines and keeps the
-header and narration — useful in a busy group. It is edited on the Channels
-page, which offers it only for a platform that has a live surface (Telegram).
-
-A transport that must shorten a snapshot to its own limit clips the answer's
-oldest words and keeps the status block whole; only a limit too small for the
-block drops the step lines, then the header.
-
-#### Scenario: a long turn shows elapsed time and step count in one status line
-- **GIVEN** a turn that has run for 2 minutes 14 seconds and called eight tools,
-  one of which failed
-- **WHEN** its status block is drawn
-- **THEN** the header reads `⏳ Working · 2m 14s · 8 steps (1 failed)`, followed by
-  `+5 earlier` and the newest three step lines
+#### Scenario: a turn posts nothing until its reply
+- **GIVEN** a paired channel on a transport that can react, type and edit
+- **WHEN** a turn writes some text, runs a tool and then answers
+- **THEN** nothing is sent, edited or deleted while it runs, and the answer
+  arrives as one new message
 
 #### Scenario: a turn that wrote no text sends no reply
 - **GIVEN** a turn whose agent ended without writing any text
 - **WHEN** the turn finishes
-- **THEN** no reply message is sent and the live status is closed
-
-#### Scenario: narration between tool calls moves to the status line
-- **GIVEN** a turn whose agent writes a sentence and then calls a tool
-- **WHEN** the tool call arrives and the agent then writes its answer
-- **THEN** the sentence appears as the status block's `💬` line and the answer
-  alone grows under the rule
-
-#### Scenario: the status line keeps ticking during a silent tool
-- **GIVEN** a turn whose tool runs for minutes without producing an event
-- **WHEN** the live surface is next redrawn on its cadence
-- **THEN** the header shows the new elapsed time
+- **THEN** no reply message is sent
 
 #### Scenario: the final reply carries only the answer
 - **GIVEN** a turn whose agent wrote text, called a tool, wrote more text, called
@@ -2795,15 +2562,6 @@ block drops the step lines, then the header.
   writing nothing after it
 - **WHEN** the reply is delivered
 - **THEN** it holds the last text the agent wrote
-
-#### Scenario: hiding steps keeps only the header
-- **GIVEN** a channel with `show_steps` off
-- **WHEN** a turn calls a tool
-- **THEN** the status block shows the header and narration but no step line
-
-#### Scenario: the step lines are hidden in the channel's settings
-- **WHEN** the owner switches the channel's step lines off in its settings, then on again
-- **THEN** the channel's `show_steps` setting is off, then on again
 
 #### Scenario: narration the agent marked never reaches the reply
 - **GIVEN** a turn whose agent marks a message as narration, calls a tool, marks
@@ -2824,7 +2582,7 @@ only shouting. Five constraints bound it.
   arrives on a later update of the same message renders as a name and notifies
   nobody, which is the worst of both — the room sees an @ the mentioned person
   never got. The reply is always a new message sent when the turn ends (see
-  "Show a turn's progress on one live surface"), so it opens with the mention,
+  "Send only the answer, once the turn is done"), so it opens with the mention,
   exactly once.
 - The mention is built from the id the PLATFORM addresses a member by, which is
   not always the id the owner gate matches — so the transport carries both.
@@ -2836,8 +2594,6 @@ only shouting. Five constraints bound it.
   anything that could end the link text.
 - It degrades silently: no id and no usable fallback, or a transport that cannot
   mention at all, yields an ordinary unmentioned reply — never a broken tag.
-- A live surface carries no mention: it is scaffolding, deleted or expired
-  before the answer, and a mention there would only render as markup.
 
 #### Scenario: a group reply @mentions whoever asked
 - **GIVEN** an addressed message in a group from a member the transport named,
@@ -2848,13 +2604,6 @@ only shouting. Five constraints bound it.
 - **GIVEN** the same channel answering in a 1:1 chat,
 - **WHEN** the turn replies,
 - **THEN** the reply carries no mention — there is nobody to disambiguate.
-
-#### Scenario: a live surface carries no mention and the reply does
-- **GIVEN** a group turn on a transport with a live surface and a mention
-  spelling
-- **WHEN** the turn shows its progress and then replies
-- **THEN** no snapshot of the surface carries the mention, and the reply — a new
-  message — opens with it exactly once
 
 ### Requirement: Ground a thread turn in a bounded slice of the thread
 A thread turn MUST fold a bounded slice of its thread, never the whole thread,

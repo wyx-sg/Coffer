@@ -12,10 +12,6 @@ is not a model of another — and keeps the directory. The answer is one line �
 agent · model · directory — as a card with Agent, Model and Dir buttons; the
 Agent button opens the agent card, whose tap does what `/new <agent>` does.
 
-In a SeaTalk group's main chat nothing is opened: ``/new <agent>`` sets the
-group's default agent and bare ``/new`` says what the defaults are (spec
-channels "Set a group's defaults from its main chat").
-
 Application layer only: no infrastructure import here.
 """
 
@@ -26,8 +22,6 @@ from typing import TYPE_CHECKING
 from coffer.application.channel.agent_routing import routable_choices
 from coffer.application.channel.command_cards import agent_card, new_card
 from coffer.application.channel.command_text import (
-    GROUP_DEFAULT_SUFFIX,
-    agent_display,
     resolve_agent,
     settings_line,
     unknown_agent,
@@ -54,13 +48,6 @@ async def cmd_new(ctx: CommandContext, text: str) -> None:
             return
         await apply_agent(ctx, key)
         return
-    if ctx.group_main:
-        line = await settings_line(ctx.commands, await ctx.settings())
-        await ctx.say(
-            f"Defaults for new threads in this group: {line}\n"
-            "Send /new <agent> here to change the agent."
-        )
-        return
     await _open_and_announce(ctx)
 
 
@@ -75,10 +62,6 @@ async def apply_agent(ctx: CommandContext, key: str) -> None:
     await ctx.commands._threads.set_preferences(
         ctx.resource_uid, ctx.chat_id, ctx.conversation_thread_id, agent=key, **cleared
     )
-    if ctx.group_main:
-        name = agent_display(ctx.commands._agents, key)
-        await ctx.say(f"🔀 Agent set to {name}{GROUP_DEFAULT_SUFFIX}.")
-        return
     await _open_and_announce(ctx)
 
 

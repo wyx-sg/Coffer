@@ -27,7 +27,7 @@ Two consequences follow:
 
 1. On the SeaTalk Open Platform, create an app.
 2. Enable the **Bot** capability and set the bot **Online**.
-3. Request the scopes the bot needs. At minimum you need *Send Message to Bot User*; your organisation's admin may have to approve them. Add *Get Employee Profile* if you want the channel's owner list to show each owner's SeaTalk picture; without it the list shows their initials.
+3. Request the scopes the bot needs. At minimum you need *Send Message to Bot User*; your organisation's admin may have to approve them.
 4. Note the app's **App ID** and **App Secret**.
 
 Leave the event delivery setting for step 4: SeaTalk only verifies WebSocket delivery while Coffer holds the connection.
@@ -100,7 +100,7 @@ Before the first attempt there is no connection state: the daemon starts a chann
 - **While the turn runs** — SeaTalk has no reactions and cannot edit a text message, so the only sign of work is the typing indicator. It appears at once and is kept alive every 3 seconds until the reply is sent, in direct chats and group threads alike. SeaTalk silently skips group typing in groups of more than 200 members.
 - **Direct chats** — the answer arrives as one ordinary new message, so SeaTalk notifies you the way it does for any message. Only what the agent writes after its last tool call is sent; its earlier remarks between steps are not. A long answer is split at paragraph boundaries into several messages, and every message after the first is numbered `(2/3)`, `(3/3)`.
 - **Groups** — the finished answer arrives as one interactive card, split into several cards if it is long, and it opens by @mentioning whoever asked. When the agent needs something from someone else in the thread, it @mentions them too, by the email the thread names them by, so they are notified. Cards are used because SeaTalk can rewrite a card but cannot delete or edit anything else, and that is what lets the owner withdraw a group reply (see below). Each card carries a 🗑 button.
-- **Formatting** — the agent's Markdown is converted to SeaTalk Markdown: bold, italic, inline code, code fences and lists. Headings become bold and links become `label (url)`, since SeaTalk supports neither. A table becomes one bullet per row (a big one also arrives as a `.csv`), and a code block over 30 lines arrives as a file. Messages are split to stay under SeaTalk's 4,096-byte cap.
+- **Formatting** — the agent's Markdown is converted to SeaTalk Markdown: bold, italic, inline code, code fences and lists. Headings become bold and links become `label (url)`, since SeaTalk supports neither. SeaTalk has no tables either, so the agent is told to write one bullet per row instead. Messages are split to stay under SeaTalk's 4,096-byte cap.
 - **Long sections** — SeaTalk cannot collapse text, so the answer arrives whole, including any section the agent puts under a heading such as `## Details`.
 - **Withdrawing a reply.** SeaTalk's Open Platform has no API to delete a bot's message, and only interactive cards can be rewritten, and only by the bot that sent them. So when the owner withdraws a group reply — by tapping its 🗑 button, or by quoting it and sending `/del` — Coffer rewrites each card of that reply into a neutral “🗑 Withdrawn” card with no buttons. The text is gone from the chat, but the card stays. SeaTalk allows rewriting for 7 days; past that the owner is told privately that the reply can no longer be withdrawn. Only the owner's tap or command counts, and `/del` without a quote withdraws the most recent reply in the group or thread. A direct-chat reply is an ordinary message and cannot be withdrawn on SeaTalk. See [Withdrawing a reply](/guides/channels#withdrawing-a-reply).
 
@@ -120,9 +120,9 @@ Where the answer goes:
 
 Each group thread is its own conversation, so you can run Claude Code in one thread and Codex in another. A group answer opens by @mentioning you, so SeaTalk notifies you.
 
-Because a main-chat @mention always roots a new thread, `@bot /new <agent>` in the main chat sets the **group's default agent**, which every new thread in the group starts on, and `@bot /stop` stops every turn running in the group. `/del` withdraws a reply, as described under [How replies look](#how-replies-look). `/model`, `/dir`, `/status`, `/resume`, `/thread` and `/close` work only in a direct chat; sent in a group they get one private line saying so. Inside a group thread, `/new` and `/stop` apply to that thread. See [Group defaults on SeaTalk](/reference/channel-commands#group-defaults-on-seatalk).
+Because a main-chat @mention always roots a new thread, a command sent there, like `@bot /new <agent>`, applies to that new thread. `/del` withdraws a reply, as described under [How replies look](#how-replies-look). `/model`, `/dir`, `/status`, `/resume`, `/thread` and `/close` work only in a direct chat; sent in a group they get one private line saying so. Inside a group thread, `/new` and `/stop` apply to that thread, and a new thread starts on the channel's default agent.
 
-To have the bot leave alone a message that also @mentions another person, turn on **Ignore messages that @mention someone else** on the channel's **Settings** tab under **Receiving messages**. SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions.
+SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions, and the bot answers each one, even when it also @mentions someone else.
 
 The bot never reads recent messages from a group's main chat. SeaTalk does not grant that permission to a self-built app, and the message you address to the bot is meant to carry what it needs.
 
@@ -151,7 +151,7 @@ In a direct chat a bare `/model`, `/dir` or `/resume` answers with an interactiv
 
 Everything SeaTalk can attach drives a turn: images, files and documents, video, and voice or audio. Coffer downloads each one with the app's token, since SeaTalk file links require authentication.
 
-- Documents are extracted to text for the agent.
+- Images and documents reach the agent as file paths it opens itself.
 - Voice is transcribed when speech to text is on (**Settings › General → Speech to text**); otherwise the agent gets the audio file.
 - A file keeps its real filename.
 

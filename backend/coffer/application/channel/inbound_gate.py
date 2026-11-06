@@ -41,12 +41,6 @@ async def group_peer(
         # lets un-addressed group messages through this gate (still
         # owner-gated by the sender_id checks below).
         return None
-    if binding.ignore_other_mentions and msg.mentions_others:
-        # "Configure when the bot answers in a group": a group message that
-        # @mentions another user is aimed at a human — drop it silently (no
-        # reply), before the owner gate, so a bot in a busy group never butts in
-        # regardless of who sent it.
-        return None
     paired = await peers.sender_ids(binding.resource.uid)
     if not paired:
         # Nobody is paired (no DM/group has a known sender id yet) — a group

@@ -9,9 +9,7 @@ The model is parametric — the SAME conversation runs its next turn on it — a
 is remembered on the thread, so a fresh conversation opens on it too
 (spec channels "Keep a chat's agent, model and directory across its conversations"). A model
 name is matched against the catalogue's ids and shown names; anything else is
-passed through verbatim, since the agent's CLI owns that namespace. In a SeaTalk
-group's main chat only the group's defaults row is written (spec channels "Set
-a group's defaults from its main chat").
+passed through verbatim, since the agent's CLI owns that namespace.
 """
 
 from __future__ import annotations

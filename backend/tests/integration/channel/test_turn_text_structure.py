@@ -21,7 +21,7 @@ from coffer.application.channel import inbound_burst
 from coffer.application.channel.ports import AdapterCallbacks
 from coffer.domain.chat.attachment import Attachment, attachments_block
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
-from coffer.infrastructure.chat.codex_stream import attachment_note
+from coffer.infrastructure.chat.adapter_support import attachment_note
 from tests.integration.infrastructure.channel.conftest import FakeSeaTalk, make_seatalk_adapter
 
 from .conftest import DEFAULT_AGENT_KEY, ChannelEnv, uid_of, wait_until
@@ -126,7 +126,6 @@ async def _seatalk(env: ChannelEnv, fake: FakeSeaTalk, tmp_path: Path) -> Any:
             on_message=env.processor.on_message,
             on_callback=env.processor.on_callback,
             on_lifecycle=env.processor.on_lifecycle,
-            on_stop=env.processor.on_stop,
         )
     )
     return resource, adapter
