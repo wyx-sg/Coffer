@@ -388,7 +388,7 @@ cut by a daemon stop:
   `unknown`; for each leased item with no declared action Coffer records a
   synthetic `unknown` action `stage:<run>:<stage>:<item>`, so every item has
   something to reconcile; the item goes `needs_reconcile` and keeps its lease.
-  A run without a flow has no items: a chat-target `unknown` run pauses its
+  A run without a flow has no items: an `unknown` run of a task without a flow (chat or prompt-only workspace) pauses its
   task until the owner resolves it (`coffer task reconcile <task> --run <run
   id>` or Resume, audited) and its chat is told once, so the next slot cannot
   rerun the prompt blindly (§4.13).
@@ -504,7 +504,7 @@ A repeating task is switched off after three runs in a row that ended
 Policy deferrals — outside the window, a holiday, budget exhausted, calendar
 not covered — and lease-`busy` deferrals neither count nor reset the count:
 they are the policy or another run working, not the task failing. A
-chat-target run that ends `unknown` pauses its task at once, whatever the
+run of a task without a flow (chat or prompt-only workspace) that ends `unknown` pauses its task at once, whatever the
 count, until `coffer task reconcile <task> --run <run id>` or Resume (both
 audited). A calendar that does not cover the year would otherwise
 defer silently forever, so it raises a Coffer attention item (the same feed

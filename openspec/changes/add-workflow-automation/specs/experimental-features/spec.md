@@ -17,7 +17,7 @@ While it is off, `coffer__automation_action_begin`,
 `coffer__automation_action_end` and `coffer__automation_report` MUST also be
 absent from every turn; the work-item, action, reconcile and precheck routes
 under `/api/v1/scheduled-tasks/{uid}` (`items`, `actions`,
-`actions/{key}/reconcile`, `items/{key}/reconcile`, `precheck`) MUST answer 404 `FEATURE_DISABLED` like
+`actions/{key}/reconcile`, `items/{key}/reconcile`, `runs/{run}/reconcile`, `precheck`) MUST answer 404 `FEATURE_DISABLED` like
 the rest; no precheck, recheck or reconcile command MUST run; and every
 work-item lease, action of the ledger and recorded model call MUST be kept as
 it is, so switching it on again resumes from them.

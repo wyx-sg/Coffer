@@ -193,12 +193,16 @@ A repeating task whose last three runs all ended `failed`, `timed_out`,
 reason recorded on its last run. A deferral the policy causes — outside the
 window, a holiday, the model-run budget exhausted, a calendar that does not
 cover the year — and a deferral because a work item's lease was busy MUST NOT
-count toward the three, nor break a count it sits between. A task with a chat
-target whose run ends `unknown` MUST be switched off at once, whatever its
-count, until the owner resolves that run — `coffer task reconcile <task> --run
-<run id>` or Resume, either one audited — so its next slot cannot run the same
-prompt blindly; its chat is told once ([channels](../channels/spec.md) "Run a
-scheduled task in the chat it names").
+count toward the three, nor break a count it sits between; a `timed_out` run
+counts as the reason "timed out". A task with no bound flow — a chat target or
+a prompt-only workspace task — whose run ends `unknown` MUST be switched off at
+once, whatever its count, until the owner resolves that run — `coffer task
+reconcile <task> --run <run id>` (`POST
+/api/v1/scheduled-tasks/{uid}/runs/{run}/reconcile`) or Resume, either one
+audited — so its next slot cannot run the same prompt blindly; a chat target's
+chat is told once ([channels](../channels/spec.md) "Run a scheduled task in the
+chat it names"). A task with a bound flow is held per work item instead
+("Never retry an external write whose result is unknown").
 
 #### Scenario: a workspace task that keeps failing is paused
 - **GIVEN** a daily workspace task whose agent is not installed
@@ -216,9 +220,14 @@ scheduled task in the chat it names").
 - **THEN** the task stays on
 
 #### Scenario: a timed-out run counts toward the pause
-- **GIVEN** a daily workspace task whose last two runs failed for the same reason
+- **GIVEN** a daily task bound to a flow whose only stage may not write, and whose last two runs timed out
 - **WHEN** its third run times out
-- **THEN** the task is switched off
+- **THEN** the task is switched off and its last run says it was paused after three timeouts
+
+#### Scenario: a prompt-only workspace run of unknown result pauses its task
+- **GIVEN** a daily workspace task with no bound flow whose run was cut by a daemon stop after its prompt was handed over
+- **WHEN** the daemon starts again and the next slot comes
+- **THEN** the run is `unknown`, the task is switched off, no run starts for the slot and no chat is told
 
 #### Scenario: a chat run of unknown result pauses its task until resolved
 - **GIVEN** a daily chat-target task whose run was cut by a daemon stop after its prompt was handed over
