@@ -6,7 +6,10 @@ Spec vault-sync "Report a join before applying it".
 from __future__ import annotations
 
 from coffer.application.sync.round_deps import RoundDeps
+from coffer.domain.sync.machine import MachineDescriptor, machine_id_of
+from coffer.domain.sync.remote import SyncRemote
 from coffer.domain.sync.rounds import RoundStatus
+from coffer.domain.vault.layout import MACHINES
 
 
 def layout_refusal(d: RoundDeps, tip: str) -> tuple[RoundStatus, str] | None:
@@ -23,6 +26,45 @@ def layout_refusal(d: RoundDeps, tip: str) -> tuple[RoundStatus, str] | None:
             "upgrade Coffer on this machine",
         )
     return None
+
+
+def key_refusal(d: RoundDeps, remote: SyncRemote, tip: str) -> tuple[RoundStatus, str] | None:
+    """Why a remote that carries secrets cannot be synced with while another
+    machine's master key differs from this one's, or ``None``.
+
+    Ciphertext encrypted under another key cannot be opened here, and "the
+    fresher encryption wins" would let it replace a value this machine can
+    open; the two machines would then overwrite each other every round. So
+    nothing moves until the keys match (spec vault-sync "Refuse to carry
+    secrets between machines whose master keys differ")."""
+    if not remote.include_secret:
+        return None
+    own = d.machine.machine_id()
+    mine = MachineDescriptor.parse(own, d.machine.descriptor(last_round_at=None, last_commit=None))
+    my_key = mine.key_fingerprint if mine else None
+    files = {p: b for p, b in d.git.files(tip, MACHINES + "/").items() if machine_id_of(p)}
+    data = d.git.blobs(list(files.values()))
+    differ: list[str] = []
+    for path, blob in sorted(files.items()):
+        machine = machine_id_of(path)
+        if machine is None or machine == own or blob not in data:
+            continue
+        peer = MachineDescriptor.parse(machine, data[blob])
+        if peer is None or peer.key_fingerprint is None or peer.key_fingerprint == my_key:
+            continue
+        differ.append(peer.name or machine)
+    if not differ:
+        return None
+    return (
+        RoundStatus.KEY_MISMATCH,
+        f"this remote carries secrets and the master key on {', '.join(differ)} differs from "
+        "this machine's; import the same master key on Settings > Security, then sync again",
+    )
+
+
+def refusal(d: RoundDeps, remote: SyncRemote, tip: str) -> tuple[RoundStatus, str] | None:
+    """Why a round or a join must not converge with the remote at ``tip``."""
+    return layout_refusal(d, tip) or key_refusal(d, remote, tip)
 
 
 def unseen_older(d: RoundDeps, tip: str, local: str) -> tuple[RoundStatus, str] | None:

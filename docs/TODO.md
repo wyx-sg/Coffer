@@ -216,7 +216,7 @@ threads appending at once rarely conflict:
 
 ## Vault sync
 
-All four come from the thread "梳理多机器同步的缺口和缺陷" (2026-11-06), whose
+All three come from the thread "梳理多机器同步的缺口和缺陷" (2026-11-06), whose
 discussion draft is `sync-review/讨论稿.md` in the project files. They matter
 once a second Mac syncs; on 2026-11-06 only one did (every round pulled 0 files).
 
@@ -233,18 +233,6 @@ once a second Mac syncs; on 2026-11-06 only one did (every round pulled 0 files)
   hourly round stays as the fallback. Not real-time. Syncthing aggregates
   file events for 10 s and rescans hourly; Obsidian Sync and 1Password are
   near-instant.
-
-### Keep secrets readable when two Macs hold different master keys
-
-- **Added:** 2026-11-06, from the thread "梳理多机器同步的缺口和缺陷"
-- **What:** a Mac never replaces a secret it can decrypt with a newer ciphertext
-  it cannot, and joining a remote that carries secrets asks for the master key
-  before secrets come down.
-- **Why later:** today "the fresher encryption wins" (`settle_secrets` in
-  `application/sync/round_trees.py`) does not check this Mac's key; the
-  Machines tab only flags the mismatch. It needs two Macs with secrets synced.
-- **Sketch:** open questions: two Macs that keep their own values would
-  ping-pong; perhaps stop the round on such a secret instead. Needs an ADR.
 
 ### Help when a Mac is lost or retired
 

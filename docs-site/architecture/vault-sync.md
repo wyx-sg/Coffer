@@ -104,6 +104,7 @@ Every round is recorded in the round history in `runs.db` and audited, whatever 
 | `paused_cloud_folder` | The vault is inside a folder another tool synchronises. |
 | `remote_too_new` | The remote is at a newer vault layout. |
 | `older_remote_has_changes` | The remote is at an older layout and holds commits this machine never pulled. |
+| `key_mismatch` | The remote carries secrets and another machine's master key differs from this one's. |
 | `rolled_back` | A round was rolled back. |
 | `failed` | Anything else, with git's message. |
 

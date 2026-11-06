@@ -375,6 +375,25 @@ by hand.
 - **THEN** the descriptor's `key_fingerprint` is the value the route returns
 - **AND** the machines table says that a peer whose fingerprint differs from this machine's has secrets that cannot be decrypted here
 
+### Requirement: Refuse to carry secrets between machines whose master keys differ
+When the remote carries secrets (`include_secret`), a round or a join SHALL
+read every other machine's descriptor at the remote's tip before it merges,
+and when any of them publishes a `key_fingerprint` that differs from this
+machine's (or this machine has no key yet), SHALL end `key_mismatch`, naming
+those machines, with nothing pulled, checked out or pushed, and the join
+preview SHALL say it is refused. Ciphertext under another key cannot be opened
+here, and "Let the fresher secret ciphertext win" would otherwise let it
+replace a value this machine can open. A machine that publishes no fingerprint
+does not count. A remote that does not carry secrets is unaffected. The Sync
+page reports it as the problem `key_mismatch`, pointing to importing the same
+master key on Settings › Security.
+
+#### Scenario: machines whose master keys differ do not sync a remote that carries secrets
+- **GIVEN** a remote that carries secrets, joined by a machine with one master key, and a second machine with another
+- **WHEN** the second machine previews and then joins
+- **THEN** the preview is refused naming the first machine, the join ends `key_mismatch`, and no ciphertext arrives
+- **AND** once the keys match the join goes through, and a remote that does not carry secrets syncs whatever the keys
+
 ### Requirement: Scope names agents only
 `scope` MUST name agents, by uid, and nothing else — `{ agents: [...] }`.
 `null` means every agent, a non-empty list restricts to it, an empty list is

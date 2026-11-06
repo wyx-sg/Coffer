@@ -224,6 +224,7 @@ class ProblemOut(BaseModel):
         "plaintext_found",
         "cloud_folder",
         "layout",
+        "key_mismatch",
         "git_missing",
         "failed",
     ]

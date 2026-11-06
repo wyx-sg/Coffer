@@ -29,6 +29,7 @@ const FAILED: ReadonlySet<RoundStatus> = new Set([
   "paused_cloud_folder",
   "remote_too_new",
   "older_remote_has_changes",
+  "key_mismatch",
   "failed",
 ]);
 

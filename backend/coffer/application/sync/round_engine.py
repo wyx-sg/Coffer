@@ -25,7 +25,7 @@ from typing import Any
 from coffer.application.sync import round_plaintext
 from coffer.application.sync.round_deps import RoundDeps
 from coffer.application.sync.round_guard import invalid_files, merge_hold, push_hold
-from coffer.application.sync.round_layout import is_older, layout_refusal, unseen_older
+from coffer.application.sync.round_layout import is_older, refusal, unseen_older
 from coffer.application.sync.round_replace import replace
 from coffer.application.sync.round_trees import (
     conflict_files,
@@ -106,7 +106,7 @@ class RoundEngine:
             if not d.state.joined():
                 return rec(RoundStatus.JOIN_REQUIRED, detail="the remote is empty")
             return self._push(rec, remote, token, local, None)
-        refused = layout_refusal(d, tip)
+        refused = refusal(d, remote, tip)
         if refused is not None:
             return rec(refused[0], detail=refused[1])
         if is_older(d, tip):

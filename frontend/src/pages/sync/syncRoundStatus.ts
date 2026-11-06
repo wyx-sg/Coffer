@@ -33,6 +33,7 @@ const STATUS_TONE: Record<RoundStatus, Tone> = {
   auth_failed: "error",
   remote_too_new: "error",
   older_remote_has_changes: "warn",
+  key_mismatch: "error",
   failed: "error",
 };
 

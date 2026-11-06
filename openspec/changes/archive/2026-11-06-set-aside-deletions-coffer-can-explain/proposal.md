@@ -18,6 +18,9 @@ are argued in the 2026-11-06 addendum to ADR `sync-deletion-breaker`.
   it never pulled: the round ends `older_remote_has_changes` and the machine
   that pushed them upgrades and syncs first (ADR
   `every-vault-file-carries-its-format-version`, addendum 2026-11-06).
+- A remote that carries secrets is not synced while another machine's master
+  key differs from this one's: the round or join ends `key_mismatch` (ADR
+  `secrets-cross-machines-only-as-ciphertext`, addendum 2026-11-06).
 - Docs: the guide no longer says both that secret ciphertext never conflicts and
   that it offers two choices (the second is a join's differing file).
 

@@ -151,6 +151,37 @@ def test_secrets_travel_only_when_carried_and_the_fresher_ciphertext_wins(
 
 
 @pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="machines whose master keys differ do not sync a remote that carries secrets",
+)
+def test_machines_whose_master_keys_differ_do_not_sync_secrets(tmp_path: Path) -> None:
+    from coffer.application.sync.round_join import join, preview
+
+    url = str(bare_remote(tmp_path))
+    carried = SyncRemote(url=url, include_secret=True)
+    mac = Machine(tmp_path / "mac", "MacBook Pro", carried)
+    mini = Machine(tmp_path / "mini", "Mac mini", carried)
+    mac.deps.machine.key = "aaaa"  # type: ignore[attr-defined]
+    mini.deps.machine.key = "bbbb"  # type: ignore[attr-defined]
+    mac.repo.set_carry_secret(True)
+    mac.put("secret/provider/p1/key.enc", _fernet(1000))
+    join(mac.engine, carried, None)
+    shown = preview(mini.engine, carried, None)
+    assert shown.refused and "MacBook Pro" in shown.refused
+    got = join(mini.engine, carried, None)
+    assert got.status is RoundStatus.KEY_MISMATCH
+    assert mini.disk("secret/provider/p1/key.enc") is None
+    # Once the keys match, the join goes through.
+    mini.deps.machine.key = "aaaa"  # type: ignore[attr-defined]
+    assert join(mini.engine, carried, None).status is not RoundStatus.KEY_MISMATCH
+    assert mini.disk("secret/provider/p1/key.enc") == _fernet(1000)
+    # A remote that does not carry secrets syncs whatever the keys.
+    mini.deps.machine.key = "bbbb"  # type: ignore[attr-defined]
+    plain = SyncRemote(url=url)
+    assert mini.engine.run(plain, None, trigger="manual").status is not RoundStatus.KEY_MISMATCH
+
+
+@pytest.mark.acceptance(
     spec="vault-sync", scenario="ciphertext travels only when the remote carries it"
 )
 def test_ciphertext_never_leaves_a_machine_whose_remote_does_not_carry_it(

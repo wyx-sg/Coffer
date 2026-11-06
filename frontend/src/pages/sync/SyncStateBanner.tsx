@@ -73,6 +73,7 @@ export function SyncStateBanner({ status, state, runs, startedAt, onRecheck, rec
     case "cloud_folder":
     case "git_missing":
     case "layout":
+    case "key_mismatch":
     case "failed":
       return status.problem && !isIgnored(PROBLEM_REASON[status.problem.kind] ?? "") ? (
         <SyncProblemBanner

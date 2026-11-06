@@ -104,6 +104,7 @@ sequenceDiagram
 | `paused_cloud_folder` | 保险库位于另一个工具同步的文件夹中。 |
 | `remote_too_new` | 远端处于更新的保险库布局。 |
 | `older_remote_has_changes` | 远端处于更旧的布局，并且有这台机器从没拉取过的提交。 |
+| `key_mismatch` | 远端带着密钥，而另一台机器的主密钥与本机不同。 |
 | `rolled_back` | 某一轮已被回滚。 |
 | `failed` | 其他任何情况，附带 git 的消息。 |
 

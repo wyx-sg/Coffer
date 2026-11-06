@@ -26,6 +26,7 @@ const MOVED_NOTHING = new Set<string>([
   "paused_cloud_folder",
   "remote_too_new",
   "older_remote_has_changes",
+  "key_mismatch",
   "join_required",
   "waiting_on_edit",
 ]);
