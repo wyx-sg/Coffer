@@ -74,9 +74,8 @@ def _normalise(node: Any) -> Any:
     if out.get("nullable") in (True, False):
         out.pop("nullable")
     for exclusive, bound in (("exclusiveMinimum", "minimum"), ("exclusiveMaximum", "maximum")):
-        if isinstance(out.get(exclusive), bool):
-            if out.pop(exclusive) and bound in out:
-                out[exclusive] = out.pop(bound)
+        if isinstance(out.get(exclusive), bool) and out.pop(exclusive) and bound in out:
+            out[exclusive] = out.pop(bound)
     if isinstance(out.get("items"), list):
         out["prefixItems"] = out.pop("items")
         if "additionalItems" in out:

@@ -2,8 +2,9 @@
 
 Spec mcp-gateway "Relay an upstream's sampling and roots requests to the
 client" and "Relay an upstream's elicitation to the client". The upstream is
-a real MCP server process that asks the client something in the middle of a tool call (``tests/fixtures/server_requests_mcp_server.py``);
-the gateway session spawns it with the real SDK, so the test covers what the
+a real MCP server process that asks the client something in the middle of a
+tool call (``tests/fixtures/server_requests_mcp_server.py``); the gateway
+session spawns it with the real SDK, so the test covers what the
 callback-only tests never did: the SDK client session must have the callbacks
 when it is constructed. Each downstream "client" here is the session's sink,
 answering every server-initiated request the way a client posts its response.

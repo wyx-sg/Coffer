@@ -44,7 +44,8 @@ class ResponseCheck:
 
 def response_check(transport: HttpApiTransport, tool: HttpApiTool) -> ResponseCheck:
     rules = transport.rules_for(tool)
-    return ResponseCheck(rules=list(rules), headers=frozenset(rule_headers(rules) - SENSITIVE_HEADERS))
+    headers = frozenset(rule_headers(rules) - SENSITIVE_HEADERS)
+    return ResponseCheck(rules=list(rules), headers=headers)
 
 
 class HttpCallOutcome:
@@ -162,6 +163,6 @@ __all__ = [
     "HttpCallOutcome",
     "ResponseCheck",
     "mask_secrets",
-    "response_headers",
     "response_check",
+    "response_headers",
 ]

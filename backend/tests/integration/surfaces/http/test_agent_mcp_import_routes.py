@@ -295,9 +295,7 @@ def test_an_old_sse_entry_is_listed_but_neither_imported_nor_adopted(
     assert refused["error_code"] == "MCP_SSE_NOT_SUPPORTED"
     assert "SSE" in refused["error"]
 
-    r = client.post(
-        f"/api/v1/agents/{cc}/mcp-entries/legacy/adopt", json={"source": row["source"]}
-    )
+    r = client.post(f"/api/v1/agents/{cc}/mcp-entries/legacy/adopt", json={"source": row["source"]})
     assert (r.status_code, r.json()["error"]["code"]) == (422, "MCP_SSE_NOT_SUPPORTED")
     assert _files(home) == before
     assert _resources(client) == []

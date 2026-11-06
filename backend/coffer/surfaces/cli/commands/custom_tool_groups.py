@@ -91,8 +91,7 @@ def create(
     response: str | None = typer.Option(
         None,
         "--response",
-        help='Response settings as JSON {"rules": [...]}: '
-        "text, @file or -",
+        help='Response settings as JSON {"rules": [...]}: text, @file or -',
     ),
     data: str | None = _io.data_option("The whole group as JSON (text, @file or -)"),
     sets: list[str] | None = _io.set_option(),
@@ -151,8 +150,7 @@ def update(
     response: str | None = typer.Option(
         None,
         "--response",
-        help='Response settings as JSON {"rules": [...]}: '
-        "text, @file or -",
+        help='Response settings as JSON {"rules": [...]}: text, @file or -',
     ),
     data: str | None = _io.data_option(),
     sets: list[str] | None = _io.set_option(),

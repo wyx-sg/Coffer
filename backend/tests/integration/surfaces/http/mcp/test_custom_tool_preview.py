@@ -178,9 +178,7 @@ def test_a_dry_run_refuses_what_a_call_would(
 @pytest.mark.acceptance(
     spec="mcp-gateway", scenario="a test reports every response header, a cookie's value masked"
 )
-def test_a_test_reports_every_response_header(
-    daemon: BoundaryDaemon, api: FakeHttpApi
-) -> None:
+def test_a_test_reports_every_response_header(daemon: BoundaryDaemon, api: FakeHttpApi) -> None:
     _two_envs(daemon, api)
     api.echo_secret = TEST_TOKEN
     tool = {
