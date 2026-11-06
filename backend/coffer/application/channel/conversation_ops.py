@@ -22,7 +22,6 @@ if TYPE_CHECKING:
     from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.store_ports import (
     ChannelPeer,
-    ChannelThreadConversation,
     ChannelThreadConversationRepoPort,
 )
 
@@ -30,7 +29,6 @@ __all__ = [
     "ConversationPort",
     "ensure_conversation",
     "explain_conversation_error",
-    "inherited_setting",
     "open_conversation",
     "predict_conversation",
 ]
@@ -61,30 +59,6 @@ class ConversationPort(Protocol):
     async def delete_conversation(self, conversation_id: str) -> None: ...
 
 
-def inherited_setting(
-    row: ChannelThreadConversation | None,
-    group: ChannelThreadConversation | None,
-    field: str,
-) -> str | None:
-    """One sticky ``preferred_*`` setting of a thread: its own, else its group's
-    (spec channels "Keep a chat's agent, model and directory across its conversations").
-
-    The group's model was chosen for the group's agent, so a thread
-    that switched to another agent does not inherit them; its directory it
-    does."""
-    own: str | None = getattr(row, field) if row is not None else None
-    if own or group is None:
-        return own
-    own_agent = row.preferred_agent if row is not None else None
-    if field == "preferred_model" and own_agent not in (
-        None,
-        group.preferred_agent,
-    ):
-        return None
-    inherited: str | None = getattr(group, field)
-    return inherited
-
-
 async def open_conversation(
     conversations: ConversationPort,
     threads: ChannelThreadConversationRepoPort,
@@ -100,18 +74,15 @@ async def open_conversation(
 
     Conversation identity is per ``(resource_uid, chat_id, thread_id)`` — a DM
     (``thread_id=""``) and each group thread open independently, so concurrent
-    turns in different threads never collide on one conversation. A group
-    thread with no setting of its own takes the group's defaults, which live on
-    the group's ``""`` row (see "Set a group's defaults from its main chat").
-    The conversation is recorded in the thread's history, which `/resume` lists."""
+    turns in different threads never collide on one conversation. What the
+    thread has not set comes from the channel's defaults. The conversation is
+    recorded in the thread's history, which `/resume` lists."""
     row = await threads.get(binding.resource.uid, peer.chat_id, thread_id)
     kind = chat_kind or (row.chat_kind if row is not None else None)
-    group = None
-    if thread_id and kind == "group":
-        group = await threads.get(binding.resource.uid, peer.chat_id, "")
 
     def pick(field: str) -> str | None:
-        return inherited_setting(row, group, field)
+        value: str | None = getattr(row, field) if row is not None else None
+        return value
 
     spec = resolve_conversation_spec(
         default_agent=binding.default_agent,

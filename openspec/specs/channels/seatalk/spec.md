@@ -547,18 +547,18 @@ conversation ([channels](../spec.md) "Key conversation identity by channel, chat
 - **WHEN** the owner taps a `/thread` button, or sends `/thread` inside a thread
 - **THEN** the bot posts the mark as a new direct-chat message, whose id is the thread's
 
-### Requirement: Mark a main-chat mention as the group's main chat
+### Requirement: Root a main-chat mention's thread at the message itself
 A SeaTalk @mention sent in a group's main chat carries no thread id, and the
-reply roots a new thread at the message itself. The transport MUST mark such a
-message as coming from the group's main chat, so the core can treat a command
-sent there as setting the group's defaults (spec channels "Set a group's
-defaults from its main chat"); a mention inside a thread is not marked.
+reply roots a new thread at the message itself. The transport MUST give such a
+message its own message id as its thread, so the message, and a command sent
+there, belong to that new thread like any other; a mention inside a thread keeps
+its thread.
 
-#### Scenario: a main-chat @mention is marked as group main
+#### Scenario: a main-chat @mention roots its thread at itself
 - **GIVEN** a SeaTalk channel receiving group @mention events
 - **WHEN** one arrives with no thread id and another arrives inside a thread
-- **THEN** the first is marked as the group's main chat with its own message id as
-  the thread, and the second is not marked
+- **THEN** the first has its own message id as its thread, and the second keeps
+  its thread
 
 ### Requirement: Show only typing while a turn runs
 A SeaTalk turn MUST show its progress through the typing indicator alone (see

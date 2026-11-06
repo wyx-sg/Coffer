@@ -171,7 +171,6 @@ class SeaTalkAdapter:
                     chat_kind="group",
                     addressed=True,
                     thread_id=in_thread or message_id,
-                    group_main=not in_thread,
                     quoted_message_id=str(message.get("quoted_message_id") or ""),
                     forwarded=tag == "combined_forwarded_chat_history",
                     forwarded_items=combined_forwarded_items(message),

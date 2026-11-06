@@ -330,9 +330,9 @@ def _group_mention(event_id: str, message_id: str, thread_id: str) -> dict[str, 
 
 
 @pytest.mark.acceptance(
-    spec="channels/seatalk", scenario="a main-chat @mention is marked as group main"
+    spec="channels/seatalk", scenario="a main-chat @mention roots its thread at itself"
 )
-async def test_a_main_chat_mention_is_marked_as_group_main(fake_seatalk: FakeSeaTalk) -> None:
+async def test_a_main_chat_mention_roots_its_thread_at_itself(fake_seatalk: FakeSeaTalk) -> None:
     adapter = make_seatalk_adapter(fake_seatalk)
     recorder = RecordingCallbacks()
     await adapter.start(recorder.as_callbacks())
@@ -343,9 +343,9 @@ async def test_a_main_chat_mention_is_marked_as_group_main(fake_seatalk: FakeSea
         await adapter.stop()
 
     main, threaded = recorder.messages
-    # The main-chat mention roots its thread at itself — and says it came from the main chat.
-    assert (main.thread_id, main.group_main) == ("gm-9", True)
-    assert (threaded.thread_id, threaded.group_main) == ("t-1", False)
+    # The main-chat mention roots its thread at itself.
+    assert main.thread_id == "gm-9"
+    assert threaded.thread_id == "t-1"
     assert main.text == threaded.text == "/model opus"
 
 

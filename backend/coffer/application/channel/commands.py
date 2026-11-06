@@ -102,15 +102,12 @@ class ChannelCommands:
         chat_kind: str = "direct",
         thread_id: str = "",
         conversation_thread_id: str,
-        group_main: bool = False,
         quoted_message_id: str = "",
         command_message_id: str = "",
     ) -> None:
         """Dispatch one reserved command. ``thread_id`` is where the answer goes;
         ``conversation_thread_id`` is which conversation it is about (see "Key
-        conversation identity by channel, chat and thread") — ``""``, the
-        group's defaults, when ``group_main`` (spec channels "Set a group's
-        defaults from its main chat")."""
+        conversation identity by channel, chat and thread")."""
         ctx = CommandContext(
             commands=self,
             binding=binding,
@@ -120,7 +117,6 @@ class ChannelCommands:
             chat_kind=chat_kind,
             thread_id=thread_id,
             conversation_thread_id=conversation_thread_id,
-            group_main=group_main,
             quoted_message_id=quoted_message_id,
             command_message_id=command_message_id,
         )
@@ -143,9 +139,6 @@ class ChannelCommands:
             await _HANDLERS[name](ctx, text)
 
     async def _stop(self, ctx: CommandContext) -> None:
-        if ctx.group_main:
-            await self._stop_group(ctx)
-            return
         await self.interrupt(
             ctx.binding,
             ctx.peer,
@@ -223,17 +216,6 @@ class ChannelCommands:
         except ConversationNotFound:
             return "Untitled conversation"
         return str(conversation.title or "").strip() or "Untitled conversation"
-
-    async def _stop_group(self, ctx: CommandContext) -> None:
-        """`/stop` in a SeaTalk group's main chat: every turn in the group."""
-        running = self.running_in_chat(ctx.binding.resource.uid, ctx.chat_id)
-        if not running:
-            return
-        titles = [await self._title(conversation_id) for conversation_id in running]
-        for conversation_id in running:
-            self._turns.interrupt_turn(conversation_id)
-        noun = "conversation" if len(running) == 1 else "conversations"
-        await ctx.say(f"⏹ Stopping {len(running)} {noun}:\n" + "\n".join(f"• {t}" for t in titles))
 
     async def dispatch_callback(
         self,

@@ -65,7 +65,6 @@ def _group(text: str, thread_id: str, *, main: bool = False) -> object:
         sender_id="owner",
         thread_id=thread_id,
         platform_message_id=thread_id if main else "pm-1",
-        group_main=main,
     )
 
 

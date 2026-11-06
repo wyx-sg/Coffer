@@ -378,8 +378,7 @@ read everything the owner keeps in Coffer, so the owner MUST be able to take any
 reply back. Two owner-only ways do it, and both end the same way. The command
 `/del` withdraws the reply it QUOTES (the platform's reply pointer or quote), the
 whole reply — every part a long answer was cut into and the files it carried — and `/del` with no quote withdraws the bot's most recent reply in
-that chat (in a thread, in that thread; in a group's main chat, anywhere in the
-group). It works in groups and in direct chats. And every bot reply in a group
+that chat (in a thread, in that thread). It works in groups and in direct chats. And every bot reply in a group
 carries a 🗑 button on its last text message, where the transport has buttons and
 can withdraw at all.
 
@@ -2276,30 +2275,6 @@ nothing.
 - **WHEN** the owner sends `/status`
 - **THEN** the state line reads "⏸ 1 on hold" and the card carries Continue, Discard, Model and Dir
 
-### Requirement: Set a group's defaults from its main chat
-On a platform where every @mention in a group's main chat roots a fresh thread
-(SeaTalk), a command sent in the main chat MUST configure the group rather than
-that one-message thread: `/new <agent>` sets the group's default agent, which
-every new thread of the group inherits (see "Keep a chat's agent, model and directory across its conversations"), and the answer says so, while bare `/new` says what the
-defaults are; and `/stop` interrupts every turn running in that group and lists
-what it stopped. A thread's own settings still win inside it. `/model`, `/dir`,
-`/status` and `/resume` are direct-chat commands and set nothing here (see
-"Answer the conversation commands from any paired chat"). Where a group's main
-chat is itself one conversation (a Telegram group without topics) nothing
-changes: commands apply to that conversation.
-
-#### Scenario: an agent sent in a SeaTalk group's main chat becomes the default for new threads
-- **GIVEN** a paired SeaTalk group
-- **WHEN** the owner sends `@bot /new <agent>` in the group's main chat, and
-  later @mentions the bot with a question in the main chat
-- **THEN** the first answer says the agent is the default for new threads, and
-  the question's thread runs on that agent
-
-#### Scenario: /stop in a SeaTalk group's main chat stops every turn in the group
-- **GIVEN** a paired SeaTalk group with turns running in two of its threads
-- **WHEN** the owner sends `@bot /stop` in the group's main chat
-- **THEN** both turns are interrupted and the answer lists both
-
 ### Requirement: Shape a reply for what the chat can show
 A finished reply MUST pass one structure pass before the platform renderer,
 driven by the transport's declared capabilities, never its type:
@@ -2503,9 +2478,9 @@ the chat (see "Keep a chat's agent, model and directory across its conversations
 ### Requirement: Keep a chat's agent, model and directory across its conversations
 A chat thread MUST remember its settings — the agent, the model and the working directory — and a fresh conversation opened there, by
 `/new`, by a deleted conversation being replaced, or by `/dir`, MUST open with
-them. What the thread has not set falls back, in a group thread, to the group's
-defaults (see "Set a group's defaults from its main chat"), and then to the
-channel's own default agent and agent configuration. `/model default` and `/dir
+them. What the thread has not set falls back to the channel's own default agent
+and agent configuration: each group thread keeps its own settings, and a new one
+starts from the channel's. `/model default` and `/dir
 default` are the ways back to the defaults.
 
 A conversation `/dir` replaces MUST be deleted when no turn ever ran in it (it
@@ -2541,10 +2516,10 @@ agent drops it.
 - **AND** the second opens with no model but on the default directory
 - **AND** changing the channel's default agent removes the default model
 
-#### Scenario: a group thread inherits the group's defaults
-- **GIVEN** a group whose defaults name an agent
-- **WHEN** the owner starts a new thread in that group
-- **THEN** that thread's conversation opens on the group's agent
+#### Scenario: a new group thread starts from the channel's defaults
+- **GIVEN** a group thread where the owner switched the agent with `/new <agent>`
+- **WHEN** the owner starts another thread in that group
+- **THEN** that thread's conversation opens on the channel's default agent
 
 ### Requirement: Hand inbound attachments to the turn as references
 An inbound attachment MUST reach the turn that carries it as a **reference** —

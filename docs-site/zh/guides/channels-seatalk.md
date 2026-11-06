@@ -120,7 +120,7 @@ SeaTalk 没有启动链接，所以要你手动输入配对码。它只能用一
 
 每个群组线程都是一个独立的对话，所以你可以在一个线程里用 Claude Code，在另一个线程里用 Codex。群组里的回答以 @ 你开头，所以 SeaTalk 会通知你。
 
-因为在主聊天里 @ 提及总会开一个新线程，所以在主聊天里发 `@bot /new <agent>` 设置的是**群组的默认智能体**，群组里每个新线程都从它开始；`@bot /stop` 停止群组里正在运行的所有轮次。`/del` 撤回回复，见[回复的样子](#how-replies-look)。`/model`、`/dir`、`/status`、`/resume`、`/thread` 和 `/close` 只能在私聊里用，在群里发会得到一行私下的提示。在群组线程里，`/new` 和 `/stop` 只作用于该线程。见 [SeaTalk 上的群组默认值](/zh/reference/channel-commands#group-defaults-on-seatalk)。
+因为在主聊天里 @ 提及总会开一个新线程，所以在主聊天里发的命令（比如 `@bot /new <agent>`）作用于这个新线程。`/del` 撤回回复，见[回复的样子](#how-replies-look)。`/model`、`/dir`、`/status`、`/resume`、`/thread` 和 `/close` 只能在私聊里用，在群里发会得到一行私下的提示。在群组线程里，`/new` 和 `/stop` 只作用于该线程，新线程从消息渠道的默认智能体开始。
 
 SeaTalk 没有**仅在被 @ 时回复**开关：它本来就只投递 @ 提及，机器人每条都回复，即使同时 @ 了其他人。
 

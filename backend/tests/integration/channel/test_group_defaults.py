@@ -1,24 +1,21 @@
-"""The agent sent with ``/new`` in a SeaTalk group's main chat becomes the group's
-default (spec channels "Set a group's defaults from its main chat" and "Keep a chat's agent, model
-and directory across its conversations"); the direct-chat commands only answer
-where they work.
+"""A group's threads each keep their own agent, model and directory, and a new
+thread starts from the channel's defaults (spec channels "Keep a chat's agent,
+model and directory across its conversations"); the direct-chat commands only
+answer where they work.
 
-A main-chat @mention roots a new thread at itself, so the message carries
-``group_main=True`` and ``thread_id`` = its own id: the answer goes to that
-thread, the setting to the group's ``""`` row.
+A SeaTalk main-chat @mention roots a new thread at itself, so ``thread_id`` is
+the message's own id: a command there is about that new thread like any other.
 """
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
 import pytest
 
 from coffer.domain.channel.commands import DM_ONLY_NOTICE
 
-from .conftest import ChannelEnv, FakeChannelAdapter, Resource, inbound, uid_of, wait_until
-from .test_queue_and_stop import GatedAdapter
+from .conftest import ChannelEnv, FakeChannelAdapter, Resource, inbound, wait_until
 
 GROUP = "grp-1"
 
@@ -32,7 +29,6 @@ def _main(text: str, message_id: str = "m-1") -> object:
         sender_id="owner-1",
         thread_id=message_id,
         platform_message_id=message_id,
-        group_main=True,
     )
 
 
@@ -50,26 +46,25 @@ async def _channel(
 
 
 @pytest.mark.acceptance(
-    spec="channels",
-    scenario="an agent sent in a SeaTalk group's main chat becomes the default for new threads",
+    spec="channels", scenario="a new group thread starts from the channel's defaults"
 )
-async def test_a_main_chat_agent_becomes_the_default_for_new_threads(env: ChannelEnv) -> None:
+async def test_a_new_group_thread_starts_from_the_channels_defaults(env: ChannelEnv) -> None:
     env.add_agent("codex", reply="codex-here")
     resource, adapter = await _channel(env)
 
+    # /new codex in the main chat opens its own thread on Codex.
     await env.processor.on_message(_main("/new codex", "m-1"))
+    first = await env.active_conversation(resource, GROUP, "m-1")
+    assert first is not None
+    assert (await env.chat.get_conversation(first)).agent_key == "codex"
+    assert adapter.texts()[-1].startswith("🆕 New conversation · Codex")
 
-    row = await env.threads.get(resource.uid, GROUP, "")
-    assert row is not None and row.preferred_agent == "codex"
-    # Nothing was opened: neither for the group row nor for the rooted thread.
-    for thread in ("", "m-1"):
-        assert await env.active_conversation(resource, GROUP, thread) is None
-    answers = [(text, thread) for _chat, text, thread, _kind in adapter.sent_routed]
-    assert answers == [("🔀 Agent set to Codex — default for new threads in this group.", "m-1")]
-
-    # Bare /new there says what the defaults are.
-    await env.processor.on_message(_main("/new", "m-4"))
-    assert adapter.texts()[-1].startswith("Defaults for new threads in this group: Codex")
+    # The next thread keeps nothing of it: it opens on the channel's default.
+    await env.send(_in_thread("hello", "th-2"))
+    await wait_until(lambda: "Hello world" in adapter.texts())
+    second = await env.active_conversation(resource, GROUP, "th-2")
+    assert second is not None
+    assert (await env.chat.get_conversation(second)).agent_key == "builtin"
 
 
 @pytest.mark.acceptance(
@@ -89,55 +84,3 @@ async def test_a_dm_only_command_in_a_group_is_declined_and_changes_nothing(
     assert await env.threads.get(resource.uid, GROUP, "m-1") is None
     # Nothing reached the agent as a message.
     assert await env.active_conversation(resource, GROUP, "m-1") is None
-
-
-@pytest.mark.acceptance(spec="channels", scenario="a group thread inherits the group's defaults")
-async def test_a_group_thread_inherits_the_groups_defaults(env: ChannelEnv) -> None:
-    codex = env.add_agent("codex", reply="codex-here")
-    resource, adapter = await _channel(env)
-    await env.processor.on_message(_main("/new codex"))
-
-    # A plain message in the main chat is an ordinary turn in the new thread,
-    # and that thread opens on the group's defaults.
-    await env.send(_main("hello", "m-9"))
-    await wait_until(lambda: "codex-here" in adapter.texts())
-
-    conversation_id = await env.active_conversation(resource, GROUP, "m-9")
-    assert conversation_id is not None
-    assert (await env.chat.get_conversation(conversation_id)).agent_key == "codex"
-    assert codex.last_agent_config is not None
-
-
-@pytest.mark.acceptance(
-    spec="channels", scenario="/stop in a SeaTalk group's main chat stops every turn in the group"
-)
-async def test_stop_in_the_main_chat_stops_every_turn_in_the_group(env: ChannelEnv) -> None:
-    resource, adapter = await _channel(env)
-    before = list(adapter.texts())
-    await env.processor.on_message(_main("/stop", "m-0"))
-    assert adapter.texts() == before
-
-    gated = GatedAdapter()
-    env.provider.adapter = gated
-    await env.send(_in_thread("deploy the api", "th-1"))
-    await env.send(_in_thread("write the docs", "th-2"))
-    await wait_until(
-        lambda: len(env.processor._running_in_chat(uid_of("tg"), GROUP)) == 2,
-        message="both thread turns should be running",
-    )
-    titles = [
-        (await env.chat.get_conversation(await env.active_conversation(resource, GROUP, t))).title
-        for t in ("th-1", "th-2")
-    ]
-
-    await env.processor.on_message(_main("/stop", "m-2"))
-
-    reply = adapter.texts()[-1].splitlines()
-    assert reply[0] == "⏹ Stopping 2 conversations:"
-    assert sorted(reply[1:]) == sorted(f"• {t}" for t in titles)
-    await wait_until(
-        lambda: env.processor._running_in_chat(uid_of("tg"), GROUP) == [],
-        message="every turn in the group should have stopped",
-    )
-    gated.release.set()
-    await asyncio.sleep(0)

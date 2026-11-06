@@ -202,11 +202,6 @@ without an ordinal is a casual reply, which is what folds it into the direct
 chat's conversation. `chat_kind`, the three `preferred_*` settings and
 `parallel_closed_at` are nullable too.
 
-A group's `thread_id=""` row doubles as the **group's defaults** ("Set a
-group's defaults from its main chat"): a group thread with no setting of its own
-opens with the group row's, except that a model chosen for another
-agent is not inherited.
-
 ### `channel_thread_history`
 
 Every conversation a chat thread opened — what `/resume` lists ("Resume an

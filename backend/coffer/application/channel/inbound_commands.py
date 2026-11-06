@@ -70,22 +70,15 @@ async def route_slash(
         await burst.drop(key)
     else:
         await burst.flush(key)
-    # A SeaTalk group's main-chat message roots a new thread; a command there
-    # is about the group's defaults (its ``""`` row), while the answer still
-    # goes to that thread (spec channels "Set a group's defaults from its main
-    # chat"). A non-command there stays an ordinary turn in the new thread.
-    group_main = msg.group_main and msg.chat_kind == "group"
-    conv_thread = "" if group_main else conversation_thread_id
     await commands.handle(
         binding,
         peer,
         text,
-        session(binding.resource.uid, peer.chat_id, conv_thread),
+        session(binding.resource.uid, peer.chat_id, conversation_thread_id),
         send,
         chat_kind=msg.chat_kind,
         thread_id=msg.thread_id,
-        conversation_thread_id=conv_thread,
-        group_main=group_main,
+        conversation_thread_id=conversation_thread_id,
         quoted_message_id=msg.quoted_message_id or msg.replies_to_message_id,
         command_message_id=msg.platform_message_id,
     )

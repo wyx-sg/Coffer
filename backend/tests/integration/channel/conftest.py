@@ -144,7 +144,6 @@ def inbound(
     sender_mention_id: str = "",
     attachments: Sequence[InboundAttachment] = (),
     quoted_message_id: str = "",
-    group_main: bool = False,
     timestamp: datetime | None = None,
 ) -> InboundMessage:
     return InboundMessage(
@@ -166,7 +165,6 @@ def inbound(
         addressed=addressed,
         attachments=tuple(attachments),
         quoted_message_id=quoted_message_id,
-        group_main=group_main,
     )
 
 

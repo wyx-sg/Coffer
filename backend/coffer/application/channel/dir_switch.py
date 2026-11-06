@@ -9,9 +9,6 @@ to its directory, a switch records the sticky directory and opens a fresh
 conversation there — the previous one stays one `/resume` away. `/dir default`
 clears it; bare `/dir` shows what is in effect and the allow-list as a card.
 
-In a SeaTalk group's main chat only the group's default is written (spec
-channels "Set a group's defaults from its main chat").
-
 Application layer only: plain ``os.path`` reads, no infrastructure import.
 """
 

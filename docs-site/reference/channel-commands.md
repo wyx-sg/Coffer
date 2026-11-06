@@ -40,8 +40,8 @@ Names are the ones you see, never internal ids. An agent is its display name or 
 
 | Command | Direct chat | Parallel thread | Group thread | Group main chat |
 | --- | --- | --- | --- | --- |
-| `/new [agent]` | ✓ | ✓ | ✓ | SeaTalk: sets the group's default agent; bare shows it |
-| `/stop` | ✓ | ✓ | ✓ | SeaTalk: stops every turn running in the group |
+| `/new [agent]` | ✓ | ✓ | ✓ | SeaTalk: opens a conversation in the new thread |
+| `/stop` | ✓ | ✓ | ✓ | SeaTalk: nothing runs there yet |
 | `/status` | ✓, with the parallel threads | ✓ | Direct chat only | Direct chat only |
 | `/model` | ✓ | ✓ | Direct chat only | Direct chat only |
 | `/dir` | ✓ | ✓ | Direct chat only | Direct chat only |
@@ -69,7 +69,7 @@ A word that is one slip away from a command — `/stpo`, `/stat`, `/threads` —
 
 Each chat, and each thread in it, remembers three settings: the agent, the model and the working directory. Every fresh conversation opened there — by `/new`, by `/dir`, or because the old conversation was deleted — starts with them.
 
-This is why `/new` is safe to use often: it clears the context, not your choices. What a chat has not set falls back to its group's defaults (in a group thread), then to the channel's default agent and configuration.
+This is why `/new` is safe to use often: it clears the context, not your choices. What a chat has not set falls back to the channel's default agent and configuration; each group thread keeps its own settings, and a new one starts from the channel's.
 
 - `/new <agent>` switches the agent and remembers it. A model chosen for the previous agent does not follow it, because one agent's model means nothing to another; the directory does follow.
 - An existing conversation cannot change its agent or directory — an agent session is tied to both — so switching either opens a fresh conversation. The old one stays one `/resume` away.
@@ -145,15 +145,6 @@ Messages you sent while a turn was running wait in a queue. `/stop` stops the tu
 - **Discard** throws them away (“🗑 Discarded 2 queued messages.”); what you send next runs on its own.
 
 Sending any message also continues them, ahead of the new one. Where the platform can edit the “Stopping…” message (Telegram) the buttons sit on that message; elsewhere (SeaTalk) the held line follows the reply as its own card. `/status` shows **⏸ 2 on hold** and the same two buttons for as long as they are held. A tap after they were already continued or discarded answers “Nothing is on hold any more.”.
-
-## Group defaults on SeaTalk
-
-On SeaTalk every @mention in a group's main chat roots a fresh thread, so a setting sent there would configure a thread nobody continues. Instead, the two commands a group may send in the main chat configure the group:
-
-- `@bot /new <agent>` sets the group's default agent, and the answer says "default for new threads in this group". Every new thread in the group starts on it; a thread's own settings still win inside it.
-- `@bot /stop` interrupts every turn running in the group and lists what it stopped.
-
-`/model`, `/dir`, `/status` and `/resume` no longer set group defaults there; they are direct-chat commands and get the private notice. A Telegram group's main chat is itself one conversation, so `/new` and `/stop` there apply to that conversation as usual.
 
 ## Command menus
 
