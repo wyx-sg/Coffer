@@ -2478,6 +2478,12 @@ defaults (see "Set a group's defaults from its main chat"), and then to the
 channel's own default agent and agent configuration. `/model default` and `/dir
 default` are the ways back to the defaults.
 
+A conversation `/dir` replaces MUST be deleted when no turn ever ran in it (it
+holds no agent session) and no turn is running in the chat, so setting the
+directory before the first message leaves one conversation in the list, not an
+empty one beside the new one. A conversation that has run stays; `/new` keeps the
+conversation it leaves.
+
 The channel MAY also name a default model for its default agent (Overview ›
 Agents › Default model, stored as the default agent configuration's `model`).
 It applies only while the default agent is the agent in effect: a thread whose
@@ -2491,6 +2497,12 @@ agent drops it.
 - **WHEN** the owner sends `/new`
 - **THEN** the fresh conversation runs on the same agent, model and
   directory
+
+#### Scenario: a conversation nothing ran in is replaced, not kept beside the new one
+- **GIVEN** a chat whose current conversation has had no turn
+- **WHEN** the owner sends `/dir` to another allowed directory
+- **THEN** the fresh conversation opens in that directory and the empty one is gone from the list
+- **AND** a conversation that did run is kept when `/dir` opens a new one
 
 #### Scenario: the channel's default model applies only to its default agent
 - **GIVEN** a channel whose default agent has a default model and a default directory

@@ -97,7 +97,7 @@ async def apply_dir(ctx: CommandContext, path: str | None) -> None:
         ctx.resource_uid, ctx.chat_id, ctx.conversation_thread_id, cwd=path
     )
     shown = path_label(path or default_cwd(ctx.binding))
-    if await open_fresh(ctx):
+    if await open_fresh(ctx, replace_unused=True):
         await ctx.say(f"📁 Now in {shown} — started a fresh conversation.")
 
 

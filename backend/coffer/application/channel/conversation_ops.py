@@ -58,6 +58,8 @@ class ConversationPort(Protocol):
 
     async def rename_conversation(self, conversation_id: str, *, new_title: str) -> Any: ...
 
+    async def delete_conversation(self, conversation_id: str) -> None: ...
+
 
 def inherited_setting(
     row: ChannelThreadConversation | None,
