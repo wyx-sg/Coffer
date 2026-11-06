@@ -7,7 +7,7 @@ description: Have an agent do something at a time you choose, in one of your cha
 
 A **scheduled task** is a turn Coffer starts by itself: at the time you choose, it sends a prompt to an agent, either in one of your chats, where the reply goes like any other, or in a new conversation of its own, like Claude Code's and Codex's own automations. A morning summary, a weekly check, a reminder in a group thread — and, when an agent says "I'll check again after the deploy", the follow-up it books for itself. The **daily report** on a channel is a scheduled task too.
 
-Every task is on the **Scheduled tasks** page (Run › Scheduled tasks), with its history. The same page shows Coffer's own background work, read-only.
+Every task is on the **Scheduled tasks** page (Run › Scheduled tasks), with its history.
 
 Scheduled tasks are an [experimental feature](/guides/experimental-features): switch them on in **Settings → Features** first. While they are off, no task runs and agents cannot book follow-ups; your tasks and their history are kept.
 
@@ -92,7 +92,6 @@ Turn **Catch up** off on a task to skip every missed run instead.
 
 - **My tasks**: the ones you set up, the daily report among them. Each row says when it runs next, or that it is paused or failing.
 - **Follow-ups**: the ones agents booked.
-- **Coffer internal**: Coffer's own background work — sync, memory sync, cleaning up old records, keeping agents' config files in line, starting scheduled tasks, and more — with how each is woken and when it last ran. Nothing here can be changed: these settings live on their own pages.
 
 Open a task for its header (**Run now**, **Pause** or **Resume**, **Edit**, and **⋯ › Delete**), what it does, and **History**: every run, newest first, with how it ended — **Replied**, **Nothing to say**, **Done** (a task in no chat), **Skipped**, **Failed**, **Stopped** — and why. A run that used a conversation names it as a link: it takes you to that conversation on the **Conversations** page, selected in the list, and opens it in your terminal, so you can read what the run did and carry the conversation on. Runs are kept for 90 days by default; change it in Settings › Data.
 

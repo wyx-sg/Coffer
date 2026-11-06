@@ -1,31 +1,25 @@
-// src/components/scheduled-tasks/TaskList.tsx — the Scheduled tasks list pane: a filter ("/" focuses it), My tasks, Follow-ups, then Coffer internal.
+// src/components/scheduled-tasks/TaskList.tsx — the Scheduled tasks list pane: a filter ("/" focuses it), My tasks, Follow-ups.
 //
 // My tasks are the ones the owner set up (the daily report among them);
-// Follow-ups the ones an agent booked in a thread. Coffer internal lists the
-// daemon's own background workers, read-only, every one of them: the ones a
-// person recognises first, then the rest by name (spec daemon "Show Coffer's
-// own background work beside the owner's tasks").
+// Follow-ups the ones an agent booked in a thread (spec channels "Manage
+// scheduled tasks from the Scheduled tasks page").
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ListLoadError, ListLoadingRows } from "@/components/ListPaneStates";
 import { SearchInput } from "@/components/SearchInput";
-import type { DaemonWorker } from "@/lib/api/daemon";
 import type { ScheduledTask } from "@/lib/api/scheduledTasks";
-import { groupTasks, orderWorkers, workerLabel } from "@/lib/scheduledTasks/format";
+import { groupTasks } from "@/lib/scheduledTasks/format";
 import { TaskRow } from "./TaskRow";
-import { WorkerRow } from "./WorkerRow";
 
 interface Props {
   items: ScheduledTask[];
-  workers: DaemonWorker[];
   loading: boolean;
   error?: unknown;
   onRetry?: () => void;
-  /** The open task's uid, or `internal:<worker>`. */
+  /** The open task's uid. */
   selected: string | null;
   onOpen: (uid: string) => void;
-  onOpenWorker: (name: string) => void;
 }
 
 function Heading({ children }: { children: string }) {
@@ -40,15 +34,11 @@ function Heading({ children }: { children: string }) {
 }
 
 export function TaskList(props: Props) {
-  const { items, workers, loading, error, onRetry, selected, onOpen, onOpenWorker } = props;
+  const { items, loading, error, onRetry, selected, onOpen } = props;
   const { t } = useTranslation();
   const [filter, setFilter] = useState("");
   const { mine, followUps } = groupTasks(items, filter);
   const q = filter.trim().toLowerCase();
-  const { featured, rest } = orderWorkers(
-    q ? workers.filter((w) => workerLabel(t, w.name).toLowerCase().includes(q)) : workers,
-  );
-  const shownWorkers = [...featured, ...rest];
   const groups = [
     { key: "mine", rows: mine },
     { key: "followUps", rows: followUps },
@@ -91,21 +81,6 @@ export function TaskList(props: Props) {
             </section>
           ))
         )}
-        {shownWorkers.length > 0 ? (
-          <section className="mb-3" aria-label={t("scheduledTasks.list.internal")}>
-            <Heading>{t("scheduledTasks.list.internal")}</Heading>
-            <ul>
-              {shownWorkers.map((w) => (
-                <WorkerRow
-                  key={w.name}
-                  worker={w}
-                  selected={selected === `internal:${w.name}`}
-                  onOpen={() => onOpenWorker(w.name)}
-                />
-              ))}
-            </ul>
-          </section>
-        ) : null}
       </div>
     </div>
   );

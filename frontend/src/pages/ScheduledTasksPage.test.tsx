@@ -1,4 +1,4 @@
-// src/pages/ScheduledTasksPage.test.tsx — the Scheduled tasks page: the owner's tasks beside the open one, New task, and Coffer's own workers.
+// src/pages/ScheduledTasksPage.test.tsx — the Scheduled tasks page: the owner's tasks beside the open one, and New task.
 //
 // Real QueryClientProvider; only the api modules are mocked.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -7,7 +7,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
-import type { DaemonWorker } from "@/lib/api/daemon";
 import type { ScheduledRun, ScheduledTask } from "@/lib/api/scheduledTasks";
 import { acceptance } from "@/test/acceptance";
 import { ScheduledTasksPage } from "./ScheduledTasksPage";
@@ -23,13 +22,11 @@ vi.mock("@/lib/api/scheduledTasks", () => ({
     setDailyReport: vi.fn(),
   },
 }));
-vi.mock("@/lib/api/daemon", () => ({ daemonApi: { status: vi.fn() } }));
 vi.mock("@/lib/api/resources", () => ({
   resourcesApi: { update: vi.fn(), enable: vi.fn(), disable: vi.fn(), remove: vi.fn() },
 }));
 const { scheduledTasksApi } = await import("@/lib/api/scheduledTasks");
 const api = vi.mocked(scheduledTasksApi);
-const { daemonApi } = await import("@/lib/api/daemon");
 const { resourcesApi } = await import("@/lib/api/resources");
 
 function task(over: Partial<ScheduledTask> & { uid: string; name: string }): ScheduledTask {
@@ -67,28 +64,6 @@ const FOLLOW_UP = task({
   },
 });
 
-function worker(name: string, over: Partial<DaemonWorker> = {}): DaemonWorker {
-  return {
-    name,
-    mode: "timer",
-    state: "waiting",
-    runs: 4,
-    failures: 0,
-    last_ok: true,
-    last_started_at: "2026-10-29T09:55:00Z",
-    last_duration_ms: 12,
-    next_run_at: null,
-    ...over,
-  };
-}
-
-const WORKERS = [
-  worker("sync-worker"),
-  worker("reconciler", { mode: "event+fallback" }),
-  worker("scheduled-tasks", { mode: "event+fallback" }),
-  worker("usage-ingest", { mode: "event" }),
-];
-
 function Where() {
   const { pathname } = useLocation();
   return <div data-testid="where">{pathname}</div>;
@@ -102,7 +77,6 @@ function renderPage(path = "/scheduled-tasks") {
         <MemoryRouter initialEntries={[path]}>
           <Routes>
             <Route path="/scheduled-tasks" element={<ScheduledTasksPage />} />
-            <Route path="/scheduled-tasks/internal/:worker" element={<ScheduledTasksPage />} />
             <Route path="/scheduled-tasks/:uid" element={<ScheduledTasksPage />} />
           </Routes>
           <Where />
@@ -131,9 +105,6 @@ beforeEach(() => {
     },
     { channel: "ch-1", channel_name: "Work", chat_id: "grp", chat_kind: "group", label: "Release" },
   ]);
-  vi.mocked(daemonApi.status).mockResolvedValue({
-    runtime: { workers: WORKERS },
-  } as unknown as Awaited<ReturnType<typeof daemonApi.status>>);
 });
 afterEach(() => vi.clearAllMocks());
 
@@ -267,26 +238,5 @@ describe("ScheduledTasksPage", () => {
       },
     });
     expect(body.config).not.toHaveProperty("chat");
-  });
-
-  acceptance("daemon", "the internal section lists the daemon's workers", async () => {
-    renderPage();
-    await screen.findByRole("heading", { name: "Morning summary" });
-    // Every worker: the recognised ones in the catalogue's order, then the rest.
-    expect(rows("Coffer internal")).toEqual([
-      "Sync",
-      "Reconciler",
-      "Scheduled tasks",
-      "Usage import",
-    ]);
-    expect(screen.queryByRole("button", { name: /^Show all/ })).not.toBeInTheDocument();
-    fireEvent.click(
-      within(screen.getByRole("region", { name: "Coffer internal" })).getByText("Sync"),
-    );
-    expect(screen.getByTestId("where")).toHaveTextContent("/scheduled-tasks/internal/sync-worker");
-    expect(await screen.findByRole("heading", { name: "Sync" })).toBeInTheDocument();
-    expect(screen.getByText("Runs on a timer")).toBeInTheDocument();
-    // Read-only: nothing here runs or pauses a worker.
-    expect(screen.queryByRole("button", { name: "Run now" })).not.toBeInTheDocument();
   });
 });

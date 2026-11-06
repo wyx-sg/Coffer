@@ -18,7 +18,7 @@ for two things that need Coffer to start one itself:
 
 The owner's own direction, on reviewing the first draft: the core concept is the
 **scheduled task**, and a follow-up and the daily report are each a kind of
-task. They also asked to see Coffer's own background work on the same page.
+task.
 
 Forces:
 
@@ -237,9 +237,6 @@ Rules a change must keep:
 - **Experimental.** The `scheduled_tasks` feature is off until the owner
   switches it on, per Mac; off, nothing runs, the tools are withdrawn and the
   surfaces are hidden, and nothing is deleted.
-- **Coffer's own work.** Every background worker reports to the worker
-  registry (a plain timer loop through `TimedWorker`), and the Scheduled tasks
-  page lists them read-only beside the owner's tasks.
 
 ## Consequences
 

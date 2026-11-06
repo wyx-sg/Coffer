@@ -34,7 +34,6 @@ from typing import Protocol
 
 from coffer.application.provider.ports import ModelList
 from coffer.application.runtime.supervisor import spawn
-from coffer.application.runtime.workers import TimedWorker
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.provider.config import Protocol as Wire
 from coffer.domain.provider.config import ProviderConfig
@@ -224,19 +223,13 @@ class ProviderHealthService:
         if not self._background:
             return
         self._stop.clear()
-        report = TimedWorker("provider-health")
-        try:
-            while not self._stop.is_set():
-                try:
-                    with report.pass_():
-                        await self.check_all()
-                except Exception:
-                    _log.exception("provider_health.sweep_failed")
-                report.sleeping(interval)
-                with contextlib.suppress(TimeoutError):
-                    await asyncio.wait_for(self._stop.wait(), timeout=interval)
-        finally:
-            report.close()
+        while not self._stop.is_set():
+            try:
+                await self.check_all()
+            except Exception:
+                _log.exception("provider_health.sweep_failed")
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(self._stop.wait(), timeout=interval)
 
     def stop(self) -> None:
         self._stop.set()

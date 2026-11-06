@@ -1,9 +1,6 @@
 // src/lib/scheduledTasks/format.ts — what the Scheduled tasks page prints: a schedule in words, a run's tone, the list's groups, and the form ↔ config mapping.
 //
-// Spec channels "Manage scheduled tasks from the Scheduled tasks page" and
-// daemon "Show Coffer's own background work beside the owner's tasks". The
-// internal section names the daemon's workers in words; the ones the owner
-// would recognise come first, then every other worker by name.
+// Spec channels "Manage scheduled tasks from the Scheduled tasks page".
 import type { TFunction } from "i18next";
 
 import type {
@@ -13,7 +10,6 @@ import type {
   ScheduledTask,
   ScheduledTaskConfig,
 } from "@/lib/api/scheduledTasks";
-import type { DaemonWorker } from "@/lib/api/daemon";
 import type { StatusTone } from "@/lib/statusTone";
 
 /** A schedule in words: "Every day at 18:00", "Fridays at 17:30", with its
@@ -106,49 +102,6 @@ export function groupTasks(items: ScheduledTask[], filter: string) {
     mine: shown.filter((task) => task.config.origin !== "agent"),
     followUps: shown.filter((task) => task.config.origin === "agent"),
   };
-}
-
-// --- Coffer internal ----------------------------------------------------------
-
-/** The daemon's workers the owner would recognise, in this order. */
-const FEATURED_WORKERS = [
-  "sync-worker",
-  "memory-sync",
-  "retention-worker",
-  "reconciler",
-  "vault-scanner",
-  "scheduled-tasks",
-  "provider-health",
-  "skill-source-updates",
-  "release-check",
-] as const;
-
-/** Featured workers first, in the order above, then the rest by name. */
-export function orderWorkers<W extends { name: string }>(
-  workers: W[],
-): { featured: W[]; rest: W[] } {
-  const rank = (name: string) => (FEATURED_WORKERS as readonly string[]).indexOf(name);
-  const featured = workers
-    .filter((w) => rank(w.name) >= 0)
-    .sort((a, b) => rank(a.name) - rank(b.name));
-  const rest = workers.filter((w) => rank(w.name) < 0).sort((a, b) => a.name.localeCompare(b.name));
-  return { featured, rest };
-}
-
-/** A worker's name in words; one with no entry is shown by its own name. */
-export function workerLabel(t: TFunction, name: string): string {
-  return t(`scheduledTasks.workers.${name}.name`, { defaultValue: name });
-}
-
-export function workerTone(worker: DaemonWorker): StatusTone {
-  if (worker.state === "running") return "ok";
-  if (worker.last_ok === false) return "err";
-  if (worker.state === "parked") return "off";
-  return "ok";
-}
-
-export function workerDescription(t: TFunction, name: string): string {
-  return t(`scheduledTasks.workers.${name}.description`, { defaultValue: "" });
 }
 
 // --- the form ----------------------------------------------------------------

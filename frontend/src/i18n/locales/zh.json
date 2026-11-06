@@ -6698,7 +6698,6 @@
     "list": {
       "mine": "我的任务",
       "followUps": "跟进",
-      "internal": "Coffer 内部",
       "none": "暂无。",
       "noMatch": "没有匹配的任务。",
       "pausedLine": "已暂停",
@@ -6827,100 +6826,6 @@
       "open": "打开任务",
       "saved": "每日汇报已设为 {{time}}。",
       "failed": "无法设置每日汇报"
-    },
-    "internal": {
-      "title": "状态",
-      "help": "Coffer 自己的后台工作。它们自动运行，这里不能修改。",
-      "failedLine": "上次运行失败",
-      "lastLine": "{{mode}} · 上次 {{last}}",
-      "mode": {
-        "event": "有变化时唤醒",
-        "event+fallback": "有变化或定时唤醒",
-        "on-demand": "按需运行",
-        "timer": "定时运行"
-      },
-      "state": {
-        "waiting": "等待中",
-        "running": "运行中",
-        "parked": "已停放"
-      },
-      "wakes": "唤醒方式",
-      "last": "上次运行",
-      "next": "下次运行",
-      "runs": "运行次数",
-      "runsCount": "{{runs}} 次 · 失败 {{failures}} 次",
-      "took": "耗时 {{ms}} 毫秒",
-      "failed": "失败"
-    },
-    "workers": {
-      "sync-worker": {
-        "name": "同步",
-        "description": "与你的其他 Mac 推送和拉取保险库。"
-      },
-      "memory-sync": {
-        "name": "记忆同步",
-        "description": "在中心和每个智能体自己的记忆之间复制记忆。"
-      },
-      "retention-worker": {
-        "name": "保留期清理",
-        "description": "删除超过保留期的旧活动和运行记录。"
-      },
-      "reconciler": {
-        "name": "配置对齐",
-        "description": "按保险库写入每个智能体的配置文件。"
-      },
-      "vault-scanner": {
-        "name": "保险库扫描",
-        "description": "发现在 Coffer 之外改动的保险库文件。"
-      },
-      "scheduled-tasks": {
-        "name": "定时任务",
-        "description": "按时启动你的每个定时任务。"
-      },
-      "provider-health": {
-        "name": "服务商健康检查",
-        "description": "检查每个模型服务商是否有响应。"
-      },
-      "skill-source-updates": {
-        "name": "技能来源更新",
-        "description": "从来源检查技能的新版本。"
-      },
-      "release-check": {
-        "name": "更新检查",
-        "description": "检查 Coffer 是否有新版本。"
-      },
-      "channel-runtime": {
-        "name": "渠道连接",
-        "description": "保持每个 IM 机器人在线。"
-      },
-      "channel-thread-sweep": {
-        "name": "渠道话题清理",
-        "description": "清掉长时间无人使用的聊天话题。"
-      },
-      "usage-ingest": {
-        "name": "用量导入",
-        "description": "从智能体日志读取 token 用量。"
-      },
-      "price-refresh": {
-        "name": "价格刷新",
-        "description": "获取最新的模型价格。"
-      },
-      "attention-watch": {
-        "name": "待处理检查",
-        "description": "整理概览页上需要你处理的事。"
-      },
-      "knowledge-sweep": {
-        "name": "知识库整理",
-        "description": "保持知识库索引最新。"
-      },
-      "model-proxy": {
-        "name": "模型中转",
-        "description": "运行本地中转服务，智能体经由它访问服务商。"
-      },
-      "mcp-session-reaper": {
-        "name": "MCP 会话清理",
-        "description": "关闭一段时间无人使用的 MCP 会话。"
-      }
     },
     "noChat": "不绑聊天"
   }

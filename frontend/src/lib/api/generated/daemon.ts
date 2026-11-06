@@ -975,9 +975,8 @@ export interface components {
         };
         /**
          * WorkerOut
-         * @description One background worker: how it is woken and what it did last (ADR
-         *     background-workers-wake-on-events). Most are built on the shared wakeable
-         *     loop; a plain timer loop reports through ``TimedWorker``.
+         * @description One background worker built on the shared wakeable loop: how it is
+         *     woken and what it did last (ADR background-workers-wake-on-events).
          */
         WorkerOut: {
             /** Failures */
@@ -992,7 +991,7 @@ export interface components {
              * Mode
              * @enum {string}
              */
-            mode: "event" | "event+fallback" | "on-demand" | "timer";
+            mode: "event" | "event+fallback" | "on-demand";
             /** Name */
             name: string;
             /** Next Run At */

@@ -6698,7 +6698,6 @@
     "list": {
       "mine": "My tasks",
       "followUps": "Follow-ups",
-      "internal": "Coffer internal",
       "none": "None yet.",
       "noMatch": "No task matches.",
       "pausedLine": "Paused",
@@ -6827,100 +6826,6 @@
       "open": "Open task",
       "saved": "Daily report set for {{time}}.",
       "failed": "Couldn’t set the daily report"
-    },
-    "internal": {
-      "title": "Status",
-      "help": "Coffer's own background work. It runs by itself; nothing here can be changed.",
-      "failedLine": "Last pass failed",
-      "lastLine": "{{mode}} · last {{last}}",
-      "mode": {
-        "event": "Wakes on changes",
-        "event+fallback": "Wakes on changes, or on a timer",
-        "on-demand": "Runs when asked",
-        "timer": "Runs on a timer"
-      },
-      "state": {
-        "waiting": "Waiting",
-        "running": "Running",
-        "parked": "Parked"
-      },
-      "wakes": "Wakes",
-      "last": "Last pass",
-      "next": "Next pass",
-      "runs": "Passes",
-      "runsCount": "{{runs}} · {{failures}} failed",
-      "took": "took {{ms}} ms",
-      "failed": "failed"
-    },
-    "workers": {
-      "sync-worker": {
-        "name": "Sync",
-        "description": "Pushes and pulls the vault with your other Macs."
-      },
-      "memory-sync": {
-        "name": "Memory sync",
-        "description": "Copies memories between the hub and each agent's own memory."
-      },
-      "retention-worker": {
-        "name": "Retention",
-        "description": "Deletes old activity and run records past their keep time."
-      },
-      "reconciler": {
-        "name": "Reconciler",
-        "description": "Writes each agent's config files to match the vault."
-      },
-      "vault-scanner": {
-        "name": "Vault scanner",
-        "description": "Notices files changed in the vault outside Coffer."
-      },
-      "scheduled-tasks": {
-        "name": "Scheduled tasks",
-        "description": "Starts each of your scheduled tasks on time."
-      },
-      "provider-health": {
-        "name": "Provider health",
-        "description": "Checks that each model provider answers."
-      },
-      "skill-source-updates": {
-        "name": "Skill source updates",
-        "description": "Looks for new versions of skills from their sources."
-      },
-      "release-check": {
-        "name": "Update check",
-        "description": "Looks for a new Coffer release."
-      },
-      "channel-runtime": {
-        "name": "Channel connections",
-        "description": "Keeps each IM bot connected."
-      },
-      "channel-thread-sweep": {
-        "name": "Channel thread sweep",
-        "description": "Forgets chat threads nobody has used for a long time."
-      },
-      "usage-ingest": {
-        "name": "Usage import",
-        "description": "Reads token usage from the agents' logs."
-      },
-      "price-refresh": {
-        "name": "Price refresh",
-        "description": "Fetches current model prices."
-      },
-      "attention-watch": {
-        "name": "Attention watch",
-        "description": "Works out what needs you on the Overview."
-      },
-      "knowledge-sweep": {
-        "name": "Knowledge sweep",
-        "description": "Keeps the knowledge collections' indexes fresh."
-      },
-      "model-proxy": {
-        "name": "Model proxy",
-        "description": "Runs the local proxy agents reach providers through."
-      },
-      "mcp-session-reaper": {
-        "name": "MCP session cleanup",
-        "description": "Closes MCP sessions nobody has used for a while."
-      }
     },
     "noChat": "No chat"
   }
