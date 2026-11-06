@@ -583,7 +583,6 @@
       "edit": "编辑",
       "errors_one": "个错误",
       "errors_other": "个错误",
-      "failingSince": "自 {{at}} 起失败",
       "failingTitle": "它没有响应",
       "keyRejectedTitle": "密钥被拒绝",
       "keyRejectedBody": "每次调用都被以 401 Unauthorized 拒绝。API 密钥可能已被撤销，更换之前，{{who}} 无法调用{{tools}}。",
@@ -597,8 +596,6 @@
         "off": "已关闭"
       },
       "last24h": "最近 24 小时",
-      "lastErrorAt": "最近一次错误于 {{at}}",
-      "lastSuccess": "最近一次成功调用于 {{at}}，{{tool}}。",
       "launcherTitle": "这台机器上找不到 {{runner}}",
       "listed": "直接列出",
       "listedDirectly": "直接列出",
@@ -626,7 +623,6 @@
       "offTitle": "已关闭 — 没有智能体能使用它",
       "reason": {
         "failing": "失败",
-        "failingSince": "{{error}} · 自 {{since}} 起",
         "launcher": "这台机器上找不到 {{runner}}",
         "secret": "缺少密钥 · {{secret}}"
       },

@@ -175,11 +175,12 @@ def test_missing_runner_of_reads_only_stdio_launchers(tmp_path) -> None:  # type
 
 
 class FakeHandoffs:
-    def launcher(self, server: Any, runner: str) -> str:
-        return f"install {runner} for {server.name}"
+    async def last_error(self, server_uid: str) -> str | None:
+        return f"error of {server_uid}"
 
-    def diagnose(self, server: Any) -> str:
-        return f"diagnose {server.name}"
+    def server(self, server: Any, *, error: str | None, runner: str | None) -> str:
+        what = f"install {runner}" if runner else "diagnose"
+        return f"{what} for {server.name}: {error}"
 
 
 async def test_missing_launcher_item_carries_the_hand_off_and_a_command_free_reason() -> None:
@@ -188,7 +189,7 @@ async def test_missing_launcher_item_carries_the_hand_off_and_a_command_free_rea
         FakeResources([srv]), missing={"uvx": "uvx"}, handoffs=FakeHandoffs()
     ).items()
     assert item.reason_code == "mcp_missing_launcher"
-    assert item.handoff == "install uvx for jira"
+    assert item.handoff == "install uvx for jira: error of u1"
     assert "coffer " not in item.reason and "brew" not in item.reason
     assert "`" not in item.reason
 
@@ -199,7 +200,7 @@ async def test_failing_item_carries_the_diagnosis_hand_off() -> None:
         FakeResources([srv]), health=FakeHealth({"u1": ("failing", T0)}), handoffs=FakeHandoffs()
     ).items()
     assert item.reason_code == "mcp_failing"
-    assert item.handoff == "diagnose jira"
+    assert item.handoff == "diagnose for jira: error of u1"
 
 
 async def test_without_a_hand_off_port_items_carry_none() -> None:

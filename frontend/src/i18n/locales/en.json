@@ -583,7 +583,6 @@
       "edit": "Edit",
       "errors_one": "error",
       "errors_other": "errors",
-      "failingSince": "failing since {{at}}",
       "failingTitle": "It isn't answering",
       "keyRejectedTitle": "The key was rejected",
       "keyRejectedBody": "Every call is rejected with 401 Unauthorized. The API key looks revoked, so {{who}} can't call {{tools}} until it is replaced.",
@@ -597,8 +596,6 @@
         "off": "Off"
       },
       "last24h": "Last 24 hours",
-      "lastErrorAt": "Last error at {{at}}",
-      "lastSuccess": "Last successful call {{at}}, {{tool}}.",
       "launcherTitle": "{{runner}} isn't found on this machine",
       "listed": "Listed",
       "listedDirectly": "Listed directly",
@@ -626,7 +623,6 @@
       "offTitle": "Off — no agent can use it",
       "reason": {
         "failing": "Failing",
-        "failingSince": "{{error}} · since {{since}}",
         "launcher": "{{runner}} isn't found on this machine",
         "secret": "Secret missing · {{secret}}"
       },

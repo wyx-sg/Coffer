@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from coffer.application.mcp.custom_tool_handoff import failing_group_handoff
+from coffer.application.mcp.custom_tool_handoff import call_outcome, group_handoff
 from coffer.application.mcp.custom_tool_views import EnvironmentView, GroupView, ToolView
 from coffer.application.mcp.custom_tools import secret_name_of
+from coffer.domain.mcp.config_summary import redacted_url
 from coffer.domain.mcp.namespace import prefix_tool
 from coffer.surfaces.http.handoff_schemas import HandoffOut
 from coffer.surfaces.http.mcp.custom_tool_response_schemas import (
@@ -105,10 +106,10 @@ def group_out(view: GroupView) -> CustomToolGroupOut:
         last_call_at=view.last_call_at,
         handoff=(
             HandoffOut(
-                prompt=failing_group_handoff(
+                prompt=group_handoff(
                     group=r.name,
-                    base_url=str(first.environment.base_url),
-                    status=view.last_call_status,
+                    request=f"its last call, to {redacted_url(str(first.environment.base_url))}",
+                    outcome=call_outcome(view.last_call_status),
                     error=view.last_call_error,
                     machine=host_machine(),
                 )

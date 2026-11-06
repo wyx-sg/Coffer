@@ -108,12 +108,11 @@ export function RecordDrawer({ record, rows, agents, transports, onSelect, onClo
   const call = record.source === "call" ? record.call : null;
   const failures = useServerFailures(call);
 
-  // The hand-off prompt is the drawer's to use, not part of the record.
   const raw =
     record.source === "change"
       ? record.entry
       : record.source === "call"
-        ? { ...record.call, handoff: undefined }
+        ? record.call
         : { ...record.log.record };
 
   const copy = (text: string) => {

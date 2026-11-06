@@ -29,8 +29,8 @@ class McpServerStatusOut(BaseModel):
     """Cheap per-server status, derived from persisted state (no spawn).
 
     Beside the state word, what the page says about it (spec mcp-gateway
-    "Explain a server's state on its page"): the last transport failure and
-    since when the server has been failing, the last successful call, and the
+    "Explain a server's state on its page"): the last transport failure, when
+    the last successful call was, and the
     first cited secret with no value on this machine. Each is null when
     nothing persisted says it.
     """
@@ -40,9 +40,9 @@ class McpServerStatusOut(BaseModel):
     # (a synced server referencing e.g. uvx on a machine without uv). The UI
     # renders "missing <runner>" so the cause is visible.
     missing_runner: str | None = None
+    #: The newest error of the current run of calls that failed to reach the
+    #: server, in Coffer's words (spec mcp-gateway "Name why an upstream failed").
     last_error: str | None = None
-    last_error_at: datetime | None = None
-    failing_since: datetime | None = None
     #: When the health record (a test) was last written.
     last_checked_at: datetime | None = None
     #: Why the last test failed — ``auth_rejected`` (the key is refused),
@@ -52,8 +52,6 @@ class McpServerStatusOut(BaseModel):
         None
     )
     last_ok_at: datetime | None = None
-    #: The capability the last successful call reached (a tool name, a URI).
-    last_ok_capability: str | None = None
     #: The environment or header key citing a secret this machine does not hold…
     missing_secret: str | None = None
     #: …and the secret's own reference, which is what the user recognises.

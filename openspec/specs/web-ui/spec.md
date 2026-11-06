@@ -2555,18 +2555,18 @@ while older records exist is not the first run: it says so and keeps the filters
 - **AND** with a record older than the time range the filter row stays
 
 ### Requirement: Hand an environment failure on Activity to an agent
-Activity MUST offer the hand-off ([Ask an agent ▾]) only for a failure that depends
-on this machine, with the prompt the backend wrote: the conclusion card of a
-call's drawer for a call whose server never answered, and the first button of an
-opened daemon ERROR about an external service or the environment. A denied call,
-an error the server itself returned and a Coffer-internal error offer no
-hand-off; a daemon error offers **Copy record** alone. The drawer's footer for a
-call is the server's page; it carries no step to read the daemon log.
+Activity MUST offer the hand-off ([Ask an agent ▾]) only for a daemon ERROR about
+an external service or the environment, as the first button of the opened record,
+with the prompt the backend wrote; a Coffer-internal error offers **Copy record**
+alone. A call carries no hand-off of its own: its drawer's conclusion card names
+the failure in Coffer's words, and its footer is the server's page, whose one
+hand-off covers every failing call (mcp-gateway "Hand a failing MCP server's
+diagnosis to an agent"). It carries no step to read the daemon log.
 
-#### Scenario: an unanswered call and an environment error carry the hand-off
+#### Scenario: an environment error carries the hand-off and a call does not
 - **GIVEN** a call refused by its server, a denied call, and a daemon ERROR that is a refused connection beside one that is Coffer's own
 - **WHEN** each is opened
-- **THEN** the refused call's card and the environment error's button row lead with the hand-off, and the others have none
+- **THEN** only the environment error's button row leads with the hand-off; the refused call's drawer offers its server's page instead
 
 ### Requirement: Match a list's search on names only
 A search box over a list of named things — MCP servers and their tools, resources

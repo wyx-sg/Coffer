@@ -396,7 +396,8 @@ command for it either: which installer fits depends on the machine, so installin
 the person's agent (Principle IV, AI-Native). The server's status read
 (`GET /api/v1/resources/mcp_server/{uid}/status`), a failed test of it
 (`POST /api/v1/resources/mcp_server/{uid}/test`) and its `mcp_missing_launcher` attention item MUST each carry
-`handoff`, one prompt that names the server, the launcher, the command line the server is started with, the
+`handoff`: the server's one hand-off ("Hand a failing MCP server's diagnosis to an agent"), which for a
+missing launcher asks to install it and names the server, the launcher, the command line the server is started with, the
 `PATH` Coffer looks it up on and this machine's OS and architecture, asks for an install a process started
 from the GUI can find, and names `coffer mcp test <name>` to confirm. The command line MUST NOT carry a secret:
 an argument that follows a secret-named flag or looks like a token reads `<secret>`, and environment values
@@ -807,7 +808,7 @@ call, and `idle` with no call in 24 hours.
 
 ### Requirement: Hand a failing custom tool group to an agent
 A group whose last call failed, and a test of a request that could not connect
-or timed out (for a saved or an unsaved group), MUST carry a hand-off prompt
+or timed out (for a saved or an unsaved group), MUST carry the group's one hand-off prompt
 that hands the network problem to an agent — the group, the method and URL with
 credentials and secret-looking query values redacted, the error and the machine;
 no header value — and no other result does. The prompt is written by the daemon,
@@ -900,13 +901,17 @@ The daemon MUST run a request of a custom-tool group that is not saved yet — i
 
 ### Requirement: Hand a failing MCP server's diagnosis to an agent
 Finding why a server will not start or answer depends on the machine, so a failing server MUST offer its
-diagnosis as a hand-off prompt for the person's agent (Principle IV, AI-Native). The status read of a
+diagnosis as a hand-off prompt for the person's agent (Principle IV, AI-Native). A server has ONE hand-off,
+whichever surface serves it: the same prompt, asking to install the launcher when it is not found here
+("Name a missing stdio launcher") and to find the cause otherwise, always carrying the newest real error
+("Name why an upstream failed in Coffer's words"). A single call carries no hand-off of its own; its server's
+is the one to use. The status read of a
 server that reads `failing` (and is not missing its launcher or a secret), a failed test of a registered
 server whose launcher resolves, and the `mcp_failing` attention item MUST carry `handoff`: one prompt naming
 the server, its transport and a config summary — the command line and working directory, or the URL — with
 the NAMES of its environment variables, headers and stored secrets and never their values, a URL's
 `user:pass@` and secret-named query values and any secret-looking argument reading `<secret>`; the error of
-the test or of the last failed call; at most the newest 20 lines the server printed on stderr (the test's
+the test or of the newest failed call (the attention item's too); at most the newest 20 lines the server printed on stderr (the test's
 own capture, else the server's log file, whose path it names), each passed through the same secret scrub;
 and this machine. Its steps MUST ask to find the cause (a missing environment variable, a wrong path, a
 package that won't start) and propose the fix before changing anything, MUST forbid reading or changing the
@@ -938,18 +943,17 @@ person's own. `coffer mcp test <name> --prompt` MUST print a failed test's promp
 ### Requirement: Explain a server's state on its page
 A server's status read (`GET /api/v1/resources/mcp_server/{uid}/status`) MUST say, beside the state word,
 what the page needs to explain it, from persisted state only and without spawning the server: the last
-transport failure (its message and time) and since when the server has been failing — the newest run of
-calls that failed to reach it, where a `denied` call is skipped and a call the upstream answered, or one
-that succeeded, ends the run — or, with no such calls, the time of the failing test; the time and target
-of the last successful call; when the health record was last written; and the first secret the server's
+transport failure's message — the newest of the run of calls that failed to reach it, where a `denied` call
+is skipped and a call the upstream answered, or one that succeeded, ends the run; the time of the last
+successful call; when the health record was last written; and the first secret the server's
 transport cites that has no value on this machine, by the environment or header key that cites it and by
 the secret's own reference (a vault restored on a new machine carries references, not values). A secret's
 value is never read for this; a server that cites none never asks the secret store.
 
-#### Scenario: a failing server says its last error and since when
+#### Scenario: a failing server says its last error and when it last worked
 - **GIVEN** a server whose last calls are a success, a transport error, a denied call and a timeout, newest last
 - **WHEN** its status is read
-- **THEN** it reads failing with the timeout as the last error, failing since the transport error, and the earlier success as the last successful call with its tool
+- **THEN** it reads failing with the timeout as the last error and the earlier success's time as the last successful call, and carries no failing-since time, error time or last tool
 
 #### Scenario: a secret missing on this machine is named
 - **GIVEN** an HTTP server whose `Authorization` header cites a secret with no value in this machine's store
@@ -1061,24 +1065,6 @@ listed nor found.
 - **GIVEN** an agent session started in a terminal, with no turn token
 - **WHEN** it lists Coffer's tools
 - **THEN** no request carries `X-Coffer-Turn` and no turn-scoped tool is among them
-
-### Requirement: Hand a failing MCP call's diagnosis to an agent
-A call whose server never answered — it failed without the upstream returning a
-result or a JSON-RPC error, or it timed out — MUST carry `handoff` on its
-invocation record: one prompt naming the server, the tool, the error (passed
-through the same secret scrub as a server's diagnosis), how many calls to that
-server failed in the last 24 hours, the session and the call's id, and this
-machine. Its steps MUST ask to find the cause and propose the fix before changing
-anything, MUST forbid reading or changing the secrets Coffer stores, and MUST name
-`coffer mcp test <name>`. It MUST NOT contain the call's arguments or result,
-which Coffer never stores. A call that succeeded, a denied call and a call the
-upstream answered with its own error carry no `handoff`.
-
-#### Scenario: an unanswered call carries a hand-off without arguments
-- **GIVEN** an errored call, a timed-out call, a successful call, a denied call and a call the upstream answered with an error result
-- **WHEN** the invocations are read
-- **THEN** the errored and timed-out calls carry a prompt naming the server, tool, error, session, call id and the count of the server's failures in the last 24 hours
-- **AND** the other three carry none
 
 ### Requirement: Read every failed call at once
 `GET /api/v1/mcp/invocations` MUST accept `status=failed` besides the four

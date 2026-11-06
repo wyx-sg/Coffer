@@ -3161,10 +3161,6 @@ components:
           - type: string
           - type: 'null'
           title: Error Message
-        handoff:
-          anyOf:
-          - $ref: '#/components/schemas/HandoffOut'
-          - type: 'null'
         id:
           title: Id
           type: integer
@@ -3212,7 +3208,6 @@ components:
       - trace_id
       - agent_uid
       - environment
-      - handoff
       - content
       title: InvocationDetailOut
       type: object
@@ -3269,10 +3264,6 @@ components:
           - type: string
           - type: 'null'
           title: Error Message
-        handoff:
-          anyOf:
-          - $ref: '#/components/schemas/HandoffOut'
-          - type: 'null'
         id:
           title: Id
           type: integer
@@ -3320,7 +3311,6 @@ components:
       - trace_id
       - agent_uid
       - environment
-      - handoff
       title: InvocationOut
       type: object
     InvocationSummaryOut:
@@ -3659,17 +3649,11 @@ components:
         Cheap per-server status, derived from persisted state (no spawn).
 
         Beside the state word, what the page says about it (spec mcp-gateway
-        "Explain a server's state on its page"): the last transport failure and
-        since when the server has been failing, the last successful call, and the
+        "Explain a server's state on its page"): the last transport failure, when
+        the last successful call was, and the
         first cited secret with no value on this machine. Each is null when
         nothing persisted says it.
       properties:
-        failing_since:
-          anyOf:
-          - format: date-time
-            type: string
-          - type: 'null'
-          title: Failing Since
         failure_reason:
           anyOf:
           - enum:
@@ -3695,23 +3679,12 @@ components:
           - type: string
           - type: 'null'
           title: Last Error
-        last_error_at:
-          anyOf:
-          - format: date-time
-            type: string
-          - type: 'null'
-          title: Last Error At
         last_ok_at:
           anyOf:
           - format: date-time
             type: string
           - type: 'null'
           title: Last Ok At
-        last_ok_capability:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Last Ok Capability
         missing_runner:
           anyOf:
           - type: string
@@ -3743,12 +3716,9 @@ components:
       - status
       - missing_runner
       - last_error
-      - last_error_at
-      - failing_since
       - last_checked_at
       - failure_reason
       - last_ok_at
-      - last_ok_capability
       - missing_secret
       - missing_secret_ref
       - handoff

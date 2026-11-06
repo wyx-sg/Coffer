@@ -137,10 +137,10 @@ async def ctx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway", scenario="a failing server says its last error and since when"
+    spec="mcp-gateway", scenario="a failing server says its last error and when it last worked"
 )
 @pytest.mark.asyncio
-async def test_a_failing_server_says_its_last_error_since_when_and_its_last_success(ctx):
+async def test_a_failing_server_says_its_last_error_and_its_last_success(ctx):
     srv = await ctx.server("sentry", _stdio())
     await ctx.call(srv.uid, "list_issues", "ok", ago=600)
     await ctx.call(srv.uid, "get_issue", "error", ago=300, error_message="Connection refused")
@@ -150,11 +150,9 @@ async def test_a_failing_server_says_its_last_error_since_when_and_its_last_succ
     body = r.json()
     assert body["status"] == "failing"
     assert body["last_error"] == "timed out"
-    assert body["last_ok_capability"] == "list_issues"
-    since = datetime.fromisoformat(body["failing_since"])
-    last = datetime.fromisoformat(body["last_error_at"])
-    assert last - since == timedelta(seconds=200)
-    assert datetime.fromisoformat(body["last_ok_at"]) < since
+    assert datetime.fromisoformat(body["last_ok_at"]) == NOW - timedelta(seconds=600)
+    for gone in ("failing_since", "last_error_at", "last_ok_capability"):
+        assert gone not in body
     # A server that cites no secret never asks the store.
     assert body["missing_secret"] is None
     assert ctx.store.asked == []
@@ -166,7 +164,7 @@ async def test_a_healthy_server_has_no_failure_detail(ctx):
     await ctx.call(srv.uid, "create_pull_request", "ok")
     body = (await ctx.client.get(f"/api/v1/resources/mcp_server/{srv.uid}/status")).json()
     assert body["status"] == "healthy"
-    assert body["last_error"] is None and body["failing_since"] is None
+    assert body["last_error"] is None
 
 
 @pytest.mark.acceptance(spec="mcp-gateway", scenario="a secret missing on this machine is named")
@@ -189,12 +187,12 @@ async def test_a_secret_missing_on_this_machine_is_named_by_key_and_ref(ctx):
 
 
 @pytest.mark.asyncio
-async def test_a_failed_test_with_no_calls_is_failing_since_the_test(ctx):
+async def test_a_failed_test_with_no_calls_reads_failing_at_the_test(ctx):
     srv = await ctx.server("docs", _stdio())
     await ctx.health.upsert(srv.uid, "failing", NOW)
     body = (await ctx.client.get(f"/api/v1/resources/mcp_server/{srv.uid}/status")).json()
     assert body["status"] == "failing"
-    assert body["failing_since"] == body["last_checked_at"] is not None
+    assert body["last_checked_at"] is not None and body["last_error"] is None
 
 
 @pytest.mark.asyncio

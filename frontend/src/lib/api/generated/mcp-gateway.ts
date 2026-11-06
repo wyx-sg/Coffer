@@ -1306,7 +1306,6 @@ export interface components {
             environment: string | null;
             /** Error Message */
             error_message: string | null;
-            handoff: components["schemas"]["HandoffOut"] | null;
             /** Id */
             id: number;
             /** Resource Name */
@@ -1360,7 +1359,6 @@ export interface components {
             environment: string | null;
             /** Error Message */
             error_message: string | null;
-            handoff: components["schemas"]["HandoffOut"] | null;
             /** Id */
             id: number;
             /** Resource Name */
@@ -1592,14 +1590,12 @@ export interface components {
          * @description Cheap per-server status, derived from persisted state (no spawn).
          *
          *     Beside the state word, what the page says about it (spec mcp-gateway
-         *     "Explain a server's state on its page"): the last transport failure and
-         *     since when the server has been failing, the last successful call, and the
+         *     "Explain a server's state on its page"): the last transport failure, when
+         *     the last successful call was, and the
          *     first cited secret with no value on this machine. Each is null when
          *     nothing persisted says it.
          */
         McpServerStatusOut: {
-            /** Failing Since */
-            failing_since: string | null;
             /** Failure Reason */
             failure_reason: ("auth_rejected" | "unreachable" | "command_not_found" | "other") | null;
             handoff: components["schemas"]["HandoffOut"] | null;
@@ -1607,12 +1603,8 @@ export interface components {
             last_checked_at: string | null;
             /** Last Error */
             last_error: string | null;
-            /** Last Error At */
-            last_error_at: string | null;
             /** Last Ok At */
             last_ok_at: string | null;
-            /** Last Ok Capability */
-            last_ok_capability: string | null;
             /** Missing Runner */
             missing_runner: string | null;
             /** Missing Secret */
