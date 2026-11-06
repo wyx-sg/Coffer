@@ -25,6 +25,7 @@ from coffer.domain.chat.events import (
     TextDelta,
     TurnDone,
     TurnError,
+    TurnProgress,
     TurnStarted,
 )
 from coffer.infrastructure.chat import codex_agent
@@ -395,6 +396,24 @@ async def test_another_threads_text_and_completion_stay_out_of_the_reply():
     assert [e.text for e in events if isinstance(e, TextDelta)] == ["Hello"]
     assert [type(e) for e in events].count(TurnDone) == 1
     assert saved == ["thread-1"]
+
+
+@pytest.mark.asyncio
+async def test_another_threads_activity_is_a_keepalive_for_the_turn():
+    foreign = [
+        _Frame(
+            "turn/start",
+            "item/agentMessage/delta",
+            {"threadId": "memory-agent", "turnId": "m1", "itemId": "x", "delta": "memo"},
+        ),
+    ]
+    server = FakeCodexAppServer(frames=foreign + _basic_frames())
+    events = await asyncio.wait_for(
+        _collect(_adapter(_Factory(server)), _user_turn("hi")), timeout=5
+    )
+
+    assert TurnProgress in [type(e) for e in events]
+    assert [e.text for e in events if isinstance(e, TextDelta)] == ["Hello"]
 
 
 @pytest.mark.asyncio

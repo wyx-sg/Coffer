@@ -44,6 +44,7 @@ from coffer.domain.chat.events import (
     ToolResult,
     TurnDone,
     TurnError,
+    TurnProgress,
     TurnStarted,
 )
 from coffer.infrastructure.chat.claude_sdk_agent import (
@@ -848,7 +849,7 @@ async def test_a_background_shell_command_is_not_waited_for():
     ]
     state = ClaudeParseState(session_id=None)
     events = _map_all(messages, state)
-    assert [type(e) for e in events] == [TurnDone]
+    assert [type(e) for e in events] == [TurnProgress, TurnDone]
 
 
 @pytest.mark.asyncio
@@ -1182,3 +1183,15 @@ async def test_connect_failure_without_resume_yields_turn_error():
     assert len(errs) == 1
     assert errs[0].code == "sdk_connect_error"
     assert "failed to start" in errs[0].message
+
+
+@pytest.mark.asyncio
+async def test_a_held_result_and_sub_agent_messages_are_keepalives():
+    messages = [
+        SystemMessage(subtype="init", data={"session_id": "sess-1"}),
+        _task_started("t1", task_type="local_agent"),
+        _result(),
+    ]
+    events = _map_all(messages, ClaudeParseState(session_id=None))
+    assert TurnProgress in [type(e) for e in events]
+    assert TurnDone not in [type(e) for e in events]

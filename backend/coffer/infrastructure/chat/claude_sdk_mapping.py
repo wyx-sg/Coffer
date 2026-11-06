@@ -23,6 +23,7 @@ from claude_agent_sdk import (
     StreamEvent,
     SystemMessage,
     TaskNotificationMessage,
+    TaskProgressMessage,
     TaskStartedMessage,
     TaskUpdatedMessage,
     UserMessage,
@@ -39,6 +40,7 @@ from coffer.domain.chat.events import (
     ToolResult,
     TurnDone,
     TurnError,
+    TurnProgress,
 )
 from coffer.infrastructure.chat.adapter_support import ParseState
 
@@ -96,12 +98,14 @@ def map_sdk_message(msg: Any, state: ClaudeParseState) -> list[AgentEvent]:
     if isinstance(msg, TaskStartedMessage):
         if msg.task_type in _WAKING_TASK_TYPES:
             state.waking_tasks.add(msg.task_id)
-        return []
+        return [TurnProgress()]
     if isinstance(msg, (TaskNotificationMessage, TaskUpdatedMessage)):
         status = msg.status if isinstance(msg, TaskNotificationMessage) else _updated_status(msg)
         if status in TERMINAL_TASK_STATUSES:
             state.waking_tasks.discard(msg.task_id)
-        return []
+        return [TurnProgress()]
+    if isinstance(msg, TaskProgressMessage):
+        return [TurnProgress()]
     if isinstance(msg, SystemMessage):
         if msg.subtype == "init":
             data = msg.data or {}
@@ -251,7 +255,7 @@ def _result(msg: ResultMessage, state: ClaudeParseState) -> list[AgentEvent]:
         # Its end wakes the agent for a follow-up turn whose text is the answer
         # (spec chat "Wait for a Claude Code turn's background sub-agents").
         state.deferred_done = done
-        return []
+        return [TurnProgress()]
     state.deferred_done = None
     state.terminal_emitted = True
     return [done]

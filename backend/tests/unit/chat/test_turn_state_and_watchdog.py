@@ -22,6 +22,7 @@ from coffer.domain.chat.events import (
     TextDelta,
     TurnDone,
     TurnError,
+    TurnProgress,
     TurnStarted,
 )
 from tests.support.chat_turns import start_turn
@@ -109,6 +110,27 @@ async def test_events_inside_the_window_keep_a_turn_alive() -> None:
 
     assert events[-1] == _DONE
     assert not any(isinstance(e, TurnError) for e in events)
+
+
+@pytest.mark.acceptance(
+    spec="chat", scenario="a keepalive from the agent holds off the idle watchdog"
+)
+async def test_progress_keepalives_hold_off_the_watchdog_and_stay_off_the_stream() -> None:
+    class _Quiet(FakeAgentAdapter):
+        async def _yield_events(self) -> AsyncIterator[AgentEvent]:
+            for event in self._events:
+                await asyncio.sleep(0.06)  # a lone gap fits the window, the sum does not
+                yield event
+
+    adapter = _Quiet([TurnStarted(), TurnProgress(), TurnProgress(), TurnProgress(), _DONE])
+    orchestrator, _conv, _prov = make_orchestrator(adapter=adapter)
+    orchestrator._idle_timeout = 0.1
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
+
+    events = await drain_queue(await start_turn(orchestrator, conv.id, "hi"))
+
+    assert events[-1] == _DONE
+    assert not any(isinstance(e, (TurnError, TurnProgress)) for e in events)
 
 
 async def test_a_disabled_watchdog_waits_indefinitely() -> None:
