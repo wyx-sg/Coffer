@@ -148,13 +148,14 @@ def _entries(error: ValidationError) -> Iterator[SchemaError]:
     at = list(error.absolute_path)
     keyword = str(error.validator)
     instance = error.instance
+    value: Any = error.validator_value
     if keyword == "required" and isinstance(instance, dict):
-        for name in error.validator_value:
+        for name in value:
             if name not in instance:
                 yield SchemaError(_pointer([*at, name]), keyword, f"'{name}' is required")
         return
     if keyword == "dependentRequired" and isinstance(instance, dict):
-        for owner, needed in error.validator_value.items():
+        for owner, needed in value.items():
             if owner in instance:
                 for name in needed:
                     if name not in instance:
