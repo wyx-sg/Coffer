@@ -10,12 +10,11 @@
 //! this command instead (spec secret "Release plaintext only to a present
 //! human in the desktop app").
 
-use std::time::Duration;
-
 use tauri::AppHandle;
 
 /// How long a copied secret stays on the pasteboard. 1Password's default.
-pub const CLEAR_AFTER: Duration = Duration::from_secs(90);
+#[cfg(target_os = "macos")]
+const CLEAR_AFTER: std::time::Duration = std::time::Duration::from_secs(90);
 
 #[tauri::command]
 pub fn copy_secret(app: AppHandle, value: String) -> Result<(), String> {
