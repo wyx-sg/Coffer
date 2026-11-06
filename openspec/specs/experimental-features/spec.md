@@ -237,10 +237,10 @@ skip its rounds.
 - **WHEN** a route under `/api/v1/knowledge` is requested
 - **THEN** it answers 404 `FEATURE_DISABLED` naming `knowledge`
 
-#### Scenario: knowledge off leaves coffer__search_tools the only built-in tool
+#### Scenario: knowledge off adds or removes no built-in tool
 - **GIVEN** `knowledge` off
 - **WHEN** an agent opens a gateway session and lists the tools
-- **THEN** the `coffer__` tools listed are `coffer__search_tools` alone, a call to any other `coffer__` tool answers as an unknown tool, and the handshake instructions name no knowledge tool
+- **THEN** the `coffer__` tools listed are `coffer__search_tools` and `coffer__channel_notify`, the same as with it on, a call to any other `coffer__` tool answers as an unknown tool, and the handshake instructions name no knowledge tool
 
 #### Scenario: knowledge off re-renders the coffer-guide skill without its knowledge sections
 - **GIVEN** `knowledge` off

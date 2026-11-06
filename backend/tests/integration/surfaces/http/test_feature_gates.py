@@ -289,10 +289,8 @@ def test_a_switched_off_features_tool_leaves_the_tool_list(
         assert fake_tool in _tool_names(c, session)
 
 
-@pytest.mark.acceptance(
-    spec="mcp-gateway", scenario="advertise coffer__search_tools as the one built-in tool"
-)
-def test_the_gateway_advertises_only_search_tools_as_a_built_in(home: pathlib.Path) -> None:
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="advertise only Coffer's own built-in tools")
+def test_the_gateway_advertises_only_its_own_built_ins(home: pathlib.Path) -> None:
     def builtins(c: TestClient, session: str) -> set[str]:
         return {n for n in _tool_names(c, session) if n.startswith("coffer__")}
 
@@ -302,7 +300,7 @@ def test_the_gateway_advertises_only_search_tools_as_a_built_in(home: pathlib.Pa
             c, session, "tools/call", {"name": "coffer__nosuchtool", "arguments": {}}
         ).json()
 
-        assert builtins(c, session) == {"coffer__search_tools"}
+        assert builtins(c, session) == {"coffer__search_tools", "coffer__channel_notify"}
 
         for name, arguments in (
             ("coffer__write", {"collection": "x", "title": "t", "description": "d"}),
