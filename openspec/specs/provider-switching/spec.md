@@ -183,8 +183,9 @@ launch; `env.ANTHROPIC_DEFAULT_OPUS_MODEL`,
 `env.ANTHROPIC_DEFAULT_SONNET_MODEL`, `env.ANTHROPIC_DEFAULT_HAIKU_MODEL` and, when a Fable tier is
 pinned, `env.ANTHROPIC_DEFAULT_FABLE_MODEL`, from "Suggest a model for each Claude Code tier"; and
 `modelPicker`, which fills Claude Code's `/model` picker with the connection's curated text models,
-replacing the built-in rows on an endpoint that serves no Claude ids and keeping them on one that
-does. Every option Coffer writes into `modelPicker` carries the description `via Coffer`, which is
+always replacing the built-in rows, so `/model` offers only models the connection serves — a built-in
+row it does not serve (Fable on a gateway that curates only Opus and Haiku) would otherwise reach the
+proxy, which swaps it for another model (see "Reach API-key and local connections through the local model proxy"). Every option Coffer writes into `modelPicker` carries the description `via Coffer`, which is
 how de-projection tells Coffer's picker from the user's. For a connection to
 a model runtime on this machine it also writes `env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` (local
 runtimes reject Claude Code's beta request fields). For any connection whose chosen model is not a
@@ -208,6 +209,10 @@ own CLI is never silently overwritten.
 - **GIVEN** `~/.claude/settings.json` contains keys Coffer does not manage (e.g. `theme`, `mcpServers`),
 - **WHEN** the user switches that agent onto a connection reaching it,
 - **THEN** those keys are preserved byte-for-byte in the updated file, a timestamped copy of the prior file is written under `~/.coffer/config-backups/` before the update, and nothing is written next to it, and only the Coffer-managed keys are changed.
+#### Scenario: the picker offers only the connection's models, on a Claude gateway too
+- **GIVEN** a connection that curates `claude-opus-5-5` and `claude-haiku-5-5`, and no Fable model
+- **WHEN** the user switches Claude Code onto it
+- **THEN** `modelPicker` lists those two models with `replaceBuiltInOptions` true, so `/model` offers no built-in Fable row the proxy would swap for another model
 #### Scenario: projection refuses to overwrite a concurrent edit
 - **GIVEN** `~/.claude/settings.json` that the user saves from their editor after Coffer has read it and before Coffer writes its projection,
 - **WHEN** the projection write runs,

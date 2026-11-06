@@ -144,3 +144,23 @@ def test_a_provider_models_recorded_window_reaches_claude_code() -> None:
     assert "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS" not in env
     assert "CLAUDE_CODE_MAX_CONTEXT_TOKENS" not in env_for("claude-opus-4-8", 1_000_000)
     assert "CLAUDE_CODE_MAX_CONTEXT_TOKENS" not in env_for("agnes-2.5-pro-alpha", None)
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="the picker offers only the connection's models, on a Claude gateway too",
+)
+def test_claude_codes_picker_lists_only_curated_models_even_on_a_claude_gateway() -> None:
+    """A built-in row the connection does not curate (Fable here) would reach
+    the proxy and be swapped for another model unseen, so the built-in rows go."""
+    facet = ClaudeCodeProviderProjection()
+    plan = facet.apply(
+        "{}",
+        _req(
+            ("claude-opus-5-5", "claude-haiku-5-5"), binding=ModelBinding(model="claude-opus-5-5")
+        ),
+        pathlib.Path("/h/.claude/settings.json"),
+    )
+    picker = json.loads(plan.text)["modelPicker"]
+    assert picker["replaceBuiltInOptions"] is True
+    assert [o["model"] for o in picker["options"]] == ["claude-opus-5-5", "claude-haiku-5-5"]

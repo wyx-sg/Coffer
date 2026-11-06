@@ -54,3 +54,15 @@ def pid_alive(pid: int) -> bool:
     except PermissionError:
         return True
     return True
+
+
+def spawn_env(extra: dict[str, str] | None, *, from_source: bool) -> dict[str, str]:
+    """The proxy child's environment: the daemon's, plus ``extra``, plus the
+    source tree on ``PYTHONPATH`` when it runs from source (not frozen)."""
+    env = dict(os.environ)
+    if extra is not None:
+        env.update(extra)
+    if from_source and not getattr(sys, "frozen", False):
+        existing = env.get("PYTHONPATH")
+        env["PYTHONPATH"] = source_root() + (os.pathsep + existing if existing else "")
+    return env

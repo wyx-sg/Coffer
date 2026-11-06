@@ -121,7 +121,7 @@ Coffer 的中转把 Claude Code 的请求原样发到 Anthropic 兼容地址，�
 
 ## 写入了什么 {#what-gets-written}
 
-运行在提供商上的智能体并不直接调用提供商。它调用的是 Coffer 在 `127.0.0.1:38471` 上的**本地模型中转**，中转把每个请求带上真实的 key 转发给提供商；如果第一个提供商在响应前失败，就切换到另一个提供同一模型的提供商，并记录请求的花费（[用量](/zh/guides/usage)）。中转的工作原理见[本地模型中转](/zh/architecture/model-proxy)。因此落到智能体自己文件里的，是中转的地址和一条打印智能体自己的**本地中转令牌**的命令——从不是提供商的接入地址或 key。
+运行在提供商上的智能体并不直接调用提供商。它调用的是 Coffer 在 `127.0.0.1:38471` 上的**本地模型中转**，中转把每个请求带上真实的 key 转发给提供商，并记录请求的花费（[用量](/zh/guides/usage)）。中转只把智能体的请求发给它所在的那个提供商，不会改发给别的提供商；那个提供商连不上时，智能体会收到错误，并像平时一样自己重试。中转的工作原理见[本地模型中转](/zh/architecture/model-proxy)。因此落到智能体自己文件里的，是中转的地址和一条打印智能体自己的**本地中转令牌**的命令——从不是提供商的接入地址或 key。
 
 Coffer 只把自己的键合并进智能体的文件，其余一切保持原样。写入走的是和[Coffer 对智能体配置的写入](/zh/guides/agents#what-coffer-reads-and-what-it-writes)相同的机制：原子写入，上一版先复制到 `~/.coffer/config-backups`，如果文件在 Coffer 读取之后变了，就以 `CONFIG_FILE_STALE` 拒绝（审计为 `provider_projection_refused`）。
 
@@ -150,7 +150,7 @@ Coffer 只把自己的键合并进智能体的文件，其余一切保持原样�
 - **`NO_PROXY`** 会加上 `127.0.0.1,localhost`，这样公司的 `HTTPS_PROXY` 永远不会截获回环调用。你自己的条目保留，切回时只移除 Coffer 追加的这一对。
 - **模型**写在顶层 `model` 键，`/model` 也会保存到这里，所以在 Claude Code 里选别的模型会保留下来。Coffer 不写推理强度的键：智能体按它自己配置里的推理强度运行，早期版本写下的 `effortLevel` 会作为你自己的设置留在文件里。
 - **每个档位都被固定。** Claude Code 按档位请求模型——Opus、Sonnet、Haiku（它也负责后台任务）和 Fable；Fable 只在提供商整理的模型里有名字带它的模型时才固定。在不提供 Claude id 的接入地址上，每个档位都是智能体的模型；在提供 Claude id 的网关上，每个档位是名字里带有该档位的模型。在更换模型对话框的**按档位选模型**里可以自己设置某一个。
-- **`modelPicker`** 把提供商的模型放进 `/model`，当提供商不提供 Claude id 时替换内置的选项。
+- **`modelPicker`** 用提供商的模型替换 `/model` 里内置的选项，所以 `/model` 里只有提供商实际提供的模型。不这样做的话，选了一个提供商没有的内置模型，它会被悄悄换成另一个模型。
 - **`CLAUDE_CODE_MAX_CONTEXT_TOKENS`** 是智能体所用模型的上下文窗口，在模型不是 Claude 模型、且它的窗口已知时写入（见[上下文窗口](#context-windows)）。否则 Claude Code 对不认识的模型一律假设 200k token，提示它 "isn't described by this version's model catalog"，并在 200k 处压缩。这个值对整个会话生效：之后在 `/model` 里换的模型沿用它，直到 Coffer 再次切换该智能体。
 
 helper 以绝对路径指向 `coffer` CLI（路径含空格时按 shell 规则加引号），因为从 Dock 或 Finder 启动的 Claude Code 拿不到你登录 shell 的 `PATH`。安装在 `~/.coffer/bin` 下时，路径是稳定的 `~/.coffer/bin/coffer`，所以升级不会弄坏它。

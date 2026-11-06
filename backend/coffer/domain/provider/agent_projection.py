@@ -162,9 +162,11 @@ class ClaudeCodeProviderProjection:
                 model=req.binding.model,
                 tier_models=claude_tiers(req),
                 picker_models=req.model_ids,
-                # Replace Claude Code's built-in rows only where they would
-                # fail: an endpoint that serves no Claude ids.
-                replace_builtin_picker=not any(is_claude_model_id(m) for m in req.model_ids),
+                # Always replace Claude Code's built-in rows: a built-in row the
+                # connection does not curate (Fable on a gateway serving only
+                # Opus and Haiku) would be swapped by the proxy for another
+                # model without anyone seeing it.
+                replace_builtin_picker=True,
                 local=req.local,
                 # Claude Code knows a Claude id's window itself and assumes 200k
                 # for any other id; the resolved window corrects that.

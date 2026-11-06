@@ -27,6 +27,38 @@ threads appending at once rarely conflict:
   looked at (link the discussion draft or research note when there is one).
 ```
 
+## Agents and model providers
+
+### Support a third coding agent
+
+- **Added:** 2026-11-06, from the thread "梳理智能体与模型提供商的缺口和缺陷"
+- **What:** register, connect and deliver to a third coding agent such as Gemini
+  CLI or OpenCode, the way Claude Code and Codex are today (MCP entry, skills,
+  memory, provider projection, sessions).
+- **Why later:** serving every agent through one Coffer is what the project is
+  for, but only Claude Code and Codex are used now. The code is already shaped
+  for it: one enum value, one `AGENT_DESCRIPTORS` record and one child spec under
+  `openspec/specs/agent-registry/`.
+- **Sketch:** start from the agent's own config format and session API. CC
+  Switch manages Gemini CLI and OpenCode next to Claude Code and Codex, so it is
+  a reference for their config files. Discussion:
+  `agents-providers-gaps/讨论稿.md` in the project files.
+
+### Keep Codex's model capabilities on a provider
+
+- **Added:** 2026-11-06, from the thread "梳理智能体与模型提供商的缺口和缺陷"
+- **What:** when Codex runs on a provider, its model picker keeps reasoning effort
+  and parallel tool calls for models that support them. Today Coffer's
+  `coffer-model-catalog.json` writes `supported_reasoning_levels: []` and
+  `supports_parallel_tool_calls: false` for every model
+  (`backend/coffer/domain/provider/codex_projection.py`), so Codex on a GPT
+  relay is weaker than on its own login.
+- **Why later:** Codex currently runs on its own login, so nothing is lost yet;
+  it matters the first time Codex is put on an OpenAI-compatible relay.
+- **Sketch:** first check how Codex parses `model_catalog_json` (whether the
+  fields may be omitted so Codex uses its own defaults), then write what the
+  provider reports and leave the rest to Codex.
+
 ## Channels and conversations
 
 ### Continue a terminal session from the phone

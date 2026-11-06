@@ -28,9 +28,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import os
 import subprocess
-import sys
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from pathlib import Path
@@ -49,7 +47,7 @@ from coffer.infrastructure.model_proxy.supervisor_support import (
     ProxyStatus,
     default_proxy_command,
     pid_alive,
-    source_root,
+    spawn_env,
 )
 from coffer.infrastructure.platform.process import detached_popen_kwargs
 
@@ -105,6 +103,8 @@ class ProxySupervisor:
         self._restarts = 0
         self._last_error: str | None = None
         self._pushed_revision: int | None = None
+        #: The last push, revision aside: re-pushing it to a proxy holding it is skipped.
+        self._pushed_body: dict[str, object] | None = None
         self._lock = asyncio.Lock()
         self._dirty = False
         self._watchdog: asyncio.Task[None] | None = None
@@ -156,6 +156,10 @@ class ProxySupervisor:
                 self._info = self._health = None  # not ours: re-found only through the checked path
                 return
             state, self._prefetched = self._prefetched or await self._state_provider(), None
+            body = state.model_dump(mode="json", exclude={"revision"})
+            held = (self._health or {}).get("revision", -1) == self._pushed_revision
+            if held and body == self._pushed_body:
+                return
             try:
                 r = await self._http.put(
                     self._url(info, "/_coffer/state"),
@@ -168,6 +172,7 @@ class ProxySupervisor:
                 _logger.warning("model_proxy.state_push_failed: %s", type(exc).__name__)
                 return
             self._pushed_revision = state.revision
+            self._pushed_body = body
             if self._health is not None:
                 self._health = {**self._health, "revision": state.revision}
 
@@ -291,16 +296,6 @@ class ProxySupervisor:
         if self._alive(info.pid):
             raise RuntimeError(f"old model proxy pid {info.pid} did not finish draining")
 
-    def _spawn_env(self) -> dict[str, str]:
-        env = dict(os.environ)
-        if self._env is not None:
-            env.update(self._env)
-        if self._command is None and not getattr(sys, "frozen", False):
-            existing = env.get("PYTHONPATH")
-            root = source_root()
-            env["PYTHONPATH"] = root + (os.pathsep + existing if existing else "")
-        return env
-
     async def _spawn(self) -> None:
         command = self._command or default_proxy_command(self.port)
         log_path = log_dir() / "proxy.log"
@@ -313,7 +308,7 @@ class ProxySupervisor:
                 stdin=subprocess.PIPE if key is not None else subprocess.DEVNULL,
                 stdout=log,
                 stderr=log,
-                env=self._spawn_env(),
+                env=spawn_env(self._env, from_source=self._command is None),
                 **detached_popen_kwargs(),
             )
         self._proc = proc
@@ -337,6 +332,7 @@ class ProxySupervisor:
                 if health is not None:
                     self._info, self._health = info, health
                     self._pushed_revision = None
+                    self._pushed_body = None
                     _logger.info("model_proxy.spawned pid=%s port=%s", proc.pid, info.port)
                     return
             await asyncio.sleep(0.05)
