@@ -318,7 +318,7 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 
 ## 调用日志 {#invocation-logging}
 
-每一次被路由的调用，包括内置工具的调用，无论成功还是失败，都会写一行 `mcp_invocations`：哪项能力跑了、跑了多久、`status` 是什么（`ok`、`error`、`timeout` 或 `denied`）、来自哪个会话，以及会话上报了身份时是哪个智能体（`agent_uid`）。这一行的 `content` 保存调用的参数、结果或错误，自定义工具还保存它的 HTTP 请求和响应（见[调用内容](/zh/architecture/observability#call-content)）。`error_message` 列仍会简化成 Coffer 编写的摘要（对于上游返回的格式正确的 JSON-RPC 错误，只保留它的数字代码：`upstream answered with a JSON-RPC error (code -32602)`），因为上游的消息可能把密钥回显出来，比如一条引用了 key 的认证失败信息。内置工具以保留 uid `coffer` 记录。
+每一次被路由的调用，包括内置工具的调用，无论成功还是失败，都会写一行 `mcp_invocations`：哪项能力跑了、跑了多久、`status` 是什么（`ok`、`error`、`timeout` 或 `denied`）、来自哪个会话，以及会话上报了身份时是哪个智能体（`agent_uid`）。这一行的 `content` 保存调用的参数、结果或错误，自定义工具还保存它的 HTTP 请求和响应（见[调用内容](/zh/architecture/observability#call-content)）。`error_message` 列仍会简化成 Coffer 编写的摘要（对于上游返回的格式正确的 JSON-RPC 错误，只保留它的数字代码：`upstream answered with a JSON-RPC error (code -32602)`），因为上游的消息可能把密钥回显出来，比如一条引用了 key 的认证失败信息。连不上的上游仍会写明原因：HTTP 写网络失败的类型（`the connection was refused`、`the server's host name does not resolve`、`the TLS handshake failed`…）或它返回的状态（`the server answered HTTP 502`），由 `infrastructure/mcp/failure_detail.py` 分类，不引用异常原文；stdio 写 `the server exited`，再加上它在 stderr 上打印的最后一行，取自已遮盖的日志文件，再过一遍密钥清洗，截到 200 个字符。内置工具以保留 uid `coffer` 记录。
 
 这一行的各列、每个状态的确切含义、缓冲写入器和保留期，统一在 [可观测性](/zh/architecture/observability#the-mcp-invocation-log) 里描述。你可以按服务器读日志（`coffer log mcp --server <server>`），也可以跨所有服务器读（`coffer log mcp`）；见 [活动与审计](/zh/guides/activity)。
 

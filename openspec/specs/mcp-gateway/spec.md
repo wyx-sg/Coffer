@@ -1439,6 +1439,26 @@ answers `cancel` for them.
 - **WHEN** all three sessions call the tool
 - **THEN** each of the first two calls returns its own client's answer and each client is asked once, and the third call reports that the client refused while its client is asked nothing
 
+### Requirement: Name why an upstream failed in Coffer's words
+A call or a start that failed because the upstream could not be reached MUST record why, in a summary Coffer
+writes, never the upstream's own exception text (which can carry a URL with a secret in it). For an HTTP
+upstream the summary names the kind of failure (the host name does not resolve, the connection was refused,
+the TLS handshake failed, connecting timed out, the server stopped answering, the proxy refused) or the HTTP
+status the server answered with. For a stdio upstream whose process ended, it says the server exited and
+quotes the last line it printed on stderr: read from its log file, where injected values are already masked,
+scrubbed of anything shaped like a secret, and cut to 200 characters. This summary is the invocation's
+`error_message`, so the status read, the Overview and every hand-off show the same reason.
+
+#### Scenario: a call to a server that exited records what it printed last
+- **GIVEN** a stdio server that prints `fatal: out of memory with key sk-…` and exits during a call
+- **WHEN** the call fails
+- **THEN** the error says the server exited and quotes that line with the key replaced by `<secret>`
+
+#### Scenario: an HTTP server that cannot be reached is named by the kind of failure
+- **GIVEN** a URL nothing listens on, and a server that answers every request with HTTP 502
+- **WHEN** Coffer connects to each
+- **THEN** the first error says the connection was refused and the second that the server answered HTTP 502
+
 ### Requirement: Record invocations with redacted, bounded content
 The system MUST record an invocation entry for every tool call, resource read, and prompt fetch — its target,
 timestamp, duration and outcome. Each entry MUST also carry

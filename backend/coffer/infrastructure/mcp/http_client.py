@@ -41,6 +41,7 @@ from typing import Any
 
 import httpx2
 from mcp import ClientSession, MCPError
+from mcp import types as mcp_types
 from mcp.client.session import ElicitationFnT, ListRootsFnT, SamplingFnT
 from mcp.client.streamable_http import streamable_http_client
 from mcp.types import ServerNotification
@@ -50,6 +51,7 @@ from coffer.domain.auth_scheme import with_schemes
 from coffer.domain.errors import UpstreamAuthRejected, UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.server_config import HttpTransport
 from coffer.infrastructure.mcp.dispatch import dispatch_method
+from coffer.infrastructure.mcp.failure_detail import http_failure_kind, status_failure
 from coffer.infrastructure.mcp.push_stream_guard import GuardedAsyncClient, PushStreamGuard
 
 NotificationCallback = Callable[[Any], Awaitable[None]]
@@ -109,6 +111,7 @@ class HttpUpstreamConnection:
         #: the SDK reports it as a generic JSON-RPC error.
         self.last_status: int | None = None
         self._session: ClientSession | None = None
+        self._http_client: GuardedAsyncClient | None = None
         # The lifetime task and the two handles spawn/close talk to it with.
         self._runner: asyncio.Task[None] | None = None
         self._ready: asyncio.Future[Any] | None = None
@@ -173,6 +176,7 @@ class HttpUpstreamConnection:
             timeout=httpx2.Timeout(float(self._spawn_timeout), read=_STREAM_READ_SECONDS),
         )
         http_client.event_hooks["response"].append(self._note_status)
+        self._http_client = http_client
 
         loop = asyncio.get_running_loop()
         ready: asyncio.Future[Any] = loop.create_future()
@@ -217,6 +221,17 @@ class HttpUpstreamConnection:
         if response.status_code >= 400 and self.first_error_status is None:
             self.first_error_status = response.status_code
 
+    def _request_failure(self, exc: MCPError) -> str | None:
+        """Why a request failed, when it was the HTTP exchange and not the server
+        answering with a JSON-RPC error: the network failure's kind, or the
+        error status the upstream answered with. ``None`` for a real answer."""
+        network = self._http_client.last_network_error if self._http_client else None
+        if exc.code == mcp_types.CONNECTION_CLOSED:
+            return http_failure_kind(network) if network is not None else "the connection closed"
+        if self.last_status is not None and self.last_status >= 400:
+            return status_failure(self.last_status)
+        return None
+
     def _init_error(self, exc: BaseException) -> UpstreamTimeout | UpstreamUnavailable:
         """Map a lifetime-task failure onto a domain error.
 
@@ -237,7 +252,16 @@ class HttpUpstreamConnection:
             # as a CancelledError; when scope exit surfaced nothing better,
             # this is all we know.
             return UpstreamUnavailable(f"upstream init cancelled: {type(leaf).__name__}")
-        return UpstreamUnavailable(f"upstream init failed: {type(leaf).__name__}")
+        network = self._http_client.last_network_error if self._http_client else None
+        if isinstance(leaf, httpx2.HTTPError):
+            reason = http_failure_kind(leaf)
+        elif network is not None:
+            reason = http_failure_kind(network)
+        elif self.first_error_status is not None:
+            reason = status_failure(self.first_error_status)
+        else:
+            return UpstreamUnavailable(f"upstream init failed: {type(leaf).__name__}")
+        return UpstreamUnavailable(f"upstream init failed: {type(leaf).__name__} ({reason})")
 
     def _auth_rejected(self, status: int | None) -> UpstreamAuthRejected:
         return UpstreamAuthRejected(
@@ -342,6 +366,11 @@ class HttpUpstreamConnection:
             # the response hook saw says it was the key that was refused.
             if self.last_status in _AUTH_STATUSES:
                 raise self._auth_rejected(self.last_status) from exc
+            reason = self._request_failure(exc)
+            if reason is not None:
+                raise UpstreamUnavailable(
+                    f"MCP server {self._server_name!r} failed {method}: {reason}"
+                ) from exc
             raise
         except TimeoutError as exc:
             raise UpstreamTimeout(
