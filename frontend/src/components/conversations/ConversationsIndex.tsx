@@ -5,7 +5,11 @@
 // could not be read, then the sessions grouped by day; with none at all, one
 // empty state. Rows are the shared SessionRow: pressing one opens its session in
 // the preferred terminal (spec chat "Open a conversation in the terminal").
-import { useCallback, useMemo, useState } from "react";
+// `?open=<conversation id>` (a scheduled run's History links here) lands on that
+// conversation in the full list: later pages load until its row shows, the row
+// is selected and scrolled to, and its session opens.
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { MessageSquare } from "lucide-react";
 
@@ -42,6 +46,10 @@ export function ConversationsIndex() {
   const stop = useInterruptConversation();
   const [deleting, setDeleting] = useState<SessionRowData | null>(null);
   const opener = useOpenSession();
+  const [params, setParams] = useSearchParams();
+  const target = params.get("open");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [missing, setMissing] = useState(false);
 
   const agentNames = useMemo(
     () => new Map(agents.map((a) => [a.agent_key, a.display_name])),
@@ -57,6 +65,27 @@ export function ConversationsIndex() {
     [channelRows],
   );
   const rows = useMemo(() => list.items.map(sessionRow), [list.items]);
+
+  // Land on `?open=`: page on until its row shows, then select it, open it once
+  // and drop the parameter so a reload does not open it again.
+  const { isLoading, isLoadingMore, hasMore, loadMore } = list;
+  const { open: openRow, canOpen } = opener;
+  const landed = useRef<string | null>(null);
+  useEffect(() => {
+    if (!target || landed.current === target || isLoading || isLoadingMore) return;
+    const row = rows.find((r) => r.conversationId === target);
+    if (!row && hasMore) {
+      loadMore();
+      return;
+    }
+    landed.current = target;
+    setSelectedId(row?.id ?? null);
+    setMissing(!row);
+    if (row && canOpen(row)) openRow(row);
+    const next = new URLSearchParams(params);
+    next.delete("open");
+    setParams(next, { replace: true });
+  }, [target, rows, isLoading, isLoadingMore, hasMore, loadMore, canOpen, openRow, params, setParams]);
   // The agents whose sessions could not be read, once each, named as the registry does.
   const unavailable = useMemo(
     () => [...new Set(list.extras.flat().map((u) => u.agent))].map((k) => agentNames.get(k) ?? k),
@@ -142,6 +171,11 @@ export function ConversationsIndex() {
         />
       ) : (
         <>
+          {missing ? (
+            <p className="text-xs text-text-muted" role="status">
+              {t("conversations.list.openMissing")}
+            </p>
+          ) : null}
           {unavailable.length > 0 ? (
             <p className="flex items-center gap-1.5 text-xs text-text-muted" role="status">
               {t("conversations.list.unavailable", {
@@ -168,6 +202,7 @@ export function ConversationsIndex() {
               grouped
               showChannel
               agentNames={agentNames}
+              selectedId={selectedId}
               stoppingId={
                 stop.isPending
                   ? (rows.find((r) => r.conversationId === stop.variables)?.id ?? null)

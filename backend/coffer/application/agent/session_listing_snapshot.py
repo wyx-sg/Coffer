@@ -87,6 +87,12 @@ class SnapshotSessionSource:
             del self._entries[key]
         return await self._fetch(key, config_dir, q, limit, position)
 
+    async def tail(
+        self, config_dir: pathlib.Path, session_id: str, cwd: str | None
+    ) -> tuple[str, str]:
+        """Not a listing: read through, never kept."""
+        return await self._inner.tail(config_dir, session_id, cwd)
+
     def _task(
         self, key: _Key, config_dir: pathlib.Path, q: str | None, limit: int, pos: _Pos
     ) -> asyncio.Task[_Outcome]:

@@ -5,6 +5,7 @@ import type { components } from "@/lib/api/types";
 export type DaemonStatus = components["schemas"]["DaemonStatusOut"];
 export type DaemonPort = components["schemas"]["DaemonPortOut"];
 export type DaemonResidency = components["schemas"]["DaemonResidencyOut"];
+export type DaemonWorker = components["schemas"]["WorkerOut"];
 export type DaemonResidencyIn = components["schemas"]["DaemonResidencyIn"];
 /** What a daemon in its setup state waits for (spec daemon "Wait in a setup state when git is missing or too old"). */
 export type DaemonSetup = components["schemas"]["DaemonSetupOut"];

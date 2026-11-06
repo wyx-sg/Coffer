@@ -123,6 +123,9 @@ def merge_parts(parts: list[BurstPart]) -> QueuedInbound:
         mention_user_email=last.item.mention_user_email,
         mention_user_name=last.item.mention_user_name,
         title_hint=title_hint,
+        # Two people can fold into one burst in a group thread: the turn is an
+        # owner's only when every message in it was.
+        asker_is_owner=all(p.item.asker_is_owner for p in parts),
     )
 
 

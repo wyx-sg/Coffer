@@ -43,7 +43,7 @@ coffer resource list [OPTIONS]
 
 | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `--kind` <span class="cli-chip">选项</span> | text |  | mcp_server, agent, skill, knowledge, memory, provider, channel |
+| `--kind` <span class="cli-chip">选项</span> | text |  | mcp_server, agent, skill, knowledge, provider, channel, scheduled_task |
 | `--name` <span class="cli-chip">选项</span> | text |  |  |
 | `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
 

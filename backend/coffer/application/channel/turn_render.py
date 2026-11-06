@@ -45,6 +45,7 @@ from coffer.application.channel.turn_surface import typing_heartbeat
 from coffer.application.channel.turn_text import with_mention
 from coffer.application.runtime.supervisor import spawn
 from coffer.domain.channel.envelopes import ChoiceButton
+from coffer.domain.channel.scheduled_task import SILENT_MARK
 from coffer.domain.chat.events import (
     MessageEnd,
     TextDelta,
@@ -96,6 +97,12 @@ class TurnRenderer:
     rewrite: Callable[[int, str], Awaitable[bool]] | None = None
     #: This turn IS that follow-up: its reply carries the full-report button.
     offer_full_report: bool = False
+    #: A scheduled run's turn: a clean reply opening with ``[SILENT]`` is not
+    #: sent (spec channels "Stay silent when a scheduled run has nothing to say").
+    silent_mark: bool = False
+    #: Set once the turn ended silent, and its error's message when it failed.
+    silenced: bool = field(init=False, default=False)
+    error_text: str = field(init=False, default="")
     #: The long reply's ``MEDIA:`` lines, which this follow-up's reply sends.
     carried_media: str = ""
     heartbeat_seconds: float = _TYPING_HEARTBEAT_SECONDS
@@ -144,7 +151,11 @@ class TurnRenderer:
             elif isinstance(event, TurnError):
                 error = event
         end = TurnEnd(stop_reason, error, len(tool_ids), self.now() - started, tokens)
+        self.error_text = error.message if error is not None else ""
         answer = self._reply.answer()
+        if self.silent_mark and end.clean and answer.lstrip().startswith(SILENT_MARK):
+            self.silenced = True
+            return end.outcome
         # The long reply's files ride on its short version — once, should the
         # agent have repeated a MEDIA: line itself.
         carried = [m for m in self.carried_media.splitlines() if m and m not in answer]

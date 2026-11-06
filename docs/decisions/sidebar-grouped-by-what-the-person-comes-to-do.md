@@ -14,7 +14,8 @@
 [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md),
 [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md),
 spec web-ui "Group the sidebar by what the user comes to do",
-spec web-ui "Keep the sidebar to its fourteen entries",
+spec web-ui "Keep the sidebar to its fifteen entries",
+[Scheduled Tasks Are Turns Coffer Starts in a Chat](scheduled-tasks-are-turns-coffer-starts-in-a-chat.md),
 spec web-ui "Manage custom tool groups on their own page",
 spec web-ui "Show every CLI a skill requires on the CLIs page",
 spec web-ui "Give each listed resource kind one sidebar entry",
@@ -54,7 +55,8 @@ entries:
 
 | Future addition | Lands as |
 | --- | --- |
-| Workflows, with a Workflows tab and a Runs tab; scheduled tasks are workflows with a schedule trigger | one entry |
+| Workflows, with a Workflows tab and a Runs tab | one entry |
+| Scheduled tasks: turns Coffer starts in a chat at a time, and Coffer's own background work | one entry, in Run (the fifteenth) |
 | Rules (instructions projected into each agent's instruction files) | one entry |
 | Sources (read-only git sources a vault subscribes to, for skills and the like) | one entry |
 | More agents; agentic development environments (ADEs) as delivery targets | rows on Agents |
@@ -224,6 +226,15 @@ second kind of conversation. They share a group because both are how work with a
 they are two entries because the user comes to each for a different reason. A reply sent from
 Coffer into a channel-opened conversation is also delivered back to that channel (a behaviour since removed).
 
+**Scheduled tasks is an entry in Run, after Channels.** A scheduled task is a turn Coffer starts
+in a chat at a time ([Scheduled Tasks Are Turns Coffer Starts in a Chat](scheduled-tasks-are-turns-coffer-starts-in-a-chat.md)):
+it puts an agent to work, which is what Run is for, and it runs through a channel, so it sits
+next to Channels. It is not a tab of Channels because a task is managed on its own — its history,
+Run now, pause — and the page also lists Coffer's own background workers, which belong to no
+channel. It was planned as a schedule trigger on Workflows; it shipped first and on its own, so
+it took its own entry, and Run holds three (Conversations, Channels, Scheduled tasks). That makes
+fifteen entries; a sixteenth is still a spec change.
+
 **Model providers belongs with Agents.** A provider is the endpoint and key an agent's model is
 served from, and a connection and model are chosen per agent, on that agent's page (spec
 provider-switching "Offer every connection operation over REST and in the web UI";
@@ -281,7 +292,7 @@ The sidebar is grouped by what the person comes to do:
 
 - **Overview**, above the groups, under no heading.
 - **Agents** — set up the agents and the models they run on: Agents, Model providers.
-- **Run** — put an agent to work, directly or through an IM bot: Conversations, Channels.
+- **Run** — put an agent to work, directly, through an IM bot or at a time: Conversations, Channels, Scheduled tasks.
 - **Capabilities** — give agents things they can do: MCP servers, Custom tools, Skills, CLIs.
 - **Context** — give agents things they know: Knowledge, Memory.
 - **System** — look after Coffer and what every part shares: Secrets, Activity, Sync.
@@ -290,7 +301,7 @@ Usage is not an entry: what requests through Coffer cost is the **Usage** tab of
 - A labelled Settings row in the sidebar footer, above the daemon status, opens Settings as a
   modal (also on ⌘,); it is in no group.
 
-Fourteen entries with every experimental feature on; spec web-ui "Keep the sidebar to its fourteen
+Fifteen entries with every experimental feature on; spec web-ui "Keep the sidebar to its fifteen
 entries" owns the list and the routes, and `NAV_GROUPS` in `frontend/src/lib/navigation.ts` is the
 one list the sidebar, the command palette and the Settings modal read. An entry whose experimental
 feature is switched off is left out; the four experimental features own Model providers (with its Usage tab),
@@ -317,7 +328,7 @@ Rules a future change must respect:
 
 ## Consequences
 
-- The entry set and groups are pinned by spec web-ui "Keep the sidebar to its fourteen entries"
+- The entry set and groups are pinned by spec web-ui "Keep the sidebar to its fifteen entries"
   and "Group the sidebar by what the user comes to do"; changing either is a spec change. The
   groups and entries are implemented in `frontend/src/lib/navigation.ts` (`NAV_GROUPS`) and
   rendered by `frontend/src/components/SidebarNav.tsx`; the Settings modal is

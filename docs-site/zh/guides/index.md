@@ -42,6 +42,7 @@ description: Coffer 的全部任务型指南集中在一页，按你要做的事
 - [消息渠道](/zh/guides/channels) 在 Telegram 或 SeaTalk 里和智能体对话。
 - [Telegram](/zh/guides/channels-telegram) 配对一个 Telegram 机器人。
 - [SeaTalk](/zh/guides/channels-seatalk) 配对一个 SeaTalk 机器人。
+- [定时任务](/zh/guides/scheduled-tasks) 让智能体到点做事、过后跟进，并发送每日汇报。
 
 </LinkList>
 

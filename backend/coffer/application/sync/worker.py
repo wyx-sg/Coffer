@@ -20,6 +20,7 @@ from typing import Protocol
 
 from coffer.application.runtime.cancellation import raise_if_stopping
 from coffer.application.runtime.supervisor import spawn_restarting
+from coffer.application.runtime.workers import TimedWorker
 from coffer.domain.sync.remote import DEFAULT_INTERVAL_SECONDS, SyncRemote
 from coffer.domain.sync.rounds import RoundRecord
 
@@ -67,10 +68,17 @@ class SyncWorker:
 
     async def _loop(self) -> None:
         self._service.set_next_round(self._clock() + timedelta(seconds=self._start_delay))
-        await self._sleep(self._start_delay)
-        while not self._stop.is_set():
-            wait = await self.tick()
-            await self._sleep(wait)
+        report = TimedWorker("sync-worker")
+        try:
+            report.sleeping(self._start_delay)
+            await self._sleep(self._start_delay)
+            while not self._stop.is_set():
+                with report.pass_():
+                    wait = await self.tick()
+                report.sleeping(wait)
+                await self._sleep(wait)
+        finally:
+            report.close()
 
     async def tick(self) -> float:
         """One scheduled round when a remote is on; answers how long to wait."""

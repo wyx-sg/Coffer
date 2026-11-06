@@ -42,6 +42,7 @@ One page per task. Each guide shows the place in the app, and a command where an
 - [Channels](/guides/channels) Chat with your agents from Telegram or SeaTalk.
 - [Telegram](/guides/channels-telegram) Pair a Telegram bot.
 - [SeaTalk](/guides/channels-seatalk) Pair a SeaTalk bot.
+- [Scheduled tasks](/guides/scheduled-tasks) Have an agent do something at a time, follow up later, and send a daily report.
 
 </LinkList>
 

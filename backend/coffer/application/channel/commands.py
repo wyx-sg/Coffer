@@ -30,6 +30,7 @@ from coffer.application.channel import (
 from coffer.application.channel.card_delivery import dispatch_card_tap
 from coffer.application.channel.command_context import CommandContext, SafeSend
 from coffer.application.channel.ports import AgentCatalogPort, ChannelBinding, ModelSuggestionPort
+from coffer.application.channel.status_tasks import ChatTasksPort
 from coffer.application.channel.stop_notice import StopNotice
 from coffer.application.channel.store_ports import (
     ChannelPeer,
@@ -90,6 +91,9 @@ class ChannelCommands:
         self._turns = turns
         self._agents = agents
         self._model_suggestions = model_suggestions
+        #: The scheduled tasks `/status` lists and cancels, wired once the
+        #: scheduled-task core exists; ``None`` lists none.
+        self.scheduled: ChatTasksPort | None = None
 
     async def handle(
         self,

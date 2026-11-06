@@ -19,6 +19,7 @@ from typing import IO, TypeVar
 
 from coffer.application.runtime.cancellation import raise_if_stopping
 from coffer.application.runtime.supervisor import spawn
+from coffer.application.runtime.workers import TimedWorker
 from coffer.application.skill import (
     source_stage_ops,
     update_merge,
@@ -167,14 +168,21 @@ class SkillUpdateWorker:
         self._task: asyncio.Task[None] | None = None
 
     async def run(self) -> None:
-        await asyncio.sleep(self._first_delay)
-        while True:
-            try:
-                await self._svc.check_due()
-            except Exception as exc:
-                raise_if_stopping(exc)
-                logger.warning("skill.update_check.failed", exc_info=True)
-            await asyncio.sleep(self._slice)
+        report = TimedWorker("skill-source-updates")
+        try:
+            report.sleeping(self._first_delay)
+            await asyncio.sleep(self._first_delay)
+            while True:
+                try:
+                    with report.pass_():
+                        await self._svc.check_due()
+                except Exception as exc:
+                    raise_if_stopping(exc)
+                    logger.warning("skill.update_check.failed", exc_info=True)
+                report.sleeping(self._slice)
+                await asyncio.sleep(self._slice)
+        finally:
+            report.close()
 
     def start(self) -> asyncio.Task[None]:
         self._task = spawn(self.run(), name="skill-source-updates")

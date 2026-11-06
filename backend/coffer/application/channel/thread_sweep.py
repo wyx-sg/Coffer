@@ -36,6 +36,7 @@ from coffer.application.channel.store_ports import (
 )
 from coffer.application.channel.turn_driver import TurnPort
 from coffer.application.runtime.cancellation import raise_if_stopping
+from coffer.application.runtime.workers import TimedWorker
 from coffer.domain.chat.errors import ConversationNotFound
 
 __all__ = ["IDLE_CLOSE_AFTER", "SWEEP_INTERVAL_S", "ParallelThreadSweep"]
@@ -77,13 +78,19 @@ class ParallelThreadSweep:
 
     async def run(self) -> None:
         """Sweep now, then every ``interval_s``, until the task is cancelled."""
-        while True:
-            try:
-                await self.sweep_once()
-            except Exception as exc:
-                raise_if_stopping(exc)
-                _logger.exception("channel.thread_sweep.failed")
-            await asyncio.sleep(self._interval_s)
+        report = TimedWorker("channel-thread-sweep")
+        try:
+            while True:
+                try:
+                    with report.pass_():
+                        await self.sweep_once()
+                except Exception as exc:
+                    raise_if_stopping(exc)
+                    _logger.exception("channel.thread_sweep.failed")
+                report.sleeping(self._interval_s)
+                await asyncio.sleep(self._interval_s)
+        finally:
+            report.close()
 
     async def sweep_once(self) -> int:
         """One pass; how many threads it closed."""

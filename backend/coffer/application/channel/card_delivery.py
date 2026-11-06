@@ -38,6 +38,7 @@ from coffer.application.channel.selection_cards import (
     is_page_turn,
     parse_page_turn,
 )
+from coffer.application.channel.status_tasks import TASK_CANCEL_KIND, cancel_tapped
 from coffer.domain.channel.commands import DM_ONLY_NOTICE, command_name
 
 if TYPE_CHECKING:
@@ -83,6 +84,11 @@ async def dispatch_card_tap(ctx: CommandContext, data: str) -> None:
     if kind == WITHDRAW_KIND:
         # The 🗑 under a reply (spec channels "Withdraw a bot reply on the owner's command").
         await ctx.commands.withdrawal.tap(ctx, value)
+        return
+    if kind == TASK_CANCEL_KIND:
+        # Cancel under a `/status` card's scheduled task (spec channels "List
+        # and cancel a chat's scheduled tasks from /status").
+        await cancel_tapped(ctx, value)
         return
     if kind == HELD_KIND:
         # Continue or Discard under a stopped line or a `/status` card (spec
