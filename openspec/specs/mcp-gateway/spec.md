@@ -71,6 +71,13 @@ in-process tool.
 The system MUST forward MCP `tools`, `resources`, and `prompts` capabilities (list, call/read/get, and
 list-changed notifications) between clients and upstream MCP servers.
 
+- **Lists without starting servers.** A session MUST answer a server's `tools/list`, `resources/list` and
+  `prompts/list` from the list that server last gave on this machine when it was given under the server's
+  current config and the session holds no connection to the server, and MUST start the server only when a
+  call, read or get needs it. A server never listed on this machine, one whose config changed since its last
+  list, and one the session is connected to are asked live, and every live answer is saved whole for the
+  next session (ADR session-subprocess-model, revision 2026-11-06). The management routes always ask live.
+
 - **Tools-only upstreams.** An upstream that implements only `tools` and replies with JSON-RPC `-32601`
   (METHOD_NOT_FOUND) for `resources/list` or `prompts/list` MUST be treated as having no resources / no
   prompts: the per-server capability view and the aggregate lists return that server's tools with an empty
@@ -170,6 +177,11 @@ list-changed notifications) between clients and upstream MCP servers.
 - **GIVEN** an aggregated upstream tool whose name and description say only that it lists accounts, and whose input schema has a parameter `phone_list` described as 手机号列表 and a `status` parameter with the enum values `active` and `frozen`
 - **WHEN** an agent searches for "find a user by phone number", for "frozen", or for 按手机号查
 - **THEN** that tool is among the results each time, and first for the last two
+
+#### Scenario: a session lists a server's tools without starting it
+- **GIVEN** a stdio server one session has listed, and a second session
+- **WHEN** the second session lists its tools and resources, then calls one of its tools, and the server's config is then edited
+- **THEN** the second session's lists match the first's with no server started until the call, and the next session after the edit asks the server live and sees the new tools
 
 ### Requirement: Namespace every upstream capability
 The system MUST namespace every upstream capability with its server's name (`<server>__<tool>` for tools and

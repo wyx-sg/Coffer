@@ -357,6 +357,15 @@ class SubprocessSupervisor:
         """What a call's recorded content is masked with (``call_content``)."""
         return self._injected.get(server_name, ())
 
+    def is_live(self, server_name: str) -> bool:
+        """Whether this session holds a healthy connection to the server now."""
+        entry = self._entries.get(server_name)
+        return (
+            entry is not None
+            and entry.connection is not None
+            and entry.state == UpstreamHealth.HEALTHY
+        )
+
     async def evict(self, server_name: str) -> None:
         """Drop this server's connection — after a crash, a delete or an edit.
 

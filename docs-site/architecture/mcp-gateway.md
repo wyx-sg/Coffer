@@ -21,7 +21,7 @@ Aggregation brings its own problem. Once a user registers a handful of servers, 
 | --- | --- |
 | Coffer is one MCP server downstream and an MCP client upstream. | Every agent needs one config entry, and the gateway is free to rewrite, filter and log in between. |
 | Each downstream session gets its own upstream processes. | MCP is a per-session protocol. Sharing one upstream session between clients would mean re-implementing capability negotiation and notification routing inside the gateway. |
-| Upstreams are spawned lazily. | Sessions start fast, and a server the agent never touches costs nothing. |
+| Upstreams are started only for a call. A session lists from what each server last listed on this machine. | Sessions start fast, and a server the agent never calls costs nothing. |
 | Names are rewritten to `<server>__<name>` and `coffer://<server>/<uri>`. | Two servers that both expose `search` never collide. `__` was chosen because `:`, `.`, `/` and `-` are all legal inside upstream tool names. |
 | Capabilities are discovered live, and only preferences are stored. | An upstream upgrade cannot leave a stale copy of its schema behind. The user's enable or disable decision survives upgrades and temporary disappearances. |
 | Listing is budgeted, and calling is not. | Tiering decides what the model sees. It never decides what the model may call. |
@@ -102,7 +102,7 @@ The `initialize` reply declares `tools`, `resources` and `prompts`, each with `l
 
 ## Discovery and namespacing
 
-Discovery asks the upstream for `tools/list`, `resources/list` and `prompts/list`. It caches each list per (session, server, type) for 60 seconds and rewrites names into the gateway's namespace:
+Discovery asks the upstream for `tools/list`, `resources/list` and `prompts/list`, or, in a gateway session, answers from the saved catalogue (`mcp_catalogue` in `derived.db`): the whole list the server last gave on this machine, stored with a SHA-256 fingerprint of the server config it was listed under. The catalogue is used when the fingerprint matches and the session holds no connection to the server; otherwise the server is asked and its answer is saved for the next session. So a session starts a server only for a call, a read or a get, and an edit of the config makes the next list ask the server again. The management routes (the server page, Refresh) always ask live. Discovery caches each list per (session, server, type) for 60 seconds and rewrites names into the gateway's namespace:
 
 | Capability | Upstream | Presented |
 | --- | --- | --- |

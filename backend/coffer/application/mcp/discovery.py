@@ -1,14 +1,21 @@
-"""Live capability discovery for MCP gateway sessions.
+"""Capability discovery for MCP gateway sessions.
 
-Per the capability-state model, the DB stores only user preferences (enabled/disabled per
-capability key). The actual tool/resource/prompt list is queried live
-from the upstream on each request, with a short in-process cache.
+The person's switches are stored per capability key; the lists themselves come
+from the upstream. A session with a catalogue (the gateway's) answers a list
+from what the server listed last on this machine, under the same config, and
+starts the server only when a call needs it; a server never listed here, or
+one whose config changed since, is asked live, and so is one the session is
+already connected to. Every live answer is saved for the next session (ADR
+session-subprocess-model). A short in-process cache sits in front of both.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -16,7 +23,7 @@ from typing import Any, Literal
 import mcp.types as mcp_types
 from mcp import MCPError
 
-from coffer.application.mcp.ports import MCPCapabilityPreferenceRepoPort
+from coffer.application.mcp.ports import MCPCapabilityPreferenceRepoPort, McpCataloguePort
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
@@ -90,6 +97,55 @@ def _annotations_of(tool: Any) -> dict[str, Any] | None:
     return dict(raw) if isinstance(raw, dict) and raw else None
 
 
+def config_hash(config: dict[str, Any]) -> str:
+    """A server config's fingerprint: a list saved under another one is stale."""
+    canonical = json.dumps(config, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def _parse_tools(result: Any) -> list[MCPTool]:
+    return [
+        MCPTool(
+            name=t.name,
+            description=getattr(t, "description", None),
+            input_schema=getattr(t, "input_schema", None) or {},
+            annotations=_annotations_of(t),
+            output_schema=_output_schema_of(t),
+        )
+        for t in getattr(result, "tools", [])
+    ]
+
+
+def _parse_resources(result: Any) -> list[MCPResource]:
+    return [
+        MCPResource(
+            uri=str(getattr(r, "uri", "")),
+            name=getattr(r, "name", None),
+            description=getattr(r, "description", None),
+            mime_type=getattr(r, "mime_type", None),
+        )
+        for r in getattr(result, "resources", [])
+    ]
+
+
+def _parse_prompts(result: Any) -> list[MCPPrompt]:
+    return [
+        MCPPrompt(
+            name=p.name,
+            description=getattr(p, "description", None),
+            arguments=[
+                MCPPromptArgument(
+                    name=a.name,
+                    description=getattr(a, "description", None),
+                    required=getattr(a, "required", False),
+                )
+                for a in (getattr(p, "arguments", []) or [])
+            ],
+        )
+        for p in getattr(result, "prompts", [])
+    ]
+
+
 @dataclass(frozen=True)
 class DiscoveredResource:
     prefixed_uri: str
@@ -127,6 +183,7 @@ class CapabilityDiscovery:
         *,
         cache_ttl_seconds: float = _DEFAULT_CACHE_TTL_SECONDS,
         clock: Any = None,
+        catalogue: McpCataloguePort | None = None,
     ) -> None:
         self._resources = resource_service
         self._supervisor = supervisor
@@ -134,6 +191,7 @@ class CapabilityDiscovery:
         self._ttl = cache_ttl_seconds
         self._clock: Any = clock or time.monotonic
         self._caches: dict[str, _UpstreamCache] = {}
+        self._catalogue = catalogue
 
     def _cache_for(self, server_name: str) -> _UpstreamCache:
         return self._caches.setdefault(server_name, _UpstreamCache())
@@ -170,20 +228,10 @@ class CapabilityDiscovery:
         resource = None
         async with self._lock_for(server_name, "tool"):
             if cache.tools is None or not self._is_fresh(cache.tools_fetched_at):
-                result = await self._request_self_heal(server_name, "tools/list", {})
-                cache.tools = [
-                    MCPTool(
-                        name=t.name,
-                        description=getattr(t, "description", None),
-                        input_schema=getattr(t, "input_schema", None) or {},
-                        annotations=_annotations_of(t),
-                        output_schema=_output_schema_of(t),
-                    )
-                    for t in getattr(result, "tools", [])
-                ]
+                resource, cache.tools = await self._listed(
+                    server_name, "tool", "tools/list", _parse_tools, MCPTool, key=lambda t: t.name
+                )
                 cache.tools_fetched_at = self._clock()
-                resource = await self._resources.get_by_name("mcp_server", server_name)
-                await self._reconcile_preferences(resource, "tool", [t.name for t in cache.tools])
 
         prefs = await self._build_pref_map(server_name, "tool", resource=resource)
         return [
@@ -207,33 +255,18 @@ class CapabilityDiscovery:
         resource = None
         async with self._lock_for(server_name, "resource"):
             if cache.resources is None or not self._is_fresh(cache.resources_fetched_at):
-                try:
-                    result = await self._request_self_heal(server_name, "resources/list", {})
-                except MCPError as exc:
-                    # An upstream that implements only tools replies with JSON-RPC
-                    # -32601 (METHOD_NOT_FOUND) for resources/list. Treat that as
-                    # "this upstream has no resources" — cache an empty list and
-                    # return [], without affecting tools. Any other MCPError (and
-                    # real UpstreamUnavailable/UpstreamTimeout) propagates.
-                    if exc.code != mcp_types.METHOD_NOT_FOUND:
-                        raise
-                    cache.resources = []
-                    cache.resources_fetched_at = self._clock()
-                    return []
-                cache.resources = [
-                    MCPResource(
-                        uri=str(getattr(r, "uri", "")),
-                        name=getattr(r, "name", None),
-                        description=getattr(r, "description", None),
-                        mime_type=getattr(r, "mime_type", None),
-                    )
-                    for r in getattr(result, "resources", [])
-                ]
-                cache.resources_fetched_at = self._clock()
-                resource = await self._resources.get_by_name("mcp_server", server_name)
-                await self._reconcile_preferences(
-                    resource, "resource", [r.uri for r in cache.resources]
+                # An upstream that implements only tools replies -32601 to
+                # resources/list: it has no resources, which is not an error.
+                resource, cache.resources = await self._listed(
+                    server_name,
+                    "resource",
+                    "resources/list",
+                    _parse_resources,
+                    MCPResource,
+                    key=lambda r: r.uri,
+                    absent_ok=True,
                 )
+                cache.resources_fetched_at = self._clock()
 
         prefs = await self._build_pref_map(server_name, "resource", resource=resource)
         return [
@@ -256,39 +289,16 @@ class CapabilityDiscovery:
         resource = None
         async with self._lock_for(server_name, "prompt"):
             if cache.prompts is None or not self._is_fresh(cache.prompts_fetched_at):
-                try:
-                    result = await self._request_self_heal(server_name, "prompts/list", {})
-                except MCPError as exc:
-                    # A tools-only upstream replies with JSON-RPC -32601
-                    # (METHOD_NOT_FOUND) for prompts/list. Treat that as "this
-                    # upstream has no prompts" — cache an empty list and return
-                    # [], without affecting tools. Any other MCPError (and real
-                    # UpstreamUnavailable/UpstreamTimeout) propagates.
-                    if exc.code != mcp_types.METHOD_NOT_FOUND:
-                        raise
-                    cache.prompts = []
-                    cache.prompts_fetched_at = self._clock()
-                    return []
-                cache.prompts = [
-                    MCPPrompt(
-                        name=p.name,
-                        description=getattr(p, "description", None),
-                        arguments=[
-                            MCPPromptArgument(
-                                name=a.name,
-                                description=getattr(a, "description", None),
-                                required=getattr(a, "required", False),
-                            )
-                            for a in (getattr(p, "arguments", []) or [])
-                        ],
-                    )
-                    for p in getattr(result, "prompts", [])
-                ]
-                cache.prompts_fetched_at = self._clock()
-                resource = await self._resources.get_by_name("mcp_server", server_name)
-                await self._reconcile_preferences(
-                    resource, "prompt", [p.name for p in cache.prompts]
+                resource, cache.prompts = await self._listed(
+                    server_name,
+                    "prompt",
+                    "prompts/list",
+                    _parse_prompts,
+                    MCPPrompt,
+                    key=lambda p: p.name,
+                    absent_ok=True,
                 )
+                cache.prompts_fetched_at = self._clock()
 
         prefs = await self._build_pref_map(server_name, "prompt", resource=resource)
         return [
@@ -302,6 +312,47 @@ class CapabilityDiscovery:
             for p in cache.prompts
             if include_disabled or prefs.get(p.name, True)
         ]
+
+    async def _listed(
+        self,
+        server_name: str,
+        capability_type: CapabilityType,
+        method: str,
+        parse: Callable[[Any], list[Any]],
+        model: Any,
+        *,
+        key: Callable[[Any], str],
+        absent_ok: bool = False,
+    ) -> tuple[Any, list[Any]]:
+        """The server's row and its list: saved when it can be, else live.
+
+        Saved: this machine has a list the server gave under the config it has
+        now, and the session is not connected to it (a live connection is
+        cheap to ask, and its ``list_changed`` notifications are what keep a
+        list current). Live otherwise: the answer is reconciled with the
+        switches and saved for the next session."""
+        resource = await self._resources.get_by_name("mcp_server", server_name)
+        digest = config_hash(resource.config)
+        if self._catalogue is not None and not self._supervisor.is_live(server_name):
+            saved = await self._catalogue.load(resource.uid, capability_type)
+            if saved is not None and saved[0] == digest:
+                try:
+                    return resource, [model.model_validate(item) for item in saved[1]]
+                except ValueError:
+                    pass  # a list saved in another shape: ask the server
+        try:
+            items = parse(await self._request_self_heal(server_name, method, {}))
+        except MCPError as exc:
+            if not (absent_ok and exc.code == mcp_types.METHOD_NOT_FOUND):
+                raise
+            items = []
+        else:
+            await self._reconcile_preferences(resource, capability_type, [key(i) for i in items])
+        if self._catalogue is not None:
+            await self._catalogue.save(
+                resource.uid, capability_type, digest, [i.model_dump(mode="json") for i in items]
+            )
+        return resource, items
 
     async def request(self, server_name: str, method: str, params: dict[str, Any]) -> Any:
         """One upstream request for the server page's previews (``resources/read``,
