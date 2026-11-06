@@ -400,8 +400,28 @@ async def test_a_channel_turn_carries_no_memory_from_coffer(tmp_path) -> None:  
         }
         prompts[conv.id] = str(captured[0].system_prompt)
 
-    assert envs[channel.id] == envs[web.id] == {}
+    # A channel's turn differs by one switch only: no background tasks.
+    assert envs[web.id] == {}
+    assert envs[channel.id] == {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}
     assert "memory" not in prompts[channel.id].lower()
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="chat", scenario="a channel conversation runs without background tasks"
+)
+async def test_a_channel_turn_runs_without_background_tasks(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    repo, engine = await _repo(tmp_path)
+    channel = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
+    factory, captured = _make_factory(_simple_messages())
+    provider = ClaudeSdkProvider(conversations=repo, session_factory=factory)
+    await provider.init_conversation(channel.id, {"cwd": str(tmp_path)})
+    adapter = await provider.build_adapter(channel.id)
+    await _collect(adapter, _user_turn("hi", channel.id))
+
+    assert captured[0].env["CLAUDE_CODE_DISABLE_BACKGROUND_TASKS"] == "1"
 
     await engine.dispose()
 
