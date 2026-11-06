@@ -9,7 +9,7 @@ Coffer keeps one master library of skills on your machine and links each skill i
 
 ## What skills are for
 
-A skill is a folder an agent loads on demand: a `SKILL.md` with instructions, plus any scripts or reference files it needs. Claude Code and Codex both read skills natively from a `skills/` folder inside their config directory. Without Coffer, the same skill ends up copied into `~/.claude/skills/` and `~/.codex/skills/`, and the copies drift apart.
+A skill is a folder an agent loads on demand: a `SKILL.md` with instructions, plus any scripts or reference files it needs. Claude Code reads skills from `~/.claude/skills/` and Codex from `~/.agents/skills/`. Without Coffer, the same skill ends up copied into both, and the copies drift apart.
 
 Coffer keeps a single master copy of each skill under `~/.coffer/vault/skills/<name>/` and places a directory link to it in each agent's skill folder. You edit the skill once and every agent reads the same bytes.
 
@@ -44,7 +44,7 @@ Coffer validates every folder before it accepts it:
 | --- | --- |
 | `SKILL.md` present | required |
 | `name` | lowercase letters, digits and `-`; starts with a letter or digit; at most 64 characters |
-| `description` | non-empty, at most 1024 characters |
+| `description` | non-empty |
 | Symlinks inside the folder | none may point outside the folder or at a folder (a link to a file counts as that file's bytes) |
 | Total folder size | at most 50 MB |
 
@@ -52,12 +52,16 @@ Coffer also reads the optional `license` field, the experimental `allowed-tools`
 
 A folder that breaks a rule is refused with the reason, and nothing is written to the vault.
 
+The AgentSkills specification caps `description` at 1024 characters, but neither Claude Code nor Codex enforces it, so Coffer accepts a longer one. The skill's `SKILL.md` keeps every word; the description Coffer shows in its lists is the first 1024 characters, ending in `…`.
+
 ## Where skills live
 
 | Path | What it is |
 | --- | --- |
 | `~/.coffer/vault/skills/<name>/` | The master folder. This is the only copy you edit. |
-| `<config_dir>/skills/<name>` | The delivered link in each agent, for example `~/.claude/skills/release-checklist` or `~/.codex/skills/release-checklist`. It points at the master folder. |
+| `~/.claude/skills/<name>` (Claude Code) and `~/.agents/skills/<name>` (Codex) | The delivered link in each agent's skill folder. It points at the master folder. A Claude Code agent with another config directory gets `<config_dir>/skills/<name>`. |
+
+Codex still reads its old `~/.codex/skills/` folder but has deprecated it; Coffer delivers to `~/.agents/skills/`, the folder Codex documents, and moves any link it once made in the old folder on its next pass, so Codex never lists a skill twice.
 
 Because the delivered path is a link, editing `SKILL.md` from inside `~/.claude/skills/<name>/` edits the master, and every other agent sees the change on its next read. Deleting a file there deletes it from the master too.
 
@@ -65,9 +69,9 @@ Because the delivered path is a link, editing `SKILL.md` from inside `~/.claude/
 
 <Shot name="skill" alt="A skill's page, with the agents it is delivered to." />
 
-**Skills** (under Capabilities in the sidebar) is your library beside the skill you are reading. The list on the left has a search box and **Check copies**, and groups skills by what needs you: **Needs attention**, **In use**, **Unused**, **Off** and **Built-in**. A row shows the skill's name and its reach as a badge — its description is on the skill's page — and, under the name, only the one thing that needs you: **Master missing**, **Folder in the way in Codex**, **Needs jq · not installed**, **Tool off**, **Secret missing**, **Source unreachable** or **Update available**. The **Reach** filter under the search box narrows the list to the skills that reach one agent (an agent's Skills tab links here with that agent chosen, `/skills?agent=<uid>`). Tick rows (a box appears on hover) to set the reach of several skills at once or to delete them; the selection shows as a bar under the search box and in the reading pane. Folders in `~/.coffer/vault/skills/` that no skill claims are listed apart, under **Not in your library** (see [below](#folders-not-in-your-library)).
+**Skills** (under Capabilities in the sidebar) is your library beside the skill you are reading. The list on the left has a search box and **Check copies**, and groups skills by what needs you: **Needs attention**, **In use**, **Off** and **Built-in**. A row shows the skill's name and its reach as a badge — its description is on the skill's page — and, under the name, only the one thing that needs you: **Master missing**, **Folder in the way in Codex**, **Needs jq · not installed**, **Tool off**, **Needs skill pdf · not on Codex**, **Secret missing**, **Source unreachable** or **Update available**. The **Reach** filter under the search box narrows the list to the skills that reach one agent (an agent's Skills tab links here with that agent chosen, `/skills?agent=<uid>`). Tick rows (a box appears on hover) to set the reach of several skills at once or to delete them; the selection shows as a bar under the search box and in the reading pane. Folders in `~/.coffer/vault/skills/` that no skill claims are listed apart, under **Not in your library** (see [below](#folders-not-in-your-library)).
 
-The open skill's header carries its name, a state pill (**In use**, **Off**, **Master missing**, **Folder in the way**, **Command missing**, **Tool off**, **Secret missing**, **Source unreachable**), and two fixed buttons: **Reach** and a **⋯** menu with **Open in editor**, **Reveal in Finder**, **Copy master path** and **Delete…**. Turning a skill off is **Reach** › **Off**; its copies are checked from the **Delivery** tab's **Check again** or the library's **Check copies**. Above its tabs, a banner says what needs you — a folder in the way, a missing command, a tool that is off, an update — with the one action that answers it.
+The open skill's header carries its name, a state pill (**In use**, **Off**, **Master missing**, **Folder in the way**, **Command missing**, **Tool off**, **Skill not shared**, **Secret missing**, **Source unreachable**), and two fixed buttons: **Reach** and a **⋯** menu with **Open in editor**, **Reveal in Finder**, **Copy master path** and **Delete…**. Turning a skill off is **Reach** › **Off**; its copies are checked from the **Delivery** tab's **Check again** or the library's **Check copies**. Above its tabs, a banner says what needs you — a folder in the way, a missing command, a tool that is off, an update — with the one action that answers it.
 
 Choosing a skill opens it on the right, at its own address (`/skills/<name>`), with four tabs:
 
@@ -98,9 +102,9 @@ Coffer reads the skill's name from its `SKILL.md` frontmatter and copies the fol
 Skills → Add skill → From an archive → Choose file… (or drop a .zip or .skill file) → Add skill
 ```
 
-A `.zip` or `.skill` archive holds a skill when its `SKILL.md` is at the top of the archive or one folder down. An archive holding several skills lists them all, and you pick which to add.
+A `.zip` or `.skill` archive holds a skill wherever a folder in it has a `SKILL.md`: at the top, or in a folder below it, up to four levels down. A `SKILL.md` at the top makes the whole archive one skill, a folder that holds one is not searched further, and `.git`, `.github`, `node_modules` and `__MACOSX` are skipped. An archive holding several skills lists them all by their folder, and you pick which to add.
 
-Coffer refuses the whole archive, naming the entries, before unpacking any of it when an entry has an absolute path or a `..` in its path, when an entry is a symlink, or when it would unpack to more than 50 MB. An archive with no `SKILL.md` at the top or one folder down is refused with that message.
+Coffer refuses the whole archive, naming the entries, before unpacking any of it when an entry has an absolute path or a `..` in its path, when an entry is a symlink, or when it would unpack to more than 50 MB. An archive with no `SKILL.md` anywhere in that reach is refused with that message.
 
 ### From a Git repository
 
@@ -108,9 +112,9 @@ Coffer refuses the whole archive, naming the entries, before unpacking any of it
 Skills → Add skill → From Git → Repository URL, and optionally Branch or tag and Folder in the repository → Clone → Add skill
 ```
 
-Coffer clones the repository with this machine's own `git`, resolves the branch, tag or commit you gave (the default branch when you gave none) to one commit, and looks for skills in the folder you named by the same rule as an archive. A GitHub folder address such as `https://github.com/acme/agent-skills/tree/main/terraform-plan` is read as the repository, the branch and the folder.
+Coffer clones the repository with this machine's own `git`, resolves the branch, tag or commit you gave (the default branch when you gave none) to one commit, and looks for skills in the folder you named by the same rule as an archive, so a whole collection such as `anthropics/skills` or `openai/skills` can be added from its top. A GitHub folder address such as `https://github.com/acme/agent-skills/tree/main/terraform-plan` is read as the repository, the branch and the folder.
 
-The clone keeps the repository's history but not every version of every file, and the files of the folder you named are downloaded in one request, so a large skill collection is quick to add. If git still reports an object it could not get, Coffer clones the repository once more in full and takes the files from that. One add, update check or change of source may take up to 5 minutes in all; past that it is stopped and refused with a message saying so, and nothing is written.
+The clone keeps the repository's history but not every version of every file, and the files of the folder you named are downloaded in one request, so a large skill collection is quick to add. If git still reports an object it could not get, Coffer clones the repository once more in full and takes the files from that. One add or update check may take up to 5 minutes in all; past that it is stopped and refused with a message saying so, and nothing is written.
 
 The skill is **pinned** to the commit it was copied from. It does not change when the repository does; see [Update a skill from its repository](#update-a-skill-from-its-repository).
 
@@ -134,15 +138,15 @@ Skills → the skill → Check again, then Hand off to <Agent> to update when an
 
 When the branch or tag has new commits that change the skill's folder, the skill shows **Update available** with the commit range from the pinned commit to the new one, on the Skills page and on the skill's page. **Coffer does not apply an update itself.** There is no update preview, no **Keep mine**, **Take theirs** or **Compare**, and no merge of its own: bringing new upstream content into a folder that may carry your edits is a job for your agent.
 
-While an update is waiting, the skill also offers **Open in editor** (the master folder) and **View upstream changes**: for a GitHub or GitLab repository a link to the host's compare page from the pinned commit to the new one, and for any other host the copyable commit range and the commit subjects instead. Coffer draws no diff of its own. The skill offers one main button, **Hand off to &lt;Agent&gt; to update** (its menu holds the other installed agent and **Copy prompt**), whether or not you edited the skill. Coffer builds the prompt when you press it, so it is never stale. It names the skill's master folder as the only place to edit, the pinned and new commits with their subjects, the repository, branch and folder to read the update from (read-only, with no credential in the URL), and the files you edited since the pin, or says there are none. The agent brings the new commit's content into the master folder, keeps what your edits were for, asks you where the two really disagree, and shows you the diff; it does not record the merge itself.
+While an update is waiting, the skill also offers **Open in editor** (the master folder) and shows the commit range, which you can copy, with the commit subjects. Coffer draws no diff of its own and links to no compare page; reading the change is the agent's part. The skill offers one main button, **Hand off to &lt;Agent&gt; to update** (its menu holds the other installed agent and **Copy prompt**), whether or not you edited the skill. Coffer builds the prompt when you press it, so it is never stale. It names the skill's master folder as the only place to edit, the pinned and new commits with their subjects, the repository, branch and folder to read the update from (read-only, with no credential in the URL), and the files you edited since the pin, or says there are none. The agent brings the new commit's content into the master folder, keeps what your edits were for, asks you where the two really disagree, and shows you the diff; it does not record the merge itself.
 
-When the files look right, choose **I merged it** beside the button and confirm. That moves the pin to the new commit and leaves the master folder exactly as the agent left it. Your edits still count as local edits against the new pin, so the next update's prompt lists exactly the edits you carried over. Only the update that is waiting can be recorded: the pinned commit, or a commit that is not on the branch, is refused with `SKILL_UPDATE_NOT_PENDING`.
+When the files look right, choose **I merged it** beside the button and confirm. That moves the pin to the new commit and leaves the master folder exactly as the agent left it. Your edits still count as local edits against the new pin, so the next update's prompt lists exactly the edits you carried over. Only the update that is waiting, the newest commit in full, can be recorded: the pinned commit, an older commit, a short prefix or a commit that is not on the branch is refused with `SKILL_UPDATE_NOT_PENDING`.
 
 **API:** `POST /skills/{uid}/source/check` checks, `POST /skills/{uid}/source/handoff` answers the newest commit and the prompt (refused with `SKILL_UPDATE_NOT_PENDING` when nothing newer changes the folder), and `POST /skills/{uid}/source/merged` records the merge.
 
 If the repository can no longer be reached, the skill keeps working from its pinned copy. Its page shows git's message and when the last check succeeded, and nothing changes until a check succeeds again.
 
-To move a Git skill to another repository, branch or folder, use **Change source…** in its Source block. Coffer clones the new source and lists the names of the files that would be added, removed or changed against your current folder (names only, no diff); nothing is replaced until you confirm, and then the folder is swapped in at once, keeping the skill's name, reach and links. Cancelling leaves everything as it was. (`POST /skills/{uid}/source/change`, then `…/source/change/apply`.)
+To move a Git skill to another repository, branch or folder, delete it and add it again from the new source.
 
 A skill added from a folder or an archive has no source to update from: add it again with **Replace**.
 
@@ -152,8 +156,8 @@ Agents accumulate skills that Coffer does not manage — a folder you copied int
 
 Coffer scans:
 
-- `<config_dir>/skills/` for every agent, and
-- `~/.agents/skills/` for Codex, which reads that location as well.
+- each agent's skill folder (`~/.claude/skills/` or `~/.agents/skills/`), and
+- `~/.codex/skills/` for Codex, the old folder it still reads.
 
 Anything there that is not a Coffer-managed link is unmanaged. Codex's own `.system` entry is never listed.
 
@@ -163,30 +167,20 @@ Anything there that is not a Coffer-managed link is unmanaged. Codex's own `.sys
 Agents → choose the agent → Skills tab → the agent's own skills
 ```
 
-Each entry shows its name, path, location and whether its `SKILL.md` is valid. An invalid entry shows the reason.
-
-### Preview one
-
-Read an unmanaged skill before you decide what to do with it. Nothing here changes the folder.
-
-```text
-Agents → choose the agent → Skills tab → click the row
-```
-
-The detail page has an **Overview** tab (the `SKILL.md` description, the folder's path and location) and a **Files** tab (the folder's tree and a read-only preview of each file). An invalid folder opens too, with the reason at the top. The page header carries **Adopt** and a **⋯** menu with **Delete…**; the title bar's back arrow returns to the agent's Skills tab. Files are shown in the same tree and viewer as everywhere else, so opening one in your editor or revealing it is on the viewer. File reads stay inside the folder, as they do for a managed skill.
+Each entry shows its name, the folder it sits in and whether its `SKILL.md` is valid. An invalid entry shows the reason. An unmanaged skill has no page of its own: its row carries **Adopt**, and its **⋯** menu **Reveal in Finder** and **Delete…**. To read its files, reveal it in Finder or ask your agent.
 
 ### Adopt one
 
 Adopting moves the folder into `~/.coffer/vault/skills/<name>/`, registers it as a skill, and puts a managed link where the agent expects it.
 
 ```text
-Agents → choose the agent → Skills tab → Adopt on the row, or Adopt on the skill's page
+Agents → choose the agent → Skills tab → Adopt on the row
 ```
 
 Adopt opens a small form with the **name in Coffer** (checked against the library as you type; it defaults to the folder's own) and the **reach** the skill starts with — every agent, only the agents you choose, or off. An error stays inside the form.
 
-- A folder adopted from `<config_dir>/skills/` is replaced in place by the link.
-- A folder adopted from `~/.agents/skills/` is moved out of that directory and the link is placed in `<config_dir>/skills/`. Codex reads both locations, so it keeps seeing the skill.
+- A folder adopted from the agent's skill folder is replaced in place by the link.
+- A folder adopted from Codex's old `~/.codex/skills/` is moved out of it and the link is placed in `~/.agents/skills/`. Codex reads both, so it keeps seeing the skill.
 
 Adoption is refused, with nothing moved, when the folder has no valid `SKILL.md`, when its name matches a skill already in the library, or when the entry is a symlink pointing somewhere outside Coffer's store (shown as **Foreign link**). If anything fails before the skill is registered, the original folder stays exactly where it was.
 
@@ -197,7 +191,7 @@ After adoption the skill is an ordinary managed skill and follows the same deliv
 To remove an unmanaged folder from disk without adopting it:
 
 ```text
-Agents → choose the agent → Skills tab → ⋯ › Delete… on the row, or ⋯ › Delete… on the skill's page
+Agents → choose the agent → Skills tab → ⋯ › Delete… on the row
 ```
 
 This deletes only that folder. It never touches the master library. Coffer never deletes an unmanaged folder on its own.
@@ -218,11 +212,11 @@ Two settings on the skill decide where it is delivered, and nothing else does:
 A skill is delivered to an agent if and only if the skill is enabled **and** its reach includes that agent. There is no per-agent switch for "this agent gets no skills"; to keep an agent away from a skill, leave it out of that skill's reach.
 
 ```text
-Skills → the Reach button on the skill's row (or on its detail page)
+Skills → the Reach button on the open skill
        → Off | All agents | Chosen agents
 ```
 
-The Reach button shows a badge for the current answer — the marks of its agents, **All agents** or **Off**, never a count. The panel saves every change as you make it ("Applying…", then "✓ Saved"); **All agents** includes agents you register later. Saving a change delivers it agent by agent: if one agent's copy can't be placed, its row says why and offers **Retry** or **Untick**. To change several skills at once, select their rows and use the selection bar's reach control.
+The Reach button shows a badge for the current answer — the marks of its agents, **All agents** or **Off**, never a count. The panel saves every change as you make it ("Applying…", then "✓ Saved"); **All agents** includes agents you register later. A write that fails stays on the row of the agent you just ticked, with **Retry** or **Untick**. A folder that blocks an agent's link is not a failed write: the skill reports it as **Folder in the way**. To change several skills at once, select their rows and use the selection bar's reach control.
 
 ::: info Reach is set per machine
 Reach and the enabled flag apply to the machine you set them on. [Vault sync](/guides/vault-sync) carries the skill itself — its files and metadata — to your other machines, but each machine keeps its own reach.
@@ -320,30 +314,15 @@ Each entry is the name the MCP server or the custom tool group has in Coffer, ei
 
 The skill's **Requires** tab lists each tool under **Tools** as on, off or failing, linking to its page. A required tool that is off puts the skill under **Needs attention** with the banner **Tool off**, whose action turns it on. As with commands and secrets, the skill is delivered whether or not its tools are on.
 
-## Requirements a profile declares {#profile-declared-requirements}
-
-A skill library may keep per-skill profiles at `<skill folder>/profiles/<name>.md`: a `default.md` plus one file per environment, each with YAML frontmatter ([Writing skill libraries](/guides/writing-skill-libraries) explains why). A profile's frontmatter may carry the same `requires:` as `SKILL.md`, with commands, secrets and tools:
-
-```yaml
----
-carrier: Skill(example-log-search)
-requires:
-  commands:
-    - command: gh
-      login_check: gh auth status
-  secrets: [<id>]
----
-```
-
-An agent picks one profile when it runs, and Coffer cannot know which. So Coffer reads the union of `SKILL.md`'s `requires:` and that of every `profiles/*.md`, each time, and says which profile declared each entry: the **Requires** tab shows "in profile example-org" on the row, and [CLIs](/guides/clis) shows `skill-name · example-org` under **Needed by**. An entry `SKILL.md` itself declares carries no profile. A command, secret or tool declared in several places is one requirement; for a command Coffer keeps the highest minimum version and the first title, `why` and login check. A warning from a profile names its file, `profiles/<name>.md`. Coffer reads only what the files declare and never scans them to guess.
+The skills a skill loads, listed under `metadata.requires`, show under **Skills** on the same tab. When one of them is in your library but does not reach every agent this skill reaches, the skill goes under **Needs attention** with **Needs skill `<name>` · not on `<agent>`** and a banner that opens that skill, so you can give it the same reach. A loaded skill that is not in your library adds nothing, since it may be the agent's own.
 
 ## Declared or not, and checking with an agent {#declared-or-not}
 
-Coffer tells a skill that declares nothing from one that has not declared. A skill whose `SKILL.md` and every `profiles/*.md` carry no `requires:` key is **undeclared**: its **Requires** tab reads that what it needs is unknown, because it doesn't say, and offers **Add requires with an agent**. A skill with a `requires:` key anywhere, even an empty `requires: []`, is declared; an empty one means it needs nothing, and the tab reads **Nothing required**. Unknown shows on the **Requires** tab only: the Skills list, the attention items and the Overview don't mention it, and delivery is unchanged.
+Coffer tells a skill that declares nothing from one that has not declared. A skill whose `SKILL.md` carries no `requires:` key is **undeclared**: its **Requires** tab reads that what it needs is unknown, because it doesn't say, and offers **Add requires with an agent**. A skill with a `requires:` key, even an empty `requires: []`, is declared; an empty one means it needs nothing, and the tab reads **Nothing required**. Unknown shows on the **Requires** tab only: the Skills list, the attention items and the Overview don't mention it, and delivery is unchanged.
 
 A declared skill's tab carries **Check with an agent** at the top, and the Skills list's selection bar has the same button for the ticked skills, one prompt for all of them. The button is the usual hand-off split button, labelled with the agent it starts (**Check with Claude Code**, or **Add requires with Claude Code** for a skill that never declared), with **Copy prompt** and the other agent in its menu; picking the other agent makes it the hand-off agent, and the label follows. On the skill's tab a one-line note beside the button says what the agent will do. Coffer builds the prompt when you press it, naming each skill's master folder, whether it declares anything and where it came from; for a Git-imported skill it says edits are kept as local edits across updates and suggests proposing them upstream too.
 
-Everything the agent says is a suggestion you can decline. It reads the whole skill folder, proposes what it would change and why, asks which to apply, edits only the master folder and only what you agree to, shows you the diff and commits nothing. It doesn't restructure a skill, add a profiles folder or rename files, and a secret value or personal detail already in a file stays there if you prefer; it may only point it out and suggest Coffer's secret store. Coffer reads only the `requires:` declaration; see [Writing skill libraries](/guides/writing-skill-libraries) for the optional conventions, which Coffer never requires.
+Everything the agent says is a suggestion you can decline. It reads the whole skill folder, proposes what it would change and why, asks which to apply, edits only the master folder and only what you agree to, shows you the diff and commits nothing. It also compares each skill's description with the other skills in your library and points out where two would be picked for the same request, and, for a skill meant to run only when you ask or only from another skill, suggests `disable-model-invocation: true` (Claude Code) or `policy.allow_implicit_invocation: false` in `agents/openai.yaml` (Codex), warning that in Claude Code another skill can then no longer call it. It doesn't restructure a skill, add a profiles folder or rename files, and a secret value or personal detail already in a file stays there if you prefer; it may only point it out and suggest Coffer's secret store. Coffer reads only the `requires:` declaration; see [Writing skill libraries](/guides/writing-skill-libraries) for the optional conventions, which Coffer never requires.
 
 ## Where a skill's scripts keep their files
 
@@ -390,7 +369,7 @@ The diff shows what happens to the side you are not keeping. Coffer never makes 
 
 ### Folders not in your library
 
-A folder in `~/.coffer/vault/skills/` that no skill claims — copied in by hand, or left behind by an interrupted import — reaches no agent. It is listed under **Not in your library**, with whether its `SKILL.md` is valid, how many files it holds and when Coffer found it. Its files open in the same locked file tree and viewer as a skill's **Files** tab, read-only. **Add to library…** adds it in place, **Reveal in Finder** shows it, and **Delete folder…** moves it to `~/.coffer/content/backup/skills/orphans/` after asking. The pane's prompt asks your agent to read the folder and tell you which of the two to choose.
+A folder in `~/.coffer/vault/skills/` that no skill claims — copied in by hand, or left behind by an interrupted import — reaches no agent. It is listed under **Not in your library**, with whether its `SKILL.md` is valid, how many files it holds and when Coffer found it. **Add to library…** adds it in place, and **Reveal in Finder** shows it; Coffer shows none of its files and has no delete for it. The pane's prompt asks your agent to read the folder and say whether to add it or remove it, and, if you agree it should go, to move it to `~/.coffer/content/backup/skills/orphans/`.
 
 ### When the master folder is gone
 
@@ -459,7 +438,7 @@ For the resource model behind enable and reach, see [Resource framework](/archit
 
 **An archive is refused.** The message names the entries that could write outside the archive, the symlinks, or the size cap it would pass. Re-create the archive from the skill's folder itself.
 
-**Adding a skill is refused.** The error names the rule the folder broke and, for a frontmatter problem, the field and the check it failed (for example `description: String should have at most 1024 characters`). The most common causes are a `name` with uppercase letters or dots, a missing or over-long `description`, or a symlink inside the folder that points outside it.
+**Adding a skill is refused.** The error names the rule the folder broke and, for a frontmatter problem, the field and the check it failed (for example `name: String should match pattern …`). The most common causes are a `name` with uppercase letters or dots, a missing `description`, or a symlink inside the folder that points outside it.
 
 **A skill shows the Copied badge.** The agent's filesystem does not support links (this happens only on Windows). The copy does not follow edits to the master. After editing, trigger a new delivery, for example by disabling and re-enabling the skill.
 

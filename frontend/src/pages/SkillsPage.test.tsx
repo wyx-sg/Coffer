@@ -295,7 +295,6 @@ describe("SkillsPage library", () => {
       checked_at: null,
       commits_ahead: 0,
       commits: [],
-      compare_url: null,
       error: null,
       files_changed: 0,
       last_success_at: null,

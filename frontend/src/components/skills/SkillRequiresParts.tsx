@@ -1,4 +1,4 @@
-// src/components/skills/SkillRequiresParts.tsx — the pieces of a skill's Requires tab: a row's profile note, a command's state word, a group.
+// src/components/skills/SkillRequiresParts.tsx — the pieces of a skill's Requires tab: a command's state word, a group.
 import { useTranslation } from "react-i18next";
 
 import { Section } from "@/components/Section";
@@ -7,22 +7,6 @@ import type { Cli } from "@/lib/api/clis";
 import { cliTone } from "@/lib/clis/format";
 import { requireColumns } from "@/lib/skills/requireColumns";
 import { cn } from "@/lib/utils";
-
-export type Translate = (key: string, options?: Record<string, unknown>) => string;
-
-/** A requirement's note, followed by the profiles that declare it ("profile
- *  shopee-account"); nothing extra when SKILL.md itself declares it. */
-export function profileNote(
-  t: Translate,
-  profiles: readonly string[] | undefined,
-  note: string | null = null,
-): string | null {
-  const declared =
-    profiles && profiles.length > 0
-      ? t("skills.requires.inProfiles", { profiles: profiles.join(" · ") })
-      : null;
-  return [note, declared].filter(Boolean).join(" · ") || null;
-}
 
 export function StateWord({ cli }: { cli: Cli | undefined }) {
   const { t } = useTranslation();

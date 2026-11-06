@@ -63,6 +63,12 @@ function useSublineText(item: SkillAttention, agents: readonly AgentOut[]): stri
         state: t(`skills.requires.toolState.${tool?.status ?? "off"}`).toLowerCase(),
       });
     }
+    case "skillNotShared": {
+      const dep = item.skills[0];
+      const missing = dep?.missing_agent_names ?? [];
+      const names = missing.map((n) => agents.find((a) => a.name === n)?.display_name ?? n);
+      return t("skills.row.needsSkill", { name: dep?.name, agents: names.join(", ") });
+    }
     case "secrets":
       return t("skills.row.needsSecret", { name: item.missing[0] });
     case "sourceUnreachable":

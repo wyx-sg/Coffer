@@ -298,8 +298,8 @@ type for agents (`/agents/<type>`), and the command for CLIs (`/clis/<command>`)
 A kind whose name can be renamed — model providers, channels, knowledge
 collections — MUST keep its immutable `uid` as the `<id>`
 (`/model-providers/<uid>`), because a renamed name would break every
-address to it. A page opened from a tab (a plugin, a direct MCP entry, an
-unmanaged skill) nests under that tab's path.
+address to it. A page opened from a tab (a plugin, a direct MCP entry) nests under that
+tab's path.
 
 #### Scenario: detail pages share one tab layout
 - **GIVEN** two detail pages of different kinds
@@ -370,9 +370,9 @@ then "✓ Saved"), so a panel that is opened and dismissed writes nothing. The
 panel keeps its own choice while it is open, so the refetch that follows a write
 cannot move the row it is anchored to; the lists refresh once when it closes. A
 write that fails MUST stay in the panel, on the row of the agent just ticked,
-with **Retry** and **Untick**, and MUST NOT be a toast. For a skill the write
-reports delivery per agent: an agent the reach was saved for but the skill could
-not be delivered to is a failed row with the daemon's reason.
+with **Retry** and **Untick**, and MUST NOT be a toast. A saved reach whose
+link an agent's folder blocks is not a failed write: it is reported where drift
+is ("Report skill drift on request").
 
 #### Scenario: a dismissed reach panel writes nothing
 - **GIVEN** a reach panel opened on a resource
@@ -2220,7 +2220,7 @@ missing, older than the minimum, or not logged in, grouped under Needs attention
 Ready — as a split view with the selected CLI's detail beside the list
 (`/clis/<command>`). The detail's Needed by MUST list the MCP servers started
 with the command, each opening that server's page and naming its launcher, and
-the skills that declare it, each opening that skill's Requires tab and followed by " · <profile>" for each profile that declares the command (spec skill-manager "Read the requirements profile files declare"); each row
+the skills that declare it, each opening that skill's Requires tab; each row
 carries its kind when both need it. The app MUST NOT show an install, update or
 login command, a "run it in a terminal" instruction, or run any of them: a CLI
 that needs the user says what it costs in a plain sentence — which servers can't
@@ -3121,15 +3121,10 @@ validates its source inline and MUST carry the Available to reach control.
 - **THEN** its header pill says Master missing and a banner says the master folder is gone and offers the hand-off that looks for a copy to restore (spec skill-manager "Hand unsettled skill drift to an agent with a prompt") and Delete skill…, which opens the delete confirmation
 - **AND** the Files tab says there are no files to show
 
-#### Scenario: a folder no skill claims is added in place or moved out
+#### Scenario: a folder no skill claims is added in place
 - **GIVEN** a folder in the skills store that no skill claims
 - **WHEN** the user opens it under Not in your library
-- **THEN** it shows its path, whether its SKILL.md is valid and its file count, Delete folder… asks first, and Add to library… adds it and opens the new skill
-
-#### Scenario: changing a skill's source shows the change before anything is replaced
-- **GIVEN** a skill added from Git
-- **WHEN** the user opens Change source…, enters another repository and chooses Check source
-- **THEN** the dialog lists the names of the files that would change, with no diff, and a button to take it, and cancelling applies nothing and drops the staged source
+- **THEN** it shows its path, whether its SKILL.md is valid and its file count, with Reveal in Finder and no files or delete of Coffer's own, and Add to library… adds it and opens the new skill
 
 #### Scenario: a skill is added with the reach chosen in the dialog
 - **GIVEN** the Add skill dialog with Available to set to Disabled or to chosen agents

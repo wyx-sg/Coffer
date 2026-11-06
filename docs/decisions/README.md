@@ -231,6 +231,9 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | --- | --- |
 | [`cross-platform-skill-delivery`](cross-platform-skill-delivery.md) | Skills Reach an Agent as a Directory Link to One Master Folder |
 | [`coffer-ships-its-own-skill`](coffer-ships-its-own-skill.md) | Coffer Ships Its Own Manual as a Skill Resource |
+| [`codex-skills-go-to-agents-skills`](codex-skills-go-to-agents-skills.md) | Codex Skills Go to `~/.agents/skills` |
+| [`accept-long-skill-descriptions-and-find-skills-below-a-repos-top`](accept-long-skill-descriptions-and-find-skills-below-a-repos-top.md) | Accept Long Skill Descriptions, and Find Skills Below a Repository's Top |
+| [`trim-skill-management-to-what-an-agent-cannot-do`](trim-skill-management-to-what-an-agent-cannot-do.md) | Trim Skill Management to What an Agent Cannot Do |
 | [`git-source-partial-clone-prefetch`](git-source-partial-clone-prefetch.md) | A Git Skill's Folder Is Fetched in One Request From a Partial Clone, With One Full-Clone Fallback |
 | [`knowledge-is-plain-files`](knowledge-is-plain-files.md) | Knowledge Is a Directory of Markdown Files, Not an Index |
 | [`tidying-knowledge-is-the-agents-job`](tidying-knowledge-is-the-agents-job.md) | Tidying Knowledge Is the Agent's Job, One Hand-Off Recorded as One Change |

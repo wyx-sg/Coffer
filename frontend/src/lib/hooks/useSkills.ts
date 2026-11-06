@@ -153,19 +153,6 @@ export function useRecordSkillMerged() {
   });
 }
 
-/** Take a staged change of source. No toast: the dialog renders a refusal. */
-export function useApplySkillSourceChange() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: { uid: string; stagingId: string }) =>
-      skillsApi.applySourceChange(vars.uid, vars.stagingId),
-    onSuccess: (_d, vars) => {
-      void qc.invalidateQueries({ queryKey: skillsKey });
-      void qc.invalidateQueries({ queryKey: skillFilesKey(vars.uid) });
-    },
-  });
-}
-
 /** How often this machine checks skills for updates in the background
  *  (Settings › General); kept by the daemon, in effect at once. */
 export function useSkillUpdateCheck() {

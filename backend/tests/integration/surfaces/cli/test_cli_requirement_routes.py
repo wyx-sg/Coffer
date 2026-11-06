@@ -76,7 +76,6 @@ def test_requires_list_is_read(daemon: CliDaemon, probe: FakeCommandProbe) -> No
             "skill_name": "issues",
             "min_version": "2.40",
             "why": "Opens issues.",
-            "profiles": [],
         }
     ]
     assert by["jq"]["needed_by"][0]["skill_name"] == "issues"

@@ -42,7 +42,6 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Agents · Skills tab · Delete | `DELETE /agents/{uid}/unmanaged-skills/{skill}` | `coffer agent unmanaged-skill delete` | `test_cli_parity.py` |
 | Agents · Skills tab · files | `GET /agents/{uid}/unmanaged-skills/{skill}/files` | `coffer agent unmanaged-skill files` | `test_cli_parity.py` |
 | Agents · Skills tab · not managed | `GET /agents/{uid}/unmanaged-skills` | `coffer agent unmanaged-skill list` | `test_cli_parity.py` |
-| Agents · Skills tab · open | `GET /agents/{uid}/unmanaged-skills/{skill}` | `coffer agent unmanaged-skill show` | `test_cli_parity.py` |
 | Agents · edit the config dir or model | `PATCH /agents/{uid}` | `coffer agent update` | `test_cli_parity.py` |
 
 ## `coffer app` {#app}
@@ -360,14 +359,10 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Skills · Files tab | `GET /skills/{uid}/files` | `coffer skill files` | `test_cli_parity.py` |
 | Skills · list | `GET /skills` | `coffer skill list` | `test_cli_parity.py` |
 | Skills · an orphan · Adopt | `POST /skills/orphans/{name}/adopt` | `coffer skill orphan adopt` | `test_cli_parity.py` |
-| Skills · an orphan's files | `GET /skills/orphans/{name}/files` | `coffer skill orphan files` | `test_cli_parity.py` |
 | Skills · folders no skill owns | `GET /skills/orphans` | `coffer skill orphan list` | `test_cli_parity.py` |
-| Skills · an orphan · Remove | `DELETE /skills/orphans/{name}` | `coffer skill orphan remove` | `test_cli_parity.py` |
 | Skills · Reach | `PUT /resources/{uid}/scope` | `coffer skill reach` | `test_cli_parity.py` |
 | Skills · Repair | `POST /skills/repair` | `coffer skill repair` | `test_cli_parity.py` |
 | Skills · open a skill | `GET /skills/{uid}` | `coffer skill show` | `test_cli_parity.py` |
-| Skills · Source · Change source · preview | `POST /skills/{uid}/source/change` | `coffer skill source change` | `test_cli_parity.py` |
-| Skills · Source · Change source · apply | `POST /skills/{uid}/source/change/apply` | `coffer skill source change-apply` | `test_cli_parity.py` |
 | Skills · Source · Check for updates | `POST /skills/{uid}/source/check` | `coffer skill source check` | `test_cli_parity.py` |
 | Skills · Source · Ask an agent to merge | `POST /skills/{uid}/source/handoff` | `coffer skill source handoff` | `test_cli_parity.py` |
 | Skills · Source · record the merge | `POST /skills/{uid}/source/merged` | `coffer skill source merged` | `test_cli_parity.py` |
@@ -455,7 +450,6 @@ Plain files are read and edited with your own tools, and a few acts only make se
 | --- | --- |
 | `GET /agents/{uid}/config-files/{key}/content` | plain file: an agent's config file is its own plain file |
 | `GET /agents/{uid}/native-memory/files/content` | plain file: an agent's native memory is its own plain file |
-| `GET /agents/{uid}/unmanaged-skills/{skill}/files/content` | plain file: a skill's files are plain files |
 | `GET /channels/{uid}/people/{sender_id}/avatar` | the window: a paired person's picture in the owner list |
 | `GET /fs/browse` | the window: the folder picker's own listing |
 | `GET /fs/editors` | the window: which editors the Open in… menu offers |
@@ -468,7 +462,6 @@ Plain files are read and edited with your own tools, and a few acts only make se
 | `GET /knowledge/asset` | plain file: a knowledge picture is a plain file |
 | `DELETE /knowledge/file` | plain file: a knowledge document is a plain file |
 | `GET /knowledge/file` | plain file: a knowledge document is a plain file |
-| `GET /skills/orphans/{name}/files/content` | plain file: a skill's files are plain files |
 | `GET /skills/{uid}/files/content` | plain file: a skill's files are plain files |
 | `POST /sync/join-choices/editor` | the window: opens a conflicting file in the editor |
 | `POST /sync/stop/files/editor` | the window: opens a conflicting file in the editor |

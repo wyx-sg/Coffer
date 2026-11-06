@@ -38,7 +38,7 @@ requires:
 | `login` | The command that logs you in. Coffer never runs it; the [login prompt](#logging-in) names it for your agent. |
 | `why` | One line on what the skill uses the command for. |
 
-A skill that keeps per-environment profiles (`profiles/<name>.md`) may declare commands in a profile's frontmatter too, in the same shape. An agent picks one profile at run time, which Coffer cannot know, so Coffer reads the union of `SKILL.md` and every profile. **Needed by** names the profile after the skill, as `example-log-search · example-org`; a command several of them declare is one entry with the highest minimum. See [Requirements a profile declares](/guides/skills#profile-declared-requirements).
+Coffer reads `requires:` from `SKILL.md` only; a profile file's frontmatter is the skill's own business.
 
 A bare name (`- uv`) is a command with no conditions, and `- "node>=20.1"` a command with a minimum; `requires: [jq, "gh>=2.40"]` and `requires: {commands: [...]}` are read the same way. An entry Coffer cannot use — a path instead of a name, a login check that runs a different program — is skipped with a warning on the CLIs page, and so is a `tools:` name that matches no MCP server or custom tool group (see [Tools a skill needs](/guides/skills#tools-a-skill-needs)); it never stops the skill from being imported or delivered.
 

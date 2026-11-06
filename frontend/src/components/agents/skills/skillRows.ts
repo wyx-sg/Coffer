@@ -31,7 +31,7 @@ export const OWN_STATE_TONE: Record<OwnSkillState, StatusTone> = {
 
 const ORDER: Record<OwnSkillState, number> = { invalid: 0, foreign: 1, duplicate: 2, unmanaged: 3 };
 
-export function ownSkillKey(item: UnmanagedSkillOut): string {
+function ownSkillKey(item: UnmanagedSkillOut): string {
   return `own:${item.location}:${item.name}`;
 }
 

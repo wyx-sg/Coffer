@@ -7,6 +7,8 @@
 
 **Partly superseded** (2026-10-05): Coffer has no in-app skill file editor any more, so the fingerprint-conditional in-app write described under concurrent writers no longer exists; the master folder is edited in the person's own editor or by an agent, see the OpenSpec change `hand-files-to-external-tools`.
 
+**Partly superseded** (2026-11-06): Codex skills are delivered to `~/.agents/skills`, not `$CODEX_HOME/skills`, see [Codex Skills Go to `~/.agents/skills`](codex-skills-go-to-agents-skills.md).
+
 ## Context
 
 Coffer keeps one master folder per skill under `~/.coffer/vault/skills/<name>/`

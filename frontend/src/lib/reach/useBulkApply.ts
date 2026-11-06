@@ -11,7 +11,7 @@ import { useTranslation } from "react-i18next";
 import { translateApiError } from "@/lib/api/errors";
 import { agentsKey, resourcesKey, scopeKey } from "@/lib/api/queryKeys";
 import { resourcesApi } from "@/lib/api/resources";
-import { putScopeChecked } from "@/lib/reach/deliveryFailure";
+import { scopeApi } from "@/lib/api/scope";
 import type { BulkRow } from "@/lib/reach/bulkReach";
 import type { ReachValue } from "@/lib/reach/useReachWrites";
 import { sameScope } from "@/lib/scope";
@@ -42,7 +42,7 @@ export function useBulkApply(invalidate: QueryKey[] = []) {
             if (!value.enabled) return void (await resourcesApi.disable(row.uid));
             if (!row.enabled) await resourcesApi.enable(row.uid);
             if (!sameScope(row.scope ?? null, value.scope)) {
-              await putScopeChecked(row.uid, value.scope);
+              await scopeApi.put(row.uid, value.scope);
             }
           }),
         );

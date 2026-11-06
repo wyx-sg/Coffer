@@ -26,10 +26,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # hyphens.
 _NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 
-# agentskills.io caps the description at 1024 chars. Aligning the cap turns an
-# over-long description into a clean ``SkillValidationError`` (422) at validate
-# time instead of silently letting an out-of-spec skill into the master store.
-_DESCRIPTION_MAX = 1024
+# agentskills.io caps the description at 1024 chars, but neither agent Coffer
+# delivers to enforces it (Codex does not check the length, Claude Code cuts
+# its skill listing at 1536), and real skills exceed it — Anthropic's own
+# ``claude-api``. So a longer description is accepted; only the copy kept on
+# the resource is cut to the cap (``SkillConfig.skill_md_description``).
 
 
 class FrontmatterNameError(ValueError):
@@ -65,7 +66,7 @@ class SkillFrontmatter(BaseModel):
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
     name: str = Field(min_length=1, max_length=64)
-    description: str = Field(min_length=1, max_length=_DESCRIPTION_MAX)
+    description: str = Field(min_length=1)
     license: str | None = None
     allowed_tools: list[str] | None = Field(default=None, alias="allowed-tools")
 

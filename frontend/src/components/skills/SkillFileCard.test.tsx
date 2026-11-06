@@ -1,7 +1,6 @@
 // frontend/src/components/skills/SkillFileCard.test.tsx
-// The Files card (canvas 4.3.01, 4.3.12; Foundations 0.6.04) in its two forms: a
-// managed skill's (SkillFileTree) and the one every folder Coffer doesn't own
-// renders (SkillReadOnlyFiles — a lock on every file). Both are read-only: Reveal
+// The Files card (canvas 4.3.01, 4.3.12; Foundations 0.6.04) of a managed skill
+// (SkillFileTree). It is read-only: Reveal
 // in the tree's header, Open in editor over the file, no Edit. SKILL.md is first, then folders, then files; the open
 // file is kept in `?file=`.
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -11,7 +10,6 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 
 import type { SkillFileContentOut, SkillFileNode } from "@/lib/api/skills";
 import { SkillFileTree } from "./SkillFileTree";
-import { SkillReadOnlyFiles } from "./SkillReadOnlyFiles";
 
 const revealMock = vi.fn(() => Promise.resolve());
 vi.mock("@/lib/fsActions", () => ({
@@ -76,91 +74,6 @@ function wrap(ui: React.ReactNode) {
   );
 }
 
-describe("the read-only Files card", () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  const tree = { isPending: false, error: null, data: ROOT };
-
-  test("a header with the folder's name, a lock and Reveal; SKILL.md first, folders next, files last", () => {
-    wrap(
-      <SkillReadOnlyFiles
-        name="deep-research"
-        tree={tree}
-        useContent={() => ({ isPending: false, error: null, data: content() })}
-      />,
-    );
-    const nav = screen.getByRole("tree", { name: "Files" });
-    const rows = within(nav).getAllByRole("treeitem");
-    expect(rows.map((r) => r.textContent)).toEqual(["SKILL.md", "scripts", "search.py", "LICENSE"]);
-    // Name and the lock's reason over the tree.
-    expect(screen.getByText("deep-research", { selector: "span" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("img", { name: "Not in your library — read-only" }),
-    ).toBeInTheDocument();
-    // A folder's name is sans, a file's is mono.
-    expect(within(rows[1]).getByText("scripts")).not.toHaveClass("font-mono");
-    expect(within(rows[0]).getByText("SKILL.md")).toHaveClass("font-mono");
-    // Every file wears a lock; folders don't.
-    expect(rows[0].querySelector("svg.lucide-lock")).not.toBeNull();
-    expect(rows[1].querySelector("svg.lucide-lock")).toBeNull();
-  });
-
-  test("Reveal in Finder opens the folder", () => {
-    wrap(
-      <SkillReadOnlyFiles
-        name="deep-research"
-        tree={tree}
-        useContent={() => ({ isPending: false, error: null, data: content() })}
-      />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Reveal in Finder" }));
-    expect(revealMock).toHaveBeenCalledWith("/skills/deep-research");
-  });
-
-  test("the reader has no Edit; opening a file writes it to ?file=", () => {
-    const useContent = vi.fn((path: string) => ({
-      isPending: false,
-      error: null,
-      data: content({ path, content: `text of ${path}` }),
-    }));
-    wrap(<SkillReadOnlyFiles name="deep-research" tree={tree} useContent={useContent} />);
-    expect(screen.getByText("deep-research/SKILL.md")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("treeitem", { name: /search\.py/ }));
-    expect(screen.getByTestId("where")).toHaveTextContent("?file=scripts%2Fsearch.py");
-    expect(useContent).toHaveBeenLastCalledWith("scripts/search.py");
-    expect(screen.getByText("deep-research/scripts/search.py")).toBeInTheDocument();
-  });
-
-  test("a binary file says so; a truncated one shows the grey bar", () => {
-    const { unmount } = wrap(
-      <SkillReadOnlyFiles
-        name="deep-research"
-        tree={tree}
-        useContent={() => ({
-          isPending: false,
-          error: null,
-          data: content({ binary: true, size: 49152 }),
-        })}
-      />,
-    );
-    expect(screen.getByText("Can’t preview binary file")).toBeInTheDocument();
-    unmount();
-    wrap(
-      <SkillReadOnlyFiles
-        name="deep-research"
-        tree={tree}
-        useContent={() => ({
-          isPending: false,
-          error: null,
-          data: content({ truncated: true, content: "aaa", size: 18_000_000 }),
-        })}
-      />,
-    );
-    expect(screen.getByText(/read-only here/)).toBeInTheDocument();
-  });
-});
-
 describe("a managed skill's Files card", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -220,19 +133,15 @@ describe("a managed skill's Files card", () => {
         "abc",
       ),
     ]);
-    const deep = { isPending: false, error: null, data: DEEP };
     const names = () => screen.getAllByRole("treeitem").map((r) => r.textContent);
-    const renderDeep = () =>
-      wrap(
-        <SkillReadOnlyFiles
-          name="synced"
-          tree={deep}
-          useContent={() => ({ isPending: false, error: null, data: content() })}
-        />,
-      );
+    const renderDeep = async () => {
+      vi.mocked(skillsApi.filesTree).mockResolvedValue({ root: DEEP } as never);
+      wrap(<SkillFileTree uid="sk-1" owner="synced" />);
+      await screen.findByRole("treeitem", { name: "abc" });
+    };
 
-    test("a folder toggles in place, and a file opens without collapsing its folders", () => {
-      renderDeep();
+    test("a folder toggles in place, and a file opens without collapsing its folders", async () => {
+      await renderDeep();
       expect(names()).toEqual(["abc", "docx", "pptx"]);
       fireEvent.click(screen.getByRole("treeitem", { name: "pptx" }));
       expect(names()).toEqual(["abc", "docx", "pptx", "SKILL.md"]);
@@ -257,8 +166,8 @@ describe("a managed skill's Files card", () => {
       expect(names()).toEqual(["abc", "docx", "scripts", "pptx", "SKILL.md"]);
     });
 
-    test("a folder shows its path as a tooltip", () => {
-      renderDeep();
+    test("a folder shows its path as a tooltip", async () => {
+      await renderDeep();
       expect(screen.getByRole("treeitem", { name: "docx" })).toHaveAttribute("title", "abc/docx");
     });
   });

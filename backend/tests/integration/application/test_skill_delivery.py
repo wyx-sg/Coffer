@@ -14,12 +14,14 @@ way the composition root wires them.
 
 from __future__ import annotations
 
+import os
 import pathlib
 
 import pytest
 
 from coffer.application.agent.service import AgentService
 from coffer.application.skill.service import SkillService
+from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
 from coffer.domain.errors import ScopeInvalidError
 from coffer.domain.reconcile import Disposition, Outcome
@@ -53,7 +55,7 @@ async def _register_agent(
         config_dir=str(config_dir),
         actor="cli",
     )
-    return agent, config_dir / "skills"
+    return agent, AgentConfig.model_validate(agent.config).resolved_skill_dir()
 
 
 async def _by_name(skill_svc: SkillService, name: str) -> Resource:
@@ -373,4 +375,42 @@ async def test_update_scope_on_agent_kind_is_rejected(tmp_path):
     agent, _ = await _register_agent(agent_svc, tmp_path, name="a1")
     with pytest.raises(ScopeInvalidError):
         await skill_svc._rs.update_scope(agent.uid, Scope(agents=[agent.uid]), actor="cli")
+    await graph.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="a Codex skill delivered to its old location moves to ~/.agents/skills",
+)
+async def test_codex_links_move_from_the_old_location(tmp_path, monkeypatch):
+    """A machine whose Codex skills were linked into ~/.codex/skills (before
+    Coffer delivered to ~/.agents/skills) has them moved on the next pass:
+    the new link is made and the old one removed, so Codex never lists a
+    skill twice."""
+    import dataclasses
+
+    from coffer.domain.agent import descriptor as descriptor_mod
+
+    old = descriptor_mod.AGENT_DESCRIPTORS[AgentType.CODEX]
+    monkeypatch.setitem(
+        descriptor_mod.AGENT_DESCRIPTORS,
+        AgentType.CODEX,
+        dataclasses.replace(old, skill_home_subpath=None),
+    )
+    skill_svc, agent_svc, _audit, graph = await _setup(tmp_path, reconcile_hooks=False)
+    _agent, old_dir = await _register_agent(
+        agent_svc, tmp_path, name="cdx", agent_type=AgentType.CODEX
+    )
+    await _import_skill(skill_svc, tmp_path, "travels")
+    await graph.run()
+    old_link = old_dir / "travels"
+    assert old_link.is_symlink()
+
+    monkeypatch.setitem(descriptor_mod.AGENT_DESCRIPTORS, AgentType.CODEX, old)
+    await graph.run()
+
+    new_link = pathlib.Path(os.environ["HOME"]) / ".agents" / "skills" / "travels"
+    assert new_link.is_symlink()
+    assert not old_link.exists() and not old_link.is_symlink()
     await graph.dispose()

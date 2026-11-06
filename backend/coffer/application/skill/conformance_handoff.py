@@ -15,10 +15,9 @@ import pathlib
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from coffer.application.skill.cli_documents import read_profiles
 from coffer.domain.handoff import Handoff, render_handoff
 from coffer.domain.skill.git_url import display_url
-from coffer.domain.skill.requirements_union import requirements_of_skill
+from coffer.domain.skill.requirements import requirements_from_skill_md
 from coffer.domain.skill.source import (
     ArchiveImportSource,
     BuiltinSource,
@@ -42,13 +41,12 @@ class ConformanceSkill:
 
 _STEPS = (
     "Read the coffer-guide skill for Coffer's rules, then read each skill's whole folder "
-    "(SKILL.md body, sub-skills, scripts and profiles) before suggesting anything.",
+    "(SKILL.md body, sub-skills and scripts) before suggesting anything.",
     "Everything here is a suggestion I can decline. First review and propose: say what you "
     "would change and why, ask me which suggestions to apply, and edit only what I agree to.",
     "The only thing Coffer reads is the `requires:` declaration, so Coffer can show what a "
-    "skill needs. If you suggest one, put it under a top-level `requires:` in SKILL.md "
-    "(or in an existing profile file's frontmatter for a need that belongs to one "
-    "environment), listing only what the skill itself uses: the commands it runs "
+    "skill needs. If you suggest one, put it under a top-level `requires:` in SKILL.md's "
+    "frontmatter, listing only what the skill itself uses: the commands it runs "
     "(`command`, with `min_version`, `login_check` — a subcommand of the same command that "
     "exits 0 when logged in — `login` and `why` where they help), the Coffer secrets it "
     "uses, by id (`coffer secret list --json` lists them), and the MCP servers and tool "
@@ -57,6 +55,15 @@ _STEPS = (
     "that skill declares its own. Keep `metadata.requires` for the skills it loads. If a "
     "skill truly needs nothing, `requires: []` tells Coffer it declared nothing rather "
     "than never declared.",
+    "Compare each skill's `description` with the other skills in my library (the other "
+    "folders beside its master folder): where two would be picked for the same request, "
+    "say which, and suggest wording that tells them apart.",
+    "If a skill is meant to be run only when I ask for it, or only by another skill, "
+    "suggest declaring that: `disable-model-invocation: true` in SKILL.md's frontmatter "
+    "for Claude Code, and `policy: {allow_implicit_invocation: false}` in "
+    "`agents/openai.yaml` for Codex. Say that the agent then no longer picks it on its own, "
+    "and that a skill which calls it by name still can in Codex but not in Claude Code, "
+    "so a skill other skills rely on should keep the default.",
     "Do not restructure a skill, add a profiles folder, or rename or move files for any "
     "library convention; mention such patterns only if I ask.",
     "If a skill holds a secret's value or my own identity (name, email, account) in a file, "
@@ -69,14 +76,13 @@ _STEPS = (
 
 
 def read_declared(master: pathlib.Path) -> bool:
-    """Whether the folder's SKILL.md or any profile writes ``requires:``;
-    false for a folder that cannot be read."""
+    """Whether the folder's SKILL.md writes ``requires:``; false for a folder
+    that cannot be read."""
     try:
         text = (master / "SKILL.md").read_text("utf-8")
     except (OSError, UnicodeDecodeError):
         return False
-    profiles = [(p.name, p.text) for p in read_profiles(master)]
-    return requirements_of_skill(text, profiles).declared
+    return requirements_from_skill_md(text).declared
 
 
 def _source_fact(source: SkillSource) -> str:
@@ -102,7 +108,7 @@ def _facts(skill: ConformanceSkill, many: bool) -> list[str]:
     declaration = (
         "present — review it"
         if skill.declared
-        else "none yet — neither SKILL.md nor any profile has a `requires:` key"
+        else "none yet — its SKILL.md has no `requires:` key"
     )
     lines = [
         f"Master folder (edit here, and only here): {skill.master}",

@@ -53,18 +53,10 @@ export const agentPluginsKey = (uid: string) => ["agents", uid, "plugins"] as co
 export const agentPluginKey = (uid: string, id: string) => ["agents", uid, "plugins", id] as const;
 export const agentUnmanagedSkillsKey = (uid: string) =>
   ["agents", uid, "unmanaged-skills"] as const;
-/** One unmanaged folder's preview — nested under the list key, so adopting or
- *  deleting (which invalidate the list) also drops the preview. */
-export const agentUnmanagedSkillKey = (uid: string, location: string, name: string) =>
-  ["agents", uid, "unmanaged-skills", location, name] as const;
+/** One unmanaged folder's file tree — nested under the list key, so adopting or
+ *  deleting (which invalidate the list) also drops it. */
 export const agentUnmanagedSkillFilesKey = (uid: string, location: string, name: string) =>
   ["agents", uid, "unmanaged-skills", location, name, "files"] as const;
-export const agentUnmanagedSkillFileKey = (
-  uid: string,
-  location: string,
-  name: string,
-  path: string,
-) => ["agents", uid, "unmanaged-skills", location, name, "file", path] as const;
 export const agentNativeMemoryKey = (uid: string) => ["agents", uid, "native-memory"] as const;
 /** An agent's native sessions: `q` omitted = the whole subtree, for invalidation. */
 export const agentSessionsKey = (uid: string, q?: string) =>

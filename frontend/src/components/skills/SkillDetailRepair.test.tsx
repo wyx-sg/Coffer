@@ -108,8 +108,10 @@ acceptance(
     api.resolveCopy.mockResolvedValue(h.skills[0]);
     renderSkillsPage("/skills/hello/delivery");
 
-    // Nothing is read on opening; the person asks with Check again.
-    fireEvent.click(await screen.findByRole("button", { name: "Check again" }));
+    // Nothing is read on opening; the person asks with Check again. The first
+    // render of the file loads the whole Skills page, which can pass the
+    // default 1 s on a loaded runner.
+    fireEvent.click(await screen.findByRole("button", { name: "Check again" }, { timeout: 5000 }));
     const banner = await screen.findByTestId("skill-banner-folder");
     expect(banner).toHaveTextContent("Coffer left Codex's folder alone — it needs you");
     expect(api.verify).toHaveBeenCalledTimes(1);

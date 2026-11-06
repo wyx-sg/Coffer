@@ -19,8 +19,9 @@
 //
 // A failed write is NOT a toast: it stays in the popover as `failure`, on the
 // row of the agent just ticked, with a retry that resends exactly that write.
-// The scope API answers one whole PUT — there is no per-agent delivery verdict
-// in it — so the failing agent is the one the user just ticked.
+// The scope API answers one whole PUT, so the failing agent is the one the
+// user just ticked. A saved reach an agent's folder blocks is drift, not a
+// failed write; the Skills page reports it.
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -28,8 +29,7 @@ import { useTranslation } from "react-i18next";
 import { translateApiError } from "@/lib/api/errors";
 import { agentsKey, ownListKeysForKind, resourceScopeKey, resourcesKey } from "@/lib/api/queryKeys";
 import { resourcesApi } from "@/lib/api/resources";
-import type { Scope } from "@/lib/api/scope";
-import { DeliveryError, putScopeChecked } from "@/lib/reach/deliveryFailure";
+import { scopeApi, type Scope } from "@/lib/api/scope";
 import type { ReachFailure } from "@/lib/reach/reachState";
 import { sameScope } from "@/lib/scope";
 
@@ -101,7 +101,6 @@ export function useReachWrites(kind: string, uid: string, enabled: boolean, scop
         } catch (error) {
           ok = false;
           failed = error;
-          if (error instanceof DeliveryError) dirty.current = true;
         }
         pending.current -= 1;
         // A later write in the queue supersedes this one and reports for both.
@@ -113,21 +112,16 @@ export function useReachWrites(kind: string, uid: string, enabled: boolean, scop
           intent.current = stored.current;
           setValue(stored.current);
           setState("idle");
-          // A saved scope that one agent could not take: the row of that agent
-          // fails, and Retry sends the scope again (nothing else changed).
-          const undelivered = failed instanceof DeliveryError ? failed : null;
           setFailure({
-            uid: undelivered ? undelivered.agentUid : changed,
+            uid: changed,
             message: translateApiError(t, failed),
-            retry: undelivered
-              ? () => submit(next, () => putScopeChecked(uid, next.scope), undelivered.agentUid)
-              : () => submit(next, write, changed),
+            retry: () => submit(next, write, changed),
           });
         }
         tryFlush();
       });
     },
-    [t, tryFlush, uid],
+    [t, tryFlush],
   );
 
   const enableIfNeeded = async () => {
@@ -138,13 +132,7 @@ export function useReachWrites(kind: string, uid: string, enabled: boolean, scop
 
   const putScope = async (next: Scope | null) => {
     if (sameScope(stored.current.scope, next)) return;
-    try {
-      await putScopeChecked(uid, next);
-    } catch (error) {
-      // Saved even when one agent could not take it; any other failure saved nothing.
-      if (error instanceof DeliveryError) stored.current = { ...stored.current, scope: next };
-      throw error;
-    }
+    await scopeApi.put(uid, next);
     stored.current = { ...stored.current, scope: next };
   };
 

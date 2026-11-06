@@ -30,7 +30,7 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceProtected, SkillValidationError
 from coffer.domain.resource import Resource
 from coffer.domain.skill.binding import BindingState, LinkMode
-from coffer.domain.skill.config import SkillConfig
+from coffer.domain.skill.config import SkillConfig, stored_description
 from coffer.domain.skill.copy_errors import SkillCopyNotDiffering, SkillCopyNotOurs
 from coffer.domain.skill.drift import DriftKind
 from coffer.domain.skill.folder_diff import FileChange, diff_folders
@@ -140,7 +140,7 @@ async def _adopt_into_master(
     )
     cfg = cfg.model_copy(
         update={
-            "skill_md_description": result.frontmatter.description,
+            "skill_md_description": stored_description(result.frontmatter.description),
             "version_hash": result.skill_md_sha256,
         }
     )
@@ -148,7 +148,7 @@ async def _adopt_into_master(
         skill.uid,
         new_config=cfg.model_dump(mode="json"),
         actor=actor,
-        description=result.frontmatter.description,
+        description=stored_description(result.frontmatter.description),
         allow_lifecycle_kind=True,  # the master folder was replaced above
     )
 

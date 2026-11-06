@@ -2,7 +2,7 @@
 // A Git skill's update is a hand-off, not something Coffer applies (spec
 // skill-manager "Hand a Git-imported skill's update to an agent"): the one
 // primary action is the hand-off split button with I merged it beside it, and
-// the change is looked at in the editor or on the source's host.
+// the change is looked at in the editor or as a commit range.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -104,35 +104,23 @@ describe("SkillUpdateBanner", () => {
 
   acceptance(
     "skill-manager",
-    "an update is looked at in the editor or on the source's host",
+    "an update is looked at in the editor or as a commit range",
     async () => {
-      const github = updatableSkill();
-      const { unmount } = renderBanners(github);
-      const banner = screen.getByTestId("skill-banner-update");
-      fireEvent.click(within(banner).getByRole("button", { name: "Open in editor" }));
-      await waitFor(() => expect(fs.open).toHaveBeenCalledWith(github.master_path, undefined));
-      const link = within(banner).getByRole("link", { name: "View upstream changes" });
-      expect(link).toHaveAttribute(
-        "href",
-        "https://github.com/acme/agent-skills/compare/a1b2c3d4e5f6...f9e8d7c6b5a4",
-      );
-      expect(screen.queryByTestId("skill-update-range")).not.toBeInTheDocument();
-      unmount();
-
-      // A self-hosted repository: no link, the copyable range and the commits' subjects.
       const writeText = vi.fn().mockResolvedValue(undefined);
       Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
-      renderBanners(updatableSkill({ compare_url: null }));
+      const skill = updatableSkill();
+      renderBanners(skill);
       const own = screen.getByTestId("skill-banner-update");
       expect(within(own).queryByRole("link")).not.toBeInTheDocument();
-      expect(within(own).getByRole("button", { name: "Open in editor" })).toBeInTheDocument();
+      fireEvent.click(within(own).getByRole("button", { name: "Open in editor" }));
+      await waitFor(() => expect(fs.open).toHaveBeenCalledWith(skill.master_path, undefined));
       const range = screen.getByTestId("skill-update-range");
       expect(range).toHaveTextContent("a1b2c3d..f9e8d7c");
       expect(range).toHaveTextContent("Ask before backend changes");
       expect(range).toHaveTextContent("Add plan.sh");
       fireEvent.click(within(range).getByRole("button", { name: "Copy the commit range" }));
       await waitFor(() => expect(writeText).toHaveBeenCalledWith("a1b2c3d..f9e8d7c"));
-      // Neither draws a diff.
+      // No diff is drawn.
       expect(within(own).queryByTestId("file-diff")).not.toBeInTheDocument();
     },
   );
