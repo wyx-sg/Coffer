@@ -1406,6 +1406,20 @@ never asked, and the upstream is told the capability is not supported.
 - **WHEN** it calls a tool that asks for sampling and one that asks for roots
 - **THEN** both tools report that the client refused, and the client is asked nothing
 
+### Requirement: Relay an upstream's elicitation to the client
+When an upstream sends `elicitation/create` during a request (it asks the person a question, such as a
+confirmation or a missing value), the gateway MUST pass it to the downstream client of the session the
+upstream connection belongs to, the same way as sampling, and return the client's answer (`accept` with
+content, `decline` or `cancel`) to the upstream. The gateway offers elicitation to an upstream only when the
+session's client declared it at `initialize`; otherwise the upstream is told it is not supported and the
+client is asked nothing. A person can take a while to answer, so the gateway waits up to 10 minutes and then
+answers `cancel` for them.
+
+#### Scenario: an upstream's question reaches the client that made the call
+- **GIVEN** a stdio server, and separately an HTTP server, whose tool asks the person for a name, two sessions whose clients declared elicitation and answer differently, and a third whose client did not
+- **WHEN** all three sessions call the tool
+- **THEN** each of the first two calls returns its own client's answer and each client is asked once, and the third call reports that the client refused while its client is asked nothing
+
 ### Requirement: Record invocations with redacted, bounded content
 The system MUST record an invocation entry for every tool call, resource read, and prompt fetch — its target,
 timestamp, duration and outcome. Each entry MUST also carry

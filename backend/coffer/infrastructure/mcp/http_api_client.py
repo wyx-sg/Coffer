@@ -240,6 +240,9 @@ class HttpApiUpstreamConnection:
     def on_roots_request(self, cb: Any) -> None:
         """A group never asks the client for roots."""
 
+    def on_elicitation_request(self, cb: Any) -> None:
+        """A group never asks the person anything."""
+
     async def spawn_and_initialize(self) -> dict[str, Any]:
         return {"tools": {"listChanged": False}}
 

@@ -61,7 +61,7 @@ flowchart LR
   - `initialize` 由网关会话自己回答，`ping` 返回 `{}`。`initialize` 没有完成的会话上的请求回答 `-32600`。
   - 握手之后，`MCP-Protocol-Version` 头若写的不是约定的 `2025-06-18`，`POST` 和 `GET` 都回答 `400`；不带这个头的请求按约定版本处理（shim 不发这个头）。
   - 没有 `id` 的消息是通知，返回 `202`，没有响应体。`notifications/cancelled` 取消同一会话里的那个请求（见 [取消](#cancellation)）。
-  - 有 `id` 但没有 `method` 的消息，是客户端对服务器发起的请求（`sampling/createMessage` 或 `roots/list`）的回复。它会被匹配到正在等待它的那个服务器请求，并以不带响应体的 `202` 确认。
+  - 有 `id` 但没有 `method` 的消息，是客户端对服务器发起的请求（`sampling/createMessage`、`roots/list` 或 `elicitation/create`）的回复。它会被匹配到正在等待它的那个服务器请求，并以不带响应体的 `202` 确认。
   - 批量请求（顶层是数组）以 `-32600` 拒绝。
 - **`GET /mcp`** 打开一条 Server-Sent Events 流，用于服务器到客户端的消息。它要求带一个存活会话的 `Mcp-Session-Id`（否则 `404`）。打开着的流不算活动，不会让其会话躲过空闲回收器。消息在一个按会话的队列里等待，上限 1000 条。队列满时丢掉最旧的消息。
 
@@ -306,7 +306,7 @@ MCP 服务器页面把 Coffer 自己的端点列在最后，归在「内置」�
 - `notifications/tools/list_changed`、`resources/list_changed` 和 `prompts/list_changed` 会使会话缓存里对应的部分失效，并转发给下游。
 - `notifications/resources/updated` 在把 URI 改写为 `coffer://<server>/…` 后转发。
 - `notifications/message` 和 `notifications/progress` 被丢掉。工具调用受该服务器的请求超时约束；Coffer 不向上游索要进度，所以没有什么会延长这个超时。
-- 上游发来的 `sampling/createMessage` 和 `roots/list` 通过 SSE 转给这个会话自己的客户端，并按 id 与客户端的回复匹配，超时 30 秒。SDK 在构造客户端会话时就固定了采样和 roots 的处理函数，所以 supervisor 在每个新连接启动之前就把会话的处理函数交给它，并且只在客户端于 `initialize` 时声明了采样或 roots 时才向上游提供；没声明的直接回答「不支持」，不去问客户端。HTTP 上游只有保留了通往客户端的回传通道才能发问（无状态的 Streamable HTTP 服务器不行）。
+- 上游发来的 `sampling/createMessage` 和 `roots/list` 通过 SSE 转给这个会话自己的客户端，并按 id 与客户端的回复匹配，超时 30 秒。`elicitation/create`（上游向人提问）也同样转发，只提供给声明了 elicitation 的客户端，最多等人回答 10 分钟，超时就替人回答 `cancel`。SDK 在构造客户端会话时就固定了采样和 roots 的处理函数，所以 supervisor 在每个新连接启动之前就把会话的处理函数交给它，并且只在客户端于 `initialize` 时声明了采样或 roots 时才向上游提供；没声明的直接回答「不支持」，不去问客户端。HTTP 上游只有保留了通往客户端的回传通道才能发问（无状态的 Streamable HTTP 服务器不行）。
 
 ### HTTP 上游的推送流 {#the-push-stream-of-an-http-upstream}
 

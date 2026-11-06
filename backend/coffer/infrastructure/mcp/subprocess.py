@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from mcp import ClientSession, StdioServerParameters
-from mcp.client.session import ListRootsFnT, SamplingFnT
+from mcp.client.session import ElicitationFnT, ListRootsFnT, SamplingFnT
 from mcp.client.stdio import get_default_environment
 from mcp.types import ServerNotification
 
@@ -84,6 +84,7 @@ class StdioUpstreamConnection:
         # Server-initiated request callbacks (sampling and roots)
         self._sampling_callback: SamplingFnT | None = None
         self._list_roots_callback: ListRootsFnT | None = None
+        self._elicitation_callback: ElicitationFnT | None = None
         # PID-file paths written by record_spawn; cleared on close.
         self._pid_files: list[Path] = []
 
@@ -98,6 +99,10 @@ class StdioUpstreamConnection:
     def on_roots_request(self, cb: ListRootsFnT) -> None:
         """Register a callback that handles roots/list requests from the upstream."""
         self._list_roots_callback = cb
+
+    def on_elicitation_request(self, cb: ElicitationFnT) -> None:
+        """Register a callback that handles elicitation/create requests from the upstream."""
+        self._elicitation_callback = cb
 
     async def _message_handler(
         self,
@@ -233,6 +238,7 @@ class StdioUpstreamConnection:
                         message_handler=self._message_handler,
                         sampling_callback=self._sampling_callback,
                         list_roots_callback=self._list_roots_callback,
+                        elicitation_callback=self._elicitation_callback,
                     )
                 )
                 init_result = await session.initialize()
