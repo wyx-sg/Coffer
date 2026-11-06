@@ -190,7 +190,8 @@ async def _deliver_reply(
         # The uploaded file(s) are the reply — no placeholder text.
         body = ""
     else:
-        body = text or "(the agent returned no text)"
+        # An agent that wrote nothing has nothing to say: no placeholder.
+        body = text
     if body:
         leftover = await surface.close(mention(body))
         if leftover:

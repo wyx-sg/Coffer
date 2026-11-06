@@ -145,6 +145,29 @@ simply stops is not a completed turn (see "Deliver partial output as events when
 - **THEN** exactly one terminal event follows, a `stream_ended` turn error, with
   the text streamed before the cut delivered ahead of it
 
+### Requirement: Wait for a Claude Code turn's background sub-agents
+A Claude Code result that arrives while a background sub-agent or workflow is
+still running ends one turn, not the run: the agent is woken again when that
+task ends, and the follow-up turn it writes is the answer. The adapter MUST hold
+such a result back and end the turn only on a result that arrives with no such
+task running, so the follow-up's text and tools reach the reply. A background
+shell command is not waited for: it does not wake the agent and may never end. A
+result that is an error ends the turn at once. If the agent stream ends while a
+result is held (the CLI stopped the task at its ceiling), the held result ends
+the turn. The adapter MUST raise the CLI's wait for background work from its
+10-minute default to four hours, unless the environment already sets
+`CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS`.
+
+#### Scenario: a result held while a sub-agent runs ends with the follow-up turn
+- **GIVEN** a Claude Code turn that starts a background sub-agent and ends its own turn without writing text
+- **WHEN** the sub-agent finishes and the agent writes its answer in a follow-up turn
+- **THEN** the turn ends once, after the follow-up's result, and the answer is in the reply
+
+#### Scenario: a stream that ends while a result is held ends the turn with it
+- **GIVEN** a Claude Code turn whose result arrived while a sub-agent was running
+- **WHEN** the agent stream ends before another result
+- **THEN** the held result is the turn's terminal event
+
 ### Requirement: Retry a forgotten resume id once as a fresh session
 A resume id the agent no longer recognises MUST NOT fail the turn. Where
 connecting with a stored upstream session id fails and a session id was in

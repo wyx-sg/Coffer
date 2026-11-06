@@ -22,11 +22,15 @@ from claude_agent_sdk import (
     ResultMessage,
     StreamEvent,
     SystemMessage,
+    TaskNotificationMessage,
+    TaskStartedMessage,
+    TaskUpdatedMessage,
     UserMessage,
 )
 from claude_agent_sdk import TextBlock as SdkTextBlock
 from claude_agent_sdk import ToolResultBlock as SdkToolResultBlock
 from claude_agent_sdk import ToolUseBlock as SdkToolUseBlock
+from claude_agent_sdk.types import TERMINAL_TASK_STATUSES
 
 from coffer.domain.chat.events import (
     AgentEvent,
@@ -39,6 +43,11 @@ from coffer.domain.chat.events import (
 from coffer.infrastructure.chat.adapter_support import ParseState
 
 _logger = logging.getLogger(__name__)
+
+#: Background task types that wake the agent for a follow-up turn when they end
+#: (a sub-agent, a workflow). The turn waits for these; a background shell
+#: command (a dev server) may never end and never wakes the agent, so it does not.
+_WAKING_TASK_TYPES = frozenset({"local_agent", "local_workflow"})
 
 
 @dataclass
@@ -67,6 +76,13 @@ class ClaudeParseState(ParseState):
     #: The raw stream index the last text increment belonged to, so increments of
     #: one block extend its entry while a new block opens the next one.
     stream_index: int | None = None
+    #: Ids of the background sub-agents / workflows still running. While any is,
+    #: a result does not end the turn: the agent is woken again when one finishes
+    #: and its follow-up turn is the answer.
+    waking_tasks: set[str] = field(default_factory=set)
+    #: The first result, held while ``waking_tasks`` is not empty; sent if the
+    #: stream ends before a later result replaces it.
+    deferred_done: TurnDone | None = None
 
 
 def map_sdk_message(msg: Any, state: ClaudeParseState) -> list[AgentEvent]:
@@ -77,6 +93,15 @@ def map_sdk_message(msg: Any, state: ClaudeParseState) -> list[AgentEvent]:
     ``AssistantMessage`` yields the remaining text plus tool-call events;
     ``UserMessage`` carries tool results; ``ResultMessage`` is terminal.
     """
+    if isinstance(msg, TaskStartedMessage):
+        if msg.task_type in _WAKING_TASK_TYPES:
+            state.waking_tasks.add(msg.task_id)
+        return []
+    if isinstance(msg, (TaskNotificationMessage, TaskUpdatedMessage)):
+        status = msg.status if isinstance(msg, TaskNotificationMessage) else _updated_status(msg)
+        if status in TERMINAL_TASK_STATUSES:
+            state.waking_tasks.discard(msg.task_id)
+        return []
     if isinstance(msg, SystemMessage):
         if msg.subtype == "init":
             data = msg.data or {}
@@ -92,6 +117,12 @@ def map_sdk_message(msg: Any, state: ClaudeParseState) -> list[AgentEvent]:
     if isinstance(msg, ResultMessage):
         return _result(msg, state)
     return []
+
+
+def _updated_status(msg: TaskUpdatedMessage) -> str | None:
+    """The status a ``task_updated`` reports: its own field, else its patch's."""
+    status = msg.status or (msg.patch or {}).get("status")
+    return str(status) if status else None
 
 
 def _stream_event(msg: StreamEvent, state: ClaudeParseState) -> list[AgentEvent]:
@@ -197,8 +228,8 @@ def _result(msg: ResultMessage, state: ClaudeParseState) -> list[AgentEvent]:
     usage = msg.usage or {}
     state.prompt_tokens = usage.get("input_tokens")
     state.completion_tokens = usage.get("output_tokens")
-    state.terminal_emitted = True
     if msg.is_error or msg.subtype not in (None, "success"):
+        state.terminal_emitted = True
         return [
             TurnError(
                 code="sdk_error",
@@ -210,13 +241,20 @@ def _result(msg: ResultMessage, state: ClaudeParseState) -> list[AgentEvent]:
             "claude_sdk_agent.result_subtype_none",
             extra={"session_id": state.session_id, "stop_reason": msg.stop_reason},
         )
-    return [
-        TurnDone(
-            prompt_tokens=state.prompt_tokens,
-            completion_tokens=state.completion_tokens,
-            stop_reason=str(msg.stop_reason or "end_turn"),
-        )
-    ]
+    done = TurnDone(
+        prompt_tokens=state.prompt_tokens,
+        completion_tokens=state.completion_tokens,
+        stop_reason=str(msg.stop_reason or "end_turn"),
+    )
+    if state.waking_tasks:
+        # A sub-agent is still running: this result ends one turn, not the run.
+        # Its end wakes the agent for a follow-up turn whose text is the answer
+        # (spec chat "Wait for a Claude Code turn's background sub-agents").
+        state.deferred_done = done
+        return []
+    state.deferred_done = None
+    state.terminal_emitted = True
+    return [done]
 
 
 def _stringify(content: Any) -> str:

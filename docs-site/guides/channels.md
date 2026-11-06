@@ -81,7 +81,7 @@ Send the bot a message. The first message opens a conversation on the channel's 
   A step line in a direct chat adds the agent's own one-line description or the file name, never the raw command. In a group it names only the tool (`⏳ Bash`), because everyone there reads it.
 
   **Show step lines**, on the channel's **Settings** tab under **Replies and conversations**, turns the step list off and keeps only the status header and the 💬 line, which is useful in a busy group. Only Telegram channels have it, because a SeaTalk chat shows no steps.
-- The reply is only what the agent wrote after its last tool call, on every platform; what it said between steps is not sent. Text the agent itself marks as passing commentary (Codex does) is left out too, wherever it stands. A turn that ends on a tool call replies with the last thing the agent wrote.
+- The reply is only what the agent wrote after its last tool call, on every platform; what it said between steps is not sent. Text the agent itself marks as passing commentary (Codex does) is left out too, wherever it stands. A turn that ends on a tool call replies with the last thing the agent wrote. A turn whose agent wrote no text sends no reply at all, not even a placeholder. When the agent starts a background sub-agent, the turn stays open until that sub-agent finishes and the agent writes its answer, up to four hours.
 - A turn that fails or is stopped ends with a one-line summary: the outcome, tool count, duration and tokens. A turn that succeeds sends no summary; the reply is the signal.
 
 ### What the reply looks like

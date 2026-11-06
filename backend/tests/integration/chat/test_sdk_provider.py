@@ -395,7 +395,9 @@ async def test_a_channel_turn_carries_no_memory_from_coffer(tmp_path) -> None:  
         await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
         adapter = await provider.build_adapter(conv.id)
         await _collect(adapter, _user_turn("hi", conv.id))
-        envs[conv.id] = dict(captured[0].env)
+        envs[conv.id] = {
+            k: v for k, v in captured[0].env.items() if k != "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS"
+        }
         prompts[conv.id] = str(captured[0].system_prompt)
 
     assert envs[channel.id] == envs[web.id] == {}
