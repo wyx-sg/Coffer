@@ -7,6 +7,7 @@ Each class carries a ``type`` discriminator whose value identifies the event:
   MessageEnd       → ``message_end``
   ToolCall         → ``tool_call``
   ToolResult       → ``tool_result``
+  TurnProgress     → ``turn_progress``
   TurnDone         → ``turn_done``
   TurnError        → ``turn_error``
 """
@@ -74,6 +75,16 @@ class ToolResult:
 
 
 @dataclass(frozen=True)
+class TurnProgress:
+    """The agent is working but has nothing to show yet: a sub-agent or a long
+    command is running. It only tells the turn runner the agent is alive, so its
+    idle watchdog starts counting again; it is never published to a turn's
+    consumers."""
+
+    type: Literal["turn_progress"] = "turn_progress"
+
+
+@dataclass(frozen=True)
 class TurnDone:
     """The turn completed.
 
@@ -120,4 +131,13 @@ class TurnError:
     type: Literal["turn_error"] = "turn_error"
 
 
-AgentEvent = TurnStarted | TextDelta | MessageEnd | ToolCall | ToolResult | TurnDone | TurnError
+AgentEvent = (
+    TurnStarted
+    | TextDelta
+    | MessageEnd
+    | ToolCall
+    | ToolResult
+    | TurnProgress
+    | TurnDone
+    | TurnError
+)

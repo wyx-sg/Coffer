@@ -26,6 +26,7 @@ from coffer.domain.chat.events import (
     AgentEvent,
     TurnDone,
     TurnError,
+    TurnProgress,
     TurnStarted,
 )
 from coffer.infrastructure.chat.adapter_support import SessionSink
@@ -300,10 +301,11 @@ class CodexAppServerAdapter:
             try:
                 async for method, params in notifications_until_eof(rpc):
                     if not is_own_notification(params, state):
-                        # Another thread on this app-server (Codex's memory
-                        # agent, a sub-agent): its text is not this reply.
+                        # Another thread (memory agent, sub-agent): not this
+                        # reply, but a sign of life for the idle watchdog.
+                        await queue.put(TurnProgress())
                         continue
-                    events = map_codex_notification(method, params, state)
+                    events = map_codex_notification(method, params, state) or [TurnProgress()]
                     self.model_id = state.model or self.model_id
                     for event in events:
                         await queue.put(event)

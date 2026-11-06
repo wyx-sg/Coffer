@@ -40,6 +40,7 @@ from coffer.domain.chat.events import (
     AgentEvent,
     TurnDone,
     TurnError,
+    TurnProgress,
 )
 
 log = logging.getLogger(__name__)
@@ -133,6 +134,8 @@ async def run_turn_task(
                 )
                 emit(error_event)
                 break
+            if isinstance(event, TurnProgress):
+                continue  # only restarts the idle clock above; nobody consumes it
             emit(event)
             if isinstance(event, TurnDone):
                 final_done = event

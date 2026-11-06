@@ -526,7 +526,11 @@ lie; and a turn
 that produces no event for the idle window
 (`COFFER_TURN_IDLE_TIMEOUT_SECONDS`, default 300; `0` disables the watchdog)
 MUST be cancelled with a `turn_timeout` error, its agent process stopped
-through the adapter's own cancellation path. In both cases whatever text
+through the adapter's own cancellation path. An adapter that knows the agent is
+still working although it says nothing (a Claude Code sub-agent reporting
+progress, a Codex command or sub-agent thread running) MUST emit a keepalive
+(`TurnProgress`) which resets the window and never reaches the turn's
+subscribers or stored output. In both cases whatever text
 streamed before the failure is delivered ahead of the notice.
 
 #### Scenario: stop a running turn
@@ -539,6 +543,11 @@ streamed before the failure is delivered ahead of the notice.
 - **GIVEN** an agent that streams part of a reply and then produces nothing
 - **WHEN** the idle window passes
 - **THEN** the turn ends with a `turn_timeout` error, the agent's cancellation path runs, and the partial text was delivered ahead of the error
+
+#### Scenario: a keepalive from the agent holds off the idle watchdog
+- **GIVEN** an agent that produces only keepalives for longer than the idle window in total, each gap shorter than the window, and then finishes
+- **WHEN** the turn runs
+- **THEN** the turn completes without a `turn_timeout` error and no keepalive reaches the subscribers
 
 #### Scenario: an errored turn still delivers what it streamed
 - **GIVEN** a turn that streamed text before failing,

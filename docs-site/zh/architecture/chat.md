@@ -115,7 +115,7 @@ sequenceDiagram
 
 - **没有为轮次写入任何东西。** 任务只记录智能体报告的会话 id，并在开始和结束时更新对话的 `updated_at`。回复本身只以事件的形式存在，以及存在于智能体自己的会话里。
 - **没有提问对话框。** 智能体需要所有者提供什么时，在回复里问并结束这一轮；所有者的下一条消息开启下一轮。Claude Code 运行时 `AskUserQuestion` 在 `disallowed_tools` 里，因为没有人在它的命令行前回答那个对话框（ADR [ask-in-the-reply-not-in-a-card](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/ask-in-the-reply-not-in-a-card.md)）。
-- **空闲看门狗。** 智能体可能卡住而不死：一个挂起的工具，或一个等着没人会回答的提示的 CLI。如果 `COFFER_TURN_IDLE_TIMEOUT_SECONDS`（默认 `300`；`0` 禁用）内没有事件到达，适配器事件流内部的等待会被取消。这会运行适配器自己的取消路径，中断并终止子进程。轮次随后以 `turn_error` `turn_timeout` 结束。
+- **空闲看门狗。** 智能体可能卡住而不死：一个挂起的工具，或一个等着没人会回答的提示的 CLI。如果 `COFFER_TURN_IDLE_TIMEOUT_SECONDS`（默认 `300`；`0` 禁用）内没有事件到达，适配器事件流内部的等待会被取消。这会运行适配器自己的取消路径，中断并终止子进程。轮次随后以 `turn_error` `turn_timeout` 结束。适配器如果知道智能体仍在忙但没有输出（Claude Code 子 agent 在汇报进度、Codex 命令或子 agent 线程在运行），会发出 `TurnProgress` 保活事件：它重置计时窗口，并在到达订阅者之前被丢弃，因此等待后台任务数小时的轮次不会被切断。
 - **没有悄无声息的完成。** 如果适配器的流没有 `turn_done` 或 `turn_error` 就结束了，任务会自己发出 `turn_error` `stream_ended`。它不依赖适配器来做这件事，因为在半句话被截断的回复上打一个对勾是撒谎。
 - **恰好一个终结事件。** 终结事件之后才到的取消会在不受进一步取消影响的情况下重新运行定稿，并且不再发出任何东西。
 - **部分输出是送达，不是存储。** 被打断或失败的轮次会把到目前为止产生的内容以事件形式送达消息渠道，然后是终结事件。
