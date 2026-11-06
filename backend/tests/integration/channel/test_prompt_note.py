@@ -19,9 +19,7 @@ async def test_the_note_names_platform_chat_kind_and_what_the_transport_renders(
     env: ChannelEnv,
 ) -> None:
     resource = await env.register_channel()
-    adapter = env.bind(
-        resource, FakeChannelAdapter(supports_edit=False, render_notes="This chat renders bold.")
-    )
+    adapter = env.bind(resource, FakeChannelAdapter(render_notes="This chat renders bold."))
     await env.pair(resource, "owner")
     await env.processor.on_message(inbound("tg", "owner", "hi"))
     await wait_until(lambda: bool(adapter.texts()))

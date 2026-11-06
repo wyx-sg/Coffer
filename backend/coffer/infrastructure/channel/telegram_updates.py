@@ -15,14 +15,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from coffer.domain.channel.envelopes import InboundCallback, InboundLifecycle, InboundStop
+from coffer.domain.channel.envelopes import InboundCallback, InboundLifecycle
 from coffer.infrastructure.channel.telegram_parse import is_group
 
 __all__ = [
     "ALLOWED_UPDATES",
     "callback_from_query",
     "lifecycle_from_update",
-    "stop_from_update",
     "tap_ack",
 ]
 
@@ -32,9 +31,6 @@ ALLOWED_UPDATES: tuple[str, ...] = (
     "message",
     "callback_query",
     "my_chat_member",
-    # "Stop the turn from the platform's own stop control": the user pressed the stop control on a
-    # streamed draft. An older Bot API server simply never sends this one; naming it costs nothing.
-    "stopped_message_generation",
 )
 
 #: ChatMember statuses that mean the bot is still in the chat. "restricted" is
@@ -126,30 +122,3 @@ def tap_ack(data: str) -> str:
     which is what the user chose, and fall back to a bare acknowledgement."""
     _, _, value = data.partition(":")
     return f"\u2713 {value}" if value else "\u2713"
-
-
-def stop_from_update(update: dict[str, Any], *, channel: str) -> InboundStop | None:
-    """Read a ``stopped_message_generation`` update, or ``None``.
-
-    The draft id is deliberately not carried through: Coffer keys a turn by
-    ``(channel, chat, thread)``, which is exactly what the update names, and the
-    only turn a stop could mean is the one running there.
-    """
-    stopped = update.get("stopped_message_generation")
-    if not isinstance(stopped, dict):
-        return None
-    chat = stopped.get("chat")
-    if not isinstance(chat, dict):
-        return None
-    chat_id = str(chat.get("id", ""))
-    if not chat_id:
-        return None
-    thread = stopped.get("message_thread_id")
-    return InboundStop(
-        channel=channel,
-        chat_id=chat_id,
-        thread_id=str(thread) if thread else "",
-        # A DM can carry topics too, so the thread id does not say which this
-        # is — the chat's own type does.
-        chat_kind="group" if is_group(stopped) else "direct",
-    )

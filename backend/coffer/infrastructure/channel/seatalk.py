@@ -281,13 +281,6 @@ class SeaTalkAdapter:
             raise ChannelSendFailed(self._name, "single_chat returned no message_id")
         return sent.message_id
 
-    async def open_live_text(
-        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
-    ) -> None:
-        """No live surface (spec channels/seatalk "Show only typing while a turn
-        runs"): the typing heartbeat is the progress, the reply one new message."""
-        del chat_id, thread_id, chat_kind
-
     async def update_card(
         self,
         chat_id: str,

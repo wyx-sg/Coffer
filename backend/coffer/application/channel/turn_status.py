@@ -1,59 +1,22 @@
-"""What a turn is doing right now, as one status block the reader can glance at.
+"""Which of a turn's text is the answer.
 
-Spec channels "Show a turn's working state as one status line". A long turn
-used to show either nothing or the one sentence the agent wrote before its
-first tool — frozen there for minutes. The status block replaces that with the
-facts a person watching a phone wants: THAT it is working, for HOW LONG, and
-what the agent last said it was doing::
+Spec channels "Send only the answer, once the turn is done". Text the agent
+writes BETWEEN tool calls is narration ("Let me check the logs"); the reply
+carries only what it wrote after its last tool call (``ReplyText.answer``), and
+never a message the agent itself marked as narration.
 
-    ⏳ Working · 2m 14s · 7 steps
-    💬 Checking the deploy logs
-
-No line names a tool or its input: the owner chose not to see steps. The header
-ticks on the live surfaces' keep-alive cadence, so a long silent tool still
-shows time passing. Text
-the agent writes BETWEEN tool calls is narration ("Let me check the logs"): it
-becomes the ``💬`` line rather than the answer, and the final reply leaves it
-out — it carries only what the agent wrote after its last tool call
-(``ReplyText.answer``).
-
-Pure: no I/O, no platform schema, no clock of its own — ``now`` is handed in.
+Pure: no I/O, no platform schema, no clock.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-__all__ = ["LIVE_SEPARATOR", "ReplyText", "TurnStatus", "format_elapsed", "split_snapshot"]
-
-#: The line between a live snapshot's status block and the answer growing under
-#: it. A transport that renders the two differently (Telegram's rich draft puts
-#: the header in a thinking block) splits on it; every other one shows it as a
-#: plain rule.
-LIVE_SEPARATOR = "─"
-
-_NARRATION_MAX_CHARS = 80
-
-
-def _clip(text: str, limit: int) -> str:
-    """Collapse whitespace and cap length so the line stays one tidy line."""
-    text = " ".join(text.split())
-    return text if len(text) <= limit else text[: limit - 1] + "…"
-
-
-def split_snapshot(snapshot: str) -> tuple[str, str]:
-    """``(status block, answer)`` of a live snapshot; the answer is "" when the
-    snapshot has none. A transport that must shorten a snapshot clips the
-    answer and keeps the block, so the header never scrolls away."""
-    rule = f"\n{LIVE_SEPARATOR}\n"
-    if rule in snapshot:
-        block, answer = snapshot.split(rule, 1)
-        return block, answer
-    return snapshot, ""
+__all__ = ["ReplyText", "format_elapsed"]
 
 
 def format_elapsed(seconds: float) -> str:
-    """``0s`` · ``45s`` · ``2m 14s`` · ``1h 02m`` — short enough for a header."""
+    """``0s`` · ``45s`` · ``2m 14s`` · ``1h 02m`` — short enough for a stopped line."""
     total = max(int(seconds), 0)
     if total < 60:
         return f"{total}s"
@@ -62,50 +25,6 @@ def format_elapsed(seconds: float) -> str:
         return f"{minutes}m {secs:02d}s"
     hours, minutes = divmod(minutes, 60)
     return f"{hours}h {minutes:02d}m"
-
-
-@dataclass
-class TurnStatus:
-    """The running tally one turn's status block is drawn from."""
-
-    started: float
-    _calls: set[str] = field(default_factory=set)  # tool_use_ids seen
-    failed: int = 0
-    narration: str = ""
-
-    @property
-    def steps(self) -> int:
-        return len(self._calls)
-
-    def call(self, tool_use_id: str) -> None:
-        self._calls.add(tool_use_id)
-
-    def result(self, tool_use_id: str, *, error: bool) -> None:
-        self._calls.add(tool_use_id)
-        if error:
-            self.failed += 1
-
-    def narrate(self, text: str) -> None:
-        """Show ``text`` (the agent's latest words before a tool) as the 💬 line."""
-        lines = [line for line in text.strip().splitlines() if line.strip()]
-        if lines:
-            self.narration = _clip(lines[-1], _NARRATION_MAX_CHARS)
-
-    def header(self, now: float) -> str:
-        facts = ["⏳ Working", format_elapsed(now - self.started)]
-        if self.steps:
-            count = f"{self.steps} step" + ("" if self.steps == 1 else "s")
-            if self.failed:
-                count += f" ({self.failed} failed)"
-            facts.append(count)
-        return " · ".join(facts)
-
-    def block(self, now: float) -> str:
-        """The whole status block: the header, then the narration if any."""
-        out = [self.header(now)]
-        if self.narration:
-            out.append(f"💬 {self.narration}")
-        return "\n".join(out)
 
 
 @dataclass
@@ -130,10 +49,9 @@ class ReplyText:
 
     A segment is every message the agent wrote between two tool events; deltas
     inside one message join as they came, and messages within a segment join as
-    paragraphs. The current (last, still open) segment is the answer tail a live
-    surface shows under the status block; a segment a tool call closed is
-    narration, which a live surface may show but the final reply never carries
-    (spec channels "Show a turn's working state as one status line"). A message
+    paragraphs. The current (last, still open) segment is the answer so far; a
+    segment a tool call closed is narration, which the final reply never carries
+    (spec channels "Send only the answer, once the turn is done"). A message
     the agent itself marked as narration (``MessageEnd.commentary``) is left out
     of the answer wherever it stands.
     """
@@ -152,7 +70,7 @@ class ReplyText:
 
     def end_message(self, *, commentary: bool) -> str:
         """The agent finished a message: close it and, when it was narration,
-        return its text for the status line ("" otherwise)."""
+        return its text ("" otherwise)."""
         if not (self._open and self._segments and self._segments[-1]):
             return ""
         message = self._segments[-1][-1]

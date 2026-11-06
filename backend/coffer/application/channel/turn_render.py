@@ -1,20 +1,10 @@
-"""Turn-event rendering for channels: the working state, then the reply.
+"""Turn-event rendering for channels: nothing while the turn runs, then the reply.
 
-Consumes one turn's event queue and turns it into IM traffic, strategy selected
-from the adapter's declared capabilities (never its type):
-
-- supports_live_text → ONE surface the renderer keeps updating for the whole
-  turn (see "Show a turn's progress on one live surface").
-  Each snapshot is the turn's status block — ``⏳ Working · 2m 14s · 7 steps``,
-  the agent's latest narration, the newest step lines (the tool name alone in a
-  group; see "Show a turn's working state as one status line") — with the
-  answer written so far under it. Telegram's surface is a message it edits or a
-  draft; the renderer never knows which. The surface is scaffolding: the
-  finished reply is always a new message.
-- no live surface (SeaTalk) → nothing but the typing heartbeat while the turn
-  runs, then the finished reply.
-- The header ticks on the surfaces' keep-alive cadence, so a long silent tool
-  still shows time passing.
+Consumes one turn's event queue and turns it into IM traffic (spec channels
+"Send only the answer, once the turn is done"). While the turn runs the chat
+shows only receipt: the reaction on the owner's message and, where the
+transport has one, the typing indicator kept alive on a heartbeat. Like a person
+replying, the bot then sends one new message.
 
 The finished reply carries only the answer — the text written after the last
 tool call — never the narration before it. A clean success sends no trailing
@@ -50,9 +40,9 @@ from coffer.application.channel.turn_finish import (
     held_line,
     stopped_line,
 )
-from coffer.application.channel.turn_status import LIVE_SEPARATOR, ReplyText, TurnStatus
-from coffer.application.channel.turn_surface import TurnSurface, typing_heartbeat
-from coffer.application.channel.turn_text import clip_stream_preview, with_mention
+from coffer.application.channel.turn_status import ReplyText
+from coffer.application.channel.turn_surface import typing_heartbeat
+from coffer.application.channel.turn_text import with_mention
 from coffer.application.runtime.supervisor import spawn
 from coffer.domain.channel.envelopes import ChoiceButton
 from coffer.domain.chat.events import (
@@ -64,21 +54,9 @@ from coffer.domain.chat.events import (
     TurnError,
 )
 
-#: How long a text-only turn must run before it is worth opening a live surface
-#: (always scaffolding — Telegram's): a reply that lands sooner is better served
-#: by its own message than by a create-then-delete.
-#: NOT a cadence — rate limiting belongs to the transport that knows its limits.
-_UPDATE_INTERVAL_SECONDS = 1.5
-
-#: How often the status header is redrawn with a fresh elapsed time. The same
-#: cadence as every live surface's own keep-alive (10 s, inside Telegram's 30 s
-#: draft preview), so the tick that keeps a surface alive is the tick that moves
-#: its clock — no extra traffic.
-_STATUS_TICK_SECONDS = 10.0
-
-#: Cadence (spec channels/seatalk "Keep a typing heartbeat alive in DMs and group
-#: threads") for re-sending the typing indicator. SeaTalk shows it for four
-#: seconds; three keeps it continuous, at 20 calls a minute against 300/min.
+#: Cadence (spec channels "Send only the answer, once the turn is done") for
+#: re-sending the typing indicator. SeaTalk shows it for four seconds and Telegram
+#: for five; three keeps it continuous, at 20 calls a minute.
 _TYPING_HEARTBEAT_SECONDS = 3.0
 
 
@@ -96,7 +74,7 @@ class TurnRenderer:
     send_card: SendCard | None = None
     now: Callable[[], float] = time.monotonic  # injectable clock (turn duration)
     # Where in the chat this turn's reply belongs: non-empty ``thread_id``
-    # threads the progress alongside the eventual reply; ``chat_kind`` tells a
+    # threads the reply; ``chat_kind`` tells a
     # transport whose group/DM send paths differ which one to use.
     thread_id: str = ""
     chat_kind: str = "direct"
@@ -107,8 +85,7 @@ class TurnRenderer:
     mention_user_id: str = ""
     mention_user_email: str = ""
     mention_user_name: str = ""  # for a transport whose mention shows a name
-    # The channel's "show steps" setting: off hides the step lines.
-    # Cadences, injectable so a test can drive them fast.
+    # The typing cadence, injectable so a test can drive it fast.
     #: What the reply was delivered as, filed for ``/del`` and the 🗑 button; ``None``
     #: (a renderer built without a ledger) tracks nothing.
     tracker: ReplyTracker | None = None
@@ -122,14 +99,7 @@ class TurnRenderer:
     #: The long reply's ``MEDIA:`` lines, which this follow-up's reply sends.
     carried_media: str = ""
     heartbeat_seconds: float = _TYPING_HEARTBEAT_SECONDS
-    tick_seconds: float = _STATUS_TICK_SECONDS
-    _status: TurnStatus = field(init=False)
     _reply: ReplyText = field(init=False)
-    _surface: TurnSurface = field(init=False)
-    #: The moment the status header's clock shows. It moves only with a redraw
-    #: (a step, the status tick), never with answer text: text then only APPENDS
-    #: to the snapshot on screen, which the surface may write at its fast cadence.
-    _clock: float = field(init=False, default=0.0)
     #: The held line and its Continue and Discard, owed after the reply.
     _held_card: tuple[str, list[ChoiceButton]] | None = field(init=False, default=None)
 
@@ -147,49 +117,32 @@ class TurnRenderer:
                     await heartbeat
 
     async def _consume(self, queue: asyncio.Queue[Any]) -> TurnOutcome:
-        started = self._clock = self.now()
-        self._status = TurnStatus(started=started)
+        started = self.now()
         self._reply = ReplyText()
-        self._surface = TurnSurface(self.adapter, self.chat_id, self.thread_id, self.chat_kind)
-        ticker = spawn(self._tick(), name=f"channel-turn-ticker:{self.chat_id}")
         stop_reason = "end_turn"
         error: TurnError | None = None
         tool_ids: set[str] = set()
         tokens: int | None = None
-        try:
-            while True:
-                event = await queue.get()
-                if event is None:
-                    break
-                if isinstance(event, TextDelta):
-                    self._reply.add(event.text)
-                    await self._text_update()
-                elif isinstance(event, MessageEnd):
-                    narration = self._reply.end_message(commentary=event.commentary)
-                    if narration.strip():
-                        # Text the agent marked as narration: up into the status
-                        # block, out of the answer.
-                        self._status.narrate(narration)
-                        await self._refresh(clock=False)
-                elif isinstance(event, ToolCall):
-                    tool_ids.add(event.tool_use_id)
-                    self._close_segment()
-                    self._status.call(event.tool_use_id)
-                    await self._refresh()
-                elif isinstance(event, ToolResult):
-                    self._close_segment()
-                    self._status.result(event.tool_use_id, error=bool(event.error))
-                    await self._refresh()
-                elif isinstance(event, TurnDone):
-                    stop_reason = event.stop_reason
-                    if event.prompt_tokens is not None or event.completion_tokens is not None:
-                        tokens = (event.prompt_tokens or 0) + (event.completion_tokens or 0)
-                elif isinstance(event, TurnError):
-                    error = event
-        finally:
-            ticker.cancel()
-            with contextlib.suppress(asyncio.CancelledError, Exception):
-                await ticker
+        while True:
+            event = await queue.get()
+            if event is None:
+                break
+            if isinstance(event, TextDelta):
+                self._reply.add(event.text)
+            elif isinstance(event, MessageEnd):
+                # Text the agent marked as narration stays out of the answer.
+                self._reply.end_message(commentary=event.commentary)
+            elif isinstance(event, ToolCall):
+                tool_ids.add(event.tool_use_id)
+                self._reply.boundary()
+            elif isinstance(event, ToolResult):
+                self._reply.boundary()
+            elif isinstance(event, TurnDone):
+                stop_reason = event.stop_reason
+                if event.prompt_tokens is not None or event.completion_tokens is not None:
+                    tokens = (event.prompt_tokens or 0) + (event.completion_tokens or 0)
+            elif isinstance(event, TurnError):
+                error = event
         end = TurnEnd(stop_reason, error, len(tool_ids), self.now() - started, tokens)
         answer = self._reply.answer()
         # The long reply's files ride on its short version — once, should the
@@ -207,7 +160,6 @@ class TurnRenderer:
             chat_id=self.chat_id,
             thread_id=self.thread_id,
             chat_kind=self.chat_kind,
-            surface=self._surface,
             send=self.send,
             mention=self._with_mention,
             text=answer,
@@ -236,10 +188,6 @@ class TurnRenderer:
             taken = await self.rewrite(lines, media_lines(answer))
         except Exception:
             return False
-        if taken:
-            # The live surface was this turn's scaffolding; the follow-up opens its own.
-            with contextlib.suppress(Exception):
-                await self._surface.close("")
         return taken
 
     async def _rewrite_stop_notice(self, end: TurnEnd) -> tuple[str | None, bool]:
@@ -289,67 +237,13 @@ class TurnRenderer:
         with contextlib.suppress(Exception):
             await self.send_card(text, buttons)
 
-    def _close_segment(self) -> None:
-        """A tool event: the text before it was narration — it moves up into
-        the status block, and the next text starts a new paragraph."""
-        closed = self._reply.boundary()
-        if closed.strip():
-            self._status.narrate(closed)
-
-    def _snapshot(self) -> str:
-        """Status block, then the answer so far under a rule, fitted to the
-        platform's per-message cap: the answer's TAIL is kept (the newest words
-        are the ones being watched), the step lines go before the header does,
-        and only a cap too small for even that clips the whole snapshot."""
-        limit = self.adapter.capabilities.max_message_chars
-        now = self._clock
-        tail = self._reply.tail
-        snapshot = ""
-        for block in (self._status.block(now), self._status.header(now)):
-            if not tail:
-                snapshot = block
-            else:
-                room = limit - len(block) - len(LIVE_SEPARATOR) - 2
-                clipped = clip_stream_preview(tail, room) if room > 1 else tail
-                snapshot = f"{block}\n{LIVE_SEPARATOR}\n{clipped}"
-            if len(snapshot) <= limit:
-                return snapshot
-        return clip_stream_preview(snapshot, limit)
-
-    async def _refresh(self, *, clock: bool = True) -> None:
-        if clock:
-            self._clock = self.now()
-        await self._surface.show(self._snapshot())
-
-    async def _text_update(self) -> None:
-        # On a text-only turn, open a surface only once the reply has run past
-        # the update interval — a fast reply opens NONE (no create → delete →
-        # resend flicker; its final send is enough), a slow one streams.
-        # Interim text is plain; the final reply is rendered once, at the end.
-        if not self._surface.is_open and self.now() - self._status.started < (
-            _UPDATE_INTERVAL_SECONDS
-        ):
-            return
-        if not self._reply.tail:
-            return
-        await self._refresh(clock=False)
-
-    async def _tick(self) -> None:
-        """Redraw the status on a fixed cadence so its clock moves during a long
-        silent tool, and open the surface for a turn still thinking in silence."""
-        while True:
-            await asyncio.sleep(self.tick_seconds)
-            with contextlib.suppress(Exception):
-                await self._refresh()
-
     def _start_typing_heartbeat(self) -> asyncio.Task[None] | None:
-        # A transport whose receipt cue is typing (SeaTalk — it cannot react)
-        # re-sends it on a heartbeat while the turn runs, in DMs and group
-        # threads alike: the indicator expires within seconds. Gated on the
-        # receipt mechanism, not on editing (see "Acknowledge receipt and
-        # completion by capability").
+        # A transport with a typing indicator keeps it up while the turn runs, in
+        # DMs and group threads alike: the indicator expires within seconds, and
+        # it is the only sign of work until the reply lands (see "Send only the
+        # answer, once the turn is done").
         caps = self.adapter.capabilities
-        if caps.supports_typing and not caps.supports_reactions:
+        if caps.supports_typing:
             return spawn(
                 typing_heartbeat(
                     self.adapter,

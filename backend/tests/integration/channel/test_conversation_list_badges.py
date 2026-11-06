@@ -97,9 +97,7 @@ async def _seatalk(env: ChannelEnv) -> tuple[Resource, FakeChannelAdapter]:
             "app_secret_ref": "channel/st/app-secret",
         },
     )
-    adapter = env.bind(
-        resource, FakeChannelAdapter(supports_edit=False, direct_threads_are_replies=True)
-    )
+    adapter = env.bind(resource, FakeChannelAdapter(direct_threads_are_replies=True))
     await env.pair(resource, "owner", sender_id="owner-1")
     return resource, adapter
 

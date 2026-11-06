@@ -7,8 +7,8 @@ import pytest
 
 from coffer.application.channel.turn_text import mention_prefix, with_mention
 from coffer.infrastructure.channel.render import markdown_to_telegram_html
+from coffer.infrastructure.channel.telegram_caps import TELEGRAM_MENTION_TEMPLATE
 from coffer.infrastructure.channel.telegram_parse import build_inbound_message
-from coffer.infrastructure.channel.telegram_text import TELEGRAM_MENTION_TEMPLATE
 
 
 def _group_message() -> dict[str, object]:

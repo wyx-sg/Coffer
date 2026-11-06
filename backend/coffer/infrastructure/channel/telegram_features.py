@@ -1,7 +1,7 @@
 """Capabilities the deployed Bot API server may or may not have (see "Probe
 platform capabilities and latch off rejected ones").
 
-Rich messages, streamed drafts and ephemeral messages arrived in Bot API 10.1
+Rich messages and ephemeral messages arrived in Bot API 10.1
 through 10.3. The server a user's bot token actually reaches is not guaranteed
 to be that new, and nothing in the protocol announces a version — the only
 honest way to find out is to try once and read the refusal.
@@ -98,9 +98,5 @@ class FeatureSet:
 
     #: sendRichMessage / editMessageText(rich_message) — Bot API 10.1.
     rich_messages: Feature = field(default_factory=lambda: Feature("rich_messages"))
-    #: sendMessageDraft — Bot API 10.1, can_stop in 10.3.
-    message_drafts: Feature = field(default_factory=lambda: Feature("message_drafts"))
-    #: sendRichMessageDraft — Bot API 10.1; the thinking block is drafts-only.
-    rich_drafts: Feature = field(default_factory=lambda: Feature("rich_drafts"))
     #: ephemeral_message_parameters on sendMessage — Bot API 10.2/10.3.
     ephemeral_messages: Feature = field(default_factory=lambda: Feature("ephemeral_messages"))

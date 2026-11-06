@@ -30,11 +30,9 @@ SEATALK_RENDER_NOTES = (
 )
 
 SEATALK_CAPABILITIES = ChannelCapabilities(
-    # No live surface: while a turn runs the chat shows only the typing indicator
-    # (a heartbeat keeps it up), and the finished reply is one new message. The
-    # platform's stream re-types the whole message whenever anything already
-    # shown changes, so a growing status message flickered (spec channels/seatalk
-    # "Show only typing while a turn runs").
+    # While a turn runs the chat shows only the typing indicator (a heartbeat
+    # keeps it up), and the finished reply is one new message (spec
+    # channels/seatalk "Show only typing while a turn runs").
     # Both chat kinds: single_chat_typing and group_chat_typing. The group one
     # silently no-ops above 200 members (code 7003), so this promises an
     # attempt, never a delivered receipt.

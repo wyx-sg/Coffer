@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-11-06
 **Deciders**: Yuxing Wu
-**Related**: [Coffer Drives Claude Code Through the Agent SDK and Codex Through `codex app-server`](driving-agents-through-sdk-and-app-server.md), spec chat "Wait for a Claude Code turn's background sub-agents", spec channels "Show a turn's working state as one status line"
+**Related**: [Coffer Drives Claude Code Through the Agent SDK and Codex Through `codex app-server`](driving-agents-through-sdk-and-app-server.md), spec chat "Wait for a Claude Code turn's background sub-agents", spec channels "Send only the answer, once the turn is done"
 
 ## Context
 

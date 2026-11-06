@@ -325,14 +325,12 @@ InboundCallback:    a selection-card tap: the opaque `data` value, callback_id,
                     owner-gated and answered in its own group/thread
 InboundLifecycle:   the bot's own standing in a chat changed — removed, or the
                     group turned external
-InboundStop:        the platform's own stop control was pressed
 ChoiceButton:       label + opaque value; a list of them renders as a card
 EphemeralTarget:    who a privately-delivered reply is addressed to
 SentMessage:        what a send returned — the last message's id and the ids of
                     every message the send produced — so a later rewrite or
                     withdrawal can address them
-ChannelCapabilities: supports_live_text,
-                    supports_card_update, supports_buttons, supports_typing,
+ChannelCapabilities: supports_card_update, supports_buttons, supports_typing,
                     supports_reactions, supports_media,
                     supports_history_fetch, max_message_chars,
                     withdraw_window_hours, withdraw_removes (can a bot message be
@@ -345,9 +343,9 @@ ChannelCapabilities: supports_live_text,
 ```
 
 Adapters translate platform payloads to/from these; the application core
-never sees a Telegram update or SeaTalk event shape. The core asks `supports_live_text`
-("is there a surface I can keep updating?"), never whether a delivered text message can be
-rewritten (see "Show a turn's progress on one live surface").
+never sees a Telegram update or SeaTalk event shape. Nothing in the record describes
+showing a turn's progress: no transport does (see "Send only the answer, once the turn
+is done").
 
 ## Audit events (spec channels)
 

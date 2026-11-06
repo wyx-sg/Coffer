@@ -217,7 +217,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`channel-thread-context-is-a-bounded-slice`](channel-thread-context-is-a-bounded-slice.md) | A Channel Turn Folds a Bounded Slice of Its Thread, Read by the Transport |
 | [`a-burst-of-channel-messages-is-one-turn`](a-burst-of-channel-messages-is-one-turn.md) | A Burst of Channel Messages Is One Turn, Released After a Per-Channel Quiet Window |
 | [`channel-switches-structural-vs-parametric`](channel-switches-structural-vs-parametric.md) | Channel Switches: the Agent Opens a New Conversation, the Model Applies Next Turn |
-| [`channel-live-surface-strategy`](channel-live-surface-strategy.md) | A Channel Turn Shows Progress on a Preview Surface Where One Exists, and the Reply Is the Answer Alone |
+| [`channel-live-surface-strategy`](channel-live-surface-strategy.md) | A Channel Turn Posts Nothing Until It Is Done, and the Reply Is the Answer Alone |
 | [`channel-attachments`](channel-attachments.md) | Channel Attachments Are Saved Files, Handed to Every Agent by Path |
 | [`channel-prompt-fixed-note-and-editable-style`](channel-prompt-fixed-note-and-editable-style.md) | A Channel's System Prompt Is a Fixed Channel Note Plus a Reply Style the Owner Can Rewrite |
 | [`long-channel-reply-is-rewritten-short`](long-channel-reply-is-rewritten-short.md) | A Long Channel Reply Is Rewritten Short by the Agent |

@@ -118,13 +118,9 @@ class ReactionSet:
 class ChannelCapabilities:
     """What a transport can do; the core picks strategies from this.
 
-    The question the core asks about progress is ``supports_live_text`` — *is
-    there a surface I can keep updating while a turn runs?* ("Show a turn's
-    progress on one live surface"). Telegram answers yes, with a message draft or
-    one message it edits; SeaTalk answers no and shows only its typing indicator.
-    The core asks for a live-text handle (``open_live_text``) and never branches
-    on which mechanism is underneath, so there is no flag for "can rewrite a
-    delivered text message" — nothing would read it.
+    No transport shows a turn's progress: while it runs the chat shows only
+    receipt (a reaction or typing), and the finished reply is one new message
+    ("Reply once the turn is done").
     ``supports_card_update`` is the one narrower question: can an already-delivered
     *selection card* be rewritten? Without it a card keeps offering the option the
     user already took.
@@ -140,10 +136,6 @@ class ChannelCapabilities:
     # system line such as "Stopping…" is then rewritten into its result rather
     # than followed by a second message.
     edits_text: bool = False
-    # A surface the core can keep updating during a turn — a draft or an edited
-    # message (Telegram). It is scaffolding: the finished reply is always a new
-    # message. See "Show a turn's progress on one live surface".
-    supports_live_text: bool = False
     supports_media: bool = False  # outbound file/photo upload (send_media)
     # A file message carries its own caption (Telegram). Without it the reply
     # names its files and their captions instead (SeaTalk).
@@ -281,25 +273,6 @@ class EphemeralTarget:
     receiver_id: str  # the member whose client shows the message
     ephemeral_message_id: str = ""  # the ephemeral message being answered
     callback_id: str = ""  # the card tap being answered
-
-
-@dataclass(frozen=True)
-class InboundStop:
-    """The user stopped the reply from the platform's own control.
-
-    Spec channels "Stop the turn from the platform's own stop control".
-
-    Telegram draws a stop button on a streamed draft; pressing it reports the
-    stopped draft rather than sending a message. It must reach the same
-    interrupt path a typed ``/stop`` does — a stop control the user can see but
-    that does not stop anything is worse than none at all.
-    """
-
-    channel: str  # the channel resource's uid (what its adapter is named by)
-    chat_id: str  # the chat whose reply was stopped
-    thread_id: str = ""  # the thread it was being generated in, if any
-    chat_kind: str = "direct"  # "direct" | "group" — so the acknowledgement
-    # routes back the way every other reply to this chat does
 
 
 @dataclass(frozen=True)

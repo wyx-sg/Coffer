@@ -20,7 +20,6 @@ from coffer.domain.channel.envelopes import (
     InboundCallback,
     InboundLifecycle,
     InboundMessage,
-    InboundStop,
     SentMessage,
 )
 from coffer.domain.channel.rich_content import ForwardedItem
@@ -42,45 +41,10 @@ class AdapterCallbacks:
     # transports/tests that never emit one; adapters skip the callback when unset.
     on_callback: Callable[[InboundCallback], Awaitable[None]] | None = None
     # A non-message event about the bot's own standing in a chat (removed from a group,
-    # group turned external), and the platform's own stop control being pressed (see
-    # "Stop the turn from the platform's own stop control"). Both optional exactly like
+    # group turned external). Optional exactly like
     # ``on_callback``: transports and test fakes that never emit one leave it unset, and
     # adapters skip the call when it is ``None``.
     on_lifecycle: Callable[[InboundLifecycle], Awaitable[None]] | None = None
-    on_stop: Callable[[InboundStop], Awaitable[None]] | None = None
-
-
-class LiveText(Protocol):
-    """A surface the core can keep updating while a turn runs (see "Show a turn's
-    progress on one live surface").
-
-    One handle == one preview of the turn's progress. ``text`` is ALWAYS the full
-    accumulated snapshot, never a delta: the transport underneath shows the
-    latest snapshot (a Telegram draft) or rewrites a message with it (a Telegram
-    edit), and neither can reconstruct a text from fragments.
-
-    The surface is scaffolding, never the reply, and the handle is terminal after
-    ``close``: a finished/failed surface is never reused, and a handle that gave
-    up simply hands its text back so the ordinary send path delivers the reply.
-    """
-
-    async def update(self, text: str) -> None:
-        """Show ``text`` (the full accumulated reply so far) on the surface.
-
-        Best-effort and self-throttling: the caller may offer a new snapshot as
-        often as it likes. A failure is swallowed and latches the handle dead —
-        the turn must never break because a progress update did not land."""
-        ...
-
-    async def close(self, text: str) -> str:
-        """Finish the surface with the final ``text``, returning whatever the
-        caller must STILL send through the ordinary send path ("" when the
-        surface delivered all of it).
-
-        Telegram returns ``text`` unchanged — its status message is deleted (a
-        draft simply expires) and the final reply is sent rendered and chunked as
-        a new message."""
-        ...
 
 
 class ChannelAdapter(Protocol):
@@ -130,16 +94,6 @@ class ChannelAdapter(Protocol):
         private in a group") — never a guarantee, since a platform that refuses delivers
         an ordinary message instead.
         """
-        ...
-
-    async def open_live_text(
-        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
-    ) -> LiveText | None:
-        """Open a surface the core can keep updating for this turn (see "Show a turn's
-        progress on one live surface"), or ``None`` when this transport has none — the
-        caller then sends only the finished reply. Only called when the transport
-        declares ``capabilities.supports_live_text``; the mechanism (an edited message,
-        a draft) is the adapter's business."""
         ...
 
     async def update_card(

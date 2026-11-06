@@ -21,7 +21,6 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
 
 from coffer.application.channel.bot_label import bot_name
 from coffer.application.channel.commands import ChannelCommands, SafeSend
@@ -36,7 +35,6 @@ from coffer.domain.channel.envelopes import (
     InboundCallback,
     InboundLifecycle,
     InboundMessage,
-    InboundStop,
 )
 
 __all__ = ["EXTERNAL_GROUP_WARNING", "InboundEvents"]
@@ -233,33 +231,3 @@ class InboundEvents:
             },
         )
         await self.safe_send(binding, event.chat_id, EXTERNAL_GROUP_WARNING, chat_kind="group")
-
-    async def on_stop(
-        self,
-        binding: ChannelBinding,
-        event: InboundStop,
-        *,
-        session: Any,
-        conversation_thread_id: str,
-    ) -> None:
-        """The user pressed the platform's own stop control (see "Stop the turn from the
-        platform's own stop control").
-
-        Routed to exactly the path a typed ``/stop`` takes, so the two cannot drift
-        apart: same cancellation, same queue pause (spec chat "Pause the pending queue
-        on interrupt"), same thing said back. Owner-gated like everything else — a stop
-        press from a chat that was never paired is ignored in silence rather than
-        answered, which would confirm to a stranger that this channel exists.
-        """
-        peer = await self.peers.get_by_chat(binding.resource.uid, event.chat_id)
-        if peer is None:
-            return
-        await self.commands.interrupt(
-            binding,
-            peer,
-            session,
-            self.safe_send,
-            chat_kind=event.chat_kind,
-            thread_id=event.thread_id,
-            conversation_thread_id=conversation_thread_id,
-        )

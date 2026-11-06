@@ -89,7 +89,12 @@ async def test_no_reaction_on_a_non_reacting_transport(env: ChannelEnv) -> None:
     # cue is the typing signal, so the reaction path is skipped entirely.
     env.provider.adapter = _clean_reply("42")
     resource = await env.register_channel()
-    adapter = env.bind(resource, FakeChannelAdapter(supports_reactions=False, supports_edit=False))
+    adapter = env.bind(
+        resource,
+        FakeChannelAdapter(
+            supports_reactions=False,
+        ),
+    )
     await env.pair(resource, "owner")
 
     await env.processor.on_message(inbound("tg", "owner", "meaning?"))

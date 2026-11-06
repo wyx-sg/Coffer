@@ -33,7 +33,6 @@ def _callbacks(env: ChannelEnv) -> AdapterCallbacks:
         on_message=env.processor.on_message,
         on_callback=env.processor.on_callback,
         on_lifecycle=env.processor.on_lifecycle,
-        on_stop=env.processor.on_stop,
     )
 
 

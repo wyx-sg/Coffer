@@ -4,7 +4,7 @@ An agent streams "Let me check the logs." — runs a tool — then "The failure 
 Both arrive as bare ``TextDelta``s, so a renderer that only concatenated them
 would deliver "…check the logs.The failure is…". The tool call between them is
 the boundary: the text before it is narration and the final reply is the text
-after it alone (spec channels "Show a turn's working state as one status line").
+after it alone (spec channels "Send only the answer, once the turn is done").
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ async def _render(adapter: FakeChannelAdapter, events: list[Any]) -> None:
 
 
 async def test_only_the_text_after_the_tool_call_is_the_reply() -> None:
-    adapter = FakeChannelAdapter(supports_edit=False)
+    adapter = FakeChannelAdapter()
 
     await _render(
         adapter,
@@ -58,7 +58,7 @@ async def test_only_the_text_after_the_tool_call_is_the_reply() -> None:
 
 
 async def test_deltas_within_one_text_block_still_join_without_a_break() -> None:
-    adapter = FakeChannelAdapter(supports_edit=False)
+    adapter = FakeChannelAdapter()
 
     await _render(
         adapter,
@@ -72,40 +72,9 @@ async def test_deltas_within_one_text_block_still_join_without_a_break() -> None
     assert adapter.texts() == ["forty-two"]
 
 
-async def test_tool_progress_keeps_updating_after_the_agent_has_written_text() -> None:
-    # The long-task case: one sentence of narration, then a run of tools. The
-    # live surface must keep counting each tool, not freeze on the sentence.
-    adapter = FakeChannelAdapter(supports_edit=True)
-    box = [0.0]
-
-    def now() -> float:
-        box[0] += 2.0
-        return box[0]
-
-    async def send(text: str) -> None:
-        await adapter.send_text("owner", text)
-
-    renderer = TurnRenderer(
-        channel="tg", adapter=adapter, chat_id="owner", conversation_id="c1", send=send, now=now
-    )
-    queue: asyncio.Queue[Any] = asyncio.Queue()
-    for event in [
-        TextDelta(text="Let me look at the logs."),
-        ToolCall(tool_use_id="t1", tool_name="Bash", tool_input={"description": "tail the log"}),
-        ToolCall(tool_use_id="t2", tool_name="Grep", tool_input={"pattern": "3DS"}),
-        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
-        None,
-    ]:
-        queue.put_nowait(event)
-    await renderer.consume(queue)
-
-    snapshots = adapter.live_handles[0].snapshots
-    assert any("2 steps" in s for s in snapshots)
-
-
 @pytest.mark.acceptance(spec="channels", scenario="a turn that wrote no text sends no reply")
 async def test_a_turn_that_wrote_no_text_sends_no_reply() -> None:
-    adapter = FakeChannelAdapter(supports_edit=False)
+    adapter = FakeChannelAdapter()
 
     await _render(
         adapter,

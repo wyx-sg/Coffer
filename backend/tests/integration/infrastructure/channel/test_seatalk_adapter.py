@@ -1524,24 +1524,6 @@ async def test_fetch_thread_degrades_to_empty_list_on_error(
         await adapter.stop()
 
 
-# -- no live surface ("Show only typing while a turn runs") -------------------
-
-
-@pytest.mark.acceptance(
-    spec="channels/seatalk", scenario="a seatalk transport offers no live surface"
-)
-async def test_seatalk_offers_no_live_surface(fake_seatalk: FakeSeaTalk) -> None:
-    adapter = make_seatalk_adapter(fake_seatalk)
-    try:
-        assert adapter.capabilities.supports_live_text is False
-        assert await adapter.open_live_text("emp-1") is None
-        assert await adapter.open_live_text("gid-1", thread_id="t1", chat_kind="group") is None
-    finally:
-        await adapter.stop()
-    assert fake_seatalk.init_stream_calls == []
-    assert fake_seatalk.update_stream_calls == []
-
-
 # -- @mentioning the asker in a group reply ("Mention the asker in a group answer")
 
 
@@ -1782,20 +1764,6 @@ async def test_withdrawing_rewrites_the_card_blank_through_update_message(
     ]
 
 
-@pytest.mark.acceptance(spec="channels/seatalk", scenario="a seatalk group turn does not stream")
-async def test_seatalk_declares_no_group_streaming_and_a_seven_day_card_window(
-    fake_seatalk: FakeSeaTalk,
-) -> None:
-    adapter = make_seatalk_adapter(fake_seatalk)
-    try:
-        caps = adapter.capabilities
-    finally:
-        await adapter.stop()
-    assert caps.supports_live_text is False  # typing only, in groups and direct chats
-    assert caps.withdraw_window_hours == 168
-    assert caps.withdraw_removes is False
-
-
 async def test_open_thread_anchored_replies_in_the_owners_message_thread(
     fake_seatalk: FakeSeaTalk,
 ) -> None:
@@ -1814,3 +1782,13 @@ async def test_open_thread_anchored_replies_in_the_owners_message_thread(
     assert first["message"]["text"]["content"].startswith("🧵#1 Task")
     assert "thread_id" not in second["message"] or not second["message"]["thread_id"]
     assert rooted != "u-1" and rooted
+
+
+async def test_seatalk_declares_a_seven_day_card_window(fake_seatalk: FakeSeaTalk) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    try:
+        caps = adapter.capabilities
+    finally:
+        await adapter.stop()
+    assert caps.withdraw_window_hours == 168
+    assert caps.withdraw_removes is False

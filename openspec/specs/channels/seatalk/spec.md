@@ -207,7 +207,7 @@ name.
   it is escaped as usual.
 
 ### Requirement: Keep a typing heartbeat alive in DMs and group threads
-SeaTalk has **no reaction to ack with** and no live surface, so it MUST keep a
+SeaTalk has **no reaction to ack with**, so it MUST keep a
 periodic **typing heartbeat** alive (an ephemeral action, zero chat clutter) for
 the whole turn: it is the only sign of progress until the reply lands. It runs wherever the turn is, DM or
 group thread alike: SeaTalk has a thread-scoped group typing endpoint
@@ -288,11 +288,6 @@ core tells the owner privately.
 - **GIVEN** a SeaTalk reply sent as several cards
 - **WHEN** it is withdrawn
 - **THEN** each card is rewritten through Update Message into a "🗑 Withdrawn" card with no buttons
-
-#### Scenario: a seatalk group turn does not stream
-- **GIVEN** a SeaTalk channel and a group turn
-- **WHEN** the capabilities are read
-- **THEN** no live surface is offered, withdrawing takes up to 168 hours, and withdrawing does not remove the message
 
 ### Requirement: Degrade card rewrites outside SeaTalk's update window
 A card rewrite ([channels](../spec.md) "Switch the agent with /new", [channels](../spec.md) "Offer choices and actions as owner-gated cards") reaches only
@@ -562,9 +557,9 @@ its thread.
 
 ### Requirement: Show only typing while a turn runs
 A SeaTalk turn MUST show its progress through the typing indicator alone (see
-"Keep a typing heartbeat alive in DMs and group threads"): the transport
-declares no live surface (`supports_live_text` false), so nothing is posted
-while the turn runs and no message stream is ever opened. When the turn ends the
+"Keep a typing heartbeat alive in DMs and group threads"): like every channel
+([channels](../spec.md) "Send only the answer, once the turn is done") nothing
+is posted while the turn runs, and no message stream is ever opened. When the turn ends the
 reply goes out as new messages — in a direct chat, ordinary text messages
 rendered as SeaTalk markdown and cut at paragraph boundaries, every message after
 the first opening with its place, `(2/3)`; in a group, withdrawable cards (see
@@ -589,9 +584,3 @@ alive at no cost, and the answer, sent when it is ready, notifies.
 - **WHEN** it is sent
 - **THEN** it is cut at paragraph boundaries into messages headed `(2/3)`, `(3/3)`
   after the first
-
-#### Scenario: a seatalk transport offers no live surface
-- **WHEN** the SeaTalk transport's capabilities are read and a live surface is
-  asked for, in a direct chat or a group thread
-- **THEN** it declares none and opens none, and no stream request reaches the
-  platform

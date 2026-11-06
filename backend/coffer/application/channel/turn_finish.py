@@ -1,10 +1,9 @@
 """The end of a turn: the reply delivered, and the outcome it ended with.
 
 Split out of ``turn_render`` (at its size budget). One pass turns what the agent
-wrote into what the chat receives: ``MEDIA:`` sentinels uploaded after the reply, the error /
-stop / limit notice appended, the live surface closed (or none to close) and the
-body sent as new messages, and the compact summary of a turn that did not end
-normally.
+wrote into what the chat receives: ``MEDIA:`` sentinels uploaded after the reply,
+the error / stop / limit notice appended, the body sent as new messages, and the
+compact summary of a turn that did not end normally.
 """
 
 from __future__ import annotations
@@ -23,7 +22,6 @@ from coffer.application.channel.turn_media import (
     take_media,
 )
 from coffer.application.channel.turn_status import format_elapsed
-from coffer.application.channel.turn_surface import TurnSurface
 from coffer.domain.channel.envelopes import ChoiceButton, SentMessage
 from coffer.domain.chat.events import SESSION_IN_USE, TurnError
 
@@ -136,7 +134,6 @@ async def _deliver_reply(
     chat_id: str,
     thread_id: str,
     chat_kind: str,
-    surface: TurnSurface,
     send: Callable[[str], Awaitable[None]],
     mention: Callable[[str], str],
     text: str,
@@ -150,9 +147,8 @@ async def _deliver_reply(
     stop result, so the reply does not repeat it. ``stop_line``: that result,
     naming what was stopped, when a ``/stop`` asked for it.
 
-    The @mention is added HERE, to the body, exactly once. A live surface is
-    scaffolding: closing it hands the body back, and the body goes out as new
-    messages, so the mention is in the message that creates the reply.
+    The @mention is added HERE, to the body, exactly once, so it is in the
+    message that creates the reply.
     """
     media: tuple[MediaFile, ...] = ()
     if text:
@@ -189,15 +185,10 @@ async def _deliver_reply(
             )
         body = text
     if body:
-        leftover = await surface.close(mention(body))
-        if leftover:
-            if tracker is not None:
-                await tracker.send(leftover)
-            else:
-                await send(leftover)
-    else:
-        # The live surface still has to be closed.
-        await surface.close("")
+        if tracker is not None:
+            await tracker.send(mention(body))
+        else:
+            await send(mention(body))
     on_sent = tracker.note_file if tracker is not None else None
     failed = await send_media_files(
         adapter, chat_id, media, thread_id=thread_id, chat_kind=chat_kind, on_sent=on_sent

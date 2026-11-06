@@ -27,11 +27,9 @@ from coffer.domain.channel.envelopes import (
     SentMessage,
 )
 from coffer.domain.channel.thread_messages import ThreadMessage, ThreadRead
-from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.telegram_album import AlbumBuffer
 from coffer.infrastructure.channel.telegram_caps import telegram_capabilities
 from coffer.infrastructure.channel.telegram_cards import edit_card
-from coffer.infrastructure.channel.telegram_draft import TelegramDraftLiveText
 from coffer.infrastructure.channel.telegram_features import FeatureSet
 from coffer.infrastructure.channel.telegram_media import (
     FetchedMedia,
@@ -53,7 +51,6 @@ from coffer.infrastructure.channel.telegram_transport import call
 from coffer.infrastructure.channel.telegram_updates import (
     callback_from_query,
     lifecycle_from_update,
-    stop_from_update,
     tap_ack,
 )
 
@@ -177,12 +174,6 @@ class TelegramAdapter:
         query = update.get("callback_query")
         if isinstance(query, dict):
             await self._dispatch_callback(query)
-            return
-        # The user pressed the stop control on a streamed draft.
-        stopped = stop_from_update(update, channel=self._name)
-        if stopped is not None:
-            if self._callbacks.on_stop is not None:
-                await self._callbacks.on_stop(stopped)
             return
         # The bot was removed from a chat ("Track the bot's own standing in a group") — the same
         # event SeaTalk reports directly, arriving here as a membership transition.
@@ -312,35 +303,6 @@ class TelegramAdapter:
             as_photo=as_photo,
             thread_id=thread_id,
         )
-
-    async def open_live_text(
-        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
-    ) -> TelegramLiveText | TelegramDraftLiveText:
-        """A surface the turn's progress shows on ("Show a turn's progress on one live surface").
-
-        A message draft is the platform's own answer to this and is preferred
-        where it exists: nothing is delivered, so nothing has to be deleted
-        afterwards, and it carries the stop control routed back here.
-
-        Two things send a turn back to one sent message rewritten in place: a
-        Bot API server that has never heard of drafts, and a group —
-        ``sendMessageDraft`` addresses "the target private chat" only, and its
-        stop update names no sender, so a group's button could not be owner-gated.
-        """
-        if chat_kind != "group" and self._features.message_drafts.available:
-            return TelegramDraftLiveText(
-                self._call,
-                chat_id,
-                channel=self._name,
-                feature=self._features.message_drafts,
-                thread_id=thread_id,
-                # A rich draft needs rich messages: a server refusing those
-                # knows neither.
-                rich=(
-                    self._features.rich_drafts if self._features.rich_messages.available else None
-                ),
-            )
-        return TelegramLiveText(self._call, chat_id, thread_id=thread_id)
 
     async def delete_message(self, chat_id: str, message_id: str) -> None:
         await self._call("deleteMessage", chat_id=chat_id, message_id=message_id)

@@ -67,7 +67,6 @@ from coffer.infrastructure.persistence.engine import (
 )
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo
 from tests.support.channel import FakeChannelAdapter as FakeChannelAdapter
-from tests.support.channel import FakeLiveText as FakeLiveText
 from tests.support.vault_stores import make_resource_repo
 from tests.support.waiting import wait_until  # noqa: F401  (re-exported to the channel tests)
 from tests.unit.chat.conftest import FakeAgentAdapter

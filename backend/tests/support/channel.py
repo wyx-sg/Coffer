@@ -6,8 +6,8 @@ shared channel core *sent* (texts, cards, edits, typing, reactions, media)
 without a network. Inbound traffic is simulated by calling the callbacks the
 core handed to :meth:`FakeChannelAdapter.start` (``adapter.callbacks``) —
 ``tap`` does it for a card button. Every capability flag is a constructor
-argument, so one fake stands in for a Telegram-shaped transport (edits, live
-text) or a SeaTalk-shaped one (typing only, mentions, groups, threads).
+argument, so one fake stands in for a Telegram-shaped transport (reactions,
+edits) or a SeaTalk-shaped one (typing only, mentions, groups, threads).
 
 It lives here rather than in ``integration/channel/conftest.py`` so tiers other
 than the channel core's (the daemon, the HTTP routes) can wire a channel without
@@ -46,8 +46,6 @@ class FakeChannelAdapter:
     def __init__(
         self,
         *,
-        supports_edit: bool = True,
-        supports_live_text: bool | None = None,
         supports_typing: bool = True,
         max_message_chars: int = 4096,
         supports_buttons: bool = False,
@@ -62,11 +60,7 @@ class FakeChannelAdapter:
         reactions: ReactionSet | None = None,
         **capabilities: Any,
     ) -> None:
-        # ``supports_edit`` is this fake's own switch, not a capability: a fake that
-        # edits (``edit_text`` records) has a live surface by definition; a test
-        # may say otherwise explicitly.
         self._caps = ChannelCapabilities(
-            supports_live_text=supports_edit if supports_live_text is None else supports_live_text,
             supports_typing=supports_typing,
             max_message_chars=max_message_chars,
             supports_buttons=supports_buttons,
@@ -172,11 +166,6 @@ class FakeChannelAdapter:
         self.quoted_items: list[ForwardedItem] = []
         self.quoted_attachments: tuple[InboundAttachment, ...] = ()
         self.fetch_quoted_calls: list[str] = []
-        # "Show a turn's progress on one live surface": every live-text handle the
-        # core opened this session, and the
-        # switch that makes the transport refuse to open one.
-        self.live_handles: list[FakeLiveText] = []
-        self.live_text_unavailable = False
         # (chat_id, mark, body, thread_id) for every ``open_thread`` the core
         # asked for ("Open parallel conversations beside a direct chat"), and the
         # scripted refusal a transport with no threads available raises.
@@ -254,15 +243,6 @@ class FakeChannelAdapter:
         chat_kind: str = "direct",
     ) -> None:
         self.card_updates.append((chat_id, message_id, markdown, list(buttons), title))
-
-    async def open_live_text(
-        self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
-    ) -> FakeLiveText | None:
-        if not self._caps.supports_live_text or self.live_text_unavailable:
-            return None
-        handle = FakeLiveText(self, chat_id, thread_id=thread_id, chat_kind=chat_kind)
-        self.live_handles.append(handle)
-        return handle
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:
         self.edits.append((chat_id, message_id, text))
@@ -345,47 +325,6 @@ class FakeChannelAdapter:
         await self.callbacks.on_callback(
             InboundCallback(channel=channel, chat_id=chat_id, sender_id=sender_id, data=value)
         )
-
-
-class FakeLiveText:
-    """The fake's live surface ("Show a turn's progress on one live surface"),
-    shaped like Telegram's: the first
-    update sends a message, later ones edit it, and closing deletes it and hands
-    the whole final text back for the ordinary send path."""
-
-    def __init__(
-        self,
-        adapter: FakeChannelAdapter,
-        chat_id: str,
-        *,
-        thread_id: str = "",
-        chat_kind: str = "direct",
-    ) -> None:
-        self._adapter = adapter
-        self._chat_id = chat_id
-        self._thread_id = thread_id
-        self._chat_kind = chat_kind
-        self.message_id = ""
-        self.closed = False
-        self.final = ""
-        self.snapshots: list[str] = []
-
-    async def update(self, text: str) -> None:
-        self.snapshots.append(text)
-        if not self.message_id:
-            sent = await self._adapter.send_text(
-                self._chat_id, text, thread_id=self._thread_id, chat_kind=self._chat_kind
-            )
-            self.message_id = sent.message_id
-            return
-        await self._adapter.edit_text(self._chat_id, self.message_id, text)
-
-    async def close(self, text: str) -> str:
-        self.closed = True
-        self.final = text
-        if self.message_id:
-            await self._adapter.delete_message(self._chat_id, self.message_id)
-        return text
 
 
 def rendered_record(msg: InboundMessage) -> str:

@@ -37,7 +37,7 @@ async def _run(adapter: FakeChannelAdapter, text: str) -> None:
 
 @pytest.mark.acceptance(spec="channels", scenario="a table goes out as the agent wrote it")
 async def test_a_table_goes_out_as_the_agent_wrote_it() -> None:
-    adapter = FakeChannelAdapter(supports_edit=False)
+    adapter = FakeChannelAdapter()
     table = "| a | b |\n|---|---|\n| 1 | 2 |"
 
     await _run(adapter, table)

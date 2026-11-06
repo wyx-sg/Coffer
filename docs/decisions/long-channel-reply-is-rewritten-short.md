@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-10-20
 **Deciders**: Yuxing Wu
-**Related**: [A Channel's System Prompt Is a Fixed Channel Note Plus a Reply Style the Owner Can Rewrite](channel-prompt-fixed-note-and-editable-style.md), [A Channel Turn Shows Progress on a Preview Surface Where One Exists, and the Reply Is the Answer Alone](channel-live-surface-strategy.md), spec channels "Ask for the short version of a reply too long for a chat"
+**Related**: [A Channel's System Prompt Is a Fixed Channel Note Plus a Reply Style the Owner Can Rewrite](channel-prompt-fixed-note-and-editable-style.md), [A Channel Turn Posts Nothing Until It Is Done, and the Reply Is the Answer Alone](channel-live-surface-strategy.md), spec channels "Ask for the short version of a reply too long for a chat"
 
 ## Context
 

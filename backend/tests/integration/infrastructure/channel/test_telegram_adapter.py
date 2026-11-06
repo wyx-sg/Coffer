@@ -14,9 +14,7 @@ import pytest
 
 from coffer.domain.channel.envelopes import ChoiceButton, EphemeralTarget
 from coffer.domain.channel.errors import ChannelSendFailed
-from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.telegram import TelegramAdapter
-from coffer.infrastructure.channel.telegram_draft import TelegramDraftLiveText
 from coffer.infrastructure.channel.telegram_profile import BotIdentity
 from tests.support.channel import rendered_record
 
@@ -765,54 +763,6 @@ async def test_a_non_list_getupdates_result_backs_off_instead_of_spinning(
     assert len(fake_telegram.calls_for("getUpdates")) <= 3
 
 
-# -- live text: the editable surface ("Use a deleted status message as the live
-# scaffolding") ----------------------------------------------------------------
-
-
-async def test_live_text_sends_once_then_edits_and_deletes_on_close(
-    fake_telegram: FakeTelegram,
-) -> None:
-    adapter = make_telegram_adapter(fake_telegram)
-    try:
-        assert adapter.capabilities.supports_live_text is True
-        live = TelegramLiveText(adapter._call, "555", now=_live_ticking())
-        await live.update("I found")
-        await live.update("I found three cats.")
-        leftover = await live.close("I found three cats.")
-    finally:
-        await adapter.stop()
-
-    sends = fake_telegram.calls_for("sendMessage")
-    assert len(sends) == 1  # opened once…
-    assert sends[0]["text"] == "I found"
-    assert "parse_mode" not in sends[0]  # interim text is PLAIN, never HTML
-    edits = fake_telegram.calls_for("editMessageText")
-    assert [e["text"] for e in edits] == ["I found three cats."]  # …then edited in place
-    # The status message is scaffolding: it is deleted and the whole reply is
-    # handed back, so the caller sends it HTML-rendered and chunked.
-    assert fake_telegram.calls_for("deleteMessage") == [{"chat_id": "555", "message_id": "101"}]
-    assert leftover == "I found three cats."
-
-
-async def test_live_text_stops_writing_once_the_platform_rejects_an_update(
-    fake_telegram: FakeTelegram,
-) -> None:
-    fake_telegram.reject_all_sends = 1  # the very first snapshot is refused
-    adapter = make_telegram_adapter(fake_telegram)
-    try:
-        live = TelegramLiveText(adapter._call, "555", now=_live_ticking())
-        await live.update("one")
-        await live.update("one two")  # the surface is dead — nothing more is sent
-        leftover = await live.close("one two three")
-    finally:
-        await adapter.stop()
-
-    assert len(fake_telegram.calls_for("sendMessage")) == 1
-    assert fake_telegram.calls_for("editMessageText") == []
-    assert fake_telegram.calls_for("deleteMessage") == []  # nothing to delete
-    assert leftover == "one two three"  # the reply still owes the user its text
-
-
 # -- Bot API 10.x parity: profile, reply routing, media coverage ---------------
 
 
@@ -1146,103 +1096,6 @@ async def test_a_rich_send_carries_buttons_and_the_reply_pointer(
     assert sent["rich_message"]["markdown"].startswith("## Agent")
 
 
-# -- streamed drafts and the platform stop control ("Stream through a message draft
-# in direct chats only", "Route the draft's stop button to the interrupt path") --
-
-
-async def test_a_live_reply_streams_as_a_draft(fake_telegram: FakeTelegram) -> None:
-    fake_telegram.supports_drafts = True
-    adapter = make_telegram_adapter(fake_telegram)
-    await adapter.start(RecordingCallbacks().as_callbacks())
-    surface = await adapter.open_live_text("555")
-    assert isinstance(surface, TelegramDraftLiveText)
-    try:
-        await surface.update("thinking")
-        remainder = await surface.close("the whole answer")
-    finally:
-        await adapter.stop()
-    drafts = fake_telegram.calls_for("sendMessageDraft")
-    assert [d["text"] for d in drafts] == ["thinking"]
-    assert drafts[0]["draft_id"] == surface.draft_id
-    # A draft is a preview, never the reply: the caller still sends the real
-    # message, and there is nothing to clean up.
-    assert remainder == "the whole answer"
-    assert not fake_telegram.calls_for("deleteMessage")
-
-
-async def test_a_streamed_draft_advertises_the_stop_control(
-    fake_telegram: FakeTelegram,
-) -> None:
-    fake_telegram.supports_drafts = True
-    adapter = make_telegram_adapter(fake_telegram)
-    await adapter.start(RecordingCallbacks().as_callbacks())
-    surface = await adapter.open_live_text("555", thread_id="8")
-    try:
-        await surface.update("partial")
-    finally:
-        await adapter.stop()
-    draft = fake_telegram.calls_for("sendMessageDraft")[0]
-    assert draft["can_stop"] is True
-    # The finished reply is sent straight after, so a kept draft would leave the
-    # user reading the answer twice.
-    assert draft["keep_on_stop"] is False
-    assert draft["message_thread_id"] == 8
-
-
-async def test_drafts_fall_back_to_the_edited_message_surface(
-    fake_telegram: FakeTelegram,
-) -> None:
-    adapter = make_telegram_adapter(fake_telegram)  # fake defaults to pre-10.1
-    await adapter.start(RecordingCallbacks().as_callbacks())
-    first = await adapter.open_live_text("555")
-    try:
-        await first.update("partial")  # latches drafts off
-        second = await adapter.open_live_text("555")
-        await second.update("partial")
-    finally:
-        await adapter.stop()
-    # The next turn must not pay for another doomed round trip (spec channels "Probe
-    # platform capabilities and latch off rejected ones").
-    assert isinstance(second, TelegramLiveText)
-    assert len(fake_telegram.calls_for("sendMessageDraft")) == 1
-    # The edit surface opens by sending the message it will then rewrite.
-    assert fake_telegram.calls_for("sendMessage")[0]["text"] == "partial"
-
-
-@pytest.mark.acceptance(
-    spec="channels", scenario="a stop pressed on the platform's own control ends the turn"
-)
-async def test_the_stop_control_reaches_the_stop_callback(fake_telegram: FakeTelegram) -> None:
-    recorder = RecordingCallbacks()
-    adapter = await _start_bot_adapter(fake_telegram, recorder)
-    await fake_telegram.update_batches.put(
-        [
-            {
-                "update_id": 80,
-                "stopped_message_generation": {
-                    "chat": {"id": -100123, "type": "supergroup"},
-                    "message_thread_id": 8,
-                    "draft_id": 4242,
-                },
-            }
-        ]
-    )
-    try:
-        await wait_until(lambda: len(recorder.stops) == 1)
-    finally:
-        await adapter.stop()
-    stop = recorder.stops[0]
-    assert (stop.channel, stop.chat_id, stop.thread_id, stop.chat_kind) == (
-        "tg",
-        "-100123",
-        "8",
-        "group",
-    )
-    assert (
-        "stopped_message_generation" in fake_telegram.calls_for("getUpdates")[0]["allowed_updates"]
-    )
-
-
 # -- ephemeral group answers ("Deliver group command output as ephemeral messages")
 
 
@@ -1301,83 +1154,6 @@ async def test_an_ordinary_reply_is_never_ephemeral(fake_telegram: FakeTelegram)
     finally:
         await adapter.stop()
     assert "ephemeral_message_parameters" not in fake_telegram.calls_for("sendMessage")[0]
-
-
-async def test_a_group_turn_keeps_the_edit_based_surface(fake_telegram: FakeTelegram) -> None:
-    """sendMessageDraft addresses "the target private chat" and has no group
-    form, so a group turn would spend a refused round trip per snapshot and
-    show no progress at all."""
-    fake_telegram.supports_drafts = True
-    adapter = make_telegram_adapter(fake_telegram)
-    await adapter.start(RecordingCallbacks().as_callbacks())
-    surface = await adapter.open_live_text("-100123", chat_kind="group", thread_id="8")
-    try:
-        await surface.update("partial")
-    finally:
-        await adapter.stop()
-    assert isinstance(surface, TelegramLiveText)
-    assert not fake_telegram.calls_for("sendMessageDraft")
-
-
-async def test_a_long_snapshot_keeps_the_draft_alive(fake_telegram: FakeTelegram) -> None:
-    """A live snapshot is the whole reply so far, so it outgrows the draft's
-    4096-character budget on any long answer. Sending it anyway is refused and
-    latches the surface dead — the one thing a progress indicator must not do."""
-    fake_telegram.supports_drafts = True
-    adapter = make_telegram_adapter(fake_telegram)
-    await adapter.start(RecordingCallbacks().as_callbacks())
-    surface = await adapter.open_live_text("555")
-    try:
-        await surface.update("x" * 9000)
-    finally:
-        await adapter.stop()
-    sent = fake_telegram.calls_for("sendMessageDraft")[0]["text"]
-    assert len(sent) == 4096
-    # The tail is what the reader is watching, not the head they have seen.
-    assert sent.startswith("…") and sent.endswith("x")
-
-
-@pytest.mark.acceptance(
-    spec="channels/telegram",
-    scenario="a direct chat's draft shows the status in its thinking block",
-)
-async def test_a_rich_draft_puts_the_status_header_in_the_thinking_block(
-    fake_telegram: FakeTelegram,
-) -> None:
-    fake_telegram.supports_drafts = True
-    fake_telegram.supports_rich_drafts = True
-    adapter = make_telegram_adapter(fake_telegram)
-    await adapter.start(RecordingCallbacks().as_callbacks())
-    surface = await adapter.open_live_text("555")
-    try:
-        await surface.update(
-            "⏳ Working · 2m 14s · 2 steps\n💬 Reading a.ts\n─\nThe **answer** so far"
-        )
-    finally:
-        await adapter.stop()
-    [draft] = fake_telegram.calls_for("sendRichMessageDraft")
-    assert draft["rich_message"]["markdown"] == (
-        "<tg-thinking>Working · 2m 14s · 2 steps</tg-thinking>\n\n- 💬 Reading a.ts\n\n"
-        "The **answer** so far"
-    )
-    assert draft["can_stop"] is True
-    assert not fake_telegram.calls_for("sendMessageDraft")
-
-
-async def test_a_refused_rich_draft_falls_back_to_the_plain_draft(
-    fake_telegram: FakeTelegram,
-) -> None:
-    fake_telegram.supports_drafts = True  # rich drafts stay unsupported
-    adapter = make_telegram_adapter(fake_telegram)
-    await adapter.start(RecordingCallbacks().as_callbacks())
-    surface = await adapter.open_live_text("555")
-    try:
-        await surface.update("⏳ Working · 1s")
-        await surface.update("⏳ Working · 2s")
-    finally:
-        await adapter.stop()
-    assert len(fake_telegram.calls_for("sendRichMessageDraft")) == 1  # latched off after one
-    assert fake_telegram.calls_for("sendMessageDraft")[0]["text"] == "⏳ Working · 1s"
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a rate-limited send backs off and retries")

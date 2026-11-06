@@ -13,7 +13,6 @@ from typing import Any
 
 import pytest
 
-from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.telegram_features import Feature
 from coffer.infrastructure.channel.telegram_reactions import (
     ALLOWED_REACTIONS,
@@ -69,15 +68,6 @@ async def test_a_reaction_off_the_list_is_refused_before_any_call() -> None:
             {"chat_id": "1", "message_id": "2", "reaction": [{"type": "emoji", "emoji": "👌"}]},
         )
     ]
-
-
-async def test_the_group_status_message_is_sent_silently() -> None:
-    api = _Api()
-    live = TelegramLiveText(api, "-100")
-    await live.update("⏳ Bash · list the desktop")
-    method, params = api.calls[0]
-    assert method == "sendMessage"
-    assert params["disable_notification"] is True
 
 
 async def test_only_the_first_plain_chunk_notifies() -> None:

@@ -224,13 +224,10 @@ terminal, takes that session over as [chat](../chat/spec.md) "Take over a sessio
 ### Requirement: Render replies by the adapter's declared capabilities
 Replies MUST render per channel capability — each adapter converts the agent's
 markdown into its platform's own format and chunks to its own limit, as its
-child spec states. A transport with a live surface shows a turn's progress on
-ONE surface (see "Show a turn's progress on one live surface"), its lines
-describing each call from its input (e.g. `⏳ Bash · list the desktop`,
-`✅ Read · wedding.json`). Capabilities are declared by the adapter, not
+child spec states. A turn's progress is never rendered (see "Send only the
+answer, once the turn is done"). Capabilities are declared by the adapter, not
 special-cased in the core: a `ChannelCapabilities` record states what the
-adapter can do — a live-updating surface via `supports_live_text`, rewriting a
-delivered selection card via `supports_card_update`, interactive
+adapter can do — rewriting a delivered selection card via `supports_card_update`, interactive
 buttons via `supports_buttons`, a typing indicator — and the core picks
 rendering strategies from it. When the platform rejects a formatted message the
 channel retries the same content as plain text before reporting failure, and
@@ -266,12 +263,6 @@ been delivered.
 - **WHEN** delivered through telegram and through a channel without rich text
 - **THEN** telegram receives HTML (falling back to plain text if rejected)
   and the other channel receives its declared format
-
-#### Scenario: the status block names no tool and nothing from its input
-- **GIVEN** a paired channel on an adapter that can edit messages
-- **WHEN** the agent invokes a tool during a turn
-- **THEN** the status block counts the step and shows no line for it: neither
-  the tool's name nor anything from its input appears
 
 ### Requirement: Answer the conversation commands from any paired chat
 Ten words are Coffer's commands in a paired chat, and nothing else: `/new`,
@@ -1414,7 +1405,9 @@ starts, and one of **done** (a clean finish), **failed** (an error) or
 transport's declared `reactions` set, because a platform may accept only a fixed
 list — each child spec names its own. A reaction replaces the previous one, so
 the message shows where the turn is now. A transport without reactions uses its
-typing/working signal as the receipt-and-progress cue instead. All best-effort —
+typing signal as the receipt cue instead, and every transport with a typing
+signal keeps it up while the turn runs (see "Send only the answer, once the
+turn is done"). All best-effort —
 a failed mark never breaks the turn.
 
 #### Scenario: receipt and completion are acked with reactions where supported
@@ -1558,9 +1551,8 @@ pairing (see "Pair exactly one owner with a single-use code") is the gate.
 
 ### Requirement: Probe platform capabilities and latch off rejected ones
 Platform capability MUST be probed, never assumed. Each platform carries a
-family of surfaces built for exactly this shape of bot — a message that streams
-while an agent generates it, a stop control the platform draws itself,
-structured rich text, and a group reply only one member can see. Coffer uses
+family of surfaces built for exactly this shape of bot — structured rich text
+and a group reply only one member can see, for example. Coffer uses
 each one where the platform it reaches offers it, and keeps its own hand-built
 equivalent as the fallback beneath it, because the platform version a user
 reaches is not guaranteed to be new enough; every such capability is therefore
@@ -1606,39 +1598,6 @@ passes a table through as raw pipes. The existing renderer stays as the fallback
 - **THEN** the reply is delivered in the platform's rich format with that
   structure intact, and a platform that rejects it falls back to the plain
   renderer without losing the reply.
-
-### Requirement: Stream through the platform's own surface where the chat has one
-A live reply MUST use the platform's own streaming surface **where there is one
-for that chat**. Where the platform can stream a partial message while it is
-generated, the live-text handle (see "Show a turn's progress on one live
-surface") drives that instead of rewriting a delivered message: no status
-message to delete, no rewrite of an already-delivered message, and no edit-rate
-ceiling on how often progress may show. A streaming surface the platform offers
-only in some chats is used only there; everywhere else the transport keeps the
-mechanism it had, rather than spending a refused call per snapshot to show
-nothing. A snapshot past whatever the surface may carry is clipped to its tail —
-the newest words are the ones being watched — because a refused snapshot would
-kill the progress indicator mid-reply.
-
-#### Scenario: a chat without the platform streaming surface keeps its old live mechanism
-- **GIVEN** a platform whose streaming surface exists only for direct chats
-- **WHEN** one turn runs in a direct chat and another in a group
-- **THEN** the direct-chat turn's progress is streamed through the platform surface
-- **AND** the group turn's progress uses the transport's previous live mechanism and makes no streaming-surface call
-
-### Requirement: Stop the turn from the platform's own stop control
-The platform's own stop control MUST end the turn. Where a live surface
-advertises a stop control the platform draws, Coffer MUST route the press to the
-same interrupt path as `/stop` — same turn cancellation, same queue pause, same
-user-visible outcome. A stop control the user can see but that does not stop
-anything is worse than none, so the button is only advertised on a transport
-where the route is wired.
-
-#### Scenario: a stop pressed on the platform's own control ends the turn
-- **GIVEN** a running turn whose live surface advertises a stop control,
-- **WHEN** the platform reports that the user stopped the generation,
-- **THEN** the turn is interrupted and the pending queue is paused, exactly as
-  a typed `/stop` would.
 
 ### Requirement: Keep non-answer chatter private in a group
 Chatter that is not the answer MUST stay private in a group. Command output and
@@ -2559,112 +2518,38 @@ the name SHALL read "Owner · paired <date>".
 - **THEN** the person's row shows their initials beside their name
 - **AND** the line under the name reads "Owner · paired <date>"
 
-### Requirement: Show a turn's progress on one live surface
-A turn's progress MUST show on a live surface where the transport has one —
-chosen from the adapter's declared capabilities, never its type. The capability
-the core asks about is `supports_live_text` ("is there a surface I can keep
-updating while this turn runs?"), whether the transport gets there through a
-message draft or by editing one message (Telegram). The core asks for a
-live-text handle and never branches on the mechanism underneath, so no
-capability says "can rewrite a delivered text message".
+### Requirement: Send only the answer, once the turn is done
+Like a person replying, a channel MUST post nothing while a turn runs and send
+the answer as one new message when the turn is done. While the turn runs the
+chat shows only receipt: the reaction on the owner's message where the transport
+has reactions, and the typing indicator, kept alive on a heartbeat, where it has
+one (see "Acknowledge receipt and completion by capability"). There is no status
+message, no streamed preview and no draft: a running turn's steps, clock and
+partial answer are not shown anywhere in the chat. `/status` says whether a turn
+is running. All best-effort — a failed reaction or heartbeat never breaks the
+turn.
 
-A live surface is **scaffolding**, never the reply: when the turn ends it is
-closed (a draft expires, a status message is deleted) and the finished reply is
-sent as a new message. A reply created when the turn began would notify nobody
-when it ends, and a message that carries the turn's progress and then turns into
-the answer redraws itself on every step; the other IM-agent products show a
-running turn through typing or a status surface and keep their final message for
-the answer. A turn keeps at most ONE live surface, opened only once the turn has
-run past the update interval — either tool activity opens it or the reply text
-does — so a reply that finishes sooner opens none, avoiding a create → delete →
-resend flicker. A turn still thinking in silence opens it on the status line's
-first tick.
+The reply MUST carry only the answer: the text written after the last tool
+call. Text the agent writes before a tool call is narration ("Let me check the
+logs") and never reaches the reply. A turn that wrote nothing after its last
+tool call replies with the last text it did write, so an answer is never lost to
+a trailing tool call. An agent that marks its own messages as narration (Codex's
+`commentary` phase, carried as `MessageEnd.commentary`) has those messages left
+out of the reply wherever they stand, even after the last tool call; messages
+the agent wrote between two tool events join the reply as paragraphs. A turn
+that wrote nothing but narration replies with its last words. A turn whose agent
+wrote no text at all sends no reply: no placeholder line is posted.
 
-The cadence of updates belongs to the TRANSPORT, which alone knows its own
-limits: the core offers every snapshot and each surface buffers to what it can
-sustain. A throttle added by the core on top hides that buffer completely and
-makes progress arrive a paragraph at a time. Interim snapshots are plain text
-clipped to the platform's per-message limit, keeping their newest words, so a
-long or half-written-markdown preview never breaks a platform parser or exceeds
-the cap.
-
-A transport with no live surface (SeaTalk) posts no interim traffic: its typing
-indication is the progress (see "Acknowledge receipt and completion by
-capability") and its final reply is the whole signal. All best-effort — a
-failed update, close, or heartbeat never breaks the turn.
-
-#### Scenario: the streamed reply preview is clipped to the platform limit
-- **GIVEN** a paired channel on an adapter that can edit messages
-- **WHEN** the accumulating reply text grows past the platform's per-message limit
-- **THEN** each interim edit is clipped to that limit (keeping the most recent
-  text behind a leading ellipsis) so the edit never fails, while the final reply
-  carries the full text
-
-#### Scenario: a transport with no live-text surface posts no interim status message
-- **GIVEN** a paired channel on an adapter that can neither edit nor stream and
-  declares no typing signal either, in a group/thread
-- **WHEN** a turn runs
-- **THEN** no interim signal is posted at all — only the final chunked reply
-  lands in the originating group/thread
-
-#### Scenario: a live surface is never the reply
-- **GIVEN** a paired channel on an adapter with a live surface
-- **WHEN** a turn runs a tool and then answers
-- **THEN** the surface shows the progress and is closed when the turn ends, and
-  the answer arrives as a new message after it
-
-### Requirement: Show a turn's working state as one status line
-While a turn runs on a transport with a live surface (see "Show a turn's
-progress on one live surface"), that surface MUST show one status block the
-reader can take in at a glance: a header saying that the turn is working, for how long,
-and how many steps it has taken (`⏳ Working · 2m 14s · 7 steps`, with the
-failed count when there is one), and the agent's latest narration as a `💬`
-line. No line names a tool or carries anything from its input. The answer
-written so far follows under a rule. The header MUST keep ticking while nothing else
-happens — a long silent tool still shows time passing — on the cadence the live
-surfaces already keep alive at, so the tick costs no extra traffic.
-
-Text the agent writes before a tool call is narration ("Let me check the
-logs"): once the tool call arrives it moves up into the `💬` line and the answer
-tail shows only text written after the last tool call. The final reply, on every
-transport, MUST carry only the answer: the text written after the last tool
-call. A turn that wrote nothing after its last tool call replies with the last
-text it did write, so an answer is never lost to a trailing tool call.
-Narration never reaches the final message. An agent that marks its own messages
-as narration (Codex's `commentary` phase, carried as `MessageEnd.commentary`)
-has those messages moved into the `💬` line and left out of the reply wherever
-they stand, even after the last tool call; messages the agent wrote between two
-tool events join the reply as paragraphs. A turn that wrote nothing but
-narration replies with its last words.
-A turn whose agent wrote no text at all sends no reply: no placeholder line is
-posted, and the live surface is closed.
-
-A transport that must shorten a snapshot to its own limit clips the answer's
-oldest words and keeps the status block whole; only a limit too small for the
-block drops the narration, then the header.
-
-#### Scenario: a long turn shows elapsed time and step count in one status line
-- **GIVEN** a turn that has run for 2 minutes 14 seconds and called eight tools,
-  one of which failed
-- **WHEN** its status block is drawn
-- **THEN** the block reads `⏳ Working · 2m 14s · 8 steps (1 failed)` and holds no
-  step lines
+#### Scenario: a turn posts nothing until its reply
+- **GIVEN** a paired channel on a transport that can react, type and edit
+- **WHEN** a turn writes some text, runs a tool and then answers
+- **THEN** nothing is sent, edited or deleted while it runs, and the answer
+  arrives as one new message
 
 #### Scenario: a turn that wrote no text sends no reply
 - **GIVEN** a turn whose agent ended without writing any text
 - **WHEN** the turn finishes
-- **THEN** no reply message is sent and the live status is closed
-
-#### Scenario: narration between tool calls moves to the status line
-- **GIVEN** a turn whose agent writes a sentence and then calls a tool
-- **WHEN** the tool call arrives and the agent then writes its answer
-- **THEN** the sentence appears as the status block's `💬` line and the answer
-  alone grows under the rule
-
-#### Scenario: the status line keeps ticking during a silent tool
-- **GIVEN** a turn whose tool runs for minutes without producing an event
-- **WHEN** the live surface is next redrawn on its cadence
-- **THEN** the header shows the new elapsed time
+- **THEN** no reply message is sent
 
 #### Scenario: the final reply carries only the answer
 - **GIVEN** a turn whose agent wrote text, called a tool, wrote more text, called
@@ -2697,7 +2582,7 @@ only shouting. Five constraints bound it.
   arrives on a later update of the same message renders as a name and notifies
   nobody, which is the worst of both — the room sees an @ the mentioned person
   never got. The reply is always a new message sent when the turn ends (see
-  "Show a turn's progress on one live surface"), so it opens with the mention,
+  "Send only the answer, once the turn is done"), so it opens with the mention,
   exactly once.
 - The mention is built from the id the PLATFORM addresses a member by, which is
   not always the id the owner gate matches — so the transport carries both.
@@ -2709,8 +2594,6 @@ only shouting. Five constraints bound it.
   anything that could end the link text.
 - It degrades silently: no id and no usable fallback, or a transport that cannot
   mention at all, yields an ordinary unmentioned reply — never a broken tag.
-- A live surface carries no mention: it is scaffolding, deleted or expired
-  before the answer, and a mention there would only render as markup.
 
 #### Scenario: a group reply @mentions whoever asked
 - **GIVEN** an addressed message in a group from a member the transport named,
@@ -2721,13 +2604,6 @@ only shouting. Five constraints bound it.
 - **GIVEN** the same channel answering in a 1:1 chat,
 - **WHEN** the turn replies,
 - **THEN** the reply carries no mention — there is nobody to disambiguate.
-
-#### Scenario: a live surface carries no mention and the reply does
-- **GIVEN** a group turn on a transport with a live surface and a mention
-  spelling
-- **WHEN** the turn shows its progress and then replies
-- **THEN** no snapshot of the surface carries the mention, and the reply — a new
-  message — opens with it exactly once
 
 ### Requirement: Ground a thread turn in a bounded slice of the thread
 A thread turn MUST fold a bounded slice of its thread, never the whole thread,

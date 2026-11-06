@@ -62,20 +62,7 @@ A direct chat paired by an older Coffer, before pairings recorded who the owner 
 Send the bot a message. The first message opens a conversation on the channel's default agent, in the Coffer-managed workspace `~/.coffer/content/workspace`, and every later message continues it. You can move a chat to another agent, model or directory with [commands](#commands).
 
 - A reaction (Telegram) or a typing indicator (SeaTalk) says the message was received.
-- On SeaTalk the typing indicator is all you see while the agent works; the answer then arrives as one new message. See [SeaTalk → How replies look](/guides/channels-seatalk#how-replies-look).
-- On Telegram, one status line sits at the top of a live preview while the agent works, and its clock keeps moving even during a long silent tool:
-
-  ```
-  ⏳ Working · 2m 14s · 7 steps
-  💬 Checking the deploy logs
-  ─
-  The failure is the 3DS step: the sandbox answered after 30 s and…
-  ```
-
-  The `💬` line is what the agent last said before a tool call; the text it is writing now shows under the rule. The preview goes away when the turn ends and the reply is sent as a new message.
-
-  The preview counts steps but never lists them: no tool name and nothing from a tool's input is shown.
-
+- While the agent works you see only that reaction and the typing indicator; nothing is posted, edited or deleted. When the turn is done the answer arrives as one new message, like a person replying. To watch a turn as it runs, open its conversation in the web UI.
 - The reply is only what the agent wrote after its last tool call, on every platform; what it said between steps is not sent. Text the agent itself marks as passing commentary (Codex does) is left out too, wherever it stands. A turn that ends on a tool call replies with the last thing the agent wrote. A turn whose agent wrote no text sends no reply at all, not even a placeholder. In a chat the agent does not start background tasks; a sub-agent it runs in the foreground is waited for. If one still ends up in the background, the turn stays open until that sub-agent finishes and the agent writes its answer, up to four hours.
 - A turn that fails or is stopped ends with a one-line summary: the outcome, tool count, duration and tokens. A turn that succeeds sends no summary; the reply is the signal.
 
@@ -356,7 +343,7 @@ An agent that is tricked by a group member can still say something private. If y
 
 ## How it works
 
-The channel layer meets the agents only at the turn platform's seams — conversation creation and the turn event stream — so a new channel type is one adapter and touches no agent code, and a new agent is reachable from every channel with no channel change. Each adapter declares its capabilities (live text, edits, buttons, reactions, media), and the core chooses how to render a reply from those declarations, never from the platform's name. See [Chat and turns](/architecture/chat).
+The channel layer meets the agents only at the turn platform's seams — conversation creation and the turn event stream — so a new channel type is one adapter and touches no agent code, and a new agent is reachable from every channel with no channel change. Each adapter declares its capabilities (buttons, reactions, typing, media), and the core chooses how to render a reply from those declarations, never from the platform's name. See [Chat and turns](/architecture/chat).
 
 ## Related
 

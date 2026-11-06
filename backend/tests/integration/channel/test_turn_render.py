@@ -1,11 +1,9 @@
-"""TurnRenderer progress strategy is picked from capabilities, never the type.
+"""TurnRenderer: nothing is posted while a turn runs, then the reply is sent.
 
-supports_live_text → ONE surface the renderer keeps updating for the whole turn:
-Telegram's is a message it edits (deleted when the turn ends, the final reply
-sent after it); SeaTalk's is a stream that finishes as the reply itself. A
-transport with neither sends no interim traffic at all. Every turn that ends
-abnormally closes with a compact completion summary, capability-agnostic
-("Summarise a turn that did not end normally").
+Every transport is the same here (spec channels "Send only the answer, once the
+turn is done"). Every turn that ends abnormally closes with a compact
+completion summary, capability-agnostic ("Summarise a turn that did not end
+normally").
 """
 
 from __future__ import annotations
@@ -17,21 +15,9 @@ from typing import Any
 import pytest
 
 from coffer.application.channel.turn_render import TurnRenderer
-from coffer.application.channel.turn_status import LIVE_SEPARATOR
 from coffer.domain.chat.events import TextDelta, ToolCall, ToolResult, TurnDone, TurnError
 
 from .conftest import FakeChannelAdapter, wait_until
-
-_RULE = f"\n{LIVE_SEPARATOR}\n"
-
-
-def _answer(snapshot: str) -> str:
-    """The answer a live snapshot shows under its status block ("" when none)."""
-    return snapshot.split(_RULE, 1)[1] if _RULE in snapshot else ""
-
-
-def _is_status(snapshot: str) -> bool:
-    return snapshot.lstrip().startswith("⏳ Working")
 
 
 def _ticking(step: float = 2.0, start: float = 0.0) -> Callable[[], float]:
@@ -97,28 +83,8 @@ _TOOL_TURN = [
     spec="channels",
     scenario="a clean success sends no completion summary",
 )
-async def test_supports_edit_creates_then_deletes_a_progress_message() -> None:
-    adapter = FakeChannelAdapter(supports_edit=True)
-
-    await _render(adapter, _TOOL_TURN)
-
-    # The first send is the progress message created on ToolCall: the status
-    # header alone, with no step line…
-    assert adapter.sent[0] == ("owner", "⏳ Working · 0s · 1 step")
-    progress_id = "m1"  # ids are issued in send order
-    # …which is deleted when the turn finishes, before the final reply.
-    assert adapter.deleted == [("owner", progress_id)]
-    # A clean success ends with the reply itself — no trailing fact summary.
-    assert adapter.sent[-1] == ("owner", "found 3 cats")
-    assert not any(text.startswith("✅ done") for _, text in adapter.sent)
-
-
-@pytest.mark.acceptance(
-    spec="channels",
-    scenario="a clean success sends no completion summary",
-)
 async def test_without_edit_support_no_progress_traffic_is_sent() -> None:
-    adapter = FakeChannelAdapter(supports_edit=False)
+    adapter = FakeChannelAdapter()
 
     await _render(adapter, _TOOL_TURN)
 
@@ -131,7 +97,7 @@ async def test_without_edit_support_no_progress_traffic_is_sent() -> None:
 
 async def test_an_interrupt_ends_with_the_stopped_line() -> None:
     # The turn's real duration, in the short form — and no separate fact summary.
-    adapter = FakeChannelAdapter(supports_edit=False)
+    adapter = FakeChannelAdapter()
     events = [
         TextDelta(text="partial"),
         TurnDone(prompt_tokens=50, completion_tokens=30, stop_reason="interrupted"),
@@ -147,7 +113,7 @@ async def test_an_interrupt_ends_with_the_stopped_line() -> None:
     scenario="a turn that does not end normally sends a completion summary",
 )
 async def test_error_turn_ends_with_a_failed_summary() -> None:
-    adapter = FakeChannelAdapter(supports_edit=False)
+    adapter = FakeChannelAdapter()
     events = [TurnError(code="PROVIDER_TIMEOUT", message="upstream timed out")]
 
     await _render(adapter, events)
@@ -160,7 +126,7 @@ async def test_error_turn_still_delivers_what_was_streamed_before_it() -> None:
     # A turn that streamed half an answer and then died (stream_ended, a
     # timeout, a provider error) owes the user that half: it is delivered
     # first, the failure notice under it — the interrupted path's shape.
-    adapter = FakeChannelAdapter(supports_edit=False)
+    adapter = FakeChannelAdapter()
     events = [
         TextDelta(text="The answer is "),
         TextDelta(text="forty-two, because"),
@@ -179,37 +145,13 @@ async def test_error_turn_still_delivers_what_was_streamed_before_it() -> None:
 
 @pytest.mark.acceptance(
     spec="channels",
-    scenario="the status block names no tool and nothing from its input",
-)
-async def test_the_status_block_names_no_tool_and_nothing_from_its_input() -> None:
-    adapter = FakeChannelAdapter(supports_edit=True)
-    events = [
-        ToolCall(
-            tool_use_id="t1",
-            tool_name="Bash",
-            tool_input={"command": "cat ~/.ssh/id_rsa", "description": "list the desktop"},
-        ),
-        TextDelta(text="done"),
-        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
-    ]
-
-    await _render(adapter, events)
-
-    assert adapter.sent[0] == ("owner", "⏳ Working · 0s · 1 step")
-    shown = " ".join(text for _, text in adapter.sent)
-    shown += " ".join(text for _chat, _mid, text in adapter.edits)
-    assert "Bash" not in shown and "desktop" not in shown and "id_rsa" not in shown
-
-
-@pytest.mark.acceptance(
-    spec="channels",
     scenario="the agent sends a file to the user via a reply marker",
 )
 async def test_reply_file_sentinel_uploads_and_is_stripped(tmp_path) -> None:  # type: ignore[no-untyped-def]
     img = tmp_path / "invite.png"
     img.write_bytes(b"PNG-bytes")
     # A transport whose file messages carry a caption (Telegram).
-    adapter = FakeChannelAdapter(supports_edit=False, media_captions=True)
+    adapter = FakeChannelAdapter(media_captions=True)
     events = [
         # A MEDIA: sentinel line with an optional `| caption`.
         TextDelta(text=f"here you go\n\nMEDIA:{img} | the invitation"),
@@ -235,7 +177,7 @@ async def test_reply_names_its_files_and_they_follow_it(tmp_path) -> None:  # ty
     users.write_text("a,b\n")
     events_csv = tmp_path / "events.csv"
     events_csv.write_text("c,d\n")
-    adapter = FakeChannelAdapter(supports_edit=False)
+    adapter = FakeChannelAdapter()
     uploaded_after: list[int] = []
     upload = adapter.send_media
 
@@ -264,7 +206,7 @@ async def test_reply_names_its_files_and_they_follow_it(tmp_path) -> None:  # ty
 async def test_a_file_that_fails_to_upload_is_said(tmp_path) -> None:  # type: ignore[no-untyped-def]
     doc = tmp_path / "report.csv"
     doc.write_text("x\n")
-    adapter = FakeChannelAdapter(supports_edit=False)
+    adapter = FakeChannelAdapter()
 
     async def send_media(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise RuntimeError("upload refused")
@@ -284,7 +226,7 @@ async def test_reply_file_sentinel_without_caption_uses_filename(tmp_path) -> No
     # No `| caption`: the caption defaults to None (adapters fall back to the name).
     img = tmp_path / "invite.png"
     img.write_bytes(b"PNG-bytes")
-    adapter = FakeChannelAdapter(supports_edit=False)
+    adapter = FakeChannelAdapter()
     events = [
         TextDelta(text=f"here you go\n\nMEDIA:{img}"),
         TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
@@ -301,7 +243,7 @@ async def test_markdown_image_is_not_uploaded(tmp_path) -> None:  # type: ignore
     # to *reference* a real local file must NOT be uploaded — it stays as text.
     img = tmp_path / "diagram.png"
     img.write_bytes(b"PNG")
-    adapter = FakeChannelAdapter(supports_edit=False)
+    adapter = FakeChannelAdapter()
     events = [
         TextDelta(text=f"see the diagram ![diagram]({img}) above"),
         TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
@@ -316,7 +258,7 @@ async def test_markdown_image_is_not_uploaded(tmp_path) -> None:  # type: ignore
 async def test_bare_path_in_prose_is_not_uploaded(tmp_path) -> None:  # type: ignore[no-untyped-def]
     data = tmp_path / "wedding.json"
     data.write_text("{}")
-    adapter = FakeChannelAdapter(supports_edit=False)
+    adapter = FakeChannelAdapter()
     events = [
         # A plain mention, not the MEDIA: sentinel — must not upload.
         TextDelta(text=f"I edited {data} for you."),
@@ -330,7 +272,7 @@ async def test_bare_path_in_prose_is_not_uploaded(tmp_path) -> None:  # type: ig
 
 
 async def test_sentinel_for_a_missing_file_is_left_as_text() -> None:
-    adapter = FakeChannelAdapter(supports_edit=False)
+    adapter = FakeChannelAdapter()
     events = [
         TextDelta(text="MEDIA:/no/such/file.png"),
         TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
@@ -347,7 +289,7 @@ async def test_sentinel_on_a_non_media_channel_is_replaced_with_a_note(tmp_path)
     # sentinel is replaced with a plain note instead of being uploaded or left.
     img = tmp_path / "chart.png"
     img.write_bytes(b"PNG")
-    adapter = FakeChannelAdapter(supports_edit=False, supports_media=False)
+    adapter = FakeChannelAdapter(supports_media=False)
     events = [
         TextDelta(text=f"here it is\n\nMEDIA:{img} | the chart"),
         TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
@@ -367,7 +309,7 @@ async def test_sentinel_path_with_spaces_is_delivered(tmp_path) -> None:  # type
     d.mkdir()
     img = d / "chart.png"
     img.write_bytes(b"PNG")
-    adapter = FakeChannelAdapter(supports_edit=False)
+    adapter = FakeChannelAdapter()
     events = [
         TextDelta(text=f"MEDIA:{img} | chart"),
         TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
@@ -392,7 +334,7 @@ async def test_media_returned_in_a_group_thread_is_uploaded_into_that_thread(
     originating thread, not the group main chat."""
     img = tmp_path / "chart.png"
     img.write_bytes(b"PNG")
-    adapter = FakeChannelAdapter(supports_edit=False, supports_media=True)
+    adapter = FakeChannelAdapter(supports_media=True)
 
     async def send(text: str) -> None:
         await adapter.send_text("gid-1", text, thread_id="t1", chat_kind="group")
@@ -422,123 +364,7 @@ async def test_media_returned_in_a_group_thread_is_uploaded_into_that_thread(
 
 
 # ---------------------------------------------------------------------------
-# Streaming the reply into one editable status message (supports_edit) — see
-# "Show a turn's progress on one live surface"
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.acceptance(
-    spec="channels/telegram",
-    scenario="reply text streams into the editable status message as it arrives",
-)
-async def test_reply_text_streams_into_the_status_message() -> None:
-    adapter = FakeChannelAdapter(supports_edit=True)
-    events = [
-        ToolCall(tool_use_id="t1", tool_name="search", tool_input={"q": "cats"}),
-        TextDelta(text="I found "),
-        TextDelta(text="three "),
-        TextDelta(text="cats."),
-        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
-    ]
-
-    # A ticking clock (step > the 1.5s throttle) makes each render pass the throttle.
-    await _render(adapter, events, now=_ticking())
-
-    # Before any text, the status message shows the status header alone…
-    assert _is_status(adapter.sent[0][1])
-    assert adapter.sent[0][1].endswith("1 step")
-    # …then the SAME single message is edited with the growing reply text (plain,
-    # not HTML) under the status block, so the user watches the answer materialize.
-    answers = [_answer(text) for _chat, mid, text in adapter.edits if mid == "m1"]
-    assert "I found" in answers
-    assert answers[-1] == "I found three cats."
-    # Finish still deletes the status message and sends the final reply once.
-    assert adapter.deleted == [("owner", "m1")]
-    assert adapter.sent[-1] == ("owner", "I found three cats.")
-
-
-@pytest.mark.acceptance(
-    spec="channels",
-    scenario="the streamed reply preview is clipped to the platform limit",
-)
-async def test_streamed_preview_is_clipped_to_the_platform_limit() -> None:
-    # A tiny per-message limit forces clipping of the interim preview.
-    adapter = FakeChannelAdapter(supports_edit=True, max_message_chars=10)
-    body = "0123456789ABCDEFGHIJ"  # 20 chars, twice the limit
-    events = [
-        # A tool call opens the status message the reply text then streams into.
-        ToolCall(tool_use_id="t1", tool_name="search", tool_input={"q": "cats"}),
-        TextDelta(text="start"),
-        TextDelta(text=body),
-        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
-    ]
-
-    await _render(adapter, events, now=_ticking())
-
-    # Every interim text edit fits the platform limit and, when clipped, keeps the
-    # TAIL behind a leading ellipsis so the newest text shows.
-    assert adapter.edits, "expected at least one interim status edit"
-    for _chat, _mid, text in adapter.edits:
-        assert len(text) <= 10
-    clipped = adapter.edits[-1][2]
-    assert clipped == "…BCDEFGHIJ"  # ellipsis + the final 9 chars of the accumulated text
-    # The final reply (sent via _finish) is the FULL text, not the clipped preview.
-    assert adapter.sent[-1] == ("owner", "start" + body)
-
-
-@pytest.mark.acceptance(
-    spec="channels/telegram",
-    scenario="a slow text-only reply streams into a status message",
-)
-async def test_slow_text_only_reply_opens_and_streams_a_status_message() -> None:
-    # No tool call — a pure explanatory reply. The status message is opened only
-    # because the reply runs PAST the throttle interval (the ticking clock, step
-    # 2.0 > 1.5s, makes it "slow"), then the growing text streams into it.
-    adapter = FakeChannelAdapter(supports_edit=True)
-    events = [
-        TextDelta(text="First, "),
-        TextDelta(text="second, "),
-        TextDelta(text="third."),
-        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
-    ]
-
-    await _render(adapter, events, now=_ticking())
-
-    # The status message is opened with the streaming reply text (no tool line)…
-    assert _is_status(adapter.sent[0][1])
-    assert _answer(adapter.sent[0][1]) == "First,"
-    # …then edited in place as the answer grows…
-    assert _answer(adapter.edits[-1][2]) == "First, second, third."
-    # …and on finish it is deleted and the final reply is sent once.
-    assert adapter.deleted == [("owner", "m1")]
-    assert adapter.sent[-1] == ("owner", "First, second, third.")
-
-
-@pytest.mark.acceptance(
-    spec="channels/telegram",
-    scenario="a fast text-only reply opens no status message",
-)
-async def test_fast_text_only_reply_opens_no_status_message() -> None:
-    # A quick reply whose deltas all land within the throttle window (the default
-    # constant clock never advances past 0) opens NO placeholder — no
-    # create → delete → resend flicker; texts() is exactly the one final reply.
-    adapter = FakeChannelAdapter(supports_edit=True)
-    events = [
-        TextDelta(text="hi "),
-        TextDelta(text="there"),
-        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
-    ]
-
-    await _render(adapter, events)  # default now=_clock(0.0): elapsed stays 0 < 1.5
-
-    assert adapter.sent == [("owner", "hi there")]
-    assert adapter.edits == []
-    assert adapter.deleted == []
-
-
-# ---------------------------------------------------------------------------
-# Typing heartbeat on a supports_typing-only transport (SeaTalk) — see "Grow a
-# reply in place on one live surface"
+# The typing heartbeat — see "Send only the answer, once the turn is done"
 # ---------------------------------------------------------------------------
 
 
@@ -548,7 +374,7 @@ async def test_fast_text_only_reply_opens_no_status_message() -> None:
 )
 async def test_typing_heartbeat_re_sends_on_a_supports_typing_only_dm() -> None:
     # SeaTalk-shaped: can type, cannot edit; a DM.
-    adapter = FakeChannelAdapter(supports_edit=False, supports_typing=True)
+    adapter = FakeChannelAdapter(supports_typing=True)
     queue: asyncio.Queue[Any] = asyncio.Queue()
 
     async def send(text: str) -> None:
@@ -587,8 +413,6 @@ async def test_typing_heartbeat_re_sends_in_a_group_thread_when_group_typing_is_
     this is the ONLY acknowledgement between the @mention and the first live
     update, and it must land in the thread the turn came from."""
     adapter = FakeChannelAdapter(
-        supports_edit=False,
-        supports_live_text=False,
         supports_typing=True,
     )
     queue: asyncio.Queue[Any] = asyncio.Queue()
@@ -658,108 +482,13 @@ async def test_no_typing_heartbeat_on_a_transport_that_reacts() -> None:
     assert adapter.typing == []
 
 
-@pytest.mark.acceptance(
-    spec="channels",
-    scenario="a transport with no live-text surface posts no interim status message",
-)
-async def test_no_interim_signal_without_a_live_text_surface_in_a_group() -> None:
-    # A transport that can neither edit nor stream, in a group whose typing
-    # endpoint it does not hold either: NO interim signal at all, only the
-    # final chunked reply. (SeaTalk left this shape behind — it streams now.)
-    adapter = FakeChannelAdapter(
-        supports_edit=False,
-        supports_live_text=False,
-        supports_typing=True,
-    )
-    queue: asyncio.Queue[Any] = asyncio.Queue()
-
-    async def send(text: str) -> None:
-        await adapter.send_text("gid-1", text, thread_id="t1", chat_kind="group")
-
-    renderer = TurnRenderer(
-        channel="st",
-        adapter=adapter,
-        chat_id="gid-1",
-        conversation_id="c1",
-        send=send,
-        now=_clock(0.0),
-        thread_id="t1",
-        chat_kind="group",
-        heartbeat_seconds=0.01,
-    )
-    for event in [
-        ToolCall(tool_use_id="t1", tool_name="search", tool_input={"q": "cats"}),
-        TextDelta(text="found 3 cats"),
-        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
-    ]:
-        queue.put_nowait(event)
-    queue.put_nowait(None)
-    await renderer.consume(queue)
-
-    # No heartbeat (group), no live surface, no edits/deletes — just the single
-    # final reply into the originating group/thread.
-    assert adapter.typing == []
-    assert adapter.edits == []
-    assert adapter.deleted == []
-    assert adapter.sent == [("gid-1", "found 3 cats")]
-
-
-# ---------------------------------------------------------------------------
-# A live surface is scaffolding — see "Show a turn's progress on one live surface"
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.acceptance(spec="channels", scenario="a live surface is never the reply")
-async def test_the_live_surface_is_closed_and_the_reply_is_a_new_message() -> None:
-    adapter = FakeChannelAdapter(supports_edit=True)
-
-    await _render(adapter, _TOOL_TURN, now=_ticking())
-
-    [live] = adapter.live_handles
-    assert live.closed
-    # The surface's message was deleted, and the answer went out after it as a
-    # message of its own — the one that notifies.
-    assert adapter.deleted == [("owner", live.message_id)]
-    assert adapter.texts()[-1] == "found 3 cats"
-    assert len(adapter.texts()) == 2  # the scaffolding, then the reply
-
-
-async def test_a_transport_that_refuses_a_live_surface_is_asked_once_and_degrades() -> None:
-    # open_live_text may answer None (nothing available right now). The turn then
-    # behaves exactly as a transport without the capability: no interim traffic,
-    # one final reply — and the transport is not re-asked on every event.
-    adapter = FakeChannelAdapter(supports_edit=False, supports_live_text=True)
-    adapter.live_text_unavailable = True
-
-    await _render(adapter, _TOOL_TURN, now=_ticking())
-
-    assert adapter.live_handles == []
-    assert adapter.sent == [("owner", "found 3 cats")]
-    assert adapter.edits == [] and adapter.deleted == []
-
-
-async def test_a_scaffolding_surface_is_not_opened_before_there_is_something_to_show() -> None:
-    """Telegram's live surface is a status message the renderer DELETES before
-    sending the real reply. Opening it to acknowledge would post something only
-    to take it away again, so no acknowledgement is offered there — its 👀
-    receipt reaction already says the message was heard."""
-    adapter = FakeChannelAdapter(supports_edit=True)
-
-    # A clock that never advances: the reply lands well inside the window below
-    # which a scaffolding surface is not worth opening.
-    await _render(adapter, [TextDelta(text="quick")])
-
-    assert adapter.live_handles == []  # nothing opened for a reply this fast
-    assert adapter.sent == [("owner", "quick")]
-
-
 async def test_an_upload_says_what_it_is_uploading(tmp_path) -> None:  # type: ignore[no-untyped-def]
     # Claiming to type while a file goes up is the wrong busy signal.
     img = tmp_path / "chart.png"
     img.write_bytes(b"PNG-bytes")
     doc = tmp_path / "report.pdf"
     doc.write_bytes(b"%PDF-1.4")
-    adapter = FakeChannelAdapter(supports_edit=False)
+    adapter = FakeChannelAdapter()
 
     await _render(
         adapter,
@@ -833,31 +562,11 @@ async def _group_reply(
 
 @pytest.mark.acceptance(
     spec="channels",
-    scenario="a group reply @mentions whoever asked",
-)
-async def test_a_group_reply_opens_with_a_mention_of_the_asker() -> None:
-    # No live surface here (supports_live_text off): the ordinary group send is
-    # the whole reply, and it is the other place a mention may appear.
-    adapter = FakeChannelAdapter(
-        supports_edit=False,
-        supports_live_text=False,
-        mention_template=_MENTION,
-    )
-
-    await _group_reply(adapter, mention_user_id="st-77")
-
-    assert adapter.texts() == ['<mention-tag target="seatalk://user?id=st-77"/> the answer']
-
-
-@pytest.mark.acceptance(
-    spec="channels",
     scenario="a direct reply carries no mention",
 )
 async def test_a_dm_reply_never_mentions_the_sender() -> None:
     """A 1:1 chat has nobody to disambiguate — an @ there is only shouting."""
     adapter = FakeChannelAdapter(
-        supports_edit=False,
-        supports_live_text=False,
         mention_template=_MENTION,
     )
 
@@ -871,46 +580,15 @@ async def test_a_sender_with_no_mention_id_gets_a_clean_reply() -> None:
     transport that cannot mention declares no template. Either way the reply is
     the reply — never a half-built tag, never a failure."""
     mentionable = FakeChannelAdapter(
-        supports_edit=False,
-        supports_live_text=False,
         mention_template=_MENTION,
     )
     await _group_reply(mentionable, mention_user_id="")
     assert mentionable.texts() == ["the answer"]
 
     # And the mirror case: an id, but a transport with no mention spelling.
-    speechless = FakeChannelAdapter(supports_edit=False, supports_live_text=False)
+    speechless = FakeChannelAdapter()
     await _group_reply(speechless, mention_user_id="st-77")
     assert speechless.texts() == ["the answer"]
-
-
-@pytest.mark.acceptance(
-    spec="channels", scenario="a live surface carries no mention and the reply does"
-)
-async def test_a_scaffolding_surface_carries_no_mention_and_the_reply_one() -> None:
-    """A platform decides @ notifications when a message is created, and the
-    reply is always a new message, so it carries the mention. The live surface
-    is scaffolding deleted before the answer is sent, so its snapshots stay
-    plain — a mention there would only render as raw markup."""
-    adapter = FakeChannelAdapter(supports_edit=True, mention_template=_MENTION)
-
-    await _group_reply(
-        adapter,
-        mention_user_id="st-77",
-        events=[
-            ToolCall(tool_use_id="t1", tool_name="Bash", tool_input={"command": "ls"}),
-            ToolResult(tool_use_id="t1", tool_name="Bash", output={"out": "a b"}, error=None),
-            TextDelta(text="done looking."),
-            TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
-        ],
-    )
-
-    [live] = adapter.live_handles
-    assert live.snapshots  # the lazy open really happened
-    assert all(s.count("mention-tag") == 0 for s in live.snapshots)
-    assert live.final.count("mention-tag") == 1
-    assert adapter.texts()[-1].startswith('<mention-tag target="seatalk://user?id=st-77"/> ')
-    assert adapter.texts()[-1].count("mention-tag") == 1
 
 
 @pytest.mark.acceptance(
@@ -922,8 +600,6 @@ async def test_a_sender_with_no_id_is_mentioned_by_email_where_the_platform_allo
     one always present on the inbound event — and the address is the fallback for
     the case the id is missing, not a second mention."""
     adapter = FakeChannelAdapter(
-        supports_edit=False,
-        supports_live_text=False,
         mention_template=_MENTION,
         mention_email_template=_MENTION_BY_EMAIL,
     )
@@ -937,8 +613,6 @@ async def test_a_sender_with_no_id_is_mentioned_by_email_where_the_platform_allo
 
 async def test_the_id_wins_when_both_an_id_and_an_address_are_known() -> None:
     adapter = FakeChannelAdapter(
-        supports_edit=False,
-        supports_live_text=False,
         mention_template=_MENTION,
         mention_email_template=_MENTION_BY_EMAIL,
     )
@@ -976,3 +650,38 @@ def test_an_address_is_held_to_the_same_bar_as_an_id() -> None:
     assert by_email("not-an-address") == ""
     assert by_email("two@at@example.com") == ""
     assert by_email("") == ""
+
+
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="a group reply @mentions whoever asked",
+)
+async def test_a_group_reply_opens_with_a_mention_of_the_asker() -> None:
+    adapter = FakeChannelAdapter(mention_template=_MENTION)
+
+    await _group_reply(adapter, mention_user_id="st-77")
+
+    assert adapter.texts() == ['<mention-tag target="seatalk://user?id=st-77"/> the answer']
+
+
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="a turn posts nothing until its reply",
+)
+async def test_a_turn_posts_nothing_until_its_reply() -> None:
+    # A Telegram-shaped transport: reactions, edits, typing. While the turn runs
+    # nothing is sent, edited or deleted; the reply is one new message.
+    adapter = FakeChannelAdapter(supports_reactions=True, edits_text=True)
+    events = [
+        TextDelta(text="Let me look."),
+        ToolCall(tool_use_id="t1", tool_name="Bash", tool_input={"command": "ls"}),
+        ToolResult(tool_use_id="t1", tool_name="Bash", output="", error=None),
+        TextDelta(text="Found 3 cats."),
+        TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="end_turn"),
+    ]
+
+    await _render(adapter, events)
+
+    assert adapter.texts() == ["Found 3 cats."]
+    assert adapter.edits == []
+    assert adapter.deleted == []

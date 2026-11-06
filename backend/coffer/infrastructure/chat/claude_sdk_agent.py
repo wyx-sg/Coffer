@@ -190,8 +190,8 @@ class ClaudeSdkAgentAdapter:
             permission_mode="bypassPermissions",
             model=self._extra.get("model"),
             # Without this the SDK only yields whole ``AssistantMessage``s, so the
-            # entire reply arrives as one delta at the end of the turn and a chat
-            # channel's live surface has nothing to grow. With it the reply's text
+            # entire reply arrives as one delta at the end of the turn and the chat
+            # page's streamed reply has nothing to grow. With it the reply's text
             # increments stream as they are written; ``claude_sdk_mapping`` folds
             # them and the final message into one non-duplicating sequence.
             # It reaches the CLI as ``--include-partial-messages``, which the CLI

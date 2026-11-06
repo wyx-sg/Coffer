@@ -13,7 +13,6 @@ import pytest
 
 from coffer.application.channel.turn_driver import DROPPED_NOTICE
 from coffer.application.chat.turn_orchestrator import active_turns
-from coffer.domain.channel.envelopes import InboundStop
 from coffer.domain.chat.events import (
     AgentEvent,
     TextDelta,
@@ -21,7 +20,7 @@ from coffer.domain.chat.events import (
     TurnStarted,
 )
 
-from .conftest import ChannelEnv, FakeChannelAdapter, inbound, turn_body, uid_of, wait_until
+from .conftest import ChannelEnv, FakeChannelAdapter, inbound, turn_body, wait_until
 
 
 class GatedAdapter:
@@ -303,66 +302,6 @@ async def test_stop_holds_the_queued_messages_until_the_next_message(env: Channe
     await env.send(inbound("tg", "owner", "C"))
     await wait_until(lambda: "echo:C" in adapter.texts())
     assert gated.runs == ["A", "B", "C"]
-
-
-# -- the platform's own stop control ------------------------------------------
-
-
-@pytest.mark.acceptance(
-    spec="channels", scenario="a stop pressed on the platform's own control ends the turn"
-)
-async def test_platform_stop_control_interrupts_like_a_typed_stop(env: ChannelEnv) -> None:
-    gated = GatedAdapter()
-    env.provider.adapter = gated
-    resource, adapter = await env.paired_channel()
-
-    await env.processor.on_message(inbound("tg", "owner", "long job"))
-    await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
-    conversation_id = await env.active_conversation(resource)
-    assert conversation_id is not None
-    assert conversation_id in active_turns()
-    await env.send(inbound("tg", "owner", "queued behind it"))
-
-    # The user presses the button Telegram drew on the streamed draft.
-    await env.processor.on_stop(InboundStop(channel=uid_of("tg"), chat_id="owner"))
-
-    assert "⏹ Stopping “long job”…" in adapter.texts()
-    await wait_until(lambda: any(t.startswith("⏹ Stopped") for t in adapter.texts()))
-    await wait_until(lambda: conversation_id not in active_turns())
-    assert not any(t.startswith("echo:") for t in adapter.texts())
-    # Like a typed /stop it pauses the queue: the waiting message is held, not run.
-    await asyncio.sleep(0.05)
-    assert [turn_body(t) for t in env.orchestrator.pending(conversation_id)] == ["queued behind it"]
-    assert gated.runs == ["long job"]
-
-
-async def test_platform_stop_with_nothing_running_is_silent(env: ChannelEnv) -> None:
-    _resource, adapter = await env.paired_channel()
-    before = list(adapter.texts())
-
-    await env.processor.on_stop(InboundStop(channel=uid_of("tg"), chat_id="owner"))
-
-    assert adapter.texts() == before
-
-
-async def test_platform_stop_from_an_unpaired_chat_is_ignored(env: ChannelEnv) -> None:
-    # Answering would confirm to a stranger that this channel exists.
-    _resource, adapter = await env.paired_channel(chat_id="owner")
-
-    await env.processor.on_stop(InboundStop(channel=uid_of("tg"), chat_id="stranger"))
-
-    assert adapter.sent == []
-
-
-async def test_platform_stop_in_a_thread_with_nothing_running_is_silent(env: ChannelEnv) -> None:
-    _resource, adapter = await env.paired_channel(chat_id="-100group")
-    before = list(adapter.sent_routed)
-
-    await env.processor.on_stop(
-        InboundStop(channel=uid_of("tg"), chat_id="-100group", thread_id="8", chat_kind="group")
-    )
-
-    assert adapter.sent_routed == before
 
 
 async def test_status_while_a_turn_runs_counts_the_waiting_and_offers_stop(

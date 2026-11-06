@@ -389,8 +389,6 @@ async def test_the_group_reply_mentions_the_sender_the_transport_named(env: Chan
     adapter = env.bind(
         resource,
         FakeChannelAdapter(
-            supports_edit=False,
-            supports_live_text=False,
             mention_template='<mention-tag target="seatalk://user?id={user_id}"/>',
         ),
     )

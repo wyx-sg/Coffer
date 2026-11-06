@@ -4,7 +4,7 @@
 **Date**: 2026-09-24
 **Deciders**: Yuxing Wu
 **Related**: spec channels ("Run the channel lifecycle through the resource framework", "Render replies by the adapter's declared capabilities", "Route the owner's messages into a turn-platform conversation", "Drive every managed agent from one bot"); [Channels Are Machine-Local Resources, Like Agents](channels-are-machine-local-resources.md),
-[Channel Owner Gate](channel-owner-gate.md), [Channel Live Surface Strategy](channel-live-surface-strategy.md),
+[Channel Owner Gate](channel-owner-gate.md), [A Channel Turn Posts Nothing Until It Is Done](channel-live-surface-strategy.md),
 [SeaTalk Inbound Over WebSocket](seatalk-websocket-inbound.md), [Telegram Long Polling](telegram-long-polling.md),
 [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), [Resource Framework Designed Upfront](resource-framework-upfront.md),
 [Per-Agent Resource Scope](per-agent-resource-scope.md);
@@ -54,11 +54,10 @@ The forces:
   audit and secret-reference machinery; secrets live in the secret store
   and config carries refs, probed at registration. A channel is
   machine-local like an agent ([Channels Are Machine-Local Resources, Like Agents](channels-are-machine-local-resources.md)).
-- **An adapter is transport only**: start/stop, outbound send/edit/stream,
+- **An adapter is transport only**: start/stop, outbound send and card update,
   normalising inbound platform payloads into the envelopes in
   `domain/channel/envelopes.py` (`InboundMessage`, `InboundCallback`,
   `InboundLifecycle`), and a `ChannelCapabilities` declaration —
-  `supports_live_text`,
   `supports_typing`, `supports_reactions`, `supports_buttons`,
   `supports_card_update`, `supports_media`,
   `supports_history_fetch`, `max_message_chars`, mention templates.
@@ -111,8 +110,9 @@ of an enable or a rebind.
 
 Wins because it holds N + M with the smallest process surface, and the
 capability split has already paid for itself: when SeaTalk dropped its live
-surface for typing alone, only its adapter changed (`supports_live_text` became
-false) while the renderer stayed identical.
+surface for typing alone, only its adapter changed while the renderer stayed
+identical (that live-surface capability was later removed for every transport,
+see [A Channel Turn Posts Nothing Until It Is Done](channel-live-surface-strategy.md)).
 
 ### Option B — Adopt platform SDKs or bot frameworks (python-telegram-bot, aiogram, a SeaTalk SDK for everything)
 

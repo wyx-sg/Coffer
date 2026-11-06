@@ -57,8 +57,8 @@ The code is single-use, expires after an hour, and is invalidated after 10 wrong
 Send the bot a message, for example `list the files in my home directory`. You should see:
 
 1. a 👀 reaction on your message as soon as Coffer receives it, which becomes 👨‍💻 when the turn starts;
-2. for a longer turn, the status line (`⏳ Working · 12s · 2 steps`, then what the agent last said it was doing) and the reply as it is written;
-3. the final reply, formatted, with the status removed;
+2. "typing…" at the top of the chat while the agent works; nothing is posted until it is done;
+3. the final reply, formatted, as one new message;
 4. a 👌 reaction on your message when the turn finished — 😢 if it failed, 🤷 if it was stopped. Telegram lets a bot react with a fixed list of emoji only, and these are on it.
 
 Open **Conversations** in the web UI and the same conversation is there, its channel reading `Telegram · DM` (hover it for the channel's name).
@@ -69,14 +69,13 @@ Telegram replies are built from the agent's Markdown.
 
 - **Rich messages** — where the Bot API server Coffer reaches supports them, a reply with headings, lists, tables or code is sent as a rich message that keeps that structure.
 - **HTML fallback** — otherwise the reply is converted to Telegram's HTML subset and split into messages of at most 4,000 characters on paragraph boundaries. A chunk Telegram refuses as HTML is re-sent as plain text.
-- **Live progress** — in a direct chat, where the server supports message drafts, the reply streams into a draft that also shows Telegram's own stop button; pressing it is the same as `/stop`. Where the server supports rich drafts, the status header sits in the draft's collapsible thinking block. In a group, a status message appears once a turn has run for more than about 1.5 seconds, is edited as the turn progresses, and is deleted when the final reply is sent; it is sent silently, so it does not buzz the group. A quick reply opens no status message at all.
 - **Mentions** — in a group, every answer is a reply to your message and opens with a real mention of you, so it notifies you even in a busy group.
-- **Withdrawing** — every reply in a group carries an inline 🗑 button, and the owner can also quote a reply and send `/del`. Either deletes the whole reply, however many messages it was split into. Telegram lets a bot delete a message for 48 hours; past that the owner is told privately it can no longer be deleted. Coffer deletes the `/del` message too when the bot has the right to delete messages in that chat; give it that right if you want the chat kept tidy. Only the owner's tap counts. Group replies still stream as described above. See [Withdrawing a reply](/guides/channels#withdrawing-a-reply).
+- **Withdrawing** — every reply in a group carries an inline 🗑 button, and the owner can also quote a reply and send `/del`. Either deletes the whole reply, however many messages it was split into. Telegram lets a bot delete a message for 48 hours; past that the owner is told privately it can no longer be deleted. Coffer deletes the `/del` message too when the bot has the right to delete messages in that chat; give it that right if you want the chat kept tidy. Only the owner's tap counts. See [Withdrawing a reply](/guides/channels#withdrawing-a-reply).
 - **Details** — a `## Details` section is collapsed: a `<details>` block in a rich message, an expandable quotation on the HTML fallback.
 - **Private command answers** — in a group, where the server supports ephemeral messages, the answer to `/help`, and the one-line notice that a private-chat command was sent in a group, are shown only to you.
 - **Cards** — in a private chat a bare `/model`, `/dir` or `/resume` answers with an inline keyboard, and `/status` carries **Model** and **Dir** buttons (with **Stop** first while a turn runs, and **Continue** and **Discard** while messages are on hold after `/stop`). `/help` is plain text with no buttons; the commands in it can be tapped. After `/stop` the edited “Stopped” message carries **Continue** and **Discard** when messages are on hold. `/new` carries **Agent**, **Model** and **Dir** in a private chat and only **Agent** in a group. The card's title is a heading or a bold first line.
 
-Coffer probes each newer Bot API surface (rich messages, drafts, rich drafts, ephemeral messages) once. If the server refuses it as unsupported, Coffer stops trying it for the life of the daemon and uses the older mechanism, so an older server costs formatting and liveness, never delivery.
+Coffer probes each newer Bot API surface (rich messages, ephemeral messages) once. If the server refuses it as unsupported, Coffer stops trying it for the life of the daemon and uses the older mechanism, so an older server costs formatting, never delivery.
 
 ## Command menus
 
