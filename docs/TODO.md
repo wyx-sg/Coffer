@@ -29,32 +29,24 @@ threads appending at once rarely conflict:
 
 ## MCP servers and custom tools
 
-### Limit MCP servers to a project
+### Refresh custom-tool tokens with OAuth2 client credentials
 
 - **Added:** 2026-11-06, from the thread "梳理 MCP 和自定义工具还缺什么"
-- **What:** a server or custom tool group shows up only in the projects that need
-  it (for example a production database only in the billing repo), the way a
-  server configured in Claude Code's project `.mcp.json` or a project
-  `.codex/config.toml` does today.
-- **Why later:** once servers move into Coffer they lose the agents' native
-  project scoping, since every agent reaches Coffer through one global `coffer`
-  entry, so Coffer is a step back from configuring the agent directly. Nobody
-  needs it yet.
-- **Sketch:** named **profiles** (a set of servers and custom tool groups). The
-  `coffer` entry takes a profile argument (`--profile billing`) and the gateway
-  lists only that profile's servers, intersected with the agent's existing reach
-  (a profile only narrows). Coffer writes a profile's entry into a project's
-  `.mcp.json` / `.codex/config.toml` on request ("use in a project"), so the
-  agent's own project mechanism decides which entry applies and Coffer never
-  matches paths. UI: profiles on the MCP servers page, "use in a project" and
-  "used in these projects" on a profile, "in profiles" on a server's Overview,
-  per-project `coffer` entries on the agent's MCP servers tab. Comparable
-  products all use one endpoint per subset: 1MCP (tags in the URL), MetaMCP
-  (namespace endpoints), IBM ContextForge (virtual servers), Docker MCP Gateway
-  (profiles), mcpm (profiles written into each client), see
-  [MCP gateways research](research/mcp-gateways.md). Alternative to weigh in the
-  ADR: the gateway infers the project from MCP `roots`. That needs no project
-  files but needs path rules per server, and Codex's roots support is unverified.
+- **What:** a custom-tool group whose API gives out a client id and client secret
+  instead of a long-lived token: Coffer exchanges them at the token endpoint for a
+  short-lived access token, caches it, refreshes it before it expires and sends it
+  on each request (Microsoft Graph app-only access, Salesforce, many company API
+  gateways).
+- **Why later:** only Coffer can do it, because the agent never holds the client
+  secret; with a fixed token such an API stops working within an hour or two. No
+  current API needs it: SeaTalk exchanges an app id and secret too, but in its own
+  format, which standard client credentials would not cover.
+- **Sketch:** the client id and secret are stored secrets cited by the
+  environment (the secret picker offers "pick existing / create new"); the access
+  token is a machine-local secret that never syncs and that no agent sees. The
+  token request is `application/x-www-form-urlencoded`, so it lands together with
+  form request bodies. Needs an ADR on where the token lives and how a refresh
+  failure is reported.
 
 ### Upload files from custom tools
 
