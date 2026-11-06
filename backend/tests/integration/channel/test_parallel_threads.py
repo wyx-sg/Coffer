@@ -123,7 +123,7 @@ async def test_status_inside_a_parallel_thread_names_its_mark(env: ChannelEnv) -
 
     # The direct chat's own /status carries no mark.
     await env.processor.on_message(inbound("tg", "owner", "/status"))
-    assert adapter.texts()[-1].startswith("Status\nNo conversation yet\n")
+    assert adapter.texts()[-1].startswith("Status\nCoffer Assistant")
 
 
 @pytest.mark.acceptance(

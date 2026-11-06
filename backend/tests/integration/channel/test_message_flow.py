@@ -116,7 +116,6 @@ async def test_status_reports_conversation_agent_and_queue(env: ChannelEnv) -> N
     status = adapter.texts()[0]
     assert status.splitlines() == [
         "Status",
-        "No conversation yet",
         "Coffer Assistant · Default model · Default directory",
         "Idle",
     ]

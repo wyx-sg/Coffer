@@ -196,7 +196,7 @@ async def test_a_refused_status_card_falls_back_to_the_text_reply(env: ChannelEn
 
     assert adapter.cards == []
     [text] = adapter.texts()
-    assert text.startswith("Status\nNo conversation yet\nCoffer Assistant · Default model")
+    assert text.startswith("Status\nCoffer Assistant · Default model")
 
 
 async def test_model_card_tap_sets_next_turn_model(env: ChannelEnv) -> None:

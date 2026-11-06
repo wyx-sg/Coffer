@@ -380,6 +380,6 @@ async def test_status_while_a_turn_runs_counts_the_waiting_and_offers_stop(
     await env.processor.on_message(inbound("tg", "owner", "/status"))
 
     _chat, text, buttons = adapter.cards[-1]
-    assert text.splitlines()[2] == "Running · 1 waiting"
+    assert text.splitlines()[1] == "Running · 1 waiting"
     assert [b.label for b in buttons] == ["Stop", "Model", "Dir"]
     gated.release.set()

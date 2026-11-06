@@ -2178,8 +2178,8 @@ always an ordinary message the whole room would see.
 - **GIVEN** a paired chat on a button-capable transport with an active
   conversation
 - **WHEN** the owner sends `/status`
-- **THEN** a card titled "Status" names the conversation, the agent by display name, the model
-  and the directory, carries the Model and Dir buttons —
+- **THEN** a card titled "Status" names the agent by display name, the model
+  and the directory, shows no conversation title, carries the Model and Dir buttons —
   and Stop first while a turn runs — and contains no conversation id
 
 ### Requirement: List the commands with /help
