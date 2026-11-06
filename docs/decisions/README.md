@@ -171,6 +171,7 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`tool-overload-tier-the-list-search-the-rest`](tool-overload-tier-the-list-search-the-rest.md) | Tool Overload: List a Usage-Ranked Slice, Search the Rest |
 | [`tool-search-cuts-cjk-text-into-bigrams`](tool-search-cuts-cjk-text-into-bigrams.md) | Tool Search Cuts CJK Text Into Bigrams |
 | [`tool-search-indexes-parameter-text`](tool-search-indexes-parameter-text.md) | Tool Search Indexes Parameter Text |
+| [`tool-search-puts-an-exact-name-first`](tool-search-puts-an-exact-name-first.md) | Tool Search Puts an Exact Name First |
 | [`eval-capture-and-regression-gate`](eval-capture-and-regression-gate.md) | Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate |
 | [`record-tool-call-content-redacted-and-bounded`](record-tool-call-content-redacted-and-bounded.md) | Record Tool Call Content, Masked Where the Secrets Are Known and Cut at 16 KB |
 | [`custom-tool-pages-give-testing-and-environments-their-own-tabs`](custom-tool-pages-give-testing-and-environments-their-own-tabs.md) | A Custom Tool's Test and a Group's Environments Each Have Their Own Tab |

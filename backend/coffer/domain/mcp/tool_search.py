@@ -6,8 +6,10 @@ the indices of the best matches ranked by a BM25-lite score: tool-name tokens
 weigh most, description tokens next and the input schema's parameter text
 (names, descriptions, enum values) least. Chinese, Japanese and Korean text is
 cut into overlapping two-character terms, since it has no spaces to split on.
-Deterministic — equal scores keep catalogue order — so the retrieval eval can
-score it offline.
+A query that is exactly a tool's name — the full ``server__tool`` or the part
+after ``__``, in any case — puts that tool first, whatever the scores (ADR
+tool-search-puts-an-exact-name-first). Deterministic — equal scores keep
+catalogue order — so the retrieval eval can score it offline.
 """
 
 from __future__ import annotations
@@ -119,6 +121,23 @@ def _fields(tool: tuple[str, ...]) -> tuple[str, str, str]:
     return str(name), str(description), str(rest[0]) if rest else ""
 
 
+def _exact_names(query: str, catalogue: Sequence[tuple[str, ...]]) -> set[int]:
+    """The tools whose name ``query`` spells out exactly."""
+    wanted = query.strip().lower()
+    if not wanted or any(c.isspace() for c in wanted):
+        return set()
+    out: set[int] = set()
+    for i, tool in enumerate(catalogue):
+        # The gateway passes ``server tool`` (namespace split off, see
+        # gateway_tool_search._search_corpus); a caller may pass ``server__tool``.
+        name = str(tool[0]).lower()
+        server, _, bare = name.partition(" ")
+        names = {name, name.partition("__")[2], bare, f"{server}__{bare}" if bare else server}
+        if wanted in names - {""}:
+            out.add(i)
+    return out
+
+
 def rank_tools(
     query: str,
     catalogue: Sequence[tuple[str, str] | tuple[str, str, str]],
@@ -128,9 +147,10 @@ def rank_tools(
 ) -> list[ScoredTool]:
     """Rank ``catalogue`` against ``query``; return up to ``top_k`` best-first.
 
-    Zero-score tools are dropped. Deterministic: ties keep catalogue order,
-    except that a tool flagged in ``prefer`` (one only search can reach) goes
-    ahead of an equally scored one the agent already sees listed.
+    Zero-score tools are dropped. A tool whose name the query spells out
+    exactly goes first. Deterministic: ties keep catalogue order, except that a
+    tool flagged in ``prefer`` (one only search can reach) goes ahead of an
+    equally scored one the agent already sees listed.
     """
     if top_k <= 0 or not catalogue:
         return []
@@ -160,7 +180,13 @@ def rank_tools(
         if score > 0.0:
             scored.append(ScoredTool(index=i, score=score))
 
-    scored.sort(key=lambda s: (-s.score, not (prefer and prefer[s.index]), s.index))
+    exact = _exact_names(query, catalogue)
+    for i in exact:
+        if not any(s.index == i for s in scored):
+            scored.append(ScoredTool(index=i, score=0.0))
+    scored.sort(
+        key=lambda s: (s.index not in exact, -s.score, not (prefer and prefer[s.index]), s.index)
+    )
     return scored[:top_k]
 
 

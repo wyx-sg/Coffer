@@ -234,7 +234,7 @@ stdio 服务器的 stderr 写到它自己的文件 `~/.coffer/logs/upstream/<nam
 }
 ```
 
-搜索用本地关键词排序器按工具名和描述对整个目录排序——不用模型、不用 embedding、不走网络。`top_k` 默认 5，上限 20。结果里不包含 Coffer 自己的工具。有工具被隐藏时，Coffer 在 `initialize` 时发送的 `instructions` 会告诉智能体使用 `coffer__search_tools`。
+搜索用本地关键词排序器按工具名和描述对整个目录排序——不用模型、不用 embedding、不走网络。`top_k` 默认 5，上限 20。查询恰好是某个工具的名字（`jira__get_issue`，或者只写 `get_issue`）时，这个工具排在第一。结果里不包含 Coffer 自己的工具。有工具被隐藏时，Coffer 在 `initialize` 时发送的 `instructions` 会告诉智能体使用 `coffer__search_tools`。
 
 分层由守护进程的三个环境变量控制（修改后重启守护进程）：
 

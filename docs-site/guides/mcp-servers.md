@@ -234,7 +234,7 @@ A model chooses tools less well as the list grows, and every listed tool costs c
 }
 ```
 
-The search ranks the full catalogue with a local keyword ranker over tool names and descriptions — no model, no embeddings, no network. `top_k` defaults to 5 and is capped at 20. Coffer's own tools are not in the results. When tools are hidden, the `instructions` Coffer sends at `initialize` tell the agent to use `coffer__search_tools`.
+The search ranks the full catalogue with a local keyword ranker over tool names and descriptions — no model, no embeddings, no network. `top_k` defaults to 5 and is capped at 20. A query that is exactly a tool's name (`jira__get_issue`, or just `get_issue`) returns that tool first. Coffer's own tools are not in the results. When tools are hidden, the `instructions` Coffer sends at `initialize` tell the agent to use `coffer__search_tools`.
 
 Tiering is controlled by three environment variables of the daemon process (restart the daemon after changing them):
 

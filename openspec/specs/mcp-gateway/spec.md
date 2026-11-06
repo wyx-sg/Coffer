@@ -92,7 +92,9 @@ list-changed notifications) between clients and upstream MCP servers.
   deterministic, local keyword ranker (BM25-lite over each tool's name, its description and its input
   schema's parameter names, parameter descriptions and enum values, weighted in that order) — no LLM, no
   embeddings, no network. A query in Chinese, Japanese or Korean MUST match tools described in that language: such text is
-  matched by overlapping character pairs, since it has no spaces between words. Results MUST be upstream-only (Coffer's own
+  matched by overlapping character pairs, since it has no spaces between words. A query that is exactly a
+  tool's name — its `<server>__<tool>` or the part after `__`, in any case, with no space — MUST return that
+  tool first, ahead of every scored result. Results MUST be upstream-only (Coffer's own
   `coffer__` built-ins excluded); each returned `name` is the same `<server>__<tool>` identifier the agent
   would call directly, with routing unchanged; and the invocation MUST be recorded in the invocation log like
   any other gateway call.
@@ -136,6 +138,11 @@ list-changed notifications) between clients and upstream MCP servers.
 - **GIVEN** N upstream tools are aggregated and healthy through coffer,
 - **WHEN** an agent calls `coffer__search_tools` with an intent query and a `top_k`,
 - **THEN** it receives at most `top_k` ranked real upstream tool schemas (upstream-only, with Coffer's own `coffer__` built-ins excluded), each named `<server>__<tool>`, the response reports `total_searched`, and the gateway records the invocation.
+
+#### Scenario: a query that is a tool's name returns that tool first
+- **GIVEN** a catalogue where `jira__get_issue_history` outscores `jira__get_issue` for the words "get issue"
+- **WHEN** an agent calls `coffer__search_tools` with `jira__get_issue`, `get_issue` or `JIRA__GET_ISSUE`
+- **THEN** `jira__get_issue` is the first result each time
 
 #### Scenario: advertise only Coffer's own built-in tools
 - **GIVEN** a client connected through coffer
