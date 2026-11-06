@@ -28,9 +28,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import os
 import subprocess
-import sys
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from pathlib import Path
@@ -49,7 +47,7 @@ from coffer.infrastructure.model_proxy.supervisor_support import (
     ProxyStatus,
     default_proxy_command,
     pid_alive,
-    source_root,
+    spawn_env,
 )
 from coffer.infrastructure.platform.process import detached_popen_kwargs
 
@@ -105,8 +103,7 @@ class ProxySupervisor:
         self._restarts = 0
         self._last_error: str | None = None
         self._pushed_revision: int | None = None
-        #: What the last push carried, revision aside: a refresh that would
-        #: push the same routes to a proxy that holds them is skipped.
+        #: The last push, revision aside: re-pushing it to a proxy holding it is skipped.
         self._pushed_body: dict[str, object] | None = None
         self._lock = asyncio.Lock()
         self._dirty = False
@@ -160,9 +157,7 @@ class ProxySupervisor:
                 return
             state, self._prefetched = self._prefetched or await self._state_provider(), None
             body = state.model_dump(mode="json", exclude={"revision"})
-            held = (
-                self._health is not None and self._health.get("revision") == self._pushed_revision
-            )
+            held = (self._health or {}).get("revision", -1) == self._pushed_revision
             if held and body == self._pushed_body:
                 return
             try:
@@ -301,16 +296,6 @@ class ProxySupervisor:
         if self._alive(info.pid):
             raise RuntimeError(f"old model proxy pid {info.pid} did not finish draining")
 
-    def _spawn_env(self) -> dict[str, str]:
-        env = dict(os.environ)
-        if self._env is not None:
-            env.update(self._env)
-        if self._command is None and not getattr(sys, "frozen", False):
-            existing = env.get("PYTHONPATH")
-            root = source_root()
-            env["PYTHONPATH"] = root + (os.pathsep + existing if existing else "")
-        return env
-
     async def _spawn(self) -> None:
         command = self._command or default_proxy_command(self.port)
         log_path = log_dir() / "proxy.log"
@@ -323,7 +308,7 @@ class ProxySupervisor:
                 stdin=subprocess.PIPE if key is not None else subprocess.DEVNULL,
                 stdout=log,
                 stderr=log,
-                env=self._spawn_env(),
+                env=spawn_env(self._env, from_source=self._command is None),
                 **detached_popen_kwargs(),
             )
         self._proc = proc
