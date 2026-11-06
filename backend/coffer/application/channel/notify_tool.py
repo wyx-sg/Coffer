@@ -23,7 +23,6 @@ from coffer.application.channel.turn_media import MediaFile, send_media_files
 
 __all__ = ["MAX_FILES", "MAX_TEXT", "OwnerNotifier", "channel_notify_tool"]
 
-TOOL_NAME = "channel_notify"
 MAX_TEXT = 4000
 MAX_FILES = 10
 
@@ -136,7 +135,7 @@ def channel_notify_tool(notifier: OwnerNotifier) -> BuiltinTool:
     """The registry entry. Not turn-scoped: the agents that need it run in a
     terminal or in their own scheduled tasks, outside any turn Coffer runs."""
     return BuiltinTool(
-        name=TOOL_NAME,
+        name="channel_notify",
         description=_DESCRIPTION,
         input_schema=_INPUT_SCHEMA,
         handler=notifier.notify,
