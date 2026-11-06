@@ -2924,16 +2924,6 @@ the gateway").
 - **WHEN** the user opens the tool
 - **THEN** the drawer shows no On switch, shows the group's header in the headers table as from the group, and offers Delete tool and Cancel
 
-#### Scenario: a spec that does not parse shows the lines around the failure
-- **GIVEN** the import step with a file whose YAML breaks on line 3
-- **WHEN** the file is read
-- **THEN** the step says it couldn't read the spec and why, and shows the file with line 3 marked
-
-#### Scenario: an unreachable spec URL names the reason and keeps Review tools off
-- **GIVEN** the import step with a URL the daemon cannot reach
-- **WHEN** the user chooses Load
-- **THEN** the step names the host and the reason, marks the URL invalid, offers Retry and a hand-off, and Review tools stays off
-
 #### Scenario: a tool that changes data is annotated for the agent
 - **GIVEN** a group with a `GET /invoices` tool and a `POST /refunds` tool, and the user turning the changes-data flag off on a third, `POST /search`
 - **WHEN** an agent lists the group's tools
