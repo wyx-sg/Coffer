@@ -197,3 +197,22 @@ threads appending at once rarely conflict:
   values (principle IV), so it has to be Coffer. Nobody has needed it yet.
 - **Sketch:** reuse the scan's tick, review and apply steps. Doppler, Infisical
   and Vercel all import `.env` files. Draft: C4.
+
+### Drop the switch that turns secret approval off
+
+- **Added:** 2026-11-06, from the thread "梳理密钥管理的缺口与缺陷"
+- **What:** in a signed build, approvals are always on; a development build has
+  them off. No setting, no "turn off" approval, no Overview item about it.
+- **Why later:** Coffer holds exactly one boundary, and this switch is a master
+  breaker for it. Around it sit a `disable_protection` approval, an exception for
+  the `coffer run` grant, its exclusion from batches, a build-dependent default
+  with `default_on`, help text and an Overview item. Doing it now would leave
+  development builds unable to turn approvals on to test the flow, so it waits
+  for the first signed release (O-13), when the two builds' split is settled.
+- **Sketch:** amend the principles line "Approvals default on (a person's own
+  setting wins)"; remove spec secret "Default the approval protection by the
+  build" and "Turn the protection off only through the desktop app", the
+  setting, its routes, CLI, UI and docs; give e2e tests another way to run with
+  approvals on. Comparable: 1Password can't turn vault encryption off; macOS
+  privacy prompts have no "allow all" switch. Draft: project file
+  `secret-gaps/讨论稿.md`, E2.1.
