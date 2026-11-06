@@ -268,8 +268,7 @@ def test_daemon_spec_includes_attachment_and_chat_hidden_imports() -> None:
     attachment and probe a provider.
 
     Each of these is a real lazy importer in the codebase:
-      * markitdown  — infrastructure/chat/document_extract.py (spec channels "Give
-                      documents to every agent as extracted text")
+      * markitdown  — infrastructure/knowledge/converters/markitdown_converter.py
       * openai      — infrastructure/provider/*
 
     The knowledge layer declares nothing here: it is a directory of markdown

@@ -4,9 +4,8 @@ Spec knowledge "Keep every upload as a Markdown source" names
 what it must handle; "Carry no vector or embedding dependency" fences who may
 import it.
 
-One of exactly two importers of ``markitdown`` in this codebase — the other is
-``infrastructure.chat.document_extract`` for inbound channel attachments — and
-the import-linter contract in ``backend/pyproject.toml`` enforces there are no
+The only importer of ``markitdown`` in this codebase, and the import-linter
+contract in ``backend/pyproject.toml`` enforces there are no
 others. The import is lazy so the daemon starts even when the library is
 missing; an unhandled format then raises ``EngineUnavailable`` naming the
 missing dependency.

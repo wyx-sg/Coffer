@@ -269,25 +269,12 @@ async def _dummy_sink(sid: str) -> None:
     return None
 
 
-class _FakeExtractor:
-    """A ``DocumentExtractor`` that returns canned text (no ``markitdown``)."""
-
-    def __init__(self, text: str) -> None:
-        self.text = text
-        self.calls: list[str] = []
-
-    async def extract(self, path: str) -> str:
-        self.calls.append(path)
-        return self.text
-
-
 def _adapter(
     factory: _Factory,
     *,
     on_session: Any = _dummy_sink,
     resume: str | None = None,
     extra: dict[str, Any] | None = None,
-    document_extractor: Any = None,
     system_context: str | None = None,
 ) -> CodexAppServerAdapter:
     return CodexAppServerAdapter(
@@ -296,7 +283,6 @@ def _adapter(
         extra=extra or {},
         session_factory=factory,
         on_session=on_session,
-        document_extractor=document_extractor,
         system_context=system_context,
     )
 
@@ -897,48 +883,12 @@ async def test_stream_end_without_terminal_no_pending_task_warning(recwarn: Any)
     assert pending_warnings == [], f"Unexpected pending-task warnings: {pending_warnings}"
 
 
-# ---------------------------------------------------------------------------
-# A document reaches a path-native agent as extracted text
-# (spec channels "Give documents to every agent as extracted text")
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.acceptance(
-    spec="channels",
-    scenario="a PDF reaches a path-native agent as extracted text",
-)
-@pytest.mark.acceptance(
-    spec="chat",
-    scenario="a PDF reaches a path-native agent as extracted text",
-)
+@pytest.mark.acceptance(spec="channels", scenario="a document reaches the agent as its path")
 @pytest.mark.asyncio
-async def test_pdf_reaches_codex_as_extracted_text() -> None:
-    extractor = _FakeExtractor("Quarterly revenue was $4.2M.")
+async def test_a_document_reaches_codex_as_its_path(tmp_path: Any) -> None:
     server = FakeCodexAppServer(frames=_basic_frames())
     factory = _Factory(server)
-    adapter = _adapter(factory, document_extractor=extractor)
-    pdf = Attachment(path="/tmp/report.pdf", mime="application/pdf", filename="report.pdf")
-
-    stream = await adapter.run_turn(_user_turn("summarise this"), attachments=(pdf,))
-    events = await asyncio.wait_for(_collect_stream(stream), timeout=5)
-
-    assert isinstance(events[-1], TurnDone)
-    # The PDF was extracted (not handed over as a binary path note)…
-    assert extractor.calls == ["/tmp/report.pdf"]
-    # …and its text was folded into the turn/start prompt as a labelled block.
-    turn_params = next(p for m, p in server.requests if m == "turn/start")
-    sent = turn_params["input"][0]["text"]
-    assert "[Document from the user's message: report.pdf]" in sent
-    assert "Quarterly revenue was $4.2M." in sent
-    # The path-note fallback is NOT used — the agent gets text, not a binary path.
-    assert "saved at" not in sent
-
-
-@pytest.mark.asyncio
-async def test_document_without_extractor_degrades_to_a_path_note(tmp_path: Any) -> None:
-    server = FakeCodexAppServer(frames=_basic_frames())
-    factory = _Factory(server)
-    adapter = _adapter(factory, document_extractor=None)  # no engine available
+    adapter = _adapter(factory)
     report = tmp_path / "report.pdf"
     report.write_bytes(b"%PDF-1.4")
     pdf = Attachment(path=str(report), mime="application/pdf", filename="report.pdf")
@@ -946,12 +896,11 @@ async def test_document_without_extractor_degrades_to_a_path_note(tmp_path: Any)
     stream = await adapter.run_turn(_user_turn("look"), attachments=(pdf,))
     await asyncio.wait_for(_collect_stream(stream), timeout=5)
 
-    # Degrades gracefully: the document is handed over as a file path, turn intact.
+    # The agent opens the file itself, with its own tools.
     turn_params = next(p for m, p in server.requests if m == "turn/start")
     sent = turn_params["input"][0]["text"]
-    assert str(report) in sent
-    assert "saved at" in sent
-    assert "[Document:" not in sent
+    assert f"report.pdf (saved at {report})" in sent
+    assert "[Document" not in sent
 
 
 async def _collect_stream(stream: Any) -> list[Any]:

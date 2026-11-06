@@ -226,8 +226,7 @@ The attachment is handed to the adapter with the turn rather than re-read from h
 Each adapter then materialises attachments in its own shape, in this order:
 
 1. **Audio** is transcribed and folded into the prompt, when a speech-to-text connection has been designated (see [internal engine](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md)). This is off by default. It is the one place user content may leave the machine for transcription. With no connection, or on any failure, the audio is handed over as an ordinary file.
-2. **Documents** (PDF, Word, PowerPoint, Excel and similar) are converted to text by a document extractor, which lazily imports the optional `markitdown` library. If the library is missing or extraction fails, the document degrades to a file attachment.
-3. **Everything else:** Claude Code receives an image inline, as a base64 image block, only when it passes the inline check: its bytes sniff as PNG, JPEG, GIF or WEBP, and it is at most 5 MB once base64-encoded (the Messages API's per-image ceiling). The block's media type is the sniffed type, not the stored one, so a mislabelled channel photo is not rejected as "image does not match media type". Any other file, including an image that fails either check, becomes a text note naming the saved path. Codex, which is path-native over the app-server protocol, always receives the path note, so it has no inline ceiling to respect.
+2. **Everything else**, images and documents included, becomes a line of the `[Attachments]` block naming the saved path, for Claude Code and Codex alike. The agent opens the file with its own tools; Coffer inlines nothing and converts nothing, because an agent that can read a file on disk needs no second reader in Coffer.
 
 ## Channels as a second surface
 

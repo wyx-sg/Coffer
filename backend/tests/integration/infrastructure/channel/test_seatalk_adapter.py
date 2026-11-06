@@ -966,7 +966,7 @@ async def test_fetch_thread_recurses_forwarded_records_in_the_thread(
     assert all(it.text != "[forwarded chat record]" for it in items)
 
 
-@pytest.mark.acceptance(spec="channels", scenario="thread-history images reach a vision agent")
+@pytest.mark.acceptance(spec="channels", scenario="thread-history images reach the agent")
 async def test_fetch_thread_downloads_thread_images(
     fake_seatalk: FakeSeaTalk, tmp_path: Any
 ) -> None:

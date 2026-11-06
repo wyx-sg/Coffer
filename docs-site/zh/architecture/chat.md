@@ -226,8 +226,7 @@ Codex 适配器通过 `codex app-server` 驱动 Codex：stdio 上的 JSON-RPC 2.
 每个适配器随后按各自的形态物化附件，顺序如下：
 
 1. **音频**在指定了语音转文字连接时会被转写并折叠进提示词（见[内部引擎](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md)）。这默认是关的。这是用户内容唯一可能为转写离开机器的地方。没有连接，或者任何失败时，音频会作为普通文件交出。
-2. **文档**（PDF、Word、PowerPoint、Excel 等）由文档提取器转换成文字，它会延迟导入可选的 `markitdown` 库。库缺失或提取失败时，文档退化为文件附件。
-3. **其余一切：**只有通过内联检查时，Claude Code 才会内联收到图片（base64 图片块）：它的字节嗅探为 PNG、JPEG、GIF 或 WEBP，且 base64 编码后不超过 5 MB（Messages API 的单图上限）。块的媒体类型是嗅探到的类型，而不是存下的类型，所以被错标的消息渠道照片不会因为「图片与媒体类型不符」而被拒绝。任何其他文件，包括没通过任一检查的图片，都会变成一条写明保存路径的文字说明。Codex 通过 app-server 协议原生支持路径，所以总是收到路径说明，也就没有需要遵守的内联上限。
+2. **其余一切**（包括图片和文档）都会成为 `[Attachments]` 块里写明保存路径的一行，Claude Code 和 Codex 都一样。智能体用自己的工具打开文件；Coffer 不内联、不转换，因为能读磁盘文件的智能体不需要 Coffer 再做一个读取器。
 
 ## 消息渠道作为第二个界面 {#channels-as-a-second-surface}
 

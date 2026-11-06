@@ -29,12 +29,10 @@ hidden = (
     # Turn-platform deps. These are imported LAZILY (inside functions) so the
     # daemon ships even when an extra is missing — which is exactly why
     # PyInstaller's static analysis cannot trace them. Declare them explicitly
-    # so a frozen build can extract inbound attachments and drive the built-in
+    # so a frozen build can convert knowledge uploads and drive the built-in
     # chat agent.
     #   markitdown — knowledge/converters/markitdown_converter.py (file → markdown
-    #                at ingest) and chat/document_extract.py (channel attachments,
-    #                spec channels "Give documents to every agent as extracted
-    #                text")
+    #                at ingest)
     #   openai     — providers/*
     # The knowledge layer needs no index and no embedding client bundled: it is
     # a directory of markdown files an agent greps (ADR knowledge-is-plain-files).

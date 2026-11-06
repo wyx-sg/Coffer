@@ -10,7 +10,6 @@ approval relay.
 from __future__ import annotations
 
 import asyncio
-import base64
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
@@ -36,7 +35,7 @@ from claude_agent_sdk import (
     ToolUseBlock as SdkToolUseBlock,
 )
 
-from coffer.domain.chat.attachment import INLINE_IMAGE_MAX_BYTES, Attachment
+from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
     STREAM_ENDED_MESSAGE,
     TextDelta,
@@ -119,25 +118,12 @@ async def _dummy_sink(sid: str) -> None:
     return None
 
 
-class _FakeExtractor:
-    """A ``DocumentExtractor`` that returns canned text (no ``markitdown``)."""
-
-    def __init__(self, text: str) -> None:
-        self.text = text
-        self.calls: list[str] = []
-
-    async def extract(self, path: str) -> str:
-        self.calls.append(path)
-        return self.text
-
-
 def _adapter(
     factory: _Factory,
     *,
     on_session: Any = _dummy_sink,
     resume: str | None = None,
     extra: dict[str, Any] | None = None,
-    document_extractor: Any = None,
 ) -> ClaudeSdkAgentAdapter:
     return ClaudeSdkAgentAdapter(
         cwd="/tmp",
@@ -145,7 +131,6 @@ def _adapter(
         extra=extra or {},
         session_factory=factory,
         on_session=on_session,
-        document_extractor=document_extractor,
     )
 
 
@@ -163,22 +148,13 @@ async def _collect(
 # ---------------------------------------------------------------------------
 
 
-def _inner(content: Any) -> list[dict[str, Any]]:
-    """The attachment blocks between ``[Attachments]`` and its end line."""
-    start = content.index({"type": "text", "text": "[Attachments]"})
-    return list(content[start + 1 : -1])
-
-
 def test_build_content_is_the_plain_prompt_without_attachments() -> None:
     # No attachments → unchanged behaviour: the content is the bare string.
     assert ClaudeSdkAgentAdapter._build_content("hello", []) == "hello"
 
 
-@pytest.mark.acceptance(
-    spec="channels",
-    scenario="an inbound image reaches a vision agent as an inline block",
-)
-def test_build_content_inlines_an_image_as_a_base64_block(tmp_path: Any) -> None:
+@pytest.mark.acceptance(spec="channels", scenario="an inbound image reaches the agent as its path")
+def test_build_content_hands_an_image_over_by_its_path(tmp_path: Any) -> None:
     img = tmp_path / "photo.png"
     img.write_bytes(_PNG_BYTES)
     att = Attachment(
@@ -191,108 +167,25 @@ def test_build_content_inlines_an_image_as_a_base64_block(tmp_path: Any) -> None
 
     content = ClaudeSdkAgentAdapter._build_content("what is this?", [att])
 
-    assert isinstance(content, list)
-    assert content[0] == {"type": "text", "text": "what is this?"}
-    # The [Attachments] block names the image by its number and source, right
-    # above the inline image, so the turn text's "→ attachment #1" resolves.
-    assert content[1] == {"type": "text", "text": "[Attachments]"}
-    assert content[2] == {
-        "type": "text",
-        "text": "#1 from the forwarded record: photo.png (image, shown below)",
-    }
-    assert content[-1] == {"type": "text", "text": "[End of attachments]"}
-    image = content[3]
-    assert image["type"] == "image"
-    assert image["source"]["type"] == "base64"
-    assert image["source"]["media_type"] == "image/png"
-    # The bytes are read from disk and encoded here, never stored as base64.
-    assert base64.b64decode(image["source"]["data"]) == _PNG_BYTES
+    # The [Attachments] block names the image by its number and source, with the
+    # path the agent opens it at; no bytes travel in the message.
+    assert content == (
+        "what is this?\n\n[Attachments]\n"
+        f"#1 from the forwarded record: photo.png (image, saved at {img})\n"
+        "[End of attachments]"
+    )
 
 
-def test_build_content_hands_off_a_non_vision_file_by_path(tmp_path: Any) -> None:
-    data = tmp_path / "notes.csv"
-    data.write_text("a,b\n1,2\n")
-    att = Attachment(path=str(data), mime="text/csv", filename="notes.csv")
+@pytest.mark.acceptance(spec="channels", scenario="a document reaches the agent as its path")
+def test_build_content_hands_a_document_over_by_its_path(tmp_path: Any) -> None:
+    pdf = tmp_path / "report.pdf"
+    pdf.write_bytes(b"%PDF-1.7 fake")
+    att = Attachment(path=str(pdf), mime="application/pdf", filename="report.pdf")
 
     content = ClaudeSdkAgentAdapter._build_content("", [att])
 
-    # A non-vision file is not inlined — the agent gets its path to open.
-    assert isinstance(content, list)
-    assert _inner(content)[0]["type"] == "text"
-    assert str(data) in _inner(content)[0]["text"]
-
-
-def test_build_content_does_not_inline_an_unsupported_image_format(tmp_path: Any) -> None:
-    # An image/heic (e.g. an iPhone photo sent as a document) is NOT an API-inlinable
-    # type — inlining it would 400 the turn, so it falls to the path pointer instead.
-    heic = tmp_path / "photo.heic"
-    heic.write_bytes(b"HEIC-bytes")
-    att = Attachment(path=str(heic), mime="image/heic", filename="photo.heic")
-
-    content = ClaudeSdkAgentAdapter._build_content("", [att])
-
-    assert isinstance(content, list)
-    assert _inner(content)[0]["type"] == "text"
-    assert str(heic) in _inner(content)[0]["text"]
-
-
-@pytest.mark.acceptance(
-    spec="channels", scenario="an inbound image reaches a vision agent as an inline block"
-)
-def test_build_content_inlines_a_mislabelled_image_under_its_sniffed_type(tmp_path: Any) -> None:
-    # A JPEG a browser or channel called image/png would be rejected by the API
-    # ("image does not match media type"); it is sent as the JPEG it is.
-    img = tmp_path / "photo.png"
-    img.write_bytes(_JPEG_BYTES)
-    att = Attachment(path=str(img), mime="image/png", filename="photo.png")
-
-    content = ClaudeSdkAgentAdapter._build_content("", [att])
-
-    assert isinstance(content, list)
-    image = _inner(content)[1]
-    assert image["type"] == "image"
-    assert image["source"]["media_type"] == "image/jpeg"
-    assert base64.b64decode(image["source"]["data"]) == _JPEG_BYTES
-
-
-def test_build_content_hands_an_image_over_the_inline_ceiling_off_by_path(
-    tmp_path: Any,
-) -> None:
-    # One byte past what encodes to 5 MB: inlining it would 400 the whole turn.
-    img = tmp_path / "huge.png"
-    img.write_bytes(_PNG_BYTES.ljust(INLINE_IMAGE_MAX_BYTES * 3 // 4 + 1, b"\x00"))
-    att = Attachment(path=str(img), mime="image/png", filename="huge.png")
-
-    content = ClaudeSdkAgentAdapter._build_content("look", [att])
-
-    assert isinstance(content, list)
-    assert content[0] == {"type": "text", "text": "look"}
-    assert [b["type"] for b in _inner(content)] == ["text"]
-    assert str(img) in _inner(content)[0]["text"]
-
-
-def test_build_content_inlines_an_image_exactly_at_the_inline_ceiling(tmp_path: Any) -> None:
-    img = tmp_path / "edge.png"
-    img.write_bytes(_PNG_BYTES.ljust(INLINE_IMAGE_MAX_BYTES * 3 // 4, b"\x00"))
-    att = Attachment(path=str(img), mime="image/png", filename="edge.png")
-
-    content = ClaudeSdkAgentAdapter._build_content("", [att])
-
-    assert isinstance(content, list)
-    assert _inner(content)[1]["type"] == "image"
-    assert len(_inner(content)[1]["source"]["data"]) == INLINE_IMAGE_MAX_BYTES
-
-
-def test_build_content_hands_off_an_image_whose_bytes_are_not_an_image(tmp_path: Any) -> None:
-    img = tmp_path / "fake.png"
-    img.write_bytes(b"this is not a picture")
-    att = Attachment(path=str(img), mime="image/png", filename="fake.png")
-
-    content = ClaudeSdkAgentAdapter._build_content("", [att])
-
-    assert isinstance(content, list)
-    assert _inner(content)[0]["type"] == "text"
-    assert str(img) in _inner(content)[0]["text"]
+    assert f"report.pdf (saved at {pdf})" in content
+    assert "[Document" not in content
 
 
 def test_build_content_notes_an_attachment_whose_file_is_gone(tmp_path: Any) -> None:
@@ -300,66 +193,12 @@ def test_build_content_notes_an_attachment_whose_file_is_gone(tmp_path: Any) -> 
 
     content = ClaudeSdkAgentAdapter._build_content("", [att])
 
-    assert content == [
-        {"type": "text", "text": "[Attachments]"},
-        {
-            "type": "text",
-            "text": "from the user's message: gone.png — could not be read "
-            "(the file is no longer on disk)",
-        },
-        {"type": "text", "text": "[End of attachments]"},
-    ]
-
-
-def test_build_content_no_longer_inlines_a_pdf_as_a_document_block(tmp_path: Any) -> None:
-    # Documents are text-extracted upstream (spec channels "Give documents to every
-    # agent as extracted text"), so a PDF that reaches _build_content (extraction
-    # absent/failed) degrades to a path note — not a base64 ``document`` block
-    # (uniform text-or-path across all agents).
-    pdf = tmp_path / "report.pdf"
-    pdf.write_bytes(b"%PDF-1.7 fake")
-    att = Attachment(path=str(pdf), mime="application/pdf", filename="report.pdf")
-
-    content = ClaudeSdkAgentAdapter._build_content("", [att])
-
-    assert isinstance(content, list)
-    assert _inner(content)[0]["type"] == "text"
-    assert str(pdf) in _inner(content)[0]["text"]
-    assert not any(b.get("type") == "document" for b in content)
-
-
-@pytest.mark.asyncio
-async def test_pdf_reaches_claude_as_extracted_text_not_a_document_block(tmp_path: Any) -> None:
-    # A PDF is text-extracted and folded into the prompt as a labelled
-    # text block; it is NOT sent as a base64 ``document`` block. An image on the
-    # same turn stays vision-inlined — only documents go through extraction.
-    pdf = tmp_path / "report.pdf"
-    pdf.write_bytes(b"%PDF-1.7 fake")
-    img = tmp_path / "chart.png"
-    img.write_bytes(_PNG_BYTES)
-    pdf_att = Attachment(path=str(pdf), mime="application/pdf", filename="report.pdf")
-    img_att = Attachment(path=str(img), mime="image/png", filename="chart.png")
-    extractor = _FakeExtractor("Quarterly revenue was $4.2M.")
-
-    factory = _Factory(_basic_messages())
-    adapter = _adapter(factory, document_extractor=extractor)
-    events = await _collect(adapter, _user_turn("summarise this"), attachments=(pdf_att, img_att))
-
-    assert isinstance(events[-1], TurnDone)
-    assert extractor.calls == [str(pdf)]
-    assert factory.session is not None
-    content = factory.session.connected_prompt
-    assert isinstance(content, list)
-    # The extracted PDF text is a labelled text block…
-    text_blocks = [b["text"] for b in content if b.get("type") == "text"]
-    joined = "\n".join(text_blocks)
-    assert "[Document from the user's message: report.pdf]" in joined
-    assert "[End of document]" in joined
-    assert "Quarterly revenue was $4.2M." in joined
-    # …no document/binary block was sent for the PDF…
-    assert not any(b.get("type") == "document" for b in content)
-    # …and the image stays vision-inlined (images are untouched by extraction).
-    assert any(b.get("type") == "image" for b in content)
+    assert content == (
+        "[Attachments]\n"
+        "from the user's message: gone.png — could not be read "
+        "(the file is no longer on disk)\n"
+        "[End of attachments]"
+    )
 
 
 # Canned SDK message stream: init → assistant text+tool → tool result → text → done.

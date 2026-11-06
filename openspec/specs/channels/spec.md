@@ -804,11 +804,9 @@ a Reply Style the Owner Can Rewrite](../../../docs/decisions/channel-prompt-fixe
 Inbound photos and files MUST drive a turn. The transport downloads each
 attachment to a Coffer-managed media dir; the bytes never enter the chat DB (Coffer stores
 no message at all; the agent's own session keeps the caption).
-For the turn, each attachment is handed to the agent adapter, which materialises
-it in its own native shape — a vision agent (Claude Code) inlines an image as a
-base64 content block it sees directly and a PDF as a document block; a
-path-native agent (Codex) and any non-vision file receive the on-disk path to
-open. This works for arbitrary file types, and generalises
+For the turn, each attachment is handed to the agent as its on-disk path — an
+image, a PDF or an office document alike — and the agent opens it with its own
+tools; Coffer neither inlines nor converts it. This works for arbitrary file types, and generalises
 to future modalities (a new type is a new mime, not a new schema). A sticker is
 a picture the user chose deliberately, so it is downloaded like any other
 attachment. Only a message with no text and nothing downloadable at all — a
@@ -821,12 +819,17 @@ or a file. See [Channel Attachments](../../../docs/decisions/channel-attachments
 - **THEN** the largest photo size is downloaded to the media dir and carried on
   the inbound message as an attachment, and the caption becomes the message text
 
-#### Scenario: an inbound image reaches a vision agent as an inline block
+#### Scenario: an inbound image reaches the agent as its path
 - **GIVEN** a turn carrying an image attachment
 - **WHEN** the Claude adapter builds the turn's content
-- **THEN** the image is a base64 `image` content block (a non-vision file becomes
-  a path pointer instead), so the bytes are sent inline for this turn only and
-  never stored in the chat database
+- **THEN** the image is named in the `[Attachments]` block with its number, where
+  it came from and the path it was saved at, and no bytes travel in the message
+
+#### Scenario: a document reaches the agent as its path
+- **GIVEN** a turn carrying a PDF for Claude Code or Codex
+- **WHEN** the adapter builds the turn
+- **THEN** the PDF is named in the `[Attachments]` block with the path it was
+  saved at, and its text is not extracted into the message
 
 ### Requirement: Send files back only through an explicit sentinel
 The agent MUST send a file back to the user only by an explicit opt-in: a
@@ -963,7 +966,7 @@ voice, video, a sticker — says so (`[voice] unavailable — the model cannot r
 audio`) instead of standing as a bare `[voice]`. The forwarded message's own text
 on the platform is the record's, not the owner's: the owner's words are only
 what they wrote themselves. Where a platform's file links require auth, its child
-spec states how the bytes are additionally fetched so a vision agent sees the
+spec states how the bytes are additionally fetched so the agent opens the
 picture rather than a dead link. Telegram's forwarded messages take the same
 shape through the same helpers.
 
@@ -1177,33 +1180,18 @@ alongside the flattened text, rather than surfacing only as an auth-gated
 `[image] <url>` the agent could not open. Messages the fold leaves out are not
 downloaded; a page the read tool returns has its own messages' media downloaded.
 
-#### Scenario: thread-history images reach a vision agent
+#### Scenario: thread-history images reach the agent
 - **GIVEN** a paired channel and a group thread whose own messages include an
   image (a directly-sent one and one nested in a forwarded record)
 - **WHEN** the owner @mentions the bot inside that thread
 - **THEN** the thread's images are downloaded and attached to the turn — reaching
-  the vision agent as real bytes, not a dead auth-gated file link
+  the agent as files it can open, not a dead auth-gated file link
 
 #### Scenario: only the folded messages' media is downloaded
 - **GIVEN** a thread of more than 20 earlier messages, the oldest and one of the
   newest carrying an image
 - **WHEN** the owner @mentions the bot in that thread for the first time
 - **THEN** only the newer message's image is downloaded
-
-### Requirement: Give documents to every agent as extracted text
-PDFs and office documents MUST reach every agent as extracted text, not as a
-vision input. A document attachment is text-extracted into a context block so
-path-native agents (Codex) and vision agents alike see its content; images stay
-vision-inlined for agents that support it.
-
-#### Scenario: a PDF reaches a path-native agent as extracted text
-- **GIVEN** a turn carrying a PDF (or office document) attachment for a
-  path-native agent (Codex)
-- **WHEN** the adapter prepares the turn
-- **THEN** the document is text-extracted and folded into the prompt as a
-  labelled `[Document: <name>]` block, and the document is not also sent as a
-  binary path note; when no extraction engine is available the document degrades
-  to a file path rather than wedging the turn
 
 ### Requirement: Return outbound media into the originating thread
 Outbound media MUST be thread-aware. On a `supports_media` transport an agent's
@@ -1334,8 +1322,8 @@ chat records into the turn"); the owner's own words, `[User message]` …
 Every marker is one English constant in `backend/coffer/domain/turn_markers.py`.
 
 Only Coffer's own lines open or close a block. Every untrusted text inside one —
-forwarded entries, the quote, thread messages, sender names, an extracted
-document, a voice transcript, and the owner's own words too — passes the
+forwarded entries, the quote, thread messages, sender names,
+a voice transcript, and the owner's own words too — passes the
 **forgery guard**: a line that begins, after any indentation, with `[` and one of
 the marker names (any letter case) gets a backslash before that `[`, so
 `[End of user message]` typed by anyone reads `\[End of user message]` and closes
@@ -2540,16 +2528,12 @@ message (`2/2` in a burst), the forwarded record, the quoted message, a thread
 message — and the turn text points at it by that number. Each agent adapter lists
 the turn's files after the text in one `[Attachments]` … `[End of attachments]`
 block, one `#n from <source>: <name> …` line each, through the same domain helper:
-a path-native agent (Codex) gets `(image, saved at <path>)` / `(saved at <path>)`;
-a vision agent (Claude) gets an inline image as that line ending `(image, shown
-below)` followed by the base64 block, so it can map the picture to its number. No
+every agent gets `(image, saved at <path>)` / `(saved at <path>)`. No
 adapter says "the user attached" a file that came from a record, a quote or a
 thread. Voice and video say what is true: `— voice; the model cannot read it
 directly; file at <path>` (unless the agent's speech-to-text turned it into a
 `[Voice message transcript #n from …]` block). A file the media prune already
-removed says it could not be read. An extracted document reads
-`[Document #n from …: <name>]` … `[End of document]`; its text and a transcript's
-pass the forgery guard ("Open every turn with its message origin").
+removed says it could not be read. A transcript passes the forgery guard ("Open every turn with its message origin").
 
 #### Scenario: each attachment is named by its number and where it came from
 - **GIVEN** a turn whose first file came from a forwarded record and whose second from the owner's own message

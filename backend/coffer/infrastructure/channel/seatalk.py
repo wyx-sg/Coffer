@@ -148,8 +148,8 @@ class SeaTalkAdapter:
             )
             message_id = str(message.get("message_id", ""))
             # A group reply lands in a thread: an in-thread @mention carries its root id, a
-            # main-chat one ("") roots a thread at itself and is marked (spec channels/seatalk
-            # "Mark a main-chat mention as the group's main chat").
+            # main-chat one ("") roots a thread at itself (spec channels/seatalk "Root a
+            # main-chat mention's thread at the message itself").
             in_thread = str(message.get("thread_id", ""))
             await self._callbacks.on_message(
                 InboundMessage(

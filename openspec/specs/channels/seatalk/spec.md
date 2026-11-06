@@ -342,7 +342,7 @@ thread read itself downloads nothing.
 Images carried by SeaTalk messages — a directly-sent image, or any image nested
 **recursively** inside a `combined_forwarded_chat_history` — MUST additionally be
 downloaded with the app token and attached to the turn ([channels](../spec.md) "Flatten forwarded chat records into the turn"), so
-a vision agent sees the actual picture and not just a link.
+the agent opens the actual picture and not just a link.
 
 #### Scenario: an image nested two forwards deep is downloaded
 - **GIVEN** a SeaTalk message whose forwarded chat history contains another forwarded record holding an image

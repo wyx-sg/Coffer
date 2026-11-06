@@ -61,7 +61,7 @@ flowchart TB
 | CLI 不直接访问钥匙串 | `surfaces.cli` 完全不能导入 `infrastructure.secret`。CLI 只能通过守护进程的 HTTP API 接触密钥，所以在每台机器上，守护进程是主密钥唯一的读取者。 |
 | 禁止跨类型导入（每种类型一条） | 九条对称的契约：`mcp`、`agent`、`skill`、`knowledge`、`channel`、`chat`、`provider`、`memory`、`sync`，每条都禁止该领域的模块导入其他领域的模块。指名的例外只涉及纯领域词汇：`provider` 和 `memory` 可以读 `domain.agent`，`channel` 可以读 `domain.chat`。`domain.knowledge` 和 `infrastructure.knowledge` 是共享底层。 |
 | 与类型无关的核心不导入类型专属代码 | 资源服务及其范围、启停、删除、重命名、标题和类型辅助模块、仓库端口、调和器、关注列表和事件流、审计服务、保留期服务和 worker、内置工具注册表、Coffer 自己的引擎模块、领域层的资源、调和、范围和审计模块、共享的基础设施包、通用的依赖提供者和通用路由，都不能导入任何类型。获准的例外有两个：Alembic 的迁移环境（它把每种类型的 ORM 模型导入到同一份 metadata 里），以及一次性的保险库迁移（它要读遍每个领域才能搬数据）。 |
-| 引擎限定：markitdown | 只有消息渠道的附件提取器和知识上传转换器可以导入 `markitdown`（或 `docling`）。 |
+| 引擎限定：markitdown | 只有知识上传转换器可以导入 `markitdown`（或 `docling`）。 |
 | 已弃用的引擎处处禁止 | `llama_index`、`mem0`、`chromadb`、`sentence_transformers`、`sqlite_vec`、`fastembed`、`langgraph` 和 `langchain*` 系列包在任何地方都不能导入。Coffer 不做任何 embedding，也不运行自己的对话模型（它唯一的模型调用是一次普通的 HTTP 语音转文字请求），要重新引入就必须有意地修改这条契约。 |
 | Claude Agent SDK 限定 | 领域层、应用层和其他基础设施包不能导入 `claude_agent_sdk`。它的归宿是 `infrastructure/chat`（智能体适配器）和 `infrastructure/agent`（读取已安装智能体的目录）。 |
 
