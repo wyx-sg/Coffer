@@ -12,8 +12,6 @@ session-subprocess-model). A short in-process cache sits in front of both.
 from __future__ import annotations
 
 import asyncio
-import hashlib
-import json
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -23,14 +21,19 @@ from typing import Any, Literal
 import mcp.types as mcp_types
 from mcp import MCPError
 
+from coffer.application.mcp.discovery_parse import (
+    config_hash,
+    parse_prompts,
+    parse_resources,
+    parse_tools,
+)
 from coffer.application.mcp.ports import MCPCapabilityPreferenceRepoPort, McpCataloguePort
-from coffer.application.mcp.supervisor import SubprocessSupervisor
+from coffer.application.mcp.supervisor import SubprocessSupervisor, UpstreamHealth
 from coffer.application.resource_service import ResourceService
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.capability import (
     CapabilityType,
     MCPPrompt,
-    MCPPromptArgument,
     MCPResource,
     MCPTool,
 )
@@ -78,72 +81,6 @@ class DiscoveredTool:
     enabled: bool
     annotations: dict[str, Any] | None = None
     output_schema: dict[str, Any] | None = None
-
-
-def _output_schema_of(tool: Any) -> dict[str, Any] | None:
-    """An upstream tool's declared ``outputSchema`` as declared, or None."""
-    raw = getattr(tool, "output_schema", None)
-    return dict(raw) if isinstance(raw, dict) and raw else None
-
-
-def _annotations_of(tool: Any) -> dict[str, Any] | None:
-    """An upstream tool's MCP annotations in their wire spelling, or None."""
-    raw = getattr(tool, "annotations", None)
-    if raw is None:
-        return None
-    if hasattr(raw, "model_dump"):
-        dumped: dict[str, Any] = raw.model_dump(exclude_none=True, by_alias=True, mode="json")
-        return dumped or None
-    return dict(raw) if isinstance(raw, dict) and raw else None
-
-
-def config_hash(config: dict[str, Any]) -> str:
-    """A server config's fingerprint: a list saved under another one is stale."""
-    canonical = json.dumps(config, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(canonical.encode()).hexdigest()
-
-
-def _parse_tools(result: Any) -> list[MCPTool]:
-    return [
-        MCPTool(
-            name=t.name,
-            description=getattr(t, "description", None),
-            input_schema=getattr(t, "input_schema", None) or {},
-            annotations=_annotations_of(t),
-            output_schema=_output_schema_of(t),
-        )
-        for t in getattr(result, "tools", [])
-    ]
-
-
-def _parse_resources(result: Any) -> list[MCPResource]:
-    return [
-        MCPResource(
-            uri=str(getattr(r, "uri", "")),
-            name=getattr(r, "name", None),
-            description=getattr(r, "description", None),
-            mime_type=getattr(r, "mime_type", None),
-        )
-        for r in getattr(result, "resources", [])
-    ]
-
-
-def _parse_prompts(result: Any) -> list[MCPPrompt]:
-    return [
-        MCPPrompt(
-            name=p.name,
-            description=getattr(p, "description", None),
-            arguments=[
-                MCPPromptArgument(
-                    name=a.name,
-                    description=getattr(a, "description", None),
-                    required=getattr(a, "required", False),
-                )
-                for a in (getattr(p, "arguments", []) or [])
-            ],
-        )
-        for p in getattr(result, "prompts", [])
-    ]
 
 
 @dataclass(frozen=True)
@@ -229,7 +166,7 @@ class CapabilityDiscovery:
         async with self._lock_for(server_name, "tool"):
             if cache.tools is None or not self._is_fresh(cache.tools_fetched_at):
                 resource, cache.tools = await self._listed(
-                    server_name, "tool", "tools/list", _parse_tools, MCPTool, key=lambda t: t.name
+                    server_name, "tool", "tools/list", parse_tools, MCPTool, key=lambda t: t.name
                 )
                 cache.tools_fetched_at = self._clock()
 
@@ -261,7 +198,7 @@ class CapabilityDiscovery:
                     server_name,
                     "resource",
                     "resources/list",
-                    _parse_resources,
+                    parse_resources,
                     MCPResource,
                     key=lambda r: r.uri,
                     absent_ok=True,
@@ -293,7 +230,7 @@ class CapabilityDiscovery:
                     server_name,
                     "prompt",
                     "prompts/list",
-                    _parse_prompts,
+                    parse_prompts,
                     MCPPrompt,
                     key=lambda p: p.name,
                     absent_ok=True,
@@ -333,7 +270,10 @@ class CapabilityDiscovery:
         switches and saved for the next session."""
         resource = await self._resources.get_by_name("mcp_server", server_name)
         digest = config_hash(resource.config)
-        if self._catalogue is not None and not self._supervisor.is_live(server_name):
+        if (
+            self._catalogue is not None
+            and self._supervisor.health(server_name) is not UpstreamHealth.HEALTHY
+        ):
             saved = await self._catalogue.load(resource.uid, capability_type)
             if saved is not None and saved[0] == digest:
                 try:

@@ -19,6 +19,7 @@ import socket
 import ssl
 
 import httpx2
+from mcp import types as mcp_types
 
 from coffer.domain.mcp.config_summary import scrub
 from coffer.infrastructure.logging.upstream_tail import read_upstream_tail
@@ -114,3 +115,41 @@ __all__ = [
     "last_stderr_line",
     "status_failure",
 ]
+
+
+def leaf_exception(exc: BaseException) -> BaseException:
+    """Unwrap single-member exception groups so the real transport error is named.
+
+    anyio surfaces a crashed transport task as a (possibly nested)
+    ExceptionGroup on scope exit; a one-leaf group is the one exception it
+    carries.
+    """
+    while isinstance(exc, BaseExceptionGroup) and len(exc.exceptions) == 1:
+        exc = exc.exceptions[0]
+    return exc
+
+
+def request_failure(
+    code: int, network: BaseException | None, last_status: int | None
+) -> str | None:
+    """Why an HTTP upstream's request failed, when it was the exchange and not
+    the server answering with a JSON-RPC error: the network failure's kind, or
+    the error status the upstream answered with. ``None`` for a real answer."""
+    if code == mcp_types.CONNECTION_CLOSED:
+        return http_failure_kind(network) if network is not None else "the connection closed"
+    if last_status is not None and last_status >= 400:
+        return status_failure(last_status)
+    return None
+
+
+def init_failure(
+    leaf: BaseException, network: BaseException | None, first_error_status: int | None
+) -> str | None:
+    """Why an HTTP upstream's start failed, or None when nothing more is known."""
+    if isinstance(leaf, httpx2.HTTPError):
+        return http_failure_kind(leaf)
+    if network is not None:
+        return http_failure_kind(network)
+    if first_error_status is not None:
+        return status_failure(first_error_status)
+    return None

@@ -41,7 +41,7 @@ class McpServerStatusOut(BaseModel):
     # renders "missing <runner>" so the cause is visible.
     missing_runner: str | None = None
     #: The newest error of the current run of calls that failed to reach the
-    #: server, in Coffer's words (spec mcp-gateway "Name why an upstream failed").
+    #: server (spec mcp-gateway "Name why an upstream failed in Coffer's words").
     last_error: str | None = None
     #: When the health record (a test) was last written.
     last_checked_at: datetime | None = None

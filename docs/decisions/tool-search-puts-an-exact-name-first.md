@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-11-06
 **Deciders**: Yuxing Wu
-**Related**: [Tool Overload: List a Usage-Ranked Slice, Search the Rest](tool-overload-tier-the-list-search-the-rest.md), [Tool Search Indexes Parameter Text](tool-search-indexes-parameter-text.md), spec mcp-gateway "Find any tool in the catalogue"
+**Related**: [Tool Overload: List a Usage-Ranked Slice, Search the Rest](tool-overload-tier-the-list-search-the-rest.md), [Tool Search Indexes Parameter Text](tool-search-indexes-parameter-text.md), spec mcp-gateway "Forward tools, resources and prompts"
 
 ## Context
 
