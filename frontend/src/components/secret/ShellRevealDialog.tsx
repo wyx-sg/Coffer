@@ -15,6 +15,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toast";
+import { copySecretValue } from "@/lib/secretClipboard";
 import { onShellEvent } from "@/lib/tauri";
 
 /** The event the shell shows a revealed value on (`desktop_requests.rs`). */
@@ -28,6 +30,7 @@ interface Revealed {
 
 export function ShellRevealDialog() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [shown, setShown] = useState<Revealed | null>(null);
   const [left, setLeft] = useState(SHOW_SECONDS);
 
@@ -65,7 +68,11 @@ export function ShellRevealDialog() {
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => void navigator.clipboard?.writeText(shown?.value ?? "")}
+            onClick={() =>
+              void copySecretValue(shown?.value ?? "")
+                .then(() => toast.success(t("secrets.reveal.copied")))
+                .catch(() => toast.error(t("secrets.menu.copyFailed")))
+            }
           >
             {t("common.copy")}
           </Button>

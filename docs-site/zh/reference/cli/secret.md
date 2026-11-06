@@ -31,7 +31,6 @@ coffer secret [OPTIONS] COMMAND [ARGS]...
 | [`secret unignore`](#secret-unignore) | Forget values remembered as not secrets. |
 | [`secret key-fingerprint`](#secret-key-fingerprint) | This machine's master key fingerprint (never the key). |
 | [`secret key-preview`](#secret-key-preview) | Whose key a key backup holds, beside this machine's; changes nothing. |
-| [`secret key-install`](#secret-key-install) | The request the Coffer app sends to install a key backup. |
 | [`secret local-access`](#secret-local-access) | Hand a standalone secret to programs `coffer run` starts. |
 | [`secret local-access request`](#secret-local-access-request) | Ask to hand a secret to programs coffer run starts; waits for approval. |
 | [`secret local-access revoke`](#secret-local-access-revoke) | Withdraw the grant. |
@@ -266,24 +265,6 @@ Whose key a key backup holds, beside this machine's; changes nothing. Body: mate
 
 ```sh
 coffer secret key-preview [OPTIONS]
-```
-
-<p class="cli-label">参数与选项</p>
-
-| 名称 | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `--data, -d` <span class="cli-chip">选项</span> | text |  | Request body: JSON text, @path to read a file, or - to read stdin. |
-| `--set` <span class="cli-chip">选项</span> | text（可重复） |  | Set one body field: key=value (dotted keys nest; the value is JSON when it parses). |
-| `--json` <span class="cli-chip">选项</span> | 开关 |  | Print the daemon's answer as JSON on stdout (errors as JSON on stderr). |
-
-## secret key-install
-
-The request the Coffer app sends to install a key backup. Body: material, passphrase, nonce, signature, where nonce and signature are the presence grant the app signs after its own Touch ID check; the command line cannot get one, and without it nothing is installed. To import a key, run `coffer secret import-key`, which opens the import in the app.
-
-<p class="cli-label">概要</p>
-
-```sh
-coffer secret key-install [OPTIONS]
 ```
 
 <p class="cli-label">参数与选项</p>

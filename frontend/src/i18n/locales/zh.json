@@ -6040,7 +6040,7 @@
       "revealedAt": "显示于 {{time}}",
       "valueLabel": "{{name}} 的值",
       "hide": "隐藏",
-      "copied": "已复制值",
+      "copied": "已复制值，90 秒后会从剪贴板清除。",
       "hidesIn": "{{seconds}} 秒后隐藏 · 已记录在活动中"
     },
     "delete": {
@@ -6470,6 +6470,12 @@
       "unreachableTitle": "无法连接 {{host}}",
       "unreachableBody": "{{reason}} 在它恢复应答之前，所有使用它的地方都会失败。",
       "unreachablePrompt": "Coffer 无法连接模型提供商「{{name}}」（{{url}}）。最近一次的结果是：{{reason}}。请查明原因——网络、VPN、网关宕机、地址错误——并修复，或告诉我该改什么。未经询问不要改动 Coffer 的设置。",
+      "awaitingTitle": "API 密钥正在等待批准",
+      "awaitingBody": "在你批准把它发到这里之前，这个密钥会被扣住，使用这个服务商的功能都无法工作。",
+      "openApprovals": "打开批准列表",
+      "refusedTitle": "已拒绝把 API 密钥发到这里",
+      "refusedBody": "地址不变时这个密钥会一直被扣住。点“重新申请”可以重新提交请求。",
+      "askAgain": "重新申请",
       "routeThrough": "经由 Coffer 的中转："
     },
     "key": {

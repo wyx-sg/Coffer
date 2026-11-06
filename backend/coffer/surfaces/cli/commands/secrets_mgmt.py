@@ -96,18 +96,6 @@ SPECS = [
         "material (read from a file with --data @backup.json).",
         body=True,
     ),
-    RouteCommand(
-        "secret key-install",
-        "POST",
-        "/secrets/key/import",
-        _KEY + "import (the app's request)",
-        "The request the Coffer app sends to install a key backup. Body: material, "
-        "passphrase, nonce, signature, where nonce and signature are the presence grant "
-        "the app signs after its own Touch ID check; the command line cannot get one, "
-        "and without it nothing is installed. To import a key, run "
-        "`coffer secret import-key`, which opens the import in the app.",
-        body=True,
-    ),
 ]
 
 mount(SPECS)

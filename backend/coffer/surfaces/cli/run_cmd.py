@@ -3,23 +3,21 @@
 Spec secret "Resolve standalone secrets into one child with coffer run";
 ADR standalone-secrets-are-named-references-injected-into-one-child.
 
-    coffer run --secret db-password -- psql -h db.internal
     coffer run --secret PGPASSWORD=coffer://secret/<id> -- psql -h db.internal
-    coffer run --secret PGPASSWORD=db-password --env-file app.env -- ./migrate
+    coffer run --secret PGPASSWORD=<id> --env-file app.env -- ./migrate
 
-Every ``--secret NAME`` (as ``$NAME`` upper-cased, ``-``/``.`` → ``_``) or
-``--secret ENV=NAME``, every ``coffer://secret/<name>`` value in ``--env-file``
-and every such value already in this environment is resolved through the
-daemon — which audits each one as ``secret_resolved`` — and set **only in the
-child's environment**. The shell that ran this, and its other children, never
-hold the value. The child's stdout and stderr pass through a filter that
-replaces each exact value with ``***``.
+Every ``--secret ENV=coffer://secret/<id>`` (or ``ENV=<id>``), every
+``coffer://secret/<name>`` value in ``--env-file`` and every such value already
+in this environment is resolved through the daemon — which audits each one as
+``secret_resolved`` — and set **only in the child's environment**. The shell
+that ran this, and its other children, never hold the value. The child's stdout
+and stderr pass through a filter that replaces each exact value with ``***``.
 
 Only secrets a person granted to local programs in the desktop app resolve;
 any other is refused, nothing starts and the request waits in the app. The
 grant is the line that matters: whoever runs ``coffer run`` — an agent too —
-owns the child and can read its environment or run ``coffer run --secret X --
-env``, so masking only keeps a value out of transcripts, files and git by
+owns the child and can read its environment or run ``coffer run --secret X=<id>
+-- env``, so masking only keeps a value out of transcripts, files and git by
 accident. A secret an agent should only *use* stays without the grant and
 reaches its service through Coffer (an MCP server or custom tool).
 """
@@ -37,7 +35,7 @@ from typing import IO, Any
 import typer
 
 from coffer.domain.secret_masking import MIN_MASKED_LENGTH, StreamMasker
-from coffer.domain.secrets import default_env_var, is_valid_secret_name, parse_secret_uri
+from coffer.domain.secrets import is_valid_secret_name, parse_secret_uri
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._options import ExitCode
 
@@ -46,18 +44,24 @@ _NOT_STARTED = 127
 
 
 def _parse_spec(spec: str) -> tuple[str, str]:
-    """``NAME`` → (default var, NAME); ``ENV=NAME`` → (ENV, NAME).
+    """``ENV=coffer://secret/<id>`` or ``ENV=<id>`` → (ENV, id).
 
-    The name may be written as its URI, ``coffer://secret/<id>``, the form a
-    skill cites a secret in.
+    The variable is always named: a secret's id is 32 hex characters, so a
+    name derived from it is one no program reads.
     """
-    var, _, name = spec.partition("=") if "=" in spec else ("", "", spec)
-    name = name.strip()
+    var, sep, name = spec.partition("=")
+    var, name = var.strip(), name.strip()
+    if not sep or not var:
+        typer.echo(
+            f"name the variable to set: --secret ENV=coffer://secret/<id> (got {spec!r})",
+            err=True,
+        )
+        raise typer.Exit(int(ExitCode.INVALID_INPUT))
     name = parse_secret_uri(name) or name
     if not is_valid_secret_name(name):
         typer.echo(f"invalid secret name: {name!r}", err=True)
         raise typer.Exit(int(ExitCode.INVALID_INPUT))
-    return (var.strip() or default_env_var(name)), name
+    return var, name
 
 
 def _read_env_file(path: pathlib.Path) -> tuple[dict[str, str], dict[str, str]]:
@@ -108,7 +112,7 @@ def run(
     secret: list[str] = typer.Option(
         [],
         "--secret",
-        help="NAME, ENV=NAME or ENV=coffer://secret/<id> of a standalone secret (repeatable)",
+        help="ENV=coffer://secret/<id> (or ENV=<id>) of a standalone secret (repeatable)",
     ),
     env_file: pathlib.Path | None = typer.Option(
         None,
@@ -134,7 +138,7 @@ def run(
     command = list(ctx.args)
     if not command:
         typer.echo(
-            "usage: coffer run [--secret NAME|ENV=NAME|ENV=coffer://secret/ID]… -- COMMAND [ARGS]…",
+            "usage: coffer run [--secret ENV=coffer://secret/ID]… -- COMMAND [ARGS]…",
             err=True,
         )
         raise typer.Exit(int(ExitCode.INVALID_USAGE))

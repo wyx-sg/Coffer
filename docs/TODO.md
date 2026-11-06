@@ -172,21 +172,6 @@ threads appending at once rarely conflict:
   delete the file, then ask for a fresh `.cfk` backup and say the other Macs
   need the new key. No standing "rotate" button. Draft: B3.
 
-### Keep plaintext secrets out of the memories Coffer copies
-
-- **Added:** 2026-11-06, from the thread "梳理密钥管理的缺口与缺陷"
-- **What:** before memory sync copies a memory into each agent's own memory,
-  Coffer checks it with the plaintext detector. A memory holding a credential is
-  not delivered, and shows under "Needs you".
-- **Why later:** memory sync copies a memory into several places outside the
-  vault (Claude Code's rules file, Codex's memories), and the check before a
-  push never sees those. So a token that lands in a memory gets spread by Coffer
-  itself. Nothing has hit this yet.
-- **Sketch:** reuse the detector and the "Not a secret" list of "Find plaintext
-  keys". Report only; never edit the memory text. Agents' own config files and
-  knowledge stay out of scope: an agent can scan those itself, and the push
-  check already covers knowledge. Draft: C3.
-
 ### Move a `.env` file into the store
 
 - **Added:** 2026-11-06, from the thread "梳理密钥管理的缺口与缺陷"

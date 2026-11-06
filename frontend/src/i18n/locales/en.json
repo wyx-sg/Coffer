@@ -6040,7 +6040,7 @@
       "revealedAt": "Revealed at {{time}}",
       "valueLabel": "Value of {{name}}",
       "hide": "Hide",
-      "copied": "Value copied",
+      "copied": "Value copied. The clipboard is cleared in 90 seconds.",
       "hidesIn": "Hides in {{seconds}} s · Recorded in Activity"
     },
     "delete": {
@@ -6470,6 +6470,12 @@
       "unreachableTitle": "Can’t reach {{host}}",
       "unreachableBody": "{{reason}} Everything that uses it fails until it answers.",
       "unreachablePrompt": "Coffer can’t reach the model provider “{{name}}” at {{url}}. The last answer was: {{reason}}. Find out why — network, VPN, the gateway being down, a wrong address — and fix it or tell me what to change. Don’t change Coffer’s settings without asking.",
+      "awaitingTitle": "The API key is waiting for approval",
+      "awaitingBody": "Its secret is held until you approve sending it here. Nothing that uses this provider works until then.",
+      "openApprovals": "Open approvals",
+      "refusedTitle": "Sending the API key here was refused",
+      "refusedBody": "Its secret stays held while the address is the same. Ask again to put the request back.",
+      "askAgain": "Ask again",
       "routeThrough": "Through Coffer’s proxy at"
     },
     "key": {

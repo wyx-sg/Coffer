@@ -4,7 +4,7 @@
 Settings > Security shows the key's fingerprint and offers the import whether
 or not the experimental ``sync`` feature is on, so the routes behind them must
 answer the same either way. Installing a key stays presence-gated: the command
-line has no way to get the desktop app's grant, so ``coffer secret key-install``
+line has no way to get the desktop app's grant, so the import route
 without one is refused and the key is unchanged.
 """
 
@@ -68,37 +68,27 @@ def test_the_key_routes_answer_whatever_the_sync_switch(daemon: BoundaryDaemon) 
 
 
 @pytest.mark.acceptance(
-    spec="secret", scenario="a key install from the command line without a grant changes nothing"
+    spec="secret", scenario="a key install without the app's grant changes nothing"
 )
-def test_the_cli_cannot_install_a_key_without_the_apps_grant(daemon: BoundaryDaemon) -> None:
+def test_a_key_install_without_the_apps_grant_changes_nothing(daemon: BoundaryDaemon) -> None:
     before = get_master_key_manager().current
     material = Fernet.generate_key().decode()
 
-    missing = _runner.invoke(
-        cli_app,
-        ["secret", "key-install", "--json", "--data", "-"],
-        input=f'{{"material": "{material}"}}',
+    missing = daemon.client.post(f"{KEY}/import", json={"material": material})
+    forged = daemon.client.post(
+        f"{KEY}/import",
+        json={"material": material, "nonce": "x" * 16, "signature": "0" * 64},
     )
-    assert missing.exit_code == 6, missing.output
-
-    forged_body = f'{{"material": "{material}", "nonce": "{"x" * 16}", "signature": "{"0" * 64}"}}'
-    forged = _runner.invoke(
-        cli_app, ["secret", "key-install", "--json", "--data", "-"], input=forged_body
-    )
-    assert forged.exit_code == 11, forged.output
-    assert "PRESENCE_GRANT_INVALID" in forged.output
+    assert missing.status_code == 422, missing.text
+    assert "PRESENCE_GRANT_INVALID" in forged.text
 
     assert get_master_key_manager().current == before
     shown = _runner.invoke(cli_app, ["secret", "key-fingerprint", "--json"])
     assert shown.exit_code == 0, shown.output
     assert _fingerprint() in shown.output
-    assert material not in shown.output + missing.output + forged.output
+    assert material not in shown.output + missing.text + forged.text
     assert daemon.audit("master_key_imported") == []
 
-
-def test_the_install_help_names_the_grant_and_the_app_command() -> None:
-    result = _runner.invoke(cli_app, ["secret", "key-install", "--help"])
-    assert result.exit_code == 0, result.output
-    text = " ".join(result.output.split())
-    assert "presence grant" in text
-    assert "coffer secret import-key" in text
+    listed = _runner.invoke(cli_app, ["secret", "--help"])
+    assert "key-install" not in listed.output
+    assert _runner.invoke(cli_app, ["secret", "key-install", "--help"]).exit_code != 0

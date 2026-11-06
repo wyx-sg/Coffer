@@ -7,7 +7,10 @@
 // uses it (ADR one-connection-serves-both-wires); a local one its runtime and
 // address. Route says agents reach it through Coffer's proxy.
 // Problems of the endpoint show here, in a box above the rows: Unreachable
-// (Hand off to <Agent>) and Key rejected (Replace key…).
+// (Hand off to <Agent>), Key rejected (Replace key…), and — when the key's secret
+// is held for approval — Waiting for approval (Open approvals) or Refused (Ask
+// again, Touch ID in the desktop app). Those two are not the endpoint's fault, so
+// they never show the Unreachable box or its hand-off.
 import { useTranslation } from "react-i18next";
 import { KeyRound } from "lucide-react";
 
@@ -17,6 +20,9 @@ import { Button } from "@/components/ui/button";
 import { SecretRefControl } from "@/components/secret/SecretRefControl";
 import { TruncatedText } from "@/components/ui/truncated-text";
 import type { Provider } from "@/lib/api/providers";
+import { endpointModelsKey } from "@/lib/api/queryKeys";
+import { useAskAgainFor } from "@/lib/hooks/useAskAgain";
+import { openApprovalsSheet } from "@/lib/hooks/useApprovals";
 import { useProxyAddress } from "@/lib/hooks/useProviderPrices";
 import { addressesOf } from "@/lib/providers/addresses";
 import type { ProbeStatus } from "@/lib/providers/probeStatus";
@@ -56,6 +62,7 @@ export function ProviderEndpoint({
   const rejected = status === "keyRejected";
   const host = hostOf(provider.base_url);
   const addresses = addressesOf(provider);
+  const askAgain = useAskAgainFor(provider.uid, [endpointModelsKey(provider.uid)]);
 
   return (
     <Section title={t("providers.endpoint.title")} gap="tight">
@@ -74,6 +81,33 @@ export function ProviderEndpoint({
               reason,
             })}
           />
+        </ProblemBox>
+      ) : null}
+      {status === "awaitingApproval" ? (
+        <ProblemBox
+          tone="neutral"
+          title={t("providers.endpoint.awaitingTitle")}
+          body={t("providers.endpoint.awaitingBody")}
+        >
+          <Button variant="outline" size="sm" onClick={openApprovalsSheet}>
+            {t("providers.endpoint.openApprovals")}
+          </Button>
+        </ProblemBox>
+      ) : null}
+      {status === "refused" ? (
+        <ProblemBox
+          tone="error"
+          title={t("providers.endpoint.refusedTitle")}
+          body={t("providers.endpoint.refusedBody")}
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={askAgain.isPending}
+            onClick={() => askAgain.mutate()}
+          >
+            {t("providers.endpoint.askAgain")}
+          </Button>
         </ProblemBox>
       ) : null}
       {rejected ? (

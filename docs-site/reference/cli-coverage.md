@@ -314,7 +314,6 @@ Every management operation a person does on a Coffer page or in the desktop app 
 | Secrets · Move into the store | `POST /secrets/import` | `coffer secret import` | `test_cli_parity.py` |
 | Settings · Security · Import a master key (desktop app, Touch ID) | `POST /desktop/requests` | `coffer secret import-key` | `test_cli_parity.py` |
 | Settings · Security · master key · fingerprint | `GET /secrets/key/fingerprint` | `coffer secret key-fingerprint` | `test_cli_parity.py` |
-| Settings · Security · master key · import (the app's request) | `POST /secrets/key/import` | `coffer secret key-install` | `test_cli_parity.py` |
 | Settings · Security · master key · import (review) | `POST /secrets/key/import/preview` | `coffer secret key-preview` | `test_cli_parity.py` |
 | Secrets · list | `GET /secrets` | `coffer secret list` | `test_secret_cmd.py` |
 | Secrets · Allow local programs (coffer run) | `POST /secrets/local-access/request` | `coffer secret local-access request` | `test_cli_parity.py` |
@@ -480,6 +479,7 @@ Plain files are read and edited with your own tools, and a few acts only make se
 | `approve_pending` | `coffer approval approve` |
 | `approve_pending_batch` | `coffer approval approve` |
 | `check_for_updates` | `coffer app update check` |
+| `copy_secret` | the window: copies a revealed value onto this Mac's pasteboard |
 | `daemon_version_matches` | the page's plumbing: the page's handshake with the shell |
 | `export_master_key_backup` | `coffer secret backup-key` |
 | `get_daemon_info` | the page's plumbing: the page's handshake with the shell |

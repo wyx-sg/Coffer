@@ -146,11 +146,6 @@ def cited_secret_names(text: str) -> set[str]:
     return set(_URI_RE.findall(text))
 
 
-def default_env_var(name: str) -> str:
-    """The variable ``coffer run --secret NAME`` sets: upper-cased, ``-``/``.`` → ``_``."""
-    return re.sub(r"[-.]", "_", name).upper()
-
-
 def fingerprint(target: str) -> str:
     """A stable digest of where a value goes; what an approval is pinned to."""
     return hashlib.sha256(target.encode("utf-8")).hexdigest()[:32]

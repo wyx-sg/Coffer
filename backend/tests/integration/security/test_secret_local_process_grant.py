@@ -290,7 +290,7 @@ def test_no_refusal_or_grant_writes_the_value_to_a_log(
 ) -> None:
     caplog.set_level(logging.DEBUG)
     _resolve(d, NAME)
-    _runner.invoke(cli_app, ["run", "--secret", NAME, "--", sys.executable, "-c", "pass"])
+    _runner.invoke(cli_app, ["run", "--secret", f"K={NAME}", "--", sys.executable, "-c", "pass"])
     d.grant_local(NAME)
     d.client.post("/api/v1/secrets/local-access/revoke", json={"name": NAME})
 

@@ -48,7 +48,7 @@ def test_coffer_run_sets_a_secret_only_in_the_child(cli: BoundaryDaemon) -> None
     )
 
     result = _runner.invoke(
-        cli_app, ["run", "--secret", "db-password", "--", sys.executable, "-c", probe]
+        cli_app, ["run", "--secret", "DB_PASSWORD=db-password", "--", sys.executable, "-c", probe]
     )
 
     assert result.exit_code == 0, result.output
@@ -105,7 +105,7 @@ def test_coffer_run_masks_a_value_split_across_writes(cli: BoundaryDaemon) -> No
     )
 
     result = _runner.invoke(
-        cli_app, ["run", "--secret", "db-password", "--", sys.executable, "-c", probe]
+        cli_app, ["run", "--secret", "DB_PASSWORD=db-password", "--", sys.executable, "-c", probe]
     )
 
     assert result.exit_code == 0, result.output
@@ -118,7 +118,7 @@ def test_coffer_run_passes_the_exit_status_through(cli: BoundaryDaemon) -> None:
     cli.grant_local("x-token")
     result = _runner.invoke(
         cli_app,
-        ["run", "--secret", "x-token", "--", sys.executable, "-c", "raise SystemExit(7)"],
+        ["run", "--secret", "X_TOKEN=x-token", "--", sys.executable, "-c", "raise SystemExit(7)"],
     )
     assert result.exit_code == 7
 
@@ -136,7 +136,7 @@ def test_a_resources_secret_cannot_be_resolved_by_coffer_run(cli: BoundaryDaemon
         json={"names": ["mcp_server/gh/TOKEN"], "argv0": "env"},
     )
     unknown = d.client.post("/api/v1/secrets/resolve", json={"names": ["TOKEN"], "argv0": "env"})
-    via_cli = _runner.invoke(cli_app, ["run", "--secret", "mcp_server/gh/TOKEN", "--", "env"])
+    via_cli = _runner.invoke(cli_app, ["run", "--secret", "T=mcp_server/gh/TOKEN", "--", "env"])
 
     assert minted.status_code == 422 and unknown.status_code == 404
     assert via_cli.exit_code != 0
@@ -171,10 +171,23 @@ def test_coffer_run_accepts_the_uri_form_a_skill_cites(cli: BoundaryDaemon) -> N
     assert "True True" in result.output
 
 
-def test_coffer_run_parse_spec_strips_the_uri_and_defaults_the_variable() -> None:
+def test_coffer_run_parse_spec_strips_the_uri() -> None:
     from coffer.surfaces.cli.run_cmd import _parse_spec
 
     uid = "0123456789abcdef0123456789abcdef"
     assert _parse_spec(f"API=coffer://secret/{uid}") == ("API", uid)
-    assert _parse_spec(f"coffer://secret/{uid}") == (uid.upper(), uid)
-    assert _parse_spec("db-password") == ("DB_PASSWORD", "db-password")
+    assert _parse_spec(f" API = {uid} ") == ("API", uid)
+
+
+@pytest.mark.acceptance(
+    spec="secret", scenario="coffer run refuses a secret whose variable is not named"
+)
+def test_coffer_run_refuses_a_secret_whose_variable_is_not_named(cli: BoundaryDaemon) -> None:
+    cli.store("secret/x-token", "value-long-enough")
+    cli.grant_local("x-token")
+    for spec in ("x-token", "coffer://secret/x-token", "=x-token"):
+        result = _runner.invoke(cli_app, ["run", "--secret", spec, "--", "env"])
+        assert result.exit_code != 0
+        assert "--secret ENV=coffer://secret/<id>" in result.output
+        assert "value-long-enough" not in result.output
+    assert cli.audit("secret_resolved") == []

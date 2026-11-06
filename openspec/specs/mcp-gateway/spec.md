@@ -1025,11 +1025,18 @@ value is never read for this; a server that cites none never asks the secret sto
 ### Requirement: Show what an MCP server requires
 A server's status read MUST also list what its command and settings need from this machine, worked out from the config alone and without starting the server: for a stdio server its **launcher** (the command's executable — `npx`, `uvx`, `docker`, `bunx`, `node`, `python` and the like) as a CLI that is `found`, with its version when it prints one, or `not_found`; and every **secret** its environment or headers cite — through a stored secret bound to the variable or header, or a `coffer://secret/<name>` written in a plain value — as `set`, `missing` on this machine, `waiting_approval`, or `refused` once a person refused its binding (a refusal is not a wait), naming the variable or header and the secret. A launcher's version is read once and kept until the daemon restarts; one that is not found is looked up again on every read. An HTTP server has no launcher, and no secret's value is read.
 
+The server's page shows each such row with its next step: a `waiting_approval` secret offers Open approvals, and a `refused` one offers Ask again, which puts the refused request back (in the desktop app it is approved on the spot with Touch ID).
+
 #### Scenario: a server's page lists what it requires
 - **GIVEN** a stdio server started with `npx` whose environment binds one stored secret that is set, one that is missing, and one that waits for approval
 - **WHEN** its status is read
 - **THEN** it lists the `npx` launcher as found with its version, then each secret as `set`, `missing` and `waiting_approval` by its variable name
 - **AND** a launcher that is not on this machine reads `not_found`, and an HTTP server lists its header secrets and no launcher
+
+#### Scenario: a secret row held for approval offers its next step
+- **GIVEN** a server page whose Requires block lists one secret waiting for approval and one refused
+- **WHEN** the person presses Open approvals on the first and Ask again on the second
+- **THEN** the approvals list opens, and the server's refused request is put back (TypeScript acceptance test)
 
 ### Requirement: Record why a registered server's test failed
 A test of a registered server that fails MUST store, with the failing health record, why it failed as one
