@@ -111,7 +111,7 @@ A parallel thread nobody has used for 24 hours closes on its own: no turn runnin
 
 ## Status, help and the /new card {#status-and-help-cards}
 
-`/status` answers in words, not ids, under the title **Status**: the conversation's title (or its `🧵#N` mark); one line with the agent, the model and the directory; then **Running**, **Running · 2 waiting**, **⏸ 2 on hold** or **Idle**. While a turn runs, the lines under it say what it is doing: how long it has run and how many steps (`⏳ Working · 2m 14s · 7 steps`), the agent's latest words (`💬 …`) and the step in hand (`⏳ Bash · rerun the 3DS test`). On SeaTalk, where a running turn shows only typing, this is how you find out what it is doing. In a direct chat it also lists the open parallel threads on one line, each with whether it is running, has messages waiting or on hold, or is idle. On a platform with buttons it is a card carrying only the buttons that act on what it shows: **Stop** while a turn runs, **Continue** and **Discard** while messages are on hold, then **Model** and **Dir**.
+`/status` answers in words, not ids, under the title **Status**: the conversation's title (or its `🧵#N` mark); one line with the agent, the model and the directory; then **Running**, **Running · 2 waiting**, **⏸ 2 on hold** or **Idle**. In a direct chat it also lists the open parallel threads on one line, each with whether it is running, has messages waiting or on hold, or is idle. On a platform with buttons it is a card carrying only the buttons that act on what it shows: **Stop** while a turn runs, **Continue** and **Discard** while messages are on hold, then **Model** and **Dir**.
 
 `/help` is a list to read, with no buttons. In a direct chat:
 

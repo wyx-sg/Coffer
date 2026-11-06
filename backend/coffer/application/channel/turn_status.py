@@ -115,16 +115,6 @@ class TurnStatus:
             facts.append(count)
         return " · ".join(facts)
 
-    def summary(self, now: float) -> str:
-        """Header, narration and the newest step only — the short form ``/status``
-        shows of a running turn, on platforms with no live surface too."""
-        out = [self.header(now)]
-        if self.narration:
-            out.append(f"💬 {self.narration}")
-        if self._lines:
-            out.append(list(self._lines.values())[-1])
-        return "\n".join(out)
-
     def block(self, now: float) -> str:
         """The whole status block: header, narration, and the newest steps."""
         out = [self.header(now)]

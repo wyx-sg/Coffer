@@ -2201,11 +2201,7 @@ with the agent by its display name, the model by the name its button shows, and 
 messages a stop held, see "Continue or discard the messages a stop held") or
 "Idle"; in a direct chat, one "Parallel threads (n):" line naming each with its
 agent and its state — running, n on hold, n waiting or idle (see "Open
-parallel conversations beside a direct chat"). While a turn runs it adds what
-the turn is doing: the status header (how long it has run and how many steps),
-the agent's latest words before a tool, and the step in hand, as the live
-preview shows them (see "Show a turn's working state as one status line"), so a
-platform with no live surface can still be asked. It shows no conversation or agent
+parallel conversations beside a direct chat"). It shows no conversation or agent
 ids. Where the transport has buttons it is a card carrying only the buttons that
 act on what it shows: Stop while a turn runs, Continue and Discard while
 messages are on hold, then Model and Dir, which change the model and directory
@@ -2221,12 +2217,6 @@ always an ordinary message the whole room would see.
 - **THEN** a card titled "Status" names the agent by display name, the model
   and the directory, shows no conversation title, carries the Model and Dir buttons —
   and Stop first while a turn runs — and contains no conversation id
-
-#### Scenario: /status says what a running turn is doing
-- **GIVEN** a direct chat whose turn has run for two minutes and three tools
-- **WHEN** the owner sends `/status`
-- **THEN** below "Running" it shows `⏳ Working · 2m … · 3 steps`, the agent's
-  latest words and the step in hand
 
 ### Requirement: List the commands with /help
 `/help` MUST answer with the commands from the roster as a list to read: a

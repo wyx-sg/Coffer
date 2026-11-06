@@ -134,12 +134,6 @@ class TurnRenderer:
     #: The held line and its Continue and Discard, owed after the reply.
     _held_card: tuple[str, list[ChoiceButton]] | None = field(init=False, default=None)
 
-    def progress(self) -> str:
-        """What the turn is doing now, for ``/status``: the status header, the
-        agent's latest words and the step in hand; "" before the turn starts."""
-        status: TurnStatus | None = getattr(self, "_status", None)
-        return "" if status is None else status.summary(self.now())
-
     async def consume(self, queue: asyncio.Queue[Any]) -> TurnOutcome:
         """Render the turn; return how it ended (``done`` / ``failed`` /
         ``stopped``), which the driver marks on the asker's message."""
