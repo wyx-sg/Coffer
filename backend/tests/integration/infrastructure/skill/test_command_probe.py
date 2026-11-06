@@ -21,15 +21,10 @@ def _path(bin_dir: pathlib.Path) -> UserPath:
     return UserPath(shell_path=lambda: shell)
 
 
-def test_probe_reads_the_version(tmp_path: pathlib.Path) -> None:
-    gh = _script(tmp_path, "gh", 'case "$1" in --version) echo "gh version 2.45.0";; esac')
+def test_probe_finds_the_command_and_runs_nothing(tmp_path: pathlib.Path) -> None:
+    ran = tmp_path / "ran"
+    gh = _script(tmp_path, "gh", f'touch "{ran}"')
     probe = CommandProbe(user_path=_path(tmp_path))
     assert probe.locate("gh") == str(gh.resolve())
     assert probe.locate("no-such-command-xyz") is None
-    assert probe.version(str(gh)) == "2.45.0"
-
-
-def test_a_tool_that_prints_no_version_reads_as_none(tmp_path: pathlib.Path) -> None:
-    # ``go --version`` prints an error and no version.
-    go = _script(tmp_path, "go", 'echo "flag provided but not defined: -version" >&2; exit 2')
-    assert CommandProbe(user_path=_path(tmp_path)).version(str(go)) is None
+    assert not ran.exists()

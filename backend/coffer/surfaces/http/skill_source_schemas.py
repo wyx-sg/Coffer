@@ -71,15 +71,12 @@ class SkillRequirementOut(BaseModel):
     """One command the skill's SKILL.md says it needs."""
 
     command: str
-    min_version: str | None
     #: The profiles that declare it; empty when SKILL.md itself does.
     profiles: list[str]
 
 
 def requirement_out(r: CommandRequirement) -> SkillRequirementOut:
-    return SkillRequirementOut(
-        command=r.command, min_version=r.min_version, profiles=list(r.profiles)
-    )
+    return SkillRequirementOut(command=r.command, profiles=list(r.profiles))
 
 
 class SkillSecretRequirementOut(BaseModel):

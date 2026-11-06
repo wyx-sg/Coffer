@@ -695,7 +695,6 @@
         "sub": "根据服务器的命令和设置推出。",
         "cli": "CLI",
         "secret": "密钥",
-        "foundVersion": "已找到 · {{version}}",
         "viewClis": "在 CLI 中查看",
         "status": {
           "found": "已找到",
@@ -2978,12 +2977,10 @@
       "openSecrets": "打开密钥",
       "loadFailed": "无法检查这个技能需要的命令",
       "found": "已找到",
-      "outdated": "{{version}}，需要 ≥ {{min}}",
       "unknown": "尚未检查",
       "state": {
         "missing": "未安装",
-        "ready": "已找到",
-        "outdated": "版本太旧"
+        "ready": "已找到"
       },
       "commandsIntro": "技能会运行的命令行工具，在 SKILL.md 的 <code>requires: commands</code> 下声明。",
       "secretsIntro": "技能会读取的 Coffer 密钥，在 SKILL.md 的 <code>requires: secrets</code> 下声明。这里只显示名字。",
@@ -2991,7 +2988,6 @@
       "skillsIntro": "这个技能会加载的其他技能，在 SKILL.md 的 <code>metadata.requires</code> 下声明。",
       "checkedAgo": "在这台 Mac 上{{when}}检查过。",
       "inProfiles": "在 profile {{profiles}} 中声明",
-      "needsAtLeast": "需要 ≥ {{min}}",
       "viewInClis": "在命令行工具中查看",
       "viewInSecrets": "在密钥中查看",
       "viewInSkills": "在技能中查看",
@@ -3047,7 +3043,6 @@
       "masterMissing": "主文件夹不见了",
       "folderInWay": "{{agent}} 中有文件夹挡住",
       "needsMissing": "需要 {{command}} · 未安装",
-      "needsNewer": "需要更新版本的 {{command}}",
       "needsSecret": "需要密钥 {{name}} · 未设置",
       "needsTool": "需要 {{name}} · {{state}}",
       "sourceUnreachable": "Git 来源无法访问",
@@ -3086,8 +3081,6 @@
       "folderBody": "Coffer 在 {{path}} 发现了一个文件夹，那里本应是 {{name}} 的链接。比较两边，选择保留哪一个。",
       "requiresMissingPart_one": "{{commands}} 未安装",
       "requiresMissingPart_other": "{{commands}} 未安装",
-      "requiresOldPart_one": "{{commands}} 版本低于技能要求",
-      "requiresOldPart_other": "{{commands}} 版本低于技能要求",
       "secretsTitle_one": "这个技能需要的 {{count}} 个密钥未设置",
       "secretsTitle_other": "这个技能需要的 {{count}} 个密钥未设置",
       "unreachableTitle": "无法访问 {{repo}}",
@@ -5124,8 +5117,6 @@
       },
       "clis": {
         "ok": "全部就绪",
-        "outdated_one": "{{count}} 个版本过旧",
-        "outdated_other": "{{count}} 个版本过旧",
         "missing_one": "{{count}} 个缺失",
         "missing_other": "{{count}} 个缺失",
         "unit_one": "个命令行工具",
@@ -5739,18 +5730,14 @@
     "title": "命令行工具",
     "addTool": "添加命令行工具",
     "check": "检查",
-    "checkHint": "重新探测每个工具：是否找到，以及版本",
+    "checkHint": "重新在 PATH 上查找每个工具",
     "checking": "正在检查…",
     "status": {
       "missing": "未找到",
-      "outdated": "版本过旧",
       "ready": "就绪"
     },
     "search": "筛选命令行工具",
     "notOnPath": "不在 PATH 上",
-    "needs": "要求 ≥ {{version}}",
-    "versionUnverifiable": "要求 ≥ {{version}} · 读不出版本，没法核对",
-    "unknownVersion": "版本未知",
     "skillCount_one": "{{count}} 个技能",
     "skillCount_other": "{{count}} 个技能",
     "warnings": {
@@ -5774,13 +5761,12 @@
       "today": "今天 {{time}}",
       "onDate": "{{date}} {{time}}",
       "foundAt": "位置",
-      "version": "版本",
       "neededByNote": "调用它的 Coffer 自身、技能和 MCP 服务器。打开技能或服务器可以看原因。",
       "neededByNothing": "没有技能或 MCP 服务器要求它——它是你手动添加的，会一直留在列表里，直到你移除。",
       "cols": {
         "name": "名称",
         "kind": "类型",
-        "needs": "要求"
+        "needs": "用途"
       },
       "kind": {
         "server": "MCP 服务器",
@@ -5796,19 +5782,17 @@
       "body": "填写命令名，或可执行文件的路径。",
       "editTitle": "编辑 {{command}}",
       "editBody": "更改 Coffer 对这个工具的检查内容。",
-      "requiredBody": "有技能或 MCP 服务器需要这个工具。你在这里改的值会代替它们写的；清空某一项就恢复成它们的。最低版本取所有要求里最高的那个。",
+      "requiredBody": "有技能或 MCP 服务器需要这个工具。你在这里改的值会代替它们写的；清空某一项就恢复成它们的。",
       "command": "命令",
       "commandPlaceholder": "jq，或 /opt/tools/bin/jq",
       "fixed": "不可更改——Coffer 靠它找到这个工具。",
       "looking": "正在查找…",
       "foundAt": "位置",
-      "version": "版本",
       "notFound": "这台机器上还没有 {{command}}。仍可添加——在 智能体装好之前会显示为未找到。",
       "alreadyAdded": "{{command}} 已添加。",
       "alsoRequired": "已在列表中——有技能或 MCP 服务器需要它。添加后，即使它们不再需要，也会保留在列表里。",
       "titleField": "显示名称",
       "titlePlaceholder": "例如 GitHub CLI",
-      "minVersion": "最低版本",
       "description": "描述",
       "descriptionPlaceholder": "用一句话说明用途",
       "submit": "添加",
@@ -5827,20 +5811,15 @@
       "failed": "无法移除 {{command}}"
     },
     "banner": {
-      "outdated_one": "{{command}} {{found}} 低于 {{skills}} 的要求",
-      "outdated_other": "{{command}} {{found}} 低于 {{skills}} 的要求",
       "body": "{{skills}} 会在调用 {{command}} 的那一步失败。",
       "missing": "这台机器上找不到 {{command}}",
-      "outdatedBody_one": "{{skills}} 需要 {{command}} ≥ {{version}}，会在调用它的那一步失败。",
-      "outdatedBody_other": "{{skills}} 需要 {{command}} ≥ {{version}}，会在调用它的那一步失败。",
       "skillsBody_one": "{{skills}} 会在调用 {{command}} 的那一步失败。",
       "skillsBody_other": "{{skills}} 会在调用 {{command}} 的那一步失败。",
       "serversBody": "{{servers}} 无法启动。",
       "bothBody_one": "{{servers}} 无法启动，{{skills}} 会在调用 {{command}} 的那一步失败。",
       "bothBody_other": "{{servers}} 无法启动，{{skills}} 会在调用 {{command}} 的那一步失败。",
       "hand": {
-        "missing": "把安装交给智能体，然后点「检查」。",
-        "outdated": "把更新交给智能体，然后点「检查」。"
+        "missing": "把安装交给智能体，然后点「检查」。"
       },
       "cofferBody": "Coffer 无法{{uses}}。"
     },
@@ -5848,7 +5827,6 @@
       "needsYou": "需要你处理",
       "needsAttention": "需要处理",
       "ready": "就绪",
-      "outdatedLine": "{{version}} · 要求 ≥ {{min}}",
       "addedByYou": "你添加的",
       "needLine_one": "{{lead}} · {{who}}需要它",
       "needLine_other": "{{lead}} · {{who}}需要它",
@@ -6353,7 +6331,6 @@
       "attention": "需要处理",
       "missing": "缺失",
       "notFound": "未找到",
-      "outdated": "版本过旧",
       "running": "运行中"
     }
   },

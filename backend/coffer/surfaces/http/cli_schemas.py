@@ -15,16 +15,15 @@ from coffer.application.skill.cli_requirements import CliListing, CliView, Skill
 from coffer.application.skill.cli_tools import CliPreview
 from coffer.surfaces.http.handoff_schemas import HandoffOut, handoff_out
 
-CliStatusOut = Literal["missing", "outdated", "ready"]
+CliStatusOut = Literal["missing", "ready"]
 CliCofferUseOut = Literal["vault_history", "sync"]
 
 
 class CliNeededByOut(BaseModel):
-    """One skill that requires the command, with what it asked for."""
+    """One skill that requires the command, and why."""
 
     skill_uid: str
     skill_name: str
-    min_version: str | None
     why: str | None
     #: The skill's profiles that declare it; empty when SKILL.md itself does.
     profiles: list[str]
@@ -52,17 +51,8 @@ class CliOut(BaseModel):
     status: CliStatusOut
     #: Where the agent's ``PATH`` finds it; ``None`` when missing.
     path: str | None
-    #: What ``--version`` printed; ``None`` when missing or unreadable.
-    version: str | None
-    #: The highest minimum any skill or the hand-added declaration asks for
-    #: (MCP servers ask for none).
-    min_version: str | None
-    #: A minimum is asked for, the command was found, and ``--version``
-    #: printed no version Coffer can read, so it cannot tell whether the
-    #: command is new enough.
-    version_unverifiable: bool
-    #: The prompt to hand to an agent: install a missing command or update an
-    #: outdated one. ``None`` when ready.
+    #: The prompt to hand to an agent to install a missing command. ``None``
+    #: when ready.
     handoff: HandoffOut | None
     #: The skills that declare the command.
     needed_by: list[CliNeededByOut]
@@ -95,7 +85,6 @@ class CliAddIn(BaseModel):
     command: str = Field(min_length=1, max_length=512)
     title: str | None = None
     description: str | None = None
-    min_version: str | None = None
 
 
 class CliEditIn(BaseModel):
@@ -105,7 +94,6 @@ class CliEditIn(BaseModel):
 
     title: str | None = None
     description: str | None = None
-    min_version: str | None = None
 
 
 class CliPreviewIn(BaseModel):
@@ -118,7 +106,6 @@ class CliPreviewOut(BaseModel):
     command: str
     #: Where it was found; ``None`` when it is not on this machine.
     path: str | None
-    version: str | None
     #: Already added by hand.
     added: bool
     #: A skill or MCP server already requires it.
@@ -126,9 +113,7 @@ class CliPreviewOut(BaseModel):
 
 
 def cli_preview_out(p: CliPreview) -> CliPreviewOut:
-    return CliPreviewOut(
-        command=p.command, path=p.path, version=p.version, added=p.added, required=p.required
-    )
+    return CliPreviewOut(command=p.command, path=p.path, added=p.added, required=p.required)
 
 
 def cli_out(view: CliView) -> CliOut:
@@ -140,15 +125,11 @@ def cli_out(view: CliView) -> CliOut:
         added=row.added,
         status=view.status.value,
         path=probe.path,
-        version=probe.version,
-        min_version=row.min_version,
-        version_unverifiable=view.version_unverifiable,
         handoff=handoff_out(view.handoff),
         needed_by=[
             CliNeededByOut(
                 skill_uid=n.skill_uid,
                 skill_name=n.skill_name,
-                min_version=n.min_version,
                 why=n.why,
                 profiles=list(n.profiles),
             )

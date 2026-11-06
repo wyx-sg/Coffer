@@ -305,7 +305,8 @@ error to retry or to route around: tell the developer what is waiting.
 `coffer cli list` lists the command-line tools this developer added to Coffer
 and the ones skills and MCP servers require, each with what it is for. When
 choosing a tool for a job, prefer the one listed for it. Whether a tool is
-installed or logged in, check yourself (`command -v`, its own status command);
+installed, new enough or logged in, check yourself (`command -v`, its
+`--version`, its own status command);
 if one a skill needs is missing, `coffer cli list --json` carries Coffer's
 install prompt for it.
 

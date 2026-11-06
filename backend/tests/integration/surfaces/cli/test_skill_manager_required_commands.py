@@ -16,9 +16,9 @@ from ._cli_requirements_app import CliDaemon, boot_cli_daemon
 
 @pytest.fixture
 def daemon(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[CliDaemon]:
-    probe = FakeCommandProbe({"gh": FakeCommand("2.30.0"), "uv": FakeCommand("0.4.18")})
+    probe = FakeCommandProbe({"gh": FakeCommand(), "uv": FakeCommand()})
     for d in boot_cli_daemon(tmp_path, monkeypatch, probe=probe):
-        d.add_skill("github", '  - command: gh\n    min_version: "2.40"\n')
+        d.add_skill("github", "  - gh\n")
         d.add_skill("data", "  - jq\n  - uv\n")
         yield d
 
@@ -31,7 +31,7 @@ def test_the_list_puts_problems_first(daemon: CliDaemon) -> None:
     items = r.json()["items"]
     assert [(i["command"], i["status"]) for i in items] == [
         ("jq", "missing"),
-        ("gh", "outdated"),
+        ("gh", "ready"),
         ("uv", "ready"),
     ]
     assert [n["skill_name"] for n in items[1]["needed_by"]] == ["github"]

@@ -1023,12 +1023,12 @@ value is never read for this; a server that cites none never asks the secret sto
 - **THEN** it names `Authorization` as the key and the secret's reference, and once the value is stored it names none
 
 ### Requirement: Show what an MCP server requires
-A server's status read MUST also list what its command and settings need from this machine, worked out from the config alone and without starting the server: for a stdio server its **launcher** (the command's executable — `npx`, `uvx`, `docker`, `bunx`, `node`, `python` and the like) as a CLI that is `found`, with its version when it prints one, or `not_found`; and every **secret** its environment or headers cite — through a stored secret bound to the variable or header, or a `coffer://secret/<name>` written in a plain value — as `set`, `missing` on this machine, `waiting_approval`, or `refused` once a person refused its binding (a refusal is not a wait), naming the variable or header and the secret. A launcher's version is read once and kept until the daemon restarts; one that is not found is looked up again on every read. An HTTP server has no launcher, and no secret's value is read.
+A server's status read MUST also list what its command and settings need from this machine, worked out from the config alone and without starting the server: for a stdio server its **launcher** (the command's executable — `npx`, `uvx`, `docker`, `bunx`, `node`, `python` and the like) as a CLI that is `found` or `not_found`, looked up on the agent's `PATH` and never run; and every **secret** its environment or headers cite — through a stored secret bound to the variable or header, or a `coffer://secret/<name>` written in a plain value — as `set`, `missing` on this machine, `waiting_approval`, or `refused` once a person refused its binding (a refusal is not a wait), naming the variable or header and the secret. The launcher is looked up again on every read. An HTTP server has no launcher, and no secret's value is read.
 
 #### Scenario: a server's page lists what it requires
 - **GIVEN** a stdio server started with `npx` whose environment binds one stored secret that is set, one that is missing, and one that waits for approval
 - **WHEN** its status is read
-- **THEN** it lists the `npx` launcher as found with its version, then each secret as `set`, `missing` and `waiting_approval` by its variable name
+- **THEN** it lists the `npx` launcher as found, then each secret as `set`, `missing` and `waiting_approval` by its variable name
 - **AND** a launcher that is not on this machine reads `not_found`, and an HTTP server lists its header secrets and no launcher
 
 ### Requirement: Record why a registered server's test failed

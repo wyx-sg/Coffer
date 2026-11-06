@@ -33,22 +33,12 @@ function CommandsBanner({
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const clis = useClis().data?.items ?? [];
-  const parts = [
-    item.missing.length > 0
-      ? t("skills.banner.requiresMissingPart", {
-          count: item.missing.length,
-          commands: joinNames(item.missing, lang),
-        })
-      : null,
-    item.outdated.length > 0
-      ? t("skills.banner.requiresOldPart", {
-          count: item.outdated.length,
-          commands: joinNames(item.outdated, lang),
-        })
-      : null,
-  ].filter(Boolean);
+  const title = t("skills.banner.requiresMissingPart", {
+    count: item.missing.length,
+    commands: joinNames(item.missing, lang),
+  });
   // One hand-off for every command that needs the person, as the daemon wrote them.
-  const wanted = new Set([...item.missing, ...item.outdated]);
+  const wanted = new Set(item.missing);
   const prompt = clis
     .filter((c) => wanted.has(c.command) && c.handoff)
     .map((c) => c.handoff?.prompt)
@@ -57,7 +47,7 @@ function CommandsBanner({
     <SkillBannerFrame
       tone="warning"
       testId="skill-banner-requires"
-      title={joinNames(parts as string[], lang)}
+      title={title}
       actions={prompt ? <AgentHandoff prompt={prompt} size="sm" /> : null}
     >
       {t("skills.banner.requiresBody", { name: skill.name })}

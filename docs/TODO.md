@@ -86,48 +86,6 @@ threads appending at once rarely conflict:
   one thread each. Comparable bridges support 13 to 20 platforms (OpenClaw,
   Hermes, cc-connect).
 
-## CLIs
-
-### Bind a secret to a command-line tool
-
-- **Added:** 2026-11-06, from the thread "梳理命令行工具管理功能还缺少什么"
-- **What:** a CLI entry names a Coffer secret and the environment variable it
-  goes in (for example `GH_TOKEN` for `gh`), so an agent runs the tool logged in
-  without the token sitting in a dotfile.
-- **Why later:** it fits "no secret sprawl", but agents already log tools in
-  their own way (`gh auth login`, the tool's keychain), and since 2026-11-06
-  Coffer checks no CLI login at all, so this may well never be needed. Do it only
-  when a real tool can't keep its own login.
-- **Sketch:** a `secrets: {ENV_VAR: <secret id>}` map on a `cli-tools` entry,
-  injected only into processes Coffer starts (it can't reach an agent's own
-  shell), which is the open question: most CLI runs happen in the agent's shell.
-  Keep it apart from a skill's `requires.secrets`, which only reports a missing
-  secret. OpenClaw's `skills.entries.<key>.env` / `apiKey` (SecretRef, injected
-  per run) is the comparable design. Needs an ADR first.
-
-### Accept any one of several commands
-
-- **Added:** 2026-11-06, from the thread "梳理命令行工具管理功能还缺少什么"
-- **What:** a skill declares "one of these is enough" (`rg` or `grep`), so the
-  one it doesn't use isn't reported missing.
-- **Why later:** no managed skill needs it yet; imported third-party skills may
-  (OpenClaw's `anyBins`). Until then such a skill declares the one it prefers.
-- **Sketch:** `requires: [{any: [rg, grep]}]`; one row per group on the CLIs page,
-  ready when any member is found; the hand-off names the first. Touches the
-  parser, aggregation, the wire, the CLIs page and Requires tab.
-
-### Read a version a tool prints another way
-
-- **Added:** 2026-11-06, from the thread "梳理命令行工具管理功能还缺少什么"
-- **What:** a declaration names how its tool prints its version (`go version`,
-  `kubectl version --client`), so a minimum can be compared for tools without
-  `--version`.
-- **Why later:** today such a tool shows "its version can't be read, so Coffer
-  can't compare" and is not flagged; that is honest and enough until a skill
-  really depends on a minimum for one of them.
-- **Sketch:** an optional `version_command` field (argv starting with the
-  command, no shell), used instead of `--version`; editable on the CLI's Edit form.
-
 ## MCP servers and custom tools
 
 ### Refresh custom-tool tokens with OAuth2 client credentials

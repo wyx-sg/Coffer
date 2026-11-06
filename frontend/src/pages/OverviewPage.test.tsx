@@ -590,7 +590,7 @@ describe("each health tile carries the numbers and lines the board shows", () =>
         items: [
           attention("agent", "a-codex", "Codex", "agent_not_connected"),
           attention("channel", "c1", "SeaTalk", "channel_reconnecting", minutes(30)),
-          attention("cli", "gh", "gh", "cli_outdated"),
+          attention("cli", "gh", "gh", "cli_missing"),
         ],
       },
     });
@@ -661,7 +661,7 @@ describe("each health tile carries the numbers and lines the board shows", () =>
     await waitFor(() => expect(sync).toHaveTextContent("4 min ago"));
     expect(sync).toHaveTextContent("last round");
     expect(sync).toHaveTextContent("1 behind · 0 ahead");
-    await waitFor(async () => expect(await tile("CLIs")).toHaveTextContent("1 outdated"));
+    await waitFor(async () => expect(await tile("CLIs")).toHaveTextContent("1 missing"));
     await waitFor(async () => expect(await tile("Secrets")).toHaveTextContent("1 unused"));
     const usage = await tile("Usage");
     await waitFor(() => expect(usage).toHaveTextContent("2.1M"));
@@ -834,25 +834,25 @@ acceptance("web-ui", "an ignored item leaves needs you whatever its severity", a
 });
 
 acceptance("web-ui", "overview flags a required CLI that needs attention", async () => {
-  const outdated = {
+  const missing = {
     kind: "cli",
     uid: "gh",
     title: "gh",
-    reason_code: "cli_outdated",
-    reason: "gh 2.30.0 is older than 2.40, needed by gh-triage.",
+    reason_code: "cli_missing",
+    reason: "gh is not on the agent's PATH; needed by gh-triage.",
     severity: "warning",
     since: null,
     action: { verb: "check", method: "POST", path: "/api/v1/clis/gh/check", body: null },
   };
-  install({ attention: { ...EMPTY_ATTENTION, items: [outdated] } });
+  install({ attention: { ...EMPTY_ATTENTION, items: [missing] } });
   renderPage();
   const name = await within(needsYou()).findByText("gh");
   const row = name.closest("li") as HTMLElement;
-  expect(within(row).getByText(/older than 2\.40/)).toBeInTheDocument();
+  expect(within(row).getByText(/not on the agent's PATH/)).toBeInTheDocument();
   expect(within(row).getByRole("link", { name: /^gh/ })).toHaveAttribute("href", "/clis/gh");
   expect(within(row).getByRole("button", { name: /^Check/ })).toBeEnabled();
 
-  // Once the command is current the daemon's list has no such item, and the row goes.
+  // Once the command is found the daemon's list has no such item, and the row goes.
   state.attention = EMPTY_ATTENTION;
   await waitFor(() => expect(listener).not.toBeNull());
   act(() => {

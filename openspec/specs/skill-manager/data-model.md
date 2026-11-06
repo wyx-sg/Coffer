@@ -99,18 +99,18 @@ it never fails a skill.
 | ------------- | ------------------------ | -------------------------------------------------------------------------- |
 | `command`     | `str`                    | required; `^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`, never a path               |
 | `title`       | `str \| None`            | display name, one line, ≤ 200 chars                                        |
-| `min_version` | `str \| None`            | dotted numbers (`"2.40"`); an unquoted YAML float is refused, since `2.40` reads as `2.4` |
 | `why`         | `str \| None`            | one line, ≤ 200 chars                                                      |
 | `profiles`    | `tuple[str, ...]`        | the `profiles/<name>.md` files that declared it; empty when SKILL.md did   |
 
 A bare string entry is a command with no conditions. An entry that breaks a
 rule is skipped and reported as a warning (`GET /clis` → `warnings`); a field
 not listed here (such as a `brew:` formula) is ignored with a warning and the
-entry kept, except `login_check` and `login`, which an older Coffer read and which
-are now dropped without a warning; a command named twice in one skill keeps its first entry. The
+entry kept, except `min_version`, `version`, `login_check` and `login`, which an
+older Coffer read and which are now dropped without a warning (a `gh>=2.40`
+spelling reads as `gh`); a command named twice in one skill keeps its first entry. The
 requirements of a skill are the union of its SKILL.md and every
 `profiles/*.md` frontmatter (`requirements_of_skill`): a command several
-sources declare is one entry with the highest minimum and the profiles joined.
+sources declare is one entry with the profiles joined.
 
 `RequirementsParse.declared` is true when a `requires` key was written, even an
 empty one; the union is declared when SKILL.md or any profile is. False means
@@ -120,14 +120,13 @@ is `SkillOut.requires_declared` (`bool`, always emitted).
 ### Required-command row and check result (`domain/skill/cli_status.py`)
 
 `aggregate()` turns every managed skill's requirements into one
-`RequiredCommand` per command: `min_version` is the highest any skill asks
-for; `title` comes from the first skill (by
-name) that declares each; `needed_by` lists every declaring skill with its own
-minimum and `why`. Every enabled stdio MCP server adds a `ServerLauncher`
+`RequiredCommand` per command: `title` comes from the first skill (by
+name) that declares each; `needed_by` lists every declaring skill with its
+`why`. Every enabled stdio MCP server adds a `ServerLauncher`
 (`server_uid`, `server_name`, `launcher`) to `needed_by_servers` of the command
 `launcher_cli()` maps its launcher to — `uv` for `uvx`, `node` for `npx`, `bun`
 for `bunx`, the launcher itself otherwise, nothing for a path — creating the row
-when no skill declares it (no minimum). On the wire it is
+when no skill declares it. On the wire it is
 `CliOut.needed_by_servers` (`CliServerOut`).
 
 `ProbeResult` is the in-memory check result, one per command, kept by
@@ -137,18 +136,14 @@ table):
 | Field         | Type                | Notes                                                              |
 | ------------- | ------------------- | ------------------------------------------------------------------ |
 | `path`        | `str \| None`       | where the agent's `PATH` finds it, symlinks resolved; `None` = missing |
-| `version`     | `str \| None`       | parsed from `--version` (5 s timeout); `None` = unreadable         |
 | `checked_at`  | `datetime`          | UTC                                                                |
 
-`status_of()` → `missing` → `outdated` (a readable version below the minimum)
-→ `ready`; lists sort in that order, then by command. Coffer runs nothing but
-`--version`. `version_unverifiable()` is true for a found command with a
-minimum whose version could not be read; on the wire it is
-`CliOut.version_unverifiable` (`bool`, always emitted).
+`status_of()` → `missing` (no path) or `ready`; lists sort in that order, then
+by command. Coffer runs none of the commands it checks, so there is no version.
 
 ### Hand-off prompt (`application/skill/cli_handoff.py`)
 
-Derived, never stored: every view of a command that is `missing` or `outdated` carries the prompt text for the person's agent, rendered by
+Derived, never stored: every view of a command that is `missing` carries the prompt text for the person's agent, rendered by
 `domain/handoff.py` from the row, the probe result and the machine's
 `machine_label()` (read once per daemon); a `ready` command carries none. On
 the wire it is `CliOut.handoff` (`HandoffOut {prompt}`), and the CLIs page copies it.

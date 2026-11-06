@@ -4,7 +4,7 @@
 // (the title is the command's display name, left out when there is none);
 // under it the description, and nothing when there is none. Edit
 // opens the dialog for any command; only a tool the person added has ⋯ › Remove.
-import { CircleAlert, Terminal, TriangleAlert, type LucideIcon } from "lucide-react";
+import { CircleAlert, Terminal, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { StatusPill } from "@/components/status/StatusPill";
@@ -15,7 +15,6 @@ import { CliActions } from "./CliActions";
 
 const TILE: Record<Cli["status"], { icon: LucideIcon; className: string }> = {
   missing: { icon: CircleAlert, className: "bg-danger-soft text-danger" },
-  outdated: { icon: TriangleAlert, className: "bg-warning-soft text-warning" },
   ready: {
     icon: Terminal,
     className: "border border-border-subtle bg-surface-sunken text-text-muted",

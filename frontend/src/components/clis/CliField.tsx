@@ -1,4 +1,4 @@
-// src/components/clis/CliField.tsx — a titled block of a CLI's page (title, one 12px line under it) and a label · value row (boards 4.4.03–4.4.08).
+// src/components/clis/CliField.tsx — a titled block of a CLI's page (title, one 12px line under it) and a label · value row (boards 4.4.03–4.4.06).
 import type { ReactNode } from "react";
 
 export function CliSection({

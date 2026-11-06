@@ -26,8 +26,8 @@ def requirements_of_skill(skill_md: str, profiles: Sequence[tuple[str, str]]) ->
 
     An agent picks one profile at run time, which Coffer cannot know, so every
     profile counts. Each requirement says which profiles declared it; a command
-    several sources declare is one requirement (highest minimum, first
-    non-empty text, profiles joined); the skill is declared when any source
+    several sources declare is one requirement (first non-empty text,
+    profiles joined); the skill is declared when any source
     wrote a ``requires:`` key. Spec skill-manager "Read the requirements
     profile files declare".
     """
@@ -83,22 +83,12 @@ def _join(have: tuple[str, ...], more: tuple[str, ...]) -> tuple[str, ...]:
 def _merge_command(
     have: CommandRequirement, req: CommandRequirement, tag: tuple[str, ...]
 ) -> CommandRequirement:
-    versions = [v for v in (have.min_version, req.min_version) if v]
-    best = None
-    for v in versions:
-        if best is None or _version_key(v) > _version_key(best):
-            best = v
     return CommandRequirement(
         command=have.command,
         title=have.title or req.title,
-        min_version=best,
         why=have.why or req.why,
         profiles=_join(have.profiles, tag),
     )
-
-
-def _version_key(version: str) -> tuple[int, ...]:
-    return tuple(int(p) for p in version.split("."))
 
 
 __all__ = ["requirements_of_skill"]

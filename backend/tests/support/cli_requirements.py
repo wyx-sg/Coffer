@@ -12,10 +12,7 @@ FAKE_MACHINE = "macOS 15.6, arm64"
 
 @dataclass
 class FakeCommand:
-    """One command on the fake ``PATH``; ``version`` is what ``--version``
-    prints that Coffer can read (``None``: nothing readable)."""
-
-    version: str | None = None
+    """One command on the fake ``PATH``."""
 
 
 @dataclass
@@ -27,6 +24,3 @@ class FakeCommandProbe:
         self.located.append(command)
         name = command.rsplit("/", 1)[-1]  # an absolute path names the same command
         return f"{FAKE_BIN}/{name}" if name in self.commands else None
-
-    def version(self, path: str) -> str | None:
-        return self.commands[path.rsplit("/", 1)[-1]].version

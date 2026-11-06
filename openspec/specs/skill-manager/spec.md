@@ -475,41 +475,42 @@ Users MUST be able to add skills from a Git repository given its URL, an optiona
 - **AND** the add dialog offers Copy prompt beside the refusal
 
 ### Requirement: Show the commands a skill declares it needs
-The system MUST read the commands a skill declares it needs from the `requires` field of its `SKILL.md` frontmatter — a list, or a mapping whose `commands` key holds one — where each entry is a command name, a command name with a minimum version (`gh>=2.40`), or a mapping with `command` and an optional `version`. The skill's read model carries them as `requires`, each with its command and its minimum version when one is given, in the order declared; an entry that names no command is ignored rather than failing the skill. Declaring a requirement changes nothing about delivery: the skill is delivered whether or not the command is present. The web UI's Requires tab lists them, each naming the profiles that declare it ("Read the requirements profile files declare"), each linking to the command's page on the CLIs page, and says so when the skill declares none.
+The system MUST read the commands a skill declares it needs from the `requires` field of its `SKILL.md` frontmatter — a list, or a mapping whose `commands` key holds one — where each entry is a command name or a mapping with `command`. The skill's read model carries them as `requires`, each with its command and the profiles that declare it, in the order declared; an entry that names no command is ignored rather than failing the skill. Declaring a requirement changes nothing about delivery: the skill is delivered whether or not the command is present. The web UI's Requires tab lists them, each naming the profiles that declare it ("Read the requirements profile files declare"), each linking to the command's page on the CLIs page, and says so when the skill declares none.
 
 #### Scenario: a skill's requires tab links each command
-- **GIVEN** a skill whose `SKILL.md` declares `requires: [jq, "gh>=2.40"]`
+- **GIVEN** a skill whose `SKILL.md` declares `requires: [jq, gh]`
 - **WHEN** the user opens its Requires tab
-- **THEN** it lists `jq` and `gh` with the minimum `2.40`, and choosing `gh` opens `/clis/gh`
+- **THEN** it lists `jq` and `gh`, and choosing `gh` opens `/clis/gh`
 - **AND** `GET /api/v1/skills/{uid}` carries the same two requirements
 
 ### Requirement: Declare the commands a skill requires
-Beyond the command and minimum version that "Show the commands a skill
-declares it needs" reads from `requires:`, an entry in mapping form MAY give a
-display `title`, a `min_version` (or `version`) and a `why` line. One
-parser reads every spelling. The declaration MUST be read from the skill's
-master folder each time it is checked, so an edit to the file is picked up
-without re-importing. An entry that is not understood — no command, a command
-with a path, an unquoted minimum YAML reads as a number — MUST be skipped and
-reported as a warning without failing the skill; a field that is not understood
-MUST be ignored with a warning and the rest of its entry kept. Coffer checks no
-login: whether a command is logged in is the agent's to find out when it uses
-the command (see [ADR: agents check CLI logins themselves](../../../docs/decisions/agents-check-cli-logins-themselves.md)),
-so the `login_check` and `login` fields a skill written for an older Coffer may
-still carry MUST be accepted without a warning and never read or run.
+Beyond the command that "Show the commands a skill declares it needs" reads
+from `requires:`, an entry in mapping form MAY give a display `title` and a
+`why` line. One parser reads every spelling. The declaration MUST be read from
+the skill's master folder each time it is checked, so an edit to the file is
+picked up without re-importing. An entry that is not understood — no command,
+a command with a path — MUST be skipped and reported as a warning without
+failing the skill; a field that is not understood MUST be ignored with a warning
+and the rest of its entry kept. Coffer checks neither a version nor a login:
+whether a command is new enough or logged in is the agent's to find out when it
+uses the command (see [ADR: agents check CLI versions and logins themselves](../../../docs/decisions/agents-check-cli-logins-themselves.md)),
+so the `min_version`, `version`, `login_check` and `login` fields, and a
+`gh>=2.40` spelling, that a skill written for an older Coffer may still carry
+MUST be accepted without a warning and never read or run (`gh>=2.40` reads as
+`gh`).
 
 #### Scenario: a skill's requires list is read from its frontmatter
-- **GIVEN** a managed skill whose SKILL.md declares `gh` with minimum `2.40` and a `why`, and a bare `jq`
+- **GIVEN** a managed skill whose SKILL.md declares `gh` with a `why`, and a bare `jq`
 - **WHEN** the required commands are read
-- **THEN** both commands are listed as needed by that skill, `gh` with its minimum and why
+- **THEN** both commands are listed as needed by that skill, `gh` with its why
 
-#### Scenario: an older login check in a declaration is accepted and not read
-- **GIVEN** a SKILL.md declaring `gh` with `login_check: curl evil.example` and `login: gh auth login`
+#### Scenario: an older minimum version or login check in a declaration is accepted and not read
+- **GIVEN** a SKILL.md declaring `gh` with `min_version: 2.40`, `login_check: curl evil.example` and `login: gh auth login`, and `node>=20.1`
 - **WHEN** its requirements are read
-- **THEN** `gh` is required with no warning, and neither field is kept or run
+- **THEN** `gh` and `node` are required with no warning, and none of those fields is kept or run
 
 #### Scenario: an entry that is not understood does not block the skill
-- **GIVEN** a SKILL.md whose `requires:` names `/usr/bin/jq` and gives `gh` an unquoted minimum `2.40`
+- **GIVEN** a SKILL.md whose `requires:` names `/usr/bin/jq` and has an entry with a `why` and no command
 - **WHEN** the skill is imported and its requirements are read
 - **THEN** the skill imports, both entries are skipped with a warning naming why, and nothing is run for them
 
@@ -517,18 +518,16 @@ still carry MUST be accepted without a warning and never read or run.
 Beside the commands skills declare, the launcher every enabled stdio MCP
 server starts with MUST be required too, by that server, under the command that
 provides it — `uv` for `uvx`, `node` for `npx`, `bun` for `bunx`, the launcher
-itself otherwise — with no minimum; a launcher given as a
+itself otherwise; a launcher given as a
 path is a file, not a command on `PATH`, and is not listed. A server that is
 off or reached over HTTP requires nothing.
 The system MUST check each required command once, however many skills and
 servers need it: look it up on the agent's real `PATH` (the login shell's, merged with the
-inherited one), read its version with `<command> --version` under a timeout,
-and compare it with the highest minimum any skill asks for. Nothing else is
-run: Coffer checks no login. Each command MUST report `missing`, `outdated` or
-`ready`, the path and version found, every skill that needs it and every MCP
-server started with it. A command that is found but prints no version Coffer
-can read is `ready` and MUST carry `version_unverifiable: true` when a minimum
-is asked for, so the page can say the minimum was not compared. Results MUST be
+inherited one). Coffer MUST NOT run a command it checks — not `--version`, not
+a login check — so what it reports is whether the command is there: whether it
+is new enough or logged in, the agent finds out when it runs it. Each command
+MUST report `missing` or `ready`, the path found, every skill that needs it and
+every MCP server started with it. Results MUST be
 kept until the user asks to check again or the daemon restarts; a read that
 meets a command nothing has checked yet probes that command once.
 An agent session Coffer starts (Claude Code through its SDK, Codex through its
@@ -536,25 +535,15 @@ app-server) MUST get the same `PATH` the commands are looked up on, so a command
 the CLIs page reports found is found by the agent too, even when the daemon
 inherited a shorter `PATH` from launchd or a stale environment.
 
-#### Scenario: a required command is found with its version on the agent's path
-- **GIVEN** a skill requiring `uv` with minimum `0.4`, and `uv 0.4.18` on the login shell's `PATH` but not on the daemon's
+#### Scenario: a required command is found on the agent's path
+- **GIVEN** a skill requiring `uv`, and `uv` on the login shell's `PATH` but not on the daemon's
 - **WHEN** the required commands are checked
-- **THEN** `uv` is `ready` with its path and version `0.4.18`
+- **THEN** `uv` is `ready` with its path
 
-#### Scenario: a command older than the highest minimum is outdated
-- **GIVEN** two skills requiring `gh`, one with minimum `2.20` and one with `2.40`, and `gh 2.30` installed
-- **WHEN** the required commands are checked
-- **THEN** `gh` is `outdated` against `2.40` and names both skills
-
-#### Scenario: only the version is read from a required command
-- **GIVEN** a skill requiring `gh` whose entry still names `login_check: gh auth status`, and `gh` on the agent's `PATH`
+#### Scenario: a required command is never run
+- **GIVEN** a skill requiring `gh` whose entry still names `min_version: "2.40"` and `login_check: gh auth status`, and `gh` on the agent's `PATH`
 - **WHEN** the commands are read, `gh` is checked and then every command is checked
-- **THEN** `gh` is `ready` and the only thing Coffer ran was `gh --version`
-
-#### Scenario: a version Coffer cannot read leaves the minimum unverified
-- **GIVEN** a skill requiring `go>=1.22`, and a `go` on the path whose `--version` prints nothing Coffer reads as a version
-- **WHEN** `go` is checked
-- **THEN** it is `ready` with `version_unverifiable: true` and carries no hand-off prompt
+- **THEN** `gh` is `ready` and Coffer ran nothing, not even `gh --version`
 
 #### Scenario: checking again probes afresh
 - **GIVEN** a command reported `missing`
@@ -567,7 +556,7 @@ inherited a shorter `PATH` from launchd or a stale environment.
 - **THEN** the session's environment carries the login shell's `PATH` merged with the inherited one
 
 #### Scenario: a stdio MCP server's launcher is listed under the command that provides it
-- **GIVEN** an enabled stdio MCP server `duckdb` started with `uvx`, one `files` started with `npx`, one started with `./run.sh`, and a skill requiring `uv` with minimum `0.4`
+- **GIVEN** an enabled stdio MCP server `duckdb` started with `uvx`, one `files` started with `npx`, one started with `./run.sh`, and a skill requiring `uv`
 - **WHEN** the required commands are checked
 - **THEN** `uv` is listed as needed by the skill and by `duckdb` (launcher `uvx`), and `node` as needed by `files` alone
 - **AND** nothing is listed for `./run.sh`
@@ -581,13 +570,13 @@ uid, name and launcher) beside the skills that need it (`needed_by`). An
 agent reads the same list with `coffer cli list` (`--json` for the full rows,
 hand-off prompts included), the one required-command command: it reads what
 Coffer last found, probing only a command nothing has checked yet, as `GET`
-does. Lists MUST put problems first: missing, then outdated, then ready. The web UI's CLIs page shows them (spec web-ui "Show
+does. Lists MUST put problems first: missing, then ready. The web UI's CLIs page shows them (spec web-ui "Show
 every CLI a skill requires on the CLIs page") and a skill's detail page
 carries a **Requires** tab listing what the skill declares, each linked to its
 command's page and offering the hand-off for a command that needs the user.
 
 #### Scenario: required commands list problems first
-- **GIVEN** skills requiring a missing `jq`, an outdated `gh` and a ready `uv`
+- **GIVEN** skills requiring a missing `jq`, and a ready `gh` and `uv`
 - **WHEN** the user reads `GET /api/v1/clis`
 - **THEN** the commands come back in the order `jq`, `gh`, `uv`, each with its status and the skills that need it
 
@@ -611,15 +600,15 @@ command's page and offering the hand-off for a command that needs the user.
 ### Requirement: Declare a command-line tool without a skill
 The system MUST let a person add a command-line tool by hand, with no skill and
 no MCP server behind it: `POST /api/v1/clis` takes a bare command name or the
-absolute path of an executable, and optionally a `title`, a `description` and a
-`min_version`. The
+absolute path of an executable, and optionally a `title` and a `description`.
+The
 tool is kept as one entry in the vault's `cli-tools` state document — the
 declaration only; where the command is found on one machine is machine-local and
 never written there — and is then listed, checked and read like every required
 command, with `added` true. When a skill or an MCP server also requires the
-command the two are one entry, the hand-added title, description and minimum
-taking precedence. `POST /api/v1/clis/preview` MUST report what Coffer finds for
-a name or path before anything is saved — where, which version, whether it was
+command the two are one entry, the hand-added title and description taking
+precedence. `POST /api/v1/clis/preview` MUST report what Coffer finds for
+a name or path before anything is saved — where it is, whether it was
 already added and whether a skill or server already requires it — and a tool that
 is not on this machine MUST still be addable, then reading `missing`. A tool
 added by hand and missing raises no attention item, because nobody asked for it
@@ -632,29 +621,30 @@ requires and nobody added by hand MUST keep the fields it carries as the
 person's edits: the command is not the person's to declare, so it stays not
 added by hand, but what they change wins over what the skills say, as a
 hand-added declaration's would — the title replaces the
-skills', the minimum still being the highest anyone asks for — and `null`
+skills' — and `null`
 drops an edit so the skills' value applies again. The description is kept in
 the same `cli-tools` document under `notes`, and the other fields under
 `edits`; a hand-added tool's own fields win over both, and adding the tool by
 hand drops its edits. A command nobody lists is refused with 404
 `CLI_NOT_KNOWN`. A name added twice is refused with 409
-`CLI_TOOL_EXISTS`, and a bad name, path or minimum version with 400
-`CLI_TOOL_INVALID`. A `login_check` stored by an older Coffer is dropped the next
-time the entry is written. Each add, edit and removal MUST be audited. Coffer MUST NOT
+`CLI_TOOL_EXISTS`, and a bad name, path, title or description with 400
+`CLI_TOOL_INVALID`. A `min_version` or `login_check` stored by an older Coffer
+is not read and is dropped the next time the entry is written, and one sent to
+the route is ignored. Each add, edit and removal MUST be audited. Coffer MUST NOT
 read a command's `--help`, build a tree of its subcommands or keep one: what it
-knows of a tool is its path and its version.
+knows of a tool is its path.
 
 #### Scenario: a command-line tool is added with no skill
-- **GIVEN** no skill and no MCP server requiring `jq`, and `jq 1.7.1` on the path
-- **WHEN** the user adds `jq` with a title, a description and the minimum `1.6`
+- **GIVEN** no skill and no MCP server requiring `jq`, and `jq` on the path
+- **WHEN** the user adds `jq` with a title and a description
 - **THEN** `GET /api/v1/clis` lists `jq` as `ready`, added by hand, needed by nobody, and the vault's `cli-tools` document holds the declaration and no path
-- **AND** adding it again is refused with `CLI_TOOL_EXISTS`, and a minimum of `latest` with `CLI_TOOL_INVALID`
+- **AND** adding it again is refused with `CLI_TOOL_EXISTS`, and a name with a space with `CLI_TOOL_INVALID`
 
 #### Scenario: a hand-added tool and a skill are one entry
-- **GIVEN** a skill requiring `jq` with minimum `1.5`, and `jq` added by hand with the title `Mine` and minimum `1.7`
+- **GIVEN** a skill requiring `jq` titled `From skill`, and `jq` added by hand with the title `Mine`
 - **WHEN** the commands are listed, and then the hand-added declaration is removed
-- **THEN** one entry `jq` is listed, titled `Mine` with minimum `1.7` and needed by the skill
-- **AND** after the removal it is still listed, no longer added by hand, with the skill's title and minimum `1.5`
+- **THEN** one entry `jq` is listed, titled `Mine` and needed by the skill
+- **AND** after the removal it is still listed, no longer added by hand, with the skill's title
 
 #### Scenario: add, edit and remove a tool over REST
 - **GIVEN** `jq` on the path and no declaration
@@ -663,19 +653,17 @@ knows of a tool is its path and its version.
 - **AND** repeating the delete is refused with 404 `CLI_TOOL_NOT_DECLARED`
 
 #### Scenario: a required tool takes the person's edits
-- **GIVEN** a skill requiring `jq` titled `From skill` with minimum `1.5`, and no declaration
-- **WHEN** the user sends `PATCH /api/v1/clis/jq` with a description, then one with the title `JSON` and the minimum `1.7`, then one with the title and minimum `null`, then one describing a command nobody lists
-- **THEN** `jq` reads that description, title `JSON` and minimum `1.7`, still not added by hand and needed by the skill, and the vault's `cli-tools` document keeps the description under `notes` and the rest under `edits`
-- **AND** after the third it reads `From skill` and minimum `1.5` again, and the unknown command is refused with 404 `CLI_NOT_KNOWN`
+- **GIVEN** a skill requiring `jq` titled `From skill`, and no declaration
+- **WHEN** the user sends `PATCH /api/v1/clis/jq` with a description, then one with the title `JSON`, then one with the title `null`, then one describing a command nobody lists
+- **THEN** `jq` reads that description and title `JSON`, still not added by hand and needed by the skill, and the vault's `cli-tools` document keeps the description under `notes` and the title under `edits`
+- **AND** after the third it reads `From skill` again, and the unknown command is refused with 404 `CLI_NOT_KNOWN`
 
 ### Requirement: Hand a required command to an agent with a prompt
 The system MUST NOT install, update or log in to a required command itself.
-For a command that is `missing` or `outdated` it MUST offer a prompt, built by
-the daemon, for the user to give their agent, which names the command (and its
-title), every skill that needs it with the minimum version each asks for, every
-MCP server started with it and the launcher it is started with, what was found
-for an outdated one, and this machine's operating system and CPU
-architecture; asks the agent to choose the install method that suits this
+For a command that is `missing` it MUST offer a prompt, built by the daemon,
+for the user to give their agent, which names the command (and its title),
+every skill that needs it, every MCP server started with it and the launcher it
+is started with, and this machine's operating system and CPU architecture; asks the agent to choose the install method that suits this
 machine, to check with the user before running anything that needs `sudo` or
 changes system settings, and, when it is done, to confirm the command works in
 its own way and then run `coffer cli check <command>` so Coffer sees it (the
@@ -685,13 +673,13 @@ prompt MUST NOT name an install command. A `ready` command MUST carry no prompt.
 `handoff.prompt` on every response that carries the command, and the CLIs page's Copy prompt offers the same text.
 
 #### Scenario: a missing command carries an install prompt for an agent
-- **GIVEN** skills `issues` (minimum `2.40`) and `triage` requiring `gh` (titled GitHub CLI), and no `gh` on the agent's `PATH`
+- **GIVEN** skills `issues` and `triage` requiring `gh` (titled GitHub CLI), and no `gh` on the agent's `PATH`
 - **WHEN** the user reads `GET /api/v1/clis/gh`
-- **THEN** its `handoff.prompt` asks to install `gh` (GitHub CLI), names `issues (version 2.40 or newer)` and `triage`, names the machine's OS and architecture, asks the agent to choose the install method, to check before anything that needs `sudo` or changes system settings, and to confirm `gh` works and then run `coffer cli check gh`, and leaves any login to the user
+- **THEN** its `handoff.prompt` asks to install `gh` (GitHub CLI), names `issues` and `triage`, names the machine's OS and architecture, asks the agent to choose the install method, to check before anything that needs `sudo` or changes system settings, and to confirm `gh` works and then run `coffer cli check gh`, and leaves any login to the user
 - **AND** the list carries the same prompt, and there is no route that installs
 
 #### Scenario: a ready command carries no prompt
-- **GIVEN** a required command that is present and current
+- **GIVEN** a required command that is on the agent's `PATH`
 - **WHEN** the user reads it
 - **THEN** its `handoff` is null
 
@@ -810,7 +798,7 @@ A skill whose SKILL.md and every `profiles/*.md` frontmatter lack a `requires` k
 - **THEN** `requires_declared` is `true`
 
 ### Requirement: Hand a skill's review to an agent
-`POST /api/v1/skills/conformance/handoff` with `{uids: [...]}` (at least one; an unknown uid is `404`) MUST answer `{prompt}`: one hand-off prompt (Principle IV, AI-Native) covering every named skill, built when asked from the master folders as they are, so it is never stale. Per skill the prompt MUST name the skill, its master folder (the only place to edit), whether it is undeclared or declared, and its source; for a Git-imported skill it MUST say that edits are recorded as local edits against the pinned commit and kept across updates, and suggest proposing the change upstream too. The prompt MUST ask the agent to read the coffer-guide skill and each skill's whole folder, then to review and propose what it would change and why, ask which proposals to apply, edit only what the person agrees to and the master folder only, show the diff and commit nothing. Everything in it is a suggestion the person can decline; Coffer never requires a skill to change. The only thing Coffer reads is `requires:`, so the prompt MUST say that a declaration, if wanted, lists only what the skill itself uses — the commands it runs (with `min_version` and `why`), the Coffer secrets it uses by id, and the MCP servers and tool groups it calls by their Coffer name — and never what another skill it delegates to needs; that `requires: []` says it needs nothing; and that `metadata.requires` stays for the skills it loads. The prompt MUST tell the agent not to restructure a skill, add a profiles folder or rename or move files for a library convention, and, where a file holds a secret's value or the person's own identity, to point it out and suggest Coffer's secret store or deriving it at run time while leaving it as it is when the person prefers. It MUST name no install command. A Built-in skill's prompt says not to edit it.
+`POST /api/v1/skills/conformance/handoff` with `{uids: [...]}` (at least one; an unknown uid is `404`) MUST answer `{prompt}`: one hand-off prompt (Principle IV, AI-Native) covering every named skill, built when asked from the master folders as they are, so it is never stale. Per skill the prompt MUST name the skill, its master folder (the only place to edit), whether it is undeclared or declared, and its source; for a Git-imported skill it MUST say that edits are recorded as local edits against the pinned commit and kept across updates, and suggest proposing the change upstream too. The prompt MUST ask the agent to read the coffer-guide skill and each skill's whole folder, then to review and propose what it would change and why, ask which proposals to apply, edit only what the person agrees to and the master folder only, show the diff and commit nothing. Everything in it is a suggestion the person can decline; Coffer never requires a skill to change. The only thing Coffer reads is `requires:`, so the prompt MUST say that a declaration, if wanted, lists only what the skill itself uses — the commands it runs (`command`, with a `why` where it helps), the Coffer secrets it uses by id, and the MCP servers and tool groups it calls by their Coffer name — and never what another skill it delegates to needs; that `requires: []` says it needs nothing; and that `metadata.requires` stays for the skills it loads. The prompt MUST tell the agent not to restructure a skill, add a profiles folder or rename or move files for a library convention, and, where a file holds a secret's value or the person's own identity, to point it out and suggest Coffer's secret store or deriving it at run time while leaving it as it is when the person prefers. It MUST name no install command. A Built-in skill's prompt says not to edit it.
 
 #### Scenario: the review prompt names each skill's folder, declaration and source
 - **GIVEN** an undeclared Git-imported skill and a declared skill imported from a folder
@@ -882,12 +870,12 @@ The mapping form of a skill's `requires:` frontmatter MAY name the MCP servers a
 - **AND** `GET /api/v1/clis` carries a warning for the skill naming `ghost` as skipped
 
 ### Requirement: Read the requirements profile files declare
-A skill library MAY keep per-skill profiles at `<skill folder>/profiles/<name>.md`, one per environment, each with YAML frontmatter. A profile's frontmatter MAY carry the same `requires:` as `SKILL.md` (commands, secrets and tools, one parser). An agent chooses one profile at run time, which Coffer cannot know, so Coffer MUST read the union of the `requires:` of `SKILL.md` and of every `profiles/*.md`, read from the master folder each time, and MUST name the profiles that declared each requirement: a command, secret or tool several sources declare is one requirement carrying the highest minimum version, the first non-empty title and why, and the profiles that declare it — none when `SKILL.md` declares it too, because then it is needed whichever profile the agent picks. A warning from a profile MUST name its file (`profiles/<name>.md: ...`); an unreadable profile is skipped. The CLIs list's `needed_by` entry for a skill and the skill's Requires-tab commands, secrets and tools carry these names as `profiles`; the missing-secret and tool-off attention items count the profile-declared ones too. Coffer reads only what a skill declares and never scans its files to guess.
+A skill library MAY keep per-skill profiles at `<skill folder>/profiles/<name>.md`, one per environment, each with YAML frontmatter. A profile's frontmatter MAY carry the same `requires:` as `SKILL.md` (commands, secrets and tools, one parser). An agent chooses one profile at run time, which Coffer cannot know, so Coffer MUST read the union of the `requires:` of `SKILL.md` and of every `profiles/*.md`, read from the master folder each time, and MUST name the profiles that declared each requirement: a command, secret or tool several sources declare is one requirement carrying the first non-empty title and why, and the profiles that declare it — none when `SKILL.md` declares it too, because then it is needed whichever profile the agent picks. A warning from a profile MUST name its file (`profiles/<name>.md: ...`); an unreadable profile is skipped. The CLIs list's `needed_by` entry for a skill and the skill's Requires-tab commands, secrets and tools carry these names as `profiles`; the missing-secret and tool-off attention items count the profile-declared ones too. Coffer reads only what a skill declares and never scans its files to guess.
 
 #### Scenario: a profile's requires joins the skill's
-- **GIVEN** a skill whose `SKILL.md` declares `gh>=2.40` and whose `profiles/acme-team.md` frontmatter declares `gh>=2.50`, `smc` with a why and the secret `ACME_TOKEN`
+- **GIVEN** a skill whose `SKILL.md` declares `gh` and whose `profiles/acme-team.md` frontmatter declares `gh` too, `smc` with a why and the secret `ACME_TOKEN`
 - **WHEN** its requirements are read
-- **THEN** `gh` is one requirement with minimum `2.50` that names no profile, because `SKILL.md` declares it too
+- **THEN** `gh` is one requirement that names no profile, because `SKILL.md` declares it too
 - **AND** `smc` and `ACME_TOKEN` are declared by `acme-team`
 
 ### Requirement: Report a secret a skill requires that is not set
@@ -932,13 +920,13 @@ The adoption MAY name the skill and its reach. A `name` registers the skill unde
 Beside the commands skills declare, the stdio MCP launchers and the tools added
 by hand, the system MUST list every command Coffer runs itself as a required
 command — `git`, titled Git, which keeps the vault's history and syncs it —
-with no minimum and no login check, whether or not anything else needs it. Such
+whether or not anything else needs it. Such
 a command is checked, cached and handed off like every required command and is
 one entry with any skill, server or hand-added declaration of the same name
 (the hand-added title taking precedence, then Coffer's). Each command MUST carry
 `needed_by_coffer`, the uses Coffer runs it for (`vault_history`, `sync`), empty
 when Coffer does not run it; `coffer cli list` names those uses, and the
-hand-off prompt for a missing or outdated one says what Coffer itself uses it
+hand-off prompt for a missing one says what Coffer itself uses it
 for. A command Coffer needs MUST raise the same `cli_*` attention item as one a
 skill requires, whether or not a skill needs it too: its reason says what Coffer
 cannot do without it, and a missing one is an error rather than a warning, because

@@ -2213,16 +2213,15 @@ row's scheme MUST be stored without it. The form has no Secret | Plain toggle.
 ### Requirement: Show every CLI a skill requires on the CLIs page
 The CLIs page (`/clis`, under Capabilities) MUST list one row per command that
 any skill requires or any enabled stdio MCP server starts with (spec
-skill-manager "Check every required command where the agent runs"), with the
-version found beside the minimum the skills ask for (saying the minimum can't be
-compared when the command prints no version Coffer reads), and how many MCP
-servers and skills need it, problems first — missing or older than the minimum,
-grouped under Needs attention above
+skill-manager "Check every required command where the agent runs"), with
+whether it was found and how many MCP servers and skills need it, problems
+first — missing, grouped under Needs attention above
 Ready — as a split view with the selected CLI's detail beside the list
 (`/clis/<command>`). The detail's Needed by MUST list the MCP servers started
 with the command, each opening that server's page and naming its launcher, and
 the skills that declare it, each opening that skill's Requires tab and followed by " · <profile>" for each profile that declares the command (spec skill-manager "Read the requirements profile files declare"); each row
-carries its kind when both need it. Coffer checks no login, and the app MUST NOT
+carries its kind, and a skill's row its `why`. Coffer runs no command it checks,
+so the page shows no version and checks no login, and the app MUST NOT
 show an install, update or login command, a "run it in a terminal" instruction, or run any of them: a CLI
 that needs the user says what it costs in a plain sentence — which servers can't
 start and which skills fail — and its detail page and the skill's Requires tab
@@ -2235,7 +2234,7 @@ a description shows it as plain text, and one without shows nothing there; the
 header holds no field to type into.
 Every CLI — added by hand or required — has **Edit** on the header's right,
 which opens the Add CLI form with the command locked and every field — display
-name, minimum version and description — filled with what the CLI
+name and description — filled with what the CLI
 reads now. For a CLI only a skill or MCP server requires, the form says that
 its changes replace what those say and that a cleared field goes back to
 theirs, and it sends only the fields that changed (spec skill-manager "Declare
@@ -2243,7 +2242,7 @@ a command-line tool without a skill"). Only a CLI a person added also
 has a **⋯** menu with **Remove** (a 420-wide confirmation saying the tool stays
 installed on this machine). **Add CLI** opens a 480-wide form for a command name
 or path, with an optional display name (the request's `title`, shown before the
-meta line's "needed by"), minimum version and description, which says what Coffer found — where, which version, and whether it is
+meta line's "needed by") and description, which says what Coffer found — where it is, and whether it is
 already added or required — before anything is saved, and keeps a refused save in
 the dialog with Retry (see skill-manager "Declare a command-line tool without a
 skill"). With nothing required and nothing added the page shows one
@@ -2251,13 +2250,13 @@ empty state with Add CLI and a link to how `requires:` works; `requires:` entrie
 Coffer skipped are one muted line under the subtitle with a link to Skills. Coffer
 reads no command's `--help` and shows no tree of subcommands. A skill's detail page MUST link each requirement it declares to
 that CLI's page, and Overview MUST show an attention item while any required CLI
-is missing or outdated. What a skill declares and how a command
+is missing. What a skill declares and how a command
 is probed are specified by skill-manager; this page shows what they report.
 
 #### Scenario: the CLIs page lists problems first
-- **GIVEN** skills requiring `jq` (not found), `gh` (minimum 2.40, found 2.30.0) and `uv` (found, current)
+- **GIVEN** skills requiring `jq` (not found), and `gh` and `uv` (found)
 - **WHEN** the user opens `/clis`
-- **THEN** `jq` and `gh` are listed under Needs attention above `uv` under Ready, `gh` shows 2.30.0 against 2.40, and each row counts the skills that need it
+- **THEN** `jq` is listed under Needs attention above `gh` and `uv` under Ready, each row counts the skills that need it, and no row shows a version
 
 #### Scenario: a CLI that needs the user offers a prompt for an agent
 - **GIVEN** a required CLI that is missing and a Coffer-managed agent
@@ -2266,14 +2265,9 @@ is probed are specified by skill-manager; this page shows what they report.
 - **AND** the page offers Copy prompt, shows no install command, and with no managed agent available offers only Copy prompt
 
 #### Scenario: check again after fixing a CLI
-- **GIVEN** a CLI's detail page showing it older than a skill needs, with the hand-off to an agent
-- **WHEN** the agent updates it and the user chooses Check in the banner
-- **THEN** the page probes that one command afresh, the banner is gone and the row shows the new version
-
-#### Scenario: a version Coffer cannot read says the minimum is not verified
-- **GIVEN** `gcloud` found, required with minimum `400`, whose version Coffer can't read
-- **WHEN** the user opens `/clis/gcloud`
-- **THEN** it is listed under Ready with no problem banner, and its version line says the minimum can't be compared
+- **GIVEN** a CLI's detail page showing it not found, with the hand-off to an agent
+- **WHEN** the agent installs it and the user chooses Check in the banner
+- **THEN** the page looks that one command up afresh, the banner is gone and the row reads ready
 
 #### Scenario: a CLI an MCP server starts with lists that server
 - **GIVEN** `uv` missing, needed by the MCP server `duckdb` (started with `uvx`) and the skill `data-profiling`
@@ -2289,7 +2283,7 @@ is probed are specified by skill-manager; this page shows what they report.
 #### Scenario: Add CLI shows what Coffer found before anything is saved
 - **GIVEN** the Add CLI dialog
 - **WHEN** the user types a command name
-- **THEN** it says where Coffer found the command and which version, or that it is not on this machine and can still be added, and says when a skill or MCP server already requires it
+- **THEN** it says where Coffer found the command, or that it is not on this machine and can still be added, and says when a skill or MCP server already requires it
 - **AND** a refused declaration stays in the dialog with its reason
 
 #### Scenario: the empty CLIs page offers Add CLI and the docs
@@ -2303,15 +2297,15 @@ is probed are specified by skill-manager; this page shows what they report.
 - **THEN** the app opens `/clis/gh`
 
 #### Scenario: overview flags a required CLI that needs attention
-- **GIVEN** a required CLI that is outdated
+- **GIVEN** a required CLI that is missing
 - **WHEN** the user opens Overview
 - **THEN** an attention item names the CLI and the problem, and its name and its Check action open the CLI's page
-- **AND** once the daemon's list no longer reports it — every required CLI present and current — the item is gone
+- **AND** once the daemon's list no longer reports it — every required CLI present — the item is gone
 
 #### Scenario: a required CLI is edited in the same dialog
 - **GIVEN** `uv`, required by a skill and not added by hand
 - **WHEN** the user opens `/clis/uv`, chooses Edit, changes the display name and saves
-- **THEN** the dialog showed the display name, minimum version and description, and the page saves only the display name for `uv`
+- **THEN** the dialog showed the display name and description, and the page saves only the display name for `uv`
 
 ### Requirement: Resize every split view by its divider
 Every split view — a list beside its detail, a file tree beside its file, and the sidebar beside the workspace — MUST
@@ -2426,7 +2420,7 @@ line reads "4 collections · edited today 13:30", Memory's count of memories in 
 ago", Sync's number is when its last round ended ("4 min ago", "last round")
 over "1 behind · 0 ahead", and Usage counts the tokens of the last 24 hours in
 one decimal ("2.1M"). A CLI tile words its problem by reason when every item
-shares one ("1 outdated", "1 missing") and generically
+shares one ("1 missing") and generically
 ("2 need attention") otherwise. Each tile loads and fails
 on its own: a failed tile says what failed, shows the failed request in mono
 ("GET /api/v1/overview · knowledge · 503 · trace 01JA2M7X4Q"), and offers Retry
@@ -2455,9 +2449,9 @@ for what agents share follows.
 - **THEN** the folder opens selected under Not in your library, the secret opens on Secrets, and the conflicts open on their review page
 
 #### Scenario: health tiles carry the numbers and lines of Overview's board
-- **GIVEN** two agents where one is not connected, a reconnecting channel, a knowledge collection edited a minute ago, nine memories in the hub last synced 14 minutes ago, a sync round that ended 4 minutes ago with one commit behind, a command that is outdated, and a secret nothing uses
+- **GIVEN** two agents where one is not connected, a reconnecting channel, a knowledge collection edited a minute ago, nine memories in the hub last synced 14 minutes ago, a sync round that ended 4 minutes ago with one commit behind, a command that is missing, and a secret nothing uses
 - **WHEN** the user opens Overview
-- **THEN** Agents reads "1 of 2 connected" and "1 to connect", Channels "0 of 1" with "SeaTalk reconnecting since" a time, Knowledge "1 collection · edited" a time, Memory "9 memories" and "Last synced 14 min ago", Sync "4 min ago", "last round" and "1 behind · 0 ahead", CLIs "1 outdated", Secrets "1 unused", and Usage "2.1M" with "Last 24 h"
+- **THEN** Agents reads "1 of 2 connected" and "1 to connect", Channels "0 of 1" with "SeaTalk reconnecting since" a time, Knowledge "1 collection · edited" a time, Memory "9 memories" and "Last synced 14 min ago", Sync "4 min ago", "last round" and "1 behind · 0 ahead", CLIs "1 missing", Secrets "1 unused", and Usage "2.1M" with "Last 24 h"
 
 #### Scenario: a row's action that runs in place shows it is in progress
 - **GIVEN** a failing MCP server in Needs you whose action is to test it again, and an agent row whose action is to connect it
@@ -2617,7 +2611,7 @@ The CLIs page MUST list the commands Coffer runs itself (spec skill-manager
 among who needs one — "Coffer", or "Coffer and 1 skill" when a skill needs it
 too. The detail's Needed by MUST show a Coffer row first, of kind Coffer, naming
 its uses (Vault history · Sync) and opening nothing, and the banner of a missing
-or outdated one MUST say what Coffer can't do without it ("Coffer can't keep the
+one MUST say what Coffer can't do without it ("Coffer can't keep the
 vault's history and sync the vault.").
 
 #### Scenario: git shows Coffer under Needed by

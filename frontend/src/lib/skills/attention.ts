@@ -21,7 +21,7 @@ export type SkillToolState = SkillOut["requires_tools"][number];
 export type SkillAttention =
   | { kind: "masterMissing" }
   | { kind: "folderInWay"; agentName: string; entry: SkillDriftEntry }
-  | { kind: "requires"; missing: string[]; outdated: string[] }
+  | { kind: "requires"; missing: string[] }
   | { kind: "toolOff"; tools: SkillToolState[] }
   | { kind: "secrets"; missing: string[] }
   | { kind: "sourceUnreachable" }
@@ -35,17 +35,14 @@ function findingsFor(
   return (entries ?? []).filter((e) => e.skill_name === skill.name);
 }
 
-/** The declared commands that are not ready on this machine, by state. */
+/** The declared commands that are not on this machine. */
 function requireProblems(skill: Pick<SkillOut, "requires">, clis: readonly Cli[]) {
   const byCommand = new Map(clis.map((c) => [c.command, c]));
   const missing: string[] = [];
-  const outdated: string[] = [];
   for (const req of skill.requires) {
-    const cli = byCommand.get(req.command);
-    if (cli?.status === "missing") missing.push(req.command);
-    else if (cli?.status === "outdated") outdated.push(req.command);
+    if (byCommand.get(req.command)?.status === "missing") missing.push(req.command);
   }
-  return { missing, outdated };
+  return missing;
 }
 
 /** Every attention item for the skill, most urgent first. */
@@ -64,10 +61,8 @@ export function skillAttention(
       out.push({ kind: "folderInWay", agentName: e.agent_name, entry: e });
     }
   }
-  const problems = requireProblems(skill, clis);
-  if (problems.missing.length + problems.outdated.length > 0) {
-    out.push({ kind: "requires", ...problems });
-  }
+  const missing = requireProblems(skill, clis);
+  if (missing.length > 0) out.push({ kind: "requires", missing });
   const sick = (skill.requires_tools ?? []).filter((tool) => tool.status !== "healthy");
   if (sick.length > 0) out.push({ kind: "toolOff", tools: sick });
   const unset = (skill.requires_secrets ?? []).filter((s) => !s.is_set).map((s) => s.name);

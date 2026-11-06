@@ -46,18 +46,16 @@ from coffer.domain.skill.cli_status import (
     SkillRequirements,
     aggregate,
     status_of,
-    version_unverifiable,
 )
 from coffer.domain.skill.requirements_union import requirements_of_skill
 from coffer.domain.skill.tool_state import ToolState, resolve_tools
 
 
 class CommandProbePort(Protocol):
-    """The machine, as far as checking a command goes. Blocking calls."""
+    """The machine, as far as checking a command goes: a ``PATH`` lookup.
+    Blocking."""
 
     def locate(self, command: str) -> str | None: ...
-
-    def version(self, path: str) -> str | None: ...
 
 
 @dataclass(frozen=True)
@@ -141,8 +139,6 @@ class CliView:
     status: CliStatus
     #: The prompt to hand to an agent; ``None`` for a ready command.
     handoff: str | None = None
-    #: A minimum is asked for but the version could not be read.
-    version_unverifiable: bool = False
 
 
 @dataclass(frozen=True)
@@ -274,19 +270,16 @@ class CliRequirementService:
         path = self._probe.locate(hint or row.command) or (
             self._probe.locate(row.command) if hint else None
         )
-        if path is None:
-            return ProbeResult(None, None, self._clock())
-        return ProbeResult(path, self._probe.version(path), self._clock())
+        return ProbeResult(path, self._clock())
 
     def _view(self, row: RequiredCommand) -> CliView:
         probe = self._cache[row.command]
-        status = status_of(row, probe)
+        status = status_of(probe)
         return CliView(
             required=row,
             probe=probe,
             status=status,
-            handoff=cli_handoff(row, probe, status, self._machine()),
-            version_unverifiable=version_unverifiable(row, probe),
+            handoff=cli_handoff(row, status, self._machine()),
         )
 
 

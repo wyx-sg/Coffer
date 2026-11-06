@@ -122,7 +122,7 @@ give the status each code is actually sent with.
 | --- | --- | --- | --- |
 | `CLI_NOT_KNOWN` | 404 | No managed skill requires that command and no command-line tool was added under that name. | List the known commands on the **CLIs** page. |
 | `CLI_TOOL_EXISTS` | 409 | A command-line tool with that name was already added. | Edit it on the **CLIs** page, or remove it first. |
-| `CLI_TOOL_INVALID` | 400 | The command name, path or minimum version is not valid. | Use a plain command name or an absolute path, and a dotted minimum version; read `message` for the field. |
+| `CLI_TOOL_INVALID` | 400 | The command name, path, display name or description is not valid. | Use a plain command name or an absolute path, a one-line display name and a description within the limit; read `message` for the field. |
 | `CLI_TOOL_NOT_DECLARED` | 404 | That command-line tool was not added by hand, so it cannot be edited or removed. | A command a skill requires is changed in the skill, not here. |
 
 ## Agents and agent workspaces

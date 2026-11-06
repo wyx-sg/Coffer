@@ -745,7 +745,7 @@ the key (`provider_key_rejected`, offering `replace_key`, which opens the
 connection's page) — read from the kept health verdict
 ([provider-switching](../provider-switching/spec.md) "Know each connection's
 health without opening it"), only while `models` is on — and commands a skill
-requires that are missing or older than a skill's minimum (kind
+requires that are not on the agent's `PATH` (kind
 `cli`, the command as the uid). Each item MUST carry its kind, the resource's uid and title, a stable
 reason code with one sentence, a severity (`error`, `warning`, `info`), when
 the condition was first seen where that is known, and exactly one action: a
@@ -785,10 +785,10 @@ items, and the answer MUST count the items per kind.
 - **THEN** that source's item is not listed and the source is not reported as failing
 
 #### Scenario: a required command that needs attention is listed
-- **GIVEN** a skill requiring `gh` with minimum `2.40` and `gh 2.30` installed
+- **GIVEN** a skill requiring `gh` and no `gh` on the agent's `PATH`
 - **WHEN** the attention list is read
-- **THEN** it carries one `cli` item for `gh` with reason `cli_outdated` whose action is `check` through `POST /api/v1/clis/gh/check`
-- **AND** once `gh` is present and current, no `cli` item is listed
+- **THEN** it carries one `cli` item for `gh` with reason `cli_missing` whose action is `check` through `POST /api/v1/clis/gh/check`
+- **AND** once `gh` is present, no `cli` item is listed
 
 #### Scenario: a connection an agent runs on that fails is listed
 - **GIVEN** Claude Code runs on connection A, whose verdict is `unreachable`, and connection B, which nothing runs on, whose verdict is `key_rejected`

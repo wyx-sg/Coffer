@@ -4,15 +4,13 @@
 requires:
   - command: gh                 # required; a bare name, no path
     title: GitHub CLI           # optional display name
-    min_version: "2.40"         # optional; dotted numbers
     why: Opens and labels issues.
-  - jq                          # shorthand: a command with no conditions
-  - "node>=20.1"                # shorthand: a command and its minimum
+  - jq                          # shorthand: a bare command name
 ```
 
 The shorter spellings of spec skill-manager "Show the commands a skill
-declares it needs" are the same list: ``requires: {commands: [...]}``, an entry
-``name>=version`` (also ``==`` / ``~=``), and ``{command|name, version}``.
+declares it needs" are the same list: ``requires: {commands: [...]}`` and
+``{name: ...}``.
 
 Only the mapping form also names the Coffer secrets a skill needs (spec
 skill-manager "Declare the secrets a skill requires"):
@@ -42,11 +40,12 @@ read by :func:`required_skills_from_skill_md`.
 
 Parsed leniently: the frontmatter is third-party, like ``allowed-tools``, so
 an entry that is not understood is skipped and reported as a warning, never a
-reason to refuse the skill. The command is a bare name, so a declaration can
-make Coffer run only the tool it names, and only as ``<command> --version``.
+reason to refuse the skill. The command is a bare name, and Coffer only looks
+it up on ``PATH``: a declaration never makes Coffer run anything.
 
-``login_check`` and ``login`` are accepted and not read: Coffer no longer
-checks a login (an agent that uses the tool finds out itself, ADR
+A minimum version (``min_version``, ``version``, or a ``name>=2.40`` entry),
+``login_check`` and ``login`` are accepted and not read: Coffer checks neither
+a version nor a login (an agent that uses the tool finds out itself, ADR
 "agents-check-cli-logins-themselves"), and a skill that still carries them is
 not warned about it.
 """
@@ -60,17 +59,17 @@ from coffer.domain.secrets import is_valid_secret_name
 from coffer.domain.skill.validator import parse_frontmatter
 
 COMMAND_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$")
-_MIN_VERSION_RE = re.compile(r"^\d+(?:\.\d+)*$")
 _TEXT_MAX = 200
 #: A resource name as Coffer files MCP servers and tool groups under.
 _TOOL_NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,64}$")
 #: The keys the mapping form of ``requires:`` may carry.
 _MAPPING_KEYS = ("commands", "secrets", "tools")
-_KEYS = frozenset({"command", "name", "title", "min_version", "version", "why"})
+_KEYS = frozenset({"command", "name", "title", "why"})
 #: Keys an older declaration may carry, accepted without a warning and not read.
-_IGNORED_KEYS = frozenset({"login_check", "login"})
-#: ``gh``, ``gh>=2.40``, ``node == 20.1``, ``python3~=3.12``.
-_SPEC_RE = re.compile(r"^\s*([^\s<>=!~]+)\s*(?:(?:>=|=>|~=|==)\s*([0-9][^\s]*))?\s*$")
+_IGNORED_KEYS = frozenset({"min_version", "version", "login_check", "login"})
+#: ``gh``; an older ``gh>=2.40``, ``node == 20.1`` or ``python3~=3.12`` names
+#: the command, and its version is not read.
+_SPEC_RE = re.compile(r"^\s*([^\s<>=!~]+)\s*(?:(?:>=|=>|~=|==)\s*[0-9][^\s]*)?\s*$")
 
 
 @dataclass(frozen=True)
@@ -79,7 +78,6 @@ class CommandRequirement:
 
     command: str
     title: str | None = None
-    min_version: str | None = None
     why: str | None = None
     #: The profile files (``profiles/<name>.md``) that declared it, by name;
     #: empty when SKILL.md itself did.
@@ -237,9 +235,7 @@ def _entry(entry: object) -> tuple[CommandRequirement, list[str]]:
         spec = _SPEC_RE.match(entry)
         if spec is None:
             raise _SkipEntryError(f"{entry!r} is not a command name")
-        return CommandRequirement(
-            command=_command(spec.group(1)), min_version=_min_version(spec.group(2))
-        ), []
+        return CommandRequirement(command=_command(spec.group(1))), []
     if not isinstance(entry, dict):
         raise _SkipEntryError("expected a command name or a mapping")
     if "command" not in entry and "name" not in entry:
@@ -253,7 +249,6 @@ def _entry(entry: object) -> tuple[CommandRequirement, list[str]]:
         CommandRequirement(
             command=command,
             title=_text(entry.get("title"), "title", dropped),
-            min_version=_min_version(entry.get("min_version", entry.get("version"))),
             why=_text(entry.get("why"), "why", dropped),
         ),
         dropped,
@@ -269,18 +264,6 @@ def _command(value: object) -> str:
     if not COMMAND_RE.match(name):
         raise _SkipEntryError(f"command {name!r} is not a command name")
     return name
-
-
-def _min_version(value: object) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, (bool, float)):
-        # YAML reads ``2.40`` as the float 2.4, which is a different minimum.
-        raise _SkipEntryError(f'min_version {value!r} must be quoted, like "2.40"')
-    text = str(value).strip().lstrip(">=~ ")
-    if not _MIN_VERSION_RE.match(text):
-        raise _SkipEntryError(f"min_version {text!r} is not dotted numbers")
-    return text
 
 
 def _text(value: object, field: str, dropped: list[str]) -> str | None:

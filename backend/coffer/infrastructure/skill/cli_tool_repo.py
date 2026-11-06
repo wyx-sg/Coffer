@@ -3,9 +3,9 @@
 The declarations are a vault state document, ``state/cli-tools/tools.json`` —
 machine-independent, so they travel with the vault. The same document keeps
 what a person changed on a tool they did not add (one a skill or MCP server
-requires): its description under ``notes``, and its display name and minimum
-version under ``edits``, one entry per command shaped like a
-declaration without a description. Where a tool was found on
+requires): its description under ``notes``, and its display name under
+``edits``, one entry per command shaped like a declaration without a
+description. Where a tool was found on
 this machine (when it was added by an absolute path) is machine-local state
 under ``local/`` and never synced.
 """

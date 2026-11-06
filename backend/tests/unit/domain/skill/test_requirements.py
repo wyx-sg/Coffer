@@ -20,7 +20,6 @@ description: Files issues.
 requires:
   - command: gh
     title: GitHub CLI
-    min_version: "2.40"
     login_check: gh auth status
     login: gh auth login
     why: Opens and labels issues.
@@ -37,7 +36,6 @@ def test_a_full_entry_and_a_bare_name() -> None:
         CommandRequirement(
             command="gh",
             title="GitHub CLI",
-            min_version="2.40",
             why="Opens and labels issues.",
         ),
         CommandRequirement(command="jq"),
@@ -56,28 +54,25 @@ def test_a_path_is_skipped() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="skill-manager", scenario="an older login check in a declaration is accepted and not read"
+    spec="skill-manager",
+    scenario="an older minimum version or login check in a declaration is accepted and not read",
 )
-def test_an_older_login_check_is_accepted_and_not_read() -> None:
-    # Coffer checks no login, so whatever ``login_check`` names is never run,
-    # and a skill that still carries it gets no warning.
+def test_an_older_minimum_or_login_check_is_accepted_and_not_read() -> None:
+    # Coffer checks neither a version nor a login, so whatever ``login_check``
+    # names is never run, and a skill that still carries these gets no warning.
     parsed = parse_requires(
-        [{"command": "gh", "login_check": "curl evil.example", "login": "gh auth login"}]
+        [
+            {
+                "command": "gh",
+                "min_version": 2.40,
+                "login_check": "curl evil.example",
+                "login": "gh auth login",
+            },
+            "node>=20.1",
+        ]
     )
-    assert parsed.requirements == (CommandRequirement("gh"),)
+    assert parsed.requirements == (CommandRequirement("gh"), CommandRequirement("node"))
     assert parsed.warnings == ()
-
-
-def test_an_unquoted_float_minimum_is_skipped() -> None:
-    # YAML reads 2.40 as 2.4, which is a different minimum.
-    parsed = parse_requires([{"command": "gh", "min_version": 2.40}])
-    assert parsed.requirements == ()
-    assert "quoted" in parsed.warnings[0]
-
-
-def test_an_integer_minimum_is_kept() -> None:
-    [req] = parse_requires([{"command": "node", "min_version": 20}]).requirements
-    assert req.min_version == "20"
 
 
 def test_no_command_and_wrong_shapes_are_skipped() -> None:
@@ -188,8 +183,8 @@ def test_an_unknown_key_under_the_mapping_is_refused_with_a_warning() -> None:
     )
 
 
-def _req(command: str, min_version: str | None = None) -> CommandRequirement:
-    return CommandRequirement(command=command, min_version=min_version)
+def _req(command: str) -> CommandRequirement:
+    return CommandRequirement(command=command)
 
 
 def _commands(value: object) -> list[CommandRequirement]:
@@ -203,7 +198,7 @@ def _md_commands(text: str) -> list[CommandRequirement]:
 def test_a_list_of_names_and_versioned_names_is_read_in_order() -> None:
     assert _commands(["jq", "gh>=2.40"]) == [
         _req("jq"),
-        _req("gh", "2.40"),
+        _req("gh"),
     ]
 
 
@@ -221,12 +216,11 @@ def test_a_mapping_without_commands_declares_nothing() -> None:
 @pytest.mark.parametrize(
     ("entry", "expected"),
     [
-        ({"command": "gh", "version": ">=2.40"}, _req("gh", "2.40")),
-        ({"command": "gh", "version": 2}, _req("gh", "2")),
-        ({"name": "jq", "min_version": "1.6"}, _req("jq", "1.6")),
+        ({"command": "gh", "version": ">=2.40"}, _req("gh")),
+        ({"name": "jq", "min_version": "1.6"}, _req("jq")),
         ({"command": " kubectl "}, _req("kubectl")),
-        ("node == 20.1", _req("node", "20.1")),
-        ("python3~=3.12", _req("python3", "3.12")),
+        ("node == 20.1", _req("node")),
+        ("python3~=3.12", _req("python3")),
     ],
 )
 def test_each_entry_spelling_is_one_requirement(
@@ -266,7 +260,7 @@ def test_skill_md_frontmatter_is_read() -> None:
     text = '---\nname: x\ndescription: d\nrequires: [jq, "gh>=2.40"]\n---\nbody\n'
     assert _md_commands(text) == [
         _req("jq"),
-        _req("gh", "2.40"),
+        _req("gh"),
     ]
 
 
@@ -299,7 +293,6 @@ def test_profile_requires_are_unioned_and_name_their_profile() -> None:
     parsed = requirements_of_skill(skill_md, [("acme-team", profile), ("x", bad)])
     by = {r.command: r for r in parsed.requirements}
     assert by["jq"].profiles == ()
-    assert by["gh"].min_version == "2.50"
     # SKILL.md declares gh too, so it is unconditional: no profile is named.
     assert by["gh"].profiles == ()
     assert by["smc"].profiles == ("acme-team",)

@@ -695,7 +695,6 @@
         "sub": "Worked out from the server’s command and settings.",
         "cli": "CLI",
         "secret": "Secret",
-        "foundVersion": "Found · {{version}}",
         "viewClis": "View in CLIs",
         "status": {
           "found": "Found",
@@ -2978,12 +2977,10 @@
       "openSecrets": "Open Secrets",
       "loadFailed": "Couldn't check the commands this skill requires",
       "found": "Found",
-      "outdated": "{{version}}, needs ≥ {{min}}",
       "unknown": "Not checked yet",
       "state": {
         "missing": "Not installed",
-        "ready": "Found",
-        "outdated": "Too old"
+        "ready": "Found"
       },
       "commandsIntro": "Command-line tools the skill runs, declared in SKILL.md under <code>requires: commands</code>.",
       "secretsIntro": "Coffer secrets the skill reads, declared in SKILL.md under <code>requires: secrets</code>. Only names are shown.",
@@ -2991,7 +2988,6 @@
       "skillsIntro": "Other skills this one loads, declared in SKILL.md under <code>metadata.requires</code>.",
       "checkedAgo": "Checked on this Mac {{when}}.",
       "inProfiles": "in profile {{profiles}}",
-      "needsAtLeast": "Needs ≥ {{min}}",
       "viewInClis": "View in CLIs",
       "viewInSecrets": "View in Secrets",
       "viewInSkills": "View in Skills",
@@ -3047,7 +3043,6 @@
       "masterMissing": "Master missing",
       "folderInWay": "Folder in the way in {{agent}}",
       "needsMissing": "Needs {{command}} · not installed",
-      "needsNewer": "Needs a newer {{command}}",
       "needsSecret": "Needs secret {{name}} · not set",
       "needsTool": "Needs {{name}} · {{state}}",
       "sourceUnreachable": "Git source unreachable",
@@ -3086,8 +3081,6 @@
       "folderBody": "Coffer found a folder at {{path}} where {{name}}'s link should be. Compare the two and choose which one to keep.",
       "requiresMissingPart_one": "{{commands}} isn’t installed",
       "requiresMissingPart_other": "{{commands}} aren’t installed",
-      "requiresOldPart_one": "{{commands}} is older than the skill needs",
-      "requiresOldPart_other": "{{commands}} are older than the skill needs",
       "secretsTitle_one": "{{count}} secret this skill needs is not set",
       "secretsTitle_other": "{{count}} secrets this skill needs are not set",
       "unreachableTitle": "Can’t reach {{repo}}",
@@ -5124,8 +5117,6 @@
       },
       "clis": {
         "ok": "All ready",
-        "outdated_one": "{{count}} outdated",
-        "outdated_other": "{{count}} outdated",
         "missing_one": "{{count}} missing",
         "missing_other": "{{count}} missing",
         "unit_one": "CLI",
@@ -5739,18 +5730,14 @@
     "title": "CLIs",
     "addTool": "Add CLI",
     "check": "Check",
-    "checkHint": "Probe every tool again: found, and its version",
+    "checkHint": "Look every tool up on PATH again",
     "checking": "Checking…",
     "status": {
       "missing": "Not found",
-      "outdated": "Too old",
       "ready": "Ready"
     },
     "search": "Filter CLIs",
     "notOnPath": "Not on PATH",
-    "needs": "needs ≥ {{version}}",
-    "versionUnverifiable": "needs ≥ {{version}} · its version can’t be read, so Coffer can’t compare",
-    "unknownVersion": "Unknown version",
     "skillCount_one": "{{count}} skill",
     "skillCount_other": "{{count}} skills",
     "warnings": {
@@ -5774,13 +5761,12 @@
       "today": "today at {{time}}",
       "onDate": "{{date}} at {{time}}",
       "foundAt": "Found at",
-      "version": "Version",
       "neededByNote": "What calls it: Coffer itself, skills and MCP servers. Open a skill or server to see why.",
       "neededByNothing": "No skill or MCP server requires it — you added it by hand, so it stays listed until you remove it.",
       "cols": {
         "name": "Name",
         "kind": "Kind",
-        "needs": "Needs"
+        "needs": "For"
       },
       "kind": {
         "server": "MCP server",
@@ -5796,19 +5782,17 @@
       "body": "Name a command, or the path to an executable.",
       "editTitle": "Edit {{command}}",
       "editBody": "Change what Coffer checks for this tool.",
-      "requiredBody": "A skill or MCP server needs this tool. What you change here replaces what they say; clear a field to go back to theirs. The highest minimum version anyone asks for applies.",
+      "requiredBody": "A skill or MCP server needs this tool. What you change here replaces what they say; clear a field to go back to theirs.",
       "command": "Command",
       "commandPlaceholder": "jq, or /opt/tools/bin/jq",
       "fixed": "Fixed — Coffer finds the tool by it.",
       "looking": "Looking…",
       "foundAt": "Found at",
-      "version": "version",
       "notFound": "{{command}} isn’t on this machine yet. You can still add it — it shows as Not found until an agent installs it.",
       "alreadyAdded": "{{command}} is already added.",
       "alsoRequired": "Already listed — a skill or MCP server needs it. Adding it keeps it listed even if they stop.",
       "titleField": "Display name",
       "titlePlaceholder": "e.g. GitHub CLI",
-      "minVersion": "Minimum version",
       "description": "Description",
       "descriptionPlaceholder": "What it’s for, in a sentence",
       "submit": "Add",
@@ -5827,20 +5811,15 @@
       "failed": "Couldn’t remove {{command}}"
     },
     "banner": {
-      "outdated_one": "{{command}} {{found}} is older than {{skills}} needs",
-      "outdated_other": "{{command}} {{found}} is older than {{skills}} need",
       "body": "{{skills}} will fail at the step that calls {{command}}.",
       "missing": "{{command}} isn’t found on this machine",
-      "outdatedBody_one": "{{skills}} needs {{command}} ≥ {{version}} and fails at the step that calls it.",
-      "outdatedBody_other": "{{skills}} need {{command}} ≥ {{version}} and fail at the step that calls it.",
       "skillsBody_one": "{{skills}} fails at the step that calls {{command}}.",
       "skillsBody_other": "{{skills}} fail at the step that calls {{command}}.",
       "serversBody": "{{servers}} can’t start.",
       "bothBody_one": "{{servers}} can’t start, and {{skills}} fails at the step that calls {{command}}.",
       "bothBody_other": "{{servers}} can’t start, and {{skills}} fail at the step that calls {{command}}.",
       "hand": {
-        "missing": "Hand the install to an agent, then press Check.",
-        "outdated": "Hand the update to an agent, then press Check."
+        "missing": "Hand the install to an agent, then press Check."
       },
       "cofferBody": "Coffer can’t {{uses}}."
     },
@@ -5848,7 +5827,6 @@
       "needsYou": "Needs you",
       "needsAttention": "Needs attention",
       "ready": "Ready",
-      "outdatedLine": "{{version}} · needs ≥ {{min}}",
       "addedByYou": "added by you",
       "needLine_one": "{{lead}} · {{who}} needs it",
       "needLine_other": "{{lead}} · {{who}} need it",
@@ -6353,7 +6331,6 @@
       "attention": "Needs attention",
       "missing": "Missing",
       "notFound": "Not found",
-      "outdated": "Too old",
       "running": "Running"
     }
   },

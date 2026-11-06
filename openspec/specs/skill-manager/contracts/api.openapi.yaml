@@ -388,8 +388,7 @@ paths:
     post:
       description: |-
         Add a command-line tool by hand, with no skill. 409 ``CLI_TOOL_EXISTS``
-        when it was already added; 400 ``CLI_TOOL_INVALID`` for a bad name, path,
-        or version.
+        when it was already added; 400 ``CLI_TOOL_INVALID`` for a bad name or path.
       operationId: add_cli_api_v1_clis_post
       parameters:
       - in: header
@@ -474,8 +473,8 @@ paths:
   /api/v1/clis/preview:
     post:
       description: |-
-        What Coffer finds for a command name or path — where, which version,
-        whether it is already added or required — before anything is saved.
+        What Coffer finds for a command name or path — where, and whether it
+        is already added or required — before anything is saved.
       operationId: preview_cli_api_v1_clis_preview_post
       parameters:
       - in: header
@@ -2089,11 +2088,6 @@ components:
           - type: string
           - type: 'null'
           title: Description
-        min_version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Min Version
         title:
           anyOf:
           - type: string
@@ -2114,11 +2108,6 @@ components:
           - type: string
           - type: 'null'
           title: Description
-        min_version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Min Version
         title:
           anyOf:
           - type: string
@@ -2144,13 +2133,8 @@ components:
       title: CliListOut
       type: object
     CliNeededByOut:
-      description: One skill that requires the command, with what it asked for.
+      description: One skill that requires the command, and why.
       properties:
-        min_version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Min Version
         profiles:
           items:
             type: string
@@ -2170,7 +2154,6 @@ components:
       required:
       - skill_uid
       - skill_name
-      - min_version
       - why
       - profiles
       title: CliNeededByOut
@@ -2196,11 +2179,6 @@ components:
           anyOf:
           - $ref: '#/components/schemas/HandoffOut'
           - type: 'null'
-        min_version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Min Version
         needed_by:
           items:
             $ref: '#/components/schemas/CliNeededByOut'
@@ -2227,7 +2205,6 @@ components:
         status:
           enum:
           - missing
-          - outdated
           - ready
           title: Status
           type: string
@@ -2236,14 +2213,6 @@ components:
           - type: string
           - type: 'null'
           title: Title
-        version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Version
-        version_unverifiable:
-          title: Version Unverifiable
-          type: boolean
       required:
       - command
       - title
@@ -2251,9 +2220,6 @@ components:
       - added
       - status
       - path
-      - version
-      - min_version
-      - version_unverifiable
       - handoff
       - needed_by
       - needed_by_servers
@@ -2289,15 +2255,9 @@ components:
         required:
           title: Required
           type: boolean
-        version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Version
       required:
       - command
       - path
-      - version
       - added
       - required
       title: CliPreviewOut
@@ -3078,11 +3038,6 @@ components:
         command:
           title: Command
           type: string
-        min_version:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Min Version
         profiles:
           items:
             type: string
@@ -3090,7 +3045,6 @@ components:
           type: array
       required:
       - command
-      - min_version
       - profiles
       title: SkillRequirementOut
       type: object

@@ -1,11 +1,11 @@
 // src/components/clis/AddCliDialog.tsx — Add a command-line tool by hand (no skill needed), or edit any listed one.
 //
 // The command is a name (`jq`) or the absolute path of an executable. While it
-// is typed the dialog asks the daemon what it finds — where, which version, and
+// is typed the dialog asks the daemon what it finds — where it is, and
 // whether the tool is already added or a skill already requires it — so the
 // person sees what Coffer found before saving. A tool that is not on this
 // machine can still be added (it shows as not found). A display name (the
-// wire's `title`), description and minimum version are optional. Editing shows the command locked
+// wire's `title`) and description are optional. Editing shows the command locked
 // and every field. For a tool only a skill or MCP server requires, the fields
 // open on what the skills say and only the ones changed are sent: they become
 // the person's edits, and a cleared one brings the skills' value back (spec
@@ -56,7 +56,6 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
   const [command, setCommand] = useState(existing?.command ?? "");
   const [title, setTitle] = useState(existing?.title ?? "");
   const [description, setDescription] = useState(existing?.description ?? "");
-  const [minVersion, setMinVersion] = useState(existing?.min_version ?? "");
   const looked = useDebouncedValue(command.trim(), 400);
   const valid = command.trim() !== "";
 
@@ -65,7 +64,6 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
     const fields = {
       title: title.trim() || null,
       description: description.trim() || null,
-      min_version: minVersion.trim() || null,
     };
     const done = (cli: Cli) => {
       onOpenChange(false);
@@ -127,27 +125,15 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
           </>
         )}
       </div>
-      <div className="grid grid-cols-[minmax(0,1fr)_140px] gap-2.5">
-        <div className="space-y-1.5">
-          <Label htmlFor="cli-title">{t("clis.add.titleField")}</Label>
-          <Input
-            id="cli-title"
-            value={title}
-            autoComplete="off"
-            placeholder={t("clis.add.titlePlaceholder")}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="cli-min">{t("clis.add.minVersion")}</Label>
-          <Input
-            id="cli-min"
-            value={minVersion}
-            placeholder="2.40"
-            className="font-mono"
-            onChange={(e) => setMinVersion(e.target.value)}
-          />
-        </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="cli-title">{t("clis.add.titleField")}</Label>
+        <Input
+          id="cli-title"
+          value={title}
+          autoComplete="off"
+          placeholder={t("clis.add.titlePlaceholder")}
+          onChange={(e) => setTitle(e.target.value)}
+        />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="cli-description">{t("clis.add.description")}</Label>
@@ -185,7 +171,6 @@ function Form({ onOpenChange, existing, onSaved }: Omit<Props, "open">) {
 type Fields = {
   title: string | null;
   description: string | null;
-  min_version: string | null;
 };
 
 /** Only the fields that differ from what the tool reads now. */
@@ -193,7 +178,6 @@ function changedFrom(cli: Cli, fields: Fields): Partial<Fields> {
   const now: Fields = {
     title: cli.title ?? null,
     description: cli.description ?? null,
-    min_version: cli.min_version ?? null,
   };
   return Object.fromEntries(
     (Object.keys(fields) as (keyof Fields)[])

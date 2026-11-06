@@ -2,17 +2,18 @@
 
 Rows aggregate every managed skill that declares the command and the tool the
 person added by hand under that name (``DeclaredTool``; no skill needed): the
-minimum is the highest any of them asks for; the title comes from the
+title comes from the
 hand-added declaration (or, for a tool nobody added, the person's edits) first,
 then from the first skill (by name) that declares one. The launcher an
 enabled stdio MCP server starts with is required too — by that server, under
 the command that provides it (``uv`` for ``uvx``, see :func:`launcher_cli`),
-with no minimum. The commands Coffer runs itself
+The commands Coffer runs itself
 (:data:`COFFER_NEEDS`: ``git`` for the vault's history and sync) are required
 by Coffer, so they are listed even when no skill or server asks. The status is
-problem-first — ``missing``, ``outdated``, ``ready`` — and a version that cannot
-be read is reported as unknown, never as outdated. Coffer checks no login: an
-agent that uses the tool finds that out itself.
+problem-first — ``missing``, then ``ready``. Coffer runs none of the commands it
+checks: it only looks each one up on ``PATH``. Whether a tool is new enough or
+logged in, the agent that uses it finds out itself (ADR
+agents-check-cli-logins-themselves).
 """
 
 from __future__ import annotations
@@ -24,12 +25,10 @@ from enum import StrEnum
 
 from coffer.domain.skill.cli_declared import DeclaredTool
 from coffer.domain.skill.requirements import CommandRequirement
-from coffer.domain.versions import at_least, compare_versions
 
 
 class CliStatus(StrEnum):
     MISSING = "missing"
-    OUTDATED = "outdated"
     READY = "ready"
 
 
@@ -51,7 +50,6 @@ class SkillRequirements:
 class NeededBy:
     skill_uid: str
     skill_name: str
-    min_version: str | None
     why: str | None
     #: Profiles that declared it; empty when SKILL.md itself did.
     profiles: tuple[str, ...] = ()
@@ -70,7 +68,6 @@ class ServerLauncher:
 class RequiredCommand:
     command: str
     title: str | None
-    min_version: str | None
     needed_by: tuple[NeededBy, ...]
     #: The MCP servers started with this command (or a launcher it provides).
     needed_by_servers: tuple[ServerLauncher, ...] = ()
@@ -120,11 +117,10 @@ def launcher_cli(launcher: str) -> str | None:
 
 @dataclass(frozen=True)
 class ProbeResult:
-    """What checking the command found: where, and the version ``--version``
-    printed (``None`` when it printed none Coffer can read)."""
+    """What looking the command up found: where it is (``None``: not on
+    ``PATH``)."""
 
     path: str | None
-    version: str | None
     checked_at: datetime
 
 
@@ -138,8 +134,8 @@ def aggregate(
 ) -> list[RequiredCommand]:
     """One :class:`RequiredCommand` per command, sorted by command name.
     ``notes`` are descriptions written for tools nobody added by hand; a
-    hand-added tool's own description wins. ``edits`` are the display name and
-    minimum changed on such a tool: they take the place of a
+    hand-added tool's own description wins. ``edits`` are the display name
+    changed on such a tool: it takes the place of a
     hand-added declaration's, and list no command on their own."""
     notes = notes or {}
     edits = edits or {}
@@ -186,12 +182,10 @@ def _row(
         title=own.title
         or (coffer.title if coffer else None)
         or next((r.title for r in reqs if r.title), None),
-        min_version=highest_minimum([own.min_version, *(r.min_version for r in reqs)]),
         needed_by=tuple(
             NeededBy(
                 skill_uid=uid,
                 skill_name=name,
-                min_version=r.min_version,
                 why=r.why,
                 profiles=r.profiles,
             )
@@ -204,33 +198,8 @@ def _row(
     )
 
 
-def highest_minimum(minimums: Iterable[str | None]) -> str | None:
-    best: str | None = None
-    for candidate in minimums:
-        if candidate is None:
-            continue
-        if best is None or (compare_versions(candidate, best) or 0) > 0:
-            best = candidate
-    return best
-
-
-def status_of(required: RequiredCommand, probe: ProbeResult) -> CliStatus:
-    if probe.path is None:
-        return CliStatus.MISSING
-    if (
-        required.min_version is not None
-        and probe.version is not None
-        and at_least(probe.version, required.min_version) is False
-    ):
-        return CliStatus.OUTDATED
-    return CliStatus.READY
-
-
-def version_unverifiable(required: RequiredCommand, probe: ProbeResult) -> bool:
-    """A minimum is asked for, the command was found, and its version could
-    not be read — so whether it is new enough is unknown (``go``, ``kubectl``
-    and ``java`` print no version for ``--version``)."""
-    return required.min_version is not None and probe.path is not None and probe.version is None
+def status_of(probe: ProbeResult) -> CliStatus:
+    return CliStatus.MISSING if probe.path is None else CliStatus.READY
 
 
 __all__ = [
@@ -245,8 +214,6 @@ __all__ = [
     "ServerLauncher",
     "SkillRequirements",
     "aggregate",
-    "highest_minimum",
     "launcher_cli",
     "status_of",
-    "version_unverifiable",
 ]

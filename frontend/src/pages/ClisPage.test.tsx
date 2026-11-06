@@ -10,10 +10,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Cli } from "@/lib/api/clis";
 import { acceptance } from "@/test/acceptance";
 import {
-  GCLOUD_UNVERIFIED,
   DEMO_ADDED,
   cli,
-  GH_OUTDATED,
+  GH_READY,
   GIT_MISSING_FOR_COFFER,
   JQ_MISSING,
   UV_MISSING_FOR_SERVER,
@@ -91,8 +90,8 @@ function paneTitle(): string {
 }
 
 beforeEach(() => {
-  // The daemon's order: missing, outdated, ready.
-  api.list.mockResolvedValue(listOf([JQ_MISSING, GH_OUTDATED, UV_READY]));
+  // The daemon's order: missing, then ready.
+  api.list.mockResolvedValue(listOf([JQ_MISSING, GH_READY, UV_READY]));
   listAgents.mockResolvedValue({
     agents: [{ agent_key: "claude_code", display_name: "Claude Code", available: true }],
   });
@@ -103,12 +102,13 @@ describe("ClisPage", () => {
   acceptance("web-ui", "the CLIs page lists problems first", async () => {
     renderPage();
     await screen.findByRole("region", { name: "Needs attention" });
-    expect(group("Needs attention")).toEqual(["jq", "gh"]);
-    expect(group("Ready")).toEqual(["uv"]);
+    expect(group("Needs attention")).toEqual(["jq"]);
+    expect(group("Ready")).toEqual(["gh", "uv"]);
 
     expect(rowOf("jq")).toHaveTextContent("Not found · 2 skills need it");
-    expect(rowOf("gh")).toHaveTextContent("2.30.0 · needs ≥ 2.40");
-    expect(rowOf("uv")).toHaveTextContent("0.4.18 · 1 skill");
+    // Coffer never runs a command, so a ready row shows who needs it, no version.
+    expect(rowOf("gh")).toHaveTextContent(/^gh2 skills$/);
+    expect(rowOf("uv")).toHaveTextContent(/^uv1 skill$/);
 
     // No command in the address: the first row is open beside the list.
     expect(paneTitle()).toBe("jq");
@@ -117,11 +117,10 @@ describe("ClisPage", () => {
     fireEvent.click(rowOf("gh"));
     expect(screen.getByTestId("where")).toHaveTextContent("/clis/gh");
     expect(paneTitle()).toBe("gh");
-    expect(screen.getByTestId("cli-problem")).toHaveTextContent(
-      "gh 2.30.0 is older than gh-triage and release-notes need",
-    );
-    expect(screen.getByTestId("cli-problem")).toHaveTextContent(
-      "gh-triage and release-notes need gh ≥ 2.40 and fail at the step that calls it.",
+    expect(screen.queryByTestId("cli-problem")).toBeNull();
+    // A skill's row says what it uses the command for.
+    expect(screen.getByRole("link", { name: /gh-triage/ })).toHaveTextContent(
+      "Opens and labels issues.",
     );
     // One page, no tab strip.
     expect(screen.queryByRole("tab")).toBeNull();
@@ -191,40 +190,25 @@ describe("ClisPage", () => {
 
   acceptance("web-ui", "check again after fixing a CLI", async () => {
     api.check.mockResolvedValue({
-      ...GH_OUTDATED,
+      ...JQ_MISSING,
       status: "ready" as const,
-      version: "2.45.0",
+      path: "/opt/homebrew/bin/jq",
       handoff: null,
     });
-    renderPage("/clis/gh");
+    renderPage("/clis/jq");
 
     const banner = await screen.findByTestId("cli-problem");
-    expect(banner).toHaveTextContent("gh 2.30.0 is older than gh-triage and release-notes need");
+    expect(banner).toHaveTextContent("jq isn’t found on this machine");
 
     // The banner's Check re-checks this one command, not all of them.
     fireEvent.click(within(banner).getByRole("button", { name: "Check" }));
-    await waitFor(() => expect(api.check).toHaveBeenCalledWith("gh"));
+    await waitFor(() => expect(api.check).toHaveBeenCalledWith("jq"));
     expect(api.checkAll).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByTestId("cli-problem")).toBeNull());
-    expect(rowOf("gh")).toHaveTextContent("2.45.0 · 2 skills");
+    expect(rowOf("jq")).toHaveTextContent(/^jq2 skills$/);
     // Ready: no hand-off.
     expect(screen.queryByRole("button", { name: /Hand off to/ })).toBeNull();
   });
-
-  acceptance(
-    "web-ui",
-    "a version Coffer cannot read says the minimum is not verified",
-    async () => {
-      api.list.mockResolvedValue(listOf([GCLOUD_UNVERIFIED]));
-      renderPage("/clis/gcloud");
-      await screen.findByRole("heading", { level: 2, name: "gcloud" });
-      expect(group("Ready")).toEqual(["gcloud"]);
-      expect(screen.queryByTestId("cli-problem")).toBeNull();
-      expect(
-        screen.getByText("needs ≥ 400 · its version can’t be read, so Coffer can’t compare"),
-      ).toBeInTheDocument();
-    },
-  );
 
   test("Check sits beside the list's filter and re-checks every command; the header holds Add CLI", async () => {
     api.checkAll.mockResolvedValue(listOf([UV_READY]));
@@ -248,7 +232,6 @@ describe("ClisPage", () => {
             {
               skill_uid: "sk-logs",
               skill_name: "logs",
-              min_version: null,
               why: null,
               profiles: ["shopee-account"],
             },
@@ -267,13 +250,11 @@ describe("ClisPage", () => {
     const link = await screen.findByRole("link", { name: /gh-triage/ });
     expect(link).toHaveAttribute("href", "/skills/gh-triage/requires");
     expect(link).toHaveTextContent("Skill");
-    expect(link).toHaveTextContent("≥ 0.4");
-    expect(screen.getByText("needs ≥ 0.4")).toBeInTheDocument();
     expect(screen.queryByTestId("cli-problem")).toBeNull();
   });
 
   acceptance("web-ui", "a CLI an MCP server starts with lists that server", async () => {
-    api.list.mockResolvedValue(listOf([UV_MISSING_FOR_SERVER, GH_OUTDATED]));
+    api.list.mockResolvedValue(listOf([UV_MISSING_FOR_SERVER, GH_READY]));
     renderPage("/clis/uv");
     const banner = await screen.findByTestId("cli-problem");
     expect(rowOf("uv")).toHaveTextContent("Not found · duckdb can’t start");
@@ -336,7 +317,7 @@ describe("ClisPage", () => {
     // The header has no field to type into: the description is text, edited through Edit.
     expect(screen.queryByRole("textbox", { name: "Description" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    for (const name of ["Display name", "Minimum version", "Description"]) {
+    for (const name of ["Display name", "Description"]) {
       expect(await screen.findByRole("textbox", { name })).toBeInTheDocument();
     }
     fireEvent.change(screen.getByRole("textbox", { name: "Display name" }), {

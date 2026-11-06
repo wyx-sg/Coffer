@@ -2,25 +2,23 @@
 "Declare a command-line tool without a skill").
 
 No skill or MCP server is involved: the person names a command, and may give
-it a title, a description and a minimum version. The declaration is
-machine-independent (it travels with the vault); where the command is found on
-one machine is machine-local and not part of it. Coffer runs only
-``<command> --version`` for it.
+it a title and a description. The declaration is machine-independent (it
+travels with the vault); where the command is found on one machine is
+machine-local and not part of it. Coffer only looks the command up; it runs
+nothing.
 
-A stored entry from an older build may still carry ``login_check``; it is not
-read, and the next write of the document drops it.
+A stored entry from an older build may still carry ``min_version`` or
+``login_check``; neither is read, and the next write of the document drops them.
 """
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Any
 
 from coffer.domain.error_base import CofferError
 from coffer.domain.skill.requirements import COMMAND_RE
 
-_MIN_VERSION_RE = re.compile(r"^\d+(?:\.\d+)*$")
 TEXT_MAX = 200
 DESCRIPTION_MAX = 1000
 #: Most tools one vault declares; a cap, not a target.
@@ -58,7 +56,6 @@ class DeclaredTool:
     command: str
     title: str | None = None
     description: str | None = None
-    min_version: str | None = None
 
 
 def is_path(raw: str) -> bool:
@@ -86,21 +83,11 @@ def clean_text(value: str | None, field: str, limit: int = TEXT_MAX) -> str | No
     return text
 
 
-def clean_min_version(value: str | None) -> str | None:
-    if value is None or not value.strip():
-        return None
-    text = value.strip().lstrip(">=~ ")
-    if not _MIN_VERSION_RE.match(text):
-        raise CliToolInvalid(f"minimum version {value!r} is not dotted numbers, like 2.40")
-    return text
-
-
 def to_document(tool: DeclaredTool) -> dict[str, Any]:
     return {
         "command": tool.command,
         "title": tool.title,
         "description": tool.description,
-        "min_version": tool.min_version,
     }
 
 
@@ -117,7 +104,7 @@ def from_document(entry: Any) -> DeclaredTool | None:
         raw = entry.get(key)
         return raw if isinstance(raw, str) and raw else None
 
-    return DeclaredTool(command, text("title"), text("description"), text("min_version"))
+    return DeclaredTool(command, text("title"), text("description"))
 
 
 __all__ = [
@@ -127,7 +114,6 @@ __all__ = [
     "CliToolInvalid",
     "CliToolNotDeclared",
     "DeclaredTool",
-    "clean_min_version",
     "clean_text",
     "command_name",
     "from_document",

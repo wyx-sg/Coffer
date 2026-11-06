@@ -266,9 +266,7 @@ describe("McpServerPane", () => {
     api.status = {
       status: "failing",
       failure_reason: "auth_rejected",
-      requires: [
-        { kind: "secret", name: "Authorization", secret: SENTRY_REF, status: "set", version: null },
-      ],
+      requires: [{ kind: "secret", name: "Authorization", secret: SENTRY_REF, status: "set" }],
     };
     renderPane();
     const callout = await screen.findByTestId("mcp-callout-key-rejected");
@@ -415,12 +413,11 @@ describe("McpServerPane", () => {
       api.status = {
         status: "healthy",
         requires: [
-          { kind: "cli", name: "npx", status: "found", version: "10.9.2", secret: null },
+          { kind: "cli", name: "npx", status: "found", secret: null },
           {
             kind: "secret",
             name: "Authorization",
             status: "missing",
-            version: null,
             secret: "sentry.AUTH_TOKEN",
           },
         ],
@@ -437,7 +434,7 @@ describe("McpServerPane", () => {
       // No Agents section, no tiering banner: banner → Last 24 hours → Requires → Most-called tools.
       expect(screen.queryByText("Reach is set on this Mac only")).toBeNull();
       expect(screen.queryByTestId("mcp-callout-tiering")).toBeNull();
-      expect(await screen.findByText("Found · 10.9.2")).toBeInTheDocument();
+      expect(await screen.findByText("Found")).toBeInTheDocument();
       expect(screen.getByText("View in CLIs")).toHaveAttribute("href", "/clis/npx");
       expect(screen.getByText("Missing")).toBeInTheDocument();
       // A secret row names the secret, not the header that carries it.

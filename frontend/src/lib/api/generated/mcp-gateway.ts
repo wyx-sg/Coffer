@@ -1687,8 +1687,6 @@ export interface components {
              * @enum {string}
              */
             status: "found" | "not_found" | "set" | "missing" | "waiting_approval" | "refused";
-            /** Version */
-            version: string | null;
         };
         /** McpServerLogLineOut */
         McpServerLogLineOut: {

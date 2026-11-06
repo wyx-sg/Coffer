@@ -113,7 +113,7 @@ describe("reviewing skills with an agent", () => {
   it("names the agent the review goes to and says what it does beside a lone button", async () => {
     tab({
       requires_declared: true,
-      requires: [{ command: "jq", min_version: null, profiles: [] }],
+      requires: [{ command: "jq", profiles: [] }],
     });
     expect(await screen.findByRole("button", { name: "Check with Claude Code" })).toBeVisible();
     expect(
