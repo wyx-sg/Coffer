@@ -1,6 +1,6 @@
 // src/components/clis/CliFound.tsx — what Coffer finds for the command typed in the Add CLI dialog, in a grey block under the field (boards 4.4.13–4.4.15).
 //
-// Found: where and which version (a green check). Not on this machine: a
+// Found: where it is (a green check). Not on this machine: a
 // warning that it can still be added. Already added: a danger line. Already
 // required by a skill or MCP server: an info line — adding it keeps it listed
 // even when they stop requiring it.
@@ -44,12 +44,6 @@ export function CliFound({ command }: { command: string }) {
             tone="text-text-muted"
           >
             {t("clis.add.foundAt")} <span className="font-mono text-text">{data.path}</span>
-            {data.version ? (
-              <>
-                {" · "}
-                {t("clis.add.version")} <span className="font-mono text-text">{data.version}</span>
-              </>
-            ) : null}
           </Line>
         ) : (
           <Line icon={<TriangleAlert className={icon} aria-hidden />} tone="text-warning">

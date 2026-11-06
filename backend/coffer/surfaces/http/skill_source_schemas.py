@@ -69,11 +69,10 @@ class SkillRequirementOut(BaseModel):
     """One command the skill's SKILL.md says it needs."""
 
     command: str
-    min_version: str | None
 
 
 def requirement_out(r: CommandRequirement) -> SkillRequirementOut:
-    return SkillRequirementOut(command=r.command, min_version=r.min_version)
+    return SkillRequirementOut(command=r.command)
 
 
 class SkillSecretRequirementOut(BaseModel):

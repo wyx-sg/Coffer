@@ -1,7 +1,7 @@
 // src/components/skills/SkillRequiresTab.test.tsx — a skill's Requires tab lists what its SKILL.md declares, in four groups.
 //
 // Commands · Secrets · Tools · Skills. Each row is name · state · a link to the
-// page that owns the thing; no install or login step of its own and no
+// page that owns the thing; no install step of its own and no
 // hand-off in a row (that is one button in the banner above the tabs). Real
 // QueryClientProvider; only the api module is mocked.
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -9,7 +9,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
-import { GCLOUD_LOGGED_OUT, JQ_MISSING, UV_READY, cli } from "@/test/cliFixtures";
+import { GH_READY, JQ_MISSING, UV_READY, cli } from "@/test/cliFixtures";
 import { acceptance } from "@/test/acceptance";
 import type { SkillOut } from "@/lib/api/skills";
 
@@ -35,13 +35,13 @@ function Where() {
 
 function renderTab(
   skillUid = "sk-gh-triage",
-  requires = ["jq", "gcloud", "uv"],
+  requires = ["jq", "gh", "uv"],
   requiresSecrets: SkillOut["requires_secrets"] = [],
   more: Partial<SkillOut> = {},
 ) {
   const skill = {
     uid: skillUid,
-    requires: requires.map((command) => ({ command, min_version: null })),
+    requires: requires.map((command) => ({ command })),
     requires_declared: true,
     requires_secrets: requiresSecrets,
     requires_tools: [],
@@ -68,37 +68,36 @@ describe("SkillRequiresTab", () => {
   acceptance("web-ui", "a skill's requirement links to its CLI", async () => {
     const other = cli({
       command: "docker",
-      needed_by: [{ skill_uid: "sk-other", skill_name: "other", min_version: null, why: null }],
+      needed_by: [{ skill_uid: "sk-other", skill_name: "other", why: null }],
     });
     api.list.mockResolvedValue({
-      items: [JQ_MISSING, GCLOUD_LOGGED_OUT, UV_READY, other],
+      items: [JQ_MISSING, GH_READY, UV_READY, other],
       warnings: [],
     });
     renderTab();
 
     await screen.findByText("Not installed");
-    expect(screen.getByText("Not logged in")).toBeInTheDocument();
-    expect(screen.getByText(/^Found/)).toBeInTheDocument();
+    expect(screen.getAllByText(/^Found/)).toHaveLength(2);
     const rows = screen.getAllByRole("listitem");
     expect(rows).toHaveLength(3);
     expect(screen.queryByText("docker")).toBeNull();
-    for (const [i, command] of ["jq", "gcloud", "uv"].entries()) {
+    for (const [i, command] of ["jq", "gh", "uv"].entries()) {
       const links = within(rows[i]).getAllByRole("link");
       expect(links.map((a) => a.getAttribute("href"))).toEqual([`/clis/${command}`]);
       expect(within(rows[i]).getByRole("link", { name: "View in CLIs" })).toBeInTheDocument();
     }
 
     fireEvent.click(within(rows[1]).getByRole("link", { name: "View in CLIs" }));
-    expect(screen.getByTestId("where")).toHaveTextContent("/clis/gcloud");
+    expect(screen.getByTestId("where")).toHaveTextContent("/clis/gh");
   });
 
   acceptance(
     "web-ui",
     "the requires tab checks the commands again and keeps the hand-off out of its rows",
     async () => {
-      api.list.mockResolvedValue({ items: [JQ_MISSING, GCLOUD_LOGGED_OUT], warnings: [] });
-      api.checkAll.mockResolvedValue({ items: [JQ_MISSING, GCLOUD_LOGGED_OUT], warnings: [] });
-      renderTab("sk-gh-triage", ["jq", "gcloud"]);
+      api.list.mockResolvedValue({ items: [JQ_MISSING, GH_READY], warnings: [] });
+      api.checkAll.mockResolvedValue({ items: [JQ_MISSING, GH_READY], warnings: [] });
+      renderTab("sk-gh-triage", ["jq", "gh"]);
       await screen.findByText("Not installed");
       expect(screen.queryByRole("button", { name: /Install/ })).toBeNull();
       expect(
@@ -106,7 +105,6 @@ describe("SkillRequiresTab", () => {
           name: "Copy prompt",
         }),
       ).toBeNull();
-      expect(screen.queryByText("gcloud auth login")).toBeNull();
       expect(screen.queryByText(/brew/)).toBeNull();
       fireEvent.click(screen.getByRole("button", { name: "Check" }));
       await waitFor(() => expect(api.checkAll).toHaveBeenCalledTimes(1));

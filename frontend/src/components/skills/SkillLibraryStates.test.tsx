@@ -48,7 +48,7 @@ const api = vi.mocked(skillsApi);
 beforeEach(() => {
   h.agents = [makeAgent()];
   h.skills = [
-    makeSkill({ requires: [{ command: "jq", min_version: null }] }),
+    makeSkill({ requires: [{ command: "jq" }] }),
     {
       ...gitSkill({
         update_available: true,

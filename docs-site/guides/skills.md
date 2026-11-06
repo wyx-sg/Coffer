@@ -265,11 +265,11 @@ A skill can say which command-line tools it relies on with `requires` in its fro
 ---
 name: gh-triage
 description: Label new issues, find duplicates, ask for missing details.
-requires: [jq, "gh>=2.40", uv]
+requires: [jq, gh, uv]
 ---
 ```
 
-Each entry is a command name, optionally with a minimum version (`gh>=2.40`); `requires: {commands: [...]}` and entries like `{command: gh, version: "2.40"}` are read too. The skill's **Requires** tab lists them, each linking to its page on the CLIs page. Declaring a requirement changes nothing about delivery: the skill is delivered whether or not the command is installed.
+Each entry is a command name; `requires: {commands: [...]}` and entries like `{command: gh, why: Opens issues.}` are read too. Coffer only checks that the command is on `PATH`; a version the skill needs belongs in its own text, for the agent to check. The skill's **Requires** tab lists them, each linking to its page on the CLIs page. Declaring a requirement changes nothing about delivery: the skill is delivered whether or not the command is installed.
 
 ## Secrets a skill needs
 
@@ -280,7 +280,7 @@ A skill whose commands need a token or key names the Coffer secret by its id und
 name: gh-triage
 description: Label new issues, find duplicates, ask for missing details.
 requires:
-  commands: [jq, "gh>=2.40"]
+  commands: [jq, gh]
   secrets: [<id>]   # the secret's 32-hex id, from its page on the Secrets page
 ---
 ```

@@ -58,14 +58,11 @@ async def add_cli(
     actor: str = Depends(get_actor),
 ) -> CliOut:
     """Add a command-line tool by hand, with no skill. 409 ``CLI_TOOL_EXISTS``
-    when it was already added; 400 ``CLI_TOOL_INVALID`` for a bad name, path,
-    version or login check."""
+    when it was already added; 400 ``CLI_TOOL_INVALID`` for a bad name or path."""
     view = await tools.add(
         body.command,
         title=body.title,
         description=body.description,
-        min_version=body.min_version,
-        login_check=body.login_check,
         actor=actor,
     )
     return cli_out(view)
@@ -76,8 +73,8 @@ async def preview_cli(
     body: CliPreviewIn,
     tools: CliToolService = Depends(get_cli_tool_service),  # noqa: B008
 ) -> CliPreviewOut:
-    """What Coffer finds for a command name or path — where, which version,
-    whether it is already added or required — before anything is saved."""
+    """What Coffer finds for a command name or path — where, and whether it
+    is already added or required — before anything is saved."""
     return cli_preview_out(await tools.preview(body.command))
 
 

@@ -265,11 +265,11 @@ Coffer 不会替你写技能文件夹里的任何文件，所以不存在与你�
 ---
 name: gh-triage
 description: Label new issues, find duplicates, ask for missing details.
-requires: [jq, "gh>=2.40", uv]
+requires: [jq, gh, uv]
 ---
 ```
 
-每个条目是一个命令名，可选附带最低版本（`gh>=2.40`）；`requires: {commands: [...]}` 以及 `{command: gh, version: "2.40"}` 这样的条目也能读取。技能的 **依赖** 标签页会列出它们，每个都链接到它在命令行工具页面上的位置。声明依赖不会改变投递：无论命令装没装，技能都会投递。
+每个条目是一个命令名；`requires: {commands: [...]}` 以及 `{command: gh, why: Opens issues.}` 这样的条目也能读取。Coffer 只检查命令在不在 `PATH` 上；技能需要哪个版本，写在技能正文里让智能体去检查。技能的 **依赖** 标签页会列出它们，每个都链接到它在命令行工具页面上的位置。声明依赖不会改变投递：无论命令装没装，技能都会投递。
 
 ## 技能需要的密钥 {#secrets-a-skill-needs}
 
@@ -280,7 +280,7 @@ requires: [jq, "gh>=2.40", uv]
 name: gh-triage
 description: Label new issues, find duplicates, ask for missing details.
 requires:
-  commands: [jq, "gh>=2.40"]
+  commands: [jq, gh]
   secrets: [<id>]   # 密钥的 32 位十六进制 id，在密钥页面上它的页面里
 ---
 ```

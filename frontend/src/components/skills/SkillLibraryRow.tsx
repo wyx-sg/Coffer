@@ -49,13 +49,7 @@ function useSublineText(item: SkillAttention, agents: readonly AgentOut[]): stri
       return t("skills.row.folderInWay", { agent: agent?.display_name ?? item.agentName });
     }
     case "requires":
-      if (item.missing.length > 0) {
-        return t("skills.row.needsMissing", { command: item.missing[0] });
-      }
-      if (item.loggedOut.length > 0) {
-        return t("skills.row.needsLogin", { command: item.loggedOut[0] });
-      }
-      return t("skills.row.needsNewer", { command: item.outdated[0] });
+      return t("skills.row.needsMissing", { command: item.missing[0] });
     case "toolOff": {
       const tool = item.tools[0];
       return t("skills.row.needsTool", {

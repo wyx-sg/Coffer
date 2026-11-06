@@ -212,9 +212,7 @@ async def get_server_status(
         "missing_secret": secret[0] if secret else None,
         "missing_secret_ref": secret[1] if secret else None,
         "requires": [
-            McpRequirementOut(
-                kind=r.kind, name=r.name, status=r.status, version=r.version, secret=r.secret
-            )
+            McpRequirementOut(kind=r.kind, name=r.name, status=r.status, secret=r.secret)
             for r in (await requirements.of(resource) if requirements else [])
         ],
     }

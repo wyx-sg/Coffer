@@ -3,9 +3,9 @@
 The declarations are a vault state document, ``state/cli-tools/tools.json`` —
 machine-independent, so they travel with the vault. The same document keeps
 what a person changed on a tool they did not add (one a skill or MCP server
-requires): its description under ``notes``, and its display name, minimum
-version and login check under ``edits``, one entry per command shaped like a
-declaration without a description. Where a tool was found on
+requires): its description under ``notes``, and its display name under
+``edits``, one entry per command shaped like a declaration without a
+description. Where a tool was found on
 this machine (when it was added by an absolute path) is machine-local state
 under ``local/`` and never synced.
 """
@@ -44,8 +44,8 @@ class VaultCliToolRepo:
         return {k: v for k, v in raw.items() if isinstance(k, str) and isinstance(v, str) and v}
 
     def edits(self) -> dict[str, DeclaredTool]:
-        """The display name, minimum and login check changed on tools nobody
-        added by hand, by command."""
+        """The display name and minimum changed on tools nobody added by
+        hand, by command."""
         raw = (self._doc.get() or {}).get("edits", [])
         found = (from_document(entry) for entry in raw if isinstance(raw, list))
         return {t.command: replace(t, description=None) for t in found if t is not None}
@@ -65,7 +65,7 @@ class VaultCliToolRepo:
         actor: str | None = None,
     ) -> None:
         """Keep ``note`` as ``command``'s description and ``edit``'s display
-        name, minimum and login check; ``None`` drops either."""
+        name and minimum; ``None`` drops either."""
         notes, edits = self.notes(), self.edits()
         if note is None:
             notes.pop(command, None)
@@ -89,11 +89,16 @@ class VaultCliToolRepo:
         if not tools and not notes and not edits:
             self._doc.remove(summary=summary, actor=actor)
             return
-        body: dict[str, Any] = {"tools": [to_document(t) for t in sorted_tools(tools)]}
-        if notes:
-            body["notes"] = dict(sorted(notes.items()))
-        if edits:
-            body["edits"] = [to_document(t) for t in sorted_tools(list(edits.values()))]
+        # ``None`` drops the key: the document is written over the stored one,
+        # which keeps every key the new body leaves out, so an empty ``notes``
+        # or ``edits`` must be named to go.
+        body: dict[str, Any] = {
+            "tools": [to_document(t) for t in sorted_tools(tools)],
+            "notes": dict(sorted(notes.items())) if notes else None,
+            "edits": (
+                [to_document(t) for t in sorted_tools(list(edits.values()))] if edits else None
+            ),
+        }
         self._doc.put(body, summary=summary, actor=actor)
 
 

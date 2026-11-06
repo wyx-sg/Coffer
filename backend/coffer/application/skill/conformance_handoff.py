@@ -47,8 +47,7 @@ _STEPS = (
     "The only thing Coffer reads is the `requires:` declaration, so Coffer can show what a "
     "skill needs. If you suggest one, put it under a top-level `requires:` in SKILL.md's "
     "frontmatter, listing only what the skill itself uses: the commands it runs "
-    "(`command`, with `min_version`, `login_check` — a subcommand of the same command that "
-    "exits 0 when logged in — `login` and `why` where they help), the Coffer secrets it "
+    "(`command`, with a `why` where it helps), the Coffer secrets it "
     "uses, by id (`coffer secret list --json` lists them), and the MCP servers and tool "
     "groups it calls, by their Coffer name.",
     "Do not declare on behalf of another skill it delegates to, Coffer-managed or external; "

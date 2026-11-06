@@ -35,15 +35,7 @@ export type PaletteTarget =
 
 /** A status worth a word beside an object, as an i18n key under `palette.status`. */
 export interface PaletteStatus {
-  key:
-    | "off"
-    | "failing"
-    | "attention"
-    | "missing"
-    | "notFound"
-    | "outdated"
-    | "loggedOut"
-    | "running";
+  key: "off" | "failing" | "attention" | "missing" | "notFound" | "running";
   tone: "muted" | "warn" | "error";
 }
 

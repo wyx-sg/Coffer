@@ -29,9 +29,7 @@ vi.mock("@/lib/api/secret", async (orig) => ({
   },
 }));
 
-const REQUIRES = [
-  { kind: "secret", name: "SENTRY_TOKEN", status: "set", version: null, secret: ID },
-] as const;
+const REQUIRES = [{ kind: "secret", name: "SENTRY_TOKEN", status: "set", secret: ID }] as const;
 
 function renderRequires(onRebind?: (r: unknown, ref: string) => Promise<unknown>) {
   render(

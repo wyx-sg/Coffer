@@ -145,9 +145,7 @@ export function SkillRequiresTab({ skill }: Props) {
             <SkillRequireRow
               key={req.command}
               name={req.command}
-              note={
-                req.min_version ? t("skills.requires.needsAtLeast", { min: req.min_version }) : null
-              }
+              note={null}
               state={<StateWord cli={cli} />}
               to={`/clis/${encodeURIComponent(req.command)}`}
               linkLabel={t("skills.requires.viewInClis")}

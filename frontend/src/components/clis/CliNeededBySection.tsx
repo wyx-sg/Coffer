@@ -1,4 +1,4 @@
-// src/components/clis/CliNeededBySection.tsx — "Needed by": Coffer itself, the skills and MCP servers that call the command, one row each (Name · Kind · Needs · →).
+// src/components/clis/CliNeededBySection.tsx — "Needed by": Coffer itself, the skills and MCP servers that call the command, one row each (Name · Kind · For · →; a skill's row shows its why).
 //
 // A row opens that skill's Requires tab or that server's page; Coffer's own row
 // (git, for the vault's history and sync) opens nothing. A tool added by
@@ -23,7 +23,6 @@ interface Row {
 
 export function CliNeededBySection({ cli }: { cli: Cli }) {
   const { t } = useTranslation();
-  const outdated = cli.status === "outdated";
   const rows: Row[] = [
     ...(cli.needed_by_coffer.length > 0
       ? [
@@ -48,7 +47,7 @@ export function CliNeededBySection({ cli }: { cli: Cli }) {
       name: n.skill_name,
       to: `/skills/${encodeURIComponent(n.skill_name)}/requires`,
       kind: t("clis.detail.kind.skill"),
-      needs: n.min_version ? `≥ ${n.min_version}` : "—",
+      needs: n.why ?? "—",
     })),
   ];
   return (
@@ -72,9 +71,7 @@ export function CliNeededBySection({ cli }: { cli: Cli }) {
               <>
                 <span className="truncate font-mono text-xs font-label">{r.name}</span>
                 <span className="text-xs text-text-muted">{r.kind}</span>
-                <span
-                  className={`truncate text-xs ${outdated && r.needs.startsWith("≥") ? "text-warning" : "text-text-muted"}`}
-                >
+                <span className="truncate text-xs text-text-muted" title={r.needs}>
                   {r.needs}
                 </span>
               </>

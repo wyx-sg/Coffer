@@ -38,7 +38,7 @@ describe("skillAttention", () => {
   test("most urgent first: master gone, then commands, then tools, then secrets", () => {
     const skill = makeSkill({
       master_missing: true,
-      requires: [{ command: "jq", min_version: null }],
+      requires: [{ command: "jq" }],
       requires_tools: [GITHUB_OFF],
       requires_secrets: [{ name: "TOKEN", is_set: false }],
     });
@@ -78,7 +78,7 @@ describe("problems and the count", () => {
   const clean = makeSkill({
     uid: "a",
     name: "clean",
-    requires: [{ command: "uv", min_version: null }],
+    requires: [{ command: "uv" }],
   });
   const toolOff = makeSkill({ uid: "b", name: "tool-off", requires_tools: [GITHUB_OFF] });
   const updating = makeSkill({
@@ -110,7 +110,7 @@ describe("problems and the count", () => {
     const missing = makeSkill({
       uid: "d",
       name: "needs-jq",
-      requires: [{ command: "jq", min_version: null }],
+      requires: [{ command: "jq" }],
     });
     const found = skillsNeedingAttention(
       [clean, toolOff, updating, missing, BUILTIN_SKILL],
@@ -129,7 +129,7 @@ describe("skillStatus", () => {
     expect(skillStatus(tool, skillAttention(tool, [], undefined))).toBe("toolOff");
     const gone = makeSkill({ master_missing: true });
     expect(skillStatus(gone, skillAttention(gone, [], undefined))).toBe("masterMissing");
-    const jq = makeSkill({ requires: [{ command: "jq", min_version: null }] });
+    const jq = makeSkill({ requires: [{ command: "jq" }] });
     expect(skillStatus(jq, skillAttention(jq, [JQ_MISSING], undefined))).toBe("commandMissing");
   });
 });

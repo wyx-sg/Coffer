@@ -103,8 +103,8 @@ def test_a_git_stage_names_the_commit_and_confirm_records_the_source(
 def test_requires_reaches_the_skill_read_model(c: TestClient, up: Upstream) -> None:
     item = _add(c, up, path="skills/review")
     expected = [
-        {"command": "jq", "min_version": None},
-        {"command": "gh", "min_version": "2.40"},
+        {"command": "jq"},
+        {"command": "gh"},
     ]
     assert item["requires"] == expected
     assert c.get(f"/api/v1/skills/{item['uid']}").json()["requires"] == expected
@@ -133,7 +133,7 @@ def test_requires_secrets_reach_the_read_model_with_their_state(
         {"name": "GH_TOKEN", "is_set": False},
         {"name": "NPM_TOKEN", "is_set": True},
     ]
-    assert item["requires"] == [{"command": "jq", "min_version": None}]
+    assert item["requires"] == [{"command": "jq"}]
     assert item["requires_secrets"] == expected
     r = c.get(f"/api/v1/skills/{item['uid']}")
     assert r.json()["requires_secrets"] == expected

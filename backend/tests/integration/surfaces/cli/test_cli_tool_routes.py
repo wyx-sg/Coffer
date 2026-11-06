@@ -20,7 +20,7 @@ _STATE = "state/cli-tools/tools.json"
 
 @pytest.fixture
 def probe() -> FakeCommandProbe:
-    return FakeCommandProbe({"jq": FakeCommand("1.7.1"), "demo": FakeCommand("3.0.0")})
+    return FakeCommandProbe({"jq": FakeCommand(), "demo": FakeCommand()})
 
 
 @pytest.fixture
@@ -43,13 +43,12 @@ def test_a_tool_is_added_with_no_skill(daemon: CliDaemon, tmp_path: pathlib.Path
             "command": "jq",
             "title": "jq",
             "description": "Slice JSON.",
-            "min_version": "1.6",
         },
     )
     assert r.status_code == 201, r.text
     body = r.json()
     assert body["command"] == "jq" and body["added"] is True and body["status"] == "ready"
-    assert body["description"] == "Slice JSON." and body["min_version"] == "1.6"
+    assert body["description"] == "Slice JSON."
     assert body["needed_by"] == [] and body["needed_by_servers"] == []
     listed = daemon.client.get("/clis").json()["items"]
     assert [i["command"] for i in listed] == ["jq"]
@@ -60,15 +59,13 @@ def test_a_tool_is_added_with_no_skill(daemon: CliDaemon, tmp_path: pathlib.Path
             "command": "jq",
             "title": "jq",
             "description": "Slice JSON.",
-            "min_version": "1.6",
-            "login_check": None,
         }
     ]
     assert "path" not in json.dumps(stored)
 
 
 def test_a_missing_tool_added_by_hand_raises_no_attention(daemon: CliDaemon) -> None:
-    r = daemon.client.post("/clis", json={"command": "ghost", "min_version": "9.0"})
+    r = daemon.client.post("/clis", json={"command": "ghost"})
     assert r.status_code == 201 and r.json()["status"] == "missing"
     assert r.json()["handoff"] is not None  # the hand-off prompt still works
     attention = daemon.client.get("/attention").json()
@@ -87,8 +84,6 @@ def test_adding_the_same_tool_twice_conflicts(daemon: CliDaemon) -> None:
     [
         {"command": "rm -rf"},
         {"command": "../jq"},
-        {"command": "jq", "min_version": "latest"},
-        {"command": "jq", "login_check": "other auth status"},
         {"command": "jq", "title": "x" * 300},
         {"command": "/not/an/executable/file"},
     ],
@@ -105,23 +100,23 @@ def test_preview_says_what_is_found_before_saving(daemon: CliDaemon) -> None:
     assert found == {
         "command": "jq",
         "path": "/fake/bin/jq",
-        "version": "1.7.1",
         "added": False,
         "required": False,
     }
     gone = daemon.client.post("/clis/preview", json={"command": "ghost"}).json()
-    assert gone["path"] is None and gone["version"] is None
+    assert gone["path"] is None
     assert daemon.client.get("/clis").json()["items"] == []  # nothing saved
 
 
 def test_a_tool_can_be_edited_and_removed(daemon: CliDaemon, tmp_path: pathlib.Path) -> None:
-    daemon.client.post("/clis", json={"command": "jq", "title": "JSON", "min_version": "1.6"})
-    r = daemon.client.patch("/clis/jq", json={"title": None, "login_check": "jq auth status"})
+    daemon.client.post(
+        "/clis", json={"command": "jq", "title": "JSON", "description": "Slice JSON."}
+    )
+    r = daemon.client.patch("/clis/jq", json={"title": None})
     assert r.status_code == 200, r.text
     edited = r.json()
-    assert edited["title"] is None and edited["min_version"] == "1.6"
-    assert edited["login"]["check"] == ["jq", "auth", "status"]
-    bad = daemon.client.patch("/clis/jq", json={"min_version": "x"})
+    assert edited["title"] is None and edited["description"] == "Slice JSON."
+    bad = daemon.client.patch("/clis/jq", json={"title": "x" * 300})
     assert bad.status_code == 400
     assert daemon.client.delete("/clis/jq").status_code == 204
     assert daemon.client.get("/clis").json()["items"] == []
@@ -150,57 +145,31 @@ def test_changes_are_audited(daemon: CliDaemon) -> None:
 )
 def test_a_hand_added_tool_and_a_skill_are_one_entry(daemon: CliDaemon) -> None:
     uid = daemon.add_skill(
-        "data", '  - command: jq\n    min_version: "1.5"\n    title: From skill\n'
+        "data", "  - command: jq\n    title: From skill\n    why: Slices JSON.\n"
     )
-    daemon.client.post("/clis", json={"command": "jq", "title": "Mine", "min_version": "1.7"})
+    daemon.client.post("/clis", json={"command": "jq", "title": "Mine"})
     items = daemon.client.get("/clis").json()["items"]
     assert len(items) == 1
     jq = items[0]
-    assert jq["added"] is True and jq["title"] == "Mine" and jq["min_version"] == "1.7"
+    assert jq["added"] is True and jq["title"] == "Mine"
     assert [n["skill_uid"] for n in jq["needed_by"]] == [uid]
     # removing the declaration only drops the declaration
     assert daemon.client.delete("/clis/jq").status_code == 204
     left = daemon.client.get("/clis/jq").json()
     assert left["added"] is False and left["title"] == "From skill"
-    assert left["min_version"] == "1.5" and len(left["needed_by"]) == 1
+    assert len(left["needed_by"]) == 1
 
 
 def test_an_absolute_path_names_the_command_and_stays_on_this_machine(
     daemon: CliDaemon, tmp_path: pathlib.Path
 ) -> None:
-    daemon.probe.commands["tool"] = FakeCommand("1.0")  # type: ignore[attr-defined]
+    daemon.probe.commands["tool"] = FakeCommand()  # type: ignore[attr-defined]
     r = daemon.client.post("/clis", json={"command": "/fake/bin/tool"})
     assert r.status_code == 201, r.text
     assert r.json()["command"] == "tool"
     assert "/fake/bin" not in json.dumps(_stored(tmp_path))
     local = (tmp_path / ".coffer" / "local" / "cli-paths.json").read_text(encoding="utf-8")
     assert json.loads(local) == {"tool": "/fake/bin/tool"}
-
-
-@pytest.mark.acceptance(
-    spec="skill-manager", scenario="a path command's login check starts with its file name"
-)
-def test_a_path_commands_login_check_starts_with_its_file_name(daemon: CliDaemon) -> None:
-    # A command given as a path is registered under its file name; the login
-    # check starts with that name, and a refusal names the field and the name.
-    daemon.probe.commands["tool"] = FakeCommand("1.0")  # type: ignore[attr-defined]
-    refused = daemon.client.post(
-        "/clis", json={"command": "/fake/bin/tool", "login_check": "/fake/bin/tool auth status"}
-    )
-    assert refused.status_code == 400, refused.text
-    error = refused.json()["error"]
-    assert error["code"] == "CLI_TOOL_INVALID"
-    assert error["details"] == {
-        "reason": "login_check_command",
-        "field": "login_check",
-        "command": "tool",
-    }
-    assert daemon.client.get("/clis").json()["items"] == []
-    added = daemon.client.post(
-        "/clis", json={"command": "/fake/bin/tool", "login_check": "tool auth status"}
-    )
-    assert added.status_code == 201, added.text
-    assert added.json()["login"]["check"] == ["tool", "auth", "status"]
 
 
 @pytest.mark.acceptance(spec="skill-manager", scenario="add, edit and remove a tool over REST")
@@ -219,7 +188,7 @@ def test_a_tool_is_added_edited_and_removed(daemon: CliDaemon) -> None:
 
 @pytest.mark.acceptance(spec="skill-manager", scenario="a required tool takes the person's edits")
 def test_a_required_tool_takes_the_persons_edits(daemon: CliDaemon, tmp_path: pathlib.Path) -> None:
-    daemon.add_skill("data", '  - command: jq\n    title: From skill\n    min_version: "1.5"\n')
+    daemon.add_skill("data", "  - command: jq\n    title: From skill\n")
     r = daemon.client.patch("/clis/jq", json={"description": "Slice  JSON."})
     assert r.status_code == 200, r.text
     assert r.json()["description"] == "Slice JSON." and r.json()["added"] is False
@@ -227,21 +196,18 @@ def test_a_required_tool_takes_the_persons_edits(daemon: CliDaemon, tmp_path: pa
     assert stored["tools"] == [] and stored["notes"] == {"jq": "Slice JSON."}
     r = daemon.client.patch(
         "/clis/jq",
-        json={"title": "JSON", "min_version": "1.7", "login_check": "jq auth status"},
+        json={"title": "JSON"},
     )
     assert r.status_code == 200, r.text
     jq = r.json()
-    assert jq["title"] == "JSON" and jq["min_version"] == "1.7" and jq["added"] is False
-    assert jq["login"]["check"] == ["jq", "auth", "status"]
+    assert jq["title"] == "JSON" and jq["added"] is False
     assert jq["description"] == "Slice JSON." and len(jq["needed_by"]) == 1
     assert [e["command"] for e in _stored(tmp_path)["edits"]] == ["jq"]
     # null brings back what the skill says
-    r = daemon.client.patch("/clis/jq", json={"title": None, "min_version": None})
-    assert r.json()["title"] == "From skill" and r.json()["min_version"] == "1.5"
-    bad = daemon.client.patch("/clis/jq", json={"login_check": "other status"})
-    assert bad.status_code == 400
+    r = daemon.client.patch("/clis/jq", json={"title": None})
+    assert r.json()["title"] == "From skill"
     unknown = daemon.client.patch("/clis/nope", json={"description": "x"})
     assert unknown.status_code == 404
     assert unknown.json()["error"]["code"] == "CLI_NOT_KNOWN"
-    daemon.client.patch("/clis/jq", json={"description": None, "login_check": None})
+    daemon.client.patch("/clis/jq", json={"description": None})
     assert not (vault_root(tmp_path) / _STATE).exists()

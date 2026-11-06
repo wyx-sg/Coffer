@@ -12,11 +12,7 @@ export function StateWord({ cli }: { cli: Cli | undefined }) {
   const { t } = useTranslation();
   if (!cli) return <StatusWord tone="off">{t("skills.requires.unknown")}</StatusWord>;
   const word =
-    cli.status === "ready"
-      ? [t("skills.requires.found"), cli.version].filter(Boolean).join(" · ")
-      : cli.status === "outdated"
-        ? t("skills.requires.outdated", { version: cli.version, min: cli.min_version })
-        : t(`skills.requires.state.${cli.status}`);
+    cli.status === "ready" ? t("skills.requires.found") : t(`skills.requires.state.${cli.status}`);
   return <StatusWord tone={cliTone(cli.status)}>{word}</StatusWord>;
 }
 

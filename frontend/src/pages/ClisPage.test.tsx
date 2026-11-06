@@ -10,9 +10,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Cli } from "@/lib/api/clis";
 import { acceptance } from "@/test/acceptance";
 import {
-  GCLOUD_LOGGED_OUT,
   DEMO_ADDED,
-  GH_OUTDATED,
+  GH_READY,
   GIT_MISSING_FOR_COFFER,
   JQ_MISSING,
   UV_MISSING_FOR_SERVER,
@@ -90,8 +89,8 @@ function paneTitle(): string {
 }
 
 beforeEach(() => {
-  // The daemon's order: missing, outdated, logged out, ready.
-  api.list.mockResolvedValue(listOf([JQ_MISSING, GH_OUTDATED, GCLOUD_LOGGED_OUT, UV_READY]));
+  // The daemon's order: missing, then ready.
+  api.list.mockResolvedValue(listOf([JQ_MISSING, GH_READY, UV_READY]));
   listAgents.mockResolvedValue({
     agents: [{ agent_key: "claude_code", display_name: "Claude Code", available: true }],
   });
@@ -102,13 +101,13 @@ describe("ClisPage", () => {
   acceptance("web-ui", "the CLIs page lists problems first", async () => {
     renderPage();
     await screen.findByRole("region", { name: "Needs attention" });
-    expect(group("Needs attention")).toEqual(["jq", "gh", "gcloud"]);
-    expect(group("Ready")).toEqual(["uv"]);
+    expect(group("Needs attention")).toEqual(["jq"]);
+    expect(group("Ready")).toEqual(["gh", "uv"]);
 
     expect(rowOf("jq")).toHaveTextContent("Not found · 2 skills need it");
-    expect(rowOf("gh")).toHaveTextContent("2.30.0 · needs ≥ 2.40");
-    expect(rowOf("gcloud")).toHaveTextContent("Not logged in · 1 skill needs it");
-    expect(rowOf("uv")).toHaveTextContent("0.4.18 · 1 skill");
+    // Coffer never runs a command, so a ready row shows who needs it, no version.
+    expect(rowOf("gh")).toHaveTextContent(/^gh2 skills$/);
+    expect(rowOf("uv")).toHaveTextContent(/^uv1 skill$/);
 
     // No command in the address: the first row is open beside the list.
     expect(paneTitle()).toBe("jq");
@@ -117,11 +116,10 @@ describe("ClisPage", () => {
     fireEvent.click(rowOf("gh"));
     expect(screen.getByTestId("where")).toHaveTextContent("/clis/gh");
     expect(paneTitle()).toBe("gh");
-    expect(screen.getByTestId("cli-problem")).toHaveTextContent(
-      "gh 2.30.0 is older than gh-triage and release-notes need",
-    );
-    expect(screen.getByTestId("cli-problem")).toHaveTextContent(
-      "gh-triage and release-notes need gh ≥ 2.40 and fail at the step that calls it.",
+    expect(screen.queryByTestId("cli-problem")).toBeNull();
+    // A skill's row says what it uses the command for.
+    expect(screen.getByRole("link", { name: /gh-triage/ })).toHaveTextContent(
+      "Opens and labels issues.",
     );
     // One page, no tab strip.
     expect(screen.queryByRole("tab")).toBeNull();
@@ -141,9 +139,9 @@ describe("ClisPage", () => {
     renderPage();
     await screen.findByRole("region", { name: "Needs attention" });
     fireEvent.change(screen.getByRole("textbox", { name: "Filter CLIs" }), {
-      target: { value: "cloud" },
+      target: { value: "jq" },
     });
-    expect(group("Needs attention")).toEqual(["gcloud"]);
+    expect(group("Needs attention")).toEqual(["jq"]);
     expect(screen.queryByRole("region", { name: "Ready" })).toBeNull();
   });
 
@@ -189,34 +187,24 @@ describe("ClisPage", () => {
     expect(screen.queryByRole("button", { name: /Hand off to/ })).toBeNull();
   });
 
-  acceptance("web-ui", "check again after logging in", async () => {
-    const loggedIn = {
-      ...GCLOUD_LOGGED_OUT,
+  acceptance("web-ui", "check again after fixing a CLI", async () => {
+    api.check.mockResolvedValue({
+      ...JQ_MISSING,
       status: "ready" as const,
-      login: { ...GCLOUD_LOGGED_OUT.login, state: "logged_in" as const },
+      path: "/opt/homebrew/bin/jq",
       handoff: null,
-    };
-    api.check.mockResolvedValue(loggedIn);
-    renderPage("/clis/gcloud");
+    });
+    renderPage("/clis/jq");
 
     const banner = await screen.findByTestId("cli-problem");
-    expect(banner).toHaveTextContent("gcloud isn’t logged in");
-    expect(banner).toHaveTextContent("gh-triage fails at the step that calls gcloud.");
-    expect(banner).toHaveTextContent("gcloud auth print-access-token didn’t succeed at");
-    // Coffer never runs the login and shows no command for it: the banner
-    // hands it to an agent.
-    expect(screen.queryByText("gcloud auth login")).toBeNull();
-    expect(
-      await within(banner).findByRole("button", { name: "Hand off to Claude Code" }),
-    ).toBeInTheDocument();
+    expect(banner).toHaveTextContent("jq isn’t found on this machine");
 
     // The banner's Check re-checks this one command, not all of them.
     fireEvent.click(within(banner).getByRole("button", { name: "Check" }));
-    await waitFor(() => expect(api.check).toHaveBeenCalledWith("gcloud"));
+    await waitFor(() => expect(api.check).toHaveBeenCalledWith("jq"));
     expect(api.checkAll).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByTestId("cli-problem")).toBeNull());
-    expect(screen.getByText("Logged in")).toBeInTheDocument();
-    expect(rowOf("gcloud")).toHaveTextContent("480.0.0 · logged in");
+    expect(rowOf("jq")).toHaveTextContent(/^jq2 skills$/);
     // Ready: no hand-off.
     expect(screen.queryByRole("button", { name: /Hand off to/ })).toBeNull();
   });
@@ -239,13 +227,11 @@ describe("ClisPage", () => {
     const link = await screen.findByRole("link", { name: /gh-triage/ });
     expect(link).toHaveAttribute("href", "/skills/gh-triage/requires");
     expect(link).toHaveTextContent("Skill");
-    expect(link).toHaveTextContent("≥ 0.4");
-    expect(screen.getByText("needs ≥ 0.4")).toBeInTheDocument();
     expect(screen.queryByTestId("cli-problem")).toBeNull();
   });
 
   acceptance("web-ui", "a CLI an MCP server starts with lists that server", async () => {
-    api.list.mockResolvedValue(listOf([UV_MISSING_FOR_SERVER, GH_OUTDATED]));
+    api.list.mockResolvedValue(listOf([UV_MISSING_FOR_SERVER, GH_READY]));
     renderPage("/clis/uv");
     const banner = await screen.findByTestId("cli-problem");
     expect(rowOf("uv")).toHaveTextContent("Not found · duckdb can’t start");
@@ -263,7 +249,6 @@ describe("ClisPage", () => {
       "href",
       "/skills/data-profiling/requires",
     );
-    expect(screen.getByText("No login needed")).toBeInTheDocument();
     expect(
       await within(banner).findByRole("button", { name: "Hand off to Claude Code" }),
     ).toBeInTheDocument();
@@ -309,7 +294,7 @@ describe("ClisPage", () => {
     // The header has no field to type into: the description is text, edited through Edit.
     expect(screen.queryByRole("textbox", { name: "Description" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    for (const name of ["Display name", "Minimum version", "Description", "Login check"]) {
+    for (const name of ["Display name", "Description"]) {
       expect(await screen.findByRole("textbox", { name })).toBeInTheDocument();
     }
     fireEvent.change(screen.getByRole("textbox", { name: "Display name" }), {

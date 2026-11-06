@@ -300,18 +300,15 @@ waits for the developer's approval in the Coffer app (a command that hits this
 prints `waiting for approval in the Coffer app` and exits `9`). That is not an
 error to retry or to route around: tell the developer what is waiting.
 
-## Command-line tools Coffer manages
+## Command-line tools the developer uses
 
-Coffer keeps track of the command-line tools this developer relies on: the ones
-skills require, the launchers MCP servers start with, and the ones the
-developer added by hand, each with what it is for. `coffer cli list` prints
-them with whether each is ready, missing, outdated or logged out on this
-machine as of Coffer's last check; `coffer cli list --json` adds, for one that
-needs attention, the prompt for installing, updating or logging in to it. Read
-it before concluding a tool is unavailable, or to learn which tool this
-developer uses for a job. Coffer installs nothing itself: a missing or
-logged-out tool is one to set up as that prompt says, or to raise with the
-developer.
+`coffer cli list` lists the command-line tools this developer added to Coffer
+and the ones skills and MCP servers require, each with what it is for. When
+choosing a tool for a job, prefer the one listed for it. Whether a tool is
+installed, new enough or logged in, check yourself (`command -v`, its
+`--version`, its own status command);
+if one a skill needs is missing, `coffer cli list --json` carries Coffer's
+install prompt for it.
 
 ## Where a skill's scripts keep their files
 
